@@ -47,6 +47,15 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   const [showCustomerList, setShowCustomerList] = useState(false);
 
   const awbRef = useRef<HTMLInputElement>(null);
+  const flightRef = useRef<HTMLInputElement>(null);
+  const flightDateRef = useRef<HTMLInputElement>(null);
+  const cutoffDateRef = useRef<HTMLInputElement>(null);
+  const cutoffHourRef = useRef<HTMLSelectElement>(null);
+  const cutoffMinuteRef = useRef<HTMLSelectElement>(null);
+  const destInputRef = useRef<HTMLInputElement>(null);
+  const warehouseRef = useRef<HTMLSelectElement>(null);
+  const customerInputRef = useRef<HTMLInputElement>(null);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
   const customerRef = useRef<HTMLDivElement>(null);
   const destRef = useRef<HTMLDivElement>(null);
 
@@ -139,6 +148,47 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     awbValid && !awbConflict && flight && flightDate && effectiveDest.length > 0 && warehouse && effectiveCustomer.length > 0;
   const canSubmit = canSubmitBase;
 
+  function focusNextFrom(el: EventTarget | null) {
+    const order: (HTMLElement | null)[] = [
+      awbRef.current,
+      flightRef.current,
+      flightDateRef.current,
+      cutoffDateRef.current,
+      cutoffHourRef.current,
+      cutoffMinuteRef.current,
+      destInputRef.current,
+      warehouseRef.current,
+      customerInputRef.current,
+    ];
+    const node = el as HTMLElement | null;
+    const idx = node ? order.indexOf(node) : -1;
+    if (idx >= 0 && idx < order.length - 1) {
+      order[idx + 1]?.focus();
+      return;
+    }
+    if (idx === order.length - 1) {
+      submitBtnRef.current?.focus();
+    }
+  }
+
+  function handleEnterAdvance(e: React.KeyboardEvent, field: "field" | "customer") {
+    if (e.key !== "Enter" || (e.nativeEvent as KeyboardEvent).isComposing) return;
+    if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+
+    if (field === "customer") {
+      e.preventDefault();
+      if (canSubmit) {
+        (e.currentTarget.closest("form") as HTMLFormElement | null)?.requestSubmit();
+      } else {
+        submitBtnRef.current?.focus();
+      }
+      return;
+    }
+
+    e.preventDefault();
+    focusNextFrom(e.currentTarget);
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
@@ -189,6 +239,12 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     >
       <form
         onSubmit={handleSubmit}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.stopPropagation();
+            props.onClose();
+          }
+        }}
         className="max-h-[95vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -206,12 +262,19 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               )}
               {!isEdit && " — AWB 11 số tự format IATA"}
             </p>
+            <p className="mt-1 text-[11px] leading-snug text-slate-400">
+              <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-mono text-[10px]">Tab</kbd> chuyển ô ·{" "}
+              <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-mono text-[10px]">Enter</kbd> sang ô tiếp
+              (ngày bay, cutoff, giờ, kho…) · Enter ở khách hàng = gửi form ·{" "}
+              <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-mono text-[10px]">Esc</kbd> đóng
+            </p>
           </div>
           <button
             type="button"
+            tabIndex={-1}
             onClick={props.onClose}
             className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Đóng"
+            aria-label="Đóng (hoặc phím Esc)"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -231,6 +294,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               placeholder="VD: 78420042005"
               value={awbRaw}
               onChange={(e) => setAwbRaw(e.target.value.replace(/\D/g, "").slice(0, 11))}
+              onKeyDown={(e) => handleEnterAdvance(e, "field")}
               className="w-full rounded-xl border border-slate-200 px-4 py-3 font-mono text-lg font-bold tracking-wide text-slate-900 placeholder:text-slate-300 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
             />
             {awbRaw.length > 0 && (
@@ -252,10 +316,12 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 Chuyến bay
               </label>
               <input
+                ref={flightRef}
                 type="text"
                 placeholder="VD: MH751"
                 value={flight}
                 onChange={(e) => setFlight(e.target.value.toUpperCase())}
+                onKeyDown={(e) => handleEnterAdvance(e, "field")}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold uppercase text-slate-900 placeholder:text-slate-300 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
               />
             </div>
@@ -264,12 +330,14 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 Ngày bay
               </label>
               <input
+                ref={flightDateRef}
                 type="date"
                 value={flightDate}
                 onChange={(e) => {
                   setFlightDate(e.target.value);
                   if (!cutoffDate) setCutoffDate(e.target.value);
                 }}
+                onKeyDown={(e) => handleEnterAdvance(e, "field")}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
               />
             </div>
@@ -281,9 +349,11 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 Ngày cutoff
               </label>
               <input
+                ref={cutoffDateRef}
                 type="date"
                 value={cutoffDate}
                 onChange={(e) => setCutoffDate(e.target.value)}
+                onKeyDown={(e) => handleEnterAdvance(e, "field")}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
               />
             </div>
@@ -293,10 +363,12 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               </label>
               <div className="flex items-center gap-1.5">
                 <select
+                  ref={cutoffHourRef}
                   value={cutoffHour}
                   onChange={(e) => setCutoffHour(e.target.value)}
+                  onKeyDown={(e) => handleEnterAdvance(e, "field")}
                   className="min-w-0 flex-1 rounded-xl border border-slate-200 px-2 py-2.5 font-mono text-sm font-bold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
-                  aria-label="Giờ 0–23"
+                  aria-label="Giờ cutoff 0–23 (mũi tên chọn, Enter sang phút)"
                 >
                   <option value="">—</option>
                   {HOURS_24.map((h) => (
@@ -307,10 +379,12 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 </select>
                 <span className="font-mono text-lg font-bold text-slate-400">:</span>
                 <select
+                  ref={cutoffMinuteRef}
                   value={cutoffMinute}
                   onChange={(e) => setCutoffMinute(e.target.value)}
+                  onKeyDown={(e) => handleEnterAdvance(e, "field")}
                   className="min-w-0 flex-1 rounded-xl border border-slate-200 px-2 py-2.5 font-mono text-sm font-bold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
-                  aria-label="Phút 0–59"
+                  aria-label="Phút cutoff 0–59 (Enter sang DEST)"
                 >
                   <option value="">—</option>
                   {MINUTES_60.map((m) => (
@@ -320,7 +394,9 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                   ))}
                 </select>
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">Định dạng 24 giờ (00–23 : 00–59)</p>
+              <p className="mt-1 text-[11px] text-slate-400">
+                24 giờ — dùng ↑↓ trong ô giờ/phút, <span className="font-semibold text-slate-500">Enter</span> sang ô kế
+              </p>
             </div>
           </div>
 
@@ -340,6 +416,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                     {dest}
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => {
                         setDest("");
                         setDestSearch("");
@@ -351,6 +428,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                   </span>
                 )}
                 <input
+                  ref={destInputRef}
                   type="text"
                   placeholder={dest ? "" : "VD: KUL hoặc gõ mã mới…"}
                   value={destSearch}
@@ -359,6 +437,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                     setShowDestList(true);
                   }}
                   onFocus={() => setShowDestList(true)}
+                  onKeyDown={(e) => handleEnterAdvance(e, "field")}
                   className="min-w-[6rem] flex-1 bg-transparent text-sm font-bold uppercase text-slate-900 placeholder:text-slate-300 focus:outline-none"
                 />
               </div>
@@ -367,6 +446,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                   {canUseTypedDest && (
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => {
                         setDest(destSearchTrim);
                         setDestSearch("");
@@ -382,6 +462,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                       <button
                         key={d}
                         type="button"
+                        tabIndex={-1}
                         onClick={() => {
                           setDest(d);
                           setDestSearch("");
@@ -407,9 +488,12 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 Kho hàng
               </label>
               <select
+                ref={warehouseRef}
                 value={warehouse}
                 onChange={(e) => setWarehouse(e.target.value as Warehouse)}
+                onKeyDown={(e) => handleEnterAdvance(e, "field")}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                aria-label="Kho hàng (↑↓ chọn, Enter sang khách hàng)"
               >
                 {WAREHOUSES.map((w) => (
                   <option key={w} value={w}>
@@ -437,6 +521,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                   {customer}
                   <button
                     type="button"
+                    tabIndex={-1}
                     onClick={() => {
                       setCustomer("");
                       setCustomerSearch("");
@@ -448,6 +533,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 </span>
               )}
               <input
+                ref={customerInputRef}
                 type="text"
                 placeholder={customer ? "" : "Tìm, chọn hoặc gõ tên khách mới..."}
                 value={customerSearch}
@@ -456,6 +542,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                   setShowCustomerList(true);
                 }}
                 onFocus={() => setShowCustomerList(true)}
+                onKeyDown={(e) => handleEnterAdvance(e, "customer")}
                 className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-900 placeholder:text-slate-300 focus:outline-none"
               />
             </div>
@@ -464,6 +551,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 {canUseTypedCustomer && (
                   <button
                     type="button"
+                    tabIndex={-1}
                     onClick={() => {
                       setCustomer(searchTrim);
                       setCustomerSearch("");
@@ -479,6 +567,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                     <button
                       key={c}
                       type="button"
+                      tabIndex={-1}
                       onClick={() => {
                         setCustomer(c);
                         setCustomerSearch("");
@@ -503,6 +592,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
 
         <div className="flex gap-2 border-t border-slate-100 px-5 py-4">
           <button
+            ref={submitBtnRef}
             type="submit"
             disabled={!canSubmit}
             className="flex-1 rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-emerald-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"

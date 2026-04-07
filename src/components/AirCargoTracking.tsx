@@ -12,6 +12,7 @@ import { useShipmentSync } from "../hooks/useShipmentSync";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { ShipmentBookingForm } from "./ShipmentBookingForm";
+import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment) => void;
@@ -97,6 +98,10 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const goNextDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, 1)));
   const goToday = () => setSelectedViewDate(startOfLocalDay(new Date()));
 
+  const onDownloadDayExcel = useCallback(() => {
+    downloadDayReportExcel(viewRows, selectedYmd);
+  }, [viewRows, selectedYmd]);
+
   const openEdit = useCallback((s: Shipment) => {
     setShowForm(false);
     setSelectedId(null);
@@ -126,6 +131,21 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
               <span className="font-semibold text-slate-700">Hôm nay</span> để có bảng mới (dữ liệu cũ vẫn lưu).
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={onDownloadDayExcel}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-900 shadow-sm hover:bg-emerald-100"
+                title="Tải báo cáo các lô của ngày đang xem (Excel)"
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+                  />
+                </svg>
+                Tải Excel (ngày này)
+              </button>
               <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
                 <button
                   type="button"

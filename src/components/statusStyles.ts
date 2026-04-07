@@ -1,24 +1,24 @@
 import type { ShipmentStatus } from "../types/shipment";
 
 export const statusLabel: Record<ShipmentStatus, string> = {
-  PENDING: "Chờ hàng",
+  PENDING: "BOOKING",
   RECEIVED: "Đã nhận",
   AT_RISK: "Sắp trễ",
-  CUTOFF_PASSED: "Quá giờ",
-  BUILT_UP: "Đã đóng",
-  DEPARTED: "Đã bay",
-  DELIVERED: "Đã giao",
+  CUTOFF_PASSED: "Hàng gấp",
+  BUILT_UP: "Đã xong",
+  DEPARTED: "Đã kéo OLA",
+  DELIVERED: "Hoàn thành",
 };
 
 /*
   Bảng màu nóng, dễ phân biệt bằng mắt từ xa:
-  ● Chờ hàng   → VÀNG
-  ● Đã nhận    → XANH LÁ
-  ● Sắp trễ    → CAM
-  ● Quá giờ    → ĐỎ
-  ● Đã đóng    → XANH DƯƠNG
-  ● Đã bay     → TÍM
-  ● Đã giao    → XÁM (hoàn tất)
+  ● BOOKING      → VÀNG
+  ● Đã nhận      → XANH LÁ
+  ● Sắp trễ      → CAM
+  ● Hàng gấp     → ĐỎ
+  ● Đã xong      → XANH DƯƠNG
+  ● Đã kéo OLA   → TÍM
+  ● Hoàn thành   → XÁM
 */
 
 export const statusRowBg: Record<ShipmentStatus, string> = {

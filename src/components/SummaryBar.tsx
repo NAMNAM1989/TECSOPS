@@ -20,7 +20,7 @@ export function SummaryBar({ rows, warehouse }: SummaryBarProps) {
       <Chip label="Lô" value={group.length} />
       <Chip label="Kiện" value={totalPcs} />
       <Chip label="Kg" value={totalKg.toLocaleString()} />
-      {pending > 0 && <Chip label="Chờ hàng" value={pending} warn />}
+      {pending > 0 && <Chip label="BOOKING" value={pending} warn />}
       {atRisk > 0 && <Chip label="Cần xử lý" value={atRisk} danger />}
       {noPcs > 0 && <Chip label="Thiếu SL" value={noPcs} warn />}
     </div>

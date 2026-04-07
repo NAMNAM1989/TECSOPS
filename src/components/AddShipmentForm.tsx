@@ -1,7 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
+import { mergeCustomerOptions, persistNewCustomer } from "../utils/customerStorage";
 import { CUSTOMERS, WAREHOUSES, DESTINATIONS } from "../data/customers";
+
+const HOURS_24 = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTES_60 = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
 
 interface AddShipmentFormProps {
   onAdd: (shipment: Omit<Shipment, "id" | "stt">) => void;
@@ -12,7 +16,9 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
   const [awbRaw, setAwbRaw] = useState("");
   const [flight, setFlight] = useState("");
   const [flightDate, setFlightDate] = useState("");
-  const [cutoffTime, setCutoffTime] = useState("");
+  /** Giờ cutoff định dạng 24h — chọn từ dropdown */
+  const [cutoffHour, setCutoffHour] = useState("");
+  const [cutoffMinute, setCutoffMinute] = useState("");
   const [cutoffDate, setCutoffDate] = useState("");
   const [dest, setDest] = useState("");
   const [warehouse, setWarehouse] = useState<Warehouse>("TECS-TCS");
@@ -37,18 +43,31 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const filteredCustomers = CUSTOMERS.filter((c) =>
+  const [customerListVersion, setCustomerListVersion] = useState(0);
+  const customerOptions = useMemo(
+    () => mergeCustomerOptions(CUSTOMERS),
+    [customerListVersion]
+  );
+
+  const filteredCustomers = customerOptions.filter((c) =>
     c.toLowerCase().includes(customerSearch.toLowerCase())
   );
+
+  const searchTrim = customerSearch.trim();
+  const canUseTypedCustomer =
+    searchTrim.length > 0 &&
+    !customerOptions.some((c) => c.toLowerCase() === searchTrim.toLowerCase());
 
   const awbDisplay = formatAwb(awbRaw);
   const awbDigits = rawAwbDigits(awbRaw);
   const awbValid = awbDigits.length === 11;
 
   function buildCutoffIso(): string {
-    if (!cutoffTime || !cutoffDate) return "";
+    if (!cutoffDate || cutoffHour === "" || cutoffMinute === "") return "";
     const [y, mo, d] = cutoffDate.split("-").map(Number);
-    const [h, m] = cutoffTime.split(":").map(Number);
+    const h = Number(cutoffHour);
+    const m = Number(cutoffMinute);
+    if (Number.isNaN(h) || Number.isNaN(m)) return "";
     return new Date(y, mo - 1, d, h, m).toISOString();
   }
 
@@ -60,11 +79,16 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
     return `${day}${months[d.getMonth()]}`;
   }
 
-  const canSubmit = awbValid && flight && flightDate && dest && warehouse && customer;
+  const effectiveCustomer = (customer || searchTrim).trim();
+  const canSubmit =
+    awbValid && flight && flightDate && dest && warehouse && effectiveCustomer.length > 0;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
+
+    persistNewCustomer(effectiveCustomer, CUSTOMERS);
+    setCustomerListVersion((v) => v + 1);
 
     onAdd({
       awb: awbDisplay,
@@ -76,14 +100,15 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
       warehouse,
       pcs: null,
       kg: null,
-      customer,
+      customer: effectiveCustomer,
       status: "PENDING",
     });
 
     setAwbRaw("");
     setFlight("");
     setFlightDate("");
-    setCutoffTime("");
+    setCutoffHour("");
+    setCutoffMinute("");
     setCutoffDate("");
     setDest("");
     setCustomer("");
@@ -172,7 +197,7 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
             </div>
           </div>
 
-          {/* Cutoff Date + Time */}
+          {/* Cutoff Date + Time (24h) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -187,14 +212,38 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
-                Giờ cutoff
+                Giờ cutoff (24h)
               </label>
-              <input
-                type="time"
-                value={cutoffTime}
-                onChange={(e) => setCutoffTime(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
-              />
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={cutoffHour}
+                  onChange={(e) => setCutoffHour(e.target.value)}
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 px-2 py-2.5 font-mono text-sm font-bold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                  aria-label="Giờ 0–23"
+                >
+                  <option value="">—</option>
+                  {HOURS_24.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </select>
+                <span className="font-mono text-lg font-bold text-slate-400">:</span>
+                <select
+                  value={cutoffMinute}
+                  onChange={(e) => setCutoffMinute(e.target.value)}
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 px-2 py-2.5 font-mono text-sm font-bold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                  aria-label="Phút 0–59"
+                >
+                  <option value="">—</option>
+                  {MINUTES_60.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">Định dạng 24 giờ (00–23 : 00–59)</p>
             </div>
           </div>
 
@@ -236,6 +285,9 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
             <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
               Khách hàng
             </label>
+            <p className="mb-1 text-[11px] text-slate-400">
+              Gõ tên mới rồi thêm lô — hệ thống tự lưu vào danh sách lần sau.
+            </p>
             <div
               className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors ${
                 showCustomerList
@@ -257,7 +309,7 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
               )}
               <input
                 type="text"
-                placeholder={customer ? "" : "Tìm hoặc chọn khách hàng..."}
+                placeholder={customer ? "" : "Tìm, chọn hoặc gõ tên khách mới..."}
                 value={customerSearch}
                 onChange={(e) => {
                   setCustomerSearch(e.target.value);
@@ -269,6 +321,19 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
             </div>
             {showCustomerList && (
               <div className="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                {canUseTypedCustomer && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomer(searchTrim);
+                      setCustomerSearch("");
+                      setShowCustomerList(false);
+                    }}
+                    className="block w-full border-b border-emerald-100 bg-emerald-50 px-4 py-2.5 text-left text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+                  >
+                    + Dùng tên mới «{searchTrim}» (sẽ được lưu)
+                  </button>
+                )}
                 {filteredCustomers.length > 0 ? (
                   filteredCustomers.map((c) => (
                     <button
@@ -289,7 +354,9 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
                     </button>
                   ))
                 ) : (
-                  <p className="px-4 py-3 text-xs text-slate-400">Không tìm thấy</p>
+                  !canUseTypedCustomer && (
+                    <p className="px-4 py-3 text-xs text-slate-400">Không tìm thấy — gõ tên khách mới</p>
+                  )
                 )}
               </div>
             )}

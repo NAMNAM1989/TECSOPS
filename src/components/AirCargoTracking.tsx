@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import { initialShipments } from "../data/mockShipments";
+import { loadRows, loadWorkDate, saveRows, saveWorkDate } from "../utils/shipmentStorage";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { AddShipmentForm } from "./AddShipmentForm";
@@ -8,8 +9,6 @@ import { AddShipmentForm } from "./AddShipmentForm";
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment) => void;
 }
-
-let nextId = 100;
 
 function formatWorkDateLabel(d: Date): string {
   const months = [
@@ -21,11 +20,19 @@ function formatWorkDateLabel(d: Date): string {
 }
 
 export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
-  const [rows, setRows] = useState<Shipment[]>(initialShipments);
+  const [rows, setRows] = useState<Shipment[]>(() => loadRows() ?? initialShipments);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   /** Ngày làm việc hiển thị trên bảng; đổi khi bấm “xóa bảng ngày này” để bắt đầu phiên mới */
-  const [workDate, setWorkDate] = useState(() => new Date());
+  const [workDate, setWorkDate] = useState(() => loadWorkDate() ?? new Date());
+
+  useEffect(() => {
+    saveRows(rows);
+  }, [rows]);
+
+  useEffect(() => {
+    saveWorkDate(workDate);
+  }, [workDate]);
 
   const selected = rows.find((r) => r.id === selectedId) ?? null;
 
@@ -40,9 +47,15 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   const onAdd = useCallback((data: Omit<Shipment, "id" | "stt">) => {
     setRows((prev) => {
+      let maxNew = 0;
+      for (const r of prev) {
+        const m = /^new-(\d+)$/.exec(r.id);
+        if (m) maxNew = Math.max(maxNew, parseInt(m[1], 10));
+      }
+      const nextNum = Math.max(100, maxNew) + 1;
+      const id = `new-${nextNum}`;
       const whGroup = prev.filter((r) => r.warehouse === data.warehouse);
       const stt = whGroup.length + 1;
-      const id = `new-${++nextId}`;
       return [...prev, { ...data, id, stt }];
     });
   }, []);
@@ -106,13 +119,13 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
         {/* Chú thích màu */}
         <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold">
-          <Legend color="bg-yellow-400" label="Chờ hàng" />
+          <Legend color="bg-yellow-400" label="BOOKING" />
           <Legend color="bg-green-500" label="Đã nhận" />
           <Legend color="bg-orange-500" label="Sắp trễ" />
-          <Legend color="bg-red-600" label="Quá giờ" />
-          <Legend color="bg-blue-500" label="Đã đóng" />
-          <Legend color="bg-violet-500" label="Đã bay" />
-          <Legend color="bg-gray-400" label="Đã giao" />
+          <Legend color="bg-red-600" label="Hàng gấp" />
+          <Legend color="bg-blue-500" label="Đã xong" />
+          <Legend color="bg-violet-500" label="Đã kéo OLA" />
+          <Legend color="bg-gray-400" label="Hoàn thành" />
         </div>
       </header>
 

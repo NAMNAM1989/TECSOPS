@@ -1,11 +1,11 @@
 export type ShipmentStatus =
-  | "PENDING"      // Chờ hàng / chưa có thông tin
-  | "RECEIVED"     // Đã nhận hàng tại kho
-  | "AT_RISK"      // Sắp trễ cutoff (< 2h)
-  | "CUTOFF_PASSED"// Đã quá cutoff
-  | "BUILT_UP"     // Đã đóng kiện
-  | "DEPARTED"     // Đã bay
-  | "DELIVERED";   // Đã giao
+  | "PENDING"       // BOOKING
+  | "RECEIVED"      // Đã nhận hàng tại kho
+  | "AT_RISK"       // Sắp trễ cutoff (< 2h)
+  | "CUTOFF_PASSED" // Hàng gấp (quá cutoff)
+  | "BUILT_UP"      // Đã xong
+  | "DEPARTED"      // Đã kéo OLA
+  | "DELIVERED";    // Hoàn thành
 
 export type Warehouse = "TECS-TCS" | "TECS-SCSC";
 

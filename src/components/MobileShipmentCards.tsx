@@ -218,9 +218,18 @@ interface StickyMobileActionsProps {
   onDelete: () => void;
   onPrint: () => void;
   onAdd: () => void;
+  onClearDay: () => void;
+  canClearDay: boolean;
 }
 
-export function StickyMobileActions({ selected, onDelete, onPrint, onAdd }: StickyMobileActionsProps) {
+export function StickyMobileActions({
+  selected,
+  onDelete,
+  onPrint,
+  onAdd,
+  onClearDay,
+  canClearDay,
+}: StickyMobileActionsProps) {
   return (
     <div className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
       <div className="border-t border-slate-200/80 bg-white/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur-md">
@@ -251,13 +260,23 @@ export function StickyMobileActions({ selected, onDelete, onPrint, onAdd }: Stic
             </div>
           </>
         ) : (
-          <button
-            type="button"
-            onClick={onAdd}
-            className="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white shadow-sm active:scale-[0.98]"
-          >
-            + Nhập booking mới
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={onAdd}
+              className="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white shadow-sm active:scale-[0.98]"
+            >
+              + Nhập booking mới
+            </button>
+            <button
+              type="button"
+              onClick={onClearDay}
+              disabled={!canClearDay}
+              className="w-full rounded-lg border border-rose-200 bg-rose-50 py-2 text-xs font-bold text-rose-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Xóa bảng ngày này
+            </button>
+          </div>
         )}
       </div>
     </div>

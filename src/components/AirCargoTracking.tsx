@@ -11,10 +11,21 @@ interface AirCargoTrackingProps {
 
 let nextId = 100;
 
+function formatWorkDateLabel(d: Date): string {
+  const months = [
+    "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+  ];
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${day}-${months[d.getMonth()]}-${d.getFullYear()}`;
+}
+
 export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [rows, setRows] = useState<Shipment[]>(initialShipments);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  /** Ngày làm việc hiển thị trên bảng; đổi khi bấm “xóa bảng ngày này” để bắt đầu phiên mới */
+  const [workDate, setWorkDate] = useState(() => new Date());
 
   const selected = rows.find((r) => r.id === selectedId) ?? null;
 
@@ -39,6 +50,20 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const totalPcs = rows.reduce((s, r) => s + (r.pcs ?? 0), 0);
   const totalKg = rows.reduce((s, r) => s + (r.kg ?? 0), 0);
 
+  const workDateLabel = formatWorkDateLabel(workDate);
+
+  const clearBoardForNewDay = useCallback(() => {
+    if (rows.length === 0) return;
+    const ok = window.confirm(
+      `Xóa toàn bộ ${rows.length} lô hàng của ngày ${workDateLabel}?\n\n` +
+        "Dùng khi đã xong việc hôm nay và ngày mai nhập bảng mới. Thao tác không hoàn tác."
+    );
+    if (!ok) return;
+    setRows([]);
+    setSelectedId(null);
+    setWorkDate(new Date());
+  }, [rows.length, workDateLabel]);
+
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6 lg:px-8">
       {/* Header */}
@@ -49,13 +74,23 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
               CẬP NHẬT HÀNG LÊN SÂN BAY
             </h1>
             <p className="mt-0.5 text-sm text-slate-500">
-              Ngày <span className="font-bold text-slate-700">04-APR-2026</span>
+              Ngày làm việc{" "}
+              <span className="font-bold text-slate-700">{workDateLabel}</span>
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <StatPill label="Tổng lô" value={rows.length} />
             <StatPill label="Kiện" value={totalPcs} />
             <StatPill label="Kg" value={totalKg.toLocaleString()} />
+            <button
+              type="button"
+              onClick={clearBoardForNewDay}
+              disabled={rows.length === 0}
+              title="Xóa hết lô trong bảng để nhập ngày mới"
+              className="rounded-xl border-2 border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 shadow-sm hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40 md:px-4"
+            >
+              Xóa bảng ngày này
+            </button>
             <button
               type="button"
               onClick={() => setShowForm(true)}
@@ -81,6 +116,15 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         </div>
       </header>
 
+      {rows.length === 0 && (
+        <div className="mb-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-slate-600">
+          <p className="font-bold text-slate-800">Bảng trống — sẵn sàng cho ngày mới</p>
+          <p className="mt-1 text-sm">
+            Bấm <span className="font-semibold text-emerald-700">Nhập booking</span> để thêm lô hàng.
+          </p>
+        </div>
+      )}
+
       {/* Desktop table */}
       <DesktopShipmentTable
         rows={rows}
@@ -105,6 +149,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onDelete={() => selected && onDelete(selected.id)}
         onPrint={() => selected && onRequestPrint(selected)}
         onAdd={() => setShowForm(true)}
+        onClearDay={clearBoardForNewDay}
+        canClearDay={rows.length > 0}
       />
 
       {/* Form nhập liệu */}

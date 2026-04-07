@@ -9,7 +9,12 @@ export function formatAwb(raw: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)} ${digits.slice(7)}`;
 }
 
-/** Lấy phần chữ số thuần từ AWB đã format */
+/** Lấy phần chữ số thuần từ AWB đã format hoặc bất kỳ chuỗi nào */
 export function rawAwbDigits(formatted: string): string {
   return formatted.replace(/\D/g, "");
+}
+
+/** Alias rõ nghĩa khi so trùng AWB */
+export function awbDigitsKey(awb: string): string {
+  return rawAwbDigits(awb);
 }

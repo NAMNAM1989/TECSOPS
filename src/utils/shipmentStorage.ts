@@ -1,4 +1,5 @@
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
+import { formatLocalSessionDate, startOfLocalDay } from "./sessionDate";
 
 const ROWS_KEY = "tecsops-shipments-v1";
 const WORK_DATE_KEY = "tecsops-work-date-v1";
@@ -15,7 +16,7 @@ const STATUSES: ShipmentStatus[] = [
 
 const WAREHOUSES: Warehouse[] = ["TECS-TCS", "TECS-SCSC"];
 
-function isShipment(o: unknown): o is Shipment {
+function isShipmentShape(o: unknown): o is Omit<Shipment, "sessionDate"> & { sessionDate?: string } {
   if (!o || typeof o !== "object") return false;
   const r = o as Record<string, unknown>;
   return (
@@ -37,6 +38,19 @@ function isShipment(o: unknown): o is Shipment {
   );
 }
 
+function legacySessionFallback(): string {
+  try {
+    const raw = localStorage.getItem(WORK_DATE_KEY);
+    if (raw) {
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) return formatLocalSessionDate(startOfLocalDay(d));
+    }
+  } catch {
+    /* ignore */
+  }
+  return formatLocalSessionDate(startOfLocalDay(new Date()));
+}
+
 /** null = chưa từng lưu → dùng dữ liệu mặc định app */
 export function loadRows(): Shipment[] | null {
   try {
@@ -44,7 +58,16 @@ export function loadRows(): Shipment[] | null {
     if (raw === null) return null;
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return null;
-    const rows = parsed.filter(isShipment);
+    const fb = legacySessionFallback();
+    const rows: Shipment[] = [];
+    for (const item of parsed) {
+      if (!isShipmentShape(item)) continue;
+      const sd =
+        typeof item.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.sessionDate)
+          ? item.sessionDate
+          : fb;
+      rows.push({ ...item, sessionDate: sd });
+    }
     return rows;
   } catch {
     return null;

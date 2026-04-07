@@ -7,8 +7,8 @@ import { InlineNumberEdit } from "./InlineNumberEdit";
 import { statusCardBg } from "./statusStyles";
 
 const SWIPE_THRESHOLD = 48;
-/** Hai nút icon — hẹp để dòng hàng gọn */
-const REVEAL_PX = 80;
+/** Ba nút: Sửa / In / Xóa */
+const REVEAL_PX = 132;
 const WAREHOUSES: Warehouse[] = ["TECS-TCS", "TECS-SCSC"];
 
 interface MobileShipmentCardsProps {
@@ -18,6 +18,7 @@ interface MobileShipmentCardsProps {
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
+  onEdit: (s: Shipment) => void;
 }
 
 export function MobileShipmentCards({
@@ -27,6 +28,7 @@ export function MobileShipmentCards({
   onUpdate,
   onDelete,
   onPrint,
+  onEdit,
 }: MobileShipmentCardsProps) {
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const touchStartX = useRef(0);
@@ -80,12 +82,30 @@ export function MobileShipmentCards({
                       selected ? "ring-2 ring-sky-500 ring-offset-1" : ""
                     }`}
                   >
-                    {/* Vuốt trái: In / Xóa (icon — tiết kiệm chiều ngang) */}
-                    <div className="absolute inset-y-0 right-0 z-0 flex w-20" aria-hidden>
+                    {/* Vuốt trái: Sửa / In / Xóa */}
+                    <div className="absolute inset-y-0 right-0 z-0 flex w-[132px]" aria-hidden>
+                      <button
+                        type="button"
+                        title="Sửa"
+                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-sky-700 text-white active:bg-sky-800"
+                        onClick={() => {
+                          setSwipeOpenId(null);
+                          onEdit(row);
+                        }}
+                      >
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
+                          />
+                        </svg>
+                        <span className="text-[9px] font-bold leading-none">Sửa</span>
+                      </button>
                       <button
                         type="button"
                         title="In nhãn"
-                        className="flex w-10 flex-col items-center justify-center gap-0.5 bg-sky-600 text-white active:bg-sky-700"
+                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-sky-600 text-white active:bg-sky-700"
                         onClick={() => {
                           setSwipeOpenId(null);
                           onPrint(row);
@@ -103,7 +123,7 @@ export function MobileShipmentCards({
                       <button
                         type="button"
                         title="Xóa"
-                        className="flex w-10 flex-col items-center justify-center gap-0.5 bg-red-600 text-white active:bg-red-700"
+                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-red-600 text-white active:bg-red-700"
                         onClick={() => {
                           setSwipeOpenId(null);
                           if (confirm(`Xóa ${row.awb}?`)) onDelete(row.id);
@@ -218,8 +238,7 @@ interface StickyMobileActionsProps {
   onDelete: () => void;
   onPrint: () => void;
   onAdd: () => void;
-  onClearDay: () => void;
-  canClearDay: boolean;
+  onEdit: () => void;
 }
 
 export function StickyMobileActions({
@@ -227,8 +246,7 @@ export function StickyMobileActions({
   onDelete,
   onPrint,
   onAdd,
-  onClearDay,
-  canClearDay,
+  onEdit,
 }: StickyMobileActionsProps) {
   return (
     <div className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
@@ -244,39 +262,36 @@ export function StickyMobileActions({
               <button
                 type="button"
                 onClick={onPrint}
-                className="flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-bold text-white shadow-sm active:scale-[0.98]"
+                className="min-w-0 flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-bold text-white shadow-sm active:scale-[0.98]"
               >
                 In nhãn
+              </button>
+              <button
+                type="button"
+                onClick={onEdit}
+                className="shrink-0 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm font-bold text-sky-800 active:scale-[0.98]"
+              >
+                Sửa
               </button>
               <button
                 type="button"
                 onClick={() => {
                   if (confirm(`Xóa ${selected.awb}?`)) onDelete();
                 }}
-                className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 active:scale-[0.98]"
+                className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-bold text-red-700 active:scale-[0.98]"
               >
                 Xóa
               </button>
             </div>
           </>
         ) : (
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={onAdd}
-              className="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white shadow-sm active:scale-[0.98]"
-            >
-              + Nhập booking mới
-            </button>
-            <button
-              type="button"
-              onClick={onClearDay}
-              disabled={!canClearDay}
-              className="w-full rounded-lg border border-rose-200 bg-rose-50 py-2 text-xs font-bold text-rose-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Xóa bảng ngày này
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onAdd}
+            className="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white shadow-sm active:scale-[0.98]"
+          >
+            + Nhập booking mới
+          </button>
         )}
       </div>
     </div>

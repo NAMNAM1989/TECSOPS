@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import { initialShipments } from "../data/mockShipments";
-import { loadRows, loadWorkDate } from "../utils/shipmentStorage";
+import { loadRows } from "../utils/shipmentStorage";
+import {
+  addLocalDays,
+  formatLocalSessionDate,
+  parseSessionDateYmd,
+  startOfLocalDay,
+} from "../utils/sessionDate";
 import { useShipmentSync } from "../hooks/useShipmentSync";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
-import { AddShipmentForm } from "./AddShipmentForm";
+import { ShipmentBookingForm } from "./ShipmentBookingForm";
 
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment) => void;
@@ -21,24 +27,33 @@ function formatWorkDateLabel(d: Date): string {
 }
 
 export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
-  const fallback = useMemo(
-    () => ({
-      rows: loadRows() ?? initialShipments,
-      workDateIso: (loadWorkDate() ?? new Date()).toISOString(),
-    }),
-    []
-  );
+  const fallback = useMemo(() => ({ rows: loadRows() ?? initialShipments }), []);
 
   const { status, state, mutate, socketConnected } = useShipmentSync(fallback);
+  const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
 
-  const rows = state?.rows ?? [];
-  const workDate = state ? new Date(state.workDateIso) : new Date();
+  const selectedYmd = formatLocalSessionDate(selectedViewDate);
+  const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
+  const isViewingToday = selectedYmd === todayYmd;
+
+  const allRows = state?.rows ?? [];
+  const viewRows = useMemo(
+    () => allRows.filter((r) => r.sessionDate === selectedYmd),
+    [allRows, selectedYmd]
+  );
+
+  const daysWithData = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of allRows) s.add(r.sessionDate);
+    return s.size;
+  }, [allRows]);
 
   useEffect(() => {
-    setSelectedId((s) => (s && !rows.some((r) => r.id === s) ? null : s));
-  }, [rows]);
+    setSelectedId((s) => (s && viewRows.some((r) => r.id === s) ? s : null));
+  }, [viewRows]);
 
   const runMutate = useCallback(
     async (cmd: Parameters<typeof mutate>[0]) => {
@@ -73,23 +88,22 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     [runMutate]
   );
 
-  const totalPcs = rows.reduce((s, r) => s + (r.pcs ?? 0), 0);
-  const totalKg = rows.reduce((s, r) => s + (r.kg ?? 0), 0);
+  const totalPcs = viewRows.reduce((s, r) => s + (r.pcs ?? 0), 0);
+  const totalKg = viewRows.reduce((s, r) => s + (r.kg ?? 0), 0);
 
-  const workDateLabel = formatWorkDateLabel(workDate);
+  const workDateLabel = formatWorkDateLabel(selectedViewDate);
 
-  const clearBoardForNewDay = useCallback(() => {
-    if (rows.length === 0) return;
-    const ok = window.confirm(
-      `Xóa toàn bộ ${rows.length} lô hàng của ngày ${workDateLabel}?\n\n` +
-        "Dùng khi đã xong việc hôm nay và ngày mai nhập bảng mới. Thao tác không hoàn tác."
-    );
-    if (!ok) return;
-    void runMutate({ action: "CLEAR_DAY" });
+  const goPrevDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, -1)));
+  const goNextDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, 1)));
+  const goToday = () => setSelectedViewDate(startOfLocalDay(new Date()));
+
+  const openEdit = useCallback((s: Shipment) => {
+    setShowForm(false);
     setSelectedId(null);
-  }, [rows.length, workDateLabel, runMutate]);
+    setEditingShipment(s);
+  }, []);
 
-  const selected = rows.find((r) => r.id === selectedId) ?? null;
+  const selected = viewRows.find((r) => r.id === selectedId) ?? null;
 
   if (status === "loading" || !state) {
     return (
@@ -101,7 +115,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6 lg:px-8">
-      {/* Header */}
       <header className="mb-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -109,27 +122,71 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
               CẬP NHẬT HÀNG LÊN SÂN BAY
             </h1>
             <p className="mt-0.5 text-sm text-slate-500">
-              Ngày làm việc{" "}
-              <span className="font-bold text-slate-700">{workDateLabel}</span>
+              Phiên bảng theo ngày — chọn ngày để xem / nhập. Hôm sau mở{" "}
+              <span className="font-semibold text-slate-700">Hôm nay</span> để có bảng mới (dữ liệu cũ vẫn lưu).
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={goPrevDay}
+                  className="rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-700 hover:bg-slate-100"
+                  aria-label="Ngày trước"
+                >
+                  ‹
+                </button>
+                <input
+                  type="date"
+                  value={selectedYmd}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v) setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)));
+                  }}
+                  className="rounded-lg border-0 bg-transparent px-2 py-1 font-mono text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                />
+                <button
+                  type="button"
+                  onClick={goNextDay}
+                  className="rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-700 hover:bg-slate-100"
+                  aria-label="Ngày sau"
+                >
+                  ›
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={goToday}
+                disabled={isViewingToday}
+                className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-900 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Hôm nay
+              </button>
+              {!isViewingToday && (
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-900 ring-1 ring-amber-200">
+                  Đang xem ngày đã qua — vẫn có thể sửa / thêm lô cho ngày này
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-sm font-medium text-slate-600">
+              Đang xem: <span className="font-bold text-slate-800">{workDateLabel}</span>
+              {daysWithData > 0 && (
+                <span className="ml-2 text-slate-400">
+                  · {allRows.length} lô trên {daysWithData} ngày có dữ liệu
+                </span>
+              )}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <SyncBadge status={status} socketConnected={socketConnected} />
-            <StatPill label="Tổng lô" value={rows.length} />
+            <StatPill label="Tổng lô (ngày này)" value={viewRows.length} />
             <StatPill label="Kiện" value={totalPcs} />
             <StatPill label="Kg" value={totalKg.toLocaleString()} />
             <button
               type="button"
-              onClick={clearBoardForNewDay}
-              disabled={rows.length === 0}
-              title="Xóa hết lô trong bảng để nhập ngày mới"
-              className="rounded-xl border-2 border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 shadow-sm hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40 md:px-4"
-            >
-              Xóa bảng ngày này
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(true)}
+              onClick={() => {
+                setEditingShipment(null);
+                setShowForm(true);
+              }}
               className="hidden rounded-xl bg-emerald-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.98] md:inline-flex md:items-center md:gap-1.5"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -140,7 +197,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           </div>
         </div>
 
-        {/* Chú thích màu */}
         <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold">
           <Legend color="bg-yellow-400" label="BOOKING" />
           <Legend color="bg-green-500" label="Đã nhận" />
@@ -152,42 +208,73 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         </div>
       </header>
 
-      {rows.length === 0 && (
+      {viewRows.length === 0 && (
         <div className="mb-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-slate-600">
-          <p className="font-bold text-slate-800">Bảng trống — sẵn sàng cho ngày mới</p>
+          <p className="font-bold text-slate-800">
+            {isViewingToday ? "Bảng hôm nay đang trống" : "Không có lô cho ngày này"}
+          </p>
           <p className="mt-1 text-sm">
-            Bấm <span className="font-semibold text-emerald-700">Nhập booking</span> để thêm lô hàng.
+            {isViewingToday ? (
+              <>
+                Bấm <span className="font-semibold text-emerald-700">Nhập booking</span> để thêm lô cho hôm nay.
+              </>
+            ) : (
+              <>
+                Có thể <span className="font-semibold text-emerald-700">Nhập booking</span> để bổ sung lô cho ngày đang
+                xem, hoặc chọn ngày khác.
+              </>
+            )}
           </p>
         </div>
       )}
 
       <DesktopShipmentTable
-        rows={rows}
+        rows={viewRows}
         onUpdate={onUpdate}
         onDelete={onDelete}
         onPrint={onRequestPrint}
+        onEdit={openEdit}
       />
 
       <MobileShipmentCards
-        rows={rows}
+        rows={viewRows}
         selectedId={selectedId}
         onSelect={setSelectedId}
         onUpdate={onUpdate}
         onDelete={onDelete}
         onPrint={onRequestPrint}
+        onEdit={openEdit}
       />
 
       <StickyMobileActions
         selected={selected}
         onDelete={() => selected && onDelete(selected.id)}
         onPrint={() => selected && onRequestPrint(selected)}
-        onAdd={() => setShowForm(true)}
-        onClearDay={clearBoardForNewDay}
-        canClearDay={rows.length > 0}
+        onAdd={() => {
+          setEditingShipment(null);
+          setShowForm(true);
+        }}
+        onEdit={() => selected && openEdit(selected)}
       />
 
       {showForm && (
-        <AddShipmentForm onAdd={onAdd} onClose={() => setShowForm(false)} />
+        <ShipmentBookingForm
+          sessionDateYmd={selectedYmd}
+          allRows={allRows}
+          onAdd={onAdd}
+          onClose={() => setShowForm(false)}
+        />
+      )}
+
+      {editingShipment && (
+        <ShipmentBookingForm
+          mode="edit"
+          sessionDateYmd={editingShipment.sessionDate}
+          allRows={allRows}
+          shipment={editingShipment}
+          onSave={(patch) => onUpdate(editingShipment.id, patch)}
+          onClose={() => setEditingShipment(null)}
+        />
       )}
     </div>
   );

@@ -7,6 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
 const INITIAL_FILE = path.join(__dirname, "initialRows.json");
+const SEED_SESSION_DAY = "2026-04-05";
 
 const REDIS_STATE_KEY = process.env.REDIS_STATE_KEY || "tecsops:state";
 const REDIS_LOCK_KEY = process.env.REDIS_LOCK_KEY || "tecsops:state-lock";
@@ -25,9 +26,53 @@ function ensureDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-function renumberStt(rows) {
-  const c = { "TECS-TCS": 0, "TECS-SCSC": 0 };
-  return rows.map((r) => ({ ...r, stt: ++c[r.warehouse] }));
+/** STT theo từng sessionDate + warehouse, giữ thứ tự xuất hiện từng ngày */
+function renumberSttForAll(rows) {
+  const order = [];
+  const byDay = new Map();
+  for (const r of rows) {
+    const key = r.sessionDate || "legacy";
+    if (!byDay.has(key)) {
+      byDay.set(key, []);
+      order.push(key);
+    }
+    byDay.get(key).push(r);
+  }
+  const out = [];
+  for (const key of order) {
+    const dayRows = byDay.get(key);
+    const c = { "TECS-TCS": 0, "TECS-SCSC": 0 };
+    for (const r of dayRows) {
+      out.push({ ...r, stt: ++c[r.warehouse] });
+    }
+  }
+  return out;
+}
+
+function migrateRows(rows, workDateIso) {
+  const fallback = (workDateIso || new Date().toISOString()).slice(0, 10);
+  return rows.map((r) => ({
+    ...r,
+    sessionDate:
+      typeof r.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.sessionDate)
+        ? r.sessionDate
+        : fallback,
+  }));
+}
+
+function awbDigits(awb) {
+  return String(awb || "").replace(/\D/g, "");
+}
+
+function assertAwbUnique(rows, awbString, exceptId) {
+  const d = awbDigits(awbString);
+  if (d.length !== 11) return;
+  for (const r of rows) {
+    if (exceptId && r.id === exceptId) continue;
+    if (awbDigits(r.awb) === d) {
+      throw new Error("AWB đã tồn tại trong hệ thống — mỗi số AWB chỉ dùng một lần.");
+    }
+  }
 }
 
 function nextNewId(rows) {
@@ -40,16 +85,21 @@ function nextNewId(rows) {
 }
 
 export function createInitialState() {
-  const rows = JSON.parse(fs.readFileSync(INITIAL_FILE, "utf8"));
+  const raw = JSON.parse(fs.readFileSync(INITIAL_FILE, "utf8"));
+  const withS = raw.map((r) => ({
+    ...r,
+    sessionDate:
+      typeof r.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.sessionDate)
+        ? r.sessionDate
+        : SEED_SESSION_DAY,
+  }));
   return {
     version: 1,
-    rows: renumberStt(rows),
-    workDateIso: new Date().toISOString(),
+    rows: renumberSttForAll(withS),
   };
 }
 
 /**
- * Gắn client Redis dùng cho state (GET/SET + lock). Gọi trước listen(); null = chỉ dùng file.
  * @param {import('redis').RedisClientType | null} client
  */
 export function setRedisStateClient(client) {
@@ -60,18 +110,22 @@ export function isRedisStateEnabled() {
   return redisStateClient != null;
 }
 
+function normalizeState(raw) {
+  if (!raw || !Array.isArray(raw.rows) || typeof raw.version !== "number") return null;
+  const merged = migrateRows(raw.rows, raw.workDateIso);
+  return {
+    version: raw.version,
+    rows: renumberSttForAll(merged),
+  };
+}
+
 function loadStateFile() {
   ensureDir();
   try {
     if (fs.existsSync(STATE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
-      if (raw && Array.isArray(raw.rows) && typeof raw.version === "number") {
-        return {
-          version: raw.version,
-          rows: raw.rows,
-          workDateIso: raw.workDateIso || new Date().toISOString(),
-        };
-      }
+      const n = normalizeState(raw);
+      if (n) return n;
     }
   } catch (e) {
     console.error("[state] load error", e.message);
@@ -86,17 +140,6 @@ function saveStateFile(state) {
   const tmp = `${STATE_FILE}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(state), "utf8");
   fs.renameSync(tmp, STATE_FILE);
-}
-
-function normalizeState(raw) {
-  if (raw && Array.isArray(raw.rows) && typeof raw.version === "number") {
-    return {
-      version: raw.version,
-      rows: raw.rows,
-      workDateIso: raw.workDateIso || new Date().toISOString(),
-    };
-  }
-  return null;
 }
 
 /** @returns {Promise<object>} */
@@ -147,13 +190,15 @@ export async function saveState(state) {
  * @param {object} mutation
  */
 export function applyMutation(state, mutation) {
-  const rows = [...state.rows];
-  let workDateIso = state.workDateIso;
+  let rows = [...state.rows];
 
   switch (mutation.action) {
     case "UPDATE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
       if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
+      if (mutation.patch.awb !== undefined) {
+        assertAwbUnique(rows, mutation.patch.awb, mutation.id);
+      }
       rows[i] = { ...rows[i], ...mutation.patch };
       break;
     }
@@ -165,24 +210,22 @@ export function applyMutation(state, mutation) {
     }
     case "ADD": {
       const s = mutation.shipment;
+      const sd = s.sessionDate;
+      if (!sd || !/^\d{4}-\d{2}-\d{2}$/.test(sd)) {
+        throw new Error("ADD requires shipment.sessionDate (YYYY-MM-DD)");
+      }
+      assertAwbUnique(rows, s.awb, null);
       const id = nextNewId(rows);
       rows.push({ ...s, id });
-      break;
-    }
-    case "CLEAR_DAY": {
-      rows.length = 0;
-      workDateIso = new Date().toISOString();
       break;
     }
     default:
       throw new Error(`Unknown action: ${mutation.action}`);
   }
 
-  const normalized = renumberStt(rows);
   return {
     version: state.version + 1,
-    rows: normalized,
-    workDateIso,
+    rows: renumberSttForAll(rows),
   };
 }
 
@@ -211,7 +254,6 @@ async function withDistributedLock(fn) {
   throw new Error("Không lấy được khóa state (Redis); thử lại sau.");
 }
 
-/** Chuỗi Promise tuần tự — giảm race trên từng process */
 let tail = Promise.resolve();
 
 export function runMutation(mutation) {

@@ -1,4 +1,4 @@
-import type { Shipment } from "../types/shipment";
+﻿import type { Shipment } from "../types/shipment";
 
 function cutoffToday(time: string, dateStr: string): string {
   if (!time) return "";
@@ -14,6 +14,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "tcs-1",
     stt: 1,
+    sessionDate: "2026-04-05",
     awb: "232-1825 3045",
     flight: "MH751",
     flightDate: "05APR",
@@ -29,6 +30,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "tcs-2",
     stt: 2,
+    sessionDate: "2026-04-05",
     awb: "695-5817 7733",
     flight: "BR382",
     flightDate: "05APR",
@@ -44,6 +46,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "tcs-3",
     stt: 3,
+    sessionDate: "2026-04-05",
     awb: "232-1825 3126",
     flight: "MH0767",
     flightDate: "05APR",
@@ -59,6 +62,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "tcs-4",
     stt: 4,
+    sessionDate: "2026-04-05",
     awb: "738-0609 7092",
     flight: "VN773",
     flightDate: "05APR",
@@ -68,12 +72,13 @@ export const initialShipments: Shipment[] = [
     warehouse: "TECS-TCS",
     pcs: 34,
     kg: 507,
-    customer: "CÔNG CHÚA",
+    customer: "CÃ”NG CHÃšA",
     status: "RECEIVED",
   },
   {
     id: "tcs-5",
     stt: 5,
+    sessionDate: "2026-04-05",
     awb: "695-5817 7700",
     flight: "BR396",
     flightDate: "05APR",
@@ -83,12 +88,13 @@ export const initialShipments: Shipment[] = [
     warehouse: "TECS-TCS",
     pcs: null,
     kg: null,
-    customer: "CÔNG CHÚA",
+    customer: "CÃ”NG CHÃšA",
     status: "PENDING",
   },
   {
     id: "tcs-6",
     stt: 6,
+    sessionDate: "2026-04-05",
     awb: "235-9687 0266",
     flight: "TK0163",
     flightDate: "05APR",
@@ -98,12 +104,13 @@ export const initialShipments: Shipment[] = [
     warehouse: "TECS-TCS",
     pcs: 49,
     kg: 824,
-    customer: "MINH KHÔI",
+    customer: "MINH KHÃ”I",
     status: "AT_RISK",
   },
   {
     id: "tcs-7",
     stt: 7,
+    sessionDate: "2026-04-05",
     awb: "738-0599 4671",
     flight: "VN306",
     flightDate: "05APR",
@@ -119,6 +126,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "tcs-8",
     stt: 8,
+    sessionDate: "2026-04-05",
     awb: "784-6313 9311",
     flight: "CZ8466",
     flightDate: "05APR",
@@ -134,6 +142,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "tcs-9",
     stt: 9,
+    sessionDate: "2026-04-05",
     awb: "738-0609 6963",
     flight: "VN648",
     flightDate: "05APR",
@@ -149,6 +158,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "tcs-10",
     stt: 10,
+    sessionDate: "2026-04-05",
     awb: "203-0095 8285",
     flight: "5J752",
     flightDate: "05APR",
@@ -164,6 +174,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "tcs-11",
     stt: 11,
+    sessionDate: "2026-04-05",
     awb: "807-3783 5770",
     flight: "AK1493",
     flightDate: "05APR",
@@ -181,6 +192,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "scsc-1",
     stt: 1,
+    sessionDate: "2026-04-05",
     awb: "672-2626 3075",
     flight: "BI384",
     flightDate: "05APR",
@@ -196,6 +208,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "scsc-2",
     stt: 2,
+    sessionDate: "2026-04-05",
     awb: "618-5361 7664",
     flight: "TR503",
     flightDate: "05APR",
@@ -211,6 +224,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "scsc-3",
     stt: 3,
+    sessionDate: "2026-04-05",
     awb: "618-5242 7900",
     flight: "TR503",
     flightDate: "05APR",
@@ -220,12 +234,13 @@ export const initialShipments: Shipment[] = [
     warehouse: "TECS-SCSC",
     pcs: 60,
     kg: 1250,
-    customer: "QUÝ NAM",
+    customer: "QUÃ NAM",
     status: "RECEIVED",
   },
   {
     id: "scsc-4",
     stt: 4,
+    sessionDate: "2026-04-05",
     awb: "157-6667 7413",
     flight: "QR8969",
     flightDate: "05APR",
@@ -235,12 +250,13 @@ export const initialShipments: Shipment[] = [
     warehouse: "TECS-SCSC",
     pcs: 89,
     kg: 1431,
-    customer: "TÍN PHÁT",
+    customer: "TÃN PHÃT",
     status: "CUTOFF_PASSED",
   },
   {
     id: "scsc-5",
     stt: 5,
+    sessionDate: "2026-04-05",
     awb: "978-2365 3626",
     flight: "VJ081",
     flightDate: "05APR",
@@ -250,12 +266,13 @@ export const initialShipments: Shipment[] = [
     warehouse: "TECS-SCSC",
     pcs: 79,
     kg: 1265,
-    customer: "TÍN PHÁT",
+    customer: "TÃN PHÃT",
     status: "RECEIVED",
   },
   {
     id: "scsc-6",
     stt: 6,
+    sessionDate: "2026-04-05",
     awb: "978-2368 2142",
     flight: "VJ081",
     flightDate: "06APR",
@@ -265,12 +282,13 @@ export const initialShipments: Shipment[] = [
     warehouse: "TECS-SCSC",
     pcs: 116,
     kg: 1380,
-    customer: "GIA PHÚ",
+    customer: "GIA PHÃš",
     status: "RECEIVED",
   },
   {
     id: "scsc-7",
     stt: 7,
+    sessionDate: "2026-04-05",
     awb: "876-1503 1671",
     flight: "3U3904",
     flightDate: "05APR",
@@ -280,12 +298,13 @@ export const initialShipments: Shipment[] = [
     warehouse: "TECS-SCSC",
     pcs: 24,
     kg: 426,
-    customer: "GIA PHÚ",
+    customer: "GIA PHÃš",
     status: "RECEIVED",
   },
   {
     id: "scsc-8",
     stt: 8,
+    sessionDate: "2026-04-05",
     awb: "731-9887 2620",
     flight: "MF894",
     flightDate: "05APR",
@@ -301,6 +320,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "scsc-9",
     stt: 9,
+    sessionDate: "2026-04-05",
     awb: "978-2365 6942",
     flight: "VJ825",
     flightDate: "05APR",
@@ -316,6 +336,7 @@ export const initialShipments: Shipment[] = [
   {
     id: "scsc-10",
     stt: 10,
+    sessionDate: "2026-04-05",
     awb: "539-1012 7810",
     flight: "TH237",
     flightDate: "05APR",

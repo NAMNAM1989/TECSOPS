@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { io, type Socket } from "socket.io-client";
+import { io } from "socket.io-client";
 import type { Shipment } from "../types/shipment";
-import { saveRows, saveWorkDate } from "../utils/shipmentStorage";
+import { saveRows } from "../utils/shipmentStorage";
 import {
   applyShipmentMutation,
   type AppState,
@@ -10,15 +10,13 @@ import {
 
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
-type Fallback = { rows: Shipment[]; workDateIso: string };
+type Fallback = { rows: Shipment[] };
 
 function parseState(raw: unknown): AppState | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   if (typeof o.version !== "number" || !Array.isArray(o.rows)) return null;
-  const workDateIso =
-    typeof o.workDateIso === "string" ? o.workDateIso : new Date().toISOString();
-  return { version: o.version, rows: o.rows as Shipment[], workDateIso };
+  return { version: o.version, rows: o.rows as Shipment[] };
 }
 
 export function useShipmentSync(fallback: Fallback) {
@@ -26,7 +24,7 @@ export function useShipmentSync(fallback: Fallback) {
   const [socketConnected, setSocketConnected] = useState(false);
   const [state, setState] = useState<AppState | null>(null);
   const apiOkRef = useRef(false);
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const fallbackRef = useRef(fallback);
   fallbackRef.current = fallback;
 
@@ -50,7 +48,6 @@ export function useShipmentSync(fallback: Fallback) {
         setState({
           version: 0,
           rows: fallbackRef.current.rows,
-          workDateIso: fallbackRef.current.workDateIso,
         });
         setStatus("offline");
         return;
@@ -105,7 +102,6 @@ export function useShipmentSync(fallback: Fallback) {
         try {
           const next = applyShipmentMutation(prev, mutation);
           saveRows(next.rows);
-          saveWorkDate(new Date(next.workDateIso));
           return next;
         } catch {
           return prev;

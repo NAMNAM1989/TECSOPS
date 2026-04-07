@@ -1,20 +1,47 @@
 import type { Shipment } from "../types/shipment";
+import { awbDigitsKey } from "./awbFormat";
 
 export type AppState = {
   version: number;
   rows: Shipment[];
-  workDateIso: string;
 };
 
 export type ShipmentMutation =
   | { action: "UPDATE"; id: string; patch: Partial<Shipment> }
   | { action: "DELETE"; id: string }
-  | { action: "ADD"; shipment: Omit<Shipment, "id" | "stt"> }
-  | { action: "CLEAR_DAY" };
+  | { action: "ADD"; shipment: Omit<Shipment, "id" | "stt"> };
 
-function renumberStt(rows: Shipment[]): Shipment[] {
-  const c: Record<string, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
-  return rows.map((r) => ({ ...r, stt: ++c[r.warehouse] }));
+function assertAwbUnique(rows: Shipment[], awb: string, exceptId?: string) {
+  const d = awbDigitsKey(awb);
+  if (d.length !== 11) return;
+  for (const r of rows) {
+    if (exceptId && r.id === exceptId) continue;
+    if (awbDigitsKey(r.awb) === d) {
+      throw new Error("AWB đã tồn tại trong hệ thống — mỗi số AWB chỉ dùng một lần.");
+    }
+  }
+}
+
+function renumberSttForAll(rows: Shipment[]): Shipment[] {
+  const order: string[] = [];
+  const byDay = new Map<string, Shipment[]>();
+  for (const r of rows) {
+    const key = r.sessionDate || "legacy";
+    if (!byDay.has(key)) {
+      byDay.set(key, []);
+      order.push(key);
+    }
+    byDay.get(key)!.push(r);
+  }
+  const out: Shipment[] = [];
+  for (const key of order) {
+    const dayRows = byDay.get(key)!;
+    const c: Record<string, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
+    for (const r of dayRows) {
+      out.push({ ...r, stt: ++c[r.warehouse] });
+    }
+  }
+  return out;
 }
 
 function nextNewId(rows: Shipment[]): string {
@@ -28,13 +55,15 @@ function nextNewId(rows: Shipment[]): string {
 
 /** Khớp logic `server/stateStore.mjs` — dùng khi không có API (offline). */
 export function applyShipmentMutation(state: AppState, mutation: ShipmentMutation): AppState {
-  const rows = [...state.rows];
-  let workDateIso = state.workDateIso;
+  let rows = [...state.rows];
 
   switch (mutation.action) {
     case "UPDATE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
       if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
+      if (mutation.patch.awb !== undefined) {
+        assertAwbUnique(rows, mutation.patch.awb, mutation.id);
+      }
       rows[i] = { ...rows[i], ...mutation.patch };
       break;
     }
@@ -45,13 +74,13 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
       break;
     }
     case "ADD": {
+      const s = mutation.shipment;
+      if (!s.sessionDate || !/^\d{4}-\d{2}-\d{2}$/.test(s.sessionDate)) {
+        throw new Error("ADD requires sessionDate");
+      }
+      assertAwbUnique(rows, s.awb);
       const id = nextNewId(rows);
-      rows.push({ ...mutation.shipment, id } as Shipment);
-      break;
-    }
-    case "CLEAR_DAY": {
-      rows.length = 0;
-      workDateIso = new Date().toISOString();
+      rows.push({ ...s, id } as Shipment);
       break;
     }
     default:
@@ -60,7 +89,6 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
 
   return {
     version: state.version + 1,
-    rows: renumberStt(rows),
-    workDateIso,
+    rows: renumberSttForAll(rows),
   };
 }

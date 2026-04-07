@@ -12,6 +12,8 @@ export type Warehouse = "TECS-TCS" | "TECS-SCSC";
 export interface Shipment {
   id: string;
   stt: number;
+  /** Ngày phiên bảng (YYYY-MM-DD, theo giờ local khi nhập) */
+  sessionDate: string;
   awb: string;
   flight: string;
   flightDate: string;  // "05APR" etc.
@@ -25,4 +27,4 @@ export interface Shipment {
   status: ShipmentStatus;
 }
 
-export type ShipmentField = keyof Omit<Shipment, "id" | "status" | "stt">;
+export type ShipmentField = keyof Omit<Shipment, "id" | "status" | "stt" | "sessionDate">;

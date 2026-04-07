@@ -1,26 +1,46 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
+import { isAwbDigitsTaken } from "../utils/awbUnique";
 import { mergeCustomerOptions, persistNewCustomer } from "../utils/customerStorage";
 import { CUSTOMERS, WAREHOUSES, DESTINATIONS } from "../data/customers";
+import { parseFlightDateDisplayToYmd, splitIsoToLocalDateTime } from "../utils/bookingDateParse";
 
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES_60 = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
 
-interface AddShipmentFormProps {
-  onAdd: (shipment: Omit<Shipment, "id" | "stt">) => void;
+type BaseProps = {
+  sessionDateYmd: string;
+  allRows: Shipment[];
   onClose: () => void;
-}
+};
 
-export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
+type AddMode = BaseProps & {
+  mode?: "add";
+  onAdd: (shipment: Omit<Shipment, "id" | "stt">) => void;
+};
+
+type EditMode = BaseProps & {
+  mode: "edit";
+  shipment: Shipment;
+  onSave: (patch: Partial<Shipment>) => void;
+};
+
+export type ShipmentBookingFormProps = AddMode | EditMode;
+
+export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
+  const isEdit = props.mode === "edit";
+  const editShipment = isEdit ? props.shipment : null;
+
   const [awbRaw, setAwbRaw] = useState("");
   const [flight, setFlight] = useState("");
   const [flightDate, setFlightDate] = useState("");
-  /** Giờ cutoff định dạng 24h — chọn từ dropdown */
   const [cutoffHour, setCutoffHour] = useState("");
   const [cutoffMinute, setCutoffMinute] = useState("");
   const [cutoffDate, setCutoffDate] = useState("");
   const [dest, setDest] = useState("");
+  const [destSearch, setDestSearch] = useState("");
+  const [showDestList, setShowDestList] = useState(false);
   const [warehouse, setWarehouse] = useState<Warehouse>("TECS-TCS");
   const [customer, setCustomer] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
@@ -28,16 +48,35 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
 
   const awbRef = useRef<HTMLInputElement>(null);
   const customerRef = useRef<HTMLDivElement>(null);
+  const destRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isEdit || !editShipment) return;
+    const y = parseInt(editShipment.sessionDate.slice(0, 4), 10);
+    setAwbRaw(rawAwbDigits(editShipment.awb));
+    setFlight(editShipment.flight);
+    setFlightDate(parseFlightDateDisplayToYmd(editShipment.flightDate, y) || "");
+    const co = editShipment.cutoff ? splitIsoToLocalDateTime(editShipment.cutoff) : { date: "", hour: "", minute: "" };
+    setCutoffDate(co.date);
+    setCutoffHour(co.hour);
+    setCutoffMinute(co.minute);
+    setDest(editShipment.dest);
+    setDestSearch("");
+    setWarehouse(editShipment.warehouse);
+    setCustomer(editShipment.customer);
+    setCustomerSearch("");
+  }, [isEdit, editShipment?.id]);
+
+  useEffect(() => {
+    if (isEdit) return;
     awbRef.current?.focus();
-  }, []);
+  }, [isEdit]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (!customerRef.current?.contains(e.target as Node)) {
-        setShowCustomerList(false);
-      }
+      const t = e.target as Node;
+      if (!customerRef.current?.contains(t)) setShowCustomerList(false);
+      if (!destRef.current?.contains(t)) setShowDestList(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -58,9 +97,24 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
     searchTrim.length > 0 &&
     !customerOptions.some((c) => c.toLowerCase() === searchTrim.toLowerCase());
 
+  const destOptions = useMemo(
+    () => [...DESTINATIONS].sort((a, b) => a.localeCompare(b)),
+    []
+  );
+  const filteredDests = destOptions.filter((d) =>
+    d.toLowerCase().includes(destSearch.toLowerCase())
+  );
+  const destSearchTrim = destSearch.trim().toUpperCase();
+  const canUseTypedDest =
+    destSearchTrim.length > 0 &&
+    !destOptions.some((d) => d.toUpperCase() === destSearchTrim);
+
   const awbDisplay = formatAwb(awbRaw);
   const awbDigits = rawAwbDigits(awbRaw);
   const awbValid = awbDigits.length === 11;
+  const exceptId = isEdit ? editShipment!.id : null;
+  const awbConflict =
+    awbValid && isAwbDigitsTaken(props.allRows, awbDigits, exceptId);
 
   function buildCutoffIso(): string {
     if (!cutoffDate || cutoffHour === "" || cutoffMinute === "") return "";
@@ -75,13 +129,15 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
     if (!flightDate) return "";
     const d = new Date(flightDate);
     const day = String(d.getDate()).padStart(2, "0");
-    const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
     return `${day}${months[d.getMonth()]}`;
   }
 
   const effectiveCustomer = (customer || searchTrim).trim();
-  const canSubmit =
-    awbValid && flight && flightDate && dest && warehouse && effectiveCustomer.length > 0;
+  const effectiveDest = (dest || destSearchTrim).trim();
+  const canSubmitBase =
+    awbValid && !awbConflict && flight && flightDate && effectiveDest.length > 0 && warehouse && effectiveCustomer.length > 0;
+  const canSubmit = canSubmitBase;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -90,30 +146,39 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
     persistNewCustomer(effectiveCustomer, CUSTOMERS);
     setCustomerListVersion((v) => v + 1);
 
-    onAdd({
+    const cutoff = buildCutoffIso();
+    const payloadCommon = {
       awb: awbDisplay,
       flight: flight.toUpperCase(),
       flightDate: formatFlightDate(),
-      cutoff: buildCutoffIso(),
-      cutoffNote: "",
-      dest: dest.toUpperCase(),
+      cutoff,
+      cutoffNote: isEdit ? editShipment!.cutoffNote : "",
+      dest: effectiveDest.toUpperCase(),
       warehouse,
-      pcs: null,
-      kg: null,
+      pcs: isEdit ? editShipment!.pcs : null,
+      kg: isEdit ? editShipment!.kg : null,
       customer: effectiveCustomer,
-      status: "PENDING",
-    });
+      status: isEdit ? editShipment!.status : ("PENDING" as const),
+    };
 
-    setAwbRaw("");
-    setFlight("");
-    setFlightDate("");
-    setCutoffHour("");
-    setCutoffMinute("");
-    setCutoffDate("");
-    setDest("");
-    setCustomer("");
-    setCustomerSearch("");
-    awbRef.current?.focus();
+    if (isEdit) {
+      props.onSave(payloadCommon);
+      props.onClose();
+    } else {
+      props.onAdd({
+        ...payloadCommon,
+        sessionDate: props.sessionDateYmd,
+      });
+      setAwbRaw("");
+      setFlight("");
+      setFlightDate("");
+      setCutoffHour("");
+      setCutoffMinute("");
+      setCutoffDate("");
+      setDest("");
+      setDestSearch("");
+      awbRef.current?.focus();
+    }
   }
 
   return (
@@ -124,17 +189,27 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        className="max-h-[95vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
       >
-        {/* Title */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
-            <h2 className="text-lg font-extrabold text-slate-900">Nhập booking mới</h2>
-            <p className="text-xs text-slate-500">Nhập AWB 11 số → tự format chuẩn IATA</p>
+            <h2 className="text-lg font-extrabold text-slate-900">
+              {isEdit ? "Sửa lô hàng" : "Nhập booking mới"}
+            </h2>
+            <p className="text-xs text-slate-500">
+              Phiên ngày <span className="font-mono font-bold text-slate-700">{props.sessionDateYmd}</span>
+              {isEdit && (
+                <>
+                  {" "}
+                  · AWB 11 số, không trùng trong toàn hệ thống
+                </>
+              )}
+              {!isEdit && " — AWB 11 số tự format IATA"}
+            </p>
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={props.onClose}
             className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             aria-label="Đóng"
           >
@@ -145,7 +220,6 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
         </div>
 
         <div className="space-y-4 px-5 py-5">
-          {/* AWB */}
           <div>
             <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
               AWB (11 số)
@@ -160,14 +234,18 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
               className="w-full rounded-xl border border-slate-200 px-4 py-3 font-mono text-lg font-bold tracking-wide text-slate-900 placeholder:text-slate-300 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
             />
             {awbRaw.length > 0 && (
-              <p className={`mt-1.5 font-mono text-sm font-bold ${awbValid ? "text-emerald-600" : "text-amber-600"}`}>
+              <p className={`mt-1.5 font-mono text-sm font-bold ${awbValid && !awbConflict ? "text-emerald-600" : "text-amber-600"}`}>
                 {awbDisplay}
-                {!awbValid && <span className="ml-2 font-sans text-xs font-normal text-slate-400">({awbDigits.length}/11 số)</span>}
+                {!awbValid && (
+                  <span className="ml-2 font-sans text-xs font-normal text-slate-400">({awbDigits.length}/11 số)</span>
+                )}
+                {awbValid && awbConflict && (
+                  <span className="ml-2 font-sans text-xs font-bold text-red-600">Đã có lô khác dùng số này</span>
+                )}
               </p>
             )}
           </div>
 
-          {/* Flight + Flight Date */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -197,7 +275,6 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
             </div>
           </div>
 
-          {/* Cutoff Date + Time (24h) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -247,22 +324,83 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
             </div>
           </div>
 
-          {/* DEST + Warehouse */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div ref={destRef} className="relative">
               <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
                 Điểm đến (DEST)
               </label>
-              <select
-                value={dest}
-                onChange={(e) => setDest(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+              <p className="mb-1 text-[11px] text-slate-400">Gõ mã tùy ý hoặc chọn gợi ý.</p>
+              <div
+                className={`flex min-h-[42px] flex-wrap items-center gap-2 rounded-xl border px-3 py-2 transition-colors ${
+                  showDestList ? "border-sky-400 ring-2 ring-sky-400/30" : "border-slate-200"
+                }`}
               >
-                <option value="">Chọn DEST</option>
-                {DESTINATIONS.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
+                {dest && (
+                  <span className="shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-bold text-white">
+                    {dest}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDest("");
+                        setDestSearch("");
+                      }}
+                      className="ml-1.5 text-slate-400 hover:text-white"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+                <input
+                  type="text"
+                  placeholder={dest ? "" : "VD: KUL hoặc gõ mã mới…"}
+                  value={destSearch}
+                  onChange={(e) => {
+                    setDestSearch(e.target.value.toUpperCase());
+                    setShowDestList(true);
+                  }}
+                  onFocus={() => setShowDestList(true)}
+                  className="min-w-[6rem] flex-1 bg-transparent text-sm font-bold uppercase text-slate-900 placeholder:text-slate-300 focus:outline-none"
+                />
+              </div>
+              {showDestList && (
+                <div className="absolute left-0 right-0 z-20 mt-1 max-h-40 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                  {canUseTypedDest && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDest(destSearchTrim);
+                        setDestSearch("");
+                        setShowDestList(false);
+                      }}
+                      className="block w-full border-b border-emerald-100 bg-emerald-50 px-4 py-2.5 text-left text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+                    >
+                      + Dùng mã «{destSearchTrim}»
+                    </button>
+                  )}
+                  {filteredDests.length > 0 ? (
+                    filteredDests.map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => {
+                          setDest(d);
+                          setDestSearch("");
+                          setShowDestList(false);
+                        }}
+                        className={`block w-full px-4 py-2.5 text-left text-sm font-bold transition-colors ${
+                          dest === d ? "bg-sky-50 text-sky-800" : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    ))
+                  ) : (
+                    !canUseTypedDest && (
+                      <p className="px-4 py-3 text-xs text-slate-400">Gõ mã DEST hoặc chọn từ danh sách</p>
+                    )
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -274,25 +412,24 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
                 className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
               >
                 {WAREHOUSES.map((w) => (
-                  <option key={w} value={w}>{w}</option>
+                  <option key={w} value={w}>
+                    {w}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Customer dropdown */}
           <div ref={customerRef} className="relative">
             <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
               Khách hàng
             </label>
             <p className="mb-1 text-[11px] text-slate-400">
-              Gõ tên mới rồi thêm lô — hệ thống tự lưu vào danh sách lần sau.
+              Gõ tên mới rồi lưu — hệ thống tự nhớ lần sau.
             </p>
             <div
               className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors ${
-                showCustomerList
-                  ? "border-sky-400 ring-2 ring-sky-400/30"
-                  : "border-slate-200"
+                showCustomerList ? "border-sky-400 ring-2 ring-sky-400/30" : "border-slate-200"
               }`}
             >
               {customer && (
@@ -300,7 +437,10 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
                   {customer}
                   <button
                     type="button"
-                    onClick={() => { setCustomer(""); setCustomerSearch(""); }}
+                    onClick={() => {
+                      setCustomer("");
+                      setCustomerSearch("");
+                    }}
                     className="ml-1.5 text-slate-400 hover:text-white"
                   >
                     ×
@@ -345,9 +485,7 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
                         setShowCustomerList(false);
                       }}
                       className={`block w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
-                        customer === c
-                          ? "bg-sky-50 text-sky-800"
-                          : "text-slate-700 hover:bg-slate-50"
+                        customer === c ? "bg-sky-50 text-sky-800" : "text-slate-700 hover:bg-slate-50"
                       }`}
                     >
                       {c}
@@ -363,21 +501,20 @@ export function AddShipmentForm({ onAdd, onClose }: AddShipmentFormProps) {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex gap-2 border-t border-slate-100 px-5 py-4">
           <button
             type="submit"
             disabled={!canSubmit}
             className="flex-1 rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-emerald-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
           >
-            Thêm lô hàng
+            {isEdit ? "Lưu thay đổi" : "Thêm lô hàng"}
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={props.onClose}
             className="rounded-xl border border-slate-200 px-5 py-3.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
           >
-            Đóng
+            Hủy
           </button>
         </div>
       </form>

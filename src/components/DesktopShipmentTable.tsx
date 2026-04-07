@@ -10,6 +10,7 @@ interface Props {
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
+  onEdit: (s: Shipment) => void;
 }
 
 const WAREHOUSES: Warehouse[] = ["TECS-TCS", "TECS-SCSC"];
@@ -24,10 +25,10 @@ const COL_HEADERS = [
   { key: "kg", label: "KG", w: "w-16 text-right" },
   { key: "customer", label: "KHÁCH HÀNG", w: "min-w-[120px]" },
   { key: "status", label: "TRẠNG THÁI", w: "min-w-[110px]" },
-  { key: "actions", label: "", w: "w-20" },
+  { key: "actions", label: "", w: "w-32" },
 ] as const;
 
-export function DesktopShipmentTable({ rows, onUpdate, onDelete, onPrint }: Props) {
+export function DesktopShipmentTable({ rows, onUpdate, onDelete, onPrint, onEdit }: Props) {
   return (
     <div className="hidden md:block space-y-8">
       {WAREHOUSES.map((wh) => {
@@ -68,6 +69,7 @@ export function DesktopShipmentTable({ rows, onUpdate, onDelete, onPrint }: Prop
                       onUpdate={onUpdate}
                       onDelete={onDelete}
                       onPrint={onPrint}
+                      onEdit={onEdit}
                     />
                   ))}
                 </tbody>
@@ -85,11 +87,13 @@ function ShipmentRow({
   onUpdate,
   onDelete,
   onPrint,
+  onEdit,
 }: {
   row: Shipment;
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
+  onEdit: (s: Shipment) => void;
 }) {
   const bg = statusRowBg[row.status];
   const border = statusRowBorder[row.status];
@@ -161,7 +165,21 @@ function ShipmentRow({
       </td>
       {/* Actions */}
       <td className="px-1.5 py-2">
-        <div className="flex items-center justify-center gap-1">
+        <div className="flex flex-wrap items-center justify-center gap-0.5">
+          <button
+            type="button"
+            title="Sửa lô"
+            onClick={() => onEdit(row)}
+            className="rounded-lg p-1.5 text-sky-700 hover:bg-sky-100 hover:text-sky-900"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
+              />
+            </svg>
+          </button>
           <button
             type="button"
             title="In nhãn"

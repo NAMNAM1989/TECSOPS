@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+# Nixpacks đã chạy `npm ci` ở phase install — chỉ build ở đây
+buildCommand = "npm run build"
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "ON_FAILURE"

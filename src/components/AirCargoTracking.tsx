@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import { initialShipments } from "../data/mockShipments";
-import { loadRows, loadWorkDate, saveRows, saveWorkDate } from "../utils/shipmentStorage";
+import { loadRows, loadWorkDate } from "../utils/shipmentStorage";
+import { useShipmentSync } from "../hooks/useShipmentSync";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { AddShipmentForm } from "./AddShipmentForm";
@@ -20,45 +21,57 @@ function formatWorkDateLabel(d: Date): string {
 }
 
 export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
-  const [rows, setRows] = useState<Shipment[]>(() => loadRows() ?? initialShipments);
+  const fallback = useMemo(
+    () => ({
+      rows: loadRows() ?? initialShipments,
+      workDateIso: (loadWorkDate() ?? new Date()).toISOString(),
+    }),
+    []
+  );
+
+  const { status, state, mutate, socketConnected } = useShipmentSync(fallback);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  /** Ngày làm việc hiển thị trên bảng; đổi khi bấm “xóa bảng ngày này” để bắt đầu phiên mới */
-  const [workDate, setWorkDate] = useState(() => loadWorkDate() ?? new Date());
+
+  const rows = state?.rows ?? [];
+  const workDate = state ? new Date(state.workDateIso) : new Date();
 
   useEffect(() => {
-    saveRows(rows);
+    setSelectedId((s) => (s && !rows.some((r) => r.id === s) ? null : s));
   }, [rows]);
 
-  useEffect(() => {
-    saveWorkDate(workDate);
-  }, [workDate]);
-
-  const selected = rows.find((r) => r.id === selectedId) ?? null;
-
-  const onUpdate = useCallback((id: string, patch: Partial<Shipment>) => {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  }, []);
-
-  const onDelete = useCallback((id: string) => {
-    setRows((prev) => prev.filter((r) => r.id !== id));
-    setSelectedId((s) => (s === id ? null : s));
-  }, []);
-
-  const onAdd = useCallback((data: Omit<Shipment, "id" | "stt">) => {
-    setRows((prev) => {
-      let maxNew = 0;
-      for (const r of prev) {
-        const m = /^new-(\d+)$/.exec(r.id);
-        if (m) maxNew = Math.max(maxNew, parseInt(m[1], 10));
+  const runMutate = useCallback(
+    async (cmd: Parameters<typeof mutate>[0]) => {
+      try {
+        await mutate(cmd);
+      } catch (e) {
+        console.error(e);
+        window.alert(e instanceof Error ? e.message : "Không gửi được thay đổi lên máy chủ.");
       }
-      const nextNum = Math.max(100, maxNew) + 1;
-      const id = `new-${nextNum}`;
-      const whGroup = prev.filter((r) => r.warehouse === data.warehouse);
-      const stt = whGroup.length + 1;
-      return [...prev, { ...data, id, stt }];
-    });
-  }, []);
+    },
+    [mutate]
+  );
+
+  const onUpdate = useCallback(
+    (id: string, patch: Partial<Shipment>) => {
+      void runMutate({ action: "UPDATE", id, patch });
+    },
+    [runMutate]
+  );
+
+  const onDelete = useCallback(
+    (id: string) => {
+      void runMutate({ action: "DELETE", id });
+    },
+    [runMutate]
+  );
+
+  const onAdd = useCallback(
+    (data: Omit<Shipment, "id" | "stt">) => {
+      void runMutate({ action: "ADD", shipment: data });
+    },
+    [runMutate]
+  );
 
   const totalPcs = rows.reduce((s, r) => s + (r.pcs ?? 0), 0);
   const totalKg = rows.reduce((s, r) => s + (r.kg ?? 0), 0);
@@ -72,10 +85,19 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         "Dùng khi đã xong việc hôm nay và ngày mai nhập bảng mới. Thao tác không hoàn tác."
     );
     if (!ok) return;
-    setRows([]);
+    void runMutate({ action: "CLEAR_DAY" });
     setSelectedId(null);
-    setWorkDate(new Date());
-  }, [rows.length, workDateLabel]);
+  }, [rows.length, workDateLabel, runMutate]);
+
+  const selected = rows.find((r) => r.id === selectedId) ?? null;
+
+  if (status === "loading" || !state) {
+    return (
+      <div className="mx-auto max-w-[1600px] px-4 py-16 text-center text-slate-600">
+        <p className="font-semibold text-slate-800">Đang tải dữ liệu…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6 lg:px-8">
@@ -92,6 +114,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <SyncBadge status={status} socketConnected={socketConnected} />
             <StatPill label="Tổng lô" value={rows.length} />
             <StatPill label="Kiện" value={totalPcs} />
             <StatPill label="Kg" value={totalKg.toLocaleString()} />
@@ -138,7 +161,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         </div>
       )}
 
-      {/* Desktop table */}
       <DesktopShipmentTable
         rows={rows}
         onUpdate={onUpdate}
@@ -146,7 +168,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onPrint={onRequestPrint}
       />
 
-      {/* Mobile cards */}
       <MobileShipmentCards
         rows={rows}
         selectedId={selectedId}
@@ -156,7 +177,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onPrint={onRequestPrint}
       />
 
-      {/* Mobile sticky bar */}
       <StickyMobileActions
         selected={selected}
         onDelete={() => selected && onDelete(selected.id)}
@@ -166,11 +186,47 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         canClearDay={rows.length > 0}
       />
 
-      {/* Form nhập liệu */}
       {showForm && (
         <AddShipmentForm onAdd={onAdd} onClose={() => setShowForm(false)} />
       )}
     </div>
+  );
+}
+
+function SyncBadge({
+  status,
+  socketConnected,
+}: {
+  status: "live" | "degraded" | "offline";
+  socketConnected: boolean;
+}) {
+  if (status === "offline") {
+    return (
+      <span
+        className="rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700"
+        title="Không kết nối máy chủ — dữ liệu chỉ lưu trên trình duyệt này"
+      >
+        Chỉ máy này
+      </span>
+    );
+  }
+  if (status === "degraded" || !socketConnected) {
+    return (
+      <span
+        className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-900 ring-1 ring-amber-300/80"
+        title="Máy chủ OK nhưng kênh realtime đang ngắt — thay đổi vẫn gửi được; F5 nếu không thấy cập nhật từ người khác"
+      >
+        Đồng bộ hạn chế
+      </span>
+    );
+  }
+  return (
+    <span
+      className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-900 ring-1 ring-emerald-300/80"
+      title="Đang nhận cập nhật tức thì từ các máy khác"
+    >
+      Realtime
+    </span>
   );
 }
 

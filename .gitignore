@@ -1,5 +1,7 @@
 node_modules
 dist
+server/data/state.json
+server/data/*.tmp
 .DS_Store
 *.local
 .env

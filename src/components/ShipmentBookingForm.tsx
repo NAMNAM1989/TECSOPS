@@ -45,6 +45,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   const [customer, setCustomer] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerList, setShowCustomerList] = useState(false);
+  const [note, setNote] = useState("");
 
   const awbRef = useRef<HTMLInputElement>(null);
   const flightRef = useRef<HTMLInputElement>(null);
@@ -74,6 +75,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     setWarehouse(editShipment.warehouse);
     setCustomer(editShipment.customer);
     setCustomerSearch("");
+    setNote(editShipment.note ?? "");
   }, [isEdit, editShipment?.id]);
 
   useEffect(() => {
@@ -203,6 +205,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       flightDate: formatFlightDate(),
       cutoff,
       cutoffNote: isEdit ? editShipment!.cutoffNote : "",
+      note: note.trim(),
       dest: effectiveDest.toUpperCase(),
       warehouse,
       pcs: isEdit ? editShipment!.pcs : null,
@@ -227,6 +230,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       setCutoffDate("");
       setDest("");
       setDestSearch("");
+      setNote("");
       awbRef.current?.focus();
     }
   }
@@ -266,6 +270,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Tab</kbd> chuyển ô ·{" "}
               <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Enter</kbd> sang ô tiếp
               (ngày bay, cutoff, giờ, kho…) · Enter ở khách hàng = gửi form ·{" "}
+              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Tab</kbd> sang Note ·{" "}
               <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Esc</kbd> đóng
             </p>
           </div>
@@ -587,6 +592,22 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 )}
               </div>
             )}
+          </div>
+
+          <div>
+            <label htmlFor="booking-note" className="mb-1 block text-xs font-semibold text-apple-secondary">
+              Note
+            </label>
+            <p className="mb-1 text-[11px] text-apple-tertiary">Ghi chú thêm cho lô (tùy chọn).</p>
+            <textarea
+              id="booking-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              placeholder="VD: hàng dễ vỡ, ưu tiên xuất kho…"
+              className="w-full resize-y rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+            />
           </div>
         </div>
 

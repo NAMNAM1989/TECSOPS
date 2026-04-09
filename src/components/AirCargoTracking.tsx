@@ -219,13 +219,13 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-semibold text-apple-secondary">
-          <Legend color="bg-amber-400" label="BOOKING" />
-          <Legend color="bg-emerald-500" label="Đã nhận" />
-          <Legend color="bg-orange-500" label="Sắp trễ" />
-          <Legend color="bg-red-500" label="Hàng gấp" />
-          <Legend color="bg-sky-500" label="Đã xong" />
+          <Legend color="bg-white ring-1 ring-slate-300" label="BOOKING" />
+          <Legend color="bg-yellow-400" label="Đã nhận" />
+          <Legend color="bg-red-500" label="Sắp trễ" />
+          <Legend color="bg-orange-500" label="Hàng gấp" />
+          <Legend color="bg-emerald-500" label="Đã xong" />
           <Legend color="bg-violet-500" label="Đã kéo OLA" />
-          <Legend color="bg-neutral-400" label="Hoàn thành" />
+          <Legend color="bg-sky-500" label="Hoàn thành" />
         </div>
       </header>
 

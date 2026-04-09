@@ -24,6 +24,7 @@ const COL_HEADERS = [
   { key: "pcs", label: "KIỆN", w: "w-16 text-right" },
   { key: "kg", label: "KG", w: "w-16 text-right" },
   { key: "customer", label: "KHÁCH HÀNG", w: "min-w-[120px]" },
+  { key: "note", label: "NOTE", w: "min-w-[100px] max-w-[180px]" },
   { key: "status", label: "TRẠNG THÁI", w: "min-w-[110px]" },
   { key: "actions", label: "", w: "w-32" },
 ] as const;
@@ -154,6 +155,16 @@ function ShipmentRow({
       {/* Customer */}
       <td className="border-r border-black/[0.06] px-2.5 py-2 font-semibold text-apple-label">
         {row.customer}
+      </td>
+      {/* Note */}
+      <td className="border-r border-black/[0.06] px-2.5 py-2 align-top">
+        {row.note ? (
+          <span className="line-clamp-2 text-xs leading-snug text-apple-secondary" title={row.note}>
+            {row.note}
+          </span>
+        ) : (
+          <span className="text-xs italic text-apple-tertiary">—</span>
+        )}
       </td>
       {/* Status */}
       <td className="border-r border-black/[0.06] px-2 py-2">

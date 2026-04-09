@@ -28,6 +28,7 @@ function isShipmentShape(o: unknown): o is Omit<Shipment, "sessionDate"> & { ses
     typeof r.flightDate === "string" &&
     typeof r.cutoff === "string" &&
     typeof r.cutoffNote === "string" &&
+    (r.note === undefined || typeof r.note === "string") &&
     typeof r.dest === "string" &&
     typeof r.customer === "string" &&
     typeof r.status === "string" &&
@@ -66,7 +67,11 @@ export function loadRows(): Shipment[] | null {
         typeof item.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.sessionDate)
           ? item.sessionDate
           : fb;
-      rows.push({ ...item, sessionDate: sd });
+      rows.push({
+        ...item,
+        sessionDate: sd,
+        note: typeof item.note === "string" ? item.note : "",
+      });
     }
     return rows;
   } catch {

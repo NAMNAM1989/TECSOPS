@@ -158,23 +158,20 @@ export function MobileShipmentCards({
                       style={{
                         transform: open ? `translateX(-${REVEAL_PX}px)` : undefined,
                       }}
-                      className="relative z-10 cursor-pointer bg-white/90 py-2 pl-3 pr-2 backdrop-blur-sm transition-transform duration-200 ease-out"
+                      className="relative z-10 cursor-pointer bg-white/90 px-2 py-1.5 backdrop-blur-sm transition-transform duration-200 ease-out"
                     >
-                      {/* Dòng 1: AWB · chuyến · DEST | trạng thái */}
-                      <div className="flex items-start gap-1.5">
-                        <div className="min-w-0 flex-1">
-                          <p className="leading-tight">
-                            <span className="font-mono text-[13px] font-semibold tracking-tight text-apple-label">
-                              {row.awb}
-                            </span>
-                            <span className="mx-1 text-apple-tertiary">·</span>
-                            <span className="text-[11px] font-medium text-apple-secondary">
-                              {row.flight}/{row.flightDate}
-                            </span>
-                            <span className="mx-1 text-apple-tertiary">·</span>
-                            <span className="text-[12px] font-semibold text-apple-label">{row.dest}</span>
-                          </p>
-                        </div>
+                      {/* Một dòng ngang — vuốt ngang nếu nội dung dài */}
+                      <div className="flex w-full min-w-0 flex-nowrap items-center gap-x-1 overflow-x-auto overscroll-x-contain text-left [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                        <span className="shrink-0 font-mono text-[12px] font-semibold tracking-tight text-apple-label">
+                          {row.awb}
+                        </span>
+                        <span className="shrink-0 text-apple-tertiary">·</span>
+                        <span className="shrink-0 whitespace-nowrap text-[10px] font-medium text-apple-secondary">
+                          {row.flight}/{row.flightDate}
+                        </span>
+                        <span className="shrink-0 text-apple-tertiary">·</span>
+                        <span className="shrink-0 text-[11px] font-semibold text-apple-label">{row.dest}</span>
+                        <span className="shrink-0 px-0.5 text-apple-tertiary">|</span>
                         <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                           <StatusSelect
                             value={row.status}
@@ -182,43 +179,59 @@ export function MobileShipmentCards({
                             onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
                           />
                         </div>
-                      </div>
-
-                      {/* Dòng 2: ghi chú · cutoff · K/G · khách */}
-                      <div
-                        className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0 text-[11px] leading-snug text-apple-secondary"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {row.cutoffNote ? (
-                          <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-px text-[9px] font-semibold text-white">
-                            {row.cutoffNote}
-                          </span>
-                        ) : null}
-                        <span className="shrink-0 font-medium text-apple-tertiary">CO</span>
-                        {row.cutoff ? (
-                          <CutoffCountdown iso={row.cutoff} className="text-[10px]" />
-                        ) : (
-                          <span className="text-[10px] italic text-apple-tertiary">—</span>
-                        )}
-                        <span className="shrink-0 text-apple-tertiary">|</span>
-                        <span className="shrink-0 font-medium text-apple-tertiary">K</span>
-                        <InlineNumberEdit
-                          compact
-                          value={row.pcs}
-                          placeholder="—"
-                          className="text-[11px]"
-                          onCommit={(v) => onUpdate(row.id, { pcs: v })}
-                        />
-                        <span className="shrink-0 font-medium text-apple-tertiary">G</span>
-                        <InlineNumberEdit
-                          compact
-                          value={row.kg}
-                          placeholder="—"
-                          className="text-[11px]"
-                          onCommit={(v) => onUpdate(row.id, { kg: v })}
-                        />
-                        <span className="min-w-0 flex-1 truncate text-right text-[11px] font-semibold text-apple-label">
+                        <span className="shrink-0 px-0.5 text-apple-tertiary">|</span>
+                        <span
+                          className="shrink-0 max-w-[6rem] truncate text-[11px] font-semibold text-apple-label"
+                          title={row.customer}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           {row.customer}
+                        </span>
+                        {row.note ? (
+                          <>
+                            <span className="shrink-0 text-apple-tertiary">·</span>
+                            <span
+                              className="shrink-0 max-w-[5rem] truncate text-[10px] text-apple-secondary"
+                              title={row.note}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {row.note}
+                            </span>
+                          </>
+                        ) : null}
+                        <span
+                          className="inline-flex shrink-0 items-center gap-x-1 whitespace-nowrap text-[10px] text-apple-secondary"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="text-apple-tertiary">|</span>
+                          {row.cutoffNote ? (
+                            <span className="rounded-full bg-red-500 px-1 py-px text-[9px] font-semibold text-white">
+                              {row.cutoffNote}
+                            </span>
+                          ) : null}
+                          <span className="font-medium text-apple-tertiary">CO</span>
+                          {row.cutoff ? (
+                            <CutoffCountdown iso={row.cutoff} className="text-[10px]" />
+                          ) : (
+                            <span className="italic text-apple-tertiary">—</span>
+                          )}
+                          <span className="text-apple-tertiary">|</span>
+                          <span className="font-medium text-apple-tertiary">K</span>
+                          <InlineNumberEdit
+                            compact
+                            value={row.pcs}
+                            placeholder="—"
+                            className="text-[11px]"
+                            onCommit={(v) => onUpdate(row.id, { pcs: v })}
+                          />
+                          <span className="font-medium text-apple-tertiary">G</span>
+                          <InlineNumberEdit
+                            compact
+                            value={row.kg}
+                            placeholder="—"
+                            className="text-[11px]"
+                            onCommit={(v) => onUpdate(row.id, { kg: v })}
+                          />
                         </span>
                       </div>
                     </div>

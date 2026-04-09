@@ -57,6 +57,7 @@ function migrateRows(rows, workDateIso) {
       typeof r.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.sessionDate)
         ? r.sessionDate
         : fallback,
+    note: typeof r.note === "string" ? r.note : "",
   }));
 }
 
@@ -92,6 +93,7 @@ export function createInitialState() {
       typeof r.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.sessionDate)
         ? r.sessionDate
         : SEED_SESSION_DAY,
+    note: typeof r.note === "string" ? r.note : "",
   }));
   return {
     version: 1,

@@ -19,6 +19,8 @@ export interface Shipment {
   flightDate: string;  // "05APR" etc.
   cutoff: string;      // ISO hoặc "" nếu chưa có
   cutoffNote: string;  // Ghi chú thêm (VD "PER")
+  /** Ghi chú tự do cho lô (form booking) */
+  note: string;
   dest: string;
   warehouse: Warehouse;
   pcs: number | null;

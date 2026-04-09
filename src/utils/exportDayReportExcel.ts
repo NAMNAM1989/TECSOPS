@@ -28,6 +28,7 @@ export function downloadDayReportExcel(rows: Shipment[], sessionDateYmd: string)
     "Số kiện",
     "Số KG",
     "Tên khách hàng",
+    "Note",
   ];
   const aoa: (string | number)[][] = [
     headerRow,
@@ -39,6 +40,7 @@ export function downloadDayReportExcel(rows: Shipment[], sessionDateYmd: string)
       r.pcs ?? "",
       r.kg ?? "",
       r.customer,
+      r.note ?? "",
     ]),
   ];
 
@@ -51,6 +53,7 @@ export function downloadDayReportExcel(rows: Shipment[], sessionDateYmd: string)
     { wch: 10 },
     { wch: 10 },
     { wch: 28 },
+    { wch: 32 },
   ];
 
   const wb = XLSX.utils.book_new();

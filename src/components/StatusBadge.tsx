@@ -23,7 +23,7 @@ export function StatusSelect({ value, onChange, compact }: StatusSelectProps) {
       value={value}
       onChange={(e) => onChange(e.target.value as ShipmentStatus)}
       onClick={(e) => e.stopPropagation()}
-      className={`cursor-pointer rounded-md border-0 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40 ${statusBadge[value]} ${
+      className={`cursor-pointer rounded-full border-0 shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/30 ${statusBadge[value]} ${
         compact ? "max-w-[9.5rem] px-1 py-0.5 text-[10px] leading-tight" : "px-2.5 py-1 text-xs"
       }`}
     >

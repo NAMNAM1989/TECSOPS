@@ -16,7 +16,7 @@ export function SummaryBar({ rows, warehouse }: SummaryBarProps) {
   const noPcs = group.filter((r) => r.pcs === null).length;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-[10px] md:gap-3 md:text-sm">
+    <div className="flex flex-wrap items-center gap-1.5 text-[10px] md:gap-2 md:text-xs">
       <Chip label="Lô" value={group.length} />
       <Chip label="Kiện" value={totalPcs} />
       <Chip label="Kg" value={totalKg.toLocaleString()} />
@@ -39,16 +39,16 @@ function Chip({
   danger?: boolean;
 }) {
   const tone = danger
-    ? "bg-rose-100 text-rose-800"
+    ? "bg-red-100/90 text-red-900"
     : warn
-      ? "bg-amber-100 text-amber-800"
-      : "bg-slate-100 text-slate-700";
+      ? "bg-amber-100/90 text-amber-950"
+      : "bg-black/[0.05] text-apple-label";
   return (
     <span
-      className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold md:gap-1 md:rounded-lg md:px-2 md:py-1 md:text-xs ${tone}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold md:px-2.5 md:py-1 ${tone}`}
     >
       {label}
-      <span className="font-bold">{value}</span>
+      <span className="tabular-nums font-semibold">{value}</span>
     </span>
   );
 }

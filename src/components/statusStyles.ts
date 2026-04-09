@@ -10,60 +10,44 @@ export const statusLabel: Record<ShipmentStatus, string> = {
   DELIVERED: "Hoàn thành",
 };
 
-/*
-  Bảng màu nóng, dễ phân biệt bằng mắt từ xa:
-  ● BOOKING      → VÀNG
-  ● Đã nhận      → XANH LÁ
-  ● Sắp trễ      → CAM
-  ● Hàng gấp     → ĐỎ
-  ● Đã xong      → XANH DƯƠNG
-  ● Đã kéo OLA   → TÍM
-  ● Hoàn thành   → XÁM
-*/
-
+/** Nền hàng: tint nhẹ kiểu Apple, vạch trái rõ để quét nhanh */
 export const statusRowBg: Record<ShipmentStatus, string> = {
-  PENDING:       "bg-yellow-100",
-  RECEIVED:      "bg-green-100",
-  AT_RISK:       "bg-orange-100",
-  CUTOFF_PASSED: "bg-red-100",
-  BUILT_UP:      "bg-blue-100",
-  DEPARTED:      "bg-violet-100",
-  DELIVERED:     "bg-gray-100",
+  PENDING: "bg-amber-50/80",
+  RECEIVED: "bg-emerald-50/70",
+  AT_RISK: "bg-orange-50/80",
+  CUTOFF_PASSED: "bg-red-50/80",
+  BUILT_UP: "bg-sky-50/70",
+  DEPARTED: "bg-violet-50/70",
+  DELIVERED: "bg-neutral-100/80",
 };
 
 export const statusRowBorder: Record<ShipmentStatus, string> = {
-  PENDING:       "border-l-4 border-l-yellow-400",
-  RECEIVED:      "border-l-4 border-l-green-500",
-  AT_RISK:       "border-l-4 border-l-orange-500",
-  CUTOFF_PASSED: "border-l-4 border-l-red-500",
-  BUILT_UP:      "border-l-4 border-l-blue-500",
-  DEPARTED:      "border-l-4 border-l-violet-500",
-  DELIVERED:     "border-l-4 border-l-gray-400",
+  PENDING: "border-l-[3px] border-l-amber-400",
+  RECEIVED: "border-l-[3px] border-l-emerald-500",
+  AT_RISK: "border-l-[3px] border-l-orange-500",
+  CUTOFF_PASSED: "border-l-[3px] border-l-red-500",
+  BUILT_UP: "border-l-[3px] border-l-sky-500",
+  DEPARTED: "border-l-[3px] border-l-violet-500",
+  DELIVERED: "border-l-[3px] border-l-neutral-400",
 };
 
+/** Pill trạng thái — chữ đậm vừa, bo đầy */
 export const statusBadge: Record<ShipmentStatus, string> = {
-  PENDING:
-    "bg-yellow-400 text-yellow-950 ring-1 ring-yellow-500 font-bold",
-  RECEIVED:
-    "bg-green-500 text-white ring-1 ring-green-600 font-bold",
-  AT_RISK:
-    "bg-orange-500 text-white ring-1 ring-orange-600 font-extrabold",
-  CUTOFF_PASSED:
-    "bg-red-600 text-white ring-1 ring-red-700 font-extrabold",
-  BUILT_UP:
-    "bg-blue-500 text-white ring-1 ring-blue-600 font-bold",
-  DEPARTED:
-    "bg-violet-500 text-white ring-1 ring-violet-600 font-bold",
-  DELIVERED:
-    "bg-gray-400 text-white ring-1 ring-gray-500 font-bold",
+  PENDING: "bg-amber-100/90 text-amber-950 font-semibold",
+  RECEIVED: "bg-emerald-100/90 text-emerald-900 font-semibold",
+  AT_RISK: "bg-orange-100/90 text-orange-900 font-semibold",
+  CUTOFF_PASSED: "bg-red-100/90 text-red-900 font-semibold",
+  BUILT_UP: "bg-sky-100/90 text-sky-900 font-semibold",
+  DEPARTED: "bg-violet-100/90 text-violet-900 font-semibold",
+  DELIVERED: "bg-neutral-200/90 text-neutral-800 font-semibold",
 };
 
 export const statusCardBg: Record<ShipmentStatus, string> = {
-  PENDING:       "bg-yellow-50 border-yellow-300",
-  RECEIVED:      "bg-green-50 border-green-300",
-  AT_RISK:       "bg-orange-50 border-orange-400",
-  CUTOFF_PASSED: "bg-red-50 border-red-400",
-  BUILT_UP:      "bg-blue-50 border-blue-300",
-  DEPARTED:      "bg-violet-50 border-violet-300",
-  DELIVERED:     "bg-gray-50 border-gray-300",
+  PENDING: "bg-amber-50/90 border-amber-200/60",
+  RECEIVED: "bg-emerald-50/90 border-emerald-200/50",
+  AT_RISK: "bg-orange-50/90 border-orange-200/60",
+  CUTOFF_PASSED: "bg-red-50/90 border-red-200/60",
+  BUILT_UP: "bg-sky-50/90 border-sky-200/50",
+  DEPARTED: "bg-violet-50/90 border-violet-200/50",
+  DELIVERED: "bg-neutral-100/90 border-neutral-200/60",
 };

@@ -233,7 +233,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 backdrop-blur-sm sm:items-center sm:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/25 p-3 backdrop-blur-xl sm:items-center sm:p-6"
       role="dialog"
       aria-modal="true"
     >
@@ -245,15 +245,15 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
             props.onClose();
           }
         }}
-        className="max-h-[95vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        className="max-h-[95vh] w-full max-w-lg overflow-y-auto rounded-[28px] border border-black/[0.08] bg-white shadow-apple-md"
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-black/[0.06] px-5 py-4">
           <div>
-            <h2 className="text-lg font-extrabold text-slate-900">
+            <h2 className="text-[19px] font-semibold tracking-tight text-apple-label">
               {isEdit ? "Sửa lô hàng" : "Nhập booking mới"}
             </h2>
-            <p className="text-xs text-slate-500">
-              Phiên ngày <span className="font-mono font-bold text-slate-700">{props.sessionDateYmd}</span>
+            <p className="text-xs text-apple-secondary">
+              Phiên ngày <span className="font-mono font-semibold text-apple-label">{props.sessionDateYmd}</span>
               {isEdit && (
                 <>
                   {" "}
@@ -262,18 +262,18 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               )}
               {!isEdit && " — AWB 11 số tự format IATA"}
             </p>
-            <p className="mt-1 text-[11px] leading-snug text-slate-400">
-              <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-mono text-[10px]">Tab</kbd> chuyển ô ·{" "}
-              <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-mono text-[10px]">Enter</kbd> sang ô tiếp
+            <p className="mt-1 text-[11px] leading-snug text-apple-tertiary">
+              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Tab</kbd> chuyển ô ·{" "}
+              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Enter</kbd> sang ô tiếp
               (ngày bay, cutoff, giờ, kho…) · Enter ở khách hàng = gửi form ·{" "}
-              <kbd className="rounded border border-slate-200 bg-slate-50 px-1 font-mono text-[10px]">Esc</kbd> đóng
+              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Esc</kbd> đóng
             </p>
           </div>
           <button
             type="button"
             tabIndex={-1}
             onClick={props.onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-full p-2 text-apple-tertiary hover:bg-black/[0.05] hover:text-apple-label"
             aria-label="Đóng (hoặc phím Esc)"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -284,7 +284,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
 
         <div className="space-y-4 px-5 py-5">
           <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+            <label className="mb-1 block text-xs font-semibold text-apple-secondary">
               AWB (11 số)
             </label>
             <input
@@ -295,13 +295,13 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               value={awbRaw}
               onChange={(e) => setAwbRaw(e.target.value.replace(/\D/g, "").slice(0, 11))}
               onKeyDown={(e) => handleEnterAdvance(e, "field")}
-              className="w-full rounded-xl border border-slate-200 px-4 py-3 font-mono text-lg font-bold tracking-wide text-slate-900 placeholder:text-slate-300 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+              className="w-full rounded-2xl border border-black/[0.08] bg-white px-4 py-3 font-mono text-lg font-semibold tracking-wide text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
             />
             {awbRaw.length > 0 && (
               <p className={`mt-1.5 font-mono text-sm font-bold ${awbValid && !awbConflict ? "text-emerald-600" : "text-amber-600"}`}>
                 {awbDisplay}
                 {!awbValid && (
-                  <span className="ml-2 font-sans text-xs font-normal text-slate-400">({awbDigits.length}/11 số)</span>
+                  <span className="ml-2 font-sans text-xs font-normal text-apple-tertiary">({awbDigits.length}/11 số)</span>
                 )}
                 {awbValid && awbConflict && (
                   <span className="ml-2 font-sans text-xs font-bold text-red-600">Đã có lô khác dùng số này</span>
@@ -312,7 +312,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+              <label className="mb-1 block text-xs font-semibold text-apple-secondary">
                 Chuyến bay
               </label>
               <input
@@ -322,11 +322,11 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 value={flight}
                 onChange={(e) => setFlight(e.target.value.toUpperCase())}
                 onKeyDown={(e) => handleEnterAdvance(e, "field")}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold uppercase text-slate-900 placeholder:text-slate-300 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                className="w-full rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 text-sm font-semibold uppercase text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+              <label className="mb-1 block text-xs font-semibold text-apple-secondary">
                 Ngày bay
               </label>
               <input
@@ -338,14 +338,14 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                   if (!cutoffDate) setCutoffDate(e.target.value);
                 }}
                 onKeyDown={(e) => handleEnterAdvance(e, "field")}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                className="w-full rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+              <label className="mb-1 block text-xs font-semibold text-apple-secondary">
                 Ngày cutoff
               </label>
               <input
@@ -354,11 +354,11 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 value={cutoffDate}
                 onChange={(e) => setCutoffDate(e.target.value)}
                 onKeyDown={(e) => handleEnterAdvance(e, "field")}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                className="w-full rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+              <label className="mb-1 block text-xs font-semibold text-apple-secondary">
                 Giờ cutoff (24h)
               </label>
               <div className="flex items-center gap-1.5">
@@ -367,7 +367,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                   value={cutoffHour}
                   onChange={(e) => setCutoffHour(e.target.value)}
                   onKeyDown={(e) => handleEnterAdvance(e, "field")}
-                  className="min-w-0 flex-1 rounded-xl border border-slate-200 px-2 py-2.5 font-mono text-sm font-bold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                  className="min-w-0 flex-1 rounded-2xl border border-black/[0.08] bg-white px-2 py-2.5 font-mono text-sm font-bold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
                   aria-label="Giờ cutoff 0–23 (mũi tên chọn, Enter sang phút)"
                 >
                   <option value="">—</option>
@@ -377,13 +377,13 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                     </option>
                   ))}
                 </select>
-                <span className="font-mono text-lg font-bold text-slate-400">:</span>
+                <span className="font-mono text-lg font-semibold text-apple-tertiary">:</span>
                 <select
                   ref={cutoffMinuteRef}
                   value={cutoffMinute}
                   onChange={(e) => setCutoffMinute(e.target.value)}
                   onKeyDown={(e) => handleEnterAdvance(e, "field")}
-                  className="min-w-0 flex-1 rounded-xl border border-slate-200 px-2 py-2.5 font-mono text-sm font-bold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                  className="min-w-0 flex-1 rounded-2xl border border-black/[0.08] bg-white px-2 py-2.5 font-mono text-sm font-bold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
                   aria-label="Phút cutoff 0–59 (Enter sang DEST)"
                 >
                   <option value="">—</option>
@@ -394,25 +394,25 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                   ))}
                 </select>
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">
-                24 giờ — dùng ↑↓ trong ô giờ/phút, <span className="font-semibold text-slate-500">Enter</span> sang ô kế
+              <p className="mt-1 text-[11px] text-apple-tertiary">
+                24 giờ — dùng ↑↓ trong ô giờ/phút, <span className="font-semibold text-apple-secondary">Enter</span> sang ô kế
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div ref={destRef} className="relative">
-              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+              <label className="mb-1 block text-xs font-semibold text-apple-secondary">
                 Điểm đến (DEST)
               </label>
-              <p className="mb-1 text-[11px] text-slate-400">Gõ mã tùy ý hoặc chọn gợi ý.</p>
+              <p className="mb-1 text-[11px] text-apple-tertiary">Gõ mã tùy ý hoặc chọn gợi ý.</p>
               <div
-                className={`flex min-h-[42px] flex-wrap items-center gap-2 rounded-xl border px-3 py-2 transition-colors ${
-                  showDestList ? "border-sky-400 ring-2 ring-sky-400/30" : "border-slate-200"
+                className={`flex min-h-[42px] flex-wrap items-center gap-2 rounded-2xl border border-black/[0.08] bg-white px-3 py-2 transition-colors ${
+                  showDestList ? "border-apple-blue ring-2 ring-apple-blue/20" : ""
                 }`}
               >
                 {dest && (
-                  <span className="shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-bold text-white">
+                  <span className="shrink-0 rounded-full bg-apple-label px-2.5 py-1 text-xs font-semibold text-white">
                     {dest}
                     <button
                       type="button"
@@ -421,7 +421,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                         setDest("");
                         setDestSearch("");
                       }}
-                      className="ml-1.5 text-slate-400 hover:text-white"
+                      className="ml-1.5 text-white/70 hover:text-white"
                     >
                       ×
                     </button>
@@ -438,11 +438,11 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                   }}
                   onFocus={() => setShowDestList(true)}
                   onKeyDown={(e) => handleEnterAdvance(e, "field")}
-                  className="min-w-[6rem] flex-1 bg-transparent text-sm font-bold uppercase text-slate-900 placeholder:text-slate-300 focus:outline-none"
+                  className="min-w-[6rem] flex-1 bg-transparent text-sm font-semibold uppercase text-apple-label placeholder:text-apple-tertiary focus:outline-none"
                 />
               </div>
               {showDestList && (
-                <div className="absolute left-0 right-0 z-20 mt-1 max-h-40 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                <div className="absolute left-0 right-0 z-20 mt-1 max-h-40 overflow-y-auto rounded-2xl border border-black/[0.08] bg-white py-1 shadow-xl">
                   {canUseTypedDest && (
                     <button
                       type="button"
@@ -452,7 +452,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                         setDestSearch("");
                         setShowDestList(false);
                       }}
-                      className="block w-full border-b border-emerald-100 bg-emerald-50 px-4 py-2.5 text-left text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+                      className="block w-full border-b border-black/[0.06] bg-apple-blue/10 px-4 py-2.5 text-left text-sm font-semibold text-apple-blue hover:bg-apple-blue/15"
                     >
                       + Dùng mã «{destSearchTrim}»
                     </button>
@@ -468,8 +468,8 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                           setDestSearch("");
                           setShowDestList(false);
                         }}
-                        className={`block w-full px-4 py-2.5 text-left text-sm font-bold transition-colors ${
-                          dest === d ? "bg-sky-50 text-sky-800" : "text-slate-700 hover:bg-slate-50"
+                        className={`block w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
+                          dest === d ? "bg-apple-blue/10 text-apple-blue" : "text-apple-label hover:bg-black/[0.03]"
                         }`}
                       >
                         {d}
@@ -477,14 +477,14 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                     ))
                   ) : (
                     !canUseTypedDest && (
-                      <p className="px-4 py-3 text-xs text-slate-400">Gõ mã DEST hoặc chọn từ danh sách</p>
+                      <p className="px-4 py-3 text-xs text-apple-tertiary">Gõ mã DEST hoặc chọn từ danh sách</p>
                     )
                   )}
                 </div>
               )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+              <label className="mb-1 block text-xs font-semibold text-apple-secondary">
                 Kho hàng
               </label>
               <select
@@ -492,7 +492,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 value={warehouse}
                 onChange={(e) => setWarehouse(e.target.value as Warehouse)}
                 onKeyDown={(e) => handleEnterAdvance(e, "field")}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+                className="w-full rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 text-sm font-bold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
                 aria-label="Kho hàng (↑↓ chọn, Enter sang khách hàng)"
               >
                 {WAREHOUSES.map((w) => (
@@ -505,19 +505,19 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
           </div>
 
           <div ref={customerRef} className="relative">
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+            <label className="mb-1 block text-xs font-semibold text-apple-secondary">
               Khách hàng
             </label>
-            <p className="mb-1 text-[11px] text-slate-400">
+            <p className="mb-1 text-[11px] text-apple-tertiary">
               Gõ tên mới rồi lưu — hệ thống tự nhớ lần sau.
             </p>
             <div
-              className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors ${
-                showCustomerList ? "border-sky-400 ring-2 ring-sky-400/30" : "border-slate-200"
+              className={`flex items-center gap-2 rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 transition-colors ${
+                showCustomerList ? "border-apple-blue ring-2 ring-apple-blue/20" : ""
               }`}
             >
               {customer && (
-                <span className="shrink-0 rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-bold text-white">
+                <span className="shrink-0 rounded-full bg-apple-label px-2.5 py-1 text-xs font-semibold text-white">
                   {customer}
                   <button
                     type="button"
@@ -526,7 +526,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                       setCustomer("");
                       setCustomerSearch("");
                     }}
-                    className="ml-1.5 text-slate-400 hover:text-white"
+                    className="ml-1.5 text-white/70 hover:text-white"
                   >
                     ×
                   </button>
@@ -543,11 +543,11 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 }}
                 onFocus={() => setShowCustomerList(true)}
                 onKeyDown={(e) => handleEnterAdvance(e, "customer")}
-                className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-900 placeholder:text-slate-300 focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-apple-label placeholder:text-apple-tertiary focus:outline-none"
               />
             </div>
             {showCustomerList && (
-              <div className="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+              <div className="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto rounded-2xl border border-black/[0.08] bg-white py-1 shadow-xl">
                 {canUseTypedCustomer && (
                   <button
                     type="button"
@@ -557,7 +557,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                       setCustomerSearch("");
                       setShowCustomerList(false);
                     }}
-                    className="block w-full border-b border-emerald-100 bg-emerald-50 px-4 py-2.5 text-left text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+                    className="block w-full border-b border-black/[0.06] bg-apple-blue/10 px-4 py-2.5 text-left text-sm font-semibold text-apple-blue hover:bg-apple-blue/15"
                   >
                     + Dùng tên mới «{searchTrim}» (sẽ được lưu)
                   </button>
@@ -574,7 +574,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                         setShowCustomerList(false);
                       }}
                       className={`block w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
-                        customer === c ? "bg-sky-50 text-sky-800" : "text-slate-700 hover:bg-slate-50"
+                        customer === c ? "bg-apple-blue/10 text-apple-blue" : "text-apple-label hover:bg-black/[0.03]"
                       }`}
                     >
                       {c}
@@ -582,7 +582,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                   ))
                 ) : (
                   !canUseTypedCustomer && (
-                    <p className="px-4 py-3 text-xs text-slate-400">Không tìm thấy — gõ tên khách mới</p>
+                    <p className="px-4 py-3 text-xs text-apple-tertiary">Không tìm thấy — gõ tên khách mới</p>
                   )
                 )}
               </div>
@@ -590,19 +590,19 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
           </div>
         </div>
 
-        <div className="flex gap-2 border-t border-slate-100 px-5 py-4">
+        <div className="flex gap-2 border-t border-black/[0.06] px-5 py-4">
           <button
             ref={submitBtnRef}
             type="submit"
             disabled={!canSubmit}
-            className="flex-1 rounded-xl bg-emerald-600 px-4 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-emerald-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+            className="flex-1 rounded-full bg-apple-blue px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-apple-tertiary disabled:text-white/80"
           >
             {isEdit ? "Lưu thay đổi" : "Thêm lô hàng"}
           </button>
           <button
             type="button"
             onClick={props.onClose}
-            className="rounded-xl border border-slate-200 px-5 py-3.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            className="rounded-full border border-black/[0.12] bg-white px-6 py-3.5 text-sm font-semibold text-apple-label hover:bg-black/[0.03]"
           >
             Hủy
           </button>

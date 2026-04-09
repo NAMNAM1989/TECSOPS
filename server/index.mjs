@@ -6,6 +6,7 @@ import { createClient } from "redis";
 import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { loadState, runMutation, setRedisStateClient } from "./stateStore.mjs";
+import { registerTsplRoutes } from "./tsplRoutes.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -35,6 +36,8 @@ app.post("/api/mutation", async (req, res) => {
     res.status(400).json({ error: String(e.message) });
   }
 });
+
+registerTsplRoutes(app);
 
 const distDir = path.join(__dirname, "..", "dist");
 app.use(express.static(distDir));

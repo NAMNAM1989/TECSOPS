@@ -54,8 +54,8 @@ export function InlineNumberEdit({
           e.stopPropagation();
           setEditing(true);
         }}
-        className={`${btnBase} hover:bg-white/60 ${className} ${
-          value === null ? "italic text-slate-400" : ""
+        className={`${btnBase} hover:bg-black/[0.04] ${className} ${
+          value === null ? "italic text-apple-tertiary" : ""
         }`}
       >
         {value !== null ? value.toLocaleString() : placeholder}
@@ -81,8 +81,8 @@ export function InlineNumberEdit({
       onClick={(e) => e.stopPropagation()}
       className={
         compact
-          ? "inline-block w-14 rounded border border-sky-500 bg-white px-1 py-0.5 text-right text-[11px] font-bold shadow-sm focus:outline-none focus:ring-1 focus:ring-sky-400"
-          : "w-full rounded border-2 border-sky-400 bg-white px-1.5 py-0.5 text-right text-sm font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-400/30"
+          ? "inline-block w-14 rounded-lg border border-apple-blue bg-white px-1 py-0.5 text-right text-[11px] font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/25"
+          : "w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 text-right text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
       }
       step="any"
     />

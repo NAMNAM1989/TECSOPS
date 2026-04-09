@@ -112,45 +112,44 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   if (status === "loading" || !state) {
     return (
-      <div className="mx-auto max-w-[1600px] px-4 py-16 text-center text-slate-600">
-        <p className="font-semibold text-slate-800">Đang tải dữ liệu…</p>
+      <div className="mx-auto max-w-[1600px] px-4 py-16 text-center text-apple-secondary">
+        <p className="font-semibold text-apple-label">Đang tải dữ liệu…</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6 lg:px-8">
-      <header className="mb-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
+      <header className="mb-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
-              CẬP NHẬT HÀNG LÊN SÂN BAY
+            <h1 className="text-2xl font-semibold tracking-tight text-apple-label sm:text-[1.75rem] sm:leading-tight">
+              Hàng lên sân bay
             </h1>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Phiên bảng theo ngày — chọn ngày để xem / nhập. Hôm sau mở{" "}
-              <span className="font-semibold text-slate-700">Hôm nay</span> để có bảng mới (dữ liệu cũ vẫn lưu).
+            <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-apple-secondary">
+              Bảng theo ngày — chọn ngày để xem hoặc nhập. Mỗi ngày một phiên; dữ liệu các ngày trước vẫn được lưu.
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={onDownloadDayExcel}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-900 shadow-sm hover:bg-emerald-100"
+                className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label shadow-apple transition-colors hover:bg-black/[0.03]"
                 title="Tải báo cáo các lô của ngày đang xem (Excel)"
               >
-                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <svg className="h-4 w-4 shrink-0 text-apple-blue" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
                   />
                 </svg>
-                Tải Excel (ngày này)
+                Tải Excel
               </button>
-              <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+              <div className="inline-flex items-center gap-0.5 rounded-full border border-black/[0.08] bg-white p-0.5 shadow-apple">
                 <button
                   type="button"
                   onClick={goPrevDay}
-                  className="rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-700 hover:bg-slate-100"
+                  className="rounded-full px-3 py-2 text-sm font-semibold text-apple-label hover:bg-black/[0.05]"
                   aria-label="Ngày trước"
                 >
                   ‹
@@ -162,12 +161,12 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
                     const v = e.target.value;
                     if (v) setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)));
                   }}
-                  className="rounded-lg border-0 bg-transparent px-2 py-1 font-mono text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+                  className="rounded-full border-0 bg-transparent px-2 py-1.5 font-mono text-sm font-semibold text-apple-label focus:outline-none focus:ring-2 focus:ring-apple-blue/25"
                 />
                 <button
                   type="button"
                   onClick={goNextDay}
-                  className="rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-700 hover:bg-slate-100"
+                  className="rounded-full px-3 py-2 text-sm font-semibold text-apple-label hover:bg-black/[0.05]"
                   aria-label="Ngày sau"
                 >
                   ›
@@ -177,28 +176,30 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
                 type="button"
                 onClick={goToday}
                 disabled={isViewingToday}
-                className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-900 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-full bg-apple-blue px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover disabled:cursor-not-allowed disabled:bg-apple-tertiary disabled:text-white/80"
               >
                 Hôm nay
               </button>
               {!isViewingToday && (
-                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-900 ring-1 ring-amber-200">
-                  Đang xem ngày đã qua — vẫn có thể sửa / thêm lô cho ngày này
+                <span className="rounded-full bg-amber-100/90 px-3 py-1.5 text-[11px] font-semibold text-amber-950 ring-1 ring-amber-200/80">
+                  Đang xem ngày khác — vẫn sửa / thêm lô được
                 </span>
               )}
             </div>
-            <p className="mt-2 text-sm font-medium text-slate-600">
-              Đang xem: <span className="font-bold text-slate-800">{workDateLabel}</span>
+            <p className="mt-3 text-sm text-apple-secondary">
+              Đang xem{" "}
+              <span className="font-semibold text-apple-label">{workDateLabel}</span>
               {daysWithData > 0 && (
-                <span className="ml-2 text-slate-400">
-                  · {allRows.length} lô trên {daysWithData} ngày có dữ liệu
+                <span className="text-apple-tertiary">
+                  {" "}
+                  · {allRows.length} lô / {daysWithData} ngày có dữ liệu
                 </span>
               )}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <SyncBadge status={status} socketConnected={socketConnected} />
-            <StatPill label="Tổng lô (ngày này)" value={viewRows.length} />
+            <StatPill label="Lô" value={viewRows.length} />
             <StatPill label="Kiện" value={totalPcs} />
             <StatPill label="Kg" value={totalKg.toLocaleString()} />
             <button
@@ -207,7 +208,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
                 setEditingShipment(null);
                 setShowForm(true);
               }}
-              className="hidden rounded-xl bg-emerald-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-[0.98] md:inline-flex md:items-center md:gap-1.5"
+              className="hidden rounded-full bg-apple-blue px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover active:scale-[0.98] md:inline-flex md:items-center md:gap-2"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -217,31 +218,30 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold">
-          <Legend color="bg-yellow-400" label="BOOKING" />
-          <Legend color="bg-green-500" label="Đã nhận" />
+        <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-semibold text-apple-secondary">
+          <Legend color="bg-amber-400" label="BOOKING" />
+          <Legend color="bg-emerald-500" label="Đã nhận" />
           <Legend color="bg-orange-500" label="Sắp trễ" />
-          <Legend color="bg-red-600" label="Hàng gấp" />
-          <Legend color="bg-blue-500" label="Đã xong" />
+          <Legend color="bg-red-500" label="Hàng gấp" />
+          <Legend color="bg-sky-500" label="Đã xong" />
           <Legend color="bg-violet-500" label="Đã kéo OLA" />
-          <Legend color="bg-gray-400" label="Hoàn thành" />
+          <Legend color="bg-neutral-400" label="Hoàn thành" />
         </div>
       </header>
 
       {viewRows.length === 0 && (
-        <div className="mb-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-slate-600">
-          <p className="font-bold text-slate-800">
-            {isViewingToday ? "Bảng hôm nay đang trống" : "Không có lô cho ngày này"}
+        <div className="mb-8 rounded-apple-lg border border-dashed border-black/[0.12] bg-white/60 px-5 py-12 text-center shadow-apple backdrop-blur-sm">
+          <p className="text-[17px] font-semibold text-apple-label">
+            {isViewingToday ? "Hôm nay chưa có lô" : "Không có lô cho ngày này"}
           </p>
-          <p className="mt-1 text-sm">
+          <p className="mt-2 text-sm leading-relaxed text-apple-secondary">
             {isViewingToday ? (
               <>
-                Bấm <span className="font-semibold text-emerald-700">Nhập booking</span> để thêm lô cho hôm nay.
+                Chọn <span className="font-semibold text-apple-blue">Nhập booking</span> (máy tính) hoặc nút dưới cùng (điện thoại) để thêm lô.
               </>
             ) : (
               <>
-                Có thể <span className="font-semibold text-emerald-700">Nhập booking</span> để bổ sung lô cho ngày đang
-                xem, hoặc chọn ngày khác.
+                Bạn có thể <span className="font-semibold text-apple-blue">Nhập booking</span> cho ngày đang xem, hoặc đổi ngày.
               </>
             )}
           </p>
@@ -310,7 +310,7 @@ function SyncBadge({
   if (status === "offline") {
     return (
       <span
-        className="rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-700"
+        className="rounded-full bg-black/[0.06] px-3 py-1.5 text-[11px] font-semibold text-apple-secondary"
         title="Không kết nối máy chủ — dữ liệu chỉ lưu trên trình duyệt này"
       >
         Chỉ máy này
@@ -320,7 +320,7 @@ function SyncBadge({
   if (status === "degraded" || !socketConnected) {
     return (
       <span
-        className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-900 ring-1 ring-amber-300/80"
+        className="rounded-full bg-amber-100/90 px-3 py-1.5 text-[11px] font-semibold text-amber-950 ring-1 ring-amber-200/80"
         title="Máy chủ OK nhưng kênh realtime đang ngắt — thay đổi vẫn gửi được; F5 nếu không thấy cập nhật từ người khác"
       >
         Đồng bộ hạn chế
@@ -329,7 +329,7 @@ function SyncBadge({
   }
   return (
     <span
-      className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-900 ring-1 ring-emerald-300/80"
+      className="rounded-full bg-emerald-100/90 px-3 py-1.5 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-200/80"
       title="Đang nhận cập nhật tức thì từ các máy khác"
     >
       Realtime
@@ -339,17 +339,17 @@ function SyncBadge({
 
 function StatPill({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm shadow-sm">
-      <span className="text-slate-500">{label}</span>{" "}
-      <span className="font-bold text-slate-800">{value}</span>
+    <div className="rounded-2xl border border-black/[0.06] bg-white/90 px-3 py-2 text-sm shadow-apple backdrop-blur-sm">
+      <span className="text-apple-secondary">{label}</span>{" "}
+      <span className="font-semibold tabular-nums text-apple-label">{value}</span>
     </div>
   );
 }
 
 function Legend({ color, label }: { color: string; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 shadow-sm ring-1 ring-slate-200/80">
-      <span className={`inline-block h-2.5 w-2.5 rounded-full ${color}`} />
+    <span className="inline-flex items-center gap-2 rounded-full border border-black/[0.06] bg-white/90 px-3 py-1.5 shadow-apple backdrop-blur-sm">
+      <span className={`inline-block h-2 w-2 rounded-full ${color}`} />
       {label}
     </span>
   );

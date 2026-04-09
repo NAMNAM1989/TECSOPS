@@ -28,7 +28,7 @@ export function CutoffCountdown({ iso, className = "" }: CutoffCountdownProps) {
   if (past) {
     return (
       <span
-        className={`font-mono font-bold text-rose-600 ${className || "text-xs"}`}
+        className={`font-mono font-semibold text-red-600 ${className || "text-xs"}`}
         title={new Date(iso).toLocaleString()}
       >
         -{h}:{pad(m)}:{pad(s)}
@@ -43,10 +43,10 @@ export function CutoffCountdown({ iso, className = "" }: CutoffCountdownProps) {
     <span
       className={`font-mono font-semibold ${
         urgent
-          ? "text-rose-600 animate-pulse"
+          ? "animate-pulse text-red-600"
           : warning
             ? "text-amber-700"
-            : "text-slate-600"
+            : "text-apple-secondary"
       } ${className || "text-xs"}`}
       title={new Date(iso).toLocaleString()}
     >

@@ -1,0 +1,222 @@
+/**
+ * In nhãn nhiệt — ưu tiên đơn vị mm, một trang, không scale ngẫu nhiên.
+ *
+ * Vì sao tách file: tránh xung đột Tailwind; comment đầy đủ cho kỹ sư in.
+ *
+ * Thermal Xprinter: driver thường map khổ 100×80 thành trang lệch 90°.
+ * Giải pháp: @page 80×100 mm + xoay khối nhãn 100×80 mm ±90° (class .print-label-spin).
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Canvas tem — màn hình + in (cùng DOM → preview khớp bản in)                */
+/* -------------------------------------------------------------------------- */
+
+.print-label-sheet.lbl-sheet {
+  position: relative;
+  box-sizing: border-box;
+  width: 100mm;
+  height: 80mm;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #fff;
+  color: #000;
+  /* Arial in được tốt trên Windows/Chrome print; không phụ thuộc webfont */
+  font-family: Arial, Helvetica, "Liberation Sans", "DejaVu Sans", sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  border: 0.53mm solid #000; /* ~2px @ 96dpi — viền ngoài */
+}
+
+.lbl-sheet p,
+.lbl-sheet span {
+  margin: 0;
+  padding: 0;
+}
+
+/* Dải tuyệt đối theo mm — tránh flex/grid full-page (Chrome in đôi lệch khác preview) */
+.lbl-band {
+  position: absolute;
+  left: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.lbl-band--airline {
+  top: 0;
+  width: 100%;
+  height: 17mm;
+  border-bottom: 0.53mm solid #000;
+  padding: 0.4mm 1mm 0;
+  text-align: center;
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+}
+
+.lbl-band--awb {
+  top: 17mm;
+  width: 100%;
+  height: 19mm;
+  border-bottom: 0.53mm solid #000;
+  padding: 0 0.5mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lbl-band--awb p {
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 900;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* Vùng dưới: hai cột, không hàng ngang cắt giữa mã sân */
+.lbl-band--split {
+  top: 36mm;
+  width: 100%;
+  height: 44mm; /* 80 - 36 */
+  margin: 0;
+  padding: 0;
+}
+
+.lbl-col {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 50%;
+  box-sizing: border-box;
+  padding: 0.6mm 1mm 0.5mm;
+}
+
+.lbl-col--left {
+  left: 0;
+  border-right: 0.53mm solid #000;
+}
+
+.lbl-col--right {
+  left: 50%;
+}
+
+.lbl-col-cap {
+  display: block;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.lbl-col-airport {
+  display: block;
+  margin-top: 0.4mm;
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.lbl-col-footer {
+  position: absolute;
+  bottom: 0.6mm;
+  left: 1mm;
+  right: 1mm;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.lbl-col--right .lbl-col-footer {
+  left: auto;
+  text-align: right;
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 900;
+}
+
+.lbl-col--left .lbl-col-footer {
+  right: 1mm;
+}
+
+/* -------------------------------------------------------------------------- */
+/* @media print — một trang, không margin, chặn page-break                    */
+/* -------------------------------------------------------------------------- */
+
+@media print {
+  /* Trang = khổ feed máy nhiệt (80×100) khi tem 100×80 xoay 90° */
+  @page {
+    size: 80mm 100mm;
+    margin: 0;
+  }
+
+  /* min-h-screen (Tailwind) là nguyên nhân hay gây trang 2 — override mạnh */
+  html {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 80mm;
+    height: 100mm;
+    max-width: 80mm;
+    max-height: 100mm;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: 100mm !important;
+    max-height: 100mm !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only.print-label-host {
+    display: block !important;
+    position: fixed;
+    left: 0;
+    top: 0;
+    margin: 0;
+    padding: 0;
+    width: 80mm;
+    height: 100mm;
+    max-width: 80mm;
+    max-height: 100mm;
+    overflow: hidden;
+    box-sizing: border-box;
+    background: #fff;
+    page-break-after: avoid !important;
+    break-after: avoid-page !important;
+  }
+
+  /* Khối tem 100×80, căn giữa trang 80×100 rồi xoay */
+  .print-label-spin {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 100mm;
+    height: 80mm;
+    max-width: 100mm;
+    max-height: 80mm;
+    box-sizing: border-box;
+    overflow: hidden;
+    transform-origin: center center;
+    transform: translate(-50%, -50%) rotate(90deg);
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-label-spin.print-label-spin--ccw {
+    transform: translate(-50%, -50%) rotate(-90deg);
+  }
+
+  .print-label-sheet.lbl-sheet {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}

@@ -1,110 +1,130 @@
-import Barcode from "react-barcode";
-import { QRCodeSVG } from "qrcode.react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
-import { statusLabel } from "./statusStyles";
+import { formatAwb } from "../utils/awbFormat";
+import {
+  LABEL_FONT_SCALE_DEFAULT,
+  LABEL_FONT_SCALE_MAX,
+  LABEL_FONT_SCALE_MIN,
+  clampLabelFontScale,
+  labelFs,
+  loadLabelFontScale,
+  saveLabelFontScale,
+} from "../utils/labelFontScale";
+import {
+  type LabelPrintMode,
+  loadLabelPrintFlipCcw,
+  loadLabelPrintMode,
+  saveLabelPrintFlipCcw,
+  saveLabelPrintMode,
+} from "../utils/labelPrintMode";
+import { LABEL_PT } from "../constants/labelTypography";
+import { airlineLines, shipmentToTsplBody } from "../utils/shipmentToLabelPayload";
+import { printBrowserLabel } from "../utils/printBrowserLabel";
 
-const qrPayload = (s: Shipment) =>
-  JSON.stringify({
-    awb: s.awb,
-    flight: s.flight,
-    dest: s.dest,
-    warehouse: s.warehouse,
-    pcs: s.pcs,
-    kg: s.kg,
-    customer: s.customer,
-  });
+const DEFAULT_ORIGIN = "SGN";
 
-export function LabelContent({ s }: { s: Shipment }) {
-  const barcodeValue = s.awb.replace(/\D/g, "").slice(0, 13) || "0000000000";
+type LabelContentProps = { s: Shipment; fontScale: number };
+
+export function LabelContent({ s, fontScale }: LabelContentProps) {
+  const fs = (pt: number) => labelFs(fontScale, pt);
+  const awbLine = formatAwb(s.awb);
+  const pcsDisplay = s.pcs != null ? String(s.pcs) : "—";
+  const [line1, line2] = airlineLines(s.flight);
 
   return (
-    <div className="print-label-sheet flex flex-col border-[3px] border-black bg-white p-3 text-black">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2 border-b-2 border-black pb-2">
-        <div>
-          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-neutral-600">
-            AIR CARGO LABEL
-          </p>
-          <p className="font-mono text-xl font-black leading-tight tracking-tight">{s.awb}</p>
-        </div>
-        <div className="shrink-0 rounded border-2 border-black bg-white p-0.5">
-          <QRCodeSVG value={qrPayload(s)} size={56} level="M" marginSize={0} />
-        </div>
+    <div className="print-label-sheet lbl-sheet">
+      <div className="lbl-band lbl-band--airline">
+        <p style={{ fontSize: fs(LABEL_PT.airlineLine) }}>{line1}</p>
+        <p style={{ fontSize: fs(LABEL_PT.airlineLine) }}>{line2}</p>
       </div>
-
-      {/* Main info */}
-      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5">
-        <LabelField label="CHUYẾN BAY" className="font-mono text-sm font-bold">
-          {s.flight}/{s.flightDate}
-        </LabelField>
-        <LabelField label="DEST" className="text-2xl font-black leading-none">
-          {s.dest}
-        </LabelField>
-        <LabelField label="KHO" className="text-sm font-bold">
-          {s.warehouse}
-        </LabelField>
-        <LabelField label="KIỆN / KG" className="font-mono text-sm font-bold">
-          {s.pcs ?? "—"} / {s.kg ?? "—"}
-        </LabelField>
+      <div className="lbl-band lbl-band--awb">
+        <p style={{ fontSize: fs(LABEL_PT.awb) }}>{awbLine}</p>
       </div>
-
-      {/* Customer & status */}
-      <div className="mt-2 min-h-0 flex-1 border-t-2 border-black pt-2">
-        <LabelField label="KHÁCH HÀNG" className="line-clamp-2 text-base font-extrabold leading-snug">
-          {s.customer}
-        </LabelField>
-        <div className="mt-1 flex items-center gap-2">
-          <span className="inline-block rounded border border-black px-2 py-0.5 text-[10px] font-bold">
-            {statusLabel[s.status]}
+      <div className="lbl-band lbl-band--split">
+        <div className="lbl-col lbl-col--left">
+          <span className="lbl-col-cap" style={{ fontSize: fs(LABEL_PT.caption) }}>
+            Origin
           </span>
-          {s.cutoffNote && (
-            <span className="rounded bg-black px-2 py-0.5 text-[10px] font-bold text-white">
-              {s.cutoffNote}
-            </span>
-          )}
+          <span className="lbl-col-airport" style={{ fontSize: fs(LABEL_PT.airport) }}>
+            {DEFAULT_ORIGIN}
+          </span>
+          <span className="lbl-col-footer" style={{ fontSize: fs(LABEL_PT.caption) }}>
+            Total no. of pieces
+          </span>
         </div>
-      </div>
-
-      {/* Barcode footer */}
-      <div className="mt-auto flex flex-col items-center border-t-2 border-dashed border-black pt-2">
-        <div className="w-full overflow-hidden [&_svg]:max-h-[32mm] [&_svg]:w-full">
-          <Barcode
-            value={barcodeValue}
-            format="CODE128"
-            width={1.4}
-            height={40}
-            displayValue
-            fontSize={11}
-            margin={0}
-            background="#ffffff"
-            lineColor="#000000"
-          />
+        <div className="lbl-col lbl-col--right">
+          <span className="lbl-col-cap" style={{ fontSize: fs(LABEL_PT.caption) }}>
+            Destination
+          </span>
+          <span className="lbl-col-airport truncate" style={{ fontSize: fs(LABEL_PT.airport) }}>
+            {s.dest}
+          </span>
+          <span className="lbl-col-footer" style={{ fontSize: fs(LABEL_PT.pieces) }}>
+            {pcsDisplay}
+          </span>
         </div>
-        {s.cutoff && (
-          <p className="mt-1 font-mono text-[9px] font-semibold">
-            Cutoff: {new Date(s.cutoff).toLocaleString("vi-VN")}
-          </p>
-        )}
       </div>
     </div>
   );
 }
 
-function LabelField({
-  label,
-  className,
-  children,
-}: {
-  label: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
+function LabelPreviewFit({ shipment, fontScale }: { shipment: Shipment; fontScale: number }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLDivElement>(null);
+  const [preview, setPreview] = useState({ scale: 1, clipW: 360, clipH: 288 });
+
+  const updateScale = useCallback(() => {
+    const box = containerRef.current;
+    const label = labelRef.current;
+    if (!box || !label) return;
+
+    const lw = label.offsetWidth;
+    const lh = label.offsetHeight;
+    if (lw < 8 || lh < 8) return;
+
+    const pad = 20;
+    const cr = box.getBoundingClientRect();
+    const sx = (cr.width - pad) / lw;
+    const sy = (cr.height - pad) / lh;
+    const s = Math.min(sx, sy, 1);
+    const sc = Number.isFinite(s) ? Math.max(0.32, s) : 1;
+    setPreview({ scale: sc, clipW: lw * sc, clipH: lh * sc });
+  }, []);
+
+  useLayoutEffect(() => {
+    updateScale();
+    const box = containerRef.current;
+    if (!box) return;
+    const ro = new ResizeObserver(() => updateScale());
+    ro.observe(box);
+    window.addEventListener("resize", updateScale);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateScale);
+    };
+  }, [updateScale, shipment.id, fontScale]);
+
   return (
-    <div>
-      <span className="text-[8px] font-bold uppercase tracking-wider text-neutral-500">
-        {label}
-      </span>
-      <p className={className}>{children}</p>
+    <div
+      ref={containerRef}
+      className="flex h-[min(280px,calc(100dvh-300px))] w-full min-h-[200px] items-center justify-center overflow-hidden rounded-2xl bg-apple-bg px-3 py-4"
+    >
+      <div
+        className="overflow-hidden rounded-xl shadow-apple ring-1 ring-black/[0.08]"
+        style={{ width: preview.clipW, height: preview.clipH }}
+      >
+        <div
+          ref={labelRef}
+          style={{
+            width: "100mm",
+            height: "80mm",
+            transform: `scale(${preview.scale})`,
+            transformOrigin: "top left",
+          }}
+        >
+          <LabelContent s={shipment} fontScale={fontScale} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -114,27 +134,164 @@ interface PrintShippingLabelProps {
   onClose: () => void;
 }
 
+const PRINT_OVERRIDE_STYLE_ID = "tecsops-print-label-override";
+
 export function PrintShippingLabel({ shipment, onClose }: PrintShippingLabelProps) {
+  const [fontScale, setFontScale] = useState(LABEL_FONT_SCALE_DEFAULT);
+  const [printMode, setPrintMode] = useState<LabelPrintMode>("thermal");
+  const [printFlipCcw, setPrintFlipCcw] = useState(false);
+  const [printerHost, setPrinterHost] = useState("");
+  const [printerPort, setPrinterPort] = useState("9100");
+  const [tsplBusy, setTsplBusy] = useState(false);
+  const [tsplMsg, setTsplMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFontScale(loadLabelFontScale());
+    setPrintMode(loadLabelPrintMode());
+    setPrintFlipCcw(loadLabelPrintFlipCcw());
+  }, []);
+
+  useEffect(() => {
+    if (printMode !== "direct") {
+      document.getElementById(PRINT_OVERRIDE_STYLE_ID)?.remove();
+      return;
+    }
+    let el = document.getElementById(PRINT_OVERRIDE_STYLE_ID) as HTMLStyleElement | null;
+    if (!el) {
+      el = document.createElement("style");
+      el.id = PRINT_OVERRIDE_STYLE_ID;
+      document.head.appendChild(el);
+    }
+    el.textContent = `
+@media print {
+  @page { size: 100mm 80mm !important; margin: 0 !important; }
+  html {
+    height: 80mm !important;
+    width: 100mm !important;
+    max-height: 80mm !important;
+    overflow: hidden !important;
+  }
+  body {
+    min-height: 0 !important;
+    height: 80mm !important;
+    max-height: 80mm !important;
+    width: 100mm !important;
+    max-width: 100mm !important;
+    overflow: hidden !important;
+  }
+  .print-only.print-label-host {
+    width: 100mm !important;
+    height: 80mm !important;
+    max-width: 100mm !important;
+    max-height: 80mm !important;
+    page-break-after: avoid !important;
+    break-after: avoid-page !important;
+  }
+  .print-label-spin,
+  .print-label-spin.print-label-spin--ccw {
+    position: static !important;
+    transform: none !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100mm !important;
+    height: 80mm !important;
+    max-width: 100mm !important;
+    max-height: 80mm !important;
+    overflow: hidden !important;
+  }
+}`;
+    return () => {
+      document.getElementById(PRINT_OVERRIDE_STYLE_ID)?.remove();
+    };
+  }, [printMode]);
+
+  const onFontScaleInput = (raw: number) => {
+    const c = clampLabelFontScale(raw);
+    setFontScale(c);
+    saveLabelFontScale(c);
+  };
+
+  const onPrintModeChange = (m: LabelPrintMode) => {
+    setPrintMode(m);
+    saveLabelPrintMode(m);
+  };
+
+  const onPrintFlipChange = (on: boolean) => {
+    setPrintFlipCcw(on);
+    saveLabelPrintFlipCcw(on);
+  };
+
+  const downloadTspl = async () => {
+    setTsplMsg(null);
+    setTsplBusy(true);
+    try {
+      const body = shipmentToTsplBody(shipment);
+      const r = await fetch("/api/tspl/build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error ?? r.statusText);
+      const text = await r.text();
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `label-${body.awb.replace(/\s/g, "")}.tspl`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setTsplMsg("Đã tải file .tspl — gửi RAW qua cổng 9100 hoặc nhập vào tool máy in.");
+    } catch (e) {
+      setTsplMsg(e instanceof Error ? e.message : "Lỗi tải TSPL");
+    } finally {
+      setTsplBusy(false);
+    }
+  };
+
+  const sendTsplToNetwork = async () => {
+    setTsplMsg(null);
+    const host = printerHost.trim();
+    if (!host) {
+      setTsplMsg("Nhập IP máy in.");
+      return;
+    }
+    const port = parseInt(printerPort, 10) || 9100;
+    setTsplBusy(true);
+    try {
+      const body = { ...shipmentToTsplBody(shipment), host, port };
+      const r = await fetch("/api/tspl/print", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error ?? r.statusText);
+      setTsplMsg("Đã gửi TSPL tới máy in.");
+    } catch (e) {
+      setTsplMsg(e instanceof Error ? e.message : "Lỗi gửi in");
+    } finally {
+      setTsplBusy(false);
+    }
+  };
+
   return (
     <>
-      {/* Modal xem trước (ẩn khi in) */}
       <div
-        className="no-print fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/50 p-4 sm:items-center"
+        className="no-print fixed inset-0 z-[100] flex items-end justify-center bg-black/25 p-4 backdrop-blur-xl sm:items-center"
         role="dialog"
         aria-modal="true"
       >
-        <div className="no-print w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+        <div className="no-print max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-[28px] border border-black/[0.08] bg-white p-5 shadow-apple-md sm:max-w-xl">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">In nhãn</h2>
-              <p className="text-xs text-slate-500">
-                {shipment.awb} · {shipment.customer}
+              <h2 className="text-[19px] font-semibold tracking-tight text-apple-label">In nhãn</h2>
+              <p className="text-xs text-apple-secondary">
+                Tem {shipment.awb} · {shipment.customer}
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              className="rounded-full p-2 text-apple-tertiary hover:bg-black/[0.05] hover:text-apple-label"
               aria-label="Đóng"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -143,31 +300,141 @@ export function PrintShippingLabel({ shipment, onClose }: PrintShippingLabelProp
             </button>
           </div>
 
-          <div className="mx-auto flex justify-center overflow-auto rounded-lg bg-slate-100 p-4">
-            <div
-              className="origin-top scale-[0.68] shadow-lg sm:scale-[0.82]"
-              style={{ width: "100mm", height: "150mm" }}
-            >
-              <LabelContent s={shipment} />
+          <div className="mb-4 rounded-2xl border border-black/[0.08] bg-apple-blue/5 px-3 py-3">
+            <p className="text-xs font-semibold text-apple-label">Khuyến nghị: TSPL (RAW)</p>
+            <p className="mt-1 text-[11px] leading-snug text-apple-secondary">
+              Tránh Chrome scale/lệch trang. Tải file lệnh hoặc gửi TCP :9100 (cần{" "}
+              <span className="font-mono text-apple-label">TSPL_ALLOWED_HOSTS</span> trên server).
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={tsplBusy}
+                onClick={() => void downloadTspl()}
+                className="rounded-full bg-apple-blue px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-apple-blue-hover disabled:opacity-50"
+              >
+                Tải .tspl
+              </button>
             </div>
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <div className="min-w-0 flex-1">
+                <label className="text-[10px] font-semibold text-apple-secondary">IP máy in</label>
+                <input
+                  value={printerHost}
+                  onChange={(e) => setPrinterHost(e.target.value)}
+                  placeholder="192.168.x.x"
+                  className="mt-0.5 w-full rounded-xl border border-black/[0.1] bg-white px-2 py-1.5 font-mono text-xs text-apple-label"
+                />
+              </div>
+              <div className="w-20">
+                <label className="text-[10px] font-semibold text-apple-secondary">Cổng</label>
+                <input
+                  value={printerPort}
+                  onChange={(e) => setPrinterPort(e.target.value)}
+                  className="mt-0.5 w-full rounded-xl border border-black/[0.1] bg-white px-2 py-1.5 font-mono text-xs text-apple-label"
+                />
+              </div>
+              <button
+                type="button"
+                disabled={tsplBusy}
+                onClick={() => void sendTsplToNetwork()}
+                className="rounded-full border border-black/[0.12] bg-white px-3 py-2 text-xs font-semibold text-apple-blue hover:bg-black/[0.03] disabled:opacity-50"
+              >
+                Gửi TSPL
+              </button>
+            </div>
+            {tsplMsg && <p className="mt-2 text-[11px] text-apple-secondary">{tsplMsg}</p>}
           </div>
 
-          <p className="mt-3 text-center text-xs text-slate-500">100mm × 150mm</p>
+          <div className="mb-4 rounded-2xl border border-black/[0.08] bg-apple-bg px-3 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="label-font-scale" className="text-xs font-semibold text-apple-label">
+                Cỡ chữ ({Math.round(fontScale * 100)}%)
+              </label>
+              <button
+                type="button"
+                onClick={() => onFontScaleInput(LABEL_FONT_SCALE_DEFAULT)}
+                className="text-[11px] font-semibold text-apple-blue hover:underline"
+              >
+                Mặc định 100%
+              </button>
+            </div>
+            <input
+              id="label-font-scale"
+              type="range"
+              min={LABEL_FONT_SCALE_MIN}
+              max={LABEL_FONT_SCALE_MAX}
+              step={0.05}
+              value={fontScale}
+              onChange={(e) => onFontScaleInput(parseFloat(e.target.value))}
+              className="mt-2 h-2 w-full cursor-pointer accent-apple-blue"
+            />
+            <p className="mt-1.5 text-[11px] leading-snug text-apple-secondary">
+              Gốc: {LABEL_PT.airlineLine}/{LABEL_PT.awb}/{LABEL_PT.caption}/{LABEL_PT.airport}/{LABEL_PT.pieces} pt — vùng
+              tuyệt đối mm.
+            </p>
+          </div>
 
-          <div className="mt-4 flex gap-2">
+          <div className="mb-4 rounded-2xl border border-black/[0.08] bg-amber-50/60 px-3 py-3">
+            <p className="text-xs font-semibold text-apple-label">Chrome window.print (dự phòng)</p>
+            <div className="mt-2 space-y-2 text-[11px] text-apple-label">
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="radio"
+                  name="label-print-mode"
+                  checked={printMode === "thermal"}
+                  onChange={() => onPrintModeChange("thermal")}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-semibold">Nhiệt</span> — @page <span className="font-mono">80×100 mm</span>, tem xoay
+                  90°.
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="radio"
+                  name="label-print-mode"
+                  checked={printMode === "direct"}
+                  onChange={() => onPrintModeChange("direct")}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-semibold">Thẳng 100×80</span> — PDF / laser.
+                </span>
+              </label>
+              <label
+                className={`flex cursor-pointer items-start gap-2 ${printMode !== "thermal" ? "opacity-40" : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={printFlipCcw}
+                  disabled={printMode !== "thermal"}
+                  onChange={(e) => onPrintFlipChange(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>Đảo xoay ±90°.</span>
+              </label>
+            </div>
+            <p className="mt-2 text-[10px] text-apple-secondary">
+              In trình duyệt: 100%, tắt Fit to page, tắt header/footer nếu có.
+            </p>
+          </div>
+
+          <LabelPreviewFit shipment={shipment} fontScale={fontScale} />
+
+          <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => {
-                requestAnimationFrame(() => window.print());
-              }}
-              className="flex-1 rounded-xl bg-slate-900 px-4 py-3.5 text-sm font-bold text-white hover:bg-slate-800 active:scale-[0.98]"
+              onClick={() => void printBrowserLabel()}
+              className="min-w-[8rem] flex-1 rounded-full bg-apple-blue px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-apple-blue-hover"
             >
-              In ngay
+              In Chrome…
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-200 px-4 py-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="rounded-full border border-black/[0.12] bg-white px-5 py-3 text-sm font-semibold text-apple-label hover:bg-black/[0.03]"
             >
               Đóng
             </button>
@@ -175,12 +442,14 @@ export function PrintShippingLabel({ shipment, onClose }: PrintShippingLabelProp
         </div>
       </div>
 
-      {/* Bản in — chỉ hiện khi in */}
-      <div
-        className="print-only fixed left-0 top-0 hidden h-screen w-screen items-center justify-center bg-white print:flex"
-        aria-hidden
-      >
-        <LabelContent s={shipment} />
+      <div className="print-only print-label-host fixed left-0 top-0 hidden bg-white print:block" aria-hidden>
+        <div
+          className={
+            printMode === "thermal" && printFlipCcw ? "print-label-spin print-label-spin--ccw" : "print-label-spin"
+          }
+        >
+          <LabelContent s={shipment} fontScale={fontScale} />
+        </div>
       </div>
     </>
   );

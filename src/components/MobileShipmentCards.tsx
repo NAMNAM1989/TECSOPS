@@ -53,15 +53,15 @@ export function MobileShipmentCards({
   );
 
   return (
-    <div className="space-y-4 pb-28 md:hidden">
+    <div className="space-y-5 pb-28 md:hidden">
       {WAREHOUSES.map((wh) => {
         const group = rows.filter((r) => r.warehouse === wh);
         if (group.length === 0) return null;
         return (
           <section key={wh}>
             <div className="mb-2 flex items-center gap-2">
-              <h2 className="text-sm font-extrabold text-slate-800">{wh}</h2>
-              <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              <h2 className="text-[17px] font-semibold tracking-tight text-apple-label">{wh}</h2>
+              <span className="rounded-full bg-apple-label px-2 py-0.5 text-[10px] font-semibold text-white">
                 {group.length}
               </span>
             </div>
@@ -78,8 +78,8 @@ export function MobileShipmentCards({
                   <div
                     id={`mobile-shipment-${row.id}`}
                     key={row.id}
-                    className={`relative overflow-hidden rounded-lg border shadow-sm transition-all ${cardColors} ${
-                      selected ? "ring-2 ring-sky-500 ring-offset-1" : ""
+                    className={`relative overflow-hidden rounded-2xl border border-black/[0.08] shadow-apple transition-all ${cardColors} ${
+                      selected ? "ring-2 ring-apple-blue/40 ring-offset-2 ring-offset-apple-bg" : ""
                     }`}
                   >
                     {/* Vuốt trái: Sửa / In / Xóa */}
@@ -87,7 +87,7 @@ export function MobileShipmentCards({
                       <button
                         type="button"
                         title="Sửa"
-                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-sky-700 text-white active:bg-sky-800"
+                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-apple-blue text-white active:bg-apple-blue-hover"
                         onClick={() => {
                           setSwipeOpenId(null);
                           onEdit(row);
@@ -105,7 +105,7 @@ export function MobileShipmentCards({
                       <button
                         type="button"
                         title="In nhãn"
-                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-sky-600 text-white active:bg-sky-700"
+                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-apple-blue/85 text-white active:bg-apple-blue"
                         onClick={() => {
                           setSwipeOpenId(null);
                           onPrint(row);
@@ -123,7 +123,7 @@ export function MobileShipmentCards({
                       <button
                         type="button"
                         title="Xóa"
-                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-red-600 text-white active:bg-red-700"
+                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-red-500 text-white active:bg-red-600"
                         onClick={() => {
                           setSwipeOpenId(null);
                           if (confirm(`Xóa ${row.awb}?`)) onDelete(row.id);
@@ -158,21 +158,21 @@ export function MobileShipmentCards({
                       style={{
                         transform: open ? `translateX(-${REVEAL_PX}px)` : undefined,
                       }}
-                      className="relative z-10 cursor-pointer bg-white/85 py-1.5 pl-2 pr-1 transition-transform duration-200 ease-out"
+                      className="relative z-10 cursor-pointer bg-white/90 py-2 pl-3 pr-2 backdrop-blur-sm transition-transform duration-200 ease-out"
                     >
                       {/* Dòng 1: AWB · chuyến · DEST | trạng thái */}
                       <div className="flex items-start gap-1.5">
                         <div className="min-w-0 flex-1">
                           <p className="leading-tight">
-                            <span className="font-mono text-[13px] font-black tracking-tight text-slate-900">
+                            <span className="font-mono text-[13px] font-semibold tracking-tight text-apple-label">
                               {row.awb}
                             </span>
-                            <span className="mx-1 text-slate-300">·</span>
-                            <span className="text-[11px] font-semibold text-slate-600">
+                            <span className="mx-1 text-apple-tertiary">·</span>
+                            <span className="text-[11px] font-medium text-apple-secondary">
                               {row.flight}/{row.flightDate}
                             </span>
-                            <span className="mx-1 text-slate-300">·</span>
-                            <span className="text-[12px] font-extrabold text-slate-900">{row.dest}</span>
+                            <span className="mx-1 text-apple-tertiary">·</span>
+                            <span className="text-[12px] font-semibold text-apple-label">{row.dest}</span>
                           </p>
                         </div>
                         <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -186,22 +186,22 @@ export function MobileShipmentCards({
 
                       {/* Dòng 2: ghi chú · cutoff · K/G · khách */}
                       <div
-                        className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0 text-[11px] leading-snug text-slate-700"
+                        className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0 text-[11px] leading-snug text-apple-secondary"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {row.cutoffNote ? (
-                          <span className="shrink-0 rounded bg-red-600 px-1 py-px text-[9px] font-black text-white">
+                          <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-px text-[9px] font-semibold text-white">
                             {row.cutoffNote}
                           </span>
                         ) : null}
-                        <span className="shrink-0 font-medium text-slate-400">CO</span>
+                        <span className="shrink-0 font-medium text-apple-tertiary">CO</span>
                         {row.cutoff ? (
                           <CutoffCountdown iso={row.cutoff} className="text-[10px]" />
                         ) : (
-                          <span className="text-[10px] italic text-slate-400">—</span>
+                          <span className="text-[10px] italic text-apple-tertiary">—</span>
                         )}
-                        <span className="shrink-0 text-slate-300">|</span>
-                        <span className="shrink-0 font-medium text-slate-400">K</span>
+                        <span className="shrink-0 text-apple-tertiary">|</span>
+                        <span className="shrink-0 font-medium text-apple-tertiary">K</span>
                         <InlineNumberEdit
                           compact
                           value={row.pcs}
@@ -209,7 +209,7 @@ export function MobileShipmentCards({
                           className="text-[11px]"
                           onCommit={(v) => onUpdate(row.id, { pcs: v })}
                         />
-                        <span className="shrink-0 font-medium text-slate-400">G</span>
+                        <span className="shrink-0 font-medium text-apple-tertiary">G</span>
                         <InlineNumberEdit
                           compact
                           value={row.kg}
@@ -217,7 +217,7 @@ export function MobileShipmentCards({
                           className="text-[11px]"
                           onCommit={(v) => onUpdate(row.id, { kg: v })}
                         />
-                        <span className="min-w-0 flex-1 truncate text-right text-[11px] font-bold text-slate-800">
+                        <span className="min-w-0 flex-1 truncate text-right text-[11px] font-semibold text-apple-label">
                           {row.customer}
                         </span>
                       </div>
@@ -250,26 +250,26 @@ export function StickyMobileActions({
 }: StickyMobileActionsProps) {
   return (
     <div className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
-      <div className="border-t border-slate-200/80 bg-white/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur-md">
+      <div className="border-t border-black/[0.08] bg-white/80 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] backdrop-blur-xl backdrop-saturate-150">
         {selected ? (
           <>
-            <p className="mb-1.5 truncate text-center text-[11px] font-medium text-slate-500">
-              <span className="font-mono font-bold text-slate-800">{selected.awb}</span>
-              <span className="mx-1">·</span>
+            <p className="mb-2 truncate text-center text-[11px] font-medium text-apple-secondary">
+              <span className="font-mono font-semibold text-apple-label">{selected.awb}</span>
+              <span className="mx-1 text-apple-tertiary">·</span>
               {selected.customer}
             </p>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={onPrint}
-                className="min-w-0 flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-bold text-white shadow-sm active:scale-[0.98]"
+                className="min-w-0 flex-1 rounded-full bg-apple-label py-3 text-sm font-semibold text-white shadow-sm transition-transform active:scale-[0.98]"
               >
                 In nhãn
               </button>
               <button
                 type="button"
                 onClick={onEdit}
-                className="shrink-0 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm font-bold text-sky-800 active:scale-[0.98]"
+                className="shrink-0 rounded-full border border-black/[0.1] bg-white px-4 py-3 text-sm font-semibold text-apple-blue active:scale-[0.98]"
               >
                 Sửa
               </button>
@@ -278,7 +278,7 @@ export function StickyMobileActions({
                 onClick={() => {
                   if (confirm(`Xóa ${selected.awb}?`)) onDelete();
                 }}
-                className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-bold text-red-700 active:scale-[0.98]"
+                className="shrink-0 rounded-full border border-red-200/80 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 active:scale-[0.98]"
               >
                 Xóa
               </button>
@@ -288,7 +288,7 @@ export function StickyMobileActions({
           <button
             type="button"
             onClick={onAdd}
-            className="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white shadow-sm active:scale-[0.98]"
+            className="w-full rounded-full bg-apple-blue py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover active:scale-[0.98]"
           >
             + Nhập booking mới
           </button>

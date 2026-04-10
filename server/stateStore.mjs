@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
 const INITIAL_FILE = path.join(__dirname, "initialRows.json");
-const SEED_SESSION_DAY = "2026-04-05";
+const SEED_SESSION_DAY = "2026-04-06";
 
 const REDIS_STATE_KEY = process.env.REDIS_STATE_KEY || "tecsops:state";
 const REDIS_LOCK_KEY = process.env.REDIS_LOCK_KEY || "tecsops:state-lock";
@@ -49,6 +49,24 @@ function renumberSttForAll(rows) {
   return out;
 }
 
+function normalizeDimLines(raw) {
+  if (raw == null) return null;
+  if (!Array.isArray(raw)) return null;
+  const out = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const l = item.lCm;
+    const w = item.wCm;
+    const h = item.hCm;
+    const p = item.pcs;
+    if (typeof l !== "number" || typeof w !== "number" || typeof h !== "number" || typeof p !== "number")
+      continue;
+    if (!(l > 0 && w > 0 && h > 0 && p > 0)) continue;
+    out.push({ lCm: l, wCm: w, hCm: h, pcs: Math.max(1, Math.floor(p)) });
+  }
+  return out.length ? out : null;
+}
+
 function migrateRows(rows, workDateIso) {
   const fallback = (workDateIso || new Date().toISOString()).slice(0, 10);
   return rows.map((r) => ({
@@ -58,6 +76,10 @@ function migrateRows(rows, workDateIso) {
         ? r.sessionDate
         : fallback,
     note: typeof r.note === "string" ? r.note : "",
+    dimWeightKg:
+      r.dimWeightKg === null || typeof r.dimWeightKg === "number" ? r.dimWeightKg : null,
+    dimLines: normalizeDimLines(r.dimLines),
+    dimDivisor: r.dimDivisor === 5000 || r.dimDivisor === 6000 ? r.dimDivisor : null,
   }));
 }
 
@@ -94,6 +116,10 @@ export function createInitialState() {
         ? r.sessionDate
         : SEED_SESSION_DAY,
     note: typeof r.note === "string" ? r.note : "",
+    dimWeightKg:
+      r.dimWeightKg === null || typeof r.dimWeightKg === "number" ? r.dimWeightKg : null,
+    dimLines: normalizeDimLines(r.dimLines),
+    dimDivisor: r.dimDivisor === 5000 || r.dimDivisor === 6000 ? r.dimDivisor : null,
   }));
   return {
     version: 1,

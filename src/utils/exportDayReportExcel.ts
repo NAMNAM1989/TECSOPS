@@ -27,6 +27,8 @@ export function downloadDayReportExcel(rows: Shipment[], sessionDateYmd: string)
     "DEST",
     "Số kiện",
     "Số KG",
+    "DIM kg",
+    "DIM nhóm",
     "Tên khách hàng",
     "Note",
   ];
@@ -39,6 +41,8 @@ export function downloadDayReportExcel(rows: Shipment[], sessionDateYmd: string)
       r.dest,
       r.pcs ?? "",
       r.kg ?? "",
+      r.dimWeightKg ?? "",
+      r.dimLines?.length ?? "",
       r.customer,
       r.note ?? "",
     ]),
@@ -52,6 +56,8 @@ export function downloadDayReportExcel(rows: Shipment[], sessionDateYmd: string)
     { wch: 8 },
     { wch: 10 },
     { wch: 10 },
+    { wch: 10 },
+    { wch: 8 },
     { wch: 28 },
     { wch: 32 },
   ];

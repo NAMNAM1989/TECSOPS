@@ -1,4 +1,4 @@
-import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
+import type { DimPieceLine, Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { formatLocalSessionDate, startOfLocalDay } from "./sessionDate";
 
 const ROWS_KEY = "tecsops-shipments-v1";
@@ -15,6 +15,41 @@ const STATUSES: ShipmentStatus[] = [
 ];
 
 const WAREHOUSES: Warehouse[] = ["TECS-TCS", "TECS-SCSC"];
+
+function isDimPieceLine(o: unknown): o is DimPieceLine {
+  if (!o || typeof o !== "object") return false;
+  const x = o as Record<string, unknown>;
+  return (
+    typeof x.lCm === "number" &&
+    Number.isFinite(x.lCm) &&
+    typeof x.wCm === "number" &&
+    Number.isFinite(x.wCm) &&
+    typeof x.hCm === "number" &&
+    Number.isFinite(x.hCm) &&
+    typeof x.pcs === "number" &&
+    Number.isFinite(x.pcs) &&
+    x.lCm > 0 &&
+    x.wCm > 0 &&
+    x.hCm > 0 &&
+    x.pcs > 0
+  );
+}
+
+function normalizeDimLines(raw: unknown): DimPieceLine[] | null {
+  if (raw == null) return null;
+  if (!Array.isArray(raw)) return null;
+  const out: DimPieceLine[] = [];
+  for (const item of raw) {
+    if (!isDimPieceLine(item)) continue;
+    out.push({
+      lCm: item.lCm,
+      wCm: item.wCm,
+      hCm: item.hCm,
+      pcs: Math.max(1, Math.floor(item.pcs)),
+    });
+  }
+  return out.length > 0 ? out : null;
+}
 
 function isShipmentShape(o: unknown): o is Omit<Shipment, "sessionDate"> & { sessionDate?: string } {
   if (!o || typeof o !== "object") return false;
@@ -35,7 +70,10 @@ function isShipmentShape(o: unknown): o is Omit<Shipment, "sessionDate"> & { ses
     STATUSES.includes(r.status as ShipmentStatus) &&
     WAREHOUSES.includes(r.warehouse as Warehouse) &&
     (r.pcs === null || typeof r.pcs === "number") &&
-    (r.kg === null || typeof r.kg === "number")
+    (r.kg === null || typeof r.kg === "number") &&
+    (r.dimWeightKg === undefined || r.dimWeightKg === null || typeof r.dimWeightKg === "number") &&
+    (r.dimLines === undefined || r.dimLines === null || Array.isArray(r.dimLines)) &&
+    (r.dimDivisor === undefined || r.dimDivisor === null || r.dimDivisor === 6000 || r.dimDivisor === 5000)
   );
 }
 
@@ -67,10 +105,16 @@ export function loadRows(): Shipment[] | null {
         typeof item.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.sessionDate)
           ? item.sessionDate
           : fb;
+      const dimDivisor =
+        item.dimDivisor === 5000 || item.dimDivisor === 6000 ? item.dimDivisor : null;
       rows.push({
         ...item,
         sessionDate: sd,
         note: typeof item.note === "string" ? item.note : "",
+        dimWeightKg:
+          item.dimWeightKg === null || typeof item.dimWeightKg === "number" ? item.dimWeightKg : null,
+        dimLines: normalizeDimLines(item.dimLines),
+        dimDivisor,
       });
     }
     return rows;

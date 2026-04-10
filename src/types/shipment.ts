@@ -1,3 +1,5 @@
+import type { DimDivisor, DimPieceLine } from "../utils/volumetricDim";
+
 export type ShipmentStatus =
   | "PENDING"       // BOOKING
   | "RECEIVED"      // Đã nhận hàng tại kho
@@ -8,6 +10,8 @@ export type ShipmentStatus =
   | "DELIVERED";    // Hoàn thành
 
 export type Warehouse = "TECS-TCS" | "TECS-SCSC";
+
+export type { DimPieceLine };
 
 export interface Shipment {
   id: string;
@@ -25,6 +29,12 @@ export interface Shipment {
   warehouse: Warehouse;
   pcs: number | null;
   kg: number | null;
+  /** Dimensional weight (kg) — trọng lượng thể tích */
+  dimWeightKg: number | null;
+  /** Chi tiết từng nhóm kiện (D×R×C×số kiện), null nếu chỉ nhập kg tay */
+  dimLines: DimPieceLine[] | null;
+  /** Hệ số dùng khi tính từ dimLines (để mở lại modal khớp cách tính) */
+  dimDivisor: DimDivisor | null;
   customer: string;
   status: ShipmentStatus;
 }

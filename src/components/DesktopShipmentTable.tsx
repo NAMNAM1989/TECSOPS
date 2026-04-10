@@ -4,6 +4,7 @@ import { StatusSelect } from "./StatusBadge";
 import { SummaryBar } from "./SummaryBar";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { statusRowBg, statusRowBorder } from "./statusStyles";
+import { canPrintDimReport, printDimReport } from "../utils/printDimReport";
 
 interface Props {
   rows: Shipment[];
@@ -23,10 +24,11 @@ const COL_HEADERS = [
   { key: "dest", label: "DEST", w: "w-16" },
   { key: "pcs", label: "KIỆN", w: "w-16 text-right" },
   { key: "kg", label: "KG", w: "w-16 text-right" },
+  { key: "dim", label: "DIM kg", w: "w-[4.5rem] text-right" },
   { key: "customer", label: "KHÁCH HÀNG", w: "min-w-[120px]" },
   { key: "note", label: "NOTE", w: "min-w-[100px] max-w-[180px]" },
   { key: "status", label: "TRẠNG THÁI", w: "min-w-[110px]" },
-  { key: "actions", label: "", w: "w-32" },
+  { key: "actions", label: "", w: "w-36" },
 ] as const;
 
 export function DesktopShipmentTable({ rows, onUpdate, onDelete, onPrint, onEdit }: Props) {
@@ -152,6 +154,17 @@ function ShipmentRow({
           onCommit={(v) => onUpdate(row.id, { kg: v })}
         />
       </td>
+      {/* DIM kg */}
+      <td className="border-r border-black/[0.06] px-1.5 py-1 text-right">
+        <InlineNumberEdit
+          value={row.dimWeightKg}
+          placeholder="—"
+          className="font-mono text-xs font-semibold tabular-nums"
+          onCommit={(v) =>
+            onUpdate(row.id, { dimWeightKg: v, dimLines: null, dimDivisor: null })
+          }
+        />
+      </td>
       {/* Customer */}
       <td className="border-r border-black/[0.06] px-2.5 py-2 font-semibold text-apple-label">
         {row.customer}
@@ -191,6 +204,22 @@ function ShipmentRow({
               />
             </svg>
           </button>
+          {canPrintDimReport(row) ? (
+            <button
+              type="button"
+              title="In form DIM"
+              onClick={() => printDimReport(row)}
+              className="rounded-full p-2 text-apple-secondary hover:bg-emerald-50 hover:text-emerald-800"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+            </button>
+          ) : null}
           <button
             type="button"
             title="In nhãn"

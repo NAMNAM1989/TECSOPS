@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
+import { MobileDimKgModal } from "./MobileDimKgModal";
+import { canPrintDimReport, printDimReport } from "../utils/printDimReport";
 import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { SummaryBar } from "./SummaryBar";
@@ -31,6 +34,7 @@ export function MobileShipmentCards({
   onEdit,
 }: MobileShipmentCardsProps) {
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
+  const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
 
@@ -53,6 +57,7 @@ export function MobileShipmentCards({
   );
 
   return (
+    <>
     <div className="space-y-5 pb-28 md:hidden">
       {WAREHOUSES.map((wh) => {
         const group = rows.filter((r) => r.warehouse === wh);
@@ -158,81 +163,114 @@ export function MobileShipmentCards({
                       style={{
                         transform: open ? `translateX(-${REVEAL_PX}px)` : undefined,
                       }}
-                      className="relative z-10 cursor-pointer bg-white/90 px-2 py-1.5 backdrop-blur-sm transition-transform duration-200 ease-out"
+                      className="relative z-10 cursor-pointer bg-white/90 px-2.5 py-2 backdrop-blur-sm transition-transform duration-200 ease-out"
                     >
-                      {/* Một dòng ngang — vuốt ngang nếu nội dung dài */}
-                      <div className="flex w-full min-w-0 flex-nowrap items-center gap-x-1 overflow-x-auto overscroll-x-contain text-left [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                        <span className="shrink-0 font-mono text-[12px] font-semibold tracking-tight text-apple-label">
-                          {row.awb}
-                        </span>
-                        <span className="shrink-0 text-apple-tertiary">·</span>
-                        <span className="shrink-0 whitespace-nowrap text-[10px] font-medium text-apple-secondary">
-                          {row.flight}/{row.flightDate}
-                        </span>
-                        <span className="shrink-0 text-apple-tertiary">·</span>
-                        <span className="shrink-0 text-[11px] font-semibold text-apple-label">{row.dest}</span>
-                        <span className="shrink-0 px-0.5 text-apple-tertiary">|</span>
-                        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                          <StatusSelect
-                            value={row.status}
-                            compact
-                            onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
-                          />
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 flex-1 text-left text-[12px] leading-snug">
+                            <span className="font-mono font-semibold tracking-tight text-apple-label">{row.awb}</span>
+                            <span className="text-apple-tertiary"> · </span>
+                            <span className="text-[11px] font-medium text-apple-secondary">
+                              {row.flight}/{row.flightDate}
+                            </span>
+                            <span className="text-apple-tertiary"> · </span>
+                            <span className="font-semibold text-apple-label">{row.dest}</span>
+                          </p>
+                          <div className="shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
+                            <StatusSelect
+                              value={row.status}
+                              compact
+                              onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
+                            />
+                          </div>
                         </div>
-                        <span className="shrink-0 px-0.5 text-apple-tertiary">|</span>
-                        <span
-                          className="shrink-0 max-w-[6rem] truncate text-[11px] font-semibold text-apple-label"
-                          title={row.customer}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {row.customer}
-                        </span>
-                        {row.note ? (
-                          <>
-                            <span className="shrink-0 text-apple-tertiary">·</span>
+                        <div className="border-t border-black/[0.06] pt-1.5 text-left text-[11px] leading-snug">
+                          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                             <span
-                              className="shrink-0 max-w-[5rem] truncate text-[10px] text-apple-secondary"
-                              title={row.note}
+                              className="min-w-0 max-w-full font-semibold text-apple-label sm:max-w-[70%]"
+                              title={row.customer}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {row.note}
+                              {row.customer}
                             </span>
-                          </>
-                        ) : null}
-                        <span
-                          className="inline-flex shrink-0 items-center gap-x-1 whitespace-nowrap text-[10px] text-apple-secondary"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <span className="text-apple-tertiary">|</span>
-                          {row.cutoffNote ? (
-                            <span className="rounded-full bg-red-500 px-1 py-px text-[9px] font-semibold text-white">
-                              {row.cutoffNote}
+                            {row.note ? (
+                              <span
+                                className="min-w-0 max-w-full text-apple-secondary sm:max-w-[65%]"
+                                title={row.note}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                · {row.note}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                            <span
+                              className="inline-flex flex-wrap items-center gap-x-1 text-[10px] text-apple-secondary"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {row.cutoffNote ? (
+                                <span className="rounded-full bg-red-500 px-1.5 py-px text-[9px] font-semibold text-white">
+                                  {row.cutoffNote}
+                                </span>
+                              ) : null}
+                              <span className="font-medium text-apple-tertiary">CO</span>
+                              {row.cutoff ? (
+                                <CutoffCountdown iso={row.cutoff} className="text-[10px]" />
+                              ) : (
+                                <span className="italic text-apple-tertiary">—</span>
+                              )}
+                              <span className="text-apple-tertiary">|</span>
+                              <span className="font-medium text-apple-tertiary">K</span>
+                              <InlineNumberEdit
+                                compact
+                                value={row.pcs}
+                                placeholder="—"
+                                className="text-[11px]"
+                                onCommit={(v) => onUpdate(row.id, { pcs: v })}
+                              />
+                              <span className="font-medium text-apple-tertiary">G</span>
+                              <InlineNumberEdit
+                                compact
+                                value={row.kg}
+                                placeholder="—"
+                                className="text-[11px]"
+                                onCommit={(v) => onUpdate(row.id, { kg: v })}
+                              />
                             </span>
-                          ) : null}
-                          <span className="font-medium text-apple-tertiary">CO</span>
-                          {row.cutoff ? (
-                            <CutoffCountdown iso={row.cutoff} className="text-[10px]" />
-                          ) : (
-                            <span className="italic text-apple-tertiary">—</span>
-                          )}
-                          <span className="text-apple-tertiary">|</span>
-                          <span className="font-medium text-apple-tertiary">K</span>
-                          <InlineNumberEdit
-                            compact
-                            value={row.pcs}
-                            placeholder="—"
-                            className="text-[11px]"
-                            onCommit={(v) => onUpdate(row.id, { pcs: v })}
-                          />
-                          <span className="font-medium text-apple-tertiary">G</span>
-                          <InlineNumberEdit
-                            compact
-                            value={row.kg}
-                            placeholder="—"
-                            className="text-[11px]"
-                            onCommit={(v) => onUpdate(row.id, { kg: v })}
-                          />
-                        </span>
+                            <span
+                              className="inline-flex flex-wrap items-center justify-end gap-1.5"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {row.dimWeightKg != null ? (
+                                <span className="rounded-full bg-black/[0.06] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-apple-label">
+                                  DIM {row.dimWeightKg} kg
+                                  {(row.dimLines?.length ?? 0) > 1 ? (
+                                    <span className="text-apple-secondary"> · {row.dimLines!.length} nhóm</span>
+                                  ) : (row.dimLines?.length ?? 0) === 1 ? (
+                                    <span className="text-apple-secondary"> · 1 nhóm</span>
+                                  ) : null}
+                                </span>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => setDimModalRow(row)}
+                                className="rounded-full border border-apple-blue/30 bg-apple-blue/10 px-2.5 py-1 text-[10px] font-semibold text-apple-blue active:scale-[0.98]"
+                              >
+                                Nhập DIM
+                              </button>
+                              {canPrintDimReport(row) ? (
+                                <button
+                                  type="button"
+                                  title="In form DIM (MAWB + bảng kích thước)"
+                                  onClick={() => printDimReport(row)}
+                                  className="rounded-full border border-black/[0.12] bg-white px-2.5 py-1 text-[10px] font-semibold text-apple-label active:scale-[0.98]"
+                                >
+                                  In DIM
+                                </button>
+                              ) : null}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -243,6 +281,21 @@ export function MobileShipmentCards({
         );
       })}
     </div>
+    {dimModalRow &&
+      typeof document !== "undefined" &&
+      createPortal(
+        <MobileDimKgModal
+          key={dimModalRow.id}
+          row={dimModalRow}
+          onClose={() => setDimModalRow(null)}
+          onSave={(payload) => {
+            onUpdate(dimModalRow.id, payload);
+            setDimModalRow(null);
+          }}
+        />,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -252,6 +305,7 @@ interface StickyMobileActionsProps {
   onPrint: () => void;
   onAdd: () => void;
   onEdit: () => void;
+  onPrintDim?: () => void;
 }
 
 export function StickyMobileActions({
@@ -260,6 +314,7 @@ export function StickyMobileActions({
   onPrint,
   onAdd,
   onEdit,
+  onPrintDim,
 }: StickyMobileActionsProps) {
   return (
     <div className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
@@ -271,30 +326,41 @@ export function StickyMobileActions({
               <span className="mx-1 text-apple-tertiary">·</span>
               {selected.customer}
             </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onPrint}
-                className="min-w-0 flex-1 rounded-full bg-apple-label py-3 text-sm font-semibold text-white shadow-sm transition-transform active:scale-[0.98]"
-              >
-                In nhãn
-              </button>
-              <button
-                type="button"
-                onClick={onEdit}
-                className="shrink-0 rounded-full border border-black/[0.1] bg-white px-4 py-3 text-sm font-semibold text-apple-blue active:scale-[0.98]"
-              >
-                Sửa
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm(`Xóa ${selected.awb}?`)) onDelete();
-                }}
-                className="shrink-0 rounded-full border border-red-200/80 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 active:scale-[0.98]"
-              >
-                Xóa
-              </button>
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={onPrint}
+                  className="min-w-0 flex-1 rounded-full bg-apple-label py-3 text-sm font-semibold text-white shadow-sm transition-transform active:scale-[0.98]"
+                >
+                  In nhãn
+                </button>
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="shrink-0 rounded-full border border-black/[0.1] bg-white px-4 py-3 text-sm font-semibold text-apple-blue active:scale-[0.98]"
+                >
+                  Sửa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Xóa ${selected.awb}?`)) onDelete();
+                  }}
+                  className="shrink-0 rounded-full border border-red-200/80 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 active:scale-[0.98]"
+                >
+                  Xóa
+                </button>
+              </div>
+              {onPrintDim && canPrintDimReport(selected) ? (
+                <button
+                  type="button"
+                  onClick={onPrintDim}
+                  className="w-full rounded-full border border-black/[0.12] bg-white py-2.5 text-sm font-semibold text-apple-label shadow-sm active:scale-[0.98]"
+                >
+                  In form DIM (bảng kích thước)
+                </button>
+              ) : null}
             </div>
           </>
         ) : (

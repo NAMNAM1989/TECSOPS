@@ -13,6 +13,7 @@ import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { ShipmentBookingForm } from "./ShipmentBookingForm";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
+import { printDimReport } from "../utils/printDimReport";
 
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment) => void;
@@ -275,6 +276,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           setShowForm(true);
         }}
         onEdit={() => selected && openEdit(selected)}
+        onPrintDim={() => selected && printDimReport(selected)}
       />
 
       {showForm && (

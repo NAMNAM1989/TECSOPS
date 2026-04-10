@@ -46,6 +46,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [note, setNote] = useState("");
+  const [dimKg, setDimKg] = useState("");
 
   const awbRef = useRef<HTMLInputElement>(null);
   const flightRef = useRef<HTMLInputElement>(null);
@@ -76,6 +77,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     setCustomer(editShipment.customer);
     setCustomerSearch("");
     setNote(editShipment.note ?? "");
+    setDimKg(editShipment.dimWeightKg != null ? String(editShipment.dimWeightKg) : "");
   }, [isEdit, editShipment?.id]);
 
   useEffect(() => {
@@ -199,6 +201,24 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     setCustomerListVersion((v) => v + 1);
 
     const cutoff = buildCutoffIso();
+    const dimTrim = dimKg.trim();
+    let dimWeightKg: number | null = null;
+    if (dimTrim !== "") {
+      const n = Number(dimTrim.replace(",", "."));
+      if (Number.isNaN(n) || n < 0) {
+        window.alert("DIM (kg) không hợp lệ — để trống hoặc nhập số ≥ 0.");
+        return;
+      }
+      dimWeightKg = n;
+    }
+
+    const initialDimStr = isEdit && editShipment ? (editShipment.dimWeightKg != null ? String(editShipment.dimWeightKg) : "") : "";
+    const dimFieldChanged = isEdit && dimTrim !== initialDimStr;
+    const dimLinesPayload =
+      isEdit && editShipment && !dimFieldChanged ? editShipment.dimLines : null;
+    const dimDivisorPayload =
+      isEdit && editShipment && !dimFieldChanged ? editShipment.dimDivisor : null;
+
     const payloadCommon = {
       awb: awbDisplay,
       flight: flight.toUpperCase(),
@@ -210,6 +230,9 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       warehouse,
       pcs: isEdit ? editShipment!.pcs : null,
       kg: isEdit ? editShipment!.kg : null,
+      dimWeightKg,
+      dimLines: dimLinesPayload,
+      dimDivisor: dimDivisorPayload,
       customer: effectiveCustomer,
       status: isEdit ? editShipment!.status : ("PENDING" as const),
     };
@@ -231,6 +254,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       setDest("");
       setDestSearch("");
       setNote("");
+      setDimKg("");
       awbRef.current?.focus();
     }
   }
@@ -607,6 +631,24 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               maxLength={2000}
               placeholder="VD: hàng dễ vỡ, ưu tiên xuất kho…"
               className="w-full resize-y rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="booking-dim-kg" className="mb-1 block text-xs font-semibold text-apple-secondary">
+              Dimensional weight (kg)
+            </label>
+            <p className="mb-1 text-[11px] text-apple-tertiary">Trọng lượng thể tích — tùy chọn.</p>
+            <input
+              id="booking-dim-kg"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="any"
+              value={dimKg}
+              onChange={(e) => setDimKg(e.target.value)}
+              placeholder="VD: 120.5"
+              className="w-full rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
             />
           </div>
         </div>

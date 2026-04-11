@@ -39,6 +39,14 @@ function cloneLines(lines: DimPieceLine[] | null): DimPieceLine[] {
   return lines.map((l) => ({ ...l }));
 }
 
+/** Trên bàn phím số mobile, phím "," → coi như phân cách nhân (×) giữa các cạnh. */
+function normalizeDimComboInput(raw: string): string {
+  return raw
+    .replace(/,/g, "×")
+    .replace(/\u060C/g, "×") // dấu phẩy tiếng Ả Rập (một số bàn phím)
+    .replace(/\*/g, "×");
+}
+
 export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps) {
   const hasSavedBreakdown = (row.dimLines?.length ?? 0) > 0;
   const [tab, setTab] = useState<Tab>(() =>
@@ -237,12 +245,29 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   inputMode="decimal"
                   autoComplete="off"
                   value={combo}
-                  onChange={(e) => setCombo(e.target.value)}
-                  placeholder="VD: 120 50 30 4"
+                  onChange={(e) => setCombo(normalizeDimComboInput(e.target.value))}
+                  onKeyDown={(e) => {
+                    if (e.key === "," || e.key === "\u060C") {
+                      e.preventDefault();
+                      const el = e.currentTarget;
+                      const start = el.selectionStart ?? combo.length;
+                      const end = el.selectionEnd ?? combo.length;
+                      const ins = "×";
+                      const next = combo.slice(0, start) + ins + combo.slice(end);
+                      setCombo(next);
+                      const pos = start + ins.length;
+                      requestAnimationFrame(() => {
+                        el.setSelectionRange(pos, pos);
+                      });
+                    }
+                  }}
+                  placeholder="VD: 120×50×30×4"
                   className="mt-1 w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2.5 text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
                 />
                 <p className="mt-1 text-[10px] leading-snug text-apple-tertiary">
-                  4 số = D×R×C×số kiện. Nhiều nhóm: 120 50 30 4 80 60 40 2. Chỉ 3 số → kiện = 1.
+                  Phím <span className="font-semibold text-apple-secondary">,</span> trên bàn phím số = nhập{" "}
+                  <span className="font-semibold text-apple-secondary">×</span>. 4 số = D×R×C×kiện; nhiều nhóm nối
+                  tiếp; chỉ 3 số → kiện = 1.
                 </p>
                 <button
                   type="button"

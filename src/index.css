@@ -12,3 +12,15 @@
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+@keyframes dim-voice-bar {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}

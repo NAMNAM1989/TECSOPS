@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Shipment } from "../types/shipment";
+import { useDimSpeechRecognition } from "../hooks/useDimSpeechRecognition";
+import {
+  numbersFromDimVoiceTranscript,
+  preprocessDimVoiceTranscript,
+} from "../utils/dimVoiceTranscript";
 import {
   type DimDivisor,
   type DimPieceLine,
@@ -19,15 +24,6 @@ export type MobileDimSavePayload = {
   dimDivisor: DimDivisor | null;
 };
 
-function getSpeechRecognitionCtor(): (new () => SpeechRecognition) | null {
-  if (typeof window === "undefined") return null;
-  const w = window as Window & {
-    SpeechRecognition?: new () => SpeechRecognition;
-    webkitSpeechRecognition?: new () => SpeechRecognition;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
-
 interface MobileDimKgModalProps {
   row: Shipment;
   onClose: () => void;
@@ -43,8 +39,130 @@ function cloneLines(lines: DimPieceLine[] | null): DimPieceLine[] {
 function normalizeDimComboInput(raw: string): string {
   return raw
     .replace(/,/g, "×")
-    .replace(/\u060C/g, "×") // dấu phẩy tiếng Ả Rập (một số bàn phím)
+    .replace(/\u060C/g, "×")
     .replace(/\*/g, "×");
+}
+
+type VoiceHintTone = "ok" | "warn" | "err";
+
+function DimVoiceHero({
+  variant,
+  speechOk,
+  listening,
+  liveCaption,
+  hint,
+  onMicPress,
+}: {
+  variant: "calc" | "direct";
+  speechOk: boolean;
+  listening: boolean;
+  liveCaption: string;
+  hint: { tone: VoiceHintTone; text: string } | null;
+  onMicPress: () => void;
+}) {
+  const example =
+    variant === "calc"
+      ? "« một hai không, năm mươi, ba mươi, bốn » → 120×50×30 × 4 kiện"
+      : "« một trăm tám mươi phẩy năm » hoặc « 185 phẩy 5 » → kg";
+
+  return (
+    <section
+      className="relative overflow-hidden rounded-2xl border border-violet-200/70 bg-gradient-to-br from-violet-50/95 via-white to-sky-50/90 p-4 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset]"
+      aria-label="Nhập DIM bằng giọng nói"
+    >
+      <div
+        className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-violet-200/30 blur-2xl"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -bottom-4 -left-4 h-20 w-20 rounded-full bg-sky-200/35 blur-2xl"
+        aria-hidden
+      />
+
+      <div className="relative flex flex-col items-center text-center">
+        <span className="inline-flex items-center gap-1 rounded-full border border-violet-200/80 bg-white/80 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-700 shadow-sm">
+          <span className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" aria-hidden />
+          Nhận diện AI · tiếng Việt
+        </span>
+        <h3 className="mt-2.5 text-[15px] font-semibold leading-snug tracking-tight text-apple-label">
+          Nhập DIM bằng giọng nói
+        </h3>
+        <p className="mt-1 max-w-[280px] text-[11px] leading-relaxed text-apple-secondary">
+          Nhanh, chính xác và dễ sửa — trình duyệt chuyển lời nói thành số; bạn vẫn kiểm tra trước khi lưu.
+        </p>
+
+        <div className="relative mt-4">
+          {listening ? (
+            <div
+              className="absolute inset-x-0 -top-1 flex h-8 items-end justify-center gap-1"
+              aria-hidden
+            >
+              {[0, 1, 2, 3, 4].map((i) => (
+                <span
+                  key={i}
+                  className="w-1 origin-bottom rounded-full bg-violet-400/90 motion-safe:animate-[dim-voice-bar_0.9s_ease-in-out_infinite]"
+                  style={{ animationDelay: `${i * 0.12}s`, height: `${10 + (i % 3) * 6}px` }}
+                />
+              ))}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            disabled={!speechOk}
+            onClick={onMicPress}
+            aria-pressed={listening}
+            aria-label={listening ? "Đang nghe — chạm để hủy không khả dụng, nói xong sẽ tự dừng" : "Bắt đầu nói để nhập DIM"}
+            className={`relative flex h-[72px] w-[72px] items-center justify-center rounded-full shadow-lg transition-transform touch-manipulation active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45 ${
+              listening
+                ? "bg-gradient-to-br from-rose-500 to-orange-500 text-white ring-4 ring-rose-200/80"
+                : "bg-gradient-to-br from-violet-600 to-sky-600 text-white ring-4 ring-violet-200/70 hover:from-violet-500 hover:to-sky-500"
+            }`}
+          >
+            <svg className="h-9 w-9" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 0014 0h-2zm-5 8c-2.21 0-4-1.12-4-2.5V16h8v.5C16 20.88 14.21 22 12 22z" />
+            </svg>
+          </button>
+        </div>
+
+        <p className="mt-3 text-[10px] font-medium text-apple-tertiary">
+          {speechOk ? "Chạm nút mic — nói rõ từng số, tạm dừng giữa các nhóm nếu cần." : "Trình duyệt này chưa hỗ trợ mic — dùng Chrome (Android) hoặc nhập tay."}
+        </p>
+
+        <div
+          className="mt-2 min-h-[2.5rem] w-full rounded-xl border border-black/[0.06] bg-white/70 px-3 py-2 text-left text-[11px] leading-snug text-apple-label backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+        >
+          {listening ? (
+            liveCaption ? (
+              <span className="text-apple-label">Đang nghe: {liveCaption}</span>
+            ) : (
+              <span className="text-violet-700">Đang lắng nghe…</span>
+            )
+          ) : (
+            <span className="text-apple-secondary">
+              Ví dụ: <span className="font-mono text-[10px] text-apple-label">{example}</span>
+            </span>
+          )}
+        </div>
+
+        {hint ? (
+          <p
+            className={`mt-2 w-full rounded-lg px-2 py-1.5 text-center text-[11px] font-medium leading-snug ${
+              hint.tone === "ok"
+                ? "bg-emerald-100/90 text-emerald-950"
+                : hint.tone === "warn"
+                  ? "bg-amber-100/90 text-amber-950"
+                  : "bg-rose-100/90 text-rose-950"
+            }`}
+            role="status"
+          >
+            {hint.text}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
 }
 
 export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps) {
@@ -56,26 +174,26 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   const [lines, setLines] = useState<DimPieceLine[]>(() => cloneLines(row.dimLines));
   const [divisor, setDivisor] = useState<DimDivisor>(row.dimDivisor ?? 6000);
   const [direct, setDirect] = useState(row.dimWeightKg != null ? String(row.dimWeightKg) : "");
-  const [listening, setListening] = useState<"combo" | "kg" | null>(null);
-  const recRef = useRef<SpeechRecognition | null>(null);
+  const [voiceHint, setVoiceHint] = useState<{ tone: VoiceHintTone; text: string } | null>(null);
+
+  const { listening, liveCaption, start, abort, speechOk } = useDimSpeechRecognition();
 
   const totalDim = useMemo(() => totalDimKgFromLines(lines, divisor), [lines, divisor]);
 
   useEffect(() => {
-    return () => {
-      try {
-        recRef.current?.abort();
-      } catch {
-        /* ignore */
-      }
-      recRef.current = null;
-    };
-  }, []);
+    abort();
+  }, [tab, abort]);
 
-  const appendQuads = (parsed: DimPieceLine[]) => {
+  useEffect(() => {
+    if (!voiceHint) return;
+    const t = window.setTimeout(() => setVoiceHint(null), 4200);
+    return () => window.clearTimeout(t);
+  }, [voiceHint]);
+
+  const appendQuads = useCallback((parsed: DimPieceLine[]) => {
     if (parsed.length === 0) return;
     setLines((prev) => [...prev, ...parsed]);
-  };
+  }, []);
 
   const addFromCombo = () => {
     const nums = parsePositiveNumbersFromText(combo);
@@ -88,55 +206,68 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     setCombo("");
   };
 
-  const startListen = (mode: "combo" | "kg") => {
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) {
-      window.alert("Trình duyệt không hỗ trợ đọc giọng. Thử Chrome trên Android.");
+  const startVoiceCalc = useCallback(() => {
+    if (listening) {
+      abort();
       return;
     }
-    try {
-      recRef.current?.abort();
-    } catch {
-      /* ignore */
-    }
-    const rec = new Ctor();
-    recRef.current = rec;
-    rec.lang = "vi-VN";
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    setListening(mode);
-
-    rec.onresult = (ev: SpeechRecognitionEvent) => {
-      const text = ev.results[0]?.[0]?.transcript ?? "";
-      const nums = parsePositiveNumbersFromText(text);
-      if (mode === "kg") {
-        if (nums[0] != null) {
-          setDirect(String(nums[0]));
-          setTab("direct");
+    start({
+      onFinal: (text) => {
+        if (!text.trim()) {
+          setVoiceHint({ tone: "warn", text: "Chưa có câu thoại — thử lại, nói rõ từng số." });
+          return;
         }
-      } else {
+        const nums = numbersFromDimVoiceTranscript(text);
         const parsed = parseDimLineQuadsFromNumbers(nums);
         if (parsed.length > 0) {
           appendQuads(parsed);
           setTab("calc");
+          setVoiceHint({
+            tone: "ok",
+            text:
+              parsed.length === 1
+                ? "Đã thêm 1 nhóm kích thước từ giọng nói — kiểm tra bảng dưới."
+                : `Đã thêm ${parsed.length} nhóm từ giọng nói — kiểm tra bảng dưới.`,
+          });
+          return;
         }
-      }
-    };
+        const normalized = preprocessDimVoiceTranscript(text).replace(/\s+/g, "");
+        setCombo(normalizeDimComboInput(normalized));
+        setVoiceHint({
+          tone: "warn",
+          text: "Chưa đủ bộ 3–4 số — đã đưa phần nhận được vào ô nhập; chỉnh tay hoặc đọc lại (dài, rộng, cao, kiện).",
+        });
+      },
+      onErrorMessage: (m) => setVoiceHint({ tone: "err", text: m }),
+    });
+  }, [abort, appendQuads, listening, start]);
 
-    rec.onerror = () => setListening(null);
-    rec.onend = () => {
-      setListening(null);
-      recRef.current = null;
-    };
-
-    try {
-      rec.start();
-    } catch {
-      setListening(null);
-      window.alert("Không bật được mic. Kiểm tra quyền microphone.");
+  const startVoiceKg = useCallback(() => {
+    if (listening) {
+      abort();
+      return;
     }
-  };
+    start({
+      onFinal: (text) => {
+        if (!text.trim()) {
+          setVoiceHint({ tone: "warn", text: "Chưa có câu thoại — đọc một số kg." });
+          return;
+        }
+        const nums = numbersFromDimVoiceTranscript(text);
+        if (nums[0] != null) {
+          setDirect(String(nums[0]));
+          setTab("direct");
+          setVoiceHint({ tone: "ok", text: "Đã điền kg từ giọng nói — kiểm tra số trước khi lưu." });
+          return;
+        }
+        setVoiceHint({
+          tone: "warn",
+          text: "Chưa trích được số — thử « 185 phẩy 5 » hoặc đọc từng chữ số.",
+        });
+      },
+      onErrorMessage: (m) => setVoiceHint({ tone: "err", text: m }),
+    });
+  }, [abort, listening, start]);
 
   const removeLine = (index: number) => {
     setLines((prev) => prev.filter((_, i) => i !== index));
@@ -176,8 +307,6 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     onSave({ dimWeightKg: null, dimLines: null, dimDivisor: null });
   };
 
-  const speechOk = typeof window !== "undefined" && getSpeechRecognitionCtor() != null;
-
   return (
     <div
       className="no-print fixed inset-0 z-[60] flex items-end justify-center bg-black/30 p-3 sm:items-center sm:p-4"
@@ -187,7 +316,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
       onClick={onClose}
     >
       <div
-        className="flex max-h-[min(90vh,640px)] w-full max-w-sm flex-col rounded-2xl border border-black/[0.08] bg-white shadow-xl"
+        className="flex max-h-[min(92vh,680px)] w-full max-w-sm flex-col rounded-2xl border border-black/[0.08] bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="shrink-0 border-b border-black/[0.06] p-4 pb-3">
@@ -220,25 +349,20 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
           {tab === "calc" ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              <DimVoiceHero
+                variant="calc"
+                speechOk={speechOk}
+                listening={listening}
+                liveCaption={liveCaption}
+                hint={voiceHint}
+                onMicPress={startVoiceCalc}
+              />
+
               <div>
-                <div className="flex items-center justify-between gap-2">
-                  <label htmlFor="dim-combo" className="text-xs font-semibold text-apple-secondary">
-                    Một dòng (cm + kiện)
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!speechOk}
-                    onClick={() => startListen("combo")}
-                    className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold ${
-                      listening === "combo"
-                        ? "animate-pulse border-red-300 bg-red-50 text-red-600"
-                        : "border-black/[0.1] text-apple-blue disabled:opacity-40"
-                    }`}
-                  >
-                    <span aria-hidden>🎤</span> Đọc số
-                  </button>
-                </div>
+                <label htmlFor="dim-combo" className="text-xs font-semibold text-apple-secondary">
+                  Một dòng (cm + kiện)
+                </label>
                 <input
                   id="dim-combo"
                   type="text"
@@ -305,7 +429,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 </div>
                 {lines.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-black/[0.12] py-6 text-center text-xs text-apple-tertiary">
-                    Chưa có dòng — dùng ô trên hoặc 🎤 đọc 4 số mỗi nhóm.
+                    Chưa có dòng — dùng mic phía trên, ô nhập, hoặc nút thêm.
                   </p>
                 ) : (
                   <ul className="space-y-2">
@@ -357,25 +481,20 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
               ) : null}
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              <DimVoiceHero
+                variant="direct"
+                speechOk={speechOk}
+                listening={listening}
+                liveCaption={liveCaption}
+                hint={voiceHint}
+                onMicPress={startVoiceKg}
+              />
+
               <div>
-                <div className="flex items-center justify-between gap-2">
-                  <label htmlFor="dim-kg-direct" className="text-xs font-semibold text-apple-secondary">
-                    Trọng lượng thể tích (kg)
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!speechOk}
-                    onClick={() => startListen("kg")}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold ${
-                      listening === "kg"
-                        ? "animate-pulse border-red-300 bg-red-50 text-red-600"
-                        : "border-black/[0.1] text-apple-blue disabled:opacity-40"
-                    }`}
-                  >
-                    <span aria-hidden>🎤</span> Đọc kg
-                  </button>
-                </div>
+                <label htmlFor="dim-kg-direct" className="text-xs font-semibold text-apple-secondary">
+                  Trọng lượng thể tích (kg)
+                </label>
                 <input
                   id="dim-kg-direct"
                   type="text"

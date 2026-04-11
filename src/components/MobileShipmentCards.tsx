@@ -3,6 +3,11 @@ import { createPortal } from "react-dom";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { MobileDimKgModal } from "./MobileDimKgModal";
 import { canPrintDimReport, printDimReport } from "../utils/printDimReport";
+import {
+  canExportTcsDimTemplate,
+  downloadTcsAttachedDimsExcel,
+  printTcsAttachedDimsList,
+} from "../utils/exportTcsAttachedDimsExcel";
 import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { SummaryBar } from "./SummaryBar";
@@ -261,12 +266,32 @@ export function MobileShipmentCards({
                               {canPrintDimReport(row) ? (
                                 <button
                                   type="button"
-                                  title="In form DIM (MAWB + bảng kích thước)"
+                                  title="In form DIM SCSC (MAWB + bảng kích thước)"
                                   onClick={() => printDimReport(row)}
                                   className="rounded-full border border-black/[0.12] bg-white px-2.5 py-1 text-[10px] font-semibold text-apple-label active:scale-[0.98]"
                                 >
-                                  In DIM
+                                  In DIM SCSC
                                 </button>
+                              ) : null}
+                              {row.warehouse === "TECS-TCS" && canExportTcsDimTemplate(row) ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    title="Tải file Excel LIST DIM TCS (mẫu ATTACHED_LIST_DIMS)"
+                                    onClick={() => downloadTcsAttachedDimsExcel(row)}
+                                    className="rounded-full border border-emerald-600/35 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-900 active:scale-[0.98]"
+                                  >
+                                    LIST DIM TCS
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="In bảng IN DIM TCS (dài/rộng/cao/kiện)"
+                                    onClick={() => printTcsAttachedDimsList(row)}
+                                    className="rounded-full border border-emerald-600/25 bg-white px-2.5 py-1 text-[10px] font-semibold text-emerald-800 active:scale-[0.98]"
+                                  >
+                                    IN DIM TCS
+                                  </button>
+                                </>
                               ) : null}
                             </span>
                           </div>
@@ -358,8 +383,26 @@ export function StickyMobileActions({
                   onClick={onPrintDim}
                   className="w-full rounded-full border border-black/[0.12] bg-white py-2.5 text-sm font-semibold text-apple-label shadow-sm active:scale-[0.98]"
                 >
-                  In form DIM (bảng kích thước)
+                  In DIM SCSC (bảng kích thước)
                 </button>
+              ) : null}
+              {selected.warehouse === "TECS-TCS" && canExportTcsDimTemplate(selected) ? (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => downloadTcsAttachedDimsExcel(selected)}
+                    className="min-w-0 flex-1 rounded-full border border-emerald-600/40 bg-emerald-50 py-2.5 text-sm font-semibold text-emerald-900 active:scale-[0.98]"
+                  >
+                    LIST DIM TCS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => printTcsAttachedDimsList(selected)}
+                    className="min-w-0 flex-1 rounded-full border border-emerald-600/30 bg-white py-2.5 text-sm font-semibold text-emerald-800 active:scale-[0.98]"
+                  >
+                    IN DIM TCS
+                  </button>
+                </div>
               ) : null}
             </div>
           </>

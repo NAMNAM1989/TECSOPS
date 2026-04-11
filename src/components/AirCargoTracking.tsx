@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Shipment } from "../types/shipment";
+import type { Shipment, ShipmentStatus } from "../types/shipment";
 import { initialShipments } from "../data/mockShipments";
 import { loadRows } from "../utils/shipmentStorage";
 import {
@@ -14,6 +14,7 @@ import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards"
 import { ShipmentBookingForm } from "./ShipmentBookingForm";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { printDimReport } from "../utils/printDimReport";
+import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment) => void;
@@ -36,6 +37,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -47,6 +49,15 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     [allRows, selectedYmd]
   );
 
+  const filteredViewRows = useMemo(() => {
+    if (statusFilter === "ALL") return viewRows;
+    return viewRows.filter((r) => r.status === (statusFilter as ShipmentStatus));
+  }, [viewRows, statusFilter]);
+
+  useEffect(() => {
+    setStatusFilter("ALL");
+  }, [selectedYmd]);
+
   const daysWithData = useMemo(() => {
     const s = new Set<string>();
     for (const r of allRows) s.add(r.sessionDate);
@@ -54,8 +65,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   }, [allRows]);
 
   useEffect(() => {
-    setSelectedId((s) => (s && viewRows.some((r) => r.id === s) ? s : null));
-  }, [viewRows]);
+    setSelectedId((s) => (s && filteredViewRows.some((r) => r.id === s) ? s : null));
+  }, [filteredViewRows]);
 
   const runMutate = useCallback(
     async (cmd: Parameters<typeof mutate>[0]) => {
@@ -90,8 +101,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     [runMutate]
   );
 
-  const totalPcs = viewRows.reduce((s, r) => s + (r.pcs ?? 0), 0);
-  const totalKg = viewRows.reduce((s, r) => s + (r.kg ?? 0), 0);
+  const totalPcs = filteredViewRows.reduce((s, r) => s + (r.pcs ?? 0), 0);
+  const totalKg = filteredViewRows.reduce((s, r) => s + (r.kg ?? 0), 0);
 
   const workDateLabel = formatWorkDateLabel(selectedViewDate);
 
@@ -109,7 +120,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     setEditingShipment(s);
   }, []);
 
-  const selected = viewRows.find((r) => r.id === selectedId) ?? null;
+  const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
 
   if (status === "loading" || !state) {
     return (
@@ -200,7 +211,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <SyncBadge status={status} socketConnected={socketConnected} />
-            <StatPill label="Lô" value={viewRows.length} />
+            <StatPill label="Lô" value={filteredViewRows.length} />
             <StatPill label="Kiện" value={totalPcs} />
             <StatPill label="Kg" value={totalKg.toLocaleString()} />
             <button
@@ -219,16 +230,9 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-semibold text-apple-secondary">
-          <Legend color="bg-white ring-1 ring-slate-300" label="BOOKING" />
-          <Legend color="bg-yellow-400" label="Đã nhận" />
-          <Legend color="bg-red-500" label="Sắp trễ" />
-          <Legend color="bg-orange-500" label="Hàng gấp" />
-          <Legend color="bg-emerald-500" label="Đã xong" />
-          <Legend color="bg-violet-500" label="Đã kéo OLA" />
-          <Legend color="bg-sky-500" label="Hoàn thành" />
-        </div>
       </header>
+
+      <StatusFilterBar dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
 
       {viewRows.length === 0 && (
         <div className="mb-8 rounded-apple-lg border border-dashed border-black/[0.12] bg-white/60 px-5 py-12 text-center shadow-apple backdrop-blur-sm">
@@ -249,8 +253,22 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         </div>
       )}
 
+      {viewRows.length > 0 && filteredViewRows.length === 0 && (
+        <div className="mb-8 rounded-apple-lg border border-dashed border-amber-200/80 bg-amber-50/50 px-5 py-10 text-center shadow-apple backdrop-blur-sm">
+          <p className="text-[17px] font-semibold text-apple-label">Không có lô nào khớp bộ lọc</p>
+          <p className="mt-2 text-sm text-apple-secondary">Thử chọn trạng thái khác hoặc &quot;Tất cả&quot;.</p>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("ALL")}
+            className="mt-4 rounded-full bg-apple-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-apple-blue-hover"
+          >
+            Xem tất cả lô
+          </button>
+        </div>
+      )}
+
       <DesktopShipmentTable
-        rows={viewRows}
+        rows={filteredViewRows}
         onUpdate={onUpdate}
         onDelete={onDelete}
         onPrint={onRequestPrint}
@@ -258,7 +276,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       />
 
       <MobileShipmentCards
-        rows={viewRows}
+        rows={filteredViewRows}
         selectedId={selectedId}
         onSelect={setSelectedId}
         onUpdate={onUpdate}
@@ -348,11 +366,3 @@ function StatPill({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-black/[0.06] bg-white/90 px-3 py-1.5 shadow-apple backdrop-blur-sm">
-      <span className={`inline-block h-2 w-2 rounded-full ${color}`} />
-      {label}
-    </span>
-  );
-}

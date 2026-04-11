@@ -5,6 +5,11 @@ import { SummaryBar } from "./SummaryBar";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { statusRowBg, statusRowBorder } from "./statusStyles";
 import { canPrintDimReport, printDimReport } from "../utils/printDimReport";
+import {
+  canExportTcsDimTemplate,
+  downloadTcsAttachedDimsExcel,
+  printTcsAttachedDimsList,
+} from "../utils/exportTcsAttachedDimsExcel";
 
 interface Props {
   rows: Shipment[];
@@ -28,7 +33,7 @@ const COL_HEADERS = [
   { key: "customer", label: "KHÁCH HÀNG", w: "min-w-[120px]" },
   { key: "note", label: "NOTE", w: "min-w-[100px] max-w-[180px]" },
   { key: "status", label: "TRẠNG THÁI", w: "min-w-[110px]" },
-  { key: "actions", label: "", w: "w-36" },
+  { key: "actions", label: "", w: "w-44" },
 ] as const;
 
 export function DesktopShipmentTable({ rows, onUpdate, onDelete, onPrint, onEdit }: Props) {
@@ -207,7 +212,7 @@ function ShipmentRow({
           {canPrintDimReport(row) ? (
             <button
               type="button"
-              title="In form DIM"
+              title="In DIM SCSC (form MAWB + bảng kích thước)"
               onClick={() => printDimReport(row)}
               className="rounded-full p-2 text-apple-secondary hover:bg-emerald-50 hover:text-emerald-800"
             >
@@ -219,6 +224,38 @@ function ShipmentRow({
                 />
               </svg>
             </button>
+          ) : null}
+          {row.warehouse === "TECS-TCS" && canExportTcsDimTemplate(row) ? (
+            <>
+              <button
+                type="button"
+                title="LIST DIM TCS — Excel mẫu ATTACHED_LIST_DIMS"
+                onClick={() => downloadTcsAttachedDimsExcel(row)}
+                className="rounded-full p-2 text-emerald-700 hover:bg-emerald-50"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                title="IN DIM TCS — in bảng 4 cột"
+                onClick={() => printTcsAttachedDimsList(row)}
+                className="rounded-full p-2 text-emerald-700 hover:bg-emerald-50"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+                  />
+                </svg>
+              </button>
+            </>
           ) : null}
           <button
             type="button"

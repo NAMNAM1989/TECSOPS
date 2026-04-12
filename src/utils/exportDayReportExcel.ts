@@ -1,12 +1,21 @@
 import type { Borders, Cell, Fill, Font, Workbook } from "exceljs";
 import type { Shipment } from "../types/shipment";
 
-/** Hiển thị ngày phiên (sessionDate) dạng dd/mm/yyyy cho báo cáo */
-export function formatYmdToVnDisplay(ymd: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
-  if (!m) return ymd;
-  return `${m[3]}/${m[2]}/${m[1]}`;
-}
+/** Excel giới hạn 31 ký tự / tên sheet. */
+const EXCEL_MAX_SHEET_NAME_LENGTH = 31;
+
+const DEFAULT_HEADER_ROW_HEIGHT = 38;
+const DEFAULT_DATA_ROW_HEIGHT = 18;
+const DATA_BODY_FONT_SIZE = 11;
+const HEADER_FONT_SIZE = 10;
+
+/** Cột 1-based: AWB (font monospace), Note (wrap). */
+const COL_STT = 1;
+const COL_AWB = 3;
+const COL_NOTE = 9;
+
+const MIME_XLSX =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 const DAY_REPORT_HEADERS = [
   "STT",
@@ -21,9 +30,7 @@ const DAY_REPORT_HEADERS = [
 ] as const;
 
 /** Cột (1-based) căn phải: số kiện, KG, VOLUME WEIGHT */
-const NUM_COLS = new Set([5, 6, 7]);
-
-const STT_COL = 1;
+const NUMERIC_RIGHT_ALIGN_COLS = new Set([5, 6, 7]);
 
 /** Xanh lá đậm — tương phản tốt với chữ trắng */
 const HEADER_FILL: Fill = {
@@ -35,7 +42,7 @@ const HEADER_FILL: Fill = {
 const HEADER_FONT: Partial<Font> = {
   bold: true,
   color: { argb: "FFFFFFFF" },
-  size: 10,
+  size: HEADER_FONT_SIZE,
   name: "Calibri",
 };
 
@@ -52,8 +59,73 @@ const BORDER: Partial<Borders> = {
   right: { style: "thin", color: { argb: "FFE5E7EB" } },
 };
 
+/** Độ rộng cột: đủ cho tiêu đề + nút AutoFilter (Excel vẽ mũi tên lọc bên phải ô). */
+const COLUMN_WIDTHS: readonly number[] = [8, 22, 22, 10, 14, 12, 22, 36, 42];
+
 function applyCellBorder(cell: Cell) {
   cell.border = BORDER as Borders;
+}
+
+/**
+ * Hiển thị ngày phiên (sessionDate) dạng dd/mm/yyyy cho báo cáo.
+ * Chuỗi không khớp YYYY-MM-DD được trả nguyên (fallback an toàn).
+ */
+export function formatYmdToVnDisplay(ymd: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
+  if (!m) return ymd;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
+/** Tên sheet theo ngày phiên (giữ đúng chuỗi đầu vào + cắt 31 ký tự như Excel). */
+function sheetTitleForDayReport(sessionDateYmd: string): string {
+  return `Ngay_${sessionDateYmd}`.slice(0, EXCEL_MAX_SHEET_NAME_LENGTH);
+}
+
+/** Một dòng dữ liệu (giá trị ô) từ một lô — tách khỏi Excel row styling. */
+function dayReportRowValues(r: Shipment): (string | number)[] {
+  return [
+    r.stt,
+    formatYmdToVnDisplay(r.sessionDate),
+    r.awb,
+    r.dest,
+    r.pcs ?? "",
+    r.kg ?? "",
+    r.dimWeightKg ?? "",
+    r.customer,
+    r.note ?? "",
+  ];
+}
+
+function styleHeaderCell(cell: Cell, colNumber: number) {
+  cell.fill = HEADER_FILL;
+  cell.font = HEADER_FONT as Font;
+  applyCellBorder(cell);
+  const baseAlign = {
+    vertical: "middle" as const,
+    wrapText: true,
+  };
+  if (colNumber === COL_STT) cell.alignment = { ...baseAlign, horizontal: "center" };
+  else if (NUMERIC_RIGHT_ALIGN_COLS.has(colNumber)) cell.alignment = { ...baseAlign, horizontal: "right" };
+  else cell.alignment = { ...baseAlign, horizontal: "left" };
+}
+
+function styleBodyCell(cell: Cell, colNumber: number, rowIndexZeroBased: number) {
+  const isZebra = rowIndexZeroBased % 2 === 1;
+  if (isZebra) cell.fill = ZEBRA_FILL;
+  applyCellBorder(cell);
+  cell.font = {
+    name: colNumber === COL_AWB ? "Consolas" : "Calibri",
+    size: DATA_BODY_FONT_SIZE,
+  } as Font;
+  if (colNumber === COL_STT) cell.alignment = { vertical: "middle", horizontal: "center" };
+  else if (NUMERIC_RIGHT_ALIGN_COLS.has(colNumber))
+    cell.alignment = { vertical: "middle", horizontal: "right" };
+  else
+    cell.alignment = {
+      vertical: "middle",
+      horizontal: "left",
+      wrapText: colNumber === COL_NOTE,
+    };
 }
 
 /** Tên file mặc định khi tải từ trình duyệt. */
@@ -69,7 +141,7 @@ export async function buildDayReportWorkbook(rows: Shipment[], sessionDateYmd: s
   const ExcelJS = (await import("exceljs")).default;
 
   const sorted = [...rows].sort((a, b) => a.stt - b.stt);
-  const sheetName = `Ngay_${sessionDateYmd}`.slice(0, 31);
+  const sheetName = sheetTitleForDayReport(sessionDateYmd);
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "TECSOPS";
@@ -77,61 +149,21 @@ export async function buildDayReportWorkbook(rows: Shipment[], sessionDateYmd: s
 
   const sheet = wb.addWorksheet(sheetName, {
     views: [{ state: "frozen", ySplit: 1 }],
-    properties: { defaultRowHeight: 18 },
+    properties: { defaultRowHeight: DEFAULT_DATA_ROW_HEIGHT },
   });
 
-  /* Đủ rộng để chữ tiêu đề + nút AutoFilter không chồng lên nhau (Excel vẽ mũi tên lọc bên phải ô) */
-  sheet.columns = [
-    { width: 8 },
-    { width: 22 },
-    { width: 22 },
-    { width: 10 },
-    { width: 14 },
-    { width: 12 },
-    { width: 22 },
-    { width: 36 },
-    { width: 42 },
-  ];
+  sheet.columns = COLUMN_WIDTHS.map((width) => ({ width }));
 
   const headerRow = sheet.addRow([...DAY_REPORT_HEADERS]);
-  headerRow.height = 38;
+  headerRow.height = DEFAULT_HEADER_ROW_HEIGHT;
   headerRow.eachCell((cell, colNumber) => {
-    cell.fill = HEADER_FILL;
-    cell.font = HEADER_FONT as Font;
-    applyCellBorder(cell);
-    const baseAlign = {
-      vertical: "middle" as const,
-      wrapText: true,
-    };
-    if (colNumber === STT_COL) cell.alignment = { ...baseAlign, horizontal: "center" };
-    else if (NUM_COLS.has(colNumber)) cell.alignment = { ...baseAlign, horizontal: "right" };
-    else cell.alignment = { ...baseAlign, horizontal: "left" };
+    styleHeaderCell(cell, colNumber);
   });
 
   sorted.forEach((r, idx) => {
-    const row = sheet.addRow([
-      r.stt,
-      formatYmdToVnDisplay(r.sessionDate),
-      r.awb,
-      r.dest,
-      r.pcs ?? "",
-      r.kg ?? "",
-      r.dimWeightKg ?? "",
-      r.customer,
-      r.note ?? "",
-    ]);
-    const isZebra = idx % 2 === 1;
+    const row = sheet.addRow(dayReportRowValues(r));
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-      if (isZebra) cell.fill = ZEBRA_FILL;
-      applyCellBorder(cell);
-      cell.font = {
-        name: colNumber === 3 ? "Consolas" : "Calibri",
-        size: 11,
-      } as Font;
-      if (colNumber === STT_COL) cell.alignment = { vertical: "middle", horizontal: "center" };
-      else if (NUM_COLS.has(colNumber))
-        cell.alignment = { vertical: "middle", horizontal: "right" };
-      else cell.alignment = { vertical: "middle", horizontal: "left", wrapText: colNumber === 9 };
+      styleBodyCell(cell, colNumber, idx);
     });
   });
 
@@ -147,15 +179,20 @@ export async function buildDayReportWorkbook(rows: Shipment[], sessionDateYmd: s
  * Tải file .xlsx: các lô đúng `sessionDate` đang xem, cột báo cáo cuối ngày.
  */
 export async function downloadDayReportExcel(rows: Shipment[], sessionDateYmd: string): Promise<void> {
-  const wb = await buildDayReportWorkbook(rows, sessionDateYmd);
-  const buf = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buf], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = defaultDayReportFileName(sessionDateYmd);
-  a.click();
-  URL.revokeObjectURL(url);
+  let objectUrl: string | null = null;
+  try {
+    const wb = await buildDayReportWorkbook(rows, sessionDateYmd);
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: MIME_XLSX });
+    objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = defaultDayReportFileName(sessionDateYmd);
+    a.click();
+  } catch (e) {
+    console.error("[downloadDayReportExcel]", e);
+    window.alert(e instanceof Error ? e.message : "Không tạo được file Excel. Thử lại hoặc kiểm tra bộ nhớ trình duyệt.");
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
 }

@@ -7,3 +7,6 @@ buildCommand = "npm run build"
 # Scale >1 replica: thêm Redis trên Railway và biến REDIS_URL (app dùng chung state + Socket.IO adapter).
 startCommand = "npm start"
 restartPolicyType = "ON_FAILURE"
+# Healthcheck zero-downtime — endpoint trả 200 (xem server/index.mjs GET /api/health)
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120

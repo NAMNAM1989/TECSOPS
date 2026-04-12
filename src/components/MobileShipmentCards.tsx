@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { MobileDimKgModal } from "./MobileDimKgModal";
@@ -13,8 +13,11 @@ import { StatusSelect } from "./StatusBadge";
 import { SummaryBar } from "./SummaryBar";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { statusCardBg } from "./statusStyles";
+import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 
 const SWIPE_THRESHOLD = 48;
+/** Vuốt ngang bị bỏ qua nếu lệch dọc lớn hơn (coi như cuộn dọc). */
+const SWIPE_MAX_VERTICAL_DELTA_PX = 35;
 /** Ba nút: Sửa / In / Xóa */
 const REVEAL_PX = 132;
 const WAREHOUSES: Warehouse[] = ["TECS-TCS", "TECS-SCSC"];
@@ -42,6 +45,7 @@ export function MobileShipmentCards({
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
+  const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -54,7 +58,7 @@ export function MobileShipmentCards({
       const y = e.changedTouches[0].clientY;
       const dx = touchStartX.current - x;
       const dy = Math.abs(touchStartY.current - y);
-      if (dy > 35) return;
+      if (dy > SWIPE_MAX_VERTICAL_DELTA_PX) return;
       if (dx > SWIPE_THRESHOLD) setSwipeOpenId(id);
       else if (dx < -SWIPE_THRESHOLD) setSwipeOpenId(null);
     },
@@ -65,7 +69,7 @@ export function MobileShipmentCards({
     <>
     <div className="space-y-5 pb-28 md:hidden">
       {WAREHOUSES.map((wh) => {
-        const group = rows.filter((r) => r.warehouse === wh);
+        const group = rowsByWarehouse[wh];
         if (group.length === 0) return null;
         return (
           <section key={wh}>
@@ -93,7 +97,7 @@ export function MobileShipmentCards({
                     }`}
                   >
                     {/* Vuốt trái: Sửa / In / Xóa */}
-                    <div className="absolute inset-y-0 right-0 z-0 flex w-[132px]" aria-hidden>
+                    <div className="absolute inset-y-0 right-0 z-0 flex" style={{ width: REVEAL_PX }} aria-hidden>
                       <button
                         type="button"
                         title="Sửa"

@@ -43,7 +43,8 @@ function renumberSttForAll(rows) {
     const dayRows = byDay.get(key);
     const c = { "TECS-TCS": 0, "TECS-SCSC": 0 };
     for (const r of dayRows) {
-      out.push({ ...r, stt: ++c[r.warehouse] });
+      const wh = r.warehouse === "TECS-SCSC" ? "TECS-SCSC" : "TECS-TCS";
+      out.push({ ...r, stt: ++c[wh] });
     }
   }
   return out;
@@ -180,7 +181,7 @@ export async function loadState() {
           const disk = normalizeState(JSON.parse(fs.readFileSync(STATE_FILE, "utf8")));
           if (disk) {
             await redisStateClient.set(REDIS_STATE_KEY, JSON.stringify(disk));
-            console.log("[state] đã migrate state.json → Redis");
+            console.info("[state] đã migrate state.json → Redis");
             return disk;
           }
         }

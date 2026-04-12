@@ -12,6 +12,14 @@ export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
 type Fallback = { rows: Shipment[] };
 
+const SOCKET_IO_PATH = "/socket.io/" as const;
+const SOCKET_RECONNECT_DELAY_MS = 1000;
+const SOCKET_RECONNECT_DELAY_MAX_MS = 10000;
+
+/**
+ * Parse payload JSON từ `/api/state`, `sync`, hoặc body sau mutation.
+ * Trả `null` nếu thiếu `version` số hoặc `rows` không phải mảng.
+ */
 function parseState(raw: unknown): AppState | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -19,6 +27,15 @@ function parseState(raw: unknown): AppState | null {
   return { version: o.version, rows: o.rows as Shipment[] };
 }
 
+/** Giữ bản sao mới hơn hoặc bằng `version` (tránh ghi đè do gói tin lệch thứ tự). */
+function pickNewerState(prev: AppState | null, next: AppState): AppState {
+  if (!prev || next.version >= prev.version) return next;
+  return prev;
+}
+
+/**
+ * Đồng bộ state lô hàng: fetch `/api/state`, Socket.IO `sync`, mutation POST hoặc chế độ offline + `localStorage`.
+ */
 export function useShipmentSync(fallback: Fallback) {
   const [status, setStatus] = useState<SyncStatus>("loading");
   const [socketConnected, setSocketConnected] = useState(false);
@@ -56,19 +73,16 @@ export function useShipmentSync(fallback: Fallback) {
       if (cancelled) return;
 
       const socket = io({
-        path: "/socket.io/",
+        path: SOCKET_IO_PATH,
         transports: ["websocket", "polling"],
         reconnectionAttempts: Infinity,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 10000,
+        reconnectionDelay: SOCKET_RECONNECT_DELAY_MS,
+        reconnectionDelayMax: SOCKET_RECONNECT_DELAY_MAX_MS,
       });
       socketRef.current = socket;
 
       const mergeIfNewer = (next: AppState) => {
-        setState((prev) => {
-          if (!prev || next.version >= prev.version) return next;
-          return prev;
-        });
+        setState((prev) => pickNewerState(prev, next));
       };
 
       const onSync = (payload: unknown) => {
@@ -98,6 +112,7 @@ export function useShipmentSync(fallback: Fallback) {
   const mutate = useCallback(async (mutation: ShipmentMutation): Promise<AppState | null> => {
     if (!apiOkRef.current) {
       let computed: AppState | null = null;
+      let offlineErr: Error | null = null;
       setState((prev) => {
         if (!prev) return prev;
         try {
@@ -105,10 +120,12 @@ export function useShipmentSync(fallback: Fallback) {
           saveRows(next.rows);
           computed = next;
           return next;
-        } catch {
+        } catch (e) {
+          offlineErr = e instanceof Error ? e : new Error(String(e));
           return prev;
         }
       });
+      if (offlineErr) throw offlineErr;
       return computed;
     }
 
@@ -117,18 +134,17 @@ export function useShipmentSync(fallback: Fallback) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(mutation),
     });
-    const body = await res.json().catch(() => ({}));
+    const body: unknown = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const msg = typeof body?.error === "string" ? body.error : res.statusText;
+      const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+      const msg = typeof o.error === "string" ? o.error : res.statusText;
       throw new Error(msg);
     }
     const next = parseState(body);
-    if (next) {
-      setState((prev) => {
-        if (!prev || next.version >= prev.version) return next;
-        return prev;
-      });
+    if (!next) {
+      throw new Error("Phản hồi máy chủ không hợp lệ sau khi lưu.");
     }
+    setState((prev) => pickNewerState(prev, next));
     return next;
   }, []);
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { StatusSelect } from "./StatusBadge";
 import { SummaryBar } from "./SummaryBar";
@@ -16,6 +16,7 @@ import {
   downloadTcsAttachedDimsExcel,
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
+import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 
 interface Props {
   rows: Shipment[];
@@ -43,17 +44,18 @@ const COL_HEADERS = [
   { key: "customer", label: "KHÁCH HÀNG", w: "min-w-[120px]" },
   { key: "note", label: "NOTE", w: "min-w-[100px] max-w-[180px]" },
   { key: "status", label: "TRẠNG THÁI", w: "min-w-[110px]" },
-  { key: "actions", label: "", w: "w-44" },
+  { key: "actions", label: "THAO TÁC", w: "w-44" },
 ] as const;
 
 export function DesktopShipmentTable({ rows, allRows, onAddBlankRow, onUpdate, onDelete, onPrint, onEdit }: Props) {
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
+  const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
 
   return (
     <>
     <div className="hidden md:block space-y-8">
       {WAREHOUSES.map((wh) => {
-        const group = rows.filter((r) => r.warehouse === wh);
+        const group = rowsByWarehouse[wh];
 
         return (
           <section key={wh}>
@@ -87,7 +89,7 @@ export function DesktopShipmentTable({ rows, allRows, onAddBlankRow, onUpdate, o
                         key={c.key}
                         className={`whitespace-nowrap border-r border-black/[0.06] px-2.5 py-3 text-[10px] font-semibold uppercase tracking-wider text-apple-secondary last:border-r-0 ${c.w}`}
                       >
-                        {c.label || "THAO TÁC"}
+                        {c.label}
                       </th>
                     ))}
                   </tr>
@@ -103,22 +105,15 @@ export function DesktopShipmentTable({ rows, allRows, onAddBlankRow, onUpdate, o
                       </td>
                     </tr>
                   ) : (
-                    (() => {
-                      const groupRowIds = group.map((r) => r.id);
-                      return group.map((row) => (
-                        <ShipmentRow
-                          key={row.id}
-                          row={row}
-                          groupRowIds={groupRowIds}
-                          allRows={allRows}
-                          onUpdate={onUpdate}
-                          onDelete={onDelete}
-                          onPrint={onPrint}
-                          onEdit={onEdit}
-                          onOpenDimModal={setDimModalRow}
-                        />
-                      ));
-                    })()
+                    <WarehouseGroupRows
+                      group={group}
+                      allRows={allRows}
+                      onUpdate={onUpdate}
+                      onDelete={onDelete}
+                      onPrint={onPrint}
+                      onEdit={onEdit}
+                      onOpenDimModal={setDimModalRow}
+                    />
                   )}
                 </tbody>
               </table>
@@ -138,6 +133,43 @@ export function DesktopShipmentTable({ rows, allRows, onAddBlankRow, onUpdate, o
         }}
       />
     ) : null}
+    </>
+  );
+}
+
+function WarehouseGroupRows({
+  group,
+  allRows,
+  onUpdate,
+  onDelete,
+  onPrint,
+  onEdit,
+  onOpenDimModal,
+}: {
+  group: Shipment[];
+  allRows: Shipment[];
+  onUpdate: (id: string, patch: Partial<Shipment>) => void;
+  onDelete: (id: string) => void;
+  onPrint: (s: Shipment) => void;
+  onEdit: (s: Shipment) => void;
+  onOpenDimModal: (s: Shipment) => void;
+}) {
+  const groupRowIds = group.map((r) => r.id);
+  return (
+    <>
+      {group.map((row) => (
+        <ShipmentRow
+          key={row.id}
+          row={row}
+          groupRowIds={groupRowIds}
+          allRows={allRows}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+          onPrint={onPrint}
+          onEdit={onEdit}
+          onOpenDimModal={onOpenDimModal}
+        />
+      ))}
     </>
   );
 }
@@ -311,7 +343,9 @@ function ShipmentRow({
             />
           )}
           {(row.dimLines?.length ?? 0) > 0 ? (
-            <span className="text-[9px] font-medium text-apple-tertiary">{row.dimLines!.length} nhóm</span>
+            <span className="text-[9px] font-medium text-apple-tertiary">
+              {(row.dimLines ?? []).length} nhóm
+            </span>
           ) : null}
           <button
             type="button"

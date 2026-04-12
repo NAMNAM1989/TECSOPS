@@ -128,7 +128,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const totalPcs = filteredViewRows.reduce((s, r) => s + (r.pcs ?? 0), 0);
   const totalKg = filteredViewRows.reduce((s, r) => s + (r.kg ?? 0), 0);
 
-  const workDateLabel = formatWorkDateLabel(selectedViewDate);
+  const workDateLabel = useMemo(() => formatWorkDateLabel(selectedViewDate), [selectedViewDate]);
 
   const goPrevDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, -1)));
   const goNextDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, 1)));

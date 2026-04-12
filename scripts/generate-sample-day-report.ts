@@ -75,7 +75,7 @@ async function main() {
   const outPath = path.join(outDir, fname);
   await wb.xlsx.writeFile(outPath);
 
-  console.log("Đã tạo file mẫu:\n", outPath);
+  console.info("Đã tạo file mẫu:\n", outPath);
 }
 
 main().catch((e) => {

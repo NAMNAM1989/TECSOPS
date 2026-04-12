@@ -149,7 +149,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
 
   const effectiveCustomer = (customer || searchTrim).trim();
   const effectiveDest = (dest || destSearchTrim).trim();
-  const canSubmitBase =
+  const canSubmit =
     awbValid &&
     !awbConflict &&
     flight.trim() &&
@@ -157,7 +157,6 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     effectiveDest.length > 0 &&
     warehouse &&
     effectiveCustomer.length > 0;
-  const canSubmit = canSubmitBase;
 
   function focusNextFrom(el: EventTarget | null) {
     const order: (HTMLElement | null)[] = [

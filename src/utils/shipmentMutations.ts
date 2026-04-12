@@ -1,4 +1,4 @@
-import type { Shipment } from "../types/shipment";
+import type { Shipment, Warehouse } from "../types/shipment";
 import { awbDigitsKey } from "./awbFormat";
 
 export type AppState = {
@@ -36,9 +36,10 @@ function renumberSttForAll(rows: Shipment[]): Shipment[] {
   const out: Shipment[] = [];
   for (const key of order) {
     const dayRows = byDay.get(key)!;
-    const c: Record<string, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
+    const c: Record<Warehouse, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
     for (const r of dayRows) {
-      out.push({ ...r, stt: ++c[r.warehouse] });
+      const wh: Warehouse = r.warehouse === "TECS-SCSC" ? "TECS-SCSC" : "TECS-TCS";
+      out.push({ ...r, stt: ++c[wh] });
     }
   }
   return out;
@@ -53,7 +54,10 @@ function nextNewId(rows: Shipment[]): string {
   return `new-${Math.max(100, maxNew) + 1}`;
 }
 
-/** Khớp logic `server/stateStore.mjs` — dùng khi không có API (offline). */
+/**
+ * Áp một mutation lên snapshot cục bộ (cùng quy tắc `server/stateStore.mjs`).
+ * Ném lỗi nếu ID không tồn tại, AWB trùng 11 số, hoặc `sessionDate` ADD không hợp lệ.
+ */
 export function applyShipmentMutation(state: AppState, mutation: ShipmentMutation): AppState {
   let rows = [...state.rows];
 

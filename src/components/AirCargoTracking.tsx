@@ -13,6 +13,8 @@ import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { ShipmentBookingForm } from "./ShipmentBookingForm";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
+import { fetchAppStateRows } from "../utils/fetchAppStateRows";
+import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
 import { printDimReport } from "../utils/printDimReport";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { blankShipmentDraft } from "../utils/blankShipment";
@@ -40,6 +42,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
+  const [excelExporting, setExcelExporting] = useState(false);
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -47,7 +50,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   const allRows = state?.rows ?? [];
   const viewRows = useMemo(
-    () => allRows.filter((r) => r.sessionDate === selectedYmd),
+    () => filterShipmentsBySessionYmd(allRows, selectedYmd),
     [allRows, selectedYmd]
   );
 
@@ -62,7 +65,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   const daysWithData = useMemo(() => {
     const s = new Set<string>();
-    for (const r of allRows) s.add(r.sessionDate);
+    for (const r of allRows) s.add((r.sessionDate || "").trim());
     return s.size;
   }, [allRows]);
 
@@ -134,9 +137,26 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const goNextDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, 1)));
   const goToday = () => setSelectedViewDate(startOfLocalDay(new Date()));
 
-  const onDownloadDayExcel = useCallback(() => {
-    void downloadDayReportExcel(viewRows, selectedYmd);
-  }, [viewRows, selectedYmd]);
+  /**
+   * Xuất Excel: ưu tiên `GET /api/state` (đủ mọi lô ngày đó, khớp máy chủ), fallback state React khi offline.
+   * Thứ tự dòng = thứ tự trong API/state (không sắp theo kho). Không lọc theo trạng thái UI.
+   */
+  const onDownloadDayExcel = useCallback(async () => {
+    setExcelExporting(true);
+    try {
+      let rowsForExport = filterShipmentsBySessionYmd(allRows, selectedYmd);
+      const fromApi = await fetchAppStateRows();
+      if (fromApi) {
+        rowsForExport = filterShipmentsBySessionYmd(fromApi, selectedYmd);
+      }
+      await downloadDayReportExcel(rowsForExport, selectedYmd);
+    } catch (e) {
+      console.error(e);
+      window.alert(e instanceof Error ? e.message : "Không tạo được file Excel.");
+    } finally {
+      setExcelExporting(false);
+    }
+  }, [allRows, selectedYmd]);
 
   const openEdit = useCallback((s: Shipment) => {
     setShowForm(false);
@@ -168,9 +188,10 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={onDownloadDayExcel}
-                className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label shadow-apple transition-colors hover:bg-black/[0.03]"
-                title="Tải báo cáo các lô của ngày đang xem (Excel)"
+                disabled={excelExporting}
+                onClick={() => void onDownloadDayExcel()}
+                className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label shadow-apple transition-colors hover:bg-black/[0.03] disabled:cursor-wait disabled:opacity-60"
+                title="Download day report — all warehouses (Excel)"
               >
                 <svg className="h-4 w-4 shrink-0 text-apple-blue" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path
@@ -179,7 +200,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
                     d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
                   />
                 </svg>
-                Tải Excel
+                DOWNLOAD EXCEL
               </button>
               <div className="inline-flex items-center gap-0.5 rounded-full border border-black/[0.08] bg-white p-0.5 shadow-apple">
                 <button

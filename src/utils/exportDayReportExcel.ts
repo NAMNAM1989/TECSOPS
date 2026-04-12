@@ -1,5 +1,6 @@
 import type { Borders, Cell, Fill, Font, Workbook } from "exceljs";
 import type { Shipment } from "../types/shipment";
+import { filterShipmentsBySessionYmd } from "./filterShipmentsBySessionYmd";
 
 /** Excel giới hạn 31 ký tự / tên sheet. */
 const EXCEL_MAX_SHEET_NAME_LENGTH = 31;
@@ -81,10 +82,13 @@ function sheetTitleForDayReport(sessionDateYmd: string): string {
   return `Ngay_${sessionDateYmd}`.slice(0, EXCEL_MAX_SHEET_NAME_LENGTH);
 }
 
-/** Một dòng dữ liệu (giá trị ô) từ một lô — tách khỏi Excel row styling. */
-function dayReportRowValues(r: Shipment): (string | number)[] {
+/**
+ * Một dòng dữ liệu (giá trị ô) từ một lô.
+ * `reportStt` = STT **báo cáo** 1…n liên tục trên file (không dùng `r.stt` theo từng kho).
+ */
+function dayReportRowValues(r: Shipment, reportStt: number): (string | number)[] {
   return [
-    r.stt,
+    reportStt,
     formatYmdToVnDisplay(r.sessionDate),
     r.awb,
     r.dest,
@@ -134,13 +138,22 @@ export function defaultDayReportFileName(sessionDateYmd: string): string {
 }
 
 /**
+ * Lọc đúng ngày phiên (trim), **giữ thứ tự** các phần tử trong `rows` (trên → dưới như nguồn / API),
+ * không sắp theo kho hay STT toàn cục.
+ */
+export function prepareDayReportRows(rows: Shipment[], sessionDateYmd: string): Shipment[] {
+  return filterShipmentsBySessionYmd(rows, sessionDateYmd);
+}
+
+/**
  * Workbook báo cáo ngày — định dạng: header xanh, viền, zebra, freeze hàng 1, AutoFilter.
  * `exceljs` chỉ được tải khi gọi hàm này (dynamic import).
+ * Gồm **mọi lô** (mọi kho) khớp `sessionDateYmd`, thứ tự dòng = thứ tự trong `prepareDayReportRows`.
  */
 export async function buildDayReportWorkbook(rows: Shipment[], sessionDateYmd: string): Promise<Workbook> {
   const ExcelJS = (await import("exceljs")).default;
 
-  const sorted = [...rows].sort((a, b) => a.stt - b.stt);
+  const dayRows = prepareDayReportRows(rows, sessionDateYmd);
   const sheetName = sheetTitleForDayReport(sessionDateYmd);
 
   const wb = new ExcelJS.Workbook();
@@ -160,8 +173,8 @@ export async function buildDayReportWorkbook(rows: Shipment[], sessionDateYmd: s
     styleHeaderCell(cell, colNumber);
   });
 
-  sorted.forEach((r, idx) => {
-    const row = sheet.addRow(dayReportRowValues(r));
+  dayRows.forEach((r, idx) => {
+    const row = sheet.addRow(dayReportRowValues(r, idx + 1));
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       styleBodyCell(cell, colNumber, idx);
     });
@@ -176,7 +189,7 @@ export async function buildDayReportWorkbook(rows: Shipment[], sessionDateYmd: s
 }
 
 /**
- * Tải file .xlsx: các lô đúng `sessionDate` đang xem, cột báo cáo cuối ngày.
+ * Tải file .xlsx: toàn bộ lô **mọi kho** đúng `sessionDate` (ngày báo cáo), không lọc theo trạng thái UI.
  */
 export async function downloadDayReportExcel(rows: Shipment[], sessionDateYmd: string): Promise<void> {
   let objectUrl: string | null = null;

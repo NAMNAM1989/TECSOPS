@@ -1,5 +1,5 @@
 /**
- * Ghi file Excel mẫu vào samples/ — cùng định dạng với « Tải Excel » trên app.
+ * Ghi file Excel mẫu vào samples/ — cùng định dạng với nút DOWNLOAD EXCEL trên app.
  * Chạy: npm run sample:day-report
  */
 import * as fs from "node:fs";

@@ -135,7 +135,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const goToday = () => setSelectedViewDate(startOfLocalDay(new Date()));
 
   const onDownloadDayExcel = useCallback(() => {
-    downloadDayReportExcel(viewRows, selectedYmd);
+    void downloadDayReportExcel(viewRows, selectedYmd);
   }, [viewRows, selectedYmd]);
 
   const openEdit = useCallback((s: Shipment) => {

@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import type { Borders, Cell, Fill, Font, Workbook } from "exceljs";
 import type { Shipment } from "../types/shipment";
 
 /** Hiển thị ngày phiên (sessionDate) dạng dd/mm/yyyy cho báo cáo */
@@ -8,79 +8,154 @@ export function formatYmdToVnDisplay(ymd: string): string {
   return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
-function flightCell(row: Shipment): string {
-  const f = row.flight.trim();
-  const fd = row.flightDate.trim();
-  if (f && fd) return `${f} ${fd}`;
-  return f || fd;
+const DAY_REPORT_HEADERS = [
+  "STT",
+  "Ngày hàng vào",
+  "AWB",
+  "DEST",
+  "Số kiện",
+  "Số KG",
+  "VOLUME WEIGHT",
+  "Tên khách hàng",
+  "Note",
+] as const;
+
+/** Cột (1-based) căn phải: số kiện, KG, VOLUME WEIGHT */
+const NUM_COLS = new Set([5, 6, 7]);
+
+const STT_COL = 1;
+
+/** Xanh lá đậm — tương phản tốt với chữ trắng */
+const HEADER_FILL: Fill = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: "FF15803D" },
+};
+
+const HEADER_FONT: Partial<Font> = {
+  bold: true,
+  color: { argb: "FFFFFFFF" },
+  size: 10,
+  name: "Calibri",
+};
+
+const ZEBRA_FILL: Fill = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: "FFF3F4F6" },
+};
+
+const BORDER: Partial<Borders> = {
+  top: { style: "thin", color: { argb: "FFE5E7EB" } },
+  left: { style: "thin", color: { argb: "FFE5E7EB" } },
+  bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
+  right: { style: "thin", color: { argb: "FFE5E7EB" } },
+};
+
+function applyCellBorder(cell: Cell) {
+  cell.border = BORDER as Borders;
+}
+
+/** Tên file mặc định khi tải từ trình duyệt. */
+export function defaultDayReportFileName(sessionDateYmd: string): string {
+  return `TECSOPS-bao-cao-ngay-${sessionDateYmd}.xlsx`;
 }
 
 /**
- * Một cột gộp list DIM theo thứ tự mẫu ATTACHED_LIST_DIMS (Chiều dài, rộng, cao, số kiện).
- * Chỉ kho TECS-TCS; mỗi nhóm kiện: `dài,rộng,cao,kiện`, các nhóm nối bằng ` | `.
+ * Workbook báo cáo ngày — định dạng: header xanh, viền, zebra, freeze hàng 1, AutoFilter.
+ * `exceljs` chỉ được tải khi gọi hàm này (dynamic import).
  */
-export function formatTcsDimListColumn(row: Shipment): string {
-  if (row.warehouse !== "TECS-TCS" || !row.dimLines?.length) return "";
-  const f2 = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
-  return row.dimLines
-    .map((l) => `${f2(l.lCm)},${f2(l.wCm)},${f2(l.hCm)},${f2(l.pcs)}`)
-    .join(" | ");
-}
+export async function buildDayReportWorkbook(rows: Shipment[], sessionDateYmd: string): Promise<Workbook> {
+  const ExcelJS = (await import("exceljs")).default;
 
-/**
- * Tải file .xlsx: các lô đúng `sessionDate` đang xem, cột theo yêu cầu báo cáo cuối ngày.
- */
-export function downloadDayReportExcel(rows: Shipment[], sessionDateYmd: string): void {
   const sorted = [...rows].sort((a, b) => a.stt - b.stt);
-  const headerRow = [
-    "Ngày hàng vào",
-    "AWB",
-    "Chuyến bay",
-    "DEST",
-    "Số kiện",
-    "Số KG",
-    "DIM kg",
-    "DIM nhóm",
-    "LIST_DIM_TCS (dài,rộng,cao,kiện)",
-    "Tên khách hàng",
-    "Note",
+  const sheetName = `Ngay_${sessionDateYmd}`.slice(0, 31);
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "TECSOPS";
+  wb.created = new Date();
+
+  const sheet = wb.addWorksheet(sheetName, {
+    views: [{ state: "frozen", ySplit: 1 }],
+    properties: { defaultRowHeight: 18 },
+  });
+
+  /* Đủ rộng để chữ tiêu đề + nút AutoFilter không chồng lên nhau (Excel vẽ mũi tên lọc bên phải ô) */
+  sheet.columns = [
+    { width: 8 },
+    { width: 22 },
+    { width: 22 },
+    { width: 10 },
+    { width: 14 },
+    { width: 12 },
+    { width: 22 },
+    { width: 36 },
+    { width: 42 },
   ];
-  const aoa: (string | number)[][] = [
-    headerRow,
-    ...sorted.map((r) => [
+
+  const headerRow = sheet.addRow([...DAY_REPORT_HEADERS]);
+  headerRow.height = 38;
+  headerRow.eachCell((cell, colNumber) => {
+    cell.fill = HEADER_FILL;
+    cell.font = HEADER_FONT as Font;
+    applyCellBorder(cell);
+    const baseAlign = {
+      vertical: "middle" as const,
+      wrapText: true,
+    };
+    if (colNumber === STT_COL) cell.alignment = { ...baseAlign, horizontal: "center" };
+    else if (NUM_COLS.has(colNumber)) cell.alignment = { ...baseAlign, horizontal: "right" };
+    else cell.alignment = { ...baseAlign, horizontal: "left" };
+  });
+
+  sorted.forEach((r, idx) => {
+    const row = sheet.addRow([
+      r.stt,
       formatYmdToVnDisplay(r.sessionDate),
       r.awb,
-      flightCell(r),
       r.dest,
       r.pcs ?? "",
       r.kg ?? "",
       r.dimWeightKg ?? "",
-      r.dimLines?.length ?? "",
-      formatTcsDimListColumn(r),
       r.customer,
       r.note ?? "",
-    ]),
-  ];
+    ]);
+    const isZebra = idx % 2 === 1;
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      if (isZebra) cell.fill = ZEBRA_FILL;
+      applyCellBorder(cell);
+      cell.font = {
+        name: colNumber === 3 ? "Consolas" : "Calibri",
+        size: 11,
+      } as Font;
+      if (colNumber === STT_COL) cell.alignment = { vertical: "middle", horizontal: "center" };
+      else if (NUM_COLS.has(colNumber))
+        cell.alignment = { vertical: "middle", horizontal: "right" };
+      else cell.alignment = { vertical: "middle", horizontal: "left", wrapText: colNumber === 9 };
+    });
+  });
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [
-    { wch: 14 },
-    { wch: 18 },
-    { wch: 16 },
-    { wch: 8 },
-    { wch: 10 },
-    { wch: 10 },
-    { wch: 10 },
-    { wch: 8 },
-    { wch: 42 },
-    { wch: 28 },
-    { wch: 32 },
-  ];
+  sheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: DAY_REPORT_HEADERS.length },
+  };
 
-  const wb = XLSX.utils.book_new();
-  const sheetName = `Ngay_${sessionDateYmd}`.slice(0, 31);
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  return wb;
+}
 
-  const fname = `TECSOPS-bao-cao-ngay-${sessionDateYmd}.xlsx`;
-  XLSX.writeFile(wb, fname);
+/**
+ * Tải file .xlsx: các lô đúng `sessionDate` đang xem, cột báo cáo cuối ngày.
+ */
+export async function downloadDayReportExcel(rows: Shipment[], sessionDateYmd: string): Promise<void> {
+  const wb = await buildDayReportWorkbook(rows, sessionDateYmd);
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = defaultDayReportFileName(sessionDateYmd);
+  a.click();
+  URL.revokeObjectURL(url);
 }

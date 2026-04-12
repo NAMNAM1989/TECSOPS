@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Shipment, ShipmentStatus } from "../types/shipment";
+import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { initialShipments } from "../data/mockShipments";
 import { loadRows } from "../utils/shipmentStorage";
 import {
@@ -15,6 +15,8 @@ import { ShipmentBookingForm } from "./ShipmentBookingForm";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { printDimReport } from "../utils/printDimReport";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
+import { blankShipmentDraft } from "../utils/blankShipment";
+import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment) => void;
@@ -71,10 +73,11 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const runMutate = useCallback(
     async (cmd: Parameters<typeof mutate>[0]) => {
       try {
-        await mutate(cmd);
+        return await mutate(cmd);
       } catch (e) {
         console.error(e);
         window.alert(e instanceof Error ? e.message : "Không gửi được thay đổi lên máy chủ.");
+        return null;
       }
     },
     [mutate]
@@ -99,6 +102,27 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       void runMutate({ action: "ADD", shipment: data });
     },
     [runMutate]
+  );
+
+  /** Desktop: thêm dòng trống đúng kho (nút đặt cạnh tiêu đề TCS / SCSC). */
+  const addBlankRowForWarehouse = useCallback(
+    async (warehouse: Warehouse) => {
+      setEditingShipment(null);
+      setShowForm(false);
+      setStatusFilter("ALL");
+      const prevIds = new Set((state?.rows ?? []).map((r) => r.id));
+      const next = await runMutate({
+        action: "ADD",
+        shipment: blankShipmentDraft(selectedYmd, warehouse),
+      });
+      const added = next?.rows.find((r) => !prevIds.has(r.id));
+      if (added) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => focusShipmentGridCell(added.id, "awb"));
+        });
+      }
+    },
+    [state?.rows, selectedYmd, runMutate]
   );
 
   const totalPcs = filteredViewRows.reduce((s, r) => s + (r.pcs ?? 0), 0);
@@ -214,19 +238,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             <StatPill label="Lô" value={filteredViewRows.length} />
             <StatPill label="Kiện" value={totalPcs} />
             <StatPill label="Kg" value={totalKg.toLocaleString()} />
-            <button
-              type="button"
-              onClick={() => {
-                setEditingShipment(null);
-                setShowForm(true);
-              }}
-              className="hidden rounded-full bg-apple-blue px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover active:scale-[0.98] md:inline-flex md:items-center md:gap-2"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              Nhập booking
-            </button>
           </div>
         </div>
 
@@ -242,11 +253,15 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           <p className="mt-2 text-sm leading-relaxed text-apple-secondary">
             {isViewingToday ? (
               <>
-                Chọn <span className="font-semibold text-apple-blue">Nhập booking</span> (máy tính) hoặc nút dưới cùng (điện thoại) để thêm lô.
+                Trên máy tính, bấm <span className="font-semibold text-apple-blue">Nhập booking</span> cạnh tiêu đề{" "}
+                <span className="font-semibold text-apple-label">TECS-TCS</span> hoặc{" "}
+                <span className="font-semibold text-apple-label">TECS-SCSC</span> ở bảng bên dưới; điện thoại dùng nút
+                dưới cùng (form đầy đủ).
               </>
             ) : (
               <>
-                Bạn có thể <span className="font-semibold text-apple-blue">Nhập booking</span> cho ngày đang xem, hoặc đổi ngày.
+                Bạn có thể bấm <span className="font-semibold text-apple-blue">Nhập booking</span> cạnh tên kho trên bảng
+                (máy tính) cho ngày đang xem, hoặc đổi ngày.
               </>
             )}
           </p>
@@ -269,6 +284,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
       <DesktopShipmentTable
         rows={filteredViewRows}
+        allRows={allRows}
+        onAddBlankRow={addBlankRowForWarehouse}
         onUpdate={onUpdate}
         onDelete={onDelete}
         onPrint={onRequestPrint}

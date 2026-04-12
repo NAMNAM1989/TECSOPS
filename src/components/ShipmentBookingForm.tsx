@@ -4,10 +4,14 @@ import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
 import { isAwbDigitsTaken } from "../utils/awbUnique";
 import { mergeCustomerOptions, persistNewCustomer } from "../utils/customerStorage";
 import { CUSTOMERS, WAREHOUSES, DESTINATIONS } from "../data/customers";
-import { parseFlightDateDisplayToYmd, splitIsoToLocalDateTime } from "../utils/bookingDateParse";
-
-const HOURS_24 = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
-const MINUTES_60 = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
+import {
+  buildCutoffIsoFromDateAndTimeText,
+  formatYmdToFlightDateDdMon,
+  parseBookingDateLoose,
+  parseCutoffTimeCompact,
+  splitIsoToLocalDateTime,
+  ymdToDdMon,
+} from "../utils/bookingDateParse";
 
 type BaseProps = {
   sessionDateYmd: string;
@@ -34,10 +38,12 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
 
   const [awbRaw, setAwbRaw] = useState("");
   const [flight, setFlight] = useState("");
-  const [flightDate, setFlightDate] = useState("");
-  const [cutoffHour, setCutoffHour] = useState("");
-  const [cutoffMinute, setCutoffMinute] = useState("");
-  const [cutoffDate, setCutoffDate] = useState("");
+  /** Ngày bay nhập tay: 15APR, 2026-04-15, 15/04/2026 … */
+  const [flightDateText, setFlightDateText] = useState("");
+  /** Ngày cutoff nhập tay (cùng định dạng). */
+  const [cutoffDateText, setCutoffDateText] = useState("");
+  /** Giờ cutoff: 17, 17H, 17:30, 1730 */
+  const [cutoffTimeText, setCutoffTimeText] = useState("");
   const [dest, setDest] = useState("");
   const [destSearch, setDestSearch] = useState("");
   const [showDestList, setShowDestList] = useState(false);
@@ -50,27 +56,30 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
 
   const awbRef = useRef<HTMLInputElement>(null);
   const flightRef = useRef<HTMLInputElement>(null);
-  const flightDateRef = useRef<HTMLInputElement>(null);
-  const cutoffDateRef = useRef<HTMLInputElement>(null);
-  const cutoffHourRef = useRef<HTMLSelectElement>(null);
-  const cutoffMinuteRef = useRef<HTMLSelectElement>(null);
+  const flightDateTextRef = useRef<HTMLInputElement>(null);
+  const cutoffDateTextRef = useRef<HTMLInputElement>(null);
+  const cutoffTimeTextRef = useRef<HTMLInputElement>(null);
   const destInputRef = useRef<HTMLInputElement>(null);
   const warehouseRef = useRef<HTMLSelectElement>(null);
   const customerInputRef = useRef<HTMLInputElement>(null);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
+  const dimKgRef = useRef<HTMLInputElement>(null);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
   const customerRef = useRef<HTMLDivElement>(null);
   const destRef = useRef<HTMLDivElement>(null);
 
+  const sessionYear = useMemo(() => parseInt(props.sessionDateYmd.slice(0, 4), 10), [props.sessionDateYmd]);
+
   useEffect(() => {
     if (!isEdit || !editShipment) return;
-    const y = parseInt(editShipment.sessionDate.slice(0, 4), 10);
     setAwbRaw(rawAwbDigits(editShipment.awb));
     setFlight(editShipment.flight);
-    setFlightDate(parseFlightDateDisplayToYmd(editShipment.flightDate, y) || "");
+    setFlightDateText(editShipment.flightDate?.trim() || "");
     const co = editShipment.cutoff ? splitIsoToLocalDateTime(editShipment.cutoff) : { date: "", hour: "", minute: "" };
-    setCutoffDate(co.date);
-    setCutoffHour(co.hour);
-    setCutoffMinute(co.minute);
+    setCutoffDateText(co.date ? ymdToDdMon(co.date) : "");
+    setCutoffTimeText(
+      co.hour !== "" && co.minute !== "" ? `${co.hour}:${co.minute}` : ""
+    );
     setDest(editShipment.dest);
     setDestSearch("");
     setWarehouse(editShipment.warehouse);
@@ -130,39 +139,38 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     awbValid && isAwbDigitsTaken(props.allRows, awbDigits, exceptId);
 
   function buildCutoffIso(): string {
-    if (!cutoffDate || cutoffHour === "" || cutoffMinute === "") return "";
-    const [y, mo, d] = cutoffDate.split("-").map(Number);
-    const h = Number(cutoffHour);
-    const m = Number(cutoffMinute);
-    if (Number.isNaN(h) || Number.isNaN(m)) return "";
-    return new Date(y, mo - 1, d, h, m).toISOString();
+    return buildCutoffIsoFromDateAndTimeText(cutoffDateText, cutoffTimeText, sessionYear);
   }
 
-  function formatFlightDate(): string {
-    if (!flightDate) return "";
-    const d = new Date(flightDate);
-    const day = String(d.getDate()).padStart(2, "0");
-    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-    return `${day}${months[d.getMonth()]}`;
-  }
+  const flightYmdResolved = useMemo(
+    () => parseBookingDateLoose(flightDateText.trim(), sessionYear),
+    [flightDateText, sessionYear]
+  );
 
   const effectiveCustomer = (customer || searchTrim).trim();
   const effectiveDest = (dest || destSearchTrim).trim();
   const canSubmitBase =
-    awbValid && !awbConflict && flight && flightDate && effectiveDest.length > 0 && warehouse && effectiveCustomer.length > 0;
+    awbValid &&
+    !awbConflict &&
+    flight.trim() &&
+    !!flightYmdResolved &&
+    effectiveDest.length > 0 &&
+    warehouse &&
+    effectiveCustomer.length > 0;
   const canSubmit = canSubmitBase;
 
   function focusNextFrom(el: EventTarget | null) {
     const order: (HTMLElement | null)[] = [
       awbRef.current,
       flightRef.current,
-      flightDateRef.current,
-      cutoffDateRef.current,
-      cutoffHourRef.current,
-      cutoffMinuteRef.current,
+      flightDateTextRef.current,
+      cutoffDateTextRef.current,
+      cutoffTimeTextRef.current,
       destInputRef.current,
       warehouseRef.current,
       customerInputRef.current,
+      noteRef.current,
+      dimKgRef.current,
     ];
     const node = el as HTMLElement | null;
     const idx = node ? order.indexOf(node) : -1;
@@ -171,20 +179,34 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       return;
     }
     if (idx === order.length - 1) {
-      submitBtnRef.current?.focus();
+      if (canSubmit) {
+        (node?.closest("form") as HTMLFormElement | null)?.requestSubmit();
+      } else {
+        submitBtnRef.current?.focus();
+      }
     }
   }
 
-  function handleEnterAdvance(e: React.KeyboardEvent, field: "field" | "customer") {
+  function handleEnterAdvance(e: React.KeyboardEvent, field: "field" | "customer" | "dim") {
     if (e.key !== "Enter" || (e.nativeEvent as KeyboardEvent).isComposing) return;
     if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+
+    if (field === "dim") {
+      e.preventDefault();
+      if (canSubmit) {
+        (e.currentTarget.closest("form") as HTMLFormElement | null)?.requestSubmit();
+      } else {
+        submitBtnRef.current?.focus();
+      }
+      return;
+    }
 
     if (field === "customer") {
       e.preventDefault();
       if (canSubmit) {
         (e.currentTarget.closest("form") as HTMLFormElement | null)?.requestSubmit();
       } else {
-        submitBtnRef.current?.focus();
+        noteRef.current?.focus();
       }
       return;
     }
@@ -196,6 +218,34 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
+
+    const flightYmd = parseBookingDateLoose(flightDateText.trim(), sessionYear);
+    if (!flightYmd) {
+      window.alert(
+        "Ngày bay không hợp lệ. VD: 15APR, 15 APR 2026, 2026-04-15, 15/04/2026 — hoặc Tab sang ô và chỉnh lại."
+      );
+      flightDateTextRef.current?.focus();
+      return;
+    }
+
+    const cdt = cutoffDateText.trim();
+    const ctt = cutoffTimeText.trim();
+    if (cdt || ctt) {
+      if (!cdt || !ctt) {
+        window.alert("Cutoff: nhập cả ngày và giờ, hoặc để trống cả hai ô.");
+        return;
+      }
+      if (!parseBookingDateLoose(cdt, sessionYear)) {
+        window.alert("Ngày cutoff không hợp lệ. VD: 15APR, 15/04/2026, 2026-04-15");
+        cutoffDateTextRef.current?.focus();
+        return;
+      }
+      if (!parseCutoffTimeCompact(ctt)) {
+        window.alert("Giờ cutoff không hợp lệ. VD: 17, 17H, 17:30, 1730");
+        cutoffTimeTextRef.current?.focus();
+        return;
+      }
+    }
 
     persistNewCustomer(effectiveCustomer, CUSTOMERS);
     setCustomerListVersion((v) => v + 1);
@@ -222,7 +272,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     const payloadCommon = {
       awb: awbDisplay,
       flight: flight.toUpperCase(),
-      flightDate: formatFlightDate(),
+      flightDate: formatYmdToFlightDateDdMon(flightYmd),
       cutoff,
       cutoffNote: isEdit ? editShipment!.cutoffNote : "",
       note: note.trim(),
@@ -247,10 +297,9 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       });
       setAwbRaw("");
       setFlight("");
-      setFlightDate("");
-      setCutoffHour("");
-      setCutoffMinute("");
-      setCutoffDate("");
+      setFlightDateText("");
+      setCutoffDateText("");
+      setCutoffTimeText("");
       setDest("");
       setDestSearch("");
       setNote("");
@@ -291,11 +340,15 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               {!isEdit && " — AWB 11 số tự format IATA"}
             </p>
             <p className="mt-1 text-[11px] leading-snug text-apple-tertiary">
-              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Tab</kbd> chuyển ô ·{" "}
-              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Enter</kbd> sang ô tiếp
-              (ngày bay, cutoff, giờ, kho…) · Enter ở khách hàng = gửi form ·{" "}
-              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Tab</kbd> sang Note ·{" "}
-              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Esc</kbd> đóng
+              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Tab</kbd> /{" "}
+              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Enter</kbd> chuyển ô
+              (ngày <span className="font-semibold text-apple-secondary">15APR</span>, giờ{" "}
+              <span className="font-semibold text-apple-secondary">17H</span> / 17:30) ·{" "}
+              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Enter</kbd> ở ô DIM (hoặc
+              Khách hàng khi đủ điều kiện) = <span className="font-semibold text-apple-secondary">Thêm lô</span> · Note:{" "}
+              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1 font-mono text-[10px]">Enter</kbd> sang DIM,{" "}
+              <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1 font-mono text-[10px]">Shift+Enter</kbd> xuống
+              dòng · <kbd className="rounded-md border border-black/[0.08] bg-black/[0.04] px-1.5 font-mono text-[10px]">Esc</kbd> đóng
             </p>
           </div>
           <button
@@ -359,16 +412,28 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 Ngày bay
               </label>
               <input
-                ref={flightDateRef}
-                type="date"
-                value={flightDate}
-                onChange={(e) => {
-                  setFlightDate(e.target.value);
-                  if (!cutoffDate) setCutoffDate(e.target.value);
+                ref={flightDateTextRef}
+                type="text"
+                autoComplete="off"
+                placeholder="VD: 15APR hoặc 2026-04-15"
+                value={flightDateText}
+                onChange={(e) => setFlightDateText(e.target.value.toUpperCase())}
+                onBlur={() => {
+                  if (isEdit) return;
+                  const ymd = parseBookingDateLoose(flightDateText.trim(), sessionYear);
+                  if (!ymd || cutoffDateText.trim() !== "") return;
+                  setCutoffDateText(ymdToDdMon(ymd));
                 }}
                 onKeyDown={(e) => handleEnterAdvance(e, "field")}
-                className="w-full rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                className="w-full rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 font-mono text-sm font-semibold text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
               />
+              {flightDateText.trim() && !flightYmdResolved ? (
+                <p className="mt-1 text-[11px] font-medium text-amber-700">Chưa khớp định dạng ngày — kiểm tra lại.</p>
+              ) : flightYmdResolved ? (
+                <p className="mt-1 text-[11px] text-apple-tertiary">
+                  → <span className="font-mono font-semibold text-apple-secondary">{flightYmdResolved}</span>
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -378,53 +443,35 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 Ngày cutoff
               </label>
               <input
-                ref={cutoffDateRef}
-                type="date"
-                value={cutoffDate}
-                onChange={(e) => setCutoffDate(e.target.value)}
+                ref={cutoffDateTextRef}
+                type="text"
+                autoComplete="off"
+                placeholder="VD: 15APR (để trống nếu không có)"
+                value={cutoffDateText}
+                onChange={(e) => setCutoffDateText(e.target.value.toUpperCase())}
                 onKeyDown={(e) => handleEnterAdvance(e, "field")}
-                className="w-full rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                className="w-full rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 font-mono text-sm font-semibold text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
               />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-apple-secondary">
                 Giờ cutoff (24h)
               </label>
-              <div className="flex items-center gap-1.5">
-                <select
-                  ref={cutoffHourRef}
-                  value={cutoffHour}
-                  onChange={(e) => setCutoffHour(e.target.value)}
-                  onKeyDown={(e) => handleEnterAdvance(e, "field")}
-                  className="min-w-0 flex-1 rounded-2xl border border-black/[0.08] bg-white px-2 py-2.5 font-mono text-sm font-bold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
-                  aria-label="Giờ cutoff 0–23 (mũi tên chọn, Enter sang phút)"
-                >
-                  <option value="">—</option>
-                  {HOURS_24.map((h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
-                  ))}
-                </select>
-                <span className="font-mono text-lg font-semibold text-apple-tertiary">:</span>
-                <select
-                  ref={cutoffMinuteRef}
-                  value={cutoffMinute}
-                  onChange={(e) => setCutoffMinute(e.target.value)}
-                  onKeyDown={(e) => handleEnterAdvance(e, "field")}
-                  className="min-w-0 flex-1 rounded-2xl border border-black/[0.08] bg-white px-2 py-2.5 font-mono text-sm font-bold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
-                  aria-label="Phút cutoff 0–59 (Enter sang DEST)"
-                >
-                  <option value="">—</option>
-                  {MINUTES_60.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <input
+                ref={cutoffTimeTextRef}
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                placeholder="VD: 17 hoặc 17H hoặc 17:30"
+                value={cutoffTimeText}
+                onChange={(e) => setCutoffTimeText(e.target.value)}
+                onKeyDown={(e) => handleEnterAdvance(e, "field")}
+                className="w-full rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 font-mono text-sm font-bold text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                aria-label="Giờ cutoff nhập tay: 17, 17H, 17:30, 1730"
+              />
               <p className="mt-1 text-[11px] text-apple-tertiary">
-                24 giờ — dùng ↑↓ trong ô giờ/phút, <span className="font-semibold text-apple-secondary">Enter</span> sang ô kế
+                Một ô — <span className="font-semibold text-apple-secondary">17</span> = 17:00,{" "}
+                <span className="font-semibold text-apple-secondary">1730</span> = 17:30. Để trống cả ngày + giờ nếu không có cutoff.
               </p>
             </div>
           </div>
@@ -624,9 +671,16 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
             </label>
             <p className="mb-1 text-[11px] text-apple-tertiary">Ghi chú thêm cho lô (tùy chọn).</p>
             <textarea
+              ref={noteRef}
               id="booking-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" || (e.nativeEvent as KeyboardEvent).isComposing) return;
+                if (e.shiftKey) return;
+                e.preventDefault();
+                dimKgRef.current?.focus();
+              }}
               rows={3}
               maxLength={2000}
               placeholder="VD: hàng dễ vỡ, ưu tiên xuất kho…"
@@ -640,6 +694,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
             </label>
             <p className="mb-1 text-[11px] text-apple-tertiary">Trọng lượng thể tích — tùy chọn.</p>
             <input
+              ref={dimKgRef}
               id="booking-dim-kg"
               type="number"
               inputMode="decimal"
@@ -647,6 +702,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               step="any"
               value={dimKg}
               onChange={(e) => setDimKg(e.target.value)}
+              onKeyDown={(e) => handleEnterAdvance(e, "dim")}
               placeholder="VD: 120.5"
               className="w-full rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
             />

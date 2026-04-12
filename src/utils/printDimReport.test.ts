@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import type { Shipment } from "../types/shipment";
-import { canPrintDimReport, diminsenRow, printDimReport } from "./printDimReport";
+import { canPrintDimReport, canPrintDimScscReport, diminsenRow, printDimReport } from "./printDimReport";
 
 function sampleShipment(over: Partial<Shipment> = {}): Shipment {
   return {
@@ -53,6 +53,16 @@ describe("canPrintDimReport", () => {
   });
 });
 
+describe("canPrintDimScscReport", () => {
+  it("true khi SCSC và có dimLines", () => {
+    expect(canPrintDimScscReport(sampleShipment())).toBe(true);
+  });
+
+  it("false khi kho TCS dù có dimLines", () => {
+    expect(canPrintDimScscReport(sampleShipment({ warehouse: "TECS-TCS" }))).toBe(false);
+  });
+});
+
 describe("printDimReport", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -62,6 +72,12 @@ describe("printDimReport", () => {
     const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
     printDimReport(sampleShipment({ dimLines: null }));
     expect(alert).toHaveBeenCalledWith(expect.stringContaining("Chưa có chi tiết DIM"));
+  });
+
+  it("từ chối kho TCS dù có dimLines", () => {
+    const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
+    printDimReport(sampleShipment({ warehouse: "TECS-TCS" }));
+    expect(alert).toHaveBeenCalledWith(expect.stringContaining("TCS"));
   });
 
   it("ghi HTML bảng in (MAWB, DIMINSEN, tổng PCS)", () => {

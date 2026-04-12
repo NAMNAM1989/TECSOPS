@@ -24,6 +24,11 @@ export function canPrintDimReport(s: Shipment): boolean {
   return (s.dimLines?.length ?? 0) > 0;
 }
 
+/** Form in DIM SCSC — chỉ lô kho SCSC có đủ chi tiết kiện. */
+export function canPrintDimScscReport(s: Shipment): boolean {
+  return s.warehouse === "TECS-SCSC" && canPrintDimReport(s);
+}
+
 /**
  * Mở hộp thoại in trình duyệt với layout giống form DIM (MAWB, chuyến bay, bảng D×R×C×kiện, tổng).
  * Dùng iframe để tương thích mobile hơn window.open.
@@ -31,6 +36,12 @@ export function canPrintDimReport(s: Shipment): boolean {
 export function printDimReport(s: Shipment): void {
   if (!canPrintDimReport(s)) {
     window.alert("Chưa có chi tiết DIM (D×R×C×kiện). Hãy nhập DIM trên điện thoại trước.");
+    return;
+  }
+  if (s.warehouse !== "TECS-SCSC") {
+    window.alert(
+      "Form in DIM SCSC chỉ dùng cho lô kho SCSC. Lô kho TCS dùng LIST DIM TCS / IN DIM TCS."
+    );
     return;
   }
 

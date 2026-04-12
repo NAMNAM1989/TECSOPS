@@ -95,19 +95,21 @@ export function useShipmentSync(fallback: Fallback) {
     };
   }, []);
 
-  const mutate = useCallback(async (mutation: ShipmentMutation) => {
+  const mutate = useCallback(async (mutation: ShipmentMutation): Promise<AppState | null> => {
     if (!apiOkRef.current) {
+      let computed: AppState | null = null;
       setState((prev) => {
         if (!prev) return prev;
         try {
           const next = applyShipmentMutation(prev, mutation);
           saveRows(next.rows);
+          computed = next;
           return next;
         } catch {
           return prev;
         }
       });
-      return;
+      return computed;
     }
 
     const res = await fetch("/api/mutation", {
@@ -127,6 +129,7 @@ export function useShipmentSync(fallback: Fallback) {
         return prev;
       });
     }
+    return next;
   }, []);
 
   return { status, state, mutate, socketConnected };

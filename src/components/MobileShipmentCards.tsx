@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { MobileDimKgModal } from "./MobileDimKgModal";
-import { canPrintDimReport, printDimReport } from "../utils/printDimReport";
+import { canPrintDimScscReport, printDimReport } from "../utils/printDimReport";
 import {
   canExportTcsDimTemplate,
   downloadTcsAttachedDimsExcel,
@@ -172,14 +172,16 @@ export function MobileShipmentCards({
                     >
                       <div className="flex flex-col gap-1.5">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="min-w-0 flex-1 text-left text-[12px] leading-snug">
-                            <span className="font-mono font-semibold tracking-tight text-apple-label">{row.awb}</span>
+                          <p className="min-w-0 flex-1 text-left leading-snug">
+                            <span className="font-mono text-[15px] font-semibold leading-tight tracking-tight text-apple-label">
+                              {row.awb}
+                            </span>
                             <span className="text-apple-tertiary"> · </span>
                             <span className="text-[11px] font-medium text-apple-secondary">
                               {row.flight}/{row.flightDate}
                             </span>
                             <span className="text-apple-tertiary"> · </span>
-                            <span className="font-semibold text-apple-label">{row.dest}</span>
+                            <span className="text-[13px] font-semibold text-apple-label">{row.dest}</span>
                           </p>
                           <div className="shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
                             <StatusSelect
@@ -263,7 +265,7 @@ export function MobileShipmentCards({
                               >
                                 Nhập DIM
                               </button>
-                              {canPrintDimReport(row) ? (
+                              {canPrintDimScscReport(row) ? (
                                 <button
                                   type="button"
                                   title="In form DIM SCSC (MAWB + bảng kích thước)"
@@ -347,7 +349,7 @@ export function StickyMobileActions({
         {selected ? (
           <>
             <p className="mb-2 truncate text-center text-[11px] font-medium text-apple-secondary">
-              <span className="font-mono font-semibold text-apple-label">{selected.awb}</span>
+              <span className="font-mono text-[15px] font-semibold leading-tight text-apple-label">{selected.awb}</span>
               <span className="mx-1 text-apple-tertiary">·</span>
               {selected.customer}
             </p>
@@ -377,7 +379,7 @@ export function StickyMobileActions({
                   Xóa
                 </button>
               </div>
-              {onPrintDim && canPrintDimReport(selected) ? (
+              {onPrintDim && canPrintDimScscReport(selected) ? (
                 <button
                   type="button"
                   onClick={onPrintDim}

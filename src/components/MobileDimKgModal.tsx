@@ -180,6 +180,12 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
   const totalDim = useMemo(() => totalDimKgFromLines(lines, divisor), [lines, divisor]);
 
+  /** Tổng số kiện trên các dòng DIM (cột kiện từng nhóm). */
+  const sumDimPcs = useMemo(() => lines.reduce((s, l) => s + l.pcs, 0), [lines]);
+  const declaredPcs = row.pcs;
+  const pcsMismatch =
+    declaredPcs != null && lines.length > 0 && sumDimPcs !== declaredPcs;
+
   useEffect(() => {
     abort();
   }, [tab, abort]);
@@ -289,6 +295,12 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
       return;
     }
     if (lines.length > 0 && totalDim != null) {
+      if (declaredPcs != null && sumDimPcs !== declaredPcs) {
+        window.alert(
+          `Tổng kiện trong DIM là ${sumDimPcs}, nhưng lô đang khai ${declaredPcs} kiện — hai số phải bằng nhau mới lưu được. Hãy sửa dòng hoặc số kiện ở bảng chính.`
+        );
+        return;
+      }
       onSave({ dimWeightKg: totalDim, dimLines: lines, dimDivisor: divisor });
       return;
     }
@@ -371,6 +383,11 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   value={combo}
                   onChange={(e) => setCombo(normalizeDimComboInput(e.target.value))}
                   onKeyDown={(e) => {
+                    if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
+                      e.preventDefault();
+                      addFromCombo();
+                      return;
+                    }
                     if (e.key === "," || e.key === "\u060C") {
                       e.preventDefault();
                       const el = e.currentTarget;
@@ -391,7 +408,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 <p className="mt-1 text-[10px] leading-snug text-apple-tertiary">
                   Phím <span className="font-semibold text-apple-secondary">,</span> trên bàn phím số = nhập{" "}
                   <span className="font-semibold text-apple-secondary">×</span>. 4 số = D×R×C×kiện; nhiều nhóm nối
-                  tiếp; chỉ 3 số → kiện = 1.
+                  tiếp; chỉ 3 số → kiện = 1. <span className="font-semibold text-apple-secondary">Enter</span> = thêm
+                  vào danh sách (sai thì sửa dòng dưới).
                 </p>
                 <button
                   type="button"
@@ -421,6 +439,38 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   ))}
                 </div>
               </div>
+
+              {declaredPcs != null ? (
+                <div
+                  className={`rounded-xl border px-3 py-2 text-[11px] leading-snug ${
+                    lines.length === 0
+                      ? "border-black/[0.08] bg-black/[0.03] text-apple-secondary"
+                      : pcsMismatch
+                        ? "border-amber-300 bg-amber-50 text-amber-950"
+                        : "border-emerald-200 bg-emerald-50/90 text-emerald-950"
+                  }`}
+                  role="status"
+                >
+                  <span className="font-semibold">Kiện lô (bảng chính): {declaredPcs}</span>
+                  {lines.length > 0 ? (
+                    <>
+                      {" · "}
+                      <span className="font-mono font-bold">Tổng kiện DIM: {sumDimPcs}</span>
+                      {pcsMismatch ? (
+                        <span className="block pt-1 font-semibold">
+                          Chưa khớp — tổng kiện trong các dòng phải = {declaredPcs} mới Lưu DIM được.
+                        </span>
+                      ) : (
+                        <span className="text-emerald-800"> — đã khớp.</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="block pt-0.5 text-apple-tertiary">
+                      Thêm dòng sao cho tổng cột kiện = {declaredPcs}.
+                    </span>
+                  )}
+                </div>
+              ) : null}
 
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
@@ -516,7 +566,13 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="min-w-0 flex-1 rounded-full bg-apple-blue px-3 py-2.5 text-sm font-semibold text-white hover:bg-apple-blue-hover"
+              disabled={tab === "calc" && pcsMismatch}
+              title={
+                tab === "calc" && pcsMismatch
+                  ? "Tổng kiện DIM phải bằng số kiện khai báo trên lô"
+                  : undefined
+              }
+              className="min-w-0 flex-1 rounded-full bg-apple-blue px-3 py-2.5 text-sm font-semibold text-white hover:bg-apple-blue-hover disabled:cursor-not-allowed disabled:bg-apple-tertiary disabled:text-white/85"
               onClick={handleSave}
             >
               Lưu DIM

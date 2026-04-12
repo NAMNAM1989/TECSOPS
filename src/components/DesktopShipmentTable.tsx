@@ -1,10 +1,16 @@
+import { useState } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
-import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { SummaryBar } from "./SummaryBar";
 import { InlineNumberEdit } from "./InlineNumberEdit";
+import { InlineTextEdit } from "./InlineTextEdit";
+import { formatYmdToFlightDateDdMon, parseBookingDateLoose } from "../utils/bookingDateParse";
+import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
+import { InlineAwbEdit } from "./InlineAwbEdit";
+import { InlineCutoffBlock } from "./InlineCutoffBlock";
+import { MobileDimKgModal } from "./MobileDimKgModal";
 import { statusRowBg, statusRowBorder } from "./statusStyles";
-import { canPrintDimReport, printDimReport } from "../utils/printDimReport";
+import { canPrintDimScscReport, printDimReport } from "../utils/printDimReport";
 import {
   canExportTcsDimTemplate,
   downloadTcsAttachedDimsExcel,
@@ -13,6 +19,10 @@ import {
 
 interface Props {
   rows: Shipment[];
+  /** Toàn bộ lô (kiểm tra trùng AWB khi sửa inline). */
+  allRows: Shipment[];
+  /** Thêm dòng trống vào đúng kho (nút cạnh tiêu đề TCS / SCSC). */
+  onAddBlankRow: (warehouse: Warehouse) => void;
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
@@ -29,28 +39,41 @@ const COL_HEADERS = [
   { key: "dest", label: "DEST", w: "w-16" },
   { key: "pcs", label: "KIỆN", w: "w-16 text-right" },
   { key: "kg", label: "KG", w: "w-16 text-right" },
-  { key: "dim", label: "DIM kg", w: "w-[4.5rem] text-right" },
+  { key: "dim", label: "DIM kg", w: "min-w-[5.5rem] text-right" },
   { key: "customer", label: "KHÁCH HÀNG", w: "min-w-[120px]" },
   { key: "note", label: "NOTE", w: "min-w-[100px] max-w-[180px]" },
   { key: "status", label: "TRẠNG THÁI", w: "min-w-[110px]" },
   { key: "actions", label: "", w: "w-44" },
 ] as const;
 
-export function DesktopShipmentTable({ rows, onUpdate, onDelete, onPrint, onEdit }: Props) {
+export function DesktopShipmentTable({ rows, allRows, onAddBlankRow, onUpdate, onDelete, onPrint, onEdit }: Props) {
+  const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
+
   return (
+    <>
     <div className="hidden md:block space-y-8">
       {WAREHOUSES.map((wh) => {
         const group = rows.filter((r) => r.warehouse === wh);
-        if (group.length === 0) return null;
 
         return (
           <section key={wh}>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <h2 className="text-[19px] font-semibold tracking-tight text-apple-label">{wh}</h2>
                 <span className="rounded-full bg-apple-label px-2.5 py-0.5 text-[11px] font-semibold text-white">
                   {group.length} lô
                 </span>
+                <button
+                  type="button"
+                  title={`Thêm dòng booking vào ${wh}`}
+                  onClick={() => void onAddBlankRow(wh)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-apple-blue px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover active:scale-[0.98]"
+                >
+                  <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  Nhập booking
+                </button>
               </div>
               <SummaryBar rows={rows} warehouse={wh} />
             </div>
@@ -70,16 +93,33 @@ export function DesktopShipmentTable({ rows, onUpdate, onDelete, onPrint, onEdit
                   </tr>
                 </thead>
                 <tbody>
-                  {group.map((row) => (
-                    <ShipmentRow
-                      key={row.id}
-                      row={row}
-                      onUpdate={onUpdate}
-                      onDelete={onDelete}
-                      onPrint={onPrint}
-                      onEdit={onEdit}
-                    />
-                  ))}
+                  {group.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={COL_HEADERS.length}
+                        className="px-4 py-8 text-center text-sm italic text-apple-tertiary"
+                      >
+                        Chưa có lô — bấm « Nhập booking » phía trên để thêm dòng.
+                      </td>
+                    </tr>
+                  ) : (
+                    (() => {
+                      const groupRowIds = group.map((r) => r.id);
+                      return group.map((row) => (
+                        <ShipmentRow
+                          key={row.id}
+                          row={row}
+                          groupRowIds={groupRowIds}
+                          allRows={allRows}
+                          onUpdate={onUpdate}
+                          onDelete={onDelete}
+                          onPrint={onPrint}
+                          onEdit={onEdit}
+                          onOpenDimModal={setDimModalRow}
+                        />
+                      ));
+                    })()
+                  )}
                 </tbody>
               </table>
             </div>
@@ -87,24 +127,65 @@ export function DesktopShipmentTable({ rows, onUpdate, onDelete, onPrint, onEdit
         );
       })}
     </div>
+    {dimModalRow ? (
+      <MobileDimKgModal
+        key={dimModalRow.id}
+        row={dimModalRow}
+        onClose={() => setDimModalRow(null)}
+        onSave={(payload) => {
+          onUpdate(dimModalRow.id, payload);
+          setDimModalRow(null);
+        }}
+      />
+    ) : null}
+    </>
   );
 }
 
 function ShipmentRow({
   row,
+  groupRowIds,
+  allRows,
   onUpdate,
   onDelete,
   onPrint,
   onEdit,
+  onOpenDimModal,
 }: {
   row: Shipment;
+  groupRowIds: string[];
+  allRows: Shipment[];
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   onEdit: (s: Shipment) => void;
+  onOpenDimModal: (s: Shipment) => void;
 }) {
   const bg = statusRowBg[row.status];
   const border = statusRowBorder[row.status];
+  const sessionYear = parseInt(row.sessionDate.slice(0, 4), 10) || new Date().getFullYear();
+  const rowIdx = groupRowIds.indexOf(row.id);
+  const hasNextRow = rowIdx >= 0 && rowIdx < groupRowIds.length - 1;
+
+  const navDownSameField = (field: string) => () => {
+    if (!hasNextRow) return;
+    const nextId = groupRowIds[rowIdx + 1];
+    focusShipmentGridCell(nextId, field);
+  };
+
+  const onFlightDateCommit = (t: string) => {
+    const ymd = parseBookingDateLoose(t, sessionYear);
+    if (!ymd) {
+      window.alert("Ngày bay không hợp lệ (ví dụ 15APR hoặc 15/04/2026).");
+      return;
+    }
+    onUpdate(row.id, { flightDate: formatYmdToFlightDateDdMon(ymd) });
+  };
+
+  const onFlightDateEnterDown = () => {
+    if (hasNextRow) focusShipmentGridCell(groupRowIds[rowIdx + 1], "flight");
+    else focusShipmentGridCell(row.id, "dest");
+  };
 
   return (
     <tr
@@ -115,31 +196,75 @@ function ShipmentRow({
       <td className="border-r border-black/[0.06] px-2.5 py-2 text-center text-xs font-semibold text-apple-secondary">
         {row.stt}
       </td>
-      {/* AWB */}
-      <td className="border-r border-black/[0.06] px-2.5 py-2">
-        <span className="font-mono text-sm font-semibold tracking-tight text-apple-label">{row.awb}</span>
+      {/* AWB — nhập inline (thêm dòng từ « Nhập booking »). */}
+      <td className="border-r border-black/[0.06] px-1 py-1">
+        <InlineAwbEdit
+          rowId={row.id}
+          value={row.awb}
+          allRows={allRows}
+          onCommit={(awb) => onUpdate(row.id, { awb })}
+          onEnterNavigateDown={() => focusShipmentGridCell(row.id, "flight")}
+        />
       </td>
-      {/* Flight */}
-      <td className="border-r border-black/[0.06] px-2.5 py-2">
-        <span className="font-semibold text-apple-label">{row.flight}</span>
-        <span className="ml-1 text-[11px] font-medium text-apple-secondary">/{row.flightDate}</span>
+      {/* Flight — 2 dòng: chuyến + ngày, Enter xuống ô kế */}
+      <td className="border-r border-black/[0.06] px-1.5 py-1 align-top">
+        <div className="flex min-w-[6.5rem] flex-col gap-0.5">
+          <InlineTextEdit
+            value={row.flight}
+            placeholder="Chuyến"
+            className="font-semibold text-apple-label"
+            uppercase
+            maxLength={12}
+            gridNav={{ rowId: row.id, field: "flight" }}
+            onCommit={(v) => onUpdate(row.id, { flight: v })}
+            onEnterNavigateDown={() => focusShipmentGridCell(row.id, "flightDate")}
+          />
+          <InlineTextEdit
+            value={row.flightDate}
+            placeholder="15APR"
+            className="text-[11px] font-medium text-apple-secondary"
+            uppercase
+            maxLength={16}
+            gridNav={{ rowId: row.id, field: "flightDate" }}
+            onCommit={onFlightDateCommit}
+            onEnterNavigateDown={onFlightDateEnterDown}
+          />
+        </div>
       </td>
-      {/* Cutoff */}
-      <td className="border-r border-black/[0.06] px-2.5 py-2 whitespace-nowrap">
-        {row.cutoffNote && (
-          <span className="mr-1 inline-block rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-            {row.cutoffNote}
-          </span>
-        )}
-        {row.cutoff ? (
-          <CutoffCountdown iso={row.cutoff} />
-        ) : (
-          <span className="text-xs italic text-apple-tertiary">—</span>
-        )}
+      {/* Cutoff (giờ + ngày) + ghi chú cutoff — nhập inline */}
+      <td className="border-r border-black/[0.06] px-1 py-1 align-top">
+        <div className="flex min-w-[6rem] flex-col gap-1">
+          <InlineCutoffBlock
+            rowId={row.id}
+            cutoffIso={row.cutoff}
+            sessionYear={sessionYear}
+            onCommit={(iso) => onUpdate(row.id, { cutoff: iso })}
+            onEnterAfterCommit={() => focusShipmentGridCell(row.id, "cutoffNote")}
+          />
+          <InlineTextEdit
+            value={row.cutoffNote ?? ""}
+            placeholder="PER / note"
+            className="text-[10px] font-semibold text-apple-label"
+            uppercase
+            maxLength={32}
+            gridNav={{ rowId: row.id, field: "cutoffNote" }}
+            onCommit={(v) => onUpdate(row.id, { cutoffNote: v })}
+            onEnterNavigateDown={() => focusShipmentGridCell(row.id, "dest")}
+          />
+        </div>
       </td>
       {/* DEST */}
-      <td className="border-r border-black/[0.06] px-2.5 py-2 text-center text-sm font-semibold text-apple-label">
-        {row.dest}
+      <td className="border-r border-black/[0.06] px-1 py-1 text-center">
+        <InlineTextEdit
+          value={row.dest}
+          placeholder="DEST"
+          className="text-center text-sm font-semibold text-apple-label"
+          uppercase
+          maxLength={3}
+          gridNav={{ rowId: row.id, field: "dest" }}
+          onCommit={(v) => onUpdate(row.id, { dest: v.slice(0, 3) })}
+          onEnterNavigateDown={hasNextRow ? navDownSameField("dest") : undefined}
+        />
       </td>
       {/* PCS — inline edit */}
       <td className="border-r border-black/[0.06] px-1.5 py-1 text-right">
@@ -147,7 +272,9 @@ function ShipmentRow({
           value={row.pcs}
           placeholder="Nhập"
           className="font-mono text-sm font-bold tabular-nums"
+          gridNav={{ rowId: row.id, field: "pcs" }}
           onCommit={(v) => onUpdate(row.id, { pcs: v })}
+          onEnterNavigateDown={hasNextRow ? navDownSameField("pcs") : undefined}
         />
       </td>
       {/* KG — inline edit */}
@@ -156,33 +283,72 @@ function ShipmentRow({
           value={row.kg}
           placeholder="Nhập"
           className="font-mono text-sm font-bold tabular-nums"
+          gridNav={{ rowId: row.id, field: "kg" }}
           onCommit={(v) => onUpdate(row.id, { kg: v })}
+          onEnterNavigateDown={hasNextRow ? navDownSameField("kg") : undefined}
         />
       </td>
-      {/* DIM kg */}
-      <td className="border-r border-black/[0.06] px-1.5 py-1 text-right">
-        <InlineNumberEdit
-          value={row.dimWeightKg}
-          placeholder="—"
-          className="font-mono text-xs font-semibold tabular-nums"
-          onCommit={(v) =>
-            onUpdate(row.id, { dimWeightKg: v, dimLines: null, dimDivisor: null })
-          }
-        />
+      {/* DIM kg — khi đã có D×R×C: chỉ hiển thị + modal (tránh sửa nhanh làm mất dimLines → mất in DIM) */}
+      <td className="border-r border-black/[0.06] px-1.5 py-1 text-right align-top">
+        <div className="flex flex-col items-end gap-1">
+          {(row.dimLines?.length ?? 0) > 0 ? (
+            <span
+              className="font-mono text-xs font-semibold tabular-nums text-apple-label"
+              title="Đã có chi tiết kiện — chỉnh kg/DIM trong « D×R×C » để giữ bảng in."
+            >
+              {row.dimWeightKg != null ? row.dimWeightKg : "—"}
+            </span>
+          ) : (
+            <InlineNumberEdit
+              value={row.dimWeightKg}
+              placeholder="—"
+              className="font-mono text-xs font-semibold tabular-nums"
+              gridNav={{ rowId: row.id, field: "dimKg" }}
+              onCommit={(v) =>
+                onUpdate(row.id, { dimWeightKg: v, dimLines: null, dimDivisor: null })
+              }
+              onEnterNavigateDown={hasNextRow ? navDownSameField("dimKg") : undefined}
+            />
+          )}
+          {(row.dimLines?.length ?? 0) > 0 ? (
+            <span className="text-[9px] font-medium text-apple-tertiary">{row.dimLines!.length} nhóm</span>
+          ) : null}
+          <button
+            type="button"
+            title="Nhập DIM đầy đủ (D×R×C × kiện, tính khối / nhập kg)"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenDimModal(row);
+            }}
+            className="rounded-lg border border-apple-blue/35 bg-apple-blue/8 px-1.5 py-0.5 text-[10px] font-bold leading-none text-apple-blue hover:bg-apple-blue/15"
+          >
+            D×R×C
+          </button>
+        </div>
       </td>
       {/* Customer */}
-      <td className="border-r border-black/[0.06] px-2.5 py-2 font-semibold text-apple-label">
-        {row.customer}
+      <td className="border-r border-black/[0.06] px-1 py-1">
+        <InlineTextEdit
+          value={row.customer}
+          placeholder="Khách"
+          className="text-sm font-semibold text-apple-label"
+          maxLength={120}
+          gridNav={{ rowId: row.id, field: "customer" }}
+          onCommit={(v) => onUpdate(row.id, { customer: v })}
+          onEnterNavigateDown={hasNextRow ? navDownSameField("customer") : undefined}
+        />
       </td>
       {/* Note */}
-      <td className="border-r border-black/[0.06] px-2.5 py-2 align-top">
-        {row.note ? (
-          <span className="line-clamp-2 text-xs leading-snug text-apple-secondary" title={row.note}>
-            {row.note}
-          </span>
-        ) : (
-          <span className="text-xs italic text-apple-tertiary">—</span>
-        )}
+      <td className="border-r border-black/[0.06] px-1 py-1 align-top">
+        <InlineTextEdit
+          value={row.note ?? ""}
+          placeholder="Ghi chú"
+          className="line-clamp-2 text-left text-xs leading-snug text-apple-secondary"
+          maxLength={2000}
+          gridNav={{ rowId: row.id, field: "note" }}
+          onCommit={(v) => onUpdate(row.id, { note: v })}
+          onEnterNavigateDown={hasNextRow ? navDownSameField("note") : undefined}
+        />
       </td>
       {/* Status */}
       <td className="border-r border-black/[0.06] px-2 py-2">
@@ -209,7 +375,7 @@ function ShipmentRow({
               />
             </svg>
           </button>
-          {canPrintDimReport(row) ? (
+          {canPrintDimScscReport(row) ? (
             <button
               type="button"
               title="In DIM SCSC (form MAWB + bảng kích thước)"

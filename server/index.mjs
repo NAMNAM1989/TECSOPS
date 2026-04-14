@@ -107,6 +107,12 @@ async function start() {
     io.adapter(createAdapter(pubClient, subClient));
     setRedisStateClient(stateClient);
     console.info("[redis] Socket.IO adapter + state storage (key tecsops:state)");
+    try {
+      await loadState();
+    } catch (e) {
+      console.error("[state] bootstrap Redis state failed:", e?.message ?? e);
+      process.exit(1);
+    }
   } else {
     setRedisStateClient(null);
     console.info("[state] file local + Socket.IO in-memory (một instance hoặc cùng volume)");

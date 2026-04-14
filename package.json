@@ -12,7 +12,10 @@
     "test": "vitest run",
     "sample:day-report": "tsx scripts/generate-sample-day-report.ts",
     "preview": "vite preview",
-    "start": "node server/index.mjs"
+    "start": "node server/index.mjs",
+    "start:railway": "node scripts/check-deploy-safe.mjs && node server/index.mjs",
+    "deploy:check": "node scripts/check-deploy-safe.mjs",
+    "backup:redis-state": "node scripts/redis-backup-state.mjs"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",

@@ -12,6 +12,17 @@ const SEED_SESSION_DAY = "2026-04-06";
 const REDIS_STATE_KEY = process.env.REDIS_STATE_KEY || "tecsops:state";
 const REDIS_LOCK_KEY = process.env.REDIS_LOCK_KEY || "tecsops:state-lock";
 
+/** Production: không seed từ initialRows.json khi Redis/file trống — tránh ghi đè kỳ vọng "trống". */
+function shouldSkipDemoSeed() {
+  return (
+    process.env.TECSOPS_DISABLE_DEMO_SEED === "1" || process.env.TECSOPS_EMPTY_INITIAL === "1"
+  );
+}
+
+function emptyInitialState() {
+  return { version: 1, rows: [] };
+}
+
 /** @type {import('redis').RedisClientType | null} */
 let redisStateClient = null;
 
@@ -159,7 +170,7 @@ function loadStateFile() {
   } catch (e) {
     console.error("[state] load error", e.message);
   }
-  const fresh = createInitialState();
+  const fresh = shouldSkipDemoSeed() ? emptyInitialState() : createInitialState();
   saveStateFile(fresh);
   return fresh;
 }
@@ -188,19 +199,21 @@ export async function loadState() {
       } catch (e) {
         console.warn("[state] migrate file → Redis bỏ qua:", e.message);
       }
-      const fresh = createInitialState();
+      const fresh = shouldSkipDemoSeed() ? emptyInitialState() : createInitialState();
       await redisStateClient.set(REDIS_STATE_KEY, JSON.stringify(fresh));
       return fresh;
     }
     try {
-      const parsed = normalizeState(JSON.parse(raw));
+      const obj = JSON.parse(raw);
+      const parsed = normalizeState(obj);
       if (parsed) return parsed;
+      throw new Error("normalizeState trả về null — dữ liệu không hợp lệ");
     } catch (e) {
-      console.error("[state] redis parse error", e.message);
+      console.error("[state] redis load/parse error", e.message);
+      throw new Error(
+        `[state] Dữ liệu Redis (${REDIS_STATE_KEY}) lỗi hoặc hỏng. Không tự seed lại. Khôi phục từ backup (xem scripts/redis-backup-state.mjs).`
+      );
     }
-    const fresh = createInitialState();
-    await redisStateClient.set(REDIS_STATE_KEY, JSON.stringify(fresh));
-    return fresh;
   }
   return loadStateFile();
 }

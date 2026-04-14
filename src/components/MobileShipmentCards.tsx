@@ -10,7 +10,6 @@ import {
 } from "../utils/exportTcsAttachedDimsExcel";
 import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
-import { SummaryBar } from "./SummaryBar";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { statusCardBg } from "./statusStyles";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
@@ -43,6 +42,7 @@ export function MobileShipmentCards({
 }: MobileShipmentCardsProps) {
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
+  const [mobileExtrasOpenId, setMobileExtrasOpenId] = useState<string | null>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
@@ -78,9 +78,6 @@ export function MobileShipmentCards({
               <span className="rounded-full bg-apple-label px-2 py-0.5 text-[10px] font-semibold text-white">
                 {group.length}
               </span>
-            </div>
-            <div className="mb-2">
-              <SummaryBar rows={rows} warehouse={wh} />
             </div>
             <div className="space-y-1">
               {group.map((row) => {
@@ -214,9 +211,9 @@ export function MobileShipmentCards({
                               </span>
                             ) : null}
                           </div>
-                          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span
-                              className="inline-flex flex-wrap items-center gap-x-1 text-[10px] text-apple-secondary"
+                              className="inline-flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 text-[10px] text-apple-secondary"
                               onClick={(e) => e.stopPropagation()}
                             >
                               {row.cutoffNote ? (
@@ -224,13 +221,13 @@ export function MobileShipmentCards({
                                   {row.cutoffNote}
                                 </span>
                               ) : null}
-                              <span className="font-medium text-apple-tertiary">CO</span>
+                              <span className="shrink-0 font-medium text-apple-tertiary">CO</span>
                               {row.cutoff ? (
                                 <CutoffCountdown iso={row.cutoff} className="text-[10px]" />
                               ) : (
                                 <span className="italic text-apple-tertiary">—</span>
                               )}
-                              <span className="text-apple-tertiary">|</span>
+                              <span className="text-apple-tertiary">·</span>
                               <span className="font-medium text-apple-tertiary">K</span>
                               <InlineNumberEdit
                                 compact
@@ -248,58 +245,75 @@ export function MobileShipmentCards({
                                 onCommit={(v) => onUpdate(row.id, { kg: v })}
                               />
                             </span>
-                            <span
-                              className="inline-flex flex-wrap items-center justify-end gap-1.5"
-                              onClick={(e) => e.stopPropagation()}
-                            >
+                          </div>
+                          <div className="mt-2 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-2">
                               {row.dimWeightKg != null ? (
-                                <span className="rounded-full bg-black/[0.06] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-apple-label">
+                                <span className="min-w-0 truncate rounded-lg bg-black/[0.05] px-2 py-1 text-[11px] font-semibold tabular-nums text-apple-label">
                                   DIM {row.dimWeightKg} kg
-                                  {(row.dimLines?.length ?? 0) > 1 ? (
-                                    <span className="text-apple-secondary"> · {row.dimLines!.length} nhóm</span>
-                                  ) : (row.dimLines?.length ?? 0) === 1 ? (
-                                    <span className="text-apple-secondary"> · 1 nhóm</span>
+                                  {(row.dimLines?.length ?? 0) > 0 ? (
+                                    <span className="font-normal text-apple-secondary">
+                                      {" "}
+                                      · {row.dimLines!.length} nhóm
+                                    </span>
                                   ) : null}
                                 </span>
-                              ) : null}
+                              ) : (
+                                <span className="text-[11px] text-apple-tertiary">Chưa có DIM</span>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => setDimModalRow(row)}
-                                className="rounded-full border border-apple-blue/30 bg-apple-blue/10 px-2.5 py-1 text-[10px] font-semibold text-apple-blue active:scale-[0.98]"
+                                className="ml-auto shrink-0 rounded-full bg-apple-blue px-3.5 py-2 text-[12px] font-semibold text-white shadow-sm active:scale-[0.98]"
                               >
                                 Nhập DIM
                               </button>
-                              {canPrintDimScscReport(row) ? (
+                            </div>
+                            {(canPrintDimScscReport(row) ||
+                              (row.warehouse === "TECS-TCS" && canExportTcsDimTemplate(row))) && (
+                              <div>
                                 <button
                                   type="button"
-                                  title="In form DIM SCSC (MAWB + bảng kích thước)"
-                                  onClick={() => printDimReport(row)}
-                                  className="rounded-full border border-black/[0.12] bg-white px-2.5 py-1 text-[10px] font-semibold text-apple-label active:scale-[0.98]"
+                                  onClick={() =>
+                                    setMobileExtrasOpenId((id) => (id === row.id ? null : row.id))
+                                  }
+                                  className="text-[11px] font-semibold text-apple-blue"
                                 >
-                                  In DIM SCSC
+                                  {mobileExtrasOpenId === row.id ? "Ẩn in & xuất ▴" : "In & xuất DIM ▾"}
                                 </button>
-                              ) : null}
-                              {row.warehouse === "TECS-TCS" && canExportTcsDimTemplate(row) ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    title="Tải file Excel LIST DIM TCS (mẫu ATTACHED_LIST_DIMS)"
-                                    onClick={() => downloadTcsAttachedDimsExcel(row)}
-                                    className="rounded-full border border-emerald-600/35 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-900 active:scale-[0.98]"
-                                  >
-                                    LIST DIM TCS
-                                  </button>
-                                  <button
-                                    type="button"
-                                    title="In bảng IN DIM TCS (dài/rộng/cao/kiện)"
-                                    onClick={() => printTcsAttachedDimsList(row)}
-                                    className="rounded-full border border-emerald-600/25 bg-white px-2.5 py-1 text-[10px] font-semibold text-emerald-800 active:scale-[0.98]"
-                                  >
-                                    IN DIM TCS
-                                  </button>
-                                </>
-                              ) : null}
-                            </span>
+                                {mobileExtrasOpenId === row.id ? (
+                                  <div className="mt-2 flex flex-col gap-2 border-t border-black/[0.06] pt-2">
+                                    {canPrintDimScscReport(row) ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => printDimReport(row)}
+                                        className="w-full rounded-xl border border-black/[0.1] bg-white py-2.5 text-[13px] font-semibold text-apple-label active:bg-black/[0.02]"
+                                      >
+                                        In DIM SCSC
+                                      </button>
+                                    ) : null}
+                                    {row.warehouse === "TECS-TCS" && canExportTcsDimTemplate(row) ? (
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => downloadTcsAttachedDimsExcel(row)}
+                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-emerald-600/35 bg-emerald-50 py-2.5 text-[12px] font-semibold text-emerald-900"
+                                        >
+                                          LIST TCS
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => printTcsAttachedDimsList(row)}
+                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-emerald-600/25 bg-white py-2.5 text-[12px] font-semibold text-emerald-800"
+                                        >
+                                          IN TCS
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

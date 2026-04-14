@@ -35,6 +35,8 @@ function mapSpeechErrorMessage(code: string): string {
 export type DimSpeechSession = {
   onFinal: (transcript: string) => void;
   onErrorMessage?: (message: string) => void;
+  /** true: nghe đến khi chạm mic lần 2 (dừng) — hữu ích trên Android khi cần đọc nhiều số. */
+  continuous?: boolean;
 };
 
 /**
@@ -60,6 +62,15 @@ export function useDimSpeechRecognition() {
     finalAccumRef.current = "";
   }, []);
 
+  /** Dừng sớm nhưng vẫn lấy transcript đã nhận (không hủy như abort). */
+  const finalize = useCallback(() => {
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   useEffect(() => () => abort(), [abort]);
 
   const start = useCallback(
@@ -77,7 +88,7 @@ export function useDimSpeechRecognition() {
       const rec = new Ctor();
       recRef.current = rec;
       rec.lang = "vi-VN";
-      rec.continuous = false;
+      rec.continuous = session.continuous === true;
       rec.interimResults = true;
       rec.maxAlternatives = 1;
       setListening(true);
@@ -131,5 +142,12 @@ export function useDimSpeechRecognition() {
     [abort]
   );
 
-  return { listening, liveCaption, start, abort, speechOk: speechRecognitionSupported() };
+  return {
+    listening,
+    liveCaption,
+    start,
+    abort,
+    finalize,
+    speechOk: speechRecognitionSupported(),
+  };
 }

@@ -125,7 +125,11 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
   const sumDimPcs = useMemo(() => lines.reduce((s, l) => s + l.pcs, 0), [lines]);
   const declaredPcs = row.pcs;
-  const pcsMismatch = declaredPcs != null && lines.length > 0 && sumDimPcs !== declaredPcs;
+  /** Chỉ chặn lưu khi dư kiện (DIM > lô). Thiếu kiện vẫn cho lưu. */
+  const pcsExcess =
+    declaredPcs != null && lines.length > 0 && sumDimPcs > declaredPcs;
+  const pcsShort =
+    declaredPcs != null && lines.length > 0 && sumDimPcs < declaredPcs;
 
   const appendQuads = useCallback((parsed: DimPieceLine[]) => {
     if (parsed.length === 0) return;
@@ -137,6 +141,13 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     const parsed = parseDimLineQuadsFromNumbers(nums);
     if (parsed.length === 0) {
       window.alert("Cần ít nhất 3 số (D×R×C) hoặc 4 số (D×R×C×kiện).");
+      return;
+    }
+    const nextSum = lines.reduce((s, l) => s + l.pcs, 0) + parsed.reduce((s, l) => s + l.pcs, 0);
+    if (declaredPcs != null && nextSum > declaredPcs) {
+      window.alert(
+        `Dư kiện: nếu thêm dòng này, tổng kiện (${nextSum}) vượt kiện lô (${declaredPcs}).`
+      );
       return;
     }
     appendQuads(parsed);
@@ -158,7 +169,24 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
         const nums = numbersFromDimVoiceTranscript(text);
         const parsed = parseDimLineQuadsFromNumbers(nums);
         if (parsed.length > 0) {
-          appendQuads(parsed);
+          setLines((prev) => {
+            const next = [...prev, ...parsed];
+            const sumP = next.reduce((s, l) => s + l.pcs, 0);
+            if (row.pcs != null && sumP > row.pcs) {
+              window.alert(
+                `Dư kiện: tổng kiện trong DIM (${sumP}) lớn hơn kiện lô (${row.pcs}). Không thêm nhóm vừa đọc — xóa bớt dòng hoặc sửa lô.`
+              );
+              return prev;
+            }
+            const td = totalDimKgFromLines(next, DIM_DIVISOR_UI);
+            if (td != null && next.length > 0) {
+              queueMicrotask(() => {
+                onSave({ dimWeightKg: td, dimLines: next, dimDivisor: DIM_DIVISOR_UI });
+                onClose();
+              });
+            }
+            return next;
+          });
           return;
         }
         const normalized = preprocessDimVoiceTranscript(text).replace(/\s+/g, "");
@@ -167,7 +195,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
       },
       onErrorMessage: (m) => window.alert(m),
     });
-  }, [appendQuads, finalize, listening, start]);
+  }, [finalize, listening, onClose, onSave, row.pcs, start]);
 
   const removeLine = (index: number) => {
     setLines((prev) => prev.filter((_, i) => i !== index));
@@ -175,9 +203,9 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
   const handleSave = () => {
     if (lines.length > 0 && totalDim != null) {
-      if (declaredPcs != null && sumDimPcs !== declaredPcs) {
+      if (pcsExcess) {
         window.alert(
-          `Tổng kiện DIM (${sumDimPcs}) phải bằng kiện lô (${declaredPcs}).`
+          `Dư kiện: tổng kiện DIM (${sumDimPcs}) lớn hơn kiện lô (${declaredPcs}). Giảm kiện trong các dòng hoặc sửa số kiện lô.`
         );
         return;
       }
@@ -207,6 +235,10 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
           <h2 id="dim-modal-title" className="text-base font-semibold text-apple-label">
             DIM — D×R×C × kiện
           </h2>
+          <p className="mt-1 text-[11px] leading-snug text-apple-secondary">
+            Mic: đọc xong → chạm mic lần 2 → <span className="font-semibold text-apple-label">tự lưu</span> nếu hợp lệ.
+            Thiếu kiện so với lô vẫn lưu; <span className="font-semibold text-red-600">dư kiện</span> thì không.
+          </p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
@@ -220,6 +252,9 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
             />
 
             <div>
+              <label htmlFor="dim-combo" className="mb-1 block text-[11px] font-semibold text-apple-secondary">
+                Nhập tay (cm): D×R×C×kiện — hoặc dùng nút số
+              </label>
               <input
                 id="dim-combo"
                 type="text"
@@ -294,23 +329,33 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 className={`rounded-xl border px-3 py-2 text-[11px] leading-snug ${
                   lines.length === 0
                     ? "border-black/[0.08] bg-black/[0.03] text-apple-secondary"
-                    : pcsMismatch
-                      ? "border-amber-300 bg-amber-50 text-amber-950"
-                      : "border-emerald-200 bg-emerald-50/90 text-emerald-950"
+                    : pcsExcess
+                      ? "border-red-300 bg-red-50 text-red-950"
+                      : pcsShort
+                        ? "border-amber-200 bg-amber-50/90 text-amber-950"
+                        : "border-emerald-200 bg-emerald-50/90 text-emerald-950"
                 }`}
                 role="status"
               >
-                <span className="font-semibold">Kiện lô: {declaredPcs}</span>
+                <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                  <span className="font-semibold">Kiện lô (K): {declaredPcs}</span>
+                  {lines.length > 0 ? (
+                    <>
+                      <span className="text-apple-tertiary">→</span>
+                      <span className="font-mono font-bold">Tổng kiện DIM: {sumDimPcs}</span>
+                    </>
+                  ) : null}
+                </div>
                 {lines.length > 0 ? (
-                  <>
-                    {" · "}
-                    <span className="font-mono font-bold">DIM: {sumDimPcs}</span>
-                    {pcsMismatch ? (
-                      <span className="block pt-1 font-semibold">Chưa khớp kiện — không lưu được.</span>
+                  <p className="mt-1.5 text-[11px] font-medium leading-snug">
+                    {pcsExcess ? (
+                      <span className="text-red-800">Dư kiện — không lưu được. Giảm kiện trong các dòng.</span>
+                    ) : pcsShort ? (
+                      <span className="text-amber-900">Thiếu kiện so với lô — vẫn có thể lưu DIM.</span>
                     ) : (
-                      <span className="text-emerald-800"> ✓</span>
+                      <span className="text-emerald-800">Khớp kiện.</span>
                     )}
-                  </>
+                  </p>
                 ) : null}
               </div>
             ) : null}
@@ -362,8 +407,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={pcsMismatch}
-              title={pcsMismatch ? "Kiện DIM phải khớp kiện lô" : undefined}
+              disabled={pcsExcess}
+              title={pcsExcess ? "Dư kiện so với lô — không lưu được" : undefined}
               className="min-w-0 flex-1 rounded-full bg-apple-blue px-3 py-2.5 text-sm font-semibold text-white hover:bg-apple-blue-hover disabled:cursor-not-allowed disabled:bg-apple-tertiary disabled:text-white/85"
               onClick={handleSave}
             >

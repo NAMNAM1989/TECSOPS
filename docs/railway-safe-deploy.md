@@ -22,8 +22,11 @@ Vì vậy:
 | **`TECSOPS_DISABLE_DEMO_SEED=1`** | Khi Redis/file **trống lần đầu**, tạo state **rỗng** `{ rows: [] }` thay vì seed từ `initialRows.json`. |
 | **`REDIS_STATE_KEY`** | Tùy chọn — mặc định `tecsops:state`. |
 | **`DATABASE_URL`** | **Hiện không dùng** bởi app; có thể dành cho tương lai. |
+| **`ALLOW_FILE_STATE_ON_RAILWAY=1`** | Chỉ khi **cố ý** chạy không Redis (dễ mất dữ liệu mỗi deploy). Mặc định server **thoát** nếu phát hiện Railway mà không có `REDIS_URL`. |
 
 **Không** lưu dữ liệu quan trọng chỉ trên filesystem container nếu không có Volume.
+
+Trên **Railway**, nếu thiếu `REDIS_URL`, process sẽ **dừng ngay** (log `[FATAL] Railway: thiếu REDIS_URL`) để không chạy “tưởng ổn” rồi redeploy là mất hết.
 
 ---
 
@@ -82,3 +85,24 @@ Vì vậy:
 | Prisma/Sequelize | Không dùng — nếu thêm, dùng migrate deploy / migration files, không force sync. |
 | Safety check | `scripts/check-deploy-safe.mjs` trong `start:railway`. |
 | Persistent storage | Redis plugin Railway (bền hơn filesystem container). |
+
+---
+
+## 6. Khôi phục khi mất dữ liệu (Redis trống / sai key / deploy nhầm)
+
+1. **Ưu tiên file backup** từ `npm run backup:redis-state` (có trường `body`).
+2. **Bản cục bộ dev** (nếu có): `.test-state/state.json` trong repo — có thể là snapshot cũ, **không chắc** trùng 100% production.
+3. **Railway**: xem Redis plugin có **snapshot / backup** (nếu bật).
+
+**Khôi phục vào Redis** (ghi đè key `tecsops:state`):
+
+```powershell
+$env:REDIS_URL = "<từ Railway Variables>"
+npm run restore:redis-state -- .test-state/state.json
+```
+
+Hoặc file backup: `npm run restore:redis-state -- .\tecsops-state-2026-....json`
+
+Kiểm tra trước: `node scripts/redis-restore-state.mjs --dry-run .\.test-state\state.json`
+
+Sau khi SET, **restart** service trên Railway (hoặc đợi kết nối lại) và tải lại app.

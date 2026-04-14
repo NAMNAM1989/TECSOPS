@@ -93,6 +93,19 @@ const PORT = Number(process.env.PORT) || 3001;
 
 async function start() {
   const redisUrl = process.env.REDIS_URL?.trim();
+  /** Railway inject các biến này — dùng để tránh chạy production chỉ với file (mất dữ liệu mỗi deploy). */
+  const onRailway = Boolean(
+    process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_SERVICE_ID
+  );
+  const allowFileWithoutRedis = process.env.ALLOW_FILE_STATE_ON_RAILWAY === "1";
+
+  if (onRailway && !redisUrl && !allowFileWithoutRedis) {
+    console.error(
+      "[FATAL] Railway: thiếu REDIS_URL. Thêm plugin Redis, gán biến REDIS_URL cho service app, rồi deploy lại. " +
+        "Nếu bạn cố ý chỉ dùng file trong container (dễ mất khi redeploy), set ALLOW_FILE_STATE_ON_RAILWAY=1."
+    );
+    process.exit(1);
+  }
 
   if (redisUrl) {
     const pubClient = createClient({ url: redisUrl });

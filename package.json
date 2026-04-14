@@ -15,7 +15,8 @@
     "start": "node server/index.mjs",
     "start:railway": "node scripts/check-deploy-safe.mjs && node server/index.mjs",
     "deploy:check": "node scripts/check-deploy-safe.mjs",
-    "backup:redis-state": "node scripts/redis-backup-state.mjs"
+    "backup:redis-state": "node scripts/redis-backup-state.mjs",
+    "restore:redis-state": "node scripts/redis-restore-state.mjs"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",

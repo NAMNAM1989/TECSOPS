@@ -38,6 +38,8 @@ Non-interactive/CI: set **`RAILWAY_TOKEN`** then `railway up`.
 - Confirm app URL loads; hit **`/api/health`** → 200.
 - If UI looks empty: verify **`REDIS_URL`** on the app service still points at the **same** Redis instance.
 
+Chi tiết nguyên nhân “mất dữ liệu mỗi deploy” và checklist Redis: skill **`tecsops-railway-state-persistence`** (`.cursor/skills/tecsops-railway-state-persistence/SKILL.md`).
+
 ## Restore (only if Redis empty / wrong)
 
 - `npm run restore:redis-state -- <path-to-json>` with `REDIS_URL` set. See `docs/railway-safe-deploy.md`.

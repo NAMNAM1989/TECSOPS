@@ -7,3 +7,7 @@ server/data/*.tmp
 .env
 .env.*
 !.env.example
+
+# Backup state Redis (có thể chứa dữ liệu thật — không commit nhầm)
+tecsops-state-*.json
+**/tecsops-state-*.json

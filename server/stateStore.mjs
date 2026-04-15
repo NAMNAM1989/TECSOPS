@@ -146,10 +146,6 @@ export function setRedisStateClient(client) {
   redisStateClient = client;
 }
 
-export function isRedisStateEnabled() {
-  return redisStateClient != null;
-}
-
 function normalizeState(raw) {
   if (!raw || !Array.isArray(raw.rows) || typeof raw.version !== "number") return null;
   const merged = migrateRows(raw.rows, raw.workDateIso);

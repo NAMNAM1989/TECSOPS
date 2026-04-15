@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "concurrently -k -n srv,vite -c blue,green \"node server/index.mjs\" \"vite\"",
     "build": "tsc -b && vite build",
+    "ci": "npm run build && npm test && npm run deploy:check",
     "test": "vitest run",
     "sample:day-report": "tsx scripts/generate-sample-day-report.ts",
     "preview": "vite preview",

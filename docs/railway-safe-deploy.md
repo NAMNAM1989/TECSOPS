@@ -32,6 +32,14 @@ Trên **Railway**, nếu thiếu `REDIS_URL`, process sẽ **dừng ngay** (log 
 
 ## 2. Quy trình deploy an toàn
 
+### Một lệnh (sau khi đã `git commit`)
+
+```bash
+npm run deploy:ship
+```
+
+Chạy kiểm tra `build` + `test` + `deploy:check`, backup Redis nếu có `REDIS_URL` (kể cả khi chỉ khai báo trong `.env` / `.env.local` — file này không commit), rồi `git push` (dừng nếu còn thay đổi chưa commit). Tùy chọn: đặt `TECSOPS_VERIFY_URL` trong `.env` để sau push gọi `GET …/api/health` xác nhận production còn sống.
+
 1. **Backup Redis (khuyến nghị trước mỗi đợt deploy quan trọng)**  
    Trên máy có `REDIS_URL` (hoặc tạm thời lấy từ Railway):
    ```bash

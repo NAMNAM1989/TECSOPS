@@ -16,6 +16,8 @@
     "start": "node server/index.mjs",
     "start:railway": "node scripts/check-deploy-safe.mjs && node server/index.mjs",
     "deploy:check": "node scripts/check-deploy-safe.mjs",
+    "deploy:safe": "node scripts/deploy-safe-preflight.mjs",
+    "deploy:ship": "node scripts/deploy-ship.mjs",
     "backup:redis-state": "node scripts/redis-backup-state.mjs",
     "restore:redis-state": "node scripts/redis-restore-state.mjs"
   },

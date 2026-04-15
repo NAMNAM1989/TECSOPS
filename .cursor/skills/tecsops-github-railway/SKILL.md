@@ -23,9 +23,19 @@ Stack: React/Vite + Express; **state = Redis** (`REDIS_URL`), key `tecsops:state
 
 If Railway is connected to the repo, **push alone** may trigger deploy — no extra step.
 
+## Một lệnh deploy an toàn (Git push → Railway build từ repo)
+
+Từ root repo, sau khi đã **commit** mọi thay đổi:
+
+```bash
+npm run deploy:ship
+```
+
+Chạy: `deploy:safe` (build + test + deploy:check + backup Redis nếu có `REDIS_URL`) → `git push` → tùy chọn gọi `GET /api/health` nếu set `TECSOPS_VERIFY_URL` trong `.env` (xem `.env.example`). Nếu còn file chưa commit, lệnh **dừng** trước khi push.
+
 ## Railway CLI deploy
 
-When the user wants explicit CLI deploy:
+When the user wants explicit CLI deploy (không qua Git):
 
 1. `railway login` (interactive) if needed; `railway link` to the right project/service once.
 2. From repo root: `npm run build` then `railway up`.

@@ -39,6 +39,10 @@ Tham chiếu mã: `server/index.mjs` (bắt buộc `REDIS_URL` trên Railway), `
 - [ ] **Không** đổi `REDIS_STATE_KEY` nếu không có kế hoạch migrate.
 - [ ] (Khuyến nghị) Backup: `npm run backup:redis-state` với `REDIS_URL` production (xem `docs/railway-safe-deploy.md`).
 
+### Một lệnh sau khi đã commit
+
+`npm run deploy:ship` — gom preflight + (tùy chọn) backup Redis nếu `REDIS_URL` có trong môi trường hoặc file `.env` / `.env.local` (script tự merge file, **không** commit secret) + `git push`. Dữ liệu đã nhập **không** mất miễn là Railway vẫn trỏ **cùng** Redis; lệnh không thể sửa cấu hình dashboard thay bạn.
+
 ## Kiểm tra sau deploy (nhanh)
 
 - Gọi `GET /api/state` trên URL production: so sánh `version` và số phần tử `rows` với trước deploy (hoặc với backup JSON).

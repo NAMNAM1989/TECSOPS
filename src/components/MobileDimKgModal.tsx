@@ -10,8 +10,8 @@ import {
   type DimPieceLine,
   lineDimKg,
   parseDimLineQuadsFromNumbers,
-  parsePositiveNumbersFromText,
   totalDimKgFromLines,
+  tryParseDimPieceLinesFromComboText,
 } from "../utils/volumetricDim";
 
 export type MobileDimSavePayload = {
@@ -34,9 +34,15 @@ function cloneLines(lines: DimPieceLine[] | null): DimPieceLine[] {
   return lines.map((l) => ({ ...l }));
 }
 
-/** Trên bàn phím số mobile, phím "," → coi như phân cách nhân (×) giữa các cạnh. */
+/**
+ * Chuẩn hóa ô nhập DIM: giữ xuống dòng (dán nhiều dòng desktop), tab → space;
+ * phím "," trên bàn phím số → × giữa các cạnh.
+ */
 function normalizeDimComboInput(raw: string): string {
   return raw
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\t/g, " ")
     .replace(/,/g, "×")
     .replace(/\u060C/g, "×")
     .replace(/\*/g, "×");
@@ -157,12 +163,12 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   }, [appendQuads, declaredPcs, lines, voicePreview]);
 
   const addFromCombo = () => {
-    const nums = parsePositiveNumbersFromText(combo);
-    const parsed = parseDimLineQuadsFromNumbers(nums);
-    if (parsed.length === 0) {
-      window.alert("Cần ít nhất 3 số (D×R×C) hoặc 4 số (D×R×C×kiện).");
+    const parsedResult = tryParseDimPieceLinesFromComboText(combo);
+    if (!parsedResult.ok) {
+      window.alert(parsedResult.error);
       return;
     }
+    const parsed = parsedResult.lines;
     const nextSum = lines.reduce((s, l) => s + l.pcs, 0) + parsed.reduce((s, l) => s + l.pcs, 0);
     if (declaredPcs != null && nextSum > declaredPcs) {
       window.alert(
@@ -293,13 +299,14 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
             <div>
               <label htmlFor="dim-combo" className="mb-1 block text-[11px] font-semibold text-apple-secondary">
-                Nhập tay (cm): D×R×C×kiện — hoặc dùng nút số
+                Nhập tay (cm): mỗi dòng D-R-C-kiện (vd 40-50-30-4) hoặc D×R×C×kiện — Enter thêm khi một dòng;
+                Shift+Enter xuống dòng; Ctrl+Enter luôn thêm; hoặc dùng nút số
               </label>
-              <input
+              <textarea
                 id="dim-combo"
-                type="text"
+                rows={4}
                 inputMode="text"
-                enterKeyHint="done"
+                enterKeyHint="enter"
                 autoComplete="off"
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -308,8 +315,15 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 onChange={(e) => setCombo(normalizeDimComboInput(e.target.value))}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
-                    e.preventDefault();
-                    addFromCombo();
+                    const multiLine = combo.includes("\n");
+                    const submit =
+                      e.ctrlKey ||
+                      e.metaKey ||
+                      (!multiLine && !e.shiftKey);
+                    if (submit) {
+                      e.preventDefault();
+                      addFromCombo();
+                    }
                     return;
                   }
                   if (e.key === "," || e.key === "\u060C") {
@@ -326,8 +340,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                     });
                   }
                 }}
-                placeholder="120×50×30×4"
-                className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2.5 text-base text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                placeholder={"40-50-30-4\n60-50-30-5"}
+                className="max-h-40 min-h-[5.5rem] w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2.5 font-mono text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
               />
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {DIM_QUICK_NUMS.map((n) => (
@@ -360,7 +374,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 onClick={addFromCombo}
                 className="mt-2 w-full rounded-xl bg-apple-blue py-2.5 text-sm font-semibold text-white active:scale-[0.99]"
               >
-                Thêm dòng
+                Thêm vào danh sách (một hoặc nhiều dòng)
               </button>
             </div>
 

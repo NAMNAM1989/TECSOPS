@@ -129,6 +129,13 @@ const branch = execSync("git rev-parse --abbrev-ref HEAD", {
   cwd: root,
   env: process.env,
 }).trim();
+if (branch !== "main" && branch !== "master") {
+  console.warn(
+    `\n[deploy:ship] ⚠ Nhánh hiện tại là «${branch}», không phải main.\n` +
+      "  Railway/GitHub thường **chỉ build nhánh production (main)** — push lên nhánh này có thể **không** cập nhật app production.\n" +
+      "  Cách xử lý: merge vào main rồi `git push origin main`, hoặc trong Railway đổi «Watch branch» sang nhánh bạn đang dùng.\n"
+  );
+}
 console.info(`\n[deploy:ship] ▶ git push -u origin HEAD (nhánh hiện tại: ${branch})\n`);
 const pushOut = gitPushCapture();
 await redeployIfUpToDate(pushOut);

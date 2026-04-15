@@ -40,7 +40,9 @@ npm run deploy:ship
 
 Chạy kiểm tra `build` + `test` + `deploy:check`, backup Redis nếu có `REDIS_URL` (kể cả khi chỉ khai báo trong `.env` / `.env.local` — file này không commit), rồi `git push` (dừng nếu còn thay đổi chưa commit). Nếu push báo **Everything up-to-date**, script **tự kích hoạt deploy lại**: POST `RAILWAY_DEPLOY_HOOK_URL` (nếu có trong `.env`), hoặc **empty commit + push** (trừ khi `TECSOPS_NO_EMPTY_REDEPLOY=1`). Tùy chọn: đặt `TECSOPS_VERIFY_URL` trong `.env` để sau push gọi `GET …/api/health` xác nhận production còn sống.
 
-**Lưu ý:** Railway chỉ auto-build nhánh được cấu hình trong service (thường `main`). Nếu bạn push nhánh feature mà service không theo dõi, cần đổi branch trên Railway hoặc merge vào nhánh deploy.
+**Quan trọng — vì sao push feature mà production không đổi:** Railway (mặc định GitHub) gần như luôn deploy từ nhánh **`main`**. Commit chỉ nằm trên `feature/...` thì **production không nhận** cho đến khi merge (hoặc fast-forward) vào `main` và `git push origin main`, **hoặc** bạn đổi trong Railway: Service → **Settings → Source → Branch** sang đúng nhánh feature.
+
+Sau khi merge vào `main`, chạy `npm run deploy:ship` trên nhánh `main` (hoặc chỉ `git push origin main`) để trigger build.
 
 1. **Backup Redis (khuyến nghị trước mỗi đợt deploy quan trọng)**  
    Trên máy có `REDIS_URL` (hoặc tạm thời lấy từ Railway):

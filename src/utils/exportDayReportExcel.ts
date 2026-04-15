@@ -1,6 +1,7 @@
 import type { Borders, Cell, Fill, Font, Workbook } from "exceljs";
 import type { Shipment } from "../types/shipment";
 import { filterShipmentsBySessionYmd } from "./filterShipmentsBySessionYmd";
+import { formatShipmentDimWeightKg } from "./volumetricDim";
 
 /** Excel giới hạn 31 ký tự / tên sheet. */
 const EXCEL_MAX_SHEET_NAME_LENGTH = 31;
@@ -94,7 +95,7 @@ function dayReportRowValues(r: Shipment, reportStt: number): (string | number)[]
     r.dest,
     r.pcs ?? "",
     r.kg ?? "",
-    r.dimWeightKg ?? "",
+    r.dimWeightKg != null ? formatShipmentDimWeightKg(r.flight, r.dimWeightKg) : "",
     r.customer,
     r.note ?? "",
   ];

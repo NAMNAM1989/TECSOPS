@@ -16,6 +16,7 @@ import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { fetchAppStateRows } from "../utils/fetchAppStateRows";
 import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
 import { printDimReport } from "../utils/printDimReport";
+import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
@@ -333,6 +334,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         }}
         onEdit={() => selected && openEdit(selected)}
         onPrintDim={() => selected && printDimReport(selected)}
+        onDownloadScscDimList={() => selected && downloadScscDimListExcel(selected)}
       />
 
       {showForm && (

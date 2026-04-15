@@ -1,6 +1,12 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import type { Shipment } from "../types/shipment";
-import { canPrintDimReport, canPrintDimScscReport, diminsenRow, printDimReport } from "./printDimReport";
+import { canPrintDimReport, canPrintDimScscReport, printDimReport } from "./printDimReport";
+import {
+  dimRoundingPolicyFromFlight,
+  formatDimKgDisplay,
+  lineDimKg,
+} from "./volumetricDim";
+import { scscDimDivisor } from "./scscDimListReport";
 
 function sampleShipment(over: Partial<Shipment> = {}): Shipment {
   return {
@@ -28,16 +34,6 @@ function sampleShipment(over: Partial<Shipment> = {}): Shipment {
     ...over,
   };
 }
-
-describe("diminsenRow", () => {
-  it("120×50×30 × 4 kiện ÷ 6000 = 120", () => {
-    expect(diminsenRow(120, 50, 30, 4, 6000)).toBe(120);
-  });
-
-  it("cùng kích thước ÷ 5000 = 144", () => {
-    expect(diminsenRow(120, 50, 30, 4, 5000)).toBe(144);
-  });
-});
 
 describe("canPrintDimReport", () => {
   it("false khi không có dimLines", () => {
@@ -80,7 +76,7 @@ describe("printDimReport", () => {
     expect(alert).toHaveBeenCalledWith(expect.stringContaining("TCS"));
   });
 
-  it("ghi HTML bảng in (MAWB, DIMINSEN, tổng PCS)", () => {
+  it("ghi HTML meta + bảng DIM (kg) theo lineDimKg như modal", () => {
     const mockDoc = {
       open: vi.fn(),
       write: vi.fn(),
@@ -101,8 +97,14 @@ describe("printDimReport", () => {
       return node;
     });
 
+    const s = sampleShipment();
+    const policy = dimRoundingPolicyFromFlight(s.flight);
+    const div = scscDimDivisor(s);
+    const kg1 = lineDimKg(s.dimLines![0]!, div, policy);
+    const kg2 = lineDimKg(s.dimLines![1]!, div, policy);
+
     vi.useFakeTimers();
-    printDimReport(sampleShipment());
+    printDimReport(s);
     vi.runAllTimers();
     vi.useRealTimers();
 
@@ -111,11 +113,22 @@ describe("printDimReport", () => {
     expect(html).toContain("232-1234 5678");
     expect(html).toContain("VN123");
     expect(html).toContain("06APR");
-    expect(html).toContain("DIMINSEN");
+    expect(html).toContain("DIM (kg)</th>");
+    expect(html).not.toContain("DIMINSEN");
     expect(html).toContain("120.00");
     expect(html).toContain("KUL");
-    const sumDiminsen = diminsenRow(120, 50, 30, 4, 6000) + diminsenRow(100, 80, 60, 1, 6000);
-    expect(html).toContain(`>${sumDiminsen}<`);
+    expect(html).toContain("Tổng kiện");
+    expect(html).toContain("120 kg");
+    expect(html).toContain(escHtml(formatDimKgDisplay(kg1!, policy)));
+    expect(html).toContain(escHtml(formatDimKgDisplay(kg2!, policy)));
     expect(mockWin.print).toHaveBeenCalled();
   });
 });
+
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}

@@ -16,7 +16,9 @@ import {
   downloadTcsAttachedDimsExcel,
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
+import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
+import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
 
 interface Props {
   rows: Shipment[];
@@ -328,7 +330,7 @@ function ShipmentRow({
               className="font-mono text-xs font-semibold tabular-nums text-apple-label"
               title="Đã có chi tiết kiện — chỉnh kg/DIM trong « D×R×C » để giữ bảng in."
             >
-              {row.dimWeightKg != null ? row.dimWeightKg : "—"}
+              {formatShipmentDimWeightKg(row.flight, row.dimWeightKg)}
             </span>
           ) : (
             <InlineNumberEdit
@@ -410,20 +412,36 @@ function ShipmentRow({
             </svg>
           </button>
           {canPrintDimScscReport(row) ? (
-            <button
-              type="button"
-              title="In DIM SCSC (form MAWB + bảng kích thước)"
-              onClick={() => printDimReport(row)}
-              className="rounded-full p-2 text-apple-secondary hover:bg-emerald-50 hover:text-emerald-800"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-            </button>
+            <>
+              <button
+                type="button"
+                title="In DIM SCSC (form MAWB + bảng kích thước)"
+                onClick={() => printDimReport(row)}
+                className="rounded-full p-2 text-apple-secondary hover:bg-emerald-50 hover:text-emerald-800"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                title="LIST SCSC — Excel sheet LIST SCSC (DIM chi tiết)"
+                onClick={() => downloadScscDimListExcel(row)}
+                className="rounded-full p-2 text-emerald-700 hover:bg-emerald-50"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+              </button>
+            </>
           ) : null}
           {row.warehouse === "TECS-TCS" && canExportTcsDimTemplate(row) ? (
             <>

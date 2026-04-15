@@ -1,5 +1,5 @@
 import type { Shipment } from "../types/shipment";
-import type { DimDivisor } from "./volumetricDim";
+import { buildScscDimListModel, formatLineDimKgLabel } from "./scscDimListReport";
 
 function esc(s: string): string {
   return s
@@ -7,17 +7,6 @@ function esc(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-/** DIMINSEN từng dòng theo mẫu: (D×R×C×số kiện) ÷ hệ số — làm tròn số nguyên như bảng tính. */
-export function diminsenRow(
-  lCm: number,
-  wCm: number,
-  hCm: number,
-  pcs: number,
-  divisor: DimDivisor
-): number {
-  return Math.round((lCm * wCm * hCm * pcs) / divisor);
 }
 
 export function canPrintDimReport(s: Shipment): boolean {
@@ -30,8 +19,8 @@ export function canPrintDimScscReport(s: Shipment): boolean {
 }
 
 /**
- * Mở hộp thoại in trình duyệt với layout giống form DIM (MAWB, chuyến bay, bảng D×R×C×kiện, tổng).
- * Dùng iframe để tương thích mobile hơn window.open.
+ * Mở hộp thoại in trình duyệt với layout trùng LIST SCSC / Excel (meta + bảng STT×D×R×C×kiện×DIM kg).
+ * DIM từng dòng = lineDimKg + format theo chuyến (giống modal nhập).
  */
 export function printDimReport(s: Shipment): void {
   if (!canPrintDimReport(s)) {
@@ -45,30 +34,29 @@ export function printDimReport(s: Shipment): void {
     return;
   }
 
-  const divisor = (s.dimDivisor === 5000 || s.dimDivisor === 6000 ? s.dimDivisor : 6000) as DimDivisor;
-  const lines = s.dimLines!;
+  const model = buildScscDimListModel(s);
+  if (!model) {
+    window.alert("Không đọc được dữ liệu DIM.");
+    return;
+  }
 
-  let totalPcs = 0;
-  let totalDiminsen = 0;
-  const bodyRows: string[] = [];
+  const flightLine = `${esc(s.flight.trim())} / ${esc(s.flightDate.trim())}`;
+  const title = `DIM ${s.awb}`;
+  const dimKgStripEsc = esc(model.dimKgStrip);
 
-  for (const line of lines) {
-    const d = diminsenRow(line.lCm, line.wCm, line.hCm, line.pcs, divisor);
-    totalPcs += line.pcs;
-    totalDiminsen += d;
-    bodyRows.push(
-      `<tr>
+  const bodyRows = model.rows
+    .map(
+      (line) =>
+        `<tr>
+        <td class="stt">${line.stt}</td>
         <td class="num">${line.lCm.toFixed(2)}</td>
         <td class="num">${line.wCm.toFixed(2)}</td>
         <td class="num">${line.hCm.toFixed(2)}</td>
         <td class="num">${line.pcs}</td>
-        <td class="num dim">${d}</td>
+        <td class="num dim">${esc(formatLineDimKgLabel(line.dimKg, model.policy))}</td>
       </tr>`
-    );
-  }
-
-  const flightLine = `${esc(s.flight.trim())}/${esc(s.flightDate.trim())}`;
-  const title = `DIM ${s.awb}`;
+    )
+    .join("\n");
 
   const html = `<!DOCTYPE html>
 <html lang="vi">
@@ -87,46 +75,54 @@ export function printDimReport(s: Shipment): void {
     }
     h1 {
       font-size: 13pt;
-      margin: 0 0 10mm 0;
+      margin: 0 0 6mm 0;
       text-align: center;
       letter-spacing: 0.02em;
     }
-    .meta {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px 16px;
-      margin-bottom: 8mm;
-      font-size: 10.5pt;
-    }
-    .meta-row { display: contents; }
-    .meta-row span:first-child { font-weight: 700; }
-    table {
+    table.meta-tbl {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 2mm;
+      margin-bottom: 7mm;
+      font-size: 10.5pt;
     }
-    th, td {
-      border: 1px solid #333;
+    table.meta-tbl td {
+      border: none;
+      padding: 3px 0 3px 0;
+      vertical-align: top;
+    }
+    table.meta-tbl td.meta-k {
+      font-weight: 700;
+      width: 36%;
+      color: #000;
+      padding-right: 10px;
+    }
+    table.meta-tbl td.meta-v {
+      color: #000;
+    }
+    table.dim-tbl {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1mm;
+    }
+    table.dim-tbl th,
+    table.dim-tbl td {
+      border: 1px solid #000;
       padding: 6px 8px;
+      background: #fff;
+      color: #000;
     }
-    th {
-      background: #f0f0f0;
+    table.dim-tbl th {
       font-weight: 700;
       text-align: center;
       font-size: 10pt;
     }
+    td.stt {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      width: 2.6em;
+    }
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     td.dim { font-weight: 700; }
-    tfoot td {
-      font-weight: 700;
-      background: #fafafa;
-    }
-    .foot-label { text-align: left; }
-    .note {
-      margin-top: 4mm;
-      font-size: 9pt;
-      color: #555;
-    }
     @media print {
       body { padding: 10mm 12mm; }
       @page { size: A4 portrait; margin: 12mm; }
@@ -135,34 +131,28 @@ export function printDimReport(s: Shipment): void {
 </head>
 <body>
   <h1>BẢNG KÊ DIM / DIMENSIONAL WEIGHT</h1>
-  <div class="meta">
-    <div class="meta-row"><span>MAWB/BL:</span><span>${esc(s.awb)}</span></div>
-    <div class="meta-row"><span>FLIGHT NO/DATE:</span><span>${flightLine}</span></div>
-    <div class="meta-row"><span>DESTINATION:</span><span>${esc(s.dest)}</span></div>
-    <div class="meta-row"><span>TOTAL (PCS):</span><span>${totalPcs} PCS</span></div>
-  </div>
-  <table>
+  <table class="meta-tbl">
+    <tr><td class="meta-k">MAWB/BL</td><td class="meta-v">${esc(s.awb)}</td></tr>
+    <tr><td class="meta-k">FLIGHT / DATE</td><td class="meta-v">${flightLine}</td></tr>
+    <tr><td class="meta-k">DESTINATION</td><td class="meta-v">${esc(s.dest)}</td></tr>
+    <tr><td class="meta-k">Tổng kiện</td><td class="meta-v">${model.totalPcs}</td></tr>
+    <tr><td class="meta-k">DIM (kg)</td><td class="meta-v">${dimKgStripEsc}</td></tr>
+  </table>
+  <table class="dim-tbl">
     <thead>
       <tr>
+        <th>STT</th>
         <th>DÀI</th>
         <th>RỘNG</th>
         <th>CAO</th>
         <th>SỐ KIỆN</th>
-        <th>DIMINSEN</th>
+        <th>DIM (kg)</th>
       </tr>
     </thead>
     <tbody>
-      ${bodyRows.join("\n")}
+      ${bodyRows}
     </tbody>
-    <tfoot>
-      <tr>
-        <td colspan="3" class="foot-label">Tổng</td>
-        <td class="num">${totalPcs}</td>
-        <td class="num dim">${totalDiminsen}</td>
-      </tr>
-    </tfoot>
   </table>
-  <p class="note">Công thức DIMINSEN: (Dài × Rộng × Cao × Số kiện) ÷ ${divisor} (cm³/kg). Trọng DIM lưu hệ thống: ${s.dimWeightKg != null ? s.dimWeightKg + " kg" : "—"}</p>
 </body>
 </html>`;
 

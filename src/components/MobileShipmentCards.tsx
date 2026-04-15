@@ -8,11 +8,13 @@ import {
   downloadTcsAttachedDimsExcel,
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
+import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { statusCardBg } from "./statusStyles";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
+import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
 
 const SWIPE_THRESHOLD = 48;
 /** Vuốt ngang bị bỏ qua nếu lệch dọc lớn hơn (coi như cuộn dọc). */
@@ -250,7 +252,7 @@ export function MobileShipmentCards({
                             <div className="flex items-center gap-2">
                               {row.dimWeightKg != null ? (
                                 <span className="min-w-0 truncate rounded-lg bg-black/[0.05] px-2 py-1 text-[11px] font-semibold tabular-nums text-apple-label">
-                                  DIM {row.dimWeightKg} kg
+                                  DIM {formatShipmentDimWeightKg(row.flight, row.dimWeightKg)} kg
                                   {(row.dimLines?.length ?? 0) > 0 ? (
                                     <span className="font-normal text-apple-secondary">
                                       {" "}
@@ -284,13 +286,22 @@ export function MobileShipmentCards({
                                 {mobileExtrasOpenId === row.id ? (
                                   <div className="mt-2 flex flex-col gap-2 border-t border-black/[0.06] pt-2">
                                     {canPrintDimScscReport(row) ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => printDimReport(row)}
-                                        className="w-full rounded-xl border border-black/[0.1] bg-white py-2.5 text-[13px] font-semibold text-apple-label active:bg-black/[0.02]"
-                                      >
-                                        In DIM SCSC
-                                      </button>
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => printDimReport(row)}
+                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-black/[0.1] bg-white py-2.5 text-[12px] font-semibold text-apple-label active:bg-black/[0.02]"
+                                        >
+                                          In DIM SCSC
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => downloadScscDimListExcel(row)}
+                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-emerald-600/35 bg-emerald-50 py-2.5 text-[12px] font-semibold text-emerald-900"
+                                        >
+                                          LIST SCSC
+                                        </button>
+                                      </div>
                                     ) : null}
                                     {row.warehouse === "TECS-TCS" && canExportTcsDimTemplate(row) ? (
                                       <div className="flex gap-2">
@@ -351,6 +362,7 @@ interface StickyMobileActionsProps {
   onAdd: () => void;
   onEdit: () => void;
   onPrintDim?: () => void;
+  onDownloadScscDimList?: () => void;
 }
 
 export function StickyMobileActions({
@@ -360,6 +372,7 @@ export function StickyMobileActions({
   onAdd,
   onEdit,
   onPrintDim,
+  onDownloadScscDimList,
 }: StickyMobileActionsProps) {
   return (
     <div className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
@@ -397,14 +410,23 @@ export function StickyMobileActions({
                   Xóa
                 </button>
               </div>
-              {onPrintDim && canPrintDimScscReport(selected) ? (
-                <button
-                  type="button"
-                  onClick={onPrintDim}
-                  className="w-full rounded-full border border-black/[0.12] bg-white py-2.5 text-sm font-semibold text-apple-label shadow-sm active:scale-[0.98]"
-                >
-                  In DIM SCSC (bảng kích thước)
-                </button>
+              {onPrintDim && onDownloadScscDimList && canPrintDimScscReport(selected) ? (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={onPrintDim}
+                    className="min-w-0 flex-1 rounded-full border border-black/[0.12] bg-white py-2.5 text-sm font-semibold text-apple-label shadow-sm active:scale-[0.98]"
+                  >
+                    In DIM SCSC
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDownloadScscDimList}
+                    className="min-w-0 flex-1 rounded-full border border-emerald-600/40 bg-emerald-50 py-2.5 text-sm font-semibold text-emerald-900 active:scale-[0.98]"
+                  >
+                    LIST SCSC
+                  </button>
+                </div>
               ) : null}
               {selected.warehouse === "TECS-TCS" && canExportTcsDimTemplate(selected) ? (
                 <div className="flex gap-2">

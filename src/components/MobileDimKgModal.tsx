@@ -8,6 +8,9 @@ import {
 import {
   type DimDivisor,
   type DimPieceLine,
+  type DimRoundingPolicyId,
+  dimRoundingPolicyFromFlight,
+  formatDimKgDisplay,
   lineDimKg,
   parseDimLineQuadsFromNumbers,
   totalDimKgFromLines,
@@ -64,13 +67,13 @@ function DimMicTotalRow({
   speechOk,
   listening,
   liveCaption,
-  totalDim,
+  totalDimLabel,
   onMicPress,
 }: {
   speechOk: boolean;
   listening: boolean;
   liveCaption: string;
-  totalDim: number | null;
+  totalDimLabel: string;
   onMicPress: () => void;
 }) {
   return (
@@ -108,7 +111,7 @@ function DimMicTotalRow({
         <div className="min-w-0 flex-1 text-right">
           <p className="text-[11px] font-medium text-apple-secondary">Tổng DIM</p>
           <p className="text-2xl font-bold leading-tight tabular-nums tracking-tight text-apple-label">
-            {totalDim != null ? `${totalDim} kg` : "—"}
+            {totalDimLabel}
           </p>
           {listening ? (
             <p className="mt-1 line-clamp-2 text-left text-[11px] text-violet-700" aria-live="polite">
@@ -133,7 +136,20 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
   const { listening, liveCaption, start, finalize, speechOk } = useDimSpeechRecognition();
 
-  const totalDim = useMemo(() => totalDimKgFromLines(lines, DIM_DIVISOR_UI), [lines]);
+  const dimPolicy: DimRoundingPolicyId = useMemo(
+    () => dimRoundingPolicyFromFlight(row.flight),
+    [row.flight]
+  );
+
+  const totalDim = useMemo(
+    () => totalDimKgFromLines(lines, DIM_DIVISOR_UI, dimPolicy),
+    [lines, dimPolicy]
+  );
+
+  const totalDimLabel = useMemo(() => {
+    if (totalDim == null) return "—";
+    return `${formatDimKgDisplay(totalDim, dimPolicy)} kg`;
+  }, [totalDim, dimPolicy]);
 
   const sumDimPcs = useMemo(() => lines.reduce((s, l) => s + l.pcs, 0), [lines]);
   const declaredPcs = row.pcs;
@@ -253,6 +269,11 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
             rồi <span className="font-semibold text-apple-label">Lưu DIM</span>. Nên ngắt giữa các số bằng &quot;phẩy&quot; hoặc tạm dừng.
             Thiếu kiện so với lô vẫn lưu; <span className="font-semibold text-red-600">dư kiện</span> thì không.
           </p>
+          {dimPolicy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND" ? (
+            <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/90 px-2.5 py-1.5 text-[11px] font-medium leading-snug text-amber-950">
+              Chuyến <span className="font-semibold">VJ</span>: mỗi dòng DIM cắt 3 chữ số thập phân (không làm tròn), tổng = cộng các dòng — không làm tròn lại tổng.
+            </p>
+          ) : null}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
@@ -261,7 +282,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
               speechOk={speechOk}
               listening={listening}
               liveCaption={liveCaption}
-              totalDim={totalDim}
+              totalDimLabel={totalDimLabel}
               onMicPress={startVoiceCalc}
             />
 
@@ -276,7 +297,13 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 </p>
                 <p className="mt-1 line-clamp-3 text-[11px] text-apple-label">{voicePreview.transcript}</p>
                 <p className="mt-1 font-mono text-xs font-semibold text-emerald-950">
-                  {voicePreview.parsed.map((l) => `${l.lCm}×${l.wCm}×${l.hCm}×${l.pcs}`).join(" · ")}
+                  {voicePreview.parsed
+                    .map((l) => {
+                      const kg = lineDimKg(l, DIM_DIVISOR_UI, dimPolicy);
+                      const kgPart = kg != null ? ` → ${formatDimKgDisplay(kg, dimPolicy)} kg` : "";
+                      return `${l.lCm}×${l.wCm}×${l.hCm}×${l.pcs}${kgPart}`;
+                    })
+                    .join(" · ")}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
@@ -426,7 +453,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
               ) : (
                 <ul className="space-y-2">
                   {lines.map((line, idx) => {
-                    const sub = lineDimKg(line, DIM_DIVISOR_UI);
+                    const sub = lineDimKg(line, DIM_DIVISOR_UI, dimPolicy);
                     return (
                       <li
                         key={`${idx}-${line.lCm}-${line.wCm}-${line.hCm}-${line.pcs}`}
@@ -438,7 +465,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                             <span className="text-apple-secondary">×{line.pcs}</span>
                           </p>
                           <p className="mt-0.5 text-[11px] font-medium tabular-nums text-apple-secondary">
-                            → {sub != null ? `${sub} kg` : "—"}
+                            →{" "}
+                            {sub != null ? `${formatDimKgDisplay(sub, dimPolicy)} kg` : "—"}
                           </p>
                         </div>
                         <button

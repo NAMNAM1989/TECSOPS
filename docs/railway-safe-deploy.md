@@ -118,3 +118,24 @@ Hoặc file backup: `npm run restore:redis-state -- .\tecsops-state-2026-....jso
 Kiểm tra trước: `node scripts/redis-restore-state.mjs --dry-run .\.test-state\state.json`
 
 Sau khi SET, **restart** service trên Railway (hoặc đợi kết nối lại) và tải lại app.
+
+---
+
+## 7. MCP `tecsops-deploy` (tùy chọn)
+
+Trong repo có server MCP tại `mcp/tecsops-deploy/` (stdio):
+
+1. `cd mcp/tecsops-deploy && npm install` (một lần sau clone).
+2. Trong **Cursor** → Settings → **MCP** → Add server:
+   - **Command:** `node`
+   - **Args:** đường dẫn tuyệt đối tới `mcp/tecsops-deploy/server.mjs` (ví dụ `D:\TECSOPS\mcp\tecsops-deploy\server.mjs`).
+   - **Env (tùy chọn):** `TECSOPS_REPO_ROOT` = đường dẫn tuyệt đối tới root repo nếu không muốn dùng mặc định (2 cấp trên `server.mjs`).
+
+**Công cụ (tools):**
+
+| Tên | Việc làm |
+|-----|----------|
+| `tecsops_deploy_ship` | Chạy `npm run deploy:ship` trong repo (cần git sạch, đã commit). |
+| `tecsops_health_check` | `GET {baseUrl}/api/health`. |
+
+Agent chỉ có thể chạy những gì bạn cho phép qua MCP; không thay thế việc cấu hình Railway/GitHub trên dashboard.

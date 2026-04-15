@@ -23,6 +23,10 @@ Stack: React/Vite + Express; **state = Redis** (`REDIS_URL`), key `tecsops:state
 
 If Railway is connected to the repo, **push alone** may trigger deploy — no extra step.
 
+## MCP (tùy chọn)
+
+Server MCP trong repo: `mcp/tecsops-deploy/` (`npm install` trong thư mục đó) — công cụ `tecsops_deploy_ship` và `tecsops_health_check`; cấu hình Cursor → MCP với `node …/server.mjs`. Chi tiết: `docs/railway-safe-deploy.md` §7.
+
 ## Một lệnh deploy an toàn (Git push → Railway build từ repo)
 
 Từ root repo, sau khi đã **commit** mọi thay đổi:

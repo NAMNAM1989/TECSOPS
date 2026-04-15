@@ -1,0 +1,14 @@
+{
+  "name": "mcp-tecsops-deploy",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "MCP server: deploy TECSOPS (npm run deploy:ship) + kiểm tra /api/health",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.24.0"
+  }
+}

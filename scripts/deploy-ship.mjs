@@ -141,24 +141,43 @@ const pushOut = gitPushCapture();
 await redeployIfUpToDate(pushOut);
 
 const verify = process.env.TECSOPS_VERIFY_URL?.trim().replace(/\/$/, "");
+const verifyWaitMs = Number(process.env.TECSOPS_VERIFY_WAIT_MS ?? 900_000);
+const verifyIntervalMs = Number(process.env.TECSOPS_VERIFY_INTERVAL_MS ?? 10_000);
+
 if (verify) {
   const healthUrl = `${verify}/api/health`;
-  console.info(`\n[deploy:ship] ▶ GET ${healthUrl}\n`);
-  try {
-    const res = await fetch(healthUrl, { signal: AbortSignal.timeout(25_000) });
-    const text = await res.text();
-    if (!res.ok) {
-      console.error(`[deploy:ship] Health không OK: HTTP ${res.status} — ${text.slice(0, 200)}`);
-      process.exit(1);
+  const maxAttempts = Math.max(1, Math.ceil(verifyWaitMs / verifyIntervalMs));
+  console.info(
+    `\n[deploy:ship] ▶ Chờ production sống: GET ${healthUrl} (tối đa ~${Math.round(verifyWaitMs / 60_000)} phút, mỗi ${verifyIntervalMs / 1000}s)\n`
+  );
+  let lastErr = "";
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(healthUrl, { signal: AbortSignal.timeout(25_000) });
+      const text = await res.text();
+      if (res.ok) {
+        console.info(`[deploy:ship] Health OK (lần ${attempt}/${maxAttempts}, HTTP ${res.status}): ${text.slice(0, 160)}`);
+        lastErr = "";
+        break;
+      }
+      lastErr = `HTTP ${res.status} — ${text.slice(0, 200)}`;
+      console.warn(`[deploy:ship] Chưa OK (${lastErr}). Thử lại sau ${verifyIntervalMs / 1000}s…`);
+    } catch (e) {
+      lastErr = String(e?.message ?? e);
+      console.warn(`[deploy:ship] Gọi health lỗi (${lastErr}). Thử lại sau ${verifyIntervalMs / 1000}s…`);
     }
-    console.info(`[deploy:ship] Health OK (${res.status}): ${text.slice(0, 120)}`);
-  } catch (e) {
-    console.error("[deploy:ship] Không gọi được health:", e?.message ?? e);
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, verifyIntervalMs));
+    }
+  }
+  if (lastErr && lastErr !== "") {
+    console.error(`[deploy:ship] Hết thời gian chờ — health vẫn không OK. Lỗi cuối: ${lastErr}`);
     process.exit(1);
   }
 } else {
   console.info(
-    "\n[deploy:ship] Gợi ý: set TECSOPS_VERIFY_URL trong .env (URL production, không dấu / cuối) để script tự kiểm tra /api/health sau push.\n"
+    "\n[deploy:ship] Gợi ý: set TECSOPS_VERIFY_URL trong .env (URL production, không dấu / cuối) để script **chờ** /api/health = 200 sau khi Railway build xong.\n" +
+      "  Tuỳ chọn: TECSOPS_VERIFY_WAIT_MS (mặc định 900000), TECSOPS_VERIFY_INTERVAL_MS (mặc định 10000).\n"
   );
 }
 

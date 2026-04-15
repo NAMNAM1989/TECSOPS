@@ -1,4 +1,5 @@
 import { parsePositiveNumbersFromText } from "./volumetricDim";
+import { numbersFromVietnameseSpeech } from "./viSpokenNumbers";
 
 /**
  * Chuẩn hoá transcript STT (tiếng Việt) trước khi trích số cho DIM.
@@ -11,7 +12,15 @@ export function preprocessDimVoiceTranscript(raw: string): string {
   return s;
 }
 
-/** Trích dãy số dương từ câu nói (sau khi chuẩn hoá). */
+/**
+ * Trích dãy số dương từ câu nói (sau khi chuẩn hoá).
+ * Ưu tiên chữ số La Tinh; nếu thiếu (STT chỉ trả chữ tiếng Việt) thì parse từ đọc số.
+ */
 export function numbersFromDimVoiceTranscript(raw: string): number[] {
-  return parsePositiveNumbersFromText(preprocessDimVoiceTranscript(raw));
+  const pre = preprocessDimVoiceTranscript(raw);
+  const digits = parsePositiveNumbersFromText(pre);
+  if (digits.length >= 3) return digits;
+  const vi = numbersFromVietnameseSpeech(pre);
+  if (vi.length >= 3) return vi;
+  return digits.length ? digits : vi;
 }

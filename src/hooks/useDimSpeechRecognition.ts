@@ -35,8 +35,10 @@ function mapSpeechErrorMessage(code: string): string {
 export type DimSpeechSession = {
   onFinal: (transcript: string) => void;
   onErrorMessage?: (message: string) => void;
-  /** true: nghe đến khi chạm mic lần 2 (dừng) — hữu ích trên Android khi cần đọc nhiều số. */
+  /** true: nghe đến khi chạm mic lần 2 (dừng) — hữu ích khi cần đọc nhiều cụm. */
   continuous?: boolean;
+  /** false: chỉ cập nhật khi có kết quả cuối — giảm nhảy chữ khi nhận DIM. Mặc định true. */
+  interimResults?: boolean;
 };
 
 /**
@@ -89,7 +91,7 @@ export function useDimSpeechRecognition() {
       recRef.current = rec;
       rec.lang = "vi-VN";
       rec.continuous = session.continuous === true;
-      rec.interimResults = true;
+      rec.interimResults = session.interimResults !== false;
       rec.maxAlternatives = 1;
       setListening(true);
       let errored = false;

@@ -1,8 +1,10 @@
 /**
  * Một lệnh deploy an toàn: nạp .env/.env.local (nếu có) → deploy:safe → git push.
+ * Nếu push báo "Everything up-to-date", tự kích hoạt build lại: POST RAILWAY_DEPLOY_HOOK_URL (nếu có),
+ * hoặc empty commit + push (trừ khi TECSOPS_NO_EMPTY_REDEPLOY=1).
  * Dữ liệu production phụ thuộc Redis trên Railway (REDIS_URL cố định) — script nhắc backup khi có REDIS_URL.
  */
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +34,67 @@ function mergeEnvFile(rel) {
 
 function sh(cmd, opts = {}) {
   execSync(cmd, { stdio: "inherit", cwd: root, env: process.env, ...opts });
+}
+
+/** `git push` và trả về stdout+stderr (để phát hiện Everything up-to-date). */
+function gitPushCapture() {
+  const r = spawnSync("git", ["push", "-u", "origin", "HEAD"], {
+    encoding: "utf8",
+    cwd: root,
+    env: process.env,
+  });
+  if (r.stdout) process.stdout.write(r.stdout);
+  if (r.stderr) process.stderr.write(r.stderr);
+  const combined = `${r.stdout ?? ""}\n${r.stderr ?? ""}`;
+  if (r.status !== 0) {
+    process.exit(r.status ?? 1);
+  }
+  return combined;
+}
+
+/**
+ * Khi remote đã có đủ commit, GitHub không gửi hook → Railway không build lại.
+ * Gọi Deploy Hook (Railway) hoặc tạo empty commit để luôn có sự kiện deploy.
+ */
+async function redeployIfUpToDate(pushOutput) {
+  if (!/Everything up-to-date/i.test(pushOutput)) return;
+  if (process.env.TECSOPS_NO_EMPTY_REDEPLOY === "1") {
+    console.info(
+      "[deploy:ship] Push không đổi remote — bỏ qua redeploy (TECSOPS_NO_EMPTY_REDEPLOY=1). " +
+        "Railway có thể không build lại.\n"
+    );
+    return;
+  }
+
+  const hook = process.env.RAILWAY_DEPLOY_HOOK_URL?.trim();
+  if (hook) {
+    console.info("[deploy:ship] Remote không đổi — gọi RAILWAY_DEPLOY_HOOK_URL để Railway build lại…\n");
+    try {
+      const res = await fetch(hook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+        signal: AbortSignal.timeout(60_000),
+      });
+      const text = await res.text();
+      if (res.ok) {
+        console.info(`[deploy:ship] Deploy hook OK (HTTP ${res.status}).`);
+        return;
+      }
+      console.error(`[deploy:ship] Deploy hook lỗi HTTP ${res.status}: ${text.slice(0, 400)}`);
+    } catch (e) {
+      console.error("[deploy:ship] Deploy hook không gọi được:", e?.message ?? e);
+    }
+    console.info("[deploy:ship] Fallback: empty commit + push…\n");
+  } else {
+    console.info(
+      "[deploy:ship] Remote không đổi — tạo empty commit + push để kích hoạt GitHub → Railway " +
+        "(hoặc đặt RAILWAY_DEPLOY_HOOK_URL trong .env để dùng hook thay vì commit rỗng).\n"
+    );
+  }
+
+  sh('git commit --allow-empty -m "chore: trigger Railway deploy"');
+  gitPushCapture();
 }
 
 mergeEnvFile(".env");
@@ -67,7 +130,8 @@ const branch = execSync("git rev-parse --abbrev-ref HEAD", {
   env: process.env,
 }).trim();
 console.info(`\n[deploy:ship] ▶ git push -u origin HEAD (nhánh hiện tại: ${branch})\n`);
-sh("git push -u origin HEAD");
+const pushOut = gitPushCapture();
+await redeployIfUpToDate(pushOut);
 
 const verify = process.env.TECSOPS_VERIFY_URL?.trim().replace(/\/$/, "");
 if (verify) {

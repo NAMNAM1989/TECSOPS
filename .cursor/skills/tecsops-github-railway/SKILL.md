@@ -31,7 +31,7 @@ Từ root repo, sau khi đã **commit** mọi thay đổi:
 npm run deploy:ship
 ```
 
-Chạy: `deploy:safe` (build + test + deploy:check + backup Redis nếu có `REDIS_URL`) → `git push` → tùy chọn gọi `GET /api/health` nếu set `TECSOPS_VERIFY_URL` trong `.env` (xem `.env.example`). Nếu còn file chưa commit, lệnh **dừng** trước khi push.
+Chạy: `deploy:safe` (build + test + deploy:check + backup Redis nếu có `REDIS_URL`) → `git push` → nếu **Everything up-to-date** thì **POST `RAILWAY_DEPLOY_HOOK_URL`** (nếu có) hoặc **empty commit + push** để Railway/GitHub chắc chắn có build mới (tắt bằng `TECSOPS_NO_EMPTY_REDEPLOY=1`) → tùy chọn `GET /api/health` nếu set `TECSOPS_VERIFY_URL` trong `.env` (xem `.env.example`). Nếu còn file chưa commit, lệnh **dừng** trước khi push.
 
 ## Railway CLI deploy
 

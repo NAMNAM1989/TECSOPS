@@ -38,7 +38,9 @@ Trên **Railway**, nếu thiếu `REDIS_URL`, process sẽ **dừng ngay** (log 
 npm run deploy:ship
 ```
 
-Chạy kiểm tra `build` + `test` + `deploy:check`, backup Redis nếu có `REDIS_URL` (kể cả khi chỉ khai báo trong `.env` / `.env.local` — file này không commit), rồi `git push` (dừng nếu còn thay đổi chưa commit). Tùy chọn: đặt `TECSOPS_VERIFY_URL` trong `.env` để sau push gọi `GET …/api/health` xác nhận production còn sống.
+Chạy kiểm tra `build` + `test` + `deploy:check`, backup Redis nếu có `REDIS_URL` (kể cả khi chỉ khai báo trong `.env` / `.env.local` — file này không commit), rồi `git push` (dừng nếu còn thay đổi chưa commit). Nếu push báo **Everything up-to-date**, script **tự kích hoạt deploy lại**: POST `RAILWAY_DEPLOY_HOOK_URL` (nếu có trong `.env`), hoặc **empty commit + push** (trừ khi `TECSOPS_NO_EMPTY_REDEPLOY=1`). Tùy chọn: đặt `TECSOPS_VERIFY_URL` trong `.env` để sau push gọi `GET …/api/health` xác nhận production còn sống.
+
+**Lưu ý:** Railway chỉ auto-build nhánh được cấu hình trong service (thường `main`). Nếu bạn push nhánh feature mà service không theo dõi, cần đổi branch trên Railway hoặc merge vào nhánh deploy.
 
 1. **Backup Redis (khuyến nghị trước mỗi đợt deploy quan trọng)**  
    Trên máy có `REDIS_URL` (hoặc tạm thời lấy từ Railway):

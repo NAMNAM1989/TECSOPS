@@ -1,18 +1,19 @@
 import type { DimPieceLine, Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { formatLocalSessionDate, startOfLocalDay } from "./sessionDate";
+import { SHIPMENT_STATUS_ORDER, migrateShipmentStatus } from "./shipmentWorkflowStatus";
 
 const ROWS_KEY = "tecsops-shipments-v1";
 const WORK_DATE_KEY = "tecsops-work-date-v1";
 
-const STATUSES: ShipmentStatus[] = [
-  "PENDING",
-  "RECEIVED",
+/** Cho phép đọc bản lưu cũ trước khi migrate status. */
+const RAW_STATUS_OK = new Set<string>([
+  ...SHIPMENT_STATUS_ORDER,
   "AT_RISK",
   "CUTOFF_PASSED",
   "BUILT_UP",
   "DEPARTED",
   "DELIVERED",
-];
+]);
 
 const WAREHOUSES: Warehouse[] = ["TECS-TCS", "TECS-SCSC"];
 
@@ -67,7 +68,7 @@ function isShipmentShape(o: unknown): o is Omit<Shipment, "sessionDate"> & { ses
     typeof r.dest === "string" &&
     typeof r.customer === "string" &&
     typeof r.status === "string" &&
-    STATUSES.includes(r.status as ShipmentStatus) &&
+    RAW_STATUS_OK.has(r.status) &&
     WAREHOUSES.includes(r.warehouse as Warehouse) &&
     (r.pcs === null || typeof r.pcs === "number") &&
     (r.kg === null || typeof r.kg === "number") &&
@@ -107,14 +108,21 @@ export function loadRows(): Shipment[] | null {
           : fb;
       const dimDivisor =
         item.dimDivisor === 5000 || item.dimDivisor === 6000 ? item.dimDivisor : null;
-      rows.push({
-        ...item,
+      const dimLines = normalizeDimLines(item.dimLines);
+      const dimWeightKg =
+        item.dimWeightKg === null || typeof item.dimWeightKg === "number" ? item.dimWeightKg : null;
+      const base: Shipment = {
+        ...(item as Shipment),
         sessionDate: sd,
         note: typeof item.note === "string" ? item.note : "",
-        dimWeightKg:
-          item.dimWeightKg === null || typeof item.dimWeightKg === "number" ? item.dimWeightKg : null,
-        dimLines: normalizeDimLines(item.dimLines),
+        dimWeightKg,
+        dimLines,
         dimDivisor,
+        status: item.status as ShipmentStatus,
+      };
+      rows.push({
+        ...base,
+        status: migrateShipmentStatus(base),
       });
     }
     return rows;

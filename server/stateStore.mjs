@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { migrateShipmentStatus, workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
@@ -81,18 +82,21 @@ function normalizeDimLines(raw) {
 
 function migrateRows(rows, workDateIso) {
   const fallback = (workDateIso || new Date().toISOString()).slice(0, 10);
-  return rows.map((r) => ({
-    ...r,
-    sessionDate:
-      typeof r.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.sessionDate)
-        ? r.sessionDate
-        : fallback,
-    note: typeof r.note === "string" ? r.note : "",
-    dimWeightKg:
-      r.dimWeightKg === null || typeof r.dimWeightKg === "number" ? r.dimWeightKg : null,
-    dimLines: normalizeDimLines(r.dimLines),
-    dimDivisor: r.dimDivisor === 5000 || r.dimDivisor === 6000 ? r.dimDivisor : null,
-  }));
+  return rows.map((r) => {
+    const base = {
+      ...r,
+      sessionDate:
+        typeof r.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.sessionDate)
+          ? r.sessionDate
+          : fallback,
+      note: typeof r.note === "string" ? r.note : "",
+      dimWeightKg:
+        r.dimWeightKg === null || typeof r.dimWeightKg === "number" ? r.dimWeightKg : null,
+      dimLines: normalizeDimLines(r.dimLines),
+      dimDivisor: r.dimDivisor === 5000 || r.dimDivisor === 6000 ? r.dimDivisor : null,
+    };
+    return { ...base, status: migrateShipmentStatus(base) };
+  });
 }
 
 function awbDigits(awb) {
@@ -237,7 +241,10 @@ export function applyMutation(state, mutation) {
       if (mutation.patch.awb !== undefined) {
         assertAwbUnique(rows, mutation.patch.awb, mutation.id);
       }
-      rows[i] = { ...rows[i], ...mutation.patch };
+      const prev = rows[i];
+      const merged = { ...prev, ...mutation.patch };
+      const statusExtra = workflowStatusPatchFromDataEdit(prev, mutation.patch, merged);
+      rows[i] = { ...merged, ...statusExtra };
       break;
     }
     case "DELETE": {

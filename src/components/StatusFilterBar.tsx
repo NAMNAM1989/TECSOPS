@@ -1,27 +1,19 @@
 import { useMemo } from "react";
 import type { Shipment, ShipmentStatus } from "../types/shipment";
+import { SHIPMENT_STATUS_ORDER } from "../utils/shipmentWorkflowStatus";
 import { statusLabel } from "./statusStyles";
 
 export type StatusFilterValue = ShipmentStatus | "ALL";
 
-const ORDER: ShipmentStatus[] = [
-  "PENDING",
-  "RECEIVED",
-  "AT_RISK",
-  "CUTOFF_PASSED",
-  "BUILT_UP",
-  "DEPARTED",
-  "DELIVERED",
-];
-
 const dotClass: Record<ShipmentStatus, string> = {
-  PENDING: "bg-white ring-1 ring-slate-300",
-  RECEIVED: "bg-yellow-400",
-  AT_RISK: "bg-red-500",
-  CUTOFF_PASSED: "bg-orange-500",
-  BUILT_UP: "bg-emerald-500",
-  DEPARTED: "bg-violet-500",
-  DELIVERED: "bg-sky-500",
+  PENDING: "bg-slate-400 ring-2 ring-slate-600/30",
+  RECEIVED: "bg-amber-500 ring-2 ring-amber-800/25",
+  VOLUME_DONE: "bg-cyan-500 ring-2 ring-cyan-800/25",
+  CUSTOMS: "bg-blue-600 ring-2 ring-blue-900/30",
+  SECURITY: "bg-orange-500 ring-2 ring-orange-900/25",
+  OLA_PULL: "bg-fuchsia-600 ring-2 ring-fuchsia-950/30",
+  WEIGH_SLIP: "bg-lime-500 ring-2 ring-lime-800/30",
+  COMPLETED: "bg-emerald-600 ring-2 ring-emerald-900/30",
 };
 
 interface StatusFilterBarProps {
@@ -34,7 +26,7 @@ interface StatusFilterBarProps {
 export function StatusFilterBar({ dayRows, value, onChange }: StatusFilterBarProps) {
   const counts = useMemo(() => {
     const m = new Map<ShipmentStatus, number>();
-    for (const st of ORDER) m.set(st, 0);
+    for (const st of SHIPMENT_STATUS_ORDER) m.set(st, 0);
     for (const r of dayRows) m.set(r.status, (m.get(r.status) ?? 0) + 1);
     return m;
   }, [dayRows]);
@@ -64,7 +56,7 @@ export function StatusFilterBar({ dayRows, value, onChange }: StatusFilterBarPro
           label="Tất cả"
           count={dayRows.length}
         />
-        {ORDER.map((st) => (
+        {SHIPMENT_STATUS_ORDER.map((st) => (
           <FilterChip
             key={st}
             active={value === st}

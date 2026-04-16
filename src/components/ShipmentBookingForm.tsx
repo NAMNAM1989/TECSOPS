@@ -12,6 +12,7 @@ import {
   splitIsoToLocalDateTime,
   ymdToDdMon,
 } from "../utils/bookingDateParse";
+import { deriveAutoWorkflowStatus, isAutoWorkflowStatus } from "../utils/shipmentWorkflowStatus";
 
 type BaseProps = {
   sessionDateYmd: string;
@@ -268,6 +269,18 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     const dimDivisorPayload =
       isEdit && editShipment && !dimFieldChanged ? editShipment.dimDivisor : null;
 
+    const pcsVal = isEdit ? editShipment!.pcs : null;
+    const derivedStatus = deriveAutoWorkflowStatus({
+      awb: awbDisplay,
+      pcs: pcsVal,
+      dimWeightKg,
+      dimLines: dimLinesPayload,
+    });
+    const nextStatus =
+      isEdit && editShipment && !isAutoWorkflowStatus(editShipment.status)
+        ? editShipment.status
+        : derivedStatus;
+
     const payloadCommon = {
       awb: awbDisplay,
       flight: flight.toUpperCase(),
@@ -277,13 +290,13 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       note: note.trim(),
       dest: effectiveDest.toUpperCase(),
       warehouse,
-      pcs: isEdit ? editShipment!.pcs : null,
+      pcs: pcsVal,
       kg: isEdit ? editShipment!.kg : null,
       dimWeightKg,
       dimLines: dimLinesPayload,
       dimDivisor: dimDivisorPayload,
       customer: effectiveCustomer,
-      status: isEdit ? editShipment!.status : ("PENDING" as const),
+      status: nextStatus,
     };
 
     if (isEdit) {

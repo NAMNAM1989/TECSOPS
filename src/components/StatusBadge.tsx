@@ -1,15 +1,6 @@
 import type { ShipmentStatus } from "../types/shipment";
+import { SHIPMENT_STATUS_ORDER } from "../utils/shipmentWorkflowStatus";
 import { statusBadge, statusLabel } from "./statusStyles";
-
-const allStatuses: ShipmentStatus[] = [
-  "PENDING",
-  "RECEIVED",
-  "AT_RISK",
-  "CUTOFF_PASSED",
-  "BUILT_UP",
-  "DEPARTED",
-  "DELIVERED",
-];
 
 interface StatusSelectProps {
   value: ShipmentStatus;
@@ -24,10 +15,10 @@ export function StatusSelect({ value, onChange, compact }: StatusSelectProps) {
       onChange={(e) => onChange(e.target.value as ShipmentStatus)}
       onClick={(e) => e.stopPropagation()}
       className={`cursor-pointer rounded-full border-0 shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/30 ${statusBadge[value]} ${
-        compact ? "max-w-[9.5rem] px-1 py-0.5 text-[10px] leading-tight" : "px-2.5 py-1 text-xs"
+        compact ? "max-w-[10.5rem] px-1 py-0.5 text-[9px] leading-tight" : "px-2.5 py-1 text-xs"
       }`}
     >
-      {allStatuses.map((st) => (
+      {SHIPMENT_STATUS_ORDER.map((st) => (
         <option key={st} value={st}>
           {statusLabel[st]}
         </option>

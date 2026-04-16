@@ -1,5 +1,6 @@
 import type { Shipment, Warehouse } from "../types/shipment";
 import { awbDigitsKey } from "./awbFormat";
+import { workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus";
 
 export type AppState = {
   version: number;
@@ -68,7 +69,10 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
       if (mutation.patch.awb !== undefined) {
         assertAwbUnique(rows, mutation.patch.awb, mutation.id);
       }
-      rows[i] = { ...rows[i], ...mutation.patch };
+      const prev = rows[i];
+      const merged = { ...prev, ...mutation.patch };
+      const statusExtra = workflowStatusPatchFromDataEdit(prev, mutation.patch, merged);
+      rows[i] = { ...merged, ...statusExtra };
       break;
     }
     case "DELETE": {

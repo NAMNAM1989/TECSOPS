@@ -1,13 +1,15 @@
 import type { DimDivisor, DimPieceLine } from "../utils/volumetricDim";
 
+/** Trạng thái nghiệp vụ — 3 bước đầu bám AWB / kiện / DIM, sau đó NV chọn thủ công. */
 export type ShipmentStatus =
-  | "PENDING"       // BOOKING
-  | "RECEIVED"      // Đã nhận hàng tại kho
-  | "AT_RISK"       // Sắp trễ cutoff (< 2h)
-  | "CUTOFF_PASSED" // Hàng gấp (quá cutoff)
-  | "BUILT_UP"      // Đã xong
-  | "DEPARTED"      // Đã kéo OLA
-  | "DELIVERED";    // Hoàn thành
+  | "PENDING" // BOOKING (đủ AWB, chưa kiện hoặc chưa đủ AWB)
+  | "RECEIVED" // ĐÃ NHẬN HÀNG (đủ AWB + số kiện)
+  | "VOLUME_DONE" // ĐÃ ĐO VOLUME (đã có DIM)
+  | "CUSTOMS" // HẢI QUAN
+  | "SECURITY" // AN NINH
+  | "OLA_PULL" // KÉO OLA
+  | "WEIGH_SLIP" // NỘP TỜ CÂN
+  | "COMPLETED"; // HOÀN THÀNH
 
 export type Warehouse = "TECS-TCS" | "TECS-SCSC";
 

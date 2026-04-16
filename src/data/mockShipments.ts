@@ -1,4 +1,5 @@
 ﻿import type { Shipment } from "../types/shipment";
+import { migrateShipmentStatus } from "../utils/shipmentWorkflowStatus";
 
 function cutoffToday(time: string, dateStr: string): string {
   if (!time) return "";
@@ -9,7 +10,7 @@ function cutoffToday(time: string, dateStr: string): string {
   return d.toISOString();
 }
 
-export const initialShipments: Shipment[] = [
+const initialShipmentsCore: Shipment[] = [
   // ═══════ TECS-TCS ═══════
   {
     id: "tcs-1",
@@ -129,7 +130,7 @@ export const initialShipments: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "MINH KHÃ”I",
-    status: "AT_RISK",
+    status: "RECEIVED",
   },
   {
     id: "tcs-7",
@@ -249,7 +250,7 @@ export const initialShipments: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "LOGIVAN",
-    status: "BUILT_UP",
+    status: "WEIGH_SLIP",
   },
   {
     id: "tcs-13",
@@ -269,7 +270,7 @@ export const initialShipments: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "CITYLINK",
-    status: "DELIVERED",
+    status: "COMPLETED",
   },
   {
     id: "tcs-14",
@@ -309,7 +310,7 @@ export const initialShipments: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "EURO LINE",
-    status: "DEPARTED",
+    status: "OLA_PULL",
   },
   {
     id: "tcs-16",
@@ -329,7 +330,7 @@ export const initialShipments: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "AN NAM",
-    status: "AT_RISK",
+    status: "RECEIVED",
   },
 
   // ═══════ TECS-SCSC ═══════
@@ -411,7 +412,7 @@ export const initialShipments: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "TÃN PHÃT",
-    status: "CUTOFF_PASSED",
+    status: "RECEIVED",
   },
   {
     id: "scsc-5",
@@ -591,7 +592,7 @@ export const initialShipments: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "WEST LINK",
-    status: "CUTOFF_PASSED",
+    status: "RECEIVED",
   },
   {
     id: "scsc-14",
@@ -611,6 +612,11 @@ export const initialShipments: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "TTP",
-    status: "BUILT_UP",
+    status: "WEIGH_SLIP",
   },
 ];
+
+export const initialShipments: Shipment[] = initialShipmentsCore.map((r) => ({
+  ...r,
+  status: migrateShipmentStatus(r),
+}));

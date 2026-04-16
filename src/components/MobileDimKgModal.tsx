@@ -60,7 +60,10 @@ function appendDimComboNumber(combo: string, num: string): string {
 
 const DIM_QUICK_NUMS = ["120", "100", "80", "60", "50", "40", "30", "25", "20"] as const;
 
-/** Mic + tổng DIM (không hướng dẫn chữ). */
+const DIM_INPUT_HINT =
+  "Mỗi dòng: D-R-C-kiện hoặc D×R×C×kiện. Enter thêm dòng · Shift+Enter xuống dòng · Ctrl+Enter luôn thêm.";
+
+/** Mic + tổng DIM — layout gọn. */
 function DimMicTotalRow({
   speechOk,
   listening,
@@ -75,11 +78,14 @@ function DimMicTotalRow({
   onMicPress: () => void;
 }) {
   return (
-    <section className="rounded-xl border border-violet-200/60 bg-violet-50/40 p-3" aria-label="Mic và tổng DIM">
-      <div className="flex items-center gap-3">
+    <section
+      className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/90 to-white p-2.5 shadow-sm"
+      aria-label="Mic và tổng DIM"
+    >
+      <div className="flex items-center gap-2.5">
         <div className="relative shrink-0">
           {listening ? (
-            <div className="absolute inset-x-0 -top-0.5 flex h-6 items-end justify-center gap-0.5" aria-hidden>
+            <div className="absolute inset-x-0 -top-0.5 flex h-5 items-end justify-center gap-0.5" aria-hidden>
               {[0, 1, 2, 3, 4].map((i) => (
                 <span
                   key={i}
@@ -94,26 +100,26 @@ function DimMicTotalRow({
             disabled={!speechOk}
             onClick={onMicPress}
             aria-pressed={listening}
-            aria-label={listening ? "Đang nghe — chạm lại để dừng" : "Mic nhập DIM"}
-            className={`relative mt-1 flex h-14 w-14 items-center justify-center rounded-full shadow-md transition-transform touch-manipulation active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45 ${
+            aria-label={listening ? "Dừng mic" : "Mic — đọc số D R C kiện"}
+            className={`relative mt-0.5 flex h-12 w-12 items-center justify-center rounded-2xl shadow-sm transition-transform touch-manipulation active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45 ${
               listening
                 ? "bg-gradient-to-br from-rose-500 to-orange-500 text-white ring-2 ring-rose-200/90"
-                : "bg-gradient-to-br from-violet-600 to-sky-600 text-white ring-2 ring-violet-200/80"
+                : "bg-gradient-to-br from-violet-600 to-indigo-600 text-white ring-1 ring-violet-300/60"
             }`}
           >
-            <svg className="h-7 w-7" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
               <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 0014 0h-2zm-5 8c-2.21 0-4-1.12-4-2.5V16h8v.5C16 20.88 14.21 22 12 22z" />
             </svg>
           </button>
         </div>
         <div className="min-w-0 flex-1 text-right">
-          <p className="text-[11px] font-medium text-apple-secondary">Tổng DIM</p>
-          <p className="text-2xl font-bold leading-tight tabular-nums tracking-tight text-apple-label">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-apple-tertiary">Tổng DIM</p>
+          <p className="text-[1.65rem] font-bold leading-tight tabular-nums tracking-tight text-apple-label">
             {totalDimLabel}
           </p>
           {listening ? (
-            <p className="mt-1 line-clamp-2 text-left text-[11px] text-violet-700" aria-live="polite">
-              {liveCaption.trim() ? liveCaption : "Đang nghe — chạm mic lần nữa khi đọc xong"}
+            <p className="mt-0.5 line-clamp-2 text-left text-[10px] text-violet-700" aria-live="polite">
+              {liveCaption.trim() ? liveCaption : "Đang nghe…"}
             </p>
           ) : null}
         </div>
@@ -258,34 +264,28 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
       onClick={onClose}
     >
       <div
-        className="flex max-h-[min(92vh,680px)] w-full max-w-sm flex-col rounded-2xl border border-black/[0.08] bg-white shadow-xl"
+        className="flex max-h-[min(92vh,680px)] w-full max-w-sm flex-col overflow-hidden rounded-[1.35rem] border border-black/[0.06] bg-white shadow-2xl shadow-black/10"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 border-b border-black/[0.06] p-4 pb-3">
-          <h2 id="dim-modal-title" className="text-base font-semibold text-apple-label">
-            DIM — D×R×C × kiện
-          </h2>
-          <p className="mt-1 text-[11px] leading-snug text-apple-secondary">
-            Mic: chạm để nói → chạm lần nữa để dừng → xem bản nhận → <span className="font-semibold text-apple-label">Thêm</span>{" "}
-            rồi <span className="font-semibold text-apple-label">Lưu DIM</span>. Nên ngắt giữa các số bằng &quot;phẩy&quot; hoặc tạm dừng.
-            Thiếu kiện so với lô vẫn lưu; <span className="font-semibold text-red-600">dư kiện</span> thì không.
-          </p>
-          <p className="mt-2 rounded-lg border border-slate-200/90 bg-slate-50/90 px-2.5 py-1.5 text-[11px] font-medium leading-snug text-slate-900">
-            Hệ số thể tích (theo mã chuyến):{" "}
-            <span className="font-mono font-bold">
-              L×W×H÷{divisor}
-            </span>{" "}
-            cm³/kg — cùng logic với xuất LIST SCSC / in DIM.
-          </p>
-          {dimPolicy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND" ? (
-            <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/90 px-2.5 py-1.5 text-[11px] font-medium leading-snug text-amber-950">
-              Chuyến <span className="font-semibold">VJ</span>: mỗi dòng DIM cắt 3 chữ số thập phân (không làm tròn), tổng = cộng các dòng — không làm tròn lại tổng.
-            </p>
-          ) : null}
+        <div className="shrink-0 bg-gradient-to-b from-slate-50/90 to-white px-4 pb-3 pt-4">
+          <div className="flex items-start justify-between gap-2">
+            <h2 id="dim-modal-title" className="text-[1.05rem] font-semibold tracking-tight text-apple-label">
+              Nhập DIM
+            </h2>
+            {dimPolicy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND" ? (
+              <span
+                className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900"
+                title="VietJet: DIM mỗi dòng cắt 3 số lẻ"
+              >
+                VJ
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-0.5 text-[11px] text-apple-tertiary">Dài × Rộng × Cao × kiện (cm)</p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
-          <div className="space-y-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2.5">
+          <div className="space-y-2.5">
             <DimMicTotalRow
               speechOk={speechOk}
               listening={listening}
@@ -296,13 +296,11 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
             {voicePreview ? (
               <div
-                className="rounded-xl border border-emerald-200/90 bg-emerald-50/60 p-3"
+                className="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-2.5"
                 role="region"
                 aria-label="Kết quả nhận từ giọng"
               >
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-900/80">
-                  Đã nhận — kiểm tra rồi thêm
-                </p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-900/75">Giọng nói</p>
                 <p className="mt-1 line-clamp-3 text-[11px] text-apple-label">{voicePreview.transcript}</p>
                 <p className="mt-1 font-mono text-xs font-semibold text-emerald-950">
                   {voicePreview.parsed
@@ -333,13 +331,21 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
             ) : null}
 
             <div>
-              <label htmlFor="dim-combo" className="mb-1 block text-[11px] font-semibold text-apple-secondary">
-                Nhập tay (cm): mỗi dòng D-R-C-kiện (vd 40-50-30-4) hoặc D×R×C×kiện — Enter thêm khi một dòng;
-                Shift+Enter xuống dòng; Ctrl+Enter luôn thêm; hoặc dùng nút số
-              </label>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <label htmlFor="dim-combo" className="text-xs font-semibold text-apple-label">
+                  Ô nhập
+                </label>
+                <span
+                  className="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-black/[0.05] text-[11px] font-bold text-apple-tertiary"
+                  title={DIM_INPUT_HINT}
+                >
+                  ?
+                </span>
+              </div>
               <textarea
                 id="dim-combo"
                 rows={4}
+                aria-describedby="dim-combo-hint"
                 inputMode="text"
                 enterKeyHint="enter"
                 autoComplete="off"
@@ -376,15 +382,21 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   }
                 }}
                 placeholder={"40-50-30-4\n60-50-30-5"}
-                className="max-h-40 min-h-[5.5rem] w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2.5 font-mono text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                className="max-h-40 min-h-[5rem] w-full resize-y rounded-2xl border border-black/[0.07] bg-slate-50/40 px-3 py-2.5 font-mono text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/18"
               />
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <p id="dim-combo-hint" className="sr-only">
+                {DIM_INPUT_HINT}
+              </p>
+              <div
+                className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                aria-label="Số nhanh cm"
+              >
                 {DIM_QUICK_NUMS.map((n) => (
                   <button
                     key={n}
                     type="button"
                     onClick={() => setCombo((c) => appendDimComboNumber(c, n))}
-                    className="min-h-[36px] min-w-[2.5rem] rounded-lg border border-black/[0.1] bg-white px-2 text-xs font-bold tabular-nums text-apple-label active:bg-black/[0.04]"
+                    className="shrink-0 min-h-[34px] min-w-[2.65rem] rounded-xl border border-black/[0.08] bg-white px-2.5 text-xs font-bold tabular-nums text-apple-label shadow-sm active:scale-[0.98] active:bg-black/[0.03]"
                   >
                     {n}
                   </button>
@@ -398,8 +410,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                       return t.endsWith("×") ? t : `${t}×`;
                     })
                   }
-                  className="min-h-[36px] min-w-[2.5rem] rounded-lg border border-apple-blue/30 bg-apple-blue/10 px-2 text-xs font-bold text-apple-blue"
-                  aria-label="×"
+                  className="shrink-0 min-h-[34px] min-w-[2.65rem] rounded-xl border border-apple-blue/25 bg-apple-blue/8 px-2.5 text-xs font-bold text-apple-blue active:scale-[0.98]"
+                  aria-label="Dấu nhân"
                 >
                   ×
                 </button>
@@ -407,9 +419,9 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
               <button
                 type="button"
                 onClick={addFromCombo}
-                className="mt-2 w-full rounded-xl bg-apple-blue py-2.5 text-sm font-semibold text-white active:scale-[0.99]"
+                className="mt-2 w-full rounded-2xl bg-apple-blue py-2.5 text-sm font-semibold text-white shadow-sm active:scale-[0.99]"
               >
-                Thêm vào danh sách (một hoặc nhiều dòng)
+                Thêm dòng
               </button>
             </div>
 

@@ -9,6 +9,7 @@ import {
   type DimDivisor,
   type DimPieceLine,
   type DimRoundingPolicyId,
+  dimDivisorFromFlight,
   dimRoundingPolicyFromFlight,
   formatDimKgDisplay,
   lineDimKg,
@@ -22,9 +23,6 @@ export type MobileDimSavePayload = {
   dimLines: DimPieceLine[] | null;
   dimDivisor: DimDivisor | null;
 };
-
-/** Hệ số cố định — giao diện không còn chọn 5000/6000 */
-const DIM_DIVISOR_UI: DimDivisor = 6000;
 
 interface MobileDimKgModalProps {
   row: Shipment;
@@ -141,9 +139,12 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     [row.flight]
   );
 
+  /** Cùng quy tắc với LIST SCSC / in: 6000 (IATA) hoặc 5000 nếu cấu hình theo tiền tố hãng. */
+  const divisor: DimDivisor = useMemo(() => dimDivisorFromFlight(row.flight), [row.flight]);
+
   const totalDim = useMemo(
-    () => totalDimKgFromLines(lines, DIM_DIVISOR_UI, dimPolicy),
-    [lines, dimPolicy]
+    () => totalDimKgFromLines(lines, divisor, dimPolicy),
+    [lines, divisor, dimPolicy]
   );
 
   const totalDimLabel = useMemo(() => {
@@ -238,7 +239,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
         );
         return;
       }
-      onSave({ dimWeightKg: totalDim, dimLines: lines, dimDivisor: DIM_DIVISOR_UI });
+      onSave({ dimWeightKg: totalDim, dimLines: lines, dimDivisor: divisor });
       return;
     }
     window.alert("Thêm ít nhất một dòng D×R×C×kiện.");
@@ -268,6 +269,13 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
             Mic: chạm để nói → chạm lần nữa để dừng → xem bản nhận → <span className="font-semibold text-apple-label">Thêm</span>{" "}
             rồi <span className="font-semibold text-apple-label">Lưu DIM</span>. Nên ngắt giữa các số bằng &quot;phẩy&quot; hoặc tạm dừng.
             Thiếu kiện so với lô vẫn lưu; <span className="font-semibold text-red-600">dư kiện</span> thì không.
+          </p>
+          <p className="mt-2 rounded-lg border border-slate-200/90 bg-slate-50/90 px-2.5 py-1.5 text-[11px] font-medium leading-snug text-slate-900">
+            Hệ số thể tích (theo mã chuyến):{" "}
+            <span className="font-mono font-bold">
+              L×W×H÷{divisor}
+            </span>{" "}
+            cm³/kg — cùng logic với xuất LIST SCSC / in DIM.
           </p>
           {dimPolicy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND" ? (
             <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/90 px-2.5 py-1.5 text-[11px] font-medium leading-snug text-amber-950">
@@ -299,7 +307,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 <p className="mt-1 font-mono text-xs font-semibold text-emerald-950">
                   {voicePreview.parsed
                     .map((l) => {
-                      const kg = lineDimKg(l, DIM_DIVISOR_UI, dimPolicy);
+                      const kg = lineDimKg(l, divisor, dimPolicy);
                       const kgPart = kg != null ? ` → ${formatDimKgDisplay(kg, dimPolicy)} kg` : "";
                       return `${l.lCm}×${l.wCm}×${l.hCm}×${l.pcs}${kgPart}`;
                     })
@@ -453,7 +461,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
               ) : (
                 <ul className="space-y-2">
                   {lines.map((line, idx) => {
-                    const sub = lineDimKg(line, DIM_DIVISOR_UI, dimPolicy);
+                    const sub = lineDimKg(line, divisor, dimPolicy);
                     return (
                       <li
                         key={`${idx}-${line.lCm}-${line.wCm}-${line.hCm}-${line.pcs}`}

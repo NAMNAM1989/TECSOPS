@@ -1,5 +1,6 @@
 import type { Shipment } from "../types/shipment";
 import {
+  dimDivisorFromFlight,
   dimRoundingPolicyFromFlight,
   formatDimKgDisplay,
   formatShipmentDimWeightKg,
@@ -8,8 +9,13 @@ import {
   type DimRoundingPolicyId,
 } from "./volumetricDim";
 
+/**
+ * Hệ số dùng cho LIST SCSC / in / Excel: ưu tiên giá trị đã lưu trên lô;
+ * nếu chưa có (dữ liệu cũ) → suy từ mã chuyến (`dimDivisorFromFlight`).
+ */
 export function scscDimDivisor(s: Shipment): DimDivisor {
-  return s.dimDivisor === 5000 || s.dimDivisor === 6000 ? s.dimDivisor : 6000;
+  if (s.dimDivisor === 5000 || s.dimDivisor === 6000) return s.dimDivisor;
+  return dimDivisorFromFlight(s.flight);
 }
 
 function round2(n: number): number {

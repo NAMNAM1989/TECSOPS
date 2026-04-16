@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Shipment } from "../types/shipment";
-import { dimRoundingPolicyFromFlight, lineDimKg } from "./volumetricDim";
+import { dimDivisorFromFlight, dimRoundingPolicyFromFlight, lineDimKg } from "./volumetricDim";
 import { buildScscDimListModel, dimKgExcelNumFmt, scscDimDivisor } from "./scscDimListReport";
 
 function sample(over: Partial<Shipment> = {}): Shipment {
@@ -53,5 +53,10 @@ describe("buildScscDimListModel", () => {
     const m = buildScscDimListModel(s);
     expect(m).not.toBeNull();
     expect(dimKgExcelNumFmt(m!.policy)).toBe("0.000");
+  });
+
+  it("dimDivisor null: dùng hệ số suy từ mã chuyến (khớp dimDivisorFromFlight)", () => {
+    const s = sample({ dimDivisor: null });
+    expect(scscDimDivisor(s)).toBe(dimDivisorFromFlight(s.flight));
   });
 });

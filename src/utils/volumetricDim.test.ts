@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  dimDivisorFromFlight,
   dimRoundingPolicyFromFlight,
   formatDimKgDisplay,
   formatShipmentDimWeightKg,
@@ -59,6 +60,19 @@ describe("tryParseDimPieceLinesFromComboText", () => {
     if (r.ok) {
       expect(r.lines).toEqual([{ lCm: 120, wCm: 50, hCm: 30, pcs: 4 }]);
     }
+  });
+});
+
+describe("dimDivisorFromFlight", () => {
+  it("mặc định 6000 (IATA) khi chưa cấu hình tiền tố 5000 trong DIM_DIVISOR_5000_FLIGHT_PREFIXES", () => {
+    expect(dimDivisorFromFlight("VN601")).toBe(6000);
+    expect(dimDivisorFromFlight("QH202")).toBe(6000);
+    expect(dimDivisorFromFlight("VJ123")).toBe(6000);
+  });
+
+  it("6000 khi mã chuyến trống hoặc không có tiền tố chữ", () => {
+    expect(dimDivisorFromFlight("")).toBe(6000);
+    expect(dimDivisorFromFlight("123")).toBe(6000);
   });
 });
 

@@ -1,6 +1,25 @@
-/** Hệ số thể tích phổ biến: cm³/kg (IATA thường 6000; một số hãng 5000). */
+/** Hệ số thể tích phổ biến: cm³/kg (IATA thường 6000; một số hãng/điều kiện 5000). */
 export const DIM_DIVISORS = [6000, 5000] as const;
 export type DimDivisor = (typeof DIM_DIVISORS)[number];
+
+/**
+ * Tiền tố mã chuyến (2–3 chữ đầu, ví dụ VJ, VN, QH) dùng hệ số **5000** cm³/kg.
+ * Để trống → mọi chuyến dùng **6000** (chuẩn IATA phổ biến).
+ * Cập nhật theo tài liệu hãng (PDF “Required airline”) — không đoán bừa; thêm từng hãng khi có quy định rõ.
+ */
+export const DIM_DIVISOR_5000_FLIGHT_PREFIXES: readonly string[] = [];
+
+function flightPrefix(flight: string): string {
+  const head = flight.trim().toUpperCase().replace(/\s+/g, "");
+  return head.match(/^([A-Z]{2,3})/)?.[1] ?? "";
+}
+
+/** Hệ số L×W×H (cm³/kg) theo ký hiệu hãng — mặc định 6000. */
+export function dimDivisorFromFlight(flight: string): DimDivisor {
+  const p = flightPrefix(flight);
+  if (p && DIM_DIVISOR_5000_FLIGHT_PREFIXES.includes(p)) return 5000;
+  return 6000;
+}
 
 /**
  * Quy tắc quy đổi DIM (kg) từ dimLines — một số hãng khác cách xử lý phần thập phân.

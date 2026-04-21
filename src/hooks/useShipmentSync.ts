@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import type { Shipment } from "../types/shipment";
 import { saveRows } from "../utils/shipmentStorage";
+import { credFetch } from "../apiFetch";
 import {
   applyShipmentMutation,
   type AppState,
@@ -50,7 +51,7 @@ export function useShipmentSync(fallback: Fallback) {
 
     (async () => {
       try {
-        const res = await fetch("/api/state");
+        const res = await fetch("/api/state", { ...credFetch, cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
         const parsed = parseState(await res.json());
         if (!parsed) throw new Error("Invalid state");
@@ -75,6 +76,7 @@ export function useShipmentSync(fallback: Fallback) {
       const socket = io({
         path: SOCKET_IO_PATH,
         transports: ["websocket", "polling"],
+        withCredentials: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: SOCKET_RECONNECT_DELAY_MS,
         reconnectionDelayMax: SOCKET_RECONNECT_DELAY_MAX_MS,
@@ -130,6 +132,7 @@ export function useShipmentSync(fallback: Fallback) {
     }
 
     const res = await fetch("/api/mutation", {
+      ...credFetch,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(mutation),

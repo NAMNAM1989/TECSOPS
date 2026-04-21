@@ -20,6 +20,7 @@ import {
 import { LABEL_PT } from "../constants/labelTypography";
 import { airlineLines, shipmentToTsplBody } from "../utils/shipmentToLabelPayload";
 import { printBrowserLabel } from "../utils/printBrowserLabel";
+import { credFetch } from "../apiFetch";
 
 const DEFAULT_ORIGIN = "SGN";
 
@@ -227,6 +228,7 @@ export function PrintShippingLabel({ shipment, onClose }: PrintShippingLabelProp
     try {
       const body = shipmentToTsplBody(shipment);
       const r = await fetch("/api/tspl/build", {
+        ...credFetch,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -259,6 +261,7 @@ export function PrintShippingLabel({ shipment, onClose }: PrintShippingLabelProp
     try {
       const body = { ...shipmentToTsplBody(shipment), host, port };
       const r = await fetch("/api/tspl/print", {
+        ...credFetch,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

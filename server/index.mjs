@@ -7,6 +7,11 @@ import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { loadState, runMutation, setRedisStateClient } from "./stateStore.mjs";
 import { registerTsplRoutes } from "./tsplRoutes.mjs";
+import {
+  assertSocketGateOk,
+  getSitePassword,
+  registerSitePasswordGate,
+} from "./authSiteGate.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
@@ -34,7 +39,23 @@ const io = new Server(httpServer, {
   cors: socketIoCorsOptions(),
 });
 
+io.use((socket, next) => {
+  try {
+    assertSocketGateOk(socket);
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
+
 app.use(express.json({ limit: "2mb" }));
+
+/** Luôn công khai — client biết có cần màn hình đăng nhập hay không (không lộ mật khẩu). */
+app.get("/api/auth/gate", (_req, res) => {
+  res.status(200).json({ required: Boolean(getSitePassword()) });
+});
+
+registerSitePasswordGate(app);
 
 /** Healthcheck Railway / load balancer — luôn 200 khi process sống. */
 app.get("/api/health", (_req, res) => {

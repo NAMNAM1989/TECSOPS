@@ -30,6 +30,13 @@ function sample(over: Partial<Shipment> = {}): Shipment {
 describe("buildScscDimListModel", () => {
   it("null khi không phải SCSC", () => {
     expect(buildScscDimListModel(sample({ warehouse: "TECS-TCS" }))).toBeNull();
+    expect(buildScscDimListModel(sample({ warehouse: "KHO-TCS" }))).toBeNull();
+  });
+
+  it("KHO SCSC dùng cùng model SCSC", () => {
+    const m = buildScscDimListModel(sample({ warehouse: "KHO-SCSC" }));
+    expect(m).not.toBeNull();
+    expect(m!.totalPcs).toBe(4);
   });
 
   it("null khi không có dimLines", () => {

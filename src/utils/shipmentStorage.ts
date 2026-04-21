@@ -1,4 +1,5 @@
 import type { DimPieceLine, Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
+import { WAREHOUSE_ORDER } from "../constants/warehouses";
 import { formatLocalSessionDate, startOfLocalDay } from "./sessionDate";
 import { SHIPMENT_STATUS_ORDER, migrateShipmentStatus } from "./shipmentWorkflowStatus";
 
@@ -15,7 +16,7 @@ const RAW_STATUS_OK = new Set<string>([
   "DELIVERED",
 ]);
 
-const WAREHOUSES: Warehouse[] = ["TECS-TCS", "TECS-SCSC"];
+const WAREHOUSES: Warehouse[] = [...WAREHOUSE_ORDER];
 
 function isDimPieceLine(o: unknown): o is DimPieceLine {
   if (!o || typeof o !== "object") return false;

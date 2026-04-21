@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import type { Shipment } from "../types/shipment";
+import { isTcsWarehouse } from "../constants/warehouses";
 
 /** Giống mẫu `ATTACHED_LIST_DIMS.xlsx`: 4 cột kích thước + cột trống. */
 const HEADER_ROW: (string | number)[] = [
@@ -40,13 +41,13 @@ function applyDimCellsTwoDecimals(ws: XLSX.WorkSheet) {
 }
 
 export function canExportTcsDimTemplate(s: Shipment): boolean {
-  return s.warehouse === "TECS-TCS" && (s.dimLines?.length ?? 0) > 0;
+  return isTcsWarehouse(s.warehouse) && (s.dimLines?.length ?? 0) > 0;
 }
 
 /** Xuất một sheet đúng mẫu ATTACHED_LIST_DIMS cho một lô TCS. */
 export function downloadTcsAttachedDimsExcel(s: Shipment): void {
   if (!canExportTcsDimTemplate(s) || !s.dimLines) {
-    window.alert("Chỉ áp dụng cho kho TECS-TCS và lô đã có nhập DIM (chi tiết kiện).");
+    window.alert("Chỉ áp dụng cho kho TCS (TECS-TCS hoặc KHO TCS) và lô đã có nhập DIM (chi tiết kiện).");
     return;
   }
 
@@ -90,7 +91,7 @@ export function downloadTcsAttachedDimsExcel(s: Shipment): void {
 /** In nhanh bảng DIM cùng layout (4 cột) trong trình duyệt. */
 export function printTcsAttachedDimsList(s: Shipment): void {
   if (!canExportTcsDimTemplate(s) || !s.dimLines) {
-    window.alert("Chỉ áp dụng cho kho TECS-TCS và lô đã có nhập DIM (chi tiết kiện).");
+    window.alert("Chỉ áp dụng cho kho TCS (TECS-TCS hoặc KHO TCS) và lô đã có nhập DIM (chi tiết kiện).");
     return;
   }
 

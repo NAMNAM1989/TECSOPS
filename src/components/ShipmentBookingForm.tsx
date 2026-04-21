@@ -3,6 +3,7 @@ import type { Shipment, Warehouse } from "../types/shipment";
 import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
 import { isAwbDigitsTaken } from "../utils/awbUnique";
 import { mergeCustomerOptions, persistNewCustomer } from "../utils/customerStorage";
+import { warehouseLabel } from "../constants/warehouses";
 import { CUSTOMERS, WAREHOUSES, DESTINATIONS } from "../data/customers";
 import {
   buildCutoffIsoFromDateAndTimeText,
@@ -585,7 +586,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               >
                 {WAREHOUSES.map((w) => (
                   <option key={w} value={w}>
-                    {w}
+                    {warehouseLabel[w]}
                   </option>
                 ))}
               </select>

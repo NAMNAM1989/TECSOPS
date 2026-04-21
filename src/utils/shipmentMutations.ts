@@ -1,4 +1,5 @@
 import type { Shipment, Warehouse } from "../types/shipment";
+import { WAREHOUSE_ORDER, isKnownWarehouse } from "../constants/warehouses";
 import { awbDigitsKey } from "./awbFormat";
 import { workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus";
 
@@ -37,9 +38,9 @@ function renumberSttForAll(rows: Shipment[]): Shipment[] {
   const out: Shipment[] = [];
   for (const key of order) {
     const dayRows = byDay.get(key)!;
-    const c: Record<Warehouse, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
+    const c = Object.fromEntries(WAREHOUSE_ORDER.map((w) => [w, 0])) as Record<Warehouse, number>;
     for (const r of dayRows) {
-      const wh: Warehouse = r.warehouse === "TECS-SCSC" ? "TECS-SCSC" : "TECS-TCS";
+      const wh: Warehouse = isKnownWarehouse(r.warehouse) ? r.warehouse : "TECS-TCS";
       out.push({ ...r, stt: ++c[wh] });
     }
   }

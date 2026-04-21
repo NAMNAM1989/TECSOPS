@@ -11,7 +11,7 @@ export type ShipmentStatus =
   | "WEIGH_SLIP" // NỘP TỜ CÂN
   | "COMPLETED"; // HOÀN THÀNH
 
-export type Warehouse = "TECS-TCS" | "TECS-SCSC";
+export type Warehouse = "TECS-TCS" | "TECS-SCSC" | "KHO-TCS" | "KHO-SCSC";
 
 export type { DimPieceLine };
 

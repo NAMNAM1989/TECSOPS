@@ -4,6 +4,11 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { migrateShipmentStatus, workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus.mjs";
 
+const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "KHO-TCS", "KHO-SCSC"];
+function isKnownWarehouse(w) {
+  return WAREHOUSE_ORDER.includes(w);
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
@@ -53,9 +58,9 @@ function renumberSttForAll(rows) {
   const out = [];
   for (const key of order) {
     const dayRows = byDay.get(key);
-    const c = { "TECS-TCS": 0, "TECS-SCSC": 0 };
+    const c = Object.fromEntries(WAREHOUSE_ORDER.map((w) => [w, 0]));
     for (const r of dayRows) {
-      const wh = r.warehouse === "TECS-SCSC" ? "TECS-SCSC" : "TECS-TCS";
+      const wh = isKnownWarehouse(r.warehouse) ? r.warehouse : "TECS-TCS";
       out.push({ ...r, stt: ++c[wh] });
     }
   }

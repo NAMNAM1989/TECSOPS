@@ -1,4 +1,5 @@
 import type { Shipment } from "../types/shipment";
+import { isScscWarehouse } from "../constants/warehouses";
 import {
   dimDivisorFromFlight,
   dimRoundingPolicyFromFlight,
@@ -41,7 +42,7 @@ export type ScscDimListModel = {
 
 /** Dữ liệu bảng DIM SCSC — cùng logic với modal nhập (lineDimKg + chính sách theo chuyến). */
 export function buildScscDimListModel(s: Shipment): ScscDimListModel | null {
-  if (s.warehouse !== "TECS-SCSC") return null;
+  if (!isScscWarehouse(s.warehouse)) return null;
   const lines = s.dimLines;
   if (!lines?.length) return null;
 

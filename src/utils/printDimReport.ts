@@ -1,4 +1,5 @@
 import type { Shipment } from "../types/shipment";
+import { isScscWarehouse } from "../constants/warehouses";
 import { buildScscDimListModel, formatLineDimKgLabel } from "./scscDimListReport";
 
 function esc(s: string): string {
@@ -15,7 +16,7 @@ export function canPrintDimReport(s: Shipment): boolean {
 
 /** Form in DIM SCSC — chỉ lô kho SCSC có đủ chi tiết kiện. */
 export function canPrintDimScscReport(s: Shipment): boolean {
-  return s.warehouse === "TECS-SCSC" && canPrintDimReport(s);
+  return isScscWarehouse(s.warehouse) && canPrintDimReport(s);
 }
 
 /**
@@ -27,9 +28,9 @@ export function printDimReport(s: Shipment): void {
     window.alert("Chưa có chi tiết DIM (D×R×C×kiện). Hãy nhập DIM trên điện thoại trước.");
     return;
   }
-  if (s.warehouse !== "TECS-SCSC") {
+  if (!isScscWarehouse(s.warehouse)) {
     window.alert(
-      "Form in DIM SCSC chỉ dùng cho lô kho SCSC. Lô kho TCS dùng LIST DIM TCS / IN DIM TCS."
+      "Form in DIM SCSC chỉ dùng cho lô kho SCSC (TECS-SCSC hoặc KHO SCSC). Lô kho TCS dùng LIST DIM TCS / IN DIM TCS."
     );
     return;
   }

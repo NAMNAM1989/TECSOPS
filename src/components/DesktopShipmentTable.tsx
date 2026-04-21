@@ -17,6 +17,7 @@ import {
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
 import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
+import { WAREHOUSE_ORDER, warehouseLabel, isTcsWarehouse } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
 
@@ -31,8 +32,6 @@ interface Props {
   onPrint: (s: Shipment) => void;
   onEdit: (s: Shipment) => void;
 }
-
-const WAREHOUSES: Warehouse[] = ["TECS-TCS", "TECS-SCSC"];
 
 const COL_HEADERS = [
   { key: "stt", label: "#", w: "w-9" },
@@ -56,20 +55,20 @@ export function DesktopShipmentTable({ rows, allRows, onAddBlankRow, onUpdate, o
   return (
     <>
     <div className="hidden md:block space-y-8">
-      {WAREHOUSES.map((wh) => {
+      {WAREHOUSE_ORDER.map((wh) => {
         const group = rowsByWarehouse[wh];
 
         return (
           <section key={wh}>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <h2 className="text-[19px] font-semibold tracking-tight text-apple-label">{wh}</h2>
+                <h2 className="text-[19px] font-semibold tracking-tight text-apple-label">{warehouseLabel[wh]}</h2>
                 <span className="rounded-full bg-apple-label px-2.5 py-0.5 text-[11px] font-semibold text-white">
                   {group.length} lô
                 </span>
                 <button
                   type="button"
-                  title={`Thêm dòng booking vào ${wh}`}
+                  title={`Thêm dòng booking vào ${warehouseLabel[wh]}`}
                   onClick={() => void onAddBlankRow(wh)}
                   className="inline-flex items-center gap-1.5 rounded-full bg-apple-blue px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover active:scale-[0.98]"
                 >
@@ -443,7 +442,7 @@ function ShipmentRow({
               </button>
             </>
           ) : null}
-          {row.warehouse === "TECS-TCS" && canExportTcsDimTemplate(row) ? (
+          {isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row) ? (
             <>
               <button
                 type="button"

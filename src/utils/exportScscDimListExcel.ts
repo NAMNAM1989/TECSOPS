@@ -180,7 +180,7 @@ async function buildListScscWorkbook(s: Shipment, model: ScscDimListModel) {
 /** Excel LIST SCSC — meta không viền; chỉ bảng DIM có lưới đen. */
 export function downloadScscDimListExcel(s: Shipment): void {
   if (!canPrintDimScscReport(s) || !s.dimLines) {
-    window.alert("Chỉ áp dụng cho kho TECS-SCSC và lô đã có nhập DIM (chi tiết kiện).");
+    window.alert("Chỉ áp dụng cho kho SCSC (TECS-SCSC hoặc KHO SCSC) và lô đã có nhập DIM (chi tiết kiện).");
     return;
   }
   const model = buildScscDimListModel(s);

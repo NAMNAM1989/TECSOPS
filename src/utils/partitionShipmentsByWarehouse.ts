@@ -1,21 +1,20 @@
 import type { Shipment, Warehouse } from "../types/shipment";
+import { WAREHOUSE_ORDER, isKnownWarehouse } from "../constants/warehouses";
 
 export type ShipmentsByWarehouse = Readonly<Record<Warehouse, Shipment[]>>;
 
 /**
  * Gom lô theo kho trong **một** lượt duyệt (O(n)).
- * Lô có `warehouse` không phải `TECS-SCSC` được gán vào `TECS-TCS` — khớp cách đánh STT phía server khi dữ liệu lệch.
+ * `warehouse` không hợp lệ → hiển thị bucket TECS-TCS (không sửa bản ghi).
  */
 export function partitionShipmentsByWarehouse(rows: Shipment[]): ShipmentsByWarehouse {
-  const tcs: Shipment[] = [];
-  const scsc: Shipment[] = [];
+  const buckets = Object.fromEntries(WAREHOUSE_ORDER.map((w) => [w, [] as Shipment[]])) as Record<
+    Warehouse,
+    Shipment[]
+  >;
   for (const r of rows) {
-    if (r.warehouse === "TECS-SCSC") scsc.push(r);
-    else tcs.push(r);
+    const w: Warehouse = isKnownWarehouse(r.warehouse) ? r.warehouse : "TECS-TCS";
+    buckets[w].push(r);
   }
-  const out: ShipmentsByWarehouse = {
-    "TECS-TCS": tcs,
-    "TECS-SCSC": scsc,
-  };
-  return out;
+  return buckets;
 }

@@ -275,10 +275,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           <p className="mt-2 text-sm leading-relaxed text-apple-secondary">
             {isViewingToday ? (
               <>
-                Trên máy tính, bấm <span className="font-semibold text-apple-blue">Nhập booking</span> cạnh tiêu đề{" "}
-                <span className="font-semibold text-apple-label">TECS-TCS</span> hoặc{" "}
-                <span className="font-semibold text-apple-label">TECS-SCSC</span> ở bảng bên dưới; điện thoại dùng nút
-                dưới cùng (form đầy đủ).
+                Trên máy tính, bấm <span className="font-semibold text-apple-blue">Nhập booking</span> cạnh tên kho ở
+                bảng bên dưới (TECS-TCS, TECS-SCSC, KHO TCS, KHO SCSC); điện thoại dùng nút dưới cùng (form đầy đủ).
               </>
             ) : (
               <>

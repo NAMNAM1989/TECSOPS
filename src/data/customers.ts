@@ -1,3 +1,6 @@
+import type { Warehouse } from "../types/shipment";
+import { WAREHOUSE_ORDER } from "../constants/warehouses";
+
 export const CUSTOMERS = [
   "CITYLINK",
   "SKYLINK",
@@ -14,7 +17,7 @@ export const CUSTOMERS = [
   "VAU",
 ] as const;
 
-export const WAREHOUSES = ["TECS-TCS", "TECS-SCSC"] as const;
+export const WAREHOUSES: readonly Warehouse[] = WAREHOUSE_ORDER;
 
 export const DESTINATIONS = [
   "KUL", "TPE", "SYD", "CDG", "NRT", "SZX", "MNL", "KCH",

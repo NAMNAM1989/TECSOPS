@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
+import type { Shipment, ShipmentStatus } from "../types/shipment";
 import { MobileDimKgModal } from "./MobileDimKgModal";
 import { canPrintDimScscReport, printDimReport } from "../utils/printDimReport";
 import {
@@ -13,6 +13,7 @@ import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { statusCardBg } from "./statusStyles";
+import { WAREHOUSE_ORDER, warehouseLabel, isTcsWarehouse } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
 
@@ -21,8 +22,6 @@ const SWIPE_THRESHOLD = 48;
 const SWIPE_MAX_VERTICAL_DELTA_PX = 35;
 /** Ba nút: Sửa / In / Xóa */
 const REVEAL_PX = 132;
-const WAREHOUSES: Warehouse[] = ["TECS-TCS", "TECS-SCSC"];
-
 interface MobileShipmentCardsProps {
   rows: Shipment[];
   selectedId: string | null;
@@ -70,17 +69,21 @@ export function MobileShipmentCards({
   return (
     <>
     <div className="space-y-5 pb-28 md:hidden">
-      {WAREHOUSES.map((wh) => {
+      {WAREHOUSE_ORDER.map((wh) => {
         const group = rowsByWarehouse[wh];
-        if (group.length === 0) return null;
         return (
           <section key={wh}>
             <div className="mb-2 flex items-center gap-2">
-              <h2 className="text-[17px] font-semibold tracking-tight text-apple-label">{wh}</h2>
+              <h2 className="text-[17px] font-semibold tracking-tight text-apple-label">{warehouseLabel[wh]}</h2>
               <span className="rounded-full bg-apple-label px-2 py-0.5 text-[10px] font-semibold text-white">
                 {group.length}
               </span>
             </div>
+            {group.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-black/[0.1] bg-white/80 px-4 py-6 text-center text-[13px] text-apple-secondary">
+                Chưa có lô trong kho này — dùng « Nhập booking mới » bên dưới và chọn đúng kho trong form.
+              </p>
+            ) : (
             <div className="space-y-1">
               {group.map((row) => {
                 const open = swipeOpenId === row.id;
@@ -272,7 +275,7 @@ export function MobileShipmentCards({
                               </button>
                             </div>
                             {(canPrintDimScscReport(row) ||
-                              (row.warehouse === "TECS-TCS" && canExportTcsDimTemplate(row))) && (
+                              (isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row))) && (
                               <div>
                                 <button
                                   type="button"
@@ -303,7 +306,7 @@ export function MobileShipmentCards({
                                         </button>
                                       </div>
                                     ) : null}
-                                    {row.warehouse === "TECS-TCS" && canExportTcsDimTemplate(row) ? (
+                                    {isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row) ? (
                                       <div className="flex gap-2">
                                         <button
                                           type="button"
@@ -333,6 +336,7 @@ export function MobileShipmentCards({
                 );
               })}
             </div>
+            )}
           </section>
         );
       })}
@@ -428,7 +432,7 @@ export function StickyMobileActions({
                   </button>
                 </div>
               ) : null}
-              {selected.warehouse === "TECS-TCS" && canExportTcsDimTemplate(selected) ? (
+              {isTcsWarehouse(selected.warehouse) && canExportTcsDimTemplate(selected) ? (
                 <div className="flex gap-2">
                   <button
                     type="button"

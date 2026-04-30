@@ -19,12 +19,16 @@
     "deploy:safe": "node scripts/deploy-safe-preflight.mjs",
     "deploy:ship": "node scripts/deploy-ship.mjs",
     "backup:redis-state": "node scripts/redis-backup-state.mjs",
-    "restore:redis-state": "node scripts/redis-restore-state.mjs"
+    "restore:redis-state": "node scripts/redis-restore-state.mjs",
+    "migrate:postgres-state": "node scripts/postgres-migrate-state.mjs",
+    "backup:postgres-state": "node scripts/postgres-backup-state.mjs",
+    "restore:postgres-state": "node scripts/postgres-restore-state.mjs"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
+    "pg": "^8.20.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "redis": "^4.7.0",

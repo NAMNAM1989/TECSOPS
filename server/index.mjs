@@ -5,7 +5,13 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "redis";
 import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
-import { loadState, runMutation, setRedisStateClient } from "./stateStore.mjs";
+import {
+  loadState,
+  runMutation,
+  setPostgresStateStore,
+  setRedisStateClient,
+} from "./stateStore.mjs";
+import { createPostgresStateStore } from "./postgresStateStore.mjs";
 import { registerTsplRoutes } from "./tsplRoutes.mjs";
 import {
   assertSocketGateOk,
@@ -114,18 +120,26 @@ const PORT = Number(process.env.PORT) || 3001;
 
 async function start() {
   const redisUrl = process.env.REDIS_URL?.trim();
+  const databaseUrl = process.env.DATABASE_URL?.trim();
   /** Railway inject các biến này — dùng để tránh chạy production chỉ với file (mất dữ liệu mỗi deploy). */
   const onRailway = Boolean(
     process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_SERVICE_ID
   );
   const allowFileWithoutRedis = process.env.ALLOW_FILE_STATE_ON_RAILWAY === "1";
 
-  if (onRailway && !redisUrl && !allowFileWithoutRedis) {
+  if (onRailway && !databaseUrl && !redisUrl && !allowFileWithoutRedis) {
     console.error(
-      "[FATAL] Railway: thiếu REDIS_URL. Thêm plugin Redis, gán biến REDIS_URL cho service app, rồi deploy lại. " +
+      "[FATAL] Railway: thiếu DATABASE_URL/REDIS_URL. Thêm Railway Postgres (ưu tiên) hoặc Redis, gán biến cho service app, rồi deploy lại. " +
         "Nếu bạn cố ý chỉ dùng file trong container (dễ mất khi redeploy), set ALLOW_FILE_STATE_ON_RAILWAY=1."
     );
     process.exit(1);
+  }
+
+  if (databaseUrl) {
+    setPostgresStateStore(createPostgresStateStore(databaseUrl));
+    console.info("[postgres] state storage (table app_state, key tecsops:state)");
+  } else {
+    setPostgresStateStore(null);
   }
 
   if (redisUrl) {
@@ -140,16 +154,25 @@ async function start() {
     await Promise.all([pubClient.connect(), subClient.connect(), stateClient.connect()]);
     io.adapter(createAdapter(pubClient, subClient));
     setRedisStateClient(stateClient);
-    console.info("[redis] Socket.IO adapter + state storage (key tecsops:state)");
-    try {
-      await loadState();
-    } catch (e) {
-      console.error("[state] bootstrap Redis state failed:", e?.message ?? e);
-      process.exit(1);
-    }
+    console.info(
+      databaseUrl
+        ? "[redis] Socket.IO adapter + bootstrap/rollback state available (Postgres is primary)"
+        : "[redis] Socket.IO adapter + state storage (key tecsops:state)"
+    );
   } else {
     setRedisStateClient(null);
-    console.info("[state] file local + Socket.IO in-memory (một instance hoặc cùng volume)");
+    console.info(
+      databaseUrl
+        ? "[socket] Socket.IO in-memory (Postgres state; single app replica recommended without Redis adapter)"
+        : "[state] file local + Socket.IO in-memory (một instance hoặc cùng volume)"
+    );
+  }
+
+  try {
+    await loadState();
+  } catch (e) {
+    console.error("[state] bootstrap state failed:", e?.message ?? e);
+    process.exit(1);
   }
 
   httpServer.listen(PORT, "0.0.0.0", () => {

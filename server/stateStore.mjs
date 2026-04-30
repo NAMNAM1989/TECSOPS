@@ -36,6 +36,8 @@ function emptyInitialState() {
 
 /** @type {import('redis').RedisClientType | null} */
 let redisStateClient = null;
+/** @type {ReturnType<import('./postgresStateStore.mjs').createPostgresStateStore> | null} */
+let postgresStateStore = null;
 
 const UNLOCK_SCRIPT = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -163,6 +165,13 @@ export function setRedisStateClient(client) {
   redisStateClient = client;
 }
 
+/**
+ * @param {ReturnType<import('./postgresStateStore.mjs').createPostgresStateStore> | null} store
+ */
+export function setPostgresStateStore(store) {
+  postgresStateStore = store;
+}
+
 function normalizeState(raw) {
   if (!raw || !raw.rows || !Array.isArray(raw.rows) || typeof raw.version !== "number") return null;
   const merged = migrateRows(raw.rows, raw.workDateIso);
@@ -201,11 +210,62 @@ function saveStateFile(state) {
   fs.renameSync(tmp, STATE_FILE);
 }
 
+function normalizeOrThrow(raw, source) {
+  const parsed = normalizeState(raw);
+  if (parsed) return parsed;
+  throw new Error(`[state] Dữ liệu ${source} không hợp lệ.`);
+}
+
+async function loadStateFromRedis() {
+  if (!redisStateClient) return null;
+  const raw = await redisStateClient.get(REDIS_STATE_KEY);
+  if (!raw) return null;
+  try {
+    return normalizeOrThrow(JSON.parse(raw), `Redis (${REDIS_STATE_KEY})`);
+  } catch (e) {
+    console.error("[state] redis load/parse error", e.message);
+    throw new Error(
+      `[state] Dữ liệu Redis (${REDIS_STATE_KEY}) lỗi hoặc hỏng. Không tự seed lại. Khôi phục từ backup.`
+    );
+  }
+}
+
+function loadStateFileIfExists() {
+  ensureDir();
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      return normalizeOrThrow(JSON.parse(fs.readFileSync(STATE_FILE, "utf8")), STATE_FILE);
+    }
+  } catch (e) {
+    console.warn("[state] load file existing bỏ qua:", e.message);
+  }
+  return null;
+}
+
+async function bootstrapStateForEmptyStore() {
+  const redis = await loadStateFromRedis();
+  if (redis) return redis;
+
+  const disk = loadStateFileIfExists();
+  if (disk) return disk;
+
+  return shouldSkipDemoSeed() ? emptyInitialState() : createInitialState();
+}
+
 /** @returns {Promise<object>} */
 export async function loadState() {
+  if (postgresStateStore) {
+    const raw = await postgresStateStore.loadRawState();
+    if (raw) return normalizeOrThrow(raw, `Postgres (${postgresStateStore.key})`);
+    const fresh = await bootstrapStateForEmptyStore();
+    await postgresStateStore.saveState(fresh);
+    console.info(`[state] đã bootstrap state vào Postgres (${postgresStateStore.key})`);
+    return fresh;
+  }
+
   if (redisStateClient) {
-    const raw = await redisStateClient.get(REDIS_STATE_KEY);
-    if (!raw) {
+    const parsed = await loadStateFromRedis();
+    if (!parsed) {
       try {
         if (fs.existsSync(STATE_FILE)) {
           const disk = normalizeState(JSON.parse(fs.readFileSync(STATE_FILE, "utf8")));
@@ -222,23 +282,17 @@ export async function loadState() {
       await redisStateClient.set(REDIS_STATE_KEY, JSON.stringify(fresh));
       return fresh;
     }
-    try {
-      const obj = JSON.parse(raw);
-      const parsed = normalizeState(obj);
-      if (parsed) return parsed;
-      throw new Error("normalizeState trả về null — dữ liệu không hợp lệ");
-    } catch (e) {
-      console.error("[state] redis load/parse error", e.message);
-      throw new Error(
-        `[state] Dữ liệu Redis (${REDIS_STATE_KEY}) lỗi hoặc hỏng. Không tự seed lại. Khôi phục từ backup (xem scripts/redis-backup-state.mjs).`
-      );
-    }
+    return parsed;
   }
   return loadStateFile();
 }
 
 /** @param {object} state */
 export async function saveState(state) {
+  if (postgresStateStore) {
+    await postgresStateStore.saveState(state);
+    return;
+  }
   if (redisStateClient) {
     await redisStateClient.set(REDIS_STATE_KEY, JSON.stringify(state));
     return;
@@ -331,6 +385,15 @@ let tail = Promise.resolve();
 
 export function runMutation(mutation) {
   const result = tail.then(async () => {
+    if (postgresStateStore) {
+      return postgresStateStore.runLocked(async (currentRaw) => {
+        const current = currentRaw
+          ? normalizeOrThrow(currentRaw, `Postgres (${postgresStateStore.key})`)
+          : await bootstrapStateForEmptyStore();
+        return applyMutation(current, mutation);
+      });
+    }
+
     if (redisStateClient) {
       return withDistributedLock(async () => {
         const current = await loadState();

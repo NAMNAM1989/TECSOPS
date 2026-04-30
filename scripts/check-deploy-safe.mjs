@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Safety gate: abort deploy/release if repo config looks destructive.
- * This project has no SQL migrations; state lives in Redis (see docs/railway-safe-deploy.md).
+ * State lives in Postgres JSONB (or Redis fallback during migration); see docs/railway-safe-deploy.md.
  */
 import fs from "node:fs";
 import path from "node:path";

@@ -20,3 +20,5 @@ server/data/*.tmp
 # Backup state Redis (có thể chứa dữ liệu thật — không commit nhầm)
 tecsops-state-*.json
 **/tecsops-state-*.json
+tecsops-postgres-state-*.json
+**/tecsops-postgres-state-*.json

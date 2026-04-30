@@ -1,6 +1,6 @@
 /**
  * Preflight trước khi push/deploy: build + test + deploy:check,
- * và backup Redis nếu có REDIS_URL (tùy chọn nhưng an toàn hơn).
+ * và backup Postgres/Redis nếu có biến kết nối (tùy chọn nhưng an toàn hơn).
  */
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -21,12 +21,15 @@ npmRun("build");
 npmRun("test");
 npmRun("deploy:check");
 
-if (process.env.REDIS_URL?.trim()) {
+if (process.env.DATABASE_URL?.trim()) {
+  console.info("\n[deploy:safe] ▶ backup Postgres (DATABASE_URL đã set)\n");
+  npmRun("backup:postgres-state");
+} else if (process.env.REDIS_URL?.trim()) {
   console.info("\n[deploy:safe] ▶ backup Redis (REDIS_URL đã set)\n");
   npmRun("backup:redis-state");
 } else {
   console.info(
-    "\n[deploy:safe] Bỏ qua backup Redis — set REDIS_URL rồi chạy lại nếu muốn backup trước khi push.\n"
+    "\n[deploy:safe] Bỏ qua backup state — set DATABASE_URL/REDIS_URL rồi chạy lại nếu muốn backup trước khi push.\n"
   );
 }
 

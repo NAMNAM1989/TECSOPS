@@ -22,6 +22,7 @@ function sample(over: Partial<Shipment> = {}): Shipment {
     dimDivisor: 6000,
     dimLines: [{ lCm: 120, wCm: 50, hCm: 30, pcs: 4 }],
     customer: "C",
+    customerCode: "",
     status: "RECEIVED",
     ...over,
   };

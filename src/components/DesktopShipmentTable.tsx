@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+import { lookupCustomerCodeByName } from "../utils/customerDirectoryCore";
 import { StatusSelect } from "./StatusBadge";
 import { SummaryBar } from "./SummaryBar";
 import { InlineNumberEdit } from "./InlineNumberEdit";
@@ -25,6 +27,8 @@ interface Props {
   rows: Shipment[];
   /** Toàn bộ lô (kiểm tra trùng AWB khi sửa inline). */
   allRows: Shipment[];
+  /** Danh bạ khách — dùng để đồng bộ mã khi sửa tên ô lưới. */
+  customerDirectory?: readonly CustomerDirectoryEntry[];
   /** Thêm dòng trống vào đúng kho (nút cạnh tiêu đề TCS / SCSC). */
   onAddBlankRow: (warehouse: Warehouse) => void;
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
@@ -48,7 +52,16 @@ const COL_HEADERS = [
   { key: "actions", label: "THAO TÁC", w: "w-44" },
 ] as const;
 
-export function DesktopShipmentTable({ rows, allRows, onAddBlankRow, onUpdate, onDelete, onPrint, onEdit }: Props) {
+export function DesktopShipmentTable({
+  rows,
+  allRows,
+  customerDirectory = [],
+  onAddBlankRow,
+  onUpdate,
+  onDelete,
+  onPrint,
+  onEdit,
+}: Props) {
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
 
@@ -109,6 +122,7 @@ export function DesktopShipmentTable({ rows, allRows, onAddBlankRow, onUpdate, o
                     <WarehouseGroupRows
                       group={group}
                       allRows={allRows}
+                      customerDirectory={customerDirectory}
                       onUpdate={onUpdate}
                       onDelete={onDelete}
                       onPrint={onPrint}
@@ -141,6 +155,7 @@ export function DesktopShipmentTable({ rows, allRows, onAddBlankRow, onUpdate, o
 function WarehouseGroupRows({
   group,
   allRows,
+  customerDirectory,
   onUpdate,
   onDelete,
   onPrint,
@@ -149,6 +164,7 @@ function WarehouseGroupRows({
 }: {
   group: Shipment[];
   allRows: Shipment[];
+  customerDirectory: readonly CustomerDirectoryEntry[];
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
@@ -164,6 +180,7 @@ function WarehouseGroupRows({
           row={row}
           groupRowIds={groupRowIds}
           allRows={allRows}
+          customerDirectory={customerDirectory}
           onUpdate={onUpdate}
           onDelete={onDelete}
           onPrint={onPrint}
@@ -179,6 +196,7 @@ function ShipmentRow({
   row,
   groupRowIds,
   allRows,
+  customerDirectory,
   onUpdate,
   onDelete,
   onPrint,
@@ -188,6 +206,7 @@ function ShipmentRow({
   row: Shipment;
   groupRowIds: string[];
   allRows: Shipment[];
+  customerDirectory: readonly CustomerDirectoryEntry[];
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
@@ -369,7 +388,11 @@ function ShipmentRow({
           className="text-sm font-semibold text-apple-label"
           maxLength={120}
           gridNav={{ rowId: row.id, field: "customer" }}
-          onCommit={(v) => onUpdate(row.id, { customer: v })}
+          onCommit={(v) => {
+            const trimmed = v.trim();
+            const code = lookupCustomerCodeByName(customerDirectory, trimmed);
+            onUpdate(row.id, { customer: trimmed, customerCode: code });
+          }}
           onEnterNavigateDown={hasNextRow ? navDownSameField("customer") : undefined}
         />
       </td>

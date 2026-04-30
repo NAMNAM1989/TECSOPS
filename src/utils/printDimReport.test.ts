@@ -30,6 +30,7 @@ function sampleShipment(over: Partial<Shipment> = {}): Shipment {
       { lCm: 100, wCm: 80, hCm: 60, pcs: 1 },
     ],
     customer: "TEST",
+    customerCode: "",
     status: "RECEIVED",
     ...over,
   };

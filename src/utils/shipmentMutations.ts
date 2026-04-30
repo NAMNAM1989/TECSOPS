@@ -1,17 +1,22 @@
 import type { Shipment, Warehouse } from "../types/shipment";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { WAREHOUSE_ORDER, isKnownWarehouse } from "../constants/warehouses";
 import { awbDigitsKey } from "./awbFormat";
 import { workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus";
+import { assertCustomerDirectoryValid } from "./customerDirectoryCore";
 
 export type AppState = {
   version: number;
   rows: Shipment[];
+  /** Danh bạ mã — tên; có thể rỗng nếu chưa cấu hình */
+  customers: CustomerDirectoryEntry[];
 };
 
 export type ShipmentMutation =
   | { action: "UPDATE"; id: string; patch: Partial<Shipment> }
   | { action: "DELETE"; id: string }
-  | { action: "ADD"; shipment: Omit<Shipment, "id" | "stt"> };
+  | { action: "ADD"; shipment: Omit<Shipment, "id" | "stt"> }
+  | { action: "SET_CUSTOMERS"; customers: CustomerDirectoryEntry[] };
 
 function assertAwbUnique(rows: Shipment[], awb: string, exceptId?: string) {
   const d = awbDigitsKey(awb);
@@ -64,6 +69,18 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
   let rows = [...state.rows];
 
   switch (mutation.action) {
+    case "SET_CUSTOMERS": {
+      assertCustomerDirectoryValid(mutation.customers);
+      return {
+        version: state.version + 1,
+        rows: renumberSttForAll(rows),
+        customers: mutation.customers.map((e) => ({
+          id: e.id.trim(),
+          code: e.code.trim(),
+          name: e.name.trim(),
+        })),
+      };
+    }
     case "UPDATE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
       if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
@@ -99,5 +116,6 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
   return {
     version: state.version + 1,
     rows: renumberSttForAll(rows),
+    customers: state.customers,
   };
 }

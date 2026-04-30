@@ -12,8 +12,9 @@ import { useShipmentSync } from "../hooks/useShipmentSync";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { ShipmentBookingForm } from "./ShipmentBookingForm";
+import { CustomerDirectoryModal } from "./CustomerDirectoryModal";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
-import { fetchAppStateRows } from "../utils/fetchAppStateRows";
+import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
 import { printDimReport } from "../utils/printDimReport";
 import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
@@ -44,6 +45,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
   const [excelExporting, setExcelExporting] = useState(false);
+  const [customerDirOpen, setCustomerDirOpen] = useState(false);
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -146,18 +148,20 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     setExcelExporting(true);
     try {
       let rowsForExport = filterShipmentsBySessionYmd(allRows, selectedYmd);
-      const fromApi = await fetchAppStateRows();
-      if (fromApi) {
-        rowsForExport = filterShipmentsBySessionYmd(fromApi, selectedYmd);
+      let customersForExport = state?.customers ?? [];
+      const snap = await fetchAppStateSnapshot();
+      if (snap) {
+        rowsForExport = filterShipmentsBySessionYmd(snap.rows, selectedYmd);
+        customersForExport = snap.customers;
       }
-      await downloadDayReportExcel(rowsForExport, selectedYmd);
+      await downloadDayReportExcel(rowsForExport, selectedYmd, customersForExport);
     } catch (e) {
       console.error(e);
       window.alert(e instanceof Error ? e.message : "Không tạo được file Excel.");
     } finally {
       setExcelExporting(false);
     }
-  }, [allRows, selectedYmd]);
+  }, [allRows, selectedYmd, state]);
 
   const openEdit = useCallback((s: Shipment) => {
     setShowForm(false);
@@ -187,6 +191,14 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
               Bảng theo ngày — chọn ngày để xem hoặc nhập. Mỗi ngày một phiên; dữ liệu các ngày trước vẫn được lưu.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCustomerDirOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label shadow-apple transition-colors hover:bg-black/[0.03]"
+                title="Quản lý mã và tên khách hàng (lưu trên máy chủ)"
+              >
+                Danh sách khách hàng
+              </button>
               <button
                 type="button"
                 disabled={excelExporting}
@@ -305,6 +317,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       <DesktopShipmentTable
         rows={filteredViewRows}
         allRows={allRows}
+        customerDirectory={state.customers}
         onAddBlankRow={addBlankRowForWarehouse}
         onUpdate={onUpdate}
         onDelete={onDelete}
@@ -339,6 +352,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         <ShipmentBookingForm
           sessionDateYmd={selectedYmd}
           allRows={allRows}
+          customerDirectory={state.customers}
           onAdd={onAdd}
           onClose={() => setShowForm(false)}
         />
@@ -349,11 +363,21 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           mode="edit"
           sessionDateYmd={editingShipment.sessionDate}
           allRows={allRows}
+          customerDirectory={state.customers}
           shipment={editingShipment}
           onSave={(patch) => onUpdate(editingShipment.id, patch)}
           onClose={() => setEditingShipment(null)}
         />
       )}
+
+      <CustomerDirectoryModal
+        open={customerDirOpen}
+        initial={state.customers}
+        onClose={() => setCustomerDirOpen(false)}
+        onSave={async (next) => {
+          await mutate({ action: "SET_CUSTOMERS", customers: next });
+        }}
+      />
     </div>
   );
 }

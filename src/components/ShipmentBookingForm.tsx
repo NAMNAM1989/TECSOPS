@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
 import { isAwbDigitsTaken } from "../utils/awbUnique";
 import { mergeCustomerOptions, persistNewCustomer } from "../utils/customerStorage";
@@ -14,11 +15,14 @@ import {
   ymdToDdMon,
 } from "../utils/bookingDateParse";
 import { deriveAutoWorkflowStatus, isAutoWorkflowStatus } from "../utils/shipmentWorkflowStatus";
+import { lookupCustomerCodeByName } from "../utils/customerDirectoryCore";
 
 type BaseProps = {
   sessionDateYmd: string;
   allRows: Shipment[];
   onClose: () => void;
+  /** Danh bạ từ máy chủ — nếu có phần tử, booking chỉ chọn khách trong danh sách (có mã). */
+  customerDirectory?: readonly CustomerDirectoryEntry[];
 };
 
 type AddMode = BaseProps & {
@@ -37,6 +41,8 @@ export type ShipmentBookingFormProps = AddMode | EditMode;
 export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   const isEdit = props.mode === "edit";
   const editShipment = isEdit ? props.shipment : null;
+  const directory = props.customerDirectory ?? [];
+  const useCustomerDirectory = directory.length > 0;
 
   const [awbRaw, setAwbRaw] = useState("");
   const [flight, setFlight] = useState("");
@@ -51,6 +57,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   const [showDestList, setShowDestList] = useState(false);
   const [warehouse, setWarehouse] = useState<Warehouse>("TECS-TCS");
   const [customer, setCustomer] = useState("");
+  const [customerCode, setCustomerCode] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [note, setNote] = useState("");
@@ -86,6 +93,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     setDestSearch("");
     setWarehouse(editShipment.warehouse);
     setCustomer(editShipment.customer);
+    setCustomerCode((editShipment.customerCode ?? "").trim());
     setCustomerSearch("");
     setNote(editShipment.note ?? "");
     setDimKg(editShipment.dimWeightKg != null ? String(editShipment.dimWeightKg) : "");
@@ -112,12 +120,17 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     [customerListVersion]
   );
 
-  const filteredCustomers = customerOptions.filter((c) =>
-    c.toLowerCase().includes(customerSearch.toLowerCase())
-  );
+  const filteredCustomers = useCustomerDirectory
+    ? directory.filter(
+        (e) =>
+          e.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+          e.code.toLowerCase().includes(customerSearch.toLowerCase())
+      )
+    : customerOptions.filter((c) => c.toLowerCase().includes(customerSearch.toLowerCase()));
 
   const searchTrim = customerSearch.trim();
   const canUseTypedCustomer =
+    !useCustomerDirectory &&
     searchTrim.length > 0 &&
     !customerOptions.some((c) => c.toLowerCase() === searchTrim.toLowerCase());
 
@@ -151,6 +164,17 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
 
   const effectiveCustomer = (customer || searchTrim).trim();
   const effectiveDest = (dest || destSearchTrim).trim();
+  const customerPickOk =
+    !useCustomerDirectory ||
+    Boolean(
+      customer &&
+        customerCode &&
+        directory.some(
+          (e) =>
+            e.code.trim() === customerCode.trim() &&
+            e.name.trim() === customer.trim()
+        )
+    );
   const canSubmit =
     awbValid &&
     !awbConflict &&
@@ -158,7 +182,8 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     !!flightYmdResolved &&
     effectiveDest.length > 0 &&
     warehouse &&
-    effectiveCustomer.length > 0;
+    effectiveCustomer.length > 0 &&
+    customerPickOk;
 
   function focusNextFrom(el: EventTarget | null) {
     const order: (HTMLElement | null)[] = [
@@ -248,8 +273,10 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       }
     }
 
-    persistNewCustomer(effectiveCustomer, CUSTOMERS);
-    setCustomerListVersion((v) => v + 1);
+    if (!useCustomerDirectory) {
+      persistNewCustomer(effectiveCustomer, CUSTOMERS);
+      setCustomerListVersion((v) => v + 1);
+    }
 
     const cutoff = buildCutoffIso();
     const dimTrim = dimKg.trim();
@@ -297,6 +324,9 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       dimLines: dimLinesPayload,
       dimDivisor: dimDivisorPayload,
       customer: effectiveCustomer,
+      customerCode: useCustomerDirectory
+        ? customerCode.trim()
+        : lookupCustomerCodeByName(directory, effectiveCustomer) || "",
       status: nextStatus,
     };
 
@@ -598,7 +628,9 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               Khách hàng
             </label>
             <p className="mb-1 text-[11px] text-apple-tertiary">
-              Gõ tên mới rồi lưu — hệ thống tự nhớ lần sau.
+              {useCustomerDirectory
+                ? "Chọn khách trong danh bạ (mã + tên). Chỉnh danh sách tại nút «Danh sách khách hàng» trên đầu trang."
+                : "Gõ tên mới rồi lưu — hệ thống tự nhớ lần sau (chế độ không dùng danh bạ mã)."}
             </p>
             <div
               className={`flex items-center gap-2 rounded-2xl border border-black/[0.08] bg-white px-3 py-2.5 transition-colors ${
@@ -607,12 +639,14 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
             >
               {customer && (
                 <span className="shrink-0 rounded-full bg-apple-label px-2.5 py-1 text-xs font-semibold text-white">
+                  {useCustomerDirectory && customerCode ? `${customerCode} · ` : null}
                   {customer}
                   <button
                     type="button"
                     tabIndex={-1}
                     onClick={() => {
                       setCustomer("");
+                      setCustomerCode("");
                       setCustomerSearch("");
                     }}
                     className="ml-1.5 text-white/70 hover:text-white"
@@ -624,7 +658,9 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               <input
                 ref={customerInputRef}
                 type="text"
-                placeholder={customer ? "" : "Tìm, chọn hoặc gõ tên khách mới..."}
+                placeholder={
+                  customer ? "" : useCustomerDirectory ? "Tìm theo mã hoặc tên…" : "Tìm, chọn hoặc gõ tên khách mới..."
+                }
                 value={customerSearch}
                 onChange={(e) => {
                   setCustomerSearch(e.target.value);
@@ -652,23 +688,47 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                   </button>
                 )}
                 {filteredCustomers.length > 0 ? (
-                  filteredCustomers.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => {
-                        setCustomer(c);
-                        setCustomerSearch("");
-                        setShowCustomerList(false);
-                      }}
-                      className={`block w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
-                        customer === c ? "bg-apple-blue/10 text-apple-blue" : "text-apple-label hover:bg-black/[0.03]"
-                      }`}
-                    >
-                      {c}
-                    </button>
-                  ))
+                  useCustomerDirectory
+                    ? (filteredCustomers as CustomerDirectoryEntry[]).map((e) => (
+                        <button
+                          key={e.id}
+                          type="button"
+                          tabIndex={-1}
+                          onClick={() => {
+                            setCustomer(e.name);
+                            setCustomerCode(e.code);
+                            setCustomerSearch("");
+                            setShowCustomerList(false);
+                          }}
+                          className={`block w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
+                            customer === e.name && customerCode === e.code
+                              ? "bg-apple-blue/10 text-apple-blue"
+                              : "text-apple-label hover:bg-black/[0.03]"
+                          }`}
+                        >
+                          <span className="font-mono text-xs text-apple-secondary">{e.code}</span>
+                          <span className="mx-1.5 text-apple-tertiary">·</span>
+                          {e.name}
+                        </button>
+                      ))
+                    : (filteredCustomers as string[]).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          tabIndex={-1}
+                          onClick={() => {
+                            setCustomer(c);
+                            setCustomerCode(lookupCustomerCodeByName(directory, c));
+                            setCustomerSearch("");
+                            setShowCustomerList(false);
+                          }}
+                          className={`block w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
+                            customer === c ? "bg-apple-blue/10 text-apple-blue" : "text-apple-label hover:bg-black/[0.03]"
+                          }`}
+                        >
+                          {c}
+                        </button>
+                      ))
                 ) : (
                   !canUseTypedCustomer && (
                     <p className="px-4 py-3 text-xs text-apple-tertiary">Không tìm thấy — gõ tên khách mới</p>

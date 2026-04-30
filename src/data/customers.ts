@@ -1,6 +1,7 @@
 import type { Warehouse } from "../types/shipment";
 import { WAREHOUSE_ORDER } from "../constants/warehouses";
 
+/** Gợi ý tên mặc định — giữ khớp `SEED_NAMES` trong `server/customerDirectorySeed.mjs` (migrate danh bạ). */
 export const CUSTOMERS = [
   "CITYLINK",
   "SKYLINK",

@@ -1,7 +1,9 @@
 import type { Borders, Cell, Fill, Font, Workbook } from "exceljs";
 import type { Shipment } from "../types/shipment";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { filterShipmentsBySessionYmd } from "./filterShipmentsBySessionYmd";
 import { formatShipmentDimWeightKg } from "./volumetricDim";
+import { lookupCustomerCodeByName } from "./customerDirectoryCore";
 
 /** Excel giới hạn 31 ký tự / tên sheet. */
 const EXCEL_MAX_SHEET_NAME_LENGTH = 31;
@@ -14,7 +16,7 @@ const HEADER_FONT_SIZE = 10;
 /** Cột 1-based: AWB (font monospace), Note (wrap). */
 const COL_STT = 1;
 const COL_AWB = 3;
-const COL_NOTE = 9;
+const COL_NOTE = 10;
 
 const MIME_XLSX =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -28,6 +30,7 @@ const DAY_REPORT_HEADERS = [
   "Số KG",
   "VOLUME WEIGHT",
   "Tên khách hàng",
+  "Mã Khách Hàng",
   "Note",
 ] as const;
 
@@ -62,7 +65,7 @@ const BORDER: Partial<Borders> = {
 };
 
 /** Độ rộng cột: đủ cho tiêu đề + nút AutoFilter (Excel vẽ mũi tên lọc bên phải ô). */
-const COLUMN_WIDTHS: readonly number[] = [8, 22, 22, 10, 14, 12, 22, 36, 42];
+const COLUMN_WIDTHS: readonly number[] = [8, 22, 22, 10, 14, 12, 22, 36, 16, 42];
 
 function applyCellBorder(cell: Cell) {
   cell.border = BORDER as Borders;
@@ -87,7 +90,14 @@ function sheetTitleForDayReport(sessionDateYmd: string): string {
  * Một dòng dữ liệu (giá trị ô) từ một lô.
  * `reportStt` = STT **báo cáo** 1…n liên tục trên file (không dùng `r.stt` theo từng kho).
  */
-function dayReportRowValues(r: Shipment, reportStt: number): (string | number)[] {
+function dayReportRowValues(
+  r: Shipment,
+  reportStt: number,
+  customerDirectory: readonly CustomerDirectoryEntry[]
+): (string | number)[] {
+  const code =
+    (r.customerCode && String(r.customerCode).trim()) ||
+    lookupCustomerCodeByName(customerDirectory, r.customer);
   return [
     reportStt,
     formatYmdToVnDisplay(r.sessionDate),
@@ -97,6 +107,7 @@ function dayReportRowValues(r: Shipment, reportStt: number): (string | number)[]
     r.kg ?? "",
     r.dimWeightKg != null ? formatShipmentDimWeightKg(r.flight, r.dimWeightKg) : "",
     r.customer,
+    code,
     r.note ?? "",
   ];
 }
@@ -151,7 +162,11 @@ export function prepareDayReportRows(rows: Shipment[], sessionDateYmd: string): 
  * `exceljs` chỉ được tải khi gọi hàm này (dynamic import).
  * Gồm **mọi lô** (mọi kho) khớp `sessionDateYmd`, thứ tự dòng = thứ tự trong `prepareDayReportRows`.
  */
-export async function buildDayReportWorkbook(rows: Shipment[], sessionDateYmd: string): Promise<Workbook> {
+export async function buildDayReportWorkbook(
+  rows: Shipment[],
+  sessionDateYmd: string,
+  customerDirectory: readonly CustomerDirectoryEntry[] = []
+): Promise<Workbook> {
   const ExcelJS = (await import("exceljs")).default;
 
   const dayRows = prepareDayReportRows(rows, sessionDateYmd);
@@ -175,7 +190,7 @@ export async function buildDayReportWorkbook(rows: Shipment[], sessionDateYmd: s
   });
 
   dayRows.forEach((r, idx) => {
-    const row = sheet.addRow(dayReportRowValues(r, idx + 1));
+    const row = sheet.addRow(dayReportRowValues(r, idx + 1, customerDirectory));
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       styleBodyCell(cell, colNumber, idx);
     });
@@ -192,10 +207,14 @@ export async function buildDayReportWorkbook(rows: Shipment[], sessionDateYmd: s
 /**
  * Tải file .xlsx: toàn bộ lô **mọi kho** đúng `sessionDate` (ngày báo cáo), không lọc theo trạng thái UI.
  */
-export async function downloadDayReportExcel(rows: Shipment[], sessionDateYmd: string): Promise<void> {
+export async function downloadDayReportExcel(
+  rows: Shipment[],
+  sessionDateYmd: string,
+  customerDirectory: readonly CustomerDirectoryEntry[] = []
+): Promise<void> {
   let objectUrl: string | null = null;
   try {
-    const wb = await buildDayReportWorkbook(rows, sessionDateYmd);
+    const wb = await buildDayReportWorkbook(rows, sessionDateYmd, customerDirectory);
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: MIME_XLSX });
     objectUrl = URL.createObjectURL(blob);

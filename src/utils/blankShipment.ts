@@ -22,6 +22,7 @@ export function blankShipmentDraft(
     dimLines: null,
     dimDivisor: null,
     customer: "",
+    customerCode: "",
     status: "PENDING",
   };
 }

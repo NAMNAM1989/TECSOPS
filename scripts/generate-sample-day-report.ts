@@ -6,6 +6,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Shipment } from "../src/types/shipment";
+import type { CustomerDirectoryEntry } from "../src/types/customerDirectory";
 import { buildDayReportWorkbook } from "../src/utils/exportDayReportExcel";
 
 function row(p: Partial<Shipment> & Pick<Shipment, "id" | "stt" | "awb" | "dest" | "customer">): Shipment {
@@ -21,11 +22,18 @@ function row(p: Partial<Shipment> & Pick<Shipment, "id" | "stt" | "awb" | "dest"
     dimWeightKg: null,
     dimLines: null,
     dimDivisor: null,
+    customerCode: "",
     status: "PENDING",
     sessionDate: "2026-04-06",
     ...p,
   };
 }
+
+const SAMPLE_CUSTOMERS: CustomerDirectoryEntry[] = [
+  { id: "a", code: "KH001", name: "CITYLINK" },
+  { id: "b", code: "DEMO", name: "Demo khách" },
+  { id: "c", code: "OR", name: "ORIENT CARGO" },
+];
 
 const SESSION_YMD = "2026-04-06";
 
@@ -38,6 +46,7 @@ const sampleRows: Shipment[] = [
     pcs: 20,
     kg: 230,
     customer: "CITYLINK",
+    customerCode: "KH001",
     note: "",
   }),
   row({
@@ -49,6 +58,7 @@ const sampleRows: Shipment[] = [
     kg: 50,
     dimWeightKg: 800,
     customer: "Demo khách",
+    customerCode: "DEMO",
     note: "Ví dụ có VOLUME WEIGHT",
   }),
   row({
@@ -61,6 +71,7 @@ const sampleRows: Shipment[] = [
     kg: 612,
     dimWeightKg: 590,
     customer: "ORIENT CARGO",
+    customerCode: "OR",
     note: "Dòng mẫu kho SCSC",
   }),
 ];
@@ -70,7 +81,7 @@ async function main() {
   const outDir = path.join(root, "samples");
   fs.mkdirSync(outDir, { recursive: true });
 
-  const wb = await buildDayReportWorkbook(sampleRows, SESSION_YMD);
+  const wb = await buildDayReportWorkbook(sampleRows, SESSION_YMD, SAMPLE_CUSTOMERS);
   const fname = `TECSOPS-bao-cao-ngay-MAU-${SESSION_YMD}.xlsx`;
   const outPath = path.join(outDir, fname);
   await wb.xlsx.writeFile(outPath);

@@ -3,6 +3,12 @@ import { io } from "socket.io-client";
 import type { Shipment } from "../types/shipment";
 import { saveRows } from "../utils/shipmentStorage";
 import { credFetch } from "../apiFetch";
+import { parseAppState } from "../utils/appStateParse";
+import { buildDefaultCustomerDirectory } from "../utils/defaultCustomerDirectory";
+import {
+  loadCustomerDirectoryFromStorage,
+  saveCustomerDirectoryToStorage,
+} from "../utils/customerDirectoryStorage";
 import {
   applyShipmentMutation,
   type AppState,
@@ -17,21 +23,18 @@ const SOCKET_IO_PATH = "/socket.io/" as const;
 const SOCKET_RECONNECT_DELAY_MS = 1000;
 const SOCKET_RECONNECT_DELAY_MAX_MS = 10000;
 
-/**
- * Parse payload JSON từ `/api/state`, `sync`, hoặc body sau mutation.
- * Trả `null` nếu thiếu `version` số hoặc `rows` không phải mảng.
- */
-function parseState(raw: unknown): AppState | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  if (typeof o.version !== "number" || !Array.isArray(o.rows)) return null;
-  return { version: o.version, rows: o.rows as Shipment[] };
-}
-
 /** Giữ bản sao mới hơn hoặc bằng `version` (tránh ghi đè do gói tin lệch thứ tự). */
 function pickNewerState(prev: AppState | null, next: AppState): AppState {
   if (!prev || next.version >= prev.version) return next;
   return prev;
+}
+
+function offlineBootstrapState(rows: Shipment[]): AppState {
+  return {
+    version: 0,
+    rows,
+    customers: loadCustomerDirectoryFromStorage() ?? buildDefaultCustomerDirectory(),
+  };
 }
 
 /**
@@ -53,7 +56,7 @@ export function useShipmentSync(fallback: Fallback) {
       try {
         const res = await fetch("/api/state", { ...credFetch, cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
-        const parsed = parseState(await res.json());
+        const parsed = parseAppState(await res.json());
         if (!parsed) throw new Error("Invalid state");
         if (cancelled) return;
         apiOkRef.current = true;
@@ -63,10 +66,7 @@ export function useShipmentSync(fallback: Fallback) {
         if (cancelled) return;
         apiOkRef.current = false;
         setSocketConnected(false);
-        setState({
-          version: 0,
-          rows: fallbackRef.current.rows,
-        });
+        setState(offlineBootstrapState(fallbackRef.current.rows));
         setStatus("offline");
         return;
       }
@@ -88,7 +88,7 @@ export function useShipmentSync(fallback: Fallback) {
       };
 
       const onSync = (payload: unknown) => {
-        const next = parseState(payload);
+        const next = parseAppState(payload);
         if (next) mergeIfNewer(next);
       };
 
@@ -120,6 +120,9 @@ export function useShipmentSync(fallback: Fallback) {
         try {
           const next = applyShipmentMutation(prev, mutation);
           saveRows(next.rows);
+          if (mutation.action === "SET_CUSTOMERS") {
+            saveCustomerDirectoryToStorage(next.customers);
+          }
           computed = next;
           return next;
         } catch (e) {
@@ -143,7 +146,7 @@ export function useShipmentSync(fallback: Fallback) {
       const msg = typeof o.error === "string" ? o.error : res.statusText;
       throw new Error(msg);
     }
-    const next = parseState(body);
+    const next = parseAppState(body);
     if (!next) {
       throw new Error("Phản hồi máy chủ không hợp lệ sau khi lưu.");
     }

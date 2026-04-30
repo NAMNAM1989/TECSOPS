@@ -21,6 +21,7 @@ function base(id: string, warehouse: Shipment["warehouse"], stt: number, session
     dimLines: null,
     dimDivisor: null,
     customer: "C",
+    customerCode: "",
     status: "PENDING",
   };
 }
@@ -64,5 +65,15 @@ describe("prepareDayReportRows", () => {
     const sh = wb.worksheets[0];
     expect(sh.getRow(2).getCell(1).value).toBe(1);
     expect(sh.getRow(3).getCell(1).value).toBe(2);
+  });
+
+  it("Excel: có cột Mã Khách Hàng và tra mã theo danh bạ", async () => {
+    const rows: Shipment[] = [
+      { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "ACME", customerCode: "" },
+    ];
+    const wb = await buildDayReportWorkbook(rows, ymd, [{ id: "1", code: "M1", name: "ACME" }]);
+    const sh = wb.worksheets[0];
+    expect(sh.getRow(1).getCell(9).value).toBe("Mã Khách Hàng");
+    expect(sh.getRow(2).getCell(9).value).toBe("M1");
   });
 });

@@ -24,6 +24,7 @@ const base = (): Shipment => ({
   dimLines: null,
   dimDivisor: null,
   customer: "",
+  customerCode: "",
   status: "PENDING",
 });
 

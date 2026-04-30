@@ -68,6 +68,7 @@ function isShipmentShape(o: unknown): o is Omit<Shipment, "sessionDate"> & { ses
     (r.note === undefined || typeof r.note === "string") &&
     typeof r.dest === "string" &&
     typeof r.customer === "string" &&
+    (r.customerCode === undefined || typeof r.customerCode === "string") &&
     typeof r.status === "string" &&
     RAW_STATUS_OK.has(r.status) &&
     WAREHOUSES.includes(r.warehouse as Warehouse) &&
@@ -116,6 +117,7 @@ export function loadRows(): Shipment[] | null {
         ...(item as Shipment),
         sessionDate: sd,
         note: typeof item.note === "string" ? item.note : "",
+        customerCode: typeof item.customerCode === "string" ? item.customerCode : "",
         dimWeightKg,
         dimLines,
         dimDivisor,

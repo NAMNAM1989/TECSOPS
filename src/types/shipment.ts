@@ -38,6 +38,8 @@ export interface Shipment {
   /** Hệ số dùng khi tính từ dimLines (để mở lại modal khớp cách tính) */
   dimDivisor: DimDivisor | null;
   customer: string;
+  /** Mã khách hàng (danh bạ) — có thể rỗng với dữ liệu cũ */
+  customerCode: string;
   status: ShipmentStatus;
 }
 

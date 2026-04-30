@@ -20,6 +20,7 @@ const minimal = (id: string, sd: string, wh: Shipment["warehouse"]): Shipment =>
   dimLines: null,
   dimDivisor: null,
   customer: "C",
+  customerCode: "",
   status: "PENDING",
 });
 

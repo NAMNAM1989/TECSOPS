@@ -3,6 +3,11 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { migrateShipmentStatus, workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus.mjs";
+import { buildDefaultCustomerDirectoryFromSeed } from "./customerDirectorySeed.mjs";
+import {
+  parseCustomersLoose,
+  validateCustomerDirectoryPayload,
+} from "./customerDirectoryValidate.mjs";
 
 const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "KHO-TCS", "KHO-SCSC"];
 function isKnownWarehouse(w) {
@@ -26,7 +31,7 @@ function shouldSkipDemoSeed() {
 }
 
 function emptyInitialState() {
-  return { version: 1, rows: [] };
+  return { version: 1, rows: [], customers: [] };
 }
 
 /** @type {import('redis').RedisClientType | null} */
@@ -95,6 +100,7 @@ function migrateRows(rows, workDateIso) {
           ? r.sessionDate
           : fallback,
       note: typeof r.note === "string" ? r.note : "",
+      customerCode: typeof r.customerCode === "string" ? r.customerCode : "",
       dimWeightKg:
         r.dimWeightKg === null || typeof r.dimWeightKg === "number" ? r.dimWeightKg : null,
       dimLines: normalizeDimLines(r.dimLines),
@@ -137,6 +143,7 @@ export function createInitialState() {
         ? r.sessionDate
         : SEED_SESSION_DAY,
     note: typeof r.note === "string" ? r.note : "",
+    customerCode: typeof r.customerCode === "string" ? r.customerCode : "",
     dimWeightKg:
       r.dimWeightKg === null || typeof r.dimWeightKg === "number" ? r.dimWeightKg : null,
     dimLines: normalizeDimLines(r.dimLines),
@@ -145,6 +152,7 @@ export function createInitialState() {
   return {
     version: 1,
     rows: renumberSttForAll(withS),
+    customers: buildDefaultCustomerDirectoryFromSeed(),
   };
 }
 
@@ -156,11 +164,17 @@ export function setRedisStateClient(client) {
 }
 
 function normalizeState(raw) {
-  if (!raw || !Array.isArray(raw.rows) || typeof raw.version !== "number") return null;
+  if (!raw || !raw.rows || !Array.isArray(raw.rows) || typeof raw.version !== "number") return null;
   const merged = migrateRows(raw.rows, raw.workDateIso);
+  const hasCustomersKey = Object.prototype.hasOwnProperty.call(raw, "customers");
+  let customers = parseCustomersLoose(hasCustomersKey ? raw.customers : undefined);
+  if (!hasCustomersKey) {
+    customers = shouldSkipDemoSeed() ? [] : buildDefaultCustomerDirectoryFromSeed();
+  }
   return {
     version: raw.version,
     rows: renumberSttForAll(merged),
+    customers,
   };
 }
 
@@ -240,6 +254,14 @@ export function applyMutation(state, mutation) {
   let rows = [...state.rows];
 
   switch (mutation.action) {
+    case "SET_CUSTOMERS": {
+      const list = validateCustomerDirectoryPayload(mutation.customers);
+      return {
+        version: state.version + 1,
+        rows: renumberSttForAll(rows),
+        customers: list,
+      };
+    }
     case "UPDATE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
       if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
@@ -276,6 +298,7 @@ export function applyMutation(state, mutation) {
   return {
     version: state.version + 1,
     rows: renumberSttForAll(rows),
+    customers: state.customers ?? [],
   };
 }
 

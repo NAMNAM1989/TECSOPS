@@ -30,6 +30,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "CITYLINK",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -50,6 +51,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "SKYLINK",
+    customerCode: "",
     status: "PENDING",
   },
   {
@@ -70,6 +72,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "SKYLINK",
+    customerCode: "",
     status: "PENDING",
   },
   {
@@ -90,6 +93,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "CÃ”NG CHÃšA",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -110,6 +114,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "CÃ”NG CHÃšA",
+    customerCode: "",
     status: "PENDING",
   },
   {
@@ -130,6 +135,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "MINH KHÃ”I",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -150,6 +156,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "PCS",
+    customerCode: "",
     status: "PENDING",
   },
   {
@@ -170,6 +177,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "TTP",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -190,6 +198,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "SHOPEE",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -210,6 +219,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "SHOPEE",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -230,6 +240,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "SHOPEE",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -250,6 +261,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "LOGIVAN",
+    customerCode: "",
     status: "WEIGH_SLIP",
   },
   {
@@ -270,6 +282,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "CITYLINK",
+    customerCode: "",
     status: "COMPLETED",
   },
   {
@@ -290,6 +303,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "PACIFIC AIR",
+    customerCode: "",
     status: "PENDING",
   },
   {
@@ -310,6 +324,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "EURO LINE",
+    customerCode: "",
     status: "OLA_PULL",
   },
   {
@@ -330,6 +345,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "AN NAM",
+    customerCode: "",
     status: "RECEIVED",
   },
 
@@ -352,6 +368,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "GSHIP",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -372,6 +389,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "GATEWAY",
+    customerCode: "",
     status: "PENDING",
   },
   {
@@ -392,6 +410,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "QUÃ NAM",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -412,6 +431,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "TÃN PHÃT",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -432,6 +452,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "TÃN PHÃT",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -452,6 +473,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "GIA PHÃš",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -472,6 +494,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "GIA PHÃš",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -492,6 +515,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "TTP",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -512,6 +536,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "VAU",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -532,6 +557,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "SHOPEE",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -552,6 +578,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "ORIENT CARGO",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -572,6 +599,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "GATEWAY",
+    customerCode: "",
     status: "PENDING",
   },
   {
@@ -592,6 +620,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "WEST LINK",
+    customerCode: "",
     status: "RECEIVED",
   },
   {
@@ -612,6 +641,7 @@ const initialShipmentsCore: Shipment[] = [
     dimLines: null,
     dimDivisor: null,
     customer: "TTP",
+    customerCode: "",
     status: "WEIGH_SLIP",
   },
 ];

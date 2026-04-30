@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Shipment } from "../types/shipment";
-import { buildDayReportWorkbook, prepareDayReportRows } from "./exportDayReportExcel";
+import {
+  buildDayReportWorkbook,
+  defaultDayReportFileName,
+  prepareDayReportRows,
+} from "./exportDayReportExcel";
 
 function base(id: string, warehouse: Shipment["warehouse"], stt: number, sessionDate: string, awb: string): Shipment {
   return {
@@ -75,5 +79,37 @@ describe("prepareDayReportRows", () => {
     const sh = wb.worksheets[0];
     expect(sh.getRow(1).getCell(9).value).toBe("Mã Khách Hàng");
     expect(sh.getRow(2).getCell(9).value).toBe("M1");
+  });
+
+  it("Excel: ưu tiên mã khách hàng trong danh bạ hơn mã cũ đã lưu ở lô", async () => {
+    const rows: Shipment[] = [
+      { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "ACME", customerCode: "OLD" },
+    ];
+    const wb = await buildDayReportWorkbook(rows, ymd, [{ id: "1", code: "NEW", name: "ACME" }]);
+    const sh = wb.worksheets[0];
+    expect(sh.getRow(2).getCell(9).value).toBe("NEW");
+  });
+
+  it("Excel: bám định dạng mẫu 9 cột và không xuất cột Note", async () => {
+    const wb = await buildDayReportWorkbook([base("a", "TECS-TCS", 1, ymd, "111-1111 1111")], ymd);
+    const sh = wb.worksheets[0];
+    expect(sh.getRow(1).cellCount).toBe(9);
+    expect(sh.getRow(1).values).toEqual([
+      undefined,
+      "STT",
+      "Ngày hàng vào",
+      "AWB",
+      "DEST",
+      "Số kiện",
+      "Số KG",
+      "VOLUME WEIGHT",
+      "Tên khách hàng",
+      "Mã Khách Hàng",
+    ]);
+  });
+
+  it("tên file download theo OPS_bao_cao_yyyymmdd_hhmmss", () => {
+    const name = defaultDayReportFileName(ymd, new Date(2026, 3, 30, 14, 17, 5));
+    expect(name).toBe("OPS_bao_cao_20260407_141705.xlsx");
   });
 });

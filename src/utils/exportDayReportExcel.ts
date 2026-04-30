@@ -13,10 +13,9 @@ const DEFAULT_DATA_ROW_HEIGHT = 18;
 const DATA_BODY_FONT_SIZE = 11;
 const HEADER_FONT_SIZE = 10;
 
-/** Cột 1-based: AWB (font monospace), Note (wrap). */
+/** Cột 1-based: AWB (font monospace). */
 const COL_STT = 1;
 const COL_AWB = 3;
-const COL_NOTE = 10;
 
 const MIME_XLSX =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -31,7 +30,6 @@ const DAY_REPORT_HEADERS = [
   "VOLUME WEIGHT",
   "Tên khách hàng",
   "Mã Khách Hàng",
-  "Note",
 ] as const;
 
 /** Cột (1-based) căn phải: số kiện, KG, VOLUME WEIGHT */
@@ -65,7 +63,19 @@ const BORDER: Partial<Borders> = {
 };
 
 /** Độ rộng cột: đủ cho tiêu đề + nút AutoFilter (Excel vẽ mũi tên lọc bên phải ô). */
-const COLUMN_WIDTHS: readonly number[] = [8, 22, 22, 10, 14, 12, 22, 36, 16, 42];
+const COLUMN_WIDTHS: readonly number[] = [8, 22, 22, 10, 14, 12, 22, 36, 16];
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function fileTimeStamp(now: Date): string {
+  return `${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`;
+}
+
+function compactYmd(ymd: string): string {
+  return ymd.trim().replaceAll("-", "");
+}
 
 function applyCellBorder(cell: Cell) {
   cell.border = BORDER as Borders;
@@ -96,8 +106,9 @@ function dayReportRowValues(
   customerDirectory: readonly CustomerDirectoryEntry[]
 ): (string | number)[] {
   const code =
+    lookupCustomerCodeByName(customerDirectory, r.customer) ||
     (r.customerCode && String(r.customerCode).trim()) ||
-    lookupCustomerCodeByName(customerDirectory, r.customer);
+    "";
   return [
     reportStt,
     formatYmdToVnDisplay(r.sessionDate),
@@ -108,7 +119,6 @@ function dayReportRowValues(
     r.dimWeightKg != null ? formatShipmentDimWeightKg(r.flight, r.dimWeightKg) : "",
     r.customer,
     code,
-    r.note ?? "",
   ];
 }
 
@@ -140,13 +150,12 @@ function styleBodyCell(cell: Cell, colNumber: number, rowIndexZeroBased: number)
     cell.alignment = {
       vertical: "middle",
       horizontal: "left",
-      wrapText: colNumber === COL_NOTE,
     };
 }
 
 /** Tên file mặc định khi tải từ trình duyệt. */
-export function defaultDayReportFileName(sessionDateYmd: string): string {
-  return `TECSOPS-bao-cao-ngay-${sessionDateYmd}.xlsx`;
+export function defaultDayReportFileName(sessionDateYmd: string, now = new Date()): string {
+  return `OPS_bao_cao_${compactYmd(sessionDateYmd)}_${fileTimeStamp(now)}.xlsx`;
 }
 
 /**

@@ -26,6 +26,16 @@ interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment) => void;
 }
 
+type WarehouseFilterValue = Warehouse | "ALL";
+
+const WAREHOUSE_FILTER_OPTIONS: { value: WarehouseFilterValue; label: string }[] = [
+  { value: "ALL", label: "Tất cả kho" },
+  { value: "TECS-TCS", label: "TECS-TCS" },
+  { value: "TECS-SCSC", label: "TECS-SCSC" },
+  { value: "KHO-TCS", label: "KHO TCS" },
+  { value: "KHO-SCSC", label: "KHO SCSC" },
+];
+
 function formatWorkDateLabel(d: Date): string {
   const months = [
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
@@ -44,6 +54,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
+  const [warehouseFilter, setWarehouseFilter] = useState<WarehouseFilterValue>("ALL");
+  const [customerFilter, setCustomerFilter] = useState("");
   const [excelExporting, setExcelExporting] = useState(false);
   const [customerDirOpen, setCustomerDirOpen] = useState(false);
 
@@ -58,13 +70,29 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   );
 
   const filteredViewRows = useMemo(() => {
-    if (statusFilter === "ALL") return viewRows;
-    return viewRows.filter((r) => r.status === (statusFilter as ShipmentStatus));
-  }, [viewRows, statusFilter]);
+    const customerNeedle = customerFilter.trim().toLowerCase();
+    return viewRows.filter((r) => {
+      if (statusFilter !== "ALL" && r.status !== (statusFilter as ShipmentStatus)) return false;
+      if (warehouseFilter !== "ALL" && r.warehouse !== warehouseFilter) return false;
+      if (!customerNeedle) return true;
+      return (
+        r.customer.trim().toLowerCase().includes(customerNeedle) ||
+        r.customerCode.trim().toLowerCase().includes(customerNeedle)
+      );
+    });
+  }, [viewRows, statusFilter, warehouseFilter, customerFilter]);
 
   useEffect(() => {
     setStatusFilter("ALL");
+    setWarehouseFilter("ALL");
+    setCustomerFilter("");
   }, [selectedYmd]);
+
+  const clearViewFilters = useCallback(() => {
+    setStatusFilter("ALL");
+    setWarehouseFilter("ALL");
+    setCustomerFilter("");
+  }, []);
 
   const daysWithData = useMemo(() => {
     const s = new Set<string>();
@@ -279,6 +307,66 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
       <StatusFilterBar dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
 
+      {viewRows.length > 0 && (
+        <div className="mb-6 rounded-2xl border border-black/[0.08] bg-white/90 p-3 shadow-apple backdrop-blur-sm sm:p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-apple-secondary">Lọc kho / khách hàng</p>
+            {(warehouseFilter !== "ALL" || customerFilter.trim()) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setWarehouseFilter("ALL");
+                  setCustomerFilter("");
+                }}
+                className="rounded-full border border-black/[0.1] bg-black/[0.04] px-2.5 py-1 text-[10px] font-semibold text-apple-label hover:bg-black/[0.07]"
+              >
+                Xóa lọc kho/khách
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="flex min-w-0 flex-wrap gap-2">
+              {WAREHOUSE_FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setWarehouseFilter(opt.value)}
+                  className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                    warehouseFilter === opt.value
+                      ? "border-apple-blue/40 bg-apple-blue/10 text-apple-label shadow-[0_0_0_2px_rgba(0,122,255,0.18)]"
+                      : "border-black/[0.08] bg-white/80 text-apple-secondary hover:border-black/[0.12] hover:bg-black/[0.03]"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <label className="relative min-w-0 flex-1 lg:max-w-md">
+              <span className="sr-only">Lọc khách hàng</span>
+              <input
+                type="search"
+                value={customerFilter}
+                onChange={(e) => setCustomerFilter(e.target.value)}
+                placeholder="Lọc khách hàng hoặc mã KH..."
+                className="w-full rounded-full border border-black/[0.08] bg-white px-4 py-2.5 pr-10 text-sm font-medium text-apple-label shadow-inner outline-none transition focus:border-apple-blue/40 focus:ring-2 focus:ring-apple-blue/15"
+              />
+              {customerFilter && (
+                <button
+                  type="button"
+                  onClick={() => setCustomerFilter("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-2 py-1 text-xs font-bold text-apple-tertiary hover:bg-black/[0.05] hover:text-apple-label"
+                  aria-label="Xóa lọc khách hàng"
+                >
+                  ×
+                </button>
+              )}
+            </label>
+          </div>
+        </div>
+      )}
+
       {viewRows.length === 0 && (
         <div className="mb-8 rounded-apple-lg border border-dashed border-black/[0.12] bg-white/60 px-5 py-12 text-center shadow-apple backdrop-blur-sm">
           <p className="text-[17px] font-semibold text-apple-label">
@@ -303,13 +391,13 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       {viewRows.length > 0 && filteredViewRows.length === 0 && (
         <div className="mb-8 rounded-apple-lg border border-dashed border-amber-200/80 bg-amber-50/50 px-5 py-10 text-center shadow-apple backdrop-blur-sm">
           <p className="text-[17px] font-semibold text-apple-label">Không có lô nào khớp bộ lọc</p>
-          <p className="mt-2 text-sm text-apple-secondary">Thử chọn trạng thái khác hoặc &quot;Tất cả&quot;.</p>
+          <p className="mt-2 text-sm text-apple-secondary">Thử đổi trạng thái, kho, hoặc nội dung lọc khách hàng.</p>
           <button
             type="button"
-            onClick={() => setStatusFilter("ALL")}
+            onClick={clearViewFilters}
             className="mt-4 rounded-full bg-apple-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-apple-blue-hover"
           >
-            Xem tất cả lô
+            Xóa tất cả bộ lọc
           </button>
         </div>
       )}

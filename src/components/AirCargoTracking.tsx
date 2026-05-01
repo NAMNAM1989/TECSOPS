@@ -12,7 +12,7 @@ import { useShipmentSync } from "../hooks/useShipmentSync";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { ShipmentBookingForm } from "./ShipmentBookingForm";
-import { CustomerDirectoryModal } from "./CustomerDirectoryModal";
+import { CustomerDirectoryManager } from "./CustomerDirectoryManager";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
@@ -223,9 +223,9 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
                 type="button"
                 onClick={() => setCustomerDirOpen(true)}
                 className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label shadow-apple transition-colors hover:bg-black/[0.03]"
-                title="Quản lý mã và tên khách hàng (lưu trên máy chủ)"
+                title="Quản lý khách hàng và mẫu copy (lưu trên máy chủ)"
               >
-                Danh sách khách hàng
+                Khách hàng / Mẫu copy
               </button>
               <button
                 type="button"
@@ -421,6 +421,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onDelete={onDelete}
         onPrint={onRequestPrint}
         onEdit={openEdit}
+        customerDirectory={state.customers}
       />
 
       <StickyMobileActions
@@ -458,11 +459,12 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         />
       )}
 
-      <CustomerDirectoryModal
+      <CustomerDirectoryManager
         open={customerDirOpen}
         initial={state.customers}
         onClose={() => setCustomerDirOpen(false)}
         onSave={async (next) => {
+          /** Dùng `mutate` (không qua `runMutate`) để lỗi ném lên modal — `runMutate` nuốt lỗi và `onClose` vẫn chạy. */
           await mutate({ action: "SET_CUSTOMERS", customers: next });
         }}
       />

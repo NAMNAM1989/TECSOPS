@@ -4,6 +4,7 @@ import { WAREHOUSE_ORDER, isKnownWarehouse } from "../constants/warehouses";
 import { awbDigitsKey } from "./awbFormat";
 import { workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus";
 import { assertCustomerDirectoryValid } from "./customerDirectoryCore";
+import { clampCustomerDirectoryEntry } from "./customerDirectoryProfile";
 
 export type AppState = {
   version: number;
@@ -74,11 +75,7 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
       return {
         version: state.version + 1,
         rows: renumberSttForAll(rows),
-        customers: mutation.customers.map((e) => ({
-          id: e.id.trim(),
-          code: e.code.trim(),
-          name: e.name.trim(),
-        })),
+        customers: mutation.customers.map((e) => clampCustomerDirectoryEntry(e)),
       };
     }
     case "UPDATE": {

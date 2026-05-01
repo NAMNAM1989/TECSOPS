@@ -11,6 +11,7 @@ import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { InlineAwbEdit } from "./InlineAwbEdit";
 import { InlineCutoffBlock } from "./InlineCutoffBlock";
 import { MobileDimKgModal } from "./MobileDimKgModal";
+import { CustomerShipmentDetailModal } from "./CustomerShipmentDetailModal";
 import { statusRowBg, statusRowBorder } from "./statusStyles";
 import { canPrintDimScscReport, printDimReport } from "../utils/printDimReport";
 import {
@@ -63,6 +64,7 @@ export function DesktopShipmentTable({
   onEdit,
 }: Props) {
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
+  const [customerDetailRow, setCustomerDetailRow] = useState<Shipment | null>(null);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
 
   return (
@@ -128,6 +130,7 @@ export function DesktopShipmentTable({
                       onPrint={onPrint}
                       onEdit={onEdit}
                       onOpenDimModal={setDimModalRow}
+                      onOpenCustomerDetail={setCustomerDetailRow}
                     />
                   )}
                 </tbody>
@@ -148,6 +151,12 @@ export function DesktopShipmentTable({
         }}
       />
     ) : null}
+    <CustomerShipmentDetailModal
+      open={customerDetailRow != null}
+      shipment={customerDetailRow}
+      directory={customerDirectory}
+      onClose={() => setCustomerDetailRow(null)}
+    />
     </>
   );
 }
@@ -161,6 +170,7 @@ function WarehouseGroupRows({
   onPrint,
   onEdit,
   onOpenDimModal,
+  onOpenCustomerDetail,
 }: {
   group: Shipment[];
   allRows: Shipment[];
@@ -170,6 +180,7 @@ function WarehouseGroupRows({
   onPrint: (s: Shipment) => void;
   onEdit: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
+  onOpenCustomerDetail: (s: Shipment) => void;
 }) {
   const groupRowIds = group.map((r) => r.id);
   return (
@@ -186,6 +197,7 @@ function WarehouseGroupRows({
           onPrint={onPrint}
           onEdit={onEdit}
           onOpenDimModal={onOpenDimModal}
+          onOpenCustomerDetail={onOpenCustomerDetail}
         />
       ))}
     </>
@@ -202,6 +214,7 @@ function ShipmentRow({
   onPrint,
   onEdit,
   onOpenDimModal,
+  onOpenCustomerDetail,
 }: {
   row: Shipment;
   groupRowIds: string[];
@@ -212,6 +225,7 @@ function ShipmentRow({
   onPrint: (s: Shipment) => void;
   onEdit: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
+  onOpenCustomerDetail: (s: Shipment) => void;
 }) {
   const bg = statusRowBg[row.status];
   const border = statusRowBorder[row.status];
@@ -382,19 +396,41 @@ function ShipmentRow({
       </td>
       {/* Customer */}
       <td className="border-r border-black/[0.06] px-1 py-1">
-        <InlineTextEdit
-          value={row.customer}
-          placeholder="Khách"
-          className="text-sm font-semibold text-apple-label"
-          maxLength={120}
-          gridNav={{ rowId: row.id, field: "customer" }}
-          onCommit={(v) => {
-            const trimmed = v.trim();
-            const code = lookupCustomerCodeByName(customerDirectory, trimmed);
-            onUpdate(row.id, { customer: trimmed, customerCode: code });
-          }}
-          onEnterNavigateDown={hasNextRow ? navDownSameField("customer") : undefined}
-        />
+        <div className="flex min-w-0 items-stretch gap-0.5">
+          <div className="min-w-0 flex-1">
+            <InlineTextEdit
+              value={row.customer}
+              placeholder="Khách"
+              className="text-sm font-semibold text-apple-label"
+              maxLength={120}
+              gridNav={{ rowId: row.id, field: "customer" }}
+              onCommit={(v) => {
+                const trimmed = v.trim();
+                const code = lookupCustomerCodeByName(customerDirectory, trimmed);
+                onUpdate(row.id, { customer: trimmed, customerCode: code });
+              }}
+              onEnterNavigateDown={hasNextRow ? navDownSameField("customer") : undefined}
+            />
+          </div>
+          <button
+            type="button"
+            title="Chi tiết khách (danh bạ) — sao chép"
+            aria-label="Chi tiết khách để sao chép"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenCustomerDetail(row);
+            }}
+            className="shrink-0 self-center rounded-lg border border-black/[0.08] bg-white px-1 py-1 text-apple-blue hover:bg-apple-blue/10"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              />
+            </svg>
+          </button>
+        </div>
       </td>
       {/* Note */}
       <td className="border-r border-black/[0.06] px-1 py-1 align-top">

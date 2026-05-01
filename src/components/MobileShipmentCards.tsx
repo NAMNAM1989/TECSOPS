@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Shipment, ShipmentStatus } from "../types/shipment";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { MobileDimKgModal } from "./MobileDimKgModal";
+import { CustomerShipmentDetailModal } from "./CustomerShipmentDetailModal";
 import { canPrintDimScscReport, printDimReport } from "../utils/printDimReport";
 import {
   canExportTcsDimTemplate,
@@ -30,6 +32,8 @@ interface MobileShipmentCardsProps {
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   onEdit: (s: Shipment) => void;
+  /** Danh bạ — dùng để hiển thị mã/tên chuẩn trong popup khách. */
+  customerDirectory?: readonly CustomerDirectoryEntry[];
 }
 
 export function MobileShipmentCards({
@@ -40,9 +44,11 @@ export function MobileShipmentCards({
   onDelete,
   onPrint,
   onEdit,
+  customerDirectory = [],
 }: MobileShipmentCardsProps) {
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
+  const [customerDetailRow, setCustomerDetailRow] = useState<Shipment | null>(null);
   const [mobileExtrasOpenId, setMobileExtrasOpenId] = useState<string | null>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
@@ -202,10 +208,27 @@ export function MobileShipmentCards({
                             <span
                               className="min-w-0 max-w-full font-semibold text-apple-label sm:max-w-[70%]"
                               title={row.customer}
-                              onClick={(e) => e.stopPropagation()}
                             >
-                              {row.customer}
+                              {row.customer || "Khách"}
                             </span>
+                            <button
+                              type="button"
+                              title="Chi tiết khách (danh bạ) — sao chép"
+                              aria-label="Chi tiết khách để sao chép"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCustomerDetailRow(row);
+                              }}
+                              className="shrink-0 rounded-md border border-black/[0.1] bg-white/90 p-0.5 text-apple-blue hover:bg-apple-blue/10"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                                />
+                              </svg>
+                            </button>
                             {row.note ? (
                               <span
                                 className="min-w-0 max-w-full text-apple-secondary sm:max-w-[65%]"
@@ -352,6 +375,17 @@ export function MobileShipmentCards({
             onUpdate(dimModalRow.id, payload);
             setDimModalRow(null);
           }}
+        />,
+        document.body
+      )}
+    {customerDetailRow &&
+      typeof document !== "undefined" &&
+      createPortal(
+        <CustomerShipmentDetailModal
+          open
+          shipment={customerDetailRow}
+          directory={customerDirectory}
+          onClose={() => setCustomerDetailRow(null)}
         />,
         document.body
       )}

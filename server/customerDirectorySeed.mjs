@@ -23,5 +23,6 @@ export function buildDefaultCustomerDirectoryFromSeed() {
     id: `seed-${i}`,
     code: `KH${String(i + 1).padStart(3, "0")}`,
     name,
+    parties: [],
   }));
 }

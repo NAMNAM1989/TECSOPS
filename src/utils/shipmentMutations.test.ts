@@ -1,6 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { applyShipmentMutation, type AppState } from "./shipmentMutations";
 import type { Shipment } from "../types/shipment";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+
+function cust(
+  id: string,
+  code: string,
+  name: string,
+  extra: Partial<Omit<CustomerDirectoryEntry, "id" | "code" | "name">> = {}
+): CustomerDirectoryEntry {
+  return {
+    id,
+    code,
+    name,
+    parties: [],
+    ...extra,
+  };
+}
 
 const emptyRow = (id: string): Shipment => ({
   id,
@@ -29,20 +45,24 @@ describe("applyShipmentMutation SET_CUSTOMERS", () => {
     const state: AppState = {
       version: 3,
       rows: [emptyRow("a")],
-      customers: [{ id: "1", code: "A", name: "Old" }],
+      customers: [cust("1", "A", "Old")],
     };
     const next = applyShipmentMutation(state, {
       action: "SET_CUSTOMERS",
       customers: [
-        { id: "n1", code: "M1", name: "ACME" },
-        { id: "n2", code: "M2", name: "Beta" },
+        cust("n1", "M1", "ACME"),
+        cust("n2", "M2", "Beta", {
+          parties: [{ id: "s1", type: "SHIPPER", label: "HCM", content: "Line1\nLine2" }],
+        }),
       ],
     });
     expect(next.version).toBe(4);
     expect(next.rows).toHaveLength(1);
     expect(next.customers).toEqual([
-      { id: "n1", code: "M1", name: "ACME" },
-      { id: "n2", code: "M2", name: "Beta" },
+      cust("n1", "M1", "ACME"),
+      cust("n2", "M2", "Beta", {
+        parties: [{ id: "s1", type: "SHIPPER", label: "HCM", content: "Line1\nLine2" }],
+      }),
     ]);
   });
 
@@ -51,10 +71,7 @@ describe("applyShipmentMutation SET_CUSTOMERS", () => {
     expect(() =>
       applyShipmentMutation(state, {
         action: "SET_CUSTOMERS",
-        customers: [
-          { id: "a", code: "X", name: "A" },
-          { id: "b", code: "x", name: "B" },
-        ],
+        customers: [cust("a", "X", "A"), cust("b", "x", "B")],
       })
     ).toThrow(/trùng/i);
   });

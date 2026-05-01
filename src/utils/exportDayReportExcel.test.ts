@@ -75,7 +75,14 @@ describe("prepareDayReportRows", () => {
     const rows: Shipment[] = [
       { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "ACME", customerCode: "" },
     ];
-    const wb = await buildDayReportWorkbook(rows, ymd, [{ id: "1", code: "M1", name: "ACME" }]);
+    const wb = await buildDayReportWorkbook(rows, ymd, [
+      {
+        id: "1",
+        code: "M1",
+        name: "ACME",
+        parties: [],
+      },
+    ]);
     const sh = wb.worksheets[0];
     expect(sh.getRow(1).getCell(9).value).toBe("Mã Khách Hàng");
     expect(sh.getRow(2).getCell(9).value).toBe("M1");
@@ -85,7 +92,14 @@ describe("prepareDayReportRows", () => {
     const rows: Shipment[] = [
       { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "ACME", customerCode: "OLD" },
     ];
-    const wb = await buildDayReportWorkbook(rows, ymd, [{ id: "1", code: "NEW", name: "ACME" }]);
+    const wb = await buildDayReportWorkbook(rows, ymd, [
+      {
+        id: "1",
+        code: "NEW",
+        name: "ACME",
+        parties: [],
+      },
+    ]);
     const sh = wb.worksheets[0];
     expect(sh.getRow(2).getCell(9).value).toBe("NEW");
   });

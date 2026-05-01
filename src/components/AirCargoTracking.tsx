@@ -36,6 +36,35 @@ const WAREHOUSE_FILTER_OPTIONS: { value: WarehouseFilterValue; label: string }[]
   { value: "KHO-SCSC", label: "KHO SCSC" },
 ];
 
+/** Gộp các trường thường gõ để tìm (một ô giống Google — nhiều từ cách nhau = AND). */
+function shipmentSearchHaystack(r: Shipment): string {
+  const parts = [
+    r.awb,
+    r.flight,
+    r.flightDate,
+    r.customer,
+    r.customerCode,
+    r.dest,
+    r.note,
+    r.cutoffNote,
+    r.status,
+    r.warehouse,
+    r.cutoff,
+    r.pcs != null ? String(r.pcs) : "",
+    r.kg != null ? String(r.kg) : "",
+    r.dimWeightKg != null ? String(r.dimWeightKg) : "",
+  ];
+  return parts.map((x) => String(x ?? "").toLowerCase()).join(" ");
+}
+
+function shipmentMatchesSearchQuery(r: Shipment, raw: string): boolean {
+  const q = raw.trim().toLowerCase();
+  if (!q) return true;
+  const tokens = q.split(/\s+/).filter(Boolean);
+  const hay = shipmentSearchHaystack(r);
+  return tokens.every((t) => hay.includes(t));
+}
+
 function formatWorkDateLabel(d: Date): string {
   const months = [
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
@@ -55,7 +84,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
   const [warehouseFilter, setWarehouseFilter] = useState<WarehouseFilterValue>("ALL");
-  const [customerFilter, setCustomerFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [excelExporting, setExcelExporting] = useState(false);
   const [customerDirOpen, setCustomerDirOpen] = useState(false);
 
@@ -70,28 +99,23 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   );
 
   const filteredViewRows = useMemo(() => {
-    const customerNeedle = customerFilter.trim().toLowerCase();
     return viewRows.filter((r) => {
       if (statusFilter !== "ALL" && r.status !== (statusFilter as ShipmentStatus)) return false;
       if (warehouseFilter !== "ALL" && r.warehouse !== warehouseFilter) return false;
-      if (!customerNeedle) return true;
-      return (
-        r.customer.trim().toLowerCase().includes(customerNeedle) ||
-        r.customerCode.trim().toLowerCase().includes(customerNeedle)
-      );
+      return shipmentMatchesSearchQuery(r, searchQuery);
     });
-  }, [viewRows, statusFilter, warehouseFilter, customerFilter]);
+  }, [viewRows, statusFilter, warehouseFilter, searchQuery]);
 
   useEffect(() => {
     setStatusFilter("ALL");
     setWarehouseFilter("ALL");
-    setCustomerFilter("");
+    setSearchQuery("");
   }, [selectedYmd]);
 
   const clearViewFilters = useCallback(() => {
     setStatusFilter("ALL");
     setWarehouseFilter("ALL");
-    setCustomerFilter("");
+    setSearchQuery("");
   }, []);
 
   const daysWithData = useMemo(() => {
@@ -308,61 +332,82 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       <StatusFilterBar dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
 
       {viewRows.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-black/[0.08] bg-white/90 p-3 shadow-apple backdrop-blur-sm sm:p-4">
+        <div className="mb-6 rounded-2xl border border-black/[0.08] bg-white/90 p-3 shadow-apple backdrop-blur-sm sm:p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-bold uppercase tracking-wide text-apple-secondary">Lọc kho / khách hàng</p>
-            {(warehouseFilter !== "ALL" || customerFilter.trim()) && (
+            <p className="text-xs font-bold uppercase tracking-wide text-apple-secondary">Tìm kiếm và lọc kho</p>
+            {(warehouseFilter !== "ALL" || searchQuery.trim()) && (
               <button
                 type="button"
                 onClick={() => {
                   setWarehouseFilter("ALL");
-                  setCustomerFilter("");
+                  setSearchQuery("");
                 }}
                 className="rounded-full border border-black/[0.1] bg-black/[0.04] px-2.5 py-1 text-[10px] font-semibold text-apple-label hover:bg-black/[0.07]"
               >
-                Xóa lọc kho/khách
+                Xóa lọc kho và ô tìm
               </button>
             )}
           </div>
 
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="flex min-w-0 flex-wrap gap-2">
-              {WAREHOUSE_FILTER_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setWarehouseFilter(opt.value)}
-                  className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
-                    warehouseFilter === opt.value
-                      ? "border-apple-blue/40 bg-apple-blue/10 text-apple-label shadow-[0_0_0_2px_rgba(0,122,255,0.18)]"
-                      : "border-black/[0.08] bg-white/80 text-apple-secondary hover:border-black/[0.12] hover:bg-black/[0.03]"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
-            <label className="relative min-w-0 flex-1 lg:max-w-md">
-              <span className="sr-only">Lọc khách hàng</span>
+          {/* Ô tìm kiểu Google: nổi, bóng mềm, icon trái, nút xóa phải */}
+          <div className="mb-4 flex justify-center px-0 sm:px-2">
+            <div className="relative w-full max-w-2xl">
+              <span
+                className="pointer-events-none absolute left-4 top-1/2 z-[1] -translate-y-1/2 text-[#9aa0a6]"
+                aria-hidden
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+                  />
+                </svg>
+              </span>
               <input
                 type="search"
-                value={customerFilter}
-                onChange={(e) => setCustomerFilter(e.target.value)}
-                placeholder="Lọc khách hàng hoặc mã KH..."
-                className="w-full rounded-full border border-black/[0.08] bg-white px-4 py-2.5 pr-10 text-sm font-medium text-apple-label shadow-inner outline-none transition focus:border-apple-blue/40 focus:ring-2 focus:ring-apple-blue/15"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tìm AWB, chuyến, ngày bay, khách, mã KH, đích, ghi chú…"
+                autoComplete="off"
+                spellCheck={false}
+                className="h-12 w-full rounded-full border-0 bg-white pl-12 pr-11 text-[15px] text-apple-label shadow-[0_1px_6px_rgba(32,33,36,0.28)] outline-none ring-0 transition-[box-shadow] placeholder:text-[#70757a] hover:shadow-[0_1px_6px_rgba(32,33,36,0.28),0_4px_12px_rgba(32,33,36,0.12)] focus:shadow-[0_1px_6px_rgba(32,33,36,0.28),0_8px_24px_rgba(32,33,36,0.14)]"
+                aria-label="Tìm trong các lô đang xem"
               />
-              {customerFilter && (
+              {searchQuery ? (
                 <button
                   type="button"
-                  onClick={() => setCustomerFilter("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-2 py-1 text-xs font-bold text-apple-tertiary hover:bg-black/[0.05] hover:text-apple-label"
-                  aria-label="Xóa lọc khách hàng"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[#70757a] hover:bg-black/[0.06] hover:text-apple-label"
+                  aria-label="Xóa ô tìm kiếm"
                 >
-                  ×
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
-              )}
-            </label>
+              ) : null}
+            </div>
+          </div>
+          <p className="mb-3 text-center text-[11px] text-apple-tertiary">
+            Gõ nhiều từ cách nhau — chỉ hiện lô chứa <span className="font-semibold text-apple-secondary">tất cả</span> các
+            từ (ví dụ: <span className="font-mono">180</span> <span className="font-mono">HAN</span>).
+          </p>
+
+          <div className="flex min-w-0 flex-wrap justify-center gap-2 sm:justify-start">
+            {WAREHOUSE_FILTER_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setWarehouseFilter(opt.value)}
+                className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
+                  warehouseFilter === opt.value
+                    ? "border-apple-blue/40 bg-apple-blue/10 text-apple-label shadow-[0_0_0_2px_rgba(0,122,255,0.18)]"
+                    : "border-black/[0.08] bg-white/80 text-apple-secondary hover:border-black/[0.12] hover:bg-black/[0.03]"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -391,7 +436,9 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       {viewRows.length > 0 && filteredViewRows.length === 0 && (
         <div className="mb-8 rounded-apple-lg border border-dashed border-amber-200/80 bg-amber-50/50 px-5 py-10 text-center shadow-apple backdrop-blur-sm">
           <p className="text-[17px] font-semibold text-apple-label">Không có lô nào khớp bộ lọc</p>
-          <p className="mt-2 text-sm text-apple-secondary">Thử đổi trạng thái, kho, hoặc nội dung lọc khách hàng.</p>
+          <p className="mt-2 text-sm text-apple-secondary">
+            Thử đổi trạng thái, kho, hoặc từ khóa trong ô tìm kiếm (AWB, khách, đích…).
+          </p>
           <button
             type="button"
             onClick={clearViewFilters}

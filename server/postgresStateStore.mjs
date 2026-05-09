@@ -4,6 +4,10 @@ const { Pool } = pg;
 
 const DEFAULT_STATE_KEY = "tecsops:state";
 const TABLE_NAME = "app_state";
+const CUSTOMERS_TABLE = "customers";
+const CUSTOMER_PROFILES_TABLE = "customer_print_profiles";
+const SHIPMENTS_TABLE = "shipments";
+const STATE_META_TABLE = "state_meta";
 
 function stateKey() {
   return process.env.POSTGRES_STATE_KEY || process.env.REDIS_STATE_KEY || DEFAULT_STATE_KEY;
@@ -26,6 +30,316 @@ async function ensureSchema(client) {
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS ${STATE_META_TABLE} (
+      id text PRIMARY KEY,
+      version bigint NOT NULL DEFAULT 1,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS ${CUSTOMERS_TABLE} (
+      id text PRIMARY KEY,
+      code text NOT NULL UNIQUE,
+      name text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS ${CUSTOMER_PROFILES_TABLE} (
+      customer_id text PRIMARY KEY REFERENCES ${CUSTOMERS_TABLE}(id) ON DELETE CASCADE,
+      shipper_name text NOT NULL DEFAULT '',
+      shipper_address text NOT NULL DEFAULT '',
+      shipper_phone text NOT NULL DEFAULT '',
+      shipper_email text NOT NULL DEFAULT '',
+      shipper_vat_code text NOT NULL DEFAULT '',
+      agent_name text NOT NULL DEFAULT '',
+      agent_address text NOT NULL DEFAULT '',
+      agent_phone text NOT NULL DEFAULT '',
+      agent_email text NOT NULL DEFAULT '',
+      agent_vat_code text NOT NULL DEFAULT '',
+      consignee_name text NOT NULL DEFAULT '',
+      consignee_address text NOT NULL DEFAULT '',
+      consignee_phone text NOT NULL DEFAULT '',
+      consignee_email text NOT NULL DEFAULT '',
+      notify_name text NOT NULL DEFAULT '',
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS ${SHIPMENTS_TABLE} (
+      id text PRIMARY KEY,
+      stt integer NOT NULL,
+      session_date text NOT NULL,
+      awb text NOT NULL,
+      flight text NOT NULL,
+      flight_date text NOT NULL,
+      cutoff text NOT NULL,
+      cutoff_note text NOT NULL,
+      note text NOT NULL,
+      dest text NOT NULL,
+      warehouse text NOT NULL,
+      pcs integer NULL,
+      kg double precision NULL,
+      dim_weight_kg double precision NULL,
+      dim_lines jsonb NULL,
+      dim_divisor integer NULL,
+      customer text NOT NULL,
+      customer_code text NOT NULL DEFAULT '',
+      customer_id text NULL REFERENCES ${CUSTOMERS_TABLE}(id) ON DELETE SET NULL,
+      shipper_name_print text NOT NULL DEFAULT '',
+      shipper_address_print text NOT NULL DEFAULT '',
+      shipper_phone_print text NOT NULL DEFAULT '',
+      shipper_email_print text NOT NULL DEFAULT '',
+      tax_code_print text NOT NULL DEFAULT '',
+      agent_name_print text NOT NULL DEFAULT '',
+      agent_address_print text NOT NULL DEFAULT '',
+      agent_phone_print text NOT NULL DEFAULT '',
+      agent_email_print text NOT NULL DEFAULT '',
+      agent_tax_code_print text NOT NULL DEFAULT '',
+      consignee_name_print text NOT NULL DEFAULT '',
+      consignee_address_print text NOT NULL DEFAULT '',
+      consignee_phone_print text NOT NULL DEFAULT '',
+      consignee_email_print text NOT NULL DEFAULT '',
+      notify_name_print text NOT NULL DEFAULT '',
+      status text NOT NULL
+    )
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_shipments_session_date ON ${SHIPMENTS_TABLE}(session_date)`);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_shipments_customer_id ON ${SHIPMENTS_TABLE}(customer_id)`);
+}
+
+function str(v) {
+  return typeof v === "string" ? v : "";
+}
+
+function numOrNull(v) {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function intOrNull(v) {
+  return typeof v === "number" && Number.isFinite(v) ? Math.trunc(v) : null;
+}
+
+function jsonOrNull(v) {
+  return v == null ? null : JSON.stringify(v);
+}
+
+function customerProfileFromRow(row) {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    shipperName: row.shipper_name || "",
+    shipperAddress: row.shipper_address || "",
+    shipperPhone: row.shipper_phone || "",
+    shipperEmail: row.shipper_email || "",
+    taxCode: row.shipper_vat_code || "",
+    agentName: row.agent_name || "",
+    agentAddress: row.agent_address || "",
+    agentPhone: row.agent_phone || "",
+    agentEmail: row.agent_email || "",
+    agentTaxCode: row.agent_vat_code || "",
+    consigneeName: row.consignee_name || "",
+    consigneeAddress: row.consignee_address || "",
+    consigneePhone: row.consignee_phone || "",
+    consigneeEmail: row.consignee_email || "",
+    notifyName: row.notify_name || "",
+    parties: [],
+  };
+}
+
+function shipmentFromRow(row) {
+  return {
+    id: row.id,
+    stt: row.stt,
+    sessionDate: row.session_date,
+    awb: row.awb,
+    flight: row.flight,
+    flightDate: row.flight_date,
+    cutoff: row.cutoff,
+    cutoffNote: row.cutoff_note,
+    note: row.note,
+    dest: row.dest,
+    warehouse: row.warehouse,
+    pcs: row.pcs,
+    kg: row.kg,
+    dimWeightKg: row.dim_weight_kg,
+    dimLines: row.dim_lines,
+    dimDivisor: row.dim_divisor,
+    customer: row.customer,
+    customerCode: row.customer_code || "",
+    customerId: row.customer_id || "",
+    shipperNamePrint: row.shipper_name_print || "",
+    shipperAddressPrint: row.shipper_address_print || "",
+    shipperPhonePrint: row.shipper_phone_print || "",
+    shipperEmailPrint: row.shipper_email_print || "",
+    taxCodePrint: row.tax_code_print || "",
+    agentNamePrint: row.agent_name_print || "",
+    agentAddressPrint: row.agent_address_print || "",
+    agentPhonePrint: row.agent_phone_print || "",
+    agentEmailPrint: row.agent_email_print || "",
+    agentTaxCodePrint: row.agent_tax_code_print || "",
+    consigneeNamePrint: row.consignee_name_print || "",
+    consigneeAddressPrint: row.consignee_address_print || "",
+    consigneePhonePrint: row.consignee_phone_print || "",
+    consigneeEmailPrint: row.consignee_email_print || "",
+    notifyNamePrint: row.notify_name_print || "",
+    status: row.status,
+  };
+}
+
+async function loadRelationalSnapshot(client, key) {
+  const [customerRes, shipmentRes, metaRes] = await Promise.all([
+    client.query(
+      `
+      SELECT c.id, c.code, c.name,
+             p.shipper_name, p.shipper_address, p.shipper_phone, p.shipper_email, p.shipper_vat_code,
+             p.agent_name, p.agent_address, p.agent_phone, p.agent_email, p.agent_vat_code,
+             p.consignee_name, p.consignee_address, p.consignee_phone, p.consignee_email, p.notify_name
+      FROM ${CUSTOMERS_TABLE} c
+      LEFT JOIN ${CUSTOMER_PROFILES_TABLE} p ON p.customer_id = c.id
+      ORDER BY c.code ASC, c.name ASC
+      `
+    ),
+    client.query(`SELECT * FROM ${SHIPMENTS_TABLE} ORDER BY session_date ASC, warehouse ASC, stt ASC, id ASC`),
+    client.query(`SELECT version FROM ${STATE_META_TABLE} WHERE id = $1`, [key]),
+  ]);
+  if (customerRes.rows.length === 0 && shipmentRes.rows.length === 0) return null;
+  return {
+    version: Number(metaRes.rows[0]?.version ?? 1),
+    rows: shipmentRes.rows.map(shipmentFromRow),
+    customers: customerRes.rows.map(customerProfileFromRow),
+  };
+}
+
+async function replaceRelationalSnapshot(client, key, state) {
+  const customers = Array.isArray(state.customers) ? state.customers : [];
+  const rows = Array.isArray(state.rows) ? state.rows : [];
+
+  await client.query(`DELETE FROM ${SHIPMENTS_TABLE}`);
+  await client.query(`DELETE FROM ${CUSTOMER_PROFILES_TABLE}`);
+  await client.query(`DELETE FROM ${CUSTOMERS_TABLE}`);
+
+  for (const c of customers) {
+    const customerId = str(c.id).trim();
+    if (!customerId) continue;
+    await client.query(
+      `INSERT INTO ${CUSTOMERS_TABLE} (id, code, name, updated_at) VALUES ($1,$2,$3,now())`,
+      [customerId, str(c.code), str(c.name)]
+    );
+    await client.query(
+      `
+      INSERT INTO ${CUSTOMER_PROFILES_TABLE} (
+        customer_id, shipper_name, shipper_address, shipper_phone, shipper_email, shipper_vat_code,
+        agent_name, agent_address, agent_phone, agent_email, agent_vat_code,
+        consignee_name, consignee_address, consignee_phone, consignee_email, notify_name, updated_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,
+        $7,$8,$9,$10,$11,
+        $12,$13,$14,$15,$16, now()
+      )
+      `,
+      [
+        customerId,
+        str(c.shipperName),
+        str(c.shipperAddress),
+        str(c.shipperPhone),
+        str(c.shipperEmail),
+        str(c.taxCode),
+        str(c.agentName),
+        str(c.agentAddress),
+        str(c.agentPhone),
+        str(c.agentEmail),
+        str(c.agentTaxCode),
+        str(c.consigneeName),
+        str(c.consigneeAddress),
+        str(c.consigneePhone),
+        str(c.consigneeEmail),
+        str(c.notifyName),
+      ]
+    );
+  }
+
+  for (const s of rows) {
+    await client.query(
+      `
+      INSERT INTO ${SHIPMENTS_TABLE} (
+        id, stt, session_date, awb, flight, flight_date, cutoff, cutoff_note, note, dest, warehouse,
+        pcs, kg, dim_weight_kg, dim_lines, dim_divisor,
+        customer, customer_code, customer_id,
+        shipper_name_print, shipper_address_print, shipper_phone_print, shipper_email_print, tax_code_print,
+        agent_name_print, agent_address_print, agent_phone_print, agent_email_print, agent_tax_code_print,
+        consignee_name_print, consignee_address_print, consignee_phone_print, consignee_email_print, notify_name_print,
+        status
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+        $12,$13,$14,$15::jsonb,$16,
+        $17,$18,$19,
+        $20,$21,$22,$23,$24,
+        $25,$26,$27,$28,$29,
+        $30,$31,$32,$33,$34,
+        $35
+      )
+      `,
+      [
+        str(s.id),
+        intOrNull(s.stt) ?? 0,
+        str(s.sessionDate),
+        str(s.awb),
+        str(s.flight),
+        str(s.flightDate),
+        str(s.cutoff),
+        str(s.cutoffNote),
+        str(s.note),
+        str(s.dest),
+        str(s.warehouse),
+        intOrNull(s.pcs),
+        numOrNull(s.kg),
+        numOrNull(s.dimWeightKg),
+        jsonOrNull(s.dimLines),
+        intOrNull(s.dimDivisor),
+        str(s.customer),
+        str(s.customerCode),
+        str(s.customerId) || null,
+        str(s.shipperNamePrint),
+        str(s.shipperAddressPrint),
+        str(s.shipperPhonePrint),
+        str(s.shipperEmailPrint),
+        str(s.taxCodePrint),
+        str(s.agentNamePrint),
+        str(s.agentAddressPrint),
+        str(s.agentPhonePrint),
+        str(s.agentEmailPrint),
+        str(s.agentTaxCodePrint),
+        str(s.consigneeNamePrint),
+        str(s.consigneeAddressPrint),
+        str(s.consigneePhonePrint),
+        str(s.consigneeEmailPrint),
+        str(s.notifyNamePrint),
+        str(s.status),
+      ]
+    );
+  }
+
+  await client.query(
+    `
+    INSERT INTO ${STATE_META_TABLE} (id, version, updated_at)
+    VALUES ($1,$2,now())
+    ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, updated_at = now()
+    `,
+    [key, Number(state.version || 1)]
+  );
+  await client.query(
+    `
+    INSERT INTO ${TABLE_NAME} (id, state, updated_at)
+    VALUES ($1, $2::jsonb, now())
+    ON CONFLICT (id)
+    DO UPDATE SET state = EXCLUDED.state, updated_at = now()
+    `,
+    [key, JSON.stringify(state)]
+  );
 }
 
 export function createPostgresStateStore(databaseUrl) {
@@ -50,21 +364,22 @@ export function createPostgresStateStore(databaseUrl) {
     key,
     async loadRawState() {
       return withClient(async (client) => {
+        const relational = await loadRelationalSnapshot(client, key);
+        if (relational) return relational;
         const res = await client.query(`SELECT state FROM ${TABLE_NAME} WHERE id = $1`, [key]);
         return res.rows[0]?.state ?? null;
       });
     },
     async saveState(state) {
       await withClient(async (client) => {
-        await client.query(
-          `
-          INSERT INTO ${TABLE_NAME} (id, state, updated_at)
-          VALUES ($1, $2::jsonb, now())
-          ON CONFLICT (id)
-          DO UPDATE SET state = EXCLUDED.state, updated_at = now()
-          `,
-          [key, JSON.stringify(state)]
-        );
+        await client.query("BEGIN");
+        try {
+          await replaceRelationalSnapshot(client, key, state);
+          await client.query("COMMIT");
+        } catch (e) {
+          await client.query("ROLLBACK").catch(() => {});
+          throw e;
+        }
       });
     },
     async runLocked(fn) {
@@ -73,18 +388,10 @@ export function createPostgresStateStore(databaseUrl) {
         try {
           // Advisory transaction lock avoids a race when the row has not been inserted yet.
           await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [key]);
-          const res = await client.query(`SELECT state FROM ${TABLE_NAME} WHERE id = $1 FOR UPDATE`, [key]);
-          const currentRaw = res.rows[0]?.state ?? null;
+          await client.query(`SELECT version FROM ${STATE_META_TABLE} WHERE id = $1 FOR UPDATE`, [key]);
+          const currentRaw = await loadRelationalSnapshot(client, key);
           const next = await fn(currentRaw);
-          await client.query(
-            `
-            INSERT INTO ${TABLE_NAME} (id, state, updated_at)
-            VALUES ($1, $2::jsonb, now())
-            ON CONFLICT (id)
-            DO UPDATE SET state = EXCLUDED.state, updated_at = now()
-            `,
-            [key, JSON.stringify(next)]
-          );
+          await replaceRelationalSnapshot(client, key, next);
           await client.query("COMMIT");
           return next;
         } catch (e) {

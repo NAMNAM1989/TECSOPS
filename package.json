@@ -21,6 +21,7 @@
     "backup:redis-state": "node scripts/redis-backup-state.mjs",
     "restore:redis-state": "node scripts/redis-restore-state.mjs",
     "migrate:postgres-state": "node scripts/postgres-migrate-state.mjs",
+    "migrate:customer-relations": "node scripts/migrate-customer-relations.mjs",
     "backup:postgres-state": "node scripts/postgres-backup-state.mjs",
     "restore:postgres-state": "node scripts/postgres-restore-state.mjs"
   },

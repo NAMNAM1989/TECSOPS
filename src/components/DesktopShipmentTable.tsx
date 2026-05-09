@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { lookupCustomerCodeByName } from "../utils/customerDirectoryCore";
@@ -20,9 +20,17 @@ import {
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
 import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
+import {
+  canPrintWeighReceiptScsc,
+  getScscPrintCalibration,
+  printWeighReceiptScsc,
+  resetScscPrintCalibration,
+  saveScscPrintCalibration,
+} from "../utils/printWeighReceiptScsc";
 import { WAREHOUSE_ORDER, warehouseLabel, isTcsWarehouse } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
+import { PrintCalibrationModal } from "./PrintCalibrationModal";
 
 interface Props {
   rows: Shipment[];
@@ -227,6 +235,9 @@ function ShipmentRow({
   onOpenDimModal: (s: Shipment) => void;
   onOpenCustomerDetail: (s: Shipment) => void;
 }) {
+  const [showPrintSettings, setShowPrintSettings] = useState(false);
+  const [printOffsetX, setPrintOffsetX] = useState(0);
+  const [printOffsetY, setPrintOffsetY] = useState(0);
   const bg = statusRowBg[row.status];
   const border = statusRowBorder[row.status];
   const sessionYear = parseInt(row.sessionDate.slice(0, 4), 10) || new Date().getFullYear();
@@ -253,7 +264,15 @@ function ShipmentRow({
     else focusShipmentGridCell(row.id, "dest");
   };
 
+  useEffect(() => {
+    if (!showPrintSettings) return;
+    const c = getScscPrintCalibration();
+    setPrintOffsetX(c.offsetXmm);
+    setPrintOffsetY(c.offsetYmm);
+  }, [showPrintSettings]);
+
   return (
+    <>
     <tr
       id={`shipment-row-${row.id}`}
       className={`border-b border-black/[0.06] transition-colors hover:brightness-[0.99] ${bg} ${border}`}
@@ -407,7 +426,22 @@ function ShipmentRow({
               onCommit={(v) => {
                 const trimmed = v.trim();
                 const code = lookupCustomerCodeByName(customerDirectory, trimmed);
-                onUpdate(row.id, { customer: trimmed, customerCode: code });
+                const customerId =
+                  customerDirectory.find(
+                    (e) =>
+                      e.code.trim().toLowerCase() === code.trim().toLowerCase() ||
+                      e.name.trim().toLowerCase() === trimmed.toLowerCase()
+                  )?.id ?? "";
+                onUpdate(row.id, {
+                  customer: trimmed,
+                  customerCode: code,
+                  customerId,
+                  shipperNamePrint: trimmed,
+                  shipperAddressPrint: "",
+                  shipperPhonePrint: "",
+                  shipperEmailPrint: "",
+                  taxCodePrint: "",
+                });
               }}
               onEnterNavigateDown={hasNextRow ? navDownSameField("customer") : undefined}
             />
@@ -501,6 +535,33 @@ function ShipmentRow({
               </button>
             </>
           ) : null}
+          {canPrintWeighReceiptScsc(row) ? (
+            <>
+              <button
+                type="button"
+                title="In phiếu cân (TO KHAI GỬI HÀNG – SCSC)"
+                onClick={() => printWeighReceiptScsc(row, { customerDirectory })}
+                className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-900 hover:bg-sky-100"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"
+                  />
+                </svg>
+                IN PHIEU CAN
+              </button>
+              <button
+                type="button"
+                title="Mở căn chỉnh in phiếu cân"
+                onClick={() => setShowPrintSettings(true)}
+                className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
+              >
+                Căn chỉnh in
+              </button>
+            </>
+          ) : null}
           {isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row) ? (
             <>
               <button
@@ -558,5 +619,30 @@ function ShipmentRow({
         </div>
       </td>
     </tr>
+    <PrintCalibrationModal
+      open={showPrintSettings}
+      offsetX={printOffsetX}
+      offsetY={printOffsetY}
+      onChangeOffsetX={setPrintOffsetX}
+      onChangeOffsetY={setPrintOffsetY}
+      onTestPrint={() =>
+        printWeighReceiptScsc(row, {
+          offsetXmm: printOffsetX,
+          offsetYmm: printOffsetY,
+          customerDirectory,
+        })
+      }
+      onSave={() => {
+        saveScscPrintCalibration(printOffsetX, printOffsetY);
+        setShowPrintSettings(false);
+      }}
+      onReset={() => {
+        resetScscPrintCalibration();
+        setPrintOffsetX(0);
+        setPrintOffsetY(0);
+      }}
+      onClose={() => setShowPrintSettings(false)}
+    />
+    </>
   );
 }

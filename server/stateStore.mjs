@@ -103,6 +103,7 @@ function migrateRows(rows, workDateIso) {
           : fallback,
       note: typeof r.note === "string" ? r.note : "",
       customerCode: typeof r.customerCode === "string" ? r.customerCode : "",
+      customerId: typeof r.customerId === "string" ? r.customerId : "",
       dimWeightKg:
         r.dimWeightKg === null || typeof r.dimWeightKg === "number" ? r.dimWeightKg : null,
       dimLines: normalizeDimLines(r.dimLines),

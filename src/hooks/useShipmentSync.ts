@@ -14,6 +14,7 @@ import {
   type AppState,
   type ShipmentMutation,
 } from "../utils/shipmentMutations";
+import { debugWarn } from "../utils/debugLog";
 
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
@@ -62,8 +63,9 @@ export function useShipmentSync(fallback: Fallback) {
         apiOkRef.current = true;
         setState(parsed);
         setStatus("degraded");
-      } catch {
+      } catch (e) {
         if (cancelled) return;
+        debugWarn("sync:/api/state", e);
         apiOkRef.current = false;
         setSocketConnected(false);
         setState(offlineBootstrapState(fallbackRef.current.rows));
@@ -84,19 +86,23 @@ export function useShipmentSync(fallback: Fallback) {
       socketRef.current = socket;
 
       const mergeIfNewer = (next: AppState) => {
+        if (cancelled) return;
         setState((prev) => pickNewerState(prev, next));
       };
 
       const onSync = (payload: unknown) => {
+        if (cancelled) return;
         const next = parseAppState(payload);
         if (next) mergeIfNewer(next);
       };
 
       socket.on("connect", () => {
+        if (cancelled) return;
         setSocketConnected(true);
         setStatus("live");
       });
       socket.on("disconnect", () => {
+        if (cancelled) return;
         setSocketConnected(false);
         if (apiOkRef.current) setStatus("degraded");
       });
@@ -144,6 +150,7 @@ export function useShipmentSync(fallback: Fallback) {
     if (!res.ok) {
       const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
       const msg = typeof o.error === "string" ? o.error : res.statusText;
+      debugWarn("sync:mutation", res.status, msg);
       throw new Error(msg);
     }
     const next = parseAppState(body);

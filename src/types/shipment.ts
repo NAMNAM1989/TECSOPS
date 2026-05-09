@@ -40,6 +40,27 @@ export interface Shipment {
   customer: string;
   /** Mã khách hàng (danh bạ) — có thể rỗng với dữ liệu cũ */
   customerCode: string;
+  /** Khóa ngoại khách hàng (database) */
+  customerId?: string;
+  /**
+   * Dữ liệu shipper dùng riêng cho in phiếu cân.
+   * Nếu rỗng, hệ thống sẽ fallback theo customer/customerCode + danh bạ.
+   */
+  shipperNamePrint?: string;
+  shipperAddressPrint?: string;
+  shipperPhonePrint?: string;
+  shipperEmailPrint?: string;
+  taxCodePrint?: string;
+  agentNamePrint?: string;
+  agentAddressPrint?: string;
+  agentPhonePrint?: string;
+  agentEmailPrint?: string;
+  agentTaxCodePrint?: string;
+  consigneeNamePrint?: string;
+  consigneeAddressPrint?: string;
+  consigneePhonePrint?: string;
+  consigneeEmailPrint?: string;
+  notifyNamePrint?: string;
   status: ShipmentStatus;
 }
 

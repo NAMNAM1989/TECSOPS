@@ -69,6 +69,22 @@ function isShipmentShape(o: unknown): o is Omit<Shipment, "sessionDate"> & { ses
     typeof r.dest === "string" &&
     typeof r.customer === "string" &&
     (r.customerCode === undefined || typeof r.customerCode === "string") &&
+    (r.customerId === undefined || typeof r.customerId === "string") &&
+    (r.shipperNamePrint === undefined || typeof r.shipperNamePrint === "string") &&
+    (r.shipperAddressPrint === undefined || typeof r.shipperAddressPrint === "string") &&
+    (r.shipperPhonePrint === undefined || typeof r.shipperPhonePrint === "string") &&
+    (r.shipperEmailPrint === undefined || typeof r.shipperEmailPrint === "string") &&
+    (r.taxCodePrint === undefined || typeof r.taxCodePrint === "string") &&
+    (r.agentNamePrint === undefined || typeof r.agentNamePrint === "string") &&
+    (r.agentAddressPrint === undefined || typeof r.agentAddressPrint === "string") &&
+    (r.agentPhonePrint === undefined || typeof r.agentPhonePrint === "string") &&
+    (r.agentEmailPrint === undefined || typeof r.agentEmailPrint === "string") &&
+    (r.agentTaxCodePrint === undefined || typeof r.agentTaxCodePrint === "string") &&
+    (r.consigneeNamePrint === undefined || typeof r.consigneeNamePrint === "string") &&
+    (r.consigneeAddressPrint === undefined || typeof r.consigneeAddressPrint === "string") &&
+    (r.consigneePhonePrint === undefined || typeof r.consigneePhonePrint === "string") &&
+    (r.consigneeEmailPrint === undefined || typeof r.consigneeEmailPrint === "string") &&
+    (r.notifyNamePrint === undefined || typeof r.notifyNamePrint === "string") &&
     typeof r.status === "string" &&
     RAW_STATUS_OK.has(r.status) &&
     WAREHOUSES.includes(r.warehouse as Warehouse) &&
@@ -118,6 +134,22 @@ export function loadRows(): Shipment[] | null {
         sessionDate: sd,
         note: typeof item.note === "string" ? item.note : "",
         customerCode: typeof item.customerCode === "string" ? item.customerCode : "",
+        customerId: typeof item.customerId === "string" ? item.customerId : "",
+        shipperNamePrint: typeof item.shipperNamePrint === "string" ? item.shipperNamePrint : "",
+        shipperAddressPrint: typeof item.shipperAddressPrint === "string" ? item.shipperAddressPrint : "",
+        shipperPhonePrint: typeof item.shipperPhonePrint === "string" ? item.shipperPhonePrint : "",
+        shipperEmailPrint: typeof item.shipperEmailPrint === "string" ? item.shipperEmailPrint : "",
+        taxCodePrint: typeof item.taxCodePrint === "string" ? item.taxCodePrint : "",
+        agentNamePrint: typeof item.agentNamePrint === "string" ? item.agentNamePrint : "",
+        agentAddressPrint: typeof item.agentAddressPrint === "string" ? item.agentAddressPrint : "",
+        agentPhonePrint: typeof item.agentPhonePrint === "string" ? item.agentPhonePrint : "",
+        agentEmailPrint: typeof item.agentEmailPrint === "string" ? item.agentEmailPrint : "",
+        agentTaxCodePrint: typeof item.agentTaxCodePrint === "string" ? item.agentTaxCodePrint : "",
+        consigneeNamePrint: typeof item.consigneeNamePrint === "string" ? item.consigneeNamePrint : "",
+        consigneeAddressPrint: typeof item.consigneeAddressPrint === "string" ? item.consigneeAddressPrint : "",
+        consigneePhonePrint: typeof item.consigneePhonePrint === "string" ? item.consigneePhonePrint : "",
+        consigneeEmailPrint: typeof item.consigneeEmailPrint === "string" ? item.consigneeEmailPrint : "",
+        notifyNamePrint: typeof item.notifyNamePrint === "string" ? item.notifyNamePrint : "",
         dimWeightKg,
         dimLines,
         dimDivisor,

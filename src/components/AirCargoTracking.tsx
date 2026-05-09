@@ -13,6 +13,8 @@ import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { ShipmentBookingForm } from "./ShipmentBookingForm";
 import { CustomerDirectoryManager } from "./CustomerDirectoryManager";
+import { UnmatchedCustomerReportModal } from "./UnmatchedCustomerReportModal";
+import type { UnmatchedCustomerRow } from "../utils/fetchAppStateRows";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
@@ -21,6 +23,7 @@ import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
+import { debugError } from "../utils/debugLog";
 
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment) => void;
@@ -87,6 +90,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [excelExporting, setExcelExporting] = useState(false);
   const [customerDirOpen, setCustomerDirOpen] = useState(false);
+  const [unmatchedReportOpen, setUnmatchedReportOpen] = useState(false);
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -133,7 +137,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       try {
         return await mutate(cmd);
       } catch (e) {
-        console.error(e);
+        debugError("ui:mutate", e);
         window.alert(e instanceof Error ? e.message : "Không gửi được thay đổi lên máy chủ.");
         return null;
       }
@@ -208,7 +212,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       }
       await downloadDayReportExcel(rowsForExport, selectedYmd, customersForExport);
     } catch (e) {
-      console.error(e);
+      debugError("ui:excel-day", e);
       window.alert(e instanceof Error ? e.message : "Không tạo được file Excel.");
     } finally {
       setExcelExporting(false);
@@ -222,6 +226,31 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   }, []);
 
   const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
+
+  const applySuggestedCustomerLinks = useCallback(
+    async (rows: UnmatchedCustomerRow[]): Promise<{ updated: number; failed: number }> => {
+      let updated = 0;
+      let failed = 0;
+      for (const row of rows) {
+        try {
+          await mutate({
+            action: "UPDATE",
+            id: row.id,
+            patch: {
+              customerId: row.suggestedCustomerId,
+              customerCode: row.suggestedCustomerCode || row.customerCode,
+            },
+          });
+          updated += 1;
+        } catch (e) {
+          debugError("ui:customer-unmatched-apply", row.id, e);
+          failed += 1;
+        }
+      }
+      return { updated, failed };
+    },
+    [mutate]
+  );
 
   if (status === "loading" || !state) {
     return (
@@ -247,9 +276,17 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
                 type="button"
                 onClick={() => setCustomerDirOpen(true)}
                 className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label shadow-apple transition-colors hover:bg-black/[0.03]"
-                title="Quản lý khách hàng và mẫu copy (lưu trên máy chủ)"
+                title="Quản lý khách hàng và hồ sơ in phiếu cân"
               >
-                Khách hàng / Mẫu copy
+                Khách hàng / Hồ sơ in
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnmatchedReportOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-semibold text-red-800 shadow-apple transition-colors hover:bg-red-100"
+                title="Xem các shipment chưa map customer_id"
+              >
+                Unmatched customer_id
               </button>
               <button
                 type="button"
@@ -473,6 +510,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
       <StickyMobileActions
         selected={selected}
+        customerDirectory={state.customers}
         onDelete={() => selected && onDelete(selected.id)}
         onPrint={() => selected && onRequestPrint(selected)}
         onAdd={() => {
@@ -514,6 +552,11 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           /** Dùng `mutate` (không qua `runMutate`) để lỗi ném lên modal — `runMutate` nuốt lỗi và `onClose` vẫn chạy. */
           await mutate({ action: "SET_CUSTOMERS", customers: next });
         }}
+      />
+      <UnmatchedCustomerReportModal
+        open={unmatchedReportOpen}
+        onClose={() => setUnmatchedReportOpen(false)}
+        onApplySuggestions={applySuggestedCustomerLinks}
       />
     </div>
   );

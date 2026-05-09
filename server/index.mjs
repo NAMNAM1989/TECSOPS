@@ -79,6 +79,61 @@ app.get("/api/state", async (_req, res) => {
   }
 });
 
+function normalizeText(v) {
+  return String(v ?? "").trim().toLowerCase();
+}
+
+function buildUnmatchedCustomerRows(state) {
+  const rows = Array.isArray(state?.rows) ? state.rows : [];
+  const customers = Array.isArray(state?.customers) ? state.customers : [];
+  const byId = new Map(customers.map((c) => [normalizeText(c.id), c]));
+  const byCode = new Map(customers.map((c) => [normalizeText(c.code), c]));
+  const byName = new Map(customers.map((c) => [normalizeText(c.name), c]));
+
+  const out = [];
+  for (const r of rows) {
+    const customerId = normalizeText(r.customerId);
+    if (customerId && byId.has(customerId)) continue;
+
+    const code = normalizeText(r.customerCode);
+    const name = normalizeText(r.customer);
+    const suggested = byCode.get(code) ?? byName.get(name) ?? byCode.get(name) ?? null;
+    out.push({
+      id: r.id,
+      awb: r.awb,
+      sessionDate: r.sessionDate,
+      warehouse: r.warehouse,
+      flight: r.flight,
+      flightDate: r.flightDate,
+      customer: r.customer,
+      customerCode: r.customerCode,
+      customerId: r.customerId || "",
+      suggestedCustomerId: suggested?.id ?? "",
+      suggestedCustomerCode: suggested?.code ?? "",
+      suggestedCustomerName: suggested?.name ?? "",
+    });
+  }
+  return out;
+}
+
+app.get("/api/reports/customer-unmatched", async (_req, res) => {
+  try {
+    const state = await loadState();
+    const unmatched = buildUnmatchedCustomerRows(state);
+    res.json({
+      generatedAt: new Date().toISOString(),
+      totalRows: Array.isArray(state.rows) ? state.rows.length : 0,
+      unmatchedCount: unmatched.length,
+      rows: unmatched,
+    });
+  } catch (e) {
+    console.error("[api/reports/customer-unmatched]", e);
+    res.status(500).json({
+      error: isProduction ? "Failed to build unmatched report" : String(e?.message ?? e),
+    });
+  }
+});
+
 app.post("/api/mutation", async (req, res) => {
   try {
     const body = req.body;
@@ -90,7 +145,9 @@ app.post("/api/mutation", async (req, res) => {
     io.emit("sync", next);
     res.json(next);
   } catch (e) {
-    res.status(400).json({ error: String(e.message) });
+    console.error("[api/mutation]", e);
+    const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
+    res.status(400).json({ error: msg || "Mutation failed" });
   }
 });
 

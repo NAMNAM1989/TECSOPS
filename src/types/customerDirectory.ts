@@ -14,5 +14,21 @@ export type CustomerDirectoryEntry = {
   id: string;
   code: string;
   name: string;
+  /** Hồ sơ chuẩn dùng để đổ vào phiếu cân SCSC. */
+  shipperName?: string;
+  shipperAddress?: string;
+  shipperPhone?: string;
+  shipperEmail?: string;
+  taxCode?: string;
+  agentName?: string;
+  agentAddress?: string;
+  agentPhone?: string;
+  agentEmail?: string;
+  agentTaxCode?: string;
+  consigneeName?: string;
+  consigneeAddress?: string;
+  consigneePhone?: string;
+  consigneeEmail?: string;
+  notifyName?: string;
   parties: CustomerParty[];
 };

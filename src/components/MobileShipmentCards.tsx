@@ -11,6 +11,13 @@ import {
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
 import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
+import {
+  canPrintWeighReceiptScsc,
+  getScscPrintCalibration,
+  printWeighReceiptScsc,
+  resetScscPrintCalibration,
+  saveScscPrintCalibration,
+} from "../utils/printWeighReceiptScsc";
 import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
@@ -18,6 +25,7 @@ import { statusCardBg } from "./statusStyles";
 import { WAREHOUSE_ORDER, warehouseLabel, isTcsWarehouse } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
+import { PrintCalibrationModal } from "./PrintCalibrationModal";
 
 const SWIPE_THRESHOLD = 48;
 /** Vuốt ngang bị bỏ qua nếu lệch dọc lớn hơn (coi như cuộn dọc). */
@@ -50,6 +58,10 @@ export function MobileShipmentCards({
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const [customerDetailRow, setCustomerDetailRow] = useState<Shipment | null>(null);
   const [mobileExtrasOpenId, setMobileExtrasOpenId] = useState<string | null>(null);
+  const [showPrintSettings, setShowPrintSettings] = useState(false);
+  const [calibrationTarget, setCalibrationTarget] = useState<Shipment | null>(null);
+  const [printOffsetX, setPrintOffsetX] = useState(0);
+  const [printOffsetY, setPrintOffsetY] = useState(0);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
@@ -71,6 +83,14 @@ export function MobileShipmentCards({
     },
     []
   );
+
+  const openPrintSettings = useCallback((row: Shipment) => {
+    const c = getScscPrintCalibration();
+    setPrintOffsetX(c.offsetXmm);
+    setPrintOffsetY(c.offsetYmm);
+    setCalibrationTarget(row);
+    setShowPrintSettings(true);
+  }, []);
 
   return (
     <>
@@ -298,6 +318,7 @@ export function MobileShipmentCards({
                               </button>
                             </div>
                             {(canPrintDimScscReport(row) ||
+                              canPrintWeighReceiptScsc(row) ||
                               (isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row))) && (
                               <div>
                                 <button
@@ -326,6 +347,24 @@ export function MobileShipmentCards({
                                           className="min-h-11 min-w-0 flex-1 rounded-xl border border-emerald-600/35 bg-emerald-50 py-2.5 text-[12px] font-semibold text-emerald-900"
                                         >
                                           LIST SCSC
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                    {canPrintWeighReceiptScsc(row) ? (
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => printWeighReceiptScsc(row, { customerDirectory })}
+                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-sky-600/35 bg-sky-50 py-2.5 text-[12px] font-semibold text-sky-900 active:bg-sky-100"
+                                        >
+                                          In Phiếu Cân SCSC
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => openPrintSettings(row)}
+                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-amber-400/40 bg-amber-50 py-2.5 text-[12px] font-semibold text-amber-900 active:bg-amber-100"
+                                        >
+                                          Căn chỉnh in
                                         </button>
                                       </div>
                                     ) : null}
@@ -389,6 +428,31 @@ export function MobileShipmentCards({
         />,
         document.body
       )}
+    <PrintCalibrationModal
+      open={showPrintSettings}
+      offsetX={printOffsetX}
+      offsetY={printOffsetY}
+      onChangeOffsetX={setPrintOffsetX}
+      onChangeOffsetY={setPrintOffsetY}
+      onTestPrint={() => {
+        if (!calibrationTarget) return;
+        printWeighReceiptScsc(calibrationTarget, {
+          offsetXmm: printOffsetX,
+          offsetYmm: printOffsetY,
+          customerDirectory,
+        });
+      }}
+      onSave={() => {
+        saveScscPrintCalibration(printOffsetX, printOffsetY);
+        setShowPrintSettings(false);
+      }}
+      onReset={() => {
+        resetScscPrintCalibration();
+        setPrintOffsetX(0);
+        setPrintOffsetY(0);
+      }}
+      onClose={() => setShowPrintSettings(false)}
+    />
     </>
   );
 }
@@ -401,6 +465,8 @@ interface StickyMobileActionsProps {
   onEdit: () => void;
   onPrintDim?: () => void;
   onDownloadScscDimList?: () => void;
+  /** Danh bạ — dùng cho in phiếu cân SCSC (lookup shipper chi tiết). */
+  customerDirectory?: readonly CustomerDirectoryEntry[];
 }
 
 export function StickyMobileActions({
@@ -411,6 +477,7 @@ export function StickyMobileActions({
   onEdit,
   onPrintDim,
   onDownloadScscDimList,
+  customerDirectory = [],
 }: StickyMobileActionsProps) {
   return (
     <div className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
@@ -465,6 +532,15 @@ export function StickyMobileActions({
                     LIST SCSC
                   </button>
                 </div>
+              ) : null}
+              {canPrintWeighReceiptScsc(selected) ? (
+                <button
+                  type="button"
+                  onClick={() => printWeighReceiptScsc(selected, { customerDirectory })}
+                  className="w-full rounded-full border border-sky-600/40 bg-sky-50 py-2.5 text-sm font-semibold text-sky-900 shadow-sm active:scale-[0.98]"
+                >
+                  In Phiếu Cân SCSC
+                </button>
               ) : null}
               {isTcsWarehouse(selected.warehouse) && canExportTcsDimTemplate(selected) ? (
                 <div className="flex gap-2">

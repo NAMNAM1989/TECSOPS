@@ -1,13 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CustomerDirectoryEntry, CustomerParty, CustomerPartyType } from "../types/customerDirectory";
+import { useEffect, useMemo, useState } from "react";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { assertCustomerDirectoryValid } from "../utils/customerDirectoryCore";
 import {
-  buildCustomerPartyBlock,
   clampCustomerDirectoryEntry,
-  CUSTOMER_PARTY_TYPES,
-  emptyCustomerParty,
   emptyCustomerProfileRow,
-  partyTypeLabel,
 } from "../utils/customerDirectoryProfile";
 
 type Props = {
@@ -24,30 +20,11 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-async function copyToClipboard(text: string): Promise<boolean> {
-  const t = text.trim();
-  if (!t) return false;
-  try {
-    await navigator.clipboard.writeText(t);
-    return true;
-  } catch {
-    window.alert("Không sao chép được — thử chọn văn bản thủ công.");
-    return false;
-  }
-}
-
-function partyPreview(p: CustomerParty): string {
-  const text = p.content.trim().replace(/\s+/g, " ");
-  if (!text) return "Chưa nhập nội dung";
-  return text.length > 90 ? `${text.slice(0, 90)}…` : text;
-}
-
 export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Props) {
   const [draft, setDraft] = useState<CustomerDirectoryEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -62,27 +39,13 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return draft;
-    return draft.filter((e) => {
-      const partyHit = e.parties.some(
-        (p) =>
-          p.type.toLowerCase().includes(needle) ||
-          p.label.toLowerCase().includes(needle) ||
-          p.content.toLowerCase().includes(needle)
-      );
-      return (
-        e.code.toLowerCase().includes(needle) ||
-        e.name.toLowerCase().includes(needle) ||
-        partyHit
-      );
-    });
+    return draft.filter((e) => e.code.toLowerCase().includes(needle) || e.name.toLowerCase().includes(needle));
   }, [draft, query]);
 
-  const flashCopied = useCallback((key: string) => {
-    setCopiedKey(key);
-    window.setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1600);
-  }, []);
-
-  function updateCustomer(id: string, patch: Partial<Omit<CustomerDirectoryEntry, "id" | "parties">>) {
+  function updateCustomer(
+    id: string,
+    patch: Partial<Omit<CustomerDirectoryEntry, "id" | "parties">>
+  ) {
     setDraft((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
@@ -98,37 +61,6 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
       if (selectedId === id) setSelectedId(next[0]?.id ?? null);
       return next;
     });
-  }
-
-  function addParty(customerId: string, type: CustomerPartyType) {
-    setDraft((rows) =>
-      rows.map((row) =>
-        row.id === customerId
-          ? { ...row, parties: [...row.parties, emptyCustomerParty(type)] }
-          : row
-      )
-    );
-  }
-
-  function updateParty(customerId: string, partyId: string, patch: Partial<Omit<CustomerParty, "id">>) {
-    setDraft((rows) =>
-      rows.map((row) =>
-        row.id === customerId
-          ? {
-              ...row,
-              parties: row.parties.map((p) => (p.id === partyId ? { ...p, ...patch } : p)),
-            }
-          : row
-      )
-    );
-  }
-
-  function removeParty(customerId: string, partyId: string) {
-    setDraft((rows) =>
-      rows.map((row) =>
-        row.id === customerId ? { ...row, parties: row.parties.filter((p) => p.id !== partyId) } : row
-      )
-    );
   }
 
   async function handleSave() {
@@ -165,7 +97,7 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
             <h2 id="customer-manager-title" className="text-lg font-semibold tracking-tight text-apple-label">
               Khách hàng
             </h2>
-            <p className="mt-1 text-xs text-apple-secondary">Chọn khách để tạo nhiều SHIPPER / CNEE / NOTIFY.</p>
+            <p className="mt-1 text-xs text-apple-secondary">Nhập hồ sơ in phiếu cân chuẩn cho từng khách.</p>
             <input
               type="search"
               value={query}
@@ -213,7 +145,7 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
                 {selected ? selected.name || "Khách mới" : "Chưa chọn khách"}
               </h3>
               <p className="mt-1 text-xs text-apple-secondary">
-                Lưu các đoạn nguyên văn cần copy. Một khách có thể có nhiều mẫu cùng loại.
+                Booking sẽ ưu tiên lấy dữ liệu ở đây để in phiếu cân chính xác.
               </p>
             </div>
             <button
@@ -257,76 +189,72 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
                   </div>
                 </section>
 
-                {CUSTOMER_PARTY_TYPES.map((type) => {
-                  const group = selected.parties.filter((p) => p.type === type);
-                  return (
-                    <section key={type} className="rounded-2xl border border-black/[0.08] bg-white p-3">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <h4 className="text-sm font-bold text-apple-label">{partyTypeLabel(type)}</h4>
-                          <p className="text-[11px] text-apple-tertiary">{group.length} mẫu</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => addParty(selected.id, type)}
-                          className="rounded-full bg-apple-blue px-3 py-1.5 text-xs font-semibold text-white hover:bg-apple-blue-hover"
-                        >
-                          + {partyTypeLabel(type)}
-                        </button>
-                      </div>
+                <section className="rounded-2xl border border-apple-blue/20 bg-apple-blue/5 p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-apple-blue">
+                    Thông tin in phiếu cân (ưu tiên)
+                  </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    <input
+                      value={selected.shipperName ?? ""}
+                      onChange={(e) => updateCustomer(selected.id, { shipperName: e.target.value })}
+                      className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                      placeholder="Tên người gửi in phiếu cân"
+                    />
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <input
+                        value={selected.shipperPhone ?? ""}
+                        onChange={(e) => updateCustomer(selected.id, { shipperPhone: e.target.value })}
+                        className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                        placeholder="Số điện thoại"
+                      />
+                      <input
+                        value={selected.shipperEmail ?? ""}
+                        onChange={(e) => updateCustomer(selected.id, { shipperEmail: e.target.value })}
+                        className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                        placeholder="Email người gửi"
+                      />
+                      <input
+                        value={selected.taxCode ?? ""}
+                        onChange={(e) => updateCustomer(selected.id, { taxCode: e.target.value })}
+                        className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                        placeholder="Mã số thuế"
+                      />
+                    </div>
+                    <textarea
+                      value={selected.shipperAddress ?? ""}
+                      onChange={(e) => updateCustomer(selected.id, { shipperAddress: e.target.value })}
+                      rows={2}
+                      className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                      placeholder="Địa chỉ người gửi"
+                    />
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-2 border-t border-black/[0.06] pt-2">
+                    <p className="text-[11px] font-semibold uppercase text-apple-secondary">Agent</p>
+                    <input value={selected.agentName ?? ""} onChange={(e) => updateCustomer(selected.id, { agentName: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Tên agent" />
+                    <textarea value={selected.agentAddress ?? ""} onChange={(e) => updateCustomer(selected.id, { agentAddress: e.target.value })} rows={2} className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Địa chỉ agent" />
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      <input value={selected.agentPhone ?? ""} onChange={(e) => updateCustomer(selected.id, { agentPhone: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="SĐT agent" />
+                      <input value={selected.agentEmail ?? ""} onChange={(e) => updateCustomer(selected.id, { agentEmail: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Email agent" />
+                      <input value={selected.agentTaxCode ?? ""} onChange={(e) => updateCustomer(selected.id, { agentTaxCode: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="VAT code agent" />
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-2 border-t border-black/[0.06] pt-2">
+                    <p className="text-[11px] font-semibold uppercase text-apple-secondary">Consignee / Notify</p>
+                    <input value={selected.consigneeName ?? ""} onChange={(e) => updateCustomer(selected.id, { consigneeName: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Tên consignee" />
+                    <textarea value={selected.consigneeAddress ?? ""} onChange={(e) => updateCustomer(selected.id, { consigneeAddress: e.target.value })} rows={2} className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Địa chỉ consignee" />
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      <input value={selected.consigneePhone ?? ""} onChange={(e) => updateCustomer(selected.id, { consigneePhone: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="SĐT consignee" />
+                      <input value={selected.consigneeEmail ?? ""} onChange={(e) => updateCustomer(selected.id, { consigneeEmail: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Email consignee" />
+                      <input value={selected.notifyName ?? ""} onChange={(e) => updateCustomer(selected.id, { notifyName: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Notify" />
+                    </div>
+                  </div>
+                </section>
 
-                      {group.length === 0 ? (
-                        <p className="rounded-xl border border-dashed border-black/[0.12] bg-apple-bg/50 px-3 py-4 text-center text-xs text-apple-tertiary">
-                          Chưa có mẫu {partyTypeLabel(type)}.
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          {group.map((party) => {
-                            const copyKey = `${selected.id}:${party.id}`;
-                            return (
-                              <div key={party.id} className="rounded-2xl border border-black/[0.06] bg-apple-bg/40 p-2.5">
-                                <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                                  <input
-                                    value={party.label}
-                                    onChange={(e) => updateParty(selected.id, party.id, { label: e.target.value })}
-                                    className="min-w-0 flex-1 rounded-xl border border-black/[0.08] bg-white px-2.5 py-2 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
-                                    placeholder={`Tên mẫu ${partyTypeLabel(type)} (VD: HCM, JAPAN...)`}
-                                  />
-                                  <button
-                                    type="button"
-                                    disabled={!party.content.trim()}
-                                    onClick={async () => {
-                                      const ok = await copyToClipboard(buildCustomerPartyBlock(party));
-                                      if (ok) flashCopied(copyKey);
-                                    }}
-                                    className="rounded-full bg-apple-blue px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-black/[0.12]"
-                                  >
-                                    {copiedKey === copyKey ? "Đã chép" : "Copy"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeParty(selected.id, party.id)}
-                                    className="rounded-full px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
-                                  >
-                                    Xóa
-                                  </button>
-                                </div>
-                                <textarea
-                                  value={party.content}
-                                  onChange={(e) => updateParty(selected.id, party.id, { content: e.target.value })}
-                                  rows={4}
-                                  className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 font-mono text-xs leading-relaxed text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
-                                  placeholder={`Dán nội dung ${partyTypeLabel(type)} cần copy...`}
-                                />
-                                <p className="mt-1 truncate text-[11px] text-apple-tertiary">{partyPreview(party)}</p>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </section>
-                  );
-                })}
+                <section className="rounded-2xl border border-black/[0.08] bg-white p-3">
+                  <p className="text-xs text-apple-secondary">
+                    Đã bỏ module copy/dán thông tin theo yêu cầu. Danh bạ khách hàng hiện chỉ giữ dữ liệu in phiếu cân có cấu trúc.
+                  </p>
+                </section>
               </div>
             ) : (
               <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-black/[0.12] bg-apple-bg/50 p-8 text-center text-sm text-apple-tertiary">

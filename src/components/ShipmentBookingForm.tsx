@@ -15,7 +15,7 @@ import {
   ymdToDdMon,
 } from "../utils/bookingDateParse";
 import { deriveAutoWorkflowStatus, isAutoWorkflowStatus } from "../utils/shipmentWorkflowStatus";
-import { lookupCustomerCodeByName } from "../utils/customerDirectoryCore";
+import { lookupCustomerCodeByName, lookupCustomerEntryByName } from "../utils/customerDirectoryCore";
 
 type BaseProps = {
   sessionDateYmd: string;
@@ -58,6 +58,22 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   const [warehouse, setWarehouse] = useState<Warehouse>("TECS-TCS");
   const [customer, setCustomer] = useState("");
   const [customerCode, setCustomerCode] = useState("");
+  const [customerId, setCustomerId] = useState("");
+  const [shipperNamePrint, setShipperNamePrint] = useState("");
+  const [shipperAddressPrint, setShipperAddressPrint] = useState("");
+  const [shipperPhonePrint, setShipperPhonePrint] = useState("");
+  const [shipperEmailPrint, setShipperEmailPrint] = useState("");
+  const [taxCodePrint, setTaxCodePrint] = useState("");
+  const [agentNamePrint, setAgentNamePrint] = useState("");
+  const [agentAddressPrint, setAgentAddressPrint] = useState("");
+  const [agentPhonePrint, setAgentPhonePrint] = useState("");
+  const [agentEmailPrint, setAgentEmailPrint] = useState("");
+  const [agentTaxCodePrint, setAgentTaxCodePrint] = useState("");
+  const [consigneeNamePrint, setConsigneeNamePrint] = useState("");
+  const [consigneeAddressPrint, setConsigneeAddressPrint] = useState("");
+  const [consigneePhonePrint, setConsigneePhonePrint] = useState("");
+  const [consigneeEmailPrint, setConsigneeEmailPrint] = useState("");
+  const [notifyNamePrint, setNotifyNamePrint] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [note, setNote] = useState("");
@@ -94,6 +110,22 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     setWarehouse(editShipment.warehouse);
     setCustomer(editShipment.customer);
     setCustomerCode((editShipment.customerCode ?? "").trim());
+    setCustomerId((editShipment.customerId ?? "").trim());
+    setShipperNamePrint((editShipment.shipperNamePrint ?? "").trim());
+    setShipperAddressPrint((editShipment.shipperAddressPrint ?? "").trim());
+    setShipperPhonePrint((editShipment.shipperPhonePrint ?? "").trim());
+    setShipperEmailPrint((editShipment.shipperEmailPrint ?? "").trim());
+    setTaxCodePrint((editShipment.taxCodePrint ?? "").trim());
+    setAgentNamePrint((editShipment.agentNamePrint ?? "").trim());
+    setAgentAddressPrint((editShipment.agentAddressPrint ?? "").trim());
+    setAgentPhonePrint((editShipment.agentPhonePrint ?? "").trim());
+    setAgentEmailPrint((editShipment.agentEmailPrint ?? "").trim());
+    setAgentTaxCodePrint((editShipment.agentTaxCodePrint ?? "").trim());
+    setConsigneeNamePrint((editShipment.consigneeNamePrint ?? "").trim());
+    setConsigneeAddressPrint((editShipment.consigneeAddressPrint ?? "").trim());
+    setConsigneePhonePrint((editShipment.consigneePhonePrint ?? "").trim());
+    setConsigneeEmailPrint((editShipment.consigneeEmailPrint ?? "").trim());
+    setNotifyNamePrint((editShipment.notifyNamePrint ?? "").trim());
     setCustomerSearch("");
     setNote(editShipment.note ?? "");
     setDimKg(editShipment.dimWeightKg != null ? String(editShipment.dimWeightKg) : "");
@@ -169,8 +201,10 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     Boolean(
       customer &&
         customerCode &&
+        customerId &&
         directory.some(
           (e) =>
+            e.id.trim() === customerId.trim() &&
             e.code.trim() === customerCode.trim() &&
             e.name.trim() === customer.trim()
         )
@@ -239,6 +273,79 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
 
     e.preventDefault();
     focusNextFrom(e.currentTarget);
+  }
+
+  function normalizePrintText(v: string): string {
+    return v.replace(/\s+/g, " ").trim();
+  }
+
+  function extractDirectoryPrintInfo(entry: CustomerDirectoryEntry): {
+    address: string;
+    phone: string;
+    taxCode: string;
+  } {
+    if (entry.shipperAddress?.trim() || entry.shipperPhone?.trim() || entry.taxCode?.trim()) {
+      return {
+        address: normalizePrintText(entry.shipperAddress ?? "").slice(0, 110),
+        phone: normalizePrintText(entry.shipperPhone ?? "").slice(0, 24),
+        taxCode: normalizePrintText(entry.taxCode ?? "").slice(0, 24),
+      };
+    }
+    const partiesText = entry.parties.map((p) => p.content).join("\n");
+    const shipperParty = entry.parties.find((p) => p.type === "SHIPPER");
+    const address = normalizePrintText(shipperParty?.content ?? "");
+    const phoneMatch =
+      partiesText.match(/(?:SĐT|SDT|ĐT|DT|TEL|PHONE|Tel)[:\s]*([+\d\s().-]{8,})/i) ||
+      partiesText.match(/\b0\d{9,10}\b/) ||
+      partiesText.match(/\+?\d[\d\s().-]{8,}\d/);
+    const phoneRaw = phoneMatch?.[1] ?? phoneMatch?.[0] ?? "";
+    const taxMatch = partiesText.match(/(?:MST|TAX|Tax\s*code)[:\s]*([0-9A-Z.\-]{6,24})/i);
+    return {
+      address: address.slice(0, 110),
+      phone: normalizePrintText(phoneRaw).slice(0, 24),
+      taxCode: normalizePrintText(taxMatch?.[1] ?? "").slice(0, 24),
+    };
+  }
+
+  function applyCustomerToPrintFields(nextName: string, nextCode: string): void {
+    const byCode = nextCode
+      ? directory.find((e) => e.code.trim().toLowerCase() === nextCode.trim().toLowerCase())
+      : undefined;
+    const entry = byCode ?? lookupCustomerEntryByName(directory, nextName);
+    if (!entry) {
+      setShipperNamePrint(normalizePrintText(nextName).slice(0, 45));
+      setShipperAddressPrint("");
+      setShipperPhonePrint("");
+      setShipperEmailPrint("");
+      setTaxCodePrint("");
+      setAgentNamePrint("");
+      setAgentAddressPrint("");
+      setAgentPhonePrint("");
+      setAgentEmailPrint("");
+      setAgentTaxCodePrint("");
+      setConsigneeNamePrint("");
+      setConsigneeAddressPrint("");
+      setConsigneePhonePrint("");
+      setConsigneeEmailPrint("");
+      setNotifyNamePrint("");
+      return;
+    }
+    const info = extractDirectoryPrintInfo(entry);
+    setShipperNamePrint(normalizePrintText(entry.shipperName || entry.name).slice(0, 45));
+    setShipperAddressPrint(info.address);
+    setShipperPhonePrint(info.phone);
+    setTaxCodePrint(info.taxCode);
+    setShipperEmailPrint(normalizePrintText(entry.shipperEmail ?? "").slice(0, 50));
+    setAgentNamePrint(normalizePrintText(entry.agentName ?? "").slice(0, 45));
+    setAgentAddressPrint(normalizePrintText(entry.agentAddress ?? "").slice(0, 110));
+    setAgentPhonePrint(normalizePrintText(entry.agentPhone ?? "").slice(0, 24));
+    setAgentEmailPrint(normalizePrintText(entry.agentEmail ?? "").slice(0, 50));
+    setAgentTaxCodePrint(normalizePrintText(entry.agentTaxCode ?? "").slice(0, 24));
+    setConsigneeNamePrint(normalizePrintText(entry.consigneeName ?? "").slice(0, 45));
+    setConsigneeAddressPrint(normalizePrintText(entry.consigneeAddress ?? "").slice(0, 110));
+    setConsigneePhonePrint(normalizePrintText(entry.consigneePhone ?? "").slice(0, 24));
+    setConsigneeEmailPrint(normalizePrintText(entry.consigneeEmail ?? "").slice(0, 50));
+    setNotifyNamePrint(normalizePrintText(entry.notifyName ?? "").slice(0, 80));
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -327,6 +434,22 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       customerCode: useCustomerDirectory
         ? customerCode.trim()
         : lookupCustomerCodeByName(directory, effectiveCustomer) || "",
+      customerId: useCustomerDirectory ? customerId.trim() : "",
+      shipperNamePrint: normalizePrintText(shipperNamePrint || effectiveCustomer).slice(0, 45),
+      shipperAddressPrint: normalizePrintText(shipperAddressPrint).slice(0, 110),
+      shipperPhonePrint: normalizePrintText(shipperPhonePrint).slice(0, 24),
+      shipperEmailPrint: normalizePrintText(shipperEmailPrint).slice(0, 50),
+      taxCodePrint: normalizePrintText(taxCodePrint).slice(0, 24),
+      agentNamePrint: normalizePrintText(agentNamePrint).slice(0, 45),
+      agentAddressPrint: normalizePrintText(agentAddressPrint).slice(0, 110),
+      agentPhonePrint: normalizePrintText(agentPhonePrint).slice(0, 24),
+      agentEmailPrint: normalizePrintText(agentEmailPrint).slice(0, 50),
+      agentTaxCodePrint: normalizePrintText(agentTaxCodePrint).slice(0, 24),
+      consigneeNamePrint: normalizePrintText(consigneeNamePrint).slice(0, 45),
+      consigneeAddressPrint: normalizePrintText(consigneeAddressPrint).slice(0, 110),
+      consigneePhonePrint: normalizePrintText(consigneePhonePrint).slice(0, 24),
+      consigneeEmailPrint: normalizePrintText(consigneeEmailPrint).slice(0, 50),
+      notifyNamePrint: normalizePrintText(notifyNamePrint).slice(0, 80),
       status: nextStatus,
     };
 
@@ -347,6 +470,25 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       setDestSearch("");
       setNote("");
       setDimKg("");
+      setCustomer("");
+      setCustomerCode("");
+      setCustomerId("");
+      setCustomerSearch("");
+      setShipperNamePrint("");
+      setShipperAddressPrint("");
+      setShipperPhonePrint("");
+      setShipperEmailPrint("");
+      setTaxCodePrint("");
+      setAgentNamePrint("");
+      setAgentAddressPrint("");
+      setAgentPhonePrint("");
+      setAgentEmailPrint("");
+      setAgentTaxCodePrint("");
+      setConsigneeNamePrint("");
+      setConsigneeAddressPrint("");
+      setConsigneePhonePrint("");
+      setConsigneeEmailPrint("");
+      setNotifyNamePrint("");
       awbRef.current?.focus();
     }
   }
@@ -647,6 +789,12 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                     onClick={() => {
                       setCustomer("");
                       setCustomerCode("");
+                      setCustomerId("");
+                      setShipperNamePrint("");
+                      setShipperAddressPrint("");
+                      setShipperPhonePrint("");
+                      setShipperEmailPrint("");
+                      setTaxCodePrint("");
                       setCustomerSearch("");
                     }}
                     className="ml-1.5 text-white/70 hover:text-white"
@@ -679,6 +827,8 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                     tabIndex={-1}
                     onClick={() => {
                       setCustomer(searchTrim);
+                      setCustomerId("");
+                      applyCustomerToPrintFields(searchTrim, "");
                       setCustomerSearch("");
                       setShowCustomerList(false);
                     }}
@@ -697,11 +847,13 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                           onClick={() => {
                             setCustomer(e.name);
                             setCustomerCode(e.code);
+                            setCustomerId(e.id);
+                            applyCustomerToPrintFields(e.name, e.code);
                             setCustomerSearch("");
                             setShowCustomerList(false);
                           }}
                           className={`block w-full px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
-                            customer === e.name && customerCode === e.code
+                            customer === e.name && customerCode === e.code && customerId === e.id
                               ? "bg-apple-blue/10 text-apple-blue"
                               : "text-apple-label hover:bg-black/[0.03]"
                           }`}
@@ -718,7 +870,11 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                           tabIndex={-1}
                           onClick={() => {
                             setCustomer(c);
-                            setCustomerCode(lookupCustomerCodeByName(directory, c));
+                            const code = lookupCustomerCodeByName(directory, c);
+                            setCustomerCode(code);
+                            const id = directory.find((e) => e.code.trim() === code.trim())?.id ?? "";
+                            setCustomerId(id);
+                            applyCustomerToPrintFields(c, code);
                             setCustomerSearch("");
                             setShowCustomerList(false);
                           }}
@@ -736,6 +892,59 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 )}
               </div>
             )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 rounded-2xl border border-black/[0.06] bg-black/[0.015] p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-apple-secondary">
+              Dữ liệu in phiếu cân thực tế
+            </p>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-apple-secondary">Người gửi (Shipper)</label>
+              <input
+                type="text"
+                value={shipperNamePrint}
+                onChange={(e) => setShipperNamePrint(e.target.value)}
+                maxLength={45}
+                className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-apple-secondary">SĐT</label>
+                <input type="text" value={shipperPhonePrint} onChange={(e) => setShipperPhonePrint(e.target.value)} maxLength={24} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-apple-secondary">Email</label>
+                <input type="text" value={shipperEmailPrint} onChange={(e) => setShipperEmailPrint(e.target.value)} maxLength={50} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <textarea value={shipperAddressPrint} onChange={(e) => setShipperAddressPrint(e.target.value)} rows={2} maxLength={110} placeholder="Địa chỉ shipper" className="sm:col-span-1 w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-apple-secondary">MST</label>
+                <input type="text" value={taxCodePrint} onChange={(e) => setTaxCodePrint(e.target.value)} maxLength={24} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-2 border-t border-black/[0.06] pt-2">
+              <p className="text-[11px] font-semibold uppercase text-apple-secondary">Đơn vị dịch vụ (Agent)</p>
+              <input type="text" value={agentNamePrint} onChange={(e) => setAgentNamePrint(e.target.value)} maxLength={45} placeholder="Tên agent" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              <textarea value={agentAddressPrint} onChange={(e) => setAgentAddressPrint(e.target.value)} rows={2} maxLength={110} placeholder="Địa chỉ agent" className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <input type="text" value={agentPhonePrint} onChange={(e) => setAgentPhonePrint(e.target.value)} maxLength={24} placeholder="SĐT agent" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+                <input type="text" value={agentEmailPrint} onChange={(e) => setAgentEmailPrint(e.target.value)} maxLength={50} placeholder="Email agent" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+                <input type="text" value={agentTaxCodePrint} onChange={(e) => setAgentTaxCodePrint(e.target.value)} maxLength={24} placeholder="MST agent" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-2 border-t border-black/[0.06] pt-2">
+              <p className="text-[11px] font-semibold uppercase text-apple-secondary">Người nhận / Notify</p>
+              <input type="text" value={consigneeNamePrint} onChange={(e) => setConsigneeNamePrint(e.target.value)} maxLength={45} placeholder="Tên consignee" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              <textarea value={consigneeAddressPrint} onChange={(e) => setConsigneeAddressPrint(e.target.value)} rows={2} maxLength={110} placeholder="Địa chỉ consignee" className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <input type="text" value={consigneePhonePrint} onChange={(e) => setConsigneePhonePrint(e.target.value)} maxLength={24} placeholder="SĐT consignee" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+                <input type="text" value={consigneeEmailPrint} onChange={(e) => setConsigneeEmailPrint(e.target.value)} maxLength={50} placeholder="Email consignee" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+                <input type="text" value={notifyNamePrint} onChange={(e) => setNotifyNamePrint(e.target.value)} maxLength={80} placeholder="Notify" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              </div>
+            </div>
           </div>
 
           <div>

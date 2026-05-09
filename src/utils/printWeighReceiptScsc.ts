@@ -1,6 +1,7 @@
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { isScscWarehouse } from "../constants/warehouses";
+import { ensureScscConsigneeForPrint } from "./ensureScscConsigneeForPrint";
 import { mapBookingToScaleTicketFormData, type ScaleTicketFormData } from "./mapBookingToScaleTicketFormData";
 import { debugLog } from "./debugLog";
 
@@ -166,6 +167,8 @@ export function printWeighReceiptScsc(
     offsetXmm?: number;
     offsetYmm?: number;
     customerDirectory?: readonly CustomerDirectoryEntry[];
+    /** Truyền từ bước chọn CNEE trước khi in. */
+    mapOptions?: { skipAutoSingleConsignee?: boolean };
   }
 ): void {
   if (!isScscWarehouse(s.warehouse)) {
@@ -174,7 +177,7 @@ export function printWeighReceiptScsc(
   }
 
   const directory = opts?.customerDirectory ?? [];
-  const formData = mapBookingToScaleTicketFormData(s, directory);
+  const formData = mapBookingToScaleTicketFormData(s, directory, opts?.mapOptions);
 
   const calibrationStored = readCalibrationFromStorage();
   const offsetXmm = clamp(toFiniteNumber(opts?.offsetXmm, calibrationStored.offsetXmm), -30, 30);
@@ -424,4 +427,22 @@ export function printWeighReceiptScsc(
   }, 100);
 
   setTimeout(cleanup, 120_000);
+}
+
+/** In phiếu cân — nếu khách có nhiều CNEE lưu sẵn mà booking chưa chọn, hiện modal chọn trước khi in. */
+export async function printWeighReceiptScscWithConsigneeChoice(
+  s: Shipment,
+  opts?: {
+    offsetXmm?: number;
+    offsetYmm?: number;
+    customerDirectory?: readonly CustomerDirectoryEntry[];
+  }
+): Promise<void> {
+  const directory = opts?.customerDirectory ?? [];
+  const ctx = await ensureScscConsigneeForPrint(s, directory);
+  if (!ctx) return;
+  printWeighReceiptScsc(ctx.shipment, {
+    ...opts,
+    mapOptions: { skipAutoSingleConsignee: ctx.skipAutoSingleConsignee },
+  });
 }

@@ -1,6 +1,7 @@
 import type { Shipment } from "../types/shipment";
 import type { AppState } from "./shipmentMutations";
 import { parseCustomerDirectoryLoose } from "./customerDirectoryCore";
+import { clampAirlineLabelOverrides } from "./airlineLabelOverridesCore";
 
 export function parseAppState(raw: unknown): AppState | null {
   if (!raw || typeof raw !== "object") return null;
@@ -8,9 +9,13 @@ export function parseAppState(raw: unknown): AppState | null {
   if (typeof o.version !== "number" || !Array.isArray(o.rows)) return null;
   const customersUnknown = "customers" in o ? o.customers : undefined;
   const customers = parseCustomerDirectoryLoose(customersUnknown);
+  const airlineLabelOverrides = clampAirlineLabelOverrides(
+    "airlineLabelOverrides" in o ? o.airlineLabelOverrides : undefined
+  );
   return {
     version: o.version,
     rows: o.rows as Shipment[],
     customers,
+    airlineLabelOverrides,
   };
 }

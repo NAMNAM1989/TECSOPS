@@ -5,19 +5,24 @@ import { awbDigitsKey } from "./awbFormat";
 import { workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus";
 import { assertCustomerDirectoryValid } from "./customerDirectoryCore";
 import { clampCustomerDirectoryEntry } from "./customerDirectoryProfile";
+import type { AirlineLabelOverrides } from "./airlineLabelOverridesCore";
+import { clampAirlineLabelOverrides, EMPTY_AIRLINE_LABEL_OVERRIDES } from "./airlineLabelOverridesCore";
 
 export type AppState = {
   version: number;
   rows: Shipment[];
   /** Danh bạ mã — tên; có thể rỗng nếu chưa cấu hình */
   customers: CustomerDirectoryEntry[];
+  /** Ghi đè tên hãng trên tem (ưu tiên hơn bản mặc định trong code) */
+  airlineLabelOverrides?: AirlineLabelOverrides;
 };
 
 export type ShipmentMutation =
   | { action: "UPDATE"; id: string; patch: Partial<Shipment> }
   | { action: "DELETE"; id: string }
   | { action: "ADD"; shipment: Omit<Shipment, "id" | "stt"> }
-  | { action: "SET_CUSTOMERS"; customers: CustomerDirectoryEntry[] };
+  | { action: "SET_CUSTOMERS"; customers: CustomerDirectoryEntry[] }
+  | { action: "SET_AIRLINE_LABEL_OVERRIDES"; overrides: AirlineLabelOverrides };
 
 function assertAwbUnique(rows: Shipment[], awb: string, exceptId?: string) {
   const d = awbDigitsKey(awb);
@@ -66,8 +71,13 @@ function nextNewId(rows: Shipment[]): string {
  * Áp một mutation lên snapshot cục bộ (cùng quy tắc `server/stateStore.mjs`).
  * Ném lỗi nếu ID không tồn tại, AWB trùng 11 số, hoặc `sessionDate` ADD không hợp lệ.
  */
+function resolvedAirlineOverrides(s: AppState): AirlineLabelOverrides {
+  return clampAirlineLabelOverrides(s.airlineLabelOverrides ?? EMPTY_AIRLINE_LABEL_OVERRIDES);
+}
+
 export function applyShipmentMutation(state: AppState, mutation: ShipmentMutation): AppState {
   let rows = [...state.rows];
+  const keepAirline = (): AirlineLabelOverrides => resolvedAirlineOverrides(state);
 
   switch (mutation.action) {
     case "SET_CUSTOMERS": {
@@ -76,6 +86,15 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
         version: state.version + 1,
         rows: renumberSttForAll(rows),
         customers: mutation.customers.map((e) => clampCustomerDirectoryEntry(e)),
+        airlineLabelOverrides: keepAirline(),
+      };
+    }
+    case "SET_AIRLINE_LABEL_OVERRIDES": {
+      return {
+        version: state.version + 1,
+        rows: renumberSttForAll(rows),
+        customers: state.customers,
+        airlineLabelOverrides: clampAirlineLabelOverrides(mutation.overrides),
       };
     }
     case "UPDATE": {
@@ -114,5 +133,6 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
     version: state.version + 1,
     rows: renumberSttForAll(rows),
     customers: state.customers,
+    airlineLabelOverrides: keepAirline(),
   };
 }

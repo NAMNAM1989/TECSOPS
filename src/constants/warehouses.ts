@@ -1,5 +1,8 @@
 import type { Warehouse } from "../types/shipment";
 
+/** Bộ lọc / layout: một kho cụ thể hoặc hiện tất cả. */
+export type WarehouseLayoutFilter = Warehouse | "ALL";
+
 /** Thứ tự cột kho trên bảng desktop & mobile. */
 export const WAREHOUSE_ORDER: readonly Warehouse[] = [
   "TECS-TCS",
@@ -28,4 +31,9 @@ export function isScscWarehouse(w: Warehouse): boolean {
 /** Kho dùng chung luồng / mẫu DIM kiểu TCS (TECS-TCS + KHO TCS). */
 export function isTcsWarehouse(w: Warehouse): boolean {
   return w === "TECS-TCS" || w === "KHO-TCS";
+}
+
+/** Danh sách kho cần render section (desktop/mobile) theo bộ lọc trên trang. */
+export function warehouseSectionsForLayout(filter: WarehouseLayoutFilter): readonly Warehouse[] {
+  return filter === "ALL" ? WAREHOUSE_ORDER : [filter];
 }

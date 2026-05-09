@@ -21,17 +21,18 @@ import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYm
 import { printDimReport } from "../utils/printDimReport";
 import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
+import type { WarehouseLayoutFilter } from "../constants/warehouses";
 import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { debugError } from "../utils/debugLog";
+import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
+import { AirlineLabelSettingsModal } from "./AirlineLabelSettingsModal";
 
 interface AirCargoTrackingProps {
-  onRequestPrint: (s: Shipment) => void;
+  onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
 }
 
-type WarehouseFilterValue = Warehouse | "ALL";
-
-const WAREHOUSE_FILTER_OPTIONS: { value: WarehouseFilterValue; label: string }[] = [
+const WAREHOUSE_FILTER_OPTIONS: { value: WarehouseLayoutFilter; label: string }[] = [
   { value: "ALL", label: "Tất cả kho" },
   { value: "TECS-TCS", label: "TECS-TCS" },
   { value: "TECS-SCSC", label: "TECS-SCSC" },
@@ -43,6 +44,7 @@ const WAREHOUSE_FILTER_OPTIONS: { value: WarehouseFilterValue; label: string }[]
 function shipmentSearchHaystack(r: Shipment): string {
   const parts = [
     r.awb,
+    r.hawb ?? "",
     r.flight,
     r.flightDate,
     r.customer,
@@ -86,11 +88,13 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
-  const [warehouseFilter, setWarehouseFilter] = useState<WarehouseFilterValue>("ALL");
+  const [warehouseFilter, setWarehouseFilter] = useState<WarehouseLayoutFilter>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [excelExporting, setExcelExporting] = useState(false);
   const [customerDirOpen, setCustomerDirOpen] = useState(false);
   const [unmatchedReportOpen, setUnmatchedReportOpen] = useState(false);
+  const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
+  const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -187,6 +191,23 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     [state?.rows, selectedYmd, runMutate]
   );
 
+  const requestPrintLabel = useCallback(
+    (s: Shipment) => {
+      onRequestPrint(s, state?.airlineLabelOverrides);
+    },
+    [onRequestPrint, state?.airlineLabelOverrides]
+  );
+
+  const saveAirlineLabelOverrides = async (next: AirlineLabelOverrides) => {
+    setAirlineLabelSaving(true);
+    try {
+      const out = await runMutate({ action: "SET_AIRLINE_LABEL_OVERRIDES", overrides: next });
+      if (out) setAirlineLabelSettingsOpen(false);
+    } finally {
+      setAirlineLabelSaving(false);
+    }
+  };
+
   const totalPcs = filteredViewRows.reduce((s, r) => s + (r.pcs ?? 0), 0);
   const totalKg = filteredViewRows.reduce((s, r) => s + (r.kg ?? 0), 0);
 
@@ -279,6 +300,14 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
                 title="Quản lý khách hàng và hồ sơ in phiếu cân"
               >
                 Khách hàng / Hồ sơ in
+              </button>
+              <button
+                type="button"
+                onClick={() => setAirlineLabelSettingsOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label shadow-apple transition-colors hover:bg-black/[0.03]"
+                title="Đổi tên hãng hiển thị trên tem nhãn (ghi đè bảng mặc định)"
+              >
+                Tên hãng (tem)
               </button>
               <button
                 type="button"
@@ -490,10 +519,11 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         rows={filteredViewRows}
         allRows={allRows}
         customerDirectory={state.customers}
+        warehouseLayoutFilter={warehouseFilter}
         onAddBlankRow={addBlankRowForWarehouse}
         onUpdate={onUpdate}
         onDelete={onDelete}
-        onPrint={onRequestPrint}
+        onPrint={requestPrintLabel}
         onEdit={openEdit}
       />
 
@@ -503,16 +533,17 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onSelect={setSelectedId}
         onUpdate={onUpdate}
         onDelete={onDelete}
-        onPrint={onRequestPrint}
+        onPrint={requestPrintLabel}
         onEdit={openEdit}
         customerDirectory={state.customers}
+        warehouseLayoutFilter={warehouseFilter}
       />
 
       <StickyMobileActions
         selected={selected}
         customerDirectory={state.customers}
         onDelete={() => selected && onDelete(selected.id)}
-        onPrint={() => selected && onRequestPrint(selected)}
+        onPrint={() => selected && requestPrintLabel(selected)}
         onAdd={() => {
           setEditingShipment(null);
           setShowForm(true);
@@ -557,6 +588,14 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         open={unmatchedReportOpen}
         onClose={() => setUnmatchedReportOpen(false)}
         onApplySuggestions={applySuggestedCustomerLinks}
+      />
+
+      <AirlineLabelSettingsModal
+        open={airlineLabelSettingsOpen}
+        onClose={() => setAirlineLabelSettingsOpen(false)}
+        value={state.airlineLabelOverrides}
+        saving={airlineLabelSaving}
+        onSave={saveAirlineLabelOverrides}
       />
     </div>
   );

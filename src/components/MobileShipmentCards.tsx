@@ -14,7 +14,7 @@ import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import {
   canPrintWeighReceiptScsc,
   getScscPrintCalibration,
-  printWeighReceiptScsc,
+  printWeighReceiptScscWithConsigneeChoice,
   resetScscPrintCalibration,
   saveScscPrintCalibration,
 } from "../utils/printWeighReceiptScsc";
@@ -22,7 +22,12 @@ import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { statusCardBg } from "./statusStyles";
-import { WAREHOUSE_ORDER, warehouseLabel, isTcsWarehouse } from "../constants/warehouses";
+import {
+  warehouseLabel,
+  warehouseSectionsForLayout,
+  isTcsWarehouse,
+  type WarehouseLayoutFilter,
+} from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
 import { PrintCalibrationModal } from "./PrintCalibrationModal";
@@ -32,6 +37,7 @@ const SWIPE_THRESHOLD = 48;
 const SWIPE_MAX_VERTICAL_DELTA_PX = 35;
 /** Ba nút: Sửa / In / Xóa */
 const REVEAL_PX = 132;
+
 interface MobileShipmentCardsProps {
   rows: Shipment[];
   selectedId: string | null;
@@ -42,6 +48,8 @@ interface MobileShipmentCardsProps {
   onEdit: (s: Shipment) => void;
   /** Danh bạ — dùng để hiển thị mã/tên chuẩn trong popup khách. */
   customerDirectory?: readonly CustomerDirectoryEntry[];
+  /** Chỉ hiển thị section kho đã chọn trên bộ lọc (mobile). */
+  warehouseLayoutFilter?: WarehouseLayoutFilter;
 }
 
 export function MobileShipmentCards({
@@ -53,6 +61,7 @@ export function MobileShipmentCards({
   onPrint,
   onEdit,
   customerDirectory = [],
+  warehouseLayoutFilter = "ALL",
 }: MobileShipmentCardsProps) {
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
@@ -65,6 +74,10 @@ export function MobileShipmentCards({
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
+  const warehouseSections = useMemo(
+    () => warehouseSectionsForLayout(warehouseLayoutFilter),
+    [warehouseLayoutFilter]
+  );
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -95,7 +108,7 @@ export function MobileShipmentCards({
   return (
     <>
     <div className="space-y-5 pb-28 md:hidden">
-      {WAREHOUSE_ORDER.map((wh) => {
+      {warehouseSections.map((wh) => {
         const group = rowsByWarehouse[wh];
         return (
           <section key={wh}>
@@ -208,6 +221,14 @@ export function MobileShipmentCards({
                             <span className="font-mono text-[15px] font-semibold leading-tight tracking-tight text-apple-label">
                               {row.awb}
                             </span>
+                            {(row.hawb ?? "").trim() ? (
+                              <>
+                                <span className="text-apple-tertiary"> · </span>
+                                <span className="font-mono text-[11px] font-semibold text-apple-secondary">
+                                  HAWB {(row.hawb ?? "").trim()}
+                                </span>
+                              </>
+                            ) : null}
                             <span className="text-apple-tertiary"> · </span>
                             <span className="text-[11px] font-medium text-apple-secondary">
                               {row.flight}/{row.flightDate}
@@ -354,7 +375,11 @@ export function MobileShipmentCards({
                                       <div className="flex gap-2">
                                         <button
                                           type="button"
-                                          onClick={() => printWeighReceiptScsc(row, { customerDirectory })}
+                                          onClick={() =>
+                                            void printWeighReceiptScscWithConsigneeChoice(row, {
+                                              customerDirectory,
+                                            })
+                                          }
                                           className="min-h-11 min-w-0 flex-1 rounded-xl border border-sky-600/35 bg-sky-50 py-2.5 text-[12px] font-semibold text-sky-900 active:bg-sky-100"
                                         >
                                           In Phiếu Cân SCSC
@@ -436,7 +461,7 @@ export function MobileShipmentCards({
       onChangeOffsetY={setPrintOffsetY}
       onTestPrint={() => {
         if (!calibrationTarget) return;
-        printWeighReceiptScsc(calibrationTarget, {
+        void printWeighReceiptScscWithConsigneeChoice(calibrationTarget, {
           offsetXmm: printOffsetX,
           offsetYmm: printOffsetY,
           customerDirectory,
@@ -486,6 +511,12 @@ export function StickyMobileActions({
           <>
             <p className="mb-2 truncate text-center text-[11px] font-medium text-apple-secondary">
               <span className="font-mono text-[15px] font-semibold leading-tight text-apple-label">{selected.awb}</span>
+              {(selected.hawb ?? "").trim() ? (
+                <>
+                  <span className="mx-1 text-apple-tertiary">·</span>
+                  <span className="font-mono font-semibold text-apple-secondary">HAWB {(selected.hawb ?? "").trim()}</span>
+                </>
+              ) : null}
               <span className="mx-1 text-apple-tertiary">·</span>
               {selected.customer}
             </p>
@@ -536,7 +567,9 @@ export function StickyMobileActions({
               {canPrintWeighReceiptScsc(selected) ? (
                 <button
                   type="button"
-                  onClick={() => printWeighReceiptScsc(selected, { customerDirectory })}
+                  onClick={() =>
+                    void printWeighReceiptScscWithConsigneeChoice(selected, { customerDirectory })
+                  }
                   className="w-full rounded-full border border-sky-600/40 bg-sky-50 py-2.5 text-sm font-semibold text-sky-900 shadow-sm active:scale-[0.98]"
                 >
                   In Phiếu Cân SCSC

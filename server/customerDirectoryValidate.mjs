@@ -20,6 +20,8 @@ const L = {
   partyLabel: 80,
   partyContent: 8000,
   partyCount: 60,
+  savedConsigneeLabel: 80,
+  savedConsigneeCount: 40,
 };
 
 function sliceStr(v, max) {
@@ -85,6 +87,26 @@ function parsePartiesLoose(item) {
   return [];
 }
 
+function parseSavedConsigneesLoose(item) {
+  if (!Array.isArray(item.savedConsignees)) return [];
+  const out = [];
+  for (const x of item.savedConsignees) {
+    if (!x || typeof x !== "object") continue;
+    const sid = typeof x.id === "string" ? x.id.trim() : "";
+    if (!sid) continue;
+    out.push({
+      id: sliceStr(sid, 80).trim(),
+      label: sliceStr(x.label, L.savedConsigneeLabel).trim(),
+      consigneeName: sliceStr(x.consigneeName, L.consigneeName).trim(),
+      consigneeAddress: sliceStr(x.consigneeAddress, L.consigneeAddress).trim(),
+      consigneePhone: sliceStr(x.consigneePhone, L.consigneePhone).trim(),
+      consigneeEmail: sliceStr(x.consigneeEmail, L.consigneeEmail).trim(),
+      notifyName: sliceStr(x.notifyName, L.notifyName).trim(),
+    });
+  }
+  return out.slice(0, L.savedConsigneeCount);
+}
+
 /** Parse an toàn khi đọc state — không ném lỗi. */
 export function parseCustomersLoose(raw) {
   if (!Array.isArray(raw)) return [];
@@ -114,6 +136,7 @@ export function parseCustomersLoose(raw) {
       consigneePhone: sliceStr(item.consigneePhone, L.consigneePhone).trim(),
       consigneeEmail: sliceStr(item.consigneeEmail, L.consigneeEmail).trim(),
       notifyName: sliceStr(item.notifyName, L.notifyName).trim(),
+      savedConsignees: parseSavedConsigneesLoose(item),
       parties: parsePartiesLoose(item),
     });
   }
@@ -143,6 +166,19 @@ export function validateCustomerDirectoryPayload(raw) {
       throw new Error(`Mã «${code}» bị trùng — mỗi mã chỉ dùng một lần.`);
     }
     seenCode.set(k, true);
+    const savedConsignees = parseSavedConsigneesLoose(item);
+    const seenCnee = new Set();
+    for (let j = 0; j < savedConsignees.length; j++) {
+      const sc = savedConsignees[j];
+      const sk = sc.id.toLowerCase();
+      if (!sc.id.trim()) {
+        throw new Error(`Dòng ${i + 1}: CNEE lưu sẵn thứ ${j + 1} thiếu id.`);
+      }
+      if (seenCnee.has(sk)) {
+        throw new Error(`Dòng ${i + 1}: id CNEE «${sc.id}» bị trùng.`);
+      }
+      seenCnee.add(sk);
+    }
     out.push({
       id: sliceStr(id, 80).trim(),
       code: sliceStr(code, L.code).trim(),
@@ -162,6 +198,7 @@ export function validateCustomerDirectoryPayload(raw) {
       consigneePhone: sliceStr(item.consigneePhone, L.consigneePhone).trim(),
       consigneeEmail: sliceStr(item.consigneeEmail, L.consigneeEmail).trim(),
       notifyName: sliceStr(item.notifyName, L.notifyName).trim(),
+      savedConsignees,
       parties: parsePartiesLoose(item),
     });
   }

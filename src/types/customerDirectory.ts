@@ -1,5 +1,17 @@
 export type CustomerPartyType = "SHIPPER" | "CNEE" | "NOTIFY" | "OTHER";
 
+/** Một bộ CNEE lưu sẵn — chọn khi booking / in phiếu cân. */
+export type CustomerSavedConsignee = {
+  id: string;
+  /** Nhãn hiển thị trong danh sách (VD: Tokyo, Singapore). */
+  label: string;
+  consigneeName: string;
+  consigneeAddress: string;
+  consigneePhone: string;
+  consigneeEmail: string;
+  notifyName: string;
+};
+
 /** Một mẫu nội dung cần copy nhanh cho từng khách (VD: nhiều SHIPPER, nhiều CNEE). */
 export type CustomerParty = {
   id: string;
@@ -30,5 +42,7 @@ export type CustomerDirectoryEntry = {
   consigneePhone?: string;
   consigneeEmail?: string;
   notifyName?: string;
+  /** CNEE lưu sẵn (ưu tiên khi có `customerConsigneeId` trên booking). */
+  savedConsignees?: CustomerSavedConsignee[];
   parties: CustomerParty[];
 };

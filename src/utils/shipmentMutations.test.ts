@@ -28,6 +28,7 @@ function cust(
     consigneePhone: "",
     consigneeEmail: "",
     notifyName: "",
+    savedConsignees: [],
     parties: [],
     ...extra,
   };
@@ -53,7 +54,31 @@ const emptyRow = (id: string): Shipment => ({
   customer: "X",
   customerCode: "",
   customerId: "",
+  customerConsigneeId: "",
   status: "PENDING",
+});
+
+describe("applyShipmentMutation SET_AIRLINE_LABEL_OVERRIDES", () => {
+  it("lưu ghi đè tên hãng và giữ rows/customers", () => {
+    const state: AppState = {
+      version: 2,
+      rows: [emptyRow("a")],
+      customers: [cust("1", "A", "ACME")],
+      airlineLabelOverrides: { byAwbPrefix: {}, byFlightPrefix: {} },
+    };
+    const next = applyShipmentMutation(state, {
+      action: "SET_AIRLINE_LABEL_OVERRIDES",
+      overrides: {
+        byAwbPrefix: { "978": "VIETJET AIR — CUSTOM" },
+        byFlightPrefix: { VJ: "TEST AIR" },
+      },
+    });
+    expect(next.version).toBe(3);
+    expect(next.rows).toHaveLength(1);
+    expect(next.customers).toHaveLength(1);
+    expect(next.airlineLabelOverrides?.byAwbPrefix["978"]).toBe("VIETJET AIR — CUSTOM");
+    expect(next.airlineLabelOverrides?.byFlightPrefix.VJ).toBe("TEST AIR");
+  });
 });
 
 describe("applyShipmentMutation SET_CUSTOMERS", () => {

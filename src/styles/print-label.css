@@ -1,138 +1,226 @@
 /**
- * In nhãn nhiệt — ưu tiên đơn vị mm, một trang, không scale ngẫu nhiên.
- *
- * Vì sao tách file: tránh xung đột Tailwind; comment đầy đủ cho kỹ sư in.
- *
- * Thermal Xprinter: driver thường map khổ 100×80 thành trang lệch 90°.
- * Giải pháp: @page 80×100 mm + xoay khối nhãn 100×80 mm ±90° (class .print-label-spin).
+ * In nhãn cargo nhiệt — layout lấy từ mẫu HTML nhưng chuẩn hóa thành 100×80mm.
+ * Tất cả kích thước chính dùng mm để preview và bản in ít lệch nhau.
  */
 
-/* -------------------------------------------------------------------------- */
-/* Canvas tem — màn hình + in (cùng DOM → preview khớp bản in)                */
-/* -------------------------------------------------------------------------- */
-
-.print-label-sheet.lbl-sheet {
-  position: relative;
+.label.print-label-sheet.lbl-sheet {
   box-sizing: border-box;
   width: 100mm;
   height: 80mm;
   margin: 0;
   padding: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: #fff;
   color: #000;
-  /* Arial in được tốt trên Windows/Chrome print; không phụ thuộc webfont */
   font-family: Arial, Helvetica, "Liberation Sans", "DejaVu Sans", sans-serif;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
-  border: 0.53mm solid #000; /* ~2px @ 96dpi — viền ngoài */
+  border: 0.35mm solid #000;
 }
 
-.lbl-sheet p,
-.lbl-sheet span {
-  margin: 0;
-  padding: 0;
-}
-
-/* Dải tuyệt đối theo mm — tránh flex/grid full-page (Chrome in đôi lệch khác preview) */
-.lbl-band {
-  position: absolute;
-  left: 0;
+.lbl-sheet * {
   box-sizing: border-box;
-  overflow: hidden;
 }
 
-.lbl-band--airline {
-  top: 0;
-  width: 100%;
-  height: 17mm;
-  border-bottom: 0.53mm solid #000;
-  padding: 0.4mm 1mm 0;
+.lbl-airline {
+  flex-shrink: 0;
+  min-height: 10mm;
+  padding: 2mm 2mm 1.5mm;
+  border-bottom: 0.35mm solid #000;
   text-align: center;
   font-weight: 900;
   text-transform: uppercase;
+  letter-spacing: 0.25mm;
   line-height: 1.05;
-  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.lbl-band--awb {
-  top: 17mm;
-  width: 100%;
-  height: 19mm;
-  border-bottom: 0.53mm solid #000;
-  padding: 0 0.5mm;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.lbl-band--awb p {
+.lbl-mawb {
+  flex-shrink: 0;
+  min-height: 13mm;
+  padding: 1.4mm 2mm 1.2mm;
+  border-bottom: 0.25mm solid #777;
+  text-align: center;
   font-family: "Courier New", Courier, monospace;
   font-weight: 900;
+  letter-spacing: 0.35mm;
+  line-height: 1.05;
   white-space: nowrap;
-  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Vùng dưới: hai cột, không hàng ngang cắt giữa mã sân */
-.lbl-band--split {
-  top: 36mm;
-  width: 100%;
-  height: 44mm; /* 80 - 36 */
-  margin: 0;
-  padding: 0;
+.lbl-placeholder {
+  color: #aaa;
+  font-size: 4mm;
+  letter-spacing: 0;
 }
 
-.lbl-col {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  width: 50%;
-  box-sizing: border-box;
-  padding: 0.6mm 1mm 0.5mm;
+.lbl-route {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  flex-shrink: 0;
+  border-bottom: 0.45mm solid #000;
 }
 
-.lbl-col--left {
-  left: 0;
-  border-right: 0.53mm solid #000;
+.lbl-route-cell {
+  padding: 1.4mm 2mm 2mm;
+  text-align: center;
+  min-width: 0;
 }
 
-.lbl-col--right {
-  left: 50%;
+.lbl-route-cell + .lbl-route-cell {
+  border-left: 0.25mm solid #000;
 }
 
-.lbl-col-cap {
-  display: block;
+.route-label {
+  color: #555;
   font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.25mm;
   line-height: 1;
 }
 
-.lbl-col-airport {
-  display: block;
-  margin-top: 0.4mm;
+.route-val {
+  margin-top: 0.6mm;
   font-weight: 900;
   text-transform: uppercase;
-  line-height: 1;
+  letter-spacing: 0.8mm;
+  line-height: 1.05;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.lbl-col-footer {
-  position: absolute;
-  bottom: 0.6mm;
-  left: 1mm;
-  right: 1mm;
+.lbl-hawb-row {
+  display: flex;
+  align-items: center;
+  gap: 2mm;
+  flex-shrink: 0;
+  padding: 0.8mm 2mm;
+  border-bottom: 0.25mm solid #777;
+}
+
+.lbl-hawb-label {
+  color: #555;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2mm;
+  white-space: nowrap;
+}
+
+.lbl-hawb-val {
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 900;
+  letter-spacing: 0.25mm;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lbl-bottom {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-top: 0.45mm solid #000;
+}
+
+.lbl-pieces-cell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1mm;
+  border-right: 0.25mm solid #777;
+}
+
+.lbl-pieces-cell:last-child {
+  border-right: 0;
+}
+
+.pieces-label {
+  color: #333;
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.25mm;
+  line-height: 1.25;
+}
+
+.pieces-val {
+  margin-top: 1.2mm;
+  font-weight: 900;
+  font-family: "Courier New", Courier, monospace;
+  letter-spacing: 0.35mm;
+  line-height: 0.95;
+}
+
+.lbl-special {
+  flex-shrink: 0;
+  padding: 0.8mm 1mm;
+  border-top: 0.25mm solid #777;
+  text-align: center;
+  font-weight: 900;
+  letter-spacing: 0.25mm;
   line-height: 1.1;
 }
 
-.lbl-col--right .lbl-col-footer {
-  left: auto;
-  text-align: right;
-  font-family: "Courier New", Courier, monospace;
-  font-weight: 900;
+.lbl-special.cold {
+  background: #e0f0ff;
+  color: #124f91;
 }
 
-.lbl-col--left .lbl-col-footer {
-  right: 1mm;
+.lbl-special.danger {
+  background: #fff0e0;
+  color: #a64200;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Khổ nhỏ 100×50 mm — bố cục chật hơn (HAWB có thể tắt từ UI)              */
+/* -------------------------------------------------------------------------- */
+
+.label.print-label-sheet.lbl-sheet.lbl-sheet--compact {
+  width: 100mm;
+  height: 50mm;
+}
+
+.lbl-sheet--compact .lbl-airline {
+  min-height: 5.5mm;
+  padding: 1mm 1.5mm 0.7mm;
+  letter-spacing: 0.18mm;
+}
+
+.lbl-sheet--compact .lbl-mawb {
+  min-height: 8mm;
+  padding: 0.9mm 1.5mm 0.7mm;
+}
+
+.lbl-sheet--compact .lbl-route-cell {
+  padding: 0.7mm 1.2mm 1mm;
+}
+
+.lbl-sheet--compact .route-val {
+  margin-top: 0.35mm;
+  letter-spacing: 0.45mm;
+}
+
+.lbl-sheet--compact .lbl-hawb-row {
+  padding: 0.45mm 1.5mm;
+  gap: 1.2mm;
+}
+
+.lbl-sheet--compact .lbl-pieces-cell {
+  padding: 0.4mm 0.6mm;
+}
+
+.lbl-sheet--compact .lbl-special {
+  padding: 0.35mm 0.6mm;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -140,62 +228,87 @@
 /* -------------------------------------------------------------------------- */
 
 @media print {
-  /* Trang = khổ feed máy nhiệt (80×100) khi tem 100×80 xoay 90° */
+  /* Mỗi trang = khổ feed máy nhiệt (80×100) khi tem 100×80 xoay 90° */
   @page {
     size: 80mm 100mm;
     margin: 0;
   }
 
-  /* min-h-screen (Tailwind) là nguyên nhân hay gây trang 2 — override mạnh */
-  html {
+  /**
+   * html là tổ tiên của body — selector kiểu `body.xxx html` không bao giờ khớp.
+   * Dùng :has để khi mở modal in nhãn, cả html/body/#root đều cho phép cao nhiều trang.
+   */
+  html:has(body.tecsops-label-print-open),
+  body.tecsops-label-print-open {
     margin: 0 !important;
     padding: 0 !important;
-    width: 80mm;
-    height: 100mm;
-    max-width: 80mm;
-    max-height: 100mm;
-    overflow: hidden !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  body {
-    margin: 0 !important;
-    padding: 0 !important;
-    min-height: 0 !important;
-    height: 100mm !important;
-    max-height: 100mm !important;
     width: 80mm !important;
     max-width: 80mm !important;
-    overflow: hidden !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    background: #fff !important;
+  }
+
+  body.tecsops-label-print-open #root {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   .no-print {
     display: none !important;
   }
 
-  .print-only.print-label-host {
+  .print-label-host {
     display: block !important;
-    position: fixed;
-    left: 0;
-    top: 0;
-    margin: 0;
-    padding: 0;
+    position: static !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    height: auto !important;
+    overflow: visible !important;
+    box-sizing: border-box;
+    background: #fff;
+  }
+
+  .print-label-page {
+    position: relative;
     width: 80mm;
     height: 100mm;
     max-width: 80mm;
     max-height: 100mm;
     overflow: hidden;
     box-sizing: border-box;
-    background: #fff;
-    page-break-after: avoid !important;
-    break-after: avoid-page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    isolation: isolate;
+  }
+
+  .print-label-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  .print-label-page:not(:last-child) {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .print-label-page + .print-label-page {
+    page-break-before: always !important;
+    break-before: page !important;
   }
 
   /* Khối tem 100×80, căn giữa trang 80×100 rồi xoay */
-  .print-label-spin {
+  .print-label-page .print-label-spin {
     position: absolute;
     left: 50%;
     top: 50%;
@@ -211,12 +324,38 @@
     break-inside: avoid !important;
   }
 
-  .print-label-spin.print-label-spin--ccw {
+  .print-label-page .print-label-spin.print-label-spin--ccw {
     transform: translate(-50%, -50%) rotate(-90deg);
   }
 
-  .print-label-sheet.lbl-sheet {
+  .label.print-label-sheet.lbl-sheet {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+  }
+
+  /* Tem 100×50: trang 50×100 mm */
+  .print-label-page:has(.lbl-sheet--compact) {
+    width: 50mm;
+    max-width: 50mm;
+    height: 100mm;
+    max-height: 100mm;
+  }
+
+  html:has(body.tecsops-label-print-open .lbl-sheet--compact),
+  body.tecsops-label-print-open:has(.lbl-sheet--compact) {
+    width: 50mm !important;
+    max-width: 50mm !important;
+  }
+
+  body.tecsops-label-print-open:has(.lbl-sheet--compact) .print-label-host {
+    width: 50mm !important;
+    max-width: 50mm !important;
+  }
+
+  .print-label-page:has(.lbl-sheet--compact) .print-label-spin {
+    width: 100mm;
+    height: 50mm;
+    max-width: 100mm;
+    max-height: 50mm;
   }
 }

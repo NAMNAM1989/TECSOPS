@@ -22,6 +22,7 @@ export function buildDefaultCustomerDirectory(): CustomerDirectoryEntry[] {
     consigneePhone: "",
     consigneeEmail: "",
     notifyName: "",
+    savedConsignees: [],
     parties: [],
   }));
 }

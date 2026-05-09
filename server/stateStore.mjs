@@ -8,6 +8,10 @@ import {
   parseCustomersLoose,
   validateCustomerDirectoryPayload,
 } from "./customerDirectoryValidate.mjs";
+import {
+  emptyAirlineLabelOverrides,
+  normalizeAirlineLabelOverridesLoose,
+} from "./airlineLabelOverridesNormalize.mjs";
 
 const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "KHO-TCS", "KHO-SCSC"];
 function isKnownWarehouse(w) {
@@ -31,7 +35,7 @@ function shouldSkipDemoSeed() {
 }
 
 function emptyInitialState() {
-  return { version: 1, rows: [], customers: [] };
+  return { version: 1, rows: [], customers: [], airlineLabelOverrides: emptyAirlineLabelOverrides() };
 }
 
 /** @type {import('redis').RedisClientType | null} */
@@ -104,6 +108,7 @@ function migrateRows(rows, workDateIso) {
       note: typeof r.note === "string" ? r.note : "",
       customerCode: typeof r.customerCode === "string" ? r.customerCode : "",
       customerId: typeof r.customerId === "string" ? r.customerId : "",
+      hawb: typeof r.hawb === "string" ? r.hawb : "",
       dimWeightKg:
         r.dimWeightKg === null || typeof r.dimWeightKg === "number" ? r.dimWeightKg : null,
       dimLines: normalizeDimLines(r.dimLines),
@@ -156,6 +161,7 @@ export function createInitialState() {
     version: 1,
     rows: renumberSttForAll(withS),
     customers: buildDefaultCustomerDirectoryFromSeed(),
+    airlineLabelOverrides: emptyAirlineLabelOverrides(),
   };
 }
 
@@ -185,6 +191,7 @@ function normalizeState(raw) {
     version: raw.version,
     rows: renumberSttForAll(merged),
     customers,
+    airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(raw.airlineLabelOverrides),
   };
 }
 
@@ -307,14 +314,25 @@ export async function saveState(state) {
  */
 export function applyMutation(state, mutation) {
   let rows = [...state.rows];
+  const keepAirline = () => normalizeAirlineLabelOverridesLoose(state.airlineLabelOverrides);
+  const action = String(mutation?.action ?? "").trim();
 
-  switch (mutation.action) {
+  switch (action) {
     case "SET_CUSTOMERS": {
       const list = validateCustomerDirectoryPayload(mutation.customers);
       return {
         version: state.version + 1,
         rows: renumberSttForAll(rows),
         customers: list,
+        airlineLabelOverrides: keepAirline(),
+      };
+    }
+    case "SET_AIRLINE_LABEL_OVERRIDES": {
+      return {
+        version: state.version + 1,
+        rows: renumberSttForAll(rows),
+        customers: state.customers ?? [],
+        airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(mutation?.overrides),
       };
     }
     case "UPDATE": {
@@ -347,13 +365,17 @@ export function applyMutation(state, mutation) {
       break;
     }
     default:
-      throw new Error(`Unknown action: ${mutation.action}`);
+      throw new Error(
+        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, UPDATE, DELETE, ADD. ` +
+          `Nếu vừa cập nhật code — hãy dừng toàn bộ process Node rồi chạy lại "npm run dev" (cần cả API + Vite).`
+      );
   }
 
   return {
     version: state.version + 1,
     rows: renumberSttForAll(rows),
     customers: state.customers ?? [],
+    airlineLabelOverrides: keepAirline(),
   };
 }
 

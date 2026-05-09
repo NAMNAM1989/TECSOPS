@@ -1,6 +1,7 @@
 import type { CustomerDirectoryEntry, CustomerParty, CustomerPartyType } from "../types/customerDirectory";
 import {
   clampCustomerDirectoryEntry,
+  clampCustomerSavedConsignee,
   normalizeCustomerPartyType,
 } from "./customerDirectoryProfile";
 
@@ -63,6 +64,29 @@ function parsePartiesLoose(o: Record<string, unknown>): CustomerParty[] {
   return [];
 }
 
+function parseSavedConsigneesLoose(raw: unknown): CustomerDirectoryEntry["savedConsignees"] {
+  if (!Array.isArray(raw)) return [];
+  const out: NonNullable<CustomerDirectoryEntry["savedConsignees"]> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const id = trimStr(o.id);
+    if (!id) continue;
+    out.push(
+      clampCustomerSavedConsignee({
+        id,
+        label: trimStr(o.label),
+        consigneeName: trimStr(o.consigneeName),
+        consigneeAddress: trimStr(o.consigneeAddress),
+        consigneePhone: trimStr(o.consigneePhone),
+        consigneeEmail: trimStr(o.consigneeEmail),
+        notifyName: trimStr(o.notifyName),
+      })
+    );
+  }
+  return out;
+}
+
 /** Parse mảng JSON an toàn — bỏ phần tử không hợp lệ; chuẩn hóa độ dài trường. */
 export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -94,6 +118,7 @@ export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntr
         consigneePhone: trimStr(o.consigneePhone),
         consigneeEmail: trimStr(o.consigneeEmail),
         notifyName: trimStr(o.notifyName),
+        savedConsignees: parseSavedConsigneesLoose(o.savedConsignees),
         parties: parsePartiesLoose(o),
       })
     );
@@ -117,6 +142,15 @@ export function assertCustomerDirectoryValid(entries: readonly CustomerDirectory
       throw new Error(`Mã «${e.code}» bị trùng — mỗi mã chỉ dùng một lần.`);
     }
     seenCode.set(k, e.name);
+    const seenCnee = new Set<string>();
+    for (const sc of e.savedConsignees ?? []) {
+      const sid = sc.id.trim().toLowerCase();
+      if (!sid) throw new Error(`Khách «${e.code}»: CNEE lưu sẵn thiếu id.`);
+      if (seenCnee.has(sid)) {
+        throw new Error(`Khách «${e.code}»: id CNEE «${sc.id}» bị trùng trong cùng khách.`);
+      }
+      seenCnee.add(sid);
+    }
   }
 }
 

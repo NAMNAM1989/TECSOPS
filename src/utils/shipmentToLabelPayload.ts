@@ -1,26 +1,22 @@
 import type { Shipment } from "../types/shipment";
 import { LABEL_GAP_MM, LABEL_HEIGHT_MM, LABEL_WIDTH_MM } from "../constants/labelDimensions";
-import { formatAwb, rawAwbDigits } from "./awbFormat";
-
-export function airlineLines(flight: string): [string, string] {
-  const t = flight.trim().toUpperCase();
-  const prefix = t.match(/^([A-Z]{2,3})/)?.[1] ?? (t.slice(0, 3) || "AIR");
-  return [`${prefix} AIRLINES`, "CARGO"];
-}
+import { mapShipmentToAirCargoLabelData } from "./mapShipmentToAirCargoLabelData";
+import type { AirlineLabelOverrides } from "./airlineLabelOverridesCore";
 
 /** Body JSON cho POST /api/tspl/build và /api/tspl/print */
-export function shipmentToTsplBody(s: Shipment) {
-  const [airlineLine1, airlineLine2] = airlineLines(s.flight);
+export function shipmentToTsplBody(s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) {
+  const label = mapShipmentToAirCargoLabelData(s, airlineLabelOverrides);
   return {
     widthMm: LABEL_WIDTH_MM,
     heightMm: LABEL_HEIGHT_MM,
     gapMm: LABEL_GAP_MM,
-    airlineLine1,
-    airlineLine2,
-    awb: formatAwb(s.awb),
-    awbDigits: rawAwbDigits(s.awb),
-    origin: "SGN",
-    dest: s.dest,
-    pieces: s.pcs != null ? String(s.pcs) : "—",
+    airlineLine1: label.airline,
+    airlineLine2: "",
+    awb: label.mawb,
+    awbDigits: label.mawbDigits,
+    origin: label.origin,
+    dest: label.dest,
+    pieces: label.pieces || "-",
+    special: label.special,
   };
 }

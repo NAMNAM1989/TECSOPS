@@ -21,6 +21,8 @@ export interface Shipment {
   /** Ngày phiên bảng (YYYY-MM-DD, theo giờ local khi nhập) */
   sessionDate: string;
   awb: string;
+  /** HAWB (House) — tùy chọn; dùng cho tem nhãn & phiếu cân khi có. */
+  hawb?: string;
   flight: string;
   flightDate: string;  // "05APR" etc.
   cutoff: string;      // ISO hoặc "" nếu chưa có
@@ -42,6 +44,8 @@ export interface Shipment {
   customerCode: string;
   /** Khóa ngoại khách hàng (database) */
   customerId?: string;
+  /** CNEE lưu sẵn trong danh bạ khách (customer_saved_consignees / savedConsignees). */
+  customerConsigneeId?: string;
   /**
    * Dữ liệu shipper dùng riêng cho in phiếu cân.
    * Nếu rỗng, hệ thống sẽ fallback theo customer/customerCode + danh bạ.

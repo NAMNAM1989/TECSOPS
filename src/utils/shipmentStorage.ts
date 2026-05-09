@@ -70,6 +70,7 @@ function isShipmentShape(o: unknown): o is Omit<Shipment, "sessionDate"> & { ses
     typeof r.customer === "string" &&
     (r.customerCode === undefined || typeof r.customerCode === "string") &&
     (r.customerId === undefined || typeof r.customerId === "string") &&
+    (r.customerConsigneeId === undefined || typeof r.customerConsigneeId === "string") &&
     (r.shipperNamePrint === undefined || typeof r.shipperNamePrint === "string") &&
     (r.shipperAddressPrint === undefined || typeof r.shipperAddressPrint === "string") &&
     (r.shipperPhonePrint === undefined || typeof r.shipperPhonePrint === "string") &&
@@ -135,6 +136,8 @@ export function loadRows(): Shipment[] | null {
         note: typeof item.note === "string" ? item.note : "",
         customerCode: typeof item.customerCode === "string" ? item.customerCode : "",
         customerId: typeof item.customerId === "string" ? item.customerId : "",
+        customerConsigneeId:
+          typeof item.customerConsigneeId === "string" ? item.customerConsigneeId : "",
         shipperNamePrint: typeof item.shipperNamePrint === "string" ? item.shipperNamePrint : "",
         shipperAddressPrint: typeof item.shipperAddressPrint === "string" ? item.shipperAddressPrint : "",
         shipperPhonePrint: typeof item.shipperPhonePrint === "string" ? item.shipperPhonePrint : "",

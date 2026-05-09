@@ -1,5 +1,5 @@
 import type { Shipment } from "../types/shipment";
-import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+import type { CustomerDirectoryEntry, CustomerSavedConsignee } from "../types/customerDirectory";
 import { buildScscDimListModel } from "./scscDimListReport";
 
 export type ScaleTicketFormData = {
@@ -44,7 +44,7 @@ function compactSpace(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
-function findCustomerEntry(
+export function findCustomerEntry(
   booking: Shipment,
   directory: readonly CustomerDirectoryEntry[]
 ): CustomerDirectoryEntry | undefined {
@@ -65,6 +65,21 @@ function findCustomerEntry(
     const nameAsCode = directory.find((e) => norm(e.code) === norm(nameRaw));
     if (nameAsCode) return nameAsCode;
   }
+  return undefined;
+}
+
+/** CNEE lưu sẵn: theo `customerConsigneeId`, hoặc tự động một mục nếu danh bạ chỉ có một (trừ khi `skipAutoSingleConsignee`). */
+export function resolveSavedConsigneeForBooking(
+  booking: Shipment,
+  customer: CustomerDirectoryEntry | undefined,
+  opts?: { skipAutoSingleConsignee?: boolean }
+): CustomerSavedConsignee | undefined {
+  const list = customer?.savedConsignees ?? [];
+  if (!list.length) return undefined;
+  const id = booking.customerConsigneeId?.trim();
+  if (id) return list.find((x) => norm(x.id) === norm(id));
+  if (opts?.skipAutoSingleConsignee) return undefined;
+  if (list.length === 1) return list[0];
   return undefined;
 }
 
@@ -103,7 +118,8 @@ function extractContactFromParties(entry: CustomerDirectoryEntry): {
  */
 export function mapBookingToScaleTicketFormData(
   booking: Shipment,
-  customers: readonly CustomerDirectoryEntry[] = []
+  customers: readonly CustomerDirectoryEntry[] = [],
+  mapOpts?: { skipAutoSingleConsignee?: boolean }
 ): ScaleTicketFormData {
   const dimModel = buildScscDimListModel(booking);
   const gw = booking.kg ?? 0;
@@ -123,6 +139,9 @@ export function mapBookingToScaleTicketFormData(
   const goodsDescription = noteTrim ? noteTrim.slice(0, 60) : "GENERAL CARGO";
 
   const customer = findCustomerEntry(booking, customers);
+  const savedCnee = resolveSavedConsigneeForBooking(booking, customer, {
+    skipAutoSingleConsignee: mapOpts?.skipAutoSingleConsignee,
+  });
   const partyContact = customer ? extractContactFromParties(customer) : { address: "", phone: "", taxCode: "" };
 
   const customerCode = booking.customerCode?.trim() || booking.customer?.trim() || "";
@@ -145,11 +164,15 @@ export function mapBookingToScaleTicketFormData(
   const agentPhoneFallback = customer?.agentPhone?.trim() || "";
   const agentEmailFallback = customer?.agentEmail?.trim() || "";
   const agentTaxCodeFallback = customer?.agentTaxCode?.trim() || "";
-  const consigneeNameFallback = customer?.consigneeName?.trim() || "";
-  const consigneeAddressFallback = customer?.consigneeAddress?.trim() || "";
-  const consigneePhoneFallback = customer?.consigneePhone?.trim() || "";
-  const consigneeEmailFallback = customer?.consigneeEmail?.trim() || "";
-  const notifyNameFallback = customer?.notifyName?.trim() || noteTrim;
+  const consigneeNameFallback =
+    savedCnee?.consigneeName?.trim() || customer?.consigneeName?.trim() || "";
+  const consigneeAddressFallback =
+    savedCnee?.consigneeAddress?.trim() || customer?.consigneeAddress?.trim() || "";
+  const consigneePhoneFallback =
+    savedCnee?.consigneePhone?.trim() || customer?.consigneePhone?.trim() || "";
+  const consigneeEmailFallback =
+    savedCnee?.consigneeEmail?.trim() || customer?.consigneeEmail?.trim() || "";
+  const notifyNameFallback = savedCnee?.notifyName?.trim() || customer?.notifyName?.trim() || noteTrim;
 
   /** Dòng tên shipper: nếu booking chỉ lưu mã/ngắn trùng cột khách thì ưu tiên tên đầy đủ trong hồ sơ (shipperName hoặc name) */
   const shipperName = compactSpace(
@@ -198,7 +221,11 @@ export function mapBookingToScaleTicketFormData(
     })(),
     dimensionsText,
     goodsDescription,
-    hawbDisplay:
-      dimModel && dimModel.rows.length > 0 ? String(dimModel.rows.length) : "No Hawb",
+    hawbDisplay: (() => {
+      const h = booking.hawb?.trim() ?? "";
+      if (h) return h.slice(0, 48);
+      if (dimModel && dimModel.rows.length > 0) return String(dimModel.rows.length);
+      return "No Hawb";
+    })(),
   };
 }

@@ -1,75 +1,182 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Shipment } from "../types/shipment";
-import { formatAwb } from "../utils/awbFormat";
+import { loadLabelFontScale } from "../utils/labelFontScale";
 import {
-  LABEL_FONT_SCALE_DEFAULT,
-  LABEL_FONT_SCALE_MAX,
-  LABEL_FONT_SCALE_MIN,
-  clampLabelFontScale,
-  labelFs,
-  loadLabelFontScale,
-  saveLabelFontScale,
-} from "../utils/labelFontScale";
+  LABEL_HAWB_REL_MAX,
+  LABEL_HAWB_REL_MIN,
+  LABEL_MAWB_REL_MAX,
+  LABEL_MAWB_REL_MIN,
+  clampLabelHawbRelScale,
+  clampLabelMawbRelScale,
+  loadLabelHawbRelScale,
+  loadLabelMawbRelScale,
+  saveLabelHawbRelScale,
+  saveLabelMawbRelScale,
+} from "../utils/labelAwbHawbScale";
+import { loadLabelPrintFlipCcw } from "../utils/labelPrintMode";
 import {
-  type LabelPrintMode,
-  loadLabelPrintFlipCcw,
-  loadLabelPrintMode,
-  saveLabelPrintFlipCcw,
-  saveLabelPrintMode,
-} from "../utils/labelPrintMode";
-import { LABEL_PT } from "../constants/labelTypography";
-import { airlineLines, shipmentToTsplBody } from "../utils/shipmentToLabelPayload";
-import { printBrowserLabel } from "../utils/printBrowserLabel";
-import { credFetch } from "../apiFetch";
+  loadLabelCompactShowHawb,
+  loadLabelSheetFormat,
+  saveLabelCompactShowHawb,
+  saveLabelSheetFormat,
+  type LabelSheetFormat,
+} from "../utils/labelSheetFormat";
+import { printThermalLabelsFromIframe } from "../utils/printThermalLabelIframe";
+import { mapShipmentToAirCargoLabelData } from "../utils/mapShipmentToAirCargoLabelData";
+import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 
-const DEFAULT_ORIGIN = "SGN";
+export type LabelSheetVariant = "standard" | "compact";
 
-type LabelContentProps = { s: Shipment; fontScale: number };
+type LabelContentProps = {
+  s: Shipment;
+  fontScale: number;
+  /** Nhân thêm cỡ MAWB/AWB so với 7mm (1 = mặc định). */
+  mawbRelScale?: number;
+  /** Nhân thêm cỡ số HAWB so với 4mm (1 = mặc định). */
+  hawbRelScale?: number;
+  airlineLabelOverrides?: AirlineLabelOverrides | null;
+  /** Khổ 100×50: bố cục và cỡ chữ nhỏ hơn. */
+  sheetVariant?: LabelSheetVariant;
+  /** Khổ compact: có in HAWB hay chỉ MAWB + kiện (mặc định nên tắt). */
+  showHawbOnCompact?: boolean;
+};
 
-export function LabelContent({ s, fontScale }: LabelContentProps) {
-  const fs = (pt: number) => labelFs(fontScale, pt);
-  const awbLine = formatAwb(s.awb);
-  const pcsDisplay = s.pcs != null ? String(s.pcs) : "—";
-  const [line1, line2] = airlineLines(s.flight);
+export function LabelContent({
+  s,
+  fontScale,
+  mawbRelScale = 1,
+  hawbRelScale = 1,
+  airlineLabelOverrides,
+  sheetVariant = "standard",
+  showHawbOnCompact = false,
+}: LabelContentProps) {
+  const d = mapShipmentToAirCargoLabelData(s, airlineLabelOverrides);
+  const mm = (base: number) => `${Math.round(base * fontScale * 100) / 100}mm`;
+  const compact = sheetVariant === "compact";
+  const showHawbBlock = d.hasHawb && (!compact || showHawbOnCompact);
+
+  const airlineMm = compact ? 4 : 5;
+  const mawbBaseMm = compact ? 5.5 : 7;
+  const routeLabMm = compact ? 2 : 2.5;
+  const routeValMm = compact ? 5.5 : 9;
+  const piecesMm = compact ? 11 : 20;
+  const hawbBaseMm = compact ? 3 : 4;
+  const piecesLabMm = compact ? 2.3 : 2.8;
+  const specialMm = compact ? 2.2 : 2.8;
 
   return (
-    <div className="print-label-sheet lbl-sheet">
-      <div className="lbl-band lbl-band--airline">
-        <p style={{ fontSize: fs(LABEL_PT.airlineLine) }}>{line1}</p>
-        <p style={{ fontSize: fs(LABEL_PT.airlineLine) }}>{line2}</p>
+    <div
+      className={
+        compact ? "label print-label-sheet lbl-sheet lbl-sheet--compact" : "label print-label-sheet lbl-sheet"
+      }
+    >
+      {d.airline ? (
+        <div className="lbl-airline" style={{ fontSize: mm(airlineMm) }}>
+          {d.airline}
+        </div>
+      ) : null}
+
+      <div className="lbl-mawb" style={{ fontSize: mm(mawbBaseMm * mawbRelScale) }}>
+        {d.mawb || <span className="lbl-placeholder">Nhập MAWB...</span>}
       </div>
-      <div className="lbl-band lbl-band--awb">
-        <p style={{ fontSize: fs(LABEL_PT.awb) }}>{awbLine}</p>
-      </div>
-      <div className="lbl-band lbl-band--split">
-        <div className="lbl-col lbl-col--left">
-          <span className="lbl-col-cap" style={{ fontSize: fs(LABEL_PT.caption) }}>
+
+      <div className="lbl-route">
+        <div className="lbl-route-cell">
+          <div className="route-label" style={{ fontSize: mm(routeLabMm) }}>
             Origin
-          </span>
-          <span className="lbl-col-airport" style={{ fontSize: fs(LABEL_PT.airport) }}>
-            {DEFAULT_ORIGIN}
-          </span>
-          <span className="lbl-col-footer" style={{ fontSize: fs(LABEL_PT.caption) }}>
-            Total no. of pieces
-          </span>
+          </div>
+          <div className="route-val" style={{ fontSize: mm(routeValMm) }}>
+            {d.origin}
+          </div>
         </div>
-        <div className="lbl-col lbl-col--right">
-          <span className="lbl-col-cap" style={{ fontSize: fs(LABEL_PT.caption) }}>
+        <div className="lbl-route-cell">
+          <div className="route-label" style={{ fontSize: mm(routeLabMm) }}>
             Destination
-          </span>
-          <span className="lbl-col-airport truncate" style={{ fontSize: fs(LABEL_PT.airport) }}>
-            {s.dest}
-          </span>
-          <span className="lbl-col-footer" style={{ fontSize: fs(LABEL_PT.pieces) }}>
-            {pcsDisplay}
-          </span>
+          </div>
+          <div className="route-val" style={{ fontSize: mm(routeValMm) }}>
+            {d.dest || <span className="lbl-placeholder">-</span>}
+          </div>
         </div>
       </div>
+
+      {showHawbBlock ? (
+        <div className="lbl-hawb-row">
+          <span className="lbl-hawb-label" style={{ fontSize: mm(routeLabMm) }}>
+            HAWB No.:
+          </span>
+          <span className="lbl-hawb-val" style={{ fontSize: mm(hawbBaseMm * hawbRelScale) }}>
+            {d.hawbNo || "-"}
+          </span>
+        </div>
+      ) : null}
+
+      <div className="lbl-bottom">
+        {showHawbBlock ? (
+          <>
+            <div className="lbl-pieces-cell">
+              <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
+                Pieces
+                <br />
+                HAWB
+              </div>
+              <div className="pieces-val" style={{ fontSize: mm(piecesMm) }}>
+                {d.hawbPieces || "-"}
+              </div>
+            </div>
+            <div className="lbl-pieces-cell">
+              <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
+                Total Pieces
+                <br />
+                MAWB
+              </div>
+              <div className="pieces-val" style={{ fontSize: mm(piecesMm) }}>
+                {d.pieces || "-"}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="lbl-pieces-cell">
+            <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
+              Total no. of pieces
+            </div>
+            <div className="pieces-val" style={{ fontSize: mm(piecesMm) }}>
+              {d.pieces || "-"}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {d.special === "cold" ? (
+        <div className="lbl-special cold" style={{ fontSize: mm(specialMm) }}>
+          PLS KEEP AT 2-8C - PERISHABLE
+        </div>
+      ) : d.special === "danger" ? (
+        <div className="lbl-special danger" style={{ fontSize: mm(specialMm) }}>
+          DANGEROUS GOODS
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function LabelPreviewFit({ shipment, fontScale }: { shipment: Shipment; fontScale: number }) {
+function LabelPreviewFit({
+  shipment,
+  fontScale,
+  mawbRelScale,
+  hawbRelScale,
+  airlineLabelOverrides,
+  sheetVariant,
+  showHawbOnCompact,
+}: {
+  shipment: Shipment;
+  fontScale: number;
+  mawbRelScale: number;
+  hawbRelScale: number;
+  airlineLabelOverrides?: AirlineLabelOverrides | null;
+  sheetVariant: LabelSheetVariant;
+  showHawbOnCompact: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState({ scale: 1, clipW: 360, clipH: 288 });
@@ -103,7 +210,18 @@ function LabelPreviewFit({ shipment, fontScale }: { shipment: Shipment; fontScal
       ro.disconnect();
       window.removeEventListener("resize", updateScale);
     };
-  }, [updateScale, shipment.id, fontScale]);
+  }, [
+    updateScale,
+    shipment.id,
+    fontScale,
+    mawbRelScale,
+    hawbRelScale,
+    airlineLabelOverrides,
+    sheetVariant,
+    showHawbOnCompact,
+  ]);
+
+  const labelH = sheetVariant === "compact" ? "50mm" : "80mm";
 
   return (
     <div
@@ -118,12 +236,20 @@ function LabelPreviewFit({ shipment, fontScale }: { shipment: Shipment; fontScal
           ref={labelRef}
           style={{
             width: "100mm",
-            height: "80mm",
+            height: labelH,
             transform: `scale(${preview.scale})`,
             transformOrigin: "top left",
           }}
         >
-          <LabelContent s={shipment} fontScale={fontScale} />
+          <LabelContent
+            s={shipment}
+            fontScale={fontScale}
+            mawbRelScale={mawbRelScale}
+            hawbRelScale={hawbRelScale}
+            airlineLabelOverrides={airlineLabelOverrides}
+            sheetVariant={sheetVariant}
+            showHawbOnCompact={showHawbOnCompact}
+          />
         </div>
       </div>
     </div>
@@ -132,148 +258,24 @@ function LabelPreviewFit({ shipment, fontScale }: { shipment: Shipment; fontScal
 
 interface PrintShippingLabelProps {
   shipment: Shipment;
+  /** Ghi đè tên hãng từ Cài đặt trên app (đồng bộ server). */
+  airlineLabelOverrides?: AirlineLabelOverrides | null;
   onClose: () => void;
 }
 
-const PRINT_OVERRIDE_STYLE_ID = "tecsops-print-label-override";
+export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }: PrintShippingLabelProps) {
+  const fontScale = useMemo(() => loadLabelFontScale(), []);
+  const printFlipCcw = useMemo(() => loadLabelPrintFlipCcw(), []);
+  const [mawbRelScale, setMawbRelScale] = useState(loadLabelMawbRelScale);
+  const [hawbRelScale, setHawbRelScale] = useState(loadLabelHawbRelScale);
+  const [sheetFormat, setSheetFormat] = useState<LabelSheetFormat>(() => loadLabelSheetFormat());
+  const [compactShowHawb, setCompactShowHawb] = useState(() => loadLabelCompactShowHawb());
 
-export function PrintShippingLabel({ shipment, onClose }: PrintShippingLabelProps) {
-  const [fontScale, setFontScale] = useState(LABEL_FONT_SCALE_DEFAULT);
-  const [printMode, setPrintMode] = useState<LabelPrintMode>("thermal");
-  const [printFlipCcw, setPrintFlipCcw] = useState(false);
-  const [printerHost, setPrinterHost] = useState("");
-  const [printerPort, setPrinterPort] = useState("9100");
-  const [tsplBusy, setTsplBusy] = useState(false);
-  const [tsplMsg, setTsplMsg] = useState<string | null>(null);
+  const sheetVariant: LabelSheetVariant = sheetFormat === "100x50" ? "compact" : "standard";
 
-  useEffect(() => {
-    setFontScale(loadLabelFontScale());
-    setPrintMode(loadLabelPrintMode());
-    setPrintFlipCcw(loadLabelPrintFlipCcw());
-  }, []);
-
-  useEffect(() => {
-    if (printMode !== "direct") {
-      document.getElementById(PRINT_OVERRIDE_STYLE_ID)?.remove();
-      return;
-    }
-    let el = document.getElementById(PRINT_OVERRIDE_STYLE_ID) as HTMLStyleElement | null;
-    if (!el) {
-      el = document.createElement("style");
-      el.id = PRINT_OVERRIDE_STYLE_ID;
-      document.head.appendChild(el);
-    }
-    el.textContent = `
-@media print {
-  @page { size: 100mm 80mm !important; margin: 0 !important; }
-  html {
-    height: 80mm !important;
-    width: 100mm !important;
-    max-height: 80mm !important;
-    overflow: hidden !important;
-  }
-  body {
-    min-height: 0 !important;
-    height: 80mm !important;
-    max-height: 80mm !important;
-    width: 100mm !important;
-    max-width: 100mm !important;
-    overflow: hidden !important;
-  }
-  .print-only.print-label-host {
-    width: 100mm !important;
-    height: 80mm !important;
-    max-width: 100mm !important;
-    max-height: 80mm !important;
-    page-break-after: avoid !important;
-    break-after: avoid-page !important;
-  }
-  .print-label-spin,
-  .print-label-spin.print-label-spin--ccw {
-    position: static !important;
-    transform: none !important;
-    left: auto !important;
-    top: auto !important;
-    width: 100mm !important;
-    height: 80mm !important;
-    max-width: 100mm !important;
-    max-height: 80mm !important;
-    overflow: hidden !important;
-  }
-}`;
-    return () => {
-      document.getElementById(PRINT_OVERRIDE_STYLE_ID)?.remove();
-    };
-  }, [printMode]);
-
-  const onFontScaleInput = (raw: number) => {
-    const c = clampLabelFontScale(raw);
-    setFontScale(c);
-    saveLabelFontScale(c);
-  };
-
-  const onPrintModeChange = (m: LabelPrintMode) => {
-    setPrintMode(m);
-    saveLabelPrintMode(m);
-  };
-
-  const onPrintFlipChange = (on: boolean) => {
-    setPrintFlipCcw(on);
-    saveLabelPrintFlipCcw(on);
-  };
-
-  const downloadTspl = async () => {
-    setTsplMsg(null);
-    setTsplBusy(true);
-    try {
-      const body = shipmentToTsplBody(shipment);
-      const r = await fetch("/api/tspl/build", {
-        ...credFetch,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error ?? r.statusText);
-      const text = await r.text();
-      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `label-${body.awb.replace(/\s/g, "")}.tspl`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-      setTsplMsg("Đã tải file .tspl — gửi RAW qua cổng 9100 hoặc nhập vào tool máy in.");
-    } catch (e) {
-      setTsplMsg(e instanceof Error ? e.message : "Lỗi tải TSPL");
-    } finally {
-      setTsplBusy(false);
-    }
-  };
-
-  const sendTsplToNetwork = async () => {
-    setTsplMsg(null);
-    const host = printerHost.trim();
-    if (!host) {
-      setTsplMsg("Nhập IP máy in.");
-      return;
-    }
-    const port = parseInt(printerPort, 10) || 9100;
-    setTsplBusy(true);
-    try {
-      const body = { ...shipmentToTsplBody(shipment), host, port };
-      const r = await fetch("/api/tspl/print", {
-        ...credFetch,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error ?? r.statusText);
-      setTsplMsg("Đã gửi TSPL tới máy in.");
-    } catch (e) {
-      setTsplMsg(e instanceof Error ? e.message : "Lỗi gửi in");
-    } finally {
-      setTsplBusy(false);
-    }
+  const handlePrint = async () => {
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+    await printThermalLabelsFromIframe({ format: sheetFormat });
   };
 
   return (
@@ -303,141 +305,140 @@ export function PrintShippingLabel({ shipment, onClose }: PrintShippingLabelProp
             </button>
           </div>
 
-          <div className="mb-4 rounded-2xl border border-black/[0.08] bg-apple-blue/5 px-3 py-3">
-            <p className="text-xs font-semibold text-apple-label">Khuyến nghị: TSPL (RAW)</p>
-            <p className="mt-1 text-[11px] leading-snug text-apple-secondary">
-              Tránh Chrome scale/lệch trang. Tải file lệnh hoặc gửi TCP :9100 (cần{" "}
-              <span className="font-mono text-apple-label">TSPL_ALLOWED_HOSTS</span> trên server).
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={tsplBusy}
-                onClick={() => void downloadTspl()}
-                className="rounded-full bg-apple-blue px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-apple-blue-hover disabled:opacity-50"
-              >
-                Tải .tspl
-              </button>
-            </div>
-            <div className="mt-2 flex flex-wrap items-end gap-2">
-              <div className="min-w-0 flex-1">
-                <label className="text-[10px] font-semibold text-apple-secondary">IP máy in</label>
-                <input
-                  value={printerHost}
-                  onChange={(e) => setPrinterHost(e.target.value)}
-                  placeholder="192.168.x.x"
-                  className="mt-0.5 w-full rounded-xl border border-black/[0.1] bg-white px-2 py-1.5 font-mono text-xs text-apple-label"
-                />
-              </div>
-              <div className="w-20">
-                <label className="text-[10px] font-semibold text-apple-secondary">Cổng</label>
-                <input
-                  value={printerPort}
-                  onChange={(e) => setPrinterPort(e.target.value)}
-                  className="mt-0.5 w-full rounded-xl border border-black/[0.1] bg-white px-2 py-1.5 font-mono text-xs text-apple-label"
-                />
-              </div>
-              <button
-                type="button"
-                disabled={tsplBusy}
-                onClick={() => void sendTsplToNetwork()}
-                className="rounded-full border border-black/[0.12] bg-white px-3 py-2 text-xs font-semibold text-apple-blue hover:bg-black/[0.03] disabled:opacity-50"
-              >
-                Gửi TSPL
-              </button>
-            </div>
-            {tsplMsg && <p className="mt-2 text-[11px] text-apple-secondary">{tsplMsg}</p>}
-          </div>
+          <LabelPreviewFit
+            shipment={shipment}
+            fontScale={fontScale}
+            mawbRelScale={mawbRelScale}
+            hawbRelScale={hawbRelScale}
+            airlineLabelOverrides={airlineLabelOverrides}
+            sheetVariant={sheetVariant}
+            showHawbOnCompact={compactShowHawb}
+          />
 
-          <div className="mb-4 rounded-2xl border border-black/[0.08] bg-apple-bg px-3 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <label htmlFor="label-font-scale" className="text-xs font-semibold text-apple-label">
-                Cỡ chữ ({Math.round(fontScale * 100)}%)
-              </label>
+          <div className="mt-4 space-y-2 rounded-2xl border border-black/[0.08] bg-apple-bg/60 p-3">
+            <p className="text-[11px] font-semibold text-apple-label">Khổ tem (lưu trên máy)</p>
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => onFontScaleInput(LABEL_FONT_SCALE_DEFAULT)}
-                className="text-[11px] font-semibold text-apple-blue hover:underline"
+                onClick={() => {
+                  setSheetFormat("100x80");
+                  saveLabelSheetFormat("100x80");
+                }}
+                className={
+                  sheetFormat === "100x80"
+                    ? "rounded-full bg-apple-blue px-3.5 py-2 text-xs font-semibold text-white"
+                    : "rounded-full border border-black/[0.12] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label hover:bg-black/[0.03]"
+                }
               >
-                Mặc định 100%
+                100 × 80 mm
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSheetFormat("100x50");
+                  saveLabelSheetFormat("100x50");
+                }}
+                className={
+                  sheetFormat === "100x50"
+                    ? "rounded-full bg-apple-blue px-3.5 py-2 text-xs font-semibold text-white"
+                    : "rounded-full border border-black/[0.12] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label hover:bg-black/[0.03]"
+                }
+              >
+                100 × 50 mm
               </button>
             </div>
-            <input
-              id="label-font-scale"
-              type="range"
-              min={LABEL_FONT_SCALE_MIN}
-              max={LABEL_FONT_SCALE_MAX}
-              step={0.05}
-              value={fontScale}
-              onChange={(e) => onFontScaleInput(parseFloat(e.target.value))}
-              className="mt-2 h-2 w-full cursor-pointer accent-apple-blue"
-            />
-            <p className="mt-1.5 text-[11px] leading-snug text-apple-secondary">
-              Gốc: {LABEL_PT.airlineLine}/{LABEL_PT.awb}/{LABEL_PT.caption}/{LABEL_PT.airport}/{LABEL_PT.pieces} pt — vùng
-              tuyệt đối mm.
-            </p>
-          </div>
-
-          <div className="mb-4 rounded-2xl border border-black/[0.08] bg-amber-50/60 px-3 py-3">
-            <p className="text-xs font-semibold text-apple-label">Chrome window.print (dự phòng)</p>
-            <div className="mt-2 space-y-2 text-[11px] text-apple-label">
-              <label className="flex cursor-pointer items-start gap-2">
-                <input
-                  type="radio"
-                  name="label-print-mode"
-                  checked={printMode === "thermal"}
-                  onChange={() => onPrintModeChange("thermal")}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="font-semibold">Nhiệt</span> — @page <span className="font-mono">80×100 mm</span>, tem xoay
-                  90°.
-                </span>
-              </label>
-              <label className="flex cursor-pointer items-start gap-2">
-                <input
-                  type="radio"
-                  name="label-print-mode"
-                  checked={printMode === "direct"}
-                  onChange={() => onPrintModeChange("direct")}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="font-semibold">Thẳng 100×80</span> — PDF / laser.
-                </span>
-              </label>
-              <label
-                className={`flex cursor-pointer items-start gap-2 ${printMode !== "thermal" ? "opacity-40" : ""}`}
-              >
+            {sheetFormat === "100x50" ? (
+              <label className="flex cursor-pointer items-start gap-2.5 pt-0.5">
                 <input
                   type="checkbox"
-                  checked={printFlipCcw}
-                  disabled={printMode !== "thermal"}
-                  onChange={(e) => onPrintFlipChange(e.target.checked)}
-                  className="mt-0.5"
+                  className="mt-0.5 h-4 w-4 rounded border-black/20 accent-apple-blue"
+                  checked={compactShowHawb}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setCompactShowHawb(on);
+                    saveLabelCompactShowHawb(on);
+                  }}
                 />
-                <span>Đảo xoay ±90°.</span>
+                <span className="text-[11px] leading-snug text-apple-secondary">
+                  In HAWB trên tem nhỏ (mặc định tắt — chỉ MAWB, điểm đến và tổng kiện).
+                </span>
               </label>
+            ) : null}
+          </div>
+
+          <div className="mt-4 space-y-3 rounded-2xl border border-black/[0.08] bg-apple-bg/60 p-3">
+            <p className="text-[11px] font-semibold text-apple-label">Cỡ chữ trên tem (lưu trên máy)</p>
+            <div>
+              <div className="flex items-baseline justify-between gap-2">
+                <label htmlFor="label-mawb-scale" className="text-[11px] text-apple-secondary">
+                  Số MAWB / AWB
+                </label>
+                <span className="font-mono text-[11px] font-semibold text-apple-label tabular-nums">
+                  {Math.round(mawbRelScale * 100)}%
+                </span>
+              </div>
+              <input
+                id="label-mawb-scale"
+                type="range"
+                min={LABEL_MAWB_REL_MIN}
+                max={LABEL_MAWB_REL_MAX}
+                step={0.05}
+                value={mawbRelScale}
+                onChange={(e) => {
+                  const v = clampLabelMawbRelScale(Number(e.target.value));
+                  setMawbRelScale(v);
+                  saveLabelMawbRelScale(v);
+                }}
+                className="mt-1.5 h-2 w-full cursor-pointer accent-apple-blue"
+              />
             </div>
-            <p className="mt-2 text-[10px] text-apple-secondary">
-              In trình duyệt: 100%, tắt Fit to page, tắt header/footer nếu có.
+            {sheetVariant === "standard" || compactShowHawb ? (
+              <div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <label htmlFor="label-hawb-scale" className="text-[11px] text-apple-secondary">
+                    Số HAWB
+                  </label>
+                  <span className="font-mono text-[11px] font-semibold text-apple-label tabular-nums">
+                    {Math.round(hawbRelScale * 100)}%
+                  </span>
+                </div>
+                <input
+                  id="label-hawb-scale"
+                  type="range"
+                  min={LABEL_HAWB_REL_MIN}
+                  max={LABEL_HAWB_REL_MAX}
+                  step={0.05}
+                  value={hawbRelScale}
+                  onChange={(e) => {
+                    const v = clampLabelHawbRelScale(Number(e.target.value));
+                    setHawbRelScale(v);
+                    saveLabelHawbRelScale(v);
+                  }}
+                  className="mt-1.5 h-2 w-full cursor-pointer accent-apple-blue"
+                />
+              </div>
+            ) : null}
+            <p className="text-[10px] leading-snug text-apple-secondary">
+              100% = mặc định. Áp dụng cả xem trước và khi in; tăng quá mức có thể chồng chữ trên tem{" "}
+              {sheetFormat === "100x50" ? "100×50" : "100×80"} mm.
             </p>
           </div>
 
-          <LabelPreviewFit shipment={shipment} fontScale={fontScale} />
-
-          <div className="mt-4 flex flex-wrap gap-2">
+          <p className="mt-4 text-[11px] leading-snug text-apple-secondary">
+            Web chỉ gửi một trang nhãn. Chọn số bản in trong hộp thoại in của Chrome (hoặc trên máy in) để tránh lỗi gộp trang.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => void printBrowserLabel()}
-              className="min-w-[8rem] flex-1 rounded-full bg-apple-blue px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-apple-blue-hover"
+              onClick={() => void handlePrint()}
+              className="min-h-11 min-w-[8rem] flex-1 rounded-full bg-apple-blue px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-apple-blue-hover sm:flex-none"
             >
-              In Chrome…
+              In
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-black/[0.12] bg-white px-5 py-3 text-sm font-semibold text-apple-label hover:bg-black/[0.03]"
+              className="min-h-11 rounded-full border border-black/[0.12] bg-white px-5 py-3 text-sm font-semibold text-apple-label hover:bg-black/[0.03]"
             >
               Đóng
             </button>
@@ -445,15 +446,27 @@ export function PrintShippingLabel({ shipment, onClose }: PrintShippingLabelProp
         </div>
       </div>
 
-      <div className="print-only print-label-host fixed left-0 top-0 hidden bg-white print:block" aria-hidden>
+      {createPortal(
         <div
-          className={
-            printMode === "thermal" && printFlipCcw ? "print-label-spin print-label-spin--ccw" : "print-label-spin"
-          }
+          className="print-label-host hidden bg-white print:block"
+          aria-hidden
         >
-          <LabelContent s={shipment} fontScale={fontScale} />
-        </div>
-      </div>
+          <div className="print-label-page">
+            <div className={printFlipCcw ? "print-label-spin print-label-spin--ccw" : "print-label-spin"}>
+              <LabelContent
+                s={shipment}
+                fontScale={fontScale}
+                mawbRelScale={mawbRelScale}
+                hawbRelScale={hawbRelScale}
+                airlineLabelOverrides={airlineLabelOverrides}
+                sheetVariant={sheetVariant}
+                showHawbOnCompact={compactShowHawb}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }

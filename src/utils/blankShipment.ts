@@ -9,6 +9,7 @@ export function blankShipmentDraft(
   return {
     sessionDate: sessionYmd,
     awb: "",
+    hawb: "",
     flight: "",
     flightDate: formatYmdToFlightDateDdMon(sessionYmd),
     cutoff: "",
@@ -24,6 +25,7 @@ export function blankShipmentDraft(
     customer: "",
     customerCode: "",
     customerId: "",
+    customerConsigneeId: "",
     shipperNamePrint: "",
     shipperAddressPrint: "",
     shipperPhonePrint: "",

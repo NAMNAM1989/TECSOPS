@@ -15,6 +15,10 @@ import {
   type ShipmentMutation,
 } from "../utils/shipmentMutations";
 import { debugWarn } from "../utils/debugLog";
+import {
+  loadAirlineLabelOverridesFromStorage,
+  saveAirlineLabelOverridesToStorage,
+} from "../utils/airlineLabelOverridesStorage";
 
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
@@ -35,6 +39,7 @@ function offlineBootstrapState(rows: Shipment[]): AppState {
     version: 0,
     rows,
     customers: loadCustomerDirectoryFromStorage() ?? buildDefaultCustomerDirectory(),
+    airlineLabelOverrides: loadAirlineLabelOverridesFromStorage() ?? undefined,
   };
 }
 
@@ -128,6 +133,9 @@ export function useShipmentSync(fallback: Fallback) {
           saveRows(next.rows);
           if (mutation.action === "SET_CUSTOMERS") {
             saveCustomerDirectoryToStorage(next.customers);
+          }
+          if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
+            saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
           }
           computed = next;
           return next;

@@ -1,4 +1,9 @@
-import type { CustomerDirectoryEntry, CustomerParty, CustomerPartyType } from "../types/customerDirectory";
+import type {
+  CustomerDirectoryEntry,
+  CustomerParty,
+  CustomerPartyType,
+  CustomerSavedConsignee,
+} from "../types/customerDirectory";
 
 /** Giới hạn độ dài — đồng bộ client / server. */
 export const CUSTOMER_PROFILE_LIMITS = {
@@ -22,6 +27,8 @@ export const CUSTOMER_PROFILE_LIMITS = {
   partyLabel: 80,
   partyContent: 8000,
   partyCount: 60,
+  savedConsigneeLabel: 80,
+  savedConsigneeCount: 40,
 } as const;
 
 export const CUSTOMER_PARTY_TYPES: readonly CustomerPartyType[] = ["SHIPPER", "CNEE", "NOTIFY", "OTHER"];
@@ -48,6 +55,38 @@ export function emptyCustomerParty(type: CustomerPartyType = "SHIPPER", label = 
   };
 }
 
+function newSavedConsigneeId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `cnee-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function clampCustomerSavedConsignee(c: CustomerSavedConsignee): CustomerSavedConsignee {
+  const L = CUSTOMER_PROFILE_LIMITS;
+  return {
+    id: clip(c.id, 80).trim() || newSavedConsigneeId(),
+    label: clip(c.label, L.savedConsigneeLabel).trim(),
+    consigneeName: clip(c.consigneeName, L.consigneeName).trim(),
+    consigneeAddress: clip(c.consigneeAddress, L.consigneeAddress).trim(),
+    consigneePhone: clip(c.consigneePhone, L.consigneePhone).trim(),
+    consigneeEmail: clip(c.consigneeEmail, L.consigneeEmail).trim(),
+    notifyName: clip(c.notifyName, L.notifyName).trim(),
+  };
+}
+
+export function emptyCustomerSavedConsignee(): CustomerSavedConsignee {
+  return clampCustomerSavedConsignee({
+    id: newSavedConsigneeId(),
+    label: "",
+    consigneeName: "",
+    consigneeAddress: "",
+    consigneePhone: "",
+    consigneeEmail: "",
+    notifyName: "",
+  });
+}
+
 export function clampCustomerParty(p: CustomerParty): CustomerParty {
   const L = CUSTOMER_PROFILE_LIMITS;
   return {
@@ -66,6 +105,12 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
         .slice(0, L.partyCount)
         .map(clampCustomerParty)
         .filter((p) => p.label || p.content.trim())
+    : [];
+  const savedConsignees = Array.isArray(e.savedConsignees)
+    ? e.savedConsignees
+        .slice(0, L.savedConsigneeCount)
+        .map((x) => clampCustomerSavedConsignee(x as CustomerSavedConsignee))
+        .filter((x) => x.consigneeName || x.label || x.consigneeAddress || x.consigneePhone || x.notifyName)
     : [];
   return {
     id: clip(e.id, 80).trim(),
@@ -86,6 +131,7 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
     consigneePhone: clip(e.consigneePhone ?? "", L.consigneePhone).trim(),
     consigneeEmail: clip(e.consigneeEmail ?? "", L.consigneeEmail).trim(),
     notifyName: clip(e.notifyName ?? "", L.notifyName).trim(),
+    savedConsignees,
     parties,
   };
 }
@@ -151,6 +197,7 @@ export function emptyCustomerProfileRow(id: string): CustomerDirectoryEntry {
     consigneePhone: "",
     consigneeEmail: "",
     notifyName: "",
+    savedConsignees: [],
     parties: [],
   };
 }

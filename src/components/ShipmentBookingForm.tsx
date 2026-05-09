@@ -45,6 +45,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   const useCustomerDirectory = directory.length > 0;
 
   const [awbRaw, setAwbRaw] = useState("");
+  const [hawb, setHawb] = useState("");
   const [flight, setFlight] = useState("");
   /** Ngày bay nhập tay: 15APR, 2026-04-15, 15/04/2026 … */
   const [flightDateText, setFlightDateText] = useState("");
@@ -74,12 +75,15 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   const [consigneePhonePrint, setConsigneePhonePrint] = useState("");
   const [consigneeEmailPrint, setConsigneeEmailPrint] = useState("");
   const [notifyNamePrint, setNotifyNamePrint] = useState("");
+  /** Khóa CNEE lưu sẵn trong danh bạ (nhiều người nhận / khách). */
+  const [customerConsigneeId, setCustomerConsigneeId] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [note, setNote] = useState("");
   const [dimKg, setDimKg] = useState("");
 
   const awbRef = useRef<HTMLInputElement>(null);
+  const hawbRef = useRef<HTMLInputElement>(null);
   const flightRef = useRef<HTMLInputElement>(null);
   const flightDateTextRef = useRef<HTMLInputElement>(null);
   const cutoffDateTextRef = useRef<HTMLInputElement>(null);
@@ -98,6 +102,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   useEffect(() => {
     if (!isEdit || !editShipment) return;
     setAwbRaw(rawAwbDigits(editShipment.awb));
+    setHawb((editShipment.hawb ?? "").trim());
     setFlight(editShipment.flight);
     setFlightDateText(editShipment.flightDate?.trim() || "");
     const co = editShipment.cutoff ? splitIsoToLocalDateTime(editShipment.cutoff) : { date: "", hour: "", minute: "" };
@@ -126,6 +131,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     setConsigneePhonePrint((editShipment.consigneePhonePrint ?? "").trim());
     setConsigneeEmailPrint((editShipment.consigneeEmailPrint ?? "").trim());
     setNotifyNamePrint((editShipment.notifyNamePrint ?? "").trim());
+    setCustomerConsigneeId((editShipment.customerConsigneeId ?? "").trim());
     setCustomerSearch("");
     setNote(editShipment.note ?? "");
     setDimKg(editShipment.dimWeightKg != null ? String(editShipment.dimWeightKg) : "");
@@ -151,6 +157,13 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     () => mergeCustomerOptions(CUSTOMERS),
     [customerListVersion]
   );
+
+  const directoryCustomer = useMemo(() => {
+    if (!useCustomerDirectory || !customerId.trim()) return undefined;
+    return directory.find((e) => e.id.trim() === customerId.trim());
+  }, [useCustomerDirectory, customerId, directory]);
+
+  const savedConsigneeOptions = directoryCustomer?.savedConsignees ?? [];
 
   const filteredCustomers = useCustomerDirectory
     ? directory.filter(
@@ -222,6 +235,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   function focusNextFrom(el: EventTarget | null) {
     const order: (HTMLElement | null)[] = [
       awbRef.current,
+      hawbRef.current,
       flightRef.current,
       flightDateTextRef.current,
       cutoffDateTextRef.current,
@@ -328,6 +342,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       setConsigneePhonePrint("");
       setConsigneeEmailPrint("");
       setNotifyNamePrint("");
+      setCustomerConsigneeId("");
       return;
     }
     const info = extractDirectoryPrintInfo(entry);
@@ -346,6 +361,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     setConsigneePhonePrint(normalizePrintText(entry.consigneePhone ?? "").slice(0, 24));
     setConsigneeEmailPrint(normalizePrintText(entry.consigneeEmail ?? "").slice(0, 50));
     setNotifyNamePrint(normalizePrintText(entry.notifyName ?? "").slice(0, 80));
+    setCustomerConsigneeId("");
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -418,6 +434,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
 
     const payloadCommon = {
       awb: awbDisplay,
+      hawb: normalizePrintText(hawb).slice(0, 32),
       flight: flight.toUpperCase(),
       flightDate: formatYmdToFlightDateDdMon(flightYmd),
       cutoff,
@@ -435,6 +452,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
         ? customerCode.trim()
         : lookupCustomerCodeByName(directory, effectiveCustomer) || "",
       customerId: useCustomerDirectory ? customerId.trim() : "",
+      customerConsigneeId: useCustomerDirectory ? customerConsigneeId.trim() : "",
       shipperNamePrint: normalizePrintText(shipperNamePrint || effectiveCustomer).slice(0, 45),
       shipperAddressPrint: normalizePrintText(shipperAddressPrint).slice(0, 110),
       shipperPhonePrint: normalizePrintText(shipperPhonePrint).slice(0, 24),
@@ -462,6 +480,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
         sessionDate: props.sessionDateYmd,
       });
       setAwbRaw("");
+      setHawb("");
       setFlight("");
       setFlightDateText("");
       setCutoffDateText("");
@@ -473,6 +492,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       setCustomer("");
       setCustomerCode("");
       setCustomerId("");
+      setCustomerConsigneeId("");
       setCustomerSearch("");
       setShipperNamePrint("");
       setShipperAddressPrint("");
@@ -489,6 +509,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       setConsigneePhonePrint("");
       setConsigneeEmailPrint("");
       setNotifyNamePrint("");
+      setCustomerConsigneeId("");
       awbRef.current?.focus();
     }
   }
@@ -575,6 +596,22 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 )}
               </p>
             )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-apple-secondary">
+              HAWB (tuỳ chọn)
+            </label>
+            <input
+              ref={hawbRef}
+              type="text"
+              placeholder="VD: SGN12345678"
+              value={hawb}
+              onChange={(e) => setHawb(e.target.value.slice(0, 32))}
+              onKeyDown={(e) => handleEnterAdvance(e, "field")}
+              className="w-full rounded-2xl border border-black/[0.08] bg-white px-4 py-2.5 font-mono text-sm font-semibold text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+            />
+            <p className="mt-1 text-[10px] text-apple-tertiary">Hiển thị trên tem nhãn & phiếu cân khi có.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -790,6 +827,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                       setCustomer("");
                       setCustomerCode("");
                       setCustomerId("");
+                      setCustomerConsigneeId("");
                       setShipperNamePrint("");
                       setShipperAddressPrint("");
                       setShipperPhonePrint("");
@@ -937,6 +975,36 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
             </div>
             <div className="grid grid-cols-1 gap-2 border-t border-black/[0.06] pt-2">
               <p className="text-[11px] font-semibold uppercase text-apple-secondary">Người nhận / Notify</p>
+              {useCustomerDirectory && savedConsigneeOptions.length > 0 ? (
+                <div>
+                  <label className="mb-1 block text-[10px] font-semibold text-apple-tertiary">
+                    CNEE lưu sẵn (phiếu cân)
+                  </label>
+                  <select
+                    value={customerConsigneeId}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCustomerConsigneeId(v);
+                      const sc = savedConsigneeOptions.find((x) => x.id === v);
+                      if (sc) {
+                        setConsigneeNamePrint(normalizePrintText(sc.consigneeName).slice(0, 45));
+                        setConsigneeAddressPrint(normalizePrintText(sc.consigneeAddress).slice(0, 110));
+                        setConsigneePhonePrint(normalizePrintText(sc.consigneePhone).slice(0, 24));
+                        setConsigneeEmailPrint(normalizePrintText(sc.consigneeEmail).slice(0, 50));
+                        setNotifyNamePrint(normalizePrintText(sc.notifyName).slice(0, 80));
+                      }
+                    }}
+                    className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-medium text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                  >
+                    <option value="">— Hồ sơ CNEE chính / nhập tay dưới —</option>
+                    {savedConsigneeOptions.map((sc) => (
+                      <option key={sc.id} value={sc.id}>
+                        {(sc.label.trim() ? `${sc.label} — ` : "") + (sc.consigneeName.trim() || sc.id)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <input type="text" value={consigneeNamePrint} onChange={(e) => setConsigneeNamePrint(e.target.value)} maxLength={45} placeholder="Tên consignee" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
               <textarea value={consigneeAddressPrint} onChange={(e) => setConsigneeAddressPrint(e.target.value)} rows={2} maxLength={110} placeholder="Địa chỉ consignee" className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">

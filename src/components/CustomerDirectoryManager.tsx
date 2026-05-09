@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { assertCustomerDirectoryValid } from "../utils/customerDirectoryCore";
+import type { CustomerSavedConsignee } from "../types/customerDirectory";
 import {
   clampCustomerDirectoryEntry,
   emptyCustomerProfileRow,
+  emptyCustomerSavedConsignee,
 } from "../utils/customerDirectoryProfile";
 
 type Props = {
@@ -47,6 +49,39 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
     patch: Partial<Omit<CustomerDirectoryEntry, "id" | "parties">>
   ) {
     setDraft((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  }
+
+  function patchSavedConsignee(customerId: string, index: number, patch: Partial<CustomerSavedConsignee>) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        const list = [...(row.savedConsignees ?? [])];
+        const cur = list[index];
+        if (!cur) return row;
+        list[index] = { ...cur, ...patch };
+        return { ...row, savedConsignees: list };
+      })
+    );
+  }
+
+  function removeSavedConsignee(customerId: string, index: number) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        const list = (row.savedConsignees ?? []).filter((_, i) => i !== index);
+        return { ...row, savedConsignees: list };
+      })
+    );
+  }
+
+  function addSavedConsignee(customerId: string) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        const list = [...(row.savedConsignees ?? []), emptyCustomerSavedConsignee()];
+        return { ...row, savedConsignees: list };
+      })
+    );
   }
 
   function addCustomer() {
@@ -128,7 +163,8 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
               >
                 <span className="block truncate text-sm font-semibold">{customer.name || "Chưa đặt tên"}</span>
                 <span className="mt-0.5 block truncate font-mono text-[11px] text-apple-tertiary">
-                  {customer.code || "CHƯA CÓ MÃ"} · {customer.parties.length} mẫu
+                  {customer.code || "CHƯA CÓ MÃ"} · {(customer.savedConsignees ?? []).length} CNEE ·{" "}
+                  {customer.parties.length} mẫu
                 </span>
               </button>
             ))}
@@ -246,6 +282,92 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
                       <input value={selected.consigneePhone ?? ""} onChange={(e) => updateCustomer(selected.id, { consigneePhone: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="SĐT consignee" />
                       <input value={selected.consigneeEmail ?? ""} onChange={(e) => updateCustomer(selected.id, { consigneeEmail: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Email consignee" />
                       <input value={selected.notifyName ?? ""} onChange={(e) => updateCustomer(selected.id, { notifyName: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Notify" />
+                    </div>
+                  </div>
+                  <div className="mt-4 border-t border-black/[0.06] pt-3">
+                    <p className="mb-2 text-[11px] font-semibold uppercase text-apple-secondary">
+                      CNEE lưu sẵn (chọn khi booking / in phiếu cân)
+                    </p>
+                    <p className="mb-2 text-[10px] leading-snug text-apple-tertiary">
+                      Mỗi mục là một bộ người nhận. Trên lô hàng có thể chọn mục này; nếu chưa chọn và có nhiều mục, lúc in
+                      phiếu cân SCSC sẽ hỏi chọn CNEE.
+                    </p>
+                    <div className="space-y-3">
+                      {(selected.savedConsignees ?? []).map((sc, idx) => (
+                        <div
+                          key={sc.id}
+                          className="rounded-xl border border-black/[0.08] bg-white p-2.5 shadow-sm"
+                        >
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-[10px] font-semibold uppercase text-apple-tertiary">
+                              CNEE #{idx + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeSavedConsignee(selected.id, idx)}
+                              className="rounded-lg px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                          <input
+                            value={sc.label}
+                            onChange={(e) => patchSavedConsignee(selected.id, idx, { label: e.target.value })}
+                            className="mb-1.5 w-full rounded-lg border border-black/[0.08] bg-apple-bg/40 px-2.5 py-1.5 text-xs font-semibold text-apple-label"
+                            placeholder="Nhãn (VD: Tokyo, Singapore)"
+                          />
+                          <input
+                            value={sc.consigneeName}
+                            onChange={(e) =>
+                              patchSavedConsignee(selected.id, idx, { consigneeName: e.target.value })
+                            }
+                            className="mb-1.5 w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm text-apple-label"
+                            placeholder="Tên consignee"
+                          />
+                          <textarea
+                            value={sc.consigneeAddress}
+                            onChange={(e) =>
+                              patchSavedConsignee(selected.id, idx, { consigneeAddress: e.target.value })
+                            }
+                            rows={2}
+                            className="mb-1.5 w-full resize-y rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm text-apple-label"
+                            placeholder="Địa chỉ"
+                          />
+                          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                            <input
+                              value={sc.consigneePhone}
+                              onChange={(e) =>
+                                patchSavedConsignee(selected.id, idx, { consigneePhone: e.target.value })
+                              }
+                              className="w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm text-apple-label"
+                              placeholder="SĐT"
+                            />
+                            <input
+                              value={sc.consigneeEmail}
+                              onChange={(e) =>
+                                patchSavedConsignee(selected.id, idx, { consigneeEmail: e.target.value })
+                              }
+                              className="w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm text-apple-label"
+                              placeholder="Email"
+                            />
+                            <input
+                              value={sc.notifyName}
+                              onChange={(e) =>
+                                patchSavedConsignee(selected.id, idx, { notifyName: e.target.value })
+                              }
+                              className="w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm text-apple-label"
+                              placeholder="Notify"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => addSavedConsignee(selected.id)}
+                        className="w-full rounded-full border border-dashed border-apple-blue/40 bg-apple-blue/5 py-2 text-xs font-semibold text-apple-blue hover:bg-apple-blue/10"
+                      >
+                        + Thêm CNEE lưu sẵn
+                      </button>
                     </div>
                   </div>
                 </section>

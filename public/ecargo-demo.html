@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Demo UI eCargo (KHO SCSC) — TECSOPS</title>
+    <style>
+      :root {
+        --bg: #f5f5f7;
+        --card: #fff;
+        --label: #1d1d1f;
+        --secondary: #6e6e73;
+        --tertiary: #86868b;
+        --sky: #0284c7;
+        --sky-bg: #e0f2fe;
+        --emerald: #047857;
+        --amber: #b45309;
+        --border: rgba(0, 0, 0, 0.1);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--label);
+        padding: 24px;
+        line-height: 1.45;
+      }
+      h1 {
+        font-size: 1.15rem;
+        font-weight: 650;
+        margin: 0 0 8px;
+      }
+      .note {
+        font-size: 0.8rem;
+        color: var(--secondary);
+        max-width: 42rem;
+        margin-bottom: 20px;
+      }
+      .row {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        max-width: 22rem;
+      }
+      .panel h2 {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--secondary);
+        margin: 0 0 12px;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 8px;
+      }
+      .icon-btn {
+        position: relative;
+        border: none;
+        background: transparent;
+        border-radius: 999px;
+        padding: 8px;
+        cursor: pointer;
+        color: #0369a1;
+      }
+      .icon-btn:hover {
+        background: var(--sky-bg);
+      }
+      .icon-btn.open {
+        background: #bae6fd;
+        color: #0c4a6e;
+      }
+      .dot {
+        position: absolute;
+        right: 6px;
+        top: 6px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #0ea5e9;
+        box-shadow: 0 0 0 2px #fff;
+      }
+      .wrap {
+        position: relative;
+        display: inline-flex;
+      }
+      .popover {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 4px);
+        z-index: 10;
+        width: 12.5rem;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 8px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      }
+      .popover.hidden {
+        display: none;
+      }
+      .popover p.hint-top {
+        font-size: 9px;
+        color: var(--secondary);
+        margin: 0 0 6px;
+      }
+      input.veh {
+        width: 100%;
+        font-family: ui-monospace, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        padding: 6px 8px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 6px;
+      }
+      .readiness {
+        font-size: 9px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        line-height: 1.35;
+      }
+      .readiness.ok {
+        color: var(--emerald);
+      }
+      .readiness.no {
+        color: var(--amber);
+      }
+      .btn-go {
+        width: 100%;
+        border: none;
+        border-radius: 8px;
+        padding: 8px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        background: #0284c7;
+        color: #fff;
+      }
+      .btn-go:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .status-main {
+        text-align: center;
+        font-size: 9px;
+        font-weight: 650;
+        color: var(--label);
+        line-height: 1.35;
+        margin: 0;
+      }
+      .status-sub {
+        text-align: center;
+        font-size: 8px;
+        font-weight: 500;
+        color: var(--tertiary);
+        line-height: 1.4;
+        margin: 4px 0 0;
+      }
+      .sim {
+        margin-top: 20px;
+        padding-top: 16px;
+        border-top: 1px dashed var(--border);
+      }
+      .sim h3 {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        color: var(--secondary);
+        margin: 0 0 8px;
+      }
+      .sim-btns {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .sim-btns button {
+        font-size: 11px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #fafafa;
+        cursor: pointer;
+        text-align: left;
+      }
+      .sim-btns button:hover {
+        background: #f0f0f0;
+      }
+      .log {
+        margin-top: 16px;
+        font-family: ui-monospace, monospace;
+        font-size: 10px;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        padding: 10px;
+        border-radius: 8px;
+        max-height: 140px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Demo — eCargo KHO SCSC (chỉ để nhìn UI & luồng chữ)</h1>
+    <p class="note">
+      Trang này không nối API TECSOPS. Mở khi chạy dev:
+      <strong>http://localhost:5173/ecargo-demo.html</strong> — hoặc mở file qua Vite preview. Dùng nút bên phải để giả lập trạng thái extension.
+    </p>
+
+    <div class="row">
+      <div class="panel">
+        <h2>Giống cột THAO TÁC (rút gọn)</h2>
+        <div class="actions">
+          <span style="font-size:10px;color:#86868b">⋯ các nút in/sửa ⋯</span>
+          <div class="wrap" id="truckWrap">
+            <button type="button" class="icon-btn" id="truckBtn" title="Số xe — eCargo" aria-expanded="false">
+              <span id="vehDot" class="dot" style="display: none"></span>
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M8.25 18a.75.75 0 100-1.5.75.75 0 000 1.5zm7.5 0a.75.75 0 100-1.5.75.75 0 000 1.5zm.62-9.75H15l-.621-1.242A1.5 1.5 0 0012.879 5H11.25v4.5m9 0V18a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18V9.75m16.5 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9.75m0 0V6.75A2.25 2.25 0 015.25 4.5h2.652a2.25 2.25 0 011.591.659l1.282 1.282M3 9.75h12.75m0 0l1.5 3M3 9.75l1.5 3m0 0h12.75m-12.75 0v4.5m12.75-4.5v4.5"
+                />
+              </svg>
+            </button>
+            <div class="popover hidden" id="popover" role="dialog">
+              <p class="hint-top">Dán hoặc gõ số xe (≥7 ký tự). Esc để đóng.</p>
+              <input class="veh" id="vehInput" type="text" placeholder="VD: 50H17480" autocomplete="off" />
+              <p class="readiness no" id="readiness" role="status">Chưa đủ: số xe</p>
+              <button type="button" class="btn-go" id="btnSend" disabled>Đăng ký eCargo</button>
+            </div>
+          </div>
+        </div>
+        <p class="status-main" id="statusMain">Chưa gửi</p>
+        <p class="status-sub" id="statusSub" style="display: none"></p>
+      </div>
+
+      <div class="panel sim">
+        <h3>Giả lập extension (xem đổi chữ)</h3>
+        <div class="sim-btns">
+          <button type="button" data-sim="send">1) Như đã bấm Đăng ký (OPS đã gửi)</button>
+          <button type="button" data-sim="received">2) Extension: Đã nhận</button>
+          <button type="button" data-sim="filling">3) Đang điền eCargo</button>
+          <button type="button" data-sim="submitted">4) Đã tạo phiếu</button>
+          <button type="button" data-sim="waiting_verify_email">5) Đang chờ mail xác thực</button>
+          <button type="button" data-sim="verified_waiting_qr">6) Đang chờ QR</button>
+          <button type="button" data-sim="qr_ready">7) Đã có QR</button>
+          <button type="button" data-sim="error">8) Lỗi (demo)</button>
+          <button type="button" data-sim="reset">Reset về Chưa gửi</button>
+        </div>
+        <div class="log" id="log">Sự kiện DOM / postMessage sẽ log ở đây nếu bạn mở console — demo này chỉ đổi chữ UI.</div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const EXT = {
+          received: "Đã nhận",
+          filling: "Đang điền eCargo",
+          submitted: "Đã tạo phiếu",
+          waiting_verify_email: "Đang chờ mail xác thực",
+          verified_waiting_qr: "Đang chờ QR",
+          qr_ready: "Đã có QR",
+          error: "Lỗi",
+        };
+        const SUB_EXT = {
+          received: "Đang thao tác trên eCargo (điền form / tạo phiếu).",
+          filling: "Đang thao tác trên eCargo (điền form / tạo phiếu).",
+          submitted: "Phiếu đã tạo — chờ bước xác thực hoặc QR tùy luồng eCargo.",
+          waiting_verify_email: "Cần xác thực email trước khi tới bước QR.",
+          verified_waiting_qr: "Đang chờ hiển thị QR trên eCargo.",
+          qr_ready: "QR đã có — kiểm tra cửa sổ eCargo.",
+          error: "Lỗi từ extension — kiểm tra eCargo Auto / log.",
+        };
+        const SENT_MAIN = "Đã gửi OPS — chờ extension tạo phiếu & chờ QR trên eCargo";
+        const SENT_SUB =
+          "OPS chỉ chuyển dữ liệu sang eCargo Auto. Tạo phiếu và QR do trang eCargo + extension xử lý; có mail xác thực thì thêm bước trung gian.";
+
+        const pop = document.getElementById("popover");
+        const btn = document.getElementById("truckBtn");
+        const inp = document.getElementById("vehInput");
+        const rd = document.getElementById("readiness");
+        const send = document.getElementById("btnSend");
+        const dot = document.getElementById("vehDot");
+        const sm = document.getElementById("statusMain");
+        const ss = document.getElementById("statusSub");
+        const log = document.getElementById("log");
+
+        let phase = "idle";
+        let ext = null;
+
+        function normV(s) {
+          return s
+            .toUpperCase()
+            .split("")
+            .filter((c) => /[A-Z0-9;]/.test(c))
+            .join("");
+        }
+        function readinessHint(v) {
+          const n = normV(v);
+          const missing = [];
+          if (n.length === 0) missing.push("số xe");
+          else if (n.length < 7) missing.push("số xe (còn " + (7 - n.length) + " ký tự)");
+          if (missing.length) return { ok: false, t: "Chưa đủ: " + missing.join(" · ") };
+          return { ok: true, t: "Đã nhập đủ — có thể bấm Đăng ký." };
+        }
+        function paint() {
+          const v = inp.value;
+          const r = readinessHint(v);
+          rd.textContent = r.t;
+          rd.className = "readiness " + (r.ok ? "ok" : "no");
+          send.disabled = !r.ok;
+          dot.style.display = normV(v).length >= 7 ? "" : "none";
+          btn.title = r.ok ? "Số xe — đủ điều kiện" : "Số xe — " + r.t;
+
+          if (phase === "idle") {
+            sm.textContent = "Chưa gửi";
+            ss.style.display = "none";
+          } else if (phase === "sent") {
+            sm.textContent = SENT_MAIN;
+            ss.textContent = SENT_SUB;
+            ss.style.display = "";
+          } else if (phase === "ext" && ext) {
+            sm.textContent = EXT[ext] || ext;
+            ss.textContent = SUB_EXT[ext] || "";
+            ss.style.display = ss.textContent ? "" : "none";
+          }
+        }
+
+        btn.addEventListener("click", function () {
+          const o = !pop.classList.contains("hidden");
+          pop.classList.toggle("hidden", o);
+          btn.classList.toggle("open", !o);
+          btn.setAttribute("aria-expanded", String(!o));
+        });
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") {
+            pop.classList.add("hidden");
+            btn.classList.remove("open");
+            btn.setAttribute("aria-expanded", "false");
+          }
+        });
+        inp.addEventListener("input", paint);
+        send.addEventListener("click", function () {
+          phase = "sent";
+          pop.classList.add("hidden");
+          btn.classList.remove("open");
+          btn.setAttribute("aria-expanded", "false");
+          paint();
+          log.textContent =
+            "[demo] Đã gửi — trên app thật lúc này sẽ gọi CustomEvent + postMessage với payload eCargo.";
+        });
+
+        document.querySelectorAll("[data-sim]").forEach(function (b) {
+          b.addEventListener("click", function () {
+            const k = b.getAttribute("data-sim");
+            if (k === "reset") {
+              phase = "idle";
+              ext = null;
+              inp.value = "";
+            } else if (k === "send") {
+              phase = "sent";
+              ext = null;
+              inp.value = "50H17480";
+            } else {
+              phase = "ext";
+              ext = k;
+            }
+            paint();
+          });
+        });
+
+        paint();
+      })();
+    </script>
+  </body>
+</html>

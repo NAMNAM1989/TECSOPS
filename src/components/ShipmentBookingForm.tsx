@@ -313,7 +313,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       partiesText.match(/\b0\d{9,10}\b/) ||
       partiesText.match(/\+?\d[\d\s().-]{8,}\d/);
     const phoneRaw = phoneMatch?.[1] ?? phoneMatch?.[0] ?? "";
-    const taxMatch = partiesText.match(/(?:MST|TAX|Tax\s*code)[:\s]*([0-9A-Z.\-]{6,24})/i);
+    const taxMatch = partiesText.match(/(?:MST|TAX|Tax\s*code)[:\s]*([0-9A-Z.-]{6,24})/i);
     return {
       address: address.slice(0, 110),
       phone: normalizePrintText(phoneRaw).slice(0, 24),

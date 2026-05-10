@@ -525,6 +525,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onDelete={onDelete}
         onPrint={requestPrintLabel}
         onEdit={openEdit}
+        viewSessionYmd={selectedYmd}
       />
 
       <MobileShipmentCards

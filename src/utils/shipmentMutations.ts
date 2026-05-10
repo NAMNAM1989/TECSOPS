@@ -76,7 +76,7 @@ function resolvedAirlineOverrides(s: AppState): AirlineLabelOverrides {
 }
 
 export function applyShipmentMutation(state: AppState, mutation: ShipmentMutation): AppState {
-  let rows = [...state.rows];
+  const rows = [...state.rows];
   const keepAirline = (): AirlineLabelOverrides => resolvedAirlineOverrides(state);
 
   switch (mutation.action) {

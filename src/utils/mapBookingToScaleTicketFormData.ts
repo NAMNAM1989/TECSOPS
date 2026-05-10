@@ -107,7 +107,7 @@ function extractContactFromParties(entry: CustomerDirectoryEntry): {
     partiesText.match(/\+?\d[\d\s().-]{8,}\d/);
   const phoneRaw = phoneMatch?.[1] ?? phoneMatch?.[0] ?? "";
   const phone = compactSpace(phoneRaw).slice(0, 32);
-  const taxMatch = partiesText.match(/(?:MST|TAX|Tax\s*code)[:\s]*([0-9A-Z.\-]{6,24})/i);
+  const taxMatch = partiesText.match(/(?:MST|TAX|Tax\s*code)[:\s]*([0-9A-Z.-]{6,24})/i);
   const taxCode = taxMatch?.[1]?.trim() ?? "";
   return { address: address.slice(0, 500), phone, taxCode };
 }

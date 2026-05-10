@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { lookupCustomerCodeByName } from "../utils/customerDirectoryCore";
@@ -20,13 +21,7 @@ import {
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
 import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
-import {
-  canPrintWeighReceiptScsc,
-  getScscPrintCalibration,
-  printWeighReceiptScscWithConsigneeChoice,
-  resetScscPrintCalibration,
-  saveScscPrintCalibration,
-} from "../utils/printWeighReceiptScsc";
+import { canPrintWeighReceiptScsc, printWeighReceiptScscWithConsigneeChoice } from "../utils/printWeighReceiptScsc";
 import {
   warehouseLabel,
   warehouseSectionsForLayout,
@@ -35,7 +30,10 @@ import {
 } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
-import { PrintCalibrationModal } from "./PrintCalibrationModal";
+import { useEcargoKhoScscRegister } from "../hooks/useEcargoKhoScscRegister";
+import { canSendEcargoRegister } from "../utils/ecargoPayload";
+import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStorage";
+import { buildKhoScscEcargoPasteBlock } from "../utils/ecargoPasteBlock";
 
 interface Props {
   rows: Shipment[];
@@ -54,6 +52,182 @@ interface Props {
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   onEdit: (s: Shipment) => void;
+  /** Ngày phiên đang xem (YYYY-MM-DD) — parse ngày bay eCargo theo năm trên OPS. */
+  viewSessionYmd: string;
+}
+
+const ECARGO_VEHICLE_MIN = 7;
+
+/** Nội dung modal eCargo: số xe, gửi, khối 5 dòng, copy. */
+function EcargoKhoScscModalBody({
+  row,
+  vehicleForEcargo,
+  ecargoCanSubmit,
+  onVehicleChange,
+  onRegister,
+  onClose,
+}: {
+  row: Shipment;
+  vehicleForEcargo: string;
+  ecargoCanSubmit: boolean;
+  onVehicleChange: (raw: string) => void;
+  onRegister: () => void;
+  onClose: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const hasVehicle = vehicleForEcargo.trim().length >= ECARGO_VEHICLE_MIN;
+  const pasteText = useMemo(() => buildKhoScscEcargoPasteBlock(row, vehicleForEcargo), [row, vehicleForEcargo]);
+
+  const copyPasteBlock = useCallback(async () => {
+    if (!hasVehicle) return;
+    try {
+      await navigator.clipboard.writeText(pasteText);
+      onClose();
+    } catch {
+      window.alert("Không sao chép được — chọn trong ô và Ctrl+C.");
+    }
+  }, [hasVehicle, onClose, pasteText]);
+
+  useEffect(() => {
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  return (
+    <div className="space-y-3 px-4 pb-4 pt-2 sm:px-5 sm:pb-5">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="min-w-0 flex-1">
+          <span className="mb-1 block text-[11px] font-semibold text-apple-secondary">Số xe</span>
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="text"
+            autoCapitalize="characters"
+            placeholder="VD: 50H17480"
+            value={vehicleForEcargo}
+            onChange={(e) => onVehicleChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && ecargoCanSubmit) {
+                e.preventDefault();
+                onRegister();
+              }
+            }}
+            className="w-full rounded-xl border border-black/[0.12] bg-apple-bg px-3 py-2 font-mono text-sm font-semibold uppercase tracking-wide text-apple-label placeholder:text-apple-tertiary"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={!ecargoCanSubmit}
+          aria-label="Đăng ký eCargo"
+          onClick={() => onRegister()}
+          className="shrink-0 rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold uppercase tracking-wide text-white shadow-md transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-black/30 disabled:shadow-none"
+        >
+          Gửi eCargo
+        </button>
+      </div>
+      <div>
+        <span className="mb-1 block text-[11px] font-semibold text-apple-secondary">Nội dung sao chép</span>
+        <textarea
+          readOnly
+          value={pasteText}
+          rows={5}
+          spellCheck={false}
+          className="w-full resize-none rounded-xl border border-black/[0.1] bg-zinc-50 px-3 py-2 font-mono text-sm font-semibold leading-relaxed text-apple-label shadow-inner"
+          onFocus={(e) => e.target.select()}
+        />
+      </div>
+      <button
+        type="button"
+        disabled={!hasVehicle}
+        aria-label="Sao chép khối dán"
+        onClick={() => void copyPasteBlock()}
+        className="w-full rounded-xl border-2 border-sky-400/80 bg-gradient-to-b from-sky-50 to-sky-100/90 py-2.5 text-sm font-bold uppercase tracking-wide text-sky-950 shadow-sm transition hover:border-sky-500 hover:from-sky-100 hover:to-sky-50 disabled:cursor-not-allowed disabled:border-black/10 disabled:bg-zinc-100 disabled:from-zinc-100 disabled:to-zinc-100 disabled:text-apple-tertiary"
+      >
+        Sao chép
+      </button>
+    </div>
+  );
+}
+
+function EcargoKhoScscCenterModal({
+  rowId,
+  row,
+  vehicleForEcargo,
+  ecargoCanSubmit,
+  onVehicleChange,
+  onRegister,
+  onClose,
+}: {
+  rowId: string;
+  row: Shipment;
+  vehicleForEcargo: string;
+  ecargoCanSubmit: boolean;
+  onVehicleChange: (raw: string) => void;
+  onRegister: () => void;
+  onClose: () => void;
+}) {
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[420] flex items-center justify-center bg-black/45 p-4 backdrop-blur-md animate-ecargo-backdrop-in motion-reduce:animate-none sm:p-6"
+      role="presentation"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`ecargo-modal-title-${rowId}`}
+        data-ecargo-panel={rowId}
+        id={`ecargo-panel-${rowId}`}
+        className="relative w-full max-w-md origin-center animate-ecargo-card-in motion-reduce:animate-none motion-reduce:opacity-100"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-apple-md ring-1 ring-black/[0.06]">
+          <div className="flex items-start justify-between gap-3 border-b border-black/[0.06] bg-gradient-to-r from-sky-50/90 via-white to-amber-50/30 px-4 py-3 sm:px-5">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-white text-sky-700 shadow-sm">
+                <svg className="h-6 w-8" viewBox="0 0 32 22" fill="currentColor" aria-hidden>
+                  <path opacity="0.35" d="M2 14h6v5H2v-5zm22 0h6v5h-6v-5z" />
+                  <path d="M1 15.5V8.5L4 5h8l2.5 3H27l3 4.5v6H1zm3-6.5v4h6V9H4zm9 0v4h14l-2-2.5H13V9z" />
+                  <circle cx="8" cy="19" r="2.2" />
+                  <circle cx="24" cy="19" r="2.2" />
+                </svg>
+              </span>
+              <div className="min-w-0">
+                <h2 id={`ecargo-modal-title-${rowId}`} className="text-base font-bold tracking-tight text-apple-label">
+                  eCargo
+                </h2>
+                <p className="truncate font-mono text-xs font-semibold text-apple-secondary">
+                  Lô #{row.stt} · {row.awb}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label="Đóng"
+              onClick={onClose}
+              className="shrink-0 rounded-full p-2 text-apple-secondary transition hover:bg-black/[0.06] hover:text-apple-label"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <EcargoKhoScscModalBody
+            row={row}
+            vehicleForEcargo={vehicleForEcargo}
+            ecargoCanSubmit={ecargoCanSubmit}
+            onVehicleChange={onVehicleChange}
+            onRegister={onRegister}
+            onClose={onClose}
+          />
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
 }
 
 const COL_HEADERS = [
@@ -68,7 +242,7 @@ const COL_HEADERS = [
   { key: "customer", label: "KHÁCH HÀNG", w: "min-w-[120px]" },
   { key: "note", label: "NOTE", w: "min-w-[100px] max-w-[180px]" },
   { key: "status", label: "TRẠNG THÁI", w: "min-w-[110px]" },
-  { key: "actions", label: "THAO TÁC", w: "w-44" },
+  { key: "actions", label: "THAO TÁC", w: "min-w-[8rem] max-w-[12rem]" },
 ] as const;
 
 export function DesktopShipmentTable({
@@ -81,7 +255,9 @@ export function DesktopShipmentTable({
   onDelete,
   onPrint,
   onEdit,
+  viewSessionYmd,
 }: Props) {
+  const ecargoRegister = useEcargoKhoScscRegister();
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const [customerDetailRow, setCustomerDetailRow] = useState<Shipment | null>(null);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
@@ -92,25 +268,24 @@ export function DesktopShipmentTable({
 
   return (
     <>
-    <div className="hidden md:block space-y-8">
+    <div className="hidden md:block space-y-5">
       {warehouseSections.map((wh) => {
         const group = rowsByWarehouse[wh];
 
         return (
           <section key={wh}>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <h2 className="text-[19px] font-semibold tracking-tight text-apple-label">{warehouseLabel[wh]}</h2>
-                <span className="rounded-full bg-apple-label px-2.5 py-0.5 text-[11px] font-semibold text-white">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <h2 className="text-[17px] font-semibold tracking-tight text-apple-label">{warehouseLabel[wh]}</h2>
+                <span className="rounded-full bg-apple-label px-2 py-0.5 text-[10px] font-semibold text-white">
                   {group.length} lô
                 </span>
                 <button
                   type="button"
-                  title={`Thêm dòng booking vào ${warehouseLabel[wh]}`}
                   onClick={() => void onAddBlankRow(wh)}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-apple-blue px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover active:scale-[0.98]"
+                  className="inline-flex items-center gap-1 rounded-full bg-apple-blue px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover active:scale-[0.98]"
                 >
-                  <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <svg className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
                   Nhập booking
@@ -119,18 +294,22 @@ export function DesktopShipmentTable({
               <SummaryBar rows={rows} warehouse={wh} />
             </div>
 
-            <div className="overflow-x-auto rounded-2xl border border-black/[0.08] bg-white shadow-apple">
-              <table className="w-full border-collapse text-left text-sm">
+            <div className="overflow-x-auto rounded-xl border border-black/[0.08] bg-white shadow-apple">
+              <table className="w-full border-collapse text-left text-xs">
                 <thead>
                   <tr className="border-b border-black/[0.08] bg-apple-bg">
-                    {COL_HEADERS.map((c) => (
+                    {COL_HEADERS.map((c) => {
+                      const w =
+                        c.key === "actions" && wh === "KHO-SCSC" ? "min-w-[6.5rem]" : c.w;
+                      return (
                       <th
                         key={c.key}
-                        className={`whitespace-nowrap border-r border-black/[0.06] px-2.5 py-3 text-[10px] font-semibold uppercase tracking-wider text-apple-secondary last:border-r-0 ${c.w}`}
+                        className={`whitespace-nowrap border-r border-black/[0.06] px-1.5 py-2 text-[9px] font-semibold uppercase tracking-wide text-apple-secondary last:border-r-0 ${w}`}
                       >
                         {c.label}
                       </th>
-                    ))}
+                    );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -138,14 +317,19 @@ export function DesktopShipmentTable({
                     <tr>
                       <td
                         colSpan={COL_HEADERS.length}
-                        className="px-4 py-8 text-center text-sm italic text-apple-tertiary"
+                        className="px-3 py-5 text-center text-xs text-apple-tertiary"
                       >
-                        Chưa có lô — bấm « Nhập booking » phía trên để thêm dòng.
+                        Chưa có lô
                       </td>
                     </tr>
                   ) : (
                     <WarehouseGroupRows
                       group={group}
+                      sectionWarehouse={wh}
+                      viewSessionYmd={viewSessionYmd}
+                      ecargoMap={ecargoRegister.map}
+                      onEcargoVehicleChange={ecargoRegister.setVehicle}
+                      onEcargoRegister={ecargoRegister.register}
                       allRows={allRows}
                       customerDirectory={customerDirectory}
                       onUpdate={onUpdate}
@@ -186,6 +370,11 @@ export function DesktopShipmentTable({
 
 function WarehouseGroupRows({
   group,
+  sectionWarehouse,
+  viewSessionYmd,
+  ecargoMap,
+  onEcargoVehicleChange,
+  onEcargoRegister,
   allRows,
   customerDirectory,
   onUpdate,
@@ -196,6 +385,11 @@ function WarehouseGroupRows({
   onOpenCustomerDetail,
 }: {
   group: Shipment[];
+  sectionWarehouse: Warehouse;
+  viewSessionYmd: string;
+  ecargoMap: EcargoKhoScscPersistedMap;
+  onEcargoVehicleChange: (id: string, raw: string) => void;
+  onEcargoRegister: (row: Shipment, viewSessionYmd: string, vehicleRaw: string) => void;
   allRows: Shipment[];
   customerDirectory: readonly CustomerDirectoryEntry[];
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
@@ -206,12 +400,32 @@ function WarehouseGroupRows({
   onOpenCustomerDetail: (s: Shipment) => void;
 }) {
   const groupRowIds = group.map((r) => r.id);
+  const [openEcargoRowId, setOpenEcargoRowId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openEcargoRowId) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      const panel = document.querySelector(`[data-ecargo-panel="${openEcargoRowId}"]`);
+      const trig = document.querySelector(`[data-ecargo-trigger="${openEcargoRowId}"]`);
+      if (panel?.contains(t) || trig?.contains(t)) return;
+      setOpenEcargoRowId(null);
+    };
+    document.addEventListener("mousedown", onDown, true);
+    return () => document.removeEventListener("mousedown", onDown, true);
+  }, [openEcargoRowId]);
+
   return (
     <>
       {group.map((row) => (
         <ShipmentRow
           key={row.id}
           row={row}
+          sectionWarehouse={sectionWarehouse}
+          viewSessionYmd={viewSessionYmd}
+          ecargoMap={ecargoMap}
+          onEcargoVehicleChange={onEcargoVehicleChange}
+          onEcargoRegister={onEcargoRegister}
           groupRowIds={groupRowIds}
           allRows={allRows}
           customerDirectory={customerDirectory}
@@ -221,6 +435,9 @@ function WarehouseGroupRows({
           onEdit={onEdit}
           onOpenDimModal={onOpenDimModal}
           onOpenCustomerDetail={onOpenCustomerDetail}
+          ecargoTableOpen={openEcargoRowId === row.id}
+          onToggleEcargoTable={() => setOpenEcargoRowId((p) => (p === row.id ? null : row.id))}
+          onCloseEcargoTable={() => setOpenEcargoRowId((p) => (p === row.id ? null : p))}
         />
       ))}
     </>
@@ -229,6 +446,11 @@ function WarehouseGroupRows({
 
 function ShipmentRow({
   row,
+  sectionWarehouse,
+  viewSessionYmd,
+  ecargoMap,
+  onEcargoVehicleChange,
+  onEcargoRegister,
   groupRowIds,
   allRows,
   customerDirectory,
@@ -238,8 +460,16 @@ function ShipmentRow({
   onEdit,
   onOpenDimModal,
   onOpenCustomerDetail,
+  ecargoTableOpen,
+  onToggleEcargoTable,
+  onCloseEcargoTable,
 }: {
   row: Shipment;
+  sectionWarehouse: Warehouse;
+  viewSessionYmd: string;
+  ecargoMap: EcargoKhoScscPersistedMap;
+  onEcargoVehicleChange: (id: string, raw: string) => void;
+  onEcargoRegister: (row: Shipment, viewSessionYmd: string, vehicleRaw: string) => void;
   groupRowIds: string[];
   allRows: Shipment[];
   customerDirectory: readonly CustomerDirectoryEntry[];
@@ -249,15 +479,27 @@ function ShipmentRow({
   onEdit: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
   onOpenCustomerDetail: (s: Shipment) => void;
+  ecargoTableOpen: boolean;
+  onToggleEcargoTable: () => void;
+  onCloseEcargoTable: () => void;
 }) {
-  const [showPrintSettings, setShowPrintSettings] = useState(false);
-  const [printOffsetX, setPrintOffsetX] = useState(0);
-  const [printOffsetY, setPrintOffsetY] = useState(0);
   const bg = statusRowBg[row.status];
   const border = statusRowBorder[row.status];
   const sessionYear = parseInt(row.sessionDate.slice(0, 4), 10) || new Date().getFullYear();
   const rowIdx = groupRowIds.indexOf(row.id);
   const hasNextRow = rowIdx >= 0 && rowIdx < groupRowIds.length - 1;
+  const showEcargoKhoScsc = sectionWarehouse === "KHO-SCSC" && row.warehouse === "KHO-SCSC";
+  const vehicleForEcargo = ecargoMap[row.id]?.vehicleInput ?? "";
+  const ecargoCanSubmit = canSendEcargoRegister(row, vehicleForEcargo, viewSessionYmd);
+
+  useEffect(() => {
+    if (!ecargoTableOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseEcargoTable();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [ecargoTableOpen, onCloseEcargoTable]);
 
   const navDownSameField = (field: string) => () => {
     if (!hasNextRow) return;
@@ -279,13 +521,6 @@ function ShipmentRow({
     else focusShipmentGridCell(row.id, "dest");
   };
 
-  useEffect(() => {
-    if (!showPrintSettings) return;
-    const c = getScscPrintCalibration();
-    setPrintOffsetX(c.offsetXmm);
-    setPrintOffsetY(c.offsetYmm);
-  }, [showPrintSettings]);
-
   return (
     <>
     <tr
@@ -293,7 +528,7 @@ function ShipmentRow({
       className={`border-b border-black/[0.06] transition-colors hover:brightness-[0.99] ${bg} ${border}`}
     >
       {/* # */}
-      <td className="border-r border-black/[0.06] px-2.5 py-2 text-center text-xs font-semibold text-apple-secondary">
+      <td className="border-r border-black/[0.06] px-1 py-1 text-center text-[11px] font-semibold text-apple-secondary">
         {row.stt}
       </td>
       {/* AWB + HAWB — nhập inline (thêm dòng từ « Nhập booking »). */}
@@ -309,7 +544,7 @@ function ShipmentRow({
           <InlineTextEdit
             value={row.hawb ?? ""}
             placeholder="HAWB"
-            className="font-mono text-[11px] font-semibold text-apple-secondary"
+            className="font-mono text-[10px] font-semibold text-apple-secondary"
             maxLength={32}
             gridNav={{ rowId: row.id, field: "hawb" }}
             onCommit={(v) => onUpdate(row.id, { hawb: v.slice(0, 32) })}
@@ -323,7 +558,7 @@ function ShipmentRow({
           <InlineTextEdit
             value={row.flight}
             placeholder="Chuyến"
-            className="font-semibold text-apple-label"
+            className="text-[13px] font-semibold text-apple-label"
             uppercase
             maxLength={12}
             gridNav={{ rowId: row.id, field: "flight" }}
@@ -333,7 +568,7 @@ function ShipmentRow({
           <InlineTextEdit
             value={row.flightDate}
             placeholder="15APR"
-            className="text-[11px] font-medium text-apple-secondary"
+            className="text-[10px] font-medium text-apple-secondary"
             uppercase
             maxLength={16}
             gridNav={{ rowId: row.id, field: "flightDate" }}
@@ -354,7 +589,7 @@ function ShipmentRow({
           />
           <InlineTextEdit
             value={row.cutoffNote ?? ""}
-            placeholder="PER / note"
+            placeholder="PER"
             className="text-[10px] font-semibold text-apple-label"
             uppercase
             maxLength={32}
@@ -369,7 +604,7 @@ function ShipmentRow({
         <InlineTextEdit
           value={row.dest}
           placeholder="DEST"
-          className="text-center text-sm font-semibold text-apple-label"
+            className="text-center text-[13px] font-semibold text-apple-label"
           uppercase
           maxLength={3}
           gridNav={{ rowId: row.id, field: "dest" }}
@@ -378,42 +613,39 @@ function ShipmentRow({
         />
       </td>
       {/* PCS — inline edit */}
-      <td className="border-r border-black/[0.06] px-1.5 py-1 text-right">
+      <td className="border-r border-black/[0.06] px-1 py-0.5 text-right">
         <InlineNumberEdit
           value={row.pcs}
           placeholder="Nhập"
-          className="font-mono text-sm font-bold tabular-nums"
+          className="font-mono text-[13px] font-bold tabular-nums"
           gridNav={{ rowId: row.id, field: "pcs" }}
           onCommit={(v) => onUpdate(row.id, { pcs: v })}
           onEnterNavigateDown={hasNextRow ? navDownSameField("pcs") : undefined}
         />
       </td>
       {/* KG — inline edit */}
-      <td className="border-r border-black/[0.06] px-1.5 py-1 text-right">
+      <td className="border-r border-black/[0.06] px-1 py-0.5 text-right">
         <InlineNumberEdit
           value={row.kg}
           placeholder="Nhập"
-          className="font-mono text-sm font-bold tabular-nums"
+          className="font-mono text-[13px] font-bold tabular-nums"
           gridNav={{ rowId: row.id, field: "kg" }}
           onCommit={(v) => onUpdate(row.id, { kg: v })}
           onEnterNavigateDown={hasNextRow ? navDownSameField("kg") : undefined}
         />
       </td>
       {/* DIM kg — khi đã có D×R×C: chỉ hiển thị + modal (tránh sửa nhanh làm mất dimLines → mất in DIM) */}
-      <td className="border-r border-black/[0.06] px-1.5 py-1 text-right align-top">
-        <div className="flex flex-col items-end gap-1">
+      <td className="border-r border-black/[0.06] px-1 py-0.5 text-right align-top">
+        <div className="flex flex-col items-end gap-0.5">
           {(row.dimLines?.length ?? 0) > 0 ? (
-            <span
-              className="font-mono text-xs font-semibold tabular-nums text-apple-label"
-              title="Đã có chi tiết kiện — chỉnh kg/DIM trong « D×R×C » để giữ bảng in."
-            >
+            <span className="font-mono text-[11px] font-semibold tabular-nums text-apple-label">
               {formatShipmentDimWeightKg(row.flight, row.dimWeightKg)}
             </span>
           ) : (
             <InlineNumberEdit
               value={row.dimWeightKg}
               placeholder="—"
-              className="font-mono text-xs font-semibold tabular-nums"
+              className="font-mono text-[11px] font-semibold tabular-nums"
               gridNav={{ rowId: row.id, field: "dimKg" }}
               onCommit={(v) =>
                 onUpdate(row.id, { dimWeightKg: v, dimLines: null, dimDivisor: null })
@@ -421,19 +653,14 @@ function ShipmentRow({
               onEnterNavigateDown={hasNextRow ? navDownSameField("dimKg") : undefined}
             />
           )}
-          {(row.dimLines?.length ?? 0) > 0 ? (
-            <span className="text-[9px] font-medium text-apple-tertiary">
-              {(row.dimLines ?? []).length} nhóm
-            </span>
-          ) : null}
           <button
             type="button"
-            title="Nhập DIM đầy đủ (D×R×C × kiện, tính khối / nhập kg)"
+            aria-label="Nhập DIM"
             onClick={(e) => {
               e.stopPropagation();
               onOpenDimModal(row);
             }}
-            className="rounded-lg border border-apple-blue/35 bg-apple-blue/8 px-1.5 py-0.5 text-[10px] font-bold leading-none text-apple-blue hover:bg-apple-blue/15"
+            className="rounded border border-apple-blue/35 bg-apple-blue/8 px-1 py-px text-[9px] font-bold leading-none text-apple-blue hover:bg-apple-blue/15"
           >
             D×R×C
           </button>
@@ -446,7 +673,7 @@ function ShipmentRow({
             <InlineTextEdit
               value={row.customer}
               placeholder="Khách"
-              className="text-sm font-semibold text-apple-label"
+              className="text-[13px] font-semibold text-apple-label"
               maxLength={120}
               gridNav={{ rowId: row.id, field: "customer" }}
               onCommit={(v) => {
@@ -474,15 +701,14 @@ function ShipmentRow({
           </div>
           <button
             type="button"
-            title="Chi tiết khách (danh bạ) — sao chép"
-            aria-label="Chi tiết khách để sao chép"
+            aria-label="Chi tiết khách"
             onClick={(e) => {
               e.stopPropagation();
               onOpenCustomerDetail(row);
             }}
-            className="shrink-0 self-center rounded-lg border border-black/[0.08] bg-white px-1 py-1 text-apple-blue hover:bg-apple-blue/10"
+            className="shrink-0 self-center rounded border border-black/[0.08] bg-white p-0.5 text-apple-blue hover:bg-apple-blue/10"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -497,7 +723,7 @@ function ShipmentRow({
         <InlineTextEdit
           value={row.note ?? ""}
           placeholder="Ghi chú"
-          className="line-clamp-2 text-left text-xs leading-snug text-apple-secondary"
+          className="line-clamp-2 text-left text-[11px] leading-snug text-apple-secondary"
           maxLength={2000}
           gridNav={{ rowId: row.id, field: "note" }}
           onCommit={(v) => onUpdate(row.id, { note: v })}
@@ -505,23 +731,26 @@ function ShipmentRow({
         />
       </td>
       {/* Status */}
-      <td className="border-r border-black/[0.06] px-2 py-2">
+      <td className="border-r border-black/[0.06] px-1 py-1">
         <StatusSelect
           value={row.status}
           compact
           onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
         />
       </td>
-      {/* Actions */}
-      <td className="px-1.5 py-2">
-        <div className="flex flex-wrap items-center justify-center gap-0.5">
+      {/* Actions — icon từng chức năng + xe eCargo (KHO SCSC) */}
+      <td className="px-0.5 py-0.5 align-top">
+        <div className="flex flex-wrap items-center justify-end gap-px">
           <button
             type="button"
-            title="Sửa lô"
-            onClick={() => onEdit(row)}
-            className="rounded-full p-2 text-apple-blue hover:bg-apple-blue/10"
+            aria-label="Sửa booking"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(row);
+            }}
+            className="rounded border border-black/[0.1] bg-white p-1 text-apple-blue shadow-sm hover:bg-sky-50/80"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -533,142 +762,146 @@ function ShipmentRow({
             <>
               <button
                 type="button"
-                title="In DIM SCSC (form MAWB + bảng kích thước)"
-                onClick={() => printDimReport(row)}
-                className="rounded-full p-2 text-apple-secondary hover:bg-emerald-50 hover:text-emerald-800"
+                aria-label="In DIM SCSC"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  printDimReport(row);
+                }}
+                className="rounded border border-emerald-200/90 bg-emerald-50/90 px-0.5 py-px text-[8px] font-bold leading-none text-emerald-900 hover:bg-emerald-100"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
+                DIM
               </button>
               <button
                 type="button"
-                title="LIST SCSC — Excel sheet LIST SCSC (DIM chi tiết)"
-                onClick={() => downloadScscDimListExcel(row)}
-                className="rounded-full p-2 text-emerald-700 hover:bg-emerald-50"
+                aria-label="LIST SCSC Excel"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  downloadScscDimListExcel(row);
+                }}
+                className="rounded border border-emerald-200/80 bg-white px-0.5 py-px text-[8px] font-bold leading-none text-emerald-800 hover:bg-emerald-50"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
+                LST
               </button>
             </>
           ) : null}
           {canPrintWeighReceiptScsc(row) ? (
-            <>
-              <button
-                type="button"
-                title="In phiếu cân SCSC — nếu khách có CNEE lưu sẵn sẽ hỏi chọn trước khi in"
-                onClick={() => void printWeighReceiptScscWithConsigneeChoice(row, { customerDirectory })}
-                className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-900 hover:bg-sky-100"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"
-                  />
-                </svg>
-                IN PHIEU CAN
-              </button>
-              <button
-                type="button"
-                title="Mở căn chỉnh in phiếu cân"
-                onClick={() => setShowPrintSettings(true)}
-                className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
-              >
-                Căn chỉnh in
-              </button>
-            </>
+            <button
+              type="button"
+              aria-label="In phiếu cân SCSC"
+              onClick={(e) => {
+                e.stopPropagation();
+                void printWeighReceiptScscWithConsigneeChoice(row, { customerDirectory });
+              }}
+              className="rounded border border-sky-300 bg-sky-50 px-0.5 py-px text-[8px] font-bold leading-none text-sky-900 hover:bg-sky-100"
+            >
+              CÂN
+            </button>
           ) : null}
           {isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row) ? (
             <>
               <button
                 type="button"
-                title="LIST DIM TCS — Excel mẫu ATTACHED_LIST_DIMS"
-                onClick={() => downloadTcsAttachedDimsExcel(row)}
-                className="rounded-full p-2 text-emerald-700 hover:bg-emerald-50"
+                aria-label="LIST DIM TCS"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  downloadTcsAttachedDimsExcel(row);
+                }}
+                className="rounded border border-emerald-200/80 bg-white px-0.5 py-px text-[8px] font-bold leading-none text-emerald-800 hover:bg-emerald-50"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
+                T+L
               </button>
               <button
                 type="button"
-                title="IN DIM TCS — in bảng 4 cột"
-                onClick={() => printTcsAttachedDimsList(row)}
-                className="rounded-full p-2 text-emerald-700 hover:bg-emerald-50"
+                aria-label="In DIM TCS"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  printTcsAttachedDimsList(row);
+                }}
+                className="rounded border border-emerald-200/90 bg-emerald-50/90 px-0.5 py-px text-[8px] font-bold leading-none text-emerald-900 hover:bg-emerald-100"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-                  />
-                </svg>
+                T+I
               </button>
             </>
           ) : null}
           <button
             type="button"
-            title="In nhãn"
-            onClick={() => onPrint(row)}
-            className="rounded-full p-2 text-apple-secondary hover:bg-black/[0.05] hover:text-apple-label"
+            aria-label="In nhãn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPrint(row);
+            }}
+            className="rounded border border-black/[0.1] bg-white p-1 text-apple-secondary shadow-sm hover:bg-black/[0.04] hover:text-apple-label"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"
+              />
             </svg>
           </button>
           <button
             type="button"
-            title="Xóa"
-            onClick={() => {
+            aria-label="Xóa lô"
+            onClick={(e) => {
+              e.stopPropagation();
               if (confirm(`Xóa AWB ${row.awb}?`)) onDelete(row.id);
             }}
-            className="rounded-full p-2 text-apple-tertiary hover:bg-red-50 hover:text-red-600"
+            className="rounded border border-red-200/80 bg-red-50/80 p-1 text-red-700 shadow-sm hover:bg-red-100"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
             </svg>
           </button>
+          {showEcargoKhoScsc ? (
+            <button
+              type="button"
+              data-ecargo-trigger={row.id}
+              aria-label="eCargo"
+              aria-expanded={ecargoTableOpen}
+              aria-controls={`ecargo-panel-${row.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleEcargoTable();
+              }}
+              className={`relative flex h-8 w-9 shrink-0 flex-col items-center justify-center rounded-lg border shadow-sm transition-all active:scale-[0.97] ${
+                ecargoTableOpen
+                  ? "border-sky-600 bg-sky-100 text-sky-900 ring-1 ring-sky-300/50"
+                  : "border-sky-500/80 bg-gradient-to-b from-white via-sky-50 to-sky-100 text-sky-800 hover:border-sky-600"
+              }`}
+            >
+              {vehicleForEcargo.trim().length >= ECARGO_VEHICLE_MIN ? (
+                <span
+                  className="absolute right-0.5 top-0.5 h-1 w-1 rounded-full bg-emerald-500 ring-1 ring-white"
+                  aria-hidden
+                />
+              ) : null}
+              <svg className="h-4 w-6" viewBox="0 0 32 22" fill="currentColor" aria-hidden>
+                <path opacity="0.35" d="M2 14h6v5H2v-5zm22 0h6v5h-6v-5z" />
+                <path d="M1 15.5V8.5L4 5h8l2.5 3H27l3 4.5v6H1zm3-6.5v4h6V9H4zm9 0v4h14l-2-2.5H13V9z" />
+                <circle cx="8" cy="19" r="2.2" />
+                <circle cx="24" cy="19" r="2.2" />
+              </svg>
+            </button>
+          ) : null}
         </div>
       </td>
     </tr>
-    <PrintCalibrationModal
-      open={showPrintSettings}
-      offsetX={printOffsetX}
-      offsetY={printOffsetY}
-      onChangeOffsetX={setPrintOffsetX}
-      onChangeOffsetY={setPrintOffsetY}
-      onTestPrint={() =>
-        void printWeighReceiptScscWithConsigneeChoice(row, {
-          offsetXmm: printOffsetX,
-          offsetYmm: printOffsetY,
-          customerDirectory,
-        })
-      }
-      onSave={() => {
-        saveScscPrintCalibration(printOffsetX, printOffsetY);
-        setShowPrintSettings(false);
-      }}
-      onReset={() => {
-        resetScscPrintCalibration();
-        setPrintOffsetX(0);
-        setPrintOffsetY(0);
-      }}
-      onClose={() => setShowPrintSettings(false)}
-    />
+    {showEcargoKhoScsc && ecargoTableOpen ? (
+      <EcargoKhoScscCenterModal
+        rowId={row.id}
+        row={row}
+        vehicleForEcargo={vehicleForEcargo}
+        ecargoCanSubmit={ecargoCanSubmit}
+        onVehicleChange={(raw) => onEcargoVehicleChange(row.id, raw)}
+        onRegister={() => onEcargoRegister(row, viewSessionYmd, vehicleForEcargo)}
+        onClose={onCloseEcargoTable}
+      />
+    ) : null}
     </>
   );
 }

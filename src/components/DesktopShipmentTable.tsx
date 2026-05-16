@@ -14,18 +14,10 @@ import { InlineCutoffBlock } from "./InlineCutoffBlock";
 import { MobileDimKgModal } from "./MobileDimKgModal";
 import { CustomerShipmentDetailModal } from "./CustomerShipmentDetailModal";
 import { statusRowBg, statusRowBorder } from "./statusStyles";
-import { canPrintDimScscReport, printDimReport } from "../utils/printDimReport";
-import {
-  canExportTcsDimTemplate,
-  downloadTcsAttachedDimsExcel,
-  printTcsAttachedDimsList,
-} from "../utils/exportTcsAttachedDimsExcel";
-import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
-import { canPrintWeighReceiptScsc, printWeighReceiptScscWithConsigneeChoice } from "../utils/printWeighReceiptScsc";
+import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 import {
   warehouseLabel,
   warehouseSectionsForLayout,
-  isTcsWarehouse,
   type WarehouseLayoutFilter,
 } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
@@ -740,123 +732,14 @@ function ShipmentRow({
       </td>
       {/* Actions — icon từng chức năng + xe eCargo (KHO SCSC) */}
       <td className="px-0.5 py-0.5 align-top">
-        <div className="flex flex-wrap items-center justify-end gap-px">
-          <button
-            type="button"
-            aria-label="Sửa booking"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(row);
-            }}
-            className="rounded border border-black/[0.1] bg-white p-1 text-apple-blue shadow-sm hover:bg-sky-50/80"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
-              />
-            </svg>
-          </button>
-          {canPrintDimScscReport(row) ? (
-            <>
-              <button
-                type="button"
-                aria-label="In DIM SCSC"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  printDimReport(row);
-                }}
-                className="rounded border border-emerald-200/90 bg-emerald-50/90 px-0.5 py-px text-[8px] font-bold leading-none text-emerald-900 hover:bg-emerald-100"
-              >
-                DIM
-              </button>
-              <button
-                type="button"
-                aria-label="LIST SCSC Excel"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  downloadScscDimListExcel(row);
-                }}
-                className="rounded border border-emerald-200/80 bg-white px-0.5 py-px text-[8px] font-bold leading-none text-emerald-800 hover:bg-emerald-50"
-              >
-                LST
-              </button>
-            </>
-          ) : null}
-          {canPrintWeighReceiptScsc(row) ? (
-            <button
-              type="button"
-              aria-label="In phiếu cân SCSC"
-              onClick={(e) => {
-                e.stopPropagation();
-                void printWeighReceiptScscWithConsigneeChoice(row, { customerDirectory });
-              }}
-              className="rounded border border-sky-300 bg-sky-50 px-0.5 py-px text-[8px] font-bold leading-none text-sky-900 hover:bg-sky-100"
-            >
-              CÂN
-            </button>
-          ) : null}
-          {isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row) ? (
-            <>
-              <button
-                type="button"
-                aria-label="LIST DIM TCS"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  downloadTcsAttachedDimsExcel(row);
-                }}
-                className="rounded border border-emerald-200/80 bg-white px-0.5 py-px text-[8px] font-bold leading-none text-emerald-800 hover:bg-emerald-50"
-              >
-                T+L
-              </button>
-              <button
-                type="button"
-                aria-label="In DIM TCS"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  printTcsAttachedDimsList(row);
-                }}
-                className="rounded border border-emerald-200/90 bg-emerald-50/90 px-0.5 py-px text-[8px] font-bold leading-none text-emerald-900 hover:bg-emerald-100"
-              >
-                T+I
-              </button>
-            </>
-          ) : null}
-          <button
-            type="button"
-            aria-label="In nhãn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPrint(row);
-            }}
-            className="rounded border border-black/[0.1] bg-white p-1 text-apple-secondary shadow-sm hover:bg-black/[0.04] hover:text-apple-label"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"
-              />
-            </svg>
-          </button>
-          <button
-            type="button"
-            aria-label="Xóa lô"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm(`Xóa AWB ${row.awb}?`)) onDelete(row.id);
-            }}
-            className="rounded border border-red-200/80 bg-red-50/80 p-1 text-red-700 shadow-sm hover:bg-red-100"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              />
-            </svg>
-          </button>
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          <ShipmentRowActionsMenu
+            row={row}
+            customerDirectory={customerDirectory}
+            onEdit={onEdit}
+            onPrint={onPrint}
+            onDelete={onDelete}
+          />
           {showEcargoKhoScsc ? (
             <button
               type="button"

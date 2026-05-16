@@ -27,6 +27,7 @@ import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { debugError } from "../utils/debugLog";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { AirlineLabelSettingsModal } from "./AirlineLabelSettingsModal";
+import { WeighSlipManager } from "./WeighSlipManager";
 
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
@@ -95,6 +96,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [unmatchedReportOpen, setUnmatchedReportOpen] = useState(false);
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
+  const [weighSlipOpen, setWeighSlipOpen] = useState(false);
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -293,6 +295,14 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
               Bảng theo ngày — chọn ngày để xem hoặc nhập. Mỗi ngày một phiên; dữ liệu các ngày trước vẫn được lưu.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setWeighSlipOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3.5 py-2 text-xs font-semibold text-violet-950 shadow-apple transition-colors hover:bg-violet-100"
+                title="Nhập phiếu cân SCSC, lưu Postgres, in HTML"
+              >
+                Phiếu cân (nhập)
+              </button>
               <button
                 type="button"
                 onClick={() => setCustomerDirOpen(true)}
@@ -598,6 +608,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         saving={airlineLabelSaving}
         onSave={saveAirlineLabelOverrides}
       />
+
+      <WeighSlipManager open={weighSlipOpen} onClose={() => setWeighSlipOpen(false)} />
     </div>
   );
 }

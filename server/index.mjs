@@ -13,6 +13,9 @@ import {
 } from "./stateStore.mjs";
 import { createPostgresStateStore } from "./postgresStateStore.mjs";
 import { registerTsplRoutes } from "./tsplRoutes.mjs";
+import { registerLookupRoutes } from "./lookupRoutes.mjs";
+import { registerWeighSlipRoutes } from "./weighSlipRoutes.mjs";
+import { closeDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import {
   assertSocketGateOk,
   getSitePassword,
@@ -152,6 +155,14 @@ app.post("/api/mutation", async (req, res) => {
 });
 
 registerTsplRoutes(app);
+
+if (isDatabaseConfigured()) {
+  registerLookupRoutes(app);
+  registerWeighSlipRoutes(app);
+  console.info("[api] lookup + weigh-slips (Postgres)");
+} else {
+  console.info("[api] weigh-slips / lookup disabled — cần DATABASE_URL");
+}
 
 const distDir = path.join(__dirname, "..", "dist");
 app.use(express.static(distDir));

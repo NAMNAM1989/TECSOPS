@@ -12,6 +12,10 @@ import {
   emptyAirlineLabelOverrides,
   normalizeAirlineLabelOverridesLoose,
 } from "./airlineLabelOverridesNormalize.mjs";
+import {
+  emptyPrinterProfilesCatalog,
+  normalizePrinterProfilesCatalogLoose,
+} from "./printerProfilesNormalize.mjs";
 
 const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "KHO-TCS", "KHO-SCSC"];
 function isKnownWarehouse(w) {
@@ -35,7 +39,13 @@ function shouldSkipDemoSeed() {
 }
 
 function emptyInitialState() {
-  return { version: 1, rows: [], customers: [], airlineLabelOverrides: emptyAirlineLabelOverrides() };
+  return {
+    version: 1,
+    rows: [],
+    customers: [],
+    airlineLabelOverrides: emptyAirlineLabelOverrides(),
+    printerProfiles: emptyPrinterProfilesCatalog(),
+  };
 }
 
 /** @type {import('redis').RedisClientType | null} */
@@ -162,6 +172,7 @@ export function createInitialState() {
     rows: renumberSttForAll(withS),
     customers: buildDefaultCustomerDirectoryFromSeed(),
     airlineLabelOverrides: emptyAirlineLabelOverrides(),
+    printerProfiles: emptyPrinterProfilesCatalog(),
   };
 }
 
@@ -192,6 +203,7 @@ function normalizeState(raw) {
     rows: renumberSttForAll(merged),
     customers,
     airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(raw.airlineLabelOverrides),
+    printerProfiles: normalizePrinterProfilesCatalogLoose(raw.printerProfiles),
   };
 }
 
@@ -315,6 +327,7 @@ export async function saveState(state) {
 export function applyMutation(state, mutation) {
   let rows = [...state.rows];
   const keepAirline = () => normalizeAirlineLabelOverridesLoose(state.airlineLabelOverrides);
+  const keepPrinter = () => normalizePrinterProfilesCatalogLoose(state.printerProfiles);
   const action = String(mutation?.action ?? "").trim();
 
   switch (action) {
@@ -325,6 +338,7 @@ export function applyMutation(state, mutation) {
         rows: renumberSttForAll(rows),
         customers: list,
         airlineLabelOverrides: keepAirline(),
+        printerProfiles: keepPrinter(),
       };
     }
     case "SET_AIRLINE_LABEL_OVERRIDES": {
@@ -333,6 +347,16 @@ export function applyMutation(state, mutation) {
         rows: renumberSttForAll(rows),
         customers: state.customers ?? [],
         airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(mutation?.overrides),
+        printerProfiles: keepPrinter(),
+      };
+    }
+    case "SET_PRINTER_PROFILES": {
+      return {
+        version: state.version + 1,
+        rows: renumberSttForAll(rows),
+        customers: state.customers ?? [],
+        airlineLabelOverrides: keepAirline(),
+        printerProfiles: normalizePrinterProfilesCatalogLoose(mutation?.catalog),
       };
     }
     case "UPDATE": {
@@ -366,7 +390,7 @@ export function applyMutation(state, mutation) {
     }
     default:
       throw new Error(
-        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, UPDATE, DELETE, ADD. ` +
+        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, UPDATE, DELETE, ADD. ` +
           `Nếu vừa cập nhật code — hãy dừng toàn bộ process Node rồi chạy lại "npm run dev" (cần cả API + Vite).`
       );
   }
@@ -376,6 +400,7 @@ export function applyMutation(state, mutation) {
     rows: renumberSttForAll(rows),
     customers: state.customers ?? [],
     airlineLabelOverrides: keepAirline(),
+    printerProfiles: keepPrinter(),
   };
 }
 

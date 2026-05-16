@@ -19,6 +19,7 @@ import {
   loadAirlineLabelOverridesFromStorage,
   saveAirlineLabelOverridesToStorage,
 } from "../utils/airlineLabelOverridesStorage";
+import { mergeServerCatalogIntoLocalStore } from "../printing/printerProfilesSync";
 
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
@@ -29,9 +30,16 @@ const SOCKET_RECONNECT_DELAY_MS = 1000;
 const SOCKET_RECONNECT_DELAY_MAX_MS = 10000;
 
 /** Giữ bản sao mới hơn hoặc bằng `version` (tránh ghi đè do gói tin lệch thứ tự). */
+function hydratePrinterProfiles(next: AppState): AppState {
+  if (next.printerProfiles && next.printerProfiles.profiles.length > 0) {
+    mergeServerCatalogIntoLocalStore(next.printerProfiles);
+  }
+  return next;
+}
+
 function pickNewerState(prev: AppState | null, next: AppState): AppState {
-  if (!prev || next.version >= prev.version) return next;
-  return prev;
+  const picked = !prev || next.version >= prev.version ? next : prev;
+  return hydratePrinterProfiles(picked);
 }
 
 function offlineBootstrapState(rows: Shipment[]): AppState {
@@ -136,6 +144,9 @@ export function useShipmentSync(fallback: Fallback) {
           }
           if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
             saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
+          }
+          if (mutation.action === "SET_PRINTER_PROFILES" && next.printerProfiles) {
+            mergeServerCatalogIntoLocalStore(next.printerProfiles);
           }
           computed = next;
           return next;

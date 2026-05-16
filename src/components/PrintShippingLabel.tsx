@@ -22,9 +22,20 @@ import {
   saveLabelSheetFormat,
   type LabelSheetFormat,
 } from "../utils/labelSheetFormat";
-import { printThermalLabelsFromIframe } from "../utils/printThermalLabelIframe";
 import { mapShipmentToAirCargoLabelData } from "../utils/mapShipmentToAirCargoLabelData";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
+import { usePrinterProfiles } from "../hooks/usePrinterProfiles";
+import { getActiveThermalProfile } from "../printing/printerProfiles";
+import {
+  loadThermalDeliveryMode,
+  resolveEffectiveThermalDeliveryMode,
+  saveThermalDeliveryMode,
+  type ThermalDeliveryMode,
+} from "../printing/printDeliveryMode";
+import { PrinterProfileSelector } from "../printing/components/PrinterProfileSelector";
+import { CalibrationWizard } from "../printing/components/CalibrationWizard";
+import { printThermalCalibrationTspl, printThermalLabelTspl } from "../printing/thermalLabel/thermalLabelTspl";
+import { printThermalLabelsFromIframe } from "../utils/printThermalLabelIframe";
 
 export type LabelSheetVariant = "standard" | "compact";
 
@@ -270,12 +281,29 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
   const [hawbRelScale, setHawbRelScale] = useState(loadLabelHawbRelScale);
   const [sheetFormat, setSheetFormat] = useState<LabelSheetFormat>(() => loadLabelSheetFormat());
   const [compactShowHawb, setCompactShowHawb] = useState(() => loadLabelCompactShowHawb());
+  const { store, upsert, setActiveThermal } = usePrinterProfiles();
+  const thermalProfile = useMemo(() => getActiveThermalProfile(store), [store]);
+  const [deliveryMode, setDeliveryMode] = useState<ThermalDeliveryMode>(() => loadThermalDeliveryMode());
+  const [printMsg, setPrintMsg] = useState<string | null>(null);
+  const [calibOpen, setCalibOpen] = useState(false);
+  const printHostRef = useRef<HTMLDivElement>(null);
 
   const sheetVariant: LabelSheetVariant = sheetFormat === "100x50" ? "compact" : "standard";
 
   const handlePrint = async () => {
+    setPrintMsg(null);
+    const effectiveMode = resolveEffectiveThermalDeliveryMode(deliveryMode, thermalProfile.host);
+    if (deliveryMode === "tspl-tcp" && effectiveMode !== "tspl-tcp") {
+      setPrintMsg("Chưa cấu hình IP máy in — chuyển sang in trình duyệt.");
+    }
+    if (effectiveMode === "tspl-tcp") {
+      const res = await printThermalLabelTspl(shipment, thermalProfile, airlineLabelOverrides);
+      setPrintMsg(res.ok ? `Đã gửi TSPL → ${thermalProfile.host}` : res.error);
+      return;
+    }
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-    await printThermalLabelsFromIframe({ format: sheetFormat });
+    const res = await printThermalLabelsFromIframe({ format: sheetFormat, host: printHostRef.current });
+    if (!res.ok) setPrintMsg(res.error);
   };
 
   return (
@@ -424,10 +452,63 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
             </p>
           </div>
 
-          <p className="mt-4 text-[11px] leading-snug text-apple-secondary">
-            Web chỉ gửi một trang nhãn. Chọn số bản in trong hộp thoại in của Chrome (hoặc trên máy in) để tránh lỗi gộp trang.
-          </p>
+          <div className="mt-4 space-y-2 rounded-2xl border border-black/[0.08] bg-apple-bg/60 p-3">
+            <PrinterProfileSelector
+              docType="thermal-label"
+              store={store}
+              onChangeActive={setActiveThermal}
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeliveryMode("tspl-tcp");
+                  saveThermalDeliveryMode("tspl-tcp");
+                }}
+                className={
+                  deliveryMode === "tspl-tcp"
+                    ? "rounded-full bg-apple-blue px-3 py-1.5 text-[11px] font-semibold text-white"
+                    : "rounded-full border px-3 py-1.5 text-[11px] font-semibold"
+                }
+              >
+                TSPL trực tiếp
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeliveryMode("browser-print");
+                  saveThermalDeliveryMode("browser-print");
+                }}
+                className={
+                  deliveryMode === "browser-print"
+                    ? "rounded-full bg-apple-blue px-3 py-1.5 text-[11px] font-semibold text-white"
+                    : "rounded-full border px-3 py-1.5 text-[11px] font-semibold"
+                }
+              >
+                Trình duyệt (fallback)
+              </button>
+            </div>
+            {deliveryMode === "browser-print" ? (
+              <p className="text-[10px] text-amber-900">
+                Cảnh báo: Scale 100%, margin None, đúng khổ giấy, tắt Fit to page.
+              </p>
+            ) : (
+              <p className="text-[10px] text-apple-secondary">
+                In RAW qua {thermalProfile.host || "(chưa cấu hình IP)"}:{thermalProfile.port ?? 9100}
+              </p>
+            )}
+          </div>
+
+          {printMsg ? <p className="mt-2 text-xs text-apple-label">{printMsg}</p> : null}
+
           <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setCalibOpen(true)}
+              className="min-h-11 rounded-full border px-4 py-3 text-sm font-semibold text-apple-label"
+            >
+              Căn chỉnh
+            </button>
             <button
               type="button"
               onClick={() => void handlePrint()}
@@ -448,6 +529,7 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
 
       {createPortal(
         <div
+          ref={printHostRef}
           className="print-label-host hidden bg-white print:block"
           aria-hidden
         >
@@ -467,6 +549,17 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
         </div>,
         document.body
       )}
+
+      <CalibrationWizard
+        open={calibOpen}
+        profile={thermalProfile}
+        onSave={(p) => {
+          upsert(p);
+          setCalibOpen(false);
+        }}
+        onTestPrint={() => void printThermalCalibrationTspl(thermalProfile)}
+        onClose={() => setCalibOpen(false)}
+      />
     </>
   );
 }

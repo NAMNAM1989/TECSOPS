@@ -104,14 +104,48 @@ body {
 
 export type PrintThermalLabelsOptions = {
   format?: LabelSheetFormat;
+  /** Host cụ thể (tránh lấy nhầm .print-label-host khác trên trang). */
+  host?: HTMLElement | null;
 };
 
-export async function printThermalLabelsFromIframe(opts?: PrintThermalLabelsOptions): Promise<void> {
+export type ThermalLabelPrintResult = { ok: true } | { ok: false; error: string };
+
+/** Chọn host có nội dung nhãn (ưu tiên host truyền vào, rồi phần tử cuối có lbl-sheet). */
+export function resolveThermalLabelPrintHost(explicit?: HTMLElement | null): HTMLElement | null {
+  if (explicit?.innerHTML.includes("lbl-sheet")) return explicit;
+  const hosts = [...document.querySelectorAll<HTMLElement>(".print-label-host")];
+  for (let i = hosts.length - 1; i >= 0; i--) {
+    if (hosts[i].innerHTML.includes("lbl-sheet")) return hosts[i];
+  }
+  if (explicit?.innerHTML.trim()) return explicit;
+  return hosts.find((h) => h.innerHTML.trim().length > 0) ?? null;
+}
+
+async function waitForLabelMarkup(host: HTMLElement, timeoutMs = 1200): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (host.innerHTML.includes("lbl-sheet")) return true;
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+  }
+  return host.innerHTML.includes("lbl-sheet");
+}
+
+export async function printThermalLabelsFromIframe(
+  opts?: PrintThermalLabelsOptions
+): Promise<ThermalLabelPrintResult> {
   const format = opts?.format ?? "100x80";
   const { w: pageW, h: pageH } = thermalPageMm(format);
 
-  const host = document.querySelector(".print-label-host");
-  if (!host || !host.innerHTML.trim()) return;
+  const host = resolveThermalLabelPrintHost(opts?.host ?? null);
+  if (!host) {
+    return { ok: false, error: "Không tìm thấy vùng nhãn để in. Mở lại hộp thoại in nhãn." };
+  }
+  if (opts?.host && !(await waitForLabelMarkup(host))) {
+    return { ok: false, error: "Nhãn chưa render xong — thử bấm In lại." };
+  }
+  if (!host.innerHTML.trim()) {
+    return { ok: false, error: "Nội dung nhãn trống." };
+  }
   const inner = host.innerHTML;
 
   const iframe = document.createElement("iframe");
@@ -130,7 +164,7 @@ export async function printThermalLabelsFromIframe(opts?: PrintThermalLabelsOpti
   const doc = iframe.contentDocument;
   if (!doc) {
     iframe.remove();
-    return;
+    return { ok: false, error: "Không tạo được khung in." };
   }
 
   const docHtml = `<!DOCTYPE html>
@@ -155,7 +189,7 @@ export async function printThermalLabelsFromIframe(opts?: PrintThermalLabelsOpti
   const win = iframe.contentWindow;
   if (!win) {
     iframe.remove();
-    return;
+    return { ok: false, error: "Không mở được cửa sổ in." };
   }
 
   const cleanup = () => {
@@ -187,9 +221,10 @@ export async function printThermalLabelsFromIframe(opts?: PrintThermalLabelsOpti
   try {
     win.focus();
     win.print();
+    setTimeout(cleanup, 120_000);
+    return { ok: true };
   } catch {
     cleanup();
+    return { ok: false, error: "Trình duyệt chặn hộp thoại in." };
   }
-
-  setTimeout(cleanup, 120_000);
 }

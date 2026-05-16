@@ -1,4 +1,4 @@
-import { buildTspl } from "./tsplBuild.mjs";
+import { buildTspl, buildTsplCalibration } from "./tsplBuild.mjs";
 import { sendRawToPrinter } from "./tsplTcp.mjs";
 
 /**
@@ -28,7 +28,8 @@ export function registerTsplRoutes(app) {
   app.post("/api/tspl/build", (req, res) => {
     try {
       const body = normalizeBody(req.body);
-      const tspl = buildTspl(body);
+      const { host: _hb, port: _pb, calibration: calB, ...fieldsB } = body;
+      const tspl = calB ? buildTsplCalibration(fieldsB) : buildTspl(fieldsB);
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.send(tspl);
     } catch (e) {
@@ -57,8 +58,8 @@ export function registerTsplRoutes(app) {
         });
         return;
       }
-      const { host: _h, port: _p, ...labelFields } = body;
-      const tspl = buildTspl(labelFields);
+      const { host: _h, port: _p, calibration: cal, ...labelFields } = body;
+      const tspl = cal ? buildTsplCalibration(labelFields) : buildTspl(labelFields);
       await sendRawToPrinter(host, port, Buffer.from(tspl, "utf8"));
       res.json({ ok: true });
     } catch (e) {

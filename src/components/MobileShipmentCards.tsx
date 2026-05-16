@@ -11,13 +11,11 @@ import {
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
 import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
-import {
-  canPrintWeighReceiptScsc,
-  getScscPrintCalibration,
-  printWeighReceiptScscWithConsigneeChoice,
-  resetScscPrintCalibration,
-  saveScscPrintCalibration,
-} from "../utils/printWeighReceiptScsc";
+import { canPrintWeighReceiptScsc, printWeighReceiptScscWithConsigneeChoice } from "../utils/printWeighReceiptScsc";
+import { CalibrationWizard } from "../printing/components/CalibrationWizard";
+import { usePrinterProfiles } from "../hooks/usePrinterProfiles";
+import { getActiveA4WeighProfile } from "../printing/printerProfiles";
+import { printScscWeighReceiptHtml } from "../printing/scscWeigh/scscWeighPrint";
 import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
@@ -30,7 +28,6 @@ import {
 } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
-import { PrintCalibrationModal } from "./PrintCalibrationModal";
 
 const SWIPE_THRESHOLD = 48;
 /** Vuốt ngang bị bỏ qua nếu lệch dọc lớn hơn (coi như cuộn dọc). */
@@ -69,8 +66,8 @@ export function MobileShipmentCards({
   const [mobileExtrasOpenId, setMobileExtrasOpenId] = useState<string | null>(null);
   const [showPrintSettings, setShowPrintSettings] = useState(false);
   const [calibrationTarget, setCalibrationTarget] = useState<Shipment | null>(null);
-  const [printOffsetX, setPrintOffsetX] = useState(0);
-  const [printOffsetY, setPrintOffsetY] = useState(0);
+  const { store, upsert } = usePrinterProfiles();
+  const a4Profile = useMemo(() => getActiveA4WeighProfile(store), [store]);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
@@ -98,9 +95,6 @@ export function MobileShipmentCards({
   );
 
   const openPrintSettings = useCallback((row: Shipment) => {
-    const c = getScscPrintCalibration();
-    setPrintOffsetX(c.offsetXmm);
-    setPrintOffsetY(c.offsetYmm);
     setCalibrationTarget(row);
     setShowPrintSettings(true);
   }, []);
@@ -453,28 +447,17 @@ export function MobileShipmentCards({
         />,
         document.body
       )}
-    <PrintCalibrationModal
+    <CalibrationWizard
       open={showPrintSettings}
-      offsetX={printOffsetX}
-      offsetY={printOffsetY}
-      onChangeOffsetX={setPrintOffsetX}
-      onChangeOffsetY={setPrintOffsetY}
-      onTestPrint={() => {
-        if (!calibrationTarget) return;
-        void printWeighReceiptScscWithConsigneeChoice(calibrationTarget, {
-          offsetXmm: printOffsetX,
-          offsetYmm: printOffsetY,
-          customerDirectory,
-        });
-      }}
-      onSave={() => {
-        saveScscPrintCalibration(printOffsetX, printOffsetY);
+      profile={a4Profile}
+      onSave={(p) => {
+        upsert(p);
         setShowPrintSettings(false);
       }}
-      onReset={() => {
-        resetScscPrintCalibration();
-        setPrintOffsetX(0);
-        setPrintOffsetY(0);
+      onTestPrint={() => {
+        const s = calibrationTarget ?? rows[0];
+        if (!s) return;
+        printScscWeighReceiptHtml(s, { profile: a4Profile, calibrationTest: true, customerDirectory });
       }}
       onClose={() => setShowPrintSettings(false)}
     />

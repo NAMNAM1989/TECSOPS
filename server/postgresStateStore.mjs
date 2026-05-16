@@ -1,5 +1,15 @@
 import pg from "pg";
 import { normalizeAirlineLabelOverridesLoose } from "./airlineLabelOverridesNormalize.mjs";
+import { normalizePrinterProfilesCatalogLoose } from "./printerProfilesNormalize.mjs";
+import {
+  ensureAirlineCatalogSchema,
+  loadAirlineDisplayOverrides,
+  migrateAirlineOverridesFromBlob,
+  saveAirlineDisplayOverrides,
+  seedAirlineCatalogIfEmpty,
+} from "./airlineCatalog.mjs";
+import { ensureAirportSchema, seedAirportsIfEmpty } from "./airportCatalog.mjs";
+import { ensureWeighSlipSchema } from "./weighSlipSchema.mjs";
 
 const { Pool } = pg;
 
@@ -8,6 +18,7 @@ const TABLE_NAME = "app_state";
 const CUSTOMERS_TABLE = "customers";
 const CUSTOMER_PROFILES_TABLE = "customer_print_profiles";
 const CUSTOMER_CONSIGNEES_TABLE = "customer_consignees";
+const CUSTOMER_PARTIES_TABLE = "customer_parties";
 const SHIPMENTS_TABLE = "shipments";
 const STATE_META_TABLE = "state_meta";
 
@@ -131,9 +142,27 @@ async function ensureSchema(client) {
     `CREATE INDEX IF NOT EXISTS idx_customer_consignees_customer ON ${CUSTOMER_CONSIGNEES_TABLE}(customer_id)`
   );
   await client.query(`
+    CREATE TABLE IF NOT EXISTS ${CUSTOMER_PARTIES_TABLE} (
+      id text PRIMARY KEY,
+      customer_id text NOT NULL REFERENCES ${CUSTOMERS_TABLE}(id) ON DELETE CASCADE,
+      party_type text NOT NULL DEFAULT 'OTHER',
+      label text NOT NULL DEFAULT '',
+      content text NOT NULL DEFAULT '',
+      sort_order integer NOT NULL DEFAULT 0
+    )
+  `);
+  await client.query(
+    `CREATE INDEX IF NOT EXISTS idx_customer_parties_customer ON ${CUSTOMER_PARTIES_TABLE}(customer_id)`
+  );
+  await client.query(`
     ALTER TABLE ${SHIPMENTS_TABLE}
     ADD COLUMN IF NOT EXISTS customer_consignee_id text REFERENCES ${CUSTOMER_CONSIGNEES_TABLE}(id) ON DELETE SET NULL
   `);
+  await ensureAirlineCatalogSchema(client);
+  await ensureAirportSchema(client);
+  await seedAirlineCatalogIfEmpty(client);
+  await seedAirportsIfEmpty(client);
+  await ensureWeighSlipSchema(client);
 }
 
 function str(v) {
@@ -164,7 +193,18 @@ function savedConsigneeFromRow(row) {
   };
 }
 
-function customerProfileFromRow(row, savedConsignees = []) {
+function partyFromRow(row) {
+  const type = str(row.party_type).toUpperCase();
+  const allowed = new Set(["SHIPPER", "CNEE", "NOTIFY", "OTHER"]);
+  return {
+    id: row.id || "",
+    type: allowed.has(type) ? type : "OTHER",
+    label: row.label || "",
+    content: row.content || "",
+  };
+}
+
+function customerProfileFromRow(row, savedConsignees = [], parties = []) {
   return {
     id: row.id,
     code: row.code,
@@ -185,7 +225,7 @@ function customerProfileFromRow(row, savedConsignees = []) {
     consigneeEmail: row.consignee_email || "",
     notifyName: row.notify_name || "",
     savedConsignees,
-    parties: [],
+    parties,
   };
 }
 
@@ -232,7 +272,7 @@ function shipmentFromRow(row) {
 }
 
 async function loadRelationalSnapshot(client, key) {
-  const [customerRes, consigneeRes, shipmentRes, metaRes, jsonRes] = await Promise.all([
+  const [customerRes, consigneeRes, partyRes, shipmentRes, metaRes, jsonRes] = await Promise.all([
     client.query(
       `
       SELECT c.id, c.code, c.name,
@@ -247,14 +287,21 @@ async function loadRelationalSnapshot(client, key) {
     client.query(
       `SELECT * FROM ${CUSTOMER_CONSIGNEES_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`
     ),
+    client.query(
+      `SELECT * FROM ${CUSTOMER_PARTIES_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`
+    ),
     client.query(`SELECT * FROM ${SHIPMENTS_TABLE} ORDER BY session_date ASC, warehouse ASC, stt ASC, id ASC`),
     client.query(`SELECT version FROM ${STATE_META_TABLE} WHERE id = $1`, [key]),
     client.query(`SELECT state FROM ${TABLE_NAME} WHERE id = $1`, [key]),
   ]);
   if (customerRes.rows.length === 0 && shipmentRes.rows.length === 0) return null;
   const blob = jsonRes.rows[0]?.state;
-  const airlineLabelOverrides = normalizeAirlineLabelOverridesLoose(
-    blob && typeof blob === "object" ? blob.airlineLabelOverrides : undefined
+  const blobOverrides =
+    blob && typeof blob === "object" ? blob.airlineLabelOverrides : undefined;
+  await migrateAirlineOverridesFromBlob(client, blobOverrides);
+  const airlineLabelOverrides = await loadAirlineDisplayOverrides(client);
+  const printerProfiles = normalizePrinterProfilesCatalogLoose(
+    blob && typeof blob === "object" ? blob.printerProfiles : undefined
   );
   const consigneeByCustomer = new Map();
   for (const r of consigneeRes.rows) {
@@ -263,13 +310,25 @@ async function loadRelationalSnapshot(client, key) {
     if (!consigneeByCustomer.has(cid)) consigneeByCustomer.set(cid, []);
     consigneeByCustomer.get(cid).push(savedConsigneeFromRow(r));
   }
+  const partiesByCustomer = new Map();
+  for (const r of partyRes.rows) {
+    const cid = str(r.customer_id).trim();
+    if (!cid) continue;
+    if (!partiesByCustomer.has(cid)) partiesByCustomer.set(cid, []);
+    partiesByCustomer.get(cid).push(partyFromRow(r));
+  }
   return {
     version: Number(metaRes.rows[0]?.version ?? 1),
     rows: shipmentRes.rows.map(shipmentFromRow),
     customers: customerRes.rows.map((row) =>
-      customerProfileFromRow(row, consigneeByCustomer.get(str(row.id).trim()) ?? [])
+      customerProfileFromRow(
+        row,
+        consigneeByCustomer.get(str(row.id).trim()) ?? [],
+        partiesByCustomer.get(str(row.id).trim()) ?? []
+      )
     ),
     airlineLabelOverrides,
+    printerProfiles,
   };
 }
 
@@ -279,8 +338,13 @@ async function replaceRelationalSnapshot(client, key, state) {
 
   await client.query(`DELETE FROM ${SHIPMENTS_TABLE}`);
   await client.query(`DELETE FROM ${CUSTOMER_CONSIGNEES_TABLE}`);
+  await client.query(`DELETE FROM ${CUSTOMER_PARTIES_TABLE}`);
   await client.query(`DELETE FROM ${CUSTOMER_PROFILES_TABLE}`);
   await client.query(`DELETE FROM ${CUSTOMERS_TABLE}`);
+  await saveAirlineDisplayOverrides(
+    client,
+    normalizeAirlineLabelOverridesLoose(state.airlineLabelOverrides)
+  );
 
   for (const c of customers) {
     const customerId = str(c.id).trim();
@@ -341,6 +405,28 @@ async function replaceRelationalSnapshot(client, key, state) {
           str(sc.consigneeEmail),
           str(sc.notifyName),
           sortOrder++,
+        ]
+      );
+    }
+    const parties = Array.isArray(c.parties) ? c.parties : [];
+    let partyOrder = 0;
+    for (const p of parties) {
+      const pid = str(p.id).trim();
+      if (!pid) continue;
+      const ptype = str(p.type).toUpperCase();
+      const allowed = new Set(["SHIPPER", "CNEE", "NOTIFY", "OTHER"]);
+      await client.query(
+        `
+        INSERT INTO ${CUSTOMER_PARTIES_TABLE} (id, customer_id, party_type, label, content, sort_order)
+        VALUES ($1,$2,$3,$4,$5,$6)
+        `,
+        [
+          pid,
+          customerId,
+          allowed.has(ptype) ? ptype : "OTHER",
+          str(p.label),
+          str(p.content),
+          partyOrder++,
         ]
       );
     }

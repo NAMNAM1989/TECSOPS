@@ -2,6 +2,7 @@ import type { Shipment } from "../types/shipment";
 import type { AppState } from "./shipmentMutations";
 import { parseCustomerDirectoryLoose } from "./customerDirectoryCore";
 import { clampAirlineLabelOverrides } from "./airlineLabelOverridesCore";
+import { clampPrinterProfilesCatalog } from "../printing/printerProfilesCore";
 
 export function parseAppState(raw: unknown): AppState | null {
   if (!raw || typeof raw !== "object") return null;
@@ -12,10 +13,15 @@ export function parseAppState(raw: unknown): AppState | null {
   const airlineLabelOverrides = clampAirlineLabelOverrides(
     "airlineLabelOverrides" in o ? o.airlineLabelOverrides : undefined
   );
+  const printerProfiles = clampPrinterProfilesCatalog(
+    "printerProfiles" in o ? o.printerProfiles : undefined
+  );
+
   return {
     version: o.version,
     rows: o.rows as Shipment[],
     customers,
     airlineLabelOverrides,
+    printerProfiles,
   };
 }

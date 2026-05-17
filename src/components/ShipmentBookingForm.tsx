@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+import type { GlobalAgentCatalog } from "../types/globalAgents";
+import { findGlobalAgentById } from "../utils/globalAgentsCore";
 import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
 import { isAwbDigitsTaken } from "../utils/awbUnique";
 import { mergeCustomerOptions, persistNewCustomer } from "../utils/customerStorage";
@@ -16,6 +18,12 @@ import {
 } from "../utils/bookingDateParse";
 import { deriveAutoWorkflowStatus, isAutoWorkflowStatus } from "../utils/shipmentWorkflowStatus";
 import { lookupCustomerCodeByName, lookupCustomerEntryByName } from "../utils/customerDirectoryCore";
+import {
+  resolveDefaultConsignee,
+  resolveDefaultGoods,
+  resolveDefaultShipper,
+} from "../utils/customerDirectoryDefaults";
+import { normalizePrintAddressMultiline } from "../utils/printAddressMultiline";
 
 type BaseProps = {
   sessionDateYmd: string;
@@ -23,6 +31,7 @@ type BaseProps = {
   onClose: () => void;
   /** Danh bạ từ máy chủ — nếu có phần tử, booking chỉ chọn khách trong danh sách (có mã). */
   customerDirectory?: readonly CustomerDirectoryEntry[];
+  globalAgents?: GlobalAgentCatalog;
 };
 
 type AddMode = BaseProps & {
@@ -42,6 +51,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   const isEdit = props.mode === "edit";
   const editShipment = isEdit ? props.shipment : null;
   const directory = props.customerDirectory ?? [];
+  const globalAgents = props.globalAgents;
   const useCustomerDirectory = directory.length > 0;
 
   const [awbRaw, setAwbRaw] = useState("");
@@ -75,12 +85,17 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   const [consigneePhonePrint, setConsigneePhonePrint] = useState("");
   const [consigneeEmailPrint, setConsigneeEmailPrint] = useState("");
   const [notifyNamePrint, setNotifyNamePrint] = useState("");
-  /** Khóa CNEE lưu sẵn trong danh bạ (nhiều người nhận / khách). */
+  /** Khóa Agent / CNEE lưu sẵn trong danh bạ. */
+  const [globalAgentId, setGlobalAgentId] = useState("");
+  const [customerGoodsId, setCustomerGoodsId] = useState("");
+  const [goodsDescriptionPrint, setGoodsDescriptionPrint] = useState("");
+  const [customerShipperId, setCustomerShipperId] = useState("");
   const [customerConsigneeId, setCustomerConsigneeId] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [note, setNote] = useState("");
   const [dimKg, setDimKg] = useState("");
+  const [showPrintDetails, setShowPrintDetails] = useState(false);
 
   const awbRef = useRef<HTMLInputElement>(null);
   const hawbRef = useRef<HTMLInputElement>(null);
@@ -117,20 +132,24 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     setCustomerCode((editShipment.customerCode ?? "").trim());
     setCustomerId((editShipment.customerId ?? "").trim());
     setShipperNamePrint((editShipment.shipperNamePrint ?? "").trim());
-    setShipperAddressPrint((editShipment.shipperAddressPrint ?? "").trim());
+    setShipperAddressPrint(normalizePrintAddress(editShipment.shipperAddressPrint ?? "", 2));
     setShipperPhonePrint((editShipment.shipperPhonePrint ?? "").trim());
     setShipperEmailPrint((editShipment.shipperEmailPrint ?? "").trim());
     setTaxCodePrint((editShipment.taxCodePrint ?? "").trim());
     setAgentNamePrint((editShipment.agentNamePrint ?? "").trim());
-    setAgentAddressPrint((editShipment.agentAddressPrint ?? "").trim());
+    setAgentAddressPrint(normalizePrintAddress(editShipment.agentAddressPrint ?? ""));
     setAgentPhonePrint((editShipment.agentPhonePrint ?? "").trim());
     setAgentEmailPrint((editShipment.agentEmailPrint ?? "").trim());
     setAgentTaxCodePrint((editShipment.agentTaxCodePrint ?? "").trim());
     setConsigneeNamePrint((editShipment.consigneeNamePrint ?? "").trim());
-    setConsigneeAddressPrint((editShipment.consigneeAddressPrint ?? "").trim());
+    setConsigneeAddressPrint(normalizePrintAddress(editShipment.consigneeAddressPrint ?? ""));
     setConsigneePhonePrint((editShipment.consigneePhonePrint ?? "").trim());
     setConsigneeEmailPrint((editShipment.consigneeEmailPrint ?? "").trim());
     setNotifyNamePrint((editShipment.notifyNamePrint ?? "").trim());
+    setGlobalAgentId((editShipment.globalAgentId ?? editShipment.globalAgentId ?? "").trim());
+    setCustomerGoodsId((editShipment.customerGoodsId ?? "").trim());
+    setGoodsDescriptionPrint((editShipment.goodsDescriptionPrint ?? "").trim());
+    setCustomerShipperId((editShipment.customerShipperId ?? "").trim());
     setCustomerConsigneeId((editShipment.customerConsigneeId ?? "").trim());
     setCustomerSearch("");
     setNote(editShipment.note ?? "");
@@ -163,7 +182,10 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     return directory.find((e) => e.id.trim() === customerId.trim());
   }, [useCustomerDirectory, customerId, directory]);
 
+  const globalAgentOptions = globalAgents?.agents ?? [];
+  const savedShipperOptions = directoryCustomer?.savedShippers ?? [];
   const savedConsigneeOptions = directoryCustomer?.savedConsignees ?? [];
+  const savedGoodsOptions = directoryCustomer?.savedGoods ?? [];
 
   const filteredCustomers = useCustomerDirectory
     ? directory.filter(
@@ -293,32 +315,8 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
     return v.replace(/\s+/g, " ").trim();
   }
 
-  function extractDirectoryPrintInfo(entry: CustomerDirectoryEntry): {
-    address: string;
-    phone: string;
-    taxCode: string;
-  } {
-    if (entry.shipperAddress?.trim() || entry.shipperPhone?.trim() || entry.taxCode?.trim()) {
-      return {
-        address: normalizePrintText(entry.shipperAddress ?? "").slice(0, 110),
-        phone: normalizePrintText(entry.shipperPhone ?? "").slice(0, 24),
-        taxCode: normalizePrintText(entry.taxCode ?? "").slice(0, 24),
-      };
-    }
-    const partiesText = entry.parties.map((p) => p.content).join("\n");
-    const shipperParty = entry.parties.find((p) => p.type === "SHIPPER");
-    const address = normalizePrintText(shipperParty?.content ?? "");
-    const phoneMatch =
-      partiesText.match(/(?:SĐT|SDT|ĐT|DT|TEL|PHONE|Tel)[:\s]*([+\d\s().-]{8,})/i) ||
-      partiesText.match(/\b0\d{9,10}\b/) ||
-      partiesText.match(/\+?\d[\d\s().-]{8,}\d/);
-    const phoneRaw = phoneMatch?.[1] ?? phoneMatch?.[0] ?? "";
-    const taxMatch = partiesText.match(/(?:MST|TAX|Tax\s*code)[:\s]*([0-9A-Z.-]{6,24})/i);
-    return {
-      address: address.slice(0, 110),
-      phone: normalizePrintText(phoneRaw).slice(0, 24),
-      taxCode: normalizePrintText(taxMatch?.[1] ?? "").slice(0, 24),
-    };
+  function normalizePrintAddress(v: string, maxLines = 6): string {
+    return normalizePrintAddressMultiline(v, maxLines).slice(0, 300);
   }
 
   function applyCustomerToPrintFields(nextName: string, nextCode: string): void {
@@ -342,26 +340,45 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       setConsigneePhonePrint("");
       setConsigneeEmailPrint("");
       setNotifyNamePrint("");
+      setGlobalAgentId("");
+      setCustomerGoodsId("");
+      setGoodsDescriptionPrint("");
+      setCustomerShipperId("");
       setCustomerConsigneeId("");
       return;
     }
-    const info = extractDirectoryPrintInfo(entry);
-    setShipperNamePrint(normalizePrintText(entry.shipperName || entry.name).slice(0, 45));
-    setShipperAddressPrint(info.address);
-    setShipperPhonePrint(info.phone);
-    setTaxCodePrint(info.taxCode);
-    setShipperEmailPrint(normalizePrintText(entry.shipperEmail ?? "").slice(0, 50));
-    setAgentNamePrint(normalizePrintText(entry.agentName ?? "").slice(0, 45));
-    setAgentAddressPrint(normalizePrintText(entry.agentAddress ?? "").slice(0, 110));
-    setAgentPhonePrint(normalizePrintText(entry.agentPhone ?? "").slice(0, 24));
-    setAgentEmailPrint(normalizePrintText(entry.agentEmail ?? "").slice(0, 50));
-    setAgentTaxCodePrint(normalizePrintText(entry.agentTaxCode ?? "").slice(0, 24));
-    setConsigneeNamePrint(normalizePrintText(entry.consigneeName ?? "").slice(0, 45));
-    setConsigneeAddressPrint(normalizePrintText(entry.consigneeAddress ?? "").slice(0, 110));
-    setConsigneePhonePrint(normalizePrintText(entry.consigneePhone ?? "").slice(0, 24));
-    setConsigneeEmailPrint(normalizePrintText(entry.consigneeEmail ?? "").slice(0, 50));
-    setNotifyNamePrint(normalizePrintText(entry.notifyName ?? "").slice(0, 80));
-    setCustomerConsigneeId("");
+    const defaultAgent = globalAgents ? findGlobalAgentById(globalAgents, globalAgents.defaultAgentId) : undefined;
+    const pickShipper = resolveDefaultShipper(entry);
+    const pickCnee = resolveDefaultConsignee(entry);
+    const pickGoods = resolveDefaultGoods(entry);
+    setCustomerShipperId(pickShipper?.id ?? "");
+    setShipperNamePrint(normalizePrintText(pickShipper?.shipperName ?? "").slice(0, 45));
+    setShipperAddressPrint(normalizePrintAddress(pickShipper?.shipperAddress ?? "", 2));
+    setShipperPhonePrint(normalizePrintText(pickShipper?.shipperPhone ?? "").slice(0, 24));
+    setTaxCodePrint(normalizePrintText(pickShipper?.taxCode ?? "").slice(0, 24));
+    setShipperEmailPrint(normalizePrintText(pickShipper?.shipperEmail ?? "").slice(0, 50));
+    setGlobalAgentId(globalAgents?.defaultAgentId ?? "");
+    if (defaultAgent && !defaultAgent.isNone) {
+      setAgentNamePrint(normalizePrintText(defaultAgent.agentName).slice(0, 45));
+      setAgentAddressPrint(normalizePrintAddress(defaultAgent.agentAddress));
+      setAgentPhonePrint(normalizePrintText(defaultAgent.agentPhone).slice(0, 24));
+      setAgentEmailPrint(normalizePrintText(defaultAgent.agentEmail).slice(0, 50));
+      setAgentTaxCodePrint(normalizePrintText(defaultAgent.agentTaxCode).slice(0, 24));
+    } else {
+      setAgentNamePrint("");
+      setAgentAddressPrint("");
+      setAgentPhonePrint("");
+      setAgentEmailPrint("");
+      setAgentTaxCodePrint("");
+    }
+    setCustomerConsigneeId(pickCnee?.id ?? "");
+    setConsigneeNamePrint(normalizePrintText(pickCnee?.consigneeName ?? "").slice(0, 45));
+    setConsigneeAddressPrint(normalizePrintAddress(pickCnee?.consigneeAddress ?? ""));
+    setConsigneePhonePrint(normalizePrintText(pickCnee?.consigneePhone ?? "").slice(0, 24));
+    setConsigneeEmailPrint(normalizePrintText(pickCnee?.consigneeEmail ?? "").slice(0, 50));
+    setNotifyNamePrint(normalizePrintText(pickCnee?.notifyName ?? "").slice(0, 80));
+    setCustomerGoodsId(pickGoods?.id ?? "");
+    setGoodsDescriptionPrint(normalizePrintText(pickGoods?.goodsDescription ?? "").slice(0, 60));
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -452,19 +469,23 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
         ? customerCode.trim()
         : lookupCustomerCodeByName(directory, effectiveCustomer) || "",
       customerId: useCustomerDirectory ? customerId.trim() : "",
+      globalAgentId: useCustomerDirectory ? globalAgentId.trim() : "",
+      customerGoodsId: useCustomerDirectory ? customerGoodsId.trim() : "",
+      goodsDescriptionPrint: normalizePrintText(goodsDescriptionPrint).slice(0, 60),
+      customerShipperId: useCustomerDirectory ? customerShipperId.trim() : "",
       customerConsigneeId: useCustomerDirectory ? customerConsigneeId.trim() : "",
-      shipperNamePrint: normalizePrintText(shipperNamePrint || effectiveCustomer).slice(0, 45),
-      shipperAddressPrint: normalizePrintText(shipperAddressPrint).slice(0, 110),
+      shipperNamePrint: normalizePrintText(shipperNamePrint).slice(0, 45),
+      shipperAddressPrint: normalizePrintAddress(shipperAddressPrint, 2),
       shipperPhonePrint: normalizePrintText(shipperPhonePrint).slice(0, 24),
       shipperEmailPrint: normalizePrintText(shipperEmailPrint).slice(0, 50),
       taxCodePrint: normalizePrintText(taxCodePrint).slice(0, 24),
       agentNamePrint: normalizePrintText(agentNamePrint).slice(0, 45),
-      agentAddressPrint: normalizePrintText(agentAddressPrint).slice(0, 110),
+      agentAddressPrint: normalizePrintAddress(agentAddressPrint),
       agentPhonePrint: normalizePrintText(agentPhonePrint).slice(0, 24),
       agentEmailPrint: normalizePrintText(agentEmailPrint).slice(0, 50),
       agentTaxCodePrint: normalizePrintText(agentTaxCodePrint).slice(0, 24),
       consigneeNamePrint: normalizePrintText(consigneeNamePrint).slice(0, 45),
-      consigneeAddressPrint: normalizePrintText(consigneeAddressPrint).slice(0, 110),
+      consigneeAddressPrint: normalizePrintAddress(consigneeAddressPrint),
       consigneePhonePrint: normalizePrintText(consigneePhonePrint).slice(0, 24),
       consigneeEmailPrint: normalizePrintText(consigneeEmailPrint).slice(0, 50),
       notifyNamePrint: normalizePrintText(notifyNamePrint).slice(0, 80),
@@ -492,6 +513,9 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
       setCustomer("");
       setCustomerCode("");
       setCustomerId("");
+      setGlobalAgentId("");
+      setCustomerGoodsId("");
+      setGoodsDescriptionPrint("");
       setCustomerConsigneeId("");
       setCustomerSearch("");
       setShipperNamePrint("");
@@ -827,6 +851,9 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                       setCustomer("");
                       setCustomerCode("");
                       setCustomerId("");
+                      setGlobalAgentId("");
+      setCustomerGoodsId("");
+      setGoodsDescriptionPrint("");
                       setCustomerConsigneeId("");
                       setShipperNamePrint("");
                       setShipperAddressPrint("");
@@ -936,7 +963,159 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
             <p className="text-xs font-semibold uppercase tracking-wide text-apple-secondary">
               Dữ liệu in phiếu cân thực tế
             </p>
+            {useCustomerDirectory ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {savedShipperOptions.length > 0 ? (
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold text-apple-tertiary">Shipper</label>
+                    <select
+                      value={customerShipperId}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCustomerShipperId(v);
+                        const ss = savedShipperOptions.find((x) => x.id === v);
+                        if (ss) {
+                          setShipperNamePrint(normalizePrintText(ss.shipperName).slice(0, 45));
+                          setShipperAddressPrint(normalizePrintAddress(ss.shipperAddress, 2));
+                          setShipperPhonePrint(normalizePrintText(ss.shipperPhone).slice(0, 24));
+                          setShipperEmailPrint(normalizePrintText(ss.shipperEmail).slice(0, 50));
+                          setTaxCodePrint(normalizePrintText(ss.taxCode).slice(0, 24));
+                        }
+                      }}
+                      className="w-full rounded-xl border border-black/[0.08] bg-white px-2 py-2 text-xs font-medium text-apple-label"
+                    >
+                      <option value="">— Shipper —</option>
+                      {savedShipperOptions.map((ss) => (
+                        <option key={ss.id} value={ss.id}>
+                          {(ss.label.trim() ? `${ss.label} — ` : "") + (ss.shipperName.trim() || ss.id)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+                {savedConsigneeOptions.length > 0 ? (
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold text-apple-tertiary">CNEE</label>
+                    <select
+                      value={customerConsigneeId}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCustomerConsigneeId(v);
+                        const sc = savedConsigneeOptions.find((x) => x.id === v);
+                        if (sc) {
+                          setConsigneeNamePrint(normalizePrintText(sc.consigneeName).slice(0, 45));
+                          setConsigneeAddressPrint(normalizePrintAddress(sc.consigneeAddress));
+                          setConsigneePhonePrint(normalizePrintText(sc.consigneePhone).slice(0, 24));
+                          setConsigneeEmailPrint(normalizePrintText(sc.consigneeEmail).slice(0, 50));
+                          setNotifyNamePrint(normalizePrintText(sc.notifyName).slice(0, 80));
+                        }
+                      }}
+                      className="w-full rounded-xl border border-black/[0.08] bg-white px-2 py-2 text-xs font-medium text-apple-label"
+                    >
+                      <option value="">— CNEE —</option>
+                      {savedConsigneeOptions.map((sc) => (
+                        <option key={sc.id} value={sc.id}>
+                          {(sc.label.trim() ? `${sc.label} — ` : "") + (sc.consigneeName.trim() || sc.id)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+                {globalAgentOptions.length > 0 ? (
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold text-apple-tertiary">Agent</label>
+                    <select
+                      value={globalAgentId}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setGlobalAgentId(v);
+                        const ag = globalAgentOptions.find((x) => x.id === v);
+                        if (ag) {
+                          setAgentNamePrint(normalizePrintText(ag.agentName).slice(0, 45));
+                          setAgentAddressPrint(normalizePrintAddress(ag.agentAddress));
+                          setAgentPhonePrint(normalizePrintText(ag.agentPhone).slice(0, 24));
+                          setAgentEmailPrint(normalizePrintText(ag.agentEmail).slice(0, 50));
+                          setAgentTaxCodePrint(normalizePrintText(ag.agentTaxCode).slice(0, 24));
+                        }
+                      }}
+                      className="w-full rounded-xl border border-black/[0.08] bg-white px-2 py-2 text-xs font-medium text-apple-label"
+                    >
+                      <option value="">— Agent —</option>
+                      {globalAgentOptions.map((ag) => (
+                        <option key={ag.id} value={ag.id}>
+                          {(ag.label.trim() ? `${ag.label} — ` : "") + (ag.agentName.trim() || ag.id)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+                {savedGoodsOptions.length > 0 ? (
+                  <div>
+                    <label className="mb-1 block text-[10px] font-semibold text-apple-tertiary">Tên hàng</label>
+                    <select
+                      value={customerGoodsId}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCustomerGoodsId(v);
+                        const g = savedGoodsOptions.find((x) => x.id === v);
+                        if (g) setGoodsDescriptionPrint(normalizePrintText(g.goodsDescription).slice(0, 60));
+                      }}
+                      className="w-full rounded-xl border border-black/[0.08] bg-white px-2 py-2 text-xs font-medium text-apple-label"
+                    >
+                      <option value="">— Tên hàng —</option>
+                      {savedGoodsOptions.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {(g.label.trim() ? `${g.label} — ` : "") + (g.goodsDescription.trim() || g.id)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-apple-secondary">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-black/20 accent-apple-blue"
+                checked={showPrintDetails}
+                onChange={(e) => setShowPrintDetails(e.target.checked)}
+              />
+              Chi tiết chỉnh sửa tay (địa chỉ, email…)
+            </label>
+            {showPrintDetails ? (
+            <>
             <div>
+              <p className="mb-1 text-[10px] leading-snug text-apple-tertiary">
+                Shipper in trên phiếu cân — không nhầm với tên account khách ở trên.
+              </p>
+              {useCustomerDirectory && savedShipperOptions.length > 0 ? (
+                <div className="mb-2">
+                  <label className="mb-1 block text-[10px] font-semibold text-apple-tertiary">Shipper lưu sẵn</label>
+                  <select
+                    value={customerShipperId}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCustomerShipperId(v);
+                      const ss = savedShipperOptions.find((x) => x.id === v);
+                      if (ss) {
+                        setShipperNamePrint(normalizePrintText(ss.shipperName).slice(0, 45));
+                        setShipperAddressPrint(normalizePrintAddress(ss.shipperAddress, 2));
+                        setShipperPhonePrint(normalizePrintText(ss.shipperPhone).slice(0, 24));
+                        setShipperEmailPrint(normalizePrintText(ss.shipperEmail).slice(0, 50));
+                        setTaxCodePrint(normalizePrintText(ss.taxCode).slice(0, 24));
+                      }
+                    }}
+                    className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-medium text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                  >
+                    <option value="">— Chọn Shipper / nhập tay —</option>
+                    {savedShipperOptions.map((ss) => (
+                      <option key={ss.id} value={ss.id}>
+                        {(ss.label.trim() ? `${ss.label} — ` : "") + (ss.shipperName.trim() || ss.id)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <label className="mb-1 block text-xs font-semibold text-apple-secondary">Người gửi (Shipper)</label>
               <input
                 type="text"
@@ -957,7 +1136,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
               </div>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <textarea value={shipperAddressPrint} onChange={(e) => setShipperAddressPrint(e.target.value)} rows={2} maxLength={110} placeholder="Địa chỉ shipper" className="sm:col-span-1 w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              <textarea value={shipperAddressPrint} onChange={(e) => setShipperAddressPrint(e.target.value)} rows={2} maxLength={300} placeholder="Địa chỉ — Enter = dòng 2 trên phiếu (tối đa 2 dòng)" className="sm:col-span-1 w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
               <div>
                 <label className="mb-1 block text-xs font-semibold text-apple-secondary">MST</label>
                 <input type="text" value={taxCodePrint} onChange={(e) => setTaxCodePrint(e.target.value)} maxLength={24} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
@@ -965,13 +1144,76 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
             </div>
             <div className="grid grid-cols-1 gap-2 border-t border-black/[0.06] pt-2">
               <p className="text-[11px] font-semibold uppercase text-apple-secondary">Đơn vị dịch vụ (Agent)</p>
+              {useCustomerDirectory && globalAgentOptions.length > 0 ? (
+                <div>
+                  <label className="mb-1 block text-[10px] font-semibold text-apple-tertiary">
+                    Agent chung (phiếu cân)
+                  </label>
+                  <select
+                    value={globalAgentId}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setGlobalAgentId(v);
+                      const ag = globalAgentOptions.find((x) => x.id === v);
+                      if (ag) {
+                        setAgentNamePrint(normalizePrintText(ag.agentName).slice(0, 45));
+                        setAgentAddressPrint(normalizePrintAddress(ag.agentAddress));
+                        setAgentPhonePrint(normalizePrintText(ag.agentPhone).slice(0, 24));
+                        setAgentEmailPrint(normalizePrintText(ag.agentEmail).slice(0, 50));
+                        setAgentTaxCodePrint(normalizePrintText(ag.agentTaxCode).slice(0, 24));
+                      }
+                    }}
+                    className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-medium text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                  >
+                    <option value="">— Chọn Agent —</option>
+                    {globalAgentOptions.map((ag) => (
+                      <option key={ag.id} value={ag.id}>
+                        {(ag.label.trim() ? `${ag.label} — ` : "") + (ag.agentName.trim() || ag.id)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <input type="text" value={agentNamePrint} onChange={(e) => setAgentNamePrint(e.target.value)} maxLength={45} placeholder="Tên agent" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
-              <textarea value={agentAddressPrint} onChange={(e) => setAgentAddressPrint(e.target.value)} rows={2} maxLength={110} placeholder="Địa chỉ agent" className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              <textarea value={agentAddressPrint} onChange={(e) => setAgentAddressPrint(e.target.value)} rows={2} maxLength={300} placeholder="Địa chỉ agent — Enter để xuống dòng khi in" className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <input type="text" value={agentPhonePrint} onChange={(e) => setAgentPhonePrint(e.target.value)} maxLength={24} placeholder="SĐT agent" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
                 <input type="text" value={agentEmailPrint} onChange={(e) => setAgentEmailPrint(e.target.value)} maxLength={50} placeholder="Email agent" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
                 <input type="text" value={agentTaxCodePrint} onChange={(e) => setAgentTaxCodePrint(e.target.value)} maxLength={24} placeholder="MST agent" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
               </div>
+            </div>
+            <div className="grid grid-cols-1 gap-2 border-t border-black/[0.06] pt-2">
+              <p className="text-[11px] font-semibold uppercase text-apple-secondary">Tên hàng (phiếu cân)</p>
+              {useCustomerDirectory && savedGoodsOptions.length > 0 ? (
+                <div>
+                  <label className="mb-1 block text-[10px] font-semibold text-apple-tertiary">Tên hàng lưu sẵn</label>
+                  <select
+                    value={customerGoodsId}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCustomerGoodsId(v);
+                      const g = savedGoodsOptions.find((x) => x.id === v);
+                      if (g) setGoodsDescriptionPrint(normalizePrintText(g.goodsDescription).slice(0, 60));
+                    }}
+                    className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-medium text-apple-label"
+                  >
+                    <option value="">— Chọn tên hàng / nhập tay —</option>
+                    {savedGoodsOptions.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {(g.label.trim() ? `${g.label} — ` : "") + (g.goodsDescription.trim() || g.id)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              <input
+                type="text"
+                value={goodsDescriptionPrint}
+                onChange={(e) => setGoodsDescriptionPrint(e.target.value)}
+                maxLength={60}
+                placeholder="Tên hàng in phiếu cân"
+                className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label"
+              />
             </div>
             <div className="grid grid-cols-1 gap-2 border-t border-black/[0.06] pt-2">
               <p className="text-[11px] font-semibold uppercase text-apple-secondary">Người nhận / Notify</p>
@@ -988,7 +1230,7 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                       const sc = savedConsigneeOptions.find((x) => x.id === v);
                       if (sc) {
                         setConsigneeNamePrint(normalizePrintText(sc.consigneeName).slice(0, 45));
-                        setConsigneeAddressPrint(normalizePrintText(sc.consigneeAddress).slice(0, 110));
+                        setConsigneeAddressPrint(normalizePrintAddress(sc.consigneeAddress));
                         setConsigneePhonePrint(normalizePrintText(sc.consigneePhone).slice(0, 24));
                         setConsigneeEmailPrint(normalizePrintText(sc.consigneeEmail).slice(0, 50));
                         setNotifyNamePrint(normalizePrintText(sc.notifyName).slice(0, 80));
@@ -1006,13 +1248,15 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 </div>
               ) : null}
               <input type="text" value={consigneeNamePrint} onChange={(e) => setConsigneeNamePrint(e.target.value)} maxLength={45} placeholder="Tên consignee" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
-              <textarea value={consigneeAddressPrint} onChange={(e) => setConsigneeAddressPrint(e.target.value)} rows={2} maxLength={110} placeholder="Địa chỉ consignee" className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
+              <textarea value={consigneeAddressPrint} onChange={(e) => setConsigneeAddressPrint(e.target.value)} rows={2} maxLength={300} placeholder="Địa chỉ consignee — Enter để xuống dòng khi in" className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <input type="text" value={consigneePhonePrint} onChange={(e) => setConsigneePhonePrint(e.target.value)} maxLength={24} placeholder="SĐT consignee" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
                 <input type="text" value={consigneeEmailPrint} onChange={(e) => setConsigneeEmailPrint(e.target.value)} maxLength={50} placeholder="Email consignee" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
                 <input type="text" value={notifyNamePrint} onChange={(e) => setNotifyNamePrint(e.target.value)} maxLength={80} placeholder="Notify" className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" />
               </div>
             </div>
+            </>
+            ) : null}
           </div>
 
           <div>

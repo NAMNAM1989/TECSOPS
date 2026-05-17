@@ -1,18 +1,36 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { assertCustomerDirectoryValid } from "../utils/customerDirectoryCore";
-import type { CustomerSavedConsignee } from "../types/customerDirectory";
+import type { CustomerSavedConsignee, CustomerSavedGoods, CustomerSavedShipper } from "../types/customerDirectory";
+import type { GlobalAgentCatalog } from "../types/globalAgents";
+import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
+import { GlobalAgentsSettings } from "./GlobalAgentsSettings";
+import { ScscWeighSenderSettings } from "./ScscWeighSenderSettings";
+import { CustomerPrintProfileTabs } from "./customerDirectory/CustomerPrintProfileTabs";
+import { clampGlobalAgentCatalog, defaultGlobalAgentCatalog } from "../utils/globalAgentsCore";
 import {
   clampCustomerDirectoryEntry,
   emptyCustomerProfileRow,
   emptyCustomerSavedConsignee,
+  emptyCustomerSavedGoods,
+  emptyCustomerSavedShipper,
 } from "../utils/customerDirectoryProfile";
+import {
+  clampScscWeighPrintSettings,
+  defaultScscWeighPrintSettings,
+} from "../printing/scscWeigh/scscWeighPrintSettingsCore";
 
 type Props = {
   open: boolean;
   initial: readonly CustomerDirectoryEntry[];
+  globalAgentsInitial: GlobalAgentCatalog;
+  scscWeighPrintSettingsInitial?: ScscWeighPrintSettings;
   onClose: () => void;
-  onSave: (next: CustomerDirectoryEntry[]) => Promise<void>;
+  onSave: (payload: {
+    customers: CustomerDirectoryEntry[];
+    globalAgents: GlobalAgentCatalog;
+    scscWeighPrintSettings?: ScscWeighPrintSettings;
+  }) => Promise<void>;
 };
 
 function newId(prefix: string): string {
@@ -22,11 +40,21 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Props) {
+export function CustomerDirectoryManager({
+  open,
+  initial,
+  globalAgentsInitial,
+  scscWeighPrintSettingsInitial,
+  onClose,
+  onSave,
+}: Props) {
   const [draft, setDraft] = useState<CustomerDirectoryEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
+  const [mainTab, setMainTab] = useState<"profiles" | "agents">("profiles");
+  const [globalAgentsDraft, setGlobalAgentsDraft] = useState<GlobalAgentCatalog>(defaultGlobalAgentCatalog());
+  const [senderDraft, setSenderDraft] = useState<ScscWeighPrintSettings>(defaultScscWeighPrintSettings());
 
   useEffect(() => {
     if (!open) return;
@@ -34,7 +62,9 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
     setDraft(next);
     setSelectedId((prev) => (prev && next.some((e) => e.id === prev) ? prev : next[0]?.id ?? null));
     setQuery("");
-  }, [initial, open]);
+    setGlobalAgentsDraft(clampGlobalAgentCatalog(globalAgentsInitial));
+    setSenderDraft(clampScscWeighPrintSettings(scscWeighPrintSettingsInitial));
+  }, [initial, globalAgentsInitial, scscWeighPrintSettingsInitial, open]);
 
   const selected = draft.find((e) => e.id === selectedId) ?? null;
 
@@ -69,7 +99,79 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
       rows.map((row) => {
         if (row.id !== customerId) return row;
         const list = (row.savedConsignees ?? []).filter((_, i) => i !== index);
-        return { ...row, savedConsignees: list };
+        const removed = row.savedConsignees?.[index];
+        const defaultConsigneeId =
+          removed && row.defaultConsigneeId === removed.id ? undefined : row.defaultConsigneeId;
+        return { ...row, savedConsignees: list, defaultConsigneeId };
+      })
+    );
+  }
+
+  function patchSavedShipper(customerId: string, index: number, patch: Partial<CustomerSavedShipper>) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        const list = [...(row.savedShippers ?? [])];
+        const cur = list[index];
+        if (!cur) return row;
+        list[index] = { ...cur, ...patch };
+        return { ...row, savedShippers: list };
+      })
+    );
+  }
+
+  function removeSavedShipper(customerId: string, index: number) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        const list = (row.savedShippers ?? []).filter((_, i) => i !== index);
+        const removed = row.savedShippers?.[index];
+        const defaultShipperId =
+          removed && row.defaultShipperId === removed.id ? undefined : row.defaultShipperId;
+        return { ...row, savedShippers: list, defaultShipperId };
+      })
+    );
+  }
+
+  function addSavedShipper(customerId: string) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        return { ...row, savedShippers: [...(row.savedShippers ?? []), emptyCustomerSavedShipper()] };
+      })
+    );
+  }
+
+  function patchSavedGoods(customerId: string, index: number, patch: Partial<CustomerSavedGoods>) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        const list = [...(row.savedGoods ?? [])];
+        const cur = list[index];
+        if (!cur) return row;
+        list[index] = { ...cur, ...patch };
+        return { ...row, savedGoods: list };
+      })
+    );
+  }
+
+  function removeSavedGoods(customerId: string, index: number) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        const list = (row.savedGoods ?? []).filter((_, i) => i !== index);
+        const removed = row.savedGoods?.[index];
+        const defaultGoodsId = removed && row.defaultGoodsId === removed.id ? undefined : row.defaultGoodsId;
+        return { ...row, savedGoods: list, defaultGoodsId };
+      })
+    );
+  }
+
+  function addSavedGoods(customerId: string) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        return { ...row, savedGoods: [...(row.savedGoods ?? []), emptyCustomerSavedGoods()] };
       })
     );
   }
@@ -108,7 +210,11 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
     }
     setSaving(true);
     try {
-      await onSave(normalized);
+      await onSave({
+        customers: normalized,
+        globalAgents: clampGlobalAgentCatalog(globalAgentsDraft),
+        scscWeighPrintSettings: clampScscWeighPrintSettings(senderDraft),
+      });
       onClose();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Không lưu được.");
@@ -163,8 +269,8 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
               >
                 <span className="block truncate text-sm font-semibold">{customer.name || "Chưa đặt tên"}</span>
                 <span className="mt-0.5 block truncate font-mono text-[11px] text-apple-tertiary">
-                  {customer.code || "CHƯA CÓ MÃ"} · {(customer.savedConsignees ?? []).length} CNEE ·{" "}
-                  {customer.parties.length} mẫu
+                  {customer.code || "CHƯA CÓ MÃ"} · {(customer.savedShippers ?? []).length} shipper ·{" "}
+                  {(customer.savedGoods ?? []).length} tên hàng · {(customer.savedConsignees ?? []).length} CNEE
                 </span>
               </button>
             ))}
@@ -197,7 +303,37 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            {selected ? (
+            <div className="mb-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setMainTab("profiles")}
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  mainTab === "profiles"
+                    ? "bg-apple-label text-white"
+                    : "border border-black/[0.12] bg-white text-apple-label"
+                }`}
+              >
+                Hồ sơ in theo khách
+              </button>
+              <button
+                type="button"
+                onClick={() => setMainTab("agents")}
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  mainTab === "agents"
+                    ? "bg-apple-label text-white"
+                    : "border border-black/[0.12] bg-white text-apple-label"
+                }`}
+              >
+                Agent hệ thống
+              </button>
+            </div>
+
+            {mainTab === "agents" ? (
+              <div className="space-y-4">
+                <GlobalAgentsSettings catalog={globalAgentsDraft} onChange={setGlobalAgentsDraft} />
+                <ScscWeighSenderSettings settings={senderDraft} onChange={setSenderDraft} />
+              </div>
+            ) : selected ? (
               <div className="space-y-5">
                 <section className="rounded-2xl border border-black/[0.08] bg-apple-bg/40 p-3">
                   <div className="flex flex-col gap-2 sm:flex-row">
@@ -225,161 +361,22 @@ export function CustomerDirectoryManager({ open, initial, onClose, onSave }: Pro
                   </div>
                 </section>
 
-                <section className="rounded-2xl border border-apple-blue/20 bg-apple-blue/5 p-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-apple-blue">
-                    Thông tin in phiếu cân (ưu tiên)
-                  </p>
-                  <div className="grid grid-cols-1 gap-2">
-                    <input
-                      value={selected.shipperName ?? ""}
-                      onChange={(e) => updateCustomer(selected.id, { shipperName: e.target.value })}
-                      className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
-                      placeholder="Tên người gửi in phiếu cân"
-                    />
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <input
-                        value={selected.shipperPhone ?? ""}
-                        onChange={(e) => updateCustomer(selected.id, { shipperPhone: e.target.value })}
-                        className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
-                        placeholder="Số điện thoại"
-                      />
-                      <input
-                        value={selected.shipperEmail ?? ""}
-                        onChange={(e) => updateCustomer(selected.id, { shipperEmail: e.target.value })}
-                        className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
-                        placeholder="Email người gửi"
-                      />
-                      <input
-                        value={selected.taxCode ?? ""}
-                        onChange={(e) => updateCustomer(selected.id, { taxCode: e.target.value })}
-                        className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
-                        placeholder="Mã số thuế"
-                      />
-                    </div>
-                    <textarea
-                      value={selected.shipperAddress ?? ""}
-                      onChange={(e) => updateCustomer(selected.id, { shipperAddress: e.target.value })}
-                      rows={2}
-                      className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
-                      placeholder="Địa chỉ người gửi"
-                    />
-                  </div>
-                  <div className="mt-3 grid grid-cols-1 gap-2 border-t border-black/[0.06] pt-2">
-                    <p className="text-[11px] font-semibold uppercase text-apple-secondary">Agent</p>
-                    <input value={selected.agentName ?? ""} onChange={(e) => updateCustomer(selected.id, { agentName: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Tên agent" />
-                    <textarea value={selected.agentAddress ?? ""} onChange={(e) => updateCustomer(selected.id, { agentAddress: e.target.value })} rows={2} className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Địa chỉ agent" />
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                      <input value={selected.agentPhone ?? ""} onChange={(e) => updateCustomer(selected.id, { agentPhone: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="SĐT agent" />
-                      <input value={selected.agentEmail ?? ""} onChange={(e) => updateCustomer(selected.id, { agentEmail: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Email agent" />
-                      <input value={selected.agentTaxCode ?? ""} onChange={(e) => updateCustomer(selected.id, { agentTaxCode: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="VAT code agent" />
-                    </div>
-                  </div>
-                  <div className="mt-3 grid grid-cols-1 gap-2 border-t border-black/[0.06] pt-2">
-                    <p className="text-[11px] font-semibold uppercase text-apple-secondary">Consignee / Notify</p>
-                    <input value={selected.consigneeName ?? ""} onChange={(e) => updateCustomer(selected.id, { consigneeName: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Tên consignee" />
-                    <textarea value={selected.consigneeAddress ?? ""} onChange={(e) => updateCustomer(selected.id, { consigneeAddress: e.target.value })} rows={2} className="w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Địa chỉ consignee" />
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                      <input value={selected.consigneePhone ?? ""} onChange={(e) => updateCustomer(selected.id, { consigneePhone: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="SĐT consignee" />
-                      <input value={selected.consigneeEmail ?? ""} onChange={(e) => updateCustomer(selected.id, { consigneeEmail: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Email consignee" />
-                      <input value={selected.notifyName ?? ""} onChange={(e) => updateCustomer(selected.id, { notifyName: e.target.value })} className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20" placeholder="Notify" />
-                    </div>
-                  </div>
-                  <div className="mt-4 border-t border-black/[0.06] pt-3">
-                    <p className="mb-2 text-[11px] font-semibold uppercase text-apple-secondary">
-                      CNEE lưu sẵn (chọn khi booking / in phiếu cân)
-                    </p>
-                    <p className="mb-2 text-[10px] leading-snug text-apple-tertiary">
-                      Mỗi mục là một bộ người nhận. Trên lô hàng có thể chọn mục này; nếu chưa chọn và có nhiều mục, lúc in
-                      phiếu cân SCSC sẽ hỏi chọn CNEE.
-                    </p>
-                    <div className="space-y-3">
-                      {(selected.savedConsignees ?? []).map((sc, idx) => (
-                        <div
-                          key={sc.id}
-                          className="rounded-xl border border-black/[0.08] bg-white p-2.5 shadow-sm"
-                        >
-                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-[10px] font-semibold uppercase text-apple-tertiary">
-                              CNEE #{idx + 1}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeSavedConsignee(selected.id, idx)}
-                              className="rounded-lg px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
-                            >
-                              Xóa
-                            </button>
-                          </div>
-                          <input
-                            value={sc.label}
-                            onChange={(e) => patchSavedConsignee(selected.id, idx, { label: e.target.value })}
-                            className="mb-1.5 w-full rounded-lg border border-black/[0.08] bg-apple-bg/40 px-2.5 py-1.5 text-xs font-semibold text-apple-label"
-                            placeholder="Nhãn (VD: Tokyo, Singapore)"
-                          />
-                          <input
-                            value={sc.consigneeName}
-                            onChange={(e) =>
-                              patchSavedConsignee(selected.id, idx, { consigneeName: e.target.value })
-                            }
-                            className="mb-1.5 w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm text-apple-label"
-                            placeholder="Tên consignee"
-                          />
-                          <textarea
-                            value={sc.consigneeAddress}
-                            onChange={(e) =>
-                              patchSavedConsignee(selected.id, idx, { consigneeAddress: e.target.value })
-                            }
-                            rows={2}
-                            className="mb-1.5 w-full resize-y rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm text-apple-label"
-                            placeholder="Địa chỉ"
-                          />
-                          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-                            <input
-                              value={sc.consigneePhone}
-                              onChange={(e) =>
-                                patchSavedConsignee(selected.id, idx, { consigneePhone: e.target.value })
-                              }
-                              className="w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm text-apple-label"
-                              placeholder="SĐT"
-                            />
-                            <input
-                              value={sc.consigneeEmail}
-                              onChange={(e) =>
-                                patchSavedConsignee(selected.id, idx, { consigneeEmail: e.target.value })
-                              }
-                              className="w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm text-apple-label"
-                              placeholder="Email"
-                            />
-                            <input
-                              value={sc.notifyName}
-                              onChange={(e) =>
-                                patchSavedConsignee(selected.id, idx, { notifyName: e.target.value })
-                              }
-                              className="w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm text-apple-label"
-                              placeholder="Notify"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => addSavedConsignee(selected.id)}
-                        className="w-full rounded-full border border-dashed border-apple-blue/40 bg-apple-blue/5 py-2 text-xs font-semibold text-apple-blue hover:bg-apple-blue/10"
-                      >
-                        + Thêm CNEE lưu sẵn
-                      </button>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="rounded-2xl border border-black/[0.08] bg-white p-3">
-                  <p className="text-xs text-apple-secondary">
-                    Đã bỏ module copy/dán thông tin theo yêu cầu. Danh bạ khách hàng hiện chỉ giữ dữ liệu in phiếu cân có cấu trúc.
-                  </p>
-                </section>
+                <CustomerPrintProfileTabs
+                  entry={selected}
+                  onPatch={(patch) => updateCustomer(selected.id, patch)}
+                  onPatchShipper={(idx, patch) => patchSavedShipper(selected.id, idx, patch)}
+                  onRemoveShipper={(idx) => removeSavedShipper(selected.id, idx)}
+                  onAddShipper={() => addSavedShipper(selected.id)}
+                  onPatchConsignee={(idx, patch) => patchSavedConsignee(selected.id, idx, patch)}
+                  onRemoveConsignee={(idx) => removeSavedConsignee(selected.id, idx)}
+                  onAddConsignee={() => addSavedConsignee(selected.id)}
+                  onPatchGoods={(idx, patch) => patchSavedGoods(selected.id, idx, patch)}
+                  onRemoveGoods={(idx) => removeSavedGoods(selected.id, idx)}
+                  onAddGoods={() => addSavedGoods(selected.id)}
+                />
               </div>
             ) : (
-              <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-black/[0.12] bg-apple-bg/50 p-8 text-center text-sm text-apple-tertiary">
+              <div className="flex h-full min-h-[12rem] items-center justify-center rounded-2xl border border-dashed border-black/[0.12] bg-apple-bg/50 p-8 text-center text-sm text-apple-tertiary">
                 Chọn khách bên trái hoặc bấm “Thêm khách”.
               </div>
             )}

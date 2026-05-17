@@ -1,3 +1,6 @@
+import { credFetch } from "../apiFetch";
+import { parseAppState } from "../utils/appStateParse";
+import { debugWarn } from "../utils/debugLog";
 import type { PrinterProfileStoreV1 } from "./printTypes";
 import {
   clampPrinterProfilesCatalog,
@@ -28,7 +31,9 @@ export function mergeServerCatalogIntoLocalStore(serverRaw: unknown): PrinterPro
     return loadPrinterProfileStore();
   }
   const local = loadPrinterProfileStore();
-  const mergedProfiles = mergePrinterProfileCatalogs(local.profiles, serverCatalog);
+  const mergedProfiles = mergePrinterProfileCatalogs(local.profiles, serverCatalog, {
+    localCatalogUpdatedAt: local.updatedAt,
+  });
 
   let activeThermalProfileId = local.activeThermalProfileId;
   let activeA4WeighProfileId = local.activeA4WeighProfileId;
@@ -58,4 +63,29 @@ export function mergeServerCatalogIntoLocalStore(serverRaw: unknown): PrinterPro
   const a4 = next.profiles.find((p) => p.id === activeA4WeighProfileId);
   if (a4 && isA4WeighProfile(a4)) syncLegacyScscOffsetsFromProfile(a4);
   return next;
+}
+
+/** Đẩy profile máy in local lên server (giữ tọa độ phiếu cân SCSC sau khi lưu). */
+export async function pushLocalPrinterProfilesCatalog(): Promise<void> {
+  try {
+    const store = loadPrinterProfileStore();
+    const catalog = catalogFromLocalStore(store);
+    const res = await fetch("/api/mutation", {
+      ...credFetch,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "SET_PRINTER_PROFILES", catalog }),
+    });
+    if (!res.ok) {
+      debugWarn("printer-profiles", "push catalog failed", res.status);
+      return;
+    }
+    const body: unknown = await res.json().catch(() => null);
+    const next = parseAppState(body);
+    if (next?.printerProfiles) {
+      mergeServerCatalogIntoLocalStore(next.printerProfiles);
+    }
+  } catch (e) {
+    debugWarn("printer-profiles", "push catalog error", e);
+  }
 }

@@ -1,5 +1,11 @@
 import { withDbClient } from "./dbPool.mjs";
-import { ensureWeighSlipReady, lookupAirports, lookupCustomerConsignees, lookupCustomers } from "./weighSlipStore.mjs";
+import {
+  ensureWeighSlipReady,
+  lookupAirports,
+  lookupCustomerAgents,
+  lookupCustomerConsignees,
+  lookupCustomers,
+} from "./weighSlipStore.mjs";
 
 function parseLimit(raw, fallback = 40) {
   const n = Number(raw);
@@ -43,6 +49,18 @@ export function registerLookupRoutes(app) {
       const items = await withDbClient(async (client) => {
         await ensureWeighSlipReady(client);
         return lookupCustomerConsignees(client, req.params.customerId);
+      });
+      res.json({ items });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  app.get("/api/lookup/customers/:customerId/agents", async (req, res, next) => {
+    try {
+      const items = await withDbClient(async (client) => {
+        await ensureWeighSlipReady(client);
+        return lookupCustomerAgents(client, req.params.customerId);
       });
       res.json({ items });
     } catch (e) {

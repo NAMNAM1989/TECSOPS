@@ -1,5 +1,9 @@
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+import type { GlobalAgentCatalog } from "../types/globalAgents";
+import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
+import { getScscWeighPrintSettingsCache } from "../printing/scscWeigh/scscWeighPrintSettingsRuntime";
+import { defaultGlobalAgentCatalog } from "./globalAgentsCore";
 import { isScscWarehouse } from "../constants/warehouses";
 import { ensureScscConsigneeForPrint } from "./ensureScscConsigneeForPrint";
 import { getActiveA4WeighProfile } from "../printing/printerProfiles";
@@ -43,7 +47,15 @@ export function printWeighReceiptScsc(
     offsetXmm?: number;
     offsetYmm?: number;
     customerDirectory?: readonly CustomerDirectoryEntry[];
-    mapOptions?: { skipAutoSingleConsignee?: boolean };
+    globalAgents?: GlobalAgentCatalog;
+    scscWeighPrintSettings?: ScscWeighPrintSettings;
+    saveScscWeighPrintSettings?: (settings: ScscWeighPrintSettings) => void | Promise<void>;
+    mapOptions?: {
+      skipAutoSingleConsignee?: boolean;
+      skipAutoDefaultAgent?: boolean;
+      skipAutoSingleGoods?: boolean;
+      skipAutoSingleShipper?: boolean;
+    };
     calibrationTest?: boolean;
   }
 ): void {
@@ -54,6 +66,8 @@ export function printWeighReceiptScsc(
     offsetXmm: opts?.offsetXmm,
     offsetYmm: opts?.offsetYmm,
     customerDirectory: opts?.customerDirectory,
+    globalAgents: opts?.globalAgents ?? defaultGlobalAgentCatalog(),
+    scscWeighPrintSettings: opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache(),
     mapOptions: opts?.mapOptions,
     calibrationTest: opts?.calibrationTest,
   });
@@ -65,13 +79,28 @@ export async function printWeighReceiptScscWithConsigneeChoice(
     offsetXmm?: number;
     offsetYmm?: number;
     customerDirectory?: readonly CustomerDirectoryEntry[];
+    globalAgents?: GlobalAgentCatalog;
+    scscWeighPrintSettings?: ScscWeighPrintSettings;
+    saveScscWeighPrintSettings?: (settings: ScscWeighPrintSettings) => void | Promise<void>;
   }
 ): Promise<void> {
   const directory = opts?.customerDirectory ?? [];
-  const ctx = await ensureScscConsigneeForPrint(s, directory);
+  const globalAgents = opts?.globalAgents ?? defaultGlobalAgentCatalog();
+  const scscWeighPrintSettings = opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache();
+  const ctx = await ensureScscConsigneeForPrint(s, directory, globalAgents, {
+    scscWeighPrintSettings,
+    saveScscWeighPrintSettings: opts?.saveScscWeighPrintSettings,
+  });
   if (!ctx) return;
   printWeighReceiptScsc(ctx.shipment, {
     ...opts,
-    mapOptions: { skipAutoSingleConsignee: ctx.skipAutoSingleConsignee },
+    globalAgents,
+    scscWeighPrintSettings,
+    mapOptions: {
+      skipAutoSingleConsignee: ctx.skipAutoSingleConsignee,
+      skipAutoDefaultAgent: ctx.skipAutoDefaultAgent,
+      skipAutoSingleShipper: ctx.skipAutoSingleShipper,
+      skipAutoSingleGoods: ctx.skipAutoSingleGoods,
+    },
   });
 }

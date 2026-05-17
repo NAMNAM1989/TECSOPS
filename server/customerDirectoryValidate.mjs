@@ -22,6 +22,12 @@ const L = {
   partyCount: 60,
   savedConsigneeLabel: 80,
   savedConsigneeCount: 40,
+  savedGoodsLabel: 80,
+  savedGoodsDescription: 120,
+  savedGoodsCount: 40,
+  savedShipperLabel: 80,
+  savedShipperCount: 40,
+  otherRequirementsPrint: 200,
 };
 
 function sliceStr(v, max) {
@@ -107,6 +113,62 @@ function parseSavedConsigneesLoose(item) {
   return out.slice(0, L.savedConsigneeCount);
 }
 
+function parseSavedShippersLoose(item) {
+  if (!Array.isArray(item.savedShippers)) return [];
+  const out = [];
+  for (const x of item.savedShippers) {
+    if (!x || typeof x !== "object") continue;
+    const sid = typeof x.id === "string" ? x.id.trim() : "";
+    if (!sid) continue;
+    out.push({
+      id: sliceStr(sid, 80).trim(),
+      label: sliceStr(x.label, L.savedShipperLabel).trim(),
+      shipperName: sliceStr(x.shipperName, L.shipperName).trim(),
+      shipperAddress: sliceStr(x.shipperAddress, L.shipperAddress).trim(),
+      shipperPhone: sliceStr(x.shipperPhone, L.shipperPhone).trim(),
+      shipperEmail: sliceStr(x.shipperEmail, L.shipperEmail).trim(),
+      taxCode: sliceStr(x.taxCode, L.taxCode).trim(),
+    });
+  }
+  return out.slice(0, L.savedShipperCount);
+}
+
+function parseSavedGoodsLoose(item) {
+  if (!Array.isArray(item.savedGoods)) return [];
+  const out = [];
+  for (const x of item.savedGoods) {
+    if (!x || typeof x !== "object") continue;
+    const sid = typeof x.id === "string" ? x.id.trim() : "";
+    if (!sid) continue;
+    out.push({
+      id: sliceStr(sid, 80).trim(),
+      label: sliceStr(x.label, L.savedGoodsLabel).trim(),
+      goodsDescription: sliceStr(x.goodsDescription, L.savedGoodsDescription).trim(),
+    });
+  }
+  return out.slice(0, L.savedGoodsCount);
+}
+
+function normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods) {
+  const shipperIds = new Set(savedShippers.map((x) => x.id));
+  const cneeIds = new Set(savedConsignees.map((x) => x.id));
+  const goodsIds = new Set(savedGoods.map((x) => x.id));
+  let defaultShipperId = sliceStr(item.defaultShipperId, 80).trim();
+  let defaultConsigneeId = sliceStr(item.defaultConsigneeId, 80).trim();
+  let defaultGoodsId = sliceStr(item.defaultGoodsId, 80).trim();
+  if (defaultShipperId && !shipperIds.has(defaultShipperId)) defaultShipperId = "";
+  if (defaultConsigneeId && !cneeIds.has(defaultConsigneeId)) defaultConsigneeId = "";
+  if (defaultGoodsId && !goodsIds.has(defaultGoodsId)) defaultGoodsId = "";
+  if (savedShippers.length === 1) defaultShipperId = savedShippers[0].id;
+  if (savedConsignees.length === 1) defaultConsigneeId = savedConsignees[0].id;
+  if (savedGoods.length === 1) defaultGoodsId = savedGoods[0].id;
+  const out = {};
+  if (defaultShipperId) out.defaultShipperId = defaultShipperId;
+  if (defaultConsigneeId) out.defaultConsigneeId = defaultConsigneeId;
+  if (defaultGoodsId) out.defaultGoodsId = defaultGoodsId;
+  return out;
+}
+
 /** Parse an toàn khi đọc state — không ném lỗi. */
 export function parseCustomersLoose(raw) {
   if (!Array.isArray(raw)) return [];
@@ -117,6 +179,9 @@ export function parseCustomersLoose(raw) {
     const code = typeof item.code === "string" ? item.code.trim() : "";
     const name = typeof item.name === "string" ? item.name.trim() : "";
     if (!id || !code || !name) continue;
+    const savedShippers = parseSavedShippersLoose(item);
+    const savedGoods = parseSavedGoodsLoose(item);
+    const savedConsignees = parseSavedConsigneesLoose(item);
     out.push({
       id: sliceStr(id, 80).trim(),
       code: sliceStr(code, L.code).trim(),
@@ -136,8 +201,12 @@ export function parseCustomersLoose(raw) {
       consigneePhone: sliceStr(item.consigneePhone, L.consigneePhone).trim(),
       consigneeEmail: sliceStr(item.consigneeEmail, L.consigneeEmail).trim(),
       notifyName: sliceStr(item.notifyName, L.notifyName).trim(),
-      savedConsignees: parseSavedConsigneesLoose(item),
+      savedShippers,
+      savedGoods,
+      savedConsignees,
       parties: parsePartiesLoose(item),
+      otherRequirementsPrint: sliceStr(item.otherRequirementsPrint, L.otherRequirementsPrint).trim(),
+      ...normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods),
     });
   }
   return out;
@@ -166,7 +235,33 @@ export function validateCustomerDirectoryPayload(raw) {
       throw new Error(`Mã «${code}» bị trùng — mỗi mã chỉ dùng một lần.`);
     }
     seenCode.set(k, true);
+    const savedShippers = parseSavedShippersLoose(item);
+    const savedGoods = parseSavedGoodsLoose(item);
     const savedConsignees = parseSavedConsigneesLoose(item);
+    const seenShipper = new Set();
+    for (let j = 0; j < savedShippers.length; j++) {
+      const ss = savedShippers[j];
+      const sk = ss.id.toLowerCase();
+      if (!ss.id.trim()) {
+        throw new Error(`Dòng ${i + 1}: Shipper lưu sẵn thứ ${j + 1} thiếu id.`);
+      }
+      if (seenShipper.has(sk)) {
+        throw new Error(`Dòng ${i + 1}: id Shipper «${ss.id}» bị trùng.`);
+      }
+      seenShipper.add(sk);
+    }
+    const seenGoods = new Set();
+    for (let j = 0; j < savedGoods.length; j++) {
+      const g = savedGoods[j];
+      const sk = g.id.toLowerCase();
+      if (!g.id.trim()) {
+        throw new Error(`Dòng ${i + 1}: tên hàng lưu sẵn thứ ${j + 1} thiếu id.`);
+      }
+      if (seenGoods.has(sk)) {
+        throw new Error(`Dòng ${i + 1}: id tên hàng «${g.id}» bị trùng.`);
+      }
+      seenGoods.add(sk);
+    }
     const seenCnee = new Set();
     for (let j = 0; j < savedConsignees.length; j++) {
       const sc = savedConsignees[j];
@@ -198,8 +293,12 @@ export function validateCustomerDirectoryPayload(raw) {
       consigneePhone: sliceStr(item.consigneePhone, L.consigneePhone).trim(),
       consigneeEmail: sliceStr(item.consigneeEmail, L.consigneeEmail).trim(),
       notifyName: sliceStr(item.notifyName, L.notifyName).trim(),
+      savedShippers,
+      savedGoods,
       savedConsignees,
       parties: parsePartiesLoose(item),
+      otherRequirementsPrint: sliceStr(item.otherRequirementsPrint, L.otherRequirementsPrint).trim(),
+      ...normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods),
     });
   }
   return out;

@@ -9,16 +9,27 @@ import type { AirlineLabelOverrides } from "./airlineLabelOverridesCore";
 import { clampAirlineLabelOverrides, EMPTY_AIRLINE_LABEL_OVERRIDES } from "./airlineLabelOverridesCore";
 import type { PrinterProfilesCatalog } from "../printing/printerProfilesCore";
 import { clampPrinterProfilesCatalog, EMPTY_PRINTER_PROFILES_CATALOG } from "../printing/printerProfilesCore";
+import type { GlobalAgentCatalog } from "../types/globalAgents";
+import { clampGlobalAgentCatalog, defaultGlobalAgentCatalog } from "./globalAgentsCore";
+import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
+import {
+  clampScscWeighPrintSettings,
+  defaultScscWeighPrintSettings,
+} from "../printing/scscWeigh/scscWeighPrintSettingsCore";
 
 export type AppState = {
   version: number;
   rows: Shipment[];
   /** Danh bạ mã — tên; có thể rỗng nếu chưa cấu hình */
   customers: CustomerDirectoryEntry[];
+  /** Agent dùng chung (Agent A / B / không có) + mặc định cho mọi khách. */
+  globalAgents?: GlobalAgentCatalog;
   /** Ghi đè tên hãng trên tem (ưu tiên hơn bản mặc định trong code) */
   airlineLabelOverrides?: AirlineLabelOverrides;
   /** Danh mục profile máy in (dùng chung trên server; active id vẫn lưu local từng máy). */
   printerProfiles?: PrinterProfilesCatalog;
+  /** Người gửi / làm phiếu cân SCSC — in chung mọi phiếu. */
+  scscWeighPrintSettings?: ScscWeighPrintSettings;
 };
 
 export type ShipmentMutation =
@@ -26,8 +37,10 @@ export type ShipmentMutation =
   | { action: "DELETE"; id: string }
   | { action: "ADD"; shipment: Omit<Shipment, "id" | "stt"> }
   | { action: "SET_CUSTOMERS"; customers: CustomerDirectoryEntry[] }
+  | { action: "SET_GLOBAL_AGENTS"; catalog: GlobalAgentCatalog }
   | { action: "SET_AIRLINE_LABEL_OVERRIDES"; overrides: AirlineLabelOverrides }
-  | { action: "SET_PRINTER_PROFILES"; catalog: PrinterProfilesCatalog };
+  | { action: "SET_PRINTER_PROFILES"; catalog: PrinterProfilesCatalog }
+  | { action: "SET_SCSC_WEIGH_PRINT_SETTINGS"; settings: ScscWeighPrintSettings };
 
 function assertAwbUnique(rows: Shipment[], awb: string, exceptId?: string) {
   const d = awbDigitsKey(awb);
@@ -84,10 +97,20 @@ function resolvedPrinterCatalog(s: AppState): PrinterProfilesCatalog {
   return clampPrinterProfilesCatalog(s.printerProfiles ?? EMPTY_PRINTER_PROFILES_CATALOG);
 }
 
+function resolvedGlobalAgents(s: AppState): GlobalAgentCatalog {
+  return clampGlobalAgentCatalog(s.globalAgents ?? defaultGlobalAgentCatalog());
+}
+
+function resolvedScscWeighPrintSettings(s: AppState): ScscWeighPrintSettings {
+  return clampScscWeighPrintSettings(s.scscWeighPrintSettings ?? defaultScscWeighPrintSettings());
+}
+
 export function applyShipmentMutation(state: AppState, mutation: ShipmentMutation): AppState {
   const rows = [...state.rows];
   const keepAirline = (): AirlineLabelOverrides => resolvedAirlineOverrides(state);
   const keepPrinter = (): PrinterProfilesCatalog => resolvedPrinterCatalog(state);
+  const keepGlobalAgents = (): GlobalAgentCatalog => resolvedGlobalAgents(state);
+  const keepScscWeighPrintSettings = (): ScscWeighPrintSettings => resolvedScscWeighPrintSettings(state);
 
   switch (mutation.action) {
     case "SET_CUSTOMERS": {
@@ -96,8 +119,21 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
         version: state.version + 1,
         rows: renumberSttForAll(rows),
         customers: mutation.customers.map((e) => clampCustomerDirectoryEntry(e)),
+        globalAgents: keepGlobalAgents(),
         airlineLabelOverrides: keepAirline(),
         printerProfiles: keepPrinter(),
+        scscWeighPrintSettings: keepScscWeighPrintSettings(),
+      };
+    }
+    case "SET_GLOBAL_AGENTS": {
+      return {
+        version: state.version + 1,
+        rows: renumberSttForAll(rows),
+        customers: state.customers,
+        globalAgents: clampGlobalAgentCatalog(mutation.catalog),
+        airlineLabelOverrides: keepAirline(),
+        printerProfiles: keepPrinter(),
+        scscWeighPrintSettings: keepScscWeighPrintSettings(),
       };
     }
     case "SET_AIRLINE_LABEL_OVERRIDES": {
@@ -105,8 +141,10 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
         version: state.version + 1,
         rows: renumberSttForAll(rows),
         customers: state.customers,
+        globalAgents: keepGlobalAgents(),
         airlineLabelOverrides: clampAirlineLabelOverrides(mutation.overrides),
         printerProfiles: keepPrinter(),
+        scscWeighPrintSettings: keepScscWeighPrintSettings(),
       };
     }
     case "SET_PRINTER_PROFILES": {
@@ -114,8 +152,21 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
         version: state.version + 1,
         rows: renumberSttForAll(rows),
         customers: state.customers,
+        globalAgents: keepGlobalAgents(),
         airlineLabelOverrides: keepAirline(),
         printerProfiles: clampPrinterProfilesCatalog(mutation.catalog),
+        scscWeighPrintSettings: keepScscWeighPrintSettings(),
+      };
+    }
+    case "SET_SCSC_WEIGH_PRINT_SETTINGS": {
+      return {
+        version: state.version + 1,
+        rows: renumberSttForAll(rows),
+        customers: state.customers,
+        globalAgents: keepGlobalAgents(),
+        airlineLabelOverrides: keepAirline(),
+        printerProfiles: keepPrinter(),
+        scscWeighPrintSettings: clampScscWeighPrintSettings(mutation.settings),
       };
     }
     case "UPDATE": {
@@ -154,7 +205,9 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
     version: state.version + 1,
     rows: renumberSttForAll(rows),
     customers: state.customers,
+    globalAgents: keepGlobalAgents(),
     airlineLabelOverrides: keepAirline(),
     printerProfiles: keepPrinter(),
+    scscWeighPrintSettings: keepScscWeighPrintSettings(),
   };
 }

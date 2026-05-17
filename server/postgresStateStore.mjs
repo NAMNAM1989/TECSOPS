@@ -1,6 +1,8 @@
 import pg from "pg";
 import { normalizeAirlineLabelOverridesLoose } from "./airlineLabelOverridesNormalize.mjs";
 import { normalizePrinterProfilesCatalogLoose } from "./printerProfilesNormalize.mjs";
+import { normalizeGlobalAgentsLoose } from "./globalAgentsNormalize.mjs";
+import { normalizeScscWeighPrintSettingsLoose } from "./scscWeighPrintSettingsNormalize.mjs";
 import {
   ensureAirlineCatalogSchema,
   loadAirlineDisplayOverrides,
@@ -18,6 +20,8 @@ const TABLE_NAME = "app_state";
 const CUSTOMERS_TABLE = "customers";
 const CUSTOMER_PROFILES_TABLE = "customer_print_profiles";
 const CUSTOMER_CONSIGNEES_TABLE = "customer_consignees";
+const CUSTOMER_SHIPPERS_TABLE = "customer_shippers";
+const CUSTOMER_AGENTS_TABLE = "customer_agents";
 const CUSTOMER_PARTIES_TABLE = "customer_parties";
 const SHIPMENTS_TABLE = "shipments";
 const STATE_META_TABLE = "state_meta";
@@ -142,6 +146,22 @@ async function ensureSchema(client) {
     `CREATE INDEX IF NOT EXISTS idx_customer_consignees_customer ON ${CUSTOMER_CONSIGNEES_TABLE}(customer_id)`
   );
   await client.query(`
+    CREATE TABLE IF NOT EXISTS ${CUSTOMER_SHIPPERS_TABLE} (
+      id text PRIMARY KEY,
+      customer_id text NOT NULL REFERENCES ${CUSTOMERS_TABLE}(id) ON DELETE CASCADE,
+      label text NOT NULL DEFAULT '',
+      shipper_name text NOT NULL DEFAULT '',
+      shipper_address text NOT NULL DEFAULT '',
+      shipper_phone text NOT NULL DEFAULT '',
+      shipper_email text NOT NULL DEFAULT '',
+      shipper_vat_code text NOT NULL DEFAULT '',
+      sort_order integer NOT NULL DEFAULT 0
+    )
+  `);
+  await client.query(
+    `CREATE INDEX IF NOT EXISTS idx_customer_shippers_customer ON ${CUSTOMER_SHIPPERS_TABLE}(customer_id)`
+  );
+  await client.query(`
     CREATE TABLE IF NOT EXISTS ${CUSTOMER_PARTIES_TABLE} (
       id text PRIMARY KEY,
       customer_id text NOT NULL REFERENCES ${CUSTOMERS_TABLE}(id) ON DELETE CASCADE,
@@ -157,6 +177,46 @@ async function ensureSchema(client) {
   await client.query(`
     ALTER TABLE ${SHIPMENTS_TABLE}
     ADD COLUMN IF NOT EXISTS customer_consignee_id text REFERENCES ${CUSTOMER_CONSIGNEES_TABLE}(id) ON DELETE SET NULL
+  `);
+  await client.query(`
+    ALTER TABLE ${SHIPMENTS_TABLE}
+    ADD COLUMN IF NOT EXISTS customer_shipper_id text REFERENCES ${CUSTOMER_SHIPPERS_TABLE}(id) ON DELETE SET NULL
+  `);
+  await client.query(`
+    ALTER TABLE ${SHIPMENTS_TABLE}
+    ADD COLUMN IF NOT EXISTS global_agent_id text NOT NULL DEFAULT ''
+  `);
+  await client.query(`
+    ALTER TABLE ${SHIPMENTS_TABLE}
+    ADD COLUMN IF NOT EXISTS customer_goods_id text NOT NULL DEFAULT ''
+  `);
+  await client.query(`
+    ALTER TABLE ${SHIPMENTS_TABLE}
+    ADD COLUMN IF NOT EXISTS goods_description_print text NOT NULL DEFAULT ''
+  `);
+  await client.query(`
+    ALTER TABLE ${SHIPMENTS_TABLE}
+    DROP CONSTRAINT IF EXISTS shipments_customer_agent_id_fkey
+  `);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS ${CUSTOMER_AGENTS_TABLE} (
+      id text PRIMARY KEY,
+      customer_id text NOT NULL REFERENCES ${CUSTOMERS_TABLE}(id) ON DELETE CASCADE,
+      label text NOT NULL DEFAULT '',
+      agent_name text NOT NULL DEFAULT '',
+      agent_address text NOT NULL DEFAULT '',
+      agent_phone text NOT NULL DEFAULT '',
+      agent_email text NOT NULL DEFAULT '',
+      agent_vat_code text NOT NULL DEFAULT '',
+      sort_order integer NOT NULL DEFAULT 0
+    )
+  `);
+  await client.query(
+    `CREATE INDEX IF NOT EXISTS idx_customer_agents_customer ON ${CUSTOMER_AGENTS_TABLE}(customer_id)`
+  );
+  await client.query(`
+    ALTER TABLE ${SHIPMENTS_TABLE}
+    ADD COLUMN IF NOT EXISTS customer_agent_id text REFERENCES ${CUSTOMER_AGENTS_TABLE}(id) ON DELETE SET NULL
   `);
   await ensureAirlineCatalogSchema(client);
   await ensureAirportSchema(client);
@@ -193,6 +253,30 @@ function savedConsigneeFromRow(row) {
   };
 }
 
+function savedShipperFromRow(row) {
+  return {
+    id: row.id || "",
+    label: row.label || "",
+    shipperName: row.shipper_name || "",
+    shipperAddress: row.shipper_address || "",
+    shipperPhone: row.shipper_phone || "",
+    shipperEmail: row.shipper_email || "",
+    taxCode: row.shipper_vat_code || "",
+  };
+}
+
+function savedAgentFromRow(row) {
+  return {
+    id: row.id || "",
+    label: row.label || "",
+    agentName: row.agent_name || "",
+    agentAddress: row.agent_address || "",
+    agentPhone: row.agent_phone || "",
+    agentEmail: row.agent_email || "",
+    agentTaxCode: row.agent_vat_code || "",
+  };
+}
+
 function partyFromRow(row) {
   const type = str(row.party_type).toUpperCase();
   const allowed = new Set(["SHIPPER", "CNEE", "NOTIFY", "OTHER"]);
@@ -204,26 +288,12 @@ function partyFromRow(row) {
   };
 }
 
-function customerProfileFromRow(row, savedConsignees = [], parties = []) {
+function customerProfileFromRow(row, savedShippers = [], savedConsignees = [], parties = []) {
   return {
     id: row.id,
     code: row.code,
     name: row.name,
-    shipperName: row.shipper_name || "",
-    shipperAddress: row.shipper_address || "",
-    shipperPhone: row.shipper_phone || "",
-    shipperEmail: row.shipper_email || "",
-    taxCode: row.shipper_vat_code || "",
-    agentName: row.agent_name || "",
-    agentAddress: row.agent_address || "",
-    agentPhone: row.agent_phone || "",
-    agentEmail: row.agent_email || "",
-    agentTaxCode: row.agent_vat_code || "",
-    consigneeName: row.consignee_name || "",
-    consigneeAddress: row.consignee_address || "",
-    consigneePhone: row.consignee_phone || "",
-    consigneeEmail: row.consignee_email || "",
-    notifyName: row.notify_name || "",
+    savedShippers,
     savedConsignees,
     parties,
   };
@@ -251,7 +321,12 @@ function shipmentFromRow(row) {
     customer: row.customer,
     customerCode: row.customer_code || "",
     customerId: row.customer_id || "",
+    customerShipperId: row.customer_shipper_id || "",
     customerConsigneeId: row.customer_consignee_id || "",
+    globalAgentId: row.global_agent_id || row.customer_agent_id || "",
+    customerAgentId: row.customer_agent_id || "",
+    customerGoodsId: row.customer_goods_id || "",
+    goodsDescriptionPrint: row.goods_description_print || "",
     shipperNamePrint: row.shipper_name_print || "",
     shipperAddressPrint: row.shipper_address_print || "",
     shipperPhonePrint: row.shipper_phone_print || "",
@@ -272,7 +347,7 @@ function shipmentFromRow(row) {
 }
 
 async function loadRelationalSnapshot(client, key) {
-  const [customerRes, consigneeRes, partyRes, shipmentRes, metaRes, jsonRes] = await Promise.all([
+  const [customerRes, consigneeRes, shipperRes, partyRes, shipmentRes, metaRes, jsonRes] = await Promise.all([
     client.query(
       `
       SELECT c.id, c.code, c.name,
@@ -287,6 +362,7 @@ async function loadRelationalSnapshot(client, key) {
     client.query(
       `SELECT * FROM ${CUSTOMER_CONSIGNEES_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`
     ),
+    client.query(`SELECT * FROM ${CUSTOMER_SHIPPERS_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`),
     client.query(
       `SELECT * FROM ${CUSTOMER_PARTIES_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`
     ),
@@ -303,12 +379,25 @@ async function loadRelationalSnapshot(client, key) {
   const printerProfiles = normalizePrinterProfilesCatalogLoose(
     blob && typeof blob === "object" ? blob.printerProfiles : undefined
   );
+  const globalAgents = normalizeGlobalAgentsLoose(
+    blob && typeof blob === "object" ? blob.globalAgents : undefined
+  );
+  const scscWeighPrintSettings = normalizeScscWeighPrintSettingsLoose(
+    blob && typeof blob === "object" ? blob.scscWeighPrintSettings : undefined
+  );
   const consigneeByCustomer = new Map();
   for (const r of consigneeRes.rows) {
     const cid = str(r.customer_id).trim();
     if (!cid) continue;
     if (!consigneeByCustomer.has(cid)) consigneeByCustomer.set(cid, []);
     consigneeByCustomer.get(cid).push(savedConsigneeFromRow(r));
+  }
+  const shipperByCustomer = new Map();
+  for (const r of shipperRes.rows) {
+    const cid = str(r.customer_id).trim();
+    if (!cid) continue;
+    if (!shipperByCustomer.has(cid)) shipperByCustomer.set(cid, []);
+    shipperByCustomer.get(cid).push(savedShipperFromRow(r));
   }
   const partiesByCustomer = new Map();
   for (const r of partyRes.rows) {
@@ -317,18 +406,33 @@ async function loadRelationalSnapshot(client, key) {
     if (!partiesByCustomer.has(cid)) partiesByCustomer.set(cid, []);
     partiesByCustomer.get(cid).push(partyFromRow(r));
   }
+  const blobCustomersById = new Map();
+  if (blob && typeof blob === "object" && Array.isArray(blob.customers)) {
+    for (const bc of blob.customers) {
+      if (!bc || typeof bc !== "object") continue;
+      const cid = str(bc.id).trim();
+      if (cid) blobCustomersById.set(cid, bc);
+    }
+  }
   return {
     version: Number(metaRes.rows[0]?.version ?? 1),
     rows: shipmentRes.rows.map(shipmentFromRow),
-    customers: customerRes.rows.map((row) =>
-      customerProfileFromRow(
+    customers: customerRes.rows.map((row) => {
+      const cid = str(row.id).trim();
+      const base = customerProfileFromRow(
         row,
-        consigneeByCustomer.get(str(row.id).trim()) ?? [],
-        partiesByCustomer.get(str(row.id).trim()) ?? []
-      )
-    ),
+        shipperByCustomer.get(cid) ?? [],
+        consigneeByCustomer.get(cid) ?? [],
+        partiesByCustomer.get(cid) ?? []
+      );
+      const fromBlob = blobCustomersById.get(cid);
+      const savedGoods = Array.isArray(fromBlob?.savedGoods) ? fromBlob.savedGoods : [];
+      return savedGoods.length ? { ...base, savedGoods } : base;
+    }),
     airlineLabelOverrides,
     printerProfiles,
+    globalAgents,
+    scscWeighPrintSettings,
   };
 }
 
@@ -338,6 +442,7 @@ async function replaceRelationalSnapshot(client, key, state) {
 
   await client.query(`DELETE FROM ${SHIPMENTS_TABLE}`);
   await client.query(`DELETE FROM ${CUSTOMER_CONSIGNEES_TABLE}`);
+  await client.query(`DELETE FROM ${CUSTOMER_SHIPPERS_TABLE}`);
   await client.query(`DELETE FROM ${CUSTOMER_PARTIES_TABLE}`);
   await client.query(`DELETE FROM ${CUSTOMER_PROFILES_TABLE}`);
   await client.query(`DELETE FROM ${CUSTOMERS_TABLE}`);
@@ -353,6 +458,9 @@ async function replaceRelationalSnapshot(client, key, state) {
       `INSERT INTO ${CUSTOMERS_TABLE} (id, code, name, updated_at) VALUES ($1,$2,$3,now())`,
       [customerId, str(c.code), str(c.name)]
     );
+    const shippers = Array.isArray(c.savedShippers) ? c.savedShippers : [];
+    const primaryShipper = shippers[0];
+    const primaryCnee = Array.isArray(c.savedConsignees) ? c.savedConsignees[0] : undefined;
     await client.query(
       `
       INSERT INTO ${CUSTOMER_PROFILES_TABLE} (
@@ -367,23 +475,46 @@ async function replaceRelationalSnapshot(client, key, state) {
       `,
       [
         customerId,
-        str(c.shipperName),
-        str(c.shipperAddress),
-        str(c.shipperPhone),
-        str(c.shipperEmail),
-        str(c.taxCode),
-        str(c.agentName),
-        str(c.agentAddress),
-        str(c.agentPhone),
-        str(c.agentEmail),
-        str(c.agentTaxCode),
-        str(c.consigneeName),
-        str(c.consigneeAddress),
-        str(c.consigneePhone),
-        str(c.consigneeEmail),
-        str(c.notifyName),
+        str(primaryShipper?.shipperName) || str(c.shipperName),
+        str(primaryShipper?.shipperAddress) || str(c.shipperAddress),
+        str(primaryShipper?.shipperPhone) || str(c.shipperPhone),
+        str(primaryShipper?.shipperEmail) || str(c.shipperEmail),
+        str(primaryShipper?.taxCode) || str(c.taxCode),
+        "",
+        "",
+        "",
+        "",
+        "",
+        str(primaryCnee?.consigneeName) || str(c.consigneeName),
+        str(primaryCnee?.consigneeAddress) || str(c.consigneeAddress),
+        str(primaryCnee?.consigneePhone) || str(c.consigneePhone),
+        str(primaryCnee?.consigneeEmail) || str(c.consigneeEmail),
+        str(primaryCnee?.notifyName) || str(c.notifyName),
       ]
     );
+    let shipperOrder = 0;
+    for (const ss of shippers) {
+      const sid = str(ss.id).trim();
+      if (!sid) continue;
+      await client.query(
+        `
+        INSERT INTO ${CUSTOMER_SHIPPERS_TABLE} (
+          id, customer_id, label, shipper_name, shipper_address, shipper_phone, shipper_email, shipper_vat_code, sort_order
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        `,
+        [
+          sid,
+          customerId,
+          str(ss.label),
+          str(ss.shipperName),
+          str(ss.shipperAddress),
+          str(ss.shipperPhone),
+          str(ss.shipperEmail),
+          str(ss.taxCode),
+          shipperOrder++,
+        ]
+      );
+    }
     const subs = Array.isArray(c.savedConsignees) ? c.savedConsignees : [];
     let sortOrder = 0;
     for (const sc of subs) {
@@ -438,7 +569,8 @@ async function replaceRelationalSnapshot(client, key, state) {
       INSERT INTO ${SHIPMENTS_TABLE} (
         id, stt, session_date, awb, hawb, flight, flight_date, cutoff, cutoff_note, note, dest, warehouse,
         pcs, kg, dim_weight_kg, dim_lines, dim_divisor,
-        customer, customer_code, customer_id, customer_consignee_id,
+        customer, customer_code, customer_id, customer_shipper_id, customer_consignee_id, customer_agent_id,
+        global_agent_id, customer_goods_id, goods_description_print,
         shipper_name_print, shipper_address_print, shipper_phone_print, shipper_email_print, tax_code_print,
         agent_name_print, agent_address_print, agent_phone_print, agent_email_print, agent_tax_code_print,
         consignee_name_print, consignee_address_print, consignee_phone_print, consignee_email_print, notify_name_print,
@@ -446,11 +578,12 @@ async function replaceRelationalSnapshot(client, key, state) {
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         $13,$14,$15,$16::jsonb,$17,
-        $18,$19,$20,$21,
-        $22,$23,$24,$25,$26,
+        $18,$19,$20,$21,$22,$23,
+        $24,$25,$26,
         $27,$28,$29,$30,$31,
         $32,$33,$34,$35,$36,
-        $37
+        $37,$38,$39,$40,$41,
+        $42
       )
       `,
       [
@@ -474,7 +607,12 @@ async function replaceRelationalSnapshot(client, key, state) {
         str(s.customer),
         str(s.customerCode),
         str(s.customerId) || null,
+        str(s.customerShipperId) || null,
         str(s.customerConsigneeId) || null,
+        str(s.customerAgentId) || null,
+        str(s.globalAgentId) || str(s.customerAgentId) || "",
+        str(s.customerGoodsId) || "",
+        str(s.goodsDescriptionPrint) || "",
         str(s.shipperNamePrint),
         str(s.shipperAddressPrint),
         str(s.shipperPhonePrint),

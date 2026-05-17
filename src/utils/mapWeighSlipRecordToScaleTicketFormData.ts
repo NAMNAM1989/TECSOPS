@@ -1,5 +1,6 @@
 import type { ScaleTicketFormData } from "./mapBookingToScaleTicketFormData";
 import type { WeighSlipRecord } from "../types/weighSlip";
+import { normalizePrintAddressMultiline } from "./printAddressMultiline";
 
 function compact(s: string): string {
   return s.replace(/\s+/g, " ").trim();
@@ -36,11 +37,11 @@ function buildGoodsLine(r: WeighSlipRecord): string {
 }
 
 function buildConsigneeAddress(r: WeighSlipRecord): string {
-  const addr = compact(r.consigneeAddress);
+  const addr = normalizePrintAddressMultiline(r.consigneeAddress);
   const tax = compact(r.consigneeTaxAccount);
-  if (tax && addr) return `${addr}\nMST/TK: ${tax}`.slice(0, 110);
+  if (tax && addr) return normalizePrintAddressMultiline(`${addr}\nMST/TK: ${tax}`).slice(0, 300);
   if (tax) return `MST/TK: ${tax}`.slice(0, 110);
-  return addr.slice(0, 110);
+  return addr.slice(0, 300);
 }
 
 function splitContactEmail(contact: string, emailFax: string): { phone: string; email: string } {
@@ -66,27 +67,25 @@ export function mapWeighSlipRecordToScaleTicketFormData(r: WeighSlipRecord): Sca
     flightNo && flightDatePrint ? `${flightNo} / ${flightDatePrint}` : flightNo || flightDatePrint;
 
   const hawbNo = compact(r.hawbNo);
-  const hawbStatus = compact(r.hawbCountStatus);
-  let hawbDisplay = hawbNo.slice(0, 48);
-  if (!hawbDisplay) hawbDisplay = hawbStatus.slice(0, 48) || "No Hawb";
+  const hawbDisplay = hawbNo.trim() ? "01 HAWB" : "NO HAWB";
 
   return {
     awb: compact(r.mawbNo),
     flightNo,
     flightDate: flightDatePrint,
     destination: compact(r.destinationAirport).toUpperCase().slice(0, 3),
-    origin: "SGN",
+    origin: "",
     totalPieces: r.pieces != null && r.pieces > 0 ? String(r.pieces) : "",
     grossWeight: formatWeight(r.grossWeight),
     chargeableWeight: formatWeight(r.chargeableWeight),
     customerCode: "",
     shipperName: compact(r.shipperName).slice(0, 120),
-    shipperAddress: compact(r.shipperAddress).slice(0, 110),
+    shipperAddress: normalizePrintAddressMultiline(r.shipperAddress, 2).slice(0, 300),
     shipperPhone: shipperSplit.phone,
     shipperEmail: shipperSplit.email,
     taxCode: compact(r.shipperTaxCode).slice(0, 24),
     agentName: compact(r.notifyAgentName).slice(0, 45),
-    agentAddress: compact(r.notifyAgentAddress).slice(0, 110),
+    agentAddress: normalizePrintAddressMultiline(r.notifyAgentAddress).slice(0, 300),
     agentPhone: agentSplit.phone,
     agentEmail: agentSplit.email,
     agentTaxCode: "",
@@ -99,6 +98,8 @@ export function mapWeighSlipRecordToScaleTicketFormData(r: WeighSlipRecord): Sca
     flightLinePrint,
     dimensionsText: r.dimensions.trim().slice(0, 500),
     goodsDescription: buildGoodsLine(r),
+    hawb: hawbNo.slice(0, 48),
     hawbDisplay,
+    otherRequirements: "",
   };
 }

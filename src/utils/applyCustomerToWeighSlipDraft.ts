@@ -13,12 +13,12 @@ export function applyCustomerToWeighSlipDraft(
     shipperContact: customer.shipperPhone,
     shipperEmailFax: customer.shipperEmail,
     shipperTaxCode: customer.taxCode,
-    notifyAgentName: customer.agentName,
-    notifyAgentAddress: customer.agentAddress,
-    notifyAgentContact: customer.agentPhone || customer.agentEmail,
-    consigneeName: customer.consigneeName,
-    consigneeAddress: customer.consigneeAddress,
-    notifyOther: customer.notifyName,
+    notifyAgentName: "",
+    notifyAgentAddress: "",
+    notifyAgentContact: "",
+    consigneeName: "",
+    consigneeAddress: "",
+    notifyOther: "",
   };
 }
 

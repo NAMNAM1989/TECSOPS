@@ -1,13 +1,22 @@
 import type { Shipment } from "../types/shipment";
-import type { CustomerDirectoryEntry, CustomerSavedConsignee } from "../types/customerDirectory";
+import type {
+  CustomerDirectoryEntry,
+  CustomerSavedConsignee,
+  CustomerSavedGoods,
+  CustomerSavedShipper,
+} from "../types/customerDirectory";
+import type { GlobalAgentCatalog, GlobalAgentEntry } from "../types/globalAgents";
+import { findGlobalAgentById } from "./globalAgentsCore";
 import { buildScscDimListModel } from "./scscDimListReport";
+import { resolvePrintAddressForShipment } from "./printAddressMultiline";
 
 export type ScaleTicketFormData = {
   awb: string;
   flightNo: string;
   flightDate: string;
   destination: string;
-  origin: string;
+  /** Không in trên phiếu (mẫu giấy đã có SGN) — giữ cho tương thích type. */
+  origin?: string;
   totalPieces: string;
   grossWeight: string;
   chargeableWeight: string;
@@ -32,8 +41,12 @@ export type ScaleTicketFormData = {
   flightLinePrint: string;
   dimensionsText: string;
   goodsDescription: string;
-  /** Số nhóm HAWB hoặc nhãn "No Hawb" khi không có */
+  /** Số HAWB in dưới AWB (góc phải). */
+  hawb: string;
+  /** Số nhóm HAWB hoặc nhãn "No Hawb" khi không có (ô TOTAL HAWB trên form). */
   hawbDisplay: string;
+  /** Yêu cầu khác — từ hồ sơ khách. */
+  otherRequirements: string;
 };
 
 function norm(s: string): string {
@@ -68,6 +81,26 @@ export function findCustomerEntry(
   return undefined;
 }
 
+/** Shipper lưu sẵn: theo `customerShipperId`, hoặc tự động một mục nếu danh bạ chỉ có một. */
+export function resolveSavedShipperForBooking(
+  booking: Shipment,
+  customer: CustomerDirectoryEntry | undefined,
+  opts?: { skipAutoSingleShipper?: boolean }
+): CustomerSavedShipper | undefined {
+  const list = customer?.savedShippers ?? [];
+  if (!list.length) return undefined;
+  const id = booking.customerShipperId?.trim();
+  if (id) return list.find((x) => norm(x.id) === norm(id));
+  if (opts?.skipAutoSingleShipper) return undefined;
+  const defId = customer?.defaultShipperId?.trim();
+  if (defId) {
+    const d = list.find((x) => norm(x.id) === norm(defId));
+    if (d) return d;
+  }
+  if (list.length === 1) return list[0];
+  return undefined;
+}
+
 /** CNEE lưu sẵn: theo `customerConsigneeId`, hoặc tự động một mục nếu danh bạ chỉ có một (trừ khi `skipAutoSingleConsignee`). */
 export function resolveSavedConsigneeForBooking(
   booking: Shipment,
@@ -79,47 +112,67 @@ export function resolveSavedConsigneeForBooking(
   const id = booking.customerConsigneeId?.trim();
   if (id) return list.find((x) => norm(x.id) === norm(id));
   if (opts?.skipAutoSingleConsignee) return undefined;
+  const defId = customer?.defaultConsigneeId?.trim();
+  if (defId) {
+    const d = list.find((x) => norm(x.id) === norm(defId));
+    if (d) return d;
+  }
   if (list.length === 1) return list[0];
   return undefined;
 }
 
-function extractContactFromParties(entry: CustomerDirectoryEntry): {
-  address: string;
-  phone: string;
-  taxCode: string;
-} {
-  if (entry.shipperAddress?.trim() || entry.shipperPhone?.trim() || entry.taxCode?.trim()) {
-    return {
-      address: compactSpace(entry.shipperAddress ?? "").slice(0, 500),
-      phone: compactSpace(entry.shipperPhone ?? "").slice(0, 32),
-      taxCode: compactSpace(entry.taxCode ?? ""),
-    };
+function bookingGlobalAgentId(booking: Shipment): string {
+  return (booking.globalAgentId ?? booking.customerAgentId ?? "").trim();
+}
+
+/** Agent chung: theo `globalAgentId` trên lô, hoặc mặc định toàn hệ thống. */
+export function resolveGlobalAgentForBooking(
+  booking: Shipment,
+  catalog: GlobalAgentCatalog,
+  opts?: { skipAutoDefault?: boolean }
+): GlobalAgentEntry | undefined {
+  const list = catalog.agents.filter((x) => x.id.trim());
+  if (!list.length) return undefined;
+  const explicit = bookingGlobalAgentId(booking);
+  if (explicit) return findGlobalAgentById(catalog, explicit);
+  if (opts?.skipAutoDefault) return undefined;
+  return findGlobalAgentById(catalog, catalog.defaultAgentId);
+}
+
+/** Tên hàng lưu sẵn theo khách. */
+export function resolveSavedGoodsForBooking(
+  booking: Shipment,
+  customer: CustomerDirectoryEntry | undefined,
+  opts?: { skipAutoSingleGoods?: boolean }
+): CustomerSavedGoods | undefined {
+  const list = customer?.savedGoods ?? [];
+  if (!list.length) return undefined;
+  const id = booking.customerGoodsId?.trim();
+  if (id) return list.find((x) => norm(x.id) === norm(id));
+  if (opts?.skipAutoSingleGoods) return undefined;
+  const defId = customer?.defaultGoodsId?.trim();
+  if (defId) {
+    const d = list.find((x) => norm(x.id) === norm(defId));
+    if (d) return d;
   }
-  const partiesText = entry.parties.map((p) => p.content).join("\n");
-  const shipperParty = entry.parties.find((p) => p.type === "SHIPPER");
-  let address = "";
-  if (shipperParty?.content?.trim()) {
-    address = compactSpace(shipperParty.content);
-  }
-  const phoneMatch =
-    partiesText.match(/(?:SĐT|SDT|ĐT|DT|TEL|PHONE|Tel)[:\s]*([+\d\s().-]{8,})/i) ||
-    partiesText.match(/\b0\d{9,10}\b/) ||
-    partiesText.match(/\+?\d[\d\s().-]{8,}\d/);
-  const phoneRaw = phoneMatch?.[1] ?? phoneMatch?.[0] ?? "";
-  const phone = compactSpace(phoneRaw).slice(0, 32);
-  const taxMatch = partiesText.match(/(?:MST|TAX|Tax\s*code)[:\s]*([0-9A-Z.-]{6,24})/i);
-  const taxCode = taxMatch?.[1]?.trim() ?? "";
-  return { address: address.slice(0, 500), phone, taxCode };
+  if (list.length === 1) return list[0];
+  return undefined;
 }
 
 /**
  * Map một dòng booking (Shipment) sang dữ liệu phiếu cân SCSC.
- * `customers`: danh bạ tùy chọn — nếu khớp mã/tên thì bổ sung tên đầy đủ / địa chỉ / SĐT / MST từ parties.
+ * `customers`: danh bạ tùy chọn — bổ sung shipper/CNEE/agent/tên hàng từ preset lưu sẵn.
  */
 export function mapBookingToScaleTicketFormData(
   booking: Shipment,
   customers: readonly CustomerDirectoryEntry[] = [],
-  mapOpts?: { skipAutoSingleConsignee?: boolean }
+  mapOpts?: {
+    skipAutoSingleConsignee?: boolean;
+    skipAutoDefaultAgent?: boolean;
+    skipAutoSingleGoods?: boolean;
+    skipAutoSingleShipper?: boolean;
+    globalAgents?: GlobalAgentCatalog;
+  }
 ): ScaleTicketFormData {
   const dimModel = buildScscDimListModel(booking);
   const gw = booking.kg ?? 0;
@@ -136,51 +189,65 @@ export function mapBookingToScaleTicketFormData(
     : "";
 
   const noteTrim = booking.note?.trim() ?? "";
-  const goodsDescription = noteTrim ? noteTrim.slice(0, 60) : "GENERAL CARGO";
 
   const customer = findCustomerEntry(booking, customers);
+  const savedShipper = resolveSavedShipperForBooking(booking, customer, {
+    skipAutoSingleShipper: mapOpts?.skipAutoSingleShipper,
+  });
   const savedCnee = resolveSavedConsigneeForBooking(booking, customer, {
     skipAutoSingleConsignee: mapOpts?.skipAutoSingleConsignee,
   });
-  const partyContact = customer ? extractContactFromParties(customer) : { address: "", phone: "", taxCode: "" };
-
+  const catalog = mapOpts?.globalAgents;
+  const savedAgent = catalog
+    ? resolveGlobalAgentForBooking(booking, catalog, {
+        skipAutoDefault: mapOpts?.skipAutoDefaultAgent,
+      })
+    : undefined;
+  const savedGoods = resolveSavedGoodsForBooking(booking, customer, {
+    skipAutoSingleGoods: mapOpts?.skipAutoSingleGoods,
+  });
+  const goodsPrintTrim = booking.goodsDescriptionPrint?.trim() ?? "";
+  const goodsDescription = compactSpace(
+    goodsPrintTrim ||
+      savedGoods?.goodsDescription?.trim() ||
+      (noteTrim ? noteTrim.slice(0, 60) : "")
+  ).slice(0, 60) || "GENERAL CARGO";
   const customerCode = booking.customerCode?.trim() || booking.customer?.trim() || "";
 
   const shipperNamePrintTrim = booking.shipperNamePrint?.trim() || "";
-  const printLooksLikeShortCode =
+  const looksLikeAccountLabel =
     shipperNamePrintTrim &&
     (norm(shipperNamePrintTrim) === norm(booking.customer) ||
       norm(shipperNamePrintTrim) === norm(booking.customerCode || ""));
 
-  const profileShipperName = customer?.shipperName?.trim() || "";
-  const shipperNameFallback =
-    customer?.shipperName?.trim() || customer?.name?.trim() || booking.customer?.trim() || "";
-  const shipperAddressFallback = customer ? partyContact.address : "";
-  const shipperPhoneFallback = customer ? partyContact.phone : "";
-  const taxCodeFallback = customer ? partyContact.taxCode : "";
-  const shipperEmailFallback = customer?.shipperEmail?.trim() || "";
-  const agentNameFallback = customer?.agentName?.trim() || "";
-  const agentAddressFallback = customer?.agentAddress?.trim() || "";
-  const agentPhoneFallback = customer?.agentPhone?.trim() || "";
-  const agentEmailFallback = customer?.agentEmail?.trim() || "";
-  const agentTaxCodeFallback = customer?.agentTaxCode?.trim() || "";
-  const consigneeNameFallback =
-    savedCnee?.consigneeName?.trim() || customer?.consigneeName?.trim() || "";
-  const consigneeAddressFallback =
-    savedCnee?.consigneeAddress?.trim() || customer?.consigneeAddress?.trim() || "";
-  const consigneePhoneFallback =
-    savedCnee?.consigneePhone?.trim() || customer?.consigneePhone?.trim() || "";
-  const consigneeEmailFallback =
-    savedCnee?.consigneeEmail?.trim() || customer?.consigneeEmail?.trim() || "";
-  const notifyNameFallback = savedCnee?.notifyName?.trim() || customer?.notifyName?.trim() || noteTrim;
+  const presetShipperName = savedShipper?.shipperName?.trim() || "";
+  const shipperAddressFallback = savedShipper?.shipperAddress ?? "";
+  const shipperPhoneFallback = savedShipper?.shipperPhone?.trim() || "";
+  const taxCodeFallback = savedShipper?.taxCode?.trim() || "";
+  const shipperEmailFallback = savedShipper?.shipperEmail?.trim() || "";
+  const agentIsNone = Boolean(savedAgent?.isNone);
+  const agentNameFallback = agentIsNone ? "" : savedAgent?.agentName?.trim() || "";
+  const agentAddressFallback = agentIsNone ? "" : savedAgent?.agentAddress ?? "";
+  const agentPhoneFallback = agentIsNone ? "" : savedAgent?.agentPhone?.trim() || "";
+  const agentEmailFallback = agentIsNone ? "" : savedAgent?.agentEmail?.trim() || "";
+  const agentTaxCodeFallback = agentIsNone ? "" : savedAgent?.agentTaxCode?.trim() || "";
+  const consigneeNameFallback = savedCnee?.consigneeName?.trim() || "";
+  const consigneeAddressFallback = savedCnee?.consigneeAddress ?? "";
+  const consigneePhoneFallback = savedCnee?.consigneePhone?.trim() || "";
+  const consigneeEmailFallback = savedCnee?.consigneeEmail?.trim() || "";
+  const notifyNameFallback = savedCnee?.notifyName?.trim() || noteTrim;
 
-  /** Dòng tên shipper: nếu booking chỉ lưu mã/ngắn trùng cột khách thì ưu tiên tên đầy đủ trong hồ sơ (shipperName hoặc name) */
+  /** Snapshot in trên lô → preset lưu sẵn; không gán tên account khách làm shipper. */
   const shipperName = compactSpace(
-    printLooksLikeShortCode
-      ? profileShipperName || customer?.name?.trim() || shipperNamePrintTrim || booking.customer?.trim() || ""
-      : shipperNamePrintTrim || profileShipperName || shipperNameFallback
+    looksLikeAccountLabel
+      ? presetShipperName || shipperNamePrintTrim
+      : shipperNamePrintTrim || presetShipperName
   ).slice(0, 120);
-  const shipperAddress = compactSpace(booking.shipperAddressPrint?.trim() || shipperAddressFallback).slice(0, 110);
+  const shipperAddress = resolvePrintAddressForShipment({
+    bookingPrint: booking.shipperAddressPrint,
+    directoryPrint: shipperAddressFallback,
+    maxLines: 2,
+  });
   const shipperPhone = compactSpace(booking.shipperPhonePrint?.trim() || shipperPhoneFallback).slice(0, 24);
   const taxCode = compactSpace(booking.taxCodePrint?.trim() || taxCodeFallback).slice(0, 24);
 
@@ -189,7 +256,7 @@ export function mapBookingToScaleTicketFormData(
     flightNo: booking.flight?.trim() || "",
     flightDate: booking.flightDate?.trim() || "",
     destination: booking.dest?.trim() || "",
-    origin: "SGN",
+    origin: "",
     totalPieces:
       totalPiecesNum != null && totalPiecesNum > 0 ? String(totalPiecesNum) : "",
     grossWeight:
@@ -203,12 +270,18 @@ export function mapBookingToScaleTicketFormData(
     shipperEmail: compactSpace(booking.shipperEmailPrint?.trim() || shipperEmailFallback).slice(0, 50),
     taxCode,
     agentName: compactSpace(booking.agentNamePrint?.trim() || agentNameFallback).slice(0, 45),
-    agentAddress: compactSpace(booking.agentAddressPrint?.trim() || agentAddressFallback).slice(0, 110),
+    agentAddress: resolvePrintAddressForShipment({
+      bookingPrint: booking.agentAddressPrint,
+      directoryPrint: agentAddressFallback,
+    }),
     agentPhone: compactSpace(booking.agentPhonePrint?.trim() || agentPhoneFallback).slice(0, 24),
     agentEmail: compactSpace(booking.agentEmailPrint?.trim() || agentEmailFallback).slice(0, 50),
     agentTaxCode: compactSpace(booking.agentTaxCodePrint?.trim() || agentTaxCodeFallback).slice(0, 24),
     consigneeName: compactSpace(booking.consigneeNamePrint?.trim() || consigneeNameFallback).slice(0, 45),
-    consigneeAddress: compactSpace(booking.consigneeAddressPrint?.trim() || consigneeAddressFallback).slice(0, 110),
+    consigneeAddress: resolvePrintAddressForShipment({
+      bookingPrint: booking.consigneeAddressPrint,
+      directoryPrint: consigneeAddressFallback,
+    }),
     consigneePhone: compactSpace(booking.consigneePhonePrint?.trim() || consigneePhoneFallback).slice(0, 24),
     consigneeEmail: compactSpace(booking.consigneeEmailPrint?.trim() || consigneeEmailFallback).slice(0, 50),
     notifyName: compactSpace(booking.notifyNamePrint?.trim() || notifyNameFallback).slice(0, 80),
@@ -221,11 +294,14 @@ export function mapBookingToScaleTicketFormData(
     })(),
     dimensionsText,
     goodsDescription,
+    hawb: (booking.hawb?.trim() ?? "").slice(0, 48),
     hawbDisplay: (() => {
       const h = booking.hawb?.trim() ?? "";
-      if (h) return h.slice(0, 48);
-      if (dimModel && dimModel.rows.length > 0) return String(dimModel.rows.length);
-      return "No Hawb";
+      return h ? "01 HAWB" : "NO HAWB";
     })(),
+    otherRequirements: compactSpace(customer?.otherRequirementsPrint ?? "").slice(
+      0,
+      200
+    ),
   };
 }

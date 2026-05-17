@@ -1,6 +1,6 @@
 import type { Shipment } from "../../types/shipment";
 import type { AirlineLabelOverrides } from "../../utils/airlineLabelOverridesCore";
-import { shipmentToTsplBody } from "../../utils/shipmentToLabelPayload";
+import { shipmentToTsplBodyAsync } from "../../utils/shipmentToLabelPayload";
 import type { ThermalLabelPrinterProfile } from "../printTypes";
 
 export type TsplPrintResult = { ok: true } | { ok: false; error: string };
@@ -29,13 +29,13 @@ export async function fetchTsplRaw(
   }
 }
 
-export function shipmentToTsplRequest(
+export async function shipmentToTsplRequest(
   s: Shipment,
   profile: ThermalLabelPrinterProfile,
   airlineLabelOverrides?: AirlineLabelOverrides | null,
   opts?: { calibration?: boolean }
 ) {
-  const base = shipmentToTsplBody(s, airlineLabelOverrides, profile);
+  const base = await shipmentToTsplBodyAsync(s, airlineLabelOverrides, profile);
   if (opts?.calibration) {
     return {
       ...base,
@@ -60,7 +60,7 @@ export async function printThermalLabelTspl(
   if (!profile.host?.trim()) {
     return { ok: false, error: "Chưa cấu hình IP máy in trong profile." };
   }
-  const body = shipmentToTsplRequest(s, profile, airlineLabelOverrides);
+  const body = await shipmentToTsplRequest(s, profile, airlineLabelOverrides);
   const out = await fetchTsplRaw(body, "print");
   return out.ok ? { ok: true } : { ok: false, error: out.error };
 }
@@ -92,7 +92,7 @@ export async function downloadTsplFile(
   profile: ThermalLabelPrinterProfile,
   airlineLabelOverrides?: AirlineLabelOverrides | null
 ): Promise<TsplPrintResult> {
-  const body = shipmentToTsplRequest(s, profile, airlineLabelOverrides);
+  const body = await shipmentToTsplRequest(s, profile, airlineLabelOverrides);
   const out = await fetchTsplRaw(body, "build");
   if (!out.ok) return { ok: false, error: out.error };
   const blob = new Blob([out.text ?? ""], { type: "text/plain" });

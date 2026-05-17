@@ -2,6 +2,8 @@ import type { CustomerDirectoryEntry, CustomerParty, CustomerPartyType } from ".
 import {
   clampCustomerDirectoryEntry,
   clampCustomerSavedConsignee,
+  clampCustomerSavedGoods,
+  clampCustomerSavedShipper,
   normalizeCustomerPartyType,
 } from "./customerDirectoryProfile";
 
@@ -87,6 +89,48 @@ function parseSavedConsigneesLoose(raw: unknown): CustomerDirectoryEntry["savedC
   return out;
 }
 
+function parseSavedShippersLoose(raw: unknown): CustomerDirectoryEntry["savedShippers"] {
+  if (!Array.isArray(raw)) return [];
+  const out: NonNullable<CustomerDirectoryEntry["savedShippers"]> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const id = trimStr(o.id);
+    if (!id) continue;
+    out.push(
+      clampCustomerSavedShipper({
+        id,
+        label: trimStr(o.label),
+        shipperName: trimStr(o.shipperName),
+        shipperAddress: trimStr(o.shipperAddress),
+        shipperPhone: trimStr(o.shipperPhone),
+        shipperEmail: trimStr(o.shipperEmail),
+        taxCode: trimStr(o.taxCode),
+      })
+    );
+  }
+  return out;
+}
+
+function parseSavedGoodsLoose(raw: unknown): CustomerDirectoryEntry["savedGoods"] {
+  if (!Array.isArray(raw)) return [];
+  const out: NonNullable<CustomerDirectoryEntry["savedGoods"]> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const id = trimStr(o.id);
+    if (!id) continue;
+    out.push(
+      clampCustomerSavedGoods({
+        id,
+        label: trimStr(o.label),
+        goodsDescription: trimStr(o.goodsDescription),
+      })
+    );
+  }
+  return out;
+}
+
 /** Parse mảng JSON an toàn — bỏ phần tử không hợp lệ; chuẩn hóa độ dài trường. */
 export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -103,23 +147,27 @@ export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntr
         id,
         code,
         name,
-        shipperName: trimStr(o.shipperName) || name,
+        shipperName: trimStr(o.shipperName),
         shipperAddress: trimStr(o.shipperAddress) || trimStr(o.address),
         shipperPhone: trimStr(o.shipperPhone) || trimStr(o.phone),
         shipperEmail: trimStr(o.shipperEmail) || trimStr(o.email),
         taxCode: trimStr(o.taxCode) || trimStr(o.taxId),
-        agentName: trimStr(o.agentName),
-        agentAddress: trimStr(o.agentAddress),
-        agentPhone: trimStr(o.agentPhone),
-        agentEmail: trimStr(o.agentEmail),
-        agentTaxCode: trimStr(o.agentTaxCode),
+        savedShippers: parseSavedShippersLoose(o.savedShippers),
+        savedConsignees: parseSavedConsigneesLoose(o.savedConsignees),
+        savedGoods: parseSavedGoodsLoose(o.savedGoods),
+        parties: parsePartiesLoose(o),
         consigneeName: trimStr(o.consigneeName),
         consigneeAddress: trimStr(o.consigneeAddress),
         consigneePhone: trimStr(o.consigneePhone),
         consigneeEmail: trimStr(o.consigneeEmail),
         notifyName: trimStr(o.notifyName),
-        savedConsignees: parseSavedConsigneesLoose(o.savedConsignees),
-        parties: parsePartiesLoose(o),
+        otherRequirementsPrint: trimStr(o.otherRequirementsPrint),
+      } as CustomerDirectoryEntry & {
+        consigneeName?: string;
+        consigneeAddress?: string;
+        consigneePhone?: string;
+        consigneeEmail?: string;
+        notifyName?: string;
       })
     );
   }
@@ -142,6 +190,15 @@ export function assertCustomerDirectoryValid(entries: readonly CustomerDirectory
       throw new Error(`Mã «${e.code}» bị trùng — mỗi mã chỉ dùng một lần.`);
     }
     seenCode.set(k, e.name);
+    const seenShipper = new Set<string>();
+    for (const ss of e.savedShippers ?? []) {
+      const sid = ss.id.trim().toLowerCase();
+      if (!sid) throw new Error(`Khách «${e.code}»: Shipper lưu sẵn thiếu id.`);
+      if (seenShipper.has(sid)) {
+        throw new Error(`Khách «${e.code}»: id Shipper «${ss.id}» bị trùng trong cùng khách.`);
+      }
+      seenShipper.add(sid);
+    }
     const seenCnee = new Set<string>();
     for (const sc of e.savedConsignees ?? []) {
       const sid = sc.id.trim().toLowerCase();
@@ -150,6 +207,15 @@ export function assertCustomerDirectoryValid(entries: readonly CustomerDirectory
         throw new Error(`Khách «${e.code}»: id CNEE «${sc.id}» bị trùng trong cùng khách.`);
       }
       seenCnee.add(sid);
+    }
+    const seenGoods = new Set<string>();
+    for (const g of e.savedGoods ?? []) {
+      const gid = g.id.trim().toLowerCase();
+      if (!gid) throw new Error(`Khách «${e.code}»: tên hàng lưu sẵn thiếu id.`);
+      if (seenGoods.has(gid)) {
+        throw new Error(`Khách «${e.code}»: id tên hàng «${g.id}» bị trùng trong cùng khách.`);
+      }
+      seenGoods.add(gid);
     }
   }
 }

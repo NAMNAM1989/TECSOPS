@@ -6,9 +6,12 @@ export const LABEL_MAWB_REL_MIN = 0.75;
 export const LABEL_MAWB_REL_MAX = 1.45;
 /** Tỷ lệ nhân cỡ số HAWB (cơ sở 4mm). */
 export const LABEL_HAWB_REL_MIN = 0.8;
-export const LABEL_HAWB_REL_MAX = 1.65;
+export const LABEL_HAWB_REL_MAX = 1.85;
 
-const DEFAULT_REL = 1;
+/** AWB/MAWB in to trên tem — mặc định 145%. */
+const DEFAULT_MAWB_REL = 1.45;
+/** HAWB in to trên tem 100×80 — mặc định 145% (cùng mức MAWB). */
+const DEFAULT_HAWB_REL = 1.45;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -29,7 +32,7 @@ export function loadLabelMawbRelScale(): number {
   } catch {
     /* ignore */
   }
-  return DEFAULT_REL;
+  return DEFAULT_MAWB_REL;
 }
 
 export function saveLabelMawbRelScale(n: number): void {
@@ -47,7 +50,7 @@ export function loadLabelHawbRelScale(): number {
   } catch {
     /* ignore */
   }
-  return DEFAULT_REL;
+  return DEFAULT_HAWB_REL;
 }
 
 export function saveLabelHawbRelScale(n: number): void {

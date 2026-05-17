@@ -1,5 +1,8 @@
 import type { Shipment } from "../../types/shipment";
 import type { CustomerDirectoryEntry } from "../../types/customerDirectory";
+import type { GlobalAgentCatalog } from "../../types/globalAgents";
+import type { ScscWeighPrintSettings } from "../../types/scscWeighPrintSettings";
+import { getScscWeighPrintSettingsCache } from "./scscWeighPrintSettingsRuntime";
 import { isScscWarehouse } from "../../constants/warehouses";
 import {
   mapBookingToScaleTicketFormData,
@@ -9,6 +12,10 @@ import { debugLog } from "../../utils/debugLog";
 import type { A4WeighReceiptPrinterProfile } from "../printTypes";
 import { getActiveA4WeighProfile } from "../printerProfiles";
 import { loadPrinterProfileStore } from "../printerProfileStorage";
+import {
+  buildScscFieldHtmlFromTemplate,
+  usesScscLabelTemplate,
+} from "../../label-designer/adapters/scscPrintPipeline";
 import { buildScscWeighOverlayValues, renderScscWeighFieldLayer } from "./scscWeighTemplate";
 
 function esc(s: string): string {
@@ -30,8 +37,15 @@ export type ScscWeighPrintOpts = {
   scaleX?: number;
   scaleY?: number;
   customerDirectory?: readonly CustomerDirectoryEntry[];
-  mapOptions?: { skipAutoSingleConsignee?: boolean };
+  globalAgents?: GlobalAgentCatalog;
+  mapOptions?: {
+    skipAutoSingleConsignee?: boolean;
+    skipAutoDefaultAgent?: boolean;
+    skipAutoSingleShipper?: boolean;
+    skipAutoSingleGoods?: boolean;
+  };
   calibrationTest?: boolean;
+  scscWeighPrintSettings?: ScscWeighPrintSettings;
 };
 
 export type ScscWeighPrintFromFormOpts = {
@@ -40,6 +54,7 @@ export type ScscWeighPrintFromFormOpts = {
   offsetYmm?: number;
   scaleX?: number;
   scaleY?: number;
+  scscWeighPrintSettings?: ScscWeighPrintSettings;
 };
 
 export function resolveScscWeighPrintTransform(opts?: ScscWeighPrintOpts): {
@@ -64,13 +79,21 @@ export function buildScscWeighReceiptDocumentHtml(
   formData: ScaleTicketFormData,
   opts?: ScscWeighPrintFromFormOpts & { overlayValues?: Record<string, string> }
 ): string {
-  const { offsetXmm, offsetYmm, scaleX, scaleY } = resolveScscWeighPrintTransform(opts);
-  const values = opts?.overlayValues ?? buildScscWeighOverlayValues(formData);
-  const fieldHtml = renderScscWeighFieldLayer(values);
+  const { profile, offsetXmm, offsetYmm, scaleX, scaleY } = resolveScscWeighPrintTransform(opts);
+  const shared =
+    opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache();
+  const values = opts?.overlayValues ?? buildScscWeighOverlayValues(formData, shared);
   const useScale = Math.abs(scaleX - 1) > 0.0001 || Math.abs(scaleY - 1) > 0.0001;
   const printTransform = useScale
     ? `translate(var(--print-offset-x, 0mm), var(--print-offset-y, 0mm)) scale(var(--print-scale-x, 1), var(--print-scale-y, 1))`
     : `translate(var(--print-offset-x, 0mm), var(--print-offset-y, 0mm))`;
+  const transformCss = useScale
+    ? `translate(${offsetXmm}mm, ${offsetYmm}mm) scale(${scaleX}, ${scaleY})`
+    : `translate(${offsetXmm}mm, ${offsetYmm}mm)`;
+
+  const fieldHtml = usesScscLabelTemplate(profile)
+    ? buildScscFieldHtmlFromTemplate(formData, profile, shared, transformCss)
+    : renderScscWeighFieldLayer(values, profile);
 
   return `<!DOCTYPE html>
 <html lang="vi">
@@ -209,12 +232,26 @@ export function buildScscWeighReceiptDocumentHtml(
       }
 
       .print-field,
-      .print-only-data {
+      .print-only-data,
+      .label-template-layer,
+      .label-template-layer * {
         display: block !important;
         visibility: visible !important;
         position: absolute !important;
         color: black !important;
         background: transparent !important;
+      }
+
+      .label-template-layer table {
+        display: table !important;
+      }
+
+      .label-template-layer tr {
+        display: table-row !important;
+      }
+
+      .label-template-layer td {
+        display: table-cell !important;
       }
 
       * {
@@ -267,7 +304,13 @@ export function printScscWeighReceiptHtml(s: Shipment, opts?: ScscWeighPrintOpts
   }
 
   const directory = opts?.customerDirectory ?? [];
-  const formData = mapBookingToScaleTicketFormData(s, directory, opts?.mapOptions);
+  const formData = mapBookingToScaleTicketFormData(s, directory, {
+    skipAutoSingleConsignee: opts?.mapOptions?.skipAutoSingleConsignee,
+    skipAutoDefaultAgent: opts?.mapOptions?.skipAutoDefaultAgent,
+    skipAutoSingleShipper: opts?.mapOptions?.skipAutoSingleShipper,
+    skipAutoSingleGoods: opts?.mapOptions?.skipAutoSingleGoods,
+    globalAgents: opts?.globalAgents,
+  });
   const transform = resolveScscWeighPrintTransform(opts);
 
   debugLog("print:scsc-weigh", {
@@ -281,8 +324,8 @@ export function printScscWeighReceiptHtml(s: Shipment, opts?: ScscWeighPrintOpts
     ? {
         shipper: "[TEST SHIPPER]",
         mawb: "000-00000000",
+        hawb: "TEST-HAWB-001",
         consignee: "[TEST CNEE]",
-        origin: "SGN",
         destination: "HAN",
         pieces: "1",
         grossWeight: "1.0",

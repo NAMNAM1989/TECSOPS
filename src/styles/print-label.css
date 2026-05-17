@@ -3,6 +3,16 @@
  * Tất cả kích thước chính dùng mm để preview và bản in ít lệch nhau.
  */
 
+.label.print-label-sheet.lbl-sheet.lbl-sheet--calibrated,
+.label.print-label-sheet.lbl-sheet.lbl-sheet--scsc-designer {
+  display: block;
+}
+
+.lbl-sheet.lbl-sheet--scsc-designer {
+  width: 210mm;
+  height: 297mm;
+}
+
 .label.print-label-sheet.lbl-sheet {
   box-sizing: border-box;
   width: 100mm;
@@ -96,13 +106,18 @@
   text-overflow: ellipsis;
 }
 
+/* ---------- Khổ 100×80: HAWB + số kiện to, dễ đọc ---------- */
+
 .lbl-hawb-row {
   display: flex;
-  align-items: center;
-  gap: 2mm;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1.5mm 2.5mm;
   flex-shrink: 0;
-  padding: 0.8mm 2mm;
-  border-bottom: 0.25mm solid #777;
+  padding: 1.2mm 2mm 1.4mm;
+  border-bottom: 0.35mm solid #000;
+  min-height: 10mm;
 }
 
 .lbl-hawb-label {
@@ -116,49 +131,107 @@
 .lbl-hawb-val {
   font-family: "Courier New", Courier, monospace;
   font-weight: 900;
-  letter-spacing: 0.25mm;
+  letter-spacing: 0.35mm;
+  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 92mm;
 }
 
-.lbl-bottom {
-  display: flex;
+.lbl-sheet:not(.lbl-sheet--compact) .lbl-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   flex: 1 1 auto;
   min-height: 0;
   border-top: 0.45mm solid #000;
 }
 
-.lbl-pieces-cell {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 1mm;
-  border-right: 0.25mm solid #777;
+.lbl-sheet:not(.lbl-sheet--compact) .lbl-bottom:has(.lbl-pieces-cell:only-child) {
+  grid-template-columns: 1fr;
 }
 
-.lbl-pieces-cell:last-child {
+.lbl-sheet:not(.lbl-sheet--compact) .lbl-pieces-cell {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-content: stretch;
+  padding: 1.5mm 2mm 2mm;
+  border-right: 0.35mm solid #000;
+  overflow: hidden;
+}
+
+.lbl-sheet:not(.lbl-sheet--compact) .lbl-pieces-cell:last-child {
   border-right: 0;
 }
 
-.pieces-label {
-  color: #333;
-  font-weight: 900;
-  text-align: center;
+.lbl-sheet:not(.lbl-sheet--compact) .pieces-label {
+  flex-shrink: 0;
+  color: #444;
+  font-weight: 800;
+  text-align: left;
   text-transform: uppercase;
-  letter-spacing: 0.25mm;
-  line-height: 1.25;
+  letter-spacing: 0.12mm;
+  line-height: 1.1;
+  white-space: nowrap;
+  padding-bottom: 1mm;
+  border-bottom: 0.2mm solid #bbb;
 }
 
-.pieces-val {
-  margin-top: 1.2mm;
+.lbl-sheet:not(.lbl-sheet--compact) .pieces-val {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0;
+  min-height: 14mm;
   font-weight: 900;
   font-family: "Courier New", Courier, monospace;
-  letter-spacing: 0.35mm;
-  line-height: 0.95;
+  letter-spacing: 0.4mm;
+  line-height: 1;
+  text-align: center;
+}
+
+/* ---------- Khổ 100×50: số kiện to giữa, nhãn góc trái dưới ---------- */
+
+.lbl-sheet--compact .lbl-bottom {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-top: 0.45mm solid #000;
+  /* Lề đáy an toàn — số kiện không chạm viền tem khi in */
+  padding-bottom: 0.6mm;
+}
+
+.lbl-sheet--compact .lbl-bottom-notes {
+  position: absolute;
+  left: 2mm;
+  bottom: 1.2mm;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35mm;
+  max-width: 48mm;
+  pointer-events: none;
+}
+
+.lbl-sheet--compact .lbl-note-line {
+  color: #555;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15mm;
+  line-height: 1.12;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.lbl-sheet--compact .lbl-note-hawb-val {
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 700;
+  color: #000;
+  text-transform: none;
+  letter-spacing: 0.12mm;
 }
 
 .lbl-special {
@@ -202,7 +275,7 @@
 }
 
 .lbl-sheet--compact .lbl-route-cell {
-  padding: 0.7mm 1.2mm 1mm;
+  padding: 0.5mm 1.2mm 0.75mm;
 }
 
 .lbl-sheet--compact .route-val {
@@ -210,13 +283,52 @@
   letter-spacing: 0.45mm;
 }
 
-.lbl-sheet--compact .lbl-hawb-row {
-  padding: 0.45mm 1.5mm;
-  gap: 1.2mm;
+.lbl-sheet--compact .lbl-bottom-notes {
+  left: 1.5mm;
+  bottom: 0.8mm;
+  gap: 0.2mm;
+  max-width: 44mm;
 }
 
-.lbl-sheet--compact .lbl-pieces-cell {
-  padding: 0.4mm 0.6mm;
+.lbl-sheet--compact .lbl-compact-pieces-center {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  /* Chừa ~5mm đáy cho nhãn "Total no. of pieces" — tránh cắt chân số */
+  bottom: 5mm;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 900;
+  color: #000;
+  line-height: 1;
+  letter-spacing: 0.5mm;
+  text-align: center;
+  pointer-events: none;
+  overflow: visible;
+  padding: 0 2mm 0.8mm;
+  box-sizing: border-box;
+}
+
+.lbl-sheet--compact .lbl-compact-pieces-hawb-center {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 8%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Courier New", Courier, monospace;
+  font-weight: 700;
+  color: #333;
+  line-height: 1;
+  letter-spacing: 0.35mm;
+  text-align: center;
+  pointer-events: none;
 }
 
 .lbl-sheet--compact .lbl-special {

@@ -1,8 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { PrinterProfile, PrinterProfileStoreV1 } from "../printing/printTypes";
 import type { PrinterProfilesCatalog } from "../printing/printerProfilesCore";
 import {
   loadPrinterProfileStore,
+  PRINTER_PROFILES_CHANGED_EVENT,
   savePrinterProfileStore,
   setActiveA4WeighProfileId,
   setActiveThermalProfileId,
@@ -24,6 +25,12 @@ export function usePrinterProfiles(opts?: { pushCatalog?: MutateFn }) {
   const refresh = useCallback(() => {
     setStore(loadPrinterProfileStore());
   }, []);
+
+  useEffect(() => {
+    const onChanged = () => refresh();
+    window.addEventListener(PRINTER_PROFILES_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(PRINTER_PROFILES_CHANGED_EVENT, onChanged);
+  }, [refresh]);
 
   const pushCatalog = useCallback(
     async (catalog: PrinterProfilesCatalog) => {

@@ -1,4 +1,6 @@
 import { createDefaultPrinterProfileStore, DEFAULT_A4_WEIGH_PROFILE_ID } from "./printerProfiles";
+import { migratePrinterProfileStore } from "./printerProfileMigrate";
+import { syncLabelSheetFormatFromProfile } from "./thermalLabelFormat";
 import type {
   A4WeighReceiptPrinterProfile,
   PrinterProfile,
@@ -7,6 +9,14 @@ import type {
 } from "./printTypes";
 
 const STORAGE_KEY = "tecsops-printer-profiles-v1";
+
+/** Báo UI (preview in SCSC, Print Center) reload profile sau khi lưu local. */
+export const PRINTER_PROFILES_CHANGED_EVENT = "tecsops-printer-profiles-changed";
+
+function notifyPrinterProfilesChanged(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(PRINTER_PROFILES_CHANGED_EVENT));
+}
 
 /** Khóa legacy — chỉ dùng khi migrate lần đầu sang profile A4. */
 const LEGACY_SCSC_OFFSET_X = "printOffsetX";
@@ -56,12 +66,23 @@ function applyLegacyScscOffsets(store: PrinterProfileStoreV1): PrinterProfileSto
 export function loadPrinterProfileStore(): PrinterProfileStoreV1 {
   try {
     const existing = safeParseStore(localStorage.getItem(STORAGE_KEY));
-    if (existing) return existing;
+    if (existing) {
+      const migrated = migratePrinterProfileStore(existing);
+      if (JSON.stringify(migrated) !== JSON.stringify(existing)) {
+        savePrinterProfileStore(migrated);
+      }
+      const active = migrated.profiles.find((p) => p.id === migrated.activeThermalProfileId);
+      if (active && isThermalProfile(active)) syncLabelSheetFormatFromProfile(active);
+      return migrated;
+    }
   } catch {
     /* ignore */
   }
 
-  return applyLegacyScscOffsets(createDefaultPrinterProfileStore());
+  const created = applyLegacyScscOffsets(createDefaultPrinterProfileStore());
+  const active = created.profiles.find((p) => p.id === created.activeThermalProfileId);
+  if (active && isThermalProfile(active)) syncLabelSheetFormatFromProfile(active);
+  return created;
 }
 
 export function savePrinterProfileStore(store: PrinterProfileStoreV1): void {
@@ -72,6 +93,7 @@ export function savePrinterProfileStore(store: PrinterProfileStoreV1): void {
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    notifyPrinterProfilesChanged();
   } catch {
     /* ignore */
   }
@@ -93,6 +115,8 @@ export function setActiveThermalProfileId(id: string): PrinterProfileStoreV1 {
   const store = loadPrinterProfileStore();
   const next = { ...store, activeThermalProfileId: id };
   savePrinterProfileStore(next);
+  const active = next.profiles.find((p) => p.id === id);
+  if (active && isThermalProfile(active)) syncLabelSheetFormatFromProfile(active);
   return next;
 }
 

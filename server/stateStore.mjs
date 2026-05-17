@@ -16,6 +16,8 @@ import {
   emptyPrinterProfilesCatalog,
   normalizePrinterProfilesCatalogLoose,
 } from "./printerProfilesNormalize.mjs";
+import { normalizeGlobalAgentsLoose } from "./globalAgentsNormalize.mjs";
+import { normalizeScscWeighPrintSettingsLoose } from "./scscWeighPrintSettingsNormalize.mjs";
 
 const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "KHO-TCS", "KHO-SCSC"];
 function isKnownWarehouse(w) {
@@ -45,6 +47,8 @@ function emptyInitialState() {
     customers: [],
     airlineLabelOverrides: emptyAirlineLabelOverrides(),
     printerProfiles: emptyPrinterProfilesCatalog(),
+    globalAgents: normalizeGlobalAgentsLoose(undefined),
+    scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(undefined),
   };
 }
 
@@ -173,6 +177,8 @@ export function createInitialState() {
     customers: buildDefaultCustomerDirectoryFromSeed(),
     airlineLabelOverrides: emptyAirlineLabelOverrides(),
     printerProfiles: emptyPrinterProfilesCatalog(),
+    globalAgents: normalizeGlobalAgentsLoose(undefined),
+    scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(undefined),
   };
 }
 
@@ -204,6 +210,8 @@ function normalizeState(raw) {
     customers,
     airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(raw.airlineLabelOverrides),
     printerProfiles: normalizePrinterProfilesCatalogLoose(raw.printerProfiles),
+    globalAgents: normalizeGlobalAgentsLoose(raw.globalAgents),
+    scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(raw.scscWeighPrintSettings),
   };
 }
 
@@ -328,6 +336,9 @@ export function applyMutation(state, mutation) {
   let rows = [...state.rows];
   const keepAirline = () => normalizeAirlineLabelOverridesLoose(state.airlineLabelOverrides);
   const keepPrinter = () => normalizePrinterProfilesCatalogLoose(state.printerProfiles);
+  const keepGlobalAgents = () => normalizeGlobalAgentsLoose(state.globalAgents);
+  const keepScscWeighPrintSettings = () =>
+    normalizeScscWeighPrintSettingsLoose(state.scscWeighPrintSettings);
   const action = String(mutation?.action ?? "").trim();
 
   switch (action) {
@@ -337,8 +348,32 @@ export function applyMutation(state, mutation) {
         version: state.version + 1,
         rows: renumberSttForAll(rows),
         customers: list,
+        globalAgents: keepGlobalAgents(),
         airlineLabelOverrides: keepAirline(),
         printerProfiles: keepPrinter(),
+        scscWeighPrintSettings: keepScscWeighPrintSettings(),
+      };
+    }
+    case "SET_GLOBAL_AGENTS": {
+      return {
+        version: state.version + 1,
+        rows: renumberSttForAll(rows),
+        customers: state.customers ?? [],
+        globalAgents: normalizeGlobalAgentsLoose(mutation?.catalog),
+        airlineLabelOverrides: keepAirline(),
+        printerProfiles: keepPrinter(),
+        scscWeighPrintSettings: keepScscWeighPrintSettings(),
+      };
+    }
+    case "SET_SCSC_WEIGH_PRINT_SETTINGS": {
+      return {
+        version: state.version + 1,
+        rows: renumberSttForAll(rows),
+        customers: state.customers ?? [],
+        globalAgents: keepGlobalAgents(),
+        airlineLabelOverrides: keepAirline(),
+        printerProfiles: keepPrinter(),
+        scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(mutation?.settings),
       };
     }
     case "SET_AIRLINE_LABEL_OVERRIDES": {
@@ -346,8 +381,10 @@ export function applyMutation(state, mutation) {
         version: state.version + 1,
         rows: renumberSttForAll(rows),
         customers: state.customers ?? [],
+        globalAgents: keepGlobalAgents(),
         airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(mutation?.overrides),
         printerProfiles: keepPrinter(),
+        scscWeighPrintSettings: keepScscWeighPrintSettings(),
       };
     }
     case "SET_PRINTER_PROFILES": {
@@ -355,8 +392,10 @@ export function applyMutation(state, mutation) {
         version: state.version + 1,
         rows: renumberSttForAll(rows),
         customers: state.customers ?? [],
+        globalAgents: keepGlobalAgents(),
         airlineLabelOverrides: keepAirline(),
         printerProfiles: normalizePrinterProfilesCatalogLoose(mutation?.catalog),
+        scscWeighPrintSettings: keepScscWeighPrintSettings(),
       };
     }
     case "UPDATE": {
@@ -399,8 +438,10 @@ export function applyMutation(state, mutation) {
     version: state.version + 1,
     rows: renumberSttForAll(rows),
     customers: state.customers ?? [],
+    globalAgents: keepGlobalAgents(),
     airlineLabelOverrides: keepAirline(),
     printerProfiles: keepPrinter(),
+    scscWeighPrintSettings: keepScscWeighPrintSettings(),
   };
 }
 

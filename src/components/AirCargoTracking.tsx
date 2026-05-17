@@ -28,6 +28,13 @@ import { debugError } from "../utils/debugLog";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { AirlineLabelSettingsModal } from "./AirlineLabelSettingsModal";
 import { WeighSlipManager } from "./WeighSlipManager";
+import { defaultGlobalAgentCatalog } from "../utils/globalAgentsCore";
+import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
+import {
+  clampScscWeighPrintSettings,
+  defaultScscWeighPrintSettings,
+} from "../printing/scscWeigh/scscWeighPrintSettingsCore";
+import { setScscWeighPrintSettingsCache } from "../printing/scscWeigh/scscWeighPrintSettingsRuntime";
 
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
@@ -149,6 +156,23 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       }
     },
     [mutate]
+  );
+
+  const scscWeighPrintSettings = state?.scscWeighPrintSettings ?? defaultScscWeighPrintSettings();
+
+  useEffect(() => {
+    if (state?.scscWeighPrintSettings) {
+      setScscWeighPrintSettingsCache(state.scscWeighPrintSettings);
+    }
+  }, [state?.scscWeighPrintSettings]);
+
+  const saveScscWeighPrintSettings = useCallback(
+    async (settings: ScscWeighPrintSettings) => {
+      const next = clampScscWeighPrintSettings(settings);
+      setScscWeighPrintSettingsCache(next);
+      await runMutate({ action: "SET_SCSC_WEIGH_PRINT_SETTINGS", settings: next });
+    },
+    [runMutate]
   );
 
   const onUpdate = useCallback(
@@ -529,6 +553,9 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         rows={filteredViewRows}
         allRows={allRows}
         customerDirectory={state.customers}
+        globalAgents={state.globalAgents}
+        scscWeighPrintSettings={scscWeighPrintSettings}
+        saveScscWeighPrintSettings={saveScscWeighPrintSettings}
         warehouseLayoutFilter={warehouseFilter}
         onAddBlankRow={addBlankRowForWarehouse}
         onUpdate={onUpdate}
@@ -547,12 +574,19 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onPrint={requestPrintLabel}
         onEdit={openEdit}
         customerDirectory={state.customers}
+        globalAgents={state.globalAgents}
+        scscWeighPrintSettings={scscWeighPrintSettings}
+        saveScscWeighPrintSettings={saveScscWeighPrintSettings}
         warehouseLayoutFilter={warehouseFilter}
+        viewSessionYmd={selectedYmd}
       />
 
       <StickyMobileActions
         selected={selected}
         customerDirectory={state.customers}
+        globalAgents={state.globalAgents}
+        scscWeighPrintSettings={scscWeighPrintSettings}
+        saveScscWeighPrintSettings={saveScscWeighPrintSettings}
         onDelete={() => selected && onDelete(selected.id)}
         onPrint={() => selected && requestPrintLabel(selected)}
         onAdd={() => {
@@ -569,6 +603,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           sessionDateYmd={selectedYmd}
           allRows={allRows}
           customerDirectory={state.customers}
+          globalAgents={state.globalAgents ?? defaultGlobalAgentCatalog()}
           onAdd={onAdd}
           onClose={() => setShowForm(false)}
         />
@@ -580,6 +615,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           sessionDateYmd={editingShipment.sessionDate}
           allRows={allRows}
           customerDirectory={state.customers}
+          globalAgents={state.globalAgents ?? defaultGlobalAgentCatalog()}
           shipment={editingShipment}
           onSave={(patch) => onUpdate(editingShipment.id, patch)}
           onClose={() => setEditingShipment(null)}
@@ -589,10 +625,20 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       <CustomerDirectoryManager
         open={customerDirOpen}
         initial={state.customers}
+        globalAgentsInitial={state.globalAgents ?? defaultGlobalAgentCatalog()}
+        scscWeighPrintSettingsInitial={
+          state.scscWeighPrintSettings ?? defaultScscWeighPrintSettings()
+        }
         onClose={() => setCustomerDirOpen(false)}
-        onSave={async (next) => {
-          /** Dùng `mutate` (không qua `runMutate`) để lỗi ném lên modal — `runMutate` nuốt lỗi và `onClose` vẫn chạy. */
-          await mutate({ action: "SET_CUSTOMERS", customers: next });
+        onSave={async (payload) => {
+          await mutate({ action: "SET_GLOBAL_AGENTS", catalog: payload.globalAgents });
+          await mutate({ action: "SET_CUSTOMERS", customers: payload.customers });
+          if (payload.scscWeighPrintSettings) {
+            await mutate({
+              action: "SET_SCSC_WEIGH_PRINT_SETTINGS",
+              settings: payload.scscWeighPrintSettings,
+            });
+          }
         }}
       />
       <UnmatchedCustomerReportModal

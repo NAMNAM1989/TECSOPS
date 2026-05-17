@@ -3,6 +3,8 @@ import type {
   CustomerParty,
   CustomerPartyType,
   CustomerSavedConsignee,
+  CustomerSavedGoods,
+  CustomerSavedShipper,
 } from "../types/customerDirectory";
 
 /** Giới hạn độ dài — đồng bộ client / server. */
@@ -14,11 +16,6 @@ export const CUSTOMER_PROFILE_LIMITS = {
   shipperPhone: 40,
   shipperEmail: 120,
   taxCode: 40,
-  agentName: 120,
-  agentAddress: 300,
-  agentPhone: 40,
-  agentEmail: 120,
-  agentTaxCode: 40,
   consigneeName: 120,
   consigneeAddress: 300,
   consigneePhone: 40,
@@ -29,6 +26,12 @@ export const CUSTOMER_PROFILE_LIMITS = {
   partyCount: 60,
   savedConsigneeLabel: 80,
   savedConsigneeCount: 40,
+  savedGoodsLabel: 80,
+  savedGoodsDescription: 120,
+  savedGoodsCount: 40,
+  savedShipperLabel: 80,
+  savedShipperCount: 40,
+  otherRequirementsPrint: 200,
 } as const;
 
 export const CUSTOMER_PARTY_TYPES: readonly CustomerPartyType[] = ["SHIPPER", "CNEE", "NOTIFY", "OTHER"];
@@ -68,7 +71,7 @@ export function clampCustomerSavedConsignee(c: CustomerSavedConsignee): Customer
     id: clip(c.id, 80).trim() || newSavedConsigneeId(),
     label: clip(c.label, L.savedConsigneeLabel).trim(),
     consigneeName: clip(c.consigneeName, L.consigneeName).trim(),
-    consigneeAddress: clip(c.consigneeAddress, L.consigneeAddress).trim(),
+    consigneeAddress: clip(c.consigneeAddress, L.consigneeAddress).replace(/^\s+|\s+$/g, ""),
     consigneePhone: clip(c.consigneePhone, L.consigneePhone).trim(),
     consigneeEmail: clip(c.consigneeEmail, L.consigneeEmail).trim(),
     notifyName: clip(c.notifyName, L.notifyName).trim(),
@@ -87,6 +90,121 @@ export function emptyCustomerSavedConsignee(): CustomerSavedConsignee {
   });
 }
 
+function newSavedGoodsId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `goods-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function clampCustomerSavedGoods(g: CustomerSavedGoods): CustomerSavedGoods {
+  const L = CUSTOMER_PROFILE_LIMITS;
+  return {
+    id: clip(g.id, 80).trim() || newSavedGoodsId(),
+    label: clip(g.label, L.savedGoodsLabel).trim(),
+    goodsDescription: clip(g.goodsDescription, L.savedGoodsDescription).trim(),
+  };
+}
+
+export function emptyCustomerSavedGoods(): CustomerSavedGoods {
+  return clampCustomerSavedGoods({
+    id: newSavedGoodsId(),
+    label: "",
+    goodsDescription: "",
+  });
+}
+
+function newSavedShipperId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `shipper-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function clampCustomerSavedShipper(s: CustomerSavedShipper): CustomerSavedShipper {
+  const L = CUSTOMER_PROFILE_LIMITS;
+  return {
+    id: clip(s.id, 80).trim() || newSavedShipperId(),
+    label: clip(s.label, L.savedShipperLabel).trim(),
+    shipperName: clip(s.shipperName, L.shipperName).trim(),
+    shipperAddress: clip(s.shipperAddress, L.shipperAddress).replace(/^\s+|\s+$/g, ""),
+    shipperPhone: clip(s.shipperPhone, L.shipperPhone).trim(),
+    shipperEmail: clip(s.shipperEmail, L.shipperEmail).trim(),
+    taxCode: clip(s.taxCode, L.taxCode).trim(),
+  };
+}
+
+export function emptyCustomerSavedShipper(): CustomerSavedShipper {
+  return clampCustomerSavedShipper({
+    id: newSavedShipperId(),
+    label: "",
+    shipperName: "",
+    shipperAddress: "",
+    shipperPhone: "",
+    shipperEmail: "",
+    taxCode: "",
+  });
+}
+
+type LegacyCustomerRow = CustomerDirectoryEntry & {
+  consigneeName?: string;
+  consigneeAddress?: string;
+  consigneePhone?: string;
+  consigneeEmail?: string;
+  notifyName?: string;
+};
+
+/** Đưa shipper/CNEE đơn (cũ) vào danh sách lưu sẵn nếu chưa có mục nào. */
+function migrateLegacyPrintProfiles(e: LegacyCustomerRow): CustomerDirectoryEntry {
+  let savedShippers = Array.isArray(e.savedShippers) ? [...e.savedShippers] : [];
+  let savedConsignees = Array.isArray(e.savedConsignees) ? [...e.savedConsignees] : [];
+  let savedGoods = Array.isArray(e.savedGoods) ? [...e.savedGoods] : [];
+
+  if (
+    savedShippers.length === 0 &&
+    (e.shipperName?.trim() ||
+      e.shipperAddress?.trim() ||
+      e.shipperPhone?.trim() ||
+      e.shipperEmail?.trim() ||
+      e.taxCode?.trim())
+  ) {
+    savedShippers = [
+      clampCustomerSavedShipper({
+        id: newSavedShipperId(),
+        label: "Mặc định",
+        shipperName: e.shipperName ?? "",
+        shipperAddress: e.shipperAddress ?? "",
+        shipperPhone: e.shipperPhone ?? "",
+        shipperEmail: e.shipperEmail ?? "",
+        taxCode: e.taxCode ?? "",
+      }),
+    ];
+  }
+
+  if (
+    savedConsignees.length === 0 &&
+    (e.consigneeName?.trim() ||
+      e.consigneeAddress?.trim() ||
+      e.consigneePhone?.trim() ||
+      e.consigneeEmail?.trim() ||
+      e.notifyName?.trim())
+  ) {
+    savedConsignees = [
+      clampCustomerSavedConsignee({
+        id: newSavedConsigneeId(),
+        label: "Mặc định",
+        consigneeName: e.consigneeName ?? "",
+        consigneeAddress: e.consigneeAddress ?? "",
+        consigneePhone: e.consigneePhone ?? "",
+        consigneeEmail: e.consigneeEmail ?? "",
+        notifyName: e.notifyName ?? "",
+      }),
+    ];
+  }
+
+  return { ...e, savedShippers, savedConsignees, savedGoods };
+}
+
 export function clampCustomerParty(p: CustomerParty): CustomerParty {
   const L = CUSTOMER_PROFILE_LIMITS;
   return {
@@ -99,39 +217,55 @@ export function clampCustomerParty(p: CustomerParty): CustomerParty {
 
 /** Chuẩn hóa một dòng danh bạ trước khi lưu / sau khi parse lỏng. */
 export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): CustomerDirectoryEntry {
+  const migrated = migrateLegacyPrintProfiles(e as LegacyCustomerRow);
   const L = CUSTOMER_PROFILE_LIMITS;
-  const parties = Array.isArray(e.parties)
-    ? e.parties
+  const parties = Array.isArray(migrated.parties)
+    ? migrated.parties
         .slice(0, L.partyCount)
         .map(clampCustomerParty)
         .filter((p) => p.label || p.content.trim())
     : [];
-  const savedConsignees = Array.isArray(e.savedConsignees)
-    ? e.savedConsignees
+  const savedShippers = Array.isArray(migrated.savedShippers)
+    ? migrated.savedShippers
+        .slice(0, L.savedShipperCount)
+        .map((x) => clampCustomerSavedShipper(x as CustomerSavedShipper))
+        .filter((x) => x.shipperName || x.label || x.shipperAddress || x.shipperPhone || x.shipperEmail || x.taxCode)
+    : [];
+  const savedConsignees = Array.isArray(migrated.savedConsignees)
+    ? migrated.savedConsignees
         .slice(0, L.savedConsigneeCount)
         .map((x) => clampCustomerSavedConsignee(x as CustomerSavedConsignee))
         .filter((x) => x.consigneeName || x.label || x.consigneeAddress || x.consigneePhone || x.notifyName)
     : [];
+  const savedGoods = Array.isArray(migrated.savedGoods)
+    ? migrated.savedGoods
+        .slice(0, L.savedGoodsCount)
+        .map((x) => clampCustomerSavedGoods(x as CustomerSavedGoods))
+        .filter((x) => x.goodsDescription || x.label)
+    : [];
+  const shipperIds = new Set(savedShippers.map((x) => x.id));
+  const cneeIds = new Set(savedConsignees.map((x) => x.id));
+  const goodsIds = new Set(savedGoods.map((x) => x.id));
+  let defaultShipperId = clip(migrated.defaultShipperId, 80).trim();
+  let defaultConsigneeId = clip(migrated.defaultConsigneeId, 80).trim();
+  let defaultGoodsId = clip(migrated.defaultGoodsId, 80).trim();
+  if (defaultShipperId && !shipperIds.has(defaultShipperId)) defaultShipperId = "";
+  if (defaultConsigneeId && !cneeIds.has(defaultConsigneeId)) defaultConsigneeId = "";
+  if (defaultGoodsId && !goodsIds.has(defaultGoodsId)) defaultGoodsId = "";
+  if (savedShippers.length === 1) defaultShipperId = savedShippers[0]!.id;
+  if (savedConsignees.length === 1) defaultConsigneeId = savedConsignees[0]!.id;
+  if (savedGoods.length === 1) defaultGoodsId = savedGoods[0]!.id;
   return {
-    id: clip(e.id, 80).trim(),
-    code: clip(e.code, L.code).trim(),
-    name: clip(e.name, L.name).trim(),
-    shipperName: clip(e.shipperName ?? "", L.shipperName).trim(),
-    shipperAddress: clip(e.shipperAddress ?? "", L.shipperAddress).trim(),
-    shipperPhone: clip(e.shipperPhone ?? "", L.shipperPhone).trim(),
-    shipperEmail: clip(e.shipperEmail ?? "", L.shipperEmail).trim(),
-    taxCode: clip(e.taxCode ?? "", L.taxCode).trim(),
-    agentName: clip(e.agentName ?? "", L.agentName).trim(),
-    agentAddress: clip(e.agentAddress ?? "", L.agentAddress).trim(),
-    agentPhone: clip(e.agentPhone ?? "", L.agentPhone).trim(),
-    agentEmail: clip(e.agentEmail ?? "", L.agentEmail).trim(),
-    agentTaxCode: clip(e.agentTaxCode ?? "", L.agentTaxCode).trim(),
-    consigneeName: clip(e.consigneeName ?? "", L.consigneeName).trim(),
-    consigneeAddress: clip(e.consigneeAddress ?? "", L.consigneeAddress).trim(),
-    consigneePhone: clip(e.consigneePhone ?? "", L.consigneePhone).trim(),
-    consigneeEmail: clip(e.consigneeEmail ?? "", L.consigneeEmail).trim(),
-    notifyName: clip(e.notifyName ?? "", L.notifyName).trim(),
+    id: clip(migrated.id, 80).trim(),
+    code: clip(migrated.code, L.code).trim(),
+    name: clip(migrated.name, L.name).trim(),
+    defaultShipperId: defaultShipperId || undefined,
+    defaultConsigneeId: defaultConsigneeId || undefined,
+    defaultGoodsId: defaultGoodsId || undefined,
+    savedShippers,
     savedConsignees,
+    savedGoods,
+    otherRequirementsPrint: clip(migrated.otherRequirementsPrint, L.otherRequirementsPrint).trim() || undefined,
     parties,
   };
 }
@@ -182,22 +316,9 @@ export function emptyCustomerProfileRow(id: string): CustomerDirectoryEntry {
     id,
     code: "",
     name: "",
-    shipperName: "",
-    shipperAddress: "",
-    shipperPhone: "",
-    shipperEmail: "",
-    taxCode: "",
-    agentName: "",
-    agentAddress: "",
-    agentPhone: "",
-    agentEmail: "",
-    agentTaxCode: "",
-    consigneeName: "",
-    consigneeAddress: "",
-    consigneePhone: "",
-    consigneeEmail: "",
-    notifyName: "",
+    savedShippers: [],
     savedConsignees: [],
+    savedGoods: [],
     parties: [],
   };
 }

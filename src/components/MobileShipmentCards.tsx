@@ -28,6 +28,7 @@ import {
 } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
+import { formatShipmentCneeReadonlySummary } from "../utils/shipmentCneeCopyBlock";
 
 const SWIPE_THRESHOLD = 48;
 /** Vuốt ngang bị bỏ qua nếu lệch dọc lớn hơn (coi như cuộn dọc). */
@@ -45,8 +46,15 @@ interface MobileShipmentCardsProps {
   onEdit: (s: Shipment) => void;
   /** Danh bạ — dùng để hiển thị mã/tên chuẩn trong popup khách. */
   customerDirectory?: readonly CustomerDirectoryEntry[];
+  globalAgents?: import("../types/globalAgents").GlobalAgentCatalog;
+  scscWeighPrintSettings?: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings;
+  saveScscWeighPrintSettings?: (
+    settings: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings
+  ) => void | Promise<void>;
   /** Chỉ hiển thị section kho đã chọn trên bộ lọc (mobile). */
   warehouseLayoutFilter?: WarehouseLayoutFilter;
+  /** Ngày phiên OPS (YYYY-MM-DD) — dự phòng khi `sessionDate` trên lô trống. */
+  viewSessionYmd?: string;
 }
 
 export function MobileShipmentCards({
@@ -58,7 +66,11 @@ export function MobileShipmentCards({
   onPrint,
   onEdit,
   customerDirectory = [],
+  globalAgents,
+  scscWeighPrintSettings,
+  saveScscWeighPrintSettings,
   warehouseLayoutFilter = "ALL",
+  viewSessionYmd = "",
 }: MobileShipmentCardsProps) {
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
@@ -122,6 +134,7 @@ export function MobileShipmentCards({
                 const open = swipeOpenId === row.id;
                 const selected = selectedId === row.id;
                 const cardColors = statusCardBg[row.status];
+                const cneeSummary = formatShipmentCneeReadonlySummary(row, customerDirectory);
 
                 return (
                   <div
@@ -248,8 +261,8 @@ export function MobileShipmentCards({
                             </span>
                             <button
                               type="button"
-                              title="Chi tiết khách (danh bạ) — sao chép"
-                              aria-label="Chi tiết khách để sao chép"
+                              title="Thông tin CNEE — sao chép"
+                              aria-label="Thông tin CNEE"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setCustomerDetailRow(row);
@@ -274,6 +287,11 @@ export function MobileShipmentCards({
                               </span>
                             ) : null}
                           </div>
+                          {cneeSummary ? (
+                            <p className="mt-0.5 line-clamp-2 text-[10px] text-apple-secondary" title={cneeSummary}>
+                              CNEE: {cneeSummary}
+                            </p>
+                          ) : null}
                           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span
                               className="inline-flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 text-[10px] text-apple-secondary"
@@ -372,6 +390,9 @@ export function MobileShipmentCards({
                                           onClick={() =>
                                             void printWeighReceiptScscWithConsigneeChoice(row, {
                                               customerDirectory,
+                                              globalAgents,
+                                              scscWeighPrintSettings,
+                                              saveScscWeighPrintSettings,
                                             })
                                           }
                                           className="min-h-11 min-w-0 flex-1 rounded-xl border border-sky-600/35 bg-sky-50 py-2.5 text-[12px] font-semibold text-sky-900 active:bg-sky-100"
@@ -441,8 +462,11 @@ export function MobileShipmentCards({
       createPortal(
         <CustomerShipmentDetailModal
           open
-          shipment={customerDetailRow}
+          shipment={
+            customerDetailRow ? rows.find((r) => r.id === customerDetailRow.id) ?? customerDetailRow : null
+          }
           directory={customerDirectory}
+          viewSessionYmd={viewSessionYmd}
           onClose={() => setCustomerDetailRow(null)}
         />,
         document.body
@@ -475,6 +499,11 @@ interface StickyMobileActionsProps {
   onDownloadScscDimList?: () => void;
   /** Danh bạ — dùng cho in phiếu cân SCSC (lookup shipper chi tiết). */
   customerDirectory?: readonly CustomerDirectoryEntry[];
+  globalAgents?: import("../types/globalAgents").GlobalAgentCatalog;
+  scscWeighPrintSettings?: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings;
+  saveScscWeighPrintSettings?: (
+    settings: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings
+  ) => void | Promise<void>;
 }
 
 export function StickyMobileActions({
@@ -486,6 +515,9 @@ export function StickyMobileActions({
   onPrintDim,
   onDownloadScscDimList,
   customerDirectory = [],
+  globalAgents,
+  scscWeighPrintSettings,
+  saveScscWeighPrintSettings,
 }: StickyMobileActionsProps) {
   return (
     <div className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
@@ -551,7 +583,12 @@ export function StickyMobileActions({
                 <button
                   type="button"
                   onClick={() =>
-                    void printWeighReceiptScscWithConsigneeChoice(selected, { customerDirectory })
+                    void printWeighReceiptScscWithConsigneeChoice(selected, {
+                      customerDirectory,
+                      globalAgents,
+                      scscWeighPrintSettings,
+                      saveScscWeighPrintSettings,
+                    })
                   }
                   className="w-full rounded-full border border-sky-600/40 bg-sky-50 py-2.5 text-sm font-semibold text-sky-900 shadow-sm active:scale-[0.98]"
                 >

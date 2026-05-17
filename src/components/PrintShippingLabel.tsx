@@ -1,40 +1,30 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Shipment } from "../types/shipment";
-import { loadLabelFontScale } from "../utils/labelFontScale";
-import {
-  LABEL_HAWB_REL_MAX,
-  LABEL_HAWB_REL_MIN,
-  LABEL_MAWB_REL_MAX,
-  LABEL_MAWB_REL_MIN,
-  clampLabelHawbRelScale,
-  clampLabelMawbRelScale,
-  loadLabelHawbRelScale,
-  loadLabelMawbRelScale,
-  saveLabelHawbRelScale,
-  saveLabelMawbRelScale,
-} from "../utils/labelAwbHawbScale";
+import { loadLabelSheetFormat, type LabelSheetFormat } from "../utils/labelSheetFormat";
 import { loadLabelPrintFlipCcw } from "../utils/labelPrintMode";
-import {
-  loadLabelCompactShowHawb,
-  loadLabelSheetFormat,
-  saveLabelCompactShowHawb,
-  saveLabelSheetFormat,
-  type LabelSheetFormat,
-} from "../utils/labelSheetFormat";
 import { mapShipmentToAirCargoLabelData } from "../utils/mapShipmentToAirCargoLabelData";
+import { LabelDesigner } from "../label-designer/designer/LabelDesigner";
+import { buildBoundThermalPreview } from "../label-designer/adapters/printPipelinePreview";
+import { buildShipmentLabelContext } from "../label-designer/data/shipmentDataContext";
+import { profileDocumentKind } from "../label-designer/adapters/printPipeline";
+import {
+  commitThermalDesignerSave,
+  getExtraObjects,
+  resolveThermalLabelTemplateForDesigner,
+} from "../label-designer/core/templatePreserve";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { usePrinterProfiles } from "../hooks/usePrinterProfiles";
 import { getActiveThermalProfile } from "../printing/printerProfiles";
+import { loadThermalDeliveryMode, resolveEffectiveThermalDeliveryMode } from "../printing/printDeliveryMode";
 import {
-  loadThermalDeliveryMode,
-  resolveEffectiveThermalDeliveryMode,
-  saveThermalDeliveryMode,
-  type ThermalDeliveryMode,
-} from "../printing/printDeliveryMode";
-import { PrinterProfileSelector } from "../printing/components/PrinterProfileSelector";
-import { CalibrationWizard } from "../printing/components/CalibrationWizard";
-import { printThermalCalibrationTspl, printThermalLabelTspl } from "../printing/thermalLabel/thermalLabelTspl";
+  findThermalProfileByFormat,
+  labelSheetFormatLabel,
+  resolveThermalProfileLabelFormat,
+  syncLabelSheetFormatFromProfile,
+} from "../printing/thermalLabelFormat";
+import { loadPrinterProfileStore } from "../printing/printerProfileStorage";
+import { printThermalLabelTspl } from "../printing/thermalLabel/thermalLabelTspl";
 import { printThermalLabelsFromIframe } from "../utils/printThermalLabelIframe";
 
 export type LabelSheetVariant = "standard" | "compact";
@@ -71,9 +61,13 @@ export function LabelContent({
   const mawbBaseMm = compact ? 5.5 : 7;
   const routeLabMm = compact ? 2 : 2.5;
   const routeValMm = compact ? 5.5 : 9;
-  const piecesMm = compact ? 11 : 20;
-  const hawbBaseMm = compact ? 3 : 4;
-  const piecesLabMm = compact ? 2.3 : 2.8;
+  const noteMm = 1.9;
+  const hawbNoteValMm = 2.8;
+  const hawbLabMm = compact ? 2.2 : 2.8;
+  const hawbValMm = compact ? 3.5 : 7;
+  const piecesLabMm = compact ? 2.3 : 2.6;
+  const piecesValMm = compact ? 15 : 22;
+  const compactHawbPiecesMm = 12;
   const specialMm = compact ? 2.2 : 2.8;
 
   return (
@@ -111,52 +105,95 @@ export function LabelContent({
         </div>
       </div>
 
-      {showHawbBlock ? (
-        <div className="lbl-hawb-row">
-          <span className="lbl-hawb-label" style={{ fontSize: mm(routeLabMm) }}>
-            HAWB No.:
-          </span>
-          <span className="lbl-hawb-val" style={{ fontSize: mm(hawbBaseMm * hawbRelScale) }}>
-            {d.hawbNo || "-"}
-          </span>
-        </div>
-      ) : null}
-
-      <div className="lbl-bottom">
-        {showHawbBlock ? (
-          <>
-            <div className="lbl-pieces-cell">
-              <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
-                Pieces
-                <br />
-                HAWB
-              </div>
-              <div className="pieces-val" style={{ fontSize: mm(piecesMm) }}>
-                {d.hawbPieces || "-"}
-              </div>
+      {compact ? (
+        <div className="lbl-bottom">
+          {showHawbBlock && d.hawbPieces ? (
+            <div className="lbl-compact-pieces-hawb-center" style={{ fontSize: mm(compactHawbPiecesMm) }}>
+              {d.hawbPieces}
             </div>
-            <div className="lbl-pieces-cell">
-              <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
-                Total Pieces
-                <br />
-                MAWB
+          ) : null}
+          {d.pieces ? (
+            <div className="lbl-compact-pieces-center" style={{ fontSize: mm(piecesValMm) }}>
+              {d.pieces}
+            </div>
+          ) : null}
+          <div className="lbl-bottom-notes">
+            {showHawbBlock ? (
+              <div className="lbl-note-line" style={{ fontSize: mm(noteMm) }}>
+                HAWB No.:
+                {d.hawbNo ? (
+                  <>
+                    {" "}
+                    <span className="lbl-note-hawb-val" style={{ fontSize: mm(hawbNoteValMm * hawbRelScale) }}>
+                      {d.hawbNo}
+                    </span>
+                  </>
+                ) : null}
               </div>
-              <div className="pieces-val" style={{ fontSize: mm(piecesMm) }}>
-                {d.pieces || "-"}
+            ) : null}
+            {showHawbBlock ? (
+              <>
+                <div className="lbl-note-line" style={{ fontSize: mm(noteMm) }}>
+                  Pieces HAWB
+                </div>
+                <div className="lbl-note-line" style={{ fontSize: mm(noteMm) }}>
+                  Total pieces MAWB
+                </div>
+              </>
+            ) : (
+              <div className="lbl-note-line" style={{ fontSize: mm(noteMm) }}>
+                Total no. of pieces
               </div>
-            </div>
-          </>
-        ) : (
-          <div className="lbl-pieces-cell">
-            <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
-              Total no. of pieces
-            </div>
-            <div className="pieces-val" style={{ fontSize: mm(piecesMm) }}>
-              {d.pieces || "-"}
-            </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <>
+          {showHawbBlock ? (
+            <div className="lbl-hawb-row">
+              <span className="lbl-hawb-label" style={{ fontSize: mm(hawbLabMm) }}>
+                HAWB No.:
+              </span>
+              {d.hawbNo ? (
+                <span className="lbl-hawb-val" style={{ fontSize: mm(hawbValMm * hawbRelScale) }}>
+                  {d.hawbNo}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="lbl-bottom">
+            {showHawbBlock ? (
+              <>
+                <div className="lbl-pieces-cell">
+                  <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
+                    Pieces · HAWB
+                  </div>
+                  <div className="pieces-val" style={{ fontSize: mm(piecesValMm) }}>
+                    {d.hawbPieces}
+                  </div>
+                </div>
+                <div className="lbl-pieces-cell">
+                  <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
+                    Total · MAWB
+                  </div>
+                  <div className="pieces-val" style={{ fontSize: mm(piecesValMm) }}>
+                    {d.pieces}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="lbl-pieces-cell">
+                <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
+                  Total no. of pieces
+                </div>
+                <div className="pieces-val" style={{ fontSize: mm(piecesValMm) }}>
+                  {d.pieces}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {d.special === "cold" ? (
         <div className="lbl-special cold" style={{ fontSize: mm(specialMm) }}>
@@ -173,20 +210,12 @@ export function LabelContent({
 
 function LabelPreviewFit({
   shipment,
-  fontScale,
-  mawbRelScale,
-  hawbRelScale,
+  profile,
   airlineLabelOverrides,
-  sheetVariant,
-  showHawbOnCompact,
 }: {
   shipment: Shipment;
-  fontScale: number;
-  mawbRelScale: number;
-  hawbRelScale: number;
+  profile: import("../printing/printTypes").ThermalLabelPrinterProfile;
   airlineLabelOverrides?: AirlineLabelOverrides | null;
-  sheetVariant: LabelSheetVariant;
-  showHawbOnCompact: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
@@ -221,18 +250,10 @@ function LabelPreviewFit({
       ro.disconnect();
       window.removeEventListener("resize", updateScale);
     };
-  }, [
-    updateScale,
-    shipment.id,
-    fontScale,
-    mawbRelScale,
-    hawbRelScale,
-    airlineLabelOverrides,
-    sheetVariant,
-    showHawbOnCompact,
-  ]);
+  }, [updateScale, shipment.id, airlineLabelOverrides, profile.id, profile.thermalFieldOverrides, profile.labelTemplate]);
 
-  const labelH = sheetVariant === "compact" ? "50mm" : "80mm";
+  const format = resolveThermalProfileLabelFormat(profile);
+  const labelH = format === "100x50" ? "50mm" : "80mm";
 
   return (
     <div
@@ -252,15 +273,7 @@ function LabelPreviewFit({
             transformOrigin: "top left",
           }}
         >
-          <LabelContent
-            s={shipment}
-            fontScale={fontScale}
-            mawbRelScale={mawbRelScale}
-            hawbRelScale={hawbRelScale}
-            airlineLabelOverrides={airlineLabelOverrides}
-            sheetVariant={sheetVariant}
-            showHawbOnCompact={showHawbOnCompact}
-          />
+          {buildBoundThermalPreview(shipment, profile, airlineLabelOverrides)}
         </div>
       </div>
     </div>
@@ -275,34 +288,50 @@ interface PrintShippingLabelProps {
 }
 
 export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }: PrintShippingLabelProps) {
-  const fontScale = useMemo(() => loadLabelFontScale(), []);
   const printFlipCcw = useMemo(() => loadLabelPrintFlipCcw(), []);
-  const [mawbRelScale, setMawbRelScale] = useState(loadLabelMawbRelScale);
-  const [hawbRelScale, setHawbRelScale] = useState(loadLabelHawbRelScale);
-  const [sheetFormat, setSheetFormat] = useState<LabelSheetFormat>(() => loadLabelSheetFormat());
-  const [compactShowHawb, setCompactShowHawb] = useState(() => loadLabelCompactShowHawb());
   const { store, upsert, setActiveThermal } = usePrinterProfiles();
   const thermalProfile = useMemo(() => getActiveThermalProfile(store), [store]);
-  const [deliveryMode, setDeliveryMode] = useState<ThermalDeliveryMode>(() => loadThermalDeliveryMode());
+  const activeFormat = useMemo(() => resolveThermalProfileLabelFormat(thermalProfile), [thermalProfile]);
   const [printMsg, setPrintMsg] = useState<string | null>(null);
   const [calibOpen, setCalibOpen] = useState(false);
   const printHostRef = useRef<HTMLDivElement>(null);
 
-  const sheetVariant: LabelSheetVariant = sheetFormat === "100x50" ? "compact" : "standard";
+  useEffect(() => {
+    const fmt = loadLabelSheetFormat();
+    const profile = findThermalProfileByFormat(store, fmt);
+    if (profile && profile.id !== thermalProfile.id) {
+      setActiveThermal(profile.id);
+      syncLabelSheetFormatFromProfile(profile);
+    }
+  }, [store, setActiveThermal, thermalProfile.id]);
+
+  const pickFormat = (format: LabelSheetFormat) => {
+    const profile = findThermalProfileByFormat(store, format);
+    if (!profile) {
+      setPrintMsg(`Chưa có profile máy in ${labelSheetFormatLabel(format)} — bấm Căn chỉnh để thêm IP.`);
+      return;
+    }
+    setActiveThermal(profile.id);
+    syncLabelSheetFormatFromProfile(profile);
+    setPrintMsg(null);
+  };
 
   const handlePrint = async () => {
     setPrintMsg(null);
-    const effectiveMode = resolveEffectiveThermalDeliveryMode(deliveryMode, thermalProfile.host);
-    if (deliveryMode === "tspl-tcp" && effectiveMode !== "tspl-tcp") {
-      setPrintMsg("Chưa cấu hình IP máy in — chuyển sang in trình duyệt.");
-    }
+    const profile = getActiveThermalProfile(loadPrinterProfileStore());
+    const printFormat = resolveThermalProfileLabelFormat(profile);
+    const deliveryMode = loadThermalDeliveryMode();
+    const effectiveMode = resolveEffectiveThermalDeliveryMode(deliveryMode, profile.host);
     if (effectiveMode === "tspl-tcp") {
-      const res = await printThermalLabelTspl(shipment, thermalProfile, airlineLabelOverrides);
-      setPrintMsg(res.ok ? `Đã gửi TSPL → ${thermalProfile.host}` : res.error);
+      const res = await printThermalLabelTspl(shipment, profile, airlineLabelOverrides);
+      setPrintMsg(res.ok ? `Đã gửi ${labelSheetFormatLabel(printFormat)} → ${profile.host}` : res.error);
       return;
     }
+    if (!profile.host?.trim()) {
+      setPrintMsg("Chưa cấu hình IP — thêm IP trong Căn chỉnh hoặc cấu hình máy in mặc định Windows.");
+    }
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-    const res = await printThermalLabelsFromIframe({ format: sheetFormat, host: printHostRef.current });
+    const res = await printThermalLabelsFromIframe({ format: printFormat, host: printHostRef.current });
     if (!res.ok) setPrintMsg(res.error);
   };
 
@@ -335,191 +364,78 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
 
           <LabelPreviewFit
             shipment={shipment}
-            fontScale={fontScale}
-            mawbRelScale={mawbRelScale}
-            hawbRelScale={hawbRelScale}
+            profile={thermalProfile}
             airlineLabelOverrides={airlineLabelOverrides}
-            sheetVariant={sheetVariant}
-            showHawbOnCompact={compactShowHawb}
           />
 
-          <div className="mt-4 space-y-2 rounded-2xl border border-black/[0.08] bg-apple-bg/60 p-3">
-            <p className="text-[11px] font-semibold text-apple-label">Khổ tem (lưu trên máy)</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setSheetFormat("100x80");
-                  saveLabelSheetFormat("100x80");
-                }}
-                className={
-                  sheetFormat === "100x80"
-                    ? "rounded-full bg-apple-blue px-3.5 py-2 text-xs font-semibold text-white"
-                    : "rounded-full border border-black/[0.12] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label hover:bg-black/[0.03]"
-                }
-              >
-                100 × 80 mm
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSheetFormat("100x50");
-                  saveLabelSheetFormat("100x50");
-                }}
-                className={
-                  sheetFormat === "100x50"
-                    ? "rounded-full bg-apple-blue px-3.5 py-2 text-xs font-semibold text-white"
-                    : "rounded-full border border-black/[0.12] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label hover:bg-black/[0.03]"
-                }
-              >
-                100 × 50 mm
-              </button>
+          <div className="mt-4">
+            <p className="mb-2 text-center text-xs font-semibold text-apple-secondary">Chọn máy in</p>
+            <div className="flex gap-2">
+              {(["100x80", "100x50"] as const).map((fmt) => {
+                const profile = findThermalProfileByFormat(store, fmt);
+                const selected = activeFormat === fmt;
+                return (
+                  <button
+                    key={fmt}
+                    type="button"
+                    onClick={() => pickFormat(fmt)}
+                    className={`flex-1 rounded-2xl border-2 px-3 py-3.5 text-center transition-all active:scale-[0.98] ${
+                      selected
+                        ? "border-emerald-600 bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400/40"
+                        : "border-emerald-300/80 bg-emerald-50 text-emerald-950 hover:border-emerald-500 hover:bg-emerald-100"
+                    }`}
+                  >
+                    <span className="block text-[15px] font-bold leading-tight">{labelSheetFormatLabel(fmt)}</span>
+                    <span
+                      className={`mt-1 block truncate text-[10px] font-medium ${
+                        selected ? "text-emerald-100" : "text-emerald-800/75"
+                      }`}
+                    >
+                      {profile?.host?.trim() ? profile.host : "Chưa có IP"}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-            {sheetFormat === "100x50" ? (
-              <label className="flex cursor-pointer items-start gap-2.5 pt-0.5">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-black/20 accent-apple-blue"
-                  checked={compactShowHawb}
-                  onChange={(e) => {
-                    const on = e.target.checked;
-                    setCompactShowHawb(on);
-                    saveLabelCompactShowHawb(on);
-                  }}
-                />
-                <span className="text-[11px] leading-snug text-apple-secondary">
-                  In HAWB trên tem nhỏ (mặc định tắt — chỉ MAWB, điểm đến và tổng kiện).
-                </span>
-              </label>
-            ) : null}
           </div>
 
-          <div className="mt-4 space-y-3 rounded-2xl border border-black/[0.08] bg-apple-bg/60 p-3">
-            <p className="text-[11px] font-semibold text-apple-label">Cỡ chữ trên tem (lưu trên máy)</p>
-            <div>
-              <div className="flex items-baseline justify-between gap-2">
-                <label htmlFor="label-mawb-scale" className="text-[11px] text-apple-secondary">
-                  Số MAWB / AWB
-                </label>
-                <span className="font-mono text-[11px] font-semibold text-apple-label tabular-nums">
-                  {Math.round(mawbRelScale * 100)}%
-                </span>
-              </div>
-              <input
-                id="label-mawb-scale"
-                type="range"
-                min={LABEL_MAWB_REL_MIN}
-                max={LABEL_MAWB_REL_MAX}
-                step={0.05}
-                value={mawbRelScale}
-                onChange={(e) => {
-                  const v = clampLabelMawbRelScale(Number(e.target.value));
-                  setMawbRelScale(v);
-                  saveLabelMawbRelScale(v);
-                }}
-                className="mt-1.5 h-2 w-full cursor-pointer accent-apple-blue"
-              />
-            </div>
-            {sheetVariant === "standard" || compactShowHawb ? (
-              <div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <label htmlFor="label-hawb-scale" className="text-[11px] text-apple-secondary">
-                    Số HAWB
-                  </label>
-                  <span className="font-mono text-[11px] font-semibold text-apple-label tabular-nums">
-                    {Math.round(hawbRelScale * 100)}%
-                  </span>
-                </div>
-                <input
-                  id="label-hawb-scale"
-                  type="range"
-                  min={LABEL_HAWB_REL_MIN}
-                  max={LABEL_HAWB_REL_MAX}
-                  step={0.05}
-                  value={hawbRelScale}
-                  onChange={(e) => {
-                    const v = clampLabelHawbRelScale(Number(e.target.value));
-                    setHawbRelScale(v);
-                    saveLabelHawbRelScale(v);
-                  }}
-                  className="mt-1.5 h-2 w-full cursor-pointer accent-apple-blue"
-                />
-              </div>
-            ) : null}
-            <p className="text-[10px] leading-snug text-apple-secondary">
-              100% = mặc định. Áp dụng cả xem trước và khi in; tăng quá mức có thể chồng chữ trên tem{" "}
-              {sheetFormat === "100x50" ? "100×50" : "100×80"} mm.
-            </p>
-          </div>
-
-          <div className="mt-4 space-y-2 rounded-2xl border border-black/[0.08] bg-apple-bg/60 p-3">
-            <PrinterProfileSelector
-              docType="thermal-label"
-              store={store}
-              onChangeActive={setActiveThermal}
-            />
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setDeliveryMode("tspl-tcp");
-                  saveThermalDeliveryMode("tspl-tcp");
-                }}
-                className={
-                  deliveryMode === "tspl-tcp"
-                    ? "rounded-full bg-apple-blue px-3 py-1.5 text-[11px] font-semibold text-white"
-                    : "rounded-full border px-3 py-1.5 text-[11px] font-semibold"
-                }
-              >
-                TSPL trực tiếp
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDeliveryMode("browser-print");
-                  saveThermalDeliveryMode("browser-print");
-                }}
-                className={
-                  deliveryMode === "browser-print"
-                    ? "rounded-full bg-apple-blue px-3 py-1.5 text-[11px] font-semibold text-white"
-                    : "rounded-full border px-3 py-1.5 text-[11px] font-semibold"
-                }
-              >
-                Trình duyệt (fallback)
-              </button>
-            </div>
-            {deliveryMode === "browser-print" ? (
-              <p className="text-[10px] text-amber-900">
-                Cảnh báo: Scale 100%, margin None, đúng khổ giấy, tắt Fit to page.
-              </p>
-            ) : (
-              <p className="text-[10px] text-apple-secondary">
-                In RAW qua {thermalProfile.host || "(chưa cấu hình IP)"}:{thermalProfile.port ?? 9100}
-              </p>
-            )}
-          </div>
-
-          {printMsg ? <p className="mt-2 text-xs text-apple-label">{printMsg}</p> : null}
+          {printMsg ? (
+            <p className="mt-3 rounded-xl bg-black/[0.04] px-3 py-2 text-center text-xs text-apple-label">{printMsg}</p>
+          ) : null}
 
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setCalibOpen(true)}
-              className="min-h-11 rounded-full border px-4 py-3 text-sm font-semibold text-apple-label"
+              className="min-h-11 select-none rounded-full border px-4 py-3 text-sm font-semibold text-apple-label transition-all active:scale-[0.97] active:bg-black/[0.04]"
             >
-              Căn chỉnh
+              Thiết kế tem
             </button>
+            {thermalProfile.labelTemplate?.objects.length ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!confirm("Đặt lại mẫu gốc? Preview sẽ dùng lại layout CSS chuẩn.")) return;
+                  upsert({ ...thermalProfile, labelTemplate: undefined, thermalFieldOverrides: undefined });
+                  setPrintMsg(null);
+                }}
+                className="min-h-11 select-none rounded-full border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800 transition-all active:scale-[0.97] active:bg-orange-100"
+                title="Xóa template đã lưu từ designer — trở về layout CSS gốc"
+              >
+                ↺ Mẫu gốc
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => void handlePrint()}
-              className="min-h-11 min-w-[8rem] flex-1 rounded-full bg-apple-blue px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-apple-blue-hover sm:flex-none"
+              className="min-h-11 min-w-[8rem] flex-1 select-none rounded-full bg-apple-blue px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-apple-blue-hover active:scale-[0.97] sm:flex-none"
             >
               In
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="min-h-11 rounded-full border border-black/[0.12] bg-white px-5 py-3 text-sm font-semibold text-apple-label hover:bg-black/[0.03]"
+              className="min-h-11 select-none rounded-full border border-black/[0.12] bg-white px-5 py-3 text-sm font-semibold text-apple-label transition-all hover:bg-black/[0.03] active:scale-[0.97]"
             >
               Đóng
             </button>
@@ -535,29 +451,40 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
         >
           <div className="print-label-page">
             <div className={printFlipCcw ? "print-label-spin print-label-spin--ccw" : "print-label-spin"}>
-              <LabelContent
-                s={shipment}
-                fontScale={fontScale}
-                mawbRelScale={mawbRelScale}
-                hawbRelScale={hawbRelScale}
-                airlineLabelOverrides={airlineLabelOverrides}
-                sheetVariant={sheetVariant}
-                showHawbOnCompact={compactShowHawb}
-              />
+              {buildBoundThermalPreview(shipment, thermalProfile, airlineLabelOverrides)}
             </div>
           </div>
         </div>,
         document.body
       )}
 
-      <CalibrationWizard
+      <LabelDesigner
         open={calibOpen}
-        profile={thermalProfile}
-        onSave={(p) => {
-          upsert(p);
+        initialTemplate={resolveThermalLabelTemplateForDesigner(
+          thermalProfile,
+          resolveThermalProfileLabelFormat(thermalProfile)
+        )}
+        documentKind={profileDocumentKind(thermalProfile)}
+        sampleContext={buildShipmentLabelContext(shipment, airlineLabelOverrides)}
+        onSave={(template) => {
+          const kind = profileDocumentKind(thermalProfile);
+          const format = resolveThermalProfileLabelFormat(thermalProfile);
+          const committed = commitThermalDesignerSave(template, kind, format);
+          upsert({
+            ...thermalProfile,
+            thermalFieldOverrides: committed.thermalFieldOverrides,
+            labelTemplate: committed.labelTemplate,
+          });
           setCalibOpen(false);
+          const extrasN = committed.labelTemplate
+            ? getExtraObjects(committed.labelTemplate, kind).length
+            : 0;
+          setPrintMsg(
+            extrasN > 0
+              ? `Đã lưu — ${extrasN} đối tượng thêm sẽ hiện trên mẫu gốc.`
+              : "Đã lưu — vị trí field áp dụng khi in TSPL."
+          );
         }}
-        onTestPrint={() => void printThermalCalibrationTspl(thermalProfile)}
         onClose={() => setCalibOpen(false)}
       />
     </>

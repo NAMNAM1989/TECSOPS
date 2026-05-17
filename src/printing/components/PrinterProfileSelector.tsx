@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { PrintDocumentType, PrinterProfile } from "../printTypes";
 import { isA4WeighProfile, isThermalProfile } from "../printerProfileStorage";
+import { labelSheetFormatLabel, resolveThermalProfileLabelFormat } from "../thermalLabelFormat";
 import type { PrinterProfileStoreV1 } from "../printTypes";
 
 type Props = {
@@ -42,6 +43,7 @@ export function PrinterProfileSelector({ docType, store, onChangeActive, onEditP
         {profiles.map((p: PrinterProfile) => (
           <option key={p.id} value={p.id}>
             {p.name}
+            {isThermalProfile(p) ? ` · ${labelSheetFormatLabel(resolveThermalProfileLabelFormat(p))}` : ""}
             {isThermalProfile(p) && p.host ? ` · ${p.host}` : ""}
           </option>
         ))}

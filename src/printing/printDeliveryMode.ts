@@ -9,7 +9,7 @@ export function loadThermalDeliveryMode(): ThermalDeliveryMode {
   } catch {
     /* ignore */
   }
-  return "browser-print";
+  return "tspl-tcp";
 }
 
 /** TSPL chỉ khi user chọn và profile có IP — tránh in “không ra gì”. */

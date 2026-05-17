@@ -349,3 +349,19 @@ export async function lookupCustomerConsignees(client, customerId) {
     notifyName: r.notify_name || "",
   }));
 }
+
+export async function lookupCustomerAgents(client, customerId) {
+  const res = await client.query(
+    `SELECT * FROM customer_agents WHERE customer_id = $1 ORDER BY sort_order ASC, id ASC`,
+    [customerId]
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    label: r.label || "",
+    agentName: r.agent_name || "",
+    agentAddress: r.agent_address || "",
+    agentPhone: r.agent_phone || "",
+    agentEmail: r.agent_email || "",
+    agentTaxCode: r.agent_tax_code || "",
+  }));
+}

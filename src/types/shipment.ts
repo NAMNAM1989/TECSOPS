@@ -44,8 +44,18 @@ export interface Shipment {
   customerCode: string;
   /** Khóa ngoại khách hàng (database) */
   customerId?: string;
+  /** Shipper lưu sẵn trong danh bạ khách. */
+  customerShipperId?: string;
   /** CNEE lưu sẵn trong danh bạ khách (customer_saved_consignees / savedConsignees). */
   customerConsigneeId?: string;
+  /** Agent chung (danh mục toàn cục: Agent A / B / không có). */
+  globalAgentId?: string;
+  /** @deprecated Dùng `globalAgentId`. */
+  customerAgentId?: string;
+  /** Tên hàng lưu sẵn trong danh bạ khách. */
+  customerGoodsId?: string;
+  /** Tên hàng in phiếu cân (ưu tiên hơn note / mục lưu sẵn nếu đã nhập). */
+  goodsDescriptionPrint?: string;
   /**
    * Dữ liệu shipper dùng riêng cho in phiếu cân.
    * Nếu rỗng, hệ thống sẽ fallback theo customer/customerCode + danh bạ.

@@ -158,7 +158,7 @@ type LegacyCustomerRow = CustomerDirectoryEntry & {
 function migrateLegacyPrintProfiles(e: LegacyCustomerRow): CustomerDirectoryEntry {
   let savedShippers = Array.isArray(e.savedShippers) ? [...e.savedShippers] : [];
   let savedConsignees = Array.isArray(e.savedConsignees) ? [...e.savedConsignees] : [];
-  let savedGoods = Array.isArray(e.savedGoods) ? [...e.savedGoods] : [];
+  const savedGoods = Array.isArray(e.savedGoods) ? [...e.savedGoods] : [];
 
   if (
     savedShippers.length === 0 &&

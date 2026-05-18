@@ -26,7 +26,8 @@
     "migrate:postgres-catalog": "node scripts/postgres-migrate-master-catalog.mjs",
     "migrate:customer-relations": "node scripts/migrate-customer-relations.mjs",
     "backup:postgres-state": "node scripts/postgres-backup-state.mjs",
-    "restore:postgres-state": "node scripts/postgres-restore-state.mjs"
+    "restore:postgres-state": "node scripts/postgres-restore-state.mjs",
+    "railway:up": "node scripts/railway-up.mjs"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",

@@ -16,6 +16,7 @@ import { createPostgresStateStore } from "./postgresStateStore.mjs";
 import { registerTsplRoutes } from "./tsplRoutes.mjs";
 import { registerLookupRoutes } from "./lookupRoutes.mjs";
 import { registerWeighSlipRoutes } from "./weighSlipRoutes.mjs";
+import { registerPrintPdfRoutes } from "./print/printPdfRoutes.mjs";
 import { closeDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import {
   assertSocketGateOk,
@@ -172,9 +173,10 @@ registerEcargoRoutes(app, {
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);
   registerWeighSlipRoutes(app);
-  console.info("[api] lookup + weigh-slips (Postgres)");
+  registerPrintPdfRoutes(app);
+  console.info("[api] lookup + weigh-slips + print/pdf (Postgres)");
 } else {
-  console.info("[api] weigh-slips / lookup disabled — cần DATABASE_URL");
+  console.info("[api] weigh-slips / lookup / print disabled — cần DATABASE_URL");
 }
 
 const distDir = path.join(__dirname, "..", "dist");

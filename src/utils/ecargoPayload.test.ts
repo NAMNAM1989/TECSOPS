@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   getEcargoRegisterReadiness,
   normalizeMawb,
@@ -14,7 +14,7 @@ function sampleKhoScsc(overrides: Partial<Shipment> = {}): Shipment {
     sessionDate: "2026-05-10",
     awb: "978-23767936",
     flight: "VJ842",
-    flightDate: "11MAY",
+    flightDate: "21MAY",
     cutoff: "",
     cutoffNote: "",
     note: "",
@@ -52,9 +52,37 @@ describe("normalizeVehicleNo", () => {
 
 describe("getEcargoRegisterReadiness", () => {
   it("ready khi đủ số xe và các trường lô", () => {
-    const r = getEcargoRegisterReadiness(sampleKhoScsc(), "50H17480", "2026-05-10");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-20T10:00:00+07:00"));
+    const r = getEcargoRegisterReadiness(sampleKhoScsc(), "50H17480", "2026-05-20");
     expect(r.ready).toBe(true);
     expect(r.hint).toContain("Đã nhập đủ");
+    vi.useRealTimers();
+  });
+
+  it("ready khi đủ số xe và các trường lô (TECS-SCSC)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-20T10:00:00+07:00"));
+    const r = getEcargoRegisterReadiness(
+      sampleKhoScsc({ warehouse: "TECS-SCSC" }),
+      "50H17480",
+      "2026-05-20"
+    );
+    expect(r.ready).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("chưa ready khi ngày bay đã qua", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-20T10:00:00+07:00"));
+    const r = getEcargoRegisterReadiness(
+      sampleKhoScsc({ flightDate: "11MAY" }),
+      "50H17480",
+      "2026-05-20"
+    );
+    expect(r.ready).toBe(false);
+    expect(r.hint).toContain("Ngày bay đã qua");
+    vi.useRealTimers();
   });
 
   it("chưa ready khi thiếu số xe", () => {

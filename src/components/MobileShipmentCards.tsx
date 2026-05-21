@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Shipment, ShipmentStatus } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
@@ -11,11 +11,6 @@ import {
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
 import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
-import { canPrintWeighReceiptScsc, printWeighReceiptScscWithConsigneeChoice } from "../utils/printWeighReceiptScsc";
-import { CalibrationWizard } from "../printing/components/CalibrationWizard";
-import { usePrinterProfiles } from "../hooks/usePrinterProfiles";
-import { getActiveA4WeighProfile } from "../printing/printerProfiles";
-import { printScscWeighReceiptHtml } from "../printing/scscWeigh/scscWeighPrint";
 import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
@@ -23,18 +18,29 @@ import { statusCardBg } from "./statusStyles";
 import {
   warehouseLabel,
   warehouseSectionsForLayout,
+  isScscWarehouse,
   isTcsWarehouse,
   type WarehouseLayoutFilter,
 } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
-import { formatShipmentCneeReadonlySummary } from "../utils/shipmentCneeCopyBlock";
+import { buildShipmentCneeDisplayLines } from "../utils/shipmentCneeCopyBlock";
+import { SelectableTextWithCopyPopover } from "./SelectableTextWithCopyPopover";
+import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStorage";
+import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
+import type { EcargoJobRecord } from "../types/ecargoJob";
+import {
+  ECARGO_VEHICLE_MIN,
+  EcargoKhoScscCenterModal,
+  EcargoKhoScscTriggerButton,
+} from "./EcargoKhoScscModal";
+import { ecargoKhoScscLineStatusLabel } from "../utils/ecargoUiLabels";
 
 const SWIPE_THRESHOLD = 48;
 /** Vuốt ngang bị bỏ qua nếu lệch dọc lớn hơn (coi như cuộn dọc). */
 const SWIPE_MAX_VERTICAL_DELTA_PX = 35;
-/** Ba nút: Sửa / In / Xóa */
-const REVEAL_PX = 132;
+/** Một nút: Xóa */
+const REVEAL_PX = 44;
 
 interface MobileShipmentCardsProps {
   rows: Shipment[];
@@ -42,19 +48,19 @@ interface MobileShipmentCardsProps {
   onSelect: (id: string | null) => void;
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
-  onPrint: (s: Shipment) => void;
-  onEdit: (s: Shipment) => void;
   /** Danh bạ — dùng để hiển thị mã/tên chuẩn trong popup khách. */
   customerDirectory?: readonly CustomerDirectoryEntry[];
-  globalAgents?: import("../types/globalAgents").GlobalAgentCatalog;
-  scscWeighPrintSettings?: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings;
-  saveScscWeighPrintSettings?: (
-    settings: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings
-  ) => void | Promise<void>;
   /** Chỉ hiển thị section kho đã chọn trên bộ lọc (mobile). */
   warehouseLayoutFilter?: WarehouseLayoutFilter;
   /** Ngày phiên OPS (YYYY-MM-DD) — dự phòng khi `sessionDate` trên lô trống. */
   viewSessionYmd?: string;
+  ecargoMap?: EcargoKhoScscPersistedMap;
+  onEcargoVehicleChange?: (id: string, raw: string) => void;
+  getEcargoSaveStatus?: (id: string) => EcargoSaveStatus;
+  getEcargoJob?: (id: string) => EcargoJobRecord | undefined;
+  refreshEcargoJob?: (id: string) => void | Promise<void>;
+  onEcargoAutoRegister?: (row: Shipment) => void | Promise<void>;
+  isEcargoAutoRegistering?: (id: string) => boolean;
 }
 
 export function MobileShipmentCards({
@@ -63,23 +69,22 @@ export function MobileShipmentCards({
   onSelect,
   onUpdate,
   onDelete,
-  onPrint,
-  onEdit,
   customerDirectory = [],
-  globalAgents,
-  scscWeighPrintSettings,
-  saveScscWeighPrintSettings,
   warehouseLayoutFilter = "ALL",
   viewSessionYmd = "",
+  ecargoMap = {},
+  onEcargoVehicleChange,
+  getEcargoSaveStatus,
+  getEcargoJob,
+  refreshEcargoJob,
+  onEcargoAutoRegister,
+  isEcargoAutoRegistering,
 }: MobileShipmentCardsProps) {
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
+  const [openEcargoRowId, setOpenEcargoRowId] = useState<string | null>(null);
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const [customerDetailRow, setCustomerDetailRow] = useState<Shipment | null>(null);
   const [mobileExtrasOpenId, setMobileExtrasOpenId] = useState<string | null>(null);
-  const [showPrintSettings, setShowPrintSettings] = useState(false);
-  const [calibrationTarget, setCalibrationTarget] = useState<Shipment | null>(null);
-  const { store, upsert } = usePrinterProfiles();
-  const a4Profile = useMemo(() => getActiveA4WeighProfile(store), [store]);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
@@ -87,6 +92,10 @@ export function MobileShipmentCards({
     () => warehouseSectionsForLayout(warehouseLayoutFilter),
     [warehouseLayoutFilter]
   );
+  const ecargoModalRow =
+    openEcargoRowId != null
+      ? rows.find((r) => r.id === openEcargoRowId && isScscWarehouse(r.warehouse))
+      : undefined;
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -106,10 +115,16 @@ export function MobileShipmentCards({
     []
   );
 
-  const openPrintSettings = useCallback((row: Shipment) => {
-    setCalibrationTarget(row);
-    setShowPrintSettings(true);
-  }, []);
+  const closeEcargoModal = useCallback(() => setOpenEcargoRowId(null), []);
+
+  useEffect(() => {
+    if (!openEcargoRowId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeEcargoModal();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [closeEcargoModal, openEcargoRowId]);
 
   return (
     <>
@@ -134,7 +149,14 @@ export function MobileShipmentCards({
                 const open = swipeOpenId === row.id;
                 const selected = selectedId === row.id;
                 const cardColors = statusCardBg[row.status];
-                const cneeSummary = formatShipmentCneeReadonlySummary(row, customerDirectory);
+                const cneeBodyText = buildShipmentCneeDisplayLines(row, customerDirectory, {
+                  sessionYmdFallback: viewSessionYmd,
+                }).join("\n");
+                const showEcargoKhoScsc = isScscWarehouse(row.warehouse);
+                const vehicleForEcargo = ecargoMap[row.id]?.vehicleInput ?? "";
+                const ecargoLine = ecargoMap[row.id];
+                const ecargoJob = getEcargoJob?.(row.id);
+                const ecargoOpen = openEcargoRowId === row.id;
 
                 return (
                   <div
@@ -144,44 +166,8 @@ export function MobileShipmentCards({
                       selected ? "ring-2 ring-apple-blue/40 ring-offset-2 ring-offset-apple-bg" : ""
                     }`}
                   >
-                    {/* Vuốt trái: Sửa / In / Xóa */}
+                    {/* Vuốt trái: Xóa */}
                     <div className="absolute inset-y-0 right-0 z-0 flex" style={{ width: REVEAL_PX }} aria-hidden>
-                      <button
-                        type="button"
-                        title="Sửa"
-                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-apple-blue text-white active:bg-apple-blue-hover"
-                        onClick={() => {
-                          setSwipeOpenId(null);
-                          onEdit(row);
-                        }}
-                      >
-                        <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
-                          />
-                        </svg>
-                        <span className="text-[9px] font-bold leading-none">Sửa</span>
-                      </button>
-                      <button
-                        type="button"
-                        title="In nhãn"
-                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-apple-blue/85 text-white active:bg-apple-blue"
-                        onClick={() => {
-                          setSwipeOpenId(null);
-                          onPrint(row);
-                        }}
-                      >
-                        <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z"
-                          />
-                        </svg>
-                        <span className="text-[9px] font-bold leading-none">In</span>
-                      </button>
                       <button
                         type="button"
                         title="Xóa"
@@ -287,10 +273,14 @@ export function MobileShipmentCards({
                               </span>
                             ) : null}
                           </div>
-                          {cneeSummary ? (
-                            <p className="mt-0.5 line-clamp-2 text-[10px] text-apple-secondary" title={cneeSummary}>
-                              CNEE: {cneeSummary}
-                            </p>
+                          {cneeBodyText ? (
+                            <SelectableTextWithCopyPopover
+                              className="mt-0.5 max-h-24 cursor-text select-text overflow-y-auto whitespace-pre-wrap break-words text-[10px] text-apple-secondary"
+                              title="Bôi đen chữ → bấm Sao chép nhanh"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {cneeBodyText}
+                            </SelectableTextWithCopyPopover>
                           ) : null}
                           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span
@@ -328,9 +318,9 @@ export function MobileShipmentCards({
                             </span>
                           </div>
                           <div className="mt-2 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               {row.dimWeightKg != null ? (
-                                <span className="min-w-0 truncate rounded-lg bg-black/[0.05] px-2 py-1 text-[11px] font-semibold tabular-nums text-apple-label">
+                                <span className="min-w-0 flex-1 truncate rounded-lg bg-black/[0.05] px-2 py-1 text-[11px] font-semibold tabular-nums text-apple-label">
                                   DIM {formatShipmentDimWeightKg(row.flight, row.dimWeightKg)} kg
                                   {(row.dimLines?.length ?? 0) > 0 ? (
                                     <span className="font-normal text-apple-secondary">
@@ -340,8 +330,20 @@ export function MobileShipmentCards({
                                   ) : null}
                                 </span>
                               ) : (
-                                <span className="text-[11px] text-apple-tertiary">Chưa có DIM</span>
+                                <span className="min-w-0 flex-1 text-[11px] text-apple-tertiary">Chưa có DIM</span>
                               )}
+                              {showEcargoKhoScsc && onEcargoVehicleChange && onEcargoAutoRegister && getEcargoSaveStatus ? (
+                                <EcargoKhoScscTriggerButton
+                                  rowId={row.id}
+                                  open={ecargoOpen}
+                                  hasVehicle={vehicleForEcargo.trim().length >= ECARGO_VEHICLE_MIN}
+                                  job={ecargoJob}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenEcargoRowId((id) => (id === row.id ? null : row.id));
+                                  }}
+                                />
+                              ) : null}
                               <button
                                 type="button"
                                 onClick={() => setDimModalRow(row)}
@@ -350,8 +352,12 @@ export function MobileShipmentCards({
                                 Nhập DIM
                               </button>
                             </div>
+                            {showEcargoKhoScsc && (ecargoLine || ecargoJob) ? (
+                              <p className="text-[10px] font-medium text-sky-800">
+                                {ecargoKhoScscLineStatusLabel(ecargoLine, ecargoJob)}
+                              </p>
+                            ) : null}
                             {(canPrintDimScscReport(row) ||
-                              canPrintWeighReceiptScsc(row) ||
                               (isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row))) && (
                               <div>
                                 <button
@@ -361,7 +367,7 @@ export function MobileShipmentCards({
                                   }
                                   className="text-[11px] font-semibold text-apple-blue"
                                 >
-                                  {mobileExtrasOpenId === row.id ? "Ẩn in & xuất ▴" : "In & xuất DIM ▾"}
+                                  {mobileExtrasOpenId === row.id ? "Ẩn xuất DIM ▴" : "Xuất DIM ▾"}
                                 </button>
                                 {mobileExtrasOpenId === row.id ? (
                                   <div className="mt-2 flex flex-col gap-2 border-t border-black/[0.06] pt-2">
@@ -383,36 +389,11 @@ export function MobileShipmentCards({
                                         </button>
                                       </div>
                                     ) : null}
-                                    {canPrintWeighReceiptScsc(row) ? (
-                                      <div className="flex gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            void printWeighReceiptScscWithConsigneeChoice(row, {
-                                              customerDirectory,
-                                              globalAgents,
-                                              scscWeighPrintSettings,
-                                              saveScscWeighPrintSettings,
-                                            })
-                                          }
-                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-sky-600/35 bg-sky-50 py-2.5 text-[12px] font-semibold text-sky-900 active:bg-sky-100"
-                                        >
-                                          In Phiếu Cân SCSC
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => openPrintSettings(row)}
-                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-amber-400/40 bg-amber-50 py-2.5 text-[12px] font-semibold text-amber-900 active:bg-amber-100"
-                                        >
-                                          Căn chỉnh in
-                                        </button>
-                                      </div>
-                                    ) : null}
                                     {isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row) ? (
                                       <div className="flex gap-2">
                                         <button
                                           type="button"
-                                          onClick={() => downloadTcsAttachedDimsExcel(row)}
+                                          onClick={() => void downloadTcsAttachedDimsExcel(row)}
                                           className="min-h-11 min-w-0 flex-1 rounded-xl border border-emerald-600/35 bg-emerald-50 py-2.5 text-[12px] font-semibold text-emerald-900"
                                         >
                                           LIST TCS
@@ -471,20 +452,24 @@ export function MobileShipmentCards({
         />,
         document.body
       )}
-    <CalibrationWizard
-      open={showPrintSettings}
-      profile={a4Profile}
-      onSave={(p) => {
-        upsert(p);
-        setShowPrintSettings(false);
-      }}
-      onTestPrint={() => {
-        const s = calibrationTarget ?? rows[0];
-        if (!s) return;
-        printScscWeighReceiptHtml(s, { profile: a4Profile, calibrationTest: true, customerDirectory });
-      }}
-      onClose={() => setShowPrintSettings(false)}
-    />
+    {ecargoModalRow && onEcargoVehicleChange && onEcargoAutoRegister && getEcargoSaveStatus ? (
+      <EcargoKhoScscCenterModal
+        key={ecargoModalRow.id}
+        rowId={ecargoModalRow.id}
+        row={ecargoModalRow}
+        vehicleForEcargo={ecargoMap[ecargoModalRow.id]?.vehicleInput ?? ""}
+        viewSessionYmd={viewSessionYmd}
+        saveStatus={getEcargoSaveStatus(ecargoModalRow.id)}
+        job={getEcargoJob?.(ecargoModalRow.id)}
+        autoRegistering={isEcargoAutoRegistering?.(ecargoModalRow.id) ?? false}
+        onVehicleChange={(raw) => onEcargoVehicleChange(ecargoModalRow.id, raw)}
+        onAutoRegister={async () => {
+          await onEcargoAutoRegister(ecargoModalRow);
+        }}
+        onRefreshJob={() => void refreshEcargoJob?.(ecargoModalRow.id)}
+        onClose={closeEcargoModal}
+      />
+    ) : null}
     </>
   );
 }
@@ -492,33 +477,22 @@ export function MobileShipmentCards({
 interface StickyMobileActionsProps {
   selected: Shipment | null;
   onDelete: () => void;
-  onPrint: () => void;
   onAdd: () => void;
-  onEdit: () => void;
+  onQuickEdit: () => void;
   onPrintDim?: () => void;
   onDownloadScscDimList?: () => void;
-  /** Danh bạ — dùng cho in phiếu cân SCSC (lookup shipper chi tiết). */
-  customerDirectory?: readonly CustomerDirectoryEntry[];
-  globalAgents?: import("../types/globalAgents").GlobalAgentCatalog;
-  scscWeighPrintSettings?: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings;
-  saveScscWeighPrintSettings?: (
-    settings: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings
-  ) => void | Promise<void>;
 }
 
 export function StickyMobileActions({
   selected,
   onDelete,
-  onPrint,
   onAdd,
-  onEdit,
+  onQuickEdit,
   onPrintDim,
   onDownloadScscDimList,
-  customerDirectory = [],
-  globalAgents,
-  scscWeighPrintSettings,
-  saveScscWeighPrintSettings,
 }: StickyMobileActionsProps) {
+  const [moreOpen, setMoreOpen] = useState(false);
+
   return (
     <div className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
       <div className="border-t border-black/[0.08] bg-white/80 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] backdrop-blur-xl backdrop-saturate-150">
@@ -539,27 +513,37 @@ export function StickyMobileActions({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={onPrint}
-                  className="min-w-0 flex-1 rounded-full bg-apple-label py-3 text-sm font-semibold text-white shadow-sm transition-transform active:scale-[0.98]"
+                  onClick={onQuickEdit}
+                  className="min-w-0 flex-1 rounded-full border border-apple-blue/30 bg-apple-blue/10 py-3 text-sm font-semibold text-apple-blue transition-transform active:scale-[0.98]"
                 >
-                  In nhãn
+                  Sửa nhanh
                 </button>
-                <button
-                  type="button"
-                  onClick={onEdit}
-                  className="shrink-0 rounded-full border border-black/[0.1] bg-white px-4 py-3 text-sm font-semibold text-apple-blue active:scale-[0.98]"
-                >
-                  Sửa
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Xóa ${selected.awb}?`)) onDelete();
-                  }}
-                  className="shrink-0 rounded-full border border-red-200/80 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 active:scale-[0.98]"
-                >
-                  Xóa
-                </button>
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    aria-expanded={moreOpen}
+                    aria-haspopup="menu"
+                    onClick={() => setMoreOpen((v) => !v)}
+                    className="rounded-full border border-black/[0.1] bg-white px-4 py-3 text-sm font-semibold text-apple-secondary active:scale-[0.98]"
+                    title="Thêm thao tác"
+                  >
+                    ⋯
+                  </button>
+                  {moreOpen ? (
+                    <div className="absolute bottom-full right-0 z-50 mb-2 min-w-[9rem] overflow-hidden rounded-xl border border-black/[0.1] bg-white py-1 shadow-apple-md">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMoreOpen(false);
+                          if (confirm(`Xóa ${selected.awb}?`)) onDelete();
+                        }}
+                        className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
+                      >
+                        Xóa lô
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
               {onPrintDim && onDownloadScscDimList && canPrintDimScscReport(selected) ? (
                 <div className="flex gap-2">
@@ -579,27 +563,11 @@ export function StickyMobileActions({
                   </button>
                 </div>
               ) : null}
-              {canPrintWeighReceiptScsc(selected) ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    void printWeighReceiptScscWithConsigneeChoice(selected, {
-                      customerDirectory,
-                      globalAgents,
-                      scscWeighPrintSettings,
-                      saveScscWeighPrintSettings,
-                    })
-                  }
-                  className="w-full rounded-full border border-sky-600/40 bg-sky-50 py-2.5 text-sm font-semibold text-sky-900 shadow-sm active:scale-[0.98]"
-                >
-                  In Phiếu Cân SCSC
-                </button>
-              ) : null}
               {isTcsWarehouse(selected.warehouse) && canExportTcsDimTemplate(selected) ? (
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => downloadTcsAttachedDimsExcel(selected)}
+                    onClick={() => void downloadTcsAttachedDimsExcel(selected)}
                     className="min-w-0 flex-1 rounded-full border border-emerald-600/40 bg-emerald-50 py-2.5 text-sm font-semibold text-emerald-900 active:scale-[0.98]"
                   >
                     LIST DIM TCS

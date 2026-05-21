@@ -1,7 +1,7 @@
 [build]
 builder = "nixpacks"
 # Nixpacks đã chạy `npm ci` ở phase install — chỉ build ở đây
-buildCommand = "npm run build"
+buildCommand = "npm run build && npx playwright install chromium && npx playwright install-deps chromium || true"
 
 [deploy]
 # Scale >1 replica: thêm Redis trên Railway và biến REDIS_URL (app dùng chung state + Socket.IO adapter).

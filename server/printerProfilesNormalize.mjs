@@ -141,7 +141,7 @@ function normalizeA4(raw, id, name) {
     offsetYmm: num(raw.offsetYmm, 0, -30, 30),
     scaleX: num(raw.scaleX, 1, 0.85, 1.15),
     scaleY: num(raw.scaleY, 1, 0.85, 1.15),
-    templateVersion: str(raw.templateVersion, 40) || "scsc-weigh-v1",
+    templateVersion: str(raw.templateVersion, 40) || "scsc-weigh-v2",
     partyLineGapMm: num(raw.partyLineGapMm, 6, 4, 12),
     partyAddressFontMm: num(raw.partyAddressFontMm, 3, 2.5, 5.5),
     partyNameFontMm: num(raw.partyNameFontMm, 4, 3, 6),

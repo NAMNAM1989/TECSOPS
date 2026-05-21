@@ -17,6 +17,11 @@ import {
   usesScscLabelTemplate,
 } from "../../label-designer/adapters/scscPrintPipeline";
 import { buildScscWeighOverlayValues, renderScscWeighFieldLayer } from "./scscWeighTemplate";
+import {
+  SCSC_A4_PAGE_HEIGHT_MM,
+  SCSC_A4_PAGE_WIDTH_MM,
+  SCSC_WEIGH_TEMPLATE_PNG_URL,
+} from "./scscWeighTemplateAsset";
 
 function esc(s: string): string {
   return s
@@ -117,8 +122,8 @@ export function buildScscWeighReceiptDocumentHtml(
 
     .preview-page {
       position: relative;
-      width: 210mm;
-      height: 297mm;
+      width: ${SCSC_A4_PAGE_WIDTH_MM}mm;
+      height: ${SCSC_A4_PAGE_HEIGHT_MM}mm;
       margin: 0 auto;
       transform-origin: top left;
       overflow: hidden;
@@ -127,9 +132,10 @@ export function buildScscWeighReceiptDocumentHtml(
     .template-layer.form-background.pdf-background {
       position: absolute;
       inset: 0;
-      width: 210mm;
-      height: 297mm;
-      object-fit: cover;
+      width: ${SCSC_A4_PAGE_WIDTH_MM}mm;
+      height: ${SCSC_A4_PAGE_HEIGHT_MM}mm;
+      object-fit: fill;
+      object-position: top left;
       z-index: 1;
     }
 
@@ -264,7 +270,7 @@ export function buildScscWeighReceiptDocumentHtml(
 <body>
   <div class="preview-wrapper">
     <div class="preview-page">
-      <img class="template-layer form-background pdf-background" src="/print-templates/scsc-weigh-template.png" alt="SCSC weigh template" />
+      <img class="template-layer form-background pdf-background" src="${SCSC_WEIGH_TEMPLATE_PNG_URL}" alt="SCSC weigh template" />
       <div class="preview-data-layer">
         ${fieldHtml}
       </div>

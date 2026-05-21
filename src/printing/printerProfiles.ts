@@ -61,7 +61,7 @@ export const DEFAULT_A4_WEIGH_PROFILE: A4WeighReceiptPrinterProfile = {
   offsetYmm: 0,
   scaleX: 1,
   scaleY: 1,
-  templateVersion: "scsc-weigh-v1",
+  templateVersion: "scsc-weigh-v2",
   partyLineGapMm: 6,
   partyAddressFontMm: 3,
   partyNameFontMm: 4,

@@ -18,6 +18,10 @@ import {
 } from "./printerProfilesNormalize.mjs";
 import { normalizeGlobalAgentsLoose } from "./globalAgentsNormalize.mjs";
 import { normalizeScscWeighPrintSettingsLoose } from "./scscWeighPrintSettingsNormalize.mjs";
+import {
+  normalizeEcargoKhoScscMapLoose,
+  normalizeEcargoVehicleInput,
+} from "./ecargoKhoScscNormalize.mjs";
 
 const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "KHO-TCS", "KHO-SCSC"];
 function isKnownWarehouse(w) {
@@ -49,6 +53,7 @@ function emptyInitialState() {
     printerProfiles: emptyPrinterProfilesCatalog(),
     globalAgents: normalizeGlobalAgentsLoose(undefined),
     scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(undefined),
+    ecargoKhoScsc: {},
   };
 }
 
@@ -179,6 +184,26 @@ export function createInitialState() {
     printerProfiles: emptyPrinterProfilesCatalog(),
     globalAgents: normalizeGlobalAgentsLoose(undefined),
     scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(undefined),
+    ecargoKhoScsc: {},
+  };
+}
+
+function keepEcargoMap(state) {
+  return normalizeEcargoKhoScscMapLoose(state?.ecargoKhoScsc);
+}
+
+function finishState(state, rows, extras = {}) {
+  return {
+    version: state.version + 1,
+    rows: renumberSttForAll(rows),
+    customers: extras.customers ?? state.customers ?? [],
+    globalAgents: extras.globalAgents ?? normalizeGlobalAgentsLoose(state.globalAgents),
+    airlineLabelOverrides:
+      extras.airlineLabelOverrides ?? normalizeAirlineLabelOverridesLoose(state.airlineLabelOverrides),
+    printerProfiles: extras.printerProfiles ?? normalizePrinterProfilesCatalogLoose(state.printerProfiles),
+    scscWeighPrintSettings:
+      extras.scscWeighPrintSettings ?? normalizeScscWeighPrintSettingsLoose(state.scscWeighPrintSettings),
+    ecargoKhoScsc: extras.ecargoKhoScsc ?? keepEcargoMap(state),
   };
 }
 
@@ -212,6 +237,7 @@ function normalizeState(raw) {
     printerProfiles: normalizePrinterProfilesCatalogLoose(raw.printerProfiles),
     globalAgents: normalizeGlobalAgentsLoose(raw.globalAgents),
     scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(raw.scscWeighPrintSettings),
+    ecargoKhoScsc: normalizeEcargoKhoScscMapLoose(raw.ecargoKhoScsc),
   };
 }
 
@@ -334,69 +360,60 @@ export async function saveState(state) {
  */
 export function applyMutation(state, mutation) {
   let rows = [...state.rows];
-  const keepAirline = () => normalizeAirlineLabelOverridesLoose(state.airlineLabelOverrides);
-  const keepPrinter = () => normalizePrinterProfilesCatalogLoose(state.printerProfiles);
-  const keepGlobalAgents = () => normalizeGlobalAgentsLoose(state.globalAgents);
-  const keepScscWeighPrintSettings = () =>
-    normalizeScscWeighPrintSettingsLoose(state.scscWeighPrintSettings);
   const action = String(mutation?.action ?? "").trim();
 
   switch (action) {
     case "SET_CUSTOMERS": {
       const list = validateCustomerDirectoryPayload(mutation.customers);
-      return {
-        version: state.version + 1,
-        rows: renumberSttForAll(rows),
-        customers: list,
-        globalAgents: keepGlobalAgents(),
-        airlineLabelOverrides: keepAirline(),
-        printerProfiles: keepPrinter(),
-        scscWeighPrintSettings: keepScscWeighPrintSettings(),
-      };
+      return finishState(state, rows, { customers: list });
     }
     case "SET_GLOBAL_AGENTS": {
-      return {
-        version: state.version + 1,
-        rows: renumberSttForAll(rows),
-        customers: state.customers ?? [],
+      return finishState(state, rows, {
         globalAgents: normalizeGlobalAgentsLoose(mutation?.catalog),
-        airlineLabelOverrides: keepAirline(),
-        printerProfiles: keepPrinter(),
-        scscWeighPrintSettings: keepScscWeighPrintSettings(),
-      };
+      });
     }
     case "SET_SCSC_WEIGH_PRINT_SETTINGS": {
-      return {
-        version: state.version + 1,
-        rows: renumberSttForAll(rows),
-        customers: state.customers ?? [],
-        globalAgents: keepGlobalAgents(),
-        airlineLabelOverrides: keepAirline(),
-        printerProfiles: keepPrinter(),
+      return finishState(state, rows, {
         scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(mutation?.settings),
-      };
+      });
     }
     case "SET_AIRLINE_LABEL_OVERRIDES": {
-      return {
-        version: state.version + 1,
-        rows: renumberSttForAll(rows),
-        customers: state.customers ?? [],
-        globalAgents: keepGlobalAgents(),
+      return finishState(state, rows, {
         airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(mutation?.overrides),
-        printerProfiles: keepPrinter(),
-        scscWeighPrintSettings: keepScscWeighPrintSettings(),
-      };
+      });
     }
     case "SET_PRINTER_PROFILES": {
-      return {
-        version: state.version + 1,
-        rows: renumberSttForAll(rows),
-        customers: state.customers ?? [],
-        globalAgents: keepGlobalAgents(),
-        airlineLabelOverrides: keepAirline(),
+      return finishState(state, rows, {
         printerProfiles: normalizePrinterProfilesCatalogLoose(mutation?.catalog),
-        scscWeighPrintSettings: keepScscWeighPrintSettings(),
+      });
+    }
+    case "PATCH_ECARGO_KHO_SCSC": {
+      const shipmentId = String(mutation?.shipmentId ?? "").trim();
+      if (!shipmentId) throw new Error("PATCH_ECARGO_KHO_SCSC requires shipmentId");
+      if (!rows.some((r) => r.id === shipmentId)) {
+        throw new Error(`Shipment not found: ${shipmentId}`);
+      }
+      const prev = keepEcargoMap(state);
+      const line = { ...(prev[shipmentId] ?? { vehicleInput: "" }) };
+      if (mutation.vehicleInput !== undefined) {
+        line.vehicleInput = normalizeEcargoVehicleInput(mutation.vehicleInput);
+      }
+      if (mutation.markedSubmitted !== undefined) {
+        line.markedSubmitted = Boolean(mutation.markedSubmitted);
+      }
+      line.updatedAt = new Date().toISOString();
+      const nextMap = { ...prev, [shipmentId]: line };
+      if (!line.vehicleInput && !line.markedSubmitted) {
+        delete nextMap[shipmentId];
+      }
+      return finishState(state, rows, { ecargoKhoScsc: nextMap });
+    }
+    case "MERGE_ECARGO_KHO_SCSC": {
+      const merged = {
+        ...keepEcargoMap(state),
+        ...normalizeEcargoKhoScscMapLoose(mutation?.map),
       };
+      return finishState(state, rows, { ecargoKhoScsc: merged });
     }
     case "UPDATE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
@@ -414,7 +431,9 @@ export function applyMutation(state, mutation) {
       const i = rows.findIndex((r) => r.id === mutation.id);
       if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
       rows.splice(i, 1);
-      break;
+      const ecargo = { ...keepEcargoMap(state) };
+      delete ecargo[mutation.id];
+      return finishState(state, rows, { ecargoKhoScsc: ecargo });
     }
     case "ADD": {
       const s = mutation.shipment;
@@ -429,20 +448,12 @@ export function applyMutation(state, mutation) {
     }
     default:
       throw new Error(
-        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, UPDATE, DELETE, ADD. ` +
+        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, PATCH_ECARGO_KHO_SCSC, MERGE_ECARGO_KHO_SCSC, UPDATE, DELETE, ADD. ` +
           `Nếu vừa cập nhật code — hãy dừng toàn bộ process Node rồi chạy lại "npm run dev" (cần cả API + Vite).`
       );
   }
 
-  return {
-    version: state.version + 1,
-    rows: renumberSttForAll(rows),
-    customers: state.customers ?? [],
-    globalAgents: keepGlobalAgents(),
-    airlineLabelOverrides: keepAirline(),
-    printerProfiles: keepPrinter(),
-    scscWeighPrintSettings: keepScscWeighPrintSettings(),
-  };
+  return finishState(state, rows);
 }
 
 /**

@@ -21,9 +21,11 @@ interface StatusFilterBarProps {
   dayRows: Shipment[];
   value: StatusFilterValue;
   onChange: (v: StatusFilterValue) => void;
+  /** Gọn — không khung lớn, không tiêu đề/ghi chú */
+  compact?: boolean;
 }
 
-export function StatusFilterBar({ dayRows, value, onChange }: StatusFilterBarProps) {
+export function StatusFilterBar({ dayRows, value, onChange, compact }: StatusFilterBarProps) {
   const counts = useMemo(() => {
     const m = new Map<ShipmentStatus, number>();
     for (const st of SHIPMENT_STATUS_ORDER) m.set(st, 0);
@@ -32,6 +34,50 @@ export function StatusFilterBar({ dayRows, value, onChange }: StatusFilterBarPro
   }, [dayRows]);
 
   if (dayRows.length === 0) return null;
+
+  const chips = (
+    <>
+      <FilterChip
+        compact={compact}
+        active={value === "ALL"}
+        onClick={() => onChange("ALL")}
+        dotClass="bg-gradient-to-br from-slate-400 to-slate-600"
+        label="Tất cả"
+        count={dayRows.length}
+      />
+      {SHIPMENT_STATUS_ORDER.map((st) => (
+        <FilterChip
+          key={st}
+          compact={compact}
+          active={value === st}
+          onClick={() => onChange(st)}
+          dotClass={dotClass[st]}
+          label={statusLabel[st]}
+          count={counts.get(st) ?? 0}
+        />
+      ))}
+    </>
+  );
+
+  if (compact) {
+    return (
+      <div className="flex min-w-0 flex-1 items-center gap-1">
+        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto overscroll-x-contain pb-0.5 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]">
+          {chips}
+        </div>
+        {value !== "ALL" ? (
+          <button
+            type="button"
+            onClick={() => onChange("ALL")}
+            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-apple-blue hover:bg-apple-blue/10"
+            title="Xóa lọc trạng thái"
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="mb-6 min-w-0 rounded-2xl border border-black/[0.08] bg-white/90 p-3 shadow-apple backdrop-blur-sm sm:p-4">
@@ -47,31 +93,9 @@ export function StatusFilterBar({ dayRows, value, onChange }: StatusFilterBarPro
           </button>
         )}
       </div>
-      {/* Mobile: xuống nhiều dòng để thấy hết chip; md+: một hàng + cuộn ngang nếu vẫn chật */}
       <div className="flex min-w-0 flex-wrap gap-2 md:flex-nowrap md:gap-2 md:overflow-x-auto md:overscroll-x-contain md:pb-1 md:[-webkit-overflow-scrolling:touch] md:pr-1 md:[scrollbar-width:thin]">
-        <FilterChip
-          active={value === "ALL"}
-          onClick={() => onChange("ALL")}
-          dotClass="bg-gradient-to-br from-slate-400 to-slate-600"
-          label="Tất cả"
-          count={dayRows.length}
-        />
-        {SHIPMENT_STATUS_ORDER.map((st) => (
-          <FilterChip
-            key={st}
-            active={value === st}
-            onClick={() => onChange(st)}
-            dotClass={dotClass[st]}
-            label={statusLabel[st]}
-            count={counts.get(st) ?? 0}
-          />
-        ))}
+        {chips}
       </div>
-      {value !== "ALL" && (
-        <p className="mt-2 text-[11px] text-apple-tertiary">
-          Đang hiện các lô: <span className="font-semibold text-apple-label">{statusLabel[value]}</span>
-        </p>
-      )}
     </div>
   );
 }
@@ -82,18 +106,24 @@ function FilterChip({
   dotClass,
   label,
   count,
+  compact,
 }: {
   active: boolean;
   onClick: () => void;
   dotClass: string;
   label: string;
   count: number;
+  compact?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex min-h-[40px] max-w-full shrink-0 items-center gap-1.5 rounded-xl border px-2.5 py-2 text-left text-[11px] font-semibold leading-tight transition-all active:scale-[0.98] sm:gap-2 sm:px-3 sm:text-xs md:rounded-full md:px-3.5 ${
+      className={`inline-flex max-w-full shrink-0 items-center gap-1 rounded-lg border font-semibold leading-tight transition-all active:scale-[0.98] ${
+        compact
+          ? "min-h-[28px] px-2 py-0.5 text-[10px] md:rounded-full"
+          : "min-h-[40px] gap-1.5 rounded-xl px-2.5 py-2 text-[11px] text-left sm:gap-2 sm:px-3 sm:text-xs md:rounded-full md:px-3.5"
+      } ${
         active
           ? "border-apple-blue/40 bg-apple-blue/10 text-apple-label shadow-[0_0_0_2px_rgba(0,122,255,0.2)]"
           : "border-black/[0.08] bg-white/80 text-apple-secondary hover:border-black/[0.12] hover:bg-black/[0.03]"

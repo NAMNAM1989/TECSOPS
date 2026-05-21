@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { lookupCustomerCodeByName } from "../utils/customerDirectoryCore";
@@ -16,19 +15,24 @@ import { CustomerShipmentDetailModal } from "./CustomerShipmentDetailModal";
 import { statusRowBg, statusRowBorder } from "./statusStyles";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 import {
+  isScscWarehouse,
   warehouseLabel,
   warehouseSectionsForLayout,
   type WarehouseLayoutFilter,
 } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
-import { useEcargoKhoScscRegister } from "../hooks/useEcargoKhoScscRegister";
-import { canSendEcargoRegister } from "../utils/ecargoPayload";
 import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStorage";
-import { buildKhoScscEcargoPasteBlock, formatSessionYmdForEcargoPaste } from "../utils/ecargoPasteBlock";
-import { findCustomerEntry, resolveSavedConsigneeForBooking } from "../utils/mapBookingToScaleTicketFormData";
+import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
+import type { EcargoJobRecord } from "../types/ecargoJob";
+import {
+  ECARGO_VEHICLE_MIN,
+  EcargoKhoScscCenterModal,
+  EcargoKhoScscTriggerButton,
+} from "./EcargoKhoScscModal";
+import { findCustomerEntry } from "../utils/mapBookingToScaleTicketFormData";
 import { buildShipmentPatchForSavedConsignee } from "../utils/customerConsigneeShipmentPatch";
-import { InlineConsigneeSelect } from "./InlineConsigneeSelect";
+import { InlineCneeCell } from "./InlineCneeCell";
 
 interface Props {
   rows: Shipment[];
@@ -51,191 +55,15 @@ interface Props {
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
-  onEdit: (s: Shipment) => void;
   /** Ngày phiên đang xem (YYYY-MM-DD) — parse ngày bay eCargo theo năm trên OPS. */
   viewSessionYmd: string;
-}
-
-const ECARGO_VEHICLE_MIN = 7;
-
-/** Nội dung modal eCargo: số xe, gửi, khối 5 dòng, copy. */
-function EcargoKhoScscModalBody({
-  row,
-  vehicleForEcargo,
-  pasteDate,
-  ecargoCanSubmit,
-  onVehicleChange,
-  onRegister,
-  onClose,
-}: {
-  row: Shipment;
-  vehicleForEcargo: string;
-  pasteDate: string;
-  ecargoCanSubmit: boolean;
-  onVehicleChange: (raw: string) => void;
-  onRegister: () => void;
-  onClose: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const hasVehicle = vehicleForEcargo.trim().length >= ECARGO_VEHICLE_MIN;
-  const pasteText = useMemo(
-    () => buildKhoScscEcargoPasteBlock(row, vehicleForEcargo, pasteDate),
-    [pasteDate, row, vehicleForEcargo]
-  );
-
-  const copyPasteBlock = useCallback(async () => {
-    if (!hasVehicle) return;
-    try {
-      await navigator.clipboard.writeText(pasteText);
-      onClose();
-    } catch {
-      window.alert("Không sao chép được — chọn trong ô và Ctrl+C.");
-    }
-  }, [hasVehicle, onClose, pasteText]);
-
-  useEffect(() => {
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
-
-  return (
-    <div className="space-y-5 px-5 pb-5 pt-4 sm:px-8 sm:pb-8">
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="min-w-0 flex-1">
-          <span className="mb-2 block text-sm font-semibold text-apple-secondary">Số xe</span>
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="text"
-            autoCapitalize="characters"
-            placeholder="VD: 50H17480"
-            value={vehicleForEcargo}
-            onChange={(e) => onVehicleChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && ecargoCanSubmit) {
-                e.preventDefault();
-                onRegister();
-              }
-            }}
-            className="h-14 w-full rounded-[1.1rem] border border-black/[0.12] bg-[#f7f7fb] px-5 font-mono text-lg font-bold uppercase tracking-wide text-apple-label shadow-inner placeholder:text-apple-tertiary focus:outline-none focus:ring-2 focus:ring-sky-300/60"
-          />
-        </label>
-        <button
-          type="button"
-          disabled={!ecargoCanSubmit}
-          aria-label="Đăng ký eCargo"
-          onClick={() => onRegister()}
-          className="h-12 shrink-0 rounded-2xl bg-sky-600 px-7 text-sm font-extrabold uppercase tracking-wide text-white shadow-[0_6px_14px_rgba(2,132,199,0.28)] transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-black/30 disabled:shadow-none"
-        >
-          Gửi ECARGO
-        </button>
-      </div>
-      <div>
-        <span className="mb-2 block text-sm font-semibold text-apple-secondary">Nội dung sao chép</span>
-        <textarea
-          readOnly
-          value={pasteText}
-          rows={5}
-          spellCheck={false}
-          className="w-full resize-none rounded-[1.1rem] border border-black/[0.1] bg-zinc-50 px-5 py-4 font-mono text-lg font-bold leading-[1.7] text-apple-label shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-300/60"
-          onFocus={(e) => e.target.select()}
-        />
-      </div>
-      <button
-        type="button"
-        disabled={!hasVehicle}
-        aria-label="Sao chép khối dán"
-        onClick={() => void copyPasteBlock()}
-        className="w-full rounded-2xl border-2 border-sky-400/80 bg-gradient-to-b from-sky-50 to-sky-100/90 py-4 text-xl font-extrabold uppercase tracking-wide text-sky-950 shadow-sm transition hover:border-sky-500 hover:from-sky-100 hover:to-sky-50 disabled:cursor-not-allowed disabled:border-black/10 disabled:bg-zinc-100 disabled:from-zinc-100 disabled:to-zinc-100 disabled:text-apple-tertiary"
-      >
-        SAO CHÉP
-      </button>
-    </div>
-  );
-}
-
-function EcargoKhoScscCenterModal({
-  rowId,
-  row,
-  vehicleForEcargo,
-  viewSessionYmd,
-  ecargoCanSubmit,
-  onVehicleChange,
-  onRegister,
-  onClose,
-}: {
-  rowId: string;
-  row: Shipment;
-  vehicleForEcargo: string;
-  viewSessionYmd: string;
-  ecargoCanSubmit: boolean;
-  onVehicleChange: (raw: string) => void;
-  onRegister: () => void;
-  onClose: () => void;
-}) {
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[420] flex items-center justify-center bg-black/45 p-4 backdrop-blur-md animate-ecargo-backdrop-in motion-reduce:animate-none sm:p-6"
-      role="presentation"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`ecargo-modal-title-${rowId}`}
-        data-ecargo-panel={rowId}
-        id={`ecargo-panel-${rowId}`}
-        className="relative w-full max-w-2xl origin-center animate-ecargo-card-in motion-reduce:animate-none motion-reduce:opacity-100"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="overflow-hidden rounded-[1.35rem] border border-black/[0.08] bg-white shadow-apple-md ring-1 ring-black/[0.06]">
-          <div className="flex items-start justify-between gap-3 border-b border-black/[0.06] bg-white px-5 py-4 sm:px-8">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-sky-100 bg-sky-50 text-sky-700 shadow-sm">
-                <svg className="h-6 w-8" viewBox="0 0 32 22" fill="currentColor" aria-hidden>
-                  <path opacity="0.35" d="M2 14h6v5H2v-5zm22 0h6v5h-6v-5z" />
-                  <path d="M1 15.5V8.5L4 5h8l2.5 3H27l3 4.5v6H1zm3-6.5v4h6V9H4zm9 0v4h14l-2-2.5H13V9z" />
-                  <circle cx="8" cy="19" r="2.2" />
-                  <circle cx="24" cy="19" r="2.2" />
-                </svg>
-              </span>
-              <div className="min-w-0">
-                <h2 id={`ecargo-modal-title-${rowId}`} className="text-2xl font-extrabold tracking-tight text-apple-label">
-                  eCargo
-                </h2>
-                <p className="truncate font-mono text-sm font-bold text-apple-secondary">
-                  Lô #{row.stt} · {row.awb}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              aria-label="Đóng"
-              onClick={onClose}
-              className="shrink-0 rounded-full p-2 text-apple-secondary transition hover:bg-black/[0.06] hover:text-apple-label"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <EcargoKhoScscModalBody
-            row={row}
-            vehicleForEcargo={vehicleForEcargo}
-            pasteDate={formatSessionYmdForEcargoPaste(viewSessionYmd)}
-            ecargoCanSubmit={ecargoCanSubmit}
-            onVehicleChange={onVehicleChange}
-            onRegister={onRegister}
-            onClose={onClose}
-          />
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
+  ecargoMap: EcargoKhoScscPersistedMap;
+  onEcargoVehicleChange: (id: string, raw: string) => void;
+  getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
+  getEcargoJob: (id: string) => EcargoJobRecord | undefined;
+  refreshEcargoJob: (id: string) => void | Promise<void>;
+  onEcargoAutoRegister: (row: Shipment) => void | Promise<void>;
+  isEcargoAutoRegistering: (id: string) => boolean;
 }
 
 const COL_HEADERS = [
@@ -248,7 +76,7 @@ const COL_HEADERS = [
   { key: "kg", label: "KG", w: "w-12 text-right" },
   { key: "dim", label: "DIM", w: "w-14 text-right" },
   { key: "customer", label: "KHÁCH", w: "min-w-[4.75rem] max-w-[6.5rem]" },
-  { key: "cnee", label: "CNEE", w: "min-w-[5.25rem] max-w-[8.5rem]" },
+  { key: "cnee", label: "CNEE", w: "min-w-[6.5rem] max-w-[12rem]" },
   { key: "note", label: "NOTE", w: "min-w-[3.75rem] max-w-[7rem]" },
   { key: "status", label: "TT", w: "min-w-[6.5rem]" },
   { key: "actions", label: "", w: "min-w-[5.5rem]" },
@@ -266,10 +94,15 @@ export function DesktopShipmentTable({
   onUpdate,
   onDelete,
   onPrint,
-  onEdit,
   viewSessionYmd,
+  ecargoMap,
+  onEcargoVehicleChange,
+  getEcargoSaveStatus,
+  getEcargoJob,
+  refreshEcargoJob,
+  onEcargoAutoRegister,
+  isEcargoAutoRegistering,
 }: Props) {
-  const ecargoRegister = useEcargoKhoScscRegister();
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const [customerDetailRow, setCustomerDetailRow] = useState<Shipment | null>(null);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
@@ -280,40 +113,40 @@ export function DesktopShipmentTable({
 
   return (
     <>
-    <div className="hidden md:block space-y-3">
+    <div className="hidden md:block space-y-2">
       {warehouseSections.map((wh) => {
         const group = rowsByWarehouse[wh];
 
         return (
           <section key={wh}>
-            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-1.5">
               <div className="flex flex-wrap items-center gap-1.5">
-                <h2 className="text-[15px] font-semibold tracking-tight text-apple-label">{warehouseLabel[wh]}</h2>
-                <span className="rounded-full bg-apple-label px-2 py-0.5 text-[10px] font-semibold text-white">
-                  {group.length} lô
+                <h2 className="text-sm font-semibold tracking-tight text-apple-label">{warehouseLabel[wh]}</h2>
+                <span className="rounded-full bg-apple-label px-1.5 py-0.5 text-[9px] font-semibold text-white tabular-nums">
+                  {group.length}
                 </span>
                 <button
                   type="button"
                   onClick={() => void onAddBlankRow(wh)}
-                  className="inline-flex items-center gap-1 rounded-full bg-apple-blue px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover active:scale-[0.98]"
+                  className="inline-flex items-center gap-0.5 rounded-md bg-apple-blue px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-apple-blue-hover active:scale-[0.98]"
                 >
-                  <svg className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <svg className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
-                  Nhập booking
+                  + Booking
                 </button>
               </div>
-              <SummaryBar rows={rows} warehouse={wh} />
+              {group.length > 0 ? <SummaryBar rows={rows} warehouse={wh} /> : null}
             </div>
 
-            <div className="max-h-[min(72vh,680px)] overflow-auto rounded-xl border border-black/[0.08] bg-white shadow-apple">
+            <div className="max-h-[min(78vh,720px)] overflow-auto rounded-lg border border-black/[0.08] bg-white shadow-sm">
               <table className="w-full border-collapse text-left text-[11px] leading-tight">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-black/[0.08] bg-apple-bg shadow-[0_1px_0_rgba(0,0,0,0.06)]">
                     {COL_HEADERS.map((c) => {
                       const w =
                         c.key === "actions"
-                          ? wh === "KHO-SCSC"
+                          ? isScscWarehouse(wh)
                             ? "min-w-[7.75rem] w-[7.75rem]"
                             : "min-w-[5.75rem] w-[5.75rem]"
                           : c.w;
@@ -333,7 +166,7 @@ export function DesktopShipmentTable({
                     <tr>
                       <td
                         colSpan={COL_HEADERS.length}
-                        className="px-3 py-5 text-center text-xs text-apple-tertiary"
+                        className="px-3 py-3 text-center text-[11px] text-apple-tertiary"
                       >
                         Chưa có lô
                       </td>
@@ -343,9 +176,13 @@ export function DesktopShipmentTable({
                       group={group}
                       sectionWarehouse={wh}
                       viewSessionYmd={viewSessionYmd}
-                      ecargoMap={ecargoRegister.map}
-                      onEcargoVehicleChange={ecargoRegister.setVehicle}
-                      onEcargoRegister={ecargoRegister.register}
+                      ecargoMap={ecargoMap}
+                      onEcargoVehicleChange={onEcargoVehicleChange}
+                      getEcargoSaveStatus={getEcargoSaveStatus}
+                      getEcargoJob={getEcargoJob}
+                      refreshEcargoJob={refreshEcargoJob}
+                      onEcargoAutoRegister={onEcargoAutoRegister}
+                      isEcargoAutoRegistering={isEcargoAutoRegistering}
                       allRows={allRows}
                       customerDirectory={customerDirectory}
                       globalAgents={globalAgents}
@@ -354,7 +191,6 @@ export function DesktopShipmentTable({
                       onUpdate={onUpdate}
                       onDelete={onDelete}
                       onPrint={onPrint}
-                      onEdit={onEdit}
                       onOpenDimModal={setDimModalRow}
                       onOpenCustomerDetail={setCustomerDetailRow}
                     />
@@ -396,7 +232,11 @@ function WarehouseGroupRows({
   viewSessionYmd,
   ecargoMap,
   onEcargoVehicleChange,
-  onEcargoRegister,
+  getEcargoSaveStatus,
+  getEcargoJob,
+  refreshEcargoJob,
+  onEcargoAutoRegister,
+  isEcargoAutoRegistering,
   allRows,
   customerDirectory,
   globalAgents,
@@ -405,7 +245,6 @@ function WarehouseGroupRows({
   onUpdate,
   onDelete,
   onPrint,
-  onEdit,
   onOpenDimModal,
   onOpenCustomerDetail,
 }: {
@@ -414,7 +253,11 @@ function WarehouseGroupRows({
   viewSessionYmd: string;
   ecargoMap: EcargoKhoScscPersistedMap;
   onEcargoVehicleChange: (id: string, raw: string) => void;
-  onEcargoRegister: (row: Shipment, viewSessionYmd: string, vehicleRaw: string) => void;
+  getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
+  getEcargoJob: (id: string) => EcargoJobRecord | undefined;
+  refreshEcargoJob: (id: string) => void | Promise<void>;
+  onEcargoAutoRegister: (row: Shipment) => void | Promise<void>;
+  isEcargoAutoRegistering: (id: string) => boolean;
   allRows: Shipment[];
   customerDirectory: readonly CustomerDirectoryEntry[];
   globalAgents?: import("../types/globalAgents").GlobalAgentCatalog;
@@ -425,7 +268,6 @@ function WarehouseGroupRows({
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
-  onEdit: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
   onOpenCustomerDetail: (s: Shipment) => void;
 }) {
@@ -455,7 +297,11 @@ function WarehouseGroupRows({
           viewSessionYmd={viewSessionYmd}
           ecargoMap={ecargoMap}
           onEcargoVehicleChange={onEcargoVehicleChange}
-          onEcargoRegister={onEcargoRegister}
+          getEcargoSaveStatus={getEcargoSaveStatus}
+          getEcargoJob={getEcargoJob}
+          refreshEcargoJob={refreshEcargoJob}
+          onEcargoAutoRegister={onEcargoAutoRegister}
+          isEcargoAutoRegistering={isEcargoAutoRegistering}
           groupRowIds={groupRowIds}
           allRows={allRows}
           customerDirectory={customerDirectory}
@@ -465,7 +311,6 @@ function WarehouseGroupRows({
           onUpdate={onUpdate}
           onDelete={onDelete}
           onPrint={onPrint}
-          onEdit={onEdit}
           onOpenDimModal={onOpenDimModal}
           onOpenCustomerDetail={onOpenCustomerDetail}
           ecargoTableOpen={openEcargoRowId === row.id}
@@ -483,7 +328,11 @@ function ShipmentRow({
   viewSessionYmd,
   ecargoMap,
   onEcargoVehicleChange,
-  onEcargoRegister,
+  getEcargoSaveStatus,
+  getEcargoJob,
+  refreshEcargoJob,
+  onEcargoAutoRegister,
+  isEcargoAutoRegistering,
   groupRowIds,
   allRows,
   customerDirectory,
@@ -493,7 +342,6 @@ function ShipmentRow({
   onUpdate,
   onDelete,
   onPrint,
-  onEdit,
   onOpenDimModal,
   onOpenCustomerDetail,
   ecargoTableOpen,
@@ -505,7 +353,11 @@ function ShipmentRow({
   viewSessionYmd: string;
   ecargoMap: EcargoKhoScscPersistedMap;
   onEcargoVehicleChange: (id: string, raw: string) => void;
-  onEcargoRegister: (row: Shipment, viewSessionYmd: string, vehicleRaw: string) => void;
+  getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
+  getEcargoJob: (id: string) => EcargoJobRecord | undefined;
+  refreshEcargoJob: (id: string) => void | Promise<void>;
+  onEcargoAutoRegister: (row: Shipment) => void | Promise<void>;
+  isEcargoAutoRegistering: (id: string) => boolean;
   groupRowIds: string[];
   allRows: Shipment[];
   customerDirectory: readonly CustomerDirectoryEntry[];
@@ -517,7 +369,6 @@ function ShipmentRow({
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
-  onEdit: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
   onOpenCustomerDetail: (s: Shipment) => void;
   ecargoTableOpen: boolean;
@@ -529,17 +380,11 @@ function ShipmentRow({
   const sessionYear = parseInt(row.sessionDate.slice(0, 4), 10) || new Date().getFullYear();
   const rowIdx = groupRowIds.indexOf(row.id);
   const hasNextRow = rowIdx >= 0 && rowIdx < groupRowIds.length - 1;
-  const showEcargoKhoScsc = sectionWarehouse === "KHO-SCSC" && row.warehouse === "KHO-SCSC";
+  const showEcargoKhoScsc = isScscWarehouse(row.warehouse) && sectionWarehouse === row.warehouse;
   const vehicleForEcargo = ecargoMap[row.id]?.vehicleInput ?? "";
-  const ecargoCanSubmit = canSendEcargoRegister(row, vehicleForEcargo, viewSessionYmd);
+  const ecargoJob = getEcargoJob(row.id);
   const customerEntry = findCustomerEntry(row, customerDirectory);
   const savedConsigneeOptions = customerEntry?.savedConsignees ?? [];
-  const resolvedCnee = resolveSavedConsigneeForBooking(row, customerEntry);
-  const cneePreview = (row.consigneeNamePrint?.trim() || resolvedCnee?.consigneeName?.trim() || "").slice(
-    0,
-    36
-  );
-
   useEffect(() => {
     if (!ecargoTableOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -783,26 +628,19 @@ function ShipmentRow({
           </button>
         </div>
       </td>
-      {/* CNEE — chỉ desktop */}
+      {/* CNEE — chọn consignee + khối chữ bôi đen copy */}
       <td className="border-r border-black/[0.06] px-1 py-0.5 align-top">
-        <div className="flex min-w-0 flex-col gap-px">
-          <InlineConsigneeSelect
-            value={row.customerConsigneeId?.trim() ?? ""}
-            options={savedConsigneeOptions}
-            onChange={(consigneeId) => {
-              const sc = savedConsigneeOptions.find((x) => x.id === consigneeId);
-              onUpdate(row.id, buildShipmentPatchForSavedConsignee(sc));
-            }}
-          />
-          {cneePreview ? (
-            <span
-              className="line-clamp-1 text-[9px] leading-tight text-apple-tertiary"
-              title={cneePreview}
-            >
-              {cneePreview}
-            </span>
-          ) : null}
-        </div>
+        <InlineCneeCell
+          shipment={row}
+          customerDirectory={customerDirectory}
+          value={row.customerConsigneeId?.trim() ?? ""}
+          options={savedConsigneeOptions}
+          sessionYmdFallback={viewSessionYmd}
+          onChange={(consigneeId) => {
+            const sc = savedConsigneeOptions.find((x) => x.id === consigneeId);
+            onUpdate(row.id, buildShipmentPatchForSavedConsignee(sc));
+          }}
+        />
       </td>
       {/* Note */}
       <td className="border-r border-black/[0.06] px-1 py-0.5 align-top">
@@ -833,40 +671,22 @@ function ShipmentRow({
             globalAgents={globalAgents}
             scscWeighPrintSettings={scscWeighPrintSettings}
             saveScscWeighPrintSettings={saveScscWeighPrintSettings}
-            onEdit={onEdit}
             onPrint={onPrint}
             onDelete={onDelete}
           />
           {showEcargoKhoScsc ? (
-            <button
-              type="button"
-              data-ecargo-trigger={row.id}
-              aria-label="eCargo"
-              aria-expanded={ecargoTableOpen}
-              aria-controls={`ecargo-panel-${row.id}`}
+            <EcargoKhoScscTriggerButton
+              rowId={row.id}
+              open={ecargoTableOpen}
+              hasVehicle={vehicleForEcargo.trim().length >= ECARGO_VEHICLE_MIN}
+              job={ecargoJob}
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleEcargoTable();
               }}
-              className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-md border shadow-sm transition-all active:scale-[0.97] ${
-                ecargoTableOpen
-                  ? "border-sky-600 bg-sky-100 text-sky-900 ring-1 ring-sky-300/50"
-                  : "border-sky-500/80 bg-gradient-to-b from-white via-sky-50 to-sky-100 text-sky-800 hover:border-sky-600"
-              }`}
-            >
-              {vehicleForEcargo.trim().length >= ECARGO_VEHICLE_MIN ? (
-                <span
-                  className="absolute right-0.5 top-0.5 h-1 w-1 rounded-full bg-emerald-500 ring-1 ring-white"
-                  aria-hidden
-                />
-              ) : null}
-              <svg className="h-3.5 w-5" viewBox="0 0 32 22" fill="currentColor" aria-hidden>
-                <path opacity="0.35" d="M2 14h6v5H2v-5zm22 0h6v5h-6v-5z" />
-                <path d="M1 15.5V8.5L4 5h8l2.5 3H27l3 4.5v6H1zm3-6.5v4h6V9H4zm9 0v4h14l-2-2.5H13V9z" />
-                <circle cx="8" cy="19" r="2.2" />
-                <circle cx="24" cy="19" r="2.2" />
-              </svg>
-            </button>
+              className="h-8 shrink-0 gap-1 px-1.5 text-[10px] [&>span:last-child]:inline"
+              title="eCargo — tự động đăng ký kho SCSC"
+            />
           ) : null}
         </div>
       </td>
@@ -877,9 +697,14 @@ function ShipmentRow({
         row={row}
         vehicleForEcargo={vehicleForEcargo}
         viewSessionYmd={viewSessionYmd}
-        ecargoCanSubmit={ecargoCanSubmit}
+        saveStatus={getEcargoSaveStatus(row.id)}
+        job={ecargoJob}
+        autoRegistering={isEcargoAutoRegistering(row.id)}
         onVehicleChange={(raw) => onEcargoVehicleChange(row.id, raw)}
-        onRegister={() => onEcargoRegister(row, viewSessionYmd, vehicleForEcargo)}
+        onAutoRegister={async () => {
+          await onEcargoAutoRegister(row);
+        }}
+        onRefreshJob={() => void refreshEcargoJob(row.id)}
         onClose={onCloseEcargoTable}
       />
     ) : null}

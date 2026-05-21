@@ -1,6 +1,6 @@
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import { ymdToDdMon } from "./bookingDateParse";
+import { parseFlightDateDisplayToYmd, ymdToDdMon } from "./bookingDateParse";
 import {
   findCustomerEntry,
   resolveSavedConsigneeForBooking,
@@ -9,6 +9,28 @@ import { resolvePrintAddressForShipment } from "./printAddressMultiline";
 
 function compactSpace(s: string): string {
   return s.replace(/\s+/g, " ").trim();
+}
+
+function yearHintFromShipment(shipment: Shipment, sessionYmdFallback?: string): number {
+  const ymd = shipment.sessionDate?.trim() || sessionYmdFallback?.trim() || "";
+  const y = parseInt(ymd.slice(0, 4), 10);
+  return Number.isFinite(y) && y >= 2000 ? y : new Date().getFullYear();
+}
+
+/** Ngày bay lô (VD `19MAY`) → `dd-mm-yyyy` để hiển thị trong ô CNEE. */
+export function formatFlightDateDdMmYyyy(flightDateRaw: string, yearHint: number): string {
+  const raw = (flightDateRaw ?? "").trim();
+  if (!raw) return "";
+
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (iso) return `${iso[3]}-${iso[2]}-${iso[1]}`;
+
+  const ymd = parseFlightDateDisplayToYmd(raw, yearHint);
+  if (ymd) {
+    const [y, m, d] = ymd.split("-");
+    return `${d}-${m}-${y}`;
+  }
+  return raw;
 }
 
 /** Ngày nhập liệu (sessionDate YYYY-MM-DD) → `17MAY, 2026`. */
@@ -87,6 +109,39 @@ export function buildShipmentCneeBodyLines(
     return cneePartyFallbackLines(customer);
   }
   return lines;
+}
+
+/** AWB, chuyến, ngày bay (dd-mm-yyyy), DEST — hiển thị phía trên khối CNEE trong ô. */
+export function buildShipmentCneeMetaLines(
+  shipment: Shipment,
+  opts?: { sessionYmdFallback?: string }
+): string[] {
+  const lines: string[] = [];
+  const awb = (shipment.awb ?? "").trim();
+  const flight = (shipment.flight ?? "").trim().toUpperCase();
+  const dest = (shipment.dest ?? "").trim().toUpperCase();
+  const flightDateDdMmYyyy = formatFlightDateDdMmYyyy(
+    shipment.flightDate ?? "",
+    yearHintFromShipment(shipment, opts?.sessionYmdFallback)
+  );
+
+  if (awb) lines.push(`AWB: ${awb}`);
+  if (flight) lines.push(`Chuyến: ${flight}`);
+  if (flightDateDdMmYyyy) lines.push(`Ngày bay: ${flightDateDdMmYyyy}`);
+  if (dest) lines.push(`DEST: ${dest}`);
+  return lines;
+}
+
+/** Toàn bộ nội dung hiển thị trong ô CNEE (meta lô + thông tin consignee). */
+export function buildShipmentCneeDisplayLines(
+  shipment: Shipment,
+  directory: readonly CustomerDirectoryEntry[] = [],
+  opts?: { sessionYmdFallback?: string }
+): string[] {
+  const meta = buildShipmentCneeMetaLines(shipment, opts);
+  const body = buildShipmentCneeBodyLines(shipment, directory);
+  if (meta.length && body.length) return [...meta, "", ...body];
+  return meta.length ? meta : body;
 }
 
 /**

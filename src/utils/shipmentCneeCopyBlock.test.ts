@@ -4,6 +4,9 @@ import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import {
   buildShipmentCneeBodyLines,
   buildShipmentCneeCopyBlock,
+  buildShipmentCneeDisplayLines,
+  buildShipmentCneeMetaLines,
+  formatFlightDateDdMmYyyy,
   formatSessionYmdForCneeCopy,
 } from "./shipmentCneeCopyBlock";
 
@@ -27,6 +30,43 @@ function baseShipment(overrides: Partial<Shipment> = {}): Shipment {
 describe("formatSessionYmdForCneeCopy", () => {
   it("định dạng ddMON, năm", () => {
     expect(formatSessionYmdForCneeCopy("2026-05-17")).toBe("17MAY, 2026");
+  });
+});
+
+describe("formatFlightDateDdMmYyyy", () => {
+  it("chuyển DDMMM sang dd-mm-yyyy", () => {
+    expect(formatFlightDateDdMmYyyy("19MAY", 2026)).toBe("19-05-2026");
+    expect(formatFlightDateDdMmYyyy("18MAY", 2026)).toBe("18-05-2026");
+  });
+
+  it("giữ nguyên ISO yyyy-mm-dd", () => {
+    expect(formatFlightDateDdMmYyyy("2026-05-19", 2026)).toBe("19-05-2026");
+  });
+});
+
+describe("buildShipmentCneeMetaLines", () => {
+  it("gồm AWB, chuyến, ngày bay dd-mm-yyyy, DEST", () => {
+    expect(buildShipmentCneeMetaLines(baseShipment())).toEqual([
+      "AWB: 978-1111 2222",
+      "Chuyến: VJ081",
+      "Ngày bay: 18-05-2026",
+      "DEST: MEL",
+    ]);
+  });
+});
+
+describe("buildShipmentCneeDisplayLines", () => {
+  it("meta + body CNEE", () => {
+    const lines = buildShipmentCneeDisplayLines(
+      baseShipment({
+        consigneeNamePrint: "ACME PTY LTD",
+        consigneeAddressPrint: "1 MAIN ST",
+      })
+    );
+    expect(lines[0]).toBe("AWB: 978-1111 2222");
+    expect(lines).toContain("Ngày bay: 18-05-2026");
+    expect(lines).toContain("ACME PTY LTD");
+    expect(lines).toContain("1 MAIN ST");
   });
 });
 

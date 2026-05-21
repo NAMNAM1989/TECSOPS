@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import type { Shipment } from "../types/shipment";
 import { isTcsWarehouse } from "../constants/warehouses";
 
@@ -23,33 +22,34 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** Định dạng số 2 chữ số thập phân cho ô Excel (kiểu số + hiển thị 0.00). */
-function applyDimCellsTwoDecimals(ws: XLSX.WorkSheet) {
-  const ref = ws["!ref"];
-  if (!ref) return;
-  const range = XLSX.utils.decode_range(ref);
-  for (let r = 1; r <= range.e.r; r++) {
-    for (let c = 0; c <= 3; c++) {
-      const a = XLSX.utils.encode_cell({ r, c });
-      const cell = ws[a];
-      if (!cell || cell.v === "" || cell.v == null) continue;
-      const n = typeof cell.v === "number" ? cell.v : Number(cell.v);
-      if (!Number.isFinite(n)) continue;
-      ws[a] = { t: "n", v: round2(n), z: "0.00" };
-    }
-  }
-}
-
 export function canExportTcsDimTemplate(s: Shipment): boolean {
   return isTcsWarehouse(s.warehouse) && (s.dimLines?.length ?? 0) > 0;
 }
 
-/** Xuất một sheet đúng mẫu ATTACHED_LIST_DIMS cho một lô TCS. */
-export function downloadTcsAttachedDimsExcel(s: Shipment): void {
+/** Xuất một sheet đúng mẫu ATTACHED_LIST_DIMS cho một lô TCS — dynamic import xlsx để không vào bundle chính. */
+export async function downloadTcsAttachedDimsExcel(s: Shipment): Promise<void> {
   if (!canExportTcsDimTemplate(s) || !s.dimLines) {
     window.alert("Chỉ áp dụng cho kho TCS (TECS-TCS hoặc KHO TCS) và lô đã có nhập DIM (chi tiết kiện).");
     return;
   }
+
+  const XLSX = await import("xlsx");
+
+  const applyDimCellsTwoDecimals = (ws: ReturnType<typeof XLSX.utils.aoa_to_sheet>) => {
+    const ref = ws["!ref"];
+    if (!ref) return;
+    const range = XLSX.utils.decode_range(ref);
+    for (let r = 1; r <= range.e.r; r++) {
+      for (let c = 0; c <= 3; c++) {
+        const a = XLSX.utils.encode_cell({ r, c });
+        const cell = ws[a];
+        if (!cell || cell.v === "" || cell.v == null) continue;
+        const n = typeof cell.v === "number" ? cell.v : Number(cell.v);
+        if (!Number.isFinite(n)) continue;
+        ws[a] = { t: "n", v: round2(n), z: "0.00" };
+      }
+    }
+  };
 
   const aoa: (string | number)[][] = [
     HEADER_ROW,
@@ -81,8 +81,7 @@ export function downloadTcsAttachedDimsExcel(s: Shipment): void {
   ];
 
   const wb = XLSX.utils.book_new();
-  const sheetName = "Sheet1";
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
 
   const fname = `ATTACHED_LIST_DIMS_${awbForFilename(s.awb)}.xlsx`;
   XLSX.writeFile(wb, fname);

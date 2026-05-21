@@ -7,7 +7,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "concurrently -k -n srv,vite -c blue,green \"node server/index.mjs\" \"vite\"",
+    "dev": "node scripts/dev.mjs",
+    "dev:concurrent": "concurrently -k -n srv,vite -c blue,green \"node server/index.mjs\" \"vite\"",
+    "setup:ecargo": "npx playwright install chromium",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "eslint src",
@@ -27,10 +29,13 @@
     "migrate:customer-relations": "node scripts/migrate-customer-relations.mjs",
     "backup:postgres-state": "node scripts/postgres-backup-state.mjs",
     "restore:postgres-state": "node scripts/postgres-restore-state.mjs",
+    "import:scsc-template": "node scripts/import-scsc-template.mjs",
     "railway:up": "node scripts/railway-up.mjs"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
+    "playwright": "^1.52.0",
+    "imapflow": "^1.0.186",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "konva": "^9.3.22",
@@ -52,6 +57,7 @@
     "concurrently": "^9.1.2",
     "eslint": "^9.39.4",
     "jsdom": "^25.0.1",
+    "pdf-to-img": "^6.1.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
     "tsx": "^4.19.2",

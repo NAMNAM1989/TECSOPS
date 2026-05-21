@@ -1,3 +1,4 @@
+import "./loadEnv.mjs";
 import express from "express";
 import { createServer } from "node:http";
 import path from "node:path";
@@ -21,6 +22,8 @@ import {
   getSitePassword,
   registerSitePasswordGate,
 } from "./authSiteGate.mjs";
+import { registerEcargoRoutes } from "./ecargo/ecargoRoutes.mjs";
+import { startEcargoWorker } from "./ecargo/ecargoWorker.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
@@ -156,6 +159,16 @@ app.post("/api/mutation", async (req, res) => {
 
 registerTsplRoutes(app);
 
+/** eCargo auto-register — cần Redis. */
+let ecargoRedisClient = null;
+registerEcargoRoutes(app, {
+  get redisClient() {
+    return ecargoRedisClient;
+  },
+  loadState,
+  io,
+});
+
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);
   registerWeighSlipRoutes(app);
@@ -214,14 +227,33 @@ async function start() {
     const pubClient = createClient({ url: redisUrl });
     const subClient = pubClient.duplicate();
     const stateClient = createClient({ url: redisUrl });
+    /** Client riêng cho BRPOP — tránh block GET/SET state trên cùng connection. */
+    const ecargoQueueClient = createClient({ url: redisUrl });
 
     pubClient.on("error", (err) => console.error("[redis pub]", err.message));
     subClient.on("error", (err) => console.error("[redis sub]", err.message));
     stateClient.on("error", (err) => console.error("[redis state]", err.message));
+    ecargoQueueClient.on("error", (err) => console.error("[redis ecargo-queue]", err.message));
 
-    await Promise.all([pubClient.connect(), subClient.connect(), stateClient.connect()]);
+    await Promise.all([
+      pubClient.connect(),
+      subClient.connect(),
+      stateClient.connect(),
+      ecargoQueueClient.connect(),
+    ]);
     io.adapter(createAdapter(pubClient, subClient));
     setRedisStateClient(stateClient);
+    ecargoRedisClient = stateClient;
+    startEcargoWorker({
+      queueClient: ecargoQueueClient,
+      storeClient: stateClient,
+      io,
+      runMutation: async (mutation) => {
+        const next = await runMutation(mutation);
+        io.emit("sync", next);
+        return next;
+      },
+    });
     console.info(
       databaseUrl
         ? "[redis] Socket.IO adapter + bootstrap/rollback state available (Postgres is primary)"

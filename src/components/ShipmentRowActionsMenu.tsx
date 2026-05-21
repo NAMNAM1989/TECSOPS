@@ -20,7 +20,6 @@ type Props = {
   globalAgents?: GlobalAgentCatalog;
   scscWeighPrintSettings?: ScscWeighPrintSettings;
   saveScscWeighPrintSettings?: (settings: ScscWeighPrintSettings) => void | Promise<void>;
-  onEdit: (s: Shipment) => void;
   onPrint: (s: Shipment) => void;
   onDelete: (id: string) => void;
 };
@@ -99,18 +98,6 @@ function IconDim() {
   );
 }
 
-function IconEdit() {
-  return (
-    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-      />
-    </svg>
-  );
-}
-
 function IconMore() {
   return (
     <svg className={iconCls} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -139,7 +126,6 @@ export function ShipmentRowActionsMenu({
   globalAgents,
   scscWeighPrintSettings,
   saveScscWeighPrintSettings,
-  onEdit,
   onPrint,
   onDelete,
 }: Props) {
@@ -239,7 +225,7 @@ export function ShipmentRowActionsMenu({
     >
       {showDim ? menuItem("Excel DIM", () => downloadScscDimListExcel(row)) : null}
       {showTcsDim ? menuItem("In DIM TCS", () => printTcsAttachedDimsList(row)) : null}
-      {showTcsDim ? menuItem("Excel TCS", () => downloadTcsAttachedDimsExcel(row)) : null}
+      {showTcsDim ? menuItem("Excel TCS", () => void downloadTcsAttachedDimsExcel(row)) : null}
     </div>
   ) : null;
 
@@ -269,9 +255,6 @@ export function ShipmentRowActionsMenu({
           <IconDim />
         </ActionIconBtn>
       ) : null}
-      <ActionIconBtn label="Sửa lô" onClick={() => onEdit(row)}>
-        <IconEdit />
-      </ActionIconBtn>
       {hasMoreMenu ? (
         <button
           ref={triggerRef}

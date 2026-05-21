@@ -13,6 +13,11 @@ import type { GlobalAgentCatalog } from "../types/globalAgents";
 import { clampGlobalAgentCatalog, defaultGlobalAgentCatalog } from "./globalAgentsCore";
 import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
 import {
+  normalizeEcargoKhoScscMap,
+  normalizeEcargoVehicleInput,
+  type EcargoKhoScscPersistedMap,
+} from "./ecargoKhoScscCore";
+import {
   clampScscWeighPrintSettings,
   defaultScscWeighPrintSettings,
 } from "../printing/scscWeigh/scscWeighPrintSettingsCore";
@@ -30,6 +35,8 @@ export type AppState = {
   printerProfiles?: PrinterProfilesCatalog;
   /** Người gửi / làm phiếu cân SCSC — in chung mọi phiếu. */
   scscWeighPrintSettings?: ScscWeighPrintSettings;
+  /** Số xe + trạng thái đăng ký eCargo KHO SCSC (đồng bộ mọi thiết bị). */
+  ecargoKhoScsc?: EcargoKhoScscPersistedMap;
 };
 
 export type ShipmentMutation =
@@ -40,7 +47,14 @@ export type ShipmentMutation =
   | { action: "SET_GLOBAL_AGENTS"; catalog: GlobalAgentCatalog }
   | { action: "SET_AIRLINE_LABEL_OVERRIDES"; overrides: AirlineLabelOverrides }
   | { action: "SET_PRINTER_PROFILES"; catalog: PrinterProfilesCatalog }
-  | { action: "SET_SCSC_WEIGH_PRINT_SETTINGS"; settings: ScscWeighPrintSettings };
+  | { action: "SET_SCSC_WEIGH_PRINT_SETTINGS"; settings: ScscWeighPrintSettings }
+  | {
+      action: "PATCH_ECARGO_KHO_SCSC";
+      shipmentId: string;
+      vehicleInput?: string;
+      markedSubmitted?: boolean;
+    }
+  | { action: "MERGE_ECARGO_KHO_SCSC"; map: EcargoKhoScscPersistedMap };
 
 function assertAwbUnique(rows: Shipment[], awb: string, exceptId?: string) {
   const d = awbDigitsKey(awb);
@@ -105,69 +119,83 @@ function resolvedScscWeighPrintSettings(s: AppState): ScscWeighPrintSettings {
   return clampScscWeighPrintSettings(s.scscWeighPrintSettings ?? defaultScscWeighPrintSettings());
 }
 
+function resolvedEcargoKhoScsc(s: AppState): EcargoKhoScscPersistedMap {
+  return normalizeEcargoKhoScscMap(s.ecargoKhoScsc);
+}
+
+function withEcargo(
+  state: AppState,
+  rows: Shipment[],
+  ecargoKhoScsc: EcargoKhoScscPersistedMap,
+  extras: Partial<Omit<AppState, "version" | "rows" | "ecargoKhoScsc">> = {}
+): AppState {
+  return {
+    version: state.version + 1,
+    rows: renumberSttForAll(rows),
+    customers: extras.customers ?? state.customers,
+    globalAgents: extras.globalAgents ?? resolvedGlobalAgents(state),
+    airlineLabelOverrides: extras.airlineLabelOverrides ?? resolvedAirlineOverrides(state),
+    printerProfiles: extras.printerProfiles ?? resolvedPrinterCatalog(state),
+    scscWeighPrintSettings: extras.scscWeighPrintSettings ?? resolvedScscWeighPrintSettings(state),
+    ecargoKhoScsc,
+  };
+}
+
 export function applyShipmentMutation(state: AppState, mutation: ShipmentMutation): AppState {
   const rows = [...state.rows];
-  const keepAirline = (): AirlineLabelOverrides => resolvedAirlineOverrides(state);
-  const keepPrinter = (): PrinterProfilesCatalog => resolvedPrinterCatalog(state);
-  const keepGlobalAgents = (): GlobalAgentCatalog => resolvedGlobalAgents(state);
-  const keepScscWeighPrintSettings = (): ScscWeighPrintSettings => resolvedScscWeighPrintSettings(state);
+  const keepEcargo = (): EcargoKhoScscPersistedMap => resolvedEcargoKhoScsc(state);
 
   switch (mutation.action) {
     case "SET_CUSTOMERS": {
       assertCustomerDirectoryValid(mutation.customers);
-      return {
-        version: state.version + 1,
-        rows: renumberSttForAll(rows),
+      return withEcargo(state, rows, keepEcargo(), {
         customers: mutation.customers.map((e) => clampCustomerDirectoryEntry(e)),
-        globalAgents: keepGlobalAgents(),
-        airlineLabelOverrides: keepAirline(),
-        printerProfiles: keepPrinter(),
-        scscWeighPrintSettings: keepScscWeighPrintSettings(),
-      };
+      });
     }
     case "SET_GLOBAL_AGENTS": {
-      return {
-        version: state.version + 1,
-        rows: renumberSttForAll(rows),
-        customers: state.customers,
+      return withEcargo(state, rows, keepEcargo(), {
         globalAgents: clampGlobalAgentCatalog(mutation.catalog),
-        airlineLabelOverrides: keepAirline(),
-        printerProfiles: keepPrinter(),
-        scscWeighPrintSettings: keepScscWeighPrintSettings(),
-      };
+      });
     }
     case "SET_AIRLINE_LABEL_OVERRIDES": {
-      return {
-        version: state.version + 1,
-        rows: renumberSttForAll(rows),
-        customers: state.customers,
-        globalAgents: keepGlobalAgents(),
+      return withEcargo(state, rows, keepEcargo(), {
         airlineLabelOverrides: clampAirlineLabelOverrides(mutation.overrides),
-        printerProfiles: keepPrinter(),
-        scscWeighPrintSettings: keepScscWeighPrintSettings(),
-      };
+      });
     }
     case "SET_PRINTER_PROFILES": {
-      return {
-        version: state.version + 1,
-        rows: renumberSttForAll(rows),
-        customers: state.customers,
-        globalAgents: keepGlobalAgents(),
-        airlineLabelOverrides: keepAirline(),
+      return withEcargo(state, rows, keepEcargo(), {
         printerProfiles: clampPrinterProfilesCatalog(mutation.catalog),
-        scscWeighPrintSettings: keepScscWeighPrintSettings(),
-      };
+      });
     }
     case "SET_SCSC_WEIGH_PRINT_SETTINGS": {
-      return {
-        version: state.version + 1,
-        rows: renumberSttForAll(rows),
-        customers: state.customers,
-        globalAgents: keepGlobalAgents(),
-        airlineLabelOverrides: keepAirline(),
-        printerProfiles: keepPrinter(),
+      return withEcargo(state, rows, keepEcargo(), {
         scscWeighPrintSettings: clampScscWeighPrintSettings(mutation.settings),
-      };
+      });
+    }
+    case "PATCH_ECARGO_KHO_SCSC": {
+      const shipmentId = mutation.shipmentId.trim();
+      if (!shipmentId) throw new Error("PATCH_ECARGO_KHO_SCSC requires shipmentId");
+      if (!rows.some((r) => r.id === shipmentId)) {
+        throw new Error(`Shipment not found: ${shipmentId}`);
+      }
+      const prev = keepEcargo();
+      const line = { ...(prev[shipmentId] ?? { vehicleInput: "" }) };
+      if (mutation.vehicleInput !== undefined) {
+        line.vehicleInput = normalizeEcargoVehicleInput(mutation.vehicleInput);
+      }
+      if (mutation.markedSubmitted !== undefined) {
+        line.markedSubmitted = mutation.markedSubmitted;
+      }
+      line.updatedAt = new Date().toISOString();
+      const nextMap = { ...prev, [shipmentId]: line };
+      if (!line.vehicleInput && !line.markedSubmitted) {
+        delete nextMap[shipmentId];
+      }
+      return withEcargo(state, rows, nextMap);
+    }
+    case "MERGE_ECARGO_KHO_SCSC": {
+      const merged = { ...keepEcargo(), ...normalizeEcargoKhoScscMap(mutation.map) };
+      return withEcargo(state, rows, merged);
     }
     case "UPDATE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
@@ -185,7 +213,9 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
       const i = rows.findIndex((r) => r.id === mutation.id);
       if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
       rows.splice(i, 1);
-      break;
+      const ecargo = { ...keepEcargo() };
+      delete ecargo[mutation.id];
+      return withEcargo(state, rows, ecargo);
     }
     case "ADD": {
       const s = mutation.shipment;
@@ -201,13 +231,5 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
       throw new Error("Unknown mutation");
   }
 
-  return {
-    version: state.version + 1,
-    rows: renumberSttForAll(rows),
-    customers: state.customers,
-    globalAgents: keepGlobalAgents(),
-    airlineLabelOverrides: keepAirline(),
-    printerProfiles: keepPrinter(),
-    scscWeighPrintSettings: keepScscWeighPrintSettings(),
-  };
+  return withEcargo(state, rows, keepEcargo());
 }

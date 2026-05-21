@@ -20,6 +20,7 @@ import {
   saveAirlineLabelOverridesToStorage,
 } from "../utils/airlineLabelOverridesStorage";
 import { mergeServerCatalogIntoLocalStore } from "../printing/printerProfilesSync";
+import type { EcargoJobRecord } from "../types/ecargoJob";
 
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
@@ -60,6 +61,7 @@ export function useShipmentSync(fallback: Fallback) {
   const [state, setState] = useState<AppState | null>(null);
   const apiOkRef = useRef(false);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
+  const ecargoJobListenersRef = useRef(new Set<(job: EcargoJobRecord) => void>());
   const fallbackRef = useRef(fallback);
   fallbackRef.current = fallback;
 
@@ -120,6 +122,11 @@ export function useShipmentSync(fallback: Fallback) {
         if (apiOkRef.current) setStatus("degraded");
       });
       socket.on("sync", onSync);
+      socket.on("ecargo-job", (payload: unknown) => {
+        const job = parseEcargoJobLoose(payload);
+        if (!job) return;
+        for (const fn of ecargoJobListenersRef.current) fn(job);
+      });
     })();
 
     return () => {
@@ -127,6 +134,13 @@ export function useShipmentSync(fallback: Fallback) {
       setSocketConnected(false);
       socketRef.current?.close();
       socketRef.current = null;
+    };
+  }, []);
+
+  const subscribeEcargoJob = useCallback((fn: (job: EcargoJobRecord) => void) => {
+    ecargoJobListenersRef.current.add(fn);
+    return () => {
+      ecargoJobListenersRef.current.delete(fn);
     };
   }, []);
 
@@ -180,5 +194,24 @@ export function useShipmentSync(fallback: Fallback) {
     return next;
   }, []);
 
-  return { status, state, mutate, socketConnected };
+  return { status, state, mutate, socketConnected, subscribeEcargoJob };
+}
+
+function parseEcargoJobLoose(raw: unknown): EcargoJobRecord | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const shipmentId = typeof o.shipmentId === "string" ? o.shipmentId : "";
+  const status = typeof o.status === "string" ? o.status : "";
+  if (!shipmentId || !status) return null;
+  return {
+    shipmentId,
+    status: status as EcargoJobRecord["status"],
+    jobId: typeof o.jobId === "string" ? o.jobId : undefined,
+    vehicleNo: typeof o.vehicleNo === "string" ? o.vehicleNo : undefined,
+    message: typeof o.message === "string" ? o.message : undefined,
+    verifyUrl: typeof o.verifyUrl === "string" ? o.verifyUrl : undefined,
+    updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : undefined,
+    createdAt: typeof o.createdAt === "string" ? o.createdAt : undefined,
+    finishedAt: typeof o.finishedAt === "string" ? o.finishedAt : undefined,
+  };
 }

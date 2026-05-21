@@ -1,5 +1,6 @@
 import type { EcargoRegisterFromOpsMessage, EcargoRegisterBuildInput } from "../types/ecargo";
 import type { Shipment } from "../types/shipment";
+import { isScscWarehouse } from "../constants/warehouses";
 import { parseBookingDateLoose } from "./bookingDateParse";
 
 const DEFAULT_PCS = 99;
@@ -56,6 +57,11 @@ export function isMawbCompleteForEcargo(awbRaw: string): boolean {
   return MAWB_NORMALIZED.test(normalizeMawb(awbRaw));
 }
 
+/** Ngày hiện tại theo giờ VN — `YYYY-MM-DD`. */
+export function todayIsoVietnam(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
+}
+
 export function canSendEcargoRegister(row: Shipment, vehicleNormalized: string, viewSessionYmd: string): boolean {
   return getEcargoRegisterReadiness(row, vehicleNormalized, viewSessionYmd).ready;
 }
@@ -69,8 +75,8 @@ export function getEcargoRegisterReadiness(
   vehicleRaw: string,
   viewSessionYmd: string
 ): { ready: boolean; hint: string } {
-  if (row.warehouse !== "KHO-SCSC") {
-    return { ready: false, hint: "Chỉ dùng cho kho KHO SCSC." };
+  if (!isScscWarehouse(row.warehouse)) {
+    return { ready: false, hint: "Chỉ dùng cho kho SCSC (TECS-SCSC hoặc KHO SCSC)." };
   }
 
   const missing: string[] = [];
@@ -81,7 +87,14 @@ export function getEcargoRegisterReadiness(
   if (!row.flight?.trim()) missing.push("chuyến bay");
   const y = parseInt(viewSessionYmd.slice(0, 4), 10);
   const year = Number.isFinite(y) && y >= 1900 ? y : new Date().getFullYear();
-  if (!parseFlightDateToIso(row.flightDate, year)) missing.push("ngày bay");
+  const flightDateIso = parseFlightDateToIso(row.flightDate, year);
+  if (!flightDateIso) missing.push("ngày bay");
+  else if (flightDateIso < todayIsoVietnam()) {
+    return {
+      ready: false,
+      hint: "Ngày bay đã qua — eCargo không chấp nhận. Cập nhật ngày bay trên lô.",
+    };
+  }
   if (normalizeDestination(row.dest).length < 2) missing.push("DEST");
 
   if (missing.length === 0) {

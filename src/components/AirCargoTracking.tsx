@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, lazy, Suspense, startTransition } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { initialShipments } from "../data/mockShipments";
 import { loadRows } from "../utils/shipmentStorage";
@@ -11,10 +11,11 @@ import {
 import { useShipmentSync } from "../hooks/useShipmentSync";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
-import { ShipmentBookingForm } from "./ShipmentBookingForm";
+import { MobileShipmentEditSheet } from "./MobileShipmentEditSheet";
+const ShipmentBookingForm = lazy(() =>
+  import("./ShipmentBookingForm").then((m) => ({ default: m.ShipmentBookingForm }))
+);
 import { CustomerDirectoryManager } from "./CustomerDirectoryManager";
-import { UnmatchedCustomerReportModal } from "./UnmatchedCustomerReportModal";
-import type { UnmatchedCustomerRow } from "../utils/fetchAppStateRows";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
@@ -24,10 +25,10 @@ import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import type { WarehouseLayoutFilter } from "../constants/warehouses";
 import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
+import { useEcargoKhoScscRegister } from "../hooks/useEcargoKhoScscRegister";
 import { debugError } from "../utils/debugLog";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { AirlineLabelSettingsModal } from "./AirlineLabelSettingsModal";
-import { WeighSlipManager } from "./WeighSlipManager";
 import { defaultGlobalAgentCatalog } from "../utils/globalAgentsCore";
 import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
 import {
@@ -48,9 +49,12 @@ const WAREHOUSE_FILTER_OPTIONS: { value: WarehouseLayoutFilter; label: string }[
   { value: "KHO-SCSC", label: "KHO SCSC" },
 ];
 
-/** Gộp các trường thường gõ để tìm (một ô giống Google — nhiều từ cách nhau = AND). */
+/** Cache haystack theo id để tránh build lại mỗi lần render. */
+const haystackCache = new WeakMap<Shipment, string>();
+
 function shipmentSearchHaystack(r: Shipment): string {
-  const parts = [
+  if (haystackCache.has(r)) return haystackCache.get(r)!;
+  const hay = [
     r.awb,
     r.hawb ?? "",
     r.flight,
@@ -66,8 +70,9 @@ function shipmentSearchHaystack(r: Shipment): string {
     r.pcs != null ? String(r.pcs) : "",
     r.kg != null ? String(r.kg) : "",
     r.dimWeightKg != null ? String(r.dimWeightKg) : "",
-  ];
-  return parts.map((x) => String(x ?? "").toLowerCase()).join(" ");
+  ].map((x) => String(x ?? "").toLowerCase()).join(" ");
+  haystackCache.set(r, hay);
+  return hay;
 }
 
 function shipmentMatchesSearchQuery(r: Shipment, raw: string): boolean {
@@ -90,20 +95,19 @@ function formatWorkDateLabel(d: Date): string {
 export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const fallback = useMemo(() => ({ rows: loadRows() ?? initialShipments }), []);
 
-  const { status, state, mutate, socketConnected } = useShipmentSync(fallback);
+  const { status, state, mutate, socketConnected, subscribeEcargoJob } = useShipmentSync(fallback);
+  const ecargoRegister = useEcargoKhoScscRegister(state, mutate, subscribeEcargoJob);
   const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
+  const [mobileEditShipment, setMobileEditShipment] = useState<Shipment | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
   const [warehouseFilter, setWarehouseFilter] = useState<WarehouseLayoutFilter>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [excelExporting, setExcelExporting] = useState(false);
   const [customerDirOpen, setCustomerDirOpen] = useState(false);
-  const [unmatchedReportOpen, setUnmatchedReportOpen] = useState(false);
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
-  const [weighSlipOpen, setWeighSlipOpen] = useState(false);
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -199,7 +203,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   /** Desktop: thêm dòng trống đúng kho (nút đặt cạnh tiêu đề TCS / SCSC). */
   const addBlankRowForWarehouse = useCallback(
     async (warehouse: Warehouse) => {
-      setEditingShipment(null);
+      setMobileEditShipment(null);
       setShowForm(false);
       setStatusFilter("ALL");
       const prevIds = new Set((state?.rows ?? []).map((r) => r.id));
@@ -266,38 +270,14 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     }
   }, [allRows, selectedYmd, state]);
 
-  const openEdit = useCallback((s: Shipment) => {
-    setShowForm(false);
-    setSelectedId(null);
-    setEditingShipment(s);
+  const openMobileEdit = useCallback((s: Shipment) => {
+    startTransition(() => {
+      setShowForm(false);
+      setMobileEditShipment(s);
+    });
   }, []);
 
   const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
-
-  const applySuggestedCustomerLinks = useCallback(
-    async (rows: UnmatchedCustomerRow[]): Promise<{ updated: number; failed: number }> => {
-      let updated = 0;
-      let failed = 0;
-      for (const row of rows) {
-        try {
-          await mutate({
-            action: "UPDATE",
-            id: row.id,
-            patch: {
-              customerId: row.suggestedCustomerId,
-              customerCode: row.suggestedCustomerCode || row.customerCode,
-            },
-          });
-          updated += 1;
-        } catch (e) {
-          debugError("ui:customer-unmatched-apply", row.id, e);
-          failed += 1;
-        }
-      }
-      return { updated, failed };
-    },
-    [mutate]
-  );
 
   if (status === "loading" || !state) {
     return (
@@ -308,245 +288,150 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
-      <header className="mb-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-apple-label sm:text-[1.75rem] sm:leading-tight">
-              Hàng lên sân bay
-            </h1>
-            <p className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-apple-secondary">
-              Bảng theo ngày — chọn ngày để xem hoặc nhập. Mỗi ngày một phiên; dữ liệu các ngày trước vẫn được lưu.
-            </p>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setWeighSlipOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3.5 py-2 text-xs font-semibold text-violet-950 shadow-apple transition-colors hover:bg-violet-100"
-                title="Nhập phiếu cân SCSC, lưu Postgres, in HTML"
-              >
-                Phiếu cân (nhập)
-              </button>
-              <button
-                type="button"
-                onClick={() => setCustomerDirOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label shadow-apple transition-colors hover:bg-black/[0.03]"
-                title="Quản lý khách hàng và hồ sơ in phiếu cân"
-              >
-                Khách hàng / Hồ sơ in
-              </button>
-              <button
-                type="button"
-                onClick={() => setAirlineLabelSettingsOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label shadow-apple transition-colors hover:bg-black/[0.03]"
-                title="Đổi tên hãng hiển thị trên tem nhãn (ghi đè bảng mặc định)"
-              >
-                Tên hãng (tem)
-              </button>
-              <button
-                type="button"
-                onClick={() => setUnmatchedReportOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-semibold text-red-800 shadow-apple transition-colors hover:bg-red-100"
-                title="Xem các shipment chưa map customer_id"
-              >
-                Unmatched customer_id
-              </button>
-              <button
-                type="button"
-                disabled={excelExporting}
-                onClick={() => void onDownloadDayExcel()}
-                className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3.5 py-2 text-xs font-semibold text-apple-label shadow-apple transition-colors hover:bg-black/[0.03] disabled:cursor-wait disabled:opacity-60"
-                title="Download day report — all warehouses (Excel)"
-              >
-                <svg className="h-4 w-4 shrink-0 text-apple-blue" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
-                  />
-                </svg>
-                DOWNLOAD EXCEL
-              </button>
-              <div className="inline-flex items-center gap-0.5 rounded-full border border-black/[0.08] bg-white p-0.5 shadow-apple">
-                <button
-                  type="button"
-                  onClick={goPrevDay}
-                  className="rounded-full px-3 py-2 text-sm font-semibold text-apple-label hover:bg-black/[0.05]"
-                  aria-label="Ngày trước"
-                >
-                  ‹
-                </button>
-                <input
-                  type="date"
-                  value={selectedYmd}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v) setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)));
-                  }}
-                  className="rounded-full border-0 bg-transparent px-2 py-1.5 font-mono text-sm font-semibold text-apple-label focus:outline-none focus:ring-2 focus:ring-apple-blue/25"
-                />
-                <button
-                  type="button"
-                  onClick={goNextDay}
-                  className="rounded-full px-3 py-2 text-sm font-semibold text-apple-label hover:bg-black/[0.05]"
-                  aria-label="Ngày sau"
-                >
-                  ›
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={goToday}
-                disabled={isViewingToday}
-                className="rounded-full bg-apple-blue px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover disabled:cursor-not-allowed disabled:bg-apple-tertiary disabled:text-white/80"
-              >
-                Hôm nay
-              </button>
-              {!isViewingToday && (
-                <span className="rounded-full bg-amber-100/90 px-3 py-1.5 text-[11px] font-semibold text-amber-950 ring-1 ring-amber-200/80">
-                  Đang xem ngày khác — vẫn sửa / thêm lô được
-                </span>
-              )}
-            </div>
-            <p className="mt-3 text-sm text-apple-secondary">
-              Đang xem{" "}
+    <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-4 lg:px-5">
+      <header className="mb-3 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h1 className="text-lg font-semibold tracking-tight text-apple-label sm:text-xl">Hàng lên sân bay</h1>
+            <span className="text-[11px] text-apple-secondary">
               <span className="font-semibold text-apple-label">{workDateLabel}</span>
               {daysWithData > 0 && (
                 <span className="text-apple-tertiary">
                   {" "}
-                  · {allRows.length} lô / {daysWithData} ngày có dữ liệu
+                  · {allRows.length} lô / {daysWithData} ngày
                 </span>
               )}
-            </p>
+            </span>
+            {!isViewingToday && (
+              <span
+                className="rounded bg-amber-100/90 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950"
+                title="Vẫn sửa / thêm lô được"
+              >
+                Ngày khác
+              </span>
+            )}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
             <SyncBadge status={status} socketConnected={socketConnected} />
-            <StatPill label="Lô" value={filteredViewRows.length} />
-            <StatPill label="Kiện" value={totalPcs} />
-            <StatPill label="Kg" value={totalKg.toLocaleString()} />
+            <StatInline label="Lô" value={filteredViewRows.length} />
+            <StatInline label="Kiện" value={totalPcs} />
+            <StatInline label="Kg" value={totalKg.toLocaleString()} />
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setCustomerDirOpen(true)}
+            className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03]"
+            title="Khách hàng và hồ sơ in"
+          >
+            Khách hàng
+          </button>
+          <button
+            type="button"
+            onClick={() => setAirlineLabelSettingsOpen(true)}
+            className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03]"
+            title="Tên hãng trên tem"
+          >
+            Tên hãng
+          </button>
+          <button
+            type="button"
+            disabled={excelExporting}
+            onClick={() => void onDownloadDayExcel()}
+            className="inline-flex items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03] disabled:cursor-wait disabled:opacity-60"
+            title="Xuất Excel ngày"
+          >
+            <svg className="h-3.5 w-3.5 text-apple-blue" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            Excel
+          </button>
+          <div className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white p-0.5 shadow-sm">
+            <button
+              type="button"
+              onClick={goPrevDay}
+              className="rounded-md px-2 py-1 text-xs font-semibold text-apple-label hover:bg-black/[0.05]"
+              aria-label="Ngày trước"
+            >
+              ‹
+            </button>
+            <input
+              type="date"
+              value={selectedYmd}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v) setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)));
+              }}
+              className="w-[7.25rem] border-0 bg-transparent px-1 py-1 font-mono text-[11px] font-semibold text-apple-label focus:outline-none focus:ring-1 focus:ring-apple-blue/30"
+            />
+            <button
+              type="button"
+              onClick={goNextDay}
+              className="rounded-md px-2 py-1 text-xs font-semibold text-apple-label hover:bg-black/[0.05]"
+              aria-label="Ngày sau"
+            >
+              ›
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={goToday}
+            disabled={isViewingToday}
+            className="rounded-lg bg-apple-blue px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-apple-blue-hover disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Hôm nay
+          </button>
+        </div>
       </header>
 
-      <StatusFilterBar dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
-
       {viewRows.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-black/[0.08] bg-white/90 p-3 shadow-apple backdrop-blur-sm sm:p-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-bold uppercase tracking-wide text-apple-secondary">Tìm kiếm và lọc kho</p>
-            {(warehouseFilter !== "ALL" || searchQuery.trim()) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setWarehouseFilter("ALL");
-                  setSearchQuery("");
-                }}
-                className="rounded-full border border-black/[0.1] bg-black/[0.04] px-2.5 py-1 text-[10px] font-semibold text-apple-label hover:bg-black/[0.07]"
-              >
-                Xóa lọc kho và ô tìm
-              </button>
-            )}
+        <div className="mb-2 flex flex-col gap-2 rounded-xl border border-black/[0.08] bg-white/95 px-2 py-2 shadow-sm lg:flex-row lg:items-center">
+          <StatusFilterBar compact dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
+          <div className="flex shrink-0 items-center gap-1.5 lg:w-56 xl:w-64">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Tìm AWB, khách, đích…"
+              autoComplete="off"
+              spellCheck={false}
+              className="h-8 min-w-0 flex-1 rounded-lg border border-black/[0.1] bg-[#f7f8fa] px-2.5 text-[11px] text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue/40 focus:outline-none focus:ring-1 focus:ring-apple-blue/25"
+              aria-label="Tìm lô"
+            />
+            <select
+              value={warehouseFilter}
+              onChange={(e) => setWarehouseFilter(e.target.value as WarehouseLayoutFilter)}
+              className="h-8 max-w-[7.5rem] shrink-0 rounded-lg border border-black/[0.1] bg-white px-1.5 text-[11px] font-semibold text-apple-label focus:border-apple-blue/40 focus:outline-none focus:ring-1 focus:ring-apple-blue/25"
+              aria-label="Lọc kho"
+            >
+              {WAREHOUSE_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
-
-          {/* Ô tìm kiểu Google: nổi, bóng mềm, icon trái, nút xóa phải */}
-          <div className="mb-4 flex justify-center px-0 sm:px-2">
-            <div className="relative w-full max-w-2xl">
-              <span
-                className="pointer-events-none absolute left-4 top-1/2 z-[1] -translate-y-1/2 text-[#9aa0a6]"
-                aria-hidden
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-                  />
-                </svg>
-              </span>
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm AWB, chuyến, ngày bay, khách, mã KH, đích, ghi chú…"
-                autoComplete="off"
-                spellCheck={false}
-                className="h-12 w-full rounded-full border-0 bg-white pl-12 pr-11 text-[15px] text-apple-label shadow-[0_1px_6px_rgba(32,33,36,0.28)] outline-none ring-0 transition-[box-shadow] placeholder:text-[#70757a] hover:shadow-[0_1px_6px_rgba(32,33,36,0.28),0_4px_12px_rgba(32,33,36,0.12)] focus:shadow-[0_1px_6px_rgba(32,33,36,0.28),0_8px_24px_rgba(32,33,36,0.14)]"
-                aria-label="Tìm trong các lô đang xem"
-              />
-              {searchQuery ? (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[#70757a] hover:bg-black/[0.06] hover:text-apple-label"
-                  aria-label="Xóa ô tìm kiếm"
-                >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              ) : null}
-            </div>
-          </div>
-          <p className="mb-3 text-center text-[11px] text-apple-tertiary">
-            Gõ nhiều từ cách nhau — chỉ hiện lô chứa <span className="font-semibold text-apple-secondary">tất cả</span> các
-            từ (ví dụ: <span className="font-mono">180</span> <span className="font-mono">HAN</span>).
-          </p>
-
-          <div className="flex min-w-0 flex-wrap justify-center gap-2 sm:justify-start">
-            {WAREHOUSE_FILTER_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setWarehouseFilter(opt.value)}
-                className={`rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors ${
-                  warehouseFilter === opt.value
-                    ? "border-apple-blue/40 bg-apple-blue/10 text-apple-label shadow-[0_0_0_2px_rgba(0,122,255,0.18)]"
-                    : "border-black/[0.08] bg-white/80 text-apple-secondary hover:border-black/[0.12] hover:bg-black/[0.03]"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {viewRows.length === 0 && (
-        <div className="mb-8 rounded-apple-lg border border-dashed border-black/[0.12] bg-white/60 px-5 py-12 text-center shadow-apple backdrop-blur-sm">
-          <p className="text-[17px] font-semibold text-apple-label">
-            {isViewingToday ? "Hôm nay chưa có lô" : "Không có lô cho ngày này"}
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-apple-secondary">
-            {isViewingToday ? (
-              <>
-                Trên máy tính, bấm <span className="font-semibold text-apple-blue">Nhập booking</span> cạnh tên kho ở
-                bảng bên dưới (TECS-TCS, TECS-SCSC, KHO TCS, KHO SCSC); điện thoại dùng nút dưới cùng (form đầy đủ).
-              </>
-            ) : (
-              <>
-                Bạn có thể bấm <span className="font-semibold text-apple-blue">Nhập booking</span> cạnh tên kho trên bảng
-                (máy tính) cho ngày đang xem, hoặc đổi ngày.
-              </>
-            )}
-          </p>
+          {(statusFilter !== "ALL" || warehouseFilter !== "ALL" || searchQuery.trim()) && (
+            <button
+              type="button"
+              onClick={clearViewFilters}
+              className="shrink-0 self-start rounded-lg px-2 py-1 text-[10px] font-semibold text-apple-blue hover:bg-apple-blue/10 lg:self-center"
+            >
+              Xóa lọc
+            </button>
+          )}
         </div>
       )}
 
       {viewRows.length > 0 && filteredViewRows.length === 0 && (
-        <div className="mb-8 rounded-apple-lg border border-dashed border-amber-200/80 bg-amber-50/50 px-5 py-10 text-center shadow-apple backdrop-blur-sm">
-          <p className="text-[17px] font-semibold text-apple-label">Không có lô nào khớp bộ lọc</p>
-          <p className="mt-2 text-sm text-apple-secondary">
-            Thử đổi trạng thái, kho, hoặc từ khóa trong ô tìm kiếm (AWB, khách, đích…).
-          </p>
-          <button
-            type="button"
-            onClick={clearViewFilters}
-            className="mt-4 rounded-full bg-apple-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-apple-blue-hover"
-          >
-            Xóa tất cả bộ lọc
+        <p className="mb-2 text-center text-xs text-apple-secondary">
+          Không có lô khớp bộ lọc.{" "}
+          <button type="button" onClick={clearViewFilters} className="font-semibold text-apple-blue hover:underline">
+            Xóa lọc
           </button>
-        </div>
+        </p>
       )}
 
       <DesktopShipmentTable
@@ -561,8 +446,14 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onUpdate={onUpdate}
         onDelete={onDelete}
         onPrint={requestPrintLabel}
-        onEdit={openEdit}
         viewSessionYmd={selectedYmd}
+        ecargoMap={ecargoRegister.map}
+        onEcargoVehicleChange={ecargoRegister.setVehicle}
+        getEcargoSaveStatus={ecargoRegister.getSaveStatus}
+        getEcargoJob={ecargoRegister.getJob}
+        refreshEcargoJob={ecargoRegister.refreshJob}
+        onEcargoAutoRegister={(row) => ecargoRegister.autoRegister(row, selectedYmd)}
+        isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
       />
 
       <MobileShipmentCards
@@ -571,56 +462,72 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onSelect={setSelectedId}
         onUpdate={onUpdate}
         onDelete={onDelete}
-        onPrint={requestPrintLabel}
-        onEdit={openEdit}
         customerDirectory={state.customers}
-        globalAgents={state.globalAgents}
-        scscWeighPrintSettings={scscWeighPrintSettings}
-        saveScscWeighPrintSettings={saveScscWeighPrintSettings}
         warehouseLayoutFilter={warehouseFilter}
         viewSessionYmd={selectedYmd}
+        ecargoMap={ecargoRegister.map}
+        onEcargoVehicleChange={ecargoRegister.setVehicle}
+        getEcargoSaveStatus={ecargoRegister.getSaveStatus}
+        getEcargoJob={ecargoRegister.getJob}
+        refreshEcargoJob={ecargoRegister.refreshJob}
+        onEcargoAutoRegister={(row) => ecargoRegister.autoRegister(row, selectedYmd)}
+        isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
       />
 
       <StickyMobileActions
         selected={selected}
-        customerDirectory={state.customers}
-        globalAgents={state.globalAgents}
-        scscWeighPrintSettings={scscWeighPrintSettings}
-        saveScscWeighPrintSettings={saveScscWeighPrintSettings}
         onDelete={() => selected && onDelete(selected.id)}
-        onPrint={() => selected && requestPrintLabel(selected)}
         onAdd={() => {
-          setEditingShipment(null);
-          setShowForm(true);
+          startTransition(() => {
+            setMobileEditShipment(null);
+            setShowForm(true);
+          });
         }}
-        onEdit={() => selected && openEdit(selected)}
+        onQuickEdit={() => selected && openMobileEdit(selected)}
         onPrintDim={() => selected && printDimReport(selected)}
         onDownloadScscDimList={() => selected && downloadScscDimListExcel(selected)}
       />
 
       {showForm && (
-        <ShipmentBookingForm
-          sessionDateYmd={selectedYmd}
-          allRows={allRows}
-          customerDirectory={state.customers}
-          globalAgents={state.globalAgents ?? defaultGlobalAgentCatalog()}
-          onAdd={onAdd}
-          onClose={() => setShowForm(false)}
-        />
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+              <p className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-apple-label shadow-apple-md">
+                Đang mở form booking…
+              </p>
+            </div>
+          }
+        >
+          <ShipmentBookingForm
+            sessionDateYmd={selectedYmd}
+            allRows={allRows}
+            customerDirectory={state.customers}
+            globalAgents={state.globalAgents ?? defaultGlobalAgentCatalog()}
+            onAdd={onAdd}
+            onClose={() => setShowForm(false)}
+          />
+        </Suspense>
       )}
 
-      {editingShipment && (
-        <ShipmentBookingForm
-          mode="edit"
-          sessionDateYmd={editingShipment.sessionDate}
-          allRows={allRows}
-          customerDirectory={state.customers}
-          globalAgents={state.globalAgents ?? defaultGlobalAgentCatalog()}
-          shipment={editingShipment}
-          onSave={(patch) => onUpdate(editingShipment.id, patch)}
-          onClose={() => setEditingShipment(null)}
-        />
-      )}
+      <MobileShipmentEditSheet
+        open={mobileEditShipment != null}
+        shipment={mobileEditShipment}
+        sessionDateYmd={selectedYmd}
+        customerDirectory={state.customers}
+        globalAgents={state.globalAgents}
+        ecargoMap={ecargoRegister.map}
+        onEcargoVehicleChange={ecargoRegister.setVehicle}
+        getEcargoSaveStatus={ecargoRegister.getSaveStatus}
+        getEcargoJob={ecargoRegister.getJob}
+        refreshEcargoJob={ecargoRegister.refreshJob}
+        onEcargoAutoRegister={(row) => ecargoRegister.autoRegister(row, selectedYmd)}
+        isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
+        onClose={() => setMobileEditShipment(null)}
+        onSave={(patch) => {
+          if (mobileEditShipment) onUpdate(mobileEditShipment.id, patch);
+          setMobileEditShipment(null);
+        }}
+      />
 
       <CustomerDirectoryManager
         open={customerDirOpen}
@@ -641,11 +548,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           }
         }}
       />
-      <UnmatchedCustomerReportModal
-        open={unmatchedReportOpen}
-        onClose={() => setUnmatchedReportOpen(false)}
-        onApplySuggestions={applySuggestedCustomerLinks}
-      />
 
       <AirlineLabelSettingsModal
         open={airlineLabelSettingsOpen}
@@ -654,8 +556,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         saving={airlineLabelSaving}
         onSave={saveAirlineLabelOverrides}
       />
-
-      <WeighSlipManager open={weighSlipOpen} onClose={() => setWeighSlipOpen(false)} />
     </div>
   );
 }
@@ -670,7 +570,7 @@ function SyncBadge({
   if (status === "offline") {
     return (
       <span
-        className="rounded-full bg-black/[0.06] px-3 py-1.5 text-[11px] font-semibold text-apple-secondary"
+        className="rounded-full bg-black/[0.06] px-2 py-0.5 text-[10px] font-semibold text-apple-secondary"
         title="Không kết nối máy chủ — dữ liệu chỉ lưu trên trình duyệt này"
       >
         Chỉ máy này
@@ -680,7 +580,7 @@ function SyncBadge({
   if (status === "degraded" || !socketConnected) {
     return (
       <span
-        className="rounded-full bg-amber-100/90 px-3 py-1.5 text-[11px] font-semibold text-amber-950 ring-1 ring-amber-200/80"
+        className="rounded-full bg-amber-100/90 px-2 py-0.5 text-[10px] font-semibold text-amber-950 ring-1 ring-amber-200/80"
         title="Máy chủ OK nhưng kênh realtime đang ngắt — thay đổi vẫn gửi được; F5 nếu không thấy cập nhật từ người khác"
       >
         Đồng bộ hạn chế
@@ -689,7 +589,7 @@ function SyncBadge({
   }
   return (
     <span
-      className="rounded-full bg-emerald-100/90 px-3 py-1.5 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-200/80"
+      className="rounded-full bg-emerald-100/90 px-2 py-0.5 text-[10px] font-semibold text-emerald-900 ring-1 ring-emerald-200/80"
       title="Đang nhận cập nhật tức thì từ các máy khác"
     >
       Realtime
@@ -697,12 +597,12 @@ function SyncBadge({
   );
 }
 
-function StatPill({ label, value }: { label: string; value: string | number }) {
+function StatInline({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-2xl border border-black/[0.06] bg-white/90 px-3 py-2 text-sm shadow-apple backdrop-blur-sm">
-      <span className="text-apple-secondary">{label}</span>{" "}
+    <span className="text-apple-secondary">
+      {label}{" "}
       <span className="font-semibold tabular-nums text-apple-label">{value}</span>
-    </div>
+    </span>
   );
 }
 

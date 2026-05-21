@@ -8,12 +8,29 @@ const apiTarget = `http://127.0.0.1:${apiPort}`;
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: "127.0.0.1",
     proxy: {
       "/api": { target: apiTarget, changeOrigin: true },
       "/socket.io": {
         target: apiTarget,
         ws: true,
         changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Konva/react-konva chỉ dùng trong PrintShippingLabel — tách riêng
+          if (id.includes("node_modules/konva") || id.includes("node_modules/react-konva")) {
+            return "vendor-konva";
+          }
+          // socket.io-client dùng ngay khi mount — giữ gần main
+          if (id.includes("node_modules/socket.io-client") || id.includes("node_modules/engine.io-client")) {
+            return "vendor-socketio";
+          }
+        },
       },
     },
   },

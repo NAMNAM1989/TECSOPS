@@ -36,9 +36,14 @@ import {
 import { buildScscLabelContext } from "../../label-designer/data/scscDataContext";
 import { bindLabelTemplate } from "../../label-designer/core/bindingResolver";
 import { LabelMmHtmlView } from "../../label-designer/render/htmlMmRenderer";
+import {
+  SCSC_A4_PAGE_HEIGHT_MM,
+  SCSC_A4_PAGE_WIDTH_MM,
+  SCSC_WEIGH_TEMPLATE_PNG_URL,
+} from "./scscWeighTemplateAsset";
 
-const PAGE_W_MM = 210;
-const PAGE_H_MM = 297;
+const PAGE_W_MM = SCSC_A4_PAGE_WIDTH_MM;
+const PAGE_H_MM = SCSC_A4_PAGE_HEIGHT_MM;
 const MM_TO_PX = 96 / 25.4;
 const PAGE_W_PX = PAGE_W_MM * MM_TO_PX;
 const PAGE_H_PX = PAGE_H_MM * MM_TO_PX;
@@ -336,9 +341,9 @@ export function ScscWeighPickerPreview({ formData, scscWeighPrintSettings }: Pro
           }}
         >
           <img
-            src="/print-templates/scsc-weigh-template.png"
+            src={SCSC_WEIGH_TEMPLATE_PNG_URL}
             alt=""
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            className="pointer-events-none absolute inset-0 h-full w-full object-fill object-left-top"
           />
           {showCoords ? (
             <div

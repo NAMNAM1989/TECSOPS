@@ -11,11 +11,11 @@ const inp =
   "w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums antialiased focus:outline-none focus:ring-2 focus:ring-apple-blue/20 dark:bg-ops-surface dark:text-ops-label";
 
 const urgencyTone = {
-  empty: "text-apple-tertiary italic dark:text-ops-tertiary",
-  ok: "font-semibold tabular-nums text-slate-900 dark:text-slate-100",
-  warning: "font-bold tabular-nums text-amber-700 dark:text-amber-400",
+  empty: "ops-grid-placeholder text-xs",
+  ok: "font-semibold tabular-nums text-slate-900 dark:text-zinc-100",
+  warning: "font-bold tabular-nums text-amber-700 dark:text-amber-300",
   urgent: "font-bold tabular-nums text-red-600 dark:text-red-400",
-  past: "font-bold tabular-nums text-red-700 line-through opacity-80 dark:text-red-500",
+  past: "font-bold tabular-nums text-red-700 line-through opacity-80 dark:text-red-400",
 } as const;
 
 type Props = {

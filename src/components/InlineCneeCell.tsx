@@ -44,7 +44,7 @@ export function InlineCneeCell({
             displayText={shortName || undefined}
             iconOnly={!shortName && hasDetail}
             text={detailText}
-            className="min-w-0 truncate text-[11px] font-medium leading-snug text-apple-label dark:text-ops-label"
+            className="min-w-0 truncate text-[11px] font-medium leading-snug ops-grid-cell"
             panelLabel="Chi tiết lô"
             magnifyTitle="Rê chuột để xem AWB, chuyến bay, Dest và CNEE — bôi đen để sao chép"
             onMouseDown={(e) => e.stopPropagation()}
@@ -52,14 +52,14 @@ export function InlineCneeCell({
           />
         ) : (
           <span
-            className="block min-w-0 truncate text-[11px] font-medium leading-snug text-apple-label"
+            className="block min-w-0 truncate text-[11px] font-medium leading-snug ops-grid-cell"
             title={shortName}
           >
             {shortName}
           </span>
         )
       ) : options.length === 0 ? (
-        <span className="text-[10px] text-apple-tertiary">—</span>
+        <span className="text-[10px] ops-grid-placeholder">—</span>
       ) : null}
     </div>
   );

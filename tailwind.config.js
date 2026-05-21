@@ -39,9 +39,9 @@ export default {
           bg: "#0f1419",
           surface: "#1a212b",
           elevated: "#242d38",
-          label: "#e8eaed",
-          secondary: "#9aa0a6",
-          tertiary: "#6b7280",
+          label: "#f0f2f5",
+          secondary: "#cbd5e1",
+          tertiary: "#94a3b8",
         },
       },
       borderRadius: {

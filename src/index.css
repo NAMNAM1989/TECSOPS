@@ -11,12 +11,35 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Dark mode: màu apple.* gốc là tối — map sang tông sáng để đọc trên nền kho/tables. */
+  .dark .text-apple-label {
+    color: #f0f2f5;
+  }
+  .dark .text-apple-secondary {
+    color: #cbd5e1;
+  }
+  .dark .text-apple-tertiary {
+    color: #94a3b8;
+  }
 }
 
 @layer utilities {
   .font-shipment-data {
     font-family: "Roboto Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
       monospace;
+  }
+
+  .ops-grid-cell {
+    @apply text-apple-label dark:text-zinc-100;
+  }
+
+  .ops-grid-cell-muted {
+    @apply text-apple-secondary dark:text-zinc-300;
+  }
+
+  .ops-grid-placeholder {
+    @apply italic text-apple-tertiary dark:text-zinc-400;
   }
 }
 

@@ -186,7 +186,11 @@ export function DesktopShipmentTable({
             </div>
 
             {!collapsed ? (
-            <div className="max-h-[min(78vh,720px)] overflow-auto rounded-b-lg border-t border-black/[0.06] dark:border-white/[0.06]">
+            <div
+              className={`overflow-auto rounded-b-lg border-t border-black/[0.06] dark:border-white/[0.06] ${
+                group.length > 6 ? "max-h-[min(78vh,720px)]" : ""
+              }`}
+            >
               <table className="w-full border-collapse text-left text-[11px] leading-tight">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-black/[0.08] bg-apple-bg shadow-[0_1px_0_rgba(0,0,0,0.06)] dark:border-white/[0.08] dark:bg-ops-elevated">
@@ -200,7 +204,7 @@ export function DesktopShipmentTable({
                       return (
                       <th
                         key={c.key}
-                        className={`whitespace-nowrap border-r border-black/[0.06] px-1 py-1 text-[8px] font-semibold uppercase tracking-wide text-apple-secondary last:border-r-0 ${w}`}
+                        className={`whitespace-nowrap border-r border-black/[0.06] px-1 py-1 text-[8px] font-semibold uppercase tracking-wide text-apple-secondary last:border-r-0 dark:border-white/[0.08] dark:text-zinc-400 ${w}`}
                       >
                         {c.label}
                       </th>
@@ -213,7 +217,7 @@ export function DesktopShipmentTable({
                     <tr>
                       <td
                         colSpan={COL_HEADERS.length}
-                        className="px-3 py-3 text-center text-[11px] text-apple-tertiary"
+                        className="px-3 py-3 text-center text-[11px] ops-grid-placeholder"
                       >
                         Chưa có lô
                       </td>
@@ -472,10 +476,10 @@ function ShipmentRow({
     <>
     <tr
       id={`shipment-row-${row.id}`}
-      className={`border-b border-black/[0.06] transition-colors hover:brightness-[0.99] ${bg} ${border}`}
+      className={`border-b border-black/[0.06] transition-colors hover:brightness-[0.99] dark:border-white/[0.06] ${bg} ${border}`}
     >
       {/* # */}
-      <td className="border-r border-black/[0.06] px-1 py-0.5 text-center text-[10px] font-semibold tabular-nums text-apple-secondary">
+      <td className="border-r border-black/[0.06] px-1 py-0.5 text-center text-[10px] font-semibold tabular-nums text-apple-secondary dark:border-white/[0.06] dark:text-zinc-400">
         {row.stt}
       </td>
       {/* AWB + HAWB — nhập inline (thêm dòng từ « Nhập booking »). */}
@@ -492,7 +496,7 @@ function ShipmentRow({
           <InlineTextEdit
             value={row.hawb ?? ""}
             placeholder="HAWB"
-            className="font-shipment-data text-[9px] font-semibold text-apple-secondary"
+            className="font-shipment-data text-[9px] font-semibold ops-grid-cell-muted"
             maxLength={32}
             gridNav={{ rowId: row.id, field: "hawb" }}
             onCommit={(v) => onUpdate(row.id, { hawb: v.slice(0, 32) })}
@@ -506,7 +510,7 @@ function ShipmentRow({
           <InlineTextEdit
             value={row.flight}
             placeholder="Chuyến"
-            className="font-shipment-data text-[12px] font-semibold text-apple-label"
+            className="font-shipment-data text-[12px] font-semibold ops-grid-cell"
             uppercase
             maxLength={12}
             gridNav={{ rowId: row.id, field: "flight" }}
@@ -516,7 +520,7 @@ function ShipmentRow({
           <InlineTextEdit
             value={row.flightDate}
             placeholder="15APR"
-            className="font-shipment-data text-[9px] font-medium text-apple-secondary"
+            className="font-shipment-data text-[9px] font-medium ops-grid-cell-muted"
             uppercase
             maxLength={16}
             gridNav={{ rowId: row.id, field: "flightDate" }}
@@ -541,8 +545,8 @@ function ShipmentRow({
               placeholder="PER"
               className={
                 row.cutoffNote?.trim()
-                  ? "text-[10px] font-bold uppercase tracking-wide text-indigo-800 dark:text-indigo-300"
-                  : "text-[9px] font-normal italic text-apple-tertiary dark:text-ops-tertiary"
+                  ? "text-[10px] font-bold uppercase tracking-wide text-indigo-800 dark:text-indigo-200"
+                  : "text-[9px] font-normal ops-grid-placeholder"
               }
               uppercase
               maxLength={32}
@@ -558,7 +562,7 @@ function ShipmentRow({
         <InlineTextEdit
           value={row.dest}
           placeholder="DEST"
-          className="font-shipment-data text-center text-[12px] font-semibold text-apple-label"
+          className="font-shipment-data text-center text-[12px] font-semibold ops-grid-cell"
           uppercase
           maxLength={3}
           gridNav={{ rowId: row.id, field: "dest" }}
@@ -571,7 +575,7 @@ function ShipmentRow({
         <InlineNumberEdit
           value={row.pcs}
           variant="grid"
-          className="font-shipment-data text-[12px] font-bold tabular-nums"
+          className="font-shipment-data text-[12px] font-bold tabular-nums dark:text-zinc-100"
           gridNav={{ rowId: row.id, field: "pcs" }}
           onCommit={(v) => onUpdate(row.id, { pcs: v })}
           onEnterNavigateDown={hasNextRow ? navDownSameField("pcs") : undefined}
@@ -582,7 +586,7 @@ function ShipmentRow({
         <InlineNumberEdit
           value={row.kg}
           variant="grid"
-          className="font-shipment-data text-[12px] font-bold tabular-nums"
+          className="font-shipment-data text-[12px] font-bold tabular-nums dark:text-zinc-100"
           gridNav={{ rowId: row.id, field: "kg" }}
           onCommit={(v) => onUpdate(row.id, { kg: v })}
           onEnterNavigateDown={hasNextRow ? navDownSameField("kg") : undefined}
@@ -592,14 +596,14 @@ function ShipmentRow({
       <td className="border-r border-black/[0.06] px-1 py-0.5 text-right align-top">
         <div className="flex flex-col items-end gap-0">
           {(row.dimLines?.length ?? 0) > 0 ? (
-            <span className="font-mono text-[10px] font-semibold tabular-nums text-apple-label">
+            <span className="font-mono text-[10px] font-semibold tabular-nums ops-grid-cell">
               {formatShipmentDimWeightKg(row.flight, row.dimWeightKg)}
             </span>
           ) : (
             <InlineNumberEdit
               value={row.dimWeightKg}
               placeholder="—"
-              className="font-mono text-[11px] font-semibold tabular-nums"
+              className="font-mono text-[11px] font-semibold tabular-nums dark:text-zinc-100"
               gridNav={{ rowId: row.id, field: "dimKg" }}
               onCommit={(v) =>
                 onUpdate(row.id, { dimWeightKg: v, dimLines: null, dimDivisor: null })
@@ -630,7 +634,7 @@ function ShipmentRow({
             <InlineTextEdit
               value={row.customer}
               placeholder="Khách"
-              className="text-[12px] font-semibold text-apple-label"
+              className="text-[12px] font-semibold ops-grid-cell"
               maxLength={120}
               gridNav={{ rowId: row.id, field: "customer" }}
               onCommit={(v) => {
@@ -707,7 +711,7 @@ function ShipmentRow({
       <td className="border-r border-black/[0.06] px-1 py-0.5 align-top dark:border-white/[0.06]">
         <div className="flex min-w-0 items-start gap-0.5">
           <span
-            className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-apple-tertiary dark:text-ops-tertiary"
+            className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 dark:text-zinc-400"
             title="Ghi chú"
             aria-hidden
           >
@@ -718,7 +722,7 @@ function ShipmentRow({
           <InlineTextEdit
             value={row.note ?? ""}
             placeholder="…"
-            className="line-clamp-1 min-w-0 flex-1 text-left text-[10px] leading-snug text-apple-secondary dark:text-ops-secondary"
+            className="line-clamp-1 min-w-0 flex-1 text-left text-[10px] leading-snug ops-grid-cell-muted"
             maxLength={2000}
             gridNav={{ rowId: row.id, field: "note" }}
             onCommit={(v) => onUpdate(row.id, { note: v })}

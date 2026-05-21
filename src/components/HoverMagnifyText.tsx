@@ -5,6 +5,46 @@ import { SelectableTextWithCopyPopover } from "./SelectableTextWithCopyPopover";
 
 const CLOSE_DELAY_MS = 220;
 const MAGNIFY_FONT_CLASS = "text-[15px] leading-[1.65] tracking-[0.01em]";
+const META_LINE_RE = /^(AWB|Ngày bay|Chuyến bay|Dest):/;
+
+function MagnifyPanelBody({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className={`space-y-0.5 ${MAGNIFY_FONT_CLASS}`}>
+      {lines.map((line, idx) => {
+        if (!line.trim()) {
+          return <div key={`sp-${idx}`} className="h-2" aria-hidden />;
+        }
+        if (line === "CNEE:") {
+          return (
+            <p
+              key={`cnee-${idx}`}
+              className="pt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-sky-700 dark:text-sky-300"
+            >
+              {line}
+            </p>
+          );
+        }
+        if (META_LINE_RE.test(line)) {
+          const colon = line.indexOf(":");
+          const label = line.slice(0, colon + 1);
+          const value = line.slice(colon + 1).trim();
+          return (
+            <p key={`meta-${idx}`} className="leading-snug">
+              <span className="font-semibold text-apple-secondary dark:text-zinc-400">{label}</span>{" "}
+              <span className="font-semibold text-apple-label dark:text-zinc-50">{value}</span>
+            </p>
+          );
+        }
+        return (
+          <p key={`body-${idx}`} className="font-medium leading-relaxed text-apple-label dark:text-zinc-100">
+            {line}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 type Props = {
   text: string;
@@ -145,7 +185,7 @@ export function HoverMagnifyText({
             type="button"
             title="Chi tiết CNEE"
             aria-label="Chi tiết CNEE"
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-sky-300/60 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-600/40 dark:bg-sky-950/50 dark:text-sky-300"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-sky-300/60 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-400/45 dark:bg-sky-950/70 dark:text-sky-200 dark:hover:bg-sky-900/80"
             onMouseDown={onMouseDown}
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
@@ -161,7 +201,7 @@ export function HoverMagnifyText({
             <span className="min-w-0 flex-1 truncate">{inlineLabel}</span>
             {showInfoHint ? (
               <span
-                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-sky-300/50 bg-sky-50 text-sky-700 dark:border-sky-600/40 dark:bg-sky-950/40 dark:text-sky-300"
+                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-sky-300/50 bg-sky-50 text-sky-700 dark:border-sky-400/45 dark:bg-sky-950/70 dark:text-sky-200"
                 aria-hidden
                 title="Chi tiết CNEE"
               >
@@ -178,7 +218,7 @@ export function HoverMagnifyText({
         ? createPortal(
             <>
               <div
-                className="pointer-events-none fixed inset-0 z-[638] bg-[#1c1c1e]/8 backdrop-blur-[1px] animate-cnee-magnify-backdrop motion-reduce:animate-none motion-reduce:opacity-100"
+                className="pointer-events-none fixed inset-0 z-[638] bg-[#1c1c1e]/8 backdrop-blur-[1px] animate-cnee-magnify-backdrop motion-reduce:animate-none motion-reduce:opacity-100 dark:bg-black/35"
                 aria-hidden
               />
               <div
@@ -192,7 +232,7 @@ export function HoverMagnifyText({
                   maxHeight: panelPos.maxHeight,
                   zIndex: 650,
                 }}
-                className={`animate-cnee-magnify-panel motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:filter-none flex max-h-[inherit] flex-col overflow-hidden rounded-xl border border-sky-300/70 bg-white shadow-[0_12px_32px_rgba(0,0,0,0.18),0_0_0_2px_rgba(0,122,255,0.25)] ring-1 ring-sky-200/80 ${
+                className={`animate-cnee-magnify-panel motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:filter-none flex max-h-[inherit] flex-col overflow-hidden rounded-xl border border-sky-300/70 bg-white shadow-[0_12px_32px_rgba(0,0,0,0.18),0_0_0_2px_rgba(0,122,255,0.25)] ring-1 ring-sky-200/80 dark:border-sky-500/35 dark:bg-ops-elevated dark:text-zinc-100 dark:shadow-[0_16px_40px_rgba(0,0,0,0.55),0_0_0_1px_rgba(56,189,248,0.25)] dark:ring-sky-700/40 ${
                   panelPos.placement === "below" ? "origin-top" : "origin-top-left"
                 }`}
                 onMouseEnter={keepOpen}
@@ -200,13 +240,15 @@ export function HoverMagnifyText({
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-black/[0.06] bg-gradient-to-b from-[#f8f9fc] to-white px-3.5 py-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-apple-secondary">
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-black/[0.06] bg-gradient-to-b from-[#f8f9fc] to-white px-3.5 py-2 dark:border-white/10 dark:from-ops-surface dark:to-ops-elevated">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-apple-secondary dark:text-sky-300/90">
                     {panelLabel}
                   </span>
                   <span
                     className={`text-[10px] font-medium transition-colors ${
-                      rightClickCopied ? "font-semibold text-emerald-700" : "text-apple-tertiary"
+                      rightClickCopied
+                        ? "font-semibold text-emerald-700 dark:text-emerald-400"
+                        : "text-apple-tertiary dark:text-zinc-400"
                     }`}
                   >
                     {rightClickCopied
@@ -216,14 +258,14 @@ export function HoverMagnifyText({
                 </div>
                 <div
                   ref={panelTextRef}
-                  className="min-h-0 flex-1 overflow-y-auto px-3.5 py-3"
+                  className="min-h-0 flex-1 overflow-y-auto bg-white px-3.5 py-3 dark:bg-ops-elevated"
                   onContextMenu={handlePanelContextMenu}
                 >
                   <SelectableTextWithCopyPopover
-                    className={`cursor-text select-text whitespace-pre-wrap break-words font-medium text-apple-label ${MAGNIFY_FONT_CLASS}`}
+                    className="cursor-text select-text"
                     title="Bôi đen chữ → chuột phải để copy (hoặc Ctrl+C)"
                   >
-                    {text}
+                    <MagnifyPanelBody text={text} />
                   </SelectableTextWithCopyPopover>
                 </div>
               </div>

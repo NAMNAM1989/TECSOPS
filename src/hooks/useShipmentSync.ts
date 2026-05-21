@@ -174,11 +174,11 @@ export function useShipmentSync(fallback: Fallback) {
     }
 
     /** Xóa lô: cập nhật UI ngay để AWB được giải phóng trước khi server phản hồi. */
-    let rollbackState: AppState | null = null;
+    const rollbackRef: { current: AppState | null } = { current: null };
     if (mutation.action === "DELETE") {
       setState((prev) => {
         if (!prev) return prev;
-        rollbackState = prev;
+        rollbackRef.current = prev;
         try {
           const next = applyShipmentMutation(prev, mutation);
           saveRows(next.rows);
@@ -211,9 +211,9 @@ export function useShipmentSync(fallback: Fallback) {
       saveRows(next.rows);
       return next;
     } catch (e) {
-      if (rollbackState) {
-        setState(rollbackState);
-        saveRows(rollbackState.rows);
+      if (rollbackRef.current) {
+        setState(rollbackRef.current);
+        saveRows(rollbackRef.current.rows);
       }
       throw e;
     }

@@ -165,6 +165,17 @@ export function buildShipmentCneeCopyBlock(
   return [header, dateLine, ...body].join("\n");
 }
 
+/** Chi tiết CNEE (địa chỉ, SĐT, email…) — hiển thị trong tooltip, không chiếm ô lưới. */
+export function buildShipmentCneeTooltipLines(
+  shipment: Shipment,
+  directory: readonly CustomerDirectoryEntry[] = [],
+  opts?: { sessionYmdFallback?: string }
+): string[] {
+  const body = buildShipmentCneeBodyLines(shipment, directory);
+  if (body.length) return body;
+  return buildShipmentCneeMetaLines(shipment, opts);
+}
+
 /** Một dòng CNEE chỉ đọc (mobile / gợi ý desktop). */
 export function formatShipmentCneeReadonlySummary(
   shipment: Shipment,

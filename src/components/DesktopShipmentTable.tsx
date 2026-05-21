@@ -76,10 +76,10 @@ const COL_HEADERS = [
   { key: "kg", label: "KG", w: "w-12 text-right" },
   { key: "dim", label: "DIM", w: "w-14 text-right" },
   { key: "customer", label: "KHÁCH", w: "min-w-[4.75rem] max-w-[6.5rem]" },
-  { key: "cnee", label: "CNEE", w: "min-w-[6.5rem] max-w-[12rem]" },
+  { key: "cnee", label: "CNEE", w: "min-w-[6.5rem] max-w-[10rem]" },
   { key: "note", label: "NOTE", w: "min-w-[3.75rem] max-w-[7rem]" },
   { key: "status", label: "TT", w: "min-w-[6.5rem]" },
-  { key: "actions", label: "", w: "min-w-[5.5rem]" },
+  { key: "actions", label: "", w: "min-w-[4.5rem]" },
 ] as const;
 
 export function DesktopShipmentTable({
@@ -147,8 +147,8 @@ export function DesktopShipmentTable({
                       const w =
                         c.key === "actions"
                           ? isScscWarehouse(wh)
-                            ? "min-w-[7.75rem] w-[7.75rem]"
-                            : "min-w-[5.75rem] w-[5.75rem]"
+                            ? "min-w-[6.5rem] w-[6.5rem]"
+                            : "min-w-[4.5rem] w-[4.5rem]"
                           : c.w;
                       return (
                       <th
@@ -431,13 +431,14 @@ function ShipmentRow({
             rowId={row.id}
             value={row.awb}
             allRows={allRows}
+            className="font-shipment-data text-[13px] font-bold"
             onCommit={(awb) => onUpdate(row.id, { awb })}
             onEnterNavigateDown={() => focusShipmentGridCell(row.id, "hawb")}
           />
           <InlineTextEdit
             value={row.hawb ?? ""}
             placeholder="HAWB"
-            className="font-mono text-[9px] font-semibold text-apple-secondary"
+            className="font-shipment-data text-[9px] font-semibold text-apple-secondary"
             maxLength={32}
             gridNav={{ rowId: row.id, field: "hawb" }}
             onCommit={(v) => onUpdate(row.id, { hawb: v.slice(0, 32) })}
@@ -451,7 +452,7 @@ function ShipmentRow({
           <InlineTextEdit
             value={row.flight}
             placeholder="Chuyến"
-            className="text-[12px] font-semibold text-apple-label"
+            className="font-shipment-data text-[12px] font-semibold text-apple-label"
             uppercase
             maxLength={12}
             gridNav={{ rowId: row.id, field: "flight" }}
@@ -461,7 +462,7 @@ function ShipmentRow({
           <InlineTextEdit
             value={row.flightDate}
             placeholder="15APR"
-            className="text-[9px] font-medium text-apple-secondary"
+            className="font-shipment-data text-[9px] font-medium text-apple-secondary"
             uppercase
             maxLength={16}
             gridNav={{ rowId: row.id, field: "flightDate" }}
@@ -497,7 +498,7 @@ function ShipmentRow({
         <InlineTextEdit
           value={row.dest}
           placeholder="DEST"
-            className="text-center text-[12px] font-semibold text-apple-label"
+          className="font-shipment-data text-center text-[12px] font-semibold text-apple-label"
           uppercase
           maxLength={3}
           gridNav={{ rowId: row.id, field: "dest" }}
@@ -509,8 +510,8 @@ function ShipmentRow({
       <td className="border-r border-black/[0.06] px-1 py-0.5 text-right">
         <InlineNumberEdit
           value={row.pcs}
-          placeholder="Nhập"
-          className="font-mono text-[12px] font-bold tabular-nums"
+          variant="grid"
+          className="font-shipment-data text-[12px] font-bold tabular-nums"
           gridNav={{ rowId: row.id, field: "pcs" }}
           onCommit={(v) => onUpdate(row.id, { pcs: v })}
           onEnterNavigateDown={hasNextRow ? navDownSameField("pcs") : undefined}
@@ -520,8 +521,8 @@ function ShipmentRow({
       <td className="border-r border-black/[0.06] px-1 py-0.5 text-right">
         <InlineNumberEdit
           value={row.kg}
-          placeholder="Nhập"
-          className="font-mono text-[12px] font-bold tabular-nums"
+          variant="grid"
+          className="font-shipment-data text-[12px] font-bold tabular-nums"
           gridNav={{ rowId: row.id, field: "kg" }}
           onCommit={(v) => onUpdate(row.id, { kg: v })}
           onEnterNavigateDown={hasNextRow ? navDownSameField("kg") : undefined}
@@ -662,9 +663,9 @@ function ShipmentRow({
           onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
         />
       </td>
-      {/* Actions — icon từng chức năng + xe eCargo (KHO SCSC) */}
-      <td className="px-0.5 py-0.5 align-top">
-        <div className="flex flex-wrap items-center justify-end gap-1">
+      {/* Actions — in nhãn + menu ⋮; eCargo (KHO SCSC) giữ ngoài */}
+      <td className="px-0.5 py-0.5 align-middle">
+        <div className="flex flex-nowrap items-center justify-end gap-0.5">
           <ShipmentRowActionsMenu
             row={row}
             customerDirectory={customerDirectory}
@@ -684,7 +685,7 @@ function ShipmentRow({
                 e.stopPropagation();
                 onToggleEcargoTable();
               }}
-              className="h-8 shrink-0 gap-1 px-1.5 text-[10px] [&>span:last-child]:inline"
+              className="h-7 shrink-0 gap-1 px-1.5 text-[10px] [&>span:last-child]:inline"
               title="eCargo — tự động đăng ký kho SCSC"
             />
           ) : null}

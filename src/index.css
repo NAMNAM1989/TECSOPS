@@ -13,6 +13,13 @@
   }
 }
 
+@layer utilities {
+  .font-shipment-data {
+    font-family: "Roboto Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      monospace;
+  }
+}
+
 @keyframes dim-voice-bar {
   0%,
   100% {

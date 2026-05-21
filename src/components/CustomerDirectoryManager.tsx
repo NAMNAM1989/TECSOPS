@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { assertCustomerDirectoryValid } from "../utils/customerDirectoryCore";
 import type { CustomerSavedConsignee, CustomerSavedGoods, CustomerSavedShipper } from "../types/customerDirectory";
@@ -7,6 +7,8 @@ import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
 import { GlobalAgentsSettings } from "./GlobalAgentsSettings";
 import { ScscWeighSenderSettings } from "./ScscWeighSenderSettings";
 import { CustomerPrintProfileTabs } from "./customerDirectory/CustomerPrintProfileTabs";
+import { CustomerProfileStickyActionBar } from "./customerDirectory/CustomerProfileStickyActionBar";
+import { CustomerDeleteConfirmModal } from "./customerDirectory/CustomerDeleteConfirmModal";
 import { clampGlobalAgentCatalog, defaultGlobalAgentCatalog } from "../utils/globalAgentsCore";
 import {
   clampCustomerDirectoryEntry,
@@ -19,6 +21,8 @@ import {
   clampScscWeighPrintSettings,
   defaultScscWeighPrintSettings,
 } from "../printing/scscWeigh/scscWeighPrintSettingsCore";
+import { ScscPrintTemplateEditor } from "../printing/components/ScscPrintTemplateEditor";
+import { normalizeAgentCode } from "../utils/customerProfileInputFormat";
 
 type Props = {
   open: boolean;
@@ -52,9 +56,11 @@ export function CustomerDirectoryManager({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
-  const [mainTab, setMainTab] = useState<"profiles" | "agents">("profiles");
+  const [mainTab, setMainTab] = useState<"profiles" | "agents" | "print-layout">("profiles");
   const [globalAgentsDraft, setGlobalAgentsDraft] = useState<GlobalAgentCatalog>(defaultGlobalAgentCatalog());
   const [senderDraft, setSenderDraft] = useState<ScscWeighPrintSettings>(defaultScscWeighPrintSettings());
+  const [templateEditorOpen, setTemplateEditorOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -64,6 +70,7 @@ export function CustomerDirectoryManager({
     setQuery("");
     setGlobalAgentsDraft(clampGlobalAgentCatalog(globalAgentsInitial));
     setSenderDraft(clampScscWeighPrintSettings(scscWeighPrintSettingsInitial));
+    setDeleteModalOpen(false);
   }, [initial, globalAgentsInitial, scscWeighPrintSettingsInitial, open]);
 
   const selected = draft.find((e) => e.id === selectedId) ?? null;
@@ -200,7 +207,7 @@ export function CustomerDirectoryManager({
     });
   }
 
-  async function handleSave() {
+  const handleSave = useCallback(async () => {
     const normalized = draft.map((e) => clampCustomerDirectoryEntry(e));
     try {
       assertCustomerDirectoryValid(normalized);
@@ -221,143 +228,152 @@ export function CustomerDirectoryManager({
     } finally {
       setSaving(false);
     }
-  }
+  }, [draft, globalAgentsDraft, onClose, onSave, senderDraft]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void handleSave();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, handleSave]);
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex bg-black/25 p-2 backdrop-blur-xl sm:p-4"
+      className="fixed inset-0 z-[60] flex bg-black/25 p-1 backdrop-blur-sm sm:p-2"
       role="dialog"
       aria-modal="true"
       aria-labelledby="customer-manager-title"
     >
-      <div className="mx-auto flex h-full w-full max-w-7xl overflow-hidden rounded-[28px] border border-black/[0.08] bg-white shadow-apple-md">
-        <aside className="flex w-full max-w-[19rem] shrink-0 flex-col border-r border-black/[0.06] bg-apple-bg/70">
-          <div className="border-b border-black/[0.06] p-4">
-            <h2 id="customer-manager-title" className="text-lg font-semibold tracking-tight text-apple-label">
+      <div className="mx-auto flex h-full w-full max-w-7xl overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-apple-md">
+        <aside className="flex w-[min(100%,15rem)] shrink-0 flex-col border-r border-black/[0.08] bg-apple-bg/80 sm:w-56">
+          <div className="border-b border-black/[0.06] px-2.5 py-2">
+            <h2 id="customer-manager-title" className="text-sm font-semibold tracking-tight text-apple-label">
               Khách hàng
             </h2>
-            <p className="mt-1 text-xs text-apple-secondary">Nhập hồ sơ in phiếu cân chuẩn cho từng khách.</p>
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Tìm khách / mẫu..."
-              className="mt-3 w-full rounded-full border border-black/[0.08] bg-white px-3 py-2 text-sm font-medium text-apple-label outline-none focus:border-apple-blue/40 focus:ring-2 focus:ring-apple-blue/15"
+              placeholder="Tìm mã / tên…"
+              className="mt-1.5 w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-xs font-medium text-apple-label outline-none focus:border-apple-blue/40 focus:ring-1 focus:ring-apple-blue/20"
             />
             <button
               type="button"
               onClick={addCustomer}
-              className="mt-2 w-full rounded-full bg-apple-blue px-4 py-2 text-sm font-semibold text-white hover:bg-apple-blue-hover"
+              className="mt-1.5 w-full rounded-lg bg-apple-blue px-2 py-1.5 text-xs font-semibold text-white hover:bg-apple-blue-hover"
             >
               + Thêm khách
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
             {filtered.map((customer) => (
               <button
                 key={customer.id}
                 type="button"
                 onClick={() => setSelectedId(customer.id)}
-                className={`mb-1 w-full rounded-2xl px-3 py-2.5 text-left transition ${
+                className={`mb-0.5 w-full rounded-lg px-2 py-1.5 text-left transition ${
                   selectedId === customer.id
-                    ? "bg-white text-apple-label shadow-sm ring-2 ring-apple-blue/20"
-                    : "text-apple-secondary hover:bg-white/70"
+                    ? "bg-white text-apple-label shadow-sm ring-1 ring-apple-blue/25"
+                    : "text-apple-secondary hover:bg-white/80"
                 }`}
               >
-                <span className="block truncate text-sm font-semibold">{customer.name || "Chưa đặt tên"}</span>
-                <span className="mt-0.5 block truncate font-mono text-[11px] text-apple-tertiary">
-                  {customer.code || "CHƯA CÓ MÃ"} · {(customer.savedShippers ?? []).length} shipper ·{" "}
-                  {(customer.savedGoods ?? []).length} tên hàng · {(customer.savedConsignees ?? []).length} CNEE
+                <span className="block truncate text-xs font-semibold">{customer.name || "Chưa đặt tên"}</span>
+                <span className="mt-0.5 block truncate font-mono text-[10px] uppercase text-apple-tertiary">
+                  {customer.code || "—"} · S{customer.savedShippers?.length ?? 0} · C
+                  {customer.savedConsignees?.length ?? 0}
                 </span>
               </button>
             ))}
             {filtered.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-apple-tertiary">Không tìm thấy khách.</p>
+              <p className="px-2 py-4 text-center text-xs text-apple-tertiary">Không tìm thấy.</p>
             ) : null}
           </div>
         </aside>
 
-        <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-start justify-between gap-3 border-b border-black/[0.06] px-5 py-4">
+        <main className="relative flex min-w-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-black/[0.06] px-3 py-2">
             <div className="min-w-0">
-              <h3 className="truncate text-[19px] font-semibold tracking-tight text-apple-label">
-                {selected ? selected.name || "Khách mới" : "Chưa chọn khách"}
+              <h3 className="truncate text-base font-semibold text-apple-label">
+                {selected ? selected.name || "Khách mới" : "Chi tiết hồ sơ"}
               </h3>
-              <p className="mt-1 text-xs text-apple-secondary">
-                Booking sẽ ưu tiên lấy dữ liệu ở đây để in phiếu cân chính xác.
-              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-1">
+              {(
+                [
+                  ["profiles", "Hồ sơ KH"],
+                  ["agents", "Agent"],
+                  ["print-layout", "Mẫu in"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setMainTab(id)}
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                    mainTab === id ? "bg-apple-label text-white" : "border border-black/[0.1] bg-white"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-full p-2 text-apple-tertiary hover:bg-black/[0.05] hover:text-apple-label"
+              className="shrink-0 rounded-lg p-1.5 text-apple-tertiary hover:bg-black/[0.05]"
               aria-label="Đóng"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            <div className="mb-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setMainTab("profiles")}
-                className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                  mainTab === "profiles"
-                    ? "bg-apple-label text-white"
-                    : "border border-black/[0.12] bg-white text-apple-label"
-                }`}
-              >
-                Hồ sơ in theo khách
-              </button>
-              <button
-                type="button"
-                onClick={() => setMainTab("agents")}
-                className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                  mainTab === "agents"
-                    ? "bg-apple-label text-white"
-                    : "border border-black/[0.12] bg-white text-apple-label"
-                }`}
-              >
-                Agent hệ thống
-              </button>
-            </div>
-
-            {mainTab === "agents" ? (
-              <div className="space-y-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 pb-1">
+            {mainTab === "print-layout" ? (
+              <div className="space-y-3 py-1">
+                <p className="text-xs text-apple-secondary">
+                  Chỉnh tọa độ mm phiếu cân SCSC — lưu Postgres, in PDF server.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setTemplateEditorOpen(true)}
+                  className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white"
+                >
+                  Mở editor kéo thả
+                </button>
+              </div>
+            ) : mainTab === "agents" ? (
+              <div className="space-y-3 py-1">
                 <GlobalAgentsSettings catalog={globalAgentsDraft} onChange={setGlobalAgentsDraft} />
                 <ScscWeighSenderSettings settings={senderDraft} onChange={setSenderDraft} />
               </div>
             ) : selected ? (
-              <div className="space-y-5">
-                <section className="rounded-2xl border border-black/[0.08] bg-apple-bg/40 p-3">
-                  <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="space-y-3">
+                <section className="rounded-lg border border-black/[0.08] bg-apple-bg/30 px-2.5 py-2">
+                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
                     <input
                       value={selected.code}
-                      onChange={(e) => updateCustomer(selected.id, { code: e.target.value })}
-                      className="w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 font-mono text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20 sm:max-w-[10rem]"
-                      placeholder="Mã KH"
+                      onChange={(e) => updateCustomer(selected.id, { code: e.target.value.toUpperCase() })}
+                      onBlur={(e) => updateCustomer(selected.id, { code: normalizeAgentCode(e.target.value) })}
+                      className="w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 font-mono text-xs font-bold uppercase text-apple-label focus:border-apple-blue focus:outline-none focus:ring-1 focus:ring-apple-blue/25 sm:max-w-[7rem]"
+                      placeholder="MÃ KH"
+                      spellCheck={false}
                     />
                     <input
                       value={selected.name}
                       onChange={(e) => updateCustomer(selected.id, { name: e.target.value })}
-                      className="min-w-0 flex-1 rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
+                      className="min-w-0 flex-1 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-1 focus:ring-apple-blue/25"
                       placeholder="Tên khách hàng"
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm(`Xóa khách ${selected.name || selected.code}?`)) removeCustomer(selected.id);
-                      }}
-                      className="rounded-xl px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
-                    >
-                      Xóa khách
-                    </button>
                   </div>
                 </section>
 
@@ -376,31 +392,37 @@ export function CustomerDirectoryManager({
                 />
               </div>
             ) : (
-              <div className="flex h-full min-h-[12rem] items-center justify-center rounded-2xl border border-dashed border-black/[0.12] bg-apple-bg/50 p-8 text-center text-sm text-apple-tertiary">
-                Chọn khách bên trái hoặc bấm “Thêm khách”.
+              <div className="flex min-h-[10rem] items-center justify-center rounded-lg border border-dashed border-black/[0.1] p-6 text-center text-xs text-apple-tertiary">
+                Chọn khách bên trái hoặc thêm mới.
               </div>
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2 border-t border-black/[0.06] px-5 py-4">
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void handleSave()}
-              className="flex-1 rounded-full bg-apple-blue px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-apple-blue-hover disabled:cursor-wait disabled:opacity-70"
-            >
-              {saving ? "Đang lưu…" : "Lưu lên máy chủ"}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full border border-black/[0.12] bg-white px-5 py-2.5 text-sm font-semibold text-apple-label hover:bg-black/[0.03]"
-            >
-              Hủy
-            </button>
-          </div>
+          <CustomerProfileStickyActionBar
+            saving={saving}
+            onSave={() => void handleSave()}
+            onCancel={onClose}
+            deleteLabel="Xóa khách"
+            onDelete={
+              selected && mainTab === "profiles"
+                ? () => setDeleteModalOpen(true)
+                : undefined
+            }
+          />
         </main>
       </div>
+
+      <CustomerDeleteConfirmModal
+        open={deleteModalOpen && Boolean(selected)}
+        customerName={selected?.name ?? ""}
+        customerCode={selected?.code ?? ""}
+        onCancel={() => setDeleteModalOpen(false)}
+        onConfirm={() => {
+          if (selected) removeCustomer(selected.id);
+          setDeleteModalOpen(false);
+        }}
+      />
+      <ScscPrintTemplateEditor open={templateEditorOpen} onClose={() => setTemplateEditorOpen(false)} />
     </div>
   );
 }

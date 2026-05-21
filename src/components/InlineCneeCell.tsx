@@ -1,6 +1,9 @@
 import type { CustomerDirectoryEntry, CustomerSavedConsignee } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
-import { buildShipmentCneeDisplayLines } from "../utils/shipmentCneeCopyBlock";
+import {
+  buildShipmentCneeTooltipLines,
+  formatShipmentCneeReadonlySummary,
+} from "../utils/shipmentCneeCopyBlock";
 import { InlineConsigneeSelect } from "./InlineConsigneeSelect";
 import { HoverMagnifyText } from "./HoverMagnifyText";
 
@@ -14,7 +17,7 @@ type Props = {
   sessionYmdFallback?: string;
 };
 
-/** Ô CNEE trên lưới: chọn consignee + khối chữ bôi đen copy như Excel. */
+/** Ô CNEE: tên ngắn trên lưới; chi tiết (địa chỉ, SĐT…) trong panel hover fixed bám dưới ô. */
 export function InlineCneeCell({
   shipment,
   customerDirectory,
@@ -23,22 +26,37 @@ export function InlineCneeCell({
   onChange,
   sessionYmdFallback,
 }: Props) {
-  const lines = buildShipmentCneeDisplayLines(shipment, customerDirectory, { sessionYmdFallback });
-  const bodyText = lines.join("\n");
+  const shortName = formatShipmentCneeReadonlySummary(shipment, customerDirectory);
+  const tooltipLines = buildShipmentCneeTooltipLines(shipment, customerDirectory, {
+    sessionYmdFallback,
+  });
+  const detailText = tooltipLines.join("\n").trim();
+  const hasDetail = detailText.length > 0;
 
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       {options.length > 0 ? (
         <InlineConsigneeSelect value={value} options={options} onChange={onChange} />
       ) : null}
-      {bodyText ? (
-        <HoverMagnifyText
-          text={bodyText}
-          className="max-h-[5.5rem] min-h-[1rem] cursor-zoom-in select-text overflow-y-auto whitespace-pre-wrap break-words rounded-sm bg-black/[0.02] px-0.5 py-px text-[7px] leading-[1.15] text-apple-label"
-          panelLabel="CNEE"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        />
+      {shortName || hasDetail ? (
+        hasDetail ? (
+          <HoverMagnifyText
+            displayText={shortName || "Chi tiết CNEE"}
+            text={detailText}
+            className="min-w-0 truncate text-[11px] font-medium leading-snug text-apple-label"
+            panelLabel="CNEE"
+            magnifyTitle="Rê chuột để xem địa chỉ, SĐT, email — bôi đen để sao chép"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span
+            className="block min-w-0 truncate text-[11px] font-medium leading-snug text-apple-label"
+            title={shortName}
+          >
+            {shortName}
+          </span>
+        )
       ) : options.length === 0 ? (
         <span className="text-[10px] text-apple-tertiary">—</span>
       ) : null}

@@ -17,8 +17,8 @@ import { formatAwb } from "../utils/awbFormat";
 import { mapWeighSlipRecordToScaleTicketFormData } from "../utils/mapWeighSlipRecordToScaleTicketFormData";
 import {
   buildScscWeighReceiptDocumentHtml,
-  printScscWeighReceiptFromFormData,
 } from "../printing/scscWeigh/scscWeighPrint";
+import { printScscWeighReceiptPdfFromFormData } from "../utils/scscWeighPdfPrint";
 import { emptyWeighSlipDraft, validateWeighSlip } from "../utils/weighSlipValidation";
 
 type Props = {
@@ -194,7 +194,9 @@ export function WeighSlipManager({ open, onClose }: Props) {
       setErrors(v.errors);
       return;
     }
-    printScscWeighReceiptFromFormData(fd);
+    void printScscWeighReceiptPdfFromFormData(fd).then((result) => {
+      if (result.message) setStatusMsg(result.message);
+    });
   };
 
   if (!open) return null;

@@ -7,6 +7,8 @@ interface Props {
   className?: string;
   /** Thu gọn cho hàng mobile 1–2 dòng */
   compact?: boolean;
+  /** Ô lưới desktop — input gọn, viền mỏng */
+  variant?: "default" | "grid";
   /** Điều hướng bảng desktop (Excel): data-grid-row / data-grid-field */
   gridNav?: { rowId: string; field: string };
   /** Enter sau khi commit: ví dụ nhảy xuống ô cùng cột hàng dưới */
@@ -15,10 +17,11 @@ interface Props {
 
 export function InlineNumberEdit({
   value,
-  placeholder = "—",
+  placeholder = "",
   onCommit,
   className = "",
   compact = false,
+  variant = "default",
   gridNav,
   onEnterNavigateDown,
 }: Props) {
@@ -54,9 +57,14 @@ export function InlineNumberEdit({
     ? { "data-grid-row": gridNav.rowId, "data-grid-field": gridNav.field }
     : {};
 
-  const btnBase = compact
-    ? "inline-flex min-w-[2rem] max-w-[4rem] justify-end rounded px-0.5 py-0 text-[11px] leading-none font-bold tabular-nums"
-    : "w-full rounded px-1 py-0.5 text-right";
+  const btnBase =
+    variant === "grid"
+      ? "inline-flex min-w-[2rem] justify-end rounded px-0.5 py-0 text-right leading-none"
+      : compact
+        ? "inline-flex min-w-[2rem] max-w-[4rem] justify-end rounded px-0.5 py-0 text-[11px] leading-none font-bold tabular-nums"
+        : "w-full rounded px-1 py-0.5 text-right";
+
+  const emptyLabel = placeholder || "\u00a0";
 
   if (!editing) {
     return (
@@ -72,13 +80,20 @@ export function InlineNumberEdit({
           setEditing(true);
         }}
         className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 ${className} ${
-          value === null ? "italic text-apple-tertiary" : ""
+          value === null ? "text-apple-tertiary" : ""
         }`}
       >
-        {value !== null ? value.toLocaleString() : placeholder}
+        {value !== null ? value.toLocaleString() : emptyLabel}
       </button>
     );
   }
+
+  const inputCls =
+    variant === "grid"
+      ? "w-full min-w-[2.5rem] rounded border border-black/[0.12] bg-white px-1 py-0 text-right text-[11px] font-bold tabular-nums focus:outline-none focus:ring-1 focus:ring-apple-blue/35"
+      : compact
+        ? "inline-block w-14 rounded-lg border border-apple-blue bg-white px-1 py-0.5 text-right text-[11px] font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/25"
+        : "w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 text-right text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20";
 
   return (
     <input
@@ -102,11 +117,7 @@ export function InlineNumberEdit({
         }
       }}
       onClick={(e) => e.stopPropagation()}
-      className={
-        compact
-          ? "inline-block w-14 rounded-lg border border-apple-blue bg-white px-1 py-0.5 text-right text-[11px] font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/25"
-          : "w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 text-right text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20"
-      }
+      className={inputCls}
       step="any"
     />
   );

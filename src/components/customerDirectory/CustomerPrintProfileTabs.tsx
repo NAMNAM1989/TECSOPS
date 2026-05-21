@@ -6,6 +6,8 @@ import type {
   CustomerSavedShipper,
 } from "../../types/customerDirectory";
 import { profileOptionLabel } from "../../utils/customerDirectoryDefaults";
+import { formatVnPhoneDisplay, normalizeAgentCode } from "../../utils/customerProfileInputFormat";
+import { CustomerShipperTable } from "./CustomerShipperTable";
 
 type ProfileTab = "shipper" | "cnee" | "goods";
 
@@ -63,9 +65,9 @@ export function CustomerPrintProfileTabs({
   const goods = entry.savedGoods ?? [];
 
   const tabs: { id: ProfileTab; label: string; count: number }[] = [
-    { id: "shipper", label: "Shipper", count: shippers.length },
-    { id: "cnee", label: "CNEE", count: consignees.length },
-    { id: "goods", label: "Tên hàng", count: goods.length },
+    { id: "shipper", label: "Shippers", count: shippers.length },
+    { id: "cnee", label: "Consignees", count: consignees.length },
+    { id: "goods", label: "Cargo Items", count: goods.length },
   ];
 
   function setDefaultShipper(id: string) {
@@ -79,13 +81,13 @@ export function CustomerPrintProfileTabs({
   }
 
   return (
-    <section className="rounded-2xl border border-apple-blue/20 bg-apple-blue/5 p-3">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-apple-blue">Hồ sơ in phiếu cân</p>
-      <p className="mb-3 text-[10px] leading-snug text-apple-tertiary">
-        Mã/tên khách là account nội bộ. Shipper / CNEE / Hàng là đối tượng in trên phiếu. ★ = mặc định khi booking / in.
+    <section className="rounded-xl border border-apple-blue/20 bg-apple-blue/[0.04] p-2.5 sm:p-3">
+      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-apple-blue">Hồ sơ in phiếu cân</p>
+      <p className="mb-2 text-[10px] leading-snug text-apple-tertiary">
+        ★ = mặc định khi booking · SĐT tự format · OCR/JSON patch shipper
       </p>
 
-      <section className="mb-3 rounded-xl border border-violet-200/50 bg-white/80 p-3">
+      <section className="mb-2 rounded-lg border border-violet-200/50 bg-white/80 p-2">
         <label className="mb-1 block text-[10px] font-semibold uppercase text-violet-900">
           Yêu cầu khác
         </label>
@@ -122,28 +124,13 @@ export function CustomerPrintProfileTabs({
       </div>
 
       {tab === "shipper" ? (
-        <ProfileTable
-          rows={shippers.map((s, idx) => ({
-            key: s.id,
-            starActive: entry.defaultShipperId === s.id,
-            onStar: () => setDefaultShipper(s.id),
-            starTitle: "Shipper mặc định",
-            cols: [
-              s.label || "—",
-              s.shipperName || "—",
-              s.shipperPhone || "—",
-            ],
-            expanded: expandedKey === `sh-${s.id}`,
-            onToggle: () => setExpandedKey(expandedKey === `sh-${s.id}` ? null : `sh-${s.id}`),
-            onRemove: () => onRemoveShipper(idx),
-            detail: (
-              <ShipperDetail s={s} idx={idx} onPatch={onPatchShipper} />
-            ),
-          }))}
-          headers={["Nhãn", "Tên shipper", "SĐT"]}
-          addLabel="+ Thêm Shipper"
+        <CustomerShipperTable
+          shippers={shippers}
+          defaultShipperId={entry.defaultShipperId}
+          onSetDefault={setDefaultShipper}
+          onPatch={onPatchShipper}
+          onRemove={onRemoveShipper}
           onAdd={onAddShipper}
-          emptyHint="Chưa có Shipper lưu sẵn."
         />
       ) : null}
 
@@ -281,38 +268,6 @@ function ProfileTable(props: {
   );
 }
 
-function ShipperDetail({
-  s,
-  idx,
-  onPatch,
-}: {
-  s: CustomerSavedShipper;
-  idx: number;
-  onPatch: (index: number, patch: Partial<CustomerSavedShipper>) => void;
-}) {
-  return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      <input className={inputCls} placeholder="Nhãn" value={s.label} onChange={(e) => onPatch(idx, { label: e.target.value })} />
-      <input
-        className={inputCls}
-        placeholder="Tên shipper in phiếu"
-        value={s.shipperName}
-        onChange={(e) => onPatch(idx, { shipperName: e.target.value })}
-      />
-      <input className={inputCls} placeholder="SĐT" value={s.shipperPhone} onChange={(e) => onPatch(idx, { shipperPhone: e.target.value })} />
-      <input className={inputCls} placeholder="Email" value={s.shipperEmail} onChange={(e) => onPatch(idx, { shipperEmail: e.target.value })} />
-      <input className={`${inputCls} sm:col-span-2`} placeholder="MST" value={s.taxCode} onChange={(e) => onPatch(idx, { taxCode: e.target.value })} />
-      <textarea
-        className={`${inputCls} sm:col-span-2`}
-        rows={2}
-        placeholder="Địa chỉ — Enter xuống dòng 2 (in phiếu cân)"
-        value={s.shipperAddress}
-        onChange={(e) => onPatch(idx, { shipperAddress: e.target.value })}
-      />
-    </div>
-  );
-}
-
 function ConsigneeDetail({
   c,
   idx,
@@ -324,7 +279,7 @@ function ConsigneeDetail({
 }) {
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      <input className={inputCls} placeholder="Nhãn" value={c.label} onChange={(e) => onPatch(idx, { label: e.target.value })} />
+      <input className={inputCls} placeholder="Nhãn" value={c.label} onChange={(e) => onPatch(idx, { label: e.target.value })} onBlur={(e) => onPatch(idx, { label: normalizeAgentCode(e.target.value) })} />
       <input
         className={inputCls}
         placeholder="Tên consignee"
@@ -338,7 +293,7 @@ function ConsigneeDetail({
         value={c.consigneeAddress}
         onChange={(e) => onPatch(idx, { consigneeAddress: e.target.value })}
       />
-      <input className={inputCls} placeholder="SĐT" value={c.consigneePhone} onChange={(e) => onPatch(idx, { consigneePhone: e.target.value })} />
+      <input className={inputCls} placeholder="SĐT" value={c.consigneePhone} onChange={(e) => onPatch(idx, { consigneePhone: e.target.value })} onBlur={(e) => onPatch(idx, { consigneePhone: formatVnPhoneDisplay(e.target.value) })} />
       <input className={inputCls} placeholder="Email" value={c.consigneeEmail} onChange={(e) => onPatch(idx, { consigneeEmail: e.target.value })} />
       <input
         className={`${inputCls} sm:col-span-2`}

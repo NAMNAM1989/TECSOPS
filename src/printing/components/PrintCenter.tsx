@@ -41,8 +41,8 @@ import {
   printThermalCalibrationTspl,
   printThermalLabelTspl,
 } from "../thermalLabel/thermalLabelTspl";
-import { printScscWeighReceiptHtml } from "../scscWeigh/scscWeighPrint";
-import { canPrintWeighReceiptScsc } from "../../utils/printWeighReceiptScsc";
+import { canPrintWeighReceiptScsc, printWeighReceiptScsc } from "../../utils/printWeighReceiptScsc";
+import { ScscPrintTemplateEditor } from "./ScscPrintTemplateEditor";
 import type { ShipmentMutation } from "../../utils/shipmentMutations";
 import type { AppState } from "../../utils/shipmentMutations";
 
@@ -74,6 +74,7 @@ export function PrintCenter({
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [calibOpen, setCalibOpen] = useState(false);
   const [designerOpen, setDesignerOpen] = useState(false);
+  const [templateEditorOpen, setTemplateEditorOpen] = useState(false);
 
   const thermalProfile = useMemo(() => getActiveThermalProfile(store), [store]);
   const a4Profile = useMemo(() => getActiveA4WeighProfile(store), [store]);
@@ -136,8 +137,15 @@ export function PrintCenter({
     }
     const s = previewShipment ?? rows[0];
     if (!s) return;
-    printScscWeighReceiptHtml(s, { profile: a4Profile, calibrationTest: true, customerDirectory });
-    setStatusMsg("Đã gửi in test tờ cân A4.");
+    const result = await printWeighReceiptScsc(s, {
+      calibrationTest: true,
+      customerDirectory,
+    });
+    setStatusMsg(
+      result.via === "pdf"
+        ? "Đã gửi in test PDF (Scale 100%, margin 0)."
+        : result.message ?? "Đã gửi in test HTML (fallback)."
+    );
   };
 
   const runPrint = async () => {
@@ -155,12 +163,13 @@ export function PrintCenter({
 
     if (docType === "scsc-weigh") {
       let n = 0;
+      let viaPdf = 0;
       for (const s of targets) {
         const ctx = await ensureScscConsigneeForPrint(s, customerDirectory, globalAgents);
         if (!ctx) continue;
-        printScscWeighReceiptHtml(ctx.shipment, {
-          profile: a4Profile,
+        const result = await printWeighReceiptScsc(ctx.shipment, {
           customerDirectory,
+          globalAgents,
           mapOptions: {
             skipAutoSingleConsignee: ctx.skipAutoSingleConsignee,
             skipAutoDefaultAgent: ctx.skipAutoDefaultAgent,
@@ -168,9 +177,16 @@ export function PrintCenter({
             skipAutoSingleGoods: ctx.skipAutoSingleGoods,
           },
         });
-        n += 1;
+        if (result.ok) {
+          n += 1;
+          if (result.via === "pdf") viaPdf += 1;
+        }
       }
-      setStatusMsg(`Đã gửi ${n} tờ cân (${a4Profile.name}).`);
+      setStatusMsg(
+        n
+          ? `Đã gửi ${n} tờ cân (${viaPdf} PDF server · ${n - viaPdf} HTML fallback).`
+          : "Không in được tờ cân nào."
+      );
       return;
     }
 
@@ -285,6 +301,15 @@ export function PrintCenter({
             >
               Thiết kế tem
             </button>
+            {docType === "scsc-weigh" ? (
+              <button
+                type="button"
+                onClick={() => setTemplateEditorOpen(true)}
+                className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900"
+              >
+                Chỉnh mẫu SCSC (PDF)
+              </button>
+            ) : null}
             <button type="button" onClick={() => setCalibOpen(true)} className="rounded-full border px-3 py-2 text-xs font-semibold">
               Calibration
             </button>
@@ -362,6 +387,7 @@ export function PrintCenter({
           onClose={() => setDesignerOpen(false)}
         />
       ) : null}
+      <ScscPrintTemplateEditor open={templateEditorOpen} onClose={() => setTemplateEditorOpen(false)} />
     </div>,
     document.body
   );

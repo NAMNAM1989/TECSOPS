@@ -4,6 +4,7 @@ import {
   emptyGlobalAgentEntry,
   NONE_GLOBAL_AGENT_ID,
 } from "../utils/globalAgentsCore";
+import { formatVnPhoneDisplay, normalizeAgentCode } from "../utils/customerProfileInputFormat";
 
 type Props = {
   catalog: GlobalAgentCatalog;
@@ -38,10 +39,10 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
   }
 
   return (
-    <section className="mb-4 rounded-2xl border border-violet-200/60 bg-violet-50/40 p-3">
-      <p className="mb-1 text-[11px] font-semibold uppercase text-violet-900">Agent chung (mọi khách)</p>
-      <p className="mb-3 text-[10px] leading-snug text-violet-900/80">
-        Chọn Agent A / B / Không có agent khi booking. Mặc định áp dụng cho tất cả khách khi chọn khách mới.
+    <section className="mb-3 rounded-xl border border-violet-200/60 bg-violet-50/40 p-2.5">
+      <p className="mb-0.5 text-[10px] font-semibold uppercase text-violet-900">Agent chung (mọi khách)</p>
+      <p className="mb-2 text-[10px] leading-snug text-violet-900/80">
+        Nhãn/mã agent tự viết HOA · SĐT tự format
       </p>
       <label className="mb-3 block text-[10px] font-semibold text-apple-tertiary">
         Agent mặc định
@@ -77,9 +78,10 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
             <input
               value={ag.label}
               disabled={Boolean(ag.isNone)}
-              onChange={(e) => patchAgent(idx, { label: e.target.value })}
-              className="mb-1.5 w-full rounded-lg border border-black/[0.08] bg-apple-bg/40 px-2.5 py-1.5 text-xs font-semibold disabled:opacity-60"
-              placeholder="Nhãn (VD: Agent A)"
+              onChange={(e) => patchAgent(idx, { label: e.target.value.toUpperCase() })}
+              onBlur={(e) => patchAgent(idx, { label: normalizeAgentCode(e.target.value) })}
+              className="mb-1.5 w-full rounded-lg border border-black/[0.08] bg-apple-bg/40 px-2.5 py-1.5 font-mono text-xs font-bold uppercase disabled:opacity-60"
+              placeholder="Mã / nhãn (VD: CTL)"
             />
             {!ag.isNone ? (
               <>
@@ -103,8 +105,9 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
                       type="text"
                       value={ag.agentPhone}
                       onChange={(e) => patchAgent(idx, { agentPhone: e.target.value })}
+                      onBlur={(e) => patchAgent(idx, { agentPhone: formatVnPhoneDisplay(e.target.value) })}
                       maxLength={24}
-                      className="w-full rounded-lg border border-black/[0.08] px-2.5 py-1.5 text-sm"
+                      className="w-full rounded-lg border border-black/[0.08] px-2.5 py-1.5 text-sm tabular-nums"
                       placeholder="SĐT"
                     />
                   </div>

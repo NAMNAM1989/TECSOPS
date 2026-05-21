@@ -27,6 +27,7 @@
     "migrate:postgres-state": "node scripts/postgres-migrate-state.mjs",
     "migrate:postgres-catalog": "node scripts/postgres-migrate-master-catalog.mjs",
     "migrate:customer-relations": "node scripts/migrate-customer-relations.mjs",
+    "migrate:print-templates": "node scripts/migrate-print-templates.mjs",
     "backup:postgres-state": "node scripts/postgres-backup-state.mjs",
     "restore:postgres-state": "node scripts/postgres-restore-state.mjs",
     "import:scsc-template": "node scripts/import-scsc-template.mjs",

@@ -8,6 +8,8 @@ const MAGNIFY_FONT_CLASS = "text-[15px] leading-[1.65] tracking-[0.01em]";
 
 type Props = {
   text: string;
+  /** Nhãn gọn trong ô lưới; panel vẫn hiển thị `text` đầy đủ. */
+  displayText?: string;
   className?: string;
   magnifyTitle?: string;
   panelLabel?: string;
@@ -18,8 +20,9 @@ type Props = {
 /** Chữ nhỏ trong ô bảng; rê chuột / click → panel fixed bám ngay dưới ô (portal body). */
 export function HoverMagnifyText({
   text,
+  displayText,
   className = "",
-  magnifyTitle = "Rê chuột hoặc bấm để phóng to ngay dưới ô — bôi đen chữ để sao chép",
+  magnifyTitle = "Rê chuột hoặc bấm để xem chi tiết ngay dưới ô — bôi đen chữ để sao chép",
   panelLabel = "CNEE",
   onMouseDown,
   onClick,
@@ -114,6 +117,9 @@ export function HoverMagnifyText({
 
   if (!text.trim()) return null;
 
+  const inlineLabel = (displayText ?? text).trim() || text.trim();
+  const showInfoHint = Boolean(displayText && displayText.trim() !== text.trim());
+
   return (
     <>
       <div
@@ -131,11 +137,20 @@ export function HoverMagnifyText({
         }}
       >
         <SelectableTextWithCopyPopover
-          className={className}
+          className={`flex min-w-0 items-center gap-1 ${className}`}
           title={magnifyTitle}
           onMouseDown={onMouseDown}
         >
-          {text}
+          <span className="min-w-0 flex-1 truncate">{inlineLabel}</span>
+          {showInfoHint ? (
+            <span
+              className="shrink-0 text-[10px] leading-none text-apple-tertiary"
+              aria-hidden
+              title="Chi tiết CNEE"
+            >
+              ℹ
+            </span>
+          ) : null}
         </SelectableTextWithCopyPopover>
       </div>
 

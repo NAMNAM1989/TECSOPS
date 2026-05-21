@@ -13,7 +13,11 @@ import {
   syncLegacyScscOffsetsFromProfile,
   upsertPrinterProfile,
 } from "../printing/printerProfileStorage";
-import { printScscWeighReceiptHtml } from "../printing/scscWeigh/scscWeighPrint";
+import {
+  printScscWeighCalibrationTest,
+  printScscWeighReceiptPdf,
+  type ScscPrintResult,
+} from "./scscWeighPdfPrint";
 
 export function canPrintWeighReceiptScsc(s: Shipment): boolean {
   return isScscWarehouse(s.warehouse);
@@ -41,7 +45,7 @@ export function resetScscPrintCalibration(): void {
   upsertPrinterProfile({ ...p, scaleX: 1, scaleY: 1 });
 }
 
-export function printWeighReceiptScsc(
+export async function printWeighReceiptScsc(
   s: Shipment,
   opts?: {
     offsetXmm?: number;
@@ -58,10 +62,21 @@ export function printWeighReceiptScsc(
     };
     calibrationTest?: boolean;
   }
-): void {
+): Promise<ScscPrintResult> {
   const store = loadPrinterProfileStore();
   const profile = getActiveA4WeighProfile(store);
-  printScscWeighReceiptHtml(s, {
+  if (opts?.calibrationTest) {
+    return printScscWeighCalibrationTest(s, {
+      profile,
+      offsetXmm: opts?.offsetXmm,
+      offsetYmm: opts?.offsetYmm,
+      customerDirectory: opts?.customerDirectory,
+      globalAgents: opts?.globalAgents ?? defaultGlobalAgentCatalog(),
+      scscWeighPrintSettings: opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache(),
+      mapOptions: opts?.mapOptions,
+    });
+  }
+  return printScscWeighReceiptPdf(s, {
     profile,
     offsetXmm: opts?.offsetXmm,
     offsetYmm: opts?.offsetYmm,
@@ -69,7 +84,6 @@ export function printWeighReceiptScsc(
     globalAgents: opts?.globalAgents ?? defaultGlobalAgentCatalog(),
     scscWeighPrintSettings: opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache(),
     mapOptions: opts?.mapOptions,
-    calibrationTest: opts?.calibrationTest,
   });
 }
 
@@ -83,7 +97,7 @@ export async function printWeighReceiptScscWithConsigneeChoice(
     scscWeighPrintSettings?: ScscWeighPrintSettings;
     saveScscWeighPrintSettings?: (settings: ScscWeighPrintSettings) => void | Promise<void>;
   }
-): Promise<void> {
+): Promise<ScscPrintResult | undefined> {
   const directory = opts?.customerDirectory ?? [];
   const globalAgents = opts?.globalAgents ?? defaultGlobalAgentCatalog();
   const scscWeighPrintSettings = opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache();
@@ -91,8 +105,8 @@ export async function printWeighReceiptScscWithConsigneeChoice(
     scscWeighPrintSettings,
     saveScscWeighPrintSettings: opts?.saveScscWeighPrintSettings,
   });
-  if (!ctx) return;
-  printWeighReceiptScsc(ctx.shipment, {
+  if (!ctx) return undefined;
+  return printWeighReceiptScsc(ctx.shipment, {
     ...opts,
     globalAgents,
     scscWeighPrintSettings,

@@ -25,8 +25,7 @@ Vì vậy:
 | **`NODE_ENV`** | `production` khi build Nixpacks. |
 | **`TECSOPS_DISABLE_DEMO_SEED=1`** | Khi Redis/file **trống lần đầu**, tạo state **rỗng** `{ rows: [] }` thay vì seed từ `initialRows.json`. |
 | **`REDIS_STATE_KEY`** | Tùy chọn — mặc định `tecsops:state`. |
-| **`DATABASE_URL`** | Nếu có, app ưu tiên Postgres thay vì Redis. |
-| **`ALLOW_FILE_STATE_ON_RAILWAY=1`** | Chỉ khi **cố ý** chạy không Redis (dễ mất dữ liệu mỗi deploy). Mặc định server **thoát** nếu phát hiện Railway mà không có `REDIS_URL`. |
+| **`ALLOW_FILE_STATE_ON_RAILWAY=1`** | Chỉ khi **cố ý** chạy không Postgres/Redis (dễ mất dữ liệu mỗi deploy). Mặc định server **thoát** trên Railway nếu thiếu cả `DATABASE_URL` lẫn `REDIS_URL`. |
 
 **Không** lưu dữ liệu quan trọng chỉ trên filesystem container nếu không có Volume.
 

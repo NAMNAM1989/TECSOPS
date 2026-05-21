@@ -72,7 +72,17 @@ registerSitePasswordGate(app);
 
 /** Healthcheck Railway / load balancer — luôn 200 khi process sống. */
 app.get("/api/health", (_req, res) => {
-  res.status(200).json({ ok: true, service: "tecsops" });
+  const postgres = Boolean(process.env.DATABASE_URL?.trim());
+  const redis = Boolean(process.env.REDIS_URL?.trim());
+  res.status(200).json({
+    ok: true,
+    service: "tecsops",
+    storage: { postgres, redis, fileFallback: !postgres && !redis },
+    features: {
+      ecargo: redis && process.env.ECARGO_WORKER_ENABLED !== "0",
+      printCatalog: postgres,
+    },
+  });
 });
 
 app.get("/api/state", async (_req, res) => {

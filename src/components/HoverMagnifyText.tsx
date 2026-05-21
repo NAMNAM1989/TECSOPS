@@ -10,6 +10,8 @@ type Props = {
   text: string;
   /** Nhãn gọn trong ô lưới; panel vẫn hiển thị `text` đầy đủ. */
   displayText?: string;
+  /** Chỉ hiện icon ℹ thay vì chữ (tooltip khi hover). */
+  iconOnly?: boolean;
   className?: string;
   magnifyTitle?: string;
   panelLabel?: string;
@@ -21,6 +23,7 @@ type Props = {
 export function HoverMagnifyText({
   text,
   displayText,
+  iconOnly = false,
   className = "",
   magnifyTitle = "Rê chuột hoặc bấm để xem chi tiết ngay dưới ô — bôi đen chữ để sao chép",
   panelLabel = "CNEE",
@@ -119,6 +122,7 @@ export function HoverMagnifyText({
 
   const inlineLabel = (displayText ?? text).trim() || text.trim();
   const showInfoHint = Boolean(displayText && displayText.trim() !== text.trim());
+  const showIconTrigger = iconOnly || (!displayText?.trim() && text.trim());
 
   return (
     <>
@@ -127,7 +131,7 @@ export function HoverMagnifyText({
         className={`relative min-w-0 rounded-md transition-[box-shadow,background-color,opacity] duration-200 ${
           open
             ? "z-[2] opacity-0"
-            : "opacity-100 hover:z-[1] hover:bg-apple-blue/[0.04] hover:shadow-[0_0_0_1px_rgba(0,122,255,0.2)]"
+            : "opacity-100 hover:z-[1] hover:bg-apple-blue/[0.04] hover:shadow-[0_0_0_1px_rgba(0,122,255,0.2)] dark:hover:bg-apple-blue/10"
         }`}
         onMouseEnter={openMagnify}
         onMouseLeave={scheduleClose}
@@ -136,22 +140,38 @@ export function HoverMagnifyText({
           openMagnify();
         }}
       >
-        <SelectableTextWithCopyPopover
-          className={`flex min-w-0 items-center gap-1 ${className}`}
-          title={magnifyTitle}
-          onMouseDown={onMouseDown}
-        >
-          <span className="min-w-0 flex-1 truncate">{inlineLabel}</span>
-          {showInfoHint ? (
-            <span
-              className="shrink-0 text-[10px] leading-none text-apple-tertiary"
-              aria-hidden
-              title="Chi tiết CNEE"
-            >
-              ℹ
-            </span>
-          ) : null}
-        </SelectableTextWithCopyPopover>
+        {showIconTrigger && !displayText?.trim() ? (
+          <button
+            type="button"
+            title="Chi tiết CNEE"
+            aria-label="Chi tiết CNEE"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-sky-300/60 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-600/40 dark:bg-sky-950/50 dark:text-sky-300"
+            onMouseDown={onMouseDown}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+        ) : (
+          <SelectableTextWithCopyPopover
+            className={`flex min-w-0 items-center gap-1 ${className}`}
+            title={magnifyTitle}
+            onMouseDown={onMouseDown}
+          >
+            <span className="min-w-0 flex-1 truncate">{inlineLabel}</span>
+            {showInfoHint ? (
+              <span
+                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-sky-300/50 bg-sky-50 text-sky-700 dark:border-sky-600/40 dark:bg-sky-950/40 dark:text-sky-300"
+                aria-hidden
+                title="Chi tiết CNEE"
+              >
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </span>
+            ) : null}
+          </SelectableTextWithCopyPopover>
+        )}
       </div>
 
       {open && typeof document !== "undefined"

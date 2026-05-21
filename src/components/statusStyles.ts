@@ -13,14 +13,14 @@ export const statusLabel: Record<ShipmentStatus, string> = {
 
 /** Nền hàng bàn desktop — mỗi trạng thái một tông màu rõ rệt */
 export const statusRowBg: Record<ShipmentStatus, string> = {
-  PENDING: "bg-slate-50/95",
-  RECEIVED: "bg-amber-100/90",
-  VOLUME_DONE: "bg-cyan-100/90",
-  CUSTOMS: "bg-blue-100/90",
-  SECURITY: "bg-orange-100/90",
-  OLA_PULL: "bg-fuchsia-100/90",
-  WEIGH_SLIP: "bg-lime-100/90",
-  COMPLETED: "bg-emerald-200/90",
+  PENDING: "bg-slate-50/95 dark:bg-slate-900/35",
+  RECEIVED: "bg-amber-100/90 dark:bg-amber-950/35",
+  VOLUME_DONE: "bg-cyan-100/90 dark:bg-cyan-950/30",
+  CUSTOMS: "bg-blue-100/90 dark:bg-blue-950/35",
+  SECURITY: "bg-orange-100/90 dark:bg-orange-950/30",
+  OLA_PULL: "bg-fuchsia-100/90 dark:bg-fuchsia-950/30",
+  WEIGH_SLIP: "bg-lime-100/90 dark:bg-lime-950/25",
+  COMPLETED: "bg-emerald-200/90 dark:bg-emerald-950/35",
 };
 
 export const statusRowBorder: Record<ShipmentStatus, string> = {

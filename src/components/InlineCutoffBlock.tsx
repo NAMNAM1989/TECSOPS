@@ -1,13 +1,22 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   buildCutoffIsoFromDateAndTimeText,
   cutoffIsoToDateDdMon,
   cutoffIsoToTimeInputText,
   formatCutoffDisplayVi,
 } from "../utils/bookingDateParse";
+import { getCutoffUrgency } from "../utils/cutoffUrgency";
 
 const inp =
-  "w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums antialiased focus:outline-none focus:ring-2 focus:ring-apple-blue/20";
+  "w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums antialiased focus:outline-none focus:ring-2 focus:ring-apple-blue/20 dark:bg-ops-surface dark:text-ops-label";
+
+const urgencyTone = {
+  empty: "text-apple-tertiary italic dark:text-ops-tertiary",
+  ok: "font-semibold tabular-nums text-slate-900 dark:text-slate-100",
+  warning: "font-bold tabular-nums text-amber-700 dark:text-amber-400",
+  urgent: "font-bold tabular-nums text-red-600 dark:text-red-400",
+  past: "font-bold tabular-nums text-red-700 line-through opacity-80 dark:text-red-500",
+} as const;
 
 type Props = {
   rowId: string;
@@ -24,6 +33,7 @@ export function InlineCutoffBlock({ rowId, cutoffIso, sessionYear, onCommit, onE
   const [dateDraft, setDateDraft] = useState("");
   const timeRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
+  const urgency = useMemo(() => getCutoffUrgency(cutoffIso), [cutoffIso]);
 
   const syncFromIso = (iso: string) => {
     setTimeDraft(cutoffIsoToTimeInputText(iso));
@@ -77,14 +87,30 @@ export function InlineCutoffBlock({ rowId, cutoffIso, sessionYear, onCommit, onE
           syncFromIso(cutoffIso);
           setEditing(true);
         }}
-        className="w-full rounded px-1 py-0.5 text-left hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30"
+        className="flex w-full items-center gap-0.5 rounded px-1 py-0.5 text-left hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 dark:hover:bg-white/[0.06]"
       >
         {cutoffIso ? (
-          <span className="whitespace-nowrap text-xs font-semibold tabular-nums text-apple-label">
-            {formatCutoffDisplayVi(cutoffIso)}
-          </span>
+          <>
+            {(urgency === "urgent" || urgency === "warning" || urgency === "past") && (
+              <svg
+                className={`h-3 w-3 shrink-0 ${urgency === "warning" ? "text-amber-600" : "text-red-600"}`}
+                fill="currentColor"
+                viewBox="0 0 20 20"
+                aria-hidden
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 8a1 1 0 100-2 1 1 0 000 2z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            )}
+            <span className={`whitespace-nowrap text-xs ${urgencyTone[urgency]}`}>
+              {formatCutoffDisplayVi(cutoffIso)}
+            </span>
+          </>
         ) : (
-          <span className="text-xs italic text-apple-tertiary">Giờ / ngày</span>
+          <span className={`text-xs ${urgencyTone.empty}`}>Giờ / ngày</span>
         )}
       </button>
     );

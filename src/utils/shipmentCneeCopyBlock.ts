@@ -126,13 +126,13 @@ export function buildShipmentCneeMetaLines(
   );
 
   if (awb) lines.push(`AWB: ${awb}`);
-  if (flight) lines.push(`Chuyến: ${flight}`);
   if (flightDateDdMmYyyy) lines.push(`Ngày bay: ${flightDateDdMmYyyy}`);
-  if (dest) lines.push(`DEST: ${dest}`);
+  if (flight) lines.push(`Chuyến bay: ${flight}`);
+  if (dest) lines.push(`Dest: ${dest}`);
   return lines;
 }
 
-/** Toàn bộ nội dung hiển thị trong ô CNEE (meta lô + thông tin consignee). */
+/** Toàn bộ nội dung hiển thị trong panel phóng to CNEE (meta lô + thông tin consignee). */
 export function buildShipmentCneeDisplayLines(
   shipment: Shipment,
   directory: readonly CustomerDirectoryEntry[] = [],
@@ -140,8 +140,10 @@ export function buildShipmentCneeDisplayLines(
 ): string[] {
   const meta = buildShipmentCneeMetaLines(shipment, opts);
   const body = buildShipmentCneeBodyLines(shipment, directory);
-  if (meta.length && body.length) return [...meta, "", ...body];
-  return meta.length ? meta : body;
+  if (meta.length && body.length) return [...meta, "", "CNEE:", ...body];
+  if (meta.length) return meta;
+  if (body.length) return ["CNEE:", ...body];
+  return [];
 }
 
 /**

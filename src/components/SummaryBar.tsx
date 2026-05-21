@@ -7,7 +7,7 @@ interface SummaryBarProps {
 
 const POST_VOLUME: ShipmentStatus[] = ["CUSTOMS", "SECURITY", "OLA_PULL", "WEIGH_SLIP", "COMPLETED"];
 
-/** Một vòng lặp: đếm lô / kiện / kg / trạng thái cho đúng một kho (tránh nhiều lần filter cùng mảng). */
+/** Thẻ chỉ số gọn — góc phải header kho. */
 export function SummaryBar({ rows, warehouse }: SummaryBarProps) {
   let groupLen = 0;
   let totalPcs = 0;
@@ -26,18 +26,18 @@ export function SummaryBar({ rows, warehouse }: SummaryBarProps) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-[10px] md:gap-2 md:text-xs">
-      <Chip label="Lô" value={groupLen} />
-      <Chip label="Kiện" value={totalPcs} />
-      <Chip label="Kg" value={totalKg.toLocaleString()} />
-      {pending > 0 && <Chip label="BOOKING" value={pending} warn />}
-      {postVolume > 0 && <Chip label="Sau ĐO VOLUME" value={postVolume} />}
-      {noPcs > 0 && <Chip label="Thiếu SL" value={noPcs} warn />}
+    <div className="flex flex-wrap items-center justify-end gap-1">
+      <StatCard label="Lô" value={groupLen} />
+      <StatCard label="Kiện" value={totalPcs} />
+      <StatCard label="Kg" value={totalKg.toLocaleString()} />
+      {pending > 0 ? <StatCard label="BOOKING" value={pending} warn /> : null}
+      {postVolume > 0 ? <StatCard label="Sau ĐO VOLUME" value={postVolume} /> : null}
+      {noPcs > 0 ? <StatCard label="Thiếu SL" value={noPcs} warn /> : null}
     </div>
   );
 }
 
-function Chip({
+function StatCard({
   label,
   value,
   warn,
@@ -46,13 +46,28 @@ function Chip({
   value: string | number;
   warn?: boolean;
 }) {
-  const tone = warn ? "bg-amber-100/90 text-amber-950" : "bg-black/[0.05] text-apple-label";
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold md:px-2.5 md:py-1 ${tone}`}
+    <div
+      className={`inline-flex min-w-[3.25rem] flex-col items-center rounded-lg border px-2 py-1 shadow-sm ${
+        warn
+          ? "border-amber-300/70 bg-amber-50/95 dark:border-amber-600/40 dark:bg-amber-950/40"
+          : "border-black/[0.08] bg-white/95 dark:border-white/10 dark:bg-ops-elevated/90"
+      }`}
     >
-      {label}
-      <span className="tabular-nums font-semibold">{value}</span>
-    </span>
+      <span
+        className={`text-[8px] font-bold uppercase tracking-wide ${
+          warn ? "text-amber-800 dark:text-amber-300" : "text-apple-secondary dark:text-ops-secondary"
+        }`}
+      >
+        {label}
+      </span>
+      <span
+        className={`text-[11px] font-bold tabular-nums leading-tight ${
+          warn ? "text-amber-950 dark:text-amber-100" : "text-apple-label dark:text-ops-label"
+        }`}
+      >
+        {value}
+      </span>
+    </div>
   );
 }

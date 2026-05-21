@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, lazy, Suspense, startTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense, startTransition } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { initialShipments } from "../data/mockShipments";
 import { loadRows } from "../utils/shipmentStorage";
@@ -40,6 +40,7 @@ import {
   upsertCustomerVehicleInDirectory,
   type UpsertCustomerVehicleParams,
 } from "../utils/customerVehicleCore";
+import { useOpsTheme } from "../hooks/useOpsTheme";
 
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
@@ -121,6 +122,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [customerDirOpen, setCustomerDirOpen] = useState(false);
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const { dark: darkMode, toggle: toggleDarkMode } = useOpsTheme();
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -161,6 +164,22 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   useEffect(() => {
     setSelectedId((s) => (s && filteredViewRows.some((r) => r.id === s) ? s : null));
   }, [filteredViewRows]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+      if (e.key === "/" || e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const runMutate = useCallback(
     async (cmd: Parameters<typeof mutate>[0]) => {
@@ -302,10 +321,11 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   return (
     <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-4 lg:px-5">
-      <header className="mb-3 space-y-2">
+      <div className="sticky top-0 z-40 -mx-3 mb-2 border-b border-black/[0.06] bg-apple-bg/95 px-3 pb-2 pt-1 backdrop-blur-md dark:border-white/[0.08] dark:bg-ops-bg/95 sm:-mx-4 sm:px-4 lg:-mx-5 lg:px-5">
+      <header className="mb-2 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h1 className="text-lg font-semibold tracking-tight text-apple-label sm:text-xl">Hàng lên sân bay</h1>
+            <h1 className="text-lg font-semibold tracking-tight text-apple-label dark:text-ops-label sm:text-xl">Hàng lên sân bay</h1>
             <span className="text-[11px] text-apple-secondary">
               <span className="font-semibold text-apple-label">{workDateLabel}</span>
               {daysWithData > 0 && (
@@ -329,6 +349,23 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             <StatInline label="Lô" value={filteredViewRows.length} />
             <StatInline label="Kiện" value={totalPcs} />
             <StatInline label="Kg" value={totalKg.toLocaleString()} />
+            <button
+              type="button"
+              onClick={toggleDarkMode}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-black/[0.08] bg-white text-apple-label shadow-sm hover:bg-black/[0.03] dark:border-white/10 dark:bg-ops-elevated dark:text-ops-label dark:hover:bg-white/[0.06]"
+              title={darkMode ? "Chế độ sáng" : "Chế độ tối (Ops ban đêm)"}
+              aria-label={darkMode ? "Bật chế độ sáng" : "Bật chế độ tối"}
+            >
+              {darkMode ? (
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                </svg>
+              ) : (
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
 
@@ -336,7 +373,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           <button
             type="button"
             onClick={() => setCustomerDirOpen(true)}
-            className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03]"
+            className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03] dark:border-white/10 dark:bg-ops-elevated dark:text-ops-label dark:hover:bg-white/[0.06]"
             title="Khách hàng và hồ sơ in"
           >
             Khách hàng
@@ -344,7 +381,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           <button
             type="button"
             onClick={() => setAirlineLabelSettingsOpen(true)}
-            className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03]"
+            className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03] dark:border-white/10 dark:bg-ops-elevated dark:text-ops-label dark:hover:bg-white/[0.06]"
             title="Tên hãng trên tem"
           >
             Tên hãng
@@ -353,7 +390,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             type="button"
             disabled={excelExporting}
             onClick={() => void onDownloadDayExcel()}
-            className="inline-flex items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03] disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03] disabled:cursor-wait disabled:opacity-60 dark:border-white/10 dark:bg-ops-elevated dark:text-ops-label dark:hover:bg-white/[0.06]"
             title="Xuất Excel ngày"
           >
             <svg className="h-3.5 w-3.5 text-apple-blue" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
@@ -361,11 +398,11 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             </svg>
             Excel
           </button>
-          <div className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white p-0.5 shadow-sm">
+          <div className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white p-0.5 shadow-sm dark:border-white/10 dark:bg-ops-elevated">
             <button
               type="button"
               onClick={goPrevDay}
-              className="rounded-md px-2 py-1 text-xs font-semibold text-apple-label hover:bg-black/[0.05]"
+              className="rounded-md px-2 py-1 text-xs font-semibold text-apple-label hover:bg-black/[0.05] dark:text-ops-label dark:hover:bg-white/[0.06]"
               aria-label="Ngày trước"
             >
               ‹
@@ -377,12 +414,12 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
                 const v = e.target.value;
                 if (v) setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)));
               }}
-              className="w-[7.25rem] border-0 bg-transparent px-1 py-1 font-mono text-[11px] font-semibold text-apple-label focus:outline-none focus:ring-1 focus:ring-apple-blue/30"
+              className="w-[7.25rem] border-0 bg-transparent px-1 py-1 font-mono text-[11px] font-semibold text-apple-label focus:outline-none focus:ring-1 focus:ring-apple-blue/30 dark:text-ops-label"
             />
             <button
               type="button"
               onClick={goNextDay}
-              className="rounded-md px-2 py-1 text-xs font-semibold text-apple-label hover:bg-black/[0.05]"
+              className="rounded-md px-2 py-1 text-xs font-semibold text-apple-label hover:bg-black/[0.05] dark:text-ops-label dark:hover:bg-white/[0.06]"
               aria-label="Ngày sau"
             >
               ›
@@ -400,23 +437,24 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       </header>
 
       {viewRows.length > 0 && (
-        <div className="mb-2 flex flex-col gap-2 rounded-xl border border-black/[0.08] bg-white/95 px-2 py-2 shadow-sm lg:flex-row lg:items-center">
+        <div className="flex flex-col gap-2 rounded-xl border border-black/[0.08] bg-white/95 px-2 py-2 shadow-sm dark:border-white/10 dark:bg-ops-surface/90 lg:flex-row lg:items-center">
           <StatusFilterBar compact dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
           <div className="flex shrink-0 items-center gap-1.5 lg:w-56 xl:w-64">
             <input
+              ref={searchInputRef}
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm AWB, khách, đích…"
+              placeholder="Tìm AWB, khách, đích… (/ hoặc F)"
               autoComplete="off"
               spellCheck={false}
-              className="h-8 min-w-0 flex-1 rounded-lg border border-black/[0.1] bg-[#f7f8fa] px-2.5 text-[11px] text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue/40 focus:outline-none focus:ring-1 focus:ring-apple-blue/25"
+              className="h-8 min-w-0 flex-1 rounded-lg border border-black/[0.1] bg-[#f7f8fa] px-2.5 text-[11px] text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue/40 focus:outline-none focus:ring-1 focus:ring-apple-blue/25 dark:border-white/10 dark:bg-ops-bg dark:text-ops-label dark:placeholder:text-ops-tertiary"
               aria-label="Tìm lô"
             />
             <select
               value={warehouseFilter}
               onChange={(e) => setWarehouseFilter(e.target.value as WarehouseLayoutFilter)}
-              className="h-8 max-w-[7.5rem] shrink-0 rounded-lg border border-black/[0.1] bg-white px-1.5 text-[11px] font-semibold text-apple-label focus:border-apple-blue/40 focus:outline-none focus:ring-1 focus:ring-apple-blue/25"
+              className="h-8 max-w-[7.5rem] shrink-0 rounded-lg border border-black/[0.1] bg-white px-1.5 text-[11px] font-semibold text-apple-label focus:border-apple-blue/40 focus:outline-none focus:ring-1 focus:ring-apple-blue/25 dark:border-white/10 dark:bg-ops-elevated dark:text-ops-label"
               aria-label="Lọc kho"
             >
               {WAREHOUSE_FILTER_OPTIONS.map((opt) => (
@@ -437,6 +475,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           )}
         </div>
       )}
+      </div>
 
       {viewRows.length > 0 && filteredViewRows.length === 0 && (
         <p className="mb-2 text-center text-xs text-apple-secondary">
@@ -615,9 +654,9 @@ function SyncBadge({
 
 function StatInline({ label, value }: { label: string; value: string | number }) {
   return (
-    <span className="text-apple-secondary">
+    <span className="rounded-md border border-black/[0.06] bg-white/80 px-1.5 py-0.5 text-apple-secondary dark:border-white/10 dark:bg-ops-elevated/80 dark:text-ops-secondary">
       {label}{" "}
-      <span className="font-semibold tabular-nums text-apple-label">{value}</span>
+      <span className="font-semibold tabular-nums text-apple-label dark:text-ops-label">{value}</span>
     </span>
   );
 }

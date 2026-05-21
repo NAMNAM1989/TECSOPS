@@ -1,7 +1,7 @@
 import type { CustomerDirectoryEntry, CustomerSavedConsignee } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
 import {
-  buildShipmentCneeTooltipLines,
+  buildShipmentCneeDisplayLines,
   formatShipmentCneeReadonlySummary,
 } from "../utils/shipmentCneeCopyBlock";
 import { InlineConsigneeSelect } from "./InlineConsigneeSelect";
@@ -27,10 +27,10 @@ export function InlineCneeCell({
   sessionYmdFallback,
 }: Props) {
   const shortName = formatShipmentCneeReadonlySummary(shipment, customerDirectory);
-  const tooltipLines = buildShipmentCneeTooltipLines(shipment, customerDirectory, {
+  const panelLines = buildShipmentCneeDisplayLines(shipment, customerDirectory, {
     sessionYmdFallback,
   });
-  const detailText = tooltipLines.join("\n").trim();
+  const detailText = panelLines.join("\n").trim();
   const hasDetail = detailText.length > 0;
 
   return (
@@ -41,11 +41,12 @@ export function InlineCneeCell({
       {shortName || hasDetail ? (
         hasDetail ? (
           <HoverMagnifyText
-            displayText={shortName || "Chi tiết CNEE"}
+            displayText={shortName || undefined}
+            iconOnly={!shortName && hasDetail}
             text={detailText}
-            className="min-w-0 truncate text-[11px] font-medium leading-snug text-apple-label"
-            panelLabel="CNEE"
-            magnifyTitle="Rê chuột để xem địa chỉ, SĐT, email — bôi đen để sao chép"
+            className="min-w-0 truncate text-[11px] font-medium leading-snug text-apple-label dark:text-ops-label"
+            panelLabel="Chi tiết lô"
+            magnifyTitle="Rê chuột để xem AWB, chuyến bay, Dest và CNEE — bôi đen để sao chép"
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           />

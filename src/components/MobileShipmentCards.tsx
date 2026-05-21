@@ -23,6 +23,8 @@ import {
   type WarehouseLayoutFilter,
 } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
+import { useWarehouseSectionCollapse } from "../hooks/useWarehouseSectionCollapse";
+import type { Warehouse } from "../types/shipment";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
 import { buildShipmentCneeDisplayLines } from "../utils/shipmentCneeCopyBlock";
 import { SelectableTextWithCopyPopover } from "./SelectableTextWithCopyPopover";
@@ -96,6 +98,19 @@ export function MobileShipmentCards({
     () => warehouseSectionsForLayout(warehouseLayoutFilter),
     [warehouseLayoutFilter]
   );
+  const warehouseCounts = useMemo(() => {
+    const counts = {
+      "TECS-TCS": 0,
+      "TECS-SCSC": 0,
+      "KHO-TCS": 0,
+      "KHO-SCSC": 0,
+    } as Record<Warehouse, number>;
+    for (const wh of warehouseSections) {
+      counts[wh] = rowsByWarehouse[wh].length;
+    }
+    return counts;
+  }, [rowsByWarehouse, warehouseSections]);
+  const { isCollapsed, toggle } = useWarehouseSectionCollapse(warehouseCounts);
   const ecargoModalRow =
     openEcargoRowId != null
       ? rows.find((r) => r.id === openEcargoRowId && isScscWarehouse(r.warehouse))
@@ -135,19 +150,38 @@ export function MobileShipmentCards({
     <div className="space-y-5 pb-28 md:hidden">
       {warehouseSections.map((wh) => {
         const group = rowsByWarehouse[wh];
+        const collapsed = isCollapsed(wh);
         return (
           <section key={wh}>
-            <div className="mb-2 flex items-center gap-2">
-              <h2 className="text-[17px] font-semibold tracking-tight text-apple-label">{warehouseLabel[wh]}</h2>
-              <span className="rounded-full bg-apple-label px-2 py-0.5 text-[10px] font-semibold text-white">
+            <button
+              type="button"
+              onClick={() => toggle(wh)}
+              aria-expanded={!collapsed}
+              className="mb-2 flex w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-black/[0.03] dark:hover:bg-white/[0.06]"
+            >
+              <svg
+                className={`h-4 w-4 shrink-0 text-apple-secondary transition-transform dark:text-ops-secondary ${
+                  collapsed ? "" : "rotate-90"
+                }`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                viewBox="0 0 24 24"
+                aria-hidden
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+              <h2 className="text-[17px] font-semibold tracking-tight text-apple-label dark:text-ops-label">{warehouseLabel[wh]}</h2>
+              <span className="rounded-full bg-apple-label px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-ops-elevated">
                 {group.length}
               </span>
-            </div>
-            {group.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-black/[0.1] bg-white/80 px-4 py-6 text-center text-[13px] text-apple-secondary">
+            </button>
+            {!collapsed && group.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-black/[0.1] bg-white/80 px-4 py-6 text-center text-[13px] text-apple-secondary dark:border-white/10 dark:bg-ops-surface/80 dark:text-ops-secondary">
                 Chưa có lô trong kho này — dùng « Nhập booking mới » bên dưới và chọn đúng kho trong form.
               </p>
-            ) : (
+            ) : null}
+            {!collapsed && group.length > 0 ? (
             <div className="space-y-1">
               {group.map((row) => {
                 const open = swipeOpenId === row.id;
@@ -215,7 +249,7 @@ export function MobileShipmentCards({
                       <div className="flex flex-col gap-1.5">
                         <div className="flex items-start justify-between gap-2">
                           <p className="min-w-0 flex-1 text-left leading-snug">
-                            <span className="font-mono text-[15px] font-semibold leading-tight tracking-tight text-apple-label">
+                            <span className="font-mono text-[1.1rem] font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-50">
                               {row.awb}
                             </span>
                             {(row.hawb ?? "").trim() ? (
@@ -423,7 +457,7 @@ export function MobileShipmentCards({
                 );
               })}
             </div>
-            )}
+            ) : null}
           </section>
         );
       })}

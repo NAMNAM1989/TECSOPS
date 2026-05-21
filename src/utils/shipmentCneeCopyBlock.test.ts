@@ -49,9 +49,9 @@ describe("buildShipmentCneeMetaLines", () => {
   it("gồm AWB, chuyến, ngày bay dd-mm-yyyy, DEST", () => {
     expect(buildShipmentCneeMetaLines(baseShipment())).toEqual([
       "AWB: 978-1111 2222",
-      "Chuyến: VJ081",
       "Ngày bay: 18-05-2026",
-      "DEST: MEL",
+      "Chuyến bay: VJ081",
+      "Dest: MEL",
     ]);
   });
 });
@@ -82,6 +82,9 @@ describe("buildShipmentCneeDisplayLines", () => {
     );
     expect(lines[0]).toBe("AWB: 978-1111 2222");
     expect(lines).toContain("Ngày bay: 18-05-2026");
+    expect(lines).toContain("Chuyến bay: VJ081");
+    expect(lines).toContain("Dest: MEL");
+    expect(lines).toContain("CNEE:");
     expect(lines).toContain("ACME PTY LTD");
     expect(lines).toContain("1 MAIN ST");
   });

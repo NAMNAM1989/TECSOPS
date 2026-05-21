@@ -34,6 +34,7 @@ import { findCustomerEntry } from "../utils/mapBookingToScaleTicketFormData";
 import { buildShipmentPatchForSavedConsignee } from "../utils/customerConsigneeShipmentPatch";
 import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
 import { InlineCneeCell } from "./InlineCneeCell";
+import { useWarehouseSectionCollapse } from "../hooks/useWarehouseSectionCollapse";
 
 export type EcargoAutoRegisterOpts = {
   driverName?: string;
@@ -119,21 +120,57 @@ export function DesktopShipmentTable({
     () => warehouseSectionsForLayout(warehouseLayoutFilter),
     [warehouseLayoutFilter]
   );
+  const warehouseCounts = useMemo(() => {
+    const counts = {
+      "TECS-TCS": 0,
+      "TECS-SCSC": 0,
+      "KHO-TCS": 0,
+      "KHO-SCSC": 0,
+    } as Record<Warehouse, number>;
+    for (const wh of warehouseSections) {
+      counts[wh] = rowsByWarehouse[wh].length;
+    }
+    return counts;
+  }, [rowsByWarehouse, warehouseSections]);
+  const { isCollapsed, toggle } = useWarehouseSectionCollapse(warehouseCounts);
 
   return (
     <>
     <div className="hidden md:block space-y-2">
       {warehouseSections.map((wh) => {
         const group = rowsByWarehouse[wh];
+        const collapsed = isCollapsed(wh);
 
         return (
-          <section key={wh}>
-            <div className="mb-1 flex flex-wrap items-center justify-between gap-1.5">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <h2 className="text-sm font-semibold tracking-tight text-apple-label">{warehouseLabel[wh]}</h2>
-                <span className="rounded-full bg-apple-label px-1.5 py-0.5 text-[9px] font-semibold text-white tabular-nums">
-                  {group.length}
-                </span>
+          <section key={wh} className="rounded-lg border border-black/[0.06] bg-white/50 dark:border-white/[0.08] dark:bg-ops-surface/40">
+            <div className="flex flex-wrap items-center justify-between gap-1.5 px-2 py-1.5">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => toggle(wh)}
+                  aria-expanded={!collapsed}
+                  className="group inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 text-left hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                  title={collapsed ? "Mở rộng kho" : "Thu gọn kho"}
+                >
+                  <svg
+                    className={`h-3.5 w-3.5 shrink-0 text-apple-secondary transition-transform dark:text-ops-secondary ${
+                      collapsed ? "" : "rotate-90"
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                    viewBox="0 0 24 24"
+                    aria-hidden
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                  </svg>
+                  <h2 className="text-sm font-semibold tracking-tight text-apple-label dark:text-ops-label">
+                    {warehouseLabel[wh]}
+                  </h2>
+                  <span className="rounded-full bg-apple-label px-1.5 py-0.5 text-[9px] font-semibold text-white tabular-nums dark:bg-ops-elevated">
+                    {group.length}
+                  </span>
+                </button>
                 <button
                   type="button"
                   onClick={() => void onAddBlankRow(wh)}
@@ -148,10 +185,11 @@ export function DesktopShipmentTable({
               {group.length > 0 ? <SummaryBar rows={rows} warehouse={wh} /> : null}
             </div>
 
-            <div className="max-h-[min(78vh,720px)] overflow-auto rounded-lg border border-black/[0.08] bg-white shadow-sm">
+            {!collapsed ? (
+            <div className="max-h-[min(78vh,720px)] overflow-auto rounded-b-lg border-t border-black/[0.06] dark:border-white/[0.06]">
               <table className="w-full border-collapse text-left text-[11px] leading-tight">
                 <thead className="sticky top-0 z-10">
-                  <tr className="border-b border-black/[0.08] bg-apple-bg shadow-[0_1px_0_rgba(0,0,0,0.06)]">
+                  <tr className="border-b border-black/[0.08] bg-apple-bg shadow-[0_1px_0_rgba(0,0,0,0.06)] dark:border-white/[0.08] dark:bg-ops-elevated">
                     {COL_HEADERS.map((c) => {
                       const w =
                         c.key === "actions"
@@ -208,6 +246,7 @@ export function DesktopShipmentTable({
                 </tbody>
               </table>
             </div>
+            ) : null}
           </section>
         );
       })}
@@ -446,7 +485,7 @@ function ShipmentRow({
             rowId={row.id}
             value={row.awb}
             allRows={allRows}
-            className="font-shipment-data text-[13px] font-bold"
+            className="font-shipment-data text-[1.1rem] font-bold text-slate-900 dark:text-slate-50"
             onCommit={(awb) => onUpdate(row.id, { awb })}
             onEnterNavigateDown={() => focusShipmentGridCell(row.id, "hawb")}
           />
@@ -496,16 +535,22 @@ function ShipmentRow({
             onCommit={(iso) => onUpdate(row.id, { cutoff: iso })}
             onEnterAfterCommit={() => focusShipmentGridCell(row.id, "cutoffNote")}
           />
-          <InlineTextEdit
-            value={row.cutoffNote ?? ""}
-            placeholder="PER"
-            className="text-[9px] font-semibold text-apple-label"
-            uppercase
-            maxLength={32}
-            gridNav={{ rowId: row.id, field: "cutoffNote" }}
-            onCommit={(v) => onUpdate(row.id, { cutoffNote: v })}
-            onEnterNavigateDown={() => focusShipmentGridCell(row.id, "dest")}
-          />
+          <div className="mt-0.5 border-t border-dashed border-black/[0.08] pt-0.5 dark:border-white/10">
+            <InlineTextEdit
+              value={row.cutoffNote ?? ""}
+              placeholder="PER"
+              className={
+                row.cutoffNote?.trim()
+                  ? "text-[10px] font-bold uppercase tracking-wide text-indigo-800 dark:text-indigo-300"
+                  : "text-[9px] font-normal italic text-apple-tertiary dark:text-ops-tertiary"
+              }
+              uppercase
+              maxLength={32}
+              gridNav={{ rowId: row.id, field: "cutoffNote" }}
+              onCommit={(v) => onUpdate(row.id, { cutoffNote: v })}
+              onEnterNavigateDown={() => focusShipmentGridCell(row.id, "dest")}
+            />
+          </div>
         </div>
       </td>
       {/* DEST */}
@@ -659,16 +704,27 @@ function ShipmentRow({
         />
       </td>
       {/* Note */}
-      <td className="border-r border-black/[0.06] px-1 py-0.5 align-top">
-        <InlineTextEdit
-          value={row.note ?? ""}
-          placeholder="Ghi chú"
-          className="line-clamp-1 text-left text-[10px] leading-snug text-apple-secondary"
-          maxLength={2000}
-          gridNav={{ rowId: row.id, field: "note" }}
-          onCommit={(v) => onUpdate(row.id, { note: v })}
-          onEnterNavigateDown={hasNextRow ? navDownSameField("note") : undefined}
-        />
+      <td className="border-r border-black/[0.06] px-1 py-0.5 align-top dark:border-white/[0.06]">
+        <div className="flex min-w-0 items-start gap-0.5">
+          <span
+            className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-apple-tertiary dark:text-ops-tertiary"
+            title="Ghi chú"
+            aria-hidden
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+            </svg>
+          </span>
+          <InlineTextEdit
+            value={row.note ?? ""}
+            placeholder="…"
+            className="line-clamp-1 min-w-0 flex-1 text-left text-[10px] leading-snug text-apple-secondary dark:text-ops-secondary"
+            maxLength={2000}
+            gridNav={{ rowId: row.id, field: "note" }}
+            onCommit={(v) => onUpdate(row.id, { note: v })}
+            onEnterNavigateDown={hasNextRow ? navDownSameField("note") : undefined}
+          />
+        </div>
       </td>
       {/* Status */}
       <td className="border-r border-black/[0.06] px-1 py-1">

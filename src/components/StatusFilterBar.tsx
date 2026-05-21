@@ -125,15 +125,15 @@ function FilterChip({
           : "min-h-[40px] gap-1.5 rounded-xl px-2.5 py-2 text-[11px] text-left sm:gap-2 sm:px-3 sm:text-xs md:rounded-full md:px-3.5"
       } ${
         active
-          ? "border-apple-blue/40 bg-apple-blue/10 text-apple-label shadow-[0_0_0_2px_rgba(0,122,255,0.2)]"
-          : "border-black/[0.08] bg-white/80 text-apple-secondary hover:border-black/[0.12] hover:bg-black/[0.03]"
+          ? "border-apple-blue/40 bg-apple-blue/10 text-apple-label shadow-[0_0_0_2px_rgba(0,122,255,0.2)] dark:border-apple-blue/50 dark:bg-apple-blue/15 dark:text-ops-label"
+          : "border-black/[0.08] bg-white/80 text-apple-secondary hover:border-black/[0.12] hover:bg-black/[0.03] dark:border-white/10 dark:bg-ops-elevated/80 dark:text-ops-secondary dark:hover:bg-white/[0.06]"
       }`}
     >
       <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${dotClass}`} aria-hidden />
       <span className="whitespace-nowrap">{label}</span>
       <span
         className={`min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold tabular-nums ${
-          active ? "bg-apple-blue text-white" : "bg-black/[0.06] text-apple-label"
+          active ? "bg-apple-blue text-white" : "bg-black/[0.06] text-apple-label dark:bg-white/10 dark:text-ops-label"
         }`}
       >
         {count}

@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  darkMode: "class",
   theme: {
     extend: {
       fontFamily: {
@@ -33,6 +34,14 @@ export default {
           bg: "#f5f5f7",
           fill: "rgba(0,0,0,0.04)",
           separator: "rgba(0,0,0,0.08)",
+        },
+        ops: {
+          bg: "#0f1419",
+          surface: "#1a212b",
+          elevated: "#242d38",
+          label: "#e8eaed",
+          secondary: "#9aa0a6",
+          tertiary: "#6b7280",
         },
       },
       borderRadius: {

@@ -198,9 +198,9 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         }
         chooseVehicleRadio(cfg.vehicle.type);
         setNativeValue(inputs[4], data.vehicleNo);
-        setNativeValue(inputs[5], cfg.driver.name);
+        setNativeValue(inputs[5], data.driverName || cfg.driver.name);
         chooseDocumentRadio("driver", cfg.driver.documentType);
-        setNativeValue(inputs[6], cfg.driver.documentNo);
+        setNativeValue(inputs[6], data.driverId || cfg.driver.documentNo);
         setNativeValue(inputs[7], cfg.contact.email);
         setNativeValue(inputs[8], cfg.contact.phone);
       }

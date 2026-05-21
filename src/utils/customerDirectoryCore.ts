@@ -4,6 +4,7 @@ import {
   clampCustomerSavedConsignee,
   clampCustomerSavedGoods,
   clampCustomerSavedShipper,
+  clampCustomerSavedVehicle,
   normalizeCustomerPartyType,
 } from "./customerDirectoryProfile";
 
@@ -131,6 +132,26 @@ function parseSavedGoodsLoose(raw: unknown): CustomerDirectoryEntry["savedGoods"
   return out;
 }
 
+function parseSavedVehiclesLoose(raw: unknown): CustomerDirectoryEntry["savedVehicles"] {
+  if (!Array.isArray(raw)) return [];
+  const out: NonNullable<CustomerDirectoryEntry["savedVehicles"]> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const id = trimStr(o.id);
+    if (!id) continue;
+    out.push(
+      clampCustomerSavedVehicle({
+        id,
+        licensePlate: trimStr(o.licensePlate),
+        driverName: trimStr(o.driverName),
+        driverId: trimStr(o.driverId),
+      })
+    );
+  }
+  return out;
+}
+
 /** Parse mảng JSON an toàn — bỏ phần tử không hợp lệ; chuẩn hóa độ dài trường. */
 export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -155,6 +176,8 @@ export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntr
         savedShippers: parseSavedShippersLoose(o.savedShippers),
         savedConsignees: parseSavedConsigneesLoose(o.savedConsignees),
         savedGoods: parseSavedGoodsLoose(o.savedGoods),
+        savedVehicles: parseSavedVehiclesLoose(o.savedVehicles),
+        defaultVehicleId: trimStr(o.defaultVehicleId),
         parties: parsePartiesLoose(o),
         consigneeName: trimStr(o.consigneeName),
         consigneeAddress: trimStr(o.consigneeAddress),
@@ -216,6 +239,15 @@ export function assertCustomerDirectoryValid(entries: readonly CustomerDirectory
         throw new Error(`Khách «${e.code}»: id tên hàng «${g.id}» bị trùng trong cùng khách.`);
       }
       seenGoods.add(gid);
+    }
+    const seenVehicle = new Set<string>();
+    for (const v of e.savedVehicles ?? []) {
+      const vid = v.id.trim().toLowerCase();
+      if (!vid) throw new Error(`Khách «${e.code}»: xe lưu sẵn thiếu id.`);
+      if (seenVehicle.has(vid)) {
+        throw new Error(`Khách «${e.code}»: id xe «${v.id}» bị trùng trong cùng khách.`);
+      }
+      seenVehicle.add(vid);
     }
   }
 }

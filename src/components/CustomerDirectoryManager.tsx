@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { assertCustomerDirectoryValid } from "../utils/customerDirectoryCore";
-import type { CustomerSavedConsignee, CustomerSavedGoods, CustomerSavedShipper } from "../types/customerDirectory";
+import type { CustomerSavedConsignee, CustomerSavedGoods, CustomerSavedShipper, CustomerSavedVehicle } from "../types/customerDirectory";
 import type { GlobalAgentCatalog } from "../types/globalAgents";
 import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
 import { GlobalAgentsSettings } from "./GlobalAgentsSettings";
@@ -16,6 +16,7 @@ import {
   emptyCustomerSavedConsignee,
   emptyCustomerSavedGoods,
   emptyCustomerSavedShipper,
+  emptyCustomerSavedVehicle,
 } from "../utils/customerDirectoryProfile";
 import {
   clampScscWeighPrintSettings,
@@ -193,6 +194,41 @@ export function CustomerDirectoryManager({
     );
   }
 
+  function patchSavedVehicle(customerId: string, index: number, patch: Partial<CustomerSavedVehicle>) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        const list = [...(row.savedVehicles ?? [])];
+        const cur = list[index];
+        if (!cur) return row;
+        list[index] = { ...cur, ...patch };
+        return { ...row, savedVehicles: list };
+      })
+    );
+  }
+
+  function removeSavedVehicle(customerId: string, index: number) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        const list = (row.savedVehicles ?? []).filter((_, i) => i !== index);
+        const removed = row.savedVehicles?.[index];
+        const defaultVehicleId =
+          removed && row.defaultVehicleId === removed.id ? undefined : row.defaultVehicleId;
+        return { ...row, savedVehicles: list, defaultVehicleId };
+      })
+    );
+  }
+
+  function addSavedVehicle(customerId: string) {
+    setDraft((rows) =>
+      rows.map((row) => {
+        if (row.id !== customerId) return row;
+        return { ...row, savedVehicles: [...(row.savedVehicles ?? []), emptyCustomerSavedVehicle()] };
+      })
+    );
+  }
+
   function addCustomer() {
     const row = emptyCustomerProfileRow(newId("customer"));
     setDraft((rows) => [...rows, row]);
@@ -288,7 +324,7 @@ export function CustomerDirectoryManager({
                 <span className="block truncate text-xs font-semibold">{customer.name || "Chưa đặt tên"}</span>
                 <span className="mt-0.5 block truncate font-mono text-[10px] uppercase text-apple-tertiary">
                   {customer.code || "—"} · S{customer.savedShippers?.length ?? 0} · C
-                  {customer.savedConsignees?.length ?? 0}
+                  {customer.savedConsignees?.length ?? 0} · V{customer.savedVehicles?.length ?? 0}
                 </span>
               </button>
             ))}
@@ -389,6 +425,9 @@ export function CustomerDirectoryManager({
                   onPatchGoods={(idx, patch) => patchSavedGoods(selected.id, idx, patch)}
                   onRemoveGoods={(idx) => removeSavedGoods(selected.id, idx)}
                   onAddGoods={() => addSavedGoods(selected.id)}
+                  onPatchVehicle={(idx, patch) => patchSavedVehicle(selected.id, idx, patch)}
+                  onRemoveVehicle={(idx) => removeSavedVehicle(selected.id, idx)}
+                  onAddVehicle={() => addSavedVehicle(selected.id)}
                 />
               </div>
             ) : (

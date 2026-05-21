@@ -20,6 +20,8 @@ import {
   EcargoKhoScscCenterModal,
   EcargoKhoScscTriggerButton,
 } from "./EcargoKhoScscModal";
+import type { EcargoAutoRegisterOpts } from "./DesktopShipmentTable";
+import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
 import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStorage";
 import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
 import type { EcargoJobRecord } from "../types/ecargoJob";
@@ -38,7 +40,8 @@ type Props = {
   getEcargoSaveStatus?: (id: string) => EcargoSaveStatus;
   getEcargoJob?: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob?: (id: string) => void | Promise<void>;
-  onEcargoAutoRegister?: (row: Shipment) => void | Promise<void>;
+  onEcargoAutoRegister?: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
+  onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering?: (id: string) => boolean;
   onClose: () => void;
   onSave: (patch: Partial<Shipment>) => void;
@@ -66,6 +69,7 @@ export function MobileShipmentEditSheet({
   getEcargoJob,
   refreshEcargoJob,
   onEcargoAutoRegister,
+  onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
   onClose,
   onSave,
@@ -484,6 +488,7 @@ export function MobileShipmentEditSheet({
         <EcargoKhoScscCenterModal
           rowId={shipment.id}
           row={shipment}
+          customerDirectory={customerDirectory}
           vehicleForEcargo={vehicleForEcargo}
           viewSessionYmd={sessionDateYmd}
           saveStatus={getEcargoSaveStatus(shipment.id)}
@@ -491,9 +496,10 @@ export function MobileShipmentEditSheet({
           autoRegistering={isEcargoAutoRegistering?.(shipment.id) ?? false}
           onClose={() => setEcargoOpen(false)}
           onVehicleChange={(raw) => onEcargoVehicleChange(shipment.id, raw)}
-          onAutoRegister={async () => {
-            await onEcargoAutoRegister(shipment);
+          onAutoRegister={async (opts) => {
+            await onEcargoAutoRegister(shipment, opts);
           }}
+          onSaveVehicleAsDefault={onSaveCustomerVehicleForEcargo}
           onRefreshJob={() => void refreshEcargoJob?.(shipment.id)}
         />
       ) : null}

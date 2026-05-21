@@ -16,6 +16,7 @@ function cust(
     savedShippers: [],
     savedConsignees: [],
     savedGoods: [],
+    savedVehicles: [],
     parties: [],
     ...extra,
   };

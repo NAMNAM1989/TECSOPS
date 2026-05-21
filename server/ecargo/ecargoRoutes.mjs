@@ -70,7 +70,10 @@ export function registerEcargoRoutes(app, deps) {
         return;
       }
 
-      const booking = buildEcargoBookingFromShipment(row, vehicleNo, viewSessionYmd);
+      const booking = buildEcargoBookingFromShipment(row, vehicleNo, viewSessionYmd, {
+        driverName: String(body.driverName ?? "").trim(),
+        driverId: String(body.driverId ?? "").trim(),
+      });
       const jobId = newEcargoJobId();
 
       const job = await enqueueEcargoJob(deps.redisClient, {

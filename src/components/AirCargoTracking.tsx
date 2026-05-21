@@ -36,6 +36,10 @@ import {
   defaultScscWeighPrintSettings,
 } from "../printing/scscWeigh/scscWeighPrintSettingsCore";
 import { setScscWeighPrintSettingsCache } from "../printing/scscWeigh/scscWeighPrintSettingsRuntime";
+import {
+  upsertCustomerVehicleInDirectory,
+  type UpsertCustomerVehicleParams,
+} from "../utils/customerVehicleCore";
 
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
@@ -97,6 +101,15 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   const { status, state, mutate, socketConnected, subscribeEcargoJob } = useShipmentSync(fallback);
   const ecargoRegister = useEcargoKhoScscRegister(state, mutate, subscribeEcargoJob);
+
+  const saveCustomerVehicleForEcargo = useCallback(
+    async (params: UpsertCustomerVehicleParams) => {
+      if (!state) return;
+      const next = upsertCustomerVehicleInDirectory(state.customers, params);
+      await mutate({ action: "SET_CUSTOMERS", customers: next });
+    },
+    [mutate, state]
+  );
   const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -452,7 +465,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         getEcargoSaveStatus={ecargoRegister.getSaveStatus}
         getEcargoJob={ecargoRegister.getJob}
         refreshEcargoJob={ecargoRegister.refreshJob}
-        onEcargoAutoRegister={(row) => ecargoRegister.autoRegister(row, selectedYmd)}
+        onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
+        onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
         isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
       />
 
@@ -470,7 +484,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         getEcargoSaveStatus={ecargoRegister.getSaveStatus}
         getEcargoJob={ecargoRegister.getJob}
         refreshEcargoJob={ecargoRegister.refreshJob}
-        onEcargoAutoRegister={(row) => ecargoRegister.autoRegister(row, selectedYmd)}
+        onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
+        onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
         isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
       />
 
@@ -520,7 +535,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         getEcargoSaveStatus={ecargoRegister.getSaveStatus}
         getEcargoJob={ecargoRegister.getJob}
         refreshEcargoJob={ecargoRegister.refreshJob}
-        onEcargoAutoRegister={(row) => ecargoRegister.autoRegister(row, selectedYmd)}
+        onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
+        onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
         isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
         onClose={() => setMobileEditShipment(null)}
         onSave={(patch) => {

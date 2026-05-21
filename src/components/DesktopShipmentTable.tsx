@@ -32,7 +32,14 @@ import {
 } from "./EcargoKhoScscModal";
 import { findCustomerEntry } from "../utils/mapBookingToScaleTicketFormData";
 import { buildShipmentPatchForSavedConsignee } from "../utils/customerConsigneeShipmentPatch";
+import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
 import { InlineCneeCell } from "./InlineCneeCell";
+
+export type EcargoAutoRegisterOpts = {
+  driverName?: string;
+  driverId?: string;
+  saveAsDefault?: boolean;
+};
 
 interface Props {
   rows: Shipment[];
@@ -62,7 +69,8 @@ interface Props {
   getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
   getEcargoJob: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob: (id: string) => void | Promise<void>;
-  onEcargoAutoRegister: (row: Shipment) => void | Promise<void>;
+  onEcargoAutoRegister: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
+  onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering: (id: string) => boolean;
 }
 
@@ -101,6 +109,7 @@ export function DesktopShipmentTable({
   getEcargoJob,
   refreshEcargoJob,
   onEcargoAutoRegister,
+  onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
 }: Props) {
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
@@ -182,6 +191,7 @@ export function DesktopShipmentTable({
                       getEcargoJob={getEcargoJob}
                       refreshEcargoJob={refreshEcargoJob}
                       onEcargoAutoRegister={onEcargoAutoRegister}
+                      onSaveCustomerVehicleForEcargo={onSaveCustomerVehicleForEcargo}
                       isEcargoAutoRegistering={isEcargoAutoRegistering}
                       allRows={allRows}
                       customerDirectory={customerDirectory}
@@ -236,6 +246,7 @@ function WarehouseGroupRows({
   getEcargoJob,
   refreshEcargoJob,
   onEcargoAutoRegister,
+  onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
   allRows,
   customerDirectory,
@@ -256,7 +267,8 @@ function WarehouseGroupRows({
   getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
   getEcargoJob: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob: (id: string) => void | Promise<void>;
-  onEcargoAutoRegister: (row: Shipment) => void | Promise<void>;
+  onEcargoAutoRegister: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
+  onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering: (id: string) => boolean;
   allRows: Shipment[];
   customerDirectory: readonly CustomerDirectoryEntry[];
@@ -301,6 +313,7 @@ function WarehouseGroupRows({
           getEcargoJob={getEcargoJob}
           refreshEcargoJob={refreshEcargoJob}
           onEcargoAutoRegister={onEcargoAutoRegister}
+          onSaveCustomerVehicleForEcargo={onSaveCustomerVehicleForEcargo}
           isEcargoAutoRegistering={isEcargoAutoRegistering}
           groupRowIds={groupRowIds}
           allRows={allRows}
@@ -332,6 +345,7 @@ function ShipmentRow({
   getEcargoJob,
   refreshEcargoJob,
   onEcargoAutoRegister,
+  onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
   groupRowIds,
   allRows,
@@ -356,7 +370,8 @@ function ShipmentRow({
   getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
   getEcargoJob: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob: (id: string) => void | Promise<void>;
-  onEcargoAutoRegister: (row: Shipment) => void | Promise<void>;
+  onEcargoAutoRegister: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
+  onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering: (id: string) => boolean;
   groupRowIds: string[];
   allRows: Shipment[];
@@ -696,15 +711,17 @@ function ShipmentRow({
       <EcargoKhoScscCenterModal
         rowId={row.id}
         row={row}
+        customerDirectory={customerDirectory}
         vehicleForEcargo={vehicleForEcargo}
         viewSessionYmd={viewSessionYmd}
         saveStatus={getEcargoSaveStatus(row.id)}
         job={ecargoJob}
         autoRegistering={isEcargoAutoRegistering(row.id)}
         onVehicleChange={(raw) => onEcargoVehicleChange(row.id, raw)}
-        onAutoRegister={async () => {
-          await onEcargoAutoRegister(row);
+        onAutoRegister={async (opts) => {
+          await onEcargoAutoRegister(row, opts);
         }}
+        onSaveVehicleAsDefault={onSaveCustomerVehicleForEcargo}
         onRefreshJob={() => void refreshEcargoJob(row.id)}
         onClose={onCloseEcargoTable}
       />

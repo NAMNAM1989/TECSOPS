@@ -91,7 +91,7 @@ export function getEcargoRegisterReadiness(row, vehicleRaw, viewSessionYmd) {
 }
 
 /** Booking object for Playwright automation (extension-compatible). */
-export function buildEcargoBookingFromShipment(row, vehicleNormalized, viewSessionYmd) {
+export function buildEcargoBookingFromShipment(row, vehicleNormalized, viewSessionYmd, driverOverride = {}) {
   const y = parseInt(String(viewSessionYmd).slice(0, 4), 10);
   const year = Number.isFinite(y) && y >= 1900 ? y : new Date().getFullYear();
   const flightDateIso = parseBookingDateLoose(row.flightDate, year);
@@ -100,6 +100,10 @@ export function buildEcargoBookingFromShipment(row, vehicleNormalized, viewSessi
   const hawb = hawbRaw.length > 0 ? hawbRaw : "0";
   const pcs = row.pcs != null && row.pcs > 0 ? row.pcs : DEFAULT_PCS;
   const grossWeight = row.kg != null && row.kg > 0 ? row.kg : DEFAULT_GW;
+  const driverName = String(driverOverride.driverName ?? "").trim();
+  const driverId = String(driverOverride.driverId ?? "")
+    .trim()
+    .replace(/\D/g, "");
 
   return {
     vehicleNo: normalizeVehicleNo(vehicleNormalized),
@@ -116,6 +120,8 @@ export function buildEcargoBookingFromShipment(row, vehicleNormalized, viewSessi
     commodity: DEFAULT_COMMODITY,
     shc: DEFAULT_SHC,
     opsShipmentId: row.id,
+    ...(driverName ? { driverName } : {}),
+    ...(driverId ? { driverId } : {}),
   };
 }
 

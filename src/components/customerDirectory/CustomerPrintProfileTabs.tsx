@@ -4,12 +4,14 @@ import type {
   CustomerSavedConsignee,
   CustomerSavedGoods,
   CustomerSavedShipper,
+  CustomerSavedVehicle,
 } from "../../types/customerDirectory";
 import { profileOptionLabel } from "../../utils/customerDirectoryDefaults";
 import { formatVnPhoneDisplay, normalizeAgentCode } from "../../utils/customerProfileInputFormat";
 import { CustomerShipperTable } from "./CustomerShipperTable";
+import { CustomerVehicleTable } from "./CustomerVehicleTable";
 
-type ProfileTab = "shipper" | "cnee" | "goods";
+type ProfileTab = "shipper" | "cnee" | "goods" | "vehicles";
 
 type Props = {
   entry: CustomerDirectoryEntry;
@@ -23,6 +25,9 @@ type Props = {
   onPatchGoods: (index: number, patch: Partial<CustomerSavedGoods>) => void;
   onRemoveGoods: (index: number) => void;
   onAddGoods: () => void;
+  onPatchVehicle: (index: number, patch: Partial<CustomerSavedVehicle>) => void;
+  onRemoveVehicle: (index: number) => void;
+  onAddVehicle: () => void;
 };
 
 const inputCls =
@@ -56,6 +61,9 @@ export function CustomerPrintProfileTabs({
   onPatchGoods,
   onRemoveGoods,
   onAddGoods,
+  onPatchVehicle,
+  onRemoveVehicle,
+  onAddVehicle,
 }: Props) {
   const [tab, setTab] = useState<ProfileTab>("shipper");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -63,11 +71,13 @@ export function CustomerPrintProfileTabs({
   const shippers = entry.savedShippers ?? [];
   const consignees = entry.savedConsignees ?? [];
   const goods = entry.savedGoods ?? [];
+  const vehicles = entry.savedVehicles ?? [];
 
   const tabs: { id: ProfileTab; label: string; count: number }[] = [
     { id: "shipper", label: "Shippers", count: shippers.length },
     { id: "cnee", label: "Consignees", count: consignees.length },
     { id: "goods", label: "Cargo Items", count: goods.length },
+    { id: "vehicles", label: "Xe / tài xế", count: vehicles.length },
   ];
 
   function setDefaultShipper(id: string) {
@@ -79,12 +89,15 @@ export function CustomerPrintProfileTabs({
   function setDefaultGoods(id: string) {
     onPatch({ defaultGoodsId: id });
   }
+  function setDefaultVehicle(id: string) {
+    onPatch({ defaultVehicleId: id });
+  }
 
   return (
     <section className="rounded-xl border border-apple-blue/20 bg-apple-blue/[0.04] p-2.5 sm:p-3">
       <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-apple-blue">Hồ sơ in phiếu cân</p>
       <p className="mb-2 text-[10px] leading-snug text-apple-tertiary">
-        ★ = mặc định khi booking · SĐT tự format · OCR/JSON patch shipper
+        ★ = mặc định khi booking / eCargo · SĐT tự format · OCR/JSON patch shipper
       </p>
 
       <section className="mb-2 rounded-lg border border-violet-200/50 bg-white/80 p-2">
@@ -171,6 +184,17 @@ export function CustomerPrintProfileTabs({
           addLabel="+ Thêm tên hàng"
           onAdd={onAddGoods}
           emptyHint="Chưa có tên hàng lưu sẵn."
+        />
+      ) : null}
+
+      {tab === "vehicles" ? (
+        <CustomerVehicleTable
+          vehicles={vehicles}
+          defaultVehicleId={entry.defaultVehicleId}
+          onSetDefault={setDefaultVehicle}
+          onPatch={onPatchVehicle}
+          onRemove={onRemoveVehicle}
+          onAdd={onAddVehicle}
         />
       ) : null}
     </section>

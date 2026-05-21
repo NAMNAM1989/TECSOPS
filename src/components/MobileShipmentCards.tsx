@@ -34,6 +34,8 @@ import {
   EcargoKhoScscCenterModal,
   EcargoKhoScscTriggerButton,
 } from "./EcargoKhoScscModal";
+import type { EcargoAutoRegisterOpts } from "./DesktopShipmentTable";
+import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
 import { ecargoKhoScscLineStatusLabel } from "../utils/ecargoUiLabels";
 
 const SWIPE_THRESHOLD = 48;
@@ -59,7 +61,8 @@ interface MobileShipmentCardsProps {
   getEcargoSaveStatus?: (id: string) => EcargoSaveStatus;
   getEcargoJob?: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob?: (id: string) => void | Promise<void>;
-  onEcargoAutoRegister?: (row: Shipment) => void | Promise<void>;
+  onEcargoAutoRegister?: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
+  onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering?: (id: string) => boolean;
 }
 
@@ -78,6 +81,7 @@ export function MobileShipmentCards({
   getEcargoJob,
   refreshEcargoJob,
   onEcargoAutoRegister,
+  onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
 }: MobileShipmentCardsProps) {
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
@@ -457,15 +461,17 @@ export function MobileShipmentCards({
         key={ecargoModalRow.id}
         rowId={ecargoModalRow.id}
         row={ecargoModalRow}
+        customerDirectory={customerDirectory}
         vehicleForEcargo={ecargoMap[ecargoModalRow.id]?.vehicleInput ?? ""}
         viewSessionYmd={viewSessionYmd}
         saveStatus={getEcargoSaveStatus(ecargoModalRow.id)}
         job={getEcargoJob?.(ecargoModalRow.id)}
         autoRegistering={isEcargoAutoRegistering?.(ecargoModalRow.id) ?? false}
         onVehicleChange={(raw) => onEcargoVehicleChange(ecargoModalRow.id, raw)}
-        onAutoRegister={async () => {
-          await onEcargoAutoRegister(ecargoModalRow);
+        onAutoRegister={async (opts) => {
+          await onEcargoAutoRegister(ecargoModalRow, opts);
         }}
+        onSaveVehicleAsDefault={onSaveCustomerVehicleForEcargo}
         onRefreshJob={() => void refreshEcargoJob?.(ecargoModalRow.id)}
         onClose={closeEcargoModal}
       />

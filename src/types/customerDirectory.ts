@@ -39,6 +39,16 @@ export type CustomerSavedShipper = {
   taxCode: string;
 };
 
+/** Xe / tài xế lưu sẵn theo khách — dùng khi đăng ký eCargo KHO SCSC. */
+export type CustomerSavedVehicle = {
+  id: string;
+  /** Biển số xe (VD: 50H17480). */
+  licensePlate: string;
+  driverName: string;
+  /** CCCD / CMND tài xế. */
+  driverId: string;
+};
+
 /** Tên hàng lưu sẵn theo khách — chọn khi booking / in phiếu cân. */
 
 export type CustomerSavedGoods = {
@@ -100,6 +110,8 @@ export type CustomerDirectoryEntry = {
   defaultConsigneeId?: string;
   /** Tên hàng mặc định khi có nhiều `savedGoods`. */
   defaultGoodsId?: string;
+  /** Xe mặc định khi có nhiều `savedVehicles` (đăng ký eCargo). */
+  defaultVehicleId?: string;
 
   /** Shipper lưu sẵn (ưu tiên khi có `customerShipperId` trên booking). */
   savedShippers?: CustomerSavedShipper[];
@@ -109,6 +121,9 @@ export type CustomerDirectoryEntry = {
 
   /** Tên hàng lưu sẵn (ưu tiên khi có `customerGoodsId` trên booking). */
   savedGoods?: CustomerSavedGoods[];
+
+  /** Xe / tài xế lưu sẵn — auto-fill eCargo theo mã khách (Agent). */
+  savedVehicles?: CustomerSavedVehicle[];
 
   /** Yêu cầu khác in trên phiếu cân SCSC (theo từng khách). */
   otherRequirementsPrint?: string;

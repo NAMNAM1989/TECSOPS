@@ -5,6 +5,7 @@ import type {
   CustomerSavedConsignee,
   CustomerSavedGoods,
   CustomerSavedShipper,
+  CustomerSavedVehicle,
 } from "../types/customerDirectory";
 
 /** Giới hạn độ dài — đồng bộ client / server. */
@@ -31,6 +32,11 @@ export const CUSTOMER_PROFILE_LIMITS = {
   savedGoodsCount: 40,
   savedShipperLabel: 80,
   savedShipperCount: 40,
+  savedVehicleLabel: 80,
+  savedVehicleLicensePlate: 20,
+  savedVehicleDriverName: 120,
+  savedVehicleDriverId: 20,
+  savedVehicleCount: 30,
   otherRequirementsPrint: 200,
 } as const;
 
@@ -146,6 +152,37 @@ export function emptyCustomerSavedShipper(): CustomerSavedShipper {
   });
 }
 
+function newSavedVehicleId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `vehicle-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function clampCustomerSavedVehicle(v: CustomerSavedVehicle): CustomerSavedVehicle {
+  const L = CUSTOMER_PROFILE_LIMITS;
+  return {
+    id: clip(v.id, 80).trim() || newSavedVehicleId(),
+    licensePlate: clip(v.licensePlate, L.savedVehicleLicensePlate)
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9;]/g, ""),
+    driverName: clip(v.driverName, L.savedVehicleDriverName).trim(),
+    driverId: clip(v.driverId, L.savedVehicleDriverId)
+      .trim()
+      .replace(/\D/g, ""),
+  };
+}
+
+export function emptyCustomerSavedVehicle(): CustomerSavedVehicle {
+  return clampCustomerSavedVehicle({
+    id: newSavedVehicleId(),
+    licensePlate: "",
+    driverName: "",
+    driverId: "",
+  });
+}
+
 type LegacyCustomerRow = CustomerDirectoryEntry & {
   consigneeName?: string;
   consigneeAddress?: string;
@@ -243,18 +280,28 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
         .map((x) => clampCustomerSavedGoods(x as CustomerSavedGoods))
         .filter((x) => x.goodsDescription || x.label)
     : [];
+  const savedVehicles = Array.isArray(migrated.savedVehicles)
+    ? migrated.savedVehicles
+        .slice(0, L.savedVehicleCount)
+        .map((x) => clampCustomerSavedVehicle(x as CustomerSavedVehicle))
+        .filter((x) => x.licensePlate || x.driverName || x.driverId)
+    : [];
   const shipperIds = new Set(savedShippers.map((x) => x.id));
   const cneeIds = new Set(savedConsignees.map((x) => x.id));
   const goodsIds = new Set(savedGoods.map((x) => x.id));
+  const vehicleIds = new Set(savedVehicles.map((x) => x.id));
   let defaultShipperId = clip(migrated.defaultShipperId, 80).trim();
   let defaultConsigneeId = clip(migrated.defaultConsigneeId, 80).trim();
   let defaultGoodsId = clip(migrated.defaultGoodsId, 80).trim();
+  let defaultVehicleId = clip(migrated.defaultVehicleId, 80).trim();
   if (defaultShipperId && !shipperIds.has(defaultShipperId)) defaultShipperId = "";
   if (defaultConsigneeId && !cneeIds.has(defaultConsigneeId)) defaultConsigneeId = "";
   if (defaultGoodsId && !goodsIds.has(defaultGoodsId)) defaultGoodsId = "";
+  if (defaultVehicleId && !vehicleIds.has(defaultVehicleId)) defaultVehicleId = "";
   if (savedShippers.length === 1) defaultShipperId = savedShippers[0]!.id;
   if (savedConsignees.length === 1) defaultConsigneeId = savedConsignees[0]!.id;
   if (savedGoods.length === 1) defaultGoodsId = savedGoods[0]!.id;
+  if (savedVehicles.length === 1) defaultVehicleId = savedVehicles[0]!.id;
   return {
     id: clip(migrated.id, 80).trim(),
     code: clip(migrated.code, L.code).trim(),
@@ -262,9 +309,11 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
     defaultShipperId: defaultShipperId || undefined,
     defaultConsigneeId: defaultConsigneeId || undefined,
     defaultGoodsId: defaultGoodsId || undefined,
+    defaultVehicleId: defaultVehicleId || undefined,
     savedShippers,
     savedConsignees,
     savedGoods,
+    savedVehicles,
     otherRequirementsPrint: clip(migrated.otherRequirementsPrint, L.otherRequirementsPrint).trim() || undefined,
     parties,
   };
@@ -319,6 +368,7 @@ export function emptyCustomerProfileRow(id: string): CustomerDirectoryEntry {
     savedShippers: [],
     savedConsignees: [],
     savedGoods: [],
+    savedVehicles: [],
     parties: [],
   };
 }

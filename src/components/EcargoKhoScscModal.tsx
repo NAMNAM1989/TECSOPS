@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
 import { getEcargoRegisterReadiness } from "../utils/ecargoPayload";
 import {
@@ -16,39 +17,202 @@ import { ecargoJobStatusLabel, isEcargoJobRunning, type EcargoJobStatus } from "
 import { ecargoKhoScscSaveStatusLabel } from "../utils/ecargoUiLabels";
 import { copyTextToClipboard } from "../utils/copyTextToClipboard";
 import { formatEcargoJobErrorMessage } from "../utils/formatEcargoJobErrorMessage";
+import {
+  filterCustomerVehicles,
+  formatVehicleLicensePlate,
+  resolveEcargoVehiclePrefill,
+  vehicleDisplayLabel,
+  type UpsertCustomerVehicleParams,
+} from "../utils/customerVehicleCore";
 
 export { ECARGO_VEHICLE_MIN };
 
+function EcargoVehiclePicker({
+  vehicles,
+  vehicleInput,
+  driverName,
+  driverId,
+  listOpen,
+  onListOpenChange,
+  onSelectVehicle,
+  onVehicleInputChange,
+  onDriverNameChange,
+  onDriverIdChange,
+}: {
+  vehicles: readonly import("../types/customerDirectory").CustomerSavedVehicle[];
+  vehicleInput: string;
+  driverName: string;
+  driverId: string;
+  listOpen: boolean;
+  onListOpenChange: (open: boolean) => void;
+  onSelectVehicle: (v: import("../types/customerDirectory").CustomerSavedVehicle) => void;
+  onVehicleInputChange: (raw: string) => void;
+  onDriverNameChange: (raw: string) => void;
+  onDriverIdChange: (raw: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const filtered = useMemo(
+    () => filterCustomerVehicles(vehicles, vehicleInput),
+    [vehicleInput, vehicles]
+  );
+  const showDropdown = listOpen && vehicles.length > 0;
+
+  useEffect(() => {
+    if (!showDropdown) return;
+    const onDoc = (e: Event) => {
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (inputRef.current?.contains(t) || listRef.current?.contains(t)) return;
+      onListOpenChange(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [onListOpenChange, showDropdown]);
+
+  return (
+    <div className="space-y-3">
+      <div className="relative">
+        <label className="mb-2 block text-sm font-semibold text-apple-secondary">Số xe</label>
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="text"
+          autoCapitalize="characters"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder={vehicles.length ? "Chọn hoặc gõ biển số…" : "VD: 50H17480"}
+          value={vehicleInput}
+          onChange={(e) => {
+            onVehicleInputChange(e.target.value);
+            if (vehicles.length) onListOpenChange(true);
+          }}
+          onFocus={() => {
+            if (vehicles.length) onListOpenChange(true);
+          }}
+          className="h-14 w-full rounded-[1.1rem] border border-black/[0.12] bg-[#f7f7fb] px-5 font-mono text-lg font-bold uppercase tracking-wide text-apple-label shadow-inner placeholder:text-apple-tertiary focus:outline-none focus:ring-2 focus:ring-sky-300/60"
+        />
+        {showDropdown ? (
+          <div
+            ref={listRef}
+            className="absolute left-0 right-0 top-full z-10 mt-1 max-h-44 overflow-y-auto rounded-xl border border-black/[0.1] bg-white py-1 shadow-apple-md"
+            role="listbox"
+          >
+            {(filtered.length ? filtered : vehicles).map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                role="option"
+                className="flex w-full flex-col gap-0.5 px-4 py-2.5 text-left hover:bg-sky-50"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onSelectVehicle(v);
+                  onListOpenChange(false);
+                }}
+              >
+                <span className="font-mono text-sm font-bold uppercase text-apple-label">{v.licensePlate}</span>
+                <span className="text-[12px] text-apple-secondary">
+                  {v.driverName || "—"}
+                  {v.driverId ? ` · ${v.driverId}` : ""}
+                </span>
+              </button>
+            ))}
+            {filtered.length === 0 ? (
+              <p className="px-4 py-2 text-[12px] text-apple-tertiary">Không khớp xe nào — tiếp tục gõ biển mới.</p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="block min-w-0">
+          <span className="mb-1.5 block text-[12px] font-semibold text-apple-secondary">Tên tài xế</span>
+          <input
+            type="text"
+            value={driverName}
+            onChange={(e) => onDriverNameChange(e.target.value)}
+            placeholder="Tên trên eCargo"
+            className="h-11 w-full rounded-xl border border-black/[0.1] bg-[#f7f7fb] px-3.5 text-sm text-apple-label focus:outline-none focus:ring-2 focus:ring-sky-300/60"
+          />
+        </label>
+        <label className="block min-w-0">
+          <span className="mb-1.5 block text-[12px] font-semibold text-apple-secondary">CCCD / CMND</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={driverId}
+            onChange={(e) => onDriverIdChange(e.target.value.replace(/\D/g, ""))}
+            placeholder="Số giấy tờ tài xế"
+            className="h-11 w-full rounded-xl border border-black/[0.1] bg-[#f7f7fb] px-3.5 font-mono text-sm text-apple-label focus:outline-none focus:ring-2 focus:ring-sky-300/60"
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function EcargoKhoScscModalBody({
   row,
+  customerDirectory,
   vehicleForEcargo,
   viewSessionYmd,
   saveStatus,
   job,
   autoRegistering,
   onVehicleChange,
+  onDriverChange,
   onAutoRegister,
+  onSaveVehicleAsDefault,
   onRefreshJob,
   onClose,
 }: {
   row: Shipment;
+  customerDirectory: readonly CustomerDirectoryEntry[];
   vehicleForEcargo: string;
   viewSessionYmd: string;
   saveStatus: EcargoSaveStatus;
   job?: EcargoJobRecord;
   autoRegistering: boolean;
   onVehicleChange: (raw: string) => void;
-  onAutoRegister: () => Promise<void>;
+  onDriverChange: (driverName: string, driverId: string) => void;
+  onAutoRegister: (opts?: { driverName?: string; driverId?: string; saveAsDefault?: boolean }) => Promise<void>;
+  onSaveVehicleAsDefault?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   onRefreshJob?: () => void;
   onClose: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const prefill = useMemo(
+    () => resolveEcargoVehiclePrefill(row, customerDirectory, vehicleForEcargo),
+    [customerDirectory, row, vehicleForEcargo]
+  );
+
+  const [vehicleInput, setVehicleInput] = useState(prefill.vehicleInput);
+  const [driverName, setDriverName] = useState(prefill.driverName);
+  const [driverId, setDriverId] = useState(prefill.driverId);
+  const [saveAsDefault, setSaveAsDefault] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [copyOk, setCopyOk] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const refreshJobRef = useRef(onRefreshJob);
+  const syncedShipmentRef = useRef<string | null>(null);
   refreshJobRef.current = onRefreshJob;
+
+  const agentCode = (prefill.customer?.code || row.customerCode || row.customer || "").trim().toUpperCase();
+  const agentLabel = prefill.customer?.name?.trim() || row.customer?.trim() || agentCode;
+
+  useLayoutEffect(() => {
+    if (syncedShipmentRef.current === row.id) return;
+    syncedShipmentRef.current = row.id;
+    setVehicleInput(prefill.vehicleInput);
+    setDriverName(prefill.driverName);
+    setDriverId(prefill.driverId);
+    if (prefill.vehicleInput && !vehicleForEcargo.trim()) {
+      onVehicleChange(prefill.vehicleInput);
+      onDriverChange(prefill.driverName, prefill.driverId);
+    }
+  }, [onDriverChange, onVehicleChange, prefill, row.id, vehicleForEcargo]);
 
   const pasteDate = useMemo(() => {
     const fromRow = (row.flightDate ?? "").trim();
@@ -56,14 +220,16 @@ function EcargoKhoScscModalBody({
     return formatSessionYmdForEcargoPaste(viewSessionYmd);
   }, [row.flightDate, viewSessionYmd]);
 
+  const effectiveVehicle = formatVehicleLicensePlate(vehicleInput || vehicleForEcargo);
+
   const pasteBlock = useMemo(
-    () => buildKhoScscEcargoPasteBlock(row, vehicleForEcargo, pasteDate),
-    [pasteDate, row, vehicleForEcargo]
+    () => buildKhoScscEcargoPasteBlock(row, effectiveVehicle, pasteDate),
+    [effectiveVehicle, pasteDate, row]
   );
 
   const readiness = useMemo(
-    () => getEcargoRegisterReadiness(row, vehicleForEcargo, viewSessionYmd),
-    [row, vehicleForEcargo, viewSessionYmd]
+    () => getEcargoRegisterReadiness(row, effectiveVehicle, viewSessionYmd),
+    [effectiveVehicle, row, viewSessionYmd]
   );
   const saveLabel = ecargoKhoScscSaveStatusLabel(saveStatus);
   const displayJob = useMemo((): EcargoJobRecord | undefined => {
@@ -91,10 +257,6 @@ function EcargoKhoScscModalBody({
     (displayJob?.status === "error" && !manualOpen);
 
   useEffect(() => {
-    requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
-  }, []);
-
-  useEffect(() => {
     refreshJobRef.current?.();
   }, [row.id]);
 
@@ -102,18 +264,49 @@ function EcargoKhoScscModalBody({
     if (job?.status === "error" || localError) setManualOpen(true);
   }, [job?.status, localError]);
 
+  const applyVehicleFields = useCallback(
+    (plate: string, name: string, id: string) => {
+      const normalized = formatVehicleLicensePlate(plate);
+      setVehicleInput(normalized);
+      setDriverName(name);
+      setDriverId(id);
+      onVehicleChange(normalized);
+      onDriverChange(name, id);
+    },
+    [onDriverChange, onVehicleChange]
+  );
+
   const handleAuto = useCallback(async () => {
     if (!canSubmit) return;
     setLocalError(null);
     setCopyError(null);
     setManualOpen(false);
     try {
-      await onAutoRegister();
+      if (saveAsDefault && prefill.customer && onSaveVehicleAsDefault) {
+        await onSaveVehicleAsDefault({
+          customerId: prefill.customer.id,
+          licensePlate: effectiveVehicle,
+          driverName,
+          driverId,
+          setAsDefault: true,
+        });
+      }
+      await onAutoRegister({ saveAsDefault, driverName, driverId });
       onClose();
     } catch (e) {
       setLocalError(formatEcargoJobErrorMessage(e instanceof Error ? e.message : String(e)));
     }
-  }, [canSubmit, onAutoRegister, onClose]);
+  }, [
+    canSubmit,
+    driverId,
+    driverName,
+    effectiveVehicle,
+    onAutoRegister,
+    onClose,
+    onSaveVehicleAsDefault,
+    prefill.customer,
+    saveAsDefault,
+  ]);
 
   const copyPasteBlock = useCallback(async () => {
     setCopyError(null);
@@ -132,32 +325,85 @@ function EcargoKhoScscModalBody({
 
   return (
     <div className="space-y-5 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-8 sm:pb-8">
-      <label className="block min-w-0">
-        <span className="mb-2 block text-sm font-semibold text-apple-secondary">Số xe</span>
-        <input
-          ref={inputRef}
-          type="text"
-          inputMode="text"
-          autoCapitalize="characters"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          placeholder="VD: 50H17480"
-          value={vehicleForEcargo}
-          onChange={(e) => onVehicleChange(e.target.value)}
-          className="h-14 w-full rounded-[1.1rem] border border-black/[0.12] bg-[#f7f7fb] px-5 font-mono text-lg font-bold uppercase tracking-wide text-apple-label shadow-inner placeholder:text-apple-tertiary focus:outline-none focus:ring-2 focus:ring-sky-300/60"
-        />
-        {saveLabel ? (
-          <span
-            className={`mt-2 block text-[12px] font-medium ${
-              saveStatus === "error" ? "text-red-600" : "text-emerald-700"
-            }`}
-            role="status"
-          >
-            {saveLabel}
-          </span>
-        ) : null}
-      </label>
+      {agentCode ? (
+        <div
+          className="inline-flex max-w-full items-center gap-2 rounded-full border border-sky-200/80 bg-sky-50 px-3 py-1.5 text-[12px] font-semibold text-sky-900"
+          title={agentLabel}
+        >
+          <span className="text-sky-700/80">Xe của đại lý:</span>
+          <span className="truncate font-mono uppercase">{agentCode}</span>
+          {agentLabel && agentLabel.toUpperCase() !== agentCode ? (
+            <span className="truncate font-normal text-sky-800/90">· {agentLabel}</span>
+          ) : null}
+        </div>
+      ) : (
+        <p className="text-[12px] text-amber-800">
+          Chưa khớp hồ sơ khách — thêm mã «{row.customerCode || row.customer || "?"}» trong Danh bạ khách để lưu xe mặc định.
+        </p>
+      )}
+
+      <EcargoVehiclePicker
+        vehicles={prefill.vehicles}
+        vehicleInput={vehicleInput}
+        driverName={driverName}
+        driverId={driverId}
+        listOpen={pickerOpen}
+        onListOpenChange={setPickerOpen}
+        onSelectVehicle={(v) => {
+          applyVehicleFields(v.licensePlate, v.driverName, v.driverId);
+        }}
+        onVehicleInputChange={(raw) => {
+          const normalized = formatVehicleLicensePlate(raw);
+          setVehicleInput(normalized);
+          onVehicleChange(normalized);
+          const matched = prefill.vehicles.find(
+            (v) => formatVehicleLicensePlate(v.licensePlate) === normalized
+          );
+          if (matched) {
+            setDriverName(matched.driverName);
+            setDriverId(matched.driverId);
+            onDriverChange(matched.driverName, matched.driverId);
+          }
+        }}
+        onDriverNameChange={(raw) => {
+          setDriverName(raw);
+          onDriverChange(raw, driverId);
+        }}
+        onDriverIdChange={(raw) => {
+          setDriverId(raw);
+          onDriverChange(driverName, raw);
+        }}
+      />
+
+      {prefill.vehicles.length > 0 ? (
+        <p className="text-[11px] leading-snug text-apple-tertiary">
+          {prefill.vehicles.length} xe trong hồ sơ
+          {prefill.defaultVehicle ? ` · mặc định: ${vehicleDisplayLabel(prefill.defaultVehicle)}` : ""}
+        </p>
+      ) : null}
+
+      {saveLabel ? (
+        <span
+          className={`block text-[12px] font-medium ${
+            saveStatus === "error" ? "text-red-600" : "text-emerald-700"
+          }`}
+          role="status"
+        >
+          {saveLabel}
+        </span>
+      ) : null}
+
+      {prefill.customer && onSaveVehicleAsDefault ? (
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-black/[0.08] bg-[#fafafc] px-3.5 py-3 text-[13px] text-apple-label">
+          <input
+            type="checkbox"
+            checked={saveAsDefault}
+            onChange={(e) => setSaveAsDefault(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-black/20 text-sky-600 focus:ring-sky-400"
+          />
+          <span>Lưu xe này làm mặc định cho Khách hàng này</span>
+        </label>
+      ) : null}
 
       {!readiness.ready ? (
         <p className="text-[13px] leading-snug text-apple-secondary" role="status">
@@ -169,7 +415,7 @@ function EcargoKhoScscModalBody({
         type="button"
         disabled={!canSubmit}
         aria-label="Tự động đăng ký eCargo"
-        onClick={handleAuto}
+        onClick={() => void handleAuto()}
         className="w-full rounded-2xl bg-sky-600 py-4 text-lg font-extrabold uppercase tracking-wide text-white shadow-[0_6px_14px_rgba(2,132,199,0.28)] transition hover:bg-sky-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/30 disabled:shadow-none"
       >
         {jobRunning ? "Đang tự động đăng ký…" : "Tự động đăng ký eCargo"}
@@ -264,28 +510,41 @@ function EcargoKhoScscModalBody({
 export function EcargoKhoScscCenterModal({
   rowId,
   row,
+  customerDirectory = [],
   vehicleForEcargo,
   viewSessionYmd,
   saveStatus,
   job,
   autoRegistering,
   onVehicleChange,
+  onDriverChange,
   onAutoRegister,
+  onSaveVehicleAsDefault,
   onRefreshJob,
   onClose,
 }: {
   rowId: string;
   row: Shipment;
+  customerDirectory?: readonly CustomerDirectoryEntry[];
   vehicleForEcargo: string;
   viewSessionYmd: string;
   saveStatus: EcargoSaveStatus;
   job?: EcargoJobRecord;
   autoRegistering: boolean;
   onVehicleChange: (raw: string) => void;
-  onAutoRegister: () => Promise<void>;
+  onDriverChange?: (driverName: string, driverId: string) => void;
+  onAutoRegister: (opts?: { driverName?: string; driverId?: string; saveAsDefault?: boolean }) => Promise<void>;
+  onSaveVehicleAsDefault?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   onRefreshJob?: () => void;
   onClose: () => void;
 }) {
+  const handleDriverChange = useCallback(
+    (name: string, id: string) => {
+      onDriverChange?.(name, id);
+    },
+    [onDriverChange]
+  );
+
   if (typeof document === "undefined") return null;
 
   return createPortal(
@@ -342,13 +601,16 @@ export function EcargoKhoScscCenterModal({
           </div>
           <EcargoKhoScscModalBody
             row={row}
+            customerDirectory={customerDirectory}
             vehicleForEcargo={vehicleForEcargo}
             viewSessionYmd={viewSessionYmd}
             saveStatus={saveStatus}
             job={job}
             autoRegistering={autoRegistering}
             onVehicleChange={onVehicleChange}
+            onDriverChange={handleDriverChange}
             onAutoRegister={onAutoRegister}
+            onSaveVehicleAsDefault={onSaveVehicleAsDefault}
             onRefreshJob={onRefreshJob}
             onClose={onClose}
           />

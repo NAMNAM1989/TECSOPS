@@ -86,14 +86,20 @@ describe("getEcargoRegisterReadiness", () => {
   });
 
   it("chưa ready khi thiếu số xe", () => {
-    const r = getEcargoRegisterReadiness(sampleKhoScsc(), "", "2026-05-10");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-20T10:00:00+07:00"));
+    const r = getEcargoRegisterReadiness(sampleKhoScsc(), "", "2026-05-20");
     expect(r.ready).toBe(false);
     expect(r.hint).toContain("số xe");
+    vi.useRealTimers();
   });
 
   it("chưa ready khi MAWB không đủ 11 số", () => {
-    const r = getEcargoRegisterReadiness(sampleKhoScsc({ awb: "123" }), "50H17480", "2026-05-10");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-20T10:00:00+07:00"));
+    const r = getEcargoRegisterReadiness(sampleKhoScsc({ awb: "123" }), "50H17480", "2026-05-20");
     expect(r.ready).toBe(false);
     expect(r.hint).toContain("MAWB");
+    vi.useRealTimers();
   });
 });

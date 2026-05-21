@@ -151,7 +151,11 @@ export function useEcargoKhoScscRegister(
   );
 
   const autoRegister = useCallback(
-    async (row: Shipment, viewSessionYmd: string) => {
+    async (
+      row: Shipment,
+      viewSessionYmd: string,
+      opts?: { driverName?: string; driverId?: string }
+    ) => {
       const shipmentId = row.id;
       const vehicleInput = normalizeEcargoVehicleInput(map[shipmentId]?.vehicleInput ?? "");
       if (!canSendEcargoRegister(row, vehicleInput, viewSessionYmd)) {
@@ -186,7 +190,13 @@ export function useEcargoKhoScscRegister(
           ...credFetch,
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ shipmentId, viewSessionYmd, vehicleNo: vehicleInput }),
+          body: JSON.stringify({
+            shipmentId,
+            viewSessionYmd,
+            vehicleNo: vehicleInput,
+            driverName: opts?.driverName?.trim() || undefined,
+            driverId: opts?.driverId?.trim() || undefined,
+          }),
         });
         const body: unknown = await res.json().catch(() => ({}));
         if (!res.ok) {

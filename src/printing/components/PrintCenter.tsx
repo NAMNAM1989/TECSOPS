@@ -7,7 +7,7 @@ import type { GlobalAgentCatalog } from "../../types/globalAgents";
 import { defaultGlobalAgentCatalog } from "../../utils/globalAgentsCore";
 import { LabelDesigner } from "../../label-designer/designer/LabelDesigner";
 import { buildBoundThermalPreview } from "../../label-designer/adapters/printPipelinePreview";
-import { profileDocumentKind, resolveTemplateForKind } from "../../label-designer/adapters/printPipeline";
+import { profileDocumentKind } from "../../label-designer/adapters/printPipeline";
 import {
   commitThermalDesignerSave,
   resolveThermalLabelTemplateForDesigner,
@@ -294,13 +294,15 @@ export function PrintCenter({
                 Đồng bộ profile
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => setDesignerOpen(true)}
-              className="rounded-full border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-950"
-            >
-              Thiết kế tem
-            </button>
+            {docType === "thermal-label" ? (
+              <button
+                type="button"
+                onClick={() => setDesignerOpen(true)}
+                className="rounded-full border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-950"
+              >
+                Thiết kế tem
+              </button>
+            ) : null}
             {docType === "scsc-weigh" ? (
               <button
                 type="button"
@@ -370,19 +372,6 @@ export function PrintCenter({
             });
             setDesignerOpen(false);
             setStatusMsg("Đã lưu căn chỉnh tem — kiểm tra preview.");
-          }}
-          onClose={() => setDesignerOpen(false)}
-        />
-      ) : null}
-      {designerOpen && docType === "scsc-weigh" ? (
-        <LabelDesigner
-          open={designerOpen}
-          initialTemplate={resolveTemplateForKind(a4Profile, "scsc-weigh-a4")}
-          documentKind="scsc-weigh-a4"
-          onSave={(template) => {
-            upsert({ ...a4Profile, labelTemplate: template });
-            setDesignerOpen(false);
-            setStatusMsg("Đã lưu template SCSC A4.");
           }}
           onClose={() => setDesignerOpen(false)}
         />

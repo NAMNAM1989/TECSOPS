@@ -12,10 +12,6 @@ import { debugLog } from "../../utils/debugLog";
 import type { A4WeighReceiptPrinterProfile } from "../printTypes";
 import { getActiveA4WeighProfile } from "../printerProfiles";
 import { loadPrinterProfileStore } from "../printerProfileStorage";
-import {
-  buildScscFieldHtmlFromTemplate,
-  usesScscLabelTemplate,
-} from "../../label-designer/adapters/scscPrintPipeline";
 import { buildScscWeighOverlayValues, renderScscWeighFieldLayer } from "./scscWeighTemplate";
 import {
   SCSC_A4_PAGE_HEIGHT_MM,
@@ -92,13 +88,8 @@ export function buildScscWeighReceiptDocumentHtml(
   const printTransform = useScale
     ? `translate(var(--print-offset-x, 0mm), var(--print-offset-y, 0mm)) scale(var(--print-scale-x, 1), var(--print-scale-y, 1))`
     : `translate(var(--print-offset-x, 0mm), var(--print-offset-y, 0mm))`;
-  const transformCss = useScale
-    ? `translate(${offsetXmm}mm, ${offsetYmm}mm) scale(${scaleX}, ${scaleY})`
-    : `translate(${offsetXmm}mm, ${offsetYmm}mm)`;
 
-  const fieldHtml = usesScscLabelTemplate(profile)
-    ? buildScscFieldHtmlFromTemplate(formData, profile, shared, transformCss)
-    : renderScscWeighFieldLayer(values, profile);
+  const fieldHtml = renderScscWeighFieldLayer(values, profile);
 
   return `<!DOCTYPE html>
 <html lang="vi">

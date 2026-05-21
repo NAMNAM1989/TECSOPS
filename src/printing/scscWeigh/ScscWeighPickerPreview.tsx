@@ -28,14 +28,6 @@ import {
   scscFieldOverridesEqual,
 } from "./scscFieldOverrides";
 import { pointerDeltaToLayoutMm } from "./scscPreviewDrag";
-import { LabelDesigner } from "../../label-designer/designer/LabelDesigner";
-import {
-  resolveScscLabelTemplate,
-  usesScscLabelTemplate,
-} from "../../label-designer/adapters/scscPrintPipeline";
-import { buildScscLabelContext } from "../../label-designer/data/scscDataContext";
-import { bindLabelTemplate } from "../../label-designer/core/bindingResolver";
-import { LabelMmHtmlView } from "../../label-designer/render/htmlMmRenderer";
 import {
   SCSC_A4_PAGE_HEIGHT_MM,
   SCSC_A4_PAGE_WIDTH_MM,
@@ -127,7 +119,6 @@ export function ScscWeighPickerPreview({ formData, scscWeighPrintSettings }: Pro
   const [showCoords, setShowCoords] = useState(false);
   const [showEmptyFields, setShowEmptyFields] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [designerOpen, setDesignerOpen] = useState(false);
 
   const patchField = useCallback((key: string, patch: ScscFieldOverride) => {
     setDraftOverrides((prev) => {
@@ -242,43 +233,22 @@ export function ScscWeighPickerPreview({ formData, scscWeighPrintSettings }: Pro
 
   const fieldsToRender = showCoords && showEmptyFields ? printFields : fieldsOnPage;
 
-  const scscTemplatePreview = useMemo(() => {
-    if (!usesScscLabelTemplate(effectiveProfile)) return null;
-    const template = resolveScscLabelTemplate(effectiveProfile);
-    const ctx = buildScscLabelContext(
-      formData,
-      scscWeighPrintSettings ?? defaultScscWeighPrintSettings()
-    );
-    return bindLabelTemplate(template, ctx);
-  }, [effectiveProfile, formData, scscWeighPrintSettings]);
-
-  const showTemplateLayer = Boolean(scscTemplatePreview) && !showCoords;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2 px-1">
         <p className="text-[10px] font-semibold uppercase text-apple-tertiary">Xem trước phiếu in</p>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setDesignerOpen(true)}
-            className="rounded-full border border-violet-300 bg-violet-50 px-2.5 py-1 text-[10px] font-semibold text-violet-950"
-          >
-            Thiết kế tem
-          </button>
-          <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/80 px-2.5 py-1 text-[10px] font-semibold text-amber-950">
-            <input
-              type="checkbox"
-              checked={showCoords}
-              onChange={(ev) => {
-                setShowCoords(ev.target.checked);
-                if (!ev.target.checked) setSelectedKey(null);
-              }}
-              className="rounded"
-            />
-            Tọa độ &amp; chỉnh vị trí
-          </label>
-        </div>
+        <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/80 px-2.5 py-1 text-[10px] font-semibold text-amber-950">
+          <input
+            type="checkbox"
+            checked={showCoords}
+            onChange={(ev) => {
+              setShowCoords(ev.target.checked);
+              if (!ev.target.checked) setSelectedKey(null);
+            }}
+            className="rounded"
+          />
+          Tọa độ &amp; chỉnh vị trí
+        </label>
       </div>
 
       {showCoords ? (
@@ -367,14 +337,7 @@ export function ScscWeighPickerPreview({ formData, scscWeighPrintSettings }: Pro
               transformOrigin: "top left",
             }}
           >
-            {showTemplateLayer && scscTemplatePreview ? (
-              <LabelMmHtmlView
-                template={scscTemplatePreview}
-                sheetClassName="scsc-template-overlay pointer-events-none"
-              />
-            ) : null}
-            {!showTemplateLayer
-              ? fieldsToRender.map((def) => {
+            {fieldsToRender.map((def) => {
               const active = selectedKey === def.key;
               const bounds = getScscFieldBoundsMm(def, printValues);
               const baseStyle = scscFieldBoxStyle(def);
@@ -440,8 +403,7 @@ export function ScscWeighPickerPreview({ formData, scscWeighPrintSettings }: Pro
                   ) : null}
                 </div>
               );
-            })
-              : null}
+            })}
           </div>
         </div>
       </div>
@@ -480,25 +442,6 @@ export function ScscWeighPickerPreview({ formData, scscWeighPrintSettings }: Pro
           <dd className="text-apple-label">{formData.goodsDescription || "—"}</dd>
         </div>
       </dl>
-
-      {designerOpen ? (
-        <LabelDesigner
-          open={designerOpen}
-          initialTemplate={resolveScscLabelTemplate(effectiveProfile)}
-          documentKind="scsc-weigh-a4"
-          sampleContext={buildScscLabelContext(
-            formData,
-            scscWeighPrintSettings ?? defaultScscWeighPrintSettings()
-          )}
-          onSave={(template) => {
-            upsertPrinterProfile({ ...a4Profile, labelTemplate: template });
-            void pushLocalPrinterProfilesCatalog();
-            setDesignerOpen(false);
-            setSaveHint("Đã lưu template SCSC A4 — giữ nguyên khi đồng bộ.");
-          }}
-          onClose={() => setDesignerOpen(false)}
-        />
-      ) : null}
     </div>
   );
 }

@@ -1,16 +1,10 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { computeCneeMagnifyPanelPos, type CneeMagnifyPanelPos } from "../utils/cneeMagnifyPanelPosition";
 import { SelectableTextWithCopyPopover } from "./SelectableTextWithCopyPopover";
 
 const CLOSE_DELAY_MS = 220;
 const MAGNIFY_FONT_CLASS = "text-[15px] leading-[1.65] tracking-[0.01em]";
-
-type PanelPos = {
-  top: number;
-  left: number;
-  width: number;
-  maxHeight: number;
-};
 
 type Props = {
   text: string;
@@ -21,34 +15,11 @@ type Props = {
   onClick?: (e: React.MouseEvent) => void;
 };
 
-/** Panel phóng to đè ngay lên ô anchor (cùng góc trái) — dễ bôi đen / copy không phải di chuột xa. */
-function computePanelAtAnchor(anchorRect: DOMRect): PanelPos {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const pad = 8;
-  const width = Math.min(520, Math.max(anchorRect.width, 300, vw - pad * 2));
-  const maxHeight = Math.min(460, Math.max(anchorRect.height, 200, vh - pad * 2));
-
-  let left = anchorRect.left;
-  let top = anchorRect.top;
-
-  if (left + width > vw - pad) {
-    left = Math.max(pad, anchorRect.right - width);
-  }
-  if (top + maxHeight > vh - pad) {
-    top = Math.max(pad, anchorRect.bottom - maxHeight);
-  }
-  if (left < pad) left = pad;
-  if (top < pad) top = pad;
-
-  return { top, left, width, maxHeight };
-}
-
-/** Chữ nhỏ trong ô bảng; rê chuột → phóng to ngay trên ô để đọc / bôi đen / sao chép. */
+/** Chữ nhỏ trong ô bảng; rê chuột / click → panel fixed bám ngay dưới ô (portal body). */
 export function HoverMagnifyText({
   text,
   className = "",
-  magnifyTitle = "Rê chuột để phóng to ngay tại ô — bôi đen chữ để sao chép",
+  magnifyTitle = "Rê chuột hoặc bấm để phóng to ngay dưới ô — bôi đen chữ để sao chép",
   panelLabel = "CNEE",
   onMouseDown,
   onClick,
@@ -59,11 +30,12 @@ export function HoverMagnifyText({
   const copyHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
   const [rightClickCopied, setRightClickCopied] = useState(false);
-  const [panelPos, setPanelPos] = useState<PanelPos>({
+  const [panelPos, setPanelPos] = useState<CneeMagnifyPanelPos>({
     top: 0,
     left: 0,
     width: 360,
     maxHeight: 400,
+    placement: "below",
   });
 
   const cancelScheduledClose = useCallback(() => {
@@ -81,7 +53,7 @@ export function HoverMagnifyText({
   const syncPanelToAnchor = useCallback(() => {
     const el = anchorRef.current;
     if (!el) return;
-    setPanelPos(computePanelAtAnchor(el.getBoundingClientRect()));
+    setPanelPos(computeCneeMagnifyPanelPos(el.getBoundingClientRect()));
   }, []);
 
   const openMagnify = useCallback(() => {
@@ -153,12 +125,15 @@ export function HoverMagnifyText({
         }`}
         onMouseEnter={openMagnify}
         onMouseLeave={scheduleClose}
+        onClick={(e) => {
+          onClick?.(e);
+          openMagnify();
+        }}
       >
         <SelectableTextWithCopyPopover
           className={className}
           title={magnifyTitle}
           onMouseDown={onMouseDown}
-          onClick={onClick}
         >
           {text}
         </SelectableTextWithCopyPopover>
@@ -182,7 +157,9 @@ export function HoverMagnifyText({
                   maxHeight: panelPos.maxHeight,
                   zIndex: 650,
                 }}
-                className="animate-cnee-magnify-panel motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:filter-none flex max-h-[inherit] flex-col overflow-hidden rounded-xl border border-sky-300/70 bg-white shadow-[0_12px_32px_rgba(0,0,0,0.18),0_0_0_2px_rgba(0,122,255,0.25)] ring-1 ring-sky-200/80"
+                className={`animate-cnee-magnify-panel motion-reduce:animate-none motion-reduce:opacity-100 motion-reduce:filter-none flex max-h-[inherit] flex-col overflow-hidden rounded-xl border border-sky-300/70 bg-white shadow-[0_12px_32px_rgba(0,0,0,0.18),0_0_0_2px_rgba(0,122,255,0.25)] ring-1 ring-sky-200/80 ${
+                  panelPos.placement === "below" ? "origin-top" : "origin-top-left"
+                }`}
                 onMouseEnter={keepOpen}
                 onMouseLeave={scheduleClose}
                 onMouseDown={(e) => e.stopPropagation()}

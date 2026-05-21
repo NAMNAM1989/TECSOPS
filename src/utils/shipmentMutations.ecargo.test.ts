@@ -55,3 +55,36 @@ describe("PATCH_ECARGO_KHO_SCSC", () => {
     expect(next.ecargoKhoScsc?.s1).toBeUndefined();
   });
 });
+
+describe("DELETE + ADD cùng AWB", () => {
+  it("cho phép nhập lại AWB sau khi xóa hẳn lô", () => {
+    const deleted = applyShipmentMutation(baseState(), { action: "DELETE", id: "s1" });
+    expect(deleted.rows).toHaveLength(0);
+
+    const readded = applyShipmentMutation(deleted, {
+      action: "ADD",
+      shipment: {
+        sessionDate: "2026-05-10",
+        awb: "978-25562555",
+        hawb: "",
+        flight: "VJ85",
+        flightDate: "10MAY",
+        cutoff: "",
+        cutoffNote: "",
+        note: "",
+        dest: "SYD",
+        warehouse: "KHO-SCSC",
+        pcs: 2,
+        kg: 2,
+        dimWeightKg: null,
+        dimLines: null,
+        dimDivisor: null,
+        customer: "cyl",
+        customerCode: "",
+        status: "PENDING",
+      },
+    });
+    expect(readded.rows).toHaveLength(1);
+    expect(readded.rows[0].awb).toBe("978-25562555");
+  });
+});

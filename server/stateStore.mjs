@@ -141,14 +141,23 @@ function awbDigits(awb) {
   return String(awb || "").replace(/\D/g, "");
 }
 
-function assertAwbUnique(rows, awbString, exceptId) {
+function findAwbConflict(rows, awbString, exceptId) {
   const d = awbDigits(awbString);
-  if (d.length !== 11) return;
+  if (d.length !== 11) return null;
   for (const r of rows) {
     if (exceptId && r.id === exceptId) continue;
-    if (awbDigits(r.awb) === d) {
-      throw new Error("AWB đã tồn tại trong hệ thống — mỗi số AWB chỉ dùng một lần.");
-    }
+    if (awbDigits(r.awb) === d) return r;
+  }
+  return null;
+}
+
+function assertAwbUnique(rows, awbString, exceptId) {
+  const conflict = findAwbConflict(rows, awbString, exceptId);
+  if (conflict) {
+    const when = String(conflict.sessionDate || "").trim() || "không rõ ngày";
+    throw new Error(
+      `AWB đã tồn tại ở phiên ${when} (${conflict.warehouse}, STT ${conflict.stt}). Xóa lô đó trước khi dùng lại số AWB này.`
+    );
   }
 }
 

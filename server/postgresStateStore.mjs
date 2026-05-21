@@ -12,6 +12,7 @@ import {
 } from "./airlineCatalog.mjs";
 import { ensureAirportSchema, seedAirportsIfEmpty } from "./airportCatalog.mjs";
 import { ensureWeighSlipSchema } from "./weighSlipSchema.mjs";
+import { normalizeEcargoKhoScscMapLoose } from "./ecargoKhoScscNormalize.mjs";
 
 const { Pool } = pg;
 
@@ -433,6 +434,9 @@ async function loadRelationalSnapshot(client, key) {
     printerProfiles,
     globalAgents,
     scscWeighPrintSettings,
+    ecargoKhoScsc: normalizeEcargoKhoScscMapLoose(
+      blob && typeof blob === "object" ? blob.ecargoKhoScsc : undefined
+    ),
   };
 }
 

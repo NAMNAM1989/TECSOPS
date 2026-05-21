@@ -173,25 +173,50 @@ export function useShipmentSync(fallback: Fallback) {
       return computed;
     }
 
-    const res = await fetch("/api/mutation", {
-      ...credFetch,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(mutation),
-    });
-    const body: unknown = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
-      const msg = typeof o.error === "string" ? o.error : res.statusText;
-      debugWarn("sync:mutation", res.status, msg);
-      throw new Error(msg);
+    /** Xóa lô: cập nhật UI ngay để AWB được giải phóng trước khi server phản hồi. */
+    let rollbackState: AppState | null = null;
+    if (mutation.action === "DELETE") {
+      setState((prev) => {
+        if (!prev) return prev;
+        rollbackState = prev;
+        try {
+          const next = applyShipmentMutation(prev, mutation);
+          saveRows(next.rows);
+          return next;
+        } catch {
+          return prev;
+        }
+      });
     }
-    const next = parseAppState(body);
-    if (!next) {
-      throw new Error("Phản hồi máy chủ không hợp lệ sau khi lưu.");
+
+    try {
+      const res = await fetch("/api/mutation", {
+        ...credFetch,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mutation),
+      });
+      const body: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+        const msg = typeof o.error === "string" ? o.error : res.statusText;
+        debugWarn("sync:mutation", res.status, msg);
+        throw new Error(msg);
+      }
+      const next = parseAppState(body);
+      if (!next) {
+        throw new Error("Phản hồi máy chủ không hợp lệ sau khi lưu.");
+      }
+      setState((prev) => pickNewerState(prev, next));
+      saveRows(next.rows);
+      return next;
+    } catch (e) {
+      if (rollbackState) {
+        setState(rollbackState);
+        saveRows(rollbackState.rows);
+      }
+      throw e;
     }
-    setState((prev) => pickNewerState(prev, next));
-    return next;
   }, []);
 
   return { status, state, mutate, socketConnected, subscribeEcargoJob };

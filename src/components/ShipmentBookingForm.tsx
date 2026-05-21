@@ -4,7 +4,7 @@ import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { GlobalAgentCatalog } from "../types/globalAgents";
 import { findGlobalAgentById } from "../utils/globalAgentsCore";
 import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
-import { isAwbDigitsTaken } from "../utils/awbUnique";
+import { awbConflictMessage, findAwbDigitsConflict } from "../utils/awbUnique";
 import { mergeCustomerOptions, persistNewCustomer } from "../utils/customerStorage";
 import { warehouseLabel } from "../constants/warehouses";
 import { CUSTOMERS, WAREHOUSES, DESTINATIONS } from "../data/customers";
@@ -217,8 +217,9 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
   const awbDigits = rawAwbDigits(awbRaw);
   const awbValid = awbDigits.length === 11;
   const exceptId = isEdit ? editShipment!.id : null;
-  const awbConflict =
-    awbValid && isAwbDigitsTaken(props.allRows, awbDigits, exceptId);
+  const awbConflictRow =
+    awbValid ? findAwbDigitsConflict(props.allRows, awbDigits, exceptId) : null;
+  const awbConflict = awbConflictRow != null;
 
   function buildCutoffIso(): string {
     return buildCutoffIsoFromDateAndTimeText(cutoffDateText, cutoffTimeText, sessionYear);
@@ -615,8 +616,10 @@ export function ShipmentBookingForm(props: ShipmentBookingFormProps) {
                 {!awbValid && (
                   <span className="ml-2 font-sans text-xs font-normal text-apple-tertiary">({awbDigits.length}/11 số)</span>
                 )}
-                {awbValid && awbConflict && (
-                  <span className="ml-2 font-sans text-xs font-bold text-red-600">Đã có lô khác dùng số này</span>
+                {awbValid && awbConflictRow && (
+                  <span className="ml-2 font-sans text-xs font-bold text-red-600">
+                    {awbConflictMessage(awbConflictRow)}
+                  </span>
                 )}
               </p>
             )}

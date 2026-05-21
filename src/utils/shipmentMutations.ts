@@ -2,6 +2,7 @@ import type { Shipment, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { WAREHOUSE_ORDER, isKnownWarehouse } from "../constants/warehouses";
 import { awbDigitsKey } from "./awbFormat";
+import { awbConflictMessage, findAwbDigitsConflict } from "./awbUnique";
 import { workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus";
 import { assertCustomerDirectoryValid } from "./customerDirectoryCore";
 import { clampCustomerDirectoryEntry } from "./customerDirectoryProfile";
@@ -59,12 +60,8 @@ export type ShipmentMutation =
 function assertAwbUnique(rows: Shipment[], awb: string, exceptId?: string) {
   const d = awbDigitsKey(awb);
   if (d.length !== 11) return;
-  for (const r of rows) {
-    if (exceptId && r.id === exceptId) continue;
-    if (awbDigitsKey(r.awb) === d) {
-      throw new Error("AWB đã tồn tại trong hệ thống — mỗi số AWB chỉ dùng một lần.");
-    }
-  }
+  const conflict = findAwbDigitsConflict(rows, d, exceptId);
+  if (conflict) throw new Error(awbConflictMessage(conflict));
 }
 
 function renumberSttForAll(rows: Shipment[]): Shipment[] {

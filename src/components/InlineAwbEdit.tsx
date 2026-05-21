@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
-import { isAwbDigitsTaken } from "../utils/awbUnique";
+import { awbConflictMessage, findAwbDigitsConflict } from "../utils/awbUnique";
 
 interface Props {
   rowId: string;
@@ -54,8 +54,9 @@ export function InlineAwbEdit({
       setEditing(false);
       return false;
     }
-    if (isAwbDigitsTaken(allRows, d, rowId)) {
-      window.alert("AWB đã tồn tại — mỗi số AWB chỉ dùng một lần.");
+    const conflict = findAwbDigitsConflict(allRows, d, rowId);
+    if (conflict) {
+      window.alert(awbConflictMessage(conflict));
       setEditing(false);
       return false;
     }

@@ -45,7 +45,13 @@ describe("filterCustomerDirectoryEntries", () => {
 describe("buildShipmentPatchForCustomerSelection", () => {
   it("fills code and id when entry selected", () => {
     const patch = buildShipmentPatchForCustomerSelection(directory, "ABC Logistics", directory[0]);
+    expect(patch.customer).toBe("ABC LOGISTICS");
     expect(patch.customerCode).toBe("ABC01");
     expect(patch.customerId).toBe("c1");
+  });
+
+  it("uppercases free-text customer name", () => {
+    const patch = buildShipmentPatchForCustomerSelection(directory, "  abc logistics  ");
+    expect(patch.customer).toBe("ABC LOGISTICS");
   });
 });

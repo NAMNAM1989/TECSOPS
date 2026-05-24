@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
-import { buildShipmentPatchForCustomerSelection } from "../utils/customerShipmentPatch";
+import { buildShipmentPatchForCustomerSelection, customerNameWhileTyping, normalizeCustomerNameInput } from "../utils/customerShipmentPatch";
 import {
   CUSTOMER_SUGGEST_LIMIT,
   CustomerSuggestDropdown,
@@ -60,6 +60,7 @@ export function InlineCustomerEdit({
     if (!editing) return;
     const el = inputRef.current;
     if (!el) return;
+    setDraft(normalizeCustomerNameInput(value));
     el.focus();
     el.select();
     setListOpen(customerDirectory.length > 0);
@@ -85,8 +86,8 @@ export function InlineCustomerEdit({
     skipBlurCommitRef.current = true;
     setEditing(false);
     setListOpen(false);
-    const trimmed = draft.trim().slice(0, maxLength);
-    if (trimmed !== value.trim() || !customerId) {
+    const trimmed = normalizeCustomerNameInput(draft).slice(0, maxLength);
+    if (trimmed !== normalizeCustomerNameInput(value) || !customerId) {
       onCommit(buildShipmentPatchForCustomerSelection(customerDirectory, trimmed));
     }
     queueMicrotask(() => {
@@ -117,6 +118,8 @@ export function InlineCustomerEdit({
 
   const btnBase = "w-full rounded px-1 py-0.5 text-left";
 
+  const displayValue = value !== "" ? normalizeCustomerNameInput(value) : "";
+
   if (!editing) {
     return (
       <button
@@ -131,10 +134,10 @@ export function InlineCustomerEdit({
           setEditing(true);
         }}
         className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 dark:hover:bg-white/[0.08] ${className} ${
-          value === "" ? "ops-grid-placeholder" : ""
+          displayValue === "" ? "ops-grid-placeholder" : ""
         }`}
       >
-        {value !== "" ? value : placeholder}
+        {displayValue !== "" ? displayValue : placeholder}
       </button>
     );
   }
@@ -148,7 +151,7 @@ export function InlineCustomerEdit({
         value={draft}
         maxLength={maxLength}
         onChange={(e) => {
-          setDraft(e.target.value);
+          setDraft(customerNameWhileTyping(e.target.value));
           setListOpen(true);
           setActiveIdx(0);
         }}

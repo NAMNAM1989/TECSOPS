@@ -7,6 +7,7 @@ import {
   useCustomerSuggestAnchor,
   useCustomerSuggestKeyboard,
 } from "./CustomerSuggestDropdown";
+import { customerNameWhileTyping, normalizeCustomerNameInput } from "../utils/customerShipmentPatch";
 
 interface CustomerPickerFieldProps {
   value: string;
@@ -48,7 +49,7 @@ export function CustomerPickerField({
   const anchor = useCustomerSuggestAnchor(inputRef, showList);
 
   useEffect(() => {
-    setDraft(value);
+    setDraft(normalizeCustomerNameInput(value));
   }, [value]);
 
   useLayoutEffect(() => {
@@ -63,8 +64,9 @@ export function CustomerPickerField({
 
   const pick = (entry: CustomerDirectoryEntry, advance?: () => void) => {
     skipBlurCommitRef.current = true;
-    setDraft(entry.name);
-    onChange(entry.name, entry);
+    const name = normalizeCustomerNameInput(entry.name);
+    setDraft(name);
+    onChange(name, entry);
     setListOpen(false);
     queueMicrotask(() => {
       skipBlurCommitRef.current = false;
@@ -74,7 +76,8 @@ export function CustomerPickerField({
 
   const commitTyped = (advance?: () => void) => {
     skipBlurCommitRef.current = true;
-    const trimmed = draft.trim();
+    const trimmed = normalizeCustomerNameInput(draft);
+    setDraft(trimmed);
     onChange(trimmed);
     setListOpen(false);
     queueMicrotask(() => {
@@ -107,7 +110,7 @@ export function CustomerPickerField({
         value={draft}
         placeholder={placeholder}
         onChange={(e) => {
-          setDraft(e.target.value);
+          setDraft(customerNameWhileTyping(e.target.value));
           setListOpen(true);
           setActiveIdx(0);
         }}

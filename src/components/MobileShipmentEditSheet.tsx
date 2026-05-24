@@ -4,7 +4,7 @@ import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { GlobalAgentCatalog } from "../types/globalAgents";
 import { DESTINATIONS } from "../data/customers";
 import { findCustomerEntry } from "../utils/mapBookingToScaleTicketFormData";
-import { buildShipmentPatchForCustomerSelection } from "../utils/customerShipmentPatch";
+import { buildShipmentPatchForCustomerSelection, normalizeCustomerNameInput } from "../utils/customerShipmentPatch";
 import { findGlobalAgentById } from "../utils/globalAgentsCore";
 import {
   buildShipmentPatchForSavedConsignee,
@@ -87,7 +87,7 @@ export function MobileShipmentEditSheet({
 
   const applyCustomerFromDirectory = (name: string, entry?: CustomerDirectoryEntry) => {
     const patch = buildShipmentPatchForCustomerSelection(customerDirectory, name, entry);
-    setCustomer((patch.customer ?? name).trim());
+    setCustomer(normalizeCustomerNameInput(patch.customer ?? name));
     setCustomerId((patch.customerId ?? "").trim());
     if (patch.customerConsigneeId) {
       setCustomerConsigneeId(patch.customerConsigneeId);
@@ -164,7 +164,6 @@ export function MobileShipmentEditSheet({
       flightDate,
       dest: dest.trim().toUpperCase(),
       ...customerPatch,
-      customer: customer.trim(),
       note: note.trim(),
       pcs,
       kg,

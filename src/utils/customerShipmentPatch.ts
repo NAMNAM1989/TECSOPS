@@ -7,6 +7,16 @@ function norm(s: string): string {
   return s.trim().toLowerCase();
 }
 
+/** Giữ chữ HOA khi đang gõ (không trim — tránh nuốt khoảng trắng cuối). */
+export function customerNameWhileTyping(raw: string): string {
+  return raw.toUpperCase();
+}
+
+/** Tên khách lưu trên lô — luôn trim + HOA. */
+export function normalizeCustomerNameInput(raw: string): string {
+  return raw.trim().toUpperCase();
+}
+
 /** Lọc danh bạ khách theo mã hoặc tên (không phân biệt hoa thường). */
 export function filterCustomerDirectoryEntries(
   directory: readonly CustomerDirectoryEntry[],
@@ -60,7 +70,7 @@ export function buildShipmentPatchForCustomerSelection(
   customerName: string,
   entry?: CustomerDirectoryEntry
 ): Partial<Shipment> {
-  const trimmed = customerName.trim();
+  const trimmed = normalizeCustomerNameInput(customerName);
   const resolved = resolveCustomerEntry(directory, trimmed, entry);
   const code = resolved?.code.trim() ?? lookupCustomerCodeByName(directory, trimmed);
   const customerId = resolved?.id ?? "";

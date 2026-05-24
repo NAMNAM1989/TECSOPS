@@ -8,12 +8,13 @@ import {
 
 const MAILBOXES = ["INBOX", "[Gmail]/All Mail"];
 
-async function loadVerifyCandidates(client, notBeforeMs) {
+async function loadVerifyCandidates(client, notBeforeMs, { includeAllMail = false } = {}) {
   const since = new Date(notBeforeMs - 3 * 60 * 1000);
   /** @type {Array<{ uid: number|string; raw: string; envelope?: object; receivedMs?: number }>} */
   const all = [];
+  const mailboxes = includeAllMail ? MAILBOXES : ["INBOX"];
 
-  for (const mailbox of MAILBOXES) {
+  for (const mailbox of mailboxes) {
     try {
       await client.mailboxOpen(mailbox);
     } catch {
@@ -48,7 +49,7 @@ async function loadVerifyCandidates(client, notBeforeMs) {
 }
 
 /**
- * Đọc mail xác thực qua Gmail IMAP — giữ kết nối, poll nhanh (mặc định 2.5s).
+ * Đọc mail xác thực qua Gmail IMAP — giữ kết nối, poll nhanh (mặc định 400ms).
  * @param {{ notBeforeMs?: number; timeoutMs?: number; pollMs?: number; matchHints?: { mawb?: string; vehicleNo?: string } }} opts
  */
 export async function waitForEcargoVerifyEmail(opts = {}) {
@@ -65,6 +66,7 @@ export async function waitForEcargoVerifyEmail(opts = {}) {
   const pollMs = opts.pollMs ?? ECARGO_GMAIL_POLL_MS;
   const matchHints = opts.matchHints;
   const deadline = Date.now() + timeoutMs;
+  const searchAllMail = process.env.ECARGO_GMAIL_SEARCH_ALL_MAIL === "1";
 
   const client = new ImapFlow({
     host: "imap.gmail.com",
@@ -77,12 +79,15 @@ export async function waitForEcargoVerifyEmail(opts = {}) {
   try {
     await client.connect();
 
+    let pollCount = 0;
     while (Date.now() < deadline) {
-      const candidates = await loadVerifyCandidates(client, notBeforeMs);
+      const includeAllMail = searchAllMail || pollCount % 5 === 4;
+      const candidates = await loadVerifyCandidates(client, notBeforeMs, { includeAllMail });
       const found = pickFreshVerifyMail(candidates, notBeforeMs, matchHints);
+      pollCount += 1;
       if (found) {
         console.info(
-          `[ecargo-gmail] verify mail uid=${found.uid} code=${found.verifyCode} received=${found.receivedMs ?? "?"}`
+          `[ecargo-gmail] verify mail uid=${found.uid} code=${found.verifyCode} received=${found.receivedMs ?? "?"} polls=${pollCount}`
         );
         return found;
       }

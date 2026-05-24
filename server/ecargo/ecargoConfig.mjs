@@ -40,7 +40,7 @@ export const FIXED_ECARGO_CONFIG = {
 };
 
 export const ECARGO_JOB_TIMEOUT_MS = Number(process.env.ECARGO_JOB_TIMEOUT_MS) || 20 * 60 * 1000;
-/** Khoảng poll Gmail IMAP khi chờ mail xác thực (ms). */
-export const ECARGO_GMAIL_POLL_MS = Number(process.env.ECARGO_GMAIL_POLL_MS) || 2500;
+/** Khoảng poll Gmail IMAP khi chờ mail xác thực (ms). Mặc định 400ms — gần tức thì sau khi mail tới. */
+export const ECARGO_GMAIL_POLL_MS = Number(process.env.ECARGO_GMAIL_POLL_MS) || 400;
 export const ECARGO_QUEUE_KEY = process.env.ECARGO_QUEUE_KEY || "ecargo:queue";
 export const ECARGO_JOB_KEY_PREFIX = process.env.ECARGO_JOB_KEY_PREFIX || "ecargo:job:";

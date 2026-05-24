@@ -94,15 +94,15 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
       const mailMs = Date.now() - tMail;
       console.info(`[ecargo] ${shipmentId} gmail ${mailMs}ms`);
 
-      await updateJob(shipmentId, {
+      const tVerify = Date.now();
+      const verifyTask = runVerifyInContext(browserContext, mail.verifyUrl);
+      void updateJob(shipmentId, {
         status: "verifying",
         verifyUrl: mail.verifyUrl,
         verifyCode: mail.verifyCode,
         jobId,
       });
-
-      const tVerify = Date.now();
-      await runVerifyInContext(browserContext, mail.verifyUrl);
+      await verifyTask;
       await closeEcargoContext(browserContext);
       browserContext = null;
       const verifyMs = Date.now() - tVerify;

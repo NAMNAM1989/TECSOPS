@@ -293,40 +293,34 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
 }
 
 async function clickVerifyOnPage(page) {
-  await page.waitForLoadState("domcontentloaded");
-  await page.waitForTimeout(1200);
-
-  const locatorCandidates = [
-    page.getByRole("button", { name: /xác\s*thực/i }),
-    page.getByRole("link", { name: /xác\s*thực/i }),
-    page.locator("input[type='button'], input[type='submit']").filter({ hasText: /xác\s*thực/i }),
-    page.locator("a, button, input[type='button'], input[type='submit']").filter({ hasText: /xác\s*thực/i }),
-  ];
-
-  for (const locator of locatorCandidates) {
-    const target = locator.first();
-    try {
-      if (await target.isVisible({ timeout: 2500 })) {
-        await target.click({ timeout: 5000 });
-        await page.waitForTimeout(800);
-        return;
+  /** Poll 40ms — bấm ngay khi nút hiện, không sleep cố định 1.2s như extension cũ. */
+  const deadline = Date.now() + 12_000;
+  while (Date.now() < deadline) {
+    const clicked = await page.evaluate(() => {
+      const nodes = [
+        ...document.querySelectorAll("button, input[type='button'], input[type='submit'], a"),
+      ];
+      const verifyButton = nodes.find((btn) =>
+        /xác\s*thực/i.test(btn.innerText || btn.value || btn.textContent || "")
+      );
+      if (!verifyButton) return false;
+      const style = window.getComputedStyle(verifyButton);
+      const rect = verifyButton.getBoundingClientRect();
+      if (style.display === "none" || style.visibility === "hidden" || rect.width < 1 || rect.height < 1) {
+        return false;
       }
-    } catch {
-      /* thử selector khác */
-    }
+      verifyButton.click();
+      return true;
+    });
+    if (clicked) return;
+    await page.waitForTimeout(40);
   }
 
-  const clicked = await page.evaluate(() => {
-    const nodes = [
-      ...document.querySelectorAll("button, input[type='button'], input[type='submit'], a"),
-    ];
-    const verifyButton = nodes.find((btn) => /xác\s*thực/i.test(btn.innerText || btn.value || btn.textContent || ""));
-    if (!verifyButton) return false;
-    verifyButton.click();
-    return true;
-  });
-  if (!clicked) throw new Error("Không tìm thấy nút Xác Thực trên trang Verify.");
-  await page.waitForTimeout(800);
+  const locator = page
+    .locator("button, input[type='button'], input[type='submit'], a")
+    .filter({ hasText: /xác\s*thực/i })
+    .first();
+  await locator.click({ timeout: 3_000 });
 }
 
 /**
@@ -357,7 +351,7 @@ export async function runEcargoPlaywrightSession(booking, hooks = {}) {
 export async function runVerifyInContext(context, verifyUrl) {
   const page = await context.newPage();
   try {
-    await page.goto(verifyUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    await page.goto(verifyUrl, { waitUntil: "commit", timeout: 45_000 });
     await clickVerifyOnPage(page);
   } finally {
     await page.close();
@@ -379,7 +373,7 @@ export async function runEcargoVerifyClick(verifyUrl) {
   const context = await browser.newContext(BROWSER_CONTEXT_OPTS);
   const page = await context.newPage();
   try {
-    await page.goto(verifyUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    await page.goto(verifyUrl, { waitUntil: "commit", timeout: 45_000 });
     await clickVerifyOnPage(page);
   } finally {
     await context.close();

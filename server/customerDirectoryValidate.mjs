@@ -27,6 +27,10 @@ const L = {
   savedGoodsCount: 40,
   savedShipperLabel: 80,
   savedShipperCount: 40,
+  savedVehicleLicensePlate: 20,
+  savedVehicleDriverName: 120,
+  savedVehicleDriverId: 20,
+  savedVehicleCount: 30,
   otherRequirementsPrint: 200,
 };
 
@@ -149,23 +153,58 @@ function parseSavedGoodsLoose(item) {
   return out.slice(0, L.savedGoodsCount);
 }
 
-function normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods) {
+function normalizeVehiclePlate(raw) {
+  return sliceStr(raw, L.savedVehicleLicensePlate)
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9;]/g, "");
+}
+
+function parseSavedVehiclesLoose(item) {
+  if (!Array.isArray(item.savedVehicles)) return [];
+  const out = [];
+  for (const x of item.savedVehicles) {
+    if (!x || typeof x !== "object") continue;
+    const sid = typeof x.id === "string" ? x.id.trim() : "";
+    if (!sid) continue;
+    const licensePlate = normalizeVehiclePlate(x.licensePlate);
+    const driverName = sliceStr(x.driverName, L.savedVehicleDriverName).trim();
+    const driverId = sliceStr(x.driverId, L.savedVehicleDriverId)
+      .trim()
+      .replace(/\D/g, "");
+    if (!licensePlate && !driverName && !driverId) continue;
+    out.push({
+      id: sliceStr(sid, 80).trim(),
+      licensePlate,
+      driverName,
+      driverId,
+    });
+  }
+  return out.slice(0, L.savedVehicleCount);
+}
+
+function normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods, savedVehicles) {
   const shipperIds = new Set(savedShippers.map((x) => x.id));
   const cneeIds = new Set(savedConsignees.map((x) => x.id));
   const goodsIds = new Set(savedGoods.map((x) => x.id));
+  const vehicleIds = new Set(savedVehicles.map((x) => x.id));
   let defaultShipperId = sliceStr(item.defaultShipperId, 80).trim();
   let defaultConsigneeId = sliceStr(item.defaultConsigneeId, 80).trim();
   let defaultGoodsId = sliceStr(item.defaultGoodsId, 80).trim();
+  let defaultVehicleId = sliceStr(item.defaultVehicleId, 80).trim();
   if (defaultShipperId && !shipperIds.has(defaultShipperId)) defaultShipperId = "";
   if (defaultConsigneeId && !cneeIds.has(defaultConsigneeId)) defaultConsigneeId = "";
   if (defaultGoodsId && !goodsIds.has(defaultGoodsId)) defaultGoodsId = "";
+  if (defaultVehicleId && !vehicleIds.has(defaultVehicleId)) defaultVehicleId = "";
   if (savedShippers.length === 1) defaultShipperId = savedShippers[0].id;
   if (savedConsignees.length === 1) defaultConsigneeId = savedConsignees[0].id;
   if (savedGoods.length === 1) defaultGoodsId = savedGoods[0].id;
+  if (savedVehicles.length === 1) defaultVehicleId = savedVehicles[0].id;
   const out = {};
   if (defaultShipperId) out.defaultShipperId = defaultShipperId;
   if (defaultConsigneeId) out.defaultConsigneeId = defaultConsigneeId;
   if (defaultGoodsId) out.defaultGoodsId = defaultGoodsId;
+  if (defaultVehicleId) out.defaultVehicleId = defaultVehicleId;
   return out;
 }
 
@@ -182,6 +221,7 @@ export function parseCustomersLoose(raw) {
     const savedShippers = parseSavedShippersLoose(item);
     const savedGoods = parseSavedGoodsLoose(item);
     const savedConsignees = parseSavedConsigneesLoose(item);
+    const savedVehicles = parseSavedVehiclesLoose(item);
     out.push({
       id: sliceStr(id, 80).trim(),
       code: sliceStr(code, L.code).trim(),
@@ -204,9 +244,10 @@ export function parseCustomersLoose(raw) {
       savedShippers,
       savedGoods,
       savedConsignees,
+      savedVehicles,
       parties: parsePartiesLoose(item),
       otherRequirementsPrint: sliceStr(item.otherRequirementsPrint, L.otherRequirementsPrint).trim(),
-      ...normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods),
+      ...normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods, savedVehicles),
     });
   }
   return out;
@@ -238,6 +279,7 @@ export function validateCustomerDirectoryPayload(raw) {
     const savedShippers = parseSavedShippersLoose(item);
     const savedGoods = parseSavedGoodsLoose(item);
     const savedConsignees = parseSavedConsigneesLoose(item);
+    const savedVehicles = parseSavedVehiclesLoose(item);
     const seenShipper = new Set();
     for (let j = 0; j < savedShippers.length; j++) {
       const ss = savedShippers[j];
@@ -274,6 +316,18 @@ export function validateCustomerDirectoryPayload(raw) {
       }
       seenCnee.add(sk);
     }
+    const seenVehicle = new Set();
+    for (let j = 0; j < savedVehicles.length; j++) {
+      const sv = savedVehicles[j];
+      const sk = sv.id.toLowerCase();
+      if (!sv.id.trim()) {
+        throw new Error(`Dòng ${i + 1}: xe lưu sẵn thứ ${j + 1} thiếu id.`);
+      }
+      if (seenVehicle.has(sk)) {
+        throw new Error(`Dòng ${i + 1}: id xe «${sv.id}» bị trùng.`);
+      }
+      seenVehicle.add(sk);
+    }
     out.push({
       id: sliceStr(id, 80).trim(),
       code: sliceStr(code, L.code).trim(),
@@ -296,9 +350,10 @@ export function validateCustomerDirectoryPayload(raw) {
       savedShippers,
       savedGoods,
       savedConsignees,
+      savedVehicles,
       parties: parsePartiesLoose(item),
       otherRequirementsPrint: sliceStr(item.otherRequirementsPrint, L.otherRequirementsPrint).trim(),
-      ...normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods),
+      ...normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods, savedVehicles),
     });
   }
   return out;

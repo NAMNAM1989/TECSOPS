@@ -6,6 +6,7 @@ import type {
   CustomerSavedShipper,
 } from "../types/customerDirectory";
 import type { GlobalAgentCatalog, GlobalAgentEntry } from "../types/globalAgents";
+import { lookupCustomerEntryByName } from "./customerDirectoryCore";
 import { findGlobalAgentById } from "./globalAgentsCore";
 import { buildScscDimListModel } from "./scscDimListReport";
 import { resolvePrintAddressForShipment } from "./printAddressMultiline";
@@ -73,6 +74,8 @@ export function findCustomerEntry(
     if (byCode) return byCode;
   }
   if (nameRaw) {
+    const byLookup = lookupCustomerEntryByName(directory, nameRaw);
+    if (byLookup) return byLookup;
     const byName = directory.find((e) => norm(e.name) === norm(nameRaw));
     if (byName) return byName;
     const nameAsCode = directory.find((e) => norm(e.code) === norm(nameRaw));

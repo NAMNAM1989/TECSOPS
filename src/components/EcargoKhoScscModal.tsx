@@ -67,11 +67,17 @@ function EcargoVehiclePicker({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const normalizedInput = formatVehicleLicensePlate(vehicleInput);
   const filtered = useMemo(
     () => filterCustomerVehicles(vehicles, vehicleInput),
     [vehicleInput, vehicles]
   );
   const showDropdown = listOpen && vehicles.length > 0;
+
+  const pickVehicle = (v: import("../types/customerDirectory").CustomerSavedVehicle) => {
+    onSelectVehicle(v);
+    onListOpenChange(false);
+  };
 
   useEffect(() => {
     if (!showDropdown) return;
@@ -87,8 +93,46 @@ function EcargoVehiclePicker({
 
   return (
     <div className="space-y-4">
+      {vehicles.length > 0 ? (
+        <div>
+          <span className={ECARGO_LABEL}>Chọn xe đại lý</span>
+          <div className="mt-1.5 flex flex-col gap-2" role="listbox" aria-label="Danh sách xe đại lý">
+            {vehicles.map((v) => {
+              const plate = formatVehicleLicensePlate(v.licensePlate);
+              const selected = Boolean(plate && plate === normalizedInput);
+              const name = v.driverName.trim();
+              const id = v.driverId.trim();
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`flex w-full flex-col gap-1 rounded-xl border px-3.5 py-2.5 text-left transition active:scale-[0.99] ${
+                    selected
+                      ? "border-sky-500/50 bg-sky-500/12 ring-1 ring-sky-500/25 dark:border-sky-400/45 dark:bg-sky-400/12 dark:ring-sky-400/30"
+                      : "border-black/[0.06] bg-white hover:border-sky-400/35 hover:bg-sky-500/8 dark:border-white/[0.1] dark:bg-ops-elevated dark:hover:border-sky-400/35 dark:hover:bg-sky-400/10"
+                  }`}
+                  onClick={() => pickVehicle(v)}
+                >
+                  <span className="font-mono text-sm font-bold uppercase tracking-wide text-dashboard-primary dark:text-slate-100">
+                    {plate || "—"}
+                  </span>
+                  <span className="text-[13px] font-medium text-dashboard-primary dark:text-slate-200">
+                    {name || "Chưa có tên tài xế"}
+                  </span>
+                  <span className="font-mono text-[12px] text-dashboard-muted dark:text-slate-400">
+                    {id ? `CCCD ${id}` : "Chưa có CCCD"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       <div className="relative">
-        <label className={ECARGO_LABEL}>Số xe</label>
+        <label className={ECARGO_LABEL}>Số xe (hoặc gõ biển mới)</label>
         <input
           ref={inputRef}
           type="text"
@@ -114,27 +158,30 @@ function EcargoVehiclePicker({
             className="absolute left-0 right-0 top-full z-10 mt-1.5 max-h-44 overflow-y-auto rounded-xl border border-black/[0.06] bg-white py-1 shadow-dashboard-card-hover dark:border-white/10 dark:bg-dashboard-surface-dark"
             role="listbox"
           >
-            {(filtered.length ? filtered : vehicles).map((v) => (
+            {(filtered.length ? filtered : vehicles).map((v) => {
+              const name = v.driverName.trim();
+              const id = v.driverId.trim();
+              return (
               <button
                 key={v.id}
                 type="button"
                 role="option"
                 className="flex w-full flex-col gap-0.5 px-4 py-2.5 text-left hover:bg-sky-500/10 dark:hover:bg-sky-400/10"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onSelectVehicle(v);
-                  onListOpenChange(false);
-                }}
+                onClick={() => pickVehicle(v)}
               >
                 <span className="font-mono text-sm font-bold uppercase text-dashboard-primary dark:text-dashboard-primary-dark">
-                  {v.licensePlate}
+                  {formatVehicleLicensePlate(v.licensePlate) || v.licensePlate}
                 </span>
-                <span className="text-[12px] text-dashboard-muted dark:text-dashboard-muted-dark">
-                  {v.driverName || "—"}
-                  {v.driverId ? ` · ${v.driverId}` : ""}
+                <span className="text-[12px] font-medium text-dashboard-primary dark:text-slate-200">
+                  {name || "Chưa có tên tài xế"}
+                </span>
+                <span className="font-mono text-[11px] text-dashboard-muted dark:text-dashboard-muted-dark">
+                  {id ? `CCCD ${id}` : "Chưa có CCCD"}
                 </span>
               </button>
-            ))}
+            );
+            })}
             {filtered.length === 0 ? (
               <p className="px-4 py-2 text-[12px] text-dashboard-muted dark:text-dashboard-muted-dark">
                 Không khớp xe nào — tiếp tục gõ biển mới.
@@ -167,6 +214,19 @@ function EcargoVehiclePicker({
           />
         </label>
       </div>
+
+      {driverName.trim() || driverId.trim() ? (
+        <p className="rounded-xl bg-sky-500/10 px-3 py-2 text-[12px] leading-snug text-sky-950 ring-1 ring-sky-500/15 dark:bg-sky-400/10 dark:text-sky-100 dark:ring-sky-400/20">
+          <span className="font-semibold">Tài xế đã chọn:</span>{" "}
+          {driverName.trim() || "—"}
+          {driverId.trim() ? (
+            <>
+              {" "}
+              · CCCD <span className="font-mono">{driverId.trim()}</span>
+            </>
+          ) : null}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -175,6 +235,8 @@ function EcargoKhoScscModalBody({
   row,
   customerDirectory,
   vehicleForEcargo,
+  driverNameForEcargo,
+  driverIdForEcargo,
   viewSessionYmd,
   saveStatus,
   job,
@@ -189,6 +251,8 @@ function EcargoKhoScscModalBody({
   row: Shipment;
   customerDirectory: readonly CustomerDirectoryEntry[];
   vehicleForEcargo: string;
+  driverNameForEcargo?: string;
+  driverIdForEcargo?: string;
   viewSessionYmd: string;
   saveStatus: EcargoSaveStatus;
   job?: EcargoJobRecord;
@@ -201,8 +265,12 @@ function EcargoKhoScscModalBody({
   onClose: () => void;
 }) {
   const prefill = useMemo(
-    () => resolveEcargoVehiclePrefill(row, customerDirectory, vehicleForEcargo),
-    [customerDirectory, row, vehicleForEcargo]
+    () =>
+      resolveEcargoVehiclePrefill(row, customerDirectory, vehicleForEcargo, {
+        driverName: driverNameForEcargo,
+        driverId: driverIdForEcargo,
+      }),
+    [customerDirectory, driverIdForEcargo, driverNameForEcargo, row, vehicleForEcargo]
   );
 
   const [vehicleInput, setVehicleInput] = useState(prefill.vehicleInput);
@@ -215,23 +283,38 @@ function EcargoKhoScscModalBody({
   const [copyError, setCopyError] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const refreshJobRef = useRef(onRefreshJob);
-  const syncedShipmentRef = useRef<string | null>(null);
+  const lastPrefillKeyRef = useRef("");
   refreshJobRef.current = onRefreshJob;
 
   const agentCode = (prefill.customer?.code || row.customerCode || row.customer || "").trim().toUpperCase();
   const agentLabel = prefill.customer?.name?.trim() || row.customer?.trim() || agentCode;
 
+  const prefillKey = `${row.id}|${prefill.vehicleInput}|${prefill.driverName}|${prefill.driverId}|${vehicleForEcargo}|${driverNameForEcargo ?? ""}|${prefill.appliedFromDefault}`;
+
   useLayoutEffect(() => {
-    if (syncedShipmentRef.current === row.id) return;
-    syncedShipmentRef.current = row.id;
+    if (lastPrefillKeyRef.current === prefillKey) return;
+    lastPrefillKeyRef.current = prefillKey;
     setVehicleInput(prefill.vehicleInput);
     setDriverName(prefill.driverName);
     setDriverId(prefill.driverId);
-    if (prefill.vehicleInput && !vehicleForEcargo.trim()) {
+    const shouldPersist =
+      prefill.vehicleInput.length >= ECARGO_VEHICLE_MIN &&
+      (!vehicleForEcargo.trim() || prefill.appliedFromDefault);
+    if (shouldPersist) {
       onVehicleChange(prefill.vehicleInput);
-      onDriverChange(prefill.driverName, prefill.driverId);
+      if (prefill.driverName.trim() || prefill.driverId.trim()) {
+        onDriverChange(prefill.driverName, prefill.driverId);
+      }
     }
-  }, [onDriverChange, onVehicleChange, prefill, row.id, vehicleForEcargo]);
+  }, [
+    driverNameForEcargo,
+    onDriverChange,
+    onVehicleChange,
+    prefill,
+    prefillKey,
+    row.id,
+    vehicleForEcargo,
+  ]);
 
   const pasteDate = useMemo(() => {
     const fromRow = (row.flightDate ?? "").trim();
@@ -360,6 +443,14 @@ function EcargoKhoScscModalBody({
           Chưa khớp hồ sơ khách — thêm mã «{row.customerCode || row.customer || "?"}» trong Danh bạ khách để lưu xe mặc định.
         </p>
       )}
+
+      {prefill.appliedFromDefault && prefill.defaultVehicle ? (
+        <p className="rounded-xl bg-emerald-500/12 px-3 py-2 text-[12px] font-medium text-emerald-900 ring-1 ring-emerald-500/20 dark:bg-emerald-400/12 dark:text-emerald-100 dark:ring-emerald-400/25">
+          Đã lấy xe mặc định từ khách{" "}
+          <span className="font-semibold">{prefill.customer?.code || agentCode}</span>:{" "}
+          {vehicleDisplayLabel(prefill.defaultVehicle)}
+        </p>
+      ) : null}
 
       <EcargoVehiclePicker
         vehicles={prefill.vehicles}
@@ -532,6 +623,8 @@ export function EcargoKhoScscCenterModal({
   row,
   customerDirectory = [],
   vehicleForEcargo,
+  driverNameForEcargo = "",
+  driverIdForEcargo = "",
   viewSessionYmd,
   saveStatus,
   job,
@@ -547,6 +640,8 @@ export function EcargoKhoScscCenterModal({
   row: Shipment;
   customerDirectory?: readonly CustomerDirectoryEntry[];
   vehicleForEcargo: string;
+  driverNameForEcargo?: string;
+  driverIdForEcargo?: string;
   viewSessionYmd: string;
   saveStatus: EcargoSaveStatus;
   job?: EcargoJobRecord;
@@ -626,6 +721,8 @@ export function EcargoKhoScscCenterModal({
             row={row}
             customerDirectory={customerDirectory}
             vehicleForEcargo={vehicleForEcargo}
+            driverNameForEcargo={driverNameForEcargo}
+            driverIdForEcargo={driverIdForEcargo}
             viewSessionYmd={viewSessionYmd}
             saveStatus={saveStatus}
             job={job}

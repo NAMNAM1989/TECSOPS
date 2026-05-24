@@ -20,6 +20,7 @@ import {
   type ScscPrintProfileChoice,
 } from "./scscPrintPickerState";
 import type { ScscPrintPickSection } from "./scscPrintProfilePick";
+import { OPS } from "../styles/opsModalStyles";
 
 export type { ScscPrintProfileChoice };
 
@@ -52,15 +53,15 @@ function PickSection(props: {
   const { title, name, useBooking, onUseBooking, bookingLabel, items, selectedId, onSelect } = props;
   return (
     <section>
-      <p className="mb-2 px-1 text-[10px] font-semibold uppercase text-apple-tertiary">{title}</p>
-      <label className="mb-2 flex cursor-pointer items-start gap-2 rounded-xl border border-apple-blue/20 bg-apple-blue/5 px-3 py-2">
+      <p className={`mb-2 px-1 text-[10px] font-semibold uppercase ${OPS.muted}`}>{title}</p>
+      <label className={OPS.pickPrimary}>
         <input type="radio" name={name} checked={useBooking} onChange={onUseBooking} />
-        <span className="text-xs text-apple-label">{bookingLabel}</span>
+        <span className={`text-xs ${OPS.title}`}>{bookingLabel}</span>
       </label>
       {items.map((item) => (
         <label
           key={item.id}
-          className="mb-1.5 flex cursor-pointer items-start gap-2 rounded-xl border border-black/[0.06] px-3 py-2 hover:bg-apple-bg/60"
+          className={OPS.pickItem}
         >
           <input
             type="radio"
@@ -68,7 +69,7 @@ function PickSection(props: {
             checked={!useBooking && selectedId === item.id}
             onChange={() => onSelect(item.id)}
           />
-          <span className="block text-sm font-semibold text-apple-label">{item.title}</span>
+          <span className={`block text-sm font-semibold ${OPS.title}`}>{item.title}</span>
         </label>
       ))}
     </section>
@@ -177,13 +178,13 @@ function PrintProfilePickerOverlay(props: {
       role="dialog"
       aria-modal="true"
     >
-      <div className="flex max-h-[96vh] w-full max-w-7xl flex-col overflow-hidden rounded-[24px] border border-black/[0.08] bg-white shadow-apple-md">
-        <div className="border-b border-black/[0.06] px-5 py-4">
-          <h2 className="text-[17px] font-semibold text-apple-label">In phiếu cân — chọn hồ sơ in</h2>
-          <p className="mt-1 text-xs text-apple-secondary">{headerSub}</p>
+      <div className={`flex max-h-[96vh] w-full max-w-7xl flex-col overflow-hidden rounded-[24px] border shadow-apple-md ${OPS.modal} ${OPS.border}`}>
+        <div className={`border-b px-5 py-4 ${OPS.border}`}>
+          <h2 className={`text-[17px] font-semibold ${OPS.title}`}>In phiếu cân — chọn hồ sơ in</h2>
+          <p className={`mt-1 text-xs ${OPS.secondary}`}>{headerSub}</p>
         </div>
         <div className="flex min-h-0 flex-1 flex-col lg:min-h-[min(78vh,700px)] lg:flex-row">
-          <div className="min-h-0 shrink-0 space-y-4 overflow-y-auto border-b border-black/[0.06] p-3 lg:w-80 lg:max-w-[22rem] lg:border-b-0 lg:border-r">
+          <div className={`min-h-0 shrink-0 space-y-4 overflow-y-auto border-b p-3 lg:w-80 lg:max-w-[22rem] lg:border-b-0 lg:border-r ${OPS.border}`}>
             <ScscWeighSenderSettings
               compact
               settings={senderSettings}
@@ -276,7 +277,7 @@ function PrintProfilePickerOverlay(props: {
             <ScscWeighPickerPreview formData={previewFormData} scscWeighPrintSettings={senderSettings} />
           </div>
         </div>
-        <div className="flex gap-2 border-t border-black/[0.06] px-4 py-3">
+        <div className={`flex gap-2 border-t px-4 py-3 ${OPS.footer}`}>
           <button
             type="button"
             onClick={() => onConfirm(pickerState)}
@@ -287,7 +288,7 @@ function PrintProfilePickerOverlay(props: {
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-full border border-black/[0.12] px-5 py-2.5 text-sm font-semibold text-apple-label"
+            className={`rounded-full border px-5 py-2.5 text-sm font-semibold ${OPS.tabIdle}`}
           >
             Hủy
           </button>

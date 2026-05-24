@@ -23,6 +23,7 @@ import {
 } from "./EcargoKhoScscModal";
 import type { EcargoAutoRegisterOpts } from "./DesktopShipmentTable";
 import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
+import { resolveEcargoVehiclePrefill, vehicleDisplayLabel } from "../utils/customerVehicleCore";
 import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStorage";
 import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
 import type { EcargoJobRecord } from "../types/ecargoJob";
@@ -39,6 +40,8 @@ type Props = {
   globalAgents?: GlobalAgentCatalog;
   ecargoMap?: EcargoKhoScscPersistedMap;
   onEcargoVehicleChange?: (id: string, raw: string) => void;
+  onEcargoDriverChange?: (id: string, driverName: string, driverId: string) => void;
+  onApplyEcargoPrefill?: (row: Shipment) => void;
   getEcargoSaveStatus?: (id: string) => EcargoSaveStatus;
   getEcargoJob?: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob?: (id: string) => void | Promise<void>;
@@ -67,6 +70,8 @@ export function MobileShipmentEditSheet({
   globalAgents,
   ecargoMap = {},
   onEcargoVehicleChange,
+  onEcargoDriverChange,
+  onApplyEcargoPrefill,
   getEcargoSaveStatus,
   getEcargoJob,
   refreshEcargoJob,
@@ -151,8 +156,14 @@ export function MobileShipmentEditSheet({
   const savedGoods = entry?.savedGoods ?? [];
   const agentOptions = globalAgents?.agents ?? [];
   const showEcargo = isScscWarehouse(shipment.warehouse);
-  const vehicleForEcargo = ecargoMap[shipment.id]?.vehicleInput ?? "";
   const ecargoLine = ecargoMap[shipment.id];
+  const vehicleForEcargo = ecargoLine?.vehicleInput ?? "";
+  const ecargoPrefill = resolveEcargoVehiclePrefill(shipment, customerDirectory, vehicleForEcargo, {
+    driverName: ecargoLine?.driverName,
+    driverId: ecargoLine?.driverId,
+  });
+  const effectiveEcargoVehicle = vehicleForEcargo.trim() || ecargoPrefill.vehicleInput;
+  const ecargoReady = effectiveEcargoVehicle.trim().length >= ECARGO_VEHICLE_MIN;
   const ecargoJob = getEcargoJob?.(shipment.id);
 
   const handleSave = () => {
@@ -449,9 +460,18 @@ export function MobileShipmentEditSheet({
                       <EcargoKhoScscTriggerButton
                         rowId={shipment.id}
                         open={ecargoOpen}
-                        hasVehicle={vehicleForEcargo.trim().length >= ECARGO_VEHICLE_MIN}
+                        hasVehicle={ecargoReady}
                         job={ecargoJob}
-                        onClick={() => setEcargoOpen((v) => !v)}
+                        onClick={() => {
+                          const opening = !ecargoOpen;
+                          setEcargoOpen((v) => !v);
+                          if (opening) onApplyEcargoPrefill?.(shipment);
+                        }}
+                        title={
+                          ecargoPrefill.defaultVehicle
+                            ? `Xe mặc định: ${vehicleDisplayLabel(ecargoPrefill.defaultVehicle)}`
+                            : undefined
+                        }
                       />
                     </div>
                     {(ecargoLine || ecargoJob) ? (
@@ -498,12 +518,15 @@ export function MobileShipmentEditSheet({
           row={shipment}
           customerDirectory={customerDirectory}
           vehicleForEcargo={vehicleForEcargo}
+          driverNameForEcargo={ecargoLine?.driverName ?? ""}
+          driverIdForEcargo={ecargoLine?.driverId ?? ""}
           viewSessionYmd={sessionDateYmd}
           saveStatus={getEcargoSaveStatus(shipment.id)}
           job={ecargoJob}
           autoRegistering={isEcargoAutoRegistering?.(shipment.id) ?? false}
           onClose={() => setEcargoOpen(false)}
           onVehicleChange={(raw) => onEcargoVehicleChange(shipment.id, raw)}
+          onDriverChange={(name, id) => onEcargoDriverChange?.(shipment.id, name, id)}
           onAutoRegister={async (opts) => {
             await onEcargoAutoRegister(shipment, opts);
           }}

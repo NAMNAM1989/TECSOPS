@@ -209,6 +209,9 @@ export function useShipmentSync(fallback: Fallback) {
       }
       setState((prev) => pickNewerState(prev, next));
       saveRows(next.rows);
+      if (mutation.action === "SET_CUSTOMERS") {
+        saveCustomerDirectoryToStorage(next.customers);
+      }
       return next;
     } catch (e) {
       if (rollbackRef.current) {

@@ -5,6 +5,7 @@ import {
   filterCustomerVehicles,
   getDefaultCustomerVehicle,
   isCustomerVehicleDefault,
+  computeEcargoSeedFromCustomer,
   resolveEcargoVehiclePrefill,
   upsertCustomerVehicleInDirectory,
 } from "./customerVehicleCore";
@@ -47,6 +48,7 @@ describe("resolveEcargoVehiclePrefill", () => {
     const r = resolveEcargoVehiclePrefill(row as never, [baseCustomer()], "");
     expect(r.vehicleInput).toBe("50H17480");
     expect(r.driverName).toBe("Nguyen A");
+    expect(r.appliedFromDefault).toBe(true);
   });
 
   it("keeps saved shipment vehicle over default", () => {
@@ -54,6 +56,25 @@ describe("resolveEcargoVehiclePrefill", () => {
     const r = resolveEcargoVehiclePrefill(row as never, [baseCustomer()], "51G99999");
     expect(r.vehicleInput).toBe("51G99999");
     expect(r.driverName).toBe("Tran B");
+  });
+});
+
+describe("computeEcargoSeedFromCustomer", () => {
+  it("seeds vehicle and driver from customer default", () => {
+    const row = { id: "s1", customerCode: "CYL", customer: "CYL Agent", customerId: "c1" } as const;
+    const { patch, prefill } = computeEcargoSeedFromCustomer(row as never, [baseCustomer()], {});
+    expect(patch?.vehicleInput).toBe("50H17480");
+    expect(patch?.driverName).toBe("Nguyen A");
+    expect(prefill.appliedFromDefault).toBe(true);
+  });
+
+  it("does not overwrite saved vehicle", () => {
+    const row = { id: "s1", customerCode: "CYL", customer: "CYL Agent", customerId: "c1" } as const;
+    const { patch } = computeEcargoSeedFromCustomer(row as never, [baseCustomer()], {
+      vehicleInput: "51G99999",
+      driverName: "Tran B",
+    });
+    expect(patch).toBeNull();
   });
 });
 

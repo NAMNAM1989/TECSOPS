@@ -8,6 +8,7 @@ import {
   DEFAULT_AIRLINE_BY_AWB_PREFIX,
   DEFAULT_AIRLINE_BY_FLIGHT_PREFIX,
 } from "../constants/airlineLabelDefaults";
+import { OPS, opsInput } from "../styles/opsModalStyles";
 
 type Props = {
   open: boolean;
@@ -100,22 +101,22 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
       aria-modal="true"
       aria-labelledby="airline-label-settings-title"
     >
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-[28px] border border-black/[0.08] bg-white shadow-apple-md">
-        <div className="flex items-start justify-between border-b border-black/[0.06] px-5 py-4">
+      <div className={`max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-[28px] border shadow-apple-md ${OPS.modal} ${OPS.border}`}>
+        <div className={`flex items-start justify-between border-b px-5 py-4 ${OPS.border}`}>
           <div>
-            <h2 id="airline-label-settings-title" className="text-[19px] font-semibold tracking-tight text-apple-label">
+            <h2 id="airline-label-settings-title" className={`text-[19px] font-semibold tracking-tight ${OPS.title}`}>
               Tên hãng trên tem nhãn
             </h2>
-            <p className="mt-1 text-xs leading-relaxed text-apple-secondary">
+            <p className={`mt-1 text-xs leading-relaxed ${OPS.secondary}`}>
               Danh sách đầy đủ theo bảng hệ thống ({defaultAwbCount} mã AWB + {defaultFltCount} prefix chuyến) và mọi hãng bạn đã thêm.
-              Sửa tên hoặc thêm dòng mới; <span className="font-semibold text-apple-label">Lưu</span> chỉ ghi các thay đổi so với mặc
+              Sửa tên hoặc thêm dòng mới; <span className={`font-semibold ${OPS.title}`}>Lưu</span> chỉ ghi các thay đổi so với mặc
               định. Xóa một dòng có sẵn trong bảng gốc = quay lại tên mặc định khi in.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-apple-tertiary hover:bg-black/[0.05] hover:text-apple-label"
+            className={`rounded-full p-2 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] ${OPS.muted}`}
             aria-label="Đóng"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,13 +128,13 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
         <div className="max-h-[min(70vh,560px)] space-y-5 overflow-y-auto px-5 py-4">
           <section>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-[11px] font-bold uppercase tracking-wide text-apple-secondary">
+              <h3 className={`text-[11px] font-bold uppercase tracking-wide ${OPS.secondary}`}>
                 Theo 3 số đầu AWB ({awbRows.length} dòng)
               </h3>
               <button
                 type="button"
                 onClick={() => setAwbRows((r) => [...r, { id: `new:${newId()}`, key: "", name: "" }])}
-                className="rounded-full border border-black/[0.1] bg-white px-2.5 py-1 text-[10px] font-semibold text-apple-blue hover:bg-apple-blue/10"
+                className={OPS.btnSmallAccent}
               >
                 + Thêm mã AWB
               </button>
@@ -151,7 +152,7 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
                       const d = e.target.value.replace(/\D/g, "").slice(0, 3);
                       setAwbRows((rows) => rows.map((x, i) => (i === idx ? { ...x, key: d } : x)));
                     }}
-                    className="w-16 rounded-xl border border-black/[0.1] bg-white px-2 py-2 text-center font-mono text-sm font-semibold text-apple-label"
+                    className={`w-16 text-center font-mono text-sm font-semibold ${opsInput}`}
                   />
                   <input
                     type="text"
@@ -162,12 +163,12 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
                       const t = e.target.value;
                       setAwbRows((rows) => rows.map((x, i) => (i === idx ? { ...x, name: t } : x)));
                     }}
-                    className="min-w-[12rem] flex-1 rounded-xl border border-black/[0.1] bg-white px-3 py-2 text-sm font-semibold text-apple-label"
+                    className={`min-w-[12rem] flex-1 text-sm font-semibold ${OPS.inputLg}`}
                   />
                   <button
                     type="button"
                     onClick={() => setAwbRows((rows) => rows.filter((_, i) => i !== idx))}
-                    className="rounded-full px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
+                    className="rounded-full px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/15"
                   >
                     Xóa
                   </button>
@@ -178,13 +179,13 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
 
           <section>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-[11px] font-bold uppercase tracking-wide text-apple-secondary">
+              <h3 className={`text-[11px] font-bold uppercase tracking-wide ${OPS.secondary}`}>
                 Theo prefix chuyến ({flightRows.length} dòng)
               </h3>
               <button
                 type="button"
                 onClick={() => setFlightRows((r) => [...r, { id: `new:${newId()}`, key: "", name: "" }])}
-                className="rounded-full border border-black/[0.1] bg-white px-2.5 py-1 text-[10px] font-semibold text-apple-blue hover:bg-apple-blue/10"
+                className={OPS.btnSmallAccent}
               >
                 + Thêm prefix
               </button>
@@ -201,7 +202,7 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
                       const k = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
                       setFlightRows((rows) => rows.map((x, i) => (i === idx ? { ...x, key: k } : x)));
                     }}
-                    className="w-16 rounded-xl border border-black/[0.1] bg-white px-2 py-2 text-center font-mono text-sm font-semibold text-apple-label uppercase"
+                    className={`w-16 text-center font-mono text-sm font-semibold uppercase ${opsInput}`}
                   />
                   <input
                     type="text"
@@ -212,12 +213,12 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
                       const t = e.target.value;
                       setFlightRows((rows) => rows.map((x, i) => (i === idx ? { ...x, name: t } : x)));
                     }}
-                    className="min-w-[12rem] flex-1 rounded-xl border border-black/[0.1] bg-white px-3 py-2 text-sm font-semibold text-apple-label"
+                    className={`min-w-[12rem] flex-1 text-sm font-semibold ${OPS.inputLg}`}
                   />
                   <button
                     type="button"
                     onClick={() => setFlightRows((rows) => rows.filter((_, i) => i !== idx))}
-                    className="rounded-full px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
+                    className="rounded-full px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/15"
                   >
                     Xóa
                   </button>
@@ -227,12 +228,12 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
           </section>
         </div>
 
-        <div className="flex flex-col gap-2 border-t border-black/[0.06] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className={`flex flex-col gap-2 border-t px-5 py-4 sm:flex-row sm:items-center sm:justify-between ${OPS.border}`}>
           <button
             type="button"
             onClick={resetToFactoryDefaults}
             disabled={saving}
-            className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+            className={`disabled:opacity-50 ${OPS.btnResetAmber}`}
           >
             Khôi phục bảng gốc (hủy mọi ghi đè)
           </button>
@@ -241,7 +242,7 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="rounded-full border border-black/[0.12] bg-white px-5 py-2.5 text-sm font-semibold text-apple-label hover:bg-black/[0.03] disabled:opacity-50"
+              className={`rounded-full border px-5 py-2.5 text-sm font-semibold disabled:opacity-50 ${OPS.tabIdle}`}
             >
               Hủy
             </button>

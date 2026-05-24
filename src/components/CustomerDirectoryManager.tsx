@@ -6,24 +6,40 @@ import type { GlobalAgentCatalog } from "../types/globalAgents";
 import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
 import { GlobalAgentsSettings } from "./GlobalAgentsSettings";
 import { ScscWeighSenderSettings } from "./ScscWeighSenderSettings";
-import { CustomerPrintProfileTabs } from "./customerDirectory/CustomerPrintProfileTabs";
+import { CustomerSavedProfilesEditor } from "./customerDirectory/CustomerSavedProfilesEditor";
 import { CustomerProfileStickyActionBar } from "./customerDirectory/CustomerProfileStickyActionBar";
 import { CustomerDeleteConfirmModal } from "./customerDirectory/CustomerDeleteConfirmModal";
 import { clampGlobalAgentCatalog, defaultGlobalAgentCatalog } from "../utils/globalAgentsCore";
 import {
   clampCustomerDirectoryEntry,
-  emptyCustomerProfileRow,
   emptyCustomerSavedConsignee,
   emptyCustomerSavedGoods,
   emptyCustomerSavedShipper,
   emptyCustomerSavedVehicle,
 } from "../utils/customerDirectoryProfile";
 import {
+  ensureCustomerEditScaffold,
+  scaffoldNewCustomer,
+  withNewDefault,
+} from "../utils/customerDirectoryScaffold";
+import {
   clampScscWeighPrintSettings,
   defaultScscWeighPrintSettings,
 } from "../printing/scscWeigh/scscWeighPrintSettingsCore";
 import { ScscPrintTemplateEditor } from "../printing/components/ScscPrintTemplateEditor";
 import { normalizeAgentCode } from "../utils/customerProfileInputFormat";
+import { normalizeCustomerNameInput, customerNameWhileTyping } from "../utils/customerShipmentPatch";
+import { UnmatchedCustomerReportModal } from "./UnmatchedCustomerReportModal";
+import type { UnmatchedCustomerRow } from "../utils/fetchAppStateRows";
+import { CD } from "./customerDirectory/customerDirectoryStyles";
+
+type MainTab = "profiles" | "agents" | "print-layout";
+
+const MAIN_SECTIONS: { id: MainTab; label: string; hint: string }[] = [
+  { id: "profiles", label: "Danh sách khách", hint: "Mã, tên, hồ sơ in" },
+  { id: "agents", label: "Agent & SCSC", hint: "Agent toàn cục, người gửi in phiếu" },
+  { id: "print-layout", label: "Mẫu in phiếu", hint: "Tọa độ mm phiếu cân SCSC" },
+];
 
 type Props = {
   open: boolean;
@@ -36,6 +52,10 @@ type Props = {
     globalAgents: GlobalAgentCatalog;
     scscWeighPrintSettings?: ScscWeighPrintSettings;
   }) => Promise<void>;
+  /** Áp dụng gợi ý map customer_id cho lô trên dashboard. */
+  onApplyUnmatchedShipments?: (
+    rows: UnmatchedCustomerRow[]
+  ) => Promise<{ updated: number; failed: number }>;
 };
 
 function newId(prefix: string): string {
@@ -52,16 +72,18 @@ export function CustomerDirectoryManager({
   scscWeighPrintSettingsInitial,
   onClose,
   onSave,
+  onApplyUnmatchedShipments,
 }: Props) {
   const [draft, setDraft] = useState<CustomerDirectoryEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
-  const [mainTab, setMainTab] = useState<"profiles" | "agents" | "print-layout">("profiles");
+  const [mainTab, setMainTab] = useState<MainTab>("profiles");
   const [globalAgentsDraft, setGlobalAgentsDraft] = useState<GlobalAgentCatalog>(defaultGlobalAgentCatalog());
   const [senderDraft, setSenderDraft] = useState<ScscWeighPrintSettings>(defaultScscWeighPrintSettings());
   const [templateEditorOpen, setTemplateEditorOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [unmatchedOpen, setUnmatchedOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -81,6 +103,11 @@ export function CustomerDirectoryManager({
     if (!needle) return draft;
     return draft.filter((e) => e.code.toLowerCase().includes(needle) || e.name.toLowerCase().includes(needle));
   }, [draft, query]);
+
+  function selectCustomer(id: string) {
+    setSelectedId(id);
+    setDraft((rows) => rows.map((row) => (row.id === id ? ensureCustomerEditScaffold(row) : row)));
+  }
 
   function updateCustomer(
     id: string,
@@ -145,7 +172,9 @@ export function CustomerDirectoryManager({
     setDraft((rows) =>
       rows.map((row) => {
         if (row.id !== customerId) return row;
-        return { ...row, savedShippers: [...(row.savedShippers ?? []), emptyCustomerSavedShipper()] };
+        const shipper = emptyCustomerSavedShipper();
+        const { list, defaultId } = withNewDefault(row.savedShippers ?? [], shipper, row.defaultShipperId);
+        return { ...row, savedShippers: list, defaultShipperId: defaultId };
       })
     );
   }
@@ -179,7 +208,9 @@ export function CustomerDirectoryManager({
     setDraft((rows) =>
       rows.map((row) => {
         if (row.id !== customerId) return row;
-        return { ...row, savedGoods: [...(row.savedGoods ?? []), emptyCustomerSavedGoods()] };
+        const item = emptyCustomerSavedGoods();
+        const { list, defaultId } = withNewDefault(row.savedGoods ?? [], item, row.defaultGoodsId);
+        return { ...row, savedGoods: list, defaultGoodsId: defaultId };
       })
     );
   }
@@ -188,8 +219,9 @@ export function CustomerDirectoryManager({
     setDraft((rows) =>
       rows.map((row) => {
         if (row.id !== customerId) return row;
-        const list = [...(row.savedConsignees ?? []), emptyCustomerSavedConsignee()];
-        return { ...row, savedConsignees: list };
+        const item = emptyCustomerSavedConsignee();
+        const { list, defaultId } = withNewDefault(row.savedConsignees ?? [], item, row.defaultConsigneeId);
+        return { ...row, savedConsignees: list, defaultConsigneeId: defaultId };
       })
     );
   }
@@ -224,13 +256,15 @@ export function CustomerDirectoryManager({
     setDraft((rows) =>
       rows.map((row) => {
         if (row.id !== customerId) return row;
-        return { ...row, savedVehicles: [...(row.savedVehicles ?? []), emptyCustomerSavedVehicle()] };
+        const item = emptyCustomerSavedVehicle();
+        const { list, defaultId } = withNewDefault(row.savedVehicles ?? [], item, row.defaultVehicleId);
+        return { ...row, savedVehicles: list, defaultVehicleId: defaultId };
       })
     );
   }
 
   function addCustomer() {
-    const row = emptyCustomerProfileRow(newId("customer"));
+    const row = scaffoldNewCustomer(newId("customer"));
     setDraft((rows) => [...rows, row]);
     setSelectedId(row.id);
   }
@@ -280,91 +314,132 @@ export function CustomerDirectoryManager({
 
   if (!open) return null;
 
+  const mainTitle =
+    mainTab === "agents"
+      ? "Agent & người gửi SCSC"
+      : mainTab === "print-layout"
+        ? "Mẫu in phiếu cân"
+        : selected
+          ? selected.name || "Khách mới"
+          : "Chọn khách hàng";
+
+  const mainSubtitle = MAIN_SECTIONS.find((s) => s.id === mainTab)?.hint ?? "";
+
   return (
     <div
-      className="fixed inset-0 z-[60] flex bg-black/25 p-1 backdrop-blur-sm sm:p-2"
+      className="fixed inset-0 z-[60] flex bg-black/25 p-1 backdrop-blur-sm dark:bg-black/45 sm:p-2"
       role="dialog"
       aria-modal="true"
       aria-labelledby="customer-manager-title"
     >
-      <div className="mx-auto flex h-full w-full max-w-7xl overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-apple-md">
-        <aside className="flex w-[min(100%,15rem)] shrink-0 flex-col border-r border-black/[0.08] bg-apple-bg/80 sm:w-56">
-          <div className="border-b border-black/[0.06] px-2.5 py-2">
-            <h2 id="customer-manager-title" className="text-sm font-semibold tracking-tight text-apple-label">
-              Khách hàng
+      <div className={`mx-auto flex h-full w-full max-w-7xl overflow-hidden rounded-2xl border shadow-apple-md dark:border-white/10 ${CD.modal}`}>
+        <aside className={`flex w-[min(100%,16rem)] shrink-0 flex-col border-r sm:w-60 ${CD.aside}`}>
+          <div className={`border-b px-2.5 py-2.5 ${CD.border}`}>
+            <h2 id="customer-manager-title" className={`text-sm font-semibold tracking-tight ${CD.title}`}>
+              Khách hàng & Cài đặt
             </h2>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Tìm mã / tên…"
-              className="mt-1.5 w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-xs font-medium text-apple-label outline-none focus:border-apple-blue/40 focus:ring-1 focus:ring-apple-blue/20"
-            />
-            <button
-              type="button"
-              onClick={addCustomer}
-              className="mt-1.5 w-full rounded-lg bg-apple-blue px-2 py-1.5 text-xs font-semibold text-white hover:bg-apple-blue-hover"
-            >
-              + Thêm khách
-            </button>
+            <p className={`mt-0.5 text-[10px] leading-snug ${CD.muted}`}>
+              Hồ sơ in, agent, mẫu phiếu cân
+            </p>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
-            {filtered.map((customer) => (
+          <nav className="space-y-0.5 p-1.5" aria-label="Khu vực cài đặt">
+            {MAIN_SECTIONS.map((section) => (
               <button
-                key={customer.id}
+                key={section.id}
                 type="button"
-                onClick={() => setSelectedId(customer.id)}
-                className={`mb-0.5 w-full rounded-lg px-2 py-1.5 text-left transition ${
-                  selectedId === customer.id
-                    ? "bg-white text-apple-label shadow-sm ring-1 ring-apple-blue/25"
-                    : "text-apple-secondary hover:bg-white/80"
+                onClick={() => setMainTab(section.id)}
+                className={`w-full rounded-lg px-2.5 py-2 text-left transition ${
+                  mainTab === section.id ? CD.navActive : CD.navIdle
                 }`}
               >
-                <span className="block truncate text-xs font-semibold">{customer.name || "Chưa đặt tên"}</span>
-                <span className="mt-0.5 block truncate font-mono text-[10px] uppercase text-apple-tertiary">
-                  {customer.code || "—"} · S{customer.savedShippers?.length ?? 0} · C
-                  {customer.savedConsignees?.length ?? 0} · V{customer.savedVehicles?.length ?? 0}
+                <span className={`block text-xs font-semibold ${CD.title}`}>
+                  {section.label}
+                </span>
+                <span className={`mt-0.5 block text-[10px] leading-snug ${CD.muted}`}>
+                  {section.hint}
                 </span>
               </button>
             ))}
-            {filtered.length === 0 ? (
-              <p className="px-2 py-4 text-center text-xs text-apple-tertiary">Không tìm thấy.</p>
-            ) : null}
-          </div>
+          </nav>
+
+          {mainTab === "profiles" ? (
+            <>
+              <div className={`border-t px-2.5 py-2 ${CD.border}`}>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Tìm mã / tên…"
+                  className={`w-full text-xs font-medium ${CD.input}`}
+                />
+                <button
+                  type="button"
+                  onClick={addCustomer}
+                  className="mt-1.5 w-full rounded-lg bg-apple-blue px-2 py-1.5 text-xs font-semibold text-white hover:bg-apple-blue-hover"
+                >
+                  + Thêm khách
+                </button>
+                {onApplyUnmatchedShipments ? (
+                  <button
+                    type="button"
+                    onClick={() => setUnmatchedOpen(true)}
+                    className="mt-1.5 w-full rounded-lg border border-amber-300/60 bg-amber-50 px-2 py-1.5 text-[10px] font-semibold text-amber-950 hover:bg-amber-100 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-200"
+                  >
+                    Lô chưa map khách…
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+                {filtered.map((customer) => (
+                  <button
+                    key={customer.id}
+                    type="button"
+                    onClick={() => selectCustomer(customer.id)}
+                    className={`mb-0.5 w-full rounded-lg px-2 py-1.5 text-left transition ${
+                      selectedId === customer.id ? CD.listActive : CD.listIdle
+                    }`}
+                  >
+                    <span className={`block truncate text-xs font-semibold ${CD.title}`}>
+                      {normalizeCustomerNameInput(customer.name) || "Chưa đặt tên"}
+                    </span>
+                    <span className={`mt-0.5 block truncate font-mono text-[10px] uppercase ${CD.muted}`}>
+                      {customer.code || "—"}
+                    </span>
+                  </button>
+                ))}
+                {filtered.length === 0 ? (
+                  <p className={`px-2 py-4 text-center text-xs ${CD.muted}`}>
+                    Không tìm thấy.
+                  </p>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <p className={`border-t px-3 py-4 text-[10px] leading-snug ${CD.border} ${CD.muted}`}>
+              Chọn mục bên trên để chỉnh cài đặt chung — không gắn với từng khách.
+            </p>
+          )}
         </aside>
 
-        <main className="relative flex min-w-0 flex-1 flex-col">
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-black/[0.06] px-3 py-2">
+        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className={`flex shrink-0 items-start justify-between gap-3 border-b px-3 py-2.5 ${CD.border}`}>
             <div className="min-w-0">
-              <h3 className="truncate text-base font-semibold text-apple-label">
-                {selected ? selected.name || "Khách mới" : "Chi tiết hồ sơ"}
+              <p className={`text-[10px] font-semibold uppercase tracking-wide ${CD.muted}`}>
+                {MAIN_SECTIONS.find((s) => s.id === mainTab)?.label}
+              </p>
+              <h3 className={`truncate text-base font-semibold ${CD.title}`}>
+                {mainTitle}
               </h3>
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-1">
-              {(
-                [
-                  ["profiles", "Hồ sơ KH"],
-                  ["agents", "Agent"],
-                  ["print-layout", "Mẫu in"],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setMainTab(id)}
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
-                    mainTab === id ? "bg-apple-label text-white" : "border border-black/[0.1] bg-white"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+              {mainSubtitle ? (
+                <p className={`mt-0.5 text-[11px] ${CD.secondary}`}>{mainSubtitle}</p>
+              ) : null}
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-lg p-1.5 text-apple-tertiary hover:bg-black/[0.05]"
+              className={`shrink-0 rounded-lg p-1.5 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] ${CD.muted}`}
               aria-label="Đóng"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -373,47 +448,56 @@ export function CustomerDirectoryManager({
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 pb-1">
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
             {mainTab === "print-layout" ? (
-              <div className="space-y-3 py-1">
-                <p className="text-xs text-apple-secondary">
-                  Chỉnh tọa độ mm phiếu cân SCSC — lưu Postgres, in PDF server.
+              <div className="mx-auto max-w-xl space-y-3 py-2">
+                <p className={`text-xs leading-relaxed ${CD.secondary}`}>
+                  Chỉnh tọa độ mm phiếu cân SCSC — lưu trên máy chủ, dùng khi in PDF.
                 </p>
                 <button
                   type="button"
                   onClick={() => setTemplateEditorOpen(true)}
-                  className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white"
+                  className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
                 >
                   Mở editor kéo thả
                 </button>
               </div>
             ) : mainTab === "agents" ? (
-              <div className="space-y-3 py-1">
+              <div className="mx-auto max-w-3xl space-y-4 py-1">
                 <GlobalAgentsSettings catalog={globalAgentsDraft} onChange={setGlobalAgentsDraft} />
                 <ScscWeighSenderSettings settings={senderDraft} onChange={setSenderDraft} />
               </div>
             ) : selected ? (
-              <div className="space-y-3">
-                <section className="rounded-lg border border-black/[0.08] bg-apple-bg/30 px-2.5 py-2">
+              <div className="mx-auto max-w-4xl space-y-3">
+                <section className={`rounded-lg px-2.5 py-2 ${CD.panelSoft}`}>
+                  <p className={`mb-1.5 text-[10px] font-semibold uppercase ${CD.muted}`}>
+                    Mã & tên khách
+                  </p>
+                  <p className={`mb-2 text-[10px] leading-snug ${CD.muted}`}>
+                    Mã map lô · tên hiển thị trên dashboard.
+                  </p>
                   <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
                     <input
                       value={selected.code}
                       onChange={(e) => updateCustomer(selected.id, { code: e.target.value.toUpperCase() })}
                       onBlur={(e) => updateCustomer(selected.id, { code: normalizeAgentCode(e.target.value) })}
-                      className="w-full rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 font-mono text-xs font-bold uppercase text-apple-label focus:border-apple-blue focus:outline-none focus:ring-1 focus:ring-apple-blue/25 sm:max-w-[7rem]"
-                      placeholder="MÃ KH"
+                      className={`w-full font-mono text-xs font-bold uppercase sm:max-w-[7rem] ${CD.input}`}
+                      placeholder="VD: ABC"
                       spellCheck={false}
                     />
                     <input
                       value={selected.name}
-                      onChange={(e) => updateCustomer(selected.id, { name: e.target.value })}
-                      className="min-w-0 flex-1 rounded-lg border border-black/[0.08] bg-white px-2.5 py-1.5 text-sm font-semibold text-apple-label focus:border-apple-blue focus:outline-none focus:ring-1 focus:ring-apple-blue/25"
-                      placeholder="Tên khách hàng"
+                      onChange={(e) => updateCustomer(selected.id, { name: customerNameWhileTyping(e.target.value) })}
+                      onBlur={() =>
+                        updateCustomer(selected.id, { name: normalizeCustomerNameInput(selected.name) })
+                      }
+                      className={`min-w-0 flex-1 text-sm font-semibold uppercase ${CD.input}`}
+                      placeholder="Tên công ty / đại lý"
                     />
                   </div>
                 </section>
 
-                <CustomerPrintProfileTabs
+                <CustomerSavedProfilesEditor
                   entry={selected}
                   onPatch={(patch) => updateCustomer(selected.id, patch)}
                   onPatchShipper={(idx, patch) => patchSavedShipper(selected.id, idx, patch)}
@@ -431,8 +515,13 @@ export function CustomerDirectoryManager({
                 />
               </div>
             ) : (
-              <div className="flex min-h-[10rem] items-center justify-center rounded-lg border border-dashed border-black/[0.1] p-6 text-center text-xs text-apple-tertiary">
-                Chọn khách bên trái hoặc thêm mới.
+              <div className={`flex min-h-[12rem] flex-col items-center justify-center gap-2 p-8 text-center ${CD.empty}`}>
+                <p className={`text-sm font-semibold ${CD.title}`}>
+                  Chưa chọn khách
+                </p>
+                <p className={`max-w-xs text-xs ${CD.muted}`}>
+                  Chọn một dòng bên trái hoặc bấm « + Thêm khách » để bắt đầu.
+                </p>
               </div>
             )}
           </div>
@@ -462,6 +551,13 @@ export function CustomerDirectoryManager({
         }}
       />
       <ScscPrintTemplateEditor open={templateEditorOpen} onClose={() => setTemplateEditorOpen(false)} />
+      {onApplyUnmatchedShipments ? (
+        <UnmatchedCustomerReportModal
+          open={unmatchedOpen}
+          onClose={() => setUnmatchedOpen(false)}
+          onApplySuggestions={onApplyUnmatchedShipments}
+        />
+      ) : null}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   NONE_GLOBAL_AGENT_ID,
 } from "../utils/globalAgentsCore";
 import { formatVnPhoneDisplay, normalizeAgentCode } from "../utils/customerProfileInputFormat";
+import { CD, cdInput } from "./customerDirectory/customerDirectoryStyles";
 
 type Props = {
   catalog: GlobalAgentCatalog;
@@ -39,17 +40,17 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
   }
 
   return (
-    <section className="mb-3 rounded-xl border border-violet-200/60 bg-violet-50/40 p-2.5">
-      <p className="mb-0.5 text-[10px] font-semibold uppercase text-violet-900">Agent chung (mọi khách)</p>
-      <p className="mb-2 text-[10px] leading-snug text-violet-900/80">
+    <section className={`mb-3 p-2.5 ${CD.sectionAgents}`}>
+      <p className={`mb-0.5 text-[10px] font-semibold uppercase ${CD.sectionAgentsTitle}`}>Agent chung (mọi khách)</p>
+      <p className={`mb-2 text-[10px] leading-snug ${CD.sectionAgentsHint}`}>
         Nhãn/mã agent tự viết HOA · SĐT tự format
       </p>
-      <label className="mb-3 block text-[10px] font-semibold text-apple-tertiary">
+      <label className={`mb-3 block text-[10px] font-semibold ${CD.muted}`}>
         Agent mặc định
         <select
           value={catalog.defaultAgentId}
           onChange={(e) => onChange({ ...catalog, defaultAgentId: e.target.value })}
-          className="mt-1 w-full rounded-xl border border-black/[0.08] bg-white px-3 py-2 text-sm font-medium text-apple-label"
+          className={`mt-1 w-full text-sm font-medium ${cdInput}`}
         >
           {catalog.agents.map((a) => (
             <option key={a.id} value={a.id}>
@@ -60,16 +61,16 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
       </label>
       <div className="space-y-2">
         {catalog.agents.map((ag, idx) => (
-          <div key={ag.id} className="rounded-xl border border-black/[0.08] bg-white p-2.5">
+          <div key={ag.id} className={`p-2.5 ${CD.card}`}>
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-[10px] font-semibold uppercase text-apple-tertiary">
+              <span className={`text-[10px] font-semibold uppercase ${CD.muted}`}>
                 {ag.isNone ? "Không agent" : `Agent #${idx + 1}`}
               </span>
               {!ag.isNone && ag.id !== NONE_GLOBAL_AGENT_ID ? (
                 <button
                   type="button"
                   onClick={() => removeAgent(idx)}
-                  className="rounded-lg px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
+                  className="rounded-lg px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/15"
                 >
                   Xóa
                 </button>
@@ -80,7 +81,7 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
               disabled={Boolean(ag.isNone)}
               onChange={(e) => patchAgent(idx, { label: e.target.value.toUpperCase() })}
               onBlur={(e) => patchAgent(idx, { label: normalizeAgentCode(e.target.value) })}
-              className="mb-1.5 w-full rounded-lg border border-black/[0.08] bg-apple-bg/40 px-2.5 py-1.5 font-mono text-xs font-bold uppercase disabled:opacity-60"
+              className={`mb-1.5 w-full font-mono text-xs font-bold uppercase disabled:opacity-60 ${cdInput} bg-apple-bg/40 dark:bg-black/25`}
               placeholder="Mã / nhãn (VD: CTL)"
             />
             {!ag.isNone ? (
@@ -88,48 +89,48 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
                 <input
                   value={ag.agentName}
                   onChange={(e) => patchAgent(idx, { agentName: e.target.value })}
-                  className="mb-1.5 w-full rounded-lg border border-black/[0.08] px-2.5 py-1.5 text-sm"
+                  className={`mb-1.5 w-full text-sm ${cdInput}`}
                   placeholder="Tên in trên phiếu cân"
                 />
                 <textarea
                   value={ag.agentAddress}
                   onChange={(e) => patchAgent(idx, { agentAddress: e.target.value })}
                   rows={2}
-                  className="mb-1.5 w-full resize-y rounded-lg border border-black/[0.08] px-2.5 py-1.5 text-sm"
+                  className={`mb-1.5 w-full resize-y text-sm ${cdInput}`}
                   placeholder="Địa chỉ — Enter để xuống dòng khi in"
                 />
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <div>
-                    <label className="mb-0.5 block text-[10px] font-semibold text-apple-tertiary">Số điện thoại</label>
+                    <label className={`mb-0.5 block text-[10px] font-semibold ${CD.muted}`}>Số điện thoại</label>
                     <input
                       type="text"
                       value={ag.agentPhone}
                       onChange={(e) => patchAgent(idx, { agentPhone: e.target.value })}
                       onBlur={(e) => patchAgent(idx, { agentPhone: formatVnPhoneDisplay(e.target.value) })}
                       maxLength={24}
-                      className="w-full rounded-lg border border-black/[0.08] px-2.5 py-1.5 text-sm tabular-nums"
+                      className={`w-full text-sm tabular-nums ${cdInput}`}
                       placeholder="SĐT"
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block text-[10px] font-semibold text-apple-tertiary">Email</label>
+                    <label className={`mb-0.5 block text-[10px] font-semibold ${CD.muted}`}>Email</label>
                     <input
                       type="email"
                       value={ag.agentEmail}
                       onChange={(e) => patchAgent(idx, { agentEmail: e.target.value })}
                       maxLength={50}
-                      className="w-full rounded-lg border border-black/[0.08] px-2.5 py-1.5 text-sm"
+                      className={`w-full text-sm ${cdInput}`}
                       placeholder="Email"
                     />
                   </div>
                   <div>
-                    <label className="mb-0.5 block text-[10px] font-semibold text-apple-tertiary">Mã số thuế</label>
+                    <label className={`mb-0.5 block text-[10px] font-semibold ${CD.muted}`}>Mã số thuế</label>
                     <input
                       type="text"
                       value={ag.agentTaxCode}
                       onChange={(e) => patchAgent(idx, { agentTaxCode: e.target.value })}
                       maxLength={24}
-                      className="w-full rounded-lg border border-black/[0.08] px-2.5 py-1.5 text-sm"
+                      className={`w-full text-sm ${cdInput}`}
                       placeholder="MST"
                     />
                   </div>
@@ -141,7 +142,7 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
         <button
           type="button"
           onClick={addAgent}
-          className="w-full rounded-full border border-dashed border-violet-400/50 py-2 text-xs font-semibold text-violet-900 hover:bg-violet-100"
+          className={`w-full rounded-full border border-dashed border-violet-400/50 py-2 text-xs font-semibold hover:bg-violet-100 ${CD.sectionVioletTitle} dark:border-violet-400/35 dark:hover:bg-violet-500/15`}
         >
           + Thêm Agent
         </button>

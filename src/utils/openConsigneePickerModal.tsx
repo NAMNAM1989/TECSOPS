@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import type { CustomerSavedConsignee } from "../types/customerDirectory";
+import { OPS } from "../styles/opsModalStyles";
 
 export type ScscConsigneePrintChoice =
   | { type: "booking" }
@@ -25,12 +26,12 @@ function ConsigneePickerOverlay(props: {
       aria-modal="true"
       aria-labelledby="cnee-pick-title"
     >
-      <div className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-[24px] border border-black/[0.08] bg-white shadow-apple-md">
-        <div className="border-b border-black/[0.06] px-5 py-4">
-          <h2 id="cnee-pick-title" className="text-[17px] font-semibold text-apple-label">
+      <div className={`max-h-[85vh] w-full max-w-md overflow-hidden rounded-[24px] border shadow-apple-md ${OPS.modal} ${OPS.border}`}>
+        <div className={`border-b px-5 py-4 ${OPS.border}`}>
+          <h2 id="cnee-pick-title" className={`text-[17px] font-semibold ${OPS.title}`}>
             In phiếu cân — chọn CNEE
           </h2>
-          <p className="mt-1 text-xs text-apple-secondary">
+          <p className={`mt-1 text-xs ${OPS.secondary}`}>
             Chọn nguồn người nhận hiển thị trên phiếu. Lựa chọn chỉ áp dụng cho lần in này (không đổi dữ liệu lô trừ khi bạn lưu ở form booking).
           </p>
         </div>
@@ -38,14 +39,14 @@ function ConsigneePickerOverlay(props: {
           <button
             type="button"
             onClick={() => onPick({ type: "booking" })}
-            className="mb-2 w-full rounded-2xl border-2 border-apple-blue/25 bg-apple-blue/5 px-4 py-3 text-left transition hover:bg-apple-blue/10 hover:ring-2 hover:ring-apple-blue/25"
+            className={`${OPS.pickHero} hover:ring-2 hover:ring-apple-blue/25 dark:hover:ring-sky-400/35`}
           >
-            <span className="block text-sm font-semibold text-apple-label">Theo ô booking + hồ sơ khách</span>
-            <span className="mt-1 block text-[11px] leading-snug text-apple-secondary">
+            <span className={`block text-sm font-semibold ${OPS.title}`}>Theo ô booking + hồ sơ khách</span>
+            <span className={`mt-1 block text-[11px] leading-snug ${OPS.secondary}`}>
               Ưu tiên đã nhập trên lô; không dùng CNEE lưu sẵn trong danh sách bên dưới. Phần còn trống lấy từ ô Consignee mặc định trên hồ sơ khách.
             </span>
           </button>
-          <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wide text-apple-tertiary">
+          <p className={`mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wide ${OPS.muted}`}>
             CNEE lưu sẵn trong danh bạ
           </p>
           {items.map((c) => (
@@ -53,20 +54,20 @@ function ConsigneePickerOverlay(props: {
               key={c.id}
               type="button"
               onClick={() => onPick({ type: "saved", id: c.id })}
-              className="mb-1.5 w-full rounded-2xl border border-black/[0.06] bg-apple-bg/50 px-4 py-3 text-left transition hover:bg-apple-blue/10 hover:ring-2 hover:ring-apple-blue/20"
+              className={`${OPS.pickSaved} hover:ring-2 hover:ring-apple-blue/20 dark:hover:ring-sky-400/30`}
             >
-              <span className="block text-sm font-semibold text-apple-label">{titleLine(c)}</span>
+              <span className={`block text-sm font-semibold ${OPS.title}`}>{titleLine(c)}</span>
               {c.consigneeAddress.trim() ? (
-                <span className="mt-1 line-clamp-2 block text-[11px] text-apple-secondary">{c.consigneeAddress.trim()}</span>
+                <span className={`mt-1 line-clamp-2 block text-[11px] ${OPS.secondary}`}>{c.consigneeAddress.trim()}</span>
               ) : null}
             </button>
           ))}
         </div>
-        <div className="flex gap-2 border-t border-black/[0.06] px-4 py-3">
+        <div className={`flex gap-2 border-t px-4 py-3 ${OPS.footer}`}>
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-full border border-black/[0.12] bg-white py-2.5 text-sm font-semibold text-apple-label hover:bg-black/[0.03]"
+            className={`flex-1 rounded-full border py-2.5 text-sm font-semibold ${OPS.tabIdle}`}
           >
             Hủy
           </button>

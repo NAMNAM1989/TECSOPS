@@ -13,6 +13,7 @@ import {
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
 import { isTcsWarehouse } from "../constants/warehouses";
+import { OPS } from "../styles/opsModalStyles";
 
 type Props = {
   row: Shipment;
@@ -42,7 +43,7 @@ function ActionIconBtn({
         e.stopPropagation();
         onClick();
       }}
-      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-black/[0.08] bg-white/80 text-apple-secondary shadow-sm transition-all hover:border-black/[0.12] hover:bg-white hover:text-apple-label active:scale-[0.96] dark:border-white/10 dark:bg-ops-elevated/80 dark:text-ops-secondary dark:hover:bg-ops-elevated dark:hover:text-ops-label"
+      className={OPS.actionIcon}
     >
       {children}
     </button>
@@ -160,8 +161,8 @@ export function ShipmentRowActionsMenu({
         setMenuOpen(false);
         onClick();
       }}
-      className={`block w-full px-2.5 py-1.5 text-left text-[11px] font-semibold hover:bg-black/[0.04] ${
-        tone === "danger" ? "text-red-700" : "text-apple-label"
+      className={`${OPS.dropdownItem} ${
+        tone === "danger" ? OPS.dropdownItemDanger : ""
       }`}
     >
       {label}
@@ -172,7 +173,7 @@ export function ShipmentRowActionsMenu({
     <div
       ref={menuRef}
       style={menuStyle ?? { position: "fixed", visibility: "hidden", right: 0, top: 0, zIndex: 450 }}
-      className="overflow-hidden rounded-lg border border-black/[0.1] bg-white py-0.5 shadow-apple-md"
+      className={OPS.dropdown}
       role="menu"
     >
       {showWeigh
@@ -190,7 +191,7 @@ export function ShipmentRowActionsMenu({
       {showTcsDim ? menuItem("In DIM TCS", () => printTcsAttachedDimsList(row)) : null}
       {showTcsDim ? menuItem("Excel TCS", () => void downloadTcsAttachedDimsExcel(row)) : null}
       {(showWeigh || showDim || showTcsDim) ? (
-        <div className="my-0.5 border-t border-black/[0.06]" aria-hidden />
+        <div className={`my-0.5 border-t ${OPS.border}`} aria-hidden />
       ) : null}
       {menuItem("Xóa lô", confirmDelete, "danger")}
     </div>
@@ -212,11 +213,7 @@ export function ShipmentRowActionsMenu({
           e.stopPropagation();
           setMenuOpen((v) => !v);
         }}
-        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border bg-white/80 shadow-sm transition-all active:scale-[0.96] dark:bg-ops-elevated/80 ${
-          menuOpen
-            ? "border-apple-blue/40 text-apple-blue dark:border-apple-blue/50"
-            : "border-black/[0.08] text-apple-secondary hover:border-black/[0.12] hover:text-apple-label dark:border-white/10 dark:text-ops-secondary dark:hover:text-ops-label"
-        }`}
+        className={`${OPS.actionIcon} ${menuOpen ? OPS.actionIconOpen : ""}`}
       >
         <IconKebabVertical />
       </button>

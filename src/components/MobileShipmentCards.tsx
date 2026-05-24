@@ -28,6 +28,7 @@ import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
 import { buildShipmentCneeDisplayLines } from "../utils/shipmentCneeCopyBlock";
 import { SelectableTextWithCopyPopover } from "./SelectableTextWithCopyPopover";
 import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStorage";
+import { OPS } from "../styles/opsModalStyles";
 import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
 import type { EcargoJobRecord } from "../types/ecargoJob";
 import {
@@ -37,6 +38,7 @@ import {
 } from "./EcargoKhoScscModal";
 import type { EcargoAutoRegisterOpts } from "./DesktopShipmentTable";
 import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
+import { resolveEcargoVehiclePrefill, vehicleDisplayLabel } from "../utils/customerVehicleCore";
 import { ecargoKhoScscLineStatusLabel } from "../utils/ecargoUiLabels";
 
 const SWIPE_THRESHOLD = 48;
@@ -61,6 +63,8 @@ interface MobileShipmentCardsProps {
   viewSessionYmd?: string;
   ecargoMap?: EcargoKhoScscPersistedMap;
   onEcargoVehicleChange?: (id: string, raw: string) => void;
+  onEcargoDriverChange?: (id: string, driverName: string, driverId: string) => void;
+  onApplyEcargoPrefill?: (row: Shipment) => void;
   getEcargoSaveStatus?: (id: string) => EcargoSaveStatus;
   getEcargoJob?: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob?: (id: string) => void | Promise<void>;
@@ -84,6 +88,8 @@ export function MobileShipmentCards({
   viewSessionYmd = "",
   ecargoMap = {},
   onEcargoVehicleChange,
+  onEcargoDriverChange,
+  onApplyEcargoPrefill,
   getEcargoSaveStatus,
   getEcargoJob,
   refreshEcargoJob,
@@ -226,8 +232,14 @@ export function MobileShipmentCards({
                   sessionYmdFallback: viewSessionYmd,
                 }).join("\n");
                 const showEcargoKhoScsc = isScscWarehouse(row.warehouse);
-                const vehicleForEcargo = ecargoMap[row.id]?.vehicleInput ?? "";
                 const ecargoLine = ecargoMap[row.id];
+                const vehicleForEcargo = ecargoLine?.vehicleInput ?? "";
+                const ecargoPrefill = resolveEcargoVehiclePrefill(row, customerDirectory, vehicleForEcargo, {
+                  driverName: ecargoLine?.driverName,
+                  driverId: ecargoLine?.driverId,
+                });
+                const effectiveEcargoVehicle = vehicleForEcargo.trim() || ecargoPrefill.vehicleInput;
+                const ecargoReady = effectiveEcargoVehicle.trim().length >= ECARGO_VEHICLE_MIN;
                 const ecargoJob = getEcargoJob?.(row.id);
                 const ecargoOpen = openEcargoRowId === row.id;
 
@@ -410,12 +422,21 @@ export function MobileShipmentCards({
                                 <EcargoKhoScscTriggerButton
                                   rowId={row.id}
                                   open={ecargoOpen}
-                                  hasVehicle={vehicleForEcargo.trim().length >= ECARGO_VEHICLE_MIN}
+                                  hasVehicle={ecargoReady}
                                   job={ecargoJob}
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    const opening = openEcargoRowId !== row.id;
                                     setOpenEcargoRowId((id) => (id === row.id ? null : row.id));
+                                    if (opening) onApplyEcargoPrefill?.(row);
                                   }}
+                                  title={
+                                    ecargoReady
+                                      ? `eCargo · ${effectiveEcargoVehicle}`
+                                      : ecargoPrefill.defaultVehicle
+                                        ? `Xe mặc định: ${vehicleDisplayLabel(ecargoPrefill.defaultVehicle)}`
+                                        : undefined
+                                  }
                                 />
                               ) : null}
                               <button
@@ -450,14 +471,14 @@ export function MobileShipmentCards({
                                         <button
                                           type="button"
                                           onClick={() => printDimReport(row)}
-                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-black/[0.1] bg-white py-2.5 text-[12px] font-semibold text-apple-label active:bg-black/[0.02]"
+                                          className={`min-h-11 min-w-0 flex-1 rounded-xl border py-2.5 text-[12px] font-semibold active:scale-[0.99] ${OPS.tabIdle}`}
                                         >
                                           In DIM SCSC
                                         </button>
                                         <button
                                           type="button"
                                           onClick={() => downloadScscDimListExcel(row)}
-                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-emerald-600/35 bg-emerald-50 py-2.5 text-[12px] font-semibold text-emerald-900"
+                                          className={`min-h-11 min-w-0 flex-1 rounded-xl border-2 py-2.5 text-[12px] font-semibold active:scale-[0.99] ${OPS.formatBtnOff}`}
                                         >
                                           LIST SCSC
                                         </button>
@@ -468,14 +489,14 @@ export function MobileShipmentCards({
                                         <button
                                           type="button"
                                           onClick={() => void downloadTcsAttachedDimsExcel(row)}
-                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-emerald-600/35 bg-emerald-50 py-2.5 text-[12px] font-semibold text-emerald-900"
+                                          className={`min-h-11 min-w-0 flex-1 rounded-xl border-2 py-2.5 text-[12px] font-semibold active:scale-[0.99] ${OPS.formatBtnOff}`}
                                         >
                                           LIST TCS
                                         </button>
                                         <button
                                           type="button"
                                           onClick={() => printTcsAttachedDimsList(row)}
-                                          className="min-h-11 min-w-0 flex-1 rounded-xl border border-emerald-600/25 bg-white py-2.5 text-[12px] font-semibold text-emerald-800"
+                                          className={`min-h-11 min-w-0 flex-1 rounded-xl border py-2.5 text-[12px] font-semibold text-emerald-800 active:scale-[0.99] dark:border-emerald-500/35 dark:text-emerald-200 ${OPS.tabIdle}`}
                                         >
                                           IN TCS
                                         </button>
@@ -533,11 +554,14 @@ export function MobileShipmentCards({
         row={ecargoModalRow}
         customerDirectory={customerDirectory}
         vehicleForEcargo={ecargoMap[ecargoModalRow.id]?.vehicleInput ?? ""}
+        driverNameForEcargo={ecargoMap[ecargoModalRow.id]?.driverName ?? ""}
+        driverIdForEcargo={ecargoMap[ecargoModalRow.id]?.driverId ?? ""}
         viewSessionYmd={viewSessionYmd}
         saveStatus={getEcargoSaveStatus(ecargoModalRow.id)}
         job={getEcargoJob?.(ecargoModalRow.id)}
         autoRegistering={isEcargoAutoRegistering?.(ecargoModalRow.id) ?? false}
         onVehicleChange={(raw) => onEcargoVehicleChange(ecargoModalRow.id, raw)}
+        onDriverChange={(name, id) => onEcargoDriverChange?.(ecargoModalRow.id, name, id)}
         onAutoRegister={async (opts) => {
           await onEcargoAutoRegister(ecargoModalRow, opts);
         }}
@@ -573,18 +597,18 @@ export function StickyMobileActions({
 
   return (
     <div className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
-      <div className="border-t border-black/[0.08] bg-white/80 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] backdrop-blur-xl backdrop-saturate-150">
+      <div className={`px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 ${OPS.stickyBar}`}>
         {selected ? (
           <>
-            <p className="mb-2 truncate text-center text-[11px] font-medium text-apple-secondary">
-              <span className="font-mono text-[15px] font-semibold leading-tight text-apple-label">{selected.awb}</span>
+            <p className={`mb-2 truncate text-center text-[11px] font-medium ${OPS.secondary}`}>
+              <span className={`font-mono text-[15px] font-semibold leading-tight ${OPS.title}`}>{selected.awb}</span>
               {(selected.hawb ?? "").trim() ? (
                 <>
-                  <span className="mx-1 text-apple-tertiary">·</span>
-                  <span className="font-mono font-semibold text-apple-secondary">HAWB {(selected.hawb ?? "").trim()}</span>
+                  <span className={`mx-1 ${OPS.muted}`}>·</span>
+                  <span className={`font-mono font-semibold ${OPS.secondary}`}>HAWB {(selected.hawb ?? "").trim()}</span>
                 </>
               ) : null}
-              <span className="mx-1 text-apple-tertiary">·</span>
+              <span className={`mx-1 ${OPS.muted}`}>·</span>
               {selected.customer}
             </p>
             <div className="flex flex-col gap-2">
@@ -602,20 +626,20 @@ export function StickyMobileActions({
                     aria-expanded={moreOpen}
                     aria-haspopup="menu"
                     onClick={() => setMoreOpen((v) => !v)}
-                    className="rounded-full border border-black/[0.1] bg-white px-4 py-3 text-sm font-semibold text-apple-secondary active:scale-[0.98]"
+                    className={`rounded-full border px-4 py-3 text-sm font-semibold active:scale-[0.98] ${OPS.tabIdle}`}
                     title="Thêm thao tác"
                   >
                     ⋯
                   </button>
                   {moreOpen ? (
-                    <div className="absolute bottom-full right-0 z-50 mb-2 min-w-[9rem] overflow-hidden rounded-xl border border-black/[0.1] bg-white py-1 shadow-apple-md">
+                    <div className={`absolute bottom-full right-0 z-50 mb-2 min-w-[9rem] ${OPS.dropdownLg}`}>
                       <button
                         type="button"
                         onClick={() => {
                           setMoreOpen(false);
                           if (confirm(`Xóa ${selected.awb}?`)) onDelete();
                         }}
-                        className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
+                        className={`${OPS.dropdownItemLg} ${OPS.dropdownItemDanger}`}
                       >
                         Xóa lô
                       </button>
@@ -628,14 +652,14 @@ export function StickyMobileActions({
                   <button
                     type="button"
                     onClick={onPrintDim}
-                    className="min-w-0 flex-1 rounded-full border border-black/[0.12] bg-white py-2.5 text-sm font-semibold text-apple-label shadow-sm active:scale-[0.98]"
+                    className={`min-w-0 flex-1 rounded-full border py-2.5 text-sm font-semibold shadow-sm active:scale-[0.98] ${OPS.tabIdle}`}
                   >
                     In DIM SCSC
                   </button>
                   <button
                     type="button"
                     onClick={onDownloadScscDimList}
-                    className="min-w-0 flex-1 rounded-full border border-emerald-600/40 bg-emerald-50 py-2.5 text-sm font-semibold text-emerald-900 active:scale-[0.98]"
+                    className={`min-w-0 flex-1 rounded-full border-2 py-2.5 text-sm font-semibold active:scale-[0.98] ${OPS.formatBtnOff}`}
                   >
                     LIST SCSC
                   </button>
@@ -646,14 +670,14 @@ export function StickyMobileActions({
                   <button
                     type="button"
                     onClick={() => void downloadTcsAttachedDimsExcel(selected)}
-                    className="min-w-0 flex-1 rounded-full border border-emerald-600/40 bg-emerald-50 py-2.5 text-sm font-semibold text-emerald-900 active:scale-[0.98]"
+                    className={`min-w-0 flex-1 rounded-full border-2 py-2.5 text-sm font-semibold active:scale-[0.98] ${OPS.formatBtnOff}`}
                   >
                     LIST DIM TCS
                   </button>
                   <button
                     type="button"
                     onClick={() => printTcsAttachedDimsList(selected)}
-                    className="min-w-0 flex-1 rounded-full border border-emerald-600/30 bg-white py-2.5 text-sm font-semibold text-emerald-800 active:scale-[0.98]"
+                    className={`min-w-0 flex-1 rounded-full border py-2.5 text-sm font-semibold text-emerald-800 active:scale-[0.98] dark:text-emerald-200 ${OPS.tabIdle}`}
                   >
                     IN DIM TCS
                   </button>

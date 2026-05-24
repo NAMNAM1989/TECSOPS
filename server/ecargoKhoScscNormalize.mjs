@@ -14,12 +14,16 @@ export function clampEcargoKhoScscLine(raw) {
   if (!raw || typeof raw !== "object") return null;
   const o = /** @type {Record<string, unknown>} */ (raw);
   const vehicleInput = normalizeEcargoVehicleInput(o.vehicleInput);
+  const driverName = typeof o.driverName === "string" ? o.driverName.trim().slice(0, 120) : undefined;
+  const driverId = typeof o.driverId === "string" ? o.driverId.replace(/\D/g, "").slice(0, 20) : undefined;
   const markedSubmitted = o.markedSubmitted === true;
   const updatedAt =
     typeof o.updatedAt === "string" && o.updatedAt.trim() ? o.updatedAt.trim() : undefined;
   if (!vehicleInput && !markedSubmitted) return null;
   return {
     vehicleInput,
+    ...(driverName ? { driverName } : {}),
+    ...(driverId ? { driverId } : {}),
     ...(markedSubmitted ? { markedSubmitted: true } : {}),
     ...(updatedAt ? { updatedAt } : {}),
   };

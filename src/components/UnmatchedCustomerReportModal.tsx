@@ -4,6 +4,7 @@ import {
   type UnmatchedCustomerReport,
   type UnmatchedCustomerRow,
 } from "../utils/fetchAppStateRows";
+import { CD } from "./customerDirectory/customerDirectoryStyles";
 
 type Props = {
   open: boolean;
@@ -57,20 +58,20 @@ export function UnmatchedCustomerReportModal({ open, onClose, onApplySuggestions
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[24px] border border-black/[0.08] bg-white shadow-apple-md">
-        <div className="flex items-center justify-between border-b border-black/[0.06] px-5 py-4">
+      <div className={`max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[24px] border shadow-apple-md ${CD.modal} ${CD.border}`}>
+        <div className={`flex items-center justify-between border-b px-5 py-4 ${CD.border}`}>
           <div>
-            <h3 className="text-[19px] font-semibold tracking-tight text-apple-label">
+            <h3 className={`text-[19px] font-semibold tracking-tight ${CD.title}`}>
               Báo cáo shipment chưa map customer_id
             </h3>
-            <p className="text-xs text-apple-secondary">
+            <p className={`text-xs ${CD.secondary}`}>
               Đối soát trực tiếp trong app, không cần mở file CSV.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-apple-tertiary hover:bg-black/[0.05]"
+            className={`rounded-full p-2 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] ${CD.muted}`}
             aria-label="Đóng"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -80,13 +81,13 @@ export function UnmatchedCustomerReportModal({ open, onClose, onApplySuggestions
         </div>
         <div className="space-y-3 px-5 py-4">
           {loading ? (
-            <p className="text-sm text-apple-secondary">Đang tải báo cáo...</p>
+            <p className={`text-sm ${CD.secondary}`}>Đang tải báo cáo...</p>
           ) : report ? (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-apple-secondary">
-                  Tổng lô: <span className="font-semibold text-apple-label">{report.totalRows}</span> ·
-                  Chưa map: <span className="font-semibold text-red-600"> {report.unmatchedCount}</span>
+                <p className={`text-sm ${CD.secondary}`}>
+                  Tổng lô: <span className={`font-semibold ${CD.title}`}>{report.totalRows}</span> ·
+                  Chưa map: <span className="font-semibold text-red-600 dark:text-red-300"> {report.unmatchedCount}</span>
                 </p>
                 <button
                   type="button"
@@ -97,10 +98,10 @@ export function UnmatchedCustomerReportModal({ open, onClose, onApplySuggestions
                   {applying ? "Đang áp dụng..." : "Áp dụng gợi ý match"}
                 </button>
               </div>
-              <div className="max-h-[58vh] overflow-auto rounded-2xl border border-black/[0.08]">
+              <div className={`max-h-[58vh] overflow-auto rounded-2xl ${CD.tableWrap}`}>
                 <table className="min-w-full text-xs">
-                  <thead className="sticky top-0 bg-apple-bg/95">
-                    <tr className="border-b border-black/[0.08] text-left text-apple-secondary">
+                  <thead className="sticky top-0 bg-apple-bg/95 dark:bg-black/40">
+                    <tr className={`border-b text-left ${CD.tableHead}`}>
                       <th className="px-2 py-2">AWB</th>
                       <th className="px-2 py-2">Ngày/Kho</th>
                       <th className="px-2 py-2">Khách trên lô</th>
@@ -110,35 +111,35 @@ export function UnmatchedCustomerReportModal({ open, onClose, onApplySuggestions
                   <tbody>
                     {report.rows.length === 0 ? (
                       <tr>
-                        <td className="px-2 py-4 text-center text-emerald-700" colSpan={4}>
+                        <td className="px-2 py-4 text-center text-emerald-700 dark:text-emerald-300" colSpan={4}>
                           Không còn shipment nào bị unmatched.
                         </td>
                       </tr>
                     ) : (
                       report.rows.map((r) => (
-                        <tr key={r.id} className="border-b border-black/[0.06]">
-                          <td className="px-2 py-2 font-mono text-apple-label">{r.awb}</td>
-                          <td className="px-2 py-2 text-apple-secondary">
+                        <tr key={r.id} className={CD.tableRow}>
+                          <td className={`px-2 py-2 font-mono ${CD.tableCell}`}>{r.awb}</td>
+                          <td className={`px-2 py-2 ${CD.secondary}`}>
                             {r.sessionDate} · {r.warehouse}
                           </td>
                           <td className="px-2 py-2">
-                            <div className="font-semibold text-apple-label">{r.customer || "—"}</div>
-                            <div className="font-mono text-[11px] text-apple-tertiary">
+                            <div className={`font-semibold ${CD.tableCell}`}>{r.customer || "—"}</div>
+                            <div className={`font-mono text-[11px] ${CD.muted}`}>
                               code: {r.customerCode || "—"}
                             </div>
                           </td>
                           <td className="px-2 py-2">
                             {r.suggestedCustomerId ? (
                               <>
-                                <div className="font-semibold text-apple-label">
+                                <div className={`font-semibold ${CD.tableCell}`}>
                                   {r.suggestedCustomerCode} · {r.suggestedCustomerName}
                                 </div>
-                                <div className="font-mono text-[11px] text-apple-tertiary">
+                                <div className={`font-mono text-[11px] ${CD.muted}`}>
                                   id: {r.suggestedCustomerId}
                                 </div>
                               </>
                             ) : (
-                              <span className="text-red-600">Không có gợi ý tự động</span>
+                              <span className="text-red-600 dark:text-red-300">Không có gợi ý tự động</span>
                             )}
                           </td>
                         </tr>
@@ -149,7 +150,7 @@ export function UnmatchedCustomerReportModal({ open, onClose, onApplySuggestions
               </div>
             </>
           ) : (
-            <p className="text-sm text-red-600">Không tải được báo cáo unmatched.</p>
+            <p className="text-sm text-red-600 dark:text-red-300">Không tải được báo cáo unmatched.</p>
           )}
         </div>
       </div>

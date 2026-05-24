@@ -13,6 +13,7 @@ import {
 import { ensureAirportSchema, seedAirportsIfEmpty } from "./airportCatalog.mjs";
 import { ensureWeighSlipSchema } from "./weighSlipSchema.mjs";
 import { normalizeEcargoKhoScscMapLoose } from "./ecargoKhoScscNormalize.mjs";
+import { parseCustomersLoose } from "./customerDirectoryValidate.mjs";
 
 const { Pool } = pg;
 
@@ -300,6 +301,23 @@ function customerProfileFromRow(row, savedShippers = [], savedConsignees = [], p
   };
 }
 
+/** Hồ sơ chỉ nằm trong JSON blob (xe/tài xế, hàng, mặc định…) — gộp lên bản relational. */
+function mergeCustomerBlobProfile(base, fromBlob) {
+  if (!fromBlob || typeof fromBlob !== "object") return base;
+  return {
+    ...base,
+    savedGoods: fromBlob.savedGoods ?? base.savedGoods,
+    savedVehicles: fromBlob.savedVehicles ?? [],
+    ...(fromBlob.defaultShipperId ? { defaultShipperId: fromBlob.defaultShipperId } : {}),
+    ...(fromBlob.defaultConsigneeId ? { defaultConsigneeId: fromBlob.defaultConsigneeId } : {}),
+    ...(fromBlob.defaultGoodsId ? { defaultGoodsId: fromBlob.defaultGoodsId } : {}),
+    ...(fromBlob.defaultVehicleId ? { defaultVehicleId: fromBlob.defaultVehicleId } : {}),
+    ...(fromBlob.otherRequirementsPrint
+      ? { otherRequirementsPrint: fromBlob.otherRequirementsPrint }
+      : {}),
+  };
+}
+
 function shipmentFromRow(row) {
   return {
     id: row.id,
@@ -409,10 +427,8 @@ async function loadRelationalSnapshot(client, key) {
   }
   const blobCustomersById = new Map();
   if (blob && typeof blob === "object" && Array.isArray(blob.customers)) {
-    for (const bc of blob.customers) {
-      if (!bc || typeof bc !== "object") continue;
-      const cid = str(bc.id).trim();
-      if (cid) blobCustomersById.set(cid, bc);
+    for (const bc of parseCustomersLoose(blob.customers)) {
+      if (bc?.id) blobCustomersById.set(bc.id, bc);
     }
   }
   return {
@@ -426,9 +442,7 @@ async function loadRelationalSnapshot(client, key) {
         consigneeByCustomer.get(cid) ?? [],
         partiesByCustomer.get(cid) ?? []
       );
-      const fromBlob = blobCustomersById.get(cid);
-      const savedGoods = Array.isArray(fromBlob?.savedGoods) ? fromBlob.savedGoods : [];
-      return savedGoods.length ? { ...base, savedGoods } : base;
+      return mergeCustomerBlobProfile(base, blobCustomersById.get(cid));
     }),
     airlineLabelOverrides,
     printerProfiles,

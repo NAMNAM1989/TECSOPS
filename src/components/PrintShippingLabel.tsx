@@ -4,16 +4,9 @@ import type { Shipment } from "../types/shipment";
 import { loadLabelSheetFormat, type LabelSheetFormat } from "../utils/labelSheetFormat";
 import { loadLabelPrintFlipCcw } from "../utils/labelPrintMode";
 import { mapShipmentToAirCargoLabelData } from "../utils/mapShipmentToAirCargoLabelData";
-import { LabelDesigner } from "../label-designer/designer/LabelDesigner";
 import { buildBoundThermalPreview } from "../label-designer/adapters/printPipelinePreview";
-import { buildShipmentLabelContext } from "../label-designer/data/shipmentDataContext";
-import { profileDocumentKind } from "../label-designer/adapters/printPipeline";
-import {
-  commitThermalDesignerSave,
-  getExtraObjects,
-  resolveThermalLabelTemplateForDesigner,
-} from "../label-designer/core/templatePreserve";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
+import { OPS } from "../styles/opsModalStyles";
 import { usePrinterProfiles } from "../hooks/usePrinterProfiles";
 import { getActiveThermalProfile } from "../printing/printerProfiles";
 import { loadThermalDeliveryMode, resolveEffectiveThermalDeliveryMode } from "../printing/printDeliveryMode";
@@ -289,11 +282,10 @@ interface PrintShippingLabelProps {
 
 export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }: PrintShippingLabelProps) {
   const printFlipCcw = useMemo(() => loadLabelPrintFlipCcw(), []);
-  const { store, upsert, setActiveThermal } = usePrinterProfiles();
+  const { store, setActiveThermal } = usePrinterProfiles();
   const thermalProfile = useMemo(() => getActiveThermalProfile(store), [store]);
   const activeFormat = useMemo(() => resolveThermalProfileLabelFormat(thermalProfile), [thermalProfile]);
   const [printMsg, setPrintMsg] = useState<string | null>(null);
-  const [calibOpen, setCalibOpen] = useState(false);
   const printHostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -308,7 +300,7 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
   const pickFormat = (format: LabelSheetFormat) => {
     const profile = findThermalProfileByFormat(store, format);
     if (!profile) {
-      setPrintMsg(`Chưa có profile máy in ${labelSheetFormatLabel(format)} — bấm Căn chỉnh để thêm IP.`);
+      setPrintMsg(`Chưa có profile máy in ${labelSheetFormatLabel(format)} — cấu hình IP máy in trên máy chủ.`);
       return;
     }
     setActiveThermal(profile.id);
@@ -328,7 +320,7 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
       return;
     }
     if (!profile.host?.trim()) {
-      setPrintMsg("Chưa cấu hình IP — thêm IP trong Căn chỉnh hoặc cấu hình máy in mặc định Windows.");
+      setPrintMsg("Chưa cấu hình IP máy in — dùng in qua Windows hoặc cấu hình IP trên máy chủ.");
     }
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     const res = await printThermalLabelsFromIframe({ format: printFormat, host: printHostRef.current });
@@ -342,18 +334,18 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
         role="dialog"
         aria-modal="true"
       >
-        <div className="no-print max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-[28px] border border-black/[0.08] bg-white p-5 shadow-apple-md sm:max-w-xl">
+        <div className={`no-print max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-[28px] border p-5 shadow-apple-md sm:max-w-xl ${OPS.modal} ${OPS.border}`}>
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-[19px] font-semibold tracking-tight text-apple-label">In nhãn</h2>
-              <p className="text-xs text-apple-secondary">
+              <h2 className={`text-[19px] font-semibold tracking-tight ${OPS.title}`}>In nhãn</h2>
+              <p className={`text-xs ${OPS.secondary}`}>
                 Tem {shipment.awb} · {shipment.customer}
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-2 text-apple-tertiary hover:bg-black/[0.05] hover:text-apple-label"
+              className={`rounded-full p-2 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] ${OPS.muted}`}
               aria-label="Đóng"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -369,7 +361,7 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
           />
 
           <div className="mt-4">
-            <p className="mb-2 text-center text-xs font-semibold text-apple-secondary">Chọn máy in</p>
+            <p className={`mb-2 text-center text-xs font-semibold ${OPS.secondary}`}>Chọn máy in</p>
             <div className="flex gap-2">
               {(["100x80", "100x50"] as const).map((fmt) => {
                 const profile = findThermalProfileByFormat(store, fmt);
@@ -380,15 +372,13 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                     type="button"
                     onClick={() => pickFormat(fmt)}
                     className={`flex-1 rounded-2xl border-2 px-3 py-3.5 text-center transition-all active:scale-[0.98] ${
-                      selected
-                        ? "border-emerald-600 bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400/40"
-                        : "border-emerald-300/80 bg-emerald-50 text-emerald-950 hover:border-emerald-500 hover:bg-emerald-100"
+                      selected ? OPS.formatBtnOn : OPS.formatBtnOff
                     }`}
                   >
                     <span className="block text-[15px] font-bold leading-tight">{labelSheetFormatLabel(fmt)}</span>
                     <span
                       className={`mt-1 block truncate text-[10px] font-medium ${
-                        selected ? "text-emerald-100" : "text-emerald-800/75"
+                        selected ? OPS.formatBtnSubOn : OPS.formatBtnSubOff
                       }`}
                     >
                       {profile?.host?.trim() ? profile.host : "Chưa có IP"}
@@ -400,31 +390,10 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
           </div>
 
           {printMsg ? (
-            <p className="mt-3 rounded-xl bg-black/[0.04] px-3 py-2 text-center text-xs text-apple-label">{printMsg}</p>
+            <p className={`mt-3 ${OPS.msgBox}`}>{printMsg}</p>
           ) : null}
 
           <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setCalibOpen(true)}
-              className="min-h-11 select-none rounded-full border px-4 py-3 text-sm font-semibold text-apple-label transition-all active:scale-[0.97] active:bg-black/[0.04]"
-            >
-              Thiết kế tem
-            </button>
-            {thermalProfile.labelTemplate?.objects.length ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!confirm("Đặt lại mẫu gốc? Preview sẽ dùng lại layout CSS chuẩn.")) return;
-                  upsert({ ...thermalProfile, labelTemplate: undefined, thermalFieldOverrides: undefined });
-                  setPrintMsg(null);
-                }}
-                className="min-h-11 select-none rounded-full border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800 transition-all active:scale-[0.97] active:bg-orange-100"
-                title="Xóa template đã lưu từ designer — trở về layout CSS gốc"
-              >
-                ↺ Mẫu gốc
-              </button>
-            ) : null}
             <button
               type="button"
               onClick={() => void handlePrint()}
@@ -435,7 +404,7 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
             <button
               type="button"
               onClick={onClose}
-              className="min-h-11 select-none rounded-full border border-black/[0.12] bg-white px-5 py-3 text-sm font-semibold text-apple-label transition-all hover:bg-black/[0.03] active:scale-[0.97]"
+              className={`min-h-11 select-none rounded-full border px-5 py-3 text-sm font-semibold transition-all active:scale-[0.97] ${OPS.tabIdle}`}
             >
               Đóng
             </button>
@@ -457,36 +426,6 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
         </div>,
         document.body
       )}
-
-      <LabelDesigner
-        open={calibOpen}
-        initialTemplate={resolveThermalLabelTemplateForDesigner(
-          thermalProfile,
-          resolveThermalProfileLabelFormat(thermalProfile)
-        )}
-        documentKind={profileDocumentKind(thermalProfile)}
-        sampleContext={buildShipmentLabelContext(shipment, airlineLabelOverrides)}
-        onSave={(template) => {
-          const kind = profileDocumentKind(thermalProfile);
-          const format = resolveThermalProfileLabelFormat(thermalProfile);
-          const committed = commitThermalDesignerSave(template, kind, format);
-          upsert({
-            ...thermalProfile,
-            thermalFieldOverrides: committed.thermalFieldOverrides,
-            labelTemplate: committed.labelTemplate,
-          });
-          setCalibOpen(false);
-          const extrasN = committed.labelTemplate
-            ? getExtraObjects(committed.labelTemplate, kind).length
-            : 0;
-          setPrintMsg(
-            extrasN > 0
-              ? `Đã lưu — ${extrasN} đối tượng thêm sẽ hiện trên mẫu gốc.`
-              : "Đã lưu — vị trí field áp dụng khi in TSPL."
-          );
-        }}
-        onClose={() => setCalibOpen(false)}
-      />
     </>
   );
 }

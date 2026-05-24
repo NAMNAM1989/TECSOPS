@@ -407,6 +407,16 @@ export function applyMutation(state, mutation) {
       if (mutation.vehicleInput !== undefined) {
         line.vehicleInput = normalizeEcargoVehicleInput(mutation.vehicleInput);
       }
+      if (mutation.driverName !== undefined) {
+        const t = String(mutation.driverName).trim().slice(0, 120);
+        if (t) line.driverName = t;
+        else delete line.driverName;
+      }
+      if (mutation.driverId !== undefined) {
+        const t = String(mutation.driverId).replace(/\D/g, "").slice(0, 20);
+        if (t) line.driverId = t;
+        else delete line.driverId;
+      }
       if (mutation.markedSubmitted !== undefined) {
         line.markedSubmitted = Boolean(mutation.markedSubmitted);
       }

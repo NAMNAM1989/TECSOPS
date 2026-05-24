@@ -6,7 +6,7 @@ import {
   emptyCustomerSavedVehicle,
 } from "./customerDirectoryProfile";
 import { findCustomerEntry } from "./mapBookingToScaleTicketFormData";
-import { normalizeEcargoVehicleInput } from "./ecargoKhoScscCore";
+import { normalizeEcargoVehicleInput, ECARGO_VEHICLE_MIN } from "./ecargoKhoScscCore";
 
 function norm(s: string): string {
   return s.trim().toLowerCase();
@@ -63,8 +63,10 @@ export function buildVehicleEcargoInput(vehicle: Pick<CustomerSavedVehicle, "lic
 export function vehicleDisplayLabel(v: CustomerSavedVehicle): string {
   const plate = v.licensePlate.trim();
   const driver = v.driverName.trim();
-  if (plate && driver) return `${plate} · ${driver}`;
-  return plate || driver || "—";
+  const id = v.driverId.trim();
+  const driverPart = driver && id ? `${driver} · CCCD ${id}` : driver || (id ? `CCCD ${id}` : "");
+  if (plate && driverPart) return `${plate} · ${driverPart}`;
+  return plate || driverPart || "—";
 }
 
 export function filterCustomerVehicles(
@@ -125,19 +127,25 @@ export function upsertCustomerVehicleInDirectory(
   });
 }
 
-/** Giá trị khởi tạo form eCargo khi mở modal (tránh flash). */
-export function resolveEcargoVehiclePrefill(
-  row: Shipment,
-  directory: readonly CustomerDirectoryEntry[],
-  savedVehicleInput: string
-): {
+export type EcargoVehiclePrefillResult = {
   customer?: CustomerDirectoryEntry;
   vehicles: CustomerSavedVehicle[];
   defaultVehicle?: CustomerSavedVehicle;
   vehicleInput: string;
   driverName: string;
   driverId: string;
-} {
+  /** Xe/tài xế lấy từ hồ sơ khách (★ mặc định), chưa có trên lô eCargo. */
+  appliedFromDefault: boolean;
+  matchedProfileVehicle: boolean;
+};
+
+/** Giá trị khởi tạo form eCargo khi mở modal (tránh flash). */
+export function resolveEcargoVehiclePrefill(
+  row: Shipment,
+  directory: readonly CustomerDirectoryEntry[],
+  savedVehicleInput: string,
+  savedDriver?: { driverName?: string; driverId?: string }
+): EcargoVehiclePrefillResult {
   const customer = findCustomerByShipment(row, directory);
   const vehicles = getCustomerVehicles(customer);
   const defaultVehicle = getDefaultCustomerVehicle(customer);
@@ -150,19 +158,24 @@ export function resolveEcargoVehiclePrefill(
       vehicles,
       defaultVehicle,
       vehicleInput: saved,
-      driverName: matched?.driverName ?? "",
-      driverId: matched?.driverId ?? "",
+      driverName: matched?.driverName?.trim() || savedDriver?.driverName?.trim() || "",
+      driverId: matched?.driverId?.trim() || savedDriver?.driverId?.trim() || "",
+      appliedFromDefault: false,
+      matchedProfileVehicle: Boolean(matched),
     };
   }
 
   if (defaultVehicle) {
+    const plate = buildVehicleEcargoInput(defaultVehicle);
     return {
       customer,
       vehicles,
       defaultVehicle,
-      vehicleInput: buildVehicleEcargoInput(defaultVehicle),
-      driverName: defaultVehicle.driverName,
-      driverId: defaultVehicle.driverId,
+      vehicleInput: plate,
+      driverName: defaultVehicle.driverName?.trim() || "",
+      driverId: defaultVehicle.driverId?.trim() || "",
+      appliedFromDefault: Boolean(plate || defaultVehicle.driverName?.trim()),
+      matchedProfileVehicle: true,
     };
   }
 
@@ -171,7 +184,51 @@ export function resolveEcargoVehiclePrefill(
     vehicles,
     defaultVehicle,
     vehicleInput: "",
-    driverName: "",
-    driverId: "",
+    driverName: savedDriver?.driverName?.trim() || "",
+    driverId: savedDriver?.driverId?.trim() || "",
+    appliedFromDefault: false,
+    matchedProfileVehicle: false,
+  };
+}
+
+/** Áp xe/tài xế mặc định từ danh bạ khách lên map eCargo của lô (nếu lô chưa có hoặc thiếu tài xế). */
+export function computeEcargoSeedFromCustomer(
+  row: Shipment,
+  directory: readonly CustomerDirectoryEntry[],
+  existing?: { vehicleInput?: string; driverName?: string; driverId?: string }
+): {
+  prefill: EcargoVehiclePrefillResult;
+  patch: { vehicleInput: string; driverName?: string; driverId?: string } | null;
+} {
+  const prefill = resolveEcargoVehiclePrefill(
+    row,
+    directory,
+    existing?.vehicleInput ?? "",
+    existing
+  );
+  const savedVehicle = formatVehicleLicensePlate(existing?.vehicleInput ?? "");
+  const savedDriverName = existing?.driverName?.trim() ?? "";
+
+  const shouldSeedVehicle =
+    !savedVehicle && prefill.vehicleInput.length >= ECARGO_VEHICLE_MIN;
+  const shouldSeedDriver =
+    Boolean(prefill.driverName.trim() || prefill.driverId.trim()) &&
+    (!savedDriverName || shouldSeedVehicle);
+
+  if (!shouldSeedVehicle && !shouldSeedDriver) {
+    return { prefill, patch: null };
+  }
+
+  return {
+    prefill,
+    patch: {
+      vehicleInput: shouldSeedVehicle ? prefill.vehicleInput : savedVehicle,
+      ...(shouldSeedDriver || shouldSeedVehicle
+        ? {
+            driverName: prefill.driverName.trim() || undefined,
+            driverId: prefill.driverId.trim() || undefined,
+          }
+        : {}),
+    },
   };
 }

@@ -30,6 +30,7 @@ import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { useEcargoKhoScscRegister } from "../hooks/useEcargoKhoScscRegister";
 import { debugError } from "../utils/debugLog";
+import type { UnmatchedCustomerRow } from "../utils/fetchAppStateRows";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { AirlineLabelSettingsModal } from "./AirlineLabelSettingsModal";
 import { defaultGlobalAgentCatalog } from "../utils/globalAgentsCore";
@@ -226,6 +227,33 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     [runMutate]
   );
 
+  const applyUnmatchedCustomerSuggestions = useCallback(
+    async (rows: UnmatchedCustomerRow[]) => {
+      let updated = 0;
+      let failed = 0;
+      for (const row of rows) {
+        if (!row.suggestedCustomerId) continue;
+        try {
+          const out = await runMutate({
+            action: "UPDATE",
+            id: row.id,
+            patch: {
+              customerId: row.suggestedCustomerId,
+              customerCode: row.suggestedCustomerCode,
+              customer: row.suggestedCustomerName,
+            },
+          });
+          if (out) updated += 1;
+          else failed += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      return { updated, failed };
+    },
+    [runMutate]
+  );
+
   /** Desktop / mobile: thêm dòng trống đúng kho — nhập inline trên lưới. */
   const addBlankRowForWarehouse = useCallback(
     async (warehouse: Warehouse) => {
@@ -389,8 +417,11 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             activeWarehouse={activeWarehouse}
             onAdd={(wh) => void addBlankRowForWarehouse(wh)}
           />
-          <DashboardToolbarButton onClick={() => setCustomerDirOpen(true)} title="Khách hàng và hồ sơ in">
-            Khách hàng
+          <DashboardToolbarButton
+            onClick={() => setCustomerDirOpen(true)}
+            title="Danh bạ khách, hồ sơ in, agent, mẫu phiếu cân"
+          >
+            Khách & in
           </DashboardToolbarButton>
           <DashboardToolbarButton onClick={() => setAirlineLabelSettingsOpen(true)} title="Tên hãng trên tem">
             Tên hãng
@@ -482,6 +513,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         viewSessionYmd={selectedYmd}
         ecargoMap={ecargoRegister.map}
         onEcargoVehicleChange={ecargoRegister.setVehicle}
+        onEcargoDriverChange={ecargoRegister.setDriver}
+        onApplyEcargoPrefill={ecargoRegister.applyCustomerEcargoPrefill}
         getEcargoSaveStatus={ecargoRegister.getSaveStatus}
         getEcargoJob={ecargoRegister.getJob}
         refreshEcargoJob={ecargoRegister.refreshJob}
@@ -504,6 +537,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         viewSessionYmd={selectedYmd}
         ecargoMap={ecargoRegister.map}
         onEcargoVehicleChange={ecargoRegister.setVehicle}
+        onEcargoDriverChange={ecargoRegister.setDriver}
+        onApplyEcargoPrefill={ecargoRegister.applyCustomerEcargoPrefill}
         getEcargoSaveStatus={ecargoRegister.getSaveStatus}
         getEcargoJob={ecargoRegister.getJob}
         refreshEcargoJob={ecargoRegister.refreshJob}
@@ -531,6 +566,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         globalAgents={state.globalAgents}
         ecargoMap={ecargoRegister.map}
         onEcargoVehicleChange={ecargoRegister.setVehicle}
+        onEcargoDriverChange={ecargoRegister.setDriver}
+        onApplyEcargoPrefill={ecargoRegister.applyCustomerEcargoPrefill}
         getEcargoSaveStatus={ecargoRegister.getSaveStatus}
         getEcargoJob={ecargoRegister.getJob}
         refreshEcargoJob={ecargoRegister.refreshJob}
@@ -562,6 +599,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             });
           }
         }}
+        onApplyUnmatchedShipments={applyUnmatchedCustomerSuggestions}
       />
 
       <AirlineLabelSettingsModal

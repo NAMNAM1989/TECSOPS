@@ -13,7 +13,12 @@ export function ecargoKhoScscLineStatusLabel(
     if (jl) return jl;
   }
   if (line?.markedSubmitted) return "Đã hoàn tất eCargo";
-  if (line?.vehicleInput?.trim()) return "Đã lưu số xe — bấm eCargo để tự động đăng ký";
+  if (line?.vehicleInput?.trim()) {
+    const driver = line.driverName?.trim();
+    return driver
+      ? `Xe ${line.vehicleInput.trim()} · ${driver} — bấm eCargo để đăng ký`
+      : "Đã lưu số xe — bấm eCargo để tự động đăng ký";
+  }
   return "Chưa nhập số xe";
 }
 

@@ -53,6 +53,8 @@ export type ShipmentMutation =
       action: "PATCH_ECARGO_KHO_SCSC";
       shipmentId: string;
       vehicleInput?: string;
+      driverName?: string;
+      driverId?: string;
       markedSubmitted?: boolean;
     }
   | { action: "MERGE_ECARGO_KHO_SCSC"; map: EcargoKhoScscPersistedMap };
@@ -179,6 +181,16 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
       const line = { ...(prev[shipmentId] ?? { vehicleInput: "" }) };
       if (mutation.vehicleInput !== undefined) {
         line.vehicleInput = normalizeEcargoVehicleInput(mutation.vehicleInput);
+      }
+      if (mutation.driverName !== undefined) {
+        const t = mutation.driverName.trim().slice(0, 120);
+        if (t) line.driverName = t;
+        else delete line.driverName;
+      }
+      if (mutation.driverId !== undefined) {
+        const t = mutation.driverId.replace(/\D/g, "").slice(0, 20);
+        if (t) line.driverId = t;
+        else delete line.driverId;
       }
       if (mutation.markedSubmitted !== undefined) {
         line.markedSubmitted = mutation.markedSubmitted;

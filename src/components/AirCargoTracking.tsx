@@ -22,7 +22,13 @@ import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYm
 import { printDimReport } from "../utils/printDimReport";
 import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
-import type { WarehouseLayoutFilter } from "../constants/warehouses";
+import { SmartSearchBar } from "./SmartSearchBar";
+import { WAREHOUSE_ORDER } from "../constants/warehouses";
+import { NewBookingDropdown } from "./NewBookingDropdown";
+import { WarehouseGridPicker } from "./WarehouseGridPicker";
+import { DashboardToolbarButton } from "./DashboardToolbarButton";
+import { OpsDatePicker } from "./OpsDatePicker";
+import { firstWarehouseWithLots } from "../utils/warehouseMetrics";
 import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { useEcargoKhoScscRegister } from "../hooks/useEcargoKhoScscRegister";
@@ -41,52 +47,17 @@ import {
   type UpsertCustomerVehicleParams,
 } from "../utils/customerVehicleCore";
 import { useOpsTheme } from "../hooks/useOpsTheme";
+import {
+  countShipmentsByWarehouse,
+  shipmentMatchesSearchQuery,
+  type ShipmentSearchContext,
+  type ShipmentSearchMatch,
+} from "../utils/shipmentSearch";
 
 interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
 }
 
-const WAREHOUSE_FILTER_OPTIONS: { value: WarehouseLayoutFilter; label: string }[] = [
-  { value: "ALL", label: "Tất cả kho" },
-  { value: "TECS-TCS", label: "TECS-TCS" },
-  { value: "TECS-SCSC", label: "TECS-SCSC" },
-  { value: "KHO-TCS", label: "KHO TCS" },
-  { value: "KHO-SCSC", label: "KHO SCSC" },
-];
-
-/** Cache haystack theo id để tránh build lại mỗi lần render. */
-const haystackCache = new WeakMap<Shipment, string>();
-
-function shipmentSearchHaystack(r: Shipment): string {
-  if (haystackCache.has(r)) return haystackCache.get(r)!;
-  const hay = [
-    r.awb,
-    r.hawb ?? "",
-    r.flight,
-    r.flightDate,
-    r.customer,
-    r.customerCode,
-    r.dest,
-    r.note,
-    r.cutoffNote,
-    r.status,
-    r.warehouse,
-    r.cutoff,
-    r.pcs != null ? String(r.pcs) : "",
-    r.kg != null ? String(r.kg) : "",
-    r.dimWeightKg != null ? String(r.dimWeightKg) : "",
-  ].map((x) => String(x ?? "").toLowerCase()).join(" ");
-  haystackCache.set(r, hay);
-  return hay;
-}
-
-function shipmentMatchesSearchQuery(r: Shipment, raw: string): boolean {
-  const q = raw.trim().toLowerCase();
-  if (!q) return true;
-  const tokens = q.split(/\s+/).filter(Boolean);
-  const hay = shipmentSearchHaystack(r);
-  return tokens.every((t) => hay.includes(t));
-}
 
 function formatWorkDateLabel(d: Date): string {
   const months = [
@@ -116,8 +87,9 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [showForm, setShowForm] = useState(false);
   const [mobileEditShipment, setMobileEditShipment] = useState<Shipment | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
-  const [warehouseFilter, setWarehouseFilter] = useState<WarehouseLayoutFilter>("ALL");
+  const [activeWarehouse, setActiveWarehouse] = useState<Warehouse>("TECS-TCS");
   const [searchQuery, setSearchQuery] = useState("");
+  const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
   const [excelExporting, setExcelExporting] = useState(false);
   const [customerDirOpen, setCustomerDirOpen] = useState(false);
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
@@ -135,24 +107,73 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     [allRows, selectedYmd]
   );
 
-  const filteredViewRows = useMemo(() => {
+  const searchContext = useMemo(
+    (): ShipmentSearchContext => ({
+      ecargoMap: ecargoRegister.map,
+      customers: state?.customers ?? [],
+      getEcargoJob: ecargoRegister.getJob,
+    }),
+    [ecargoRegister.map, ecargoRegister.getJob, state?.customers]
+  );
+
+  const statusFilteredRows = useMemo(() => {
     return viewRows.filter((r) => {
       if (statusFilter !== "ALL" && r.status !== (statusFilter as ShipmentStatus)) return false;
-      if (warehouseFilter !== "ALL" && r.warehouse !== warehouseFilter) return false;
-      return shipmentMatchesSearchQuery(r, searchQuery);
+      return true;
     });
-  }, [viewRows, statusFilter, warehouseFilter, searchQuery]);
+  }, [viewRows, statusFilter]);
+
+  const searchActive = searchQuery.trim().length > 0;
+
+  const filteredViewRows = useMemo(() => {
+    return statusFilteredRows.filter((r) =>
+      shipmentMatchesSearchQuery(r, searchQuery, searchContext)
+    );
+  }, [statusFilteredRows, searchQuery, searchContext]);
+
+  const searchHighlightWarehouses = useMemo((): Warehouse[] => {
+    if (!searchActive) return [];
+    const counts = countShipmentsByWarehouse(filteredViewRows);
+    return WAREHOUSE_ORDER.filter((wh) => counts[wh] > 0);
+  }, [searchActive, filteredViewRows]);
 
   useEffect(() => {
     setStatusFilter("ALL");
-    setWarehouseFilter("ALL");
     setSearchQuery("");
+    setHighlightedShipmentId(null);
+    setActiveWarehouse("TECS-TCS");
   }, [selectedYmd]);
+
+  useEffect(() => {
+    setActiveWarehouse((prev) => {
+      const hasInActive = statusFilteredRows.some((r) => r.warehouse === prev);
+      if (hasInActive) return prev;
+      return firstWarehouseWithLots(statusFilteredRows);
+    });
+  }, [statusFilteredRows]);
 
   const clearViewFilters = useCallback(() => {
     setStatusFilter("ALL");
-    setWarehouseFilter("ALL");
     setSearchQuery("");
+    setHighlightedShipmentId(null);
+  }, []);
+
+  const scrollToShipmentMatch = useCallback((match: ShipmentSearchMatch) => {
+    const { shipment } = match;
+    setActiveWarehouse(shipment.warehouse);
+    setHighlightedShipmentId(shipment.id);
+    setSelectedId(shipment.id);
+    window.setTimeout(() => {
+      document.getElementById(`warehouse-section-${shipment.warehouse}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      const rowEl =
+        document.getElementById(`shipment-row-${shipment.id}`) ??
+        document.getElementById(`mobile-shipment-${shipment.id}`);
+      rowEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+    window.setTimeout(() => setHighlightedShipmentId(null), 2400);
   }, []);
 
   const daysWithData = useMemo(() => {
@@ -238,6 +259,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       setMobileEditShipment(null);
       setShowForm(false);
       setStatusFilter("ALL");
+      setActiveWarehouse(warehouse);
       const prevIds = new Set((state?.rows ?? []).map((r) => r.id));
       const next = await runMutate({
         action: "ADD",
@@ -320,14 +342,16 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-4 lg:px-5">
-      <div className="sticky top-0 z-40 -mx-3 mb-2 border-b border-black/[0.06] bg-apple-bg/95 px-3 pb-2 pt-1 backdrop-blur-md dark:border-white/[0.08] dark:bg-ops-bg/95 sm:-mx-4 sm:px-4 lg:-mx-5 lg:px-5">
-      <header className="mb-2 space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+    <div className="mx-auto max-w-[1600px] px-3 py-4 sm:px-4 lg:px-6">
+      <div className="sticky top-0 z-40 -mx-3 mb-4 bg-dashboard-canvas/90 px-3 pb-3 pt-1 backdrop-blur-lg dark:bg-dashboard-canvas-dark/90 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
+      <header className="mb-3 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h1 className="text-lg font-semibold tracking-tight text-apple-label dark:text-ops-label sm:text-xl">Hàng lên sân bay</h1>
-            <span className="text-[11px] text-apple-secondary">
-              <span className="font-semibold text-apple-label">{workDateLabel}</span>
+            <h1 className="text-xl font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark sm:text-2xl">
+              Hàng lên sân bay
+            </h1>
+            <span className="text-[11px] text-dashboard-muted dark:text-dashboard-muted-dark">
+              <span className="font-semibold text-dashboard-primary dark:text-dashboard-primary-dark">{workDateLabel}</span>
               {daysWithData > 0 && (
                 <span className="text-apple-tertiary">
                   {" "}
@@ -352,7 +376,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             <button
               type="button"
               onClick={toggleDarkMode}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-black/[0.08] bg-white text-apple-label shadow-sm hover:bg-black/[0.03] dark:border-white/10 dark:bg-ops-elevated dark:text-ops-label dark:hover:bg-white/[0.06]"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/[0.05] bg-white text-dashboard-primary shadow-dashboard-card hover:bg-dashboard-canvas dark:border-white/[0.08] dark:bg-dashboard-surface-dark dark:text-dashboard-primary-dark dark:hover:bg-ops-elevated"
               title={darkMode ? "Chế độ sáng" : "Chế độ tối (Ops ban đêm)"}
               aria-label={darkMode ? "Bật chế độ sáng" : "Bật chế độ tối"}
             >
@@ -369,110 +393,74 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setCustomerDirOpen(true)}
-            className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03] dark:border-white/10 dark:bg-ops-elevated dark:text-ops-label dark:hover:bg-white/[0.06]"
-            title="Khách hàng và hồ sơ in"
-          >
+        <div className="flex flex-wrap items-center gap-2">
+          <NewBookingDropdown
+            onPickWarehouse={(wh) => void addBlankRowForWarehouse(wh)}
+            onOpenForm={() => {
+              startTransition(() => {
+                setMobileEditShipment(null);
+                setShowForm(true);
+              });
+            }}
+          />
+          <DashboardToolbarButton onClick={() => setCustomerDirOpen(true)} title="Khách hàng và hồ sơ in">
             Khách hàng
-          </button>
-          <button
-            type="button"
-            onClick={() => setAirlineLabelSettingsOpen(true)}
-            className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03] dark:border-white/10 dark:bg-ops-elevated dark:text-ops-label dark:hover:bg-white/[0.06]"
-            title="Tên hãng trên tem"
-          >
+          </DashboardToolbarButton>
+          <DashboardToolbarButton onClick={() => setAirlineLabelSettingsOpen(true)} title="Tên hãng trên tem">
             Tên hãng
-          </button>
-          <button
-            type="button"
+          </DashboardToolbarButton>
+          <DashboardToolbarButton
             disabled={excelExporting}
             onClick={() => void onDownloadDayExcel()}
-            className="inline-flex items-center gap-1 rounded-lg border border-black/[0.08] bg-white px-2 py-1 text-[11px] font-semibold text-apple-label shadow-sm hover:bg-black/[0.03] disabled:cursor-wait disabled:opacity-60 dark:border-white/10 dark:bg-ops-elevated dark:text-ops-label dark:hover:bg-white/[0.06]"
             title="Xuất Excel ngày"
           >
             <svg className="h-3.5 w-3.5 text-apple-blue" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>
             Excel
-          </button>
-          <div className="inline-flex items-center rounded-lg border border-black/[0.08] bg-white p-0.5 shadow-sm dark:border-white/10 dark:bg-ops-elevated">
-            <button
-              type="button"
-              onClick={goPrevDay}
-              className="rounded-md px-2 py-1 text-xs font-semibold text-apple-label hover:bg-black/[0.05] dark:text-ops-label dark:hover:bg-white/[0.06]"
-              aria-label="Ngày trước"
-            >
-              ‹
-            </button>
-            <input
-              type="date"
-              value={selectedYmd}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v) setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)));
-              }}
-              className="w-[7.25rem] border-0 bg-transparent px-1 py-1 font-mono text-[11px] font-semibold text-apple-label focus:outline-none focus:ring-1 focus:ring-apple-blue/30 dark:text-ops-label"
-            />
-            <button
-              type="button"
-              onClick={goNextDay}
-              className="rounded-md px-2 py-1 text-xs font-semibold text-apple-label hover:bg-black/[0.05] dark:text-ops-label dark:hover:bg-white/[0.06]"
-              aria-label="Ngày sau"
-            >
-              ›
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={goToday}
-            disabled={isViewingToday}
-            className="rounded-lg bg-apple-blue px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-apple-blue-hover disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Hôm nay
-          </button>
+          </DashboardToolbarButton>
+          <OpsDatePicker
+            value={selectedYmd}
+            onChange={(v) => setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)))}
+            onPrev={goPrevDay}
+            onNext={goNextDay}
+            onToday={goToday}
+            isViewingToday={isViewingToday}
+          />
         </div>
       </header>
 
       {viewRows.length > 0 && (
-        <div className="flex flex-col gap-2 rounded-xl border border-black/[0.08] bg-white/95 px-2 py-2 shadow-sm dark:border-white/10 dark:bg-ops-surface/90 lg:flex-row lg:items-center">
-          <StatusFilterBar compact dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
-          <div className="flex shrink-0 items-center gap-1.5 lg:w-56 xl:w-64">
-            <input
-              ref={searchInputRef}
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm AWB, khách, đích… (/ hoặc F)"
-              autoComplete="off"
-              spellCheck={false}
-              className="h-8 min-w-0 flex-1 rounded-lg border border-black/[0.1] bg-[#f7f8fa] px-2.5 text-[11px] text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue/40 focus:outline-none focus:ring-1 focus:ring-apple-blue/25 dark:border-white/10 dark:bg-ops-bg dark:text-ops-label dark:placeholder:text-ops-tertiary"
-              aria-label="Tìm lô"
-            />
-            <select
-              value={warehouseFilter}
-              onChange={(e) => setWarehouseFilter(e.target.value as WarehouseLayoutFilter)}
-              className="h-8 max-w-[7.5rem] shrink-0 rounded-lg border border-black/[0.1] bg-white px-1.5 text-[11px] font-semibold text-apple-label focus:border-apple-blue/40 focus:outline-none focus:ring-1 focus:ring-apple-blue/25 dark:border-white/10 dark:bg-ops-elevated dark:text-ops-label"
-              aria-label="Lọc kho"
-            >
-              {WAREHOUSE_FILTER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+        <div className="space-y-3">
+          <SmartSearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            searchableRows={statusFilteredRows}
+            matchedRows={filteredViewRows}
+            searchContext={searchContext}
+            inputRef={searchInputRef}
+            onSelectMatch={scrollToShipmentMatch}
+          />
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <StatusFilterBar compact dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
+            {(statusFilter !== "ALL" || searchQuery.trim()) && (
+              <button
+                type="button"
+                onClick={clearViewFilters}
+                className="shrink-0 self-start rounded-full px-3 py-1 text-[10px] font-semibold text-apple-blue hover:bg-apple-blue/10 lg:ml-auto lg:self-center"
+              >
+                Xóa lọc
+              </button>
+            )}
           </div>
-          {(statusFilter !== "ALL" || warehouseFilter !== "ALL" || searchQuery.trim()) && (
-            <button
-              type="button"
-              onClick={clearViewFilters}
-              className="shrink-0 self-start rounded-lg px-2 py-1 text-[10px] font-semibold text-apple-blue hover:bg-apple-blue/10 lg:self-center"
-            >
-              Xóa lọc
-            </button>
-          )}
+          <WarehouseGridPicker
+            className="md:hidden"
+            compact
+            rows={statusFilteredRows}
+            active={activeWarehouse}
+            onSelect={setActiveWarehouse}
+            highlightWarehouses={searchHighlightWarehouses}
+          />
         </div>
       )}
       </div>
@@ -493,8 +481,13 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         globalAgents={state.globalAgents}
         scscWeighPrintSettings={scscWeighPrintSettings}
         saveScscWeighPrintSettings={saveScscWeighPrintSettings}
-        warehouseLayoutFilter={warehouseFilter}
-        onAddBlankRow={addBlankRowForWarehouse}
+        activeWarehouse={activeWarehouse}
+        onActiveWarehouseChange={setActiveWarehouse}
+        metricRows={statusFilteredRows}
+        searchHighlightWarehouses={searchHighlightWarehouses}
+        highlightedShipmentId={highlightedShipmentId}
+        selectedRowId={selectedId}
+        onSelectRow={setSelectedId}
         onUpdate={onUpdate}
         onDelete={onDelete}
         onPrint={requestPrintLabel}
@@ -516,7 +509,10 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onUpdate={onUpdate}
         onDelete={onDelete}
         customerDirectory={state.customers}
-        warehouseLayoutFilter={warehouseFilter}
+        activeWarehouse={activeWarehouse}
+        searchActive={searchActive}
+        pinnedOpenWarehouses={searchHighlightWarehouses}
+        highlightedShipmentId={highlightedShipmentId}
         viewSessionYmd={selectedYmd}
         ecargoMap={ecargoRegister.map}
         onEcargoVehicleChange={ecargoRegister.setVehicle}
@@ -654,9 +650,9 @@ function SyncBadge({
 
 function StatInline({ label, value }: { label: string; value: string | number }) {
   return (
-    <span className="rounded-md border border-black/[0.06] bg-white/80 px-1.5 py-0.5 text-apple-secondary dark:border-white/10 dark:bg-ops-elevated/80 dark:text-ops-secondary">
+    <span className="rounded-full border border-black/[0.05] bg-white/90 px-2 py-0.5 text-[10px] text-dashboard-muted shadow-dashboard-card dark:border-white/[0.08] dark:bg-dashboard-surface-dark/90 dark:text-dashboard-muted-dark">
       {label}{" "}
-      <span className="font-semibold tabular-nums text-apple-label dark:text-ops-label">{value}</span>
+      <span className="font-semibold tabular-nums text-dashboard-primary dark:text-dashboard-primary-dark">{value}</span>
     </span>
   );
 }

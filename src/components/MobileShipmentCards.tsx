@@ -14,13 +14,12 @@ import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
-import { statusCardBg } from "./statusStyles";
+import { statusRowAccent, statusRowBg, statusRowSelected, flightNumberAccent } from "./statusStyles";
 import {
   warehouseLabel,
   warehouseSectionsForLayout,
   isScscWarehouse,
   isTcsWarehouse,
-  type WarehouseLayoutFilter,
 } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { useWarehouseSectionCollapse } from "../hooks/useWarehouseSectionCollapse";
@@ -54,8 +53,10 @@ interface MobileShipmentCardsProps {
   onDelete: (id: string) => void;
   /** Danh bạ — dùng để hiển thị mã/tên chuẩn trong popup khách. */
   customerDirectory?: readonly CustomerDirectoryEntry[];
-  /** Chỉ hiển thị section kho đã chọn trên bộ lọc (mobile). */
-  warehouseLayoutFilter?: WarehouseLayoutFilter;
+  /** Kho đang active — khi không tìm kiếm chỉ hiện kho này. */
+  activeWarehouse?: Warehouse;
+  /** Đang có từ khóa tìm kiếm — mở rộng mọi kho có kết quả. */
+  searchActive?: boolean;
   /** Ngày phiên OPS (YYYY-MM-DD) — dự phòng khi `sessionDate` trên lô trống. */
   viewSessionYmd?: string;
   ecargoMap?: EcargoKhoScscPersistedMap;
@@ -66,6 +67,8 @@ interface MobileShipmentCardsProps {
   onEcargoAutoRegister?: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
   onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering?: (id: string) => boolean;
+  pinnedOpenWarehouses?: readonly Warehouse[];
+  highlightedShipmentId?: string | null;
 }
 
 export function MobileShipmentCards({
@@ -75,7 +78,8 @@ export function MobileShipmentCards({
   onUpdate,
   onDelete,
   customerDirectory = [],
-  warehouseLayoutFilter = "ALL",
+  activeWarehouse = "TECS-TCS",
+  searchActive = false,
   viewSessionYmd = "",
   ecargoMap = {},
   onEcargoVehicleChange,
@@ -85,6 +89,8 @@ export function MobileShipmentCards({
   onEcargoAutoRegister,
   onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
+  pinnedOpenWarehouses = [],
+  highlightedShipmentId = null,
 }: MobileShipmentCardsProps) {
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const [openEcargoRowId, setOpenEcargoRowId] = useState<string | null>(null);
@@ -94,10 +100,12 @@ export function MobileShipmentCards({
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
-  const warehouseSections = useMemo(
-    () => warehouseSectionsForLayout(warehouseLayoutFilter),
-    [warehouseLayoutFilter]
-  );
+  const warehouseSections = useMemo((): Warehouse[] => {
+    if (searchActive) {
+      return [...warehouseSectionsForLayout("ALL")];
+    }
+    return [activeWarehouse];
+  }, [searchActive, activeWarehouse]);
   const warehouseCounts = useMemo(() => {
     const counts = {
       "TECS-TCS": 0,
@@ -110,7 +118,7 @@ export function MobileShipmentCards({
     }
     return counts;
   }, [rowsByWarehouse, warehouseSections]);
-  const { isCollapsed, toggle } = useWarehouseSectionCollapse(warehouseCounts);
+  const { isCollapsed, toggle } = useWarehouseSectionCollapse(warehouseCounts, pinnedOpenWarehouses);
   const ecargoModalRow =
     openEcargoRowId != null
       ? rows.find((r) => r.id === openEcargoRowId && isScscWarehouse(r.warehouse))
@@ -147,20 +155,22 @@ export function MobileShipmentCards({
 
   return (
     <>
-    <div className="space-y-5 pb-28 md:hidden">
+    <div className="space-y-4 pb-28 md:hidden">
       {warehouseSections.map((wh) => {
         const group = rowsByWarehouse[wh];
-        const collapsed = isCollapsed(wh);
+        const collapsed = searchActive ? isCollapsed(wh) : false;
+        const showAccordionHeader = searchActive;
         return (
-          <section key={wh}>
+          <section key={wh} id={`warehouse-section-${wh}`}>
+            {showAccordionHeader ? (
             <button
               type="button"
               onClick={() => toggle(wh)}
               aria-expanded={!collapsed}
-              className="mb-2 flex w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-black/[0.03] dark:hover:bg-white/[0.06]"
+              className="mb-2 flex w-full items-center gap-2 rounded-xl px-1 py-0.5 text-left hover:bg-black/[0.03] dark:hover:bg-white/[0.06]"
             >
               <svg
-                className={`h-4 w-4 shrink-0 text-apple-secondary transition-transform dark:text-ops-secondary ${
+                className={`h-4 w-4 shrink-0 text-dashboard-muted transition-transform dark:text-dashboard-muted-dark ${
                   collapsed ? "" : "rotate-90"
                 }`}
                 fill="none"
@@ -171,22 +181,35 @@ export function MobileShipmentCards({
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
               </svg>
-              <h2 className="text-[17px] font-semibold tracking-tight text-apple-label dark:text-ops-label">{warehouseLabel[wh]}</h2>
-              <span className="rounded-full bg-apple-label px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-ops-elevated">
+              <h2 className="text-[16px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
+                {warehouseLabel[wh]}
+              </h2>
+              <span className="rounded-full bg-dashboard-primary/90 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-slate-600 dark:text-slate-100">
                 {group.length}
               </span>
             </button>
+            ) : (
+              <div className="mb-2 flex items-baseline justify-between gap-2 px-0.5">
+                <h2 className="text-[16px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
+                  {warehouseLabel[wh]}
+                </h2>
+                <span className="text-[11px] tabular-nums text-dashboard-muted dark:text-dashboard-muted-dark">
+                  {group.length} lô
+                </span>
+              </div>
+            )}
             {!collapsed && group.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-black/[0.1] bg-white/80 px-4 py-6 text-center text-[13px] text-apple-secondary dark:border-white/10 dark:bg-ops-surface/80 dark:text-ops-secondary">
-                Chưa có lô trong kho này — dùng « Nhập booking mới » bên dưới và chọn đúng kho trong form.
+              <p className="rounded-2xl border border-dashed border-black/[0.08] bg-white px-4 py-6 text-center text-[13px] text-dashboard-muted shadow-dashboard-card dark:border-white/10 dark:bg-dashboard-surface-dark dark:text-dashboard-muted-dark">
+                Chưa có lô trong kho này — dùng « New Booking » phía trên.
               </p>
             ) : null}
             {!collapsed && group.length > 0 ? (
-            <div className="space-y-1">
+            <div className="space-y-2">
               {group.map((row) => {
                 const open = swipeOpenId === row.id;
                 const selected = selectedId === row.id;
-                const cardColors = statusCardBg[row.status];
+                const rowAccent = statusRowAccent[row.status];
+                const rowSurface = selected ? statusRowSelected : statusRowBg[row.status];
                 const cneeBodyText = buildShipmentCneeDisplayLines(row, customerDirectory, {
                   sessionYmdFallback: viewSessionYmd,
                 }).join("\n");
@@ -200,9 +223,9 @@ export function MobileShipmentCards({
                   <div
                     id={`mobile-shipment-${row.id}`}
                     key={row.id}
-                    className={`relative overflow-hidden rounded-2xl border border-black/[0.08] shadow-apple transition-all ${cardColors} ${
-                      selected ? "ring-2 ring-apple-blue/40 ring-offset-2 ring-offset-apple-bg" : ""
-                    }`}
+                    className={`relative overflow-hidden rounded-xl shadow-dashboard-card transition-all ${rowAccent} ${rowSurface} ${
+                      selected ? "ring-2 ring-amber-300/50 ring-offset-1 ring-offset-dashboard-canvas dark:ring-amber-400/30 dark:ring-offset-dashboard-canvas-dark" : ""
+                    } ${highlightedShipmentId === row.id ? "ring-2 ring-apple-blue/60 ring-offset-1" : ""}`}
                   >
                     {/* Vuốt trái: Xóa */}
                     <div className="absolute inset-y-0 right-0 z-0 flex" style={{ width: REVEAL_PX }} aria-hidden>
@@ -244,28 +267,29 @@ export function MobileShipmentCards({
                       style={{
                         transform: open ? `translateX(-${REVEAL_PX}px)` : undefined,
                       }}
-                      className="relative z-10 cursor-pointer bg-white/90 px-2.5 py-2 backdrop-blur-sm transition-transform duration-200 ease-out"
+                      className="relative z-10 cursor-pointer bg-transparent px-2.5 py-2 transition-transform duration-200 ease-out"
                     >
                       <div className="flex flex-col gap-1.5">
                         <div className="flex items-start justify-between gap-2">
                           <p className="min-w-0 flex-1 text-left leading-snug">
-                            <span className="font-mono text-[1.1rem] font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-50">
+                            <span className="font-mono text-[1.1rem] font-bold leading-tight tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
                               {row.awb}
                             </span>
                             {(row.hawb ?? "").trim() ? (
                               <>
-                                <span className="text-apple-tertiary"> · </span>
-                                <span className="font-mono text-[11px] font-semibold text-apple-secondary">
+                                <span className="text-dashboard-muted"> · </span>
+                                <span className="font-mono text-[11px] font-semibold text-dashboard-muted dark:text-dashboard-muted-dark">
                                   HAWB {(row.hawb ?? "").trim()}
                                 </span>
                               </>
                             ) : null}
-                            <span className="text-apple-tertiary"> · </span>
-                            <span className="text-[11px] font-medium text-apple-secondary">
-                              {row.flight}/{row.flightDate}
+                            <span className="text-dashboard-muted"> · </span>
+                            <span className={`text-[11px] font-bold ${flightNumberAccent}`}>
+                              {row.flight}
                             </span>
-                            <span className="text-apple-tertiary"> · </span>
-                            <span className="text-[13px] font-semibold text-apple-label">{row.dest}</span>
+                            <span className="text-[11px] font-medium text-dashboard-muted">/{row.flightDate}</span>
+                            <span className="text-dashboard-muted"> · </span>
+                            <span className="text-[13px] font-semibold text-dashboard-primary dark:text-dashboard-primary-dark">{row.dest}</span>
                           </p>
                           <div className="shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
                             <StatusSelect
@@ -627,9 +651,9 @@ export function StickyMobileActions({
           <button
             type="button"
             onClick={onAdd}
-            className="w-full rounded-full bg-apple-blue py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover active:scale-[0.98]"
+            className="w-full rounded-full bg-apple-blue py-3 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(0,113,227,0.35)] transition-colors hover:bg-apple-blue-hover active:scale-[0.98]"
           >
-            + Nhập booking mới
+            + New Booking
           </button>
         )}
       </div>

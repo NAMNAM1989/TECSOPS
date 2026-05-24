@@ -27,23 +27,12 @@ type Props = {
 function ActionIconBtn({
   label,
   onClick,
-  tone = "default",
   children,
 }: {
   label: string;
   onClick: () => void;
-  tone?: "default" | "sky" | "amber" | "danger";
   children: ReactNode;
 }) {
-  const toneCls =
-    tone === "sky"
-      ? "border-sky-200/80 text-sky-800 hover:bg-sky-50"
-      : tone === "amber"
-        ? "border-amber-200/80 text-amber-900 hover:bg-amber-50"
-        : tone === "danger"
-          ? "border-red-300/80 bg-red-50/80 text-red-600 hover:border-red-400 hover:bg-red-100 hover:text-red-800"
-          : "border-black/[0.08] text-apple-secondary hover:bg-black/[0.04] hover:text-apple-label";
-
   return (
     <button
       type="button"
@@ -53,18 +42,18 @@ function ActionIconBtn({
         e.stopPropagation();
         onClick();
       }}
-      className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border bg-white shadow-sm transition active:scale-[0.96] ${toneCls}`}
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-black/[0.08] bg-white/80 text-apple-secondary shadow-sm transition-all hover:border-black/[0.12] hover:bg-white hover:text-apple-label active:scale-[0.96] dark:border-white/10 dark:bg-ops-elevated/80 dark:text-ops-secondary dark:hover:bg-ops-elevated dark:hover:text-ops-label"
     >
       {children}
     </button>
   );
 }
 
-const iconCls = "h-3.5 w-3.5";
+const iconCls = "h-4 w-4";
 
 function IconPrintLabel() {
   return (
-    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24" aria-hidden>
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -74,12 +63,12 @@ function IconPrintLabel() {
   );
 }
 
-function IconMore() {
+function IconKebabVertical() {
   return (
     <svg className={iconCls} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <circle cx="12" cy="5" r="1.75" />
-      <circle cx="12" cy="12" r="1.75" />
-      <circle cx="12" cy="19" r="1.75" />
+      <circle cx="12" cy="5" r="1.35" />
+      <circle cx="12" cy="12" r="1.35" />
+      <circle cx="12" cy="19" r="1.35" />
     </svg>
   );
 }
@@ -215,7 +204,7 @@ export function ShipmentRowActionsMenu({
       <button
         ref={triggerRef}
         type="button"
-        title="Thêm thao tác"
+        title="Thao tác thêm"
         aria-label="Menu thao tác lô hàng"
         aria-expanded={menuOpen}
         aria-haspopup="menu"
@@ -223,9 +212,13 @@ export function ShipmentRowActionsMenu({
           e.stopPropagation();
           setMenuOpen((v) => !v);
         }}
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-black/[0.08] bg-white text-apple-secondary shadow-sm hover:bg-black/[0.04]"
+        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border bg-white/80 shadow-sm transition-all active:scale-[0.96] dark:bg-ops-elevated/80 ${
+          menuOpen
+            ? "border-apple-blue/40 text-apple-blue dark:border-apple-blue/50"
+            : "border-black/[0.08] text-apple-secondary hover:border-black/[0.12] hover:text-apple-label dark:border-white/10 dark:text-ops-secondary dark:hover:text-ops-label"
+        }`}
       >
-        <IconMore />
+        <IconKebabVertical />
       </button>
       {typeof document !== "undefined" && dropdownMenu ? createPortal(dropdownMenu, document.body) : null}
     </div>

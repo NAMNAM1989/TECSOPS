@@ -7,7 +7,7 @@
     @apply scroll-smooth;
   }
   body {
-    @apply min-h-screen bg-apple-bg text-apple-label antialiased dark:bg-ops-bg dark:text-ops-label;
+    @apply min-h-screen bg-dashboard-canvas text-dashboard-primary antialiased dark:bg-dashboard-canvas-dark dark:text-dashboard-primary-dark;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }

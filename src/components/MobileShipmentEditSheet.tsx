@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Shipment, ShipmentStatus } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { GlobalAgentCatalog } from "../types/globalAgents";
-import { CUSTOMERS, DESTINATIONS } from "../data/customers";
+import { DESTINATIONS } from "../data/customers";
 import { findCustomerEntry } from "../utils/mapBookingToScaleTicketFormData";
+import { buildShipmentPatchForCustomerSelection } from "../utils/customerShipmentPatch";
 import { findGlobalAgentById } from "../utils/globalAgentsCore";
 import {
   buildShipmentPatchForSavedConsignee,
@@ -26,6 +27,7 @@ import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStor
 import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
 import type { EcargoJobRecord } from "../types/ecargoJob";
 import { ecargoKhoScscLineStatusLabel } from "../utils/ecargoUiLabels";
+import { CustomerPickerField } from "./CustomerPickerField";
 
 type TabId = "lot" | "cnee" | "dim";
 
@@ -83,21 +85,24 @@ export function MobileShipmentEditSheet({
     return Number.isFinite(y) ? y : new Date().getFullYear();
   }, [sessionDateYmd, shipment?.sessionDate]);
 
-  const entry = useMemo(
-    () => (shipment ? findCustomerEntry(shipment, customerDirectory) : undefined),
-    [shipment, customerDirectory]
-  );
-  const customerOptions = useMemo(() => {
-    const fromDir = customerDirectory.map((c) => c.name.trim()).filter(Boolean);
-    const merged = new Set([...CUSTOMERS, ...fromDir]);
-    if (shipment?.customer?.trim()) merged.add(shipment.customer.trim());
-    return [...merged].sort((a, b) => a.localeCompare(b, "vi"));
-  }, [customerDirectory, shipment?.customer]);
+  const applyCustomerFromDirectory = (name: string, entry?: CustomerDirectoryEntry) => {
+    const patch = buildShipmentPatchForCustomerSelection(customerDirectory, name, entry);
+    setCustomer((patch.customer ?? name).trim());
+    setCustomerId((patch.customerId ?? "").trim());
+    if (patch.customerConsigneeId) {
+      setCustomerConsigneeId(patch.customerConsigneeId);
+      setConsigneeNamePrint(patch.consigneeNamePrint ?? "");
+      setConsigneeAddressPrint(patch.consigneeAddressPrint ?? "");
+      setConsigneePhonePrint(patch.consigneePhonePrint ?? "");
+      setConsigneeEmailPrint(patch.consigneeEmailPrint ?? "");
+    }
+  };
 
   const [flight, setFlight] = useState("");
   const [flightDateText, setFlightDateText] = useState("");
   const [dest, setDest] = useState("");
   const [customer, setCustomer] = useState("");
+  const [customerId, setCustomerId] = useState("");
   const [note, setNote] = useState("");
   const [customerConsigneeId, setCustomerConsigneeId] = useState("");
   const [consigneeNamePrint, setConsigneeNamePrint] = useState("");
@@ -122,6 +127,7 @@ export function MobileShipmentEditSheet({
     setFlightDateText((shipment.flightDate ?? "").trim());
     setDest((shipment.dest ?? "").trim());
     setCustomer((shipment.customer ?? "").trim());
+    setCustomerId((shipment.customerId ?? "").trim());
     setNote((shipment.note ?? "").trim());
     setCustomerConsigneeId((shipment.customerConsigneeId ?? "").trim());
     setConsigneeNamePrint((shipment.consigneeNamePrint ?? "").trim());
@@ -140,6 +146,7 @@ export function MobileShipmentEditSheet({
 
   if (!open || !shipment) return null;
 
+  const entry = findCustomerEntry(shipment, customerDirectory);
   const savedConsignees = entry?.savedConsignees ?? [];
   const savedGoods = entry?.savedGoods ?? [];
   const agentOptions = globalAgents?.agents ?? [];
@@ -151,10 +158,12 @@ export function MobileShipmentEditSheet({
   const handleSave = () => {
     const ymd = parseBookingDateLoose(flightDateText.trim(), sessionYear);
     const flightDate = ymd ? formatYmdToFlightDateDdMon(ymd) : flightDateText.trim();
+    const customerPatch = buildShipmentPatchForCustomerSelection(customerDirectory, customer);
     const patch: Partial<Shipment> = {
       flight: flight.trim().toUpperCase(),
       flightDate,
       dest: dest.trim().toUpperCase(),
+      ...customerPatch,
       customer: customer.trim(),
       note: note.trim(),
       pcs,
@@ -265,14 +274,14 @@ export function MobileShipmentEditSheet({
                   </datalist>
                 </Field>
                 <Field label="Khách">
-                  <select value={customer} onChange={(e) => setCustomer(e.target.value)} className={inputCls}>
-                    <option value="">— Khách —</option>
-                    {customerOptions.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                  <CustomerPickerField
+                    value={customer}
+                    customerId={customerId}
+                    directory={customerDirectory}
+                    onChange={(name, entry) => applyCustomerFromDirectory(name, entry)}
+                    placeholder="Tìm mã hoặc tên khách…"
+                    inputClassName={inputCls}
+                  />
                 </Field>
                 <Field label="Ghi chú">
                   <textarea

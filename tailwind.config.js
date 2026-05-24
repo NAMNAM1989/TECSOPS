@@ -25,6 +25,16 @@ export default {
         ],
       },
       colors: {
+        dashboard: {
+          canvas: "#F4F6F9",
+          "canvas-dark": "#0B0F19",
+          surface: "#FFFFFF",
+          "surface-dark": "#1E293B",
+          primary: "#0F172A",
+          "primary-dark": "#F8FAFC",
+          muted: "#64748B",
+          "muted-dark": "#94A3B8",
+        },
         apple: {
           blue: "#0071e3",
           "blue-hover": "#0077ed",
@@ -36,12 +46,12 @@ export default {
           separator: "rgba(0,0,0,0.08)",
         },
         ops: {
-          bg: "#0f1419",
-          surface: "#1a212b",
-          elevated: "#242d38",
-          label: "#f0f2f5",
-          secondary: "#cbd5e1",
-          tertiary: "#94a3b8",
+          bg: "#0B0F19",
+          surface: "#1E293B",
+          elevated: "#182232",
+          label: "#F8FAFC",
+          secondary: "#94A3B8",
+          tertiary: "#64748B",
         },
       },
       borderRadius: {
@@ -51,6 +61,8 @@ export default {
       boxShadow: {
         apple: "0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)",
         "apple-md": "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)",
+        "dashboard-card": "0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.04)",
+        "dashboard-card-hover": "0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.05)",
       },
       keyframes: {
         "tecsops-actions-strip": {

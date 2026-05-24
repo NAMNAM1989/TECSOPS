@@ -27,6 +27,21 @@ import {
 
 export { ECARGO_VEHICLE_MIN };
 
+const ECARGO_INPUT =
+  "w-full rounded-xl border border-black/[0.06] bg-white px-4 text-dashboard-primary shadow-dashboard-card placeholder:text-dashboard-muted focus:border-sky-400/40 focus:outline-none focus:ring-2 focus:ring-sky-400/20 dark:border-white/[0.12] dark:bg-ops-elevated dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-sky-400/45 dark:focus:ring-sky-400/25";
+
+const ECARGO_LABEL =
+  "mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-dashboard-muted dark:text-slate-400";
+
+const ECARGO_PRE =
+  "max-h-32 overflow-auto rounded-xl border border-black/[0.06] bg-slate-50 p-3 font-mono text-[12px] leading-relaxed text-slate-800 shadow-dashboard-card whitespace-pre-wrap dark:border-white/[0.1] dark:bg-black/35 dark:text-slate-200";
+
+const ECARGO_BTN_OUTLINE_SKY =
+  "min-h-11 flex-1 rounded-full border border-sky-500/30 bg-white py-2.5 text-[13px] font-bold text-sky-800 shadow-dashboard-card active:scale-[0.99] dark:border-sky-400/40 dark:bg-sky-500/15 dark:text-sky-100 dark:hover:bg-sky-500/25";
+
+const ECARGO_BTN_OUTLINE_NEUTRAL =
+  "min-h-11 flex-1 rounded-full border border-black/[0.06] bg-white py-2.5 text-[13px] font-semibold text-dashboard-primary shadow-dashboard-card active:scale-[0.99] dark:border-white/[0.14] dark:bg-white/[0.07] dark:text-slate-100 dark:hover:bg-white/[0.11]";
+
 function EcargoVehiclePicker({
   vehicles,
   vehicleInput,
@@ -71,9 +86,9 @@ function EcargoVehiclePicker({
   }, [onListOpenChange, showDropdown]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="relative">
-        <label className="mb-2 block text-sm font-semibold text-apple-secondary">Số xe</label>
+        <label className={ECARGO_LABEL}>Số xe</label>
         <input
           ref={inputRef}
           type="text"
@@ -91,12 +106,12 @@ function EcargoVehiclePicker({
           onFocus={() => {
             if (vehicles.length) onListOpenChange(true);
           }}
-          className="h-14 w-full rounded-[1.1rem] border border-black/[0.12] bg-[#f7f7fb] px-5 font-mono text-lg font-bold uppercase tracking-wide text-apple-label shadow-inner placeholder:text-apple-tertiary focus:outline-none focus:ring-2 focus:ring-sky-300/60"
+          className={`${ECARGO_INPUT} h-14 font-mono text-lg font-bold uppercase tracking-wide`}
         />
         {showDropdown ? (
           <div
             ref={listRef}
-            className="absolute left-0 right-0 top-full z-10 mt-1 max-h-44 overflow-y-auto rounded-xl border border-black/[0.1] bg-white py-1 shadow-apple-md"
+            className="absolute left-0 right-0 top-full z-10 mt-1.5 max-h-44 overflow-y-auto rounded-xl border border-black/[0.06] bg-white py-1 shadow-dashboard-card-hover dark:border-white/10 dark:bg-dashboard-surface-dark"
             role="listbox"
           >
             {(filtered.length ? filtered : vehicles).map((v) => (
@@ -104,22 +119,26 @@ function EcargoVehiclePicker({
                 key={v.id}
                 type="button"
                 role="option"
-                className="flex w-full flex-col gap-0.5 px-4 py-2.5 text-left hover:bg-sky-50"
+                className="flex w-full flex-col gap-0.5 px-4 py-2.5 text-left hover:bg-sky-500/10 dark:hover:bg-sky-400/10"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   onSelectVehicle(v);
                   onListOpenChange(false);
                 }}
               >
-                <span className="font-mono text-sm font-bold uppercase text-apple-label">{v.licensePlate}</span>
-                <span className="text-[12px] text-apple-secondary">
+                <span className="font-mono text-sm font-bold uppercase text-dashboard-primary dark:text-dashboard-primary-dark">
+                  {v.licensePlate}
+                </span>
+                <span className="text-[12px] text-dashboard-muted dark:text-dashboard-muted-dark">
                   {v.driverName || "—"}
                   {v.driverId ? ` · ${v.driverId}` : ""}
                 </span>
               </button>
             ))}
             {filtered.length === 0 ? (
-              <p className="px-4 py-2 text-[12px] text-apple-tertiary">Không khớp xe nào — tiếp tục gõ biển mới.</p>
+              <p className="px-4 py-2 text-[12px] text-dashboard-muted dark:text-dashboard-muted-dark">
+                Không khớp xe nào — tiếp tục gõ biển mới.
+              </p>
             ) : null}
           </div>
         ) : null}
@@ -127,24 +146,24 @@ function EcargoVehiclePicker({
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block min-w-0">
-          <span className="mb-1.5 block text-[12px] font-semibold text-apple-secondary">Tên tài xế</span>
+          <span className={ECARGO_LABEL}>Tên tài xế</span>
           <input
             type="text"
             value={driverName}
             onChange={(e) => onDriverNameChange(e.target.value)}
             placeholder="Tên trên eCargo"
-            className="h-11 w-full rounded-xl border border-black/[0.1] bg-[#f7f7fb] px-3.5 text-sm text-apple-label focus:outline-none focus:ring-2 focus:ring-sky-300/60"
+            className={`${ECARGO_INPUT} h-11 text-sm`}
           />
         </label>
         <label className="block min-w-0">
-          <span className="mb-1.5 block text-[12px] font-semibold text-apple-secondary">CCCD / CMND</span>
+          <span className={ECARGO_LABEL}>CCCD / CMND</span>
           <input
             type="text"
             inputMode="numeric"
             value={driverId}
             onChange={(e) => onDriverIdChange(e.target.value.replace(/\D/g, ""))}
             placeholder="Số giấy tờ tài xế"
-            className="h-11 w-full rounded-xl border border-black/[0.1] bg-[#f7f7fb] px-3.5 font-mono text-sm text-apple-label focus:outline-none focus:ring-2 focus:ring-sky-300/60"
+            className={`${ECARGO_INPUT} h-11 font-mono text-sm`}
           />
         </label>
       </div>
@@ -324,20 +343,20 @@ function EcargoKhoScscModalBody({
   }, []);
 
   return (
-    <div className="space-y-5 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-8 sm:pb-8">
+    <div className="space-y-4 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-7 sm:pb-7">
       {agentCode ? (
         <div
-          className="inline-flex max-w-full items-center gap-2 rounded-full border border-sky-200/80 bg-sky-50 px-3 py-1.5 text-[12px] font-semibold text-sky-900"
+          className="inline-flex max-w-full items-center gap-2 rounded-full bg-sky-500/15 px-3 py-1.5 text-[12px] font-semibold text-sky-800 ring-1 ring-sky-500/20 dark:bg-sky-400/15 dark:text-sky-200 dark:ring-sky-400/25"
           title={agentLabel}
         >
-          <span className="text-sky-700/80">Xe của đại lý:</span>
+          <span className="text-sky-700/80 dark:text-sky-300/80">Xe của đại lý:</span>
           <span className="truncate font-mono uppercase">{agentCode}</span>
           {agentLabel && agentLabel.toUpperCase() !== agentCode ? (
-            <span className="truncate font-normal text-sky-800/90">· {agentLabel}</span>
+            <span className="truncate font-normal opacity-90">· {agentLabel}</span>
           ) : null}
         </div>
       ) : (
-        <p className="text-[12px] text-amber-800">
+        <p className="rounded-xl bg-amber-500/15 px-3 py-2 text-[12px] font-medium text-amber-900 ring-1 ring-amber-500/20 dark:bg-amber-400/15 dark:text-amber-200 dark:ring-amber-400/25">
           Chưa khớp hồ sơ khách — thêm mã «{row.customerCode || row.customer || "?"}» trong Danh bạ khách để lưu xe mặc định.
         </p>
       )}
@@ -376,7 +395,7 @@ function EcargoKhoScscModalBody({
       />
 
       {prefill.vehicles.length > 0 ? (
-        <p className="text-[11px] leading-snug text-apple-tertiary">
+        <p className="text-[11px] leading-snug text-dashboard-muted dark:text-dashboard-muted-dark">
           {prefill.vehicles.length} xe trong hồ sơ
           {prefill.defaultVehicle ? ` · mặc định: ${vehicleDisplayLabel(prefill.defaultVehicle)}` : ""}
         </p>
@@ -384,8 +403,10 @@ function EcargoKhoScscModalBody({
 
       {saveLabel ? (
         <span
-          className={`block text-[12px] font-medium ${
-            saveStatus === "error" ? "text-red-600" : "text-emerald-700"
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+            saveStatus === "error"
+              ? "bg-red-500/15 text-red-800 ring-1 ring-red-500/20 dark:bg-red-400/15 dark:text-red-200"
+              : "bg-emerald-500/15 text-emerald-800 ring-1 ring-emerald-500/20 dark:bg-emerald-400/15 dark:text-emerald-300"
           }`}
           role="status"
         >
@@ -394,19 +415,19 @@ function EcargoKhoScscModalBody({
       ) : null}
 
       {prefill.customer && onSaveVehicleAsDefault ? (
-        <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-black/[0.08] bg-[#fafafc] px-3.5 py-3 text-[13px] text-apple-label">
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-black/[0.05] bg-dashboard-canvas/80 px-3.5 py-3 text-[13px] text-dashboard-primary shadow-dashboard-card dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-slate-200">
           <input
             type="checkbox"
             checked={saveAsDefault}
             onChange={(e) => setSaveAsDefault(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-black/20 text-sky-600 focus:ring-sky-400"
+            className="mt-0.5 h-4 w-4 rounded border-black/20 text-sky-600 focus:ring-sky-400/40 dark:border-white/20"
           />
           <span>Lưu xe này làm mặc định cho Khách hàng này</span>
         </label>
       ) : null}
 
       {!readiness.ready ? (
-        <p className="text-[13px] leading-snug text-apple-secondary" role="status">
+        <p className="text-[13px] leading-snug text-dashboard-muted dark:text-dashboard-muted-dark" role="status">
           {readiness.hint}
         </p>
       ) : null}
@@ -416,25 +437,25 @@ function EcargoKhoScscModalBody({
         disabled={!canSubmit}
         aria-label="Tự động đăng ký eCargo"
         onClick={() => void handleAuto()}
-        className="w-full rounded-2xl bg-sky-600 py-4 text-lg font-extrabold uppercase tracking-wide text-white shadow-[0_6px_14px_rgba(2,132,199,0.28)] transition hover:bg-sky-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/30 disabled:shadow-none"
+        className="w-full rounded-2xl bg-sky-600 py-3.5 text-base font-bold uppercase tracking-wide text-white shadow-[0_6px_20px_rgba(2,132,199,0.32)] transition hover:bg-sky-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400 disabled:text-slate-100 disabled:shadow-none dark:disabled:bg-slate-700 dark:disabled:text-slate-500"
       >
         {jobRunning ? "Đang tự động đăng ký…" : "Tự động đăng ký eCargo"}
       </button>
 
       {showAutoStatusBox ? (
         <div
-          className={`rounded-2xl border px-4 py-3 text-[13px] leading-snug ${
+          className={`rounded-xl px-4 py-3 text-[13px] leading-snug ring-1 ${
             localError || displayJob?.status === "error"
-              ? "border-red-300/80 bg-red-50 text-red-900"
+              ? "bg-red-500/10 text-red-900 ring-red-500/20 dark:bg-red-400/10 dark:text-red-200 dark:ring-red-400/25"
               : displayJob?.status === "verified"
-                ? "border-emerald-300/80 bg-emerald-50 text-emerald-900"
-                : "border-sky-200/80 bg-sky-50 text-sky-950"
+                ? "bg-emerald-500/10 text-emerald-900 ring-emerald-500/20 dark:bg-emerald-400/10 dark:text-emerald-200 dark:ring-emerald-400/25"
+                : "bg-sky-500/10 text-sky-950 ring-sky-500/20 dark:bg-sky-400/10 dark:text-sky-100 dark:ring-sky-400/25"
           }`}
           role="status"
         >
           {localError ? <p className="font-bold">{localError}</p> : jobLabel ? <p className="font-bold">{jobLabel}</p> : null}
           {!localError && displayJob?.message ? (
-            <p className="mt-1 font-medium">
+            <p className="mt-1 font-medium opacity-90">
               {displayJob.status === "error"
                 ? formatEcargoJobErrorMessage(displayJob.message)
                 : displayJob.message}
@@ -442,52 +463,51 @@ function EcargoKhoScscModalBody({
           ) : null}
         </div>
       ) : (
-        <p className="text-[12px] leading-snug text-apple-secondary">
+        <p className="text-[12px] leading-snug text-dashboard-muted dark:text-dashboard-muted-dark">
           Hệ thống tự điền form eCargo SCSC, tạo phiếu, đọc mail xác thực và bấm Xác Thực.
         </p>
       )}
 
-      <div className="rounded-2xl border border-black/[0.08] bg-[#fafafc]">
+      <div className="overflow-hidden rounded-xl border border-black/[0.05] bg-dashboard-canvas/60 shadow-dashboard-card dark:border-white/[0.08] dark:bg-black/25">
         <button
           type="button"
           onClick={() => setManualOpen((o) => !o)}
-          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-[13px] font-semibold text-apple-label"
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-[13px] font-semibold text-dashboard-primary dark:text-dashboard-primary-dark"
           aria-expanded={showManualFallback}
         >
           <span>Dự phòng: sao chép mẫu thủ công</span>
-          <span className="text-apple-secondary">{showManualFallback ? "▴" : "▾"}</span>
+          <svg
+            className={`h-4 w-4 shrink-0 text-dashboard-muted transition-transform dark:text-dashboard-muted-dark ${showManualFallback ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
         </button>
         {showManualFallback ? (
-          <div className="space-y-3 border-t border-black/[0.06] px-4 pb-4 pt-3">
-            <p className="text-[12px] leading-snug text-apple-secondary">
+          <div className="space-y-3 border-t border-black/[0.05] px-4 pb-4 pt-3 dark:border-white/[0.06]">
+            <p className="text-[12px] leading-snug text-dashboard-muted dark:text-dashboard-muted-dark">
               Khi tự động lỗi: sao chép 5 dòng → mở eCargo → dán vào form (extension hoặc tay).
             </p>
-            <pre className="max-h-32 overflow-auto rounded-xl border border-black/[0.08] bg-white p-3 font-mono text-[12px] leading-relaxed text-apple-label whitespace-pre-wrap">
-              {pasteBlock}
-            </pre>
+            <pre className={ECARGO_PRE}>{pasteBlock}</pre>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <button
-                type="button"
-                onClick={() => void copyPasteBlock()}
-                className="min-h-11 flex-1 rounded-xl border border-sky-600/40 bg-white py-2.5 text-[13px] font-bold text-sky-800 shadow-sm active:scale-[0.99]"
-              >
+              <button type="button" onClick={() => void copyPasteBlock()} className={ECARGO_BTN_OUTLINE_SKY}>
                 {copyOk ? "Đã sao chép ✓" : "Sao chép mẫu 5 dòng"}
               </button>
-              <button
-                type="button"
-                onClick={openEcargoSite}
-                className="min-h-11 flex-1 rounded-xl border border-black/[0.12] bg-white py-2.5 text-[13px] font-semibold text-apple-label shadow-sm active:scale-[0.99]"
-              >
+              <button type="button" onClick={openEcargoSite} className={ECARGO_BTN_OUTLINE_NEUTRAL}>
                 Mở eCargo SCSC
               </button>
             </div>
             {copyOk ? (
-              <p className="text-[12px] font-medium text-emerald-700" role="status">
+              <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-300" role="status">
                 Đã copy mẫu — mở eCargo và dán (Ctrl+V).
               </p>
             ) : null}
             {copyError ? (
-              <p className="text-[12px] font-medium text-red-700" role="alert">
+              <p className="text-[12px] font-medium text-red-700 dark:text-red-300" role="alert">
                 {copyError}
               </p>
             ) : null}
@@ -499,7 +519,7 @@ function EcargoKhoScscModalBody({
         type="button"
         aria-label="Đóng"
         onClick={onClose}
-        className="w-full rounded-xl py-2.5 text-[13px] font-semibold text-apple-secondary hover:bg-black/[0.04]"
+        className="w-full rounded-full py-2.5 text-[13px] font-semibold text-dashboard-muted transition hover:bg-black/[0.04] dark:text-dashboard-muted-dark dark:hover:bg-white/[0.06]"
       >
         Đóng
       </button>
@@ -549,7 +569,7 @@ export function EcargoKhoScscCenterModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[420] flex items-end justify-center bg-black/45 p-0 backdrop-blur-md animate-ecargo-backdrop-in motion-reduce:animate-none sm:items-center sm:p-6"
+      className="fixed inset-0 z-[420] flex items-end justify-center bg-black/50 p-0 backdrop-blur-md animate-ecargo-backdrop-in motion-reduce:animate-none dark:bg-black/65 sm:items-center sm:p-6"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -564,14 +584,14 @@ export function EcargoKhoScscCenterModal({
         aria-labelledby={`ecargo-modal-title-${rowId}`}
         data-ecargo-panel={rowId}
         id={`ecargo-panel-${rowId}`}
-        className="relative max-h-[min(92dvh,100%)] w-full max-w-2xl origin-bottom overflow-y-auto overscroll-contain animate-ecargo-card-in motion-reduce:animate-none motion-reduce:opacity-100 sm:origin-center sm:rounded-[1.35rem]"
+        className="relative max-h-[min(92dvh,100%)] w-full max-w-2xl origin-bottom overflow-y-auto overscroll-contain animate-ecargo-card-in motion-reduce:animate-none motion-reduce:opacity-100 sm:origin-center sm:rounded-2xl"
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
       >
-        <div className="overflow-hidden rounded-t-[1.35rem] border border-black/[0.08] bg-white shadow-apple-md ring-1 ring-black/[0.06] sm:rounded-[1.35rem]">
-          <div className="flex items-start justify-between gap-3 border-b border-black/[0.06] bg-white px-5 py-4 sm:px-8">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-sky-100 bg-sky-50 text-sky-700 shadow-sm">
+        <div className="overflow-hidden rounded-t-2xl bg-white shadow-dashboard-card-hover dark:bg-dashboard-surface-dark sm:rounded-2xl">
+          <div className="flex items-start justify-between gap-3 border-b border-black/[0.05] px-5 py-4 dark:border-white/[0.06] sm:px-7">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-700 ring-1 ring-sky-500/20 dark:bg-sky-400/15 dark:text-sky-300 dark:ring-sky-400/25">
                 <svg className="h-6 w-8" viewBox="0 0 32 22" fill="currentColor" aria-hidden>
                   <path opacity="0.35" d="M2 14h6v5H2v-5zm22 0h6v5h-6v-5z" />
                   <path d="M1 15.5V8.5L4 5h8l2.5 3H27l3 4.5v6H1zm3-6.5v4h6V9H4zm9 0v4h14l-2-2.5H13V9z" />
@@ -580,10 +600,13 @@ export function EcargoKhoScscCenterModal({
                 </svg>
               </span>
               <div className="min-w-0">
-                <h2 id={`ecargo-modal-title-${rowId}`} className="text-2xl font-extrabold tracking-tight text-apple-label">
+                <h2
+                  id={`ecargo-modal-title-${rowId}`}
+                  className="text-xl font-bold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark sm:text-2xl"
+                >
                   eCargo
                 </h2>
-                <p className="truncate font-mono text-sm font-bold text-apple-secondary">
+                <p className="truncate font-mono text-sm font-semibold text-dashboard-muted dark:text-dashboard-muted-dark">
                   Lô #{row.stt} · {row.awb}
                 </p>
               </div>
@@ -592,7 +615,7 @@ export function EcargoKhoScscCenterModal({
               type="button"
               aria-label="Đóng"
               onClick={onClose}
-              className="shrink-0 rounded-full p-2.5 text-apple-secondary transition hover:bg-black/[0.06] hover:text-apple-label active:bg-black/[0.08]"
+              className="shrink-0 rounded-full p-2 text-dashboard-muted transition hover:bg-black/[0.05] hover:text-dashboard-primary dark:text-dashboard-muted-dark dark:hover:bg-white/[0.08] dark:hover:text-dashboard-primary-dark"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -629,6 +652,7 @@ export function EcargoKhoScscTriggerButton({
   onClick,
   className = "",
   title,
+  variant = "default",
 }: {
   rowId: string;
   open: boolean;
@@ -637,10 +661,57 @@ export function EcargoKhoScscTriggerButton({
   onClick: (e: MouseEvent<HTMLButtonElement>) => void;
   className?: string;
   title?: string;
+  /** `icon` — chỉ biểu tượng xe (bảng desktop). */
+  variant?: "default" | "icon";
 }) {
   const verified = job?.status === "verified";
   const running = isEcargoJobRunning(job?.status);
   const errored = job?.status === "error";
+
+  const statusDot = verified ? (
+    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-ops-elevated" aria-hidden />
+  ) : running ? (
+    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500 ring-1 ring-white dark:ring-ops-elevated" aria-hidden />
+  ) : errored ? (
+    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-red-500 ring-1 ring-white dark:ring-ops-elevated" aria-hidden />
+  ) : hasVehicle ? (
+    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-ops-elevated" aria-hidden />
+  ) : null;
+
+  const truckIcon = (
+    <svg
+      className={variant === "icon" ? "h-4 w-4 shrink-0" : "h-4 w-6 shrink-0"}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      aria-hidden
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16V8l2.5-2.5H14L17 8v8M3 16h18M7 16v2m10-2v2M7 18a1.5 1.5 0 103 0 1.5 1.5 0 00-3 0zm8 0a1.5 1.5 0 103 0 1.5 1.5 0 00-3 0zM5 11h12" />
+    </svg>
+  );
+
+  if (variant === "icon") {
+    return (
+      <button
+        type="button"
+        data-ecargo-trigger={rowId}
+        aria-label="eCargo"
+        title={title ?? "eCargo — đăng ký kho SCSC"}
+        aria-expanded={open}
+        aria-controls={`ecargo-panel-${rowId}`}
+        onClick={onClick}
+        className={`relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sky-700 transition-all active:scale-[0.96] dark:text-sky-300 ${
+          open
+            ? "bg-sky-500/15 ring-1 ring-sky-500/30 shadow-[0_0_10px_rgba(14,165,233,0.2)] dark:bg-sky-400/15 dark:ring-sky-400/30"
+            : "bg-white/90 shadow-dashboard-card hover:bg-sky-500/10 dark:bg-ops-elevated dark:hover:bg-sky-400/15"
+        } ${className}`}
+      >
+        {statusDot}
+        {truckIcon}
+      </button>
+    );
+  }
 
   return (
     <button

@@ -17,6 +17,8 @@ interface Props {
   rows: readonly Shipment[];
   active: Warehouse;
   onSelect: (wh: Warehouse) => void;
+  /** Thêm dòng trống vào kho — nút + trên thẻ (1 click tại chỗ). */
+  onAddRow?: (wh: Warehouse) => void;
   /** Kho có kết quả tìm kiếm — viền phụ. */
   highlightWarehouses?: readonly Warehouse[];
   /** Dải ngang cuộn — dùng trên mobile. */
@@ -28,6 +30,7 @@ export function WarehouseGridPicker({
   rows,
   active,
   onSelect,
+  onAddRow,
   highlightWarehouses = [],
   compact = false,
   className = "",
@@ -50,13 +53,11 @@ export function WarehouseGridPicker({
         const hasSearchHit = highlightWarehouses.includes(wh);
 
         return (
-          <button
+          <div
             key={wh}
-            type="button"
             role="tab"
             aria-selected={isActive}
-            onClick={() => onSelect(wh)}
-            className={`group relative shrink-0 rounded-2xl text-left transition-all duration-200 active:scale-[0.99] ${
+            className={`group relative shrink-0 rounded-2xl text-left transition-all duration-200 ${
               compact ? "min-w-[8.5rem] p-2.5" : "p-3"
             } ${
               isActive
@@ -64,19 +65,36 @@ export function WarehouseGridPicker({
                 : "bg-white/80 shadow-dashboard-card hover:bg-white hover:shadow-dashboard-card-hover dark:bg-dashboard-surface-dark/80 dark:hover:bg-dashboard-surface-dark"
             } ${hasSearchHit && !isActive ? "ring-1 ring-apple-blue/30" : ""}`}
           >
-            <p
-              className={`font-bold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark ${
-                compact ? "text-[10px]" : "text-[11px]"
-              }`}
+            {onAddRow ? (
+              <button
+                type="button"
+                title={`Thêm lô ${warehouseLabel[wh]}`}
+                aria-label={`Thêm lô ${warehouseLabel[wh]}`}
+                onClick={() => onAddRow(wh)}
+                className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-apple-blue/40 bg-apple-blue text-[15px] font-bold leading-none text-white shadow-sm transition hover:bg-apple-blue-hover active:scale-95 dark:border-sky-400/40"
+              >
+                +
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onSelect(wh)}
+              className="block w-full rounded-2xl text-left active:scale-[0.99]"
             >
-              {warehouseLabel[wh]}
-            </p>
-            <div className={`grid grid-cols-3 gap-2 ${compact ? "mt-1.5 gap-1" : "mt-2"}`}>
-              <Metric label="Lô" value={m.lots} large={isActive} compact={compact} />
-              <Metric label="Kiện" value={m.pcs} large={isActive} compact={compact} />
-              <Metric label="Kg" value={m.kg.toLocaleString()} large={isActive} compact={compact} />
-            </div>
-          </button>
+              <p
+                className={`pr-8 font-bold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark ${
+                  compact ? "text-[10px]" : "text-[11px]"
+                }`}
+              >
+                {warehouseLabel[wh]}
+              </p>
+              <div className={`grid grid-cols-3 gap-2 ${compact ? "mt-1.5 gap-1" : "mt-2"}`}>
+                <Metric label="Lô" value={m.lots} large={isActive} compact={compact} />
+                <Metric label="Kiện" value={m.pcs} large={isActive} compact={compact} />
+                <Metric label="Kg" value={m.kg.toLocaleString()} large={isActive} compact={compact} />
+              </div>
+            </button>
+          </div>
         );
       })}
     </div>

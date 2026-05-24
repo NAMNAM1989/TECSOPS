@@ -69,6 +69,7 @@ interface MobileShipmentCardsProps {
   isEcargoAutoRegistering?: (id: string) => boolean;
   pinnedOpenWarehouses?: readonly Warehouse[];
   highlightedShipmentId?: string | null;
+  onAddBlankRow?: (warehouse: Warehouse) => void;
 }
 
 export function MobileShipmentCards({
@@ -91,6 +92,7 @@ export function MobileShipmentCards({
   isEcargoAutoRegistering,
   pinnedOpenWarehouses = [],
   highlightedShipmentId = null,
+  onAddBlankRow,
 }: MobileShipmentCardsProps) {
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const [openEcargoRowId, setOpenEcargoRowId] = useState<string | null>(null);
@@ -199,9 +201,19 @@ export function MobileShipmentCards({
               </div>
             )}
             {!collapsed && group.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-black/[0.08] bg-white px-4 py-6 text-center text-[13px] text-dashboard-muted shadow-dashboard-card dark:border-white/10 dark:bg-dashboard-surface-dark dark:text-dashboard-muted-dark">
-                Chưa có lô trong kho này — dùng « New Booking » phía trên.
-              </p>
+              onAddBlankRow ? (
+                <button
+                  type="button"
+                  onClick={() => onAddBlankRow(wh)}
+                  className="w-full rounded-2xl border border-dashed border-apple-blue/30 bg-apple-blue/5 px-4 py-6 text-center text-[13px] font-semibold text-apple-blue shadow-dashboard-card active:scale-[0.99] dark:border-sky-400/30 dark:bg-sky-500/10 dark:text-sky-300"
+                >
+                  + Booking · {warehouseLabel[wh]}
+                </button>
+              ) : (
+                <p className="rounded-2xl border border-dashed border-black/[0.08] bg-white px-4 py-6 text-center text-[13px] text-dashboard-muted shadow-dashboard-card dark:border-white/10 dark:bg-dashboard-surface-dark dark:text-dashboard-muted-dark">
+                  Chưa có lô trong kho này.
+                </p>
+              )
             ) : null}
             {!collapsed && group.length > 0 ? (
             <div className="space-y-2">
@@ -540,6 +552,7 @@ export function MobileShipmentCards({
 
 interface StickyMobileActionsProps {
   selected: Shipment | null;
+  activeWarehouse: Warehouse;
   onDelete: () => void;
   onAdd: () => void;
   onQuickEdit: () => void;
@@ -549,6 +562,7 @@ interface StickyMobileActionsProps {
 
 export function StickyMobileActions({
   selected,
+  activeWarehouse,
   onDelete,
   onAdd,
   onQuickEdit,
@@ -653,7 +667,7 @@ export function StickyMobileActions({
             onClick={onAdd}
             className="w-full rounded-full bg-apple-blue py-3 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(0,113,227,0.35)] transition-colors hover:bg-apple-blue-hover active:scale-[0.98]"
           >
-            + New Booking
+            + Booking · {warehouseLabel[activeWarehouse]}
           </button>
         )}
       </div>

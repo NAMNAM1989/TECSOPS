@@ -75,6 +75,7 @@ interface Props {
   highlightedShipmentId?: string | null;
   selectedRowId?: string | null;
   onSelectRow?: (id: string | null) => void;
+  onAddBlankRow?: (warehouse: Warehouse) => void;
 }
 
 const COL_HEADERS = [
@@ -119,6 +120,7 @@ export function DesktopShipmentTable({
   highlightedShipmentId = null,
   selectedRowId = null,
   onSelectRow,
+  onAddBlankRow,
 }: Props) {
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const [customerDetailRow, setCustomerDetailRow] = useState<Shipment | null>(null);
@@ -134,6 +136,7 @@ export function DesktopShipmentTable({
         rows={metricRows}
         active={activeWarehouse}
         onSelect={onActiveWarehouseChange}
+        onAddRow={onAddBlankRow}
         highlightWarehouses={searchHighlightWarehouses}
       />
 
@@ -141,13 +144,25 @@ export function DesktopShipmentTable({
         id={`warehouse-section-${activeWarehouse}`}
         className="overflow-hidden rounded-2xl bg-white shadow-dashboard-card transition-opacity duration-200 dark:bg-dashboard-surface-dark"
       >
-        <div className="border-b border-black/[0.04] px-3 py-2 dark:border-white/[0.06]">
-          <h2 className="text-sm font-semibold text-dashboard-primary dark:text-dashboard-primary-dark">
-            {warehouseLabel[activeWarehouse]}
-          </h2>
-          <p className="text-[10px] text-dashboard-muted dark:text-dashboard-muted-dark">
-            {group.length} lô · cuộn để xem thêm
-          </p>
+        <div className="flex items-center justify-between gap-2 border-b border-black/[0.04] px-3 py-2 dark:border-white/[0.06]">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-dashboard-primary dark:text-dashboard-primary-dark">
+              {warehouseLabel[activeWarehouse]}
+            </h2>
+            <p className="text-[10px] text-dashboard-muted dark:text-dashboard-muted-dark">
+              {group.length} lô · cuộn để xem thêm
+            </p>
+          </div>
+          {onAddBlankRow ? (
+            <button
+              type="button"
+              onClick={() => onAddBlankRow(activeWarehouse)}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-apple-blue px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm hover:bg-apple-blue-hover active:scale-[0.98]"
+              title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (N)`}
+            >
+              + Booking
+            </button>
+          ) : null}
         </div>
         <div
           className={`overflow-auto px-2 py-2 ${
@@ -178,8 +193,14 @@ export function DesktopShipmentTable({
             <tbody>
               {group.length === 0 ? (
                 <tr>
-                  <td colSpan={COL_HEADERS.length} className="px-3 py-8 text-center text-[11px] text-dashboard-muted">
-                    Chưa có lô trong kho này — dùng « New Booking » phía trên.
+                  <td colSpan={COL_HEADERS.length} className="px-3 py-6 text-center">
+                    <button
+                      type="button"
+                      onClick={() => onAddBlankRow?.(activeWarehouse)}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-apple-blue px-4 py-2 text-[11px] font-semibold text-white shadow-sm hover:bg-apple-blue-hover active:scale-[0.98]"
+                    >
+                      + Booking · {warehouseLabel[activeWarehouse]}
+                    </button>
                   </td>
                 </tr>
               ) : (

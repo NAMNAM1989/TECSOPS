@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense, startTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { initialShipments } from "../data/mockShipments";
 import { loadRows } from "../utils/shipmentStorage";
@@ -12,9 +12,6 @@ import { useShipmentSync } from "../hooks/useShipmentSync";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { MobileShipmentEditSheet } from "./MobileShipmentEditSheet";
-const ShipmentBookingForm = lazy(() =>
-  import("./ShipmentBookingForm").then((m) => ({ default: m.ShipmentBookingForm }))
-);
 import { CustomerDirectoryManager } from "./CustomerDirectoryManager";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
@@ -24,7 +21,7 @@ import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { WAREHOUSE_ORDER } from "../constants/warehouses";
-import { NewBookingDropdown } from "./NewBookingDropdown";
+import { NewBookingButton } from "./NewBookingButton";
 import { WarehouseGridPicker } from "./WarehouseGridPicker";
 import { DashboardToolbarButton } from "./DashboardToolbarButton";
 import { OpsDatePicker } from "./OpsDatePicker";
@@ -84,7 +81,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   );
   const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
   const [mobileEditShipment, setMobileEditShipment] = useState<Shipment | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
   const [activeWarehouse, setActiveWarehouse] = useState<Warehouse>("TECS-TCS");
@@ -186,22 +182,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     setSelectedId((s) => (s && filteredViewRows.some((r) => r.id === s) ? s : null));
   }, [filteredViewRows]);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
-      if (e.key === "/" || e.key === "f" || e.key === "F") {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
   const runMutate = useCallback(
     async (cmd: Parameters<typeof mutate>[0]) => {
       try {
@@ -246,18 +226,10 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     [runMutate]
   );
 
-  const onAdd = useCallback(
-    (data: Omit<Shipment, "id" | "stt">) => {
-      void runMutate({ action: "ADD", shipment: data });
-    },
-    [runMutate]
-  );
-
-  /** Desktop: thêm dòng trống đúng kho (nút đặt cạnh tiêu đề TCS / SCSC). */
+  /** Desktop / mobile: thêm dòng trống đúng kho — nhập inline trên lưới. */
   const addBlankRowForWarehouse = useCallback(
     async (warehouse: Warehouse) => {
       setMobileEditShipment(null);
-      setShowForm(false);
       setStatusFilter("ALL");
       setActiveWarehouse(warehouse);
       const prevIds = new Set((state?.rows ?? []).map((r) => r.id));
@@ -274,6 +246,26 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     },
     [state?.rows, selectedYmd, runMutate]
   );
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+      if (e.key === "/" || e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        void addBlankRowForWarehouse(activeWarehouse);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeWarehouse, addBlankRowForWarehouse]);
 
   const requestPrintLabel = useCallback(
     (s: Shipment) => {
@@ -326,7 +318,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   const openMobileEdit = useCallback((s: Shipment) => {
     startTransition(() => {
-      setShowForm(false);
       setMobileEditShipment(s);
     });
   }, []);
@@ -394,14 +385,9 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <NewBookingDropdown
-            onPickWarehouse={(wh) => void addBlankRowForWarehouse(wh)}
-            onOpenForm={() => {
-              startTransition(() => {
-                setMobileEditShipment(null);
-                setShowForm(true);
-              });
-            }}
+          <NewBookingButton
+            activeWarehouse={activeWarehouse}
+            onAdd={(wh) => void addBlankRowForWarehouse(wh)}
           />
           <DashboardToolbarButton onClick={() => setCustomerDirOpen(true)} title="Khách hàng và hồ sơ in">
             Khách hàng
@@ -459,6 +445,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             rows={statusFilteredRows}
             active={activeWarehouse}
             onSelect={setActiveWarehouse}
+            onAddRow={(wh) => void addBlankRowForWarehouse(wh)}
             highlightWarehouses={searchHighlightWarehouses}
           />
         </div>
@@ -488,6 +475,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         highlightedShipmentId={highlightedShipmentId}
         selectedRowId={selectedId}
         onSelectRow={setSelectedId}
+        onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
         onUpdate={onUpdate}
         onDelete={onDelete}
         onPrint={requestPrintLabel}
@@ -522,42 +510,18 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
         onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
         isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
+        onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
       />
 
       <StickyMobileActions
         selected={selected}
+        activeWarehouse={activeWarehouse}
         onDelete={() => selected && onDelete(selected.id)}
-        onAdd={() => {
-          startTransition(() => {
-            setMobileEditShipment(null);
-            setShowForm(true);
-          });
-        }}
+        onAdd={() => void addBlankRowForWarehouse(activeWarehouse)}
         onQuickEdit={() => selected && openMobileEdit(selected)}
         onPrintDim={() => selected && printDimReport(selected)}
         onDownloadScscDimList={() => selected && downloadScscDimListExcel(selected)}
       />
-
-      {showForm && (
-        <Suspense
-          fallback={
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-              <p className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-apple-label shadow-apple-md">
-                Đang mở form booking…
-              </p>
-            </div>
-          }
-        >
-          <ShipmentBookingForm
-            sessionDateYmd={selectedYmd}
-            allRows={allRows}
-            customerDirectory={state.customers}
-            globalAgents={state.globalAgents ?? defaultGlobalAgentCatalog()}
-            onAdd={onAdd}
-            onClose={() => setShowForm(false)}
-          />
-        </Suspense>
-      )}
 
       <MobileShipmentEditSheet
         open={mobileEditShipment != null}

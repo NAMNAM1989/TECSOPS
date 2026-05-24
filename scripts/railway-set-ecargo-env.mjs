@@ -1,6 +1,8 @@
 /**
- * Ghi biến eCargo + REDIS lên Railway (cần RAILWAY_TOKEN hợp lệ trong .env.local).
+ * Gắn biến eCargo + REDIS_URL (reference service Redis) lên Railway app.
  * Usage: node scripts/railway-set-ecargo-env.mjs
+ *
+ * Cần RAILWAY_TOKEN trong .env.local. KHÔNG copy REDIS_URL localhost.
  */
 import { execSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -8,6 +10,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const SERVICE = process.env.RAILWAY_SERVICE?.trim() || "chic-nurturing";
+const REDIS_SERVICE = process.env.RAILWAY_REDIS_SERVICE?.trim() || "Redis";
 
 function mergeEnvFile(rel, { override = false } = {}) {
   const p = join(root, rel);
@@ -40,21 +44,9 @@ if (!token) {
   process.exit(1);
 }
 
-const keys = [
-  "REDIS_URL",
-  "ECARGO_GMAIL_USER",
-  "ECARGO_GMAIL_APP_PASSWORD",
-  "ECARGO_CONTACT_EMAIL",
-];
-
-for (const key of keys) {
-  const val = process.env[key]?.trim();
-  if (!val) {
-    console.warn(`[skip] ${key} — chưa có trong .env.local`);
-    continue;
-  }
-  console.info(`[set] ${key}`);
-  const r = spawnSync("railway", ["variables", "set", `${key}=${val}`], {
+function setVar(key, value) {
+  console.info(`[set] ${key} → service ${SERVICE}`);
+  const r = spawnSync("railway", ["variable", "set", `${key}=${value}`, "-s", SERVICE], {
     cwd: root,
     env: process.env,
     shell: process.platform === "win32",
@@ -66,9 +58,27 @@ for (const key of keys) {
   }
 }
 
-console.info("\n[railway-set-ecargo-env] Xong. Redeploy service để worker nhận biến mới.");
+// Reference Redis plugin trên Railway (internal URL)
+setVar("REDIS_URL", `\${{${REDIS_SERVICE}.REDIS_URL}}`);
+setVar("ECARGO_WORKER_ENABLED", "1");
+
+for (const key of ["ECARGO_GMAIL_USER", "ECARGO_GMAIL_APP_PASSWORD", "ECARGO_CONTACT_EMAIL"]) {
+  const val = process.env[key]?.trim();
+  if (!val) {
+    console.warn(`[skip] ${key} — chưa có trong .env.local`);
+    continue;
+  }
+  setVar(key, val);
+}
+
+console.info("\n[railway-set-ecargo-env] Xong. Railway sẽ tự redeploy khi set biến.");
 try {
-  execSync("railway variables", { cwd: root, env: process.env, stdio: "inherit", shell: true });
+  execSync(`railway variable list -s ${SERVICE} -k`, {
+    cwd: root,
+    env: process.env,
+    stdio: "inherit",
+    shell: true,
+  });
 } catch {
   /* optional list */
 }

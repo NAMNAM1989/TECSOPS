@@ -4,13 +4,6 @@ import type { Shipment, ShipmentStatus } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { MobileDimKgModal } from "./MobileDimKgModal";
 import { CustomerShipmentDetailModal } from "./CustomerShipmentDetailModal";
-import { canPrintDimScscReport, printDimReport } from "../utils/printDimReport";
-import {
-  canExportTcsDimTemplate,
-  downloadTcsAttachedDimsExcel,
-  printTcsAttachedDimsList,
-} from "../utils/exportTcsAttachedDimsExcel";
-import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
@@ -19,16 +12,13 @@ import {
   warehouseLabel,
   warehouseSectionsForLayout,
   isScscWarehouse,
-  isTcsWarehouse,
 } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { useWarehouseSectionCollapse } from "../hooks/useWarehouseSectionCollapse";
 import type { Warehouse } from "../types/shipment";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
 import { buildShipmentCneeDisplayLines } from "../utils/shipmentCneeCopyBlock";
-import { SelectableTextWithCopyPopover } from "./SelectableTextWithCopyPopover";
 import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStorage";
-import { OPS } from "../styles/opsModalStyles";
 import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
 import type { EcargoJobRecord } from "../types/ecargoJob";
 import {
@@ -40,11 +30,10 @@ import type { EcargoAutoRegisterOpts } from "./DesktopShipmentTable";
 import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
 import { resolveEcargoVehiclePrefill, vehicleDisplayLabel } from "../utils/customerVehicleCore";
 import { ecargoKhoScscLineStatusLabel } from "../utils/ecargoUiLabels";
+import { MOBILE } from "../styles/mobileOpsStyles";
 
 const SWIPE_THRESHOLD = 48;
-/** Vuốt ngang bị bỏ qua nếu lệch dọc lớn hơn (coi như cuộn dọc). */
 const SWIPE_MAX_VERTICAL_DELTA_PX = 35;
-/** Một nút: Xóa */
 const REVEAL_PX = 44;
 
 interface MobileShipmentCardsProps {
@@ -53,13 +42,10 @@ interface MobileShipmentCardsProps {
   onSelect: (id: string | null) => void;
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
-  /** Danh bạ — dùng để hiển thị mã/tên chuẩn trong popup khách. */
+  onQuickEdit?: (row: Shipment) => void;
   customerDirectory?: readonly CustomerDirectoryEntry[];
-  /** Kho đang active — khi không tìm kiếm chỉ hiện kho này. */
   activeWarehouse?: Warehouse;
-  /** Đang có từ khóa tìm kiếm — mở rộng mọi kho có kết quả. */
   searchActive?: boolean;
-  /** Ngày phiên OPS (YYYY-MM-DD) — dự phòng khi `sessionDate` trên lô trống. */
   viewSessionYmd?: string;
   ecargoMap?: EcargoKhoScscPersistedMap;
   onEcargoVehicleChange?: (id: string, raw: string) => void;
@@ -82,6 +68,7 @@ export function MobileShipmentCards({
   onSelect,
   onUpdate,
   onDelete,
+  onQuickEdit,
   customerDirectory = [],
   activeWarehouse = "TECS-TCS",
   searchActive = false,
@@ -104,14 +91,11 @@ export function MobileShipmentCards({
   const [openEcargoRowId, setOpenEcargoRowId] = useState<string | null>(null);
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const [customerDetailRow, setCustomerDetailRow] = useState<Shipment | null>(null);
-  const [mobileExtrasOpenId, setMobileExtrasOpenId] = useState<string | null>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
   const warehouseSections = useMemo((): Warehouse[] => {
-    if (searchActive) {
-      return [...warehouseSectionsForLayout("ALL")];
-    }
+    if (searchActive) return [...warehouseSectionsForLayout("ALL")];
     return [activeWarehouse];
   }, [searchActive, activeWarehouse]);
   const warehouseCounts = useMemo(() => {
@@ -121,9 +105,7 @@ export function MobileShipmentCards({
       "KHO-TCS": 0,
       "KHO-SCSC": 0,
     } as Record<Warehouse, number>;
-    for (const wh of warehouseSections) {
-      counts[wh] = rowsByWarehouse[wh].length;
-    }
+    for (const wh of warehouseSections) counts[wh] = rowsByWarehouse[wh].length;
     return counts;
   }, [rowsByWarehouse, warehouseSections]);
   const { isCollapsed, toggle } = useWarehouseSectionCollapse(warehouseCounts, pinnedOpenWarehouses);
@@ -163,413 +145,359 @@ export function MobileShipmentCards({
 
   return (
     <>
-    <div className="space-y-4 pb-28 md:hidden">
-      {warehouseSections.map((wh) => {
-        const group = rowsByWarehouse[wh];
-        const collapsed = searchActive ? isCollapsed(wh) : false;
-        const showAccordionHeader = searchActive;
-        return (
-          <section key={wh} id={`warehouse-section-${wh}`}>
-            {showAccordionHeader ? (
-            <button
-              type="button"
-              onClick={() => toggle(wh)}
-              aria-expanded={!collapsed}
-              className="mb-2 flex w-full items-center gap-2 rounded-xl px-1 py-0.5 text-left hover:bg-black/[0.03] dark:hover:bg-white/[0.06]"
-            >
-              <svg
-                className={`h-4 w-4 shrink-0 text-dashboard-muted transition-transform dark:text-dashboard-muted-dark ${
-                  collapsed ? "" : "rotate-90"
-                }`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2.5}
-                viewBox="0 0 24 24"
-                aria-hidden
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
-              <h2 className="text-[16px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
-                {warehouseLabel[wh]}
-              </h2>
-              <span className="rounded-full bg-dashboard-primary/90 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-slate-600 dark:text-slate-100">
-                {group.length}
-              </span>
-            </button>
-            ) : (
-              <div className="mb-2 flex items-baseline justify-between gap-2 px-0.5">
-                <h2 className="text-[16px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
-                  {warehouseLabel[wh]}
-                </h2>
-                <span className="text-[11px] tabular-nums text-dashboard-muted dark:text-dashboard-muted-dark">
-                  {group.length} lô
-                </span>
-              </div>
-            )}
-            {!collapsed && group.length === 0 ? (
-              onAddBlankRow ? (
+      <Box className="space-y-4 pb-28 md:hidden">
+        {warehouseSections.map((wh) => {
+          const group = rowsByWarehouse[wh];
+          const collapsed = searchActive ? isCollapsed(wh) : false;
+          const showAccordionHeader = searchActive;
+          return (
+            <section key={wh} id={`warehouse-section-${wh}`}>
+              {showAccordionHeader ? (
                 <button
                   type="button"
-                  onClick={() => onAddBlankRow(wh)}
-                  className="w-full rounded-2xl border border-dashed border-apple-blue/30 bg-apple-blue/5 px-4 py-6 text-center text-[13px] font-semibold text-apple-blue shadow-dashboard-card active:scale-[0.99] dark:border-sky-400/30 dark:bg-sky-500/10 dark:text-sky-300"
+                  onClick={() => toggle(wh)}
+                  aria-expanded={!collapsed}
+                  className="mb-2 flex w-full items-center gap-2 rounded-xl px-1 py-1 text-left active:bg-black/[0.03] dark:active:bg-white/[0.06]"
                 >
-                  + Booking · {warehouseLabel[wh]}
+                  <Chevron collapsed={collapsed} />
+                  <h2 className="text-[15px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
+                    {warehouseLabel[wh]}
+                  </h2>
+                  <span className="rounded-full bg-dashboard-primary/90 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-slate-600">
+                    {group.length}
+                  </span>
                 </button>
               ) : (
-                <p className="rounded-2xl border border-dashed border-black/[0.08] bg-white px-4 py-6 text-center text-[13px] text-dashboard-muted shadow-dashboard-card dark:border-white/10 dark:bg-dashboard-surface-dark dark:text-dashboard-muted-dark">
-                  Chưa có lô trong kho này.
-                </p>
-              )
-            ) : null}
-            {!collapsed && group.length > 0 ? (
-            <div className="space-y-2">
-              {group.map((row) => {
-                const open = swipeOpenId === row.id;
-                const selected = selectedId === row.id;
-                const rowAccent = statusRowAccent[row.status];
-                const rowSurface = selected ? statusRowSelected : statusRowBg[row.status];
-                const cneeBodyText = buildShipmentCneeDisplayLines(row, customerDirectory, {
-                  sessionYmdFallback: viewSessionYmd,
-                }).join("\n");
-                const showEcargoKhoScsc = isScscWarehouse(row.warehouse);
-                const ecargoLine = ecargoMap[row.id];
-                const vehicleForEcargo = ecargoLine?.vehicleInput ?? "";
-                const ecargoPrefill = resolveEcargoVehiclePrefill(row, customerDirectory, vehicleForEcargo, {
-                  driverName: ecargoLine?.driverName,
-                  driverId: ecargoLine?.driverId,
-                });
-                const effectiveEcargoVehicle = vehicleForEcargo.trim() || ecargoPrefill.vehicleInput;
-                const ecargoReady = effectiveEcargoVehicle.trim().length >= ECARGO_VEHICLE_MIN;
-                const ecargoJob = getEcargoJob?.(row.id);
-                const ecargoOpen = openEcargoRowId === row.id;
-
-                return (
-                  <div
-                    id={`mobile-shipment-${row.id}`}
-                    key={row.id}
-                    className={`relative overflow-hidden rounded-xl shadow-dashboard-card transition-all ${rowAccent} ${rowSurface} ${
-                      selected ? "ring-2 ring-amber-300/50 ring-offset-1 ring-offset-dashboard-canvas dark:ring-amber-400/30 dark:ring-offset-dashboard-canvas-dark" : ""
-                    } ${highlightedShipmentId === row.id ? "ring-2 ring-apple-blue/60 ring-offset-1" : ""}`}
+                <Box className="mb-3 flex items-end justify-between gap-2 px-0.5">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-apple-tertiary dark:text-slate-500">
+                      Kho đang xem
+                    </p>
+                    <h2 className="text-[17px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
+                      {warehouseLabel[wh]}
+                    </h2>
+                  </div>
+                  <span className="rounded-full bg-black/[0.05] px-2.5 py-1 text-[11px] font-semibold tabular-nums text-apple-secondary dark:bg-white/[0.08] dark:text-slate-300">
+                    {group.length} lô
+                  </span>
+                </Box>
+              )}
+              {!collapsed && group.length === 0 ? (
+                onAddBlankRow ? (
+                  <button
+                    type="button"
+                    onClick={() => onAddBlankRow(wh)}
+                    className={`w-full ${MOBILE.sectionEmpty} active:scale-[0.99]`}
                   >
-                    {/* Vuốt trái: Xóa */}
-                    <div className="absolute inset-y-0 right-0 z-0 flex" style={{ width: REVEAL_PX }} aria-hidden>
-                      <button
-                        type="button"
-                        title="Xóa"
-                        className="flex w-11 flex-col items-center justify-center gap-0.5 bg-red-500 text-white active:bg-red-600"
-                        onClick={() => {
-                          setSwipeOpenId(null);
-                          if (confirm(`Xóa ${row.awb}?`)) onDelete(row.id);
-                        }}
-                      >
-                        <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-                          />
-                        </svg>
-                        <span className="text-[9px] font-bold leading-none">Xóa</span>
-                      </button>
-                    </div>
+                    <p className="text-[15px] font-semibold text-apple-blue dark:text-sky-300">+ Booking mới</p>
+                    <p className="mt-1 text-[12px] text-apple-secondary dark:text-slate-400">
+                      {warehouseLabel[wh]} · nhập AWB ngay
+                    </p>
+                  </button>
+                ) : (
+                  <p className="rounded-2xl border border-dashed border-black/[0.08] bg-white px-4 py-8 text-center text-[13px] text-dashboard-muted dark:border-white/10 dark:bg-dashboard-surface-dark dark:text-dashboard-muted-dark">
+                    Chưa có lô trong kho này.
+                  </p>
+                )
+              ) : null}
+              {!collapsed && group.length > 0 ? (
+                <div className="space-y-2.5">
+                  {group.map((row) => {
+                    const open = swipeOpenId === row.id;
+                    const selected = selectedId === row.id;
+                    const rowAccent = statusRowAccent[row.status];
+                    const rowSurface = selected ? statusRowSelected : statusRowBg[row.status];
+                    const awbTrim = (row.awb ?? "").trim();
+                    const hawbTrim = (row.hawb ?? "").trim();
+                    const cneePreview = buildShipmentCneeDisplayLines(row, customerDirectory, {
+                      sessionYmdFallback: viewSessionYmd,
+                    })
+                      .join(" · ")
+                      .slice(0, 120);
+                    const showEcargoKhoScsc = isScscWarehouse(row.warehouse);
+                    const ecargoLine = ecargoMap[row.id];
+                    const vehicleForEcargo = ecargoLine?.vehicleInput ?? "";
+                    const ecargoPrefill = resolveEcargoVehiclePrefill(row, customerDirectory, vehicleForEcargo, {
+                      driverName: ecargoLine?.driverName,
+                      driverId: ecargoLine?.driverId,
+                    });
+                    const effectiveEcargoVehicle = vehicleForEcargo.trim() || ecargoPrefill.vehicleInput;
+                    const ecargoReady = effectiveEcargoVehicle.trim().length >= ECARGO_VEHICLE_MIN;
+                    const ecargoJob = getEcargoJob?.(row.id);
+                    const ecargoOpen = openEcargoRowId === row.id;
 
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onSelect(selected ? null : row.id);
-                        }
-                      }}
-                      onTouchStart={onTouchStart}
-                      onTouchEnd={onTouchEnd(row.id)}
-                      onClick={() => {
-                        setSwipeOpenId(null);
-                        onSelect(selected ? null : row.id);
-                      }}
-                      style={{
-                        transform: open ? `translateX(-${REVEAL_PX}px)` : undefined,
-                      }}
-                      className="relative z-10 cursor-pointer bg-transparent px-2.5 py-2 transition-transform duration-200 ease-out"
-                    >
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="min-w-0 flex-1 text-left leading-snug">
-                            <span className="font-mono text-[1.1rem] font-bold leading-tight tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
-                              {row.awb}
-                            </span>
-                            {(row.hawb ?? "").trim() ? (
-                              <>
-                                <span className="text-dashboard-muted"> · </span>
-                                <span className="font-mono text-[11px] font-semibold text-dashboard-muted dark:text-dashboard-muted-dark">
-                                  HAWB {(row.hawb ?? "").trim()}
-                                </span>
-                              </>
-                            ) : null}
-                            <span className="text-dashboard-muted"> · </span>
-                            <span className={`text-[11px] font-bold ${flightNumberAccent}`}>
-                              {row.flight}
-                            </span>
-                            <span className="text-[11px] font-medium text-dashboard-muted">/{row.flightDate}</span>
-                            <span className="text-dashboard-muted"> · </span>
-                            <span className="text-[13px] font-semibold text-dashboard-primary dark:text-dashboard-primary-dark">{row.dest}</span>
-                          </p>
-                          <div className="shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
-                            <StatusSelect
-                              value={row.status}
-                              compact
-                              onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
-                            />
-                          </div>
+                    return (
+                      <Box
+                        id={`mobile-shipment-${row.id}`}
+                        key={row.id}
+                        className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
+                          selected
+                            ? "ring-2 ring-apple-blue/45 ring-offset-1 ring-offset-dashboard-canvas dark:ring-sky-400/40 dark:ring-offset-dashboard-canvas-dark"
+                            : ""
+                        } ${highlightedShipmentId === row.id ? "ring-2 ring-amber-400/70 ring-offset-1" : ""}`}
+                      >
+                        <div className="absolute inset-y-0 right-0 z-0 flex" style={{ width: REVEAL_PX }} aria-hidden>
+                          <button
+                            type="button"
+                            title="Xóa"
+                            className="flex w-11 flex-col items-center justify-center gap-0.5 bg-red-500 text-white active:bg-red-600"
+                            onClick={() => {
+                              setSwipeOpenId(null);
+                              if (confirm(`Xóa ${awbTrim || "lô này"}?`)) onDelete(row.id);
+                            }}
+                          >
+                            <TrashIcon />
+                            <span className="text-[9px] font-bold leading-none">Xóa</span>
+                          </button>
                         </div>
-                        <div className="border-t border-black/[0.06] pt-1.5 text-left text-[11px] leading-snug">
-                          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onSelect(selected ? null : row.id);
+                            }
+                          }}
+                          onTouchStart={onTouchStart}
+                          onTouchEnd={onTouchEnd(row.id)}
+                          onClick={() => {
+                            setSwipeOpenId(null);
+                            onSelect(selected ? null : row.id);
+                          }}
+                          style={{ transform: open ? `translateX(-${REVEAL_PX}px)` : undefined }}
+                          className={MOBILE.cardInner}
+                        >
+                          <Box className="flex items-start justify-between gap-2">
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 text-left"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelect(selected ? null : row.id);
+                                if (!awbTrim && onQuickEdit) onQuickEdit(row);
+                              }}
+                            >
+                              {awbTrim ? (
+                                <p className={MOBILE.awb}>
+                                  {awbTrim}
+                                  {hawbTrim ? (
+                                    <span className="ml-1.5 text-[12px] font-semibold text-apple-secondary dark:text-slate-400">
+                                      / {hawbTrim}
+                                    </span>
+                                  ) : null}
+                                </p>
+                              ) : (
+                                <p className={MOBILE.awbEmpty}>+ Nhập AWB · chạm để mở form</p>
+                              )}
+                              <p className={`mt-1 ${MOBILE.cardMeta}`}>
+                                <span className={`font-bold ${flightNumberAccent}`}>{row.flight || "—"}</span>
+                                {row.flightDate ? (
+                                  <span className="text-apple-tertiary dark:text-slate-500"> · {row.flightDate}</span>
+                                ) : null}
+                                {row.dest ? (
+                                  <>
+                                    <span className="text-apple-tertiary dark:text-slate-500"> · </span>
+                                    <span className="font-semibold text-dashboard-primary dark:text-slate-200">
+                                      {row.dest}
+                                    </span>
+                                  </>
+                                ) : null}
+                              </p>
+                            </button>
+                            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <StatusSelect
+                                value={row.status}
+                                compact
+                                onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
+                              />
+                            </div>
+                          </Box>
+
+                          <Box className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-black/[0.06] pt-2.5 dark:border-white/[0.08]">
                             <span
-                              className="min-w-0 max-w-full font-semibold text-apple-label sm:max-w-[70%]"
+                              className="max-w-[55%] truncate text-[12px] font-semibold text-apple-label dark:text-slate-200"
                               title={row.customer}
                             >
-                              {row.customer || "Khách"}
+                              {row.customer || "Chưa chọn khách"}
                             </span>
                             <button
                               type="button"
-                              title="Thông tin CNEE — sao chép"
+                              title="Thông tin CNEE"
                               aria-label="Thông tin CNEE"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setCustomerDetailRow(row);
                               }}
-                              className="shrink-0 rounded-md border border-black/[0.1] bg-white/90 p-0.5 text-apple-blue hover:bg-apple-blue/10"
+                              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-black/[0.08] bg-white/90 text-apple-blue active:bg-apple-blue/10 dark:border-white/12 dark:bg-ops-elevated dark:text-sky-300"
                             >
-                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                                />
-                              </svg>
+                              <CopyIcon />
                             </button>
                             {row.note ? (
                               <span
-                                className="min-w-0 max-w-full text-apple-secondary sm:max-w-[65%]"
+                                className="min-w-0 max-w-full truncate text-[11px] text-apple-secondary dark:text-slate-400"
                                 title={row.note}
-                                onClick={(e) => e.stopPropagation()}
                               >
                                 · {row.note}
                               </span>
                             ) : null}
-                          </div>
-                          {cneeBodyText ? (
-                            <SelectableTextWithCopyPopover
-                              className="mt-0.5 max-h-24 cursor-text select-text overflow-y-auto whitespace-pre-wrap break-words text-[10px] text-apple-secondary"
-                              title="Bôi đen chữ → bấm Sao chép nhanh"
-                              onClick={(e) => e.stopPropagation()}
+                          </Box>
+
+                          {cneePreview ? (
+                            <p
+                              className="mt-1 line-clamp-2 text-[10px] leading-snug text-apple-tertiary dark:text-slate-500"
+                              title={cneePreview}
                             >
-                              {cneeBodyText}
-                            </SelectableTextWithCopyPopover>
+                              {cneePreview}
+                            </p>
                           ) : null}
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span
-                              className="inline-flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 text-[10px] text-apple-secondary"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {row.cutoffNote ? (
-                                <span className="rounded-full bg-red-500 px-1.5 py-px text-[9px] font-semibold text-white">
-                                  {row.cutoffNote}
-                                </span>
-                              ) : null}
-                              <span className="shrink-0 font-medium text-apple-tertiary">CO</span>
-                              {row.cutoff ? (
-                                <CutoffCountdown iso={row.cutoff} className="text-[10px]" />
-                              ) : (
-                                <span className="italic text-apple-tertiary">—</span>
-                              )}
-                              <span className="text-apple-tertiary">·</span>
-                              <span className="font-medium text-apple-tertiary">K</span>
+
+                          <Box
+                            className="mt-2.5 flex flex-wrap items-center gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {row.cutoffNote ? (
+                              <span className={MOBILE.chipCutoff}>{row.cutoffNote}</span>
+                            ) : row.cutoff ? (
+                              <span className={MOBILE.chip}>
+                                CO <CutoffCountdown iso={row.cutoff} className="text-[10px]" />
+                              </span>
+                            ) : null}
+                            <span className={MOBILE.chip}>
+                              <span className="text-apple-tertiary dark:text-slate-500">K</span>
                               <InlineNumberEdit
                                 compact
                                 value={row.pcs}
                                 placeholder="—"
-                                className="text-[11px]"
+                                className="ml-0.5 text-[11px]"
                                 onCommit={(v) => onUpdate(row.id, { pcs: v })}
                               />
-                              <span className="font-medium text-apple-tertiary">G</span>
+                            </span>
+                            <span className={MOBILE.chip}>
+                              <span className="text-apple-tertiary dark:text-slate-500">G</span>
                               <InlineNumberEdit
                                 compact
                                 value={row.kg}
                                 placeholder="—"
-                                className="text-[11px]"
+                                className="ml-0.5 text-[11px]"
                                 onCommit={(v) => onUpdate(row.id, { kg: v })}
                               />
                             </span>
-                          </div>
-                          <div className="mt-2 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex flex-wrap items-center gap-2">
-                              {row.dimWeightKg != null ? (
-                                <span className="min-w-0 flex-1 truncate rounded-lg bg-black/[0.05] px-2 py-1 text-[11px] font-semibold tabular-nums text-apple-label">
-                                  DIM {formatShipmentDimWeightKg(row.flight, row.dimWeightKg)} kg
-                                  {(row.dimLines?.length ?? 0) > 0 ? (
-                                    <span className="font-normal text-apple-secondary">
-                                      {" "}
-                                      · {row.dimLines!.length} nhóm
-                                    </span>
-                                  ) : null}
-                                </span>
-                              ) : (
-                                <span className="min-w-0 flex-1 text-[11px] text-apple-tertiary">Chưa có DIM</span>
-                              )}
-                              {showEcargoKhoScsc && onEcargoVehicleChange && onEcargoAutoRegister && getEcargoSaveStatus ? (
-                                <EcargoKhoScscTriggerButton
-                                  rowId={row.id}
-                                  open={ecargoOpen}
-                                  hasVehicle={ecargoReady}
-                                  job={ecargoJob}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const opening = openEcargoRowId !== row.id;
-                                    setOpenEcargoRowId((id) => (id === row.id ? null : row.id));
-                                    if (opening) onApplyEcargoPrefill?.(row);
-                                  }}
-                                  title={
-                                    ecargoReady
-                                      ? `eCargo · ${effectiveEcargoVehicle}`
-                                      : ecargoPrefill.defaultVehicle
-                                        ? `Xe mặc định: ${vehicleDisplayLabel(ecargoPrefill.defaultVehicle)}`
-                                        : undefined
-                                  }
-                                />
-                              ) : null}
+                            {row.dimWeightKg != null ? (
+                              <span className={`${MOBILE.chip} font-semibold`}>
+                                DIM {formatShipmentDimWeightKg(row.flight, row.dimWeightKg)}
+                              </span>
+                            ) : null}
+                          </Box>
+
+                          <Box
+                            className="mt-2.5 flex items-center gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {showEcargoKhoScsc && onEcargoVehicleChange && onEcargoAutoRegister && getEcargoSaveStatus ? (
+                              <EcargoKhoScscTriggerButton
+                                rowId={row.id}
+                                open={ecargoOpen}
+                                hasVehicle={ecargoReady}
+                                job={ecargoJob}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const opening = openEcargoRowId !== row.id;
+                                  setOpenEcargoRowId((id) => (id === row.id ? null : row.id));
+                                  if (opening) onApplyEcargoPrefill?.(row);
+                                }}
+                                title={
+                                  ecargoReady
+                                    ? `eCargo · ${effectiveEcargoVehicle}`
+                                    : ecargoPrefill.defaultVehicle
+                                      ? `Xe mặc định: ${vehicleDisplayLabel(ecargoPrefill.defaultVehicle)}`
+                                      : undefined
+                                }
+                              />
+                            ) : null}
+                            {onQuickEdit ? (
                               <button
                                 type="button"
-                                onClick={() => setDimModalRow(row)}
-                                className="ml-auto shrink-0 rounded-full bg-apple-blue px-3.5 py-2 text-[12px] font-semibold text-white shadow-sm active:scale-[0.98]"
+                                onClick={() => onQuickEdit(row)}
+                                className="min-h-9 rounded-full border border-black/[0.08] px-3 text-[11px] font-semibold text-apple-label active:bg-black/[0.04] dark:border-white/12 dark:text-slate-200 dark:active:bg-white/[0.06]"
                               >
-                                Nhập DIM
+                                Sửa
                               </button>
-                            </div>
-                            {showEcargoKhoScsc && (ecargoLine || ecargoJob) ? (
-                              <p className="text-[10px] font-medium text-sky-800">
-                                {ecargoKhoScscLineStatusLabel(ecargoLine, ecargoJob)}
-                              </p>
                             ) : null}
-                            {(canPrintDimScscReport(row) ||
-                              (isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row))) && (
-                              <div>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setMobileExtrasOpenId((id) => (id === row.id ? null : row.id))
-                                  }
-                                  className="text-[11px] font-semibold text-apple-blue"
-                                >
-                                  {mobileExtrasOpenId === row.id ? "Ẩn xuất DIM ▴" : "Xuất DIM ▾"}
-                                </button>
-                                {mobileExtrasOpenId === row.id ? (
-                                  <div className="mt-2 flex flex-col gap-2 border-t border-black/[0.06] pt-2">
-                                    {canPrintDimScscReport(row) ? (
-                                      <div className="flex gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => printDimReport(row)}
-                                          className={`min-h-11 min-w-0 flex-1 rounded-xl border py-2.5 text-[12px] font-semibold active:scale-[0.99] ${OPS.tabIdle}`}
-                                        >
-                                          In DIM SCSC
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => downloadScscDimListExcel(row)}
-                                          className={`min-h-11 min-w-0 flex-1 rounded-xl border-2 py-2.5 text-[12px] font-semibold active:scale-[0.99] ${OPS.formatBtnOff}`}
-                                        >
-                                          LIST SCSC
-                                        </button>
-                                      </div>
-                                    ) : null}
-                                    {isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row) ? (
-                                      <div className="flex gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => void downloadTcsAttachedDimsExcel(row)}
-                                          className={`min-h-11 min-w-0 flex-1 rounded-xl border-2 py-2.5 text-[12px] font-semibold active:scale-[0.99] ${OPS.formatBtnOff}`}
-                                        >
-                                          LIST TCS
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => printTcsAttachedDimsList(row)}
-                                          className={`min-h-11 min-w-0 flex-1 rounded-xl border py-2.5 text-[12px] font-semibold text-emerald-800 active:scale-[0.99] dark:border-emerald-500/35 dark:text-emerald-200 ${OPS.tabIdle}`}
-                                        >
-                                          IN TCS
-                                        </button>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-                              </div>
-                            )}
-                          </div>
+                            <button
+                              type="button"
+                              onClick={() => setDimModalRow(row)}
+                              className="ml-auto min-h-9 rounded-full bg-apple-blue px-4 text-[12px] font-semibold text-white shadow-sm active:scale-[0.98] dark:bg-sky-500"
+                            >
+                              DIM
+                            </button>
+                          </Box>
+
+                          {showEcargoKhoScsc && (ecargoLine || ecargoJob) ? (
+                            <p className="mt-1.5 text-[10px] font-medium text-sky-800 dark:text-sky-300">
+                              {ecargoKhoScscLineStatusLabel(ecargoLine, ecargoJob)}
+                            </p>
+                          ) : null}
                         </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            ) : null}
-          </section>
-        );
-      })}
-    </div>
-    {dimModalRow &&
-      typeof document !== "undefined" &&
-      createPortal(
-        <MobileDimKgModal
-          key={dimModalRow.id}
-          row={dimModalRow}
-          onClose={() => setDimModalRow(null)}
-          onSave={(payload) => {
-            onUpdate(dimModalRow.id, payload);
-            setDimModalRow(null);
-          }}
-        />,
-        document.body
-      )}
-    {customerDetailRow &&
-      typeof document !== "undefined" &&
-      createPortal(
-        <CustomerShipmentDetailModal
-          open
-          shipment={
-            customerDetailRow ? rows.find((r) => r.id === customerDetailRow.id) ?? customerDetailRow : null
-          }
-          directory={customerDirectory}
+                      </Box>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </section>
+          );
+        })}
+      </Box>
+      {dimModalRow &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <MobileDimKgModal
+            key={dimModalRow.id}
+            row={dimModalRow}
+            onClose={() => setDimModalRow(null)}
+            onSave={(payload) => {
+              onUpdate(dimModalRow.id, payload);
+              setDimModalRow(null);
+            }}
+          />,
+          document.body
+        )}
+      {customerDetailRow &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <CustomerShipmentDetailModal
+            open
+            shipment={rows.find((r) => r.id === customerDetailRow.id) ?? customerDetailRow}
+            directory={customerDirectory}
+            viewSessionYmd={viewSessionYmd}
+            onClose={() => setCustomerDetailRow(null)}
+          />,
+          document.body
+        )}
+      {ecargoModalRow && onEcargoVehicleChange && onEcargoAutoRegister && getEcargoSaveStatus ? (
+        <EcargoKhoScscCenterModal
+          key={ecargoModalRow.id}
+          rowId={ecargoModalRow.id}
+          row={ecargoModalRow}
+          customerDirectory={customerDirectory}
+          vehicleForEcargo={ecargoMap[ecargoModalRow.id]?.vehicleInput ?? ""}
+          driverNameForEcargo={ecargoMap[ecargoModalRow.id]?.driverName ?? ""}
+          driverIdForEcargo={ecargoMap[ecargoModalRow.id]?.driverId ?? ""}
           viewSessionYmd={viewSessionYmd}
-          onClose={() => setCustomerDetailRow(null)}
-        />,
-        document.body
-      )}
-    {ecargoModalRow && onEcargoVehicleChange && onEcargoAutoRegister && getEcargoSaveStatus ? (
-      <EcargoKhoScscCenterModal
-        key={ecargoModalRow.id}
-        rowId={ecargoModalRow.id}
-        row={ecargoModalRow}
-        customerDirectory={customerDirectory}
-        vehicleForEcargo={ecargoMap[ecargoModalRow.id]?.vehicleInput ?? ""}
-        driverNameForEcargo={ecargoMap[ecargoModalRow.id]?.driverName ?? ""}
-        driverIdForEcargo={ecargoMap[ecargoModalRow.id]?.driverId ?? ""}
-        viewSessionYmd={viewSessionYmd}
-        saveStatus={getEcargoSaveStatus(ecargoModalRow.id)}
-        job={getEcargoJob?.(ecargoModalRow.id)}
-        autoRegistering={isEcargoAutoRegistering?.(ecargoModalRow.id) ?? false}
-        onVehicleChange={(raw) => onEcargoVehicleChange(ecargoModalRow.id, raw)}
-        onDriverChange={(name, id) => onEcargoDriverChange?.(ecargoModalRow.id, name, id)}
-        onAutoRegister={async (opts) => {
-          await onEcargoAutoRegister(ecargoModalRow, opts);
-        }}
-        onSaveVehicleAsDefault={onSaveCustomerVehicleForEcargo}
-        onRefreshJob={() => void refreshEcargoJob?.(ecargoModalRow.id)}
-        onClose={closeEcargoModal}
-      />
-    ) : null}
+          saveStatus={getEcargoSaveStatus(ecargoModalRow.id)}
+          job={getEcargoJob?.(ecargoModalRow.id)}
+          autoRegistering={isEcargoAutoRegistering?.(ecargoModalRow.id) ?? false}
+          onVehicleChange={(raw) => onEcargoVehicleChange(ecargoModalRow.id, raw)}
+          onDriverChange={(name, id) => onEcargoDriverChange?.(ecargoModalRow.id, name, id)}
+          onAutoRegister={async (opts) => {
+            await onEcargoAutoRegister(ecargoModalRow, opts);
+          }}
+          onSaveVehicleAsDefault={onSaveCustomerVehicleForEcargo}
+          onRefreshJob={() => void refreshEcargoJob?.(ecargoModalRow.id)}
+          onClose={closeEcargoModal}
+        />
+      ) : null}
     </>
   );
 }
@@ -580,8 +508,7 @@ interface StickyMobileActionsProps {
   onDelete: () => void;
   onAdd: () => void;
   onQuickEdit: () => void;
-  onPrintDim?: () => void;
-  onDownloadScscDimList?: () => void;
+  onDim?: () => void;
 }
 
 export function StickyMobileActions({
@@ -590,111 +517,127 @@ export function StickyMobileActions({
   onDelete,
   onAdd,
   onQuickEdit,
-  onPrintDim,
-  onDownloadScscDimList,
+  onDim,
 }: StickyMobileActionsProps) {
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
-    <div className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
-      <div className={`px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 ${OPS.stickyBar}`}>
-        {selected ? (
-          <>
-            <p className={`mb-2 truncate text-center text-[11px] font-medium ${OPS.secondary}`}>
-              <span className={`font-mono text-[15px] font-semibold leading-tight ${OPS.title}`}>{selected.awb}</span>
-              {(selected.hawb ?? "").trim() ? (
-                <>
-                  <span className={`mx-1 ${OPS.muted}`}>·</span>
-                  <span className={`font-mono font-semibold ${OPS.secondary}`}>HAWB {(selected.hawb ?? "").trim()}</span>
-                </>
-              ) : null}
-              <span className={`mx-1 ${OPS.muted}`}>·</span>
-              {selected.customer}
-            </p>
-            <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={onQuickEdit}
-                  className="min-w-0 flex-1 rounded-full border border-apple-blue/30 bg-apple-blue/10 py-3 text-sm font-semibold text-apple-blue transition-transform active:scale-[0.98]"
-                >
-                  Sửa nhanh
+    <Box className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
+      <Box className="px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
+        <Box className="rounded-[22px] border border-black/[0.06] bg-white/90 px-3 py-3 shadow-[0_-6px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-ops-surface/95 dark:shadow-[0_-6px_32px_rgba(0,0,0,0.35)]">
+          {selected ? (
+            <>
+              <p className="mb-2 truncate text-center text-[11px] font-medium text-apple-secondary dark:text-slate-400">
+                <span className="font-mono text-[14px] font-bold text-apple-label dark:text-slate-100">
+                  {(selected.awb ?? "").trim() || "Lô mới"}
+                </span>
+                {(selected.hawb ?? "").trim() ? (
+                  <span className="font-mono font-semibold"> / {(selected.hawb ?? "").trim()}</span>
+                ) : null}
+                {selected.customer ? (
+                  <>
+                    <span className="mx-1 text-apple-tertiary">·</span>
+                    {selected.customer}
+                  </>
+                ) : null}
+              </p>
+              <Box className="flex gap-2">
+                <button type="button" onClick={onQuickEdit} className={`min-w-0 flex-[2] ${MOBILE.primaryBtn}`}>
+                  Sửa lô
                 </button>
+                {onDim ? (
+                  <button
+                    type="button"
+                    onClick={onDim}
+                    className={`min-w-0 flex-1 ${MOBILE.secondaryBtn}`}
+                  >
+                    DIM
+                  </button>
+                ) : null}
                 <div className="relative shrink-0">
                   <button
                     type="button"
                     aria-expanded={moreOpen}
                     aria-haspopup="menu"
                     onClick={() => setMoreOpen((v) => !v)}
-                    className={`rounded-full border px-4 py-3 text-sm font-semibold active:scale-[0.98] ${OPS.tabIdle}`}
-                    title="Thêm thao tác"
+                    className={`h-full rounded-full border px-3.5 text-lg font-semibold leading-none active:scale-[0.98] ${MOBILE.secondaryBtn}`}
+                    title="Thêm"
                   >
                     ⋯
                   </button>
                   {moreOpen ? (
-                    <div className={`absolute bottom-full right-0 z-50 mb-2 min-w-[9rem] ${OPS.dropdownLg}`}>
+                    <Box className="absolute bottom-full right-0 z-50 mb-2 min-w-[9rem] overflow-hidden rounded-xl border border-black/[0.1] bg-white py-1 shadow-apple-md dark:border-white/12 dark:bg-ops-elevated">
                       <button
                         type="button"
                         onClick={() => {
                           setMoreOpen(false);
-                          if (confirm(`Xóa ${selected.awb}?`)) onDelete();
+                          if (confirm(`Xóa ${(selected.awb ?? "").trim() || "lô này"}?`)) onDelete();
                         }}
-                        className={`${OPS.dropdownItemLg} ${OPS.dropdownItemDanger}`}
+                        className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-red-700 active:bg-red-50 dark:text-red-300 dark:active:bg-red-500/15"
                       >
                         Xóa lô
                       </button>
-                    </div>
+                    </Box>
                   ) : null}
                 </div>
-              </div>
-              {onPrintDim && onDownloadScscDimList && canPrintDimScscReport(selected) ? (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={onPrintDim}
-                    className={`min-w-0 flex-1 rounded-full border py-2.5 text-sm font-semibold shadow-sm active:scale-[0.98] ${OPS.tabIdle}`}
-                  >
-                    In DIM SCSC
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onDownloadScscDimList}
-                    className={`min-w-0 flex-1 rounded-full border-2 py-2.5 text-sm font-semibold active:scale-[0.98] ${OPS.formatBtnOff}`}
-                  >
-                    LIST SCSC
-                  </button>
-                </div>
-              ) : null}
-              {isTcsWarehouse(selected.warehouse) && canExportTcsDimTemplate(selected) ? (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void downloadTcsAttachedDimsExcel(selected)}
-                    className={`min-w-0 flex-1 rounded-full border-2 py-2.5 text-sm font-semibold active:scale-[0.98] ${OPS.formatBtnOff}`}
-                  >
-                    LIST DIM TCS
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => printTcsAttachedDimsList(selected)}
-                    className={`min-w-0 flex-1 rounded-full border py-2.5 text-sm font-semibold text-emerald-800 active:scale-[0.98] dark:text-emerald-200 ${OPS.tabIdle}`}
-                  >
-                    IN DIM TCS
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={onAdd}
-            className="w-full rounded-full bg-apple-blue py-3 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(0,113,227,0.35)] transition-colors hover:bg-apple-blue-hover active:scale-[0.98]"
-          >
-            + Booking · {warehouseLabel[activeWarehouse]}
-          </button>
-        )}
-      </div>
+              </Box>
+            </>
+          ) : (
+            <button type="button" onClick={onAdd} className={`w-full ${MOBILE.primaryBtn}`}>
+              + Booking · {warehouseLabel[activeWarehouse]}
+            </button>
+          )}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+function Box({ className, children, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div {...rest} className={className}>
+      {children}
     </div>
+  );
+}
+
+function Chevron({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg
+      className={`h-4 w-4 shrink-0 text-dashboard-muted transition-transform dark:text-dashboard-muted-dark ${
+        collapsed ? "" : "rotate-90"
+      }`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
+      />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+      />
+    </svg>
   );
 }

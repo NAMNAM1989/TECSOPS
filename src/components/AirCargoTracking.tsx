@@ -11,13 +11,11 @@ import {
 import { useShipmentSync } from "../hooks/useShipmentSync";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
-import { MobileShipmentEditSheet } from "./MobileShipmentEditSheet";
+import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentEditSheet";
 import { CustomerDirectoryManager } from "./CustomerDirectoryManager";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
-import { printDimReport } from "../utils/printDimReport";
-import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { WAREHOUSE_ORDER } from "../constants/warehouses";
@@ -83,6 +81,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobileEditShipment, setMobileEditShipment] = useState<Shipment | null>(null);
+  const [mobileEditInitialTab, setMobileEditInitialTab] = useState<"lot" | "notify" | "dim">("lot");
+  const [mobileEditFocus, setMobileEditFocus] = useState<MobileEditFocus>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
   const [activeWarehouse, setActiveWarehouse] = useState<Warehouse>("TECS-TCS");
   const [searchQuery, setSearchQuery] = useState("");
@@ -254,10 +254,9 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     [runMutate]
   );
 
-  /** Desktop / mobile: thêm dòng trống đúng kho — nhập inline trên lưới. */
+  /** Desktop / mobile: thêm dòng trống đúng kho. Mobile mở form nhập AWB ngay. */
   const addBlankRowForWarehouse = useCallback(
     async (warehouse: Warehouse) => {
-      setMobileEditShipment(null);
       setStatusFilter("ALL");
       setActiveWarehouse(warehouse);
       const prevIds = new Set((state?.rows ?? []).map((r) => r.id));
@@ -267,9 +266,23 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       });
       const added = next?.rows.find((r) => !prevIds.has(r.id));
       if (added) {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => focusShipmentGridCell(added.id, "awb"));
-        });
+        const onMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+        if (onMobile) {
+          setSelectedId(added.id);
+          setMobileEditInitialTab("lot");
+          setMobileEditFocus("awb");
+          setMobileEditShipment(added);
+          window.setTimeout(() => {
+            document.getElementById(`mobile-shipment-${added.id}`)?.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+          }, 80);
+        } else {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => focusShipmentGridCell(added.id, "awb"));
+          });
+        }
       }
     },
     [state?.rows, selectedYmd, runMutate]
@@ -344,11 +357,16 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     }
   }, [allRows, selectedYmd, state]);
 
-  const openMobileEdit = useCallback((s: Shipment) => {
-    startTransition(() => {
-      setMobileEditShipment(s);
-    });
-  }, []);
+  const openMobileEdit = useCallback(
+    (s: Shipment, opts?: { tab?: "lot" | "notify" | "dim"; focus?: MobileEditFocus }) => {
+      startTransition(() => {
+        setMobileEditInitialTab(opts?.tab ?? "lot");
+        setMobileEditFocus(opts?.focus ?? null);
+        setMobileEditShipment(s);
+      });
+    },
+    []
+  );
 
   const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
 
@@ -389,9 +407,11 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
             <SyncBadge status={status} socketConnected={socketConnected} />
-            <StatInline label="Lô" value={filteredViewRows.length} />
-            <StatInline label="Kiện" value={totalPcs} />
-            <StatInline label="Kg" value={totalKg.toLocaleString()} />
+            <span className="hidden sm:contents">
+              <StatInline label="Lô" value={filteredViewRows.length} />
+              <StatInline label="Kiện" value={totalPcs} />
+              <StatInline label="Kg" value={totalKg.toLocaleString()} />
+            </span>
             <button
               type="button"
               onClick={toggleDarkMode}
@@ -413,37 +433,41 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <NewBookingButton
-            activeWarehouse={activeWarehouse}
-            onAdd={(wh) => void addBlankRowForWarehouse(wh)}
-          />
-          <DashboardToolbarButton
-            onClick={() => setCustomerDirOpen(true)}
-            title="Danh bạ khách, hồ sơ in, agent, mẫu phiếu cân"
-          >
-            Khách & in
-          </DashboardToolbarButton>
-          <DashboardToolbarButton onClick={() => setAirlineLabelSettingsOpen(true)} title="Tên hãng trên tem">
-            Tên hãng
-          </DashboardToolbarButton>
-          <DashboardToolbarButton
-            disabled={excelExporting}
-            onClick={() => void onDownloadDayExcel()}
-            title="Xuất Excel ngày"
-          >
-            <svg className="h-3.5 w-3.5 text-apple-blue" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-            </svg>
-            Excel
-          </DashboardToolbarButton>
-          <OpsDatePicker
-            value={selectedYmd}
-            onChange={(v) => setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)))}
-            onPrev={goPrevDay}
-            onNext={goNextDay}
-            onToday={goToday}
-            isViewingToday={isViewingToday}
-          />
+          <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2">
+            <NewBookingButton
+              activeWarehouse={activeWarehouse}
+              onAdd={(wh) => void addBlankRowForWarehouse(wh)}
+            />
+            <DashboardToolbarButton
+              onClick={() => setCustomerDirOpen(true)}
+              title="Danh bạ khách, hồ sơ in, agent, mẫu phiếu cân"
+            >
+              Khách & in
+            </DashboardToolbarButton>
+            <DashboardToolbarButton onClick={() => setAirlineLabelSettingsOpen(true)} title="Tên hãng trên tem">
+              Tên hãng
+            </DashboardToolbarButton>
+            <DashboardToolbarButton
+              disabled={excelExporting}
+              onClick={() => void onDownloadDayExcel()}
+              title="Xuất Excel ngày"
+            >
+              <svg className="h-3.5 w-3.5 text-apple-blue" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              Excel
+            </DashboardToolbarButton>
+          </div>
+          <div className="min-w-0 flex-1 md:flex-none">
+            <OpsDatePicker
+              value={selectedYmd}
+              onChange={(v) => setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)))}
+              onPrev={goPrevDay}
+              onNext={goNextDay}
+              onToday={goToday}
+              isViewingToday={isViewingToday}
+            />
+          </div>
         </div>
       </header>
 
@@ -546,6 +570,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
         isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
         onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
+        onQuickEdit={(row) => openMobileEdit(row)}
       />
 
       <StickyMobileActions
@@ -554,13 +579,14 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onDelete={() => selected && onDelete(selected.id)}
         onAdd={() => void addBlankRowForWarehouse(activeWarehouse)}
         onQuickEdit={() => selected && openMobileEdit(selected)}
-        onPrintDim={() => selected && printDimReport(selected)}
-        onDownloadScscDimList={() => selected && downloadScscDimListExcel(selected)}
+        onDim={() => selected && openMobileEdit(selected, { tab: "dim" })}
       />
 
       <MobileShipmentEditSheet
         open={mobileEditShipment != null}
         shipment={mobileEditShipment}
+        initialTab={mobileEditInitialTab}
+        focusField={mobileEditFocus}
         sessionDateYmd={selectedYmd}
         customerDirectory={state.customers}
         globalAgents={state.globalAgents}
@@ -574,7 +600,10 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
         onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
         isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
-        onClose={() => setMobileEditShipment(null)}
+        onClose={() => {
+          setMobileEditShipment(null);
+          setMobileEditFocus(null);
+        }}
         onSave={(patch) => {
           if (mobileEditShipment) onUpdate(mobileEditShipment.id, patch);
           setMobileEditShipment(null);

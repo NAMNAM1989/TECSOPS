@@ -1,4 +1,5 @@
 import type { GlobalAgentCatalog, GlobalAgentEntry } from "../types/globalAgents";
+import { normalizePrintAddressMultiline } from "./printAddressMultiline";
 
 export const NONE_GLOBAL_AGENT_ID = "__none__";
 
@@ -42,7 +43,12 @@ export function clampGlobalAgentEntry(a: GlobalAgentEntry): GlobalAgentEntry {
     id: clip(a.id, 80).trim() || newAgentId(),
     label: clip(a.label, LIMITS.label).trim() || (isNone ? "Không có agent" : ""),
     agentName: isNone ? "" : clip(a.agentName, LIMITS.agentName).trim(),
-    agentAddress: isNone ? "" : clip(a.agentAddress, LIMITS.agentAddress).trim(),
+    agentAddress: isNone
+      ? ""
+      : normalizePrintAddressMultiline(clip(a.agentAddress, LIMITS.agentAddress), 6).slice(
+          0,
+          LIMITS.agentAddress
+        ),
     agentPhone: isNone ? "" : clip(a.agentPhone, LIMITS.agentPhone).trim(),
     agentEmail: isNone ? "" : clip(a.agentEmail, LIMITS.agentEmail).trim(),
     agentTaxCode: isNone ? "" : clip(a.agentTaxCode, LIMITS.agentTaxCode).trim(),

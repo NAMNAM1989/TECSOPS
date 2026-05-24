@@ -5,6 +5,7 @@ import {
   NONE_GLOBAL_AGENT_ID,
 } from "../utils/globalAgentsCore";
 import { formatVnPhoneDisplay, normalizeAgentCode } from "../utils/customerProfileInputFormat";
+import { normalizePrintAddressMultiline } from "../utils/printAddressMultiline";
 import { CD, cdInput } from "./customerDirectory/customerDirectoryStyles";
 
 type Props = {
@@ -14,6 +15,14 @@ type Props = {
 
 export function GlobalAgentsSettings({ catalog, onChange }: Props) {
   function patchAgent(index: number, patch: Partial<GlobalAgentEntry>) {
+    const list = [...catalog.agents];
+    const cur = list[index];
+    if (!cur) return;
+    list[index] = { ...cur, ...patch };
+    onChange({ ...catalog, agents: list });
+  }
+
+  function commitAgent(index: number, patch: Partial<GlobalAgentEntry>) {
     const list = [...catalog.agents];
     const cur = list[index];
     if (!cur) return;
@@ -80,7 +89,7 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
               value={ag.label}
               disabled={Boolean(ag.isNone)}
               onChange={(e) => patchAgent(idx, { label: e.target.value.toUpperCase() })}
-              onBlur={(e) => patchAgent(idx, { label: normalizeAgentCode(e.target.value) })}
+              onBlur={(e) => commitAgent(idx, { label: normalizeAgentCode(e.target.value) })}
               className={`mb-1.5 w-full font-mono text-xs font-bold uppercase disabled:opacity-60 ${cdInput} bg-apple-bg/40 dark:bg-black/25`}
               placeholder="Mã / nhãn (VD: CTL)"
             />
@@ -95,8 +104,13 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
                 <textarea
                   value={ag.agentAddress}
                   onChange={(e) => patchAgent(idx, { agentAddress: e.target.value })}
+                  onBlur={(e) =>
+                    commitAgent(idx, {
+                      agentAddress: normalizePrintAddressMultiline(e.target.value, 6),
+                    })
+                  }
                   rows={2}
-                  className={`mb-1.5 w-full resize-y text-sm ${cdInput}`}
+                  className={`mb-1.5 w-full resize-y whitespace-pre-wrap break-words text-sm leading-relaxed ${cdInput}`}
                   placeholder="Địa chỉ — Enter để xuống dòng khi in"
                 />
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -106,7 +120,7 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
                       type="text"
                       value={ag.agentPhone}
                       onChange={(e) => patchAgent(idx, { agentPhone: e.target.value })}
-                      onBlur={(e) => patchAgent(idx, { agentPhone: formatVnPhoneDisplay(e.target.value) })}
+                      onBlur={(e) => commitAgent(idx, { agentPhone: formatVnPhoneDisplay(e.target.value) })}
                       maxLength={24}
                       className={`w-full text-sm tabular-nums ${cdInput}`}
                       placeholder="SĐT"
@@ -115,12 +129,15 @@ export function GlobalAgentsSettings({ catalog, onChange }: Props) {
                   <div>
                     <label className={`mb-0.5 block text-[10px] font-semibold ${CD.muted}`}>Email</label>
                     <input
-                      type="email"
+                      type="text"
+                      inputMode="email"
+                      autoComplete="email"
                       value={ag.agentEmail}
                       onChange={(e) => patchAgent(idx, { agentEmail: e.target.value })}
+                      onBlur={(e) => commitAgent(idx, { agentEmail: e.target.value.trim() })}
                       maxLength={50}
                       className={`w-full text-sm ${cdInput}`}
-                      placeholder="Email"
+                      placeholder="Email (tùy chọn)"
                     />
                   </div>
                   <div>

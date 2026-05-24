@@ -14,6 +14,7 @@ interface Props {
   value: string;
   customerId?: string;
   customerDirectory: readonly CustomerDirectoryEntry[];
+  globalAgents?: import("../types/globalAgents").GlobalAgentCatalog;
   placeholder?: string;
   onCommit: (patch: Partial<Shipment>) => void;
   className?: string;
@@ -28,6 +29,7 @@ export function InlineCustomerEdit({
   value,
   customerId = "",
   customerDirectory,
+  globalAgents,
   placeholder = "Khách",
   onCommit,
   className = "",
@@ -75,7 +77,7 @@ export function InlineCustomerEdit({
     skipBlurCommitRef.current = true;
     setEditing(false);
     setListOpen(false);
-    onCommit(buildShipmentPatchForCustomerSelection(customerDirectory, entry.name, entry));
+    onCommit(buildShipmentPatchForCustomerSelection(customerDirectory, entry.name, entry, globalAgents));
     queueMicrotask(() => {
       skipBlurCommitRef.current = false;
       advance?.();
@@ -88,7 +90,7 @@ export function InlineCustomerEdit({
     setListOpen(false);
     const trimmed = normalizeCustomerNameInput(draft).slice(0, maxLength);
     if (trimmed !== normalizeCustomerNameInput(value) || !customerId) {
-      onCommit(buildShipmentPatchForCustomerSelection(customerDirectory, trimmed));
+      onCommit(buildShipmentPatchForCustomerSelection(customerDirectory, trimmed, undefined, globalAgents));
     }
     queueMicrotask(() => {
       skipBlurCommitRef.current = false;

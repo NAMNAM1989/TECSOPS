@@ -289,6 +289,38 @@ export async function replacePrintTemplateFields(client, profileId, fields) {
   await client.query(`UPDATE ${PRINT_PROFILES_TABLE} SET updated_at = now() WHERE id = $1`, [profileId]);
 }
 
+/**
+ * @param {import('pg').PoolClient} client
+ * @param {string} profileId
+ * @param {{ offsetXMm?: number; offsetYMm?: number; scaleX?: number; scaleY?: number }} patch
+ */
+export async function updatePrintProfileMeta(client, profileId, patch) {
+  const sets = [];
+  const params = [profileId];
+  if (patch.offsetXMm != null) {
+    params.push(Number(patch.offsetXMm));
+    sets.push(`offset_x_mm = $${params.length}`);
+  }
+  if (patch.offsetYMm != null) {
+    params.push(Number(patch.offsetYMm));
+    sets.push(`offset_y_mm = $${params.length}`);
+  }
+  if (patch.scaleX != null) {
+    params.push(Number(patch.scaleX));
+    sets.push(`scale_x = $${params.length}`);
+  }
+  if (patch.scaleY != null) {
+    params.push(Number(patch.scaleY));
+    sets.push(`scale_y = $${params.length}`);
+  }
+  if (!sets.length) return;
+  sets.push("updated_at = now()");
+  await client.query(
+    `UPDATE ${PRINT_PROFILES_TABLE} SET ${sets.join(", ")} WHERE id = $1`,
+    params
+  );
+}
+
 export async function loadPrintJobContext(client, { profileId, templateCode = "scsc-weigh-a4" }) {
   let profile = profileId ? await getPrintProfileById(client, profileId) : null;
   if (!profile) profile = await getDefaultPrintProfile(client, templateCode);

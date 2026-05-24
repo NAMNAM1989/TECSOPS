@@ -25,13 +25,17 @@ type Props = {
   onDelete: (id: string) => void;
 };
 
+const iconCls = "h-3.5 w-3.5";
+
 function ActionIconBtn({
   label,
   onClick,
+  active,
   children,
 }: {
   label: string;
   onClick: () => void;
+  active?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -43,23 +47,41 @@ function ActionIconBtn({
         e.stopPropagation();
         onClick();
       }}
-      className={OPS.actionIcon}
+      className={`${OPS.actionIcon} ${active ? OPS.actionIconOpen : ""}`}
     >
       {children}
     </button>
   );
 }
 
-const iconCls = "h-4 w-4";
-
 function IconPrintLabel() {
   return (
-    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24" aria-hidden>
+    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
-        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+        d="M6 9V4h12v5M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"
       />
+    </svg>
+  );
+}
+
+function IconWeighSlip() {
+  return (
+    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 12h6m-6 4h4m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+      />
+    </svg>
+  );
+}
+
+function IconDimReport() {
+  return (
+    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h10M8 7v10" />
     </svg>
   );
 }
@@ -67,9 +89,9 @@ function IconPrintLabel() {
 function IconKebabVertical() {
   return (
     <svg className={iconCls} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-      <circle cx="12" cy="5" r="1.35" />
-      <circle cx="12" cy="12" r="1.35" />
-      <circle cx="12" cy="19" r="1.35" />
+      <circle cx="12" cy="5.5" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="12" cy="18.5" r="1.5" />
     </svg>
   );
 }
@@ -92,10 +114,19 @@ export function ShipmentRowActionsMenu({
   const showWeigh = canPrintWeighReceiptScsc(row);
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
+  const menuExtras = (showDim ? 1 : 0) + (showTcsDim ? 2 : 0) + 1;
 
   const confirmDelete = () => {
     if (confirm(`Xóa lô AWB ${row.awb || "(chưa có AWB)"}?`)) onDelete(row.id);
   };
+
+  const printWeigh = () =>
+    void printWeighReceiptScscWithConsigneeChoice(row, {
+      customerDirectory,
+      globalAgents,
+      scscWeighPrintSettings,
+      saveScscWeighPrintSettings,
+    });
 
   useLayoutEffect(() => {
     if (!menuOpen) {
@@ -161,9 +192,7 @@ export function ShipmentRowActionsMenu({
         setMenuOpen(false);
         onClick();
       }}
-      className={`${OPS.dropdownItem} ${
-        tone === "danger" ? OPS.dropdownItemDanger : ""
-      }`}
+      className={`${OPS.dropdownItem} ${tone === "danger" ? OPS.dropdownItemDanger : ""}`}
     >
       {label}
     </button>
@@ -176,36 +205,33 @@ export function ShipmentRowActionsMenu({
       className={OPS.dropdown}
       role="menu"
     >
-      {showWeigh
-        ? menuItem("In tờ cân SCSC", () =>
-            void printWeighReceiptScscWithConsigneeChoice(row, {
-              customerDirectory,
-              globalAgents,
-              scscWeighPrintSettings,
-              saveScscWeighPrintSettings,
-            })
-          )
-        : null}
-      {showDim ? menuItem("In DIM SCSC", () => printDimReport(row)) : null}
       {showDim ? menuItem("Excel DIM", () => downloadScscDimListExcel(row)) : null}
       {showTcsDim ? menuItem("In DIM TCS", () => printTcsAttachedDimsList(row)) : null}
       {showTcsDim ? menuItem("Excel TCS", () => void downloadTcsAttachedDimsExcel(row)) : null}
-      {(showWeigh || showDim || showTcsDim) ? (
-        <div className={`my-0.5 border-t ${OPS.border}`} aria-hidden />
-      ) : null}
+      {menuExtras > 1 ? <div className={`my-0.5 border-t ${OPS.border}`} aria-hidden /> : null}
       {menuItem("Xóa lô", confirmDelete, "danger")}
     </div>
   ) : null;
 
   return (
-    <div ref={wrapRef} className="inline-flex items-center gap-0.5">
-      <ActionIconBtn label="In nhãn" onClick={() => onPrint(row)}>
+    <div ref={wrapRef} className="inline-flex max-w-full flex-nowrap items-center justify-end gap-0.5">
+      <ActionIconBtn label="In nhãn vận chuyển" onClick={() => onPrint(row)}>
         <IconPrintLabel />
       </ActionIconBtn>
+      {showWeigh ? (
+        <ActionIconBtn label="In tờ cân SCSC" onClick={printWeigh}>
+          <IconWeighSlip />
+        </ActionIconBtn>
+      ) : null}
+      {showDim ? (
+        <ActionIconBtn label="In DIM SCSC" onClick={() => printDimReport(row)}>
+          <IconDimReport />
+        </ActionIconBtn>
+      ) : null}
       <button
         ref={triggerRef}
         type="button"
-        title="Thao tác thêm"
+        title={`Thêm (${menuExtras})`}
         aria-label="Menu thao tác lô hàng"
         aria-expanded={menuOpen}
         aria-haspopup="menu"

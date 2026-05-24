@@ -5,6 +5,10 @@ import {
   type ScaleTicketFormData,
 } from "./mapBookingToScaleTicketFormData";
 import { buildScscWeighOverlayValues } from "../printing/scscWeigh/scscWeighTemplate";
+import { resolveScscWeighPrintLayer } from "../printing/scscWeigh/scscWeighTemplate";
+import { getActiveA4WeighProfile } from "../printing/printerProfiles";
+import { loadPrinterProfileStore } from "../printing/printerProfileStorage";
+import { scscPrintLayerToPdfRenderFields } from "./printFieldConvert";
 import { getScscWeighPrintSettingsCache } from "../printing/scscWeigh/scscWeighPrintSettingsRuntime";
 import {
   printScscWeighReceiptFromFormData,
@@ -118,20 +122,30 @@ export async function printScscWeighReceiptPdfFromFormData(
   opts?: {
     profileId?: string;
     scscWeighPrintSettings?: ScscWeighPrintSettings;
+    warehouse?: Shipment["warehouse"];
     includeBackground?: boolean;
     overlayValues?: Record<string, string>;
     htmlFallbackOpts?: ScscWeighPrintFromFormOpts;
   }
 ): Promise<ScscPrintResult> {
   const settings = opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache();
-  const values = opts?.overlayValues ?? buildScscWeighOverlayValues(formData, settings);
+  const rawValues = opts?.overlayValues ?? buildScscWeighOverlayValues(formData, settings, opts?.warehouse ?? "TECS-SCSC");
+  const profile = getActiveA4WeighProfile(loadPrinterProfileStore());
+  const layer = resolveScscWeighPrintLayer(profile, rawValues);
 
   try {
     if (await probePrintApiAvailable()) {
       const buf = await fetchScscWeighPdfBuffer({
         profileId: opts?.profileId ?? DEFAULT_SCSC_PRINT_PROFILE_ID,
         templateCode: "scsc-weigh-a4",
-        values,
+        values: layer.values,
+        renderFields: scscPrintLayerToPdfRenderFields(layer.fields),
+        printTransform: {
+          offsetXMm: profile.offsetXmm,
+          offsetYMm: profile.offsetYmm,
+          scaleX: profile.scaleX,
+          scaleY: profile.scaleY,
+        },
         includeBackground: opts?.includeBackground ?? false,
       });
       await printPdfBlob(new Blob([buf], { type: "application/pdf" }));
@@ -141,14 +155,19 @@ export async function printScscWeighReceiptPdfFromFormData(
     console.warn("[print] PDF server failed:", e);
   }
 
+  console.warn(
+    "[print] SCSC: in HTML (form giấy in sẵn) — PDF API chưa bật. Cần DATABASE_URL + npm run migrate:print-templates trên server."
+  );
   printScscWeighReceiptFromFormData(formData, {
     ...opts?.htmlFallbackOpts,
-    overlayValues: opts?.overlayValues,
+    profile,
+    overlayValues: rawValues,
+    warehouse: opts?.warehouse,
   });
   return {
     ok: true,
     via: "html",
-    message: "In HTML (cần DATABASE_URL + migration để dùng PDF server).",
+    message: "In HTML (PDF API chưa bật — cần DATABASE_URL + migration print).",
   };
 }
 
@@ -187,6 +206,7 @@ export async function printScscWeighReceiptPdf(
   return printScscWeighReceiptPdfFromFormData(formData, {
     profileId: opts?.profileId,
     scscWeighPrintSettings: opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache(),
+    warehouse: s.warehouse,
     overlayValues,
     htmlFallbackOpts: opts,
   });

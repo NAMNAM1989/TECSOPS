@@ -2,7 +2,8 @@ import type { CSSProperties } from "react";
 import type { A4WeighReceiptPrinterProfile } from "../printTypes";
 import type { ScscWeighPrintSettings } from "../../types/scscWeighPrintSettings";
 import type { ScaleTicketFormData } from "../../utils/mapBookingToScaleTicketFormData";
-import { defaultScscWeighPrintSettings } from "./scscWeighPrintSettingsCore";
+import type { Warehouse } from "../../types/shipment";
+import { defaultScscWeighPrintSettings, resolveScscSenderForWarehouse } from "./scscWeighPrintSettingsCore";
 import { splitScscAddressTwoLines } from "../../utils/printAddressMultiline";
 import {
   SCSC_PARTY_LINE_GAP_MM_DEFAULT,
@@ -29,8 +30,14 @@ export type ScscFieldDef = {
   heightMm?: number;
   align?: "left" | "center" | "right";
   multiline?: boolean;
+  /** Tự xuống dòng trong ô (căn theo `align`). */
+  wrapText?: boolean;
   bold?: boolean;
 };
+
+/** Font in phiếu cân — Arial khớp PDF/in thực tế; preview dùng cùng stack. */
+export const SCSC_PRINT_FONT_FAMILY =
+  'Arial, "Helvetica Neue", Helvetica, ui-sans-serif, system-ui, sans-serif';
 
 /** Khoảng cách giữa các dòng trong khối Shipper / Agent / CNEE (mm). */
 export const SCSC_PARTY_LINE_GAP_MM = SCSC_PARTY_LINE_GAP_MM_DEFAULT;
@@ -69,40 +76,30 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function fontSizeCss(def: ScscFieldDef): string {
-  if (def.fontMm != null) {
-    if (def.multiline && def.lineHeightMm != null) {
-      const h = def.heightMm ?? def.lineHeightMm;
-      return `font-size:${def.fontMm.toFixed(2)}mm;line-height:${def.lineHeightMm.toFixed(2)}mm;height:${h.toFixed(2)}mm;`;
-    }
-    const lh =
-      def.lineHeightMm != null
-        ? `line-height:${def.lineHeightMm.toFixed(2)}mm;height:${(def.heightMm ?? def.lineHeightMm).toFixed(2)}mm;`
-        : "line-height:1.1;";
-    return `font-size:${def.fontMm.toFixed(2)}mm;${lh}`;
-  }
-  return `font-size:${(def.fontPt ?? 8.5).toFixed(2)}pt;`;
+function fieldUsesWrap(def: ScscFieldDef): boolean {
+  return Boolean(def.multiline || def.wrapText);
 }
 
-function fieldStyle(def: ScscFieldDef): string {
-  const align = def.align ? `text-align:${def.align};` : "";
-  const ws = def.multiline
-    ? "white-space:pre-line;overflow:hidden;box-sizing:border-box;"
-    : "white-space:nowrap;overflow:hidden;";
-  const fw = def.bold ? "font-weight:700;" : "";
-  const box =
-    def.lineHeightMm != null && !def.multiline
-      ? "display:flex;align-items:center;box-sizing:border-box;"
-      : def.multiline
-        ? "box-sizing:border-box;"
-        : "";
-  return `left:${def.x.toFixed(2)}mm;top:${def.y.toFixed(2)}mm;width:${def.width.toFixed(
-    2
-  )}mm;${fontSizeCss(def)}${align}${ws}${fw}${box}`;
+function cssPropKey(key: string): string {
+  return key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+}
+
+/** Inline CSS từ cùng logic preview React — preview và in HTML dùng chung. */
+export function scscFieldInlineStyle(def: ScscFieldDef): string {
+  const box = scscFieldBoxStyle(def);
+  return Object.entries(box)
+    .filter(([, v]) => v != null && v !== "")
+    .map(([k, v]) => `${cssPropKey(k)}:${v}`)
+    .join(";");
+}
+
+export function fieldStyle(def: ScscFieldDef): string {
+  return scscFieldInlineStyle(def);
 }
 
 /** Style cho preview React (cùng tọa độ mm như bản in). */
 export function scscFieldBoxStyle(def: ScscFieldDef): CSSProperties {
+  const wrap = fieldUsesWrap(def);
   const lineHeight =
     def.lineHeightMm != null
       ? `${def.lineHeightMm}mm`
@@ -123,12 +120,23 @@ export function scscFieldBoxStyle(def: ScscFieldDef): CSSProperties {
     fontSize: def.fontMm != null ? `${def.fontMm}mm` : `${def.fontPt ?? 8.5}pt`,
     fontWeight: def.bold ? 700 : 400,
     textAlign: def.align ?? "left",
-    whiteSpace: def.multiline ? "pre-line" : "nowrap",
+    whiteSpace: def.multiline ? "pre-line" : wrap ? "normal" : "nowrap",
+    wordBreak: wrap ? "break-word" : undefined,
+    overflowWrap: wrap ? "anywhere" : undefined,
     lineHeight,
-    display: def.lineHeightMm != null && !def.multiline ? "flex" : undefined,
-    alignItems: def.lineHeightMm != null && !def.multiline ? "center" : undefined,
+    display: def.lineHeightMm != null && !wrap ? "flex" : undefined,
+    alignItems: def.lineHeightMm != null && !wrap ? "center" : undefined,
+    justifyContent:
+      def.lineHeightMm != null && !wrap
+        ? def.align === "center"
+          ? "center"
+          : def.align === "right"
+            ? "flex-end"
+            : "flex-start"
+        : undefined,
     overflow: "hidden",
     color: "#000",
+    fontFamily: SCSC_PRINT_FONT_FAMILY,
     boxSizing: "border-box",
   };
 }
@@ -138,8 +146,10 @@ function finalizeScscPrintLayer(
   values: Record<string, string>
 ): { fields: ScscFieldDef[]; values: Record<string, string> } {
   const base = buildScscWeighPrintFields(resolveScscWeighLayout(profile));
-  const enriched = enrichScscPrintForRender(base, values);
-  const fields = applyScscFieldOverrides(enriched.fields, profile?.scscFieldOverrides);
+  const overrides = profile?.scscFieldOverrides;
+  const withOverrides = applyScscFieldOverrides(base, overrides);
+  const enriched = enrichScscPrintForRender(withOverrides, values, overrides);
+  const fields = applyScscFieldOverrides(enriched.fields, overrides);
   return { fields, values: enriched.values };
 }
 
@@ -164,8 +174,10 @@ export { resolveScscWeighLayout, type ScscWeighLayout };
 
 export function buildScscWeighOverlayValues(
   fd: ScaleTicketFormData,
-  shared: ScscWeighPrintSettings = defaultScscWeighPrintSettings()
+  shared: ScscWeighPrintSettings = defaultScscWeighPrintSettings(),
+  warehouse: Warehouse = "TECS-SCSC"
 ): Record<string, string> {
+  const sender = resolveScscSenderForWarehouse(shared, warehouse);
   const shipperAddr = splitScscAddressTwoLines(fd.shipperAddress);
   const agentAddr = splitScscAddressTwoLines(fd.agentAddress);
   const cneeAddr = splitScscAddressTwoLines(fd.consigneeAddress);
@@ -198,8 +210,8 @@ export function buildScscWeighOverlayValues(
     grossWeight: fd.grossWeight,
     chargeableWeight: fd.chargeableWeight,
     dimensions: fd.dimensionsText,
-    senderName: shared.senderName,
-    senderPhone: shared.senderPhone,
+    senderName: sender.senderName,
+    senderPhone: sender.senderPhone,
     otherRequirements: fd.otherRequirements,
   };
 }

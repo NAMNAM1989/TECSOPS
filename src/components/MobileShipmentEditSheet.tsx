@@ -91,7 +91,7 @@ export function MobileShipmentEditSheet({
   }, [sessionDateYmd, shipment?.sessionDate]);
 
   const applyCustomerFromDirectory = (name: string, entry?: CustomerDirectoryEntry) => {
-    const patch = buildShipmentPatchForCustomerSelection(customerDirectory, name, entry);
+    const patch = buildShipmentPatchForCustomerSelection(customerDirectory, name, entry, globalAgents);
     setCustomer(normalizeCustomerNameInput(patch.customer ?? name));
     setCustomerId((patch.customerId ?? "").trim());
     if (patch.customerConsigneeId) {
@@ -169,7 +169,7 @@ export function MobileShipmentEditSheet({
   const handleSave = () => {
     const ymd = parseBookingDateLoose(flightDateText.trim(), sessionYear);
     const flightDate = ymd ? formatYmdToFlightDateDdMon(ymd) : flightDateText.trim();
-    const customerPatch = buildShipmentPatchForCustomerSelection(customerDirectory, customer);
+    const customerPatch = buildShipmentPatchForCustomerSelection(customerDirectory, customer, undefined, globalAgents);
     const patch: Partial<Shipment> = {
       flight: flight.trim().toUpperCase(),
       flightDate,

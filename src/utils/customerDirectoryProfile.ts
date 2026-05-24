@@ -7,6 +7,7 @@ import type {
   CustomerSavedShipper,
   CustomerSavedVehicle,
 } from "../types/customerDirectory";
+import { normalizePrintAddressMultiline } from "./printAddressMultiline";
 
 /** Giới hạn độ dài — đồng bộ client / server. */
 export const CUSTOMER_PROFILE_LIMITS = {
@@ -77,7 +78,10 @@ export function clampCustomerSavedConsignee(c: CustomerSavedConsignee): Customer
     id: clip(c.id, 80).trim() || newSavedConsigneeId(),
     label: clip(c.label, L.savedConsigneeLabel).trim(),
     consigneeName: clip(c.consigneeName, L.consigneeName).trim(),
-    consigneeAddress: clip(c.consigneeAddress, L.consigneeAddress).replace(/^\s+|\s+$/g, ""),
+    consigneeAddress: normalizePrintAddressMultiline(
+      clip(c.consigneeAddress, L.consigneeAddress),
+      6
+    ).slice(0, L.consigneeAddress),
     consigneePhone: clip(c.consigneePhone, L.consigneePhone).trim(),
     consigneeEmail: clip(c.consigneeEmail, L.consigneeEmail).trim(),
     notifyName: clip(c.notifyName, L.notifyName).trim(),
@@ -133,7 +137,10 @@ export function clampCustomerSavedShipper(s: CustomerSavedShipper): CustomerSave
     id: clip(s.id, 80).trim() || newSavedShipperId(),
     label: clip(s.label, L.savedShipperLabel).trim(),
     shipperName: clip(s.shipperName, L.shipperName).trim(),
-    shipperAddress: clip(s.shipperAddress, L.shipperAddress).replace(/^\s+|\s+$/g, ""),
+    shipperAddress: normalizePrintAddressMultiline(
+      clip(s.shipperAddress, L.shipperAddress),
+      6
+    ).slice(0, L.shipperAddress),
     shipperPhone: clip(s.shipperPhone, L.shipperPhone).trim(),
     shipperEmail: clip(s.shipperEmail, L.shipperEmail).trim(),
     taxCode: clip(s.taxCode, L.taxCode).trim(),

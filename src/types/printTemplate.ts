@@ -42,10 +42,35 @@ export type PrintTemplateFieldRecord = {
 
 export type PrintFieldValues = Record<string, string>;
 
+/** Một ô đã resolve trên client — PDF in đúng như preview. */
+export type ScscPdfRenderField = {
+  fieldKey: string;
+  posXMm: number;
+  posYMm: number;
+  widthMm: number;
+  fontSizePt: number;
+  lineHeightMm?: number | null;
+  heightMm?: number | null;
+  maxLines?: number | null;
+  align?: "left" | "center" | "right";
+  multiline?: boolean;
+  bold?: boolean;
+  sortOrder?: number;
+};
+
 export type GenerateScscWeighPdfRequest = {
   profileId?: string;
   templateCode?: string;
   values: PrintFieldValues;
+  /** Layer đã enrich từ preview — ưu tiên hơn fields trong DB. */
+  renderFields?: ScscPdfRenderField[];
+  /** Transform từ profile localStorage — khớp preview (offset + pos*scale). */
+  printTransform?: {
+    offsetXMm?: number;
+    offsetYMm?: number;
+    scaleX?: number;
+    scaleY?: number;
+  };
   /** true = vẽ PNG mẫu làm nền (debug / máy in thường); false = chỉ chữ (form in sẵn). */
   includeBackground?: boolean;
 };

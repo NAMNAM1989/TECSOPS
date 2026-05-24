@@ -14,12 +14,29 @@ import {
 } from "../../utils/customerProfileInputFormat";
 import { formatVehicleLicensePlate } from "../../utils/customerVehicleCore";
 import { suggestSavedItemLabel } from "../../utils/customerDirectoryScaffold";
+import { normalizePrintAddressMultiline } from "../../utils/printAddressMultiline";
 import { CD, cdInput } from "./customerDirectoryStyles";
+import { CustomerSectionSaveButton } from "./CustomerSectionSaveButton";
+import {
+  CustomerValidationBanner,
+  FieldErrorText,
+  SectionErrorHint,
+  fieldInputClass,
+} from "./CustomerValidationField";
+import type { CustomerFieldError } from "../../utils/customerDirectoryValidation";
+import { getFieldValidationError } from "../../utils/customerDirectoryValidation";
 
-const inputCls = `w-full text-sm ${cdInput}`;
+const inputCls = `w-full text-xs ${cdInput}`;
+
+type ProfileTab = "shipper" | "consignee" | "goods" | "vehicle";
 
 type Props = {
   entry: CustomerDirectoryEntry;
+  errors: CustomerFieldError[];
+  onEdit: () => void;
+  saving: boolean;
+  savedSection: string | null;
+  onSaveSection: (key: string) => void;
   onPatch: (patch: Partial<Omit<CustomerDirectoryEntry, "id" | "parties">>) => void;
   onPatchShipper: (index: number, patch: Partial<CustomerSavedShipper>) => void;
   onRemoveShipper: (index: number) => void;
@@ -35,7 +52,14 @@ type Props = {
   onAddVehicle: () => void;
 };
 
-function DefaultToggle({
+const TAB_LABELS: { id: ProfileTab; label: string }[] = [
+  { id: "shipper", label: "Người gửi" },
+  { id: "consignee", label: "CNEE" },
+  { id: "goods", label: "Tên hàng" },
+  { id: "vehicle", label: "Xe / TX" },
+];
+
+function DefaultStar({
   active,
   onClick,
   title,
@@ -49,87 +73,61 @@ function DefaultToggle({
       type="button"
       title={title}
       onClick={onClick}
-      className={`shrink-0 rounded-md px-1.5 py-0.5 text-sm leading-none ${
-        active ? "text-amber-500" : `${CD.muted} hover:text-amber-500 dark:hover:text-amber-400`
+      className={`rounded px-1 text-sm leading-none ${
+        active ? "text-amber-500" : `${CD.muted} hover:text-amber-500`
       }`}
       aria-label={title}
       aria-pressed={active}
     >
-      {active ? "★ Mặc định" : "☆ Đặt mặc định"}
+      {active ? "★" : "☆"}
     </button>
   );
 }
 
-function SectionHead({
+function ItemCard({
   title,
-  hint,
-  onAdd,
-  addLabel,
-}: {
-  title: string;
-  hint: string;
-  onAdd: () => void;
-  addLabel: string;
-}) {
-  return (
-    <div className="mb-2 flex flex-wrap items-end justify-between gap-2 border-b border-black/[0.06] pb-2 dark:border-white/[0.08]">
-      <div>
-        <h4 className={`text-xs font-bold uppercase tracking-wide ${CD.title}`}>{title}</h4>
-        <p className={`mt-0.5 text-[10px] leading-snug ${CD.muted}`}>{hint}</p>
-      </div>
-      <button type="button" onClick={onAdd} className={`shrink-0 ${CD.btnSmallAccent}`}>
-        {addLabel}
-      </button>
-    </div>
-  );
-}
-
-function CardShell({
-  title,
-  defaultControl,
+  defaultStar,
   onRemove,
   canRemove,
   children,
 }: {
   title: string;
-  defaultControl: ReactNode;
+  defaultStar: ReactNode;
   onRemove: () => void;
   canRemove: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className={`mb-2 rounded-xl border p-2.5 sm:p-3 ${CD.card}`}>
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className={`text-xs font-semibold ${CD.secondary}`}>{title}</span>
-        <div className="flex items-center gap-2">
-          {defaultControl}
-          {canRemove ? (
-            <button
-              type="button"
-              onClick={onRemove}
-              className="rounded-md px-2 py-0.5 text-[10px] font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/15"
-            >
-              Xóa
-            </button>
-          ) : null}
-        </div>
+    <div className={`mb-1.5 rounded-lg border p-2 ${CD.panelSoft}`}>
+      <div className="mb-1.5 flex items-center gap-1.5">
+        {defaultStar}
+        <span className={`min-w-0 flex-1 truncate text-[11px] font-semibold ${CD.secondary}`}>{title}</span>
+        {canRemove ? (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="shrink-0 text-[10px] font-semibold text-red-600 hover:underline dark:text-red-300"
+          >
+            Xóa
+          </button>
+        ) : null}
       </div>
       {children}
     </div>
   );
 }
 
-function OptionalFields({ children }: { children: ReactNode }) {
-  return (
-    <details className="mt-2">
-      <summary className={`cursor-pointer text-[10px] font-semibold ${CD.muted}`}>Thêm chi tiết (tùy chọn)</summary>
-      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">{children}</div>
-    </details>
-  );
+function FieldLabel({ children }: { children: ReactNode }) {
+  return <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>{children}</span>;
 }
 
 export function CustomerSavedProfilesEditor({
   entry,
+  errors,
+  onEdit,
+  saving,
+  savedSection,
+  onSaveSection,
   onPatch,
   onPatchShipper,
   onRemoveShipper,
@@ -144,6 +142,7 @@ export function CustomerSavedProfilesEditor({
   onRemoveVehicle,
   onAddVehicle,
 }: Props) {
+  const [tab, setTab] = useState<ProfileTab>("shipper");
   const [ocrHint, setOcrHint] = useState<string | null>(null);
 
   const shippers = entry.savedShippers ?? [];
@@ -151,24 +150,31 @@ export function CustomerSavedProfilesEditor({
   const goods = entry.savedGoods ?? [];
   const vehicles = entry.savedVehicles ?? [];
 
+  const counts: Record<ProfileTab, number> = {
+    shipper: shippers.length,
+    consignee: consignees.length,
+    goods: goods.length,
+    vehicle: vehicles.length,
+  };
+
   const applyOcrPaste = async (idx: number) => {
     setOcrHint(null);
     let raw = "";
     try {
       raw = await navigator.clipboard.readText();
     } catch {
-      setOcrHint("Không đọc được clipboard.");
+      setOcrHint("Không đọc clipboard.");
       return;
     }
     const ocr = parseCustomerProfileOcrJson(raw);
     if (!ocr) {
-      setOcrHint("Clipboard không phải JSON OCR hợp lệ.");
+      setOcrHint("JSON OCR không hợp lệ.");
       return;
     }
     const s = shippers[idx];
     if (!s) return;
     onPatchShipper(idx, patchShipperFromOcr(s, ocr));
-    setOcrHint("Đã điền từ OCR.");
+    setOcrHint("Đã điền OCR.");
   };
 
   const fillLabelIfEmpty = (
@@ -182,296 +188,336 @@ export function CustomerSavedProfilesEditor({
     if (label) patch(idx, { label });
   };
 
+  const tabAdd: Record<ProfileTab, () => void> = {
+    shipper: onAddShipper,
+    consignee: onAddConsignee,
+    goods: onAddGoods,
+    vehicle: onAddVehicle,
+  };
+
+  const fe = (section: ProfileTab | "note", field: string, itemId?: string) =>
+    getFieldValidationError(errors, section, field, itemId);
+
+  const wrapPatch =
+    <T,>(fn: (i: number, p: T) => void) =>
+    (idx: number, patch: T) => {
+      onEdit();
+      fn(idx, patch);
+    };
+
+  const wrapAdd = (fn: () => void) => () => {
+    onEdit();
+    fn();
+  };
+
+  const patchShipper = wrapPatch(onPatchShipper);
+  const patchConsignee = wrapPatch(onPatchConsignee);
+  const patchGoods = wrapPatch(onPatchGoods);
+  const patchVehicle = wrapPatch(onPatchVehicle);
+
   return (
-    <section className="space-y-4">
-      <div className={`rounded-xl p-2.5 ${CD.panelSoft}`}>
-        <label className={`mb-1 block text-[10px] font-semibold uppercase ${CD.muted}`}>
-          Ghi chú in phiếu cân
-        </label>
+    <section className="space-y-2.5">
+      <div className={`rounded-lg border p-2 ${CD.card}`}>
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+          <span className={`text-[10px] font-bold uppercase ${CD.muted}`}>Ghi chú in phiếu cân</span>
+          <CustomerSectionSaveButton
+            compact
+            saving={saving}
+            saved={savedSection === "note"}
+            onSave={() => onSaveSection("note")}
+          />
+        </div>
         <textarea
           value={entry.otherRequirementsPrint ?? ""}
-          onChange={(e) => onPatch({ otherRequirementsPrint: e.target.value })}
+          onChange={(e) => {
+            onEdit();
+            onPatch({ otherRequirementsPrint: e.target.value });
+          }}
           rows={2}
-          className={`${inputCls} min-h-[3rem] resize-y`}
-          placeholder="VD: GIỮ KHÔ, KHÔNG XẾP CHỒNG… (để trống nếu không có)"
+          className={`${inputCls} min-h-[2.5rem] resize-y`}
+          placeholder="VD: GIỮ KHÔ, KHÔNG XẾP CHỒNG…"
         />
       </div>
 
-      <div>
-        <SectionHead
-          title="Người gửi"
-          hint="In trên phiếu cân · ★ = dùng mặc định khi booking"
-          onAdd={onAddShipper}
-          addLabel="+ Thêm"
-        />
-        {shippers.length === 0 ? (
-          <p className={CD.empty}>Chưa có — bấm « + Thêm ».</p>
-        ) : (
-          shippers.map((s, idx) => (
-            <CardShell
-              key={s.id}
-              title={s.shipperName.trim() || s.label.trim() || `Người gửi ${idx + 1}`}
-              canRemove={shippers.length > 1}
-              onRemove={() => onRemoveShipper(idx)}
-              defaultControl={
-                <DefaultToggle
-                  active={entry.defaultShipperId === s.id}
-                  onClick={() => onPatch({ defaultShipperId: s.id })}
-                  title="Người gửi mặc định"
-                />
-              }
+      <div className={`rounded-lg border ${CD.card}`}>
+        <div className={`flex flex-wrap items-center gap-1 border-b px-1.5 py-1 ${CD.border}`}>
+          {TAB_LABELS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
+                tab === id ? CD.navActive : CD.navIdle
+              }`}
             >
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <label className="sm:col-span-2">
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Tên in phiếu</span>
-                  <input
-                    className={inputCls}
-                    placeholder="Tên công ty / người gửi"
-                    value={s.shipperName}
-                    onChange={(e) => onPatchShipper(idx, { shipperName: e.target.value })}
-                    onBlur={() => fillLabelIfEmpty(idx, s.shipperName, onPatchShipper, s.label)}
-                  />
-                </label>
-                <label>
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Số điện thoại</span>
-                  <input
-                    className={`${inputCls} tabular-nums`}
-                    placeholder="09…"
-                    value={s.shipperPhone}
-                    onChange={(e) => onPatchShipper(idx, { shipperPhone: e.target.value })}
-                    onBlur={(e) => onPatchShipper(idx, { shipperPhone: formatVnPhoneDisplay(e.target.value) })}
-                  />
-                </label>
-                <label className="sm:col-span-2">
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Địa chỉ</span>
-                  <textarea
-                    className={`${inputCls} resize-y`}
-                    rows={2}
-                    placeholder="Enter để xuống dòng khi in"
-                    value={s.shipperAddress}
-                    onChange={(e) => onPatchShipper(idx, { shipperAddress: e.target.value })}
-                  />
-                </label>
-              </div>
-              <OptionalFields>
-                <label>
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Mã nhận diện</span>
-                  <input
-                    className={`${inputCls} font-mono uppercase`}
-                    placeholder="VD: HCM"
-                    value={s.label}
-                    onChange={(e) => onPatchShipper(idx, { label: e.target.value })}
-                    onBlur={(e) => onPatchShipper(idx, { label: normalizeAgentCode(e.target.value) })}
-                  />
-                </label>
-                <label>
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Mã số thuế</span>
-                  <input
-                    className={inputCls}
-                    value={s.taxCode}
-                    onChange={(e) => onPatchShipper(idx, { taxCode: e.target.value })}
-                  />
-                </label>
-                <label className="sm:col-span-2">
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Email</span>
-                  <input
-                    className={inputCls}
-                    value={s.shipperEmail}
-                    onChange={(e) => onPatchShipper(idx, { shipperEmail: e.target.value })}
-                  />
-                </label>
-                <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-                  <button type="button" onClick={() => void applyOcrPaste(idx)} className={CD.btnSmallAccent}>
-                    Dán OCR (clipboard)
-                  </button>
-                  {ocrHint ? <span className={`text-[10px] ${CD.secondary}`}>{ocrHint}</span> : null}
-                </div>
-              </OptionalFields>
-            </CardShell>
-          ))
-        )}
-      </div>
+              {label}
+              {counts[id] > 0 ? ` (${counts[id]})` : ""}
+            </button>
+          ))}
+          <div className="ml-auto flex items-center gap-1">
+            <SectionErrorHint errors={errors} section={tab} />
+            <button type="button" onClick={wrapAdd(tabAdd[tab])} className={CD.btnSmallAccent}>
+              + Thêm
+            </button>
+            <CustomerSectionSaveButton
+              compact
+              saving={saving}
+              saved={savedSection === tab}
+              onSave={() => onSaveSection(tab)}
+            />
+          </div>
+        </div>
 
-      <div>
-        <SectionHead
-          title="Người nhận (CNEE)"
-          hint="Chọn khi in phiếu / booking có nhiều điểm nhận"
-          onAdd={onAddConsignee}
-          addLabel="+ Thêm"
-        />
-        {consignees.length === 0 ? (
-          <p className={`${CD.empty} text-[11px]`}>Chưa có — bỏ qua nếu chỉ nhập trên từng lô.</p>
-        ) : (
-          consignees.map((c, idx) => (
-            <CardShell
-              key={c.id}
-              title={c.consigneeName.trim() || c.label.trim() || `CNEE ${idx + 1}`}
-              canRemove
-              onRemove={() => onRemoveConsignee(idx)}
-              defaultControl={
-                <DefaultToggle
-                  active={entry.defaultConsigneeId === c.id}
-                  onClick={() => onPatch({ defaultConsigneeId: c.id })}
-                  title="CNEE mặc định"
-                />
-              }
-            >
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <label className="sm:col-span-2">
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Tên người nhận</span>
-                  <input
-                    className={inputCls}
-                    value={c.consigneeName}
-                    onChange={(e) => onPatchConsignee(idx, { consigneeName: e.target.value })}
-                    onBlur={() => fillLabelIfEmpty(idx, c.consigneeName, onPatchConsignee, c.label)}
-                  />
-                </label>
-                <label>
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Số điện thoại</span>
-                  <input
-                    className={`${inputCls} tabular-nums`}
-                    value={c.consigneePhone}
-                    onChange={(e) => onPatchConsignee(idx, { consigneePhone: e.target.value })}
-                    onBlur={(e) => onPatchConsignee(idx, { consigneePhone: formatVnPhoneDisplay(e.target.value) })}
-                  />
-                </label>
-                <label className="sm:col-span-2">
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Địa chỉ</span>
-                  <textarea
-                    className={`${inputCls} resize-y`}
-                    rows={2}
-                    value={c.consigneeAddress}
-                    onChange={(e) => onPatchConsignee(idx, { consigneeAddress: e.target.value })}
-                  />
-                </label>
-              </div>
-              <OptionalFields>
-                <label>
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Mã nhận diện</span>
-                  <input
-                    className={`${inputCls} font-mono uppercase`}
-                    value={c.label}
-                    onChange={(e) => onPatchConsignee(idx, { label: e.target.value })}
-                    onBlur={(e) => onPatchConsignee(idx, { label: normalizeAgentCode(e.target.value) })}
-                  />
-                </label>
-                <label>
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Email</span>
-                  <input
-                    className={inputCls}
-                    value={c.consigneeEmail}
-                    onChange={(e) => onPatchConsignee(idx, { consigneeEmail: e.target.value })}
-                  />
-                </label>
-                <label className="sm:col-span-2">
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Notify</span>
-                  <input
-                    className={inputCls}
-                    value={c.notifyName}
-                    onChange={(e) => onPatchConsignee(idx, { notifyName: e.target.value })}
-                  />
-                </label>
-              </OptionalFields>
-            </CardShell>
-          ))
-        )}
-      </div>
+        <div className="p-2">
+          <CustomerValidationBanner errors={errors.filter((e) => e.section === tab)} />
+          {tab === "shipper" ? (
+            shippers.length === 0 ? (
+              <p className={`py-3 text-center text-[11px] ${CD.muted}`}>Chưa có người gửi.</p>
+            ) : (
+              shippers.map((s, idx) => (
+                <ItemCard
+                  key={s.id}
+                  title={s.shipperName.trim() || s.label.trim() || `#${idx + 1}`}
+                  canRemove={shippers.length > 1}
+                  onRemove={() => onRemoveShipper(idx)}
+                  defaultStar={
+                    <DefaultStar
+                      active={entry.defaultShipperId === s.id}
+                      onClick={() => onPatch({ defaultShipperId: s.id })}
+                      title="Mặc định"
+                    />
+                  }
+                >
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                    <label className="sm:col-span-2">
+                      <FieldLabel>Tên in phiếu</FieldLabel>
+                      <input
+                        className={fieldInputClass(Boolean(fe("shipper", "shipperName", s.id)))}
+                        value={s.shipperName}
+                        onChange={(e) => patchShipper(idx, { shipperName: e.target.value })}
+                        onBlur={() => fillLabelIfEmpty(idx, s.shipperName, patchShipper, s.label)}
+                      />
+                      <FieldErrorText message={fe("shipper", "shipperName", s.id)} />
+                    </label>
+                    <label>
+                      <FieldLabel>SĐT</FieldLabel>
+                      <input
+                        className={`${fieldInputClass(Boolean(fe("shipper", "shipperPhone", s.id)))} tabular-nums`}
+                        value={s.shipperPhone}
+                        onChange={(e) => patchShipper(idx, { shipperPhone: e.target.value })}
+                        onBlur={(e) =>
+                          patchShipper(idx, { shipperPhone: formatVnPhoneDisplay(e.target.value) })
+                        }
+                      />
+                      <FieldErrorText message={fe("shipper", "shipperPhone", s.id)} />
+                    </label>
+                    <label className="sm:col-span-2">
+                      <FieldLabel>Địa chỉ</FieldLabel>
+                      <textarea
+                        className={`${fieldInputClass(false)} resize-y whitespace-pre-wrap break-words leading-relaxed`}
+                        rows={2}
+                        value={s.shipperAddress}
+                        onChange={(e) => patchShipper(idx, { shipperAddress: e.target.value })}
+                        onBlur={(e) =>
+                          patchShipper(idx, {
+                            shipperAddress: normalizePrintAddressMultiline(e.target.value, 6),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <details className="mt-1">
+                    <summary className={`cursor-pointer text-[10px] ${CD.muted}`}>Thêm (MST, email, OCR…)</summary>
+                    <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                      <label>
+                        <FieldLabel>Mã</FieldLabel>
+                        <input
+                          className={`${inputCls} font-mono uppercase`}
+                          value={s.label}
+                          onChange={(e) => patchShipper(idx, { label: e.target.value })}
+                          onBlur={(e) => patchShipper(idx, { label: normalizeAgentCode(e.target.value) })}
+                        />
+                      </label>
+                      <label>
+                        <FieldLabel>MST</FieldLabel>
+                        <input
+                          className={inputCls}
+                          value={s.taxCode}
+                          onChange={(e) => patchShipper(idx, { taxCode: e.target.value })}
+                        />
+                      </label>
+                      <label className="sm:col-span-2">
+                        <FieldLabel>Email (tùy chọn)</FieldLabel>
+                        <input
+                          className={inputCls}
+                          value={s.shipperEmail}
+                          onChange={(e) => patchShipper(idx, { shipperEmail: e.target.value })}
+                        />
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+                        <button type="button" onClick={() => void applyOcrPaste(idx)} className={CD.btnSmallAccent}>
+                          Dán OCR
+                        </button>
+                        {ocrHint ? <span className={`text-[10px] ${CD.secondary}`}>{ocrHint}</span> : null}
+                      </div>
+                    </div>
+                  </details>
+                </ItemCard>
+              ))
+            )
+          ) : null}
 
-      <div>
-        <SectionHead
-          title="Tên hàng"
-          hint="Mô tả in trên phiếu cân — có thể bỏ qua nếu nhập trên từng lô"
-          onAdd={onAddGoods}
-          addLabel="+ Thêm"
-        />
-        {goods.length === 0 ? (
-          <p className={`${CD.empty} text-[11px]`}>Chưa có mẫu tên hàng.</p>
-        ) : (
-          goods.map((g, idx) => (
-            <CardShell
-              key={g.id}
-              title={g.goodsDescription.trim() || g.label.trim() || `Hàng ${idx + 1}`}
-              canRemove
-              onRemove={() => onRemoveGoods(idx)}
-              defaultControl={
-                <DefaultToggle
-                  active={entry.defaultGoodsId === g.id}
-                  onClick={() => onPatch({ defaultGoodsId: g.id })}
-                  title="Tên hàng mặc định"
-                />
-              }
-            >
-              <label>
-                <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Mô tả in phiếu</span>
-                <input
-                  className={inputCls}
-                  placeholder="VD: GARMENT, SEAFOOD…"
-                  value={g.goodsDescription}
-                  onChange={(e) => onPatchGoods(idx, { goodsDescription: e.target.value })}
-                  onBlur={() => fillLabelIfEmpty(idx, g.goodsDescription, onPatchGoods, g.label)}
-                />
-              </label>
-            </CardShell>
-          ))
-        )}
-      </div>
+          {tab === "consignee" ? (
+            consignees.length === 0 ? (
+              <p className={`py-3 text-center text-[11px] ${CD.muted}`}>Chưa có CNEE — có thể bỏ qua.</p>
+            ) : (
+              consignees.map((c, idx) => (
+                <ItemCard
+                  key={c.id}
+                  title={c.consigneeName.trim() || c.label.trim() || `#${idx + 1}`}
+                  canRemove
+                  onRemove={() => onRemoveConsignee(idx)}
+                  defaultStar={
+                    <DefaultStar
+                      active={entry.defaultConsigneeId === c.id}
+                      onClick={() => onPatch({ defaultConsigneeId: c.id })}
+                      title="Mặc định"
+                    />
+                  }
+                >
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                    <label className="sm:col-span-2">
+                      <FieldLabel>Tên</FieldLabel>
+                      <input
+                        className={fieldInputClass(Boolean(fe("consignee", "consigneeName", c.id)))}
+                        value={c.consigneeName}
+                        onChange={(e) => patchConsignee(idx, { consigneeName: e.target.value })}
+                        onBlur={() => fillLabelIfEmpty(idx, c.consigneeName, patchConsignee, c.label)}
+                      />
+                      <FieldErrorText message={fe("consignee", "consigneeName", c.id)} />
+                    </label>
+                    <label>
+                      <FieldLabel>SĐT</FieldLabel>
+                      <input
+                        className={`${fieldInputClass(Boolean(fe("consignee", "consigneePhone", c.id)))} tabular-nums`}
+                        value={c.consigneePhone}
+                        onChange={(e) => patchConsignee(idx, { consigneePhone: e.target.value })}
+                        onBlur={(e) =>
+                          patchConsignee(idx, { consigneePhone: formatVnPhoneDisplay(e.target.value) })
+                        }
+                      />
+                      <FieldErrorText message={fe("consignee", "consigneePhone", c.id)} />
+                    </label>
+                    <label className="sm:col-span-2">
+                      <FieldLabel>Địa chỉ</FieldLabel>
+                      <textarea
+                        className={`${fieldInputClass(false)} resize-y whitespace-pre-wrap break-words leading-relaxed`}
+                        rows={2}
+                        value={c.consigneeAddress}
+                        onChange={(e) => patchConsignee(idx, { consigneeAddress: e.target.value })}
+                        onBlur={(e) =>
+                          patchConsignee(idx, {
+                            consigneeAddress: normalizePrintAddressMultiline(e.target.value, 6),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                </ItemCard>
+              ))
+            )
+          ) : null}
 
-      <div>
-        <SectionHead
-          title="Xe / tài xế"
-          hint="Chỉ cần nếu đăng ký eCargo KHO SCSC"
-          onAdd={onAddVehicle}
-          addLabel="+ Thêm"
-        />
-        {vehicles.length === 0 ? (
-          <p className={`${CD.empty} text-[11px]`}>Chưa có xe lưu sẵn.</p>
-        ) : (
-          vehicles.map((v, idx) => (
-            <CardShell
-              key={v.id}
-              title={v.licensePlate.trim() || v.driverName.trim() || `Xe ${idx + 1}`}
-              canRemove
-              onRemove={() => onRemoveVehicle(idx)}
-              defaultControl={
-                <DefaultToggle
-                  active={entry.defaultVehicleId === v.id}
-                  onClick={() => onPatch({ defaultVehicleId: v.id })}
-                  title="Xe mặc định eCargo"
-                />
-              }
-            >
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <label>
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Biển số</span>
-                  <input
-                    className={`${inputCls} font-mono uppercase`}
-                    placeholder="50H17480"
-                    value={v.licensePlate}
-                    onChange={(e) => onPatchVehicle(idx, { licensePlate: e.target.value })}
-                    onBlur={(e) => onPatchVehicle(idx, { licensePlate: formatVehicleLicensePlate(e.target.value) })}
-                  />
-                </label>
-                <label>
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>Tài xế</span>
-                  <input
-                    className={inputCls}
-                    value={v.driverName}
-                    onChange={(e) => onPatchVehicle(idx, { driverName: e.target.value })}
-                  />
-                </label>
-                <label>
-                  <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>CCCD</span>
-                  <input
-                    className={`${inputCls} font-mono`}
-                    inputMode="numeric"
-                    value={v.driverId}
-                    onChange={(e) => onPatchVehicle(idx, { driverId: e.target.value.replace(/\D/g, "") })}
-                  />
-                </label>
-              </div>
-            </CardShell>
-          ))
-        )}
+          {tab === "goods" ? (
+            goods.length === 0 ? (
+              <p className={`py-3 text-center text-[11px] ${CD.muted}`}>Chưa có mẫu tên hàng.</p>
+            ) : (
+              goods.map((g, idx) => (
+                <ItemCard
+                  key={g.id}
+                  title={g.goodsDescription.trim() || g.label.trim() || `#${idx + 1}`}
+                  canRemove
+                  onRemove={() => onRemoveGoods(idx)}
+                  defaultStar={
+                    <DefaultStar
+                      active={entry.defaultGoodsId === g.id}
+                      onClick={() => onPatch({ defaultGoodsId: g.id })}
+                      title="Mặc định"
+                    />
+                  }
+                >
+                  <label>
+                    <FieldLabel>Mô tả in phiếu</FieldLabel>
+                    <input
+                      className={fieldInputClass(Boolean(fe("goods", "goodsDescription", g.id)))}
+                      placeholder="GARMENT, SEAFOOD…"
+                      value={g.goodsDescription}
+                      onChange={(e) => patchGoods(idx, { goodsDescription: e.target.value })}
+                      onBlur={() => fillLabelIfEmpty(idx, g.goodsDescription, patchGoods, g.label)}
+                    />
+                    <FieldErrorText message={fe("goods", "goodsDescription", g.id)} />
+                  </label>
+                </ItemCard>
+              ))
+            )
+          ) : null}
+
+          {tab === "vehicle" ? (
+            vehicles.length === 0 ? (
+              <p className={`py-3 text-center text-[11px] ${CD.muted}`}>Chưa có xe — cần nếu dùng eCargo.</p>
+            ) : (
+              vehicles.map((v, idx) => (
+                <ItemCard
+                  key={v.id}
+                  title={v.licensePlate.trim() || v.driverName.trim() || `#${idx + 1}`}
+                  canRemove
+                  onRemove={() => onRemoveVehicle(idx)}
+                  defaultStar={
+                    <DefaultStar
+                      active={entry.defaultVehicleId === v.id}
+                      onClick={() => onPatch({ defaultVehicleId: v.id })}
+                      title="Xe mặc định"
+                    />
+                  }
+                >
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                    <label>
+                      <FieldLabel>Biển số</FieldLabel>
+                      <input
+                        className={`${fieldInputClass(Boolean(fe("vehicle", "licensePlate", v.id)))} font-mono uppercase`}
+                        value={v.licensePlate}
+                        onChange={(e) => patchVehicle(idx, { licensePlate: e.target.value })}
+                        onBlur={(e) =>
+                          patchVehicle(idx, { licensePlate: formatVehicleLicensePlate(e.target.value) })
+                        }
+                      />
+                      <FieldErrorText message={fe("vehicle", "licensePlate", v.id)} />
+                    </label>
+                    <label>
+                      <FieldLabel>Tài xế</FieldLabel>
+                      <input
+                        className={fieldInputClass(Boolean(fe("vehicle", "driverName", v.id)))}
+                        value={v.driverName}
+                        onChange={(e) => patchVehicle(idx, { driverName: e.target.value })}
+                      />
+                      <FieldErrorText message={fe("vehicle", "driverName", v.id)} />
+                    </label>
+                    <label>
+                      <FieldLabel>CCCD</FieldLabel>
+                      <input
+                        className={`${fieldInputClass(Boolean(fe("vehicle", "driverId", v.id)))} font-mono`}
+                        inputMode="numeric"
+                        value={v.driverId}
+                        onChange={(e) => patchVehicle(idx, { driverId: e.target.value.replace(/\D/g, "") })}
+                      />
+                      <FieldErrorText message={fe("vehicle", "driverId", v.id)} />
+                    </label>
+                  </div>
+                </ItemCard>
+              ))
+            )
+          ) : null}
+        </div>
       </div>
     </section>
   );

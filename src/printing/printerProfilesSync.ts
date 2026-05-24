@@ -56,7 +56,19 @@ export function mergeServerCatalogIntoLocalStore(serverRaw: unknown): PrinterPro
     profiles: mergedProfiles.length ? mergedProfiles : createDefaultPrinterProfileStore().profiles,
     activeThermalProfileId,
     activeA4WeighProfileId,
-    updatedAt: serverCatalog.updatedAt || new Date().toISOString(),
+    updatedAt: (() => {
+      const localAt = Date.parse(local.updatedAt || "");
+      const serverAt = Date.parse(serverCatalog.updatedAt || "");
+      const best =
+        Number.isFinite(localAt) && Number.isFinite(serverAt)
+          ? Math.max(localAt, serverAt)
+          : Number.isFinite(localAt)
+            ? localAt
+            : Number.isFinite(serverAt)
+              ? serverAt
+              : Date.now();
+      return new Date(best).toISOString();
+    })(),
   };
 
   savePrinterProfileStore(next);
@@ -66,7 +78,7 @@ export function mergeServerCatalogIntoLocalStore(serverRaw: unknown): PrinterPro
 }
 
 /** Đẩy profile máy in local lên server (giữ tọa độ phiếu cân SCSC sau khi lưu). */
-export async function pushLocalPrinterProfilesCatalog(): Promise<void> {
+export async function pushLocalPrinterProfilesCatalog(): Promise<boolean> {
   try {
     const store = loadPrinterProfileStore();
     const catalog = catalogFromLocalStore(store);
@@ -78,14 +90,16 @@ export async function pushLocalPrinterProfilesCatalog(): Promise<void> {
     });
     if (!res.ok) {
       debugWarn("printer-profiles", "push catalog failed", res.status);
-      return;
+      return false;
     }
     const body: unknown = await res.json().catch(() => null);
     const next = parseAppState(body);
     if (next?.printerProfiles) {
       mergeServerCatalogIntoLocalStore(next.printerProfiles);
     }
+    return true;
   } catch (e) {
     debugWarn("printer-profiles", "push catalog error", e);
+    return false;
   }
 }

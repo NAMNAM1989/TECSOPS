@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type {
@@ -9,11 +9,21 @@ import type {
 import type { GlobalAgentCatalog, GlobalAgentEntry } from "../types/globalAgents";
 import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
 import { ScscWeighSenderSettings } from "../components/ScscWeighSenderSettings";
-import { clampScscWeighPrintSettings, defaultScscWeighPrintSettings } from "../printing/scscWeigh/scscWeighPrintSettingsCore";
+import { clampScscWeighPrintSettings, defaultScscWeighPrintSettings, resolveScscWeighWarehouseKey } from "../printing/scscWeigh/scscWeighPrintSettingsCore";
+import { setScscWeighPrintSettingsCache } from "../printing/scscWeigh/scscWeighPrintSettingsRuntime";
 import type { Shipment } from "../types/shipment";
-import { ScscWeighPickerPreview } from "../printing/scscWeigh/ScscWeighPickerPreview";
+import {
+  ScscWeighPickerPreview,
+  type ScscWeighPickerPreviewHandle,
+} from "../printing/scscWeigh/ScscWeighPickerPreview";
 import { profileOptionLabel } from "./customerDirectoryDefaults";
-import { mapBookingToScaleTicketFormData } from "./mapBookingToScaleTicketFormData";
+import { mapBookingToScaleTicketFormData, findCustomerEntry } from "./mapBookingToScaleTicketFormData";
+import {
+  resolveAgentIdForPrintPicker,
+  resolveConsigneeForPrintPicker,
+  resolveGoodsForPrintPicker,
+  resolveShipperForPrintPicker,
+} from "./scscPrintProfileLink";
 import {
   mapOptionsForScscPrintPicker,
   shipmentForScscPrintPicker,
@@ -21,6 +31,7 @@ import {
 } from "./scscPrintPickerState";
 import type { ScscPrintPickSection } from "./scscPrintProfilePick";
 import { OPS } from "../styles/opsModalStyles";
+import { warehouseLabel } from "../constants/warehouses";
 
 export type { ScscPrintProfileChoice };
 
@@ -52,8 +63,8 @@ function PickSection(props: {
 }) {
   const { title, name, useBooking, onUseBooking, bookingLabel, items, selectedId, onSelect } = props;
   return (
-    <section>
-      <p className={`mb-2 px-1 text-[10px] font-semibold uppercase ${OPS.muted}`}>{title}</p>
+    <section className={`rounded-xl border p-3 ${OPS.card}`}>
+      <p className={`mb-2 px-0.5 text-[10px] font-semibold uppercase ${OPS.muted}`}>{title}</p>
       <label className={OPS.pickPrimary}>
         <input type="radio" name={name} checked={useBooking} onChange={onUseBooking} />
         <span className={`text-xs ${OPS.title}`}>{bookingLabel}</span>
@@ -124,33 +135,61 @@ function PrintProfilePickerOverlay(props: {
   }, [scscWeighPrintSettingsProp]);
 
   const updateSenderSettings = (next: ScscWeighPrintSettings) => {
-    const clamped = clampScscWeighPrintSettings(next);
-    setSenderSettings(clamped);
+    setSenderSettings(next);
+    void onSaveScscWeighPrintSettings?.(clampScscWeighPrintSettings(next));
+  };
+
+  const previewRef = useRef<ScscWeighPickerPreviewHandle>(null);
+  const [calUi, setCalUi] = useState({ dirty: false, saving: false, justSaved: false });
+  const [printing, setPrinting] = useState(false);
+
+  const flushSenderSettingsForPrint = () => {
+    const clamped = clampScscWeighPrintSettings(senderSettings);
+    setScscWeighPrintSettingsCache(clamped);
     void onSaveScscWeighPrintSettings?.(clamped);
   };
 
-  const shipmentAgentId = (shipment.globalAgentId ?? shipment.customerAgentId ?? "").trim();
+  const handleConfirmPrint = async (choice: ScscPrintProfileChoice) => {
+    if (printing) return;
+    setPrinting(true);
+    try {
+      flushSenderSettingsForPrint();
+      const saved = await previewRef.current?.saveCalibration({ force: true });
+      if (saved === false) {
+        const proceed = window.confirm(
+          "Không lưu được căn chỉnh lên server — bản in có thể lệch preview. Vẫn in?"
+        );
+        if (!proceed) return;
+      }
+      onConfirm(choice);
+    } finally {
+      setPrinting(false);
+    }
+  };
 
-  const [shipperId, setShipperId] = useState(shippers[0]?.id ?? "");
-  const [consigneeId, setConsigneeId] = useState(consignees[0]?.id ?? "");
-  const [agentId, setAgentId] = useState(
-    shipmentAgentId || globalAgents.defaultAgentId || agents.find((a) => !a.isNone)?.id || agents[0]?.id || ""
-  );
-  const [goodsId, setGoodsId] = useState(goods[0]?.id ?? "");
+  const shipmentAgentId = (shipment.globalAgentId ?? shipment.customerAgentId ?? "").trim();
+  const customer = findCustomerEntry(shipment, customerDirectory);
+
+  const defaultShipper = resolveShipperForPrintPicker(shipment, customer, shippers);
+  const defaultConsignee = resolveConsigneeForPrintPicker(shipment, customer, consignees);
+  const defaultGoods = resolveGoodsForPrintPicker(shipment, customer, goods);
+  const defaultAgentId = resolveAgentIdForPrintPicker(shipment, globalAgents, agents);
+
+  const [shipperId, setShipperId] = useState(defaultShipper?.id ?? "");
+  const [consigneeId, setConsigneeId] = useState(defaultConsignee?.id ?? "");
+  const [agentId, setAgentId] = useState(defaultAgentId);
+  const [goodsId, setGoodsId] = useState(defaultGoods?.id ?? "");
   const [useBookingShipper, setUseBookingShipper] = useState(
-    !sections.includes("shipper") || Boolean(bookingShipperLabel.trim())
+    !sections.includes("shipper") || !defaultShipper
   );
   const [useBookingConsignee, setUseBookingConsignee] = useState(
-    !sections.includes("consignee") || Boolean(bookingConsigneeLabel.trim())
+    !sections.includes("consignee") || !defaultConsignee
   );
-  const [useBookingAgent, setUseBookingAgent] = useState(() => {
-    if (!sections.includes("agent")) return true;
-    if (bookingAgentLabel.trim()) return true;
-    if (shipmentAgentId) return false;
-    return true;
-  });
+  const [useBookingAgent, setUseBookingAgent] = useState(
+    !sections.includes("agent") || (!defaultAgentId && !shipmentAgentId)
+  );
   const [useBookingGoods, setUseBookingGoods] = useState(
-    !sections.includes("goods") || Boolean(bookingGoodsLabel.trim())
+    !sections.includes("goods") || !defaultGoods
   );
 
   const pickerState: ScscPrintProfileChoice = {
@@ -172,21 +211,26 @@ function PrintProfilePickerOverlay(props: {
     });
   }, [shipment, customerDirectory, globalAgents, pickerState]);
 
+  const printWarehouse = resolveScscWeighWarehouseKey(shipment.warehouse);
+
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/35 p-2 backdrop-blur-md sm:items-center sm:p-4"
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/35 p-2 backdrop-blur-md sm:items-center sm:p-3"
       role="dialog"
       aria-modal="true"
     >
-      <div className={`flex max-h-[96vh] w-full max-w-7xl flex-col overflow-hidden rounded-[24px] border shadow-apple-md ${OPS.modal} ${OPS.border}`}>
+      <div className={`flex max-h-[98vh] w-full max-w-[min(1680px,98vw)] flex-col overflow-hidden rounded-[24px] border shadow-apple-md ${OPS.modal} ${OPS.border}`}>
         <div className={`border-b px-5 py-4 ${OPS.border}`}>
-          <h2 className={`text-[17px] font-semibold ${OPS.title}`}>In phiếu cân — chọn hồ sơ in</h2>
-          <p className={`mt-1 text-xs ${OPS.secondary}`}>{headerSub}</p>
+          <h2 className={`text-[17px] font-semibold ${OPS.title}`}>In phiếu cân SCSC</h2>
+          <p className={`mt-1 text-xs ${OPS.secondary}`}>
+            {headerSub} · Form in sẵn · {warehouseLabel[printWarehouse]}
+          </p>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col lg:min-h-[min(78vh,700px)] lg:flex-row">
-          <div className={`min-h-0 shrink-0 space-y-4 overflow-y-auto border-b p-3 lg:w-80 lg:max-w-[22rem] lg:border-b-0 lg:border-r ${OPS.border}`}>
+        <div className="flex min-h-0 flex-1 flex-col lg:min-h-[min(82vh,820px)] lg:flex-row">
+          <div className={`min-h-0 shrink-0 space-y-3 overflow-y-auto border-b p-3 lg:w-80 lg:max-w-[22rem] lg:border-b-0 lg:border-r ${OPS.aside} ${OPS.border}`}>
             <ScscWeighSenderSettings
               compact
+              activeWarehouse={printWarehouse}
               settings={senderSettings}
               onChange={updateSenderSettings}
             />
@@ -273,22 +317,52 @@ function PrintProfilePickerOverlay(props: {
               />
             ) : null}
           </div>
-          <div className="flex min-h-[min(58vh,520px)] min-w-0 flex-1 flex-col p-3 lg:min-h-0 lg:p-4">
-            <ScscWeighPickerPreview formData={previewFormData} scscWeighPrintSettings={senderSettings} />
+          <div className={`flex min-h-0 min-w-0 flex-1 flex-col rounded-xl p-2 lg:p-3 ${OPS.panelSoft}`}>
+            <ScscWeighPickerPreview
+              ref={previewRef}
+              mode="studio"
+              warehouse={printWarehouse}
+              showSummary={false}
+              formData={previewFormData}
+              scscWeighPrintSettings={senderSettings}
+              onCalibrationUiChange={setCalUi}
+            />
           </div>
         </div>
-        <div className={`flex gap-2 border-t px-4 py-3 ${OPS.footer}`}>
+        <div className={`flex flex-wrap gap-2 px-4 py-3 ${OPS.stickyBar}`}>
           <button
             type="button"
-            onClick={() => onConfirm(pickerState)}
-            className="flex-1 rounded-full bg-apple-blue py-2.5 text-sm font-semibold text-white"
+            disabled={printing || calUi.saving}
+            onClick={() => void previewRef.current?.saveCalibration()}
+            className={`rounded-full border px-4 py-2.5 text-sm font-semibold transition-all disabled:opacity-60 ${
+              calUi.justSaved
+                ? "border-emerald-500 bg-emerald-500/15 text-emerald-700 ring-2 ring-emerald-400/50 dark:text-emerald-300"
+                : calUi.dirty
+                  ? "animate-pulse border-apple-blue bg-apple-blue/15 text-apple-blue ring-2 ring-sky-400/60 dark:text-sky-300"
+                  : OPS.tabIdle
+            }`}
           >
-            In phiếu
+            {calUi.saving
+              ? "Đang lưu…"
+              : calUi.justSaved
+                ? "✓ Đã lưu"
+                : calUi.dirty
+                  ? "● Lưu căn chỉnh"
+                  : "Lưu căn chỉnh"}
           </button>
           <button
             type="button"
+            disabled={printing}
+            onClick={() => void handleConfirmPrint(pickerState)}
+            className="min-w-[8rem] flex-1 rounded-full bg-apple-blue py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            {printing ? "Đang lưu & in…" : "In phiếu"}
+          </button>
+          <button
+            type="button"
+            disabled={printing}
             onClick={onCancel}
-            className={`rounded-full border px-5 py-2.5 text-sm font-semibold ${OPS.tabIdle}`}
+            className={`rounded-full border px-5 py-2.5 text-sm font-semibold disabled:opacity-60 ${OPS.tabIdle}`}
           >
             Hủy
           </button>

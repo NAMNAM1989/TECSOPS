@@ -1,7 +1,8 @@
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+import type { GlobalAgentCatalog } from "../types/globalAgents";
 import type { Shipment } from "../types/shipment";
-import { buildShipmentPatchForSavedConsignee } from "./customerConsigneeShipmentPatch";
 import { lookupCustomerCodeByName, lookupCustomerEntryByName } from "./customerDirectoryCore";
+import { buildShipmentPrintProfilePatch } from "./scscPrintProfileLink";
 
 function norm(s: string): string {
   return s.trim().toLowerCase();
@@ -64,31 +65,22 @@ function resolveCustomerEntry(
   );
 }
 
-/** Patch lô khi chọn / gõ khách — đồng bộ mã, id, shipper/CNEE mặc định nếu chỉ có một. */
+/** Patch lô khi chọn / gõ khách — mã, id, Shipper/CNEE/Agent/Tên hàng mặc định từ danh bạ. */
 export function buildShipmentPatchForCustomerSelection(
   directory: readonly CustomerDirectoryEntry[],
   customerName: string,
-  entry?: CustomerDirectoryEntry
+  entry?: CustomerDirectoryEntry,
+  globalAgents?: GlobalAgentCatalog
 ): Partial<Shipment> {
   const trimmed = normalizeCustomerNameInput(customerName);
   const resolved = resolveCustomerEntry(directory, trimmed, entry);
   const code = resolved?.code.trim() ?? lookupCustomerCodeByName(directory, trimmed);
   const customerId = resolved?.id ?? "";
-  const soleShipper =
-    resolved?.savedShippers?.length === 1 ? resolved.savedShippers[0] : undefined;
-  const soleConsignee =
-    resolved?.savedConsignees?.length === 1 ? resolved.savedConsignees[0] : undefined;
 
   return {
     customer: trimmed,
     customerCode: code,
     customerId,
-    customerShipperId: soleShipper?.id ?? "",
-    shipperNamePrint: soleShipper?.shipperName?.trim() ?? "",
-    shipperAddressPrint: soleShipper?.shipperAddress ?? "",
-    shipperPhonePrint: soleShipper?.shipperPhone?.trim() ?? "",
-    shipperEmailPrint: soleShipper?.shipperEmail?.trim() ?? "",
-    taxCodePrint: soleShipper?.taxCode?.trim() ?? "",
-    ...buildShipmentPatchForSavedConsignee(soleConsignee),
+    ...buildShipmentPrintProfilePatch(resolved, globalAgents),
   };
 }

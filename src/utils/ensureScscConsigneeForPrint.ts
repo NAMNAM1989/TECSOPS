@@ -4,7 +4,8 @@ import type { GlobalAgentCatalog } from "../types/globalAgents";
 import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
 import { findCustomerEntry, resolveGlobalAgentForBooking } from "./mapBookingToScaleTicketFormData";
 import { openScscPrintProfilePickerModal } from "./openScscPrintProfilePickerModal";
-import { scscPrintSectionsNeedingPick } from "./scscPrintProfilePick";
+import { enrichShipmentPrintFromCustomerProfiles } from "./scscPrintProfileLink";
+import { scscPrintSectionsForPicker } from "./scscPrintProfilePick";
 
 export type ScscPrintConsigneeContext = {
   shipment: Shipment;
@@ -27,11 +28,12 @@ export async function ensureScscConsigneeForPrint(
     saveScscWeighPrintSettings?: (settings: ScscWeighPrintSettings) => void | Promise<void>;
   }
 ): Promise<ScscPrintConsigneeContext | null> {
-  const customer = findCustomerEntry(s, directory);
-  const sections = scscPrintSectionsNeedingPick(s, directory, globalAgents);
+  const enriched = enrichShipmentPrintFromCustomerProfiles(s, directory, globalAgents);
+  const customer = findCustomerEntry(enriched, directory);
+  const sections = scscPrintSectionsForPicker(enriched, directory, globalAgents);
   if (sections.length === 0) {
     return {
-      shipment: s,
+      shipment: enriched,
       skipAutoSingleConsignee: false,
       skipAutoDefaultAgent: false,
       skipAutoSingleShipper: false,
@@ -39,18 +41,18 @@ export async function ensureScscConsigneeForPrint(
     };
   }
 
-  const code = s.customerCode?.trim() || customer?.code?.trim() || "";
-  const awb = s.awb?.trim() || "";
+  const code = enriched.customerCode?.trim() || customer?.code?.trim() || "";
+  const awb = enriched.awb?.trim() || "";
   const headerSub = [code && `KH ${code}`, awb && `AWB ${awb}`].filter(Boolean).join(" · ");
 
-  const resolvedAgent = resolveGlobalAgentForBooking(s, globalAgents);
+  const resolvedAgent = resolveGlobalAgentForBooking(enriched, globalAgents);
   const agentLabelOnBooking =
-    s.agentNamePrint?.trim() ||
+    enriched.agentNamePrint?.trim() ||
     (resolvedAgent && !resolvedAgent.isNone ? resolvedAgent.agentName.trim() : "");
 
   const choice = await openScscPrintProfilePickerModal({
     headerSub: headerSub || "Chọn bộ in cho lần in này",
-    shipment: s,
+    shipment: enriched,
     customerDirectory: directory,
     globalAgents,
     sections,
@@ -58,24 +60,28 @@ export async function ensureScscConsigneeForPrint(
     consignees: (customer?.savedConsignees ?? []).filter((x) => x.id.trim()),
     agents: globalAgents.agents.filter((x) => x.id.trim()),
     goods: (customer?.savedGoods ?? []).filter((x) => x.id.trim()),
-    bookingShipperLabel: s.shipperNamePrint?.trim() ?? "",
-    bookingConsigneeLabel: s.consigneeNamePrint?.trim() ?? "",
+    bookingShipperLabel: enriched.shipperNamePrint?.trim() ?? "",
+    bookingConsigneeLabel: enriched.consigneeNamePrint?.trim() ?? "",
     bookingAgentLabel: agentLabelOnBooking,
-    bookingGoodsLabel: s.goodsDescriptionPrint?.trim() ?? "",
+    bookingGoodsLabel: enriched.goodsDescriptionPrint?.trim() ?? "",
     scscWeighPrintSettings: printShared?.scscWeighPrintSettings,
     onSaveScscWeighPrintSettings: printShared?.saveScscWeighPrintSettings,
   });
   if (!choice) return null;
 
   return {
-    shipment: {
-      ...s,
-      customerShipperId: choice.useBookingShipper ? s.customerShipperId : choice.shipperId,
-      globalAgentId: choice.useBookingAgent ? s.globalAgentId : choice.agentId,
-      customerAgentId: choice.useBookingAgent ? s.customerAgentId : choice.agentId,
-      customerConsigneeId: choice.useBookingConsignee ? s.customerConsigneeId : choice.consigneeId,
-      customerGoodsId: choice.useBookingGoods ? s.customerGoodsId : choice.goodsId,
-    },
+    shipment: enrichShipmentPrintFromCustomerProfiles(
+      {
+        ...enriched,
+        customerShipperId: choice.useBookingShipper ? enriched.customerShipperId : choice.shipperId,
+        globalAgentId: choice.useBookingAgent ? enriched.globalAgentId : choice.agentId,
+        customerAgentId: choice.useBookingAgent ? enriched.customerAgentId : choice.agentId,
+        customerConsigneeId: choice.useBookingConsignee ? enriched.customerConsigneeId : choice.consigneeId,
+        customerGoodsId: choice.useBookingGoods ? enriched.customerGoodsId : choice.goodsId,
+      },
+      directory,
+      globalAgents
+    ),
     skipAutoSingleConsignee: choice.useBookingConsignee,
     skipAutoDefaultAgent: choice.useBookingAgent,
     skipAutoSingleShipper: choice.useBookingShipper,

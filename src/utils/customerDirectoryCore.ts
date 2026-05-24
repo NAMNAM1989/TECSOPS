@@ -1,4 +1,5 @@
 import type { CustomerDirectoryEntry, CustomerParty, CustomerPartyType } from "../types/customerDirectory";
+import { validateCustomerDirectory } from "./customerDirectoryValidation";
 import {
   clampCustomerDirectoryEntry,
   clampCustomerSavedConsignee,
@@ -199,59 +200,14 @@ export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntr
 
 /**
  * Kiểm tra danh sách trước khi lưu — mã không trùng (không phân biệt hoa thường).
- * Độ dài trường do `clampCustomerDirectoryEntry` đảm bảo trước khi gọi hàm này.
  * @throws Error với thông báo tiếng Việt
  */
 export function assertCustomerDirectoryValid(entries: readonly CustomerDirectoryEntry[]): void {
-  const seenCode = new Map<string, string>();
-  for (const e of entries) {
-    const k = e.code.trim().toLowerCase();
-    if (!e.code.trim()) throw new Error("Mã khách hàng không được để trống.");
-    if (!e.name.trim()) throw new Error("Tên khách hàng không được để trống.");
-    if (!e.id.trim()) throw new Error("Thiếu id dòng khách hàng — thử thêm dòng mới.");
-    if (seenCode.has(k)) {
-      throw new Error(`Mã «${e.code}» bị trùng — mỗi mã chỉ dùng một lần.`);
-    }
-    seenCode.set(k, e.name);
-    const seenShipper = new Set<string>();
-    for (const ss of e.savedShippers ?? []) {
-      const sid = ss.id.trim().toLowerCase();
-      if (!sid) throw new Error(`Khách «${e.code}»: Shipper lưu sẵn thiếu id.`);
-      if (seenShipper.has(sid)) {
-        throw new Error(`Khách «${e.code}»: id Shipper «${ss.id}» bị trùng trong cùng khách.`);
-      }
-      seenShipper.add(sid);
-    }
-    const seenCnee = new Set<string>();
-    for (const sc of e.savedConsignees ?? []) {
-      const sid = sc.id.trim().toLowerCase();
-      if (!sid) throw new Error(`Khách «${e.code}»: CNEE lưu sẵn thiếu id.`);
-      if (seenCnee.has(sid)) {
-        throw new Error(`Khách «${e.code}»: id CNEE «${sc.id}» bị trùng trong cùng khách.`);
-      }
-      seenCnee.add(sid);
-    }
-    const seenGoods = new Set<string>();
-    for (const g of e.savedGoods ?? []) {
-      const gid = g.id.trim().toLowerCase();
-      if (!gid) throw new Error(`Khách «${e.code}»: tên hàng lưu sẵn thiếu id.`);
-      if (seenGoods.has(gid)) {
-        throw new Error(`Khách «${e.code}»: id tên hàng «${g.id}» bị trùng trong cùng khách.`);
-      }
-      seenGoods.add(gid);
-    }
-    const seenVehicle = new Set<string>();
-    for (const v of e.savedVehicles ?? []) {
-      const vid = v.id.trim().toLowerCase();
-      if (!vid) throw new Error(`Khách «${e.code}»: xe lưu sẵn thiếu id.`);
-      if (seenVehicle.has(vid)) {
-        throw new Error(`Khách «${e.code}»: id xe «${v.id}» bị trùng trong cùng khách.`);
-      }
-      seenVehicle.add(vid);
-    }
+  const result = validateCustomerDirectory(entries);
+  if (!result.valid) {
+    throw new Error(result.summary);
   }
 }
-
 /** Tra mã theo tên (khớp không phân biệt hoa thường), lấy bản ghi đầu tiên. */
 export function lookupCustomerCodeByName(
   directory: readonly CustomerDirectoryEntry[],

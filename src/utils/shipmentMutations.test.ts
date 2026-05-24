@@ -149,6 +149,6 @@ describe("applyShipmentMutation SET_CUSTOMERS", () => {
         action: "SET_CUSTOMERS",
         customers: [cust("a", "X", "A"), cust("b", "x", "B")],
       })
-    ).toThrow(/trùng/i);
+    ).toThrow(/đã tồn tại/i);
   });
 });

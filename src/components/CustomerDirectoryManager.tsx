@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { assertCustomerDirectoryValid } from "../utils/customerDirectoryCore";
+import type {
+  CustomerFieldError,
+  CustomerProfileSection,
+} from "../utils/customerDirectoryValidation";
+import {
+  filterValidationErrorsForSection,
+  normalizeCustomerEntryForSave,
+  validateCustomerDirectory,
+  validateCustomerEntrySection,
+} from "../utils/customerDirectoryValidation";
 import type { CustomerSavedConsignee, CustomerSavedGoods, CustomerSavedShipper, CustomerSavedVehicle } from "../types/customerDirectory";
 import type { GlobalAgentCatalog } from "../types/globalAgents";
 import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
@@ -8,6 +18,9 @@ import { GlobalAgentsSettings } from "./GlobalAgentsSettings";
 import { ScscWeighSenderSettings } from "./ScscWeighSenderSettings";
 import { CustomerSavedProfilesEditor } from "./customerDirectory/CustomerSavedProfilesEditor";
 import { CustomerProfileStickyActionBar } from "./customerDirectory/CustomerProfileStickyActionBar";
+import { CustomerSectionSaveButton } from "./customerDirectory/CustomerSectionSaveButton";
+import { FieldErrorText, fieldInputClass } from "./customerDirectory/CustomerValidationField";
+import { getFieldValidationError } from "../utils/customerDirectoryValidation";
 import { CustomerDeleteConfirmModal } from "./customerDirectory/CustomerDeleteConfirmModal";
 import { clampGlobalAgentCatalog, defaultGlobalAgentCatalog } from "../utils/globalAgentsCore";
 import {
@@ -26,19 +39,17 @@ import {
   clampScscWeighPrintSettings,
   defaultScscWeighPrintSettings,
 } from "../printing/scscWeigh/scscWeighPrintSettingsCore";
-import { ScscPrintTemplateEditor } from "../printing/components/ScscPrintTemplateEditor";
 import { normalizeAgentCode } from "../utils/customerProfileInputFormat";
 import { normalizeCustomerNameInput, customerNameWhileTyping } from "../utils/customerShipmentPatch";
 import { UnmatchedCustomerReportModal } from "./UnmatchedCustomerReportModal";
 import type { UnmatchedCustomerRow } from "../utils/fetchAppStateRows";
 import { CD } from "./customerDirectory/customerDirectoryStyles";
 
-type MainTab = "profiles" | "agents" | "print-layout";
+type MainTab = "profiles" | "agents";
 
 const MAIN_SECTIONS: { id: MainTab; label: string; hint: string }[] = [
   { id: "profiles", label: "Danh sách khách", hint: "Mã, tên, hồ sơ in" },
   { id: "agents", label: "Agent & SCSC", hint: "Agent toàn cục, người gửi in phiếu" },
-  { id: "print-layout", label: "Mẫu in phiếu", hint: "Tọa độ mm phiếu cân SCSC" },
 ];
 
 type Props = {
@@ -78,10 +89,11 @@ export function CustomerDirectoryManager({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savedSection, setSavedSection] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<CustomerFieldError[]>([]);
   const [mainTab, setMainTab] = useState<MainTab>("profiles");
   const [globalAgentsDraft, setGlobalAgentsDraft] = useState<GlobalAgentCatalog>(defaultGlobalAgentCatalog());
   const [senderDraft, setSenderDraft] = useState<ScscWeighPrintSettings>(defaultScscWeighPrintSettings());
-  const [templateEditorOpen, setTemplateEditorOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [unmatchedOpen, setUnmatchedOpen] = useState(false);
 
@@ -94,6 +106,8 @@ export function CustomerDirectoryManager({
     setGlobalAgentsDraft(clampGlobalAgentCatalog(globalAgentsInitial));
     setSenderDraft(clampScscWeighPrintSettings(scscWeighPrintSettingsInitial));
     setDeleteModalOpen(false);
+    setSavedSection(null);
+    setValidationErrors([]);
   }, [initial, globalAgentsInitial, scscWeighPrintSettingsInitial, open]);
 
   const selected = draft.find((e) => e.id === selectedId) ?? null;
@@ -106,6 +120,7 @@ export function CustomerDirectoryManager({
 
   function selectCustomer(id: string) {
     setSelectedId(id);
+    setValidationErrors([]);
     setDraft((rows) => rows.map((row) => (row.id === id ? ensureCustomerEditScaffold(row) : row)));
   }
 
@@ -113,6 +128,7 @@ export function CustomerDirectoryManager({
     id: string,
     patch: Partial<Omit<CustomerDirectoryEntry, "id" | "parties">>
   ) {
+    setValidationErrors([]);
     setDraft((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
@@ -277,28 +293,70 @@ export function CustomerDirectoryManager({
     });
   }
 
-  const handleSave = useCallback(async () => {
-    const normalized = draft.map((e) => clampCustomerDirectoryEntry(e));
-    try {
-      assertCustomerDirectoryValid(normalized);
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Danh sách không hợp lệ.");
-      return;
-    }
-    setSaving(true);
-    try {
-      await onSave({
-        customers: normalized,
-        globalAgents: clampGlobalAgentCatalog(globalAgentsDraft),
-        scscWeighPrintSettings: clampScscWeighPrintSettings(senderDraft),
-      });
-      onClose();
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Không lưu được.");
-    } finally {
-      setSaving(false);
-    }
-  }, [draft, globalAgentsDraft, onClose, onSave, senderDraft]);
+  const persistDraft = useCallback(
+    async (opts?: { close?: boolean; flashKey?: string }) => {
+      const sectionKey = opts?.flashKey as CustomerProfileSection | undefined;
+      let nextDraft = draft;
+
+      if (selectedId && sectionKey) {
+        const current = draft.find((e) => e.id === selectedId);
+        if (current) {
+          const check = validateCustomerEntrySection(current, sectionKey, draft);
+          if (!check.valid) {
+            setValidationErrors(filterValidationErrorsForSection(check.errors, sectionKey));
+            return;
+          }
+          const normalizedOne = normalizeCustomerEntryForSave(current);
+          nextDraft = draft.map((e) => (e.id === selectedId ? normalizedOne : e));
+          setDraft(nextDraft);
+          setValidationErrors([]);
+        }
+      } else {
+        const check = validateCustomerDirectory(draft);
+        if (!check.valid) {
+          setValidationErrors(check.errors);
+          window.alert(check.summary);
+          return;
+        }
+        nextDraft = draft.map((e) => normalizeCustomerEntryForSave(e));
+        setDraft(nextDraft);
+        setValidationErrors([]);
+      }
+
+      const normalized = nextDraft.map((e) => clampCustomerDirectoryEntry(e));
+      try {
+        assertCustomerDirectoryValid(normalized);
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : "Danh sách không hợp lệ.");
+        return;
+      }
+      setSaving(true);
+      try {
+        await onSave({
+          customers: normalized,
+          globalAgents: clampGlobalAgentCatalog(globalAgentsDraft),
+          scscWeighPrintSettings: clampScscWeighPrintSettings(senderDraft),
+        });
+        if (opts?.flashKey) {
+          setSavedSection(opts.flashKey);
+          window.setTimeout(() => setSavedSection(null), 2000);
+        }
+        if (opts?.close) onClose();
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : "Không lưu được.");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [draft, globalAgentsDraft, onClose, onSave, selectedId, senderDraft]
+  );
+
+  const handleSave = useCallback(() => void persistDraft({ close: true }), [persistDraft]);
+
+  const handleSaveSection = useCallback(
+    (key: string) => () => void persistDraft({ flashKey: key }),
+    [persistDraft]
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -317,11 +375,9 @@ export function CustomerDirectoryManager({
   const mainTitle =
     mainTab === "agents"
       ? "Agent & người gửi SCSC"
-      : mainTab === "print-layout"
-        ? "Mẫu in phiếu cân"
-        : selected
-          ? selected.name || "Khách mới"
-          : "Chọn khách hàng";
+      : selected
+        ? selected.name || "Khách mới"
+        : "Chọn khách hàng";
 
   const mainSubtitle = MAIN_SECTIONS.find((s) => s.id === mainTab)?.hint ?? "";
 
@@ -339,7 +395,7 @@ export function CustomerDirectoryManager({
               Khách hàng & Cài đặt
             </h2>
             <p className={`mt-0.5 text-[10px] leading-snug ${CD.muted}`}>
-              Hồ sơ in, agent, mẫu phiếu cân
+              Hồ sơ in & agent SCSC
             </p>
           </div>
 
@@ -449,56 +505,61 @@ export function CustomerDirectoryManager({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-            {mainTab === "print-layout" ? (
-              <div className="mx-auto max-w-xl space-y-3 py-2">
-                <p className={`text-xs leading-relaxed ${CD.secondary}`}>
-                  Chỉnh tọa độ mm phiếu cân SCSC — lưu trên máy chủ, dùng khi in PDF.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setTemplateEditorOpen(true)}
-                  className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
-                >
-                  Mở editor kéo thả
-                </button>
-              </div>
-            ) : mainTab === "agents" ? (
+            {mainTab === "agents" ? (
               <div className="mx-auto max-w-3xl space-y-4 py-1">
                 <GlobalAgentsSettings catalog={globalAgentsDraft} onChange={setGlobalAgentsDraft} />
                 <ScscWeighSenderSettings settings={senderDraft} onChange={setSenderDraft} />
               </div>
             ) : selected ? (
-              <div className="mx-auto max-w-4xl space-y-3">
-                <section className={`rounded-lg px-2.5 py-2 ${CD.panelSoft}`}>
-                  <p className={`mb-1.5 text-[10px] font-semibold uppercase ${CD.muted}`}>
-                    Mã & tên khách
-                  </p>
-                  <p className={`mb-2 text-[10px] leading-snug ${CD.muted}`}>
-                    Mã map lô · tên hiển thị trên dashboard.
-                  </p>
-                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
-                    <input
-                      value={selected.code}
-                      onChange={(e) => updateCustomer(selected.id, { code: e.target.value.toUpperCase() })}
-                      onBlur={(e) => updateCustomer(selected.id, { code: normalizeAgentCode(e.target.value) })}
-                      className={`w-full font-mono text-xs font-bold uppercase sm:max-w-[7rem] ${CD.input}`}
-                      placeholder="VD: ABC"
-                      spellCheck={false}
+              <div className="mx-auto max-w-4xl space-y-2.5">
+                <section className={`rounded-lg border px-2.5 py-2 ${CD.card}`}>
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                    <p className={`text-[10px] font-bold uppercase ${CD.muted}`}>Mã & tên</p>
+                    <CustomerSectionSaveButton
+                      compact
+                      saving={saving}
+                      saved={savedSection === "identity"}
+                      onSave={handleSaveSection("identity")}
                     />
-                    <input
-                      value={selected.name}
-                      onChange={(e) => updateCustomer(selected.id, { name: customerNameWhileTyping(e.target.value) })}
-                      onBlur={() =>
-                        updateCustomer(selected.id, { name: normalizeCustomerNameInput(selected.name) })
-                      }
-                      className={`min-w-0 flex-1 text-sm font-semibold uppercase ${CD.input}`}
-                      placeholder="Tên công ty / đại lý"
-                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start">
+                    <div className="w-full sm:max-w-[6rem]">
+                      <input
+                        value={selected.code}
+                        onChange={(e) => updateCustomer(selected.id, { code: e.target.value.toUpperCase() })}
+                        onBlur={(e) => updateCustomer(selected.id, { code: normalizeAgentCode(e.target.value) })}
+                        className={`w-full font-mono text-xs font-bold uppercase ${fieldInputClass(
+                          Boolean(getFieldValidationError(validationErrors, "identity", "code"))
+                        )}`}
+                        placeholder="Mã"
+                        spellCheck={false}
+                      />
+                      <FieldErrorText message={getFieldValidationError(validationErrors, "identity", "code")} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <input
+                        value={selected.name}
+                        onChange={(e) => updateCustomer(selected.id, { name: customerNameWhileTyping(e.target.value) })}
+                        onBlur={() =>
+                          updateCustomer(selected.id, { name: normalizeCustomerNameInput(selected.name) })
+                        }
+                        className={`w-full text-sm font-semibold uppercase ${fieldInputClass(
+                          Boolean(getFieldValidationError(validationErrors, "identity", "name"))
+                        )}`}
+                        placeholder="Tên công ty / đại lý"
+                      />
+                      <FieldErrorText message={getFieldValidationError(validationErrors, "identity", "name")} />
+                    </div>
                   </div>
                 </section>
 
                 <CustomerSavedProfilesEditor
                   entry={selected}
+                  errors={validationErrors}
+                  onEdit={() => setValidationErrors([])}
+                  saving={saving}
+                  savedSection={savedSection}
+                  onSaveSection={(key) => void persistDraft({ flashKey: key })}
                   onPatch={(patch) => updateCustomer(selected.id, patch)}
                   onPatchShipper={(idx, patch) => patchSavedShipper(selected.id, idx, patch)}
                   onRemoveShipper={(idx) => removeSavedShipper(selected.id, idx)}
@@ -550,7 +611,6 @@ export function CustomerDirectoryManager({
           setDeleteModalOpen(false);
         }}
       />
-      <ScscPrintTemplateEditor open={templateEditorOpen} onClose={() => setTemplateEditorOpen(false)} />
       {onApplyUnmatchedShipments ? (
         <UnmatchedCustomerReportModal
           open={unmatchedOpen}

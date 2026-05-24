@@ -6,6 +6,7 @@ import {
   listPrintTemplates,
   loadPrintJobContext,
   replacePrintTemplateFields,
+  updatePrintProfileMeta,
 } from "./printTemplateStore.mjs";
 import { generateScscWeighPdfBuffer, sendPdfResponse } from "./printPdfService.mjs";
 
@@ -60,11 +61,21 @@ export function registerPrintPdfRoutes(app) {
   app.put("/api/print/profiles/:profileId/fields", async (req, res, next) => {
     try {
       const fields = Array.isArray(req.body?.fields) ? req.body.fields : [];
+      const profileMeta =
+        req.body?.profile && typeof req.body.profile === "object" ? req.body.profile : null;
       await withDbClient(async (client) => {
         await ensurePrintTemplateReady(client);
         await client.query("BEGIN");
         try {
           await replacePrintTemplateFields(client, req.params.profileId, fields);
+          if (profileMeta) {
+            await updatePrintProfileMeta(client, req.params.profileId, {
+              offsetXMm: profileMeta.offsetXMm,
+              offsetYMm: profileMeta.offsetYMm,
+              scaleX: profileMeta.scaleX,
+              scaleY: profileMeta.scaleY,
+            });
+          }
           await client.query("COMMIT");
         } catch (e) {
           await client.query("ROLLBACK").catch(() => {});
@@ -96,6 +107,9 @@ export function registerPrintPdfRoutes(app) {
           profileId: typeof body.profileId === "string" ? body.profileId.trim() : undefined,
           templateCode: typeof body.templateCode === "string" ? body.templateCode.trim() : "scsc-weigh-a4",
           values,
+          renderFields: Array.isArray(body.renderFields) ? body.renderFields : undefined,
+          printTransform:
+            body.printTransform && typeof body.printTransform === "object" ? body.printTransform : undefined,
           includeBackground: Boolean(body.includeBackground),
         });
       });

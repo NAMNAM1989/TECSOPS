@@ -4,10 +4,12 @@ import {
   applyScscFieldOverride,
   applyScscFieldOverrides,
   mergeScscFieldOverrides,
+  mergeScscFieldUserPatch,
   normalizeScscFieldOverridesMapLoose,
   pruneEmptyScscFieldOverrides,
   removeScscFieldOverride,
 } from "./scscFieldOverrides";
+import { enrichScscPrintForRender } from "./scscWeighLayout";
 
 const baseField = (): ScscFieldDef => ({
   key: "goods",
@@ -44,5 +46,39 @@ describe("scscFieldOverrides", () => {
     expect(m?.goods?.x).toBe(205);
     expect(m?.goods?.y).toBe(0);
     expect(pruneEmptyScscFieldOverrides({})).toBeUndefined();
+  });
+
+  it("snapshot layout khi user patch — giữ font/cao ô đang thấy", () => {
+    const def: ScscFieldDef = {
+      key: "goods",
+      x: 35,
+      y: 160,
+      width: 75,
+      fontMm: 2.5,
+      lineHeightMm: 2.9,
+      heightMm: 5.8,
+      multiline: true,
+    };
+    const merged = mergeScscFieldUserPatch(def, undefined, "goods", { y: 162 });
+    expect(merged?.goods).toMatchObject({
+      x: 35,
+      y: 162,
+      width: 75,
+      fontMm: 2.5,
+      lineHeightMm: 3,
+      heightMm: 6,
+      multiline: true,
+    });
+  });
+
+  it("enrich bỏ qua ô đã khóa layout (font/cao dòng)", () => {
+    const fields = [baseField()];
+    const values = { goods: "VERY LONG TEXT THAT WOULD SHRINK FONT AUTOMATICALLY" };
+    const auto = enrichScscPrintForRender(fields, values, undefined);
+    expect(auto.fields[0].fontMm).toBeLessThan(4);
+    const locked = enrichScscPrintForRender(fields, values, {
+      goods: { fontMm: 4, multiline: false },
+    });
+    expect(locked.fields[0].fontMm).toBe(4);
   });
 });

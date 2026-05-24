@@ -40,9 +40,9 @@ export function scscDefToPrintFieldPayload(
     fontSizePt: fontPt,
     lineHeightMm: def.lineHeightMm ?? null,
     heightMm: def.heightMm ?? null,
-    maxLines: existing?.maxLines ?? (def.multiline ? 4 : null),
+    maxLines: existing?.maxLines ?? (def.multiline || def.wrapText ? 4 : null),
     align: def.align ?? "left",
-    multiline: def.multiline ?? false,
+    multiline: Boolean(def.multiline || def.wrapText),
     bold: def.bold ?? false,
     sortOrder: existing?.sortOrder ?? sortOrder,
   };
@@ -76,6 +76,31 @@ export function scscDefsSnapshotEqual(a: readonly ScscFieldDef[], b: readonly Sc
     }
   }
   return true;
+}
+
+/** Chuyển layer preview (đã enrich) sang payload PDF — khớp từng ô với preview. */
+export function scscPrintLayerToPdfRenderFields(fields: readonly ScscFieldDef[]) {
+  return fields.map((def, i) => {
+    const fontPt = def.fontPt ?? (def.fontMm != null ? mmFontToPt(def.fontMm) : 9);
+    const lineHeightMm = def.lineHeightMm ?? null;
+    const heightMm =
+      def.heightMm ??
+      (lineHeightMm != null && !def.multiline && !def.wrapText ? lineHeightMm : null);
+    return {
+      fieldKey: def.key,
+      posXMm: def.x,
+      posYMm: def.y,
+      widthMm: def.width,
+      fontSizePt: fontPt,
+      lineHeightMm,
+      heightMm,
+      maxLines: def.multiline || def.wrapText ? 8 : null,
+      align: def.align ?? "left",
+      multiline: Boolean(def.multiline || def.wrapText),
+      bold: def.bold ?? false,
+      sortOrder: i,
+    };
+  });
 }
 
 /** Import tọa độ từ profile A4 localStorage → Postgres print_template_fields. */

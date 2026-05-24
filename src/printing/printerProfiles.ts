@@ -54,7 +54,7 @@ export const DEFAULT_THERMAL_LABEL_PROFILE_100x50: ThermalLabelPrinterProfile = 
 
 export const DEFAULT_A4_WEIGH_PROFILE: A4WeighReceiptPrinterProfile = {
   id: DEFAULT_A4_WEIGH_PROFILE_ID,
-  name: "Tờ cân A4 (mặc định)",
+  name: "Epson LQ-310 (tờ cân SCSC)",
   type: "a4-browser",
   paper: "A4",
   offsetXmm: 0,

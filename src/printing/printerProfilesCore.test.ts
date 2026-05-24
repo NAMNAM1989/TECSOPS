@@ -126,4 +126,39 @@ describe("mergePrinterProfileCatalogs", () => {
       expect(hit.scscFieldOverrides?.pieces?.x).toBe(10);
     }
   });
+
+  it("giữ local khi cùng số ô căn chỉnh nhưng server cũ hơn", () => {
+    const local = [
+      {
+        id: "a4-default",
+        name: "Local",
+        type: "a4-browser" as const,
+        paper: "A4" as const,
+        offsetXmm: 0,
+        offsetYmm: 0,
+        scaleX: 1,
+        scaleY: 1,
+        templateVersion: "scsc-weigh-v1",
+        scscFieldOverrides: { goods: { x: 40, y: 165, width: 80 } },
+      },
+    ];
+    const server = clampPrinterProfilesCatalog({
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      profiles: [
+        {
+          id: "a4-default",
+          name: "Server",
+          type: "a4-browser",
+          scscFieldOverrides: { goods: { x: 36, y: 161, width: 75 } },
+        },
+      ],
+    });
+    const merged = mergePrinterProfileCatalogs(local, server, {
+      localCatalogUpdatedAt: "2026-05-18T00:00:00.000Z",
+    });
+    const hit = merged.find((p) => p.id === "a4-default");
+    if (hit?.type === "a4-browser") {
+      expect(hit.scscFieldOverrides?.goods?.width).toBe(80);
+    }
+  });
 });

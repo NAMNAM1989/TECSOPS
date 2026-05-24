@@ -94,7 +94,7 @@ const COL_HEADERS = [
   { key: "cnee", label: "CNEE", w: "min-w-[6.5rem] max-w-[10rem]" },
   { key: "note", label: "NOTE", w: "min-w-[3.75rem] max-w-[7rem]" },
   { key: "status", label: "TT", w: "min-w-[6.5rem]" },
-  { key: "actions", label: "", w: "min-w-[3.75rem]" },
+  { key: "actions", label: "", w: "min-w-[7.5rem]" },
 ] as const;
 
 export function DesktopShipmentTable({
@@ -675,6 +675,7 @@ function ShipmentRow({
               value={row.customer}
               customerId={row.customerId}
               customerDirectory={customerDirectory}
+              globalAgents={globalAgents}
               placeholder="Khách"
               className="text-[12px] font-semibold ops-grid-cell"
               maxLength={120}
@@ -750,8 +751,8 @@ function ShipmentRow({
         />
       </td>
       {/* Actions — in nhãn + menu ⋮; eCargo (KHO SCSC) giữ ngoài */}
-      <td className={cell("last", "py-0.5 align-middle")}>
-        <div className="flex flex-nowrap items-center justify-end gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
+      <td className={cell("last", "overflow-visible py-0.5 align-middle")}>
+        <div className="flex flex-nowrap items-center justify-end gap-0.5">
           {showEcargoKhoScsc ? (
             <EcargoKhoScscTriggerButton
               variant="icon"

@@ -1,7 +1,9 @@
 import type { A4WeighReceiptPrinterProfile } from "../printTypes";
+import type { ScscFieldOverridesMap } from "../printTypes";
 import type { ScscFieldDef } from "./scscWeighTemplate";
 import { layoutScscGoods } from "./scscGoodsFontFit";
 import { layoutScscOtherRequirements, SCSC_OTHER_REQ_BOX } from "./scscOtherRequirementsFontFit";
+import { layoutScscSenderName, layoutScscSenderPhone } from "./scscSenderFontFit";
 
 /** Nhãn ô tổng vận đơn phụ trên phiếu SCSC (không in số/mã HAWB). */
 export function formatScscHawbStatusLabel(hawbRaw: string | undefined | null): string {
@@ -30,13 +32,29 @@ function applyFitLayout(
   };
 }
 
+const FIT_FIELD_KEYS = ["goods", "otherRequirements", "senderName", "senderPhone"] as const;
+
+function shouldAutoFitField(key: string, overrides?: ScscFieldOverridesMap | null): boolean {
+  if (!FIT_FIELD_KEYS.includes(key as (typeof FIT_FIELD_KEYS)[number])) return false;
+  const o = overrides?.[key];
+  if (!o) return true;
+  const layoutLocked =
+    o.fontMm != null ||
+    o.fontPt != null ||
+    o.lineHeightMm != null ||
+    o.heightMm != null ||
+    o.multiline != null;
+  return !layoutLocked;
+}
+
 export function enrichScscPrintForRender(
   fields: ScscFieldDef[],
-  values: Record<string, string>
+  values: Record<string, string>,
+  overrides?: ScscFieldOverridesMap | null
 ): { fields: ScscFieldDef[]; values: Record<string, string> } {
   let next = { fields, values };
   const goodsDef = next.fields.find((f) => f.key === "goods");
-  if (goodsDef) {
+  if (goodsDef && shouldAutoFitField("goods", overrides)) {
     next = applyFitLayout(
       next.fields,
       next.values,
@@ -45,12 +63,30 @@ export function enrichScscPrintForRender(
     );
   }
   const otherDef = next.fields.find((f) => f.key === "otherRequirements");
-  if (otherDef) {
+  if (otherDef && shouldAutoFitField("otherRequirements", overrides)) {
     next = applyFitLayout(
       next.fields,
       next.values,
       "otherRequirements",
       layoutScscOtherRequirements(next.values.otherRequirements ?? "", otherDef.width)
+    );
+  }
+  const senderNameDef = next.fields.find((f) => f.key === "senderName");
+  if (senderNameDef && shouldAutoFitField("senderName", overrides)) {
+    next = applyFitLayout(
+      next.fields,
+      next.values,
+      "senderName",
+      layoutScscSenderName(next.values.senderName ?? "", senderNameDef.width)
+    );
+  }
+  const senderPhoneDef = next.fields.find((f) => f.key === "senderPhone");
+  if (senderPhoneDef && shouldAutoFitField("senderPhone", overrides)) {
+    next = applyFitLayout(
+      next.fields,
+      next.values,
+      "senderPhone",
+      layoutScscSenderPhone(next.values.senderPhone ?? "", senderPhoneDef.width)
     );
   }
   return next;
@@ -238,6 +274,7 @@ function partyAddressField(
     fontMm: box.fontMm,
     lineHeightMm: lineGapMm,
     align: "center",
+    wrapText: true,
     ...extra,
   };
 }
@@ -309,6 +346,7 @@ export function buildScscWeighPrintFields(layout: ScscWeighLayout): ScscFieldDef
       width: SCSC_SENDER_WIDTH_MM,
       fontMm: SCSC_SENDER_FONT_MM,
       lineHeightMm: SCSC_SENDER_LINE_GAP_MM,
+      align: "center",
     },
     {
       key: "senderPhone",
@@ -317,6 +355,7 @@ export function buildScscWeighPrintFields(layout: ScscWeighLayout): ScscFieldDef
       width: SCSC_SENDER_WIDTH_MM,
       fontMm: SCSC_SENDER_FONT_MM,
       lineHeightMm: SCSC_SENDER_LINE_GAP_MM,
+      align: "center",
     },
     {
       key: "otherRequirements",

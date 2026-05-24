@@ -1,16 +1,12 @@
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { GlobalAgentCatalog } from "../types/globalAgents";
-import {
-  findCustomerEntry,
-  resolveSavedConsigneeForBooking,
-  resolveSavedGoodsForBooking,
-  resolveSavedShipperForBooking,
-} from "./mapBookingToScaleTicketFormData";
+import { findCustomerEntry } from "./mapBookingToScaleTicketFormData";
 
 export type ScscPrintPickSection = "shipper" | "consignee" | "agent" | "goods";
 
-export function scscPrintSectionsNeedingPick(
+/** Các phần hiển thị trong modal in — mọi hồ sơ có sẵn của khách + agent chung. */
+export function scscPrintSectionsForPicker(
   s: Shipment,
   directory: readonly CustomerDirectoryEntry[],
   globalAgents: GlobalAgentCatalog
@@ -18,25 +14,22 @@ export function scscPrintSectionsNeedingPick(
   const customer = findCustomerEntry(s, directory);
   const out: ScscPrintPickSection[] = [];
 
-  const shippers = (customer?.savedShippers ?? []).filter((x) => x.id.trim());
-  if (shippers.length > 1 && !s.customerShipperId?.trim() && !resolveSavedShipperForBooking(s, customer)) {
-    out.push("shipper");
-  }
+  if ((customer?.savedShippers ?? []).some((x) => x.id.trim())) out.push("shipper");
+  if ((customer?.savedConsignees ?? []).some((x) => x.id.trim())) out.push("consignee");
 
-  const consignees = (customer?.savedConsignees ?? []).filter((x) => x.id.trim());
-  if (consignees.length > 1 && !s.customerConsigneeId?.trim() && !resolveSavedConsigneeForBooking(s, customer)) {
-    out.push("consignee");
-  }
+  const agents = globalAgents.agents.filter((x) => x.id.trim() && !x.isNone);
+  if (agents.length > 0) out.push("agent");
 
-  const agents = globalAgents.agents.filter((x) => x.id.trim());
-  if (agents.length > 1) {
-    out.push("agent");
-  }
-
-  const goods = (customer?.savedGoods ?? []).filter((x) => x.id.trim());
-  if (goods.length > 1 && !s.customerGoodsId?.trim() && !resolveSavedGoodsForBooking(s, customer)) {
-    out.push("goods");
-  }
+  if ((customer?.savedGoods ?? []).some((x) => x.id.trim())) out.push("goods");
 
   return out;
+}
+
+/** @deprecated Dùng scscPrintSectionsForPicker — giữ tương thích test cũ. */
+export function scscPrintSectionsNeedingPick(
+  s: Shipment,
+  directory: readonly CustomerDirectoryEntry[],
+  globalAgents: GlobalAgentCatalog
+): ScscPrintPickSection[] {
+  return scscPrintSectionsForPicker(s, directory, globalAgents);
 }

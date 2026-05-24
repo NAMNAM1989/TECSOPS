@@ -148,7 +148,8 @@ function mergeA4FromLocalServer(
   const localTpl = labelTemplateObjectsCount(localP);
   const serverTpl = labelTemplateObjectsCount(serverP);
 
-  const keepScsc = (preferLocalCatalog && localScsc > 0) || localScsc > serverScsc;
+  const keepScsc =
+    localScsc > 0 && (serverScsc === 0 || localScsc >= serverScsc || preferLocalCatalog);
   const keepTpl = (preferLocalCatalog && localTpl > 0) || localTpl > serverTpl;
 
   if (!keepScsc && !keepTpl) return serverP;

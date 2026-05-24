@@ -50,12 +50,13 @@ export async function fetchPrintJobContext(opts?: {
 
 export async function savePrintProfileFields(
   profileId: string,
-  fields: ReadonlyArray<Record<string, unknown>>
+  fields: ReadonlyArray<Record<string, unknown>>,
+  profile?: { offsetXMm?: number; offsetYMm?: number; scaleX?: number; scaleY?: number }
 ): Promise<void> {
   const res = await fetch(`/api/print/profiles/${encodeURIComponent(profileId)}/fields`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({ fields, profile: profile ?? undefined }),
   });
   if (!res.ok) throw new Error(await readApiError(res));
 }

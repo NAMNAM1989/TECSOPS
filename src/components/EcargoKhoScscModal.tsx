@@ -24,6 +24,7 @@ import {
   vehicleDisplayLabel,
   type UpsertCustomerVehicleParams,
 } from "../utils/customerVehicleCore";
+import { OPS } from "../styles/opsModalStyles";
 
 export { ECARGO_VEHICLE_MIN };
 
@@ -766,18 +767,18 @@ export function EcargoKhoScscTriggerButton({
   const errored = job?.status === "error";
 
   const statusDot = verified ? (
-    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-ops-elevated" aria-hidden />
+    <span className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-slate-900" aria-hidden />
   ) : running ? (
-    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500 ring-1 ring-white dark:ring-ops-elevated" aria-hidden />
+    <span className="absolute right-0 top-0 h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500 ring-1 ring-white dark:ring-slate-900" aria-hidden />
   ) : errored ? (
-    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-red-500 ring-1 ring-white dark:ring-ops-elevated" aria-hidden />
+    <span className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-red-500 ring-1 ring-white dark:ring-slate-900" aria-hidden />
   ) : hasVehicle ? (
-    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-ops-elevated" aria-hidden />
+    <span className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-sky-500 ring-1 ring-white dark:ring-slate-900" aria-hidden />
   ) : null;
 
   const truckIcon = (
     <svg
-      className={variant === "icon" ? "h-4 w-4 shrink-0" : "h-4 w-6 shrink-0"}
+      className={variant === "icon" ? "h-3.5 w-3.5 shrink-0" : "h-4 w-6 shrink-0"}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -798,10 +799,8 @@ export function EcargoKhoScscTriggerButton({
         aria-expanded={open}
         aria-controls={`ecargo-panel-${rowId}`}
         onClick={onClick}
-        className={`relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sky-700 transition-all active:scale-[0.96] dark:text-sky-300 ${
-          open
-            ? "bg-sky-500/15 ring-1 ring-sky-500/30 shadow-[0_0_10px_rgba(14,165,233,0.2)] dark:bg-sky-400/15 dark:ring-sky-400/30"
-            : "bg-white/90 shadow-dashboard-card hover:bg-sky-500/10 dark:bg-ops-elevated dark:hover:bg-sky-400/15"
+        className={`relative ${OPS.actionIcon} ${OPS.actionIconSky} ${
+          open ? OPS.actionIconSkyOpen : ""
         } ${className}`}
       >
         {statusDot}

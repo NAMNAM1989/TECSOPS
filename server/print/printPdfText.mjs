@@ -1,39 +1,61 @@
 import { mmToPt, clamp } from "./printMmUnits.mjs";
+import { applyScscPrintTransformBox } from "./scscPrintTransform.mjs";
 
 /**
- * Vẽ text trong hộp mm: tự xuống dòng + thu nhỏ font nếu tràn chiều cao.
+ * Vẽ text trong hộp mm — transform khớp preview (offset + pos*scale).
  * @param {import('pdfkit').PDFDocument} doc
- * @param {object} field — row từ print_template_fields
+ * @param {object} field
  * @param {string} text
- * @param {{ offsetXmm?: number; offsetYmm?: number; scaleX?: number; scaleY?: number }} profile
+ * @param {{ offsetXmm?: number; offsetYMm?: number; scaleX?: number; scaleY?: number }} profile
  */
 export function drawFieldText(doc, field, text, profile = {}) {
-  const raw = String(text ?? "").trim();
-  if (!raw) return;
+  const raw = String(text ?? "");
+  if (!raw.trim()) return;
 
-  const offsetX = Number(profile.offsetXmm ?? 0);
-  const offsetY = Number(profile.offsetYmm ?? 0);
-  const scaleX = Number(profile.scaleX ?? 1);
-  const scaleY = Number(profile.scaleY ?? 1);
+  const posX = Number(field.pos_x_mm) || 0;
+  const posY = Number(field.pos_y_mm) || 0;
+  const widthRaw = field.width_mm != null ? Number(field.width_mm) : 50;
+  const heightRaw = field.height_mm != null ? Number(field.height_mm) : null;
+  const lineHeightRaw = field.line_height_mm != null ? Number(field.line_height_mm) : null;
 
-  const xMm = (Number(field.pos_x_mm) + offsetX) * scaleX;
-  const yMm = (Number(field.pos_y_mm) + offsetY) * scaleY;
-  const widthMm = field.width_mm != null ? Number(field.width_mm) * scaleX : 50 * scaleX;
-  const heightMm = field.height_mm != null ? Number(field.height_mm) * scaleY : null;
-  const lineHeightMm = field.line_height_mm != null ? Number(field.line_height_mm) * scaleY : null;
+  const box = applyScscPrintTransformBox(
+    { x: posX, y: posY, width: widthRaw, height: heightRaw, lineHeight: lineHeightRaw },
+    profile
+  );
 
-  const x = mmToPt(xMm);
-  const y = mmToPt(yMm);
-  const width = mmToPt(widthMm);
+  const x = mmToPt(box.xMm);
+  const y = mmToPt(box.yMm);
+  const width = mmToPt(box.widthMm);
+  const heightMm = box.heightMm;
+  const lineHeightMm = box.lineHeightMm;
 
   const align = field.align === "center" || field.align === "right" ? field.align : "left";
   const fontName = field.bold ? "Helvetica-Bold" : "Helvetica";
 
-  let fontPt = clamp(Number(field.font_size_pt) || 9, 4, 36);
+  let fontPt = clamp(Number(field.font_size_pt) || 9, 4, 36) * box.fontScale;
   const minPt = 4;
   const maxLines = field.max_lines != null ? Math.max(1, Number(field.max_lines)) : null;
+  const multiline = Boolean(field.multiline || maxLines == null || maxLines > 1);
+  const useFixedLayout = heightMm != null && lineHeightMm != null;
 
   doc.font(fontName);
+
+  const drawAt = (sizePt) => {
+    doc.fontSize(sizePt);
+    const lineGap = lineHeightMm != null ? mmToPt(lineHeightMm) - sizePt : sizePt * 0.15;
+    doc.text(raw, x, y, {
+      width,
+      align,
+      lineGap,
+      lineBreak: multiline,
+      ellipsis: !multiline && maxLines === 1,
+    });
+  };
+
+  if (useFixedLayout) {
+    drawAt(fontPt);
+    return;
+  }
 
   while (fontPt >= minPt) {
     doc.fontSize(fontPt);
@@ -44,7 +66,7 @@ export function drawFieldText(doc, field, text, profile = {}) {
       lineGap,
       ellipsis: maxLines === 1,
     };
-    if (field.multiline || maxLines == null || maxLines > 1) {
+    if (multiline) {
       options.lineBreak = true;
     }
 

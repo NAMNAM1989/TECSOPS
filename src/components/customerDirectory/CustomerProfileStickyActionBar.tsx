@@ -45,7 +45,7 @@ export function CustomerProfileStickyActionBar({
             onClick={onSave}
             className="min-w-[9rem] rounded-full bg-apple-blue px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-apple-blue-hover disabled:cursor-wait disabled:opacity-70"
           >
-            {saving ? "Đang lưu…" : "Lưu lên máy chủ"}
+            {saving ? "Đang lưu…" : "Lưu & đóng"}
           </button>
         </div>
       </div>

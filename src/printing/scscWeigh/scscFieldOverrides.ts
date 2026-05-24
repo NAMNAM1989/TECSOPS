@@ -20,6 +20,12 @@ export function roundScscMm(n: number): number {
   return Math.round(n * 2) / 2;
 }
 
+export const SCSC_FIELD_MM_LIMITS = {
+  width: LIMITS.width,
+  heightMm: LIMITS.heightMm,
+  lineHeightMm: LIMITS.lineHeightMm,
+} as const;
+
 function roundScscPt(n: number): number {
   return Math.round(n * 2) / 2;
 }
@@ -63,6 +69,14 @@ export function normalizeScscFieldOverrideLoose(raw: unknown): ScscFieldOverride
   if (fontMm != null) out.fontMm = fontMm;
   else if (fontPt != null) out.fontPt = fontPt;
   if (lineHeightMm != null) out.lineHeightMm = lineHeightMm;
+  const align = o.align;
+  if (align === "left" || align === "center" || align === "right") out.align = align;
+  if (o.wrapText === true) out.wrapText = true;
+  if (o.wrapText === false) out.wrapText = false;
+  if (o.multiline === true) out.multiline = true;
+  if (o.multiline === false) out.multiline = false;
+  if (o.bold === true) out.bold = true;
+  if (o.bold === false) out.bold = false;
   return Object.keys(out).length ? out : null;
 }
 
@@ -99,6 +113,10 @@ export function applyScscFieldOverride(def: ScscFieldDef, patch?: ScscFieldOverr
     delete next.fontMm;
   }
   if (patch.lineHeightMm != null) next.lineHeightMm = patch.lineHeightMm;
+  if (patch.align != null) next.align = patch.align;
+  if (patch.wrapText != null) next.wrapText = patch.wrapText;
+  if (patch.multiline != null) next.multiline = patch.multiline;
+  if (patch.bold != null) next.bold = patch.bold;
   return next;
 }
 
@@ -150,4 +168,43 @@ export function scscFieldOverridesEqual(
   b?: ScscFieldOverridesMap | null
 ): boolean {
   return JSON.stringify(a ?? {}) === JSON.stringify(b ?? {});
+}
+
+/** Chụp layout hiện tại trên preview (sau enrich) thành override đầy đủ. */
+export function scscFieldDefToLayoutOverride(def: ScscFieldDef): ScscFieldOverride {
+  const o: ScscFieldOverride = {
+    x: roundScscMm(def.x),
+    y: roundScscMm(def.y),
+    width: roundScscMm(def.width),
+  };
+  if (def.heightMm != null) o.heightMm = roundScscMm(def.heightMm);
+  if (def.fontMm != null) o.fontMm = roundScscMm(def.fontMm);
+  else if (def.fontPt != null) o.fontPt = roundScscPt(def.fontPt);
+  if (def.lineHeightMm != null) o.lineHeightMm = roundScscMm(def.lineHeightMm);
+  if (def.align != null) o.align = def.align;
+  if (def.wrapText != null) o.wrapText = def.wrapText;
+  if (def.multiline != null) o.multiline = def.multiline;
+  if (def.bold != null) o.bold = def.bold;
+  return o;
+}
+
+export function isScscFieldCalibrated(
+  key: string,
+  overrides?: ScscFieldOverridesMap | null
+): boolean {
+  const o = overrides?.[key];
+  return Boolean(o && Object.keys(o).length > 0);
+}
+
+/** Gộp patch user: snapshot layout đang thấy + thay đổi mới (tránh mặc định ghi đè). */
+export function mergeScscFieldUserPatch(
+  def: ScscFieldDef | undefined,
+  prev: ScscFieldOverridesMap | undefined,
+  key: string,
+  patch: ScscFieldOverride
+): ScscFieldOverridesMap | undefined {
+  const snap = def ? scscFieldDefToLayoutOverride(def) : {};
+  const combined = normalizeScscFieldOverrideLoose({ ...snap, ...patch });
+  if (!combined) return prev;
+  return mergeScscFieldOverrides(prev, { [key]: combined });
 }

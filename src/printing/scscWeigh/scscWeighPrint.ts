@@ -12,7 +12,7 @@ import { debugLog } from "../../utils/debugLog";
 import type { A4WeighReceiptPrinterProfile } from "../printTypes";
 import { getActiveA4WeighProfile } from "../printerProfiles";
 import { loadPrinterProfileStore } from "../printerProfileStorage";
-import { buildScscWeighOverlayValues, renderScscWeighFieldLayer } from "./scscWeighTemplate";
+import { buildScscWeighOverlayValues, renderScscWeighFieldLayer, SCSC_PRINT_FONT_FAMILY } from "./scscWeighTemplate";
 import {
   SCSC_A4_PAGE_HEIGHT_MM,
   SCSC_A4_PAGE_WIDTH_MM,
@@ -47,6 +47,7 @@ export type ScscWeighPrintOpts = {
   };
   calibrationTest?: boolean;
   scscWeighPrintSettings?: ScscWeighPrintSettings;
+  warehouse?: Shipment["warehouse"];
 };
 
 export type ScscWeighPrintFromFormOpts = {
@@ -56,6 +57,7 @@ export type ScscWeighPrintFromFormOpts = {
   scaleX?: number;
   scaleY?: number;
   scscWeighPrintSettings?: ScscWeighPrintSettings;
+  warehouse?: Shipment["warehouse"];
 };
 
 export function resolveScscWeighPrintTransform(opts?: ScscWeighPrintOpts): {
@@ -81,9 +83,8 @@ export function buildScscWeighReceiptDocumentHtml(
   opts?: ScscWeighPrintFromFormOpts & { overlayValues?: Record<string, string> }
 ): string {
   const { profile, offsetXmm, offsetYmm, scaleX, scaleY } = resolveScscWeighPrintTransform(opts);
-  const shared =
-    opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache();
-  const values = opts?.overlayValues ?? buildScscWeighOverlayValues(formData, shared);
+  const shared = opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache();
+  const values = opts?.overlayValues ?? buildScscWeighOverlayValues(formData, shared, opts?.warehouse ?? "TECS-SCSC");
   const useScale = Math.abs(scaleX - 1) > 0.0001 || Math.abs(scaleY - 1) > 0.0001;
   const printTransform = useScale
     ? `translate(var(--print-offset-x, 0mm), var(--print-offset-y, 0mm)) scale(var(--print-scale-x, 1), var(--print-scale-y, 1))`
@@ -102,7 +103,7 @@ export function buildScscWeighReceiptDocumentHtml(
       padding: 0;
       background: #fff;
       color: #000;
-      font-family: Arial, sans-serif;
+      font-family: ${SCSC_PRINT_FONT_FAMILY};
     }
 
     .preview-wrapper {
@@ -168,7 +169,6 @@ export function buildScscWeighReceiptDocumentHtml(
       background: transparent;
       overflow: hidden;
       text-overflow: ellipsis;
-      display: block;
       visibility: visible;
     }
 
@@ -232,7 +232,6 @@ export function buildScscWeighReceiptDocumentHtml(
       .print-only-data,
       .label-template-layer,
       .label-template-layer * {
-        display: block !important;
         visibility: visible !important;
         position: absolute !important;
         color: black !important;
@@ -331,7 +330,7 @@ export function printScscWeighReceiptHtml(s: Shipment, opts?: ScscWeighPrintOpts
       }
     : undefined;
 
-  printScscWeighReceiptFromFormData(formData, { ...opts, overlayValues });
+  printScscWeighReceiptFromFormData(formData, { ...opts, overlayValues, warehouse: s.warehouse });
 }
 
 function openPrintIframe(html: string): void {

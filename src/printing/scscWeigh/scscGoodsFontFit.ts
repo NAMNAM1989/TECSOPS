@@ -1,3 +1,5 @@
+export const SCSC_GOODS_MAX_LINES = 3;
+
 /** Ô tên hàng trên phiếu SCSC (mm). */
 export const SCSC_GOODS_BOX = {
   leftMm: 35,
@@ -99,9 +101,9 @@ export function layoutScscGoods(
 
   const fontMm = SCSC_GOODS_BOX.minFontMm;
   const lineHeightMm = round1(fontMm * SCSC_GOODS_BOX.lineHeightFactor);
-  const maxLines = Math.max(
-    1,
-    Math.floor(SCSC_GOODS_BOX.maxHeightMm / lineHeightMm)
+  const maxLines = Math.min(
+    SCSC_GOODS_MAX_LINES,
+    Math.max(1, Math.floor(SCSC_GOODS_BOX.maxHeightMm / lineHeightMm))
   );
   let lines = wrapGoodsLines(raw, widthMm, fontMm);
   if (lines.length > maxLines) {

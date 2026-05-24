@@ -23,6 +23,7 @@ import {
   SCSC_A4_PAGE_WIDTH_MM,
   SCSC_WEIGH_TEMPLATE_PNG_URL,
 } from "../scscWeigh/scscWeighTemplateAsset";
+import { OPS } from "../../styles/opsModalStyles";
 import { getScscFieldBoundsMm } from "../scscWeigh/scscFieldCoords";
 import { roundScscMm } from "../scscWeigh/scscFieldOverrides";
 import { pointerDeltaToLayoutMm } from "../scscWeigh/scscPreviewDrag";
@@ -319,7 +320,7 @@ export function ScscPrintTemplateEditor({
 
             <div
               ref={frameRef}
-              className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-black/[0.1] bg-[#e8eaee] shadow-inner"
+              className={`min-h-0 flex-1 ${OPS.printPreviewFrame}`}
             >
               <div
                 ref={pageRef}

@@ -8,7 +8,7 @@ import {
   setScscFieldFontPatch,
   type ScscFieldFontUnit,
 } from "./scscFieldFont";
-import { roundScscMm } from "./scscFieldOverrides";
+import { roundScscMm, SCSC_FIELD_MM_LIMITS } from "./scscFieldOverrides";
 import {
   applyScscPrintTransformToBounds,
   buildScscCoordsCopyText,
@@ -18,6 +18,7 @@ import {
   type ScscPrintTransformMm,
 } from "./scscFieldCoords";
 import { resolveScscWeighPrintTransform } from "./scscWeighPrint";
+import { OPS } from "../../styles/opsModalStyles";
 
 type Props = {
   fields: ScscFieldDef[];
@@ -31,6 +32,9 @@ type Props = {
   onResetField: (key: string) => void;
   onNudgeField: (key: string, dxMm: number, dyMm: number) => void;
   onPatchField: (key: string, patch: ScscFieldOverride) => void;
+  expanded?: boolean;
+  /** `sidebar` — cột phải, preview chiếm phần còn lại. */
+  layout?: "bottom" | "sidebar";
 };
 
 function hasTransform(t: ScscPrintTransformMm): boolean {
@@ -54,7 +58,10 @@ export function ScscWeighPreviewCoordsPanel({
   onResetField,
   onNudgeField,
   onPatchField,
+  expanded = false,
+  layout = "bottom",
 }: Props) {
+  const sidebar = layout === "sidebar";
   const transform = resolveScscWeighPrintTransform({ profile });
   const selectedDef = useMemo(
     () => (selectedKey ? fields.find((f) => f.key === selectedKey) ?? null : null),
@@ -70,11 +77,15 @@ export function ScscWeighPreviewCoordsPanel({
   };
 
   return (
-    <div className="mt-2 flex min-h-0 flex-col rounded-xl border border-amber-200/80 bg-amber-50/50">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/60 px-3 py-2">
+    <div
+      className={`flex min-h-0 flex-col ${
+        sidebar ? `h-full ${OPS.printCoordsPanel}` : `mt-2 ${OPS.printCoordsPanel}`
+      }`}
+    >
+      <div className={`flex flex-wrap items-center justify-between gap-2 ${OPS.printCoordsPanelHead}`}>
         <div>
-          <p className="text-[10px] font-semibold uppercase text-amber-900">Tọa độ ô in (mm)</p>
-          <p className="text-[10px] text-amber-950/70">
+          <p className={OPS.printCoordsPanelTitle}>Tọa độ ô in (mm)</p>
+          <p className={OPS.printCoordsPanelHint}>
             Profile: <span className="font-medium">{profile.name}</span>
             {" · "}
             offset X={formatScscCoordMm(transform.offsetXmm)} Y={formatScscCoordMm(transform.offsetYmm)}
@@ -83,7 +94,7 @@ export function ScscWeighPreviewCoordsPanel({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-amber-950">
+          <label className={`flex cursor-pointer items-center gap-1.5 text-[10px] ${OPS.printCoordsPanelHint}`}>
             <input
               type="checkbox"
               checked={showEmptyFields}
@@ -95,16 +106,17 @@ export function ScscWeighPreviewCoordsPanel({
           <button
             type="button"
             onClick={() => void copyAll()}
-            className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[10px] font-semibold text-amber-950 hover:bg-amber-100"
+            className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${OPS.btnSmallAccent}`}
           >
             Sao chép tất cả
           </button>
         </div>
       </div>
-      <p className="px-3 py-1.5 text-[10px] leading-snug text-amber-950/75">
-        Gốc: mép trái + mép trên A4. Kéo ô, chỉnh cỡ chữ (A−/A+), cao dòng / cao ô. Ô * = đã chỉnh — bấm Lưu
-        profile. Tên hàng / yêu cầu khác: cỡ tay sẽ tắt tự co chữ cho ô đó.
-      </p>
+      {!sidebar ? (
+        <p className={`px-3 py-1.5 text-[10px] leading-snug ${OPS.printCoordsPanelHint}`}>
+          Gốc: mép trái + mép trên A4 (mm). Trang preview là trắng A4 thật — căn theo form giấy in sẵn.
+        </p>
+      ) : null}
       {selectedDef ? (
         <SelectedFieldEditor
           def={selectedDef}
@@ -112,9 +124,15 @@ export function ScscWeighPreviewCoordsPanel({
           onPatch={(patch) => onPatchField(selectedDef.key, patch)}
         />
       ) : null}
-      <div className="max-h-40 min-h-0 overflow-auto">
-        <table className="w-full border-collapse text-left text-[10px]">
-          <thead className="sticky top-0 bg-amber-100/90 text-amber-950">
+      <div
+        className={
+          sidebar
+            ? "min-h-0 flex-1 overflow-auto"
+            : `min-h-0 overflow-auto ${expanded ? "max-h-[min(40vh,320px)]" : "max-h-40"}`
+        }
+      >
+        <table className={`w-full border-collapse text-left text-[10px] ${OPS.secondary}`}>
+          <thead className={OPS.printCoordsTableHead}>
             <tr>
               <th className="px-2 py-1 font-semibold">Ô</th>
               <th className="px-1 py-1 font-semibold">X</th>
@@ -141,6 +159,7 @@ export function ScscWeighPreviewCoordsPanel({
                 customized={overrideKeys.has(b.key)}
                 onSelect={() => onSelectKey(selectedKey === b.key ? null : b.key)}
                 onReset={() => onResetField(b.key)}
+                onPatchWidth={(width) => onPatchField(b.key, { width })}
               />
             ))}
           </tbody>
@@ -164,9 +183,9 @@ function SelectedFieldEditor({
   const hasBoxHeight = def.heightMm != null || def.multiline;
 
   return (
-    <div className="space-y-1.5 border-b border-amber-200/50 px-3 py-2">
+    <div className={`space-y-1.5 border-b px-3 py-2 ${OPS.border}`}>
       <div className="flex flex-wrap items-center gap-1">
-        <span className="mr-1 text-[10px] font-semibold text-amber-950">Vị trí:</span>
+        <span className={`mr-1 text-[10px] font-semibold ${OPS.title}`}>Vị trí:</span>
         {(
           [
             ["←", -0.5, 0],
@@ -179,15 +198,24 @@ function SelectedFieldEditor({
             key={label}
             type="button"
             onClick={() => onNudge(dx, dy)}
-            className="min-w-[1.75rem] rounded border border-amber-300 bg-white px-1.5 py-0.5 text-xs font-bold text-amber-950 hover:bg-amber-100"
+            className={OPS.printStepperBtn}
           >
             {label}
           </button>
         ))}
-        <span className="ml-2 text-[10px] text-amber-950/80">Rộng: kéo chấm góc phải ô trên phiếu</span>
+        <span className={`ml-1 text-[10px] ${OPS.secondary}`}>· kéo mép phải ô trên phiếu</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <MmStepper
+          label="Rộng dòng"
+          value={def.width}
+          min={SCSC_FIELD_MM_LIMITS.width.min}
+          max={SCSC_FIELD_MM_LIMITS.width.max}
+          step={0.5}
+          onDelta={(d) => onPatch({ width: roundScscMm(def.width + d * 0.5) })}
+          onSet={(v) => onPatch({ width: roundScscMm(v) })}
+        />
         <FontStepper
           label="Cỡ chữ"
           unit={font.unit}
@@ -214,6 +242,31 @@ function SelectedFieldEditor({
           />
         ) : null}
       </div>
+
+      <div className="flex flex-wrap items-center gap-1">
+        <span className={`mr-1 text-[10px] font-semibold ${OPS.title}`}>Căn ngang:</span>
+        {(
+          [
+            ["Trái", "left"],
+            ["Giữa", "center"],
+            ["Phải", "right"],
+          ] as const
+        ).map(([label, align]) => {
+          const active = (def.align ?? "left") === align;
+          return (
+            <button
+              key={align}
+              type="button"
+              onClick={() => onPatch({ align })}
+              className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
+                active ? "bg-apple-blue text-white" : OPS.printStepperBtn
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -237,11 +290,11 @@ function FontStepper({
 
   return (
     <div className="flex flex-wrap items-center gap-1">
-      <span className="text-[10px] font-semibold text-amber-950">{label}:</span>
+      <span className={`text-[10px] font-semibold ${OPS.title}`}>{label}:</span>
       <button
         type="button"
         onClick={() => onDelta(-1)}
-        className="min-w-[1.75rem] rounded border border-amber-300 bg-white px-1.5 py-0.5 text-xs font-bold hover:bg-amber-100"
+        className={OPS.printStepperBtn}
         title="Giảm cỡ chữ"
       >
         A−
@@ -256,13 +309,13 @@ function FontStepper({
           const n = Number(e.target.value);
           if (Number.isFinite(n)) onSet(unit, n);
         }}
-        className="w-14 rounded border border-amber-200 bg-white px-1 py-0.5 text-center text-[10px] tabular-nums"
+        className={OPS.printStepperInput}
       />
-      <span className="text-[10px] text-amber-950">{unit}</span>
+      <span className={`text-[10px] ${OPS.secondary}`}>{unit}</span>
       <button
         type="button"
         onClick={() => onDelta(1)}
-        className="min-w-[1.75rem] rounded border border-amber-300 bg-white px-1.5 py-0.5 text-xs font-bold hover:bg-amber-100"
+        className={OPS.printStepperBtn}
         title="Tăng cỡ chữ"
       >
         A+
@@ -272,7 +325,7 @@ function FontStepper({
           type="button"
           title="Chuyển sang mm (≈ cỡ hiện tại)"
           onClick={() => onSet("mm", roundScscMm(value * 0.3528))}
-          className="rounded border border-amber-200 px-1.5 py-0.5 text-[9px] font-semibold text-amber-900 hover:bg-amber-100"
+          className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold ${OPS.btnSmallAccent}`}
         >
           → mm
         </button>
@@ -281,7 +334,7 @@ function FontStepper({
           type="button"
           title="Chuyển sang pt"
           onClick={() => onSet("pt", roundScscPt(value / 0.3528))}
-          className="rounded border border-amber-200 px-1.5 py-0.5 text-[9px] font-semibold text-amber-900 hover:bg-amber-100"
+          className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold ${OPS.btnSmallAccent}`}
         >
           → pt
         </button>
@@ -293,32 +346,48 @@ function FontStepper({
 function MmStepper({
   label,
   value,
+  min = 0,
+  max = 200,
+  step = 0.5,
   onDelta,
+  onSet,
 }: {
   label: string;
   value: number;
+  min?: number;
+  max?: number;
+  step?: number;
   onDelta: (deltaSteps: number) => void;
+  onSet?: (value: number) => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1">
-      <span className="text-[10px] font-semibold text-amber-950">{label}:</span>
-      <button
-        type="button"
-        onClick={() => onDelta(-1)}
-        className="min-w-[1.5rem] rounded border border-amber-300 bg-white px-1 py-0.5 text-xs font-bold hover:bg-amber-100"
-      >
+      <span className={`text-[10px] font-semibold ${OPS.title}`}>{label}:</span>
+      <button type="button" onClick={() => onDelta(-1)} className={OPS.printStepperBtn}>
         −
       </button>
-      <span className="min-w-[2rem] text-center text-[10px] tabular-nums text-amber-950">
-        {formatScscCoordMm(value)}mm
-      </span>
-      <button
-        type="button"
-        onClick={() => onDelta(1)}
-        className="min-w-[1.5rem] rounded border border-amber-300 bg-white px-1 py-0.5 text-xs font-bold hover:bg-amber-100"
-      >
+      {onSet ? (
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            if (Number.isFinite(n)) onSet(n);
+          }}
+          className={OPS.printStepperInput}
+        />
+      ) : (
+        <span className={`min-w-[2rem] text-center text-[10px] tabular-nums ${OPS.title}`}>
+          {formatScscCoordMm(value)}mm
+        </span>
+      )}
+      <button type="button" onClick={() => onDelta(1)} className={OPS.printStepperBtn}>
         +
       </button>
+      {onSet ? <span className={`text-[10px] ${OPS.secondary}`}>mm</span> : null}
     </div>
   );
 }
@@ -330,6 +399,7 @@ function CoordRow({
   customized,
   onSelect,
   onReset,
+  onPatchWidth,
 }: {
   bounds: ScscFieldBoundsMm;
   transform: ScscPrintTransformMm;
@@ -337,6 +407,7 @@ function CoordRow({
   customized: boolean;
   onSelect: () => void;
   onReset: () => void;
+  onPatchWidth: (width: number) => void;
 }) {
   const eff = applyScscPrintTransformToBounds(bounds, transform);
   const font =
@@ -349,16 +420,32 @@ function CoordRow({
 
   return (
     <tr
-      className={`cursor-pointer border-t border-amber-200/40 ${active ? "bg-apple-blue/15" : "hover:bg-white/60"}`}
+      className={`cursor-pointer border-t ${OPS.border} ${
+        active ? "bg-apple-blue/15 dark:bg-sky-500/15" : "hover:bg-white/60 dark:hover:bg-white/[0.04]"
+      }`}
       onClick={onSelect}
     >
-      <td className="max-w-[7rem] truncate px-2 py-1 font-medium text-apple-label" title={bounds.label}>
+      <td className={`max-w-[7rem] truncate px-2 py-1 font-medium ${OPS.title}`} title={bounds.label}>
         {bounds.label}
-        {customized ? <span className="text-amber-600"> *</span> : null}
+        {customized ? <span className="text-apple-blue dark:text-sky-300"> *</span> : null}
       </td>
       <td className="px-1 py-1 tabular-nums">{formatScscCoordMm(bounds.x)}</td>
       <td className="px-1 py-1 tabular-nums">{formatScscCoordMm(bounds.y)}</td>
-      <td className="px-1 py-1 tabular-nums">{formatScscCoordMm(bounds.width)}</td>
+      <td className="px-1 py-1 tabular-nums" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="number"
+          min={SCSC_FIELD_MM_LIMITS.width.min}
+          max={SCSC_FIELD_MM_LIMITS.width.max}
+          step={0.5}
+          value={bounds.width}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            if (Number.isFinite(n)) onPatchWidth(roundScscMm(n));
+          }}
+          className={`w-12 rounded border px-1 py-0.5 text-[10px] tabular-nums ${OPS.printStepperInput}`}
+          title="Giới hạn rộng dòng (mm)"
+        />
+      </td>
       <td className="px-1 py-1 tabular-nums">{bounds.height != null ? formatScscCoordMm(bounds.height) : "—"}</td>
       <td className="px-1 py-1 tabular-nums">{font}</td>
       <td className="px-1 py-1">
@@ -370,18 +457,18 @@ function CoordRow({
               e.stopPropagation();
               onReset();
             }}
-            className="rounded px-1 text-[10px] font-semibold text-red-700 hover:bg-red-50"
+            className="rounded px-1 text-[10px] font-semibold text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/15"
           >
             ↺
           </button>
         ) : (
-          <span className="text-apple-tertiary">—</span>
+          <span className={OPS.muted}>—</span>
         )}
       </td>
       {showEff ? (
         <>
-          <td className="px-1 py-1 tabular-nums text-amber-900">{formatScscCoordMm(eff.x)}</td>
-          <td className="px-1 py-1 tabular-nums text-amber-900">{formatScscCoordMm(eff.y)}</td>
+          <td className={`px-1 py-1 tabular-nums ${OPS.accent}`}>{formatScscCoordMm(eff.x)}</td>
+          <td className={`px-1 py-1 tabular-nums ${OPS.accent}`}>{formatScscCoordMm(eff.y)}</td>
         </>
       ) : null}
     </tr>

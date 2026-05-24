@@ -62,6 +62,10 @@ export type ScscFieldOverride = {
   fontMm?: number;
   fontPt?: number;
   lineHeightMm?: number;
+  align?: "left" | "center" | "right";
+  wrapText?: boolean;
+  multiline?: boolean;
+  bold?: boolean;
 };
 
 export type ScscFieldOverridesMap = Record<string, ScscFieldOverride>;

@@ -100,16 +100,15 @@ export async function printWeighReceiptScscWithConsigneeChoice(
 ): Promise<ScscPrintResult | undefined> {
   const directory = opts?.customerDirectory ?? [];
   const globalAgents = opts?.globalAgents ?? defaultGlobalAgentCatalog();
-  const scscWeighPrintSettings = opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache();
   const ctx = await ensureScscConsigneeForPrint(s, directory, globalAgents, {
-    scscWeighPrintSettings,
+    scscWeighPrintSettings: opts?.scscWeighPrintSettings ?? getScscWeighPrintSettingsCache(),
     saveScscWeighPrintSettings: opts?.saveScscWeighPrintSettings,
   });
   if (!ctx) return undefined;
   return printWeighReceiptScsc(ctx.shipment, {
     ...opts,
     globalAgents,
-    scscWeighPrintSettings,
+    scscWeighPrintSettings: getScscWeighPrintSettingsCache(),
     mapOptions: {
       skipAutoSingleConsignee: ctx.skipAutoSingleConsignee,
       skipAutoDefaultAgent: ctx.skipAutoDefaultAgent,

@@ -26,16 +26,20 @@ describe("formatFlightForEcargoPaste", () => {
 });
 
 describe("buildKhoScscEcargoPasteBlock", () => {
-  it("đủ 5 dòng theo thứ tự", () => {
+  it("đủ 5 dòng eCargo + tên khách tham chiếu", () => {
     const block = buildKhoScscEcargoPasteBlock(
       {
         flight: "VJ85",
         flightDate: "10MAY",
         dest: "SYD",
         awb: "978-2556 2555",
+        customerCode: "CYL",
+        customer: "Công ty ABC",
       },
       " 50h17480 "
     );
-    expect(block).toBe(["50H17480", "VJ085", "10MAY", "SYD", "97825562555"].join("\n"));
+    expect(block).toBe(
+      ["50H17480", "VJ085", "10MAY", "SYD", "97825562555", "CYL · CÔNG TY ABC"].join("\n")
+    );
   });
 });

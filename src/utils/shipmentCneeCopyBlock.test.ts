@@ -46,8 +46,9 @@ describe("formatFlightDateDdMmYyyy", () => {
 });
 
 describe("buildShipmentCneeMetaLines", () => {
-  it("gồm AWB, chuyến, ngày bay dd-mm-yyyy, DEST", () => {
+  it("gồm khách, AWB, chuyến, ngày bay dd-mm-yyyy, DEST", () => {
     expect(buildShipmentCneeMetaLines(baseShipment())).toEqual([
+      "Khách: CYL · CÔNG TY ABC",
       "AWB: 978-1111 2222",
       "Ngày bay: 18-05-2026",
       "Chuyến bay: VJ081",
@@ -80,7 +81,8 @@ describe("buildShipmentCneeDisplayLines", () => {
         consigneeAddressPrint: "1 MAIN ST",
       })
     );
-    expect(lines[0]).toBe("AWB: 978-1111 2222");
+    expect(lines[0]).toBe("Khách: CYL · CÔNG TY ABC");
+    expect(lines[1]).toBe("AWB: 978-1111 2222");
     expect(lines).toContain("Ngày bay: 18-05-2026");
     expect(lines).toContain("Chuyến bay: VJ081");
     expect(lines).toContain("Dest: MEL");
@@ -102,6 +104,7 @@ describe("buildShipmentCneeCopyBlock", () => {
     expect(block).toBe(
       [
         "CYL-MEL VJ081/18MAY",
+        "Khách: CYL · CÔNG TY ABC",
         "date: 17MAY, 2026",
         "ACME PTY LTD",
         "1 MAIN ST",

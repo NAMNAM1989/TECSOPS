@@ -26,14 +26,18 @@ export function formatSessionYmdForEcargoPaste(ymd: string): string {
   return `${String(Number(m[3])).padStart(2, "0")}${month}`;
 }
 
-/** Khối 5 dòng dán eCargo / hệ thống ngoài (số xe lấy từ ô đã nhập). */
+/** Khối 5 dòng dán eCargo + dòng tham chiếu khách (không dán vào form eCargo). */
 export function buildKhoScscEcargoPasteBlock(
-  row: Pick<Shipment, "flight" | "flightDate" | "dest" | "awb">,
+  row: Pick<Shipment, "flight" | "flightDate" | "dest" | "awb" | "customer" | "customerCode">,
   vehicleRaw: string,
   pasteDateOverride = ""
 ): string {
   const vehicle = vehicleRaw.trim().toUpperCase();
   const pasteDate = pasteDateOverride.trim().toUpperCase() || (row.flightDate ?? "").trim().toUpperCase();
+  const code = (row.customerCode ?? "").trim().toUpperCase();
+  const name = (row.customer ?? "").trim().toUpperCase();
+  const customerRef =
+    code && name ? `${code} · ${name}` : name || code;
   const lines = [
     vehicle,
     formatFlightForEcargoPaste(row.flight),
@@ -41,5 +45,6 @@ export function buildKhoScscEcargoPasteBlock(
     (row.dest ?? "").trim().toUpperCase(),
     compactAwbDigitsForEcargoPaste(row.awb),
   ];
+  if (customerRef) lines.push(customerRef);
   return lines.join("\n");
 }

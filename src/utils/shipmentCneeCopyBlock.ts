@@ -51,6 +51,20 @@ function customerTagForCopy(shipment: Shipment): string {
   return (code || name || "—").toUpperCase();
 }
 
+/** Dòng khách hàng trong khối sao chép (mã · tên). */
+export function buildShipmentCustomerCopyLine(
+  shipment: Shipment,
+  directory: readonly CustomerDirectoryEntry[] = []
+): string {
+  const entry = findCustomerEntry(shipment, directory);
+  const code = (shipment.customerCode?.trim() || entry?.code?.trim() || "").toUpperCase();
+  const name = (shipment.customer?.trim() || entry?.name?.trim() || "").toUpperCase();
+  if (code && name) return `Khách: ${code} · ${name}`;
+  if (name) return `Khách: ${name}`;
+  if (code) return `Khách: ${code}`;
+  return "";
+}
+
 function buildHeaderLine(shipment: Shipment): string {
   const customer = customerTagForCopy(shipment);
   const dest = (shipment.dest ?? "").trim().toUpperCase();
@@ -114,9 +128,11 @@ export function buildShipmentCneeBodyLines(
 /** AWB, chuyến, ngày bay (dd-mm-yyyy), DEST — hiển thị phía trên khối CNEE trong ô. */
 export function buildShipmentCneeMetaLines(
   shipment: Shipment,
-  opts?: { sessionYmdFallback?: string }
+  opts?: { sessionYmdFallback?: string; customerDirectory?: readonly CustomerDirectoryEntry[] }
 ): string[] {
   const lines: string[] = [];
+  const customerLine = buildShipmentCustomerCopyLine(shipment, opts?.customerDirectory ?? []);
+  if (customerLine) lines.push(customerLine);
   const awb = (shipment.awb ?? "").trim();
   const flight = (shipment.flight ?? "").trim().toUpperCase();
   const dest = (shipment.dest ?? "").trim().toUpperCase();
@@ -138,7 +154,10 @@ export function buildShipmentCneeDisplayLines(
   directory: readonly CustomerDirectoryEntry[] = [],
   opts?: { sessionYmdFallback?: string }
 ): string[] {
-  const meta = buildShipmentCneeMetaLines(shipment, opts);
+  const meta = buildShipmentCneeMetaLines(shipment, {
+    sessionYmdFallback: opts?.sessionYmdFallback,
+    customerDirectory: directory,
+  });
   const body = buildShipmentCneeBodyLines(shipment, directory);
   if (meta.length && body.length) return [...meta, "", "CNEE:", ...body];
   if (meta.length) return meta;
@@ -162,9 +181,13 @@ export function buildShipmentCneeCopyBlock(
   const sessionYmd =
     shipment.sessionDate?.trim() || opts?.sessionYmdFallback?.trim() || "";
   const header = buildHeaderLine(shipment);
+  const customerLine = buildShipmentCustomerCopyLine(shipment, directory);
   const dateLine = `date: ${formatSessionYmdForCneeCopy(sessionYmd)}`;
   const body = buildShipmentCneeBodyLines(shipment, directory);
-  return [header, dateLine, ...body].join("\n");
+  const parts = [header];
+  if (customerLine) parts.push(customerLine);
+  parts.push(dateLine, ...body);
+  return parts.join("\n");
 }
 
 /** Chi tiết CNEE (địa chỉ, SĐT, email…) — hiển thị trong tooltip, không chiếm ô lưới. */
@@ -175,7 +198,10 @@ export function buildShipmentCneeTooltipLines(
 ): string[] {
   const body = buildShipmentCneeBodyLines(shipment, directory);
   if (body.length) return body;
-  return buildShipmentCneeMetaLines(shipment, opts);
+  return buildShipmentCneeMetaLines(shipment, {
+    sessionYmdFallback: opts?.sessionYmdFallback,
+    customerDirectory: directory,
+  });
 }
 
 /** Một dòng CNEE chỉ đọc (mobile / gợi ý desktop). */

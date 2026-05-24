@@ -490,7 +490,7 @@ function EcargoKhoScscModalBody({
         {showManualFallback ? (
           <div className="space-y-3 border-t border-black/[0.05] px-4 pb-4 pt-3 dark:border-white/[0.06]">
             <p className="text-[12px] leading-snug text-dashboard-muted dark:text-dashboard-muted-dark">
-              Khi tự động lỗi: sao chép 5 dòng → mở eCargo → dán vào form (extension hoặc tay).
+              Khi tự động lỗi: sao chép 5 dòng đầu → mở eCargo → dán vào form (dòng cuối là tên khách, chỉ tham chiếu).
             </p>
             <pre className={ECARGO_PRE}>{pasteBlock}</pre>
             <div className="flex flex-col gap-2 sm:flex-row">

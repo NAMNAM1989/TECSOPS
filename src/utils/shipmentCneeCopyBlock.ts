@@ -45,28 +45,37 @@ export function formatSessionYmdForCneeCopy(ymd: string): string {
   return `${ddmon}, ${m[1]}`;
 }
 
-function customerTagForCopy(shipment: Shipment): string {
-  const code = shipment.customerCode?.trim();
-  const name = shipment.customer?.trim();
-  return (code || name || "—").toUpperCase();
-}
-
-/** Dòng khách hàng trong khối sao chép (mã · tên). */
-export function buildShipmentCustomerCopyLine(
+function customerNameForCneeDisplay(
   shipment: Shipment,
   directory: readonly CustomerDirectoryEntry[] = []
 ): string {
   const entry = findCustomerEntry(shipment, directory);
-  const code = (shipment.customerCode?.trim() || entry?.code?.trim() || "").toUpperCase();
-  const name = (shipment.customer?.trim() || entry?.name?.trim() || "").toUpperCase();
-  if (code && name) return `Khách: ${code} · ${name}`;
+  const name = shipment.customer?.trim() || entry?.name?.trim() || "";
+  return name.toUpperCase();
+}
+
+/** Dòng khách hàng trong khối CNEE / sao chép — chỉ tên, không mã. */
+export function buildShipmentCustomerCopyLine(
+  shipment: Shipment,
+  directory: readonly CustomerDirectoryEntry[] = []
+): string {
+  const name = customerNameForCneeDisplay(shipment, directory);
   if (name) return `Khách: ${name}`;
-  if (code) return `Khách: ${code}`;
   return "";
 }
 
-function buildHeaderLine(shipment: Shipment): string {
-  const customer = customerTagForCopy(shipment);
+function buildHeaderLine(shipment: Shipment, directory: readonly CustomerDirectoryEntry[] = []): string {
+  const customer = customerNameForCneeDisplay(shipment, directory);
+  if (!customer) {
+    const dest = (shipment.dest ?? "").trim().toUpperCase();
+    const flight = (shipment.flight ?? "").trim().toUpperCase();
+    const flightDate = (shipment.flightDate ?? "").trim().toUpperCase();
+    let flightPart = "";
+    if (flight && flightDate) flightPart = `${flight}/${flightDate}`;
+    else if (flight) flightPart = flight;
+    else if (flightDate) flightPart = flightDate;
+    return flightPart ? `${dest} ${flightPart}`.trim() : dest;
+  }
   const dest = (shipment.dest ?? "").trim().toUpperCase();
   const customerDest = dest ? `${customer}-${dest}` : customer;
 
@@ -168,7 +177,8 @@ export function buildShipmentCneeDisplayLines(
 /**
  * Khối sao chép theo lô:
  * ```
- * CYL-MEL VJ081/18MAY
+ * CÔNG TY ABC-MEL VJ081/18MAY
+ * Khách: CÔNG TY ABC
  * date: 17MAY, 2026
  * {CNEE...}
  * ```
@@ -180,7 +190,7 @@ export function buildShipmentCneeCopyBlock(
 ): string {
   const sessionYmd =
     shipment.sessionDate?.trim() || opts?.sessionYmdFallback?.trim() || "";
-  const header = buildHeaderLine(shipment);
+  const header = buildHeaderLine(shipment, directory);
   const customerLine = buildShipmentCustomerCopyLine(shipment, directory);
   const dateLine = `date: ${formatSessionYmdForCneeCopy(sessionYmd)}`;
   const body = buildShipmentCneeBodyLines(shipment, directory);

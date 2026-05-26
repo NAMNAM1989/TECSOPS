@@ -30,7 +30,8 @@ import {
 import type { EcargoAutoRegisterOpts } from "./DesktopShipmentTable";
 import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
 import { resolveEcargoVehiclePrefill, vehicleDisplayLabel } from "../utils/customerVehicleCore";
-import { ecargoKhoScscLineStatusLabel } from "../utils/ecargoUiLabels";
+import { EcargoRowNotice } from "./EcargoRowNotice";
+import { isEcargoJobRunning, isEcargoJobTerminal } from "../types/ecargoJob";
 import { MOBILE } from "../styles/mobileOpsStyles";
 
 const SWIPE_THRESHOLD = 48;
@@ -446,10 +447,16 @@ export function MobileShipmentCards({
                             </button>
                           </Box>
 
-                          {showEcargoKhoScsc && (ecargoLine || ecargoJob) ? (
-                            <p className="mt-1.5 text-[10px] font-medium text-sky-800 dark:text-sky-300">
-                              {ecargoKhoScscLineStatusLabel(ecargoLine, ecargoJob)}
-                            </p>
+                          {showEcargoKhoScsc &&
+                          ecargoJob &&
+                          (isEcargoJobRunning(ecargoJob.status) ||
+                            isEcargoJobTerminal(ecargoJob.status)) ? (
+                            <EcargoRowNotice
+                              job={ecargoJob}
+                              awb={row.awb}
+                              compact
+                              className="mt-1.5"
+                            />
                           ) : null}
                         </div>
                       </Box>

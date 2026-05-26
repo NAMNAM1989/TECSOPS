@@ -3,6 +3,10 @@ import { ECARGO_CREATE_URL, FIXED_ECARGO_CONFIG } from "./ecargoConfig.mjs";
 import { validateEcargoBooking } from "./ecargoPayload.mjs";
 
 let browserPromise = null;
+/** @type {import('playwright').BrowserContext | null} */
+let pooledContext = null;
+/** @type {import('playwright').Page | null} */
+let warmedCreatePage = null;
 
 const BROWSER_CONTEXT_OPTS = {
   locale: "vi-VN",
@@ -10,12 +14,100 @@ const BROWSER_CONTEXT_OPTS = {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
 };
 
+function blockHeavyAssets(context) {
+  if (process.env.ECARGO_BLOCK_ASSETS === "0") return;
+  return context.route("**/*", (route) => {
+    const t = route.request().resourceType();
+    if (t === "image" || t === "font" || t === "media") {
+      void route.abort();
+      return;
+    }
+    void route.continue();
+  });
+}
+
+async function acquirePooledContext() {
+  const browser = await getBrowser();
+  if (pooledContext) {
+    try {
+      if (pooledContext.browser()?.isConnected()) return pooledContext;
+    } catch {
+      /* recreate */
+    }
+    pooledContext = null;
+    warmedCreatePage = null;
+  }
+  pooledContext = await browser.newContext(BROWSER_CONTEXT_OPTS);
+  await blockHeavyAssets(pooledContext);
+  return pooledContext;
+}
+
+async function borrowCreatePage(context) {
+  if (warmedCreatePage && !warmedCreatePage.isClosed() && warmedCreatePage.context() === context) {
+    const page = warmedCreatePage;
+    warmedCreatePage = null;
+    return page;
+  }
+  const page = await context.newPage();
+  await openCreatePageReady(page);
+  return page;
+}
+
+async function stashWarmCreatePage(page) {
+  if (page.isClosed()) return;
+  try {
+    await page.goto(ECARGO_CREATE_URL, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    await page
+      .waitForFunction(
+        () =>
+          [...document.querySelectorAll("input")].some((el) => {
+            if (el.type === "hidden" || el.type === "radio" || el.type === "checkbox") return false;
+            const s = getComputedStyle(el);
+            const r = el.getBoundingClientRect();
+            return s.display !== "none" && s.visibility !== "hidden" && r.width > 0 && r.height > 0;
+          }),
+        { timeout: 12_000 }
+      )
+      .catch(() => null);
+    warmedCreatePage = page;
+  } catch {
+    await page.close().catch(() => {});
+    warmedCreatePage = null;
+  }
+}
+
+/** Khởi động Chromium + trang Create sẵn sàng — giảm độ trễ job đầu. */
+export async function warmEcargoPlaywright() {
+  const context = await acquirePooledContext();
+  if (warmedCreatePage && !warmedCreatePage.isClosed()) return;
+  const page = await context.newPage();
+  await openCreatePageReady(page);
+  warmedCreatePage = page;
+}
+
 async function getBrowser() {
   if (!browserPromise) {
+    /**
+     * Bật trình duyệt có giao diện để quan sát thao tác:
+     *   ECARGO_HEADED=1   → headless: false
+     *   ECARGO_SLOWMO=ms  → slowMo trong ms (mặc định 120ms khi bật headed, 0 khi headless)
+     * Mặc định headless trên Railway / production.
+     */
+    const headed = process.env.ECARGO_HEADED === "1";
+    const slowMo = Number(process.env.ECARGO_SLOWMO) || (headed ? 120 : 0);
     browserPromise = chromium
       .launch({
-        headless: true,
+        headless: !headed,
+        slowMo,
         args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      })
+      .then((browser) => {
+        console.info(
+          `[ecargo-pw] Chromium launched headless=${!headed} slowMo=${slowMo}ms${
+            headed ? " — bạn sẽ thấy cửa sổ trình duyệt khi worker chạy job" : ""
+          }`
+        );
+        return browser;
       })
       .catch((e) => {
         browserPromise = null;
@@ -236,9 +328,9 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         const button = findButtonByText("Thêm AWB");
         if (!button) throw new Error("Không tìm thấy nút Thêm AWB.");
         button.click();
-        for (let i = 0; i < 25; i += 1) {
+        for (let i = 0; i < 20; i += 1) {
           if (getOpenModal()) return;
-          await sleep(50);
+          await sleep(40);
         }
         throw new Error("Không mở được modal Thêm AWB.");
       }
@@ -253,13 +345,13 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         const saveButton = buttons.find((btn) => /th[eê]m|l[uư]u|save|ok|x[aá]c nh[aậ]n/i.test(textOf(btn)));
         if (!saveButton) throw new Error("Không tìm thấy nút lưu AWB.");
         saveButton.click();
-        await sleep(400);
+        await sleep(200);
       }
 
       async function waitForAwbRow() {
-        for (let i = 0; i < 30; i += 1) {
+        for (let i = 0; i < 24; i += 1) {
           if (hasAwbRow()) return;
-          await sleep(100);
+          await sleep(50);
         }
         const hint = modalValidationHint();
         throw new Error(
@@ -274,17 +366,17 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         if (!button) throw new Error("Không tìm thấy nút Tạo phiếu.");
         if (!hasAwbRow()) throw new Error("Chưa có AWB trong bảng.");
         button.click();
-        await sleep(400);
+        await sleep(200);
       }
 
       fillMainForm(b);
-      await sleep(100);
+      await sleep(50);
       await openAwbModal();
-      await sleep(150);
+      await sleep(80);
       fillAwbModal(b);
       await saveAwbModal();
       await waitForAwbRow();
-      await sleep(150);
+      await sleep(80);
       await createOrder();
       return { ok: true, vehicleNo: b.vehicleNo, mawb: b.mawb };
     },
@@ -292,35 +384,184 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
   );
 }
 
+/** Nút xanh cạnh ô mã — khớp extension Chrome SCSC (contains «xác thực», label ngắn). */
+function isVerifySubmitLabel(label) {
+  const t = String(label || "").trim();
+  if (!t || t.length > 32) return false;
+  if (!/xác\s*thực/i.test(t)) return false;
+  if (/gửi\s*lại|hủy|đóng|quay\s*lại/i.test(t)) return false;
+  return /^xác\s*thực\.?!?$/i.test(t) || t.replace(/\s+/g, " ").length <= 16;
+}
+
+/** Chờ trang Verify render nút — khớp extension (delay ~1.2s + poll). */
+async function waitForVerifyPageReady(page) {
+  await page.waitForLoadState("load", { timeout: 60_000 }).catch(() => null);
+  await page.waitForTimeout(1_200);
+  await page
+    .waitForFunction(
+      () => {
+        const isVerify = (label) => {
+          const t = String(label || "").trim();
+          if (!t || t.length > 32) return false;
+          if (!/xác\s*thực/i.test(t)) return false;
+          if (/gửi\s*lại|hủy|đóng|quay\s*lại/i.test(t)) return false;
+          return /^xác\s*thực\.?!?$/i.test(t) || t.replace(/\s+/g, " ").length <= 16;
+        };
+        const nodes = [
+          ...document.querySelectorAll("button, input[type='button'], input[type='submit']"),
+        ];
+        return nodes.some((btn) => {
+          const label = (btn.innerText || btn.value || btn.textContent || "").trim();
+          if (!isVerify(label)) return false;
+          const style = window.getComputedStyle(btn);
+          const rect = btn.getBoundingClientRect();
+          return (
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            rect.width > 1 &&
+            rect.height > 1 &&
+            !btn.disabled
+          );
+        });
+      },
+      { timeout: 25_000 }
+    )
+    .catch(() => null);
+}
+
+/**
+ * @returns {Promise<{ clicked: boolean; method?: string; debug?: string }>}
+ */
 async function clickVerifyOnPage(page) {
-  /** Poll 40ms — bấm ngay khi nút hiện, không sleep cố định 1.2s như extension cũ. */
-  const deadline = Date.now() + 12_000;
-  while (Date.now() < deadline) {
-    const clicked = await page.evaluate(() => {
-      const nodes = [
-        ...document.querySelectorAll("button, input[type='button'], input[type='submit'], a"),
-      ];
-      const verifyButton = nodes.find((btn) =>
-        /xác\s*thực/i.test(btn.innerText || btn.value || btn.textContent || "")
-      );
-      if (!verifyButton) return false;
-      const style = window.getComputedStyle(verifyButton);
-      const rect = verifyButton.getBoundingClientRect();
-      if (style.display === "none" || style.visibility === "hidden" || rect.width < 1 || rect.height < 1) {
-        return false;
-      }
-      verifyButton.click();
-      return true;
-    });
-    if (clicked) return;
-    await page.waitForTimeout(40);
+  await waitForVerifyPageReady(page);
+
+  const roleBtn = page.getByRole("button", { name: /xác\s*thực/i });
+  if ((await roleBtn.count()) > 0) {
+    try {
+      await roleBtn.first().scrollIntoViewIfNeeded();
+      await roleBtn.first().click({ timeout: 8_000 });
+      return { clicked: true, method: "getByRole" };
+    } catch {
+      /* thử cách khác */
+    }
   }
 
-  const locator = page
-    .locator("button, input[type='button'], input[type='submit'], a")
+  const pwLocator = page
+    .locator("button, input[type='button'], input[type='submit']")
     .filter({ hasText: /xác\s*thực/i })
     .first();
-  await locator.click({ timeout: 3_000 });
+  try {
+    if ((await pwLocator.count()) > 0) {
+      await pwLocator.scrollIntoViewIfNeeded();
+      await pwLocator.click({ timeout: 8_000, force: true });
+      return { clicked: true, method: "locator" };
+    }
+  } catch {
+    /* thử evaluate */
+  }
+
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const evalResult = await page.evaluate(() => {
+      const isVerify = (label) => {
+        const t = String(label || "").trim();
+        if (!t || t.length > 32) return false;
+        if (!/xác\s*thực/i.test(t)) return false;
+        if (/gửi\s*lại|hủy|đóng|quay\s*lại/i.test(t)) return false;
+        return /^xác\s*thực\.?!?$/i.test(t) || t.replace(/\s+/g, " ").length <= 16;
+      };
+      const nodes = [
+        ...document.querySelectorAll("button, input[type='button'], input[type='submit']"),
+      ];
+      const verifyButton = nodes.find((btn) => {
+        const label = (btn.innerText || btn.value || btn.textContent || "").trim();
+        if (!isVerify(label)) return false;
+        const style = window.getComputedStyle(btn);
+        const rect = btn.getBoundingClientRect();
+        if (style.display === "none" || style.visibility === "hidden" || rect.width < 1 || rect.height < 1) {
+          return false;
+        }
+        if (btn.disabled) return false;
+        return true;
+      });
+      if (!verifyButton) return { clicked: false };
+      verifyButton.scrollIntoView({ block: "center" });
+      verifyButton.click();
+      return {
+        clicked: true,
+        label: (verifyButton.innerText || verifyButton.value || "").trim().slice(0, 40),
+      };
+    });
+    if (evalResult?.clicked) {
+      return { clicked: true, method: "evaluate", debug: evalResult.label };
+    }
+    await page.waitForTimeout(80);
+  }
+
+  const debug = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll("button, input[type='button'], input[type='submit']")]
+      .map((b) => (b.innerText || b.value || "").trim())
+      .filter(Boolean)
+      .slice(0, 12);
+    return { title: document.title, url: location.href, buttons: labels };
+  });
+  return {
+    clicked: false,
+    debug: JSON.stringify(debug).slice(0, 400),
+  };
+}
+
+/**
+ * Chờ trang Details sau khi bấm Xác Thực — banner xanh "Phiếu đăng ký đã được xác thực thành công".
+ * @returns {Promise<{ success: boolean; failure: boolean; registrationNo?: string; detailsUrl?: string; text: string }>}
+ */
+async function waitForVerifySuccessPage(page) {
+  await page
+    .waitForURL(/\/Export\/VCTOrder\/Details\//i, { timeout: 45_000 })
+    .catch(() => null);
+
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    const snap = await page.evaluate(() => {
+      const text = (document.body?.innerText || "").replace(/\s+/g, " ").trim();
+      const href = location.href;
+      const onDetails = /\/Export\/VCTOrder\/Details\//i.test(href);
+      const bannerOk = /Phiếu đăng ký đã được xác thực thành công/i.test(text);
+      const detailsPage =
+        /Thông tin hàng vào kho/i.test(text) &&
+        (/Số đăng ký/i.test(text) || /Trạng thái/i.test(text));
+      const success =
+        bannerOk ||
+        onDetails ||
+        detailsPage ||
+        (onDetails && /đã được xác thực/i.test(text));
+      const failure =
+        (/không\s*hợp\s*lệ|thất\s*bại|hết\s*hạn|invalid|không\s*tìm\s*thấy/i.test(text) &&
+          !success) ||
+        false;
+      const regMatch =
+        href.match(/\/Details\/([A-Z0-9]{6,12})/i) ||
+        text.match(/Số đăng ký\s*:?\s*([A-Z0-9]{6,12})/i);
+      return {
+        success,
+        failure,
+        onDetails,
+        registrationNo: regMatch ? regMatch[1].toUpperCase() : "",
+        detailsUrl: onDetails ? href : "",
+        text: text.slice(0, 320),
+      };
+    });
+    if (snap.success) return { ...snap, success: true };
+    if (snap.failure) return { ...snap, failure: true };
+    await page.waitForTimeout(300);
+  }
+
+  return page.evaluate(() => ({
+    success: false,
+    failure: false,
+    text: (document.body?.innerText || "").slice(0, 320),
+    detailsUrl: location.href,
+  }));
 }
 
 /**
@@ -330,36 +571,103 @@ export async function runEcargoPlaywrightSession(booking, hooks = {}) {
   const errors = validateEcargoBooking(booking);
   if (errors.length) throw new Error(errors.join(" "));
 
-  const browser = await getBrowser();
-  const context = await browser.newContext(BROWSER_CONTEXT_OPTS);
-  const page = await context.newPage();
+  const context = await acquirePooledContext();
+  const page = await borrowCreatePage(context);
 
   try {
     hooks.onStatus?.("filling");
-    await openCreatePageReady(page);
     await runEcargoDomAutomation(page, booking, FIXED_ECARGO_CONFIG);
     hooks.onStatus?.("submitted");
-    await page.close();
-    return { submittedAt: Date.now(), context };
+    const submittedAt = Date.now();
+    await stashWarmCreatePage(page);
+    return { submittedAt, context };
   } catch (e) {
-    await context.close();
+    warmedCreatePage = null;
+    for (const p of context.pages()) {
+      await p.close().catch(() => {});
+    }
+    await context.close().catch(() => {});
+    if (pooledContext === context) pooledContext = null;
     throw e;
   }
 }
 
-/** Bấm Xác Thực trong context đã mở (sau runEcargoPlaywrightSession). */
-export async function runVerifyInContext(context, verifyUrl) {
-  const page = await context.newPage();
+/**
+ * Mở link Verify và bấm nút Xác Thực — context riêng (không chặn asset) để trang render đủ.
+ * @returns {Promise<{ verifyClicked: boolean; verifyMessage: string; verifyPageHint?: string; verifyClickMethod?: string; registrationNo?: string; detailsUrl?: string; verifySuccess: boolean }>}
+ */
+export async function runVerifyInContext(_context, verifyUrl) {
+  const browser = await getBrowser();
+  const verifyContext = await browser.newContext(BROWSER_CONTEXT_OPTS);
+  const page = await verifyContext.newPage();
+
   try {
-    await page.goto(verifyUrl, { waitUntil: "commit", timeout: 45_000 });
-    await clickVerifyOnPage(page);
+    console.info("[ecargo-pw] verify goto", verifyUrl.slice(0, 80));
+    await page.goto(verifyUrl, { waitUntil: "load", timeout: 60_000 });
+
+    let clickResult = await clickVerifyOnPage(page);
+    if (!clickResult.clicked) {
+      await page.reload({ waitUntil: "load", timeout: 45_000 }).catch(() => null);
+      clickResult = await clickVerifyOnPage(page);
+    }
+
+    if (!clickResult.clicked) {
+      throw new Error(
+        `Không tìm thấy hoặc không bấm được nút Xác Thực. Debug: ${clickResult.debug ?? "no buttons"}`
+      );
+    }
+
+    console.info("[ecargo-pw] verify clicked via", clickResult.method, clickResult.debug ?? "");
+
+    const after = await waitForVerifySuccessPage(page);
+    if (after.failure && !after.success) {
+      throw new Error(
+        after.text
+          ? `Trang xác thực báo lỗi: ${after.text}`
+          : "Trang xác thực có thể thất bại — kiểm tra lại mã trong email."
+      );
+    }
+    if (!after.success) {
+      throw new Error(
+        "Đã bấm Xác Thực nhưng chưa thấy trang xác nhận «Phiếu đăng ký đã được xác thực thành công»."
+      );
+    }
+
+    const reg = after.registrationNo || "";
+    const verifyMessage = reg
+      ? `Phiếu đăng ký đã được xác thực thành công — số ${reg}.`
+      : "Phiếu đăng ký đã được xác thực thành công.";
+
+    return {
+      verifyClicked: true,
+      verifySuccess: true,
+      verifyMessage,
+      verifyPageHint: after.text || undefined,
+      verifyClickMethod: clickResult.method,
+      registrationNo: reg || undefined,
+      detailsUrl: after.detailsUrl,
+    };
   } finally {
-    await page.close();
+    await page.close().catch(() => {});
+    await verifyContext.close().catch(() => {});
   }
 }
 
-export async function closeEcargoContext(context) {
-  if (context) await context.close();
+/**
+ * @param {import('playwright').BrowserContext | null} context
+ * @param {{ destroy?: boolean }} [opts] — `destroy: true` khi lỗi; mặc định giữ context cho job sau.
+ */
+export async function closeEcargoContext(context, opts = {}) {
+  if (!context) return;
+  if (opts.destroy) {
+    warmedCreatePage = null;
+    await context.close().catch(() => {});
+    if (pooledContext === context) pooledContext = null;
+    return;
+  }
+  for (const p of context.pages()) {
+    if (p !== warmedCreatePage) await p.close().catch(() => {});
+  }
 }
 
 export async function runEcargoAutomation(booking, hooks = {}) {

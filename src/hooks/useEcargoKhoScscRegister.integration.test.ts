@@ -74,7 +74,7 @@ describe("useEcargoKhoScscRegister — lưu cloud", () => {
     expect(mutate).not.toHaveBeenCalled();
 
     await act(async () => {
-      vi.advanceTimersByTime(700);
+      vi.advanceTimersByTime(320);
     });
 
     expect(mutate).toHaveBeenCalledWith({

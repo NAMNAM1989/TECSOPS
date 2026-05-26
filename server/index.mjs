@@ -24,6 +24,7 @@ import {
   registerSitePasswordGate,
 } from "./authSiteGate.mjs";
 import { registerEcargoRoutes } from "./ecargo/ecargoRoutes.mjs";
+import { setEcargoStateSnapshot } from "./ecargo/ecargoStateCache.mjs";
 import { startEcargoWorker } from "./ecargo/ecargoWorker.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -159,6 +160,7 @@ app.post("/api/mutation", async (req, res) => {
       return;
     }
     const next = await runMutation(body);
+    setEcargoStateSnapshot(next);
     io.emit("sync", next);
     res.json(next);
   } catch (e) {
@@ -262,6 +264,7 @@ async function start() {
       io,
       runMutation: async (mutation) => {
         const next = await runMutation(mutation);
+        setEcargoStateSnapshot(next);
         io.emit("sync", next);
         return next;
       },
@@ -281,7 +284,7 @@ async function start() {
   }
 
   try {
-    await loadState();
+    setEcargoStateSnapshot(await loadState());
   } catch (e) {
     console.error("[state] bootstrap state failed:", e?.message ?? e);
     process.exit(1);
@@ -294,7 +297,9 @@ async function start() {
 
 io.on("connection", async (socket) => {
   try {
-    socket.emit("sync", await loadState());
+    const initial = await loadState();
+    setEcargoStateSnapshot(initial);
+    socket.emit("sync", initial);
   } catch (e) {
     console.error("[socket] initial sync", e);
   }

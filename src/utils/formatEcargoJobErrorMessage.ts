@@ -11,11 +11,26 @@ export function formatEcargoJobErrorMessage(raw: string | undefined): string {
   if (/eCargo worker cần Redis|REDIS_URL/i.test(msg)) {
     return "Worker eCargo chưa sẵn sàng — thiếu Redis (REDIS_URL) trên server.";
   }
+  if (/Hết thời gian chờ email QR/i.test(msg)) {
+    return "Đã xác thực nhưng chưa nhận email QR (Phiếu đăng ký hàng vào kho) — kiểm tra Gmail hoặc thử lại sau vài phút.";
+  }
+  if (/Có email xác thực trên Gmail nhưng không khớp lô/i.test(msg)) {
+    return msg;
+  }
   if (/Hết thời gian chờ email/i.test(msg)) {
     return "Không nhận được email xác thực từ ecargo@scsc.vn trong thời gian chờ — thử lại hoặc dùng sao chép thủ công.";
   }
+  if (/Không tìm thấy.*Xác Thực|Không bấm được nút Xác Thực|Trang xác thực báo lỗi/i.test(msg)) {
+    return msg.length > 220 ? `${msg.slice(0, 217)}…` : msg;
+  }
   if (/ECARGO_GMAIL_APP_PASSWORD/i.test(msg)) {
     return "Thiếu mật khẩu Gmail App trên server (ECARGO_GMAIL_APP_PASSWORD).";
+  }
+  if (/Gmail từ chối đăng nhập|AUTHENTICATIONFAILED|Invalid credentials/i.test(msg)) {
+    return "App Password Gmail sai hoặc hết hạn — tạo mật khẩu ứng dụng mới (16 ký tự, không dấu cách), cập nhật .env.local rồi chạy lại npm run dev.";
+  }
+  if (/^Command failed$/i.test(msg)) {
+    return "Không đọc được Gmail — kiểm tra App Password (ECARGO_GMAIL_APP_PASSWORD) và khởi động lại server.";
   }
   if (/Ngày CB không|cut-off|Thời gian hàng vào/i.test(msg)) {
     return "Ngày bay hoặc khung giờ không hợp lệ trên eCargo — kiểm tra ngày bay/chuyến hoặc dùng sao chép thủ công.";

@@ -13,10 +13,17 @@ import {
 } from "../utils/ecargoPasteBlock";
 import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
 import type { EcargoJobRecord } from "../types/ecargoJob";
-import { ecargoJobStatusLabel, isEcargoJobRunning, type EcargoJobStatus } from "../types/ecargoJob";
+import {
+  canRetryEcargoJob,
+  ecargoJobStatusLabel,
+  isEcargoJobRunning,
+  isEcargoJobTerminal,
+  type EcargoJobStatus,
+} from "../types/ecargoJob";
 import { ecargoKhoScscSaveStatusLabel } from "../utils/ecargoUiLabels";
 import { copyTextToClipboard } from "../utils/copyTextToClipboard";
 import { formatEcargoJobErrorMessage } from "../utils/formatEcargoJobErrorMessage";
+import { EcargoProgressChecklist } from "./EcargoProgressChecklist";
 import {
   filterCustomerVehicles,
   formatVehicleLicensePlate,
@@ -336,25 +343,35 @@ function EcargoKhoScscModalBody({
   );
   const saveLabel = ecargoKhoScscSaveStatusLabel(saveStatus);
   const displayJob = useMemo((): EcargoJobRecord | undefined => {
-    if (!job) return undefined;
-    if (autoRegistering && job.status === "error") {
+    if (!job || job.status === "superseded") return undefined;
+    if (autoRegistering && canRetryEcargoJob(job)) {
       return {
         ...job,
         status: "queued" satisfies EcargoJobStatus,
-        message: "Đang gửi lệnh tự động mới…",
+        message: "Đang gửi lệnh đăng ký…",
       };
     }
     return job;
   }, [autoRegistering, job]);
   const jobLabel = displayJob ? ecargoJobStatusLabel(displayJob.status) : "";
-  const jobRunning = isEcargoJobRunning(displayJob?.status) || autoRegistering;
-  const canSubmit = readiness.ready && !jobRunning;
+  const jobBusy =
+    autoRegistering ||
+    (isEcargoJobRunning(displayJob?.status) && !canRetryEcargoJob(job));
+  const canSubmit = readiness.ready && !autoRegistering && (!jobBusy || canRetryEcargoJob(job));
+  const registerButtonLabel = useMemo(() => {
+    if (autoRegistering) return "Đang gửi lệnh…";
+    if (jobBusy) return "Đang tự động đăng ký…";
+    if (job?.status === "error") return "Đăng ký lại eCargo";
+    if (job && isEcargoJobTerminal(job.status)) return "Đăng ký lại eCargo";
+    return "Tự động đăng ký eCargo";
+  }, [autoRegistering, job, jobBusy]);
   const showManualFallback =
     manualOpen || job?.status === "error" || Boolean(localError);
 
   const showAutoStatusBox =
     Boolean(localError) ||
-    jobRunning ||
+    jobBusy ||
+    autoRegistering ||
     displayJob?.status === "verified" ||
     (Boolean(displayJob?.message) && displayJob?.status !== "error") ||
     (displayJob?.status === "error" && !manualOpen);
@@ -385,8 +402,10 @@ function EcargoKhoScscModalBody({
     setCopyError(null);
     setManualOpen(false);
     try {
+      await onAutoRegister({ saveAsDefault, driverName, driverId });
+      onClose();
       if (saveAsDefault && prefill.customer && onSaveVehicleAsDefault) {
-        await onSaveVehicleAsDefault({
+        void onSaveVehicleAsDefault({
           customerId: prefill.customer.id,
           licensePlate: effectiveVehicle,
           driverName,
@@ -394,8 +413,6 @@ function EcargoKhoScscModalBody({
           setAsDefault: true,
         });
       }
-      await onAutoRegister({ saveAsDefault, driverName, driverId });
-      onClose();
     } catch (e) {
       setLocalError(formatEcargoJobErrorMessage(e instanceof Error ? e.message : String(e)));
     }
@@ -531,7 +548,7 @@ function EcargoKhoScscModalBody({
         onClick={() => void handleAuto()}
         className="w-full rounded-2xl bg-sky-600 py-3.5 text-base font-bold uppercase tracking-wide text-white shadow-[0_6px_20px_rgba(2,132,199,0.32)] transition hover:bg-sky-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400 disabled:text-slate-100 disabled:shadow-none dark:disabled:bg-slate-700 dark:disabled:text-slate-500"
       >
-        {jobRunning ? "Đang tự động đăng ký…" : "Tự động đăng ký eCargo"}
+        {registerButtonLabel}
       </button>
 
       {showAutoStatusBox ? (
@@ -552,6 +569,9 @@ function EcargoKhoScscModalBody({
                 ? formatEcargoJobErrorMessage(displayJob.message)
                 : displayJob.message}
             </p>
+          ) : null}
+          {displayJob && !localError ? (
+            <EcargoProgressChecklist job={displayJob} className="mt-3 border-t border-black/[0.06] pt-3 dark:border-white/[0.08]" />
           ) : null}
         </div>
       ) : (
@@ -762,12 +782,15 @@ export function EcargoKhoScscTriggerButton({
   /** `icon` — chỉ biểu tượng xe (bảng desktop). */
   variant?: "default" | "icon";
 }) {
-  const verified = job?.status === "verified";
+  const verified = job?.status === "verified" || job?.status === "qr_ready";
+  const mailReceived = job?.status === "mail_received";
   const running = isEcargoJobRunning(job?.status);
   const errored = job?.status === "error";
 
   const statusDot = verified ? (
     <span className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-slate-900" aria-hidden />
+  ) : mailReceived ? (
+    <span className="absolute right-0 top-0 h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500 ring-1 ring-white dark:ring-slate-900" aria-hidden />
   ) : running ? (
     <span className="absolute right-0 top-0 h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500 ring-1 ring-white dark:ring-slate-900" aria-hidden />
   ) : errored ? (

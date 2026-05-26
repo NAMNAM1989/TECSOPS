@@ -31,6 +31,8 @@ import {
   EcargoKhoScscCenterModal,
   EcargoKhoScscTriggerButton,
 } from "./EcargoKhoScscModal";
+import { EcargoRowNotice } from "./EcargoRowNotice";
+import { isEcargoJobRunning, isEcargoJobTerminal } from "../types/ecargoJob";
 import { findCustomerEntry } from "../utils/mapBookingToScaleTicketFormData";
 import { buildShipmentPatchForSavedConsignee } from "../utils/customerConsigneeShipmentPatch";
 import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
@@ -774,31 +776,38 @@ function ShipmentRow({
       </td>
       {/* Actions — in nhãn + menu ⋮; eCargo (KHO SCSC) giữ ngoài */}
       <td className={cell("last", "overflow-visible py-0.5 align-middle")}>
-        <div className="flex flex-nowrap items-center justify-end gap-0.5">
-          {showEcargoKhoScsc ? (
-            <EcargoKhoScscTriggerButton
-              variant="icon"
-              rowId={row.id}
-              open={ecargoTableOpen}
-              hasVehicle={ecargoReady}
-              job={ecargoJob}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleEcargoTable();
-              }}
-              title={ecargoButtonTitle}
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-nowrap items-center justify-end gap-0.5">
+            {showEcargoKhoScsc ? (
+              <EcargoKhoScscTriggerButton
+                variant="icon"
+                rowId={row.id}
+                open={ecargoTableOpen}
+                hasVehicle={ecargoReady}
+                job={ecargoJob}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleEcargoTable();
+                }}
+                title={ecargoButtonTitle}
+              />
+            ) : null}
+            <ShipmentRowActionsMenu
+              row={row}
+              customerDirectory={customerDirectory}
+              globalAgents={globalAgents}
+              scscWeighPrintSettings={scscWeighPrintSettings}
+              saveScscWeighPrintSettings={saveScscWeighPrintSettings}
+              onPrint={onPrint}
+              onDelete={onDelete}
+              onUpdate={onUpdate}
             />
+          </div>
+          {showEcargoKhoScsc &&
+          ecargoJob &&
+          (isEcargoJobRunning(ecargoJob.status) || isEcargoJobTerminal(ecargoJob.status)) ? (
+            <EcargoRowNotice job={ecargoJob} awb={row.awb} compact className="w-full max-w-[12rem]" />
           ) : null}
-          <ShipmentRowActionsMenu
-            row={row}
-            customerDirectory={customerDirectory}
-            globalAgents={globalAgents}
-            scscWeighPrintSettings={scscWeighPrintSettings}
-            saveScscWeighPrintSettings={saveScscWeighPrintSettings}
-            onPrint={onPrint}
-            onDelete={onDelete}
-            onUpdate={onUpdate}
-          />
         </div>
       </td>
     </tr>

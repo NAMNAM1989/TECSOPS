@@ -238,8 +238,34 @@ function parseEcargoJobLoose(raw: unknown): EcargoJobRecord | null {
     vehicleNo: typeof o.vehicleNo === "string" ? o.vehicleNo : undefined,
     message: typeof o.message === "string" ? o.message : undefined,
     verifyUrl: typeof o.verifyUrl === "string" ? o.verifyUrl : undefined,
+    verifyCode: typeof o.verifyCode === "string" ? o.verifyCode : undefined,
+    registrationNo: typeof o.registrationNo === "string" ? o.registrationNo : undefined,
+    mailReceivedAt: typeof o.mailReceivedAt === "string" ? o.mailReceivedAt : undefined,
+    verifyClickedAt: typeof o.verifyClickedAt === "string" ? o.verifyClickedAt : undefined,
+    qrReceivedAt: typeof o.qrReceivedAt === "string" ? o.qrReceivedAt : undefined,
+    qrSubject: typeof o.qrSubject === "string" ? o.qrSubject : undefined,
+    hasQrImage: typeof o.hasQrImage === "boolean" ? o.hasQrImage : undefined,
+    detailsUrl: typeof o.detailsUrl === "string" ? o.detailsUrl : undefined,
+    stageMs:
+      o.stageMs && typeof o.stageMs === "object"
+        ? {
+            playwright:
+              typeof (o.stageMs as Record<string, unknown>).playwright === "number"
+                ? ((o.stageMs as Record<string, unknown>).playwright as number)
+                : undefined,
+            verify:
+              typeof (o.stageMs as Record<string, unknown>).verify === "number"
+                ? ((o.stageMs as Record<string, unknown>).verify as number)
+                : undefined,
+            qrWait:
+              typeof (o.stageMs as Record<string, unknown>).qrWait === "number"
+                ? ((o.stageMs as Record<string, unknown>).qrWait as number)
+                : undefined,
+          }
+        : undefined,
     updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : undefined,
     createdAt: typeof o.createdAt === "string" ? o.createdAt : undefined,
     finishedAt: typeof o.finishedAt === "string" ? o.finishedAt : undefined,
+    durationMs: typeof o.durationMs === "number" ? o.durationMs : undefined,
   };
 }

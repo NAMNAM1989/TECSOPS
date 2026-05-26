@@ -31,7 +31,8 @@ import { resolveEcargoVehiclePrefill, vehicleDisplayLabel } from "../utils/custo
 import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStorage";
 import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
 import type { EcargoJobRecord } from "../types/ecargoJob";
-import { ecargoKhoScscLineStatusLabel } from "../utils/ecargoUiLabels";
+import { EcargoRowNotice } from "./EcargoRowNotice";
+import { isEcargoJobRunning, isEcargoJobTerminal } from "../types/ecargoJob";
 import { CustomerPickerField } from "./CustomerPickerField";
 import { buildShipmentCneeDisplayLines } from "../utils/shipmentCneeCopyBlock";
 import { copyTextToClipboard } from "../utils/copyTextToClipboard";
@@ -515,10 +516,9 @@ export function MobileShipmentEditSheet({
                         }
                       />
                     </div>
-                    {ecargoLine || ecargoJob ? (
-                      <p className="mt-1 text-[10px] font-medium text-sky-800 dark:text-sky-300">
-                        {ecargoKhoScscLineStatusLabel(ecargoLine, ecargoJob)}
-                      </p>
+                    {ecargoJob &&
+                    (isEcargoJobRunning(ecargoJob.status) || isEcargoJobTerminal(ecargoJob.status)) ? (
+                      <EcargoRowNotice job={ecargoJob} awb={shipment.awb} compact className="mt-2" />
                     ) : null}
                   </div>
                 ) : null}

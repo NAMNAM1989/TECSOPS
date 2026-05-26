@@ -5,7 +5,7 @@ export function newEcargoJobId() {
   return randomUUID();
 }
 
-/** @typedef {'queued'|'filling'|'submitted'|'waiting_verify_email'|'verifying'|'verified'|'error'} EcargoJobStatus */
+/** @typedef {'queued'|'filling'|'submitted'|'waiting_verify_email'|'mail_received'|'verifying'|'verified_waiting_qr'|'qr_ready'|'verified'|'error'|'superseded'} EcargoJobStatus */
 
 /**
  * @param {import('redis').RedisClientType} client
@@ -57,7 +57,40 @@ export async function enqueueEcargoJob(client, job) {
   return payload;
 }
 
-const ACTIVE_STATUSES = new Set(["queued", "filling", "submitted", "waiting_verify_email", "verifying"]);
+const ACTIVE_STATUSES = new Set([
+  "queued",
+  "filling",
+  "submitted",
+  "waiting_verify_email",
+  "mail_received",
+  "verifying",
+  "verified_waiting_qr",
+]);
+
+/**
+ * @param {import('redis').RedisClientType} client
+ * @param {string[]} shipmentIds
+ */
+export async function getEcargoJobsBatch(client, shipmentIds) {
+  if (!client || !Array.isArray(shipmentIds) || shipmentIds.length === 0) {
+    return {};
+  }
+  const ids = [...new Set(shipmentIds.map((id) => String(id).trim()).filter(Boolean))].slice(0, 200);
+  const keys = ids.map((id) => `${ECARGO_JOB_KEY_PREFIX}${id}`);
+  const values = await client.mGet(keys);
+  /** @type {Record<string, object>} */
+  const out = {};
+  for (let i = 0; i < ids.length; i++) {
+    const raw = values[i];
+    if (!raw) continue;
+    try {
+      out[ids[i]] = JSON.parse(raw);
+    } catch {
+      /* skip */
+    }
+  }
+  return out;
+}
 
 /**
  * @param {object|null} job
@@ -68,4 +101,50 @@ export function isEcargoJobActive(job, windowMs = 120000) {
   const t = Date.parse(job.updatedAt || job.createdAt || "");
   if (!Number.isFinite(t)) return true;
   return Date.now() - t < windowMs;
+}
+
+const STALE_ACTIVE_MS = Number(process.env.ECARGO_STALE_JOB_MS) || 3 * 60 * 1000;
+
+/**
+ * Job active nhưng không cập nhật lâu — coi như kẹt, cho đăng ký lại.
+ * @param {object|null} job
+ */
+export function isEcargoJobStaleActive(job) {
+  if (!job?.status || !ACTIVE_STATUSES.has(job.status)) return false;
+  const t = Date.parse(job.updatedAt || job.createdAt || "");
+  if (!Number.isFinite(t)) return false;
+  return Date.now() - t >= STALE_ACTIVE_MS;
+}
+
+/**
+ * Có nên chặn tạo job mới không.
+ * @param {object|null} existing
+ * @param {{ forceRetry?: boolean }} [opts]
+ */
+export function shouldBlockEcargoEnqueue(existing, opts = {}) {
+  if (!existing?.status || existing.status === "superseded") return false;
+  if (opts.forceRetry) {
+    if (existing.status === "error") return false;
+    if (existing.status === "verified" || existing.status === "qr_ready") return false;
+    if (isEcargoJobStaleActive(existing)) return false;
+    return isEcargoJobActive(existing, 90_000);
+  }
+  return isEcargoJobActive(existing);
+}
+
+/**
+ * Đánh dấu job cũ trước khi xếp hàng lần mới.
+ * @param {import('redis').RedisClientType} client
+ * @param {string} shipmentId
+ * @param {string} nextJobId
+ */
+export async function supersedeEcargoJob(client, shipmentId, nextJobId) {
+  const prev = await getEcargoJob(client, shipmentId);
+  if (!prev?.status || prev.status === "superseded") return prev;
+  return patchEcargoJob(client, shipmentId, {
+    status: "superseded",
+    supersededBy: nextJobId,
+    message: "Đã hủy — có lệnh đăng ký mới.",
+    finishedAt: new Date().toISOString(),
+  });
 }

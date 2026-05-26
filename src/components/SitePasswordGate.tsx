@@ -12,10 +12,16 @@ export function SitePasswordGate({ children }: { children: ReactNode }) {
 
   const probe = useCallback(async () => {
     setError(null);
+    let passwordRequired = false;
     try {
       const gateRes = await fetch("/api/auth/gate", { cache: "no-store" });
+      if (!gateRes.ok) {
+        setError("Không kiểm tra được cổng đăng nhập. Kiểm tra API và thử lại.");
+        setPhase("login");
+        return;
+      }
       const gateJson = (await gateRes.json().catch(() => ({}))) as { required?: boolean };
-      const passwordRequired = gateJson.required === true;
+      passwordRequired = gateJson.required === true;
 
       if (!passwordRequired) {
         setPhase("in");
@@ -31,10 +37,16 @@ export function SitePasswordGate({ children }: { children: ReactNode }) {
         setPhase("login");
         return;
       }
+      setError("Máy chủ từ chối truy cập. Thử đăng nhập lại.");
+      setPhase("login");
     } catch {
-      /* mạng lỗi — vẫn cho vào app (offline / chỉ Vite) */
+      if (passwordRequired) {
+        setError("Không kết nối được máy chủ. Kiểm tra API và thử lại.");
+        setPhase("login");
+        return;
+      }
+      setPhase("in");
     }
-    setPhase("in");
   }, []);
 
   useEffect(() => {
@@ -116,6 +128,14 @@ export function SitePasswordGate({ children }: { children: ReactNode }) {
               className="w-full rounded-full bg-apple-blue py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-apple-blue-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? "Đang xử lý…" : "Vào trang"}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void probe()}
+              className="w-full rounded-full border border-black/[0.1] py-2.5 text-sm font-semibold text-apple-secondary hover:bg-black/[0.04] disabled:opacity-50"
+            >
+              Kiểm tra lại kết nối
             </button>
           </form>
         </div>

@@ -1,37 +1,182 @@
 import { ECARGO_GMAIL_POLL_MS, ECARGO_GMAIL_USER } from "./ecargoConfig.mjs";
 import {
   ECARGO_FROM,
+  QR_SUBJECT,
   VERIFY_SUBJECT,
   messageReceivedMs,
+  mailBodyPlainText,
+  parseVerifyMailRaw,
+  pickFreshQrMail,
   pickFreshVerifyMail,
+  isVerifyEcargoMailSubject,
+  verifyMailMatchesBooking,
 } from "./ecargoVerifyMail.mjs";
 
 const MAILBOXES = ["INBOX", "[Gmail]/All Mail"];
 
-async function loadVerifyCandidates(client, notBeforeMs, { includeAllMail = false } = {}) {
+/** @type {import('imapflow').ImapFlow | null} */
+let poolClient = null;
+/** @type {Promise<import('imapflow').ImapFlow> | null} */
+let poolConnectPromise = null;
+let poolOpenMailbox = "";
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function resetPool() {
+  poolClient = null;
+  poolConnectPromise = null;
+  poolOpenMailbox = "";
+}
+
+/** @param {unknown} e */
+function formatImapConnectError(e) {
+  const msg = String(e?.message ?? e ?? "").trim();
+  const response = String(e?.response ?? "").trim();
+  const authFailed =
+    e?.authenticationFailed === true ||
+    /AUTHENTICATIONFAILED|Invalid credentials/i.test(`${msg} ${response}`);
+
+  if (authFailed) {
+    return new Error(
+      `Gmail từ chối đăng nhập IMAP (${ECARGO_GMAIL_USER}). Tạo lại App Password 16 ký tự, cập nhật ECARGO_GMAIL_APP_PASSWORD trong .env.local (không dấu cách), rồi khởi động lại server.`
+    );
+  }
+  if (msg === "Command failed" && response) {
+    return new Error(`Gmail IMAP: ${response}`);
+  }
+  if (msg === "Command failed") {
+    return new Error(
+      "Không kết nối được Gmail IMAP — kiểm tra ECARGO_GMAIL_USER và ECARGO_GMAIL_APP_PASSWORD."
+    );
+  }
+  return e instanceof Error ? e : new Error(msg || "Lỗi Gmail IMAP.");
+}
+
+async function createImapClient() {
+  const appPassword = process.env.ECARGO_GMAIL_APP_PASSWORD?.trim();
+  if (!appPassword) {
+    throw new Error(
+      "Thiếu ECARGO_GMAIL_APP_PASSWORD trên Railway — tạo App Password Gmail cho hộp nhận mail eCargo."
+    );
+  }
+  const { ImapFlow } = await import("imapflow");
+  const client = new ImapFlow({
+    host: "imap.gmail.com",
+    port: 993,
+    secure: true,
+    auth: { user: ECARGO_GMAIL_USER, pass: appPassword },
+    logger: false,
+    // Tự ngắt IDLE sau 25s để vòng poll re-search mail mới (Gmail IDLE mặc định ~29 phút quá lâu).
+    maxIdleTime: 25_000,
+  });
+  client.on("close", () => {
+    if (poolClient === client) resetPool();
+  });
+  client.on("error", () => {
+    if (poolClient === client) resetPool();
+  });
+  try {
+    await client.connect();
+  } catch (e) {
+    throw formatImapConnectError(e);
+  }
+  return client;
+}
+
+/** Giữ IMAP sẵn sàng — gọi khi worker start / trước Playwright. */
+export async function warmEcargoGmail() {
+  return getPooledImapClient();
+}
+
+/** @returns {Promise<import('imapflow').ImapFlow>} */
+async function getPooledImapClient() {
+  if (poolClient) return poolClient;
+  if (!poolConnectPromise) {
+    poolConnectPromise = createImapClient()
+      .then((client) => {
+        poolClient = client;
+        poolConnectPromise = null;
+        return client;
+      })
+      .catch((e) => {
+        poolConnectPromise = null;
+        throw e;
+      });
+  }
+  return poolConnectPromise;
+}
+
+export async function shutdownEcargoGmail() {
+  const client = poolClient;
+  resetPool();
+  if (!client) return;
+  try {
+    await client.logout();
+  } catch {
+    /* ignore */
+  }
+}
+
+async function openMailbox(client, mailbox) {
+  if (poolOpenMailbox === mailbox) return;
+  await client.mailboxOpen(mailbox);
+  poolOpenMailbox = mailbox;
+}
+
+/**
+ * Đánh dấu mail đã đọc (set IMAP flag \\Seen).
+ * Mặc định bật; có thể tắt bằng `ECARGO_GMAIL_MARK_SEEN=0`.
+ * Lỗi không làm fail job — chỉ log warning để dễ debug.
+ * @param {import('imapflow').ImapFlow} client
+ * @param {number|string} uid
+ * @param {string} mailbox
+ */
+async function markMailSeen(client, uid, mailbox) {
+  if (process.env.ECARGO_GMAIL_MARK_SEEN === "0") return;
+  if (!client || uid == null || !mailbox) return;
+  try {
+    if (poolOpenMailbox !== mailbox) {
+      await client.mailboxOpen(mailbox);
+      poolOpenMailbox = mailbox;
+    }
+    await client.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true });
+    console.info(`[ecargo-gmail] markSeen uid=${uid} mailbox=${mailbox}`);
+  } catch (e) {
+    console.warn(`[ecargo-gmail] markSeen failed uid=${uid}:`, e?.message ?? e);
+  }
+}
+
+async function loadScscMailCandidates(client, notBeforeMs, subject, { includeAllMail = false } = {}) {
   const since = new Date(notBeforeMs - 3 * 60 * 1000);
-  /** @type {Array<{ uid: number|string; raw: string; envelope?: object; receivedMs?: number }>} */
+  /** @type {Array<{ uid: number|string; mailbox: string; raw: string; envelope?: object; receivedMs?: number }>} */
   const all = [];
   const mailboxes = includeAllMail ? MAILBOXES : ["INBOX"];
 
   for (const mailbox of mailboxes) {
     try {
-      await client.mailboxOpen(mailbox);
+      await openMailbox(client, mailbox);
     } catch {
       continue;
     }
     const uids = await client.search({
       from: ECARGO_FROM,
-      subject: VERIFY_SUBJECT,
+      subject,
       since,
     });
     if (!uids.length) continue;
 
-    for (const uid of uids) {
-      const msg = await client.fetchOne(String(uid), { source: true, envelope: true, internalDate: true });
+    const uidList = uids.map(String);
+    for await (const msg of client.fetch(uidList, {
+      source: true,
+      envelope: true,
+      internalDate: true,
+    })) {
       if (!msg?.source) continue;
       all.push({
-        uid,
+        uid: msg.uid,
+        mailbox,
         raw: msg.source.toString("utf8"),
         envelope: msg.envelope,
         receivedMs: messageReceivedMs(msg),
@@ -48,64 +193,141 @@ async function loadVerifyCandidates(client, notBeforeMs, { includeAllMail = fals
   return all;
 }
 
-/**
- * Đọc mail xác thực qua Gmail IMAP — giữ kết nối, poll nhanh (mặc định 400ms).
- * @param {{ notBeforeMs?: number; timeoutMs?: number; pollMs?: number; matchHints?: { mawb?: string; vehicleNo?: string } }} opts
- */
-export async function waitForEcargoVerifyEmail(opts = {}) {
-  const appPassword = process.env.ECARGO_GMAIL_APP_PASSWORD?.trim();
-  if (!appPassword) {
-    throw new Error(
-      "Thiếu ECARGO_GMAIL_APP_PASSWORD trên Railway — tạo App Password Gmail cho hộp nhận mail eCargo."
-    );
-  }
+function loadVerifyCandidates(client, notBeforeMs, opts) {
+  return loadScscMailCandidates(client, notBeforeMs, VERIFY_SUBJECT, opts);
+}
 
-  const { ImapFlow } = await import("imapflow");
+async function loadQrCandidates(client, notBeforeMs, opts) {
+  const all = await loadScscMailCandidates(client, notBeforeMs, QR_SUBJECT, opts);
+  return all.filter((c) => !isVerifyEcargoMailSubject(c.envelope?.subject));
+}
+
+async function pollScscMail(client, opts, pickFn, logLabel) {
   const notBeforeMs = opts.notBeforeMs ?? Date.now() - 60_000;
   const timeoutMs = opts.timeoutMs ?? 8 * 60 * 1000;
   const pollMs = opts.pollMs ?? ECARGO_GMAIL_POLL_MS;
   const matchHints = opts.matchHints;
   const deadline = Date.now() + timeoutMs;
   const searchAllMail = process.env.ECARGO_GMAIL_SEARCH_ALL_MAIL === "1";
+  const loadCandidates = opts.loadCandidates ?? loadVerifyCandidates;
 
-  const client = new ImapFlow({
-    host: "imap.gmail.com",
-    port: 993,
-    secure: true,
-    auth: { user: ECARGO_GMAIL_USER, pass: appPassword },
-    logger: false,
-  });
-
-  try {
-    await client.connect();
-
-    let pollCount = 0;
-    while (Date.now() < deadline) {
-      const includeAllMail = searchAllMail || pollCount % 5 === 4;
-      const candidates = await loadVerifyCandidates(client, notBeforeMs, { includeAllMail });
-      const found = pickFreshVerifyMail(candidates, notBeforeMs, matchHints);
+  let pollCount = 0;
+  while (Date.now() < deadline) {
+    try {
+      const includeAllMail = searchAllMail || pollCount % 6 === 5;
+      const candidates = await loadCandidates(client, notBeforeMs, { includeAllMail });
+      const found = pickFn(candidates, notBeforeMs, matchHints);
       pollCount += 1;
       if (found) {
-        console.info(
-          `[ecargo-gmail] verify mail uid=${found.uid} code=${found.verifyCode} received=${found.receivedMs ?? "?"} polls=${pollCount}`
-        );
+        console.info(`[ecargo-gmail] ${logLabel} uid=${found.uid} polls=${pollCount}`);
+        if (found.mailbox) {
+          await markMailSeen(client, found.uid, found.mailbox);
+        }
         return found;
       }
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) break;
-      await sleep(Math.min(pollMs, remaining));
-    }
-  } finally {
-    try {
-      await client.logout();
     } catch {
-      /* ignore */
+      resetPool();
+      client = await getPooledImapClient();
+      pollCount += 1;
     }
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+
+    // ImapFlow `client.idle()` không nhận tham số — nếu gọi IDLE thủ công sẽ block tới ~29 phút.
+    // Dùng sleep thuần và để ImapFlow tự autoidle ở nền (maxIdleTime đã set 25s khi tạo client).
+    const waitMs = Math.min(pollMs, remaining);
+    await sleep(waitMs);
+  }
+
+  return null;
+}
+
+/** Đếm mail parse được nhưng không khớp hints (debug timeout). */
+async function countVerifyParseRejections(client, notBeforeMs, matchHints, opts = {}) {
+  try {
+    const candidates = await loadVerifyCandidates(client, notBeforeMs, opts);
+    let parsed = 0;
+    let unmatched = 0;
+    for (const c of candidates) {
+      const receivedMs = c.receivedMs ?? messageReceivedMs(c);
+      if (receivedMs > 0 && receivedMs < notBeforeMs) continue;
+      if (!parseVerifyMailRaw(c.raw, c.envelope)) continue;
+      parsed += 1;
+      if (!verifyMailMatchesBooking(mailBodyPlainText(c.raw), matchHints)) unmatched += 1;
+    }
+    return { parsed, unmatched, total: candidates.length };
+  } catch {
+    return { parsed: 0, unmatched: 0, total: 0 };
+  }
+}
+
+/**
+ * Đọc mail xác thực — dùng pool IMAP (không connect/logout mỗi job).
+ * @param {{ notBeforeMs?: number; timeoutMs?: number; pollMs?: number; matchHints?: { mawb?: string; vehicleNo?: string } }} opts
+ */
+export async function waitForEcargoVerifyEmail(opts = {}) {
+  let client;
+  try {
+    client = await getPooledImapClient();
+  } catch (e) {
+    resetPool();
+    throw e;
+  }
+
+  const found = await pollScscMail(
+    client,
+    { ...opts, loadCandidates: loadVerifyCandidates },
+    pickFreshVerifyMail,
+    "verify"
+  );
+  if (found) {
+    console.info(
+      `[ecargo-gmail] verify code=${found.verifyCode} reg=${found.registrationNo ?? "-"} received=${found.receivedMs ?? "?"}`
+    );
+    return found;
+  }
+
+  const diag = await countVerifyParseRejections(client, opts.notBeforeMs ?? Date.now() - 60_000, opts.matchHints, {
+    includeAllMail: true,
+  });
+  if (diag.parsed > 0) {
+    console.warn(
+      `[ecargo-gmail] verify timeout: ${diag.parsed} mail parse OK nhưng không khớp lô (gợi ý MAWB/xe); inbox ${diag.total} mail`
+    );
+    throw new Error(
+      "Có email xác thực trên Gmail nhưng không khớp lô này (MAWB/xe) — thử đăng ký lại hoặc mở link trong mail thủ công."
+    );
   }
 
   throw new Error("Hết thời gian chờ email xác thực từ ecargo@scsc.vn.");
 }
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
+/**
+ * Đọc mail QR sau khi đã bấm Xác Thực (subject Phiếu đăng ký hàng vào kho).
+ * @param {{ notBeforeMs?: number; timeoutMs?: number; pollMs?: number; matchHints?: { registrationNo?: string; vehicleNo?: string; mawb?: string } }} opts
+ */
+export async function waitForEcargoQrEmail(opts = {}) {
+  let client;
+  try {
+    client = await getPooledImapClient();
+  } catch (e) {
+    resetPool();
+    throw e;
+  }
+
+  const found = await pollScscMail(
+    client,
+    { ...opts, loadCandidates: loadQrCandidates },
+    pickFreshQrMail,
+    "qr"
+  );
+  if (found) {
+    console.info(
+      `[ecargo-gmail] qr reg=${found.registrationNo} subject=${found.qrSubject ?? "?"} received=${found.receivedMs ?? "?"}`
+    );
+    return found;
+  }
+
+  throw new Error("Hết thời gian chờ email QR (Phiếu đăng ký hàng vào kho) từ ecargo@scsc.vn.");
 }

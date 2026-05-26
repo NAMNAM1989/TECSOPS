@@ -18,7 +18,8 @@ import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { SmartSearchBar } from "./SmartSearchBar";
-import { WAREHOUSE_ORDER } from "../constants/warehouses";
+import { WAREHOUSE_ORDER, isScscWarehouse } from "../constants/warehouses";
+import { EcargoToastStack } from "./EcargoToastStack";
 import { NewBookingButton } from "./NewBookingButton";
 import { WarehouseGridPicker } from "./WarehouseGridPicker";
 import { DashboardToolbarButton } from "./DashboardToolbarButton";
@@ -69,6 +70,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   const { status, state, mutate, socketConnected, subscribeEcargoJob } = useShipmentSync(fallback);
   const ecargoRegister = useEcargoKhoScscRegister(state, mutate, subscribeEcargoJob);
+  const { hydrateJobs, hydrateKeyRef, toasts: ecargoToasts, dismissToast: dismissEcargoToast } =
+    ecargoRegister;
 
   const saveCustomerVehicleForEcargo = useCallback(
     async (params: UpsertCustomerVehicleParams) => {
@@ -127,6 +130,17 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       shipmentMatchesSearchQuery(r, searchQuery, searchContext)
     );
   }, [statusFilteredRows, searchQuery, searchContext]);
+
+  useEffect(() => {
+    const ids = filteredViewRows
+      .filter((r) => isScscWarehouse(r.warehouse))
+      .map((r) => r.id);
+    if (!ids.length) return;
+    const key = `${selectedYmd}|${ids.length}|${ids.join(",")}`;
+    if (hydrateKeyRef.current === key) return;
+    hydrateKeyRef.current = key;
+    void hydrateJobs(ids);
+  }, [filteredViewRows, hydrateJobs, hydrateKeyRef, selectedYmd]);
 
   const searchHighlightWarehouses = useMemo((): Warehouse[] => {
     if (!searchActive) return [];
@@ -640,6 +654,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         saving={airlineLabelSaving}
         onSave={saveAirlineLabelOverrides}
       />
+
+      <EcargoToastStack items={ecargoToasts} onDismiss={dismissEcargoToast} />
     </div>
   );
 }

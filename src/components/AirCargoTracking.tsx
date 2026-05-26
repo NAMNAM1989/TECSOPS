@@ -471,6 +471,17 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         </div>
       </header>
 
+      <div className="space-y-3 md:hidden">
+        <WarehouseGridPicker
+          compact
+          rows={statusFilteredRows}
+          active={activeWarehouse}
+          onSelect={setActiveWarehouse}
+          onAddRow={(wh) => void addBlankRowForWarehouse(wh)}
+          highlightWarehouses={searchHighlightWarehouses}
+        />
+      </div>
+
       {viewRows.length > 0 && (
         <div className="space-y-3">
           <SmartSearchBar
@@ -494,15 +505,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
               </button>
             )}
           </div>
-          <WarehouseGridPicker
-            className="md:hidden"
-            compact
-            rows={statusFilteredRows}
-            active={activeWarehouse}
-            onSelect={setActiveWarehouse}
-            onAddRow={(wh) => void addBlankRowForWarehouse(wh)}
-            highlightWarehouses={searchHighlightWarehouses}
-          />
         </div>
       )}
       </div>

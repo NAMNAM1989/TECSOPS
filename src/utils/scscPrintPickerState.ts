@@ -9,6 +9,11 @@ export type ScscPrintProfileChoice = {
   agentId: string;
   useBookingGoods: boolean;
   goodsId: string;
+  /** Nội dung in — có thể sửa tại modal. */
+  goodsDescriptionPrint: string;
+  otherRequirementsPrint: string;
+  /** Ghi ngược lên lô khi xác nhận in. */
+  saveToShipment: boolean;
 };
 
 export function shipmentForScscPrintPicker(shipment: Shipment, state: ScscPrintProfileChoice): Shipment {
@@ -19,6 +24,8 @@ export function shipmentForScscPrintPicker(shipment: Shipment, state: ScscPrintP
     customerAgentId: state.useBookingAgent ? shipment.customerAgentId : state.agentId,
     customerConsigneeId: state.useBookingConsignee ? shipment.customerConsigneeId : state.consigneeId,
     customerGoodsId: state.useBookingGoods ? shipment.customerGoodsId : state.goodsId,
+    goodsDescriptionPrint: state.goodsDescriptionPrint,
+    otherRequirementsPrint: state.otherRequirementsPrint,
   };
 }
 

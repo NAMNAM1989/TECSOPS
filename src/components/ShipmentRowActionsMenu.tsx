@@ -23,6 +23,7 @@ type Props = {
   saveScscWeighPrintSettings?: (settings: ScscWeighPrintSettings) => void | Promise<void>;
   onPrint: (s: Shipment) => void;
   onDelete: (id: string) => void;
+  onUpdate?: (id: string, patch: Partial<Shipment>) => void;
 };
 
 const iconCls = "h-3.5 w-3.5";
@@ -104,6 +105,7 @@ export function ShipmentRowActionsMenu({
   saveScscWeighPrintSettings,
   onPrint,
   onDelete,
+  onUpdate,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -126,6 +128,7 @@ export function ShipmentRowActionsMenu({
       globalAgents,
       scscWeighPrintSettings,
       saveScscWeighPrintSettings,
+      onSaveShipment: onUpdate,
     });
 
   useLayoutEffect(() => {

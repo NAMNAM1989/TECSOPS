@@ -11,6 +11,7 @@ import { statusRowAccent, statusRowBg, statusRowSelected, flightNumberAccent } f
 import {
   warehouseLabel,
   warehouseSectionsForLayout,
+  WAREHOUSE_ORDER,
   isScscWarehouse,
 } from "../constants/warehouses";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
@@ -96,8 +97,8 @@ export function MobileShipmentCards({
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
   const warehouseSections = useMemo((): Warehouse[] => {
     if (searchActive) return [...warehouseSectionsForLayout("ALL")];
-    return [activeWarehouse];
-  }, [searchActive, activeWarehouse]);
+    return [...WAREHOUSE_ORDER];
+  }, [searchActive]);
   const warehouseCounts = useMemo(() => {
     const counts = {
       "TECS-TCS": 0,
@@ -148,10 +149,17 @@ export function MobileShipmentCards({
       <Box className="space-y-4 pb-28 md:hidden">
         {warehouseSections.map((wh) => {
           const group = rowsByWarehouse[wh];
-          const collapsed = searchActive ? isCollapsed(wh) : false;
+          const collapsed = searchActive
+            ? isCollapsed(wh)
+            : group.length === 0 && wh !== activeWarehouse;
           const showAccordionHeader = searchActive;
+          const isActiveWarehouse = wh === activeWarehouse;
           return (
-            <section key={wh} id={`warehouse-section-${wh}`}>
+            <section
+              key={wh}
+              id={`warehouse-section-${wh}`}
+              className={isActiveWarehouse && !searchActive ? "scroll-mt-24" : undefined}
+            >
               {showAccordionHeader ? (
                 <button
                   type="button"
@@ -168,14 +176,18 @@ export function MobileShipmentCards({
                   </span>
                 </button>
               ) : (
-                <Box className="mb-3 flex items-end justify-between gap-2 px-0.5">
+                <Box
+                  className={`mb-3 flex items-end justify-between gap-2 rounded-xl px-0.5 py-1 ${
+                    isActiveWarehouse ? "ring-2 ring-apple-blue/40 dark:ring-sky-400/35" : ""
+                  }`}
+                >
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-apple-tertiary dark:text-slate-500">
-                      Kho đang xem
-                    </p>
                     <h2 className="text-[17px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
                       {warehouseLabel[wh]}
                     </h2>
+                    {isActiveWarehouse ? (
+                      <p className="text-[10px] font-medium text-apple-blue dark:text-sky-300">Kho đang chọn</p>
+                    ) : null}
                   </div>
                   <span className="rounded-full bg-black/[0.05] px-2.5 py-1 text-[11px] font-semibold tabular-nums text-apple-secondary dark:bg-white/[0.08] dark:text-slate-300">
                     {group.length} lô

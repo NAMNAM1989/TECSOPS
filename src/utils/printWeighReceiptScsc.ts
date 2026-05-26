@@ -96,6 +96,7 @@ export async function printWeighReceiptScscWithConsigneeChoice(
     globalAgents?: GlobalAgentCatalog;
     scscWeighPrintSettings?: ScscWeighPrintSettings;
     saveScscWeighPrintSettings?: (settings: ScscWeighPrintSettings) => void | Promise<void>;
+    onSaveShipment?: (id: string, patch: Partial<Shipment>) => void;
   }
 ): Promise<ScscPrintResult | undefined> {
   const directory = opts?.customerDirectory ?? [];
@@ -105,7 +106,34 @@ export async function printWeighReceiptScscWithConsigneeChoice(
     saveScscWeighPrintSettings: opts?.saveScscWeighPrintSettings,
   });
   if (!ctx) return undefined;
-  return printWeighReceiptScsc(ctx.shipment, {
+  const ship = ctx.shipment;
+  if (ctx.saveToShipment && opts?.onSaveShipment) {
+    opts.onSaveShipment(ship.id, {
+      customerShipperId: ship.customerShipperId,
+      customerConsigneeId: ship.customerConsigneeId,
+      globalAgentId: ship.globalAgentId,
+      customerAgentId: ship.customerAgentId,
+      customerGoodsId: ship.customerGoodsId,
+      goodsDescriptionPrint: ship.goodsDescriptionPrint ?? "",
+      otherRequirementsPrint: ship.otherRequirementsPrint ?? "",
+      shipperNamePrint: ship.shipperNamePrint,
+      shipperAddressPrint: ship.shipperAddressPrint,
+      shipperPhonePrint: ship.shipperPhonePrint,
+      shipperEmailPrint: ship.shipperEmailPrint,
+      taxCodePrint: ship.taxCodePrint,
+      agentNamePrint: ship.agentNamePrint,
+      agentAddressPrint: ship.agentAddressPrint,
+      agentPhonePrint: ship.agentPhonePrint,
+      agentEmailPrint: ship.agentEmailPrint,
+      agentTaxCodePrint: ship.agentTaxCodePrint,
+      consigneeNamePrint: ship.consigneeNamePrint,
+      consigneeAddressPrint: ship.consigneeAddressPrint,
+      consigneePhonePrint: ship.consigneePhonePrint,
+      consigneeEmailPrint: ship.consigneeEmailPrint,
+      notifyNamePrint: ship.notifyNamePrint,
+    });
+  }
+  return printWeighReceiptScsc(ship, {
     ...opts,
     globalAgents,
     scscWeighPrintSettings: getScscWeighPrintSettingsCache(),

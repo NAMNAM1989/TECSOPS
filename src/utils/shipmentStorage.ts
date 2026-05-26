@@ -73,6 +73,7 @@ function isShipmentShape(o: unknown): o is Omit<Shipment, "sessionDate"> & { ses
     (r.globalAgentId === undefined || typeof r.globalAgentId === "string") &&
     (r.customerGoodsId === undefined || typeof r.customerGoodsId === "string") &&
     (r.goodsDescriptionPrint === undefined || typeof r.goodsDescriptionPrint === "string") &&
+    (r.otherRequirementsPrint === undefined || typeof r.otherRequirementsPrint === "string") &&
     (r.customerShipperId === undefined || typeof r.customerShipperId === "string") &&
     (r.customerConsigneeId === undefined || typeof r.customerConsigneeId === "string") &&
     (r.shipperNamePrint === undefined || typeof r.shipperNamePrint === "string") &&
@@ -149,6 +150,8 @@ export function loadRows(): Shipment[] | null {
         customerGoodsId: typeof item.customerGoodsId === "string" ? item.customerGoodsId : "",
         goodsDescriptionPrint:
           typeof item.goodsDescriptionPrint === "string" ? item.goodsDescriptionPrint : "",
+        otherRequirementsPrint:
+          typeof item.otherRequirementsPrint === "string" ? item.otherRequirementsPrint : "",
         customerShipperId:
           typeof item.customerShipperId === "string" ? item.customerShipperId : "",
         customerConsigneeId:

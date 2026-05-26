@@ -6,9 +6,11 @@ import { findCustomerEntry, resolveGlobalAgentForBooking } from "./mapBookingToS
 import { openScscPrintProfilePickerModal } from "./openScscPrintProfilePickerModal";
 import { enrichShipmentPrintFromCustomerProfiles } from "./scscPrintProfileLink";
 import { scscPrintSectionsForPicker } from "./scscPrintProfilePick";
+import { shipmentForScscPrintPicker } from "./scscPrintPickerState";
 
 export type ScscPrintConsigneeContext = {
   shipment: Shipment;
+  saveToShipment: boolean;
   skipAutoSingleConsignee: boolean;
   skipAutoDefaultAgent: boolean;
   skipAutoSingleShipper: boolean;
@@ -31,15 +33,6 @@ export async function ensureScscConsigneeForPrint(
   const enriched = enrichShipmentPrintFromCustomerProfiles(s, directory, globalAgents);
   const customer = findCustomerEntry(enriched, directory);
   const sections = scscPrintSectionsForPicker(enriched, directory, globalAgents);
-  if (sections.length === 0) {
-    return {
-      shipment: enriched,
-      skipAutoSingleConsignee: false,
-      skipAutoDefaultAgent: false,
-      skipAutoSingleShipper: false,
-      skipAutoSingleGoods: false,
-    };
-  }
 
   const code = enriched.customerCode?.trim() || customer?.code?.trim() || "";
   const awb = enriched.awb?.trim() || "";
@@ -69,19 +62,19 @@ export async function ensureScscConsigneeForPrint(
   });
   if (!choice) return null;
 
+  const withProfileIds = {
+    ...enriched,
+    customerShipperId: choice.useBookingShipper ? enriched.customerShipperId : choice.shipperId,
+    globalAgentId: choice.useBookingAgent ? enriched.globalAgentId : choice.agentId,
+    customerAgentId: choice.useBookingAgent ? enriched.customerAgentId : choice.agentId,
+    customerConsigneeId: choice.useBookingConsignee ? enriched.customerConsigneeId : choice.consigneeId,
+    customerGoodsId: choice.useBookingGoods ? enriched.customerGoodsId : choice.goodsId,
+  };
+  const withSnapshots = enrichShipmentPrintFromCustomerProfiles(withProfileIds, directory, globalAgents);
+
   return {
-    shipment: enrichShipmentPrintFromCustomerProfiles(
-      {
-        ...enriched,
-        customerShipperId: choice.useBookingShipper ? enriched.customerShipperId : choice.shipperId,
-        globalAgentId: choice.useBookingAgent ? enriched.globalAgentId : choice.agentId,
-        customerAgentId: choice.useBookingAgent ? enriched.customerAgentId : choice.agentId,
-        customerConsigneeId: choice.useBookingConsignee ? enriched.customerConsigneeId : choice.consigneeId,
-        customerGoodsId: choice.useBookingGoods ? enriched.customerGoodsId : choice.goodsId,
-      },
-      directory,
-      globalAgents
-    ),
+    shipment: shipmentForScscPrintPicker(withSnapshots, choice),
+    saveToShipment: choice.saveToShipment,
     skipAutoSingleConsignee: choice.useBookingConsignee,
     skipAutoDefaultAgent: choice.useBookingAgent,
     skipAutoSingleShipper: choice.useBookingShipper,

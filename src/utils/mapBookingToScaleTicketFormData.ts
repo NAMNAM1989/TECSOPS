@@ -10,6 +10,12 @@ import { lookupCustomerEntryByName } from "./customerDirectoryCore";
 import { findGlobalAgentById } from "./globalAgentsCore";
 import { buildScscDimListModel } from "./scscDimListReport";
 import { resolvePrintAddressForShipment } from "./printAddressMultiline";
+import {
+  clipScscGoodsDescriptionPrint,
+  clipScscOtherRequirementsPrint,
+  resolveScscGoodsDescriptionPrint,
+  resolveScscOtherRequirementsPrint,
+} from "./scscPrintContent";
 
 export type ScaleTicketFormData = {
   awb: string;
@@ -209,12 +215,12 @@ export function mapBookingToScaleTicketFormData(
   const savedGoods = resolveSavedGoodsForBooking(booking, customer, {
     skipAutoSingleGoods: mapOpts?.skipAutoSingleGoods,
   });
-  const goodsPrintTrim = booking.goodsDescriptionPrint?.trim() ?? "";
-  const goodsDescription = compactSpace(
-    goodsPrintTrim ||
-      savedGoods?.goodsDescription?.trim() ||
-      (noteTrim ? noteTrim.slice(0, 60) : "")
-  ).slice(0, 60) || "GENERAL CARGO";
+  const goodsDescription =
+    clipScscGoodsDescriptionPrint(
+      resolveScscGoodsDescriptionPrint(booking, savedGoods) ||
+        compactSpace(savedGoods?.goodsDescription ?? "") ||
+        (noteTrim ? noteTrim : "")
+    ) || "GENERAL CARGO";
   const customerCode = booking.customerCode?.trim() || booking.customer?.trim() || "";
 
   const shipperNamePrintTrim = booking.shipperNamePrint?.trim() || "";
@@ -302,9 +308,8 @@ export function mapBookingToScaleTicketFormData(
       const h = booking.hawb?.trim() ?? "";
       return h ? "01 HAWB" : "NO HAWB";
     })(),
-    otherRequirements: compactSpace(customer?.otherRequirementsPrint ?? "").slice(
-      0,
-      200
+    otherRequirements: clipScscOtherRequirementsPrint(
+      resolveScscOtherRequirementsPrint(booking, customer)
     ),
   };
 }

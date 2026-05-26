@@ -15,6 +15,10 @@ import { CustomerShipmentDetailModal } from "./CustomerShipmentDetailModal";
 import { statusRowAccent, statusRowBg, statusRowSelected, flightNumberAccent } from "./statusStyles";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 import {
+  SCSC_GOODS_DESCRIPTION_PRINT_MAX,
+  SCSC_OTHER_REQUIREMENTS_PRINT_MAX,
+} from "../utils/scscPrintContent";
+import {
   isScscWarehouse,
   warehouseLabel,
 } from "../constants/warehouses";
@@ -741,6 +745,24 @@ function ShipmentRow({
             onEnterNavigateDown={hasNextRow ? navDownSameField("note") : undefined}
           />
         </div>
+        {isScscWarehouse(row.warehouse) ? (
+          <div className="mt-1 space-y-0.5 border-t border-black/[0.06] pt-1 dark:border-white/[0.08]">
+            <InlineTextEdit
+              value={row.goodsDescriptionPrint ?? ""}
+              placeholder="Tên hàng in"
+              className="line-clamp-2 min-w-0 text-left text-[9px] leading-snug text-violet-800 dark:text-violet-200"
+              maxLength={SCSC_GOODS_DESCRIPTION_PRINT_MAX}
+              onCommit={(v) => onUpdate(row.id, { goodsDescriptionPrint: v })}
+            />
+            <InlineTextEdit
+              value={row.otherRequirementsPrint ?? ""}
+              placeholder="YC khác in"
+              className="line-clamp-2 min-w-0 text-left text-[9px] leading-snug text-violet-700/90 dark:text-violet-300/90"
+              maxLength={SCSC_OTHER_REQUIREMENTS_PRINT_MAX}
+              onCommit={(v) => onUpdate(row.id, { otherRequirementsPrint: v })}
+            />
+          </div>
+        ) : null}
       </td>
       {/* Status */}
       <td className={cell("mid", "py-1")}>
@@ -775,6 +797,7 @@ function ShipmentRow({
             saveScscWeighPrintSettings={saveScscWeighPrintSettings}
             onPrint={onPrint}
             onDelete={onDelete}
+            onUpdate={onUpdate}
           />
         </div>
       </td>

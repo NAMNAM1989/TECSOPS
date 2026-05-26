@@ -30,6 +30,7 @@ export function blankShipmentDraft(
     customerConsigneeId: "",
     customerGoodsId: "",
     goodsDescriptionPrint: "",
+    otherRequirementsPrint: "",
     shipperNamePrint: "",
     shipperAddressPrint: "",
     shipperPhonePrint: "",

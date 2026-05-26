@@ -19,6 +19,15 @@ import {
 import { profileOptionLabel } from "./customerDirectoryDefaults";
 import { mapBookingToScaleTicketFormData, findCustomerEntry } from "./mapBookingToScaleTicketFormData";
 import {
+  clipScscGoodsDescriptionPrint,
+  clipScscOtherRequirementsPrint,
+  resolveScscGoodsDescriptionPrint,
+  resolveScscOtherRequirementsPrint,
+  SCSC_GOODS_DESCRIPTION_PRINT_MAX,
+  SCSC_OTHER_REQUIREMENTS_PRINT_MAX,
+  scscGoodsPrintOverflowWarning,
+} from "./scscPrintContent";
+import {
   resolveAgentIdForPrintPicker,
   resolveConsigneeForPrintPicker,
   resolveGoodsForPrintPicker,
@@ -49,6 +58,83 @@ function cneeTitle(c: CustomerSavedConsignee): string {
 
 function goodsTitle(g: CustomerSavedGoods): string {
   return profileOptionLabel(g.label, g.goodsDescription, g.id);
+}
+
+function PrintContentSection(props: {
+  goodsText: string;
+  otherText: string;
+  saveToShipment: boolean;
+  goodsOverflowWarning: string | null;
+  onGoodsChange: (v: string) => void;
+  onOtherChange: (v: string) => void;
+  onSaveToShipmentChange: (v: boolean) => void;
+  onApplyTemplate: () => void;
+  hasGoodsTemplates: boolean;
+}) {
+  const {
+    goodsText,
+    otherText,
+    saveToShipment,
+    goodsOverflowWarning,
+    onGoodsChange,
+    onOtherChange,
+    onSaveToShipmentChange,
+    onApplyTemplate,
+    hasGoodsTemplates,
+  } = props;
+
+  return (
+    <section className={`rounded-xl border p-3 ${OPS.card}`}>
+      <p className={`mb-2 px-0.5 text-[10px] font-semibold uppercase ${OPS.muted}`}>Nội dung in (sửa được)</p>
+      <label className="mb-2 block">
+        <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>Tên hàng in phiếu</span>
+        <textarea
+          value={goodsText}
+          onChange={(e) => onGoodsChange(clipScscGoodsDescriptionPrint(e.target.value))}
+          rows={3}
+          className={`w-full resize-y rounded-lg border px-2.5 py-2 text-xs ${OPS.input}`}
+          placeholder="GENERAL CARGO"
+        />
+        <span className={`mt-0.5 block text-[10px] tabular-nums ${OPS.muted}`}>
+          {goodsText.length}/{SCSC_GOODS_DESCRIPTION_PRINT_MAX}
+        </span>
+        {goodsOverflowWarning ? (
+          <p className="mt-1 text-[10px] font-medium text-amber-700 dark:text-amber-300">{goodsOverflowWarning}</p>
+        ) : null}
+      </label>
+      <label className="mb-2 block">
+        <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>Yêu cầu khác</span>
+        <textarea
+          value={otherText}
+          onChange={(e) => onOtherChange(clipScscOtherRequirementsPrint(e.target.value))}
+          rows={2}
+          className={`w-full resize-y rounded-lg border px-2.5 py-2 text-xs ${OPS.input}`}
+          placeholder="Không xếp chồng, giữ khô…"
+        />
+        <span className={`mt-0.5 block text-[10px] tabular-nums ${OPS.muted}`}>
+          {otherText.length}/{SCSC_OTHER_REQUIREMENTS_PRINT_MAX}
+        </span>
+      </label>
+      {hasGoodsTemplates ? (
+        <button
+          type="button"
+          onClick={onApplyTemplate}
+          className={`mb-2 w-full rounded-lg border px-2 py-1.5 text-[11px] font-semibold ${OPS.tabIdle}`}
+        >
+          Điền lại từ mẫu đã chọn
+        </button>
+      ) : null}
+      <label className={`flex cursor-pointer items-center gap-2 text-[11px] ${OPS.secondary}`}>
+        <input
+          type="checkbox"
+          checked={saveToShipment}
+          onChange={(e) => onSaveToShipmentChange(e.target.checked)}
+          className="rounded border-slate-300"
+        />
+        Lưu tên hàng & yêu cầu khác vào lô
+      </label>
+    </section>
+  );
 }
 
 function PickSection(props: {
@@ -192,6 +278,24 @@ function PrintProfilePickerOverlay(props: {
     !sections.includes("goods") || !defaultGoods
   );
 
+  const [goodsText, setGoodsText] = useState(() =>
+    resolveScscGoodsDescriptionPrint(shipment, defaultGoods)
+  );
+  const [otherText, setOtherText] = useState(() =>
+    resolveScscOtherRequirementsPrint(shipment, customer)
+  );
+  const [saveToShipment, setSaveToShipment] = useState(true);
+
+  const applyGoodsTemplateToContent = () => {
+    const g = useBookingGoods
+      ? undefined
+      : goods.find((x) => x.id === goodsId) ?? defaultGoods;
+    setGoodsText(resolveScscGoodsDescriptionPrint(shipment, g));
+    if (!useBookingGoods && g) {
+      setOtherText(resolveScscOtherRequirementsPrint(shipment, customer));
+    }
+  };
+
   const pickerState: ScscPrintProfileChoice = {
     useBookingShipper,
     shipperId,
@@ -201,7 +305,12 @@ function PrintProfilePickerOverlay(props: {
     agentId,
     useBookingGoods,
     goodsId,
+    goodsDescriptionPrint: goodsText,
+    otherRequirementsPrint: otherText,
+    saveToShipment,
   };
+
+  const goodsOverflowWarning = useMemo(() => scscGoodsPrintOverflowWarning(goodsText), [goodsText]);
 
   const previewFormData = useMemo(() => {
     const effective = shipmentForScscPrintPicker(shipment, pickerState);
@@ -304,6 +413,8 @@ function PrintProfilePickerOverlay(props: {
                 onUseBooking={() => {
                   setUseBookingGoods(true);
                   setGoodsId("");
+                  setGoodsText(resolveScscGoodsDescriptionPrint(shipment, undefined));
+                  setOtherText(resolveScscOtherRequirementsPrint(shipment, customer));
                 }}
                 bookingLabel={
                   bookingGoodsLabel.trim() ? `Theo lô: ${bookingGoodsLabel}` : "Theo lô (đã nhập trên booking)"
@@ -313,9 +424,24 @@ function PrintProfilePickerOverlay(props: {
                 onSelect={(id) => {
                   setUseBookingGoods(false);
                   setGoodsId(id);
+                  const g = goods.find((x) => x.id === id);
+                  if (g) {
+                    setGoodsText(clipScscGoodsDescriptionPrint(g.goodsDescription));
+                  }
                 }}
               />
             ) : null}
+            <PrintContentSection
+              goodsText={goodsText}
+              otherText={otherText}
+              saveToShipment={saveToShipment}
+              goodsOverflowWarning={goodsOverflowWarning}
+              onGoodsChange={setGoodsText}
+              onOtherChange={setOtherText}
+              onSaveToShipmentChange={setSaveToShipment}
+              onApplyTemplate={applyGoodsTemplateToContent}
+              hasGoodsTemplates={goods.length > 0}
+            />
           </div>
           <div className={`flex min-h-0 min-w-0 flex-1 flex-col rounded-xl p-2 lg:p-3 ${OPS.panelSoft}`}>
             <ScscWeighPickerPreview
@@ -389,18 +515,6 @@ export function openScscPrintProfilePickerModal(params: {
   scscWeighPrintSettings?: ScscWeighPrintSettings;
   onSaveScscWeighPrintSettings?: (settings: ScscWeighPrintSettings) => void | Promise<void>;
 }): Promise<ScscPrintProfileChoice | null> {
-  if (params.sections.length === 0) {
-    return Promise.resolve({
-      useBookingShipper: true,
-      shipperId: "",
-      useBookingConsignee: true,
-      consigneeId: "",
-      useBookingAgent: true,
-      agentId: "",
-      useBookingGoods: true,
-      goodsId: "",
-    });
-  }
   return new Promise((resolve) => {
     const el = document.createElement("div");
     document.body.appendChild(el);

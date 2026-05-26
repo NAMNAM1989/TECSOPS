@@ -56,6 +56,8 @@ export interface Shipment {
   customerGoodsId?: string;
   /** Tên hàng in phiếu cân (ưu tiên hơn note / mục lưu sẵn nếu đã nhập). */
   goodsDescriptionPrint?: string;
+  /** Yêu cầu khác in phiếu cân — ưu tiên hơn danh bạ khách nếu đã nhập trên lô. */
+  otherRequirementsPrint?: string;
   /**
    * Dữ liệu shipper dùng riêng cho in phiếu cân.
    * Nếu rỗng, hệ thống sẽ fallback theo customer/customerCode + danh bạ.

@@ -198,6 +198,10 @@ async function ensureSchema(client) {
   `);
   await client.query(`
     ALTER TABLE ${SHIPMENTS_TABLE}
+    ADD COLUMN IF NOT EXISTS other_requirements_print text NOT NULL DEFAULT ''
+  `);
+  await client.query(`
+    ALTER TABLE ${SHIPMENTS_TABLE}
     DROP CONSTRAINT IF EXISTS shipments_customer_agent_id_fkey
   `);
   await client.query(`
@@ -346,6 +350,7 @@ function shipmentFromRow(row) {
     customerAgentId: row.customer_agent_id || "",
     customerGoodsId: row.customer_goods_id || "",
     goodsDescriptionPrint: row.goods_description_print || "",
+    otherRequirementsPrint: row.other_requirements_print || "",
     shipperNamePrint: row.shipper_name_print || "",
     shipperAddressPrint: row.shipper_address_print || "",
     shipperPhonePrint: row.shipper_phone_print || "",
@@ -588,7 +593,7 @@ async function replaceRelationalSnapshot(client, key, state) {
         id, stt, session_date, awb, hawb, flight, flight_date, cutoff, cutoff_note, note, dest, warehouse,
         pcs, kg, dim_weight_kg, dim_lines, dim_divisor,
         customer, customer_code, customer_id, customer_shipper_id, customer_consignee_id, customer_agent_id,
-        global_agent_id, customer_goods_id, goods_description_print,
+        global_agent_id, customer_goods_id, goods_description_print, other_requirements_print,
         shipper_name_print, shipper_address_print, shipper_phone_print, shipper_email_print, tax_code_print,
         agent_name_print, agent_address_print, agent_phone_print, agent_email_print, agent_tax_code_print,
         consignee_name_print, consignee_address_print, consignee_phone_print, consignee_email_print, notify_name_print,
@@ -597,11 +602,11 @@ async function replaceRelationalSnapshot(client, key, state) {
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         $13,$14,$15,$16::jsonb,$17,
         $18,$19,$20,$21,$22,$23,
-        $24,$25,$26,
-        $27,$28,$29,$30,$31,
-        $32,$33,$34,$35,$36,
-        $37,$38,$39,$40,$41,
-        $42
+        $24,$25,$26,$27,
+        $28,$29,$30,$31,$32,
+        $33,$34,$35,$36,$37,
+        $38,$39,$40,$41,$42,
+        $43
       )
       `,
       [
@@ -631,6 +636,7 @@ async function replaceRelationalSnapshot(client, key, state) {
         str(s.globalAgentId) || str(s.customerAgentId) || "",
         str(s.customerGoodsId) || "",
         str(s.goodsDescriptionPrint) || "",
+        str(s.otherRequirementsPrint) || "",
         str(s.shipperNamePrint),
         str(s.shipperAddressPrint),
         str(s.shipperPhonePrint),

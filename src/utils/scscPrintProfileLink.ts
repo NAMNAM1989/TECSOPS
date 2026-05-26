@@ -15,6 +15,7 @@ import {
   resolveSavedShipperForBooking,
 } from "./mapBookingToScaleTicketFormData";
 import { normalizePrintAddressMultiline } from "./printAddressMultiline";
+import { clipScscGoodsDescriptionPrint, clipScscOtherRequirementsPrint } from "./scscPrintContent";
 
 function compactPrintText(v: string, max: number): string {
   return v.replace(/\s+/g, " ").trim().slice(0, max);
@@ -54,7 +55,7 @@ export function buildShipmentPatchForSavedGoods(
   }
   return {
     customerGoodsId: g.id,
-    goodsDescriptionPrint: compactPrintText(g.goodsDescription, 60),
+    goodsDescriptionPrint: clipScscGoodsDescriptionPrint(g.goodsDescription),
   };
 }
 
@@ -108,11 +109,18 @@ export function buildShipmentPrintProfilePatch(
     ? resolveGlobalAgentForBooking({ ...stub } as Shipment, globalAgents)
     : undefined;
 
+  const goodsPatch = buildShipmentPatchForSavedGoods(goods);
+  const otherReq =
+    customer?.otherRequirementsPrint?.trim() != null
+      ? clipScscOtherRequirementsPrint(customer.otherRequirementsPrint ?? "")
+      : undefined;
+
   return {
     ...buildShipmentPatchForSavedShipper(shipper),
     ...buildShipmentPatchForSavedConsignee(consignee),
-    ...buildShipmentPatchForSavedGoods(goods),
+    ...goodsPatch,
     ...buildShipmentPatchForGlobalAgent(agent),
+    ...(otherReq !== undefined ? { otherRequirementsPrint: otherReq } : {}),
   };
 }
 

@@ -15,6 +15,12 @@ import { MobileDimKgModal, type MobileDimSavePayload } from "./MobileDimKgModal"
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
 import { isScscWarehouse } from "../constants/warehouses";
 import {
+  clipScscGoodsDescriptionPrint,
+  clipScscOtherRequirementsPrint,
+  SCSC_GOODS_DESCRIPTION_PRINT_MAX,
+  SCSC_OTHER_REQUIREMENTS_PRINT_MAX,
+} from "../utils/scscPrintContent";
+import {
   ECARGO_VEHICLE_MIN,
   EcargoKhoScscCenterModal,
   EcargoKhoScscTriggerButton,
@@ -105,6 +111,8 @@ export function MobileShipmentEditSheet({
   const [customer, setCustomer] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [note, setNote] = useState("");
+  const [goodsDescriptionPrint, setGoodsDescriptionPrint] = useState("");
+  const [otherRequirementsPrint, setOtherRequirementsPrint] = useState("");
   const [customerConsigneeId, setCustomerConsigneeId] = useState("");
   const [pcs, setPcs] = useState<number | null>(null);
   const [kg, setKg] = useState<number | null>(null);
@@ -118,6 +126,12 @@ export function MobileShipmentEditSheet({
     setCustomerId((patch.customerId ?? "").trim());
     if (patch.customerConsigneeId) {
       setCustomerConsigneeId(patch.customerConsigneeId);
+    }
+    if (patch.goodsDescriptionPrint != null) {
+      setGoodsDescriptionPrint(patch.goodsDescriptionPrint);
+    }
+    if (patch.otherRequirementsPrint != null) {
+      setOtherRequirementsPrint(patch.otherRequirementsPrint);
     }
   };
 
@@ -135,6 +149,8 @@ export function MobileShipmentEditSheet({
     setCustomer((shipment.customer ?? "").trim());
     setCustomerId((shipment.customerId ?? "").trim());
     setNote((shipment.note ?? "").trim());
+    setGoodsDescriptionPrint((shipment.goodsDescriptionPrint ?? "").trim());
+    setOtherRequirementsPrint((shipment.otherRequirementsPrint ?? "").trim());
     setCustomerConsigneeId((shipment.customerConsigneeId ?? "").trim());
     setPcs(shipment.pcs);
     setKg(shipment.kg);
@@ -170,6 +186,7 @@ export function MobileShipmentEditSheet({
   const entry = findCustomerEntry(shipment, customerDirectory);
   const savedConsignees = entry?.savedConsignees ?? [];
   const showEcargo = isScscWarehouse(shipment.warehouse);
+  const showScscPrintFields = isScscWarehouse(shipment.warehouse);
   const ecargoLine = ecargoMap[shipment.id];
   const vehicleForEcargo = ecargoLine?.vehicleInput ?? "";
   const ecargoPrefill = resolveEcargoVehiclePrefill(shipment, customerDirectory, vehicleForEcargo, {
@@ -196,6 +213,12 @@ export function MobileShipmentEditSheet({
       ...customerPatch,
       ...consigneePatch,
       note: note.trim(),
+      ...(showScscPrintFields
+        ? {
+            goodsDescriptionPrint: clipScscGoodsDescriptionPrint(goodsDescriptionPrint),
+            otherRequirementsPrint: clipScscOtherRequirementsPrint(otherRequirementsPrint),
+          }
+        : {}),
       pcs,
       kg,
       status,
@@ -341,6 +364,38 @@ export function MobileShipmentEditSheet({
                     placeholder="Ghi chú ngắn cho ops…"
                   />
                 </Field>
+                {showScscPrintFields ? (
+                  <>
+                    <Field
+                      label="Tên hàng in phiếu cân"
+                      hint={`${goodsDescriptionPrint.length}/${SCSC_GOODS_DESCRIPTION_PRINT_MAX}`}
+                    >
+                      <textarea
+                        value={goodsDescriptionPrint}
+                        onChange={(e) =>
+                          setGoodsDescriptionPrint(clipScscGoodsDescriptionPrint(e.target.value))
+                        }
+                        rows={2}
+                        className={`${MOBILE.input} resize-none`}
+                        placeholder="GENERAL CARGO"
+                      />
+                    </Field>
+                    <Field
+                      label="Yêu cầu khác in phiếu"
+                      hint={`${otherRequirementsPrint.length}/${SCSC_OTHER_REQUIREMENTS_PRINT_MAX}`}
+                    >
+                      <textarea
+                        value={otherRequirementsPrint}
+                        onChange={(e) =>
+                          setOtherRequirementsPrint(clipScscOtherRequirementsPrint(e.target.value))
+                        }
+                        rows={2}
+                        className={`${MOBILE.input} resize-none`}
+                        placeholder="Không xếp chồng…"
+                      />
+                    </Field>
+                  </>
+                ) : null}
               </div>
             ) : null}
 

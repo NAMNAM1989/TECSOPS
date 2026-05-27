@@ -1,5 +1,10 @@
 export const HQ_HASH_PREFIX = "#/hq/";
 
+export function isDesktopViewport(): boolean {
+  if (typeof window === "undefined") return true;
+  return window.matchMedia("(min-width: 768px)").matches;
+}
+
 export function parseHqHash(hash = typeof window !== "undefined" ? window.location.hash : ""): string | null {
   if (!hash.startsWith(HQ_HASH_PREFIX)) return null;
   const raw = hash.slice(HQ_HASH_PREFIX.length).split("?")[0]?.trim();
@@ -13,6 +18,7 @@ export function parseHqHash(hash = typeof window !== "undefined" ? window.locati
 
 export function openHqPage(shipmentId: string): void {
   if (typeof window === "undefined") return;
+  if (!isDesktopViewport()) return;
   const next = `${HQ_HASH_PREFIX}${encodeURIComponent(shipmentId)}`;
   if (window.location.hash === next) return;
   window.location.hash = next;

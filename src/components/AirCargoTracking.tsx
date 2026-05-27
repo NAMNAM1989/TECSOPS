@@ -48,6 +48,7 @@ import { useHqRoute } from "../hooks/useHqRoute";
 import { ShipmentInvoicePage } from "./ShipmentInvoicePage";
 import type { InvoiceLineItem } from "../types/invoiceItem";
 import type { InvoiceCatalog } from "../utils/invoiceCatalogCore";
+import { isDesktopViewport } from "../utils/hqRoute";
 import {
   countShipmentsByWarehouse,
   shipmentMatchesSearchQuery,
@@ -101,6 +102,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { dark: darkMode, toggle: toggleDarkMode } = useOpsTheme();
   const { shipmentId: hqShipmentId, close: closeHqPage } = useHqRoute();
+  const [hqDesktop, setHqDesktop] = useState(() => isDesktopViewport());
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -387,6 +389,18 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     []
   );
 
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const sync = () => setHqDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (hqShipmentId && !hqDesktop) closeHqPage();
+  }, [hqShipmentId, hqDesktop, closeHqPage]);
+
   const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
 
   const hqShipment = useMemo(() => {
@@ -417,7 +431,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     );
   }
 
-  if (hqShipmentId) {
+  if (hqShipmentId && hqDesktop) {
     if (!hqShipment) {
       return (
         <div className="fixed inset-0 z-[700] flex flex-col items-center justify-center gap-3 bg-white px-6 dark:bg-dashboard-surface-dark">

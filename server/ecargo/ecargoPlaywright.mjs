@@ -276,6 +276,53 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         return { carrier: flight.slice(0, 2), flightNo: flight.slice(2) };
       }
 
+      function scoreSaveLabel(label) {
+        const t = String(label || "").replace(/\s+/g, " ").trim();
+        if (!t) return -100;
+        if (/h[uủ]y|đ[oó]ng|cancel|close|quay\s*lại/i.test(t)) return -100;
+        if (/^l[uư]u$/i.test(t)) return 100;
+        if (/x[aá]c\s*nh[aậ]n/i.test(t)) return 95;
+        if (/^ok$/i.test(t) || /^save$/i.test(t)) return 90;
+        if (/^th[eê]m$/i.test(t)) return 80;
+        if (/th[eê]m\s*awb/i.test(t)) return 20;
+        if (/th[eê]m/i.test(t)) return 70;
+        return -1;
+      }
+
+      function buttonLabel(btn) {
+        return textOf(btn) || btn.value || btn.getAttribute("aria-label") || "";
+      }
+
+      function findModalSaveButton(modal) {
+        const candidates = visibleElementsIn(
+          modal,
+          "button, input[type='button'], input[type='submit'], a.btn, a.button"
+        );
+        const ranked = candidates
+          .map((btn) => ({ btn, score: scoreSaveLabel(buttonLabel(btn)) }))
+          .filter((x) => x.score > 0)
+          .sort((a, b) => b.score - a.score);
+        return ranked[0]?.btn ?? null;
+      }
+
+      function rowContainsMawb(rowText, mawbRaw) {
+        const compactRow = String(rowText || "").replace(/\s+/g, "");
+        if (!compactRow) return false;
+        const digits = String(mawbRaw || "").replace(/\D/g, "");
+        if (digits.length < 11) return compactRow.length > 0;
+        const prefix = digits.slice(0, 3);
+        const suffix = digits.slice(3);
+        if (compactRow.includes(digits)) return true;
+        if (compactRow.includes(`${prefix}-${suffix}`)) return true;
+        return compactRow.includes(prefix) && compactRow.includes(suffix);
+      }
+
+      function hasAwbRow(expectedMawb) {
+        return visibleElements("table tbody tr").some((row) =>
+          rowContainsMawb(textOf(row), expectedMawb)
+        );
+      }
+
       function fillMainForm(data) {
         const inputs = mainInputs();
         if (inputs.length < 9) throw new Error("Không đủ trường form chính.");
@@ -299,7 +346,7 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
 
       function fillAwbModal(data) {
         const inputs = modalInputs();
-        if (inputs.length < 9) throw new Error("Không đủ trường modal AWB.");
+        if (inputs.length < 8) throw new Error("Không đủ trường modal AWB.");
         const { carrier, flightNo } = splitFlight(data.flight);
         const mawbDigits = data.mawb.replace(/\D/g, "");
         setNativeValue(inputs[0], carrier);
@@ -311,7 +358,9 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         setNativeValue(inputs[6], data.hawb && data.hawb !== "0" ? data.hawb : "");
         setNativeValue(inputs[7], data.pcs);
         setNativeValue(inputs[8], data.grossWeight);
-        setNativeValue(inputs[9], data.commodity);
+        if (inputs.length > 9 && data.commodity) {
+          setNativeValue(inputs[9], data.commodity);
+        }
 
         if (data.shc && data.shc !== "0") {
           const modal = getOpenModal();
@@ -328,32 +377,37 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         const button = findButtonByText("Thêm AWB");
         if (!button) throw new Error("Không tìm thấy nút Thêm AWB.");
         button.click();
-        for (let i = 0; i < 20; i += 1) {
+        for (let i = 0; i < 30; i += 1) {
           if (getOpenModal()) return;
-          await sleep(40);
+          await sleep(100);
         }
         throw new Error("Không mở được modal Thêm AWB.");
       }
 
-      function hasAwbRow() {
-        return visibleElements("table tbody tr").some((row) => textOf(row).replace(/\s+/g, "").length > 0);
-      }
-
       async function saveAwbModal() {
         const modal = getOpenModal();
-        const buttons = visibleElementsIn(modal, "button");
-        const saveButton = buttons.find((btn) => /th[eê]m|l[uư]u|save|ok|x[aá]c nh[aậ]n/i.test(textOf(btn)));
+        if (!modal) throw new Error("Không thấy cửa sổ Thêm AWB.");
+        const saveButton = findModalSaveButton(modal);
         if (!saveButton) throw new Error("Không tìm thấy nút lưu AWB.");
         saveButton.click();
-        await sleep(200);
+        await sleep(500);
       }
 
-      async function waitForAwbRow() {
-        for (let i = 0; i < 24; i += 1) {
-          if (hasAwbRow()) return;
-          await sleep(50);
+      async function waitForAwbSaved(expectedMawb) {
+        for (let i = 0; i < 40; i += 1) {
+          const modalOpen = Boolean(getOpenModal());
+          if (hasAwbRow(expectedMawb) && !modalOpen) return;
+          if (hasAwbRow(expectedMawb) && i >= 6) return;
+          await sleep(100);
         }
         const hint = modalValidationHint();
+        if (getOpenModal()) {
+          throw new Error(
+            hint
+              ? `Modal AWB không đóng — ${hint}`
+              : "Modal AWB không đóng sau khi bấm lưu — kiểm tra MAWB/chuyến/ngày bay."
+          );
+        }
         throw new Error(
           hint
             ? `Chưa lưu được AWB — ${hint}`
@@ -364,19 +418,19 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
       async function createOrder() {
         const button = findButtonByText("Tạo phiếu");
         if (!button) throw new Error("Không tìm thấy nút Tạo phiếu.");
-        if (!hasAwbRow()) throw new Error("Chưa có AWB trong bảng.");
+        if (!hasAwbRow(b.mawb)) throw new Error("Chưa có AWB trong bảng.");
         button.click();
-        await sleep(200);
+        await sleep(500);
       }
 
       fillMainForm(b);
-      await sleep(50);
+      await sleep(200);
       await openAwbModal();
-      await sleep(80);
+      await sleep(300);
       fillAwbModal(b);
       await saveAwbModal();
-      await waitForAwbRow();
-      await sleep(80);
+      await waitForAwbSaved(b.mawb);
+      await sleep(300);
       await createOrder();
       return { ok: true, vehicleNo: b.vehicleNo, mawb: b.mawb };
     },

@@ -25,6 +25,8 @@ type Props = {
   inputClassName?: string;
   disabled?: boolean;
   allowCustom?: boolean;
+  /** live = patch mỗi keystroke; blur = chỉ commit khi blur/Enter/chọn gợi ý */
+  commitMode?: "live" | "blur";
   onPickOption?: (option: ComboboxOption) => void;
 };
 
@@ -37,6 +39,7 @@ export const SearchCombobox = memo(function SearchCombobox({
   inputClassName = "",
   disabled = false,
   allowCustom = true,
+  commitMode = "live",
   onPickOption,
 }: Props) {
   const listId = useId();
@@ -77,15 +80,19 @@ export const SearchCombobox = memo(function SearchCombobox({
 
   const pick = useCallback(
     (opt: ComboboxOption) => {
-      onChange(opt.value);
-      setQuery(opt.value);
-      onPickOption?.(opt);
+      const display = opt.label || opt.value;
+      setQuery(display);
       setOpen(false);
+      if (onPickOption) {
+        onPickOption(opt);
+      } else {
+        onChange(opt.value);
+      }
     },
     [onChange, onPickOption]
   );
 
-  const commitCustom = useCallback(() => {
+  const commitQuery = useCallback(() => {
     if (allowCustom) onChange(query);
     setOpen(false);
   }, [allowCustom, onChange, query]);
@@ -105,7 +112,7 @@ export const SearchCombobox = memo(function SearchCombobox({
     if (e.key === "Enter") {
       e.preventDefault();
       if (open && filtered[activeIdx]) pick(filtered[activeIdx]);
-      else commitCustom();
+      else commitQuery();
       return;
     }
     if (e.key === "Escape") {
@@ -126,8 +133,8 @@ export const SearchCombobox = memo(function SearchCombobox({
         placeholder={placeholder}
         onChange={(e) => {
           setQuery(e.target.value);
-          if (allowCustom) onChange(e.target.value);
           setOpen(true);
+          if (commitMode === "live" && allowCustom) onChange(e.target.value);
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => {

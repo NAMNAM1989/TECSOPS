@@ -99,7 +99,6 @@ export function ShipmentInvoiceWorkspace({
   const [catalogEditorOpen, setCatalogEditorOpen] = useState(false);
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(() => new Set());
   const [copyTargetId, setCopyTargetId] = useState("");
-  const initial = useRef(cloneDeclarations(resolveInvoiceDeclarations(shipment)));
   const shipmentIdRef = useRef(shipment.id);
   const { staticItems, items: catalogItems } = useInvoiceCatalog(invoiceCatalog);
 
@@ -139,26 +138,6 @@ export function ShipmentInvoiceWorkspace({
   );
   const showShipmentLock = declarations.length > 1 || shipment.pcs != null || shipment.kg != null;
 
-  const invoicePreview = useMemo(
-    () =>
-      buildInvoiceExportPayload(shipment, customerDirectory, {
-        items: previewItems,
-        declarationSeq: activeDeclaration?.seq ?? 1,
-        totalDeclarations: declarations.length,
-        footerPcs: targetPcs,
-        footerKg: displayFooterKg,
-      }).meta.invoiceNo,
-    [
-      activeDeclaration?.seq,
-      customerDirectory,
-      declarations.length,
-      displayFooterKg,
-      previewItems,
-      shipment,
-      targetPcs,
-    ]
-  );
-
   const exportPayloadPreview = useMemo(
     () =>
       buildInvoiceExportPayload(shipment, customerDirectory, {
@@ -179,6 +158,8 @@ export function ShipmentInvoiceWorkspace({
     ]
   );
 
+  const invoicePreview = exportPayloadPreview.meta.invoiceNo;
+
   const targetsLock = useMemo(
     () => validateDeclarationTargets(declarations, shipment.pcs, shipment.kg),
     [declarations, shipment.kg, shipment.pcs]
@@ -192,43 +173,63 @@ export function ShipmentInvoiceWorkspace({
       setDeclarations(next);
       setActiveId(next[0]?.id ?? "");
       setSelectedLineIds(new Set());
-      initial.current = next;
       setDirty(false);
       return;
     }
     if (dirty) return;
     const next = cloneDeclarations(resolveInvoiceDeclarations(shipment));
     setDeclarations(next);
-    if (!next.some((d) => d.id === activeId)) setActiveId(next[0]?.id ?? "");
-    initial.current = next;
-  }, [activeId, dirty, shipment]);
+    setActiveId((cur) => (next.some((d) => d.id === cur) ? cur : next[0]?.id ?? ""));
+  }, [dirty, shipment]);
 
   const markDirty = useCallback(() => setDirty(true), []);
 
-  const setActiveItems = useCallback(
-    (nextItems: InvoiceLineItem[]) => {
-      if (!activeDeclaration) return;
-      setDeclarations((prev) => updateDeclarationItems(prev, activeDeclaration.id, nextItems));
-      markDirty();
+  const activeDeclarationId = activeDeclaration?.id;
+
+  const mutateActiveItems = useCallback(
+    (updater: (items: InvoiceLineItem[]) => InvoiceLineItem[]) => {
+      if (!activeDeclarationId) return;
+      startTransition(() => {
+        setDeclarations((prev) => {
+          const decl = prev.find((d) => d.id === activeDeclarationId);
+          if (!decl) return prev;
+          return updateDeclarationItems(prev, activeDeclarationId, updater(decl.items));
+        });
+        markDirty();
+      });
     },
-    [activeDeclaration, markDirty]
+    [activeDeclarationId, markDirty]
   );
 
+  const selectTab = useCallback((id: string) => {
+    setActiveId(id);
+    setSelectedLineIds(new Set());
+  }, []);
+
+  const confirmExportIfMismatch = useCallback((): boolean => {
+    if (totalsLock.pcsOk && totalsLock.kgOk && targetsLock.pcsOk && targetsLock.kgOk) {
+      return true;
+    }
+    return window.confirm(
+      "Tổng kiện/kg chưa khớp mục tiêu hoặc lô hàng. Vẫn xuất invoice?"
+    );
+  }, [targetsLock.kgOk, targetsLock.pcsOk, totalsLock.kgOk, totalsLock.pcsOk]);
+
   const addBlank = useCallback(() => {
-    startTransition(() => {
-      setActiveItems([...items, emptyInvoiceLineItem()]);
-    });
-  }, [items, setActiveItems]);
+    mutateActiveItems((rows) => [...rows, emptyInvoiceLineItem()]);
+  }, [mutateActiveItems]);
 
   const insertAfter = useCallback(
     (afterLineId: string) => {
-      const idx = items.findIndex((it) => it.lineId === afterLineId);
-      const next = [...items];
-      if (idx < 0) next.push(emptyInvoiceLineItem());
-      else next.splice(idx + 1, 0, emptyInvoiceLineItem());
-      startTransition(() => setActiveItems(next));
+      mutateActiveItems((rows) => {
+        const idx = rows.findIndex((it) => it.lineId === afterLineId);
+        const next = [...rows];
+        if (idx < 0) next.push(emptyInvoiceLineItem());
+        else next.splice(idx + 1, 0, emptyInvoiceLineItem());
+        return next;
+      });
     },
-    [items, setActiveItems]
+    [mutateActiveItems]
   );
 
   const handleRandomPick = useCallback(() => {
@@ -247,36 +248,42 @@ export function ShipmentInvoiceWorkspace({
       return;
     }
     const picked = randomInvoiceLinesFromCatalog(catalogItems, n);
-    startTransition(() => {
-      setActiveItems([...items, ...picked]);
-    });
-  }, [catalogItems, items, setActiveItems]);
+    mutateActiveItems((rows) => (rows.length === 0 ? picked : [...rows, ...picked]));
+  }, [catalogItems, mutateActiveItems]);
 
   const updateItem = useCallback(
     (lineId: string, patch: Partial<InvoiceLineItem>) => {
+      if (!activeDeclarationId) return;
       startTransition(() => {
-        setActiveItems(items.map((it) => (it.lineId === lineId ? { ...it, ...patch } : it)));
+        setDeclarations((prev) =>
+          prev.map((d) =>
+            d.id !== activeDeclarationId
+              ? d
+              : {
+                  ...d,
+                  items: d.items.map((it) => (it.lineId === lineId ? { ...it, ...patch } : it)),
+                }
+          )
+        );
+        markDirty();
       });
     },
-    [items, setActiveItems]
+    [activeDeclarationId, markDirty]
   );
 
   const removeItem = useCallback(
     (lineId: string) => {
-      startTransition(() => {
-        setActiveItems(items.filter((it) => it.lineId !== lineId));
-      });
+      mutateActiveItems((rows) => rows.filter((it) => it.lineId !== lineId));
     },
-    [items, setActiveItems]
+    [mutateActiveItems]
   );
 
   const buildSavePayload = useCallback((): HqInvoiceSavePayload => {
-    const active = declarations.find((d) => d.id === activeId) ?? declarations[0];
     return {
       invoiceDeclarations: declarations,
-      invoiceItems: active?.items ?? [],
+      invoiceItems: declarations[0]?.items ?? [],
     };
-  }, [activeId, declarations]);
+  }, [declarations]);
 
   const saveAll = useCallback(async () => {
     if (busy) return;
@@ -284,7 +291,6 @@ export function ShipmentInvoiceWorkspace({
     try {
       const payload = buildSavePayload();
       await onSave(payload);
-      initial.current = cloneDeclarations(declarations);
       setDirty(false);
     } finally {
       setBusy(false);
@@ -304,33 +310,51 @@ export function ShipmentInvoiceWorkspace({
 
   const handleExportExcel = useCallback(async () => {
     if (busy) return;
+    if (!confirmExportIfMismatch()) return;
     setBusy(true);
     try {
       if (dirty) {
         await onSave(buildSavePayload());
-        initial.current = cloneDeclarations(declarations);
         setDirty(false);
       }
       await downloadShipmentInvoiceExcel(shipment, customerDirectory, exportOpts);
     } finally {
       setBusy(false);
     }
-  }, [buildSavePayload, busy, customerDirectory, declarations, dirty, exportOpts, onSave, shipment]);
+  }, [
+    buildSavePayload,
+    busy,
+    confirmExportIfMismatch,
+    customerDirectory,
+    dirty,
+    exportOpts,
+    onSave,
+    shipment,
+  ]);
 
   const handleExportPdf = useCallback(async () => {
     if (busy) return;
+    if (!confirmExportIfMismatch()) return;
     setBusy(true);
     try {
       if (dirty) {
         await onSave(buildSavePayload());
-        initial.current = cloneDeclarations(declarations);
         setDirty(false);
       }
       await downloadShipmentInvoicePdf(shipment, customerDirectory, exportOpts);
     } finally {
       setBusy(false);
     }
-  }, [buildSavePayload, busy, customerDirectory, declarations, dirty, exportOpts, onSave, shipment]);
+  }, [
+    buildSavePayload,
+    busy,
+    confirmExportIfMismatch,
+    customerDirectory,
+    dirty,
+    exportOpts,
+    onSave,
+    shipment,
+  ]);
 
   const handleFinish = useCallback(async () => {
     if (busy) return;
@@ -447,33 +471,51 @@ export function ShipmentInvoiceWorkspace({
 
   const handleExportAllExcel = useCallback(async () => {
     if (busy) return;
+    if (!confirmExportIfMismatch()) return;
     setBusy(true);
     try {
       if (dirty) {
         await onSave(buildSavePayload());
-        initial.current = cloneDeclarations(declarations);
         setDirty(false);
       }
       await downloadAllDeclarationsExcelZip(shipment, customerDirectory, declarations);
     } finally {
       setBusy(false);
     }
-  }, [buildSavePayload, busy, customerDirectory, declarations, dirty, onSave, shipment]);
+  }, [
+    buildSavePayload,
+    busy,
+    confirmExportIfMismatch,
+    customerDirectory,
+    declarations,
+    dirty,
+    onSave,
+    shipment,
+  ]);
 
   const handleExportAllPdf = useCallback(async () => {
     if (busy) return;
+    if (!confirmExportIfMismatch()) return;
     setBusy(true);
     try {
       if (dirty) {
         await onSave(buildSavePayload());
-        initial.current = cloneDeclarations(declarations);
         setDirty(false);
       }
       await downloadAllDeclarationsPdfZip(shipment, customerDirectory, declarations);
     } finally {
       setBusy(false);
     }
-  }, [buildSavePayload, busy, customerDirectory, declarations, dirty, onSave, shipment]);
+  }, [
+    buildSavePayload,
+    busy,
+    confirmExportIfMismatch,
+    customerDirectory,
+    declarations,
+    dirty,
+    onSave,
+    shipment,
+  ]);
 
   const handleSplit = useCallback(() => {
     const raw = window.prompt(
@@ -543,6 +585,16 @@ export function ShipmentInvoiceWorkspace({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void saveAll();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        addBlank();
+        return;
+      }
       if (e.key === "Escape" && !catalogEditorOpen) {
         e.preventDefault();
         requestClose();
@@ -550,7 +602,7 @@ export function ShipmentInvoiceWorkspace({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [catalogEditorOpen, requestClose]);
+  }, [addBlank, catalogEditorOpen, requestClose, saveAll]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -652,7 +704,7 @@ export function ShipmentInvoiceWorkspace({
           showTargets={
             declarations.length > 1 || shipment.pcs != null || shipment.kg != null
           }
-          onSelectTab={setActiveId}
+          onSelectTab={selectTab}
           onTargetPcsChange={handleTargetPcsChange}
           onTargetKgChange={handleTargetKgChange}
           onRedistributeTargets={handleRedistributeTargets}

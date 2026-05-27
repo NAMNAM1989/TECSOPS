@@ -1,7 +1,6 @@
 import { memo, useCallback, useMemo } from "react";
 import type { InvoiceCatalogItem } from "../types/invoiceItem";
 import {
-  emptyInvoiceLineItem,
   invoiceLineAmountUsd,
   invoiceLineGrossWeightKg,
   type InvoiceLineItem,
@@ -12,6 +11,7 @@ import { SearchCombobox, type ComboboxOption } from "./SearchCombobox";
 import { OPS } from "../styles/opsModalStyles";
 
 const ORIGIN_OPTIONS = ["VN", "CN", "US", "KR", "JP", "TH", "TW", "MY", "ID"] as const;
+const ORIGIN_COMBO_OPTIONS = ORIGIN_OPTIONS.map((o) => ({ value: o, label: o }));
 
 function safeNumber(v: string, fallback = 0): number {
   const n = Number(v);
@@ -27,7 +27,7 @@ type GridRowProps = {
   descriptionOptions: ComboboxOption[];
   hsOptions: ComboboxOption[];
   unitOptions: ComboboxOption[];
-  catalogByDesc: Map<string, InvoiceCatalogItem>;
+  catalogByKey: Map<string, InvoiceCatalogItem>;
   onPatch: (lineId: string, patch: Partial<InvoiceLineItem>) => void;
   onRemove: (lineId: string) => void;
   onInsertAfter: (lineId: string) => void;
@@ -42,7 +42,7 @@ const GridRow = memo(function GridRow({
   descriptionOptions,
   hsOptions,
   unitOptions,
-  catalogByDesc,
+  catalogByKey,
   onPatch,
   onRemove,
   onInsertAfter,
@@ -91,11 +91,15 @@ const GridRow = memo(function GridRow({
       <td className="px-0.5 py-0.5 min-w-[14rem]">
         <SearchCombobox
           value={item.description}
+          commitMode="blur"
           onChange={(v) => onPatch(item.lineId, { description: v })}
           options={descriptionOptions}
           placeholder="Mô tả hàng…"
           onPickOption={(opt) => {
-            const entry = catalogByDesc.get(opt.value);
+            const entry =
+              catalogByKey.get(opt.value) ??
+              catalogByKey.get(`desc:${opt.label}`) ??
+              catalogByKey.get(`desc:${opt.value}`);
             if (entry) applyCatalog(entry);
           }}
         />
@@ -113,7 +117,7 @@ const GridRow = memo(function GridRow({
         <SearchCombobox
           value={item.origin}
           onChange={(v) => onPatch(item.lineId, { origin: v.toUpperCase().slice(0, 8) })}
-          options={ORIGIN_OPTIONS.map((o) => ({ value: o, label: o }))}
+          options={ORIGIN_COMBO_OPTIONS}
           placeholder="XX"
           inputClassName="font-mono uppercase text-center"
         />
@@ -153,6 +157,12 @@ const GridRow = memo(function GridRow({
           step="0.01"
           value={item.kgPerUnit}
           onChange={(e) => onPatch(item.lineId, { kgPerUnit: safeNumber(e.target.value) })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onInsertAfter(item.lineId);
+            }
+          }}
           className={`${OPS.input} w-full py-1 text-right text-[11px] tabular-nums`}
         />
       </td>
@@ -209,9 +219,12 @@ export function InvoiceLineGrid({
 }: Props) {
   const { items: catalogItems } = useInvoiceCatalog(stateCatalog);
 
-  const catalogByDesc = useMemo(() => {
+  const catalogByKey = useMemo(() => {
     const map = new Map<string, InvoiceCatalogItem>();
-    for (const it of catalogItems) map.set(it.description, it);
+    for (const it of catalogItems) {
+      if (it.id) map.set(it.id, it);
+      map.set(`desc:${it.description}`, it);
+    }
     return map;
   }, [catalogItems]);
 
@@ -232,7 +245,7 @@ export function InvoiceLineGrid({
 
   const descriptionOptions = useMemo((): ComboboxOption[] => {
     return catalogItems.map((it) => ({
-      value: it.description,
+      value: it.id || `desc:${it.description}`,
       label: it.description,
       hint: `${it.category || "KHÁC"} · HS ${it.hsCode} · ${it.unitPriceUsd} USD`,
     }));
@@ -268,7 +281,7 @@ export function InvoiceLineGrid({
           Bảng hàng HQ · {items.length} dòng
           {someSelected ? ` · ${selectedLineIds!.size} đã chọn` : ""}
           {" · "}
-          <span className={`font-normal ${OPS.muted}`}>Bấm + trên từng dòng để chèn nhanh</span>
+          <span className={`font-normal ${OPS.muted}`}>Ctrl+S lưu · Ctrl+Enter thêm dòng · Enter ở kg/đv → dòng mới</span>
         </p>
       </div>
 
@@ -319,7 +332,7 @@ export function InvoiceLineGrid({
                   descriptionOptions={descriptionOptions}
                   hsOptions={hsOptions}
                   unitOptions={unitOptions}
-                  catalogByDesc={catalogByDesc}
+                  catalogByKey={catalogByKey}
                   onPatch={onPatch}
                   onRemove={onRemove}
                   onInsertAfter={onInsertAfter ?? onAddBlank}
@@ -332,5 +345,3 @@ export function InvoiceLineGrid({
     </div>
   );
 }
-
-export { emptyInvoiceLineItem };

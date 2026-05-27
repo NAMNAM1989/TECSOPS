@@ -4,6 +4,7 @@ import {
   applyTemplateStructure,
   autoDistributeItemsToDeclarations,
   copyItemsToDeclaration,
+  countInvoiceLineItems,
   createInvoiceDeclaration,
   redistributeTargetsEvenly,
   resolveInvoiceDeclarations,
@@ -19,6 +20,20 @@ describe("invoiceDeclarationCore", () => {
     const list = resolveInvoiceDeclarations({ invoiceItems: items });
     expect(list).toHaveLength(1);
     expect(list[0]?.items[0]?.description).toBe("A");
+  });
+
+  it("countInvoiceLineItems ưu tiên invoiceDeclarations", () => {
+    const items = [emptyInvoiceLineItem(), emptyInvoiceLineItem()];
+    expect(countInvoiceLineItems({ invoiceItems: items })).toBe(2);
+    expect(
+      countInvoiceLineItems({
+        invoiceItems: [emptyInvoiceLineItem()],
+        invoiceDeclarations: [
+          createInvoiceDeclaration(1, 2, [emptyInvoiceLineItem(), emptyInvoiceLineItem()]),
+          createInvoiceDeclaration(2, 2, [emptyInvoiceLineItem()]),
+        ],
+      })
+    ).toBe(3);
   });
 
   it("splitIntoDeclarations tạo N tờ với mục tiêu kiện/kg", () => {

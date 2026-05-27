@@ -1,5 +1,5 @@
 import type { InvoiceLineItem } from "../types/invoiceItem";
-import { emptyInvoiceLineItem, invoiceLineAmountUsd, invoiceLineGrossWeightKg, totalsForInvoice } from "../types/invoiceItem";
+import { emptyInvoiceLineItem, totalsForInvoice } from "../types/invoiceItem";
 import type { InvoiceDeclaration } from "../types/invoiceDeclaration";
 import type { Shipment } from "../types/shipment";
 
@@ -166,12 +166,25 @@ export function copyItemsToAllOtherDeclarations(
   );
 }
 
-export function lineItemWeightScore(item: InvoiceLineItem): number {
-  return invoiceLineGrossWeightKg(item) || item.quantity * item.kgPerUnit || item.quantity;
+/** Đếm dòng hàng HQ (ưu tiên invoiceDeclarations). */
+export function countInvoiceLineItems(
+  shipment: Pick<Shipment, "invoiceItems" | "invoiceDeclarations">
+): number {
+  const decls = shipment.invoiceDeclarations;
+  if (Array.isArray(decls) && decls.length > 0) {
+    return decls.reduce((n, d) => n + (d.items?.length ?? 0), 0);
+  }
+  return shipment.invoiceItems?.length ?? 0;
 }
 
-export function lineItemAmountScore(item: InvoiceLineItem): number {
-  return invoiceLineAmountUsd(item) || item.quantity * item.unitPriceUsd;
+function splitEvenInteger(total: number, n: number): { base: number; remainder: number } {
+  const base = Math.floor(total / n);
+  return { base, remainder: total - base * (n - 1) };
+}
+
+function splitEvenKg(total: number, n: number): { base: number; remainder: number } {
+  const base = Number((total / n).toFixed(1));
+  return { base, remainder: Number((total - base * (n - 1)).toFixed(1)) };
 }
 
 function cloneItems(items: InvoiceLineItem[] | undefined): InvoiceLineItem[] {
@@ -226,20 +239,16 @@ export function splitIntoDeclarations(
   shipmentKg: number | null
 ): InvoiceDeclaration[] {
   const n = Math.max(2, Math.min(20, Math.floor(count)));
-  const basePcs = shipmentPcs != null && shipmentPcs > 0 ? Math.floor(shipmentPcs / n) : null;
-  const remPcs = shipmentPcs != null && basePcs != null ? shipmentPcs - basePcs * (n - 1) : null;
-  const baseKg = shipmentKg != null && shipmentKg > 0 ? Number((shipmentKg / n).toFixed(1)) : null;
-  const remKg =
-    shipmentKg != null && baseKg != null
-      ? Number((shipmentKg - baseKg * (n - 1)).toFixed(1))
-      : null;
+  const pcsSplit =
+    shipmentPcs != null && shipmentPcs > 0 ? splitEvenInteger(shipmentPcs, n) : null;
+  const kgSplit = shipmentKg != null && shipmentKg > 0 ? splitEvenKg(shipmentKg, n) : null;
 
   return Array.from({ length: n }, (_, i) => {
     const seq = i + 1;
     const isLast = i === n - 1;
     return createInvoiceDeclaration(seq, n, i === 0 ? cloneItems(existingItems) : [], {
-      targetPcs: basePcs != null ? (isLast ? remPcs : basePcs) : null,
-      targetKg: baseKg != null ? (isLast ? remKg : baseKg) : null,
+      targetPcs: pcsSplit != null ? (isLast ? pcsSplit.remainder : pcsSplit.base) : null,
+      targetKg: kgSplit != null ? (isLast ? kgSplit.remainder : kgSplit.base) : null,
     });
   });
 }
@@ -361,18 +370,16 @@ export function redistributeTargetsEvenly(
 ): InvoiceDeclaration[] {
   const n = declarations.length;
   if (n === 0) return [];
-  const basePcs = shipmentPcs != null && shipmentPcs > 0 ? Math.floor(shipmentPcs / n) : null;
-  const remPcs = shipmentPcs != null && basePcs != null ? shipmentPcs - basePcs * (n - 1) : null;
-  const baseKg = shipmentKg != null && shipmentKg > 0 ? Math.floor(shipmentKg / n) : null;
-  const remKg =
-    shipmentKg != null && baseKg != null ? Math.round(shipmentKg - baseKg * (n - 1)) : null;
+  const pcsSplit =
+    shipmentPcs != null && shipmentPcs > 0 ? splitEvenInteger(shipmentPcs, n) : null;
+  const kgSplit = shipmentKg != null && shipmentKg > 0 ? splitEvenKg(shipmentKg, n) : null;
 
   return declarations.map((d, i) => {
     const isLast = i === n - 1;
     return {
       ...d,
-      targetPcs: basePcs != null ? (isLast ? remPcs : basePcs) : d.targetPcs,
-      targetKg: baseKg != null ? (isLast ? remKg : baseKg) : d.targetKg,
+      targetPcs: pcsSplit != null ? (isLast ? pcsSplit.remainder : pcsSplit.base) : d.targetPcs,
+      targetKg: kgSplit != null ? (isLast ? kgSplit.remainder : kgSplit.base) : d.targetKg,
     };
   });
 }

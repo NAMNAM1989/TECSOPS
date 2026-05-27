@@ -1,6 +1,7 @@
 import { useCallback, type MouseEvent } from "react";
 import type { Shipment } from "../types/shipment";
 import { openHqPage } from "../utils/hqRoute";
+import { countInvoiceLineItems } from "../utils/invoiceDeclarationCore";
 import { OPS } from "../styles/opsModalStyles";
 
 type Props = {
@@ -31,7 +32,7 @@ export function ShipmentInvoiceExportButton({
   className,
   title = "Khai báo hải quan — map mặt hàng & xuất invoice",
 }: Props) {
-  const itemCount = shipment.invoiceItems?.length ?? 0;
+  const itemCount = countInvoiceLineItems(shipment);
 
   const onOpen = useCallback(
     (e: MouseEvent) => {

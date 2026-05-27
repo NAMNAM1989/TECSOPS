@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { InvoiceCatalogItem, InvoiceCatalogPayload } from "../types/invoiceItem";
+import type { InvoiceCatalog } from "../utils/invoiceCatalogCore";
+import { clampInvoiceCatalog, resolveInvoiceCatalogItems } from "../utils/invoiceCatalogCore";
 
 const CATALOG_URL = "/templates/invoice/data_invoice.json";
 
@@ -10,7 +12,7 @@ type CacheState = {
 
 const cache: CacheState = { items: null, pending: null };
 
-async function fetchCatalog(): Promise<InvoiceCatalogItem[]> {
+async function fetchStaticCatalog(): Promise<InvoiceCatalogItem[]> {
   if (cache.items) return cache.items;
   if (cache.pending) return cache.pending;
   cache.pending = fetch(CATALOG_URL, { cache: "force-cache" })
@@ -28,7 +30,7 @@ async function fetchCatalog(): Promise<InvoiceCatalogItem[]> {
   return cache.pending;
 }
 
-export function useInvoiceCatalog() {
+function useStaticInvoiceCatalog() {
   const [items, setItems] = useState<InvoiceCatalogItem[]>(cache.items ?? []);
   const [loading, setLoading] = useState<boolean>(cache.items === null);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +44,7 @@ export function useInvoiceCatalog() {
         cancelled = true;
       };
     }
-    fetchCatalog()
+    fetchStaticCatalog()
       .then((data) => {
         if (cancelled) return;
         setItems(data);
@@ -61,6 +63,21 @@ export function useInvoiceCatalog() {
   return { items, loading, error };
 }
 
+/** Catalog HQ: ưu tiên state đồng bộ server, fallback JSON tĩnh khi chưa cấu hình. */
+export function useInvoiceCatalog(stateCatalog?: InvoiceCatalog) {
+  const staticCatalog = useStaticInvoiceCatalog();
+  const items = useMemo(
+    () => resolveInvoiceCatalogItems(stateCatalog, staticCatalog.items),
+    [stateCatalog, staticCatalog.items]
+  );
+  const loading = staticCatalog.loading && items.length === 0;
+  const error = items.length === 0 ? staticCatalog.error : null;
+  const persistedCatalog = useMemo(() => clampInvoiceCatalog(stateCatalog), [stateCatalog]);
+  const usingStaticFallback = persistedCatalog.items.length === 0 && items.length > 0;
+
+  return { items, loading, error, persistedCatalog, staticItems: staticCatalog.items, usingStaticFallback };
+}
+
 /** Sắp xếp/gom nhóm theo category cho picker. */
 export function groupCatalog(items: InvoiceCatalogItem[]): Array<{
   category: string;
@@ -76,3 +93,5 @@ export function groupCatalog(items: InvoiceCatalogItem[]): Array<{
     .sort(([a], [b]) => a.localeCompare(b, "vi"))
     .map(([category, list]) => ({ category, items: list }));
 }
+
+export { fetchStaticCatalog };

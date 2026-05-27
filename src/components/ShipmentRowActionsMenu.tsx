@@ -220,12 +220,7 @@ export function ShipmentRowActionsMenu({
   return (
     <div ref={wrapRef} className={OPS.actionToolbar}>
       {onUpdate ? (
-        <ShipmentInvoiceExportButton
-          shipment={row}
-          customerDirectory={customerDirectory}
-          onUpdate={onUpdate}
-          variant="toolbar"
-        />
+        <ShipmentInvoiceExportButton shipment={row} variant="toolbar" />
       ) : null}
       <ActionIconBtn label="In nhãn vận chuyển" onClick={() => onPrint(row)}>
         <IconPrintLabel />

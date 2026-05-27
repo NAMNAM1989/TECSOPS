@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import {
@@ -35,7 +35,7 @@ type Props = {
   items: InvoiceLineItem[];
 };
 
-export function ShipmentInvoiceSheetPreview({
+export const ShipmentInvoiceSheetPreview = memo(function ShipmentInvoiceSheetPreview({
   shipment,
   customerDirectory,
   items,
@@ -233,4 +233,4 @@ export function ShipmentInvoiceSheetPreview({
       </div>
     </div>
   );
-}
+});

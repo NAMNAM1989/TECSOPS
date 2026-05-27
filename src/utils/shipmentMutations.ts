@@ -24,6 +24,8 @@ import {
   clampScscWeighPrintSettings,
   defaultScscWeighPrintSettings,
 } from "../printing/scscWeigh/scscWeighPrintSettingsCore";
+import type { InvoiceCatalog } from "./invoiceCatalogCore";
+import { clampInvoiceCatalog, emptyInvoiceCatalog } from "./invoiceCatalogCore";
 
 export type AppState = {
   version: number;
@@ -40,6 +42,8 @@ export type AppState = {
   scscWeighPrintSettings?: ScscWeighPrintSettings;
   /** Số xe + trạng thái đăng ký eCargo KHO SCSC (đồng bộ mọi thiết bị). */
   ecargoKhoScsc?: EcargoKhoScscPersistedMap;
+  /** Danh mục mặt hàng HQ (picker invoice); seed từ JSON nếu trống. */
+  invoiceCatalog?: InvoiceCatalog;
 };
 
 export type ShipmentMutation =
@@ -50,6 +54,7 @@ export type ShipmentMutation =
   | { action: "SET_GLOBAL_AGENTS"; catalog: GlobalAgentCatalog }
   | { action: "SET_AIRLINE_LABEL_OVERRIDES"; overrides: AirlineLabelOverrides }
   | { action: "SET_PRINTER_PROFILES"; catalog: PrinterProfilesCatalog }
+  | { action: "SET_INVOICE_CATALOG"; catalog: InvoiceCatalog }
   | { action: "SET_SCSC_WEIGH_PRINT_SETTINGS"; settings: ScscWeighPrintSettings }
   | {
       action: "PATCH_ECARGO_KHO_SCSC";
@@ -127,6 +132,10 @@ function resolvedEcargoKhoScsc(s: AppState): EcargoKhoScscPersistedMap {
   return normalizeEcargoKhoScscMap(s.ecargoKhoScsc);
 }
 
+function resolvedInvoiceCatalog(s: AppState): InvoiceCatalog {
+  return clampInvoiceCatalog(s.invoiceCatalog ?? emptyInvoiceCatalog());
+}
+
 function withEcargo(
   state: AppState,
   rows: Shipment[],
@@ -141,6 +150,7 @@ function withEcargo(
     airlineLabelOverrides: extras.airlineLabelOverrides ?? resolvedAirlineOverrides(state),
     printerProfiles: extras.printerProfiles ?? resolvedPrinterCatalog(state),
     scscWeighPrintSettings: extras.scscWeighPrintSettings ?? resolvedScscWeighPrintSettings(state),
+    invoiceCatalog: extras.invoiceCatalog ?? resolvedInvoiceCatalog(state),
     ecargoKhoScsc,
   };
 }
@@ -169,6 +179,11 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
     case "SET_PRINTER_PROFILES": {
       return withEcargo(state, rows, keepEcargo(), {
         printerProfiles: clampPrinterProfilesCatalog(mutation.catalog),
+      });
+    }
+    case "SET_INVOICE_CATALOG": {
+      return withEcargo(state, rows, keepEcargo(), {
+        invoiceCatalog: clampInvoiceCatalog(mutation.catalog),
       });
     }
     case "SET_SCSC_WEIGH_PRINT_SETTINGS": {

@@ -1,14 +1,10 @@
-import { useCallback, useState, type MouseEvent } from "react";
+import { useCallback, type MouseEvent } from "react";
 import type { Shipment } from "../types/shipment";
-import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import type { InvoiceLineItem } from "../types/invoiceItem";
-import { ShipmentInvoiceModal } from "./ShipmentInvoiceModal";
+import { openHqPage } from "../utils/hqRoute";
 import { OPS } from "../styles/opsModalStyles";
 
 type Props = {
   shipment: Shipment;
-  customerDirectory: readonly CustomerDirectoryEntry[];
-  onUpdate: (id: string, patch: Partial<Shipment>) => void;
   variant?: "toolbar" | "standalone";
   className?: string;
   title?: string;
@@ -31,26 +27,19 @@ export function CustomsDeclarationIcon({ className = "h-3.5 w-3.5" }: { classNam
 
 export function ShipmentInvoiceExportButton({
   shipment,
-  customerDirectory,
-  onUpdate,
   variant = "toolbar",
   className,
   title = "Khai báo hải quan — map mặt hàng & xuất invoice",
 }: Props) {
-  const [open, setOpen] = useState(false);
   const itemCount = shipment.invoiceItems?.length ?? 0;
 
-  const handleSaveItems = useCallback(
-    (items: InvoiceLineItem[]) => {
-      onUpdate(shipment.id, { invoiceItems: items });
+  const onOpen = useCallback(
+    (e: MouseEvent) => {
+      e.stopPropagation();
+      openHqPage(shipment.id);
     },
-    [onUpdate, shipment.id]
+    [shipment.id]
   );
-
-  const onOpen = useCallback((e: MouseEvent) => {
-    e.stopPropagation();
-    setOpen(true);
-  }, []);
 
   const btnClass =
     className ??
@@ -59,23 +48,14 @@ export function ShipmentInvoiceExportButton({
       : "inline-flex h-6 w-6 items-center justify-center rounded border border-indigo-500/30 bg-white text-indigo-800 hover:bg-indigo-500/10 dark:border-indigo-400/40 dark:bg-ops-elevated dark:text-indigo-200");
 
   return (
-    <>
-      <button
-        type="button"
-        title={itemCount > 0 ? `${title} (${itemCount} dòng)` : title}
-        aria-label={title}
-        onClick={onOpen}
-        className={btnClass}
-      >
-        <CustomsDeclarationIcon />
-      </button>
-      <ShipmentInvoiceModal
-        open={open}
-        shipment={shipment}
-        customerDirectory={customerDirectory}
-        onClose={() => setOpen(false)}
-        onSaveItems={handleSaveItems}
-      />
-    </>
+    <button
+      type="button"
+      title={itemCount > 0 ? `${title} (${itemCount} dòng)` : title}
+      aria-label={title}
+      onClick={onOpen}
+      className={btnClass}
+    >
+      <CustomsDeclarationIcon />
+    </button>
   );
 }

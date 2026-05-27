@@ -44,6 +44,10 @@ import {
   type UpsertCustomerVehicleParams,
 } from "../utils/customerVehicleCore";
 import { useOpsTheme } from "../hooks/useOpsTheme";
+import { useHqRoute } from "../hooks/useHqRoute";
+import { ShipmentInvoicePage } from "./ShipmentInvoicePage";
+import type { InvoiceLineItem } from "../types/invoiceItem";
+import type { InvoiceCatalog } from "../utils/invoiceCatalogCore";
 import {
   countShipmentsByWarehouse,
   shipmentMatchesSearchQuery,
@@ -96,6 +100,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { dark: darkMode, toggle: toggleDarkMode } = useOpsTheme();
+  const { shipmentId: hqShipmentId, close: closeHqPage } = useHqRoute();
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -384,11 +389,60 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
 
+  const hqShipment = useMemo(() => {
+    if (!hqShipmentId || !state) return null;
+    return state.rows.find((r) => r.id === hqShipmentId) ?? null;
+  }, [hqShipmentId, state]);
+
+  const saveHqItems = useCallback(
+    async (items: InvoiceLineItem[]) => {
+      if (!hqShipment) return;
+      await mutate({ action: "UPDATE", id: hqShipment.id, patch: { invoiceItems: items } });
+    },
+    [hqShipment, mutate]
+  );
+
+  const saveHqCatalog = useCallback(
+    async (catalog: InvoiceCatalog) => {
+      await mutate({ action: "SET_INVOICE_CATALOG", catalog });
+    },
+    [mutate]
+  );
+
   if (status === "loading" || !state) {
     return (
       <div className="mx-auto max-w-[1600px] px-4 py-16 text-center text-apple-secondary">
         <p className="font-semibold text-apple-label">Đang tải dữ liệu…</p>
       </div>
+    );
+  }
+
+  if (hqShipmentId) {
+    if (!hqShipment) {
+      return (
+        <div className="fixed inset-0 z-[700] flex flex-col items-center justify-center gap-3 bg-white px-6 dark:bg-dashboard-surface-dark">
+          <p className="text-center text-sm text-dashboard-muted dark:text-slate-400">
+            Không tìm thấy lô hàng cho trang HQ.
+          </p>
+          <button
+            type="button"
+            onClick={closeHqPage}
+            className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Quay lại
+          </button>
+        </div>
+      );
+    }
+    return (
+      <ShipmentInvoicePage
+        shipment={hqShipment}
+        customerDirectory={state.customers}
+        invoiceCatalog={state.invoiceCatalog}
+        onSaveItems={saveHqItems}
+        onSaveCatalog={saveHqCatalog}
+        onClose={closeHqPage}
+      />
     );
   }
 

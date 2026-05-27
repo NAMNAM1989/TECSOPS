@@ -56,6 +56,7 @@ export function baseContractState() {
       defaultWarehouse: "TECS-SCSC",
     },
     ecargoKhoScsc: {},
+    invoiceCatalog: { version: 1, items: [] },
   };
 }
 
@@ -81,5 +82,6 @@ export function normalizeStateForContract(state) {
     printerProfiles,
     scscWeighPrintSettings: state.scscWeighPrintSettings,
     ecargoKhoScsc: ecargo,
+    invoiceCatalog: state.invoiceCatalog ?? { version: 1, items: [] },
   };
 }

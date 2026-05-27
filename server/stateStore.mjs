@@ -22,6 +22,7 @@ import {
   normalizeEcargoKhoScscMapLoose,
   normalizeEcargoVehicleInput,
 } from "./ecargoKhoScscNormalize.mjs";
+import { normalizeInvoiceCatalogLoose } from "./invoiceCatalogNormalize.mjs";
 
 const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "KHO-TCS", "KHO-SCSC"];
 function isKnownWarehouse(w) {
@@ -54,6 +55,7 @@ function emptyInitialState() {
     globalAgents: normalizeGlobalAgentsLoose(undefined),
     scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(undefined),
     ecargoKhoScsc: {},
+    invoiceCatalog: normalizeInvoiceCatalogLoose(undefined),
   };
 }
 
@@ -194,6 +196,7 @@ export function createInitialState() {
     globalAgents: normalizeGlobalAgentsLoose(undefined),
     scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(undefined),
     ecargoKhoScsc: {},
+    invoiceCatalog: normalizeInvoiceCatalogLoose(undefined),
   };
 }
 
@@ -213,6 +216,7 @@ function finishState(state, rows, extras = {}) {
     scscWeighPrintSettings:
       extras.scscWeighPrintSettings ?? normalizeScscWeighPrintSettingsLoose(state.scscWeighPrintSettings),
     ecargoKhoScsc: extras.ecargoKhoScsc ?? keepEcargoMap(state),
+    invoiceCatalog: extras.invoiceCatalog ?? normalizeInvoiceCatalogLoose(state.invoiceCatalog),
   };
 }
 
@@ -247,6 +251,7 @@ function normalizeState(raw) {
     globalAgents: normalizeGlobalAgentsLoose(raw.globalAgents),
     scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(raw.scscWeighPrintSettings),
     ecargoKhoScsc: normalizeEcargoKhoScscMapLoose(raw.ecargoKhoScsc),
+    invoiceCatalog: normalizeInvoiceCatalogLoose(raw.invoiceCatalog),
   };
 }
 
@@ -394,6 +399,11 @@ export function applyMutation(state, mutation) {
     case "SET_PRINTER_PROFILES": {
       return finishState(state, rows, {
         printerProfiles: normalizePrinterProfilesCatalogLoose(mutation?.catalog),
+      });
+    }
+    case "SET_INVOICE_CATALOG": {
+      return finishState(state, rows, {
+        invoiceCatalog: normalizeInvoiceCatalogLoose(mutation?.catalog),
       });
     }
     case "PATCH_ECARGO_KHO_SCSC": {

@@ -20,6 +20,8 @@ import { buildShipmentCneeDisplayLines } from "../utils/shipmentCneeCopyBlock";
 import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStorage";
 import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
 import type { EcargoJobRecord } from "../types/ecargoJob";
+import { openHqPage } from "../utils/hqRoute";
+import { CustomsDeclarationIcon } from "./ShipmentInvoiceExportButton";
 import {
   ECARGO_VEHICLE_MIN,
   EcargoKhoScscCenterModal,
@@ -550,6 +552,15 @@ export function StickyMobileActions({
                     DIM
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() => openHqPage(selected.id)}
+                  className={`flex min-w-0 flex-1 items-center justify-center gap-1 ${MOBILE.secondaryBtn}`}
+                  title="Khai báo hải quan"
+                >
+                  <CustomsDeclarationIcon className="h-4 w-4" />
+                  HQ
+                </button>
                 <div className="relative shrink-0">
                   <button
                     type="button"

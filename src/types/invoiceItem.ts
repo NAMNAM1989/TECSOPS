@@ -1,5 +1,5 @@
 /**
- * Catalog mặt hàng (đồng bộ từ data_invoice.xlsx) — chỉ đọc, dùng cho picker.
+ * Catalog mặt hàng HQ — đồng bộ server (SET_INVOICE_CATALOG) hoặc seed từ data_invoice.json.
  */
 export interface InvoiceCatalogItem {
   id: string;

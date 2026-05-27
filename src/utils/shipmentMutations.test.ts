@@ -116,6 +116,34 @@ describe("applyShipmentMutation SET_PRINTER_PROFILES", () => {
   });
 });
 
+describe("applyShipmentMutation SET_INVOICE_CATALOG", () => {
+  it("lưu danh mục mặt hàng HQ", () => {
+    const state: AppState = { version: 1, rows: [], customers: [] };
+    const next = applyShipmentMutation(state, {
+      action: "SET_INVOICE_CATALOG",
+      catalog: {
+        version: 1,
+        items: [
+          {
+            id: "inv-test",
+            category: "BÁNH",
+            description: "Test item",
+            hsCode: "19059090",
+            origin: "VN",
+            sampleQuantity: 1,
+            unit: "BAG",
+            unitPriceUsd: 1,
+            kgPerUnit: 0.5,
+          },
+        ],
+      },
+    });
+    expect(next.version).toBe(2);
+    expect(next.invoiceCatalog?.items).toHaveLength(1);
+    expect(next.invoiceCatalog?.items[0]?.description).toBe("Test item");
+  });
+});
+
 describe("applyShipmentMutation SET_CUSTOMERS", () => {
   it("cập nhật danh bạ và tăng version, giữ rows", () => {
     const state: AppState = {

@@ -1,17 +1,26 @@
 import { useMemo, useState } from "react";
 import type { InvoiceCatalogItem } from "../types/invoiceItem";
+import type { InvoiceCatalog } from "../utils/invoiceCatalogCore";
 import { groupCatalog, useInvoiceCatalog } from "../hooks/useInvoiceCatalog";
 import { OPS } from "../styles/opsModalStyles";
 
 type Props = {
   onPick: (item: InvoiceCatalogItem) => void;
   onClose?: () => void;
-  /** `pane` = nhúng trong modal map (không bọc dialog). */
+  /** `pane` = nhúng trong trang map (không bọc dialog). */
   mode?: "dialog" | "pane";
+  stateCatalog?: InvoiceCatalog;
+  onManageCatalog?: () => void;
 };
 
-export function ShipmentInvoiceItemPicker({ onPick, onClose, mode = "dialog" }: Props) {
-  const { items, loading, error } = useInvoiceCatalog();
+export function ShipmentInvoiceItemPicker({
+  onPick,
+  onClose,
+  mode = "dialog",
+  stateCatalog,
+  onManageCatalog,
+}: Props) {
+  const { items, loading, error, usingStaticFallback } = useInvoiceCatalog(stateCatalog);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("ALL");
 
@@ -98,10 +107,26 @@ export function ShipmentInvoiceItemPicker({ onPick, onClose, mode = "dialog" }: 
     return (
       <div className="flex h-full min-h-0 max-h-full flex-col overflow-hidden">
         <div className="border-b border-black/10 px-2 py-1.5 dark:border-white/10">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-800 dark:text-indigo-300">
-            Danh mục hàng HQ
-          </p>
-          <p className="text-[9px] text-slate-500">Bấm để thêm sang bảng map →</p>
+          <div className="flex items-start justify-between gap-1">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-800 dark:text-indigo-300">
+                Danh mục hàng HQ
+              </p>
+              <p className="text-[9px] text-slate-500">
+                Bấm để thêm · {items.length} mặt hàng
+                {usingStaticFallback ? " (mặc định)" : ""}
+              </p>
+            </div>
+            {onManageCatalog ? (
+              <button
+                type="button"
+                onClick={onManageCatalog}
+                className="shrink-0 rounded-md border border-indigo-500/25 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-800 hover:bg-indigo-500/10 dark:text-indigo-200"
+              >
+                Sửa DM
+              </button>
+            ) : null}
+          </div>
         </div>
         {list}
       </div>

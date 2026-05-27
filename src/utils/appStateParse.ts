@@ -6,6 +6,7 @@ import { clampPrinterProfilesCatalog } from "../printing/printerProfilesCore";
 import { clampGlobalAgentCatalog, defaultGlobalAgentCatalog } from "./globalAgentsCore";
 import { clampScscWeighPrintSettings } from "../printing/scscWeigh/scscWeighPrintSettingsCore";
 import { normalizeEcargoKhoScscMap } from "./ecargoKhoScscCore";
+import { clampInvoiceCatalog, emptyInvoiceCatalog } from "./invoiceCatalogCore";
 
 export function parseAppState(raw: unknown): AppState | null {
   if (!raw || typeof raw !== "object") return null;
@@ -35,5 +36,6 @@ export function parseAppState(raw: unknown): AppState | null {
     printerProfiles,
     scscWeighPrintSettings,
     ecargoKhoScsc: normalizeEcargoKhoScscMap("ecargoKhoScsc" in o ? o.ecargoKhoScsc : undefined),
+    invoiceCatalog: clampInvoiceCatalog("invoiceCatalog" in o ? o.invoiceCatalog : emptyInvoiceCatalog()),
   };
 }

@@ -22,6 +22,12 @@ describe("ecargoAwbModalCore", () => {
     expect(scoreEcargoModalSaveLabel("Thêm AWB")).toBeLessThan(scoreEcargoModalSaveLabel("Lưu"));
   });
 
+  it("pickEcargoModalSaveLabel chọn Save & Close thay vì Thêm House", () => {
+    expect(pickEcargoModalSaveLabel(["Thêm House", "Save & Close", "Close"])).toBe("Save & Close");
+    expect(scoreEcargoModalSaveLabel("Save & Close")).toBeGreaterThan(scoreEcargoModalSaveLabel("Thêm House"));
+    expect(scoreEcargoModalSaveLabel("Close")).toBeLessThan(0);
+  });
+
   it("rowTextContainsMawb khớp MAWB trong dòng bảng", () => {
     expect(rowTextContainsMawb("SQ185 618-54405131 184 CTNS", "618-5440 5131")).toBe(true);
     expect(rowTextContainsMawb("SQ185 999-00001111", "618-54405131")).toBe(false);

@@ -33,13 +33,13 @@ export function formatEcargoJobErrorMessage(raw: string | undefined): string {
     return "Không đọc được Gmail — kiểm tra App Password (ECARGO_GMAIL_APP_PASSWORD) và khởi động lại server.";
   }
   if (/Ngày CB không|cut-off|Thời gian hàng vào/i.test(msg)) {
-    return "Ngày bay hoặc khung giờ không hợp lệ trên eCargo — kiểm tra ngày bay/chuyến hoặc dùng sao chép thủ công.";
+    return "Ngày bay hoặc khung giờ vào kho không hợp lệ trên eCargo — kiểm tra ngày bay/chuyến/cutoff hoặc thử đăng ký lại.";
   }
   if (/Không tìm thấy nút Xác Thực/i.test(msg)) {
     return "Không bấm được nút Xác thực trên trang eCargo — thử lại hoặc mở link trong email thủ công.";
   }
   if (/Chưa có AWB|Chưa lưu được AWB|Modal AWB không đóng/i.test(msg)) {
-    return "Không lưu được AWB trên eCargo — kiểm tra MAWB/chuyến/ngày bay hoặc dùng sao chép thủ công.";
+    return "Không lưu được AWB trên eCargo — thử đăng ký lại; nếu vẫn lỗi kiểm tra MAWB/chuyến/ngày bay hoặc dùng sao chép thủ công.";
   }
 
   return msg.length > 220 ? `${msg.slice(0, 217)}…` : msg;

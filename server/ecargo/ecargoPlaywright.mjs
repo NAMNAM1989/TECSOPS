@@ -10,6 +10,7 @@ let warmedCreatePage = null;
 
 const BROWSER_CONTEXT_OPTS = {
   locale: "vi-VN",
+  timezoneId: "Asia/Ho_Chi_Minh",
   userAgent:
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
 };
@@ -214,7 +215,11 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
           hour12: false,
         }).formatToParts(new Date());
         const get = (type) => parts.find((p) => p.type === type)?.value;
-        return { date: `${get("year")}-${get("month")}-${get("day")}`, hour: Number(get("hour")) };
+        return {
+          date: `${get("year")}-${get("month")}-${get("day")}`,
+          hour: Number(get("hour")),
+          minute: Number(get("minute")),
+        };
       }
 
       function tomorrowIsoFromVietnamDate(vietnamDate) {
@@ -224,12 +229,41 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         return `${current.getUTCFullYear()}-${String(current.getUTCMonth() + 1).padStart(2, "0")}-${String(current.getUTCDate()).padStart(2, "0")}`;
       }
 
-      function selectTimeSlot(slotText) {
-        const select = visibleElements("select").find((item) =>
-          [...item.options].some((o) => o.textContent.trim() === slotText)
+      function getArrivalTimeSelect() {
+        return (
+          visibleElements("select").find(
+            (item) => item.name === "Order.ArrivalTime" || item.id === "txtArrivalTime"
+          ) ?? visibleElements("select")[0]
         );
+      }
+
+      function listTimeSlotTexts() {
+        const select = getArrivalTimeSelect();
+        if (!select) return [];
+        return [...select.options].map((o) => o.textContent.trim()).filter(Boolean);
+      }
+
+      function parseSlotStartHour(slotText) {
+        const match = /^(\d{1,2}):/.exec(String(slotText || ""));
+        return match ? Number(match[1]) : -1;
+      }
+
+      function pickWarehouseTimeSlot(vn) {
+        const slots = listTimeSlotTexts();
+        if (!slots.length) return cfg.warehouse.timeRule.after20h.timeSlot;
+        const nowMinutes = vn.hour * 60 + vn.minute;
+        const next = slots.find((slot) => {
+          const startHour = parseSlotStartHour(slot);
+          return startHour >= 0 && startHour * 60 >= nowMinutes + 60;
+        });
+        return next ?? slots[slots.length - 1];
+      }
+
+      function selectTimeSlot(slotText) {
+        const select = getArrivalTimeSelect();
         if (!select) throw new Error(`Không tìm thấy khung giờ ${slotText}`);
         const option = [...select.options].find((o) => o.textContent.trim() === slotText);
+        if (!option) throw new Error(`Không tìm thấy khung giờ ${slotText}`);
         select.value = option.value;
         select.dispatchEvent(new Event("change", { bubbles: true }));
       }
@@ -279,10 +313,13 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
       function scoreSaveLabel(label) {
         const t = String(label || "").replace(/\s+/g, " ").trim();
         if (!t) return -100;
-        if (/h[uủ]y|đ[oó]ng|cancel|close|quay\s*lại/i.test(t)) return -100;
+        if (/h[uủ]y|cancel|quay\s*lại/i.test(t)) return -100;
+        if (/save\s*&?\s*close/i.test(t)) return 100;
+        if (/^close$/i.test(t) || (/\bclose\b/i.test(t) && !/save/i.test(t))) return -100;
         if (/^l[uư]u$/i.test(t)) return 100;
         if (/x[aá]c\s*nh[aậ]n/i.test(t)) return 95;
         if (/^ok$/i.test(t) || /^save$/i.test(t)) return 90;
+        if (/th[eê]m\s*house/i.test(t)) return 10;
         if (/^th[eê]m$/i.test(t)) return 80;
         if (/th[eê]m\s*awb/i.test(t)) return 20;
         if (/th[eê]m/i.test(t)) return 70;
@@ -323,6 +360,18 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         );
       }
 
+      function applyWarehouseArrival(vn) {
+        const inputs = mainInputs();
+        if (inputs.length < 4) throw new Error("Không tìm thấy ngày hàng vào.");
+        if (vn.hour >= 20) {
+          setNativeValue(inputs[3], tomorrowIsoFromVietnamDate(vn.date));
+          selectTimeSlot(cfg.warehouse.timeRule.after20h.timeSlot);
+          return;
+        }
+        setNativeValue(inputs[3], vn.date);
+        selectTimeSlot(pickWarehouseTimeSlot(vn));
+      }
+
       function fillMainForm(data) {
         const inputs = mainInputs();
         if (inputs.length < 9) throw new Error("Không đủ trường form chính.");
@@ -330,11 +379,6 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         setNativeValue(inputs[1], cfg.agent.name);
         chooseDocumentRadio("agent", cfg.agent.documentType);
         setNativeValue(inputs[2], cfg.agent.documentNo);
-        const vn = todayAtVietnamTime();
-        if (vn.hour >= 20) {
-          setNativeValue(inputs[3], tomorrowIsoFromVietnamDate(vn.date));
-          selectTimeSlot(cfg.warehouse.timeRule.after20h.timeSlot);
-        }
         chooseVehicleRadio(cfg.vehicle.type);
         setNativeValue(inputs[4], data.vehicleNo);
         setNativeValue(inputs[5], data.driverName || cfg.driver.name);
@@ -342,6 +386,7 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         setNativeValue(inputs[6], data.driverId || cfg.driver.documentNo);
         setNativeValue(inputs[7], cfg.contact.email);
         setNativeValue(inputs[8], cfg.contact.phone);
+        applyWarehouseArrival(todayAtVietnamTime());
       }
 
       function fillAwbModal(data) {
@@ -390,7 +435,7 @@ async function runEcargoDomAutomation(page, booking, fixedConfig) {
         const saveButton = findModalSaveButton(modal);
         if (!saveButton) throw new Error("Không tìm thấy nút lưu AWB.");
         saveButton.click();
-        await sleep(500);
+        await sleep(800);
       }
 
       async function waitForAwbSaved(expectedMawb) {

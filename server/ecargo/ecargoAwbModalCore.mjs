@@ -16,11 +16,15 @@ export function scoreEcargoModalSaveLabel(label) {
     .replace(/\s+/g, " ")
     .trim();
   if (!t) return -100;
-  if (/h[uủ]y|đ[oó]ng|cancel|close|quay\s*lại/i.test(t)) return -100;
+  if (/h[uủ]y|cancel|quay\s*lại/i.test(t)) return -100;
+  // Modal eCargo dùng «Save & Close» — không loại vì có chữ close.
+  if (/save\s*&?\s*close/i.test(t)) return 100;
+  if (/^close$/i.test(t) || (/\bclose\b/i.test(t) && !/save/i.test(t))) return -100;
   if (/^l[uư]u$/i.test(t)) return 100;
   if (/x[aá]c\s*nh[aậ]n/i.test(t)) return 95;
   if (/^ok$/i.test(t)) return 90;
   if (/^save$/i.test(t)) return 90;
+  if (/th[eê]m\s*house/i.test(t)) return 10;
   if (/^th[eê]m$/i.test(t)) return 80;
   if (/th[eê]m\s*awb/i.test(t)) return 20;
   if (/th[eê]m/i.test(t)) return 70;

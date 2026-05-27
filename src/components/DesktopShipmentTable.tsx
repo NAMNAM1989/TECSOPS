@@ -11,7 +11,6 @@ import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { InlineAwbEdit } from "./InlineAwbEdit";
 import { InlineCutoffBlock } from "./InlineCutoffBlock";
 import { MobileDimKgModal } from "./MobileDimKgModal";
-import { CustomerShipmentDetailModal } from "./CustomerShipmentDetailModal";
 import { statusRowAccent, statusRowBg, statusRowSelected, flightNumberAccent } from "./statusStyles";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 import {
@@ -96,11 +95,11 @@ const COL_HEADERS = [
   { key: "pcs", label: "KIỆN", w: "w-12 text-right" },
   { key: "kg", label: "KG", w: "w-12 text-right" },
   { key: "dim", label: "DIM", w: "w-14 text-right" },
-  { key: "customer", label: "KHÁCH", w: "min-w-[4.75rem] max-w-[6.5rem]" },
-  { key: "cnee", label: "CNEE", w: "min-w-[6.5rem] max-w-[10rem]" },
+  { key: "customer", label: "KHÁCH", w: "min-w-[4.75rem] max-w-[7rem]" },
+  { key: "cnee", label: "CNEE", w: "min-w-[4.5rem] max-w-[8.5rem]" },
   { key: "note", label: "NOTE", w: "min-w-[3.75rem] max-w-[7rem]" },
   { key: "status", label: "TT", w: "min-w-[6.5rem]" },
-  { key: "actions", label: "", w: "min-w-[7.5rem]" },
+  { key: "actions", label: "", w: "min-w-[5.5rem]" },
 ] as const;
 
 export function DesktopShipmentTable({
@@ -134,7 +133,6 @@ export function DesktopShipmentTable({
   onAddBlankRow,
 }: Props) {
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
-  const [customerDetailRow, setCustomerDetailRow] = useState<Shipment | null>(null);
   const group = useMemo(
     () => rows.filter((r) => r.warehouse === activeWarehouse),
     [rows, activeWarehouse]
@@ -187,8 +185,8 @@ export function DesktopShipmentTable({
                   const w =
                     c.key === "actions"
                       ? isScscWarehouse(activeWarehouse)
-                        ? "min-w-[5.25rem] w-[5.25rem]"
-                        : "min-w-[3.75rem] w-[3.75rem]"
+                        ? "min-w-[6.75rem] w-[6.75rem]"
+                        : "min-w-[5.5rem] w-[5.5rem]"
                       : c.w;
                   return (
                     <th
@@ -241,7 +239,6 @@ export function DesktopShipmentTable({
                   onDelete={onDelete}
                   onPrint={onPrint}
                   onOpenDimModal={setDimModalRow}
-                  onOpenCustomerDetail={setCustomerDetailRow}
                 />
               )}
             </tbody>
@@ -260,15 +257,6 @@ export function DesktopShipmentTable({
         }}
       />
     ) : null}
-    <CustomerShipmentDetailModal
-      open={customerDetailRow != null}
-      shipment={
-        customerDetailRow ? rows.find((r) => r.id === customerDetailRow.id) ?? customerDetailRow : null
-      }
-      directory={customerDirectory}
-      viewSessionYmd={viewSessionYmd}
-      onClose={() => setCustomerDetailRow(null)}
-    />
     </>
   );
 }
@@ -296,7 +284,6 @@ function WarehouseGroupRows({
   onDelete,
   onPrint,
   onOpenDimModal,
-  onOpenCustomerDetail,
   highlightedShipmentId = null,
   selectedRowId = null,
   onSelectRow,
@@ -325,7 +312,6 @@ function WarehouseGroupRows({
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
-  onOpenCustomerDetail: (s: Shipment) => void;
   highlightedShipmentId?: string | null;
   selectedRowId?: string | null;
   onSelectRow?: (id: string | null) => void;
@@ -373,7 +359,6 @@ function WarehouseGroupRows({
           onDelete={onDelete}
           onPrint={onPrint}
           onOpenDimModal={onOpenDimModal}
-          onOpenCustomerDetail={onOpenCustomerDetail}
           highlighted={highlightedShipmentId === row.id}
           selected={selectedRowId === row.id}
           onSelectRow={onSelectRow}
@@ -413,7 +398,6 @@ function ShipmentRow({
   onDelete,
   onPrint,
   onOpenDimModal,
-  onOpenCustomerDetail,
   ecargoTableOpen,
   onToggleEcargoTable,
   onCloseEcargoTable,
@@ -445,7 +429,6 @@ function ShipmentRow({
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
-  onOpenCustomerDetail: (s: Shipment) => void;
   ecargoTableOpen: boolean;
   onToggleEcargoTable: () => void;
   onCloseEcargoTable: () => void;
@@ -675,44 +658,22 @@ function ShipmentRow({
       </td>
       {/* Customer */}
       <td className={cell("mid")}>
-        <div className="flex min-w-0 items-stretch gap-0.5">
-          <div className="min-w-0 flex-1">
-            <InlineCustomerEdit
-              value={row.customer}
-              customerId={row.customerId}
-              customerDirectory={customerDirectory}
-              globalAgents={globalAgents}
-              placeholder="Khách"
-              className="text-[12px] font-semibold ops-grid-cell"
-              maxLength={120}
-              gridNav={{ rowId: row.id, field: "customer" }}
-              onCommit={(patch) => onUpdate(row.id, patch)}
-              onEnterNavigateDown={hasNextRow ? navDownSameField("customer") : undefined}
-              onTabNavigateNext={() => focusShipmentGridCell(row.id, "note")}
-            />
-          </div>
-          <button
-            type="button"
-            title="Thông tin CNEE — sao chép"
-            aria-label="Thông tin CNEE"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenCustomerDetail(row);
-            }}
-            className="shrink-0 self-center rounded border border-black/[0.08] bg-white p-0.5 text-apple-blue hover:bg-apple-blue/10"
-          >
-            <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-          </button>
-        </div>
+        <InlineCustomerEdit
+          value={row.customer}
+          customerId={row.customerId}
+          customerDirectory={customerDirectory}
+          globalAgents={globalAgents}
+          placeholder="Khách"
+          className="min-w-0 text-[12px] font-semibold ops-grid-cell"
+          maxLength={120}
+          gridNav={{ rowId: row.id, field: "customer" }}
+          onCommit={(patch) => onUpdate(row.id, patch)}
+          onEnterNavigateDown={hasNextRow ? navDownSameField("customer") : undefined}
+          onTabNavigateNext={() => focusShipmentGridCell(row.id, "note")}
+        />
       </td>
-      {/* CNEE — chọn consignee + khối chữ bôi đen copy */}
-      <td className={cell("mid", "align-top")}>
+      {/* CNEE — gọn: chọn + tên + ℹ */}
+      <td className={cell("mid", "align-middle")}>
         <InlineCneeCell
           shipment={row}
           customerDirectory={customerDirectory}
@@ -776,8 +737,8 @@ function ShipmentRow({
       </td>
       {/* Actions — in nhãn + menu ⋮; eCargo (KHO SCSC) giữ ngoài */}
       <td className={cell("last", "overflow-visible py-0.5 align-middle")}>
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex flex-nowrap items-center justify-end gap-0.5">
+        <div className="flex flex-col items-end gap-0.5">
+          <div className="flex max-w-full flex-nowrap items-center justify-end gap-0.5">
             {showEcargoKhoScsc ? (
               <EcargoKhoScscTriggerButton
                 variant="icon"
@@ -806,7 +767,12 @@ function ShipmentRow({
           {showEcargoKhoScsc &&
           ecargoJob &&
           (isEcargoJobRunning(ecargoJob.status) || isEcargoJobTerminal(ecargoJob.status)) ? (
-            <EcargoRowNotice job={ecargoJob} awb={row.awb} compact className="w-full max-w-[12rem]" />
+            <EcargoRowNotice
+              job={ecargoJob}
+              awb={row.awb}
+              compact
+              className="min-w-0 max-w-[4.75rem] text-right"
+            />
           ) : null}
         </div>
       </td>

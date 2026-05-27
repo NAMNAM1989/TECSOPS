@@ -103,6 +103,9 @@ export function HoverMagnifyText({
   }, []);
 
   const openMagnify = useCallback(() => {
+    if (typeof document !== "undefined" && document.body.dataset.invoiceModalOpen === "1") {
+      return;
+    }
     cancelScheduledClose();
     syncPanelToAnchor();
     setOpen(true);
@@ -183,13 +186,13 @@ export function HoverMagnifyText({
         {showIconTrigger && !displayText?.trim() ? (
           <button
             type="button"
-            title="Chi tiết CNEE"
-            aria-label="Chi tiết CNEE"
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-sky-300/60 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-400/45 dark:bg-sky-950/70 dark:text-sky-200 dark:hover:bg-sky-900/80"
+            title={magnifyTitle}
+            aria-label={magnifyTitle}
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-sky-300/55 bg-sky-50/90 text-sky-800 hover:bg-sky-100 dark:border-sky-400/40 dark:bg-sky-950/60 dark:text-sky-200 dark:hover:bg-sky-900/70"
             onMouseDown={onMouseDown}
           >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
             </svg>
           </button>
         ) : (

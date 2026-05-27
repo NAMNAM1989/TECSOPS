@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import type { Shipment, ShipmentStatus } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { MobileDimKgModal } from "./MobileDimKgModal";
-import { CustomerShipmentDetailModal } from "./CustomerShipmentDetailModal";
 import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
@@ -92,7 +91,6 @@ export function MobileShipmentCards({
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const [openEcargoRowId, setOpenEcargoRowId] = useState<string | null>(null);
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
-  const [customerDetailRow, setCustomerDetailRow] = useState<Shipment | null>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
@@ -335,18 +333,6 @@ export function MobileShipmentCards({
                             >
                               {row.customer || "Chưa chọn khách"}
                             </span>
-                            <button
-                              type="button"
-                              title="Thông tin CNEE"
-                              aria-label="Thông tin CNEE"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCustomerDetailRow(row);
-                              }}
-                              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-black/[0.08] bg-white/90 text-apple-blue active:bg-apple-blue/10 dark:border-white/12 dark:bg-ops-elevated dark:text-sky-300"
-                            >
-                              <CopyIcon />
-                            </button>
                             {row.note ? (
                               <span
                                 className="min-w-0 max-w-full truncate text-[11px] text-apple-secondary dark:text-slate-400"
@@ -479,18 +465,6 @@ export function MobileShipmentCards({
               onUpdate(dimModalRow.id, payload);
               setDimModalRow(null);
             }}
-          />,
-          document.body
-        )}
-      {customerDetailRow &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <CustomerShipmentDetailModal
-            open
-            shipment={rows.find((r) => r.id === customerDetailRow.id) ?? customerDetailRow}
-            directory={customerDirectory}
-            viewSessionYmd={viewSessionYmd}
-            onClose={() => setCustomerDetailRow(null)}
           />,
           document.body
         )}
@@ -644,18 +618,6 @@ function TrashIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-      />
-    </svg>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
       />
     </svg>
   );

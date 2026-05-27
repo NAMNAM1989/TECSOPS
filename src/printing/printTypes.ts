@@ -15,6 +15,8 @@ export type ThermalLabelPrinterProfile = {
   name: string;
   type: "thermal-tspl";
   connection: ThermalTsplConnection;
+  /** Tên hàng đợi Windows (USB) — dùng với `npm run print-bridge` trên PC quầy. */
+  windowsPrinterName?: string;
   host?: string;
   port?: number;
   dpi: number;

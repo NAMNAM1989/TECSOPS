@@ -132,7 +132,17 @@ function ThermalFields({
           <option value="100x50">{labelSheetFormatLabel("100x50")}</option>
         </select>
       </label>
-      <Field label="IP máy in" value={draft.host ?? ""} onChange={(v) => set({ host: v })} className="col-span-2" />
+      <Field
+        label="Tên máy in Windows (USB)"
+        value={draft.windowsPrinterName ?? ""}
+        onChange={(v) => set({ windowsPrinterName: v })}
+        className="col-span-2"
+      />
+      <p className="col-span-2 text-[10px] leading-snug text-apple-tertiary">
+        Trùng tên trong Cài đặt → Máy in (vd. XPrinter XP-470B). Cần chạy{" "}
+        <code className="rounded bg-black/[0.06] px-1">npm run print-bridge</code> trên PC quầy.
+      </p>
+      <Field label="IP máy in (mạng)" value={draft.host ?? ""} onChange={(v) => set({ host: v })} className="col-span-2" />
       <Field label="Port" value={String(draft.port ?? 9100)} onChange={(v) => set({ port: Number(v) || 9100 })} />
       <Field label="DPI" value={String(draft.dpi)} onChange={(v) => set({ dpi: Number(v) || 203 })} />
       <Field label="Tem rộng mm" value={String(draft.labelWidthMm)} onChange={(v) => set({ labelWidthMm: Number(v) })} />

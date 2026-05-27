@@ -34,6 +34,7 @@ function normalizeThermal(raw, id, name) {
     name,
     type: "thermal-tspl",
     connection: raw.connection === "usb-shared" ? "usb-shared" : "tcp",
+    windowsPrinterName: str(raw.windowsPrinterName, 120),
     host: str(raw.host, 64),
     port: num(raw.port, 9100, 1, 65535),
     dpi: num(raw.dpi, 203, 150, 600),

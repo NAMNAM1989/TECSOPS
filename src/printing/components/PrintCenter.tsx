@@ -196,7 +196,7 @@ export function PrintCenter({
     }
     const printFormat = resolveThermalProfileLabelFormat(thermalProfile);
 
-    const effectiveMode = resolveEffectiveThermalDeliveryMode(deliveryMode, thermalProfile.host);
+    const effectiveMode = resolveEffectiveThermalDeliveryMode(deliveryMode, thermalProfile, false);
     if (effectiveMode === "tspl-tcp") {
       let ok = 0;
       let err = "";

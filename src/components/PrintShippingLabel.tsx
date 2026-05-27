@@ -17,8 +17,10 @@ import {
   syncLabelSheetFormatFromProfile,
 } from "../printing/thermalLabelFormat";
 import { loadPrinterProfileStore } from "../printing/printerProfileStorage";
-import { printThermalLabelTspl } from "../printing/thermalLabel/thermalLabelTspl";
+import { printThermalLabelLocalBridge, printThermalLabelTspl } from "../printing/thermalLabel/thermalLabelTspl";
+import { fetchLocalPrintBridgeStatus } from "../printing/thermalLabel/thermalLocalBridge";
 import { printThermalLabelsFromIframe } from "../utils/printThermalLabelIframe";
+import type { PrinterProfileStoreV1 } from "../printing/printTypes";
 
 export type LabelSheetVariant = "standard" | "compact";
 
@@ -282,11 +284,38 @@ interface PrintShippingLabelProps {
 
 export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }: PrintShippingLabelProps) {
   const printFlipCcw = useMemo(() => loadLabelPrintFlipCcw(), []);
-  const { store, setActiveThermal } = usePrinterProfiles();
+  const { store, setActiveThermal, upsert } = usePrinterProfiles();
   const thermalProfile = useMemo(() => getActiveThermalProfile(store), [store]);
   const activeFormat = useMemo(() => resolveThermalProfileLabelFormat(thermalProfile), [thermalProfile]);
   const [printMsg, setPrintMsg] = useState<string | null>(null);
+  const [bridgeOnline, setBridgeOnline] = useState(false);
+  const [bridgePrinters, setBridgePrinters] = useState<string[]>([]);
   const printHostRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      const st = await fetchLocalPrintBridgeStatus(true);
+      if (cancelled) return;
+      setBridgeOnline(st.online);
+      setBridgePrinters(st.printers);
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  const saveWindowsPrinterName = useCallback(
+    (format: LabelSheetFormat, name: string) => {
+      const p = findThermalProfileByFormat(store, format);
+      if (!p) return;
+      upsert({ ...p, windowsPrinterName: name.trim() });
+    },
+    [store, upsert]
+  );
 
   useEffect(() => {
     const fmt = loadLabelSheetFormat();
@@ -313,18 +342,32 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
     const profile = getActiveThermalProfile(loadPrinterProfileStore());
     const printFormat = resolveThermalProfileLabelFormat(profile);
     const deliveryMode = loadThermalDeliveryMode();
-    const effectiveMode = resolveEffectiveThermalDeliveryMode(deliveryMode, profile.host);
+    const effectiveMode = resolveEffectiveThermalDeliveryMode(deliveryMode, profile, bridgeOnline);
+
+    if (effectiveMode === "local-bridge") {
+      const res = await printThermalLabelLocalBridge(shipment, profile, airlineLabelOverrides);
+      setPrintMsg(
+        res.ok
+          ? `Đã in ${labelSheetFormatLabel(printFormat)} → ${profile.windowsPrinterName}`
+          : res.error
+      );
+      return;
+    }
+
     if (effectiveMode === "tspl-tcp") {
       const res = await printThermalLabelTspl(shipment, profile, airlineLabelOverrides);
       setPrintMsg(res.ok ? `Đã gửi ${labelSheetFormatLabel(printFormat)} → ${profile.host}` : res.error);
       return;
     }
-    if (!profile.host?.trim()) {
-      setPrintMsg("Chưa cấu hình IP máy in — dùng in qua Windows hoặc cấu hình IP trên máy chủ.");
-    }
+
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     const res = await printThermalLabelsFromIframe({ format: printFormat, host: printHostRef.current });
     if (!res.ok) setPrintMsg(res.error);
+    else if (!bridgeOnline && !profile.windowsPrinterName?.trim()) {
+      setPrintMsg(
+        "Đã mở hộp thoại in. Để in 1 click: chạy npm run print-bridge và gán tên máy Windows bên dưới."
+      );
+    }
   };
 
   return (
@@ -360,12 +403,25 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
             airlineLabelOverrides={airlineLabelOverrides}
           />
 
+          <div className={`mt-4 rounded-2xl border px-3 py-3 ${OPS.panelSoft}`}>
+            <p
+              className={`text-center text-[11px] font-semibold ${
+                bridgeOnline ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-200"
+              }`}
+            >
+              {bridgeOnline
+                ? "Print Bridge đang chạy — in trực tiếp TSPL (không hộp thoại)"
+                : "Print Bridge chưa chạy — trên PC quầy: npm run print-bridge"}
+            </p>
+          </div>
+
           <div className="mt-4">
-            <p className={`mb-2 text-center text-xs font-semibold ${OPS.secondary}`}>Chọn máy in</p>
+            <p className={`mb-2 text-center text-xs font-semibold ${OPS.secondary}`}>Chọn khổ tem</p>
             <div className="flex gap-2">
               {(["100x80", "100x50"] as const).map((fmt) => {
                 const profile = findThermalProfileByFormat(store, fmt);
                 const selected = activeFormat === fmt;
+                const winName = profile?.windowsPrinterName?.trim();
                 return (
                   <button
                     key={fmt}
@@ -381,13 +437,23 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                         selected ? OPS.formatBtnSubOn : OPS.formatBtnSubOff
                       }`}
                     >
-                      {profile?.host?.trim() ? profile.host : "Chưa có IP"}
+                      {winName && bridgeOnline
+                        ? winName
+                        : winName
+                          ? `${winName} (cần bridge)`
+                          : "Chưa gán máy Windows"}
                     </span>
                   </button>
                 );
               })}
             </div>
           </div>
+
+          <ThermalWindowsPrinterNamesPanel
+            store={store}
+            bridgePrinters={bridgePrinters}
+            onSave={saveWindowsPrinterName}
+          />
 
           {printMsg ? (
             <p className={`mt-3 ${OPS.msgBox}`}>{printMsg}</p>
@@ -427,5 +493,69 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
         document.body
       )}
     </>
+  );
+}
+
+function ThermalWindowsPrinterNamesPanel({
+  store,
+  bridgePrinters,
+  onSave,
+}: {
+  store: PrinterProfileStoreV1;
+  bridgePrinters: string[];
+  onSave: (format: LabelSheetFormat, name: string) => void;
+}) {
+  return (
+    <div className={`mt-4 rounded-2xl border px-3 py-3 ${OPS.panelSoft}`}>
+      <p className={`mb-2 text-[11px] font-semibold ${OPS.secondary}`}>
+        Tên máy in Windows (XPrinter 470B USB) — copy đúng từ Cài đặt → Máy in
+      </p>
+      {(["100x80", "100x50"] as const).map((fmt) => {
+        const profile = findThermalProfileByFormat(store, fmt);
+        if (!profile) return null;
+        return (
+          <WindowsPrinterRow
+            key={fmt}
+            label={labelSheetFormatLabel(fmt)}
+            value={profile.windowsPrinterName ?? ""}
+            printers={bridgePrinters}
+            onChange={(v) => onSave(fmt, v)}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function WindowsPrinterRow({
+  label,
+  value,
+  printers,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  printers: string[];
+  onChange: (v: string) => void;
+}) {
+  const listId = `win-printer-list-${label.replace(/\W/g, "")}`;
+  return (
+    <label className="mb-2 block last:mb-0">
+      <span className={`mb-1 block text-[10px] font-semibold ${OPS.muted}`}>{label}</span>
+      <input
+        list={printers.length > 0 ? listId : undefined}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="vd. XPrinter XP-470B"
+        className={`w-full rounded-lg border px-2.5 py-2 text-sm ${OPS.input}`}
+      />
+      {printers.length > 0 ? (
+        <datalist id={listId}>
+          {printers.map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
+      ) : null}
+    </label>
   );
 }

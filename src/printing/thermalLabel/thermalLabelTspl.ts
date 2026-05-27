@@ -2,6 +2,7 @@ import type { Shipment } from "../../types/shipment";
 import type { AirlineLabelOverrides } from "../../utils/airlineLabelOverridesCore";
 import { shipmentToTsplBodyAsync } from "../../utils/shipmentToLabelPayload";
 import type { ThermalLabelPrinterProfile } from "../printTypes";
+import { printTsplViaLocalBridge } from "./thermalLocalBridge";
 
 export type TsplPrintResult = { ok: true } | { ok: false; error: string };
 
@@ -50,6 +51,23 @@ export async function shipmentToTsplRequest(
     host: profile.host,
     port: profile.port ?? 9100,
   };
+}
+
+/** In TSPL qua Print Bridge (Windows, tên hàng đợi USB). */
+export async function printThermalLabelLocalBridge(
+  s: Shipment,
+  profile: ThermalLabelPrinterProfile,
+  airlineLabelOverrides?: AirlineLabelOverrides | null
+): Promise<TsplPrintResult> {
+  const name = profile.windowsPrinterName?.trim();
+  if (!name) return { ok: false, error: "Chưa cấu hình tên máy in Windows cho profile này." };
+  const body = await shipmentToTsplRequest(s, profile, airlineLabelOverrides);
+  const { host: _h, port: _p, ...fields } = body;
+  const built = await fetchTsplRaw(fields, "build");
+  if (!built.ok) return built;
+  const tspl = built.text ?? "";
+  if (!tspl.trim()) return { ok: false, error: "TSPL trống." };
+  return printTsplViaLocalBridge(name, tspl);
 }
 
 export async function printThermalLabelTspl(

@@ -46,7 +46,7 @@ import {
 import { useOpsTheme } from "../hooks/useOpsTheme";
 import { useHqRoute } from "../hooks/useHqRoute";
 import { ShipmentInvoicePage } from "./ShipmentInvoicePage";
-import type { InvoiceLineItem } from "../types/invoiceItem";
+import type { HqInvoiceSavePayload } from "../types/invoiceDeclaration";
 import type { InvoiceCatalog } from "../utils/invoiceCatalogCore";
 import { isDesktopViewport } from "../utils/hqRoute";
 import {
@@ -409,9 +409,16 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   }, [hqShipmentId, state]);
 
   const saveHqItems = useCallback(
-    async (items: InvoiceLineItem[]) => {
+    async (payload: HqInvoiceSavePayload) => {
       if (!hqShipment) return;
-      await mutate({ action: "UPDATE", id: hqShipment.id, patch: { invoiceItems: items } });
+      await mutate({
+        action: "UPDATE",
+        id: hqShipment.id,
+        patch: {
+          invoiceItems: payload.invoiceItems,
+          invoiceDeclarations: payload.invoiceDeclarations,
+        },
+      });
     },
     [hqShipment, mutate]
   );
@@ -453,7 +460,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         shipment={hqShipment}
         customerDirectory={state.customers}
         invoiceCatalog={state.invoiceCatalog}
-        onSaveItems={saveHqItems}
+        onSave={saveHqItems}
         onSaveCatalog={saveHqCatalog}
         onClose={closeHqPage}
       />

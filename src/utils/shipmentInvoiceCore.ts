@@ -29,12 +29,18 @@ function compactToken(s: string): string {
 export function buildInvoiceNumber(
   shipment: Shipment,
   directory: readonly CustomerDirectoryEntry[] = [],
-  at: Date = new Date()
+  at: Date = new Date(),
+  declarationSeq = 1,
+  totalDeclarations = 1
 ): string {
-  const dest = compactToken(shipment.dest ?? "");
   const code = resolveCustomerCode(shipment, directory);
+  const dest = compactToken(shipment.dest ?? "");
   const ddmmyy = `${pad2(at.getDate())}${pad2(at.getMonth() + 1)}${String(at.getFullYear()).slice(-2)}`;
-  return `NNL${dest}${code}${ddmmyy}`;
+  const base = `${code}${dest}${ddmmyy}`;
+  if (totalDeclarations > 1 || declarationSeq > 1) {
+    return `${base}-${String(declarationSeq).padStart(2, "0")}`;
+  }
+  return base;
 }
 
 export function resolveCustomerCode(

@@ -1,6 +1,6 @@
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import type { InvoiceLineItem } from "../types/invoiceItem";
+import type { HqInvoiceSavePayload } from "../types/invoiceDeclaration";
 import type { InvoiceCatalog } from "../utils/invoiceCatalogCore";
 import { ShipmentInvoiceWorkspace } from "./ShipmentInvoiceWorkspace";
 
@@ -8,7 +8,7 @@ type Props = {
   shipment: Shipment;
   customerDirectory: readonly CustomerDirectoryEntry[];
   invoiceCatalog?: InvoiceCatalog;
-  onSaveItems: (items: InvoiceLineItem[]) => void | Promise<void>;
+  onSave: (payload: HqInvoiceSavePayload) => void | Promise<void>;
   onSaveCatalog: (catalog: InvoiceCatalog) => void | Promise<void>;
   onClose: () => void;
 };
@@ -18,7 +18,7 @@ export function ShipmentInvoicePage({
   shipment,
   customerDirectory,
   invoiceCatalog,
-  onSaveItems,
+  onSave,
   onSaveCatalog,
   onClose,
 }: Props) {
@@ -28,7 +28,7 @@ export function ShipmentInvoicePage({
         shipment={shipment}
         customerDirectory={customerDirectory}
         invoiceCatalog={invoiceCatalog}
-        onSaveItems={onSaveItems}
+        onSave={onSave}
         onSaveCatalog={onSaveCatalog}
         onClose={onClose}
       />

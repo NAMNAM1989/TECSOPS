@@ -103,10 +103,16 @@ function cneePartyFallbackLines(entry: CustomerDirectoryEntry | undefined): stri
   return splitMultilineBlock(parties[0].content);
 }
 
+export type BuildShipmentCneeBodyLinesOptions = {
+  /** Invoice HQ — không in email CNEE. */
+  omitEmail?: boolean;
+};
+
 /** Các dòng thông tin CNEE (tên, địa chỉ, SĐT, email, notify). */
 export function buildShipmentCneeBodyLines(
   shipment: Shipment,
-  directory: readonly CustomerDirectoryEntry[] = []
+  directory: readonly CustomerDirectoryEntry[] = [],
+  opts?: BuildShipmentCneeBodyLinesOptions
 ): string[] {
   const customer = findCustomerEntry(shipment, directory);
   const saved = resolveSavedConsigneeForBooking(shipment, customer);
@@ -125,7 +131,7 @@ export function buildShipmentCneeBodyLines(
   if (name) lines.push(name);
   lines.push(...splitMultilineBlock(address));
   if (phone) lines.push(`TEL: ${phone}`);
-  if (email) lines.push(`EMAIL: ${email}`);
+  if (email && !opts?.omitEmail) lines.push(`EMAIL: ${email}`);
   if (notify) lines.push(`NOTIFY: ${notify}`);
 
   if (lines.length === 0) {

@@ -3,6 +3,8 @@ import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import {
   invoiceLineAmountUsd,
+  invoiceLineGrossWeightKg,
+  roundDeclarationKg,
   totalsForInvoice,
   type InvoiceLineItem,
 } from "../types/invoiceItem";
@@ -33,29 +35,42 @@ type Props = {
   shipment: Shipment;
   customerDirectory: readonly CustomerDirectoryEntry[];
   items: InvoiceLineItem[];
+  invoiceNo?: string;
+  footerPcs?: number | null;
+  footerKg?: number | null;
 };
 
 export const ShipmentInvoiceSheetPreview = memo(function ShipmentInvoiceSheetPreview({
   shipment,
   customerDirectory,
   items,
+  invoiceNo: invoiceNoProp,
+  footerPcs,
+  footerKg,
 }: Props) {
   const at = useMemo(() => new Date(), []);
   const invoiceNo = useMemo(
-    () => buildInvoiceNumber(shipment, customerDirectory, at),
-    [shipment, customerDirectory, at]
+    () => invoiceNoProp ?? buildInvoiceNumber(shipment, customerDirectory, at),
+    [invoiceNoProp, shipment, customerDirectory, at]
   );
   const dateStr = formatInvoiceSheetDate(at);
   const flightLine = formatInvoiceFlightLine(shipment);
   const cneeLines = useMemo(
-    () => buildShipmentCneeBodyLines(shipment, customerDirectory),
+    () => buildShipmentCneeBodyLines(shipment, customerDirectory, { omitEmail: true }),
     [shipment, customerDirectory]
   );
   const totals = useMemo(() => totalsForInvoice(items), [items]);
 
   const cartonFooter =
-    shipment.pcs != null && shipment.pcs > 0 ? `${shipment.pcs} CTNS` : "—";
-  const kgFooter = shipment.kg != null && shipment.kg > 0 ? `${shipment.kg} KGM` : "—";
+    (footerPcs ?? shipment.pcs) != null && (footerPcs ?? shipment.pcs)! > 0
+      ? `${footerPcs ?? shipment.pcs} CTNS`
+      : "—";
+  const kgFooter =
+    (footerKg ?? shipment.kg) != null && (footerKg ?? shipment.kg)! > 0
+      ? `${roundDeclarationKg(footerKg ?? shipment.kg)} KGM`
+      : totals.totalGrossKg > 0
+        ? `${totals.totalGrossKg} KGM`
+        : "—";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -107,37 +122,47 @@ export const ShipmentInvoiceSheetPreview = memo(function ShipmentInvoiceSheetPre
             )}
           </div>
 
-          {/* ─── Goods table (8 columns matching Excel output) ─── */}
-          <table className="mt-5 w-full border-collapse text-[11pt]">
+          {/* ─── Goods table (10 columns matching Excel output) ─── */}
+          <table className="mt-5 w-full table-fixed border-collapse text-[10.5pt]">
             <thead>
               <tr>
-                <th className="w-[2.2rem] border border-black px-1 py-1.5 text-center font-bold">
+                <th className="w-[2rem] border border-black px-0.5 py-1 text-center text-[10pt] font-bold">
                   No
                 </th>
-                <th className="min-w-[12rem] border border-black px-1 py-1.5 text-center font-bold">
+                <th className="w-[26%] border border-black px-0.5 py-1 text-center text-[10pt] font-bold">
                   Description of goods
                 </th>
-                <th className="border border-black px-1 py-1.5 text-center font-bold">
+                <th className="w-[10%] border border-black px-0.5 py-1 text-center text-[10pt] font-bold">
                   HS code
                 </th>
-                <th className="w-[3.5rem] border border-black px-1 py-1.5 text-center font-bold">
+                <th className="w-[3rem] border border-black px-0.5 py-1 text-center text-[10pt] font-bold">
                   Origin
                 </th>
-                <th className="border border-black px-1 py-1.5 text-center font-bold">
+                <th className="w-[8%] border border-black px-0.5 py-1 text-center text-[10pt] font-bold">
                   Quantity
                 </th>
-                <th className="border border-black px-1 py-1.5 text-center font-bold">
+                <th className="w-[7%] border border-black px-0.5 py-1 text-center text-[10pt] font-bold">
                   Unit
                 </th>
-                <th className="border border-black px-1 py-1.5 text-center font-bold">
+                <th className="w-[9%] border border-black px-0.5 py-1 text-center text-[10pt] font-bold">
                   U.Price
                   <br />
-                  <span className="font-normal text-[9pt]">(FCA)(USD)</span>
+                  <span className="font-normal text-[8pt]">(FCA)(USD)</span>
                 </th>
-                <th className="border border-black px-1 py-1.5 text-center font-bold">
+                <th className="w-[9%] border border-black px-0.5 py-1 text-center text-[10pt] font-bold">
                   Amount
                   <br />
-                  <span className="font-normal text-[9pt]">(USD)</span>
+                  <span className="font-normal text-[8pt]">(USD)</span>
+                </th>
+                <th className="w-[8%] border border-black px-0.5 py-1 text-center text-[10pt] font-bold">
+                  Quy cách
+                  <br />
+                  <span className="font-normal text-[8pt]">(kg/đv)</span>
+                </th>
+                <th className="w-[8%] border border-black px-0.5 py-1 text-center text-[10pt] font-bold">
+                  Trọng lượng
+                  <br />
+                  <span className="font-normal text-[8pt]">(KG)</span>
                 </th>
               </tr>
             </thead>
@@ -145,7 +170,7 @@ export const ShipmentInvoiceSheetPreview = memo(function ShipmentInvoiceSheetPre
               {items.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={10}
                     className="border border-black px-2 py-6 text-center text-slate-500 italic"
                   >
                     Chưa có dòng hàng — bảng để trống khi xuất
@@ -154,51 +179,59 @@ export const ShipmentInvoiceSheetPreview = memo(function ShipmentInvoiceSheetPre
               ) : (
                 items.map((it, idx) => {
                   const amount = invoiceLineAmountUsd(it);
+                  const gross = roundDeclarationKg(invoiceLineGrossWeightKg(it));
                   return (
                     <tr key={it.lineId} className="align-top">
-                      <td className="border border-black px-1 py-1.5 text-center">
+                      <td className="border border-black px-0.5 py-1 text-center">
                         {idx + 1}
                       </td>
-                      <td className="border border-black px-1 py-1.5 text-left leading-snug">
+                      <td className="border border-black px-0.5 py-1 text-left text-[10pt] leading-snug break-words">
                         {it.description || "—"}
                       </td>
-                      <td className="border border-black px-1 py-1.5 text-center text-[10pt]">
+                      <td className="border border-black px-0.5 py-1 text-center text-[9pt]">
                         {it.hsCode || "—"}
                       </td>
-                      <td className="border border-black px-1 py-1.5 text-center">
+                      <td className="border border-black px-0.5 py-1 text-center">
                         {it.origin || "VN"}
                       </td>
-                      <td className="border border-black px-1 py-1.5 text-right tabular-nums">
+                      <td className="border border-black px-0.5 py-1 text-right tabular-nums">
                         {fmtQty(it.quantity)}
                       </td>
-                      <td className="border border-black px-1 py-1.5 text-center">
+                      <td className="border border-black px-0.5 py-1 text-center text-[10pt]">
                         {it.unit || "PCE"}
                       </td>
-                      <td className="border border-black px-1 py-1.5 text-right tabular-nums">
+                      <td className="border border-black px-0.5 py-1 text-right tabular-nums">
                         {fmtUsd(it.unitPriceUsd)}
                       </td>
-                      <td className="border border-black px-1 py-1.5 text-right tabular-nums">
+                      <td className="border border-black px-0.5 py-1 text-right tabular-nums">
                         {fmtUsd(amount)}
+                      </td>
+                      <td className="border border-black px-0.5 py-1 text-right tabular-nums">
+                        {it.kgPerUnit > 0 ? fmtUsd(it.kgPerUnit) : "—"}
+                      </td>
+                      <td className="border border-black px-0.5 py-1 text-right tabular-nums">
+                        {gross > 0 ? String(gross) : "—"}
                       </td>
                     </tr>
                   );
                 })
               )}
-              {/* TOTAL row */}
               <tr className="font-bold">
-                <td className="border border-black px-1 py-2" />
-                <td className="border border-black px-1 py-2 text-left text-[12pt]">
+                <td className="border border-black px-0.5 py-1.5" />
+                <td className="border border-black px-0.5 py-1.5 text-left text-[11pt]">
                   TOTAL
                 </td>
                 <td className="border border-black" />
                 <td className="border border-black" />
                 <td className="border border-black" />
                 <td className="border border-black" />
-                <td className="border border-black px-1 py-2 text-right tabular-nums">
-                  {fmtUsd(totals.totalAmountUsd > 0 ? totals.totalAmountUsd : 0)}
-                </td>
-                <td className="border border-black px-1 py-2 text-right tabular-nums">
+                <td className="border border-black" />
+                <td className="border border-black px-0.5 py-1.5 text-right tabular-nums">
                   {fmtUsd(totals.totalAmountUsd)}
+                </td>
+                <td className="border border-black" />
+                <td className="border border-black px-0.5 py-1.5 text-right tabular-nums">
+                  {totals.totalGrossKg > 0 ? String(totals.totalGrossKg) : "—"}
                 </td>
               </tr>
             </tbody>
@@ -216,9 +249,8 @@ export const ShipmentInvoiceSheetPreview = memo(function ShipmentInvoiceSheetPre
             </p>
           </div>
 
-          {/* Customs declaration note */}
-          <div className="mt-4 rounded border border-dashed border-indigo-400/50 bg-indigo-50/50 px-3 py-2 text-[10pt] text-indigo-800">
-            <p className="font-semibold">Tờ khai hải quan — Mapping dữ liệu:</p>
+          <details className="mt-4 rounded border border-dashed border-indigo-400/40 bg-indigo-50/40 px-3 py-2 text-[10pt] text-indigo-800">
+            <summary className="cursor-pointer font-semibold">Tờ khai HQ — mapping dữ liệu</summary>
             <ul className="mt-1 list-inside list-disc space-y-0.5 text-[9.5pt]">
               <li>Mô tả hàng → Ô 30 "Mô tả hàng hóa"</li>
               <li>Mã HS → Ô 31 "Mã số HS"</li>
@@ -228,7 +260,7 @@ export const ShipmentInvoiceSheetPreview = memo(function ShipmentInvoiceSheetPre
               <li>Tổng kiện → Ô 29 "Số lượng kiện"</li>
               <li>Tổng KG → Ô 33 "Trọng lượng"</li>
             </ul>
-          </div>
+          </details>
         </article>
       </div>
     </div>

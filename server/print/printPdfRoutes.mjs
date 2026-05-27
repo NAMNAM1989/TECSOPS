@@ -25,8 +25,9 @@ function compactValues(raw) {
  * Invoice PDF — không cần Postgres (luôn bật khi chạy server).
  */
 export function registerShipmentInvoicePdfRoute(app) {
-  /**
-   * POST /api/print/pdf/shipment-invoice
+/**
+ * @deprecated Dùng POST /api/export/invoice với JSON payload.
+ * POST /api/print/pdf/shipment-invoice
    * Body JSON: { xlsxBase64, invoiceNo?, awb? } — PDF từ file Excel đã điền mẫu INV.xlsx.
    */
   app.post("/api/print/pdf/shipment-invoice", async (req, res, next) => {

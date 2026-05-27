@@ -11,37 +11,57 @@ import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import {
   emptyInvoiceLineItem,
-  fromCatalogEntry,
+  roundDeclarationKg,
   totalsForInvoice,
-  type InvoiceCatalogItem,
   type InvoiceLineItem,
 } from "../types/invoiceItem";
+import type { HqInvoiceSavePayload, InvoiceDeclaration } from "../types/invoiceDeclaration";
 import type { InvoiceCatalog } from "../utils/invoiceCatalogCore";
 import {
-  buildInvoiceNumber,
+  addDeclaration,
+  applyTemplateStructure,
+  autoDistributeItemsToDeclarations,
+  copyItemsToAllOtherDeclarations,
+  copyItemsToDeclaration,
+  redistributeTargetsEvenly,
+  removeDeclaration,
+  resolveInvoiceDeclarations,
+  splitIntoDeclarations,
+  updateDeclarationItems,
+  updateDeclarationTargets,
+  validateDeclarationTargets,
+  validateDeclarationsLock,
+} from "../utils/invoiceDeclarationCore";
+import { buildInvoiceExportPayload } from "../export/builders/buildInvoiceExportPayload";
+import {
   downloadShipmentInvoiceExcel,
   formatInvoiceFlightLine,
 } from "../utils/exportShipmentInvoiceExcel";
 import { downloadShipmentInvoicePdf } from "../utils/exportShipmentInvoicePdf";
-import { ShipmentInvoiceItemPicker } from "./ShipmentInvoiceItemPicker";
-import { ShipmentInvoiceSheetPreview } from "./ShipmentInvoiceSheetPreview";
-import { InvoiceLineEditor } from "./InvoiceLineEditor";
+import {
+  downloadAllDeclarationsExcelZip,
+  downloadAllDeclarationsPdfZip,
+} from "../utils/exportShipmentInvoiceBulk";
+import { InvoiceExportPreview } from "../export/preview/InvoiceExportPreview";
+import { InvoiceLineGrid } from "./InvoiceLineGrid";
 import { InvoiceCatalogEditor } from "./InvoiceCatalogEditor";
+import { HqWorkspaceToolbar } from "./HqWorkspaceToolbar";
 import { CustomsDeclarationIcon } from "./ShipmentInvoiceExportButton";
 import { useInvoiceCatalog } from "../hooks/useInvoiceCatalog";
+import { randomInvoiceLinesFromCatalog } from "../utils/invoiceRandomPick";
 import { OPS } from "../styles/opsModalStyles";
 
 type Props = {
   shipment: Shipment;
   customerDirectory: readonly CustomerDirectoryEntry[];
   invoiceCatalog?: InvoiceCatalog;
-  onSaveItems: (items: InvoiceLineItem[]) => void | Promise<void>;
+  onSave: (payload: HqInvoiceSavePayload) => void | Promise<void>;
   onSaveCatalog: (catalog: InvoiceCatalog) => void | Promise<void>;
   onClose: () => void;
 };
 
-function cloneItems(items: InvoiceLineItem[] | undefined): InvoiceLineItem[] {
-  return (items ?? []).map((it) => ({ ...it }));
+function cloneDeclarations(list: InvoiceDeclaration[]): InvoiceDeclaration[] {
+  return list.map((d) => ({ ...d, items: d.items.map((it) => ({ ...it })) }));
 }
 
 function matchBadge(
@@ -58,7 +78,7 @@ function matchBadge(
     ok,
     text: ok
       ? `${label} khớp (${actual}${unit})`
-      : `${label} ${actual}${unit} / lô ${expected}${unit}`,
+      : `${label} ${actual}${unit} / mục tiêu ${expected}${unit}`,
   };
 }
 
@@ -66,122 +86,251 @@ export function ShipmentInvoiceWorkspace({
   shipment,
   customerDirectory,
   invoiceCatalog,
-  onSaveItems,
+  onSave,
   onSaveCatalog,
   onClose,
 }: Props) {
-  const [items, setItems] = useState<InvoiceLineItem[]>(() => cloneItems(shipment.invoiceItems));
+  const [declarations, setDeclarations] = useState<InvoiceDeclaration[]>(() =>
+    cloneDeclarations(resolveInvoiceDeclarations(shipment))
+  );
+  const [activeId, setActiveId] = useState(() => resolveInvoiceDeclarations(shipment)[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [catalogEditorOpen, setCatalogEditorOpen] = useState(false);
-  const initial = useRef<InvoiceLineItem[]>(cloneItems(shipment.invoiceItems));
+  const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(() => new Set());
+  const [copyTargetId, setCopyTargetId] = useState("");
+  const initial = useRef(cloneDeclarations(resolveInvoiceDeclarations(shipment)));
   const shipmentIdRef = useRef(shipment.id);
-  const { staticItems } = useInvoiceCatalog(invoiceCatalog);
+  const { staticItems, items: catalogItems } = useInvoiceCatalog(invoiceCatalog);
+
+  const activeDeclaration = useMemo(
+    () => declarations.find((d) => d.id === activeId) ?? declarations[0],
+    [activeId, declarations]
+  );
+
+  const items = activeDeclaration?.items ?? [];
+  const previewItems = useDeferredValue(items);
+  const totals = useMemo(() => totalsForInvoice(items), [items]);
+  const allTotals = useMemo(
+    () =>
+      declarations.reduce(
+        (acc, d) => {
+          const t = totalsForInvoice(d.items);
+          acc.totalQuantity += t.totalQuantity;
+          acc.totalGrossKg += t.totalGrossKg;
+          return acc;
+        },
+        { totalQuantity: 0, totalGrossKg: 0 }
+      ),
+    [declarations]
+  );
+
+  const targetPcs = activeDeclaration?.targetPcs ?? shipment.pcs;
+  const targetKg = activeDeclaration?.targetKg ?? shipment.kg;
+  const displayFooterKg = useMemo(
+    () => roundDeclarationKg(targetKg ?? totals.totalGrossKg),
+    [targetKg, totals.totalGrossKg]
+  );
+  const cartonBadge = matchBadge("Kiện", targetPcs, totals.totalQuantity, " CTNS");
+  const grossBadge = matchBadge("KG", roundDeclarationKg(targetKg), totals.totalGrossKg, " KGM");
+  const totalsLock = useMemo(
+    () => validateDeclarationsLock(declarations, shipment.pcs, shipment.kg),
+    [declarations, shipment.kg, shipment.pcs]
+  );
+  const showShipmentLock = declarations.length > 1 || shipment.pcs != null || shipment.kg != null;
+
+  const invoicePreview = useMemo(
+    () =>
+      buildInvoiceExportPayload(shipment, customerDirectory, {
+        items: previewItems,
+        declarationSeq: activeDeclaration?.seq ?? 1,
+        totalDeclarations: declarations.length,
+        footerPcs: targetPcs,
+        footerKg: displayFooterKg,
+      }).meta.invoiceNo,
+    [
+      activeDeclaration?.seq,
+      customerDirectory,
+      declarations.length,
+      displayFooterKg,
+      previewItems,
+      shipment,
+      targetPcs,
+    ]
+  );
+
+  const exportPayloadPreview = useMemo(
+    () =>
+      buildInvoiceExportPayload(shipment, customerDirectory, {
+        items: previewItems,
+        declarationSeq: activeDeclaration?.seq ?? 1,
+        totalDeclarations: declarations.length,
+        footerPcs: targetPcs,
+        footerKg: displayFooterKg,
+      }),
+    [
+      activeDeclaration?.seq,
+      customerDirectory,
+      declarations.length,
+      displayFooterKg,
+      previewItems,
+      shipment,
+      targetPcs,
+    ]
+  );
+
+  const targetsLock = useMemo(
+    () => validateDeclarationTargets(declarations, shipment.pcs, shipment.kg),
+    [declarations, shipment.kg, shipment.pcs]
+  );
+  const flightLine = useMemo(() => formatInvoiceFlightLine(shipment), [shipment]);
 
   useEffect(() => {
     if (shipment.id !== shipmentIdRef.current) {
       shipmentIdRef.current = shipment.id;
-      const next = cloneItems(shipment.invoiceItems);
-      setItems(next);
+      const next = cloneDeclarations(resolveInvoiceDeclarations(shipment));
+      setDeclarations(next);
+      setActiveId(next[0]?.id ?? "");
+      setSelectedLineIds(new Set());
       initial.current = next;
       setDirty(false);
       return;
     }
     if (dirty) return;
-    const next = cloneItems(shipment.invoiceItems);
-    setItems(next);
+    const next = cloneDeclarations(resolveInvoiceDeclarations(shipment));
+    setDeclarations(next);
+    if (!next.some((d) => d.id === activeId)) setActiveId(next[0]?.id ?? "");
     initial.current = next;
-  }, [shipment.id, shipment.invoiceItems, dirty]);
-
-  const previewItems = useDeferredValue(items);
-  const totals = useMemo(() => totalsForInvoice(items), [items]);
-  const invoicePreview = useMemo(
-    () => buildInvoiceNumber(shipment, customerDirectory),
-    [shipment, customerDirectory]
-  );
-  const flightLine = useMemo(() => formatInvoiceFlightLine(shipment), [shipment]);
-
-  const cartonBadge = matchBadge("Kiện", shipment.pcs, totals.totalQuantity, " CTNS");
-  const grossBadge = matchBadge("KG", shipment.kg, totals.totalGrossKg, " KGM");
+  }, [activeId, dirty, shipment]);
 
   const markDirty = useCallback(() => setDirty(true), []);
 
+  const setActiveItems = useCallback(
+    (nextItems: InvoiceLineItem[]) => {
+      if (!activeDeclaration) return;
+      setDeclarations((prev) => updateDeclarationItems(prev, activeDeclaration.id, nextItems));
+      markDirty();
+    },
+    [activeDeclaration, markDirty]
+  );
+
   const addBlank = useCallback(() => {
     startTransition(() => {
-      setItems((prev) => [...prev, emptyInvoiceLineItem()]);
-      markDirty();
+      setActiveItems([...items, emptyInvoiceLineItem()]);
     });
-  }, [markDirty]);
+  }, [items, setActiveItems]);
 
-  const addFromCatalog = useCallback(
-    (entry: InvoiceCatalogItem) => {
-      startTransition(() => {
-        setItems((prev) => [...prev, fromCatalogEntry(entry)]);
-        markDirty();
-      });
+  const insertAfter = useCallback(
+    (afterLineId: string) => {
+      const idx = items.findIndex((it) => it.lineId === afterLineId);
+      const next = [...items];
+      if (idx < 0) next.push(emptyInvoiceLineItem());
+      else next.splice(idx + 1, 0, emptyInvoiceLineItem());
+      startTransition(() => setActiveItems(next));
     },
-    [markDirty]
+    [items, setActiveItems]
   );
+
+  const handleRandomPick = useCallback(() => {
+    if (catalogItems.length === 0) {
+      window.alert("Danh mục hàng trống — thêm mặt hàng trong «Sửa danh mục» trước.");
+      return;
+    }
+    const raw = window.prompt(
+      `Chọn ngẫu nhiên bao nhiêu mặt hàng? (1–${catalogItems.length})`,
+      "6"
+    );
+    if (raw == null) return;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 1 || n > catalogItems.length) {
+      window.alert(`Nhập số từ 1 đến ${catalogItems.length}.`);
+      return;
+    }
+    const picked = randomInvoiceLinesFromCatalog(catalogItems, n);
+    startTransition(() => {
+      setActiveItems([...items, ...picked]);
+    });
+  }, [catalogItems, items, setActiveItems]);
 
   const updateItem = useCallback(
     (lineId: string, patch: Partial<InvoiceLineItem>) => {
-      setItems((prev) => prev.map((it) => (it.lineId === lineId ? { ...it, ...patch } : it)));
-      markDirty();
+      startTransition(() => {
+        setActiveItems(items.map((it) => (it.lineId === lineId ? { ...it, ...patch } : it)));
+      });
     },
-    [markDirty]
+    [items, setActiveItems]
   );
 
   const removeItem = useCallback(
     (lineId: string) => {
       startTransition(() => {
-        setItems((prev) => prev.filter((it) => it.lineId !== lineId));
-        markDirty();
+        setActiveItems(items.filter((it) => it.lineId !== lineId));
       });
     },
-    [markDirty]
+    [items, setActiveItems]
   );
 
-  const saveItems = useCallback(async () => {
+  const buildSavePayload = useCallback((): HqInvoiceSavePayload => {
+    const active = declarations.find((d) => d.id === activeId) ?? declarations[0];
+    return {
+      invoiceDeclarations: declarations,
+      invoiceItems: active?.items ?? [],
+    };
+  }, [activeId, declarations]);
+
+  const saveAll = useCallback(async () => {
     if (busy) return;
     setBusy(true);
     try {
-      await onSaveItems(items);
-      initial.current = cloneItems(items);
+      const payload = buildSavePayload();
+      await onSave(payload);
+      initial.current = cloneDeclarations(declarations);
       setDirty(false);
     } finally {
       setBusy(false);
     }
-  }, [busy, items, onSaveItems]);
+  }, [buildSavePayload, busy, declarations, onSave]);
+
+  const exportOpts = useMemo(
+    () => ({
+      items,
+      declarationSeq: activeDeclaration?.seq ?? 1,
+      totalDeclarations: declarations.length,
+      footerPcs: targetPcs,
+      footerKg: displayFooterKg,
+    }),
+    [activeDeclaration?.seq, declarations.length, displayFooterKg, items, targetPcs]
+  );
 
   const handleExportExcel = useCallback(async () => {
     if (busy) return;
     setBusy(true);
     try {
       if (dirty) {
-        await onSaveItems(items);
-        initial.current = cloneItems(items);
+        await onSave(buildSavePayload());
+        initial.current = cloneDeclarations(declarations);
         setDirty(false);
       }
-      await downloadShipmentInvoiceExcel(shipment, customerDirectory, { items });
+      await downloadShipmentInvoiceExcel(shipment, customerDirectory, exportOpts);
     } finally {
       setBusy(false);
     }
-  }, [busy, customerDirectory, dirty, items, onSaveItems, shipment]);
+  }, [buildSavePayload, busy, customerDirectory, declarations, dirty, exportOpts, onSave, shipment]);
 
   const handleExportPdf = useCallback(async () => {
     if (busy) return;
     setBusy(true);
     try {
       if (dirty) {
-        await onSaveItems(items);
-        initial.current = cloneItems(items);
+        await onSave(buildSavePayload());
+        initial.current = cloneDeclarations(declarations);
         setDirty(false);
       }
-      await downloadShipmentInvoicePdf(shipment, customerDirectory, { items });
+      await downloadShipmentInvoicePdf(shipment, customerDirectory, exportOpts);
     } finally {
       setBusy(false);
     }
-  }, [busy, customerDirectory, dirty, items, onSaveItems, shipment]);
+  }, [buildSavePayload, busy, customerDirectory, declarations, dirty, exportOpts, onSave, shipment]);
 
   const handleFinish = useCallback(async () => {
     if (busy) return;
@@ -192,15 +341,14 @@ export function ShipmentInvoiceWorkspace({
     setBusy(true);
     try {
       if (dirty) {
-        await onSaveItems(items);
-        initial.current = cloneItems(items);
+        await onSave(buildSavePayload());
         setDirty(false);
       }
       onClose();
     } finally {
       setBusy(false);
     }
-  }, [busy, dirty, items, onClose, onSaveItems]);
+  }, [buildSavePayload, busy, dirty, onClose, onSave]);
 
   const requestClose = useCallback(() => {
     if (dirty) {
@@ -209,6 +357,189 @@ export function ShipmentInvoiceWorkspace({
     }
     onClose();
   }, [dirty, onClose]);
+
+  const toggleLineSelect = useCallback((lineId: string) => {
+    setSelectedLineIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineId)) next.delete(lineId);
+      else next.add(lineId);
+      return next;
+    });
+  }, []);
+
+  const toggleAllLines = useCallback(() => {
+    setSelectedLineIds((prev) => {
+      if (items.length > 0 && items.every((it) => prev.has(it.lineId))) return new Set();
+      return new Set(items.map((it) => it.lineId));
+    });
+  }, [items]);
+
+  const selectedLineIdList = useMemo(() => Array.from(selectedLineIds), [selectedLineIds]);
+
+  const handleAutoDistribute = useCallback(() => {
+    const templates =
+      items.length > 0 ? items : declarations.find((d) => d.items.length > 0)?.items ?? [];
+    if (templates.length === 0) {
+      window.alert("Thêm ít nhất một dòng hàng trước khi chia tự động.");
+      return;
+    }
+    if (declarations.length <= 1) {
+      window.alert("Cần ít nhất 2 tờ (dùng «Chia lô» trước).");
+      return;
+    }
+    const ok = window.confirm(
+      `Chia ${templates.length} dòng mẫu theo tỷ lệ kiện/kg của ${declarations.length} tờ?`
+    );
+    if (!ok) return;
+    setDeclarations(autoDistributeItemsToDeclarations(templates, declarations));
+    setSelectedLineIds(new Set());
+    markDirty();
+  }, [declarations, items, markDirty]);
+
+  const handleApplyTemplate = useCallback(
+    (mode: "zero" | "scale") => {
+      const sourceId = declarations[0]?.id;
+      if (!sourceId) return;
+      const sourceItems = declarations[0]?.items ?? [];
+      if (sourceItems.length === 0) {
+        window.alert("Tờ 1 chưa có dòng hàng mẫu.");
+        return;
+      }
+      const msg =
+        mode === "scale"
+          ? "Nhân mẫu tờ 1 và chia số lượng theo target từng tờ?"
+          : "Copy cấu trúc tờ 1 sang các tờ khác (số lượng = 0)?";
+      if (!window.confirm(msg)) return;
+      setDeclarations(applyTemplateStructure(declarations, sourceId, mode));
+      setSelectedLineIds(new Set());
+      markDirty();
+    },
+    [declarations, markDirty]
+  );
+
+  const handleCopyLines = useCallback(
+    (mode: "append" | "replace", toAllOthers: boolean) => {
+      if (!activeDeclaration) return;
+      const lineIds = selectedLineIdList.length ? selectedLineIdList : items.map((it) => it.lineId);
+      if (lineIds.length === 0) {
+        window.alert("Chọn dòng hoặc để trống để copy cả tờ.");
+        return;
+      }
+      if (toAllOthers) {
+        setDeclarations(
+          copyItemsToAllOtherDeclarations(declarations, activeDeclaration.id, lineIds, mode)
+        );
+      } else {
+        const target = copyTargetId || declarations.find((d) => d.id !== activeDeclaration.id)?.id;
+        if (!target) {
+          window.alert("Chọn tờ đích.");
+          return;
+        }
+        setDeclarations(
+          copyItemsToDeclaration(declarations, activeDeclaration.id, target, lineIds, mode)
+        );
+      }
+      setSelectedLineIds(new Set());
+      markDirty();
+    },
+    [activeDeclaration, copyTargetId, declarations, items, markDirty, selectedLineIdList]
+  );
+
+  const handleExportAllExcel = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (dirty) {
+        await onSave(buildSavePayload());
+        initial.current = cloneDeclarations(declarations);
+        setDirty(false);
+      }
+      await downloadAllDeclarationsExcelZip(shipment, customerDirectory, declarations);
+    } finally {
+      setBusy(false);
+    }
+  }, [buildSavePayload, busy, customerDirectory, declarations, dirty, onSave, shipment]);
+
+  const handleExportAllPdf = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (dirty) {
+        await onSave(buildSavePayload());
+        initial.current = cloneDeclarations(declarations);
+        setDirty(false);
+      }
+      await downloadAllDeclarationsPdfZip(shipment, customerDirectory, declarations);
+    } finally {
+      setBusy(false);
+    }
+  }, [buildSavePayload, busy, customerDirectory, declarations, dirty, onSave, shipment]);
+
+  const handleSplit = useCallback(() => {
+    const raw = window.prompt(
+      `Chia lô ${shipment.pcs ?? "?"} kiện / ${shipment.kg ?? "?"} kg thành bao nhiêu tờ khai? (2–20)`,
+      String(Math.min(5, Math.max(2, declarations.length)))
+    );
+    if (raw == null) return;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 2 || n > 20) {
+      window.alert("Nhập số từ 2 đến 20.");
+      return;
+    }
+    const next = splitIntoDeclarations(n, items, shipment.pcs, shipment.kg);
+    setDeclarations(next);
+    setActiveId(next[0]?.id ?? "");
+    setCopyTargetId(next[1]?.id ?? "");
+    setSelectedLineIds(new Set());
+    markDirty();
+  }, [declarations.length, items, markDirty, shipment.kg, shipment.pcs]);
+
+  const handleAddDeclaration = useCallback(() => {
+    const next = addDeclaration(declarations);
+    setDeclarations(next);
+    setActiveId(next[next.length - 1]?.id ?? activeId);
+    markDirty();
+  }, [activeId, declarations, markDirty]);
+
+  const handleRemoveDeclaration = useCallback(() => {
+    if (!activeDeclaration || declarations.length <= 1) return;
+    if (!window.confirm(`Xóa ${activeDeclaration.label}?`)) return;
+    const next = removeDeclaration(declarations, activeDeclaration.id);
+    setDeclarations(next);
+    setActiveId(next[0]?.id ?? "");
+    markDirty();
+  }, [activeDeclaration, declarations, markDirty]);
+
+  const handleTargetPcsChange = useCallback(
+    (raw: string) => {
+      if (!activeDeclaration) return;
+      const n = raw.trim() === "" ? null : Number(raw);
+      if (raw.trim() !== "" && (!Number.isFinite(n) || n! < 0)) return;
+      setDeclarations((prev) =>
+        updateDeclarationTargets(prev, activeDeclaration.id, { targetPcs: n })
+      );
+      markDirty();
+    },
+    [activeDeclaration, markDirty]
+  );
+
+  const handleTargetKgChange = useCallback(
+    (raw: string) => {
+      if (!activeDeclaration) return;
+      const n = raw.trim() === "" ? null : Number(raw);
+      if (raw.trim() !== "" && (!Number.isFinite(n) || n! < 0)) return;
+      setDeclarations((prev) =>
+        updateDeclarationTargets(prev, activeDeclaration.id, { targetKg: n })
+      );
+      markDirty();
+    },
+    [activeDeclaration, markDirty]
+  );
+
+  const handleRedistributeTargets = useCallback(() => {
+    setDeclarations(redistributeTargetsEvenly(declarations, shipment.pcs, shipment.kg));
+    markDirty();
+  }, [declarations, markDirty, shipment.kg, shipment.pcs]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -234,7 +565,9 @@ export function ShipmentInvoiceWorkspace({
                 Khai báo hải quan · AWB {shipment.awb || "—"}
               </h1>
               <p className={`mt-0.5 text-xs ${OPS.muted}`}>
-                {invoicePreview} · {flightLine || "—"} · {shipment.dest || "—"}
+                Invoice No: <strong className="font-mono text-indigo-800 dark:text-indigo-200">{invoicePreview}</strong>
+                {" · "}
+                {flightLine || "—"} · {shipment.dest || "—"}
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <span
@@ -255,9 +588,45 @@ export function ShipmentInvoiceWorkspace({
                 >
                   {grossBadge.text}
                 </span>
-                <span className={`rounded-full px-2.5 py-0.5 text-[11px] ${OPS.muted}`}>
-                  Lô: {shipment.pcs ?? "—"} CTNS · {shipment.kg ?? "—"} KGM
-                </span>
+                {showShipmentLock ? (
+                  <>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                        totalsLock.pcsOk
+                          ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
+                          : "bg-red-500/15 text-red-800 dark:text-red-200"
+                      }`}
+                    >
+                      Tổng kiện {totalsLock.actualPcs}
+                      {totalsLock.shipmentPcs != null ? ` / ${totalsLock.shipmentPcs} lô` : ""}
+                      {!totalsLock.pcsOk && totalsLock.shipmentPcs != null
+                        ? ` (${totalsLock.pcsDelta > 0 ? "+" : ""}${totalsLock.pcsDelta})`
+                        : ""}
+                    </span>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                        totalsLock.kgOk
+                          ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
+                          : "bg-red-500/15 text-red-800 dark:text-red-200"
+                      }`}
+                    >
+                      Tổng kg {totalsLock.actualKg.toFixed(1)}
+                      {totalsLock.shipmentKg != null ? ` / ${totalsLock.shipmentKg} lô` : ""}
+                      {!totalsLock.kgOk && totalsLock.shipmentKg != null
+                        ? ` (${totalsLock.kgDelta > 0 ? "+" : ""}${totalsLock.kgDelta})`
+                        : ""}
+                    </span>
+                  </>
+                ) : null}
+                {declarations.length > 1 ? (
+                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] ${OPS.muted}`}>
+                    Tổng {declarations.length} tờ · {allTotals.totalQuantity} CTNS · {allTotals.totalGrossKg.toFixed(1)} kg
+                  </span>
+                ) : (
+                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] ${OPS.muted}`}>
+                    Lô: {shipment.pcs ?? "—"} CTNS · {shipment.kg ?? "—"} KGM
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -269,10 +638,50 @@ export function ShipmentInvoiceWorkspace({
             ← Quay lại
           </button>
         </div>
+
+        <HqWorkspaceToolbar
+          declarations={declarations}
+          activeId={activeId}
+          activeDeclaration={activeDeclaration}
+          shipmentPcs={shipment.pcs}
+          shipmentKg={shipment.kg}
+          targetsLock={targetsLock}
+          busy={busy}
+          dirty={dirty}
+          multiDecl={declarations.length > 1}
+          showTargets={
+            declarations.length > 1 || shipment.pcs != null || shipment.kg != null
+          }
+          onSelectTab={setActiveId}
+          onTargetPcsChange={handleTargetPcsChange}
+          onTargetKgChange={handleTargetKgChange}
+          onRedistributeTargets={handleRedistributeTargets}
+          onAddBlank={addBlank}
+          onRandomPick={handleRandomPick}
+          onOpenCatalog={() => setCatalogEditorOpen(true)}
+          onSave={() => void saveAll()}
+          onExportExcel={() => void handleExportExcel()}
+          onExportPdf={() => void handleExportPdf()}
+          onExportAllExcel={
+            declarations.length > 1 ? () => void handleExportAllExcel() : undefined
+          }
+          onExportAllPdf={
+            declarations.length > 1 ? () => void handleExportAllPdf() : undefined
+          }
+          onFinish={() => void handleFinish()}
+          onSplit={handleSplit}
+          onAddDeclaration={handleAddDeclaration}
+          onAutoDistribute={handleAutoDistribute}
+          onApplyTemplate={handleApplyTemplate}
+          onCopyLines={handleCopyLines}
+          onRemoveDeclaration={handleRemoveDeclaration}
+          copyTargetId={copyTargetId}
+          onCopyTargetChange={setCopyTargetId}
+        />
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-        <div className="flex h-[min(24vh,220px)] min-h-0 max-h-[32vh] shrink-0 flex-col overflow-hidden border-b border-black/10 lg:h-full lg:max-h-none lg:w-60 lg:border-b-0 lg:border-r dark:border-white/10">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-[1.15] flex-col overflow-hidden border-r border-black/10 dark:border-white/10">
           {catalogEditorOpen ? (
             <InvoiceCatalogEditor
               catalog={invoiceCatalog ?? { version: 1, items: [] }}
@@ -281,100 +690,32 @@ export function ShipmentInvoiceWorkspace({
               onClose={() => setCatalogEditorOpen(false)}
             />
           ) : (
-            <ShipmentInvoiceItemPicker
-              mode="pane"
+            <InvoiceLineGrid
+              items={items}
               stateCatalog={invoiceCatalog}
-              onPick={addFromCatalog}
-              onManageCatalog={() => setCatalogEditorOpen(true)}
+              selectedLineIds={selectedLineIds}
+              onToggleLineSelect={toggleLineSelect}
+              onToggleAllLines={toggleAllLines}
+              onPatch={updateItem}
+              onRemove={removeItem}
+              onAddBlank={addBlank}
+              onInsertAfter={insertAfter}
             />
           )}
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
-          <div className="flex min-h-[min(40vh,460px)] min-w-0 flex-1 flex-col border-b border-black/10 lg:min-h-0 lg:border-b-0 lg:border-r dark:border-white/10">
-            <ShipmentInvoiceSheetPreview
-              shipment={shipment}
-              customerDirectory={customerDirectory}
-              items={previewItems}
-            />
-          </div>
-
-          <div className="flex min-h-0 w-full flex-col overflow-hidden lg:w-[min(38%,26rem)]">
-            <div className={`flex items-center justify-between gap-2 border-b px-3 py-2 ${OPS.border}`}>
-              <p className={`text-xs font-semibold ${OPS.secondary}`}>
-                Chỉnh dòng hàng — {items.length} dòng
-              </p>
-              <button type="button" onClick={addBlank} className={OPS.btnSmallAccent}>
-                + Thêm dòng
-              </button>
-            </div>
-
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-2 py-2">
-              {items.length === 0 ? (
-                <div className={`m-1 ${OPS.empty}`}>
-                  Chọn mặt hàng từ danh mục bên trái hoặc thêm dòng tự nhập.
-                </div>
-              ) : (
-                items.map((it, idx) => (
-                  <InvoiceLineEditor
-                    key={it.lineId}
-                    index={idx}
-                    item={it}
-                    onPatch={updateItem}
-                    onRemove={removeItem}
-                  />
-                ))
-              )}
-            </div>
-          </div>
+        <div className="flex min-h-0 min-w-0 flex-[0.85] flex-col overflow-hidden bg-slate-50/50 dark:bg-black/20">
+          <InvoiceExportPreview exportPayload={exportPayloadPreview} />
         </div>
       </div>
 
-      <footer className={`shrink-0 border-t px-4 py-2.5 sm:px-5 ${OPS.footer}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className={`text-[11px] ${OPS.muted}`}>
-            Tổng bảng: {totals.totalAmountUsd.toFixed(2)} USD · {totals.totalGrossKg.toFixed(1)} kg
-            {" · "}
-            Footer lô: {shipment.pcs ?? 0} CTNS · {shipment.kg ?? 0} KGM
-            {dirty ? (
-              <span className="ml-1 font-semibold text-amber-700 dark:text-amber-300"> · Chưa lưu</span>
-            ) : null}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void saveItems()}
-              disabled={busy || !dirty}
-              className={`${OPS.btnSmallAccent} disabled:opacity-50`}
-            >
-              Lưu nháp
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleExportExcel()}
-              disabled={busy}
-              className="rounded-full border border-emerald-600/50 bg-emerald-600/10 px-4 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-600/20 disabled:opacity-50 dark:text-emerald-200"
-            >
-              {busy ? "Đang xuất…" : "Xuất Excel"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleExportPdf()}
-              disabled={busy}
-              className="rounded-full border border-sky-600/50 bg-sky-600/10 px-4 py-1.5 text-xs font-semibold text-sky-900 hover:bg-sky-600/20 disabled:opacity-50 dark:text-sky-200"
-            >
-              {busy ? "Đang xuất…" : "Xuất PDF"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleFinish()}
-              disabled={busy}
-              className="rounded-full bg-indigo-600 px-5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              Hoàn tất
-            </button>
-          </div>
-        </div>
+      <footer className={`shrink-0 border-t px-4 py-1.5 sm:px-5 ${OPS.footer}`}>
+        <p className={`text-[11px] ${OPS.muted}`}>
+          Tờ hiện tại: {totals.totalAmountUsd.toFixed(2)} USD · {totals.totalGrossKg} kg (làm tròn)
+          {dirty ? (
+            <span className="ml-1 font-semibold text-amber-700 dark:text-amber-300"> · Chưa lưu</span>
+          ) : null}
+        </p>
       </footer>
     </div>
   );

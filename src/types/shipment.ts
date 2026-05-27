@@ -1,5 +1,6 @@
 import type { DimDivisor, DimPieceLine } from "../utils/volumetricDim";
 import type { InvoiceLineItem } from "./invoiceItem";
+import type { InvoiceDeclaration } from "./invoiceDeclaration";
 
 /** Trạng thái nghiệp vụ — 3 bước đầu bám AWB / kiện / DIM, sau đó NV chọn thủ công. */
 export type ShipmentStatus =
@@ -81,8 +82,11 @@ export interface Shipment {
   /**
    * Danh sách mặt hàng dùng để xuất invoice cho lô. Trống = bảng hàng INV để trống.
    * Lưu chung trong JSONB shipment (mutation UPDATE), không cần migration.
+   * @deprecated Ưu tiên `invoiceDeclarations` khi có nhiều tờ khai; field này mirror tờ đang active.
    */
   invoiceItems?: InvoiceLineItem[];
+  /** Nhiều tờ khai / invoice trong cùng một lô hàng. */
+  invoiceDeclarations?: InvoiceDeclaration[];
   status: ShipmentStatus;
 }
 

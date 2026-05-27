@@ -84,8 +84,14 @@ export interface InvoiceTotals {
   totalGrossKg: number;
 }
 
+/** Làm tròn kg hiển thị / footer mỗi tờ khai (số nguyên). */
+export function roundDeclarationKg(kg: number | null | undefined): number {
+  if (kg == null || !Number.isFinite(kg)) return 0;
+  return Math.round(kg);
+}
+
 export function totalsForInvoice(items: InvoiceLineItem[]): InvoiceTotals {
-  return items.reduce<InvoiceTotals>(
+  const raw = items.reduce<InvoiceTotals>(
     (acc, line) => {
       acc.totalQuantity += Number(line.quantity) || 0;
       acc.totalAmountUsd += invoiceLineAmountUsd(line);
@@ -94,4 +100,5 @@ export function totalsForInvoice(items: InvoiceLineItem[]): InvoiceTotals {
     },
     { totalQuantity: 0, totalAmountUsd: 0, totalGrossKg: 0 }
   );
+  return { ...raw, totalGrossKg: roundDeclarationKg(raw.totalGrossKg) };
 }

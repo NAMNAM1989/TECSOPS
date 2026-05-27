@@ -27,7 +27,7 @@ export function formatEcargoJobErrorMessage(raw: string | undefined): string {
     return "Thiếu mật khẩu Gmail App trên server (ECARGO_GMAIL_APP_PASSWORD).";
   }
   if (/Gmail từ chối đăng nhập|AUTHENTICATIONFAILED|Invalid credentials/i.test(msg)) {
-    return "App Password Gmail sai hoặc hết hạn — tạo mật khẩu ứng dụng mới (16 ký tự, không dấu cách), cập nhật .env.local rồi chạy lại npm run dev.";
+    return "App Password Gmail sai hoặc hết hạn — tạo mật khẩu ứng dụng mới (16 ký tự, không dấu cách), cập nhật ECARGO_GMAIL_APP_PASSWORD trên Railway hoặc .env.local rồi khởi động lại server.";
   }
   if (/^Command failed$/i.test(msg)) {
     return "Không đọc được Gmail — kiểm tra App Password (ECARGO_GMAIL_APP_PASSWORD) và khởi động lại server.";
@@ -37,6 +37,9 @@ export function formatEcargoJobErrorMessage(raw: string | undefined): string {
   }
   if (/Không tìm thấy nút Xác Thực/i.test(msg)) {
     return "Không bấm được nút Xác thực trên trang eCargo — thử lại hoặc mở link trong email thủ công.";
+  }
+  if (/Job eCargo bị gián đoạn/i.test(msg)) {
+    return msg;
   }
   if (/Chưa có AWB|Chưa lưu được AWB|Modal AWB không đóng/i.test(msg)) {
     return "Không lưu được AWB trên eCargo — thử đăng ký lại; nếu vẫn lỗi kiểm tra MAWB/chuyến/ngày bay hoặc dùng sao chép thủ công.";

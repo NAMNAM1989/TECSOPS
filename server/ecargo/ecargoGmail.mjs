@@ -1,8 +1,6 @@
 import { ECARGO_GMAIL_POLL_MS, ECARGO_GMAIL_USER } from "./ecargoConfig.mjs";
 import {
   ECARGO_FROM,
-  QR_SUBJECT,
-  VERIFY_SUBJECT,
   messageReceivedMs,
   mailBodyPlainText,
   parseVerifyMailRaw,
@@ -40,7 +38,7 @@ function formatImapConnectError(e) {
 
   if (authFailed) {
     return new Error(
-      `Gmail từ chối đăng nhập IMAP (${ECARGO_GMAIL_USER}). Tạo lại App Password 16 ký tự, cập nhật ECARGO_GMAIL_APP_PASSWORD trong .env.local (không dấu cách), rồi khởi động lại server.`
+      `Gmail từ chối đăng nhập IMAP (${ECARGO_GMAIL_USER}). Tạo lại App Password 16 ký tự, cập nhật ECARGO_GMAIL_APP_PASSWORD trên Railway hoặc .env.local (không dấu cách), rồi khởi động lại server.`
     );
   }
   if (msg === "Command failed" && response) {
@@ -85,9 +83,19 @@ async function createImapClient() {
   return client;
 }
 
+/** Kiểm tra Gmail sẵn sàng — fail sớm nếu thiếu/sai App Password. */
+export async function assertEcargoGmailReady() {
+  if (!process.env.ECARGO_GMAIL_APP_PASSWORD?.trim()) {
+    throw new Error(
+      "Thiếu ECARGO_GMAIL_APP_PASSWORD trên server — tạo App Password Gmail và cấu hình trên Railway hoặc .env.local."
+    );
+  }
+  return getPooledImapClient();
+}
+
 /** Giữ IMAP sẵn sàng — gọi khi worker start / trước Playwright. */
 export async function warmEcargoGmail() {
-  return getPooledImapClient();
+  return assertEcargoGmailReady();
 }
 
 /** @returns {Promise<import('imapflow').ImapFlow>} */
@@ -148,7 +156,7 @@ async function markMailSeen(client, uid, mailbox) {
   }
 }
 
-async function loadScscMailCandidates(client, notBeforeMs, subject, { includeAllMail = false } = {}) {
+async function loadScscMailCandidates(client, notBeforeMs, subjectFilter, { includeAllMail = true } = {}) {
   const since = new Date(notBeforeMs - 3 * 60 * 1000);
   /** @type {Array<{ uid: number|string; mailbox: string; raw: string; envelope?: object; receivedMs?: number }>} */
   const all = [];
@@ -160,11 +168,8 @@ async function loadScscMailCandidates(client, notBeforeMs, subject, { includeAll
     } catch {
       continue;
     }
-    const uids = await client.search({
-      from: ECARGO_FROM,
-      subject,
-      since,
-    });
+    // Gmail IMAP `subject:` hay lệch với tiền tố [eCargo] — lọc subject trong code.
+    const uids = await client.search({ from: ECARGO_FROM, since });
     if (!uids.length) continue;
 
     const uidList = uids.map(String);
@@ -174,6 +179,8 @@ async function loadScscMailCandidates(client, notBeforeMs, subject, { includeAll
       internalDate: true,
     })) {
       if (!msg?.source) continue;
+      const subject = msg.envelope?.subject || "";
+      if (subjectFilter && !subjectFilter(subject)) continue;
       all.push({
         uid: msg.uid,
         mailbox,
@@ -194,12 +201,16 @@ async function loadScscMailCandidates(client, notBeforeMs, subject, { includeAll
 }
 
 function loadVerifyCandidates(client, notBeforeMs, opts) {
-  return loadScscMailCandidates(client, notBeforeMs, VERIFY_SUBJECT, opts);
+  return loadScscMailCandidates(client, notBeforeMs, isVerifyEcargoMailSubject, opts);
 }
 
 async function loadQrCandidates(client, notBeforeMs, opts) {
-  const all = await loadScscMailCandidates(client, notBeforeMs, QR_SUBJECT, opts);
-  return all.filter((c) => !isVerifyEcargoMailSubject(c.envelope?.subject));
+  return loadScscMailCandidates(
+    client,
+    notBeforeMs,
+    (subject) => /Phiếu đăng ký hàng vào kho/i.test(String(subject ?? "")) && !isVerifyEcargoMailSubject(subject),
+    opts
+  );
 }
 
 async function pollScscMail(client, opts, pickFn, logLabel) {
@@ -208,14 +219,12 @@ async function pollScscMail(client, opts, pickFn, logLabel) {
   const pollMs = opts.pollMs ?? ECARGO_GMAIL_POLL_MS;
   const matchHints = opts.matchHints;
   const deadline = Date.now() + timeoutMs;
-  const searchAllMail = process.env.ECARGO_GMAIL_SEARCH_ALL_MAIL === "1";
   const loadCandidates = opts.loadCandidates ?? loadVerifyCandidates;
 
   let pollCount = 0;
   while (Date.now() < deadline) {
     try {
-      const includeAllMail = searchAllMail || pollCount % 6 === 5;
-      const candidates = await loadCandidates(client, notBeforeMs, { includeAllMail });
+      const candidates = await loadCandidates(client, notBeforeMs, { includeAllMail: true });
       const found = pickFn(candidates, notBeforeMs, matchHints);
       pollCount += 1;
       if (found) {

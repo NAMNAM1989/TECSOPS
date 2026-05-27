@@ -1,5 +1,5 @@
-import { ECARGO_QUEUE_KEY, ECARGO_JOB_TIMEOUT_MS } from "./ecargoConfig.mjs";
-import { getEcargoJob, patchEcargoJob } from "./ecargoJobStore.mjs";
+import { ECARGO_QUEUE_KEY, ECARGO_JOB_TIMEOUT_MS, ECARGO_JOB_KEY_PREFIX } from "./ecargoConfig.mjs";
+import { getEcargoJob, patchEcargoJob, isEcargoJobStaleActive } from "./ecargoJobStore.mjs";
 import {
   closeEcargoContext,
   runEcargoPlaywrightSession,
@@ -8,6 +8,7 @@ import {
 import {
   shutdownEcargoGmail,
   warmEcargoGmail,
+  assertEcargoGmailReady,
   waitForEcargoQrEmail,
   waitForEcargoVerifyEmail,
 } from "./ecargoGmail.mjs";
@@ -119,6 +120,7 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
       });
 
       await gmailReady;
+      await assertEcargoGmailReady();
 
       // —— Bước 2: Đọc mail xác thực (chỉ mail sau lúc gửi phiếu) ——
       const mailNotBefore = submittedAt - 5_000;
@@ -195,15 +197,46 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
           jobId,
         });
         console.info(`[ecargo] ${shipmentId} step4 gmail qr`);
-        qrMail = await waitForEcargoQrEmail({
-          notBeforeMs: Number.isFinite(qrNotBefore) ? qrNotBefore : submittedAt,
-          timeoutMs: Math.min(ECARGO_JOB_TIMEOUT_MS, 12 * 60 * 1000),
-          matchHints: {
+        try {
+          qrMail = await waitForEcargoQrEmail({
+            notBeforeMs: Number.isFinite(qrNotBefore) ? qrNotBefore : submittedAt,
+            timeoutMs: Math.min(ECARGO_JOB_TIMEOUT_MS, 12 * 60 * 1000),
+            matchHints: {
+              registrationNo: regNo || undefined,
+              mawb: booking.mawb,
+              vehicleNo: booking.vehicleNo,
+            },
+          });
+        } catch (qrErr) {
+          const qrMsg = qrErr instanceof Error ? qrErr.message : String(qrErr);
+          console.warn(`[ecargo] ${shipmentId} qr wait:`, qrMsg);
+          const verifyDoneBits = [
+            regNo ? `Phiếu ${regNo}` : "",
+            mail.verifyCode ? `Mã ${mail.verifyCode}` : "",
+          ].filter(Boolean);
+          await updateJob(shipmentId, {
+            status: "verified",
+            verifyCode: mail.verifyCode,
             registrationNo: regNo || undefined,
-            mawb: booking.mawb,
-            vehicleNo: booking.vehicleNo,
-          },
-        });
+            message:
+              verifyDoneBits.length > 0
+                ? `Đã xác thực — ${verifyDoneBits.join(" · ")} (chưa nhận mail QR)`
+                : `Đã xác thực thành công (chưa nhận mail QR).`,
+            finishedAt: new Date().toISOString(),
+            durationMs: Date.now() - startedAt,
+            jobId,
+          });
+          if (deps.runMutation) {
+            const next = await deps.runMutation({
+              action: "PATCH_ECARGO_KHO_SCSC",
+              shipmentId,
+              markedSubmitted: true,
+            });
+            deps.io?.emit("sync", next);
+          }
+          await closeEcargoContext(browserContext, { destroy: false });
+          return;
+        }
         const qrWaitMs = Date.now() - tQr;
         console.info(`[ecargo] ${shipmentId} step4 done ${qrWaitMs}ms reg=${qrMail.registrationNo}`);
         await updateJob(shipmentId, {
@@ -281,6 +314,9 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
     console.warn("[ecargo] warm playwright:", e?.message ?? e)
   );
   void warmEcargoGmail().catch((e) => console.warn("[ecargo] warm gmail:", e?.message ?? e));
+  void recoverOrphanedEcargoJobs(storeClient, emitJob).catch((e) =>
+    console.warn("[ecargo] recover stale jobs:", e?.message ?? e)
+  );
 
   (async function loop() {
     console.info("[ecargo] Worker started — queue", ECARGO_QUEUE_KEY);
@@ -315,4 +351,44 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Job kẹt sau restart deploy — dọn trạng thái để UI không treo «đang đọc mail» vô hạn. */
+async function recoverOrphanedEcargoJobs(storeClient, emitJob) {
+  if (!storeClient) return;
+  const keys = await storeClient.keys(`${ECARGO_JOB_KEY_PREFIX}*`);
+  for (const key of keys) {
+    const raw = await storeClient.get(key);
+    if (!raw) continue;
+    let job;
+    try {
+      job = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+    if (!isEcargoJobStaleActive(job)) continue;
+
+    if (job.verifyClickedAt || job.status === "verified_waiting_qr") {
+      const reg = job.registrationNo || "?";
+      const next = await patchEcargoJob(storeClient, job.shipmentId, {
+        status: "verified",
+        message: `Đã xác thực phiếu ${reg} — worker khởi động lại (bỏ qua chờ mail QR).`,
+        finishedAt: new Date().toISOString(),
+      });
+      emitJob?.(next);
+      console.info(`[ecargo] recovered stale verified job ${job.shipmentId} → verified`);
+      continue;
+    }
+
+    const next = await patchEcargoJob(storeClient, job.shipmentId, {
+      status: "error",
+      message:
+        job.status === "waiting_verify_email"
+          ? "Job eCargo bị gián đoạn khi chờ mail xác thực — bấm «Đăng ký lại eCargo»."
+          : "Job eCargo bị gián đoạn — bấm «Đăng ký lại eCargo».",
+      finishedAt: new Date().toISOString(),
+    });
+    emitJob?.(next);
+    console.info(`[ecargo] recovered stale job ${job.shipmentId} (${job.status}) → error`);
+  }
 }

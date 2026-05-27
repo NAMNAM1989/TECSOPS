@@ -47,12 +47,20 @@ export async function patchEcargoJob(client, shipmentId, patch) {
  */
 export async function enqueueEcargoJob(client, job) {
   const payload = {
-    ...job,
+    jobId: job.jobId,
+    shipmentId: job.shipmentId,
+    vehicleNo: job.vehicleNo,
+    viewSessionYmd: job.viewSessionYmd,
+    booking: job.booking,
+    awb: job.awb,
+    attempt: job.attempt,
     status: /** @type {EcargoJobStatus} */ ("queued"),
+    message: job.message,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  await patchEcargoJob(client, job.shipmentId, payload);
+  const key = `${ECARGO_JOB_KEY_PREFIX}${job.shipmentId}`;
+  await client.set(key, JSON.stringify(payload), { EX: 60 * 60 * 48 });
   await client.lPush(ECARGO_QUEUE_KEY, JSON.stringify({ shipmentId: job.shipmentId, jobId: job.jobId }));
   return payload;
 }

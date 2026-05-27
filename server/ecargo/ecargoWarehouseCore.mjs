@@ -25,7 +25,8 @@ export function tomorrowIsoFromVietnamDate(vietnamDate) {
   return `${current.getUTCFullYear()}-${String(current.getUTCMonth() + 1).padStart(2, "0")}-${String(current.getUTCDate()).padStart(2, "0")}`;
 }
 
-/** Khung giờ chuẩn eCargo SCSC — 24 slot mỗi giờ. */
+/** eCargo SCSC: «Thời gian hàng vào phải trước ít nhất 6 giờ so với hiện tại». */
+export const ECARGO_WAREHOUSE_BUFFER_MINUTES = 360;
 export function buildStandardArrivalTimeSlots() {
   const slots = [];
   for (let hour = 0; hour < 24; hour += 1) {
@@ -48,7 +49,7 @@ export function parseSlotStartHour(slotText) {
  * @param {{ bufferMinutes?: number }} [opts]
  */
 export function pickWarehouseTimeSlot(slots, vnNow, opts = {}) {
-  const bufferMinutes = opts.bufferMinutes ?? 60;
+  const bufferMinutes = opts.bufferMinutes ?? ECARGO_WAREHOUSE_BUFFER_MINUTES;
   if (!slots?.length) return "";
   const nowMinutes = vnNow.hour * 60 + vnNow.minute;
   const next = slots.find((slot) => {

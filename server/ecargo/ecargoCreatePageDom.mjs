@@ -80,6 +80,50 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         );
       }
 
+      function listTimeSlotTexts() {
+        const select = getArrivalTimeSelect();
+        if (!select) return [];
+        return [...select.options].map((o) => o.textContent.trim()).filter(Boolean);
+      }
+
+      function todayAtVietnamTimeInBrowser() {
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Ho_Chi_Minh",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).formatToParts(new Date());
+        const get = (type) => parts.find((p) => p.type === type)?.value;
+        return {
+          date: `${get("year")}-${get("month")}-${get("day")}`,
+          hour: Number(get("hour")),
+          minute: Number(get("minute")),
+        };
+      }
+
+      /** Chọn khung giờ thực tế trên dropdown — eCargo chặn mở AWB nếu < 6h. */
+      function resolveWarehouseTimeSlot(plan) {
+        const pageSlots = listTimeSlotTexts();
+        if (plan?.timeSlot && pageSlots.includes(plan.timeSlot)) return plan.timeSlot;
+        if (!pageSlots.length) return plan?.timeSlot ?? "";
+        const vn = todayAtVietnamTimeInBrowser();
+        const bufferMinutes = 360;
+        const nowMinutes = vn.hour * 60 + vn.minute;
+        const next = pageSlots.find((slot) => {
+          const startHour = parseSlotStartHour(slot);
+          return startHour >= 0 && startHour * 60 >= nowMinutes + bufferMinutes;
+        });
+        return next ?? pageSlots[pageSlots.length - 1];
+      }
+
+      function parseSlotStartHour(slotText) {
+        const match = /^(\d{1,2}):/.exec(String(slotText || ""));
+        return match ? Number(match[1]) : -1;
+      }
+
       function selectTimeSlot(slotText) {
         const select = getArrivalTimeSelect();
         if (!select) throw new Error(`Không tìm thấy khung giờ ${slotText}`);
@@ -111,6 +155,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         return visibleElementsIn(modal, "input, textarea").filter(
           (item) => item.type !== "radio" && item.type !== "checkbox" && !item.classList.contains("select2-search__field")
         );
+      }
+
+      function mainFormValidationHint() {
+        const bits = visibleElements(
+          ".text-danger, .invalid-feedback, .field-validation-error, .alert-danger, .alert-warning"
+        )
+          .map((el) => textOf(el))
+          .filter((t) => t && t !== "(*)" && !/email doanh nghiệp/i.test(t));
+        return bits.join(" · ");
       }
 
       function modalValidationHint() {
@@ -188,7 +241,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
           throw new Error("Thiếu kế hoạch ngày/giờ hàng vào kho.");
         }
         setNativeValue(inputs[3], plan.arrivalDate);
-        selectTimeSlot(plan.timeSlot);
+        const slot = resolveWarehouseTimeSlot(plan);
+        if (!slot) throw new Error("Không chọn được khung giờ hàng vào kho.");
+        selectTimeSlot(slot);
       }
 
       function fillMainForm(data) {
@@ -240,12 +295,18 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       async function openAwbModal() {
         const button = findButtonByText("Thêm AWB");
         if (!button) throw new Error("Không tìm thấy nút Thêm AWB.");
+        button.scrollIntoView({ block: "center", inline: "nearest" });
         button.click();
-        for (let i = 0; i < 30; i += 1) {
+        for (let i = 0; i < 50; i += 1) {
           if (getOpenModal()) return;
           await sleep(100);
         }
-        throw new Error("Không mở được modal Thêm AWB.");
+        const hint = mainFormValidationHint();
+        throw new Error(
+          hint
+            ? `Không mở được modal Thêm AWB — ${hint}`
+            : "Không mở được modal Thêm AWB — kiểm tra ngày/giờ hàng vào kho (eCargo yêu cầu ≥ 6 giờ)."
+        );
       }
 
       async function saveAwbModal() {

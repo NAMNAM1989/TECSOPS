@@ -17,15 +17,15 @@ describe("ecargoWarehouseCore", () => {
     expect(SLOTS).toHaveLength(24);
   });
 
-  it("pickWarehouseTimeSlot chọn slot cách hiện tại ≥ 60 phút", () => {
-    expect(pickWarehouseTimeSlot(SLOTS, { hour: 1, minute: 14 })).toBe("03:00 - 04:00");
-    expect(pickWarehouseTimeSlot(SLOTS, { hour: 10, minute: 0 })).toBe("11:00 - 12:00");
+  it("pickWarehouseTimeSlot chọn slot cách hiện tại ≥ 6 giờ (quy tắc eCargo)", () => {
+    expect(pickWarehouseTimeSlot(SLOTS, { hour: 1, minute: 14 })).toBe("08:00 - 09:00");
+    expect(pickWarehouseTimeSlot(SLOTS, { hour: 10, minute: 0 })).toBe("16:00 - 17:00");
   });
 
   it("buildWarehouseArrivalPlan ban ngày dùng hôm nay + slot tiếp theo", () => {
     const plan = buildWarehouseArrivalPlan(CFG, new Date("2026-05-28T01:14:00+07:00"));
     expect(plan.arrivalDate).toBe("2026-05-28");
-    expect(plan.timeSlot).toBe("03:00 - 04:00");
+    expect(plan.timeSlot).toBe("08:00 - 09:00");
   });
 
   it("buildWarehouseArrivalPlan sau 20h chuyển sang ngày mai 07:00–08:00", () => {

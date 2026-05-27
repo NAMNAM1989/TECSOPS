@@ -22,3 +22,8 @@ tecsops-state-*.json
 **/tecsops-state-*.json
 tecsops-postgres-state-*.json
 **/tecsops-postgres-state-*.json
+
+# Debug / scratch (không commit)
+tmp/
+outputs/
+.openclaw/

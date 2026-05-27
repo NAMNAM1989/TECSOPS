@@ -1,4 +1,4 @@
-import type { Workbook, Worksheet, Borders, Font, Alignment } from "exceljs";
+import type { Workbook, Borders, Font, Alignment } from "exceljs";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { InvoiceLineItem } from "../types/invoiceItem";
@@ -284,19 +284,4 @@ function estimateRowHeight(description: string): number {
   if (len <= 60) return 36;
   if (len <= 100) return 48;
   return 60;
-}
-
-// ─── Legacy compat export ───────────────────────────────────────
-
-/**
- * @deprecated — Giữ lại cho compat. Dùng buildInvoiceWorkbook thay thế.
- */
-export function fillInvoiceWorksheetFromTemplate(
-  _ws: Worksheet,
-  shipment: Shipment,
-  directory: readonly CustomerDirectoryEntry[],
-  options: FillInvoiceWorksheetOptions,
-): { invoiceNo: string; lastRow: number } {
-  const invoiceNo = buildInvoiceNumber(shipment, directory, options.at);
-  return { invoiceNo, lastRow: 27 };
 }

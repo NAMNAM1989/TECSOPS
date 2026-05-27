@@ -3,13 +3,13 @@ import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import {
   invoiceLineAmountUsd,
-  invoiceLineGrossWeightKg,
   totalsForInvoice,
   type InvoiceLineItem,
 } from "../types/invoiceItem";
 import { buildShipmentCneeBodyLines } from "../utils/shipmentCneeCopyBlock";
 import {
   buildInvoiceNumber,
+  formatInvoiceFlightLine,
   formatInvoiceSheetDate,
 } from "../utils/shipmentInvoiceCore";
 
@@ -46,7 +46,7 @@ export function ShipmentInvoiceSheetPreview({
     [shipment, customerDirectory, at]
   );
   const dateStr = formatInvoiceSheetDate(at);
-  const flight = (shipment.flight ?? "").trim().toUpperCase();
+  const flightLine = formatInvoiceFlightLine(shipment);
   const cneeLines = useMemo(
     () => buildShipmentCneeBodyLines(shipment, customerDirectory),
     [shipment, customerDirectory]
@@ -60,7 +60,7 @@ export function ShipmentInvoiceSheetPreview({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <p className="mb-2 shrink-0 text-center text-[11px] font-medium text-slate-600 dark:text-slate-400">
-        Xem trước như file in · A4 · Times New Roman
+        Xem trước Invoice (kèm tờ khai HQ) · A4 · Times New Roman
       </p>
       <div className="min-h-0 flex-1 overflow-auto rounded-lg bg-slate-200/80 p-3 dark:bg-slate-900/80">
         <article
@@ -79,8 +79,8 @@ export function ShipmentInvoiceSheetPreview({
             </div>
             <div className="min-w-[14rem] space-y-0.5 text-left">
               <p>
-                <span className="inline-block w-[5.5rem]">InvoiceNo.:</span>
-                <span className="font-normal">{invoiceNo}</span>
+                <span className="inline-block w-[5.5rem]">Invoice No.:</span>
+                <span className="font-bold">{invoiceNo}</span>
               </p>
               <p>
                 <span className="inline-block w-[5.5rem]">Date:</span>
@@ -88,14 +88,14 @@ export function ShipmentInvoiceSheetPreview({
               </p>
               <p>
                 <span className="inline-block w-[5.5rem]">Flight:</span>
-                <span>{flight || "—"}</span>
+                <span>{flightLine || "—"}</span>
               </p>
               <p className="font-semibold">NO PAYMENT</p>
             </div>
           </div>
 
           <div className="mt-4 text-[12pt] leading-snug">
-            <p className="font-normal">THE CNEE:</p>
+            <p className="font-bold">THE CNEE:</p>
             {cneeLines.length === 0 ? (
               <p className="text-slate-500 italic">(Chưa có địa chỉ CNEE)</p>
             ) : (
@@ -107,75 +107,45 @@ export function ShipmentInvoiceSheetPreview({
             )}
           </div>
 
+          {/* ─── Goods table (8 columns matching Excel output) ─── */}
           <table className="mt-5 w-full border-collapse text-[11pt]">
             <thead>
               <tr>
-                <th
-                  rowSpan={2}
-                  className="w-[2.2rem] border border-black px-1 py-1 text-center font-bold"
-                >
+                <th className="w-[2.2rem] border border-black px-1 py-1.5 text-center font-bold">
                   No
                 </th>
-                <th
-                  colSpan={2}
-                  rowSpan={2}
-                  className="min-w-[12rem] border border-black px-1 py-1 text-center font-bold"
-                >
-                  Depcription of goods
+                <th className="min-w-[12rem] border border-black px-1 py-1.5 text-center font-bold">
+                  Description of goods
                 </th>
-                <th
-                  rowSpan={2}
-                  className="border border-black px-1 py-1 text-center font-bold"
-                >
+                <th className="border border-black px-1 py-1.5 text-center font-bold">
                   HS code
                 </th>
-                <th
-                  rowSpan={2}
-                  className="w-[3rem] border border-black px-1 py-1 text-center font-bold"
-                >
+                <th className="w-[3.5rem] border border-black px-1 py-1.5 text-center font-bold">
                   Origin
                 </th>
-                <th
-                  rowSpan={2}
-                  className="border border-black px-1 py-1 text-center font-bold"
-                >
+                <th className="border border-black px-1 py-1.5 text-center font-bold">
                   Quantity
                 </th>
-                <th
-                  rowSpan={2}
-                  className="border border-black px-1 py-1 text-center font-bold"
-                >
+                <th className="border border-black px-1 py-1.5 text-center font-bold">
                   Unit
                 </th>
-                <th className="border border-black px-1 py-0.5 text-center font-bold">
-                  U.Price (FCA)
+                <th className="border border-black px-1 py-1.5 text-center font-bold">
+                  U.Price
+                  <br />
+                  <span className="font-normal text-[9pt]">(FCA)(USD)</span>
                 </th>
-                <th className="border border-black px-1 py-0.5 text-center font-bold">
+                <th className="border border-black px-1 py-1.5 text-center font-bold">
                   Amount
+                  <br />
+                  <span className="font-normal text-[9pt]">(USD)</span>
                 </th>
-                <th
-                  rowSpan={2}
-                  className="border border-black px-1 py-1 text-center font-bold"
-                >
-                  Unit wt (kg)
-                </th>
-                <th
-                  rowSpan={2}
-                  className="border border-black px-1 py-1 text-center font-bold"
-                >
-                  Gross wt (kg)
-                </th>
-              </tr>
-              <tr>
-                <th className="border border-black px-1 py-0.5 text-center font-normal">USD</th>
-                <th className="border border-black px-1 py-0.5 text-center font-normal">USD</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={8}
                     className="border border-black px-2 py-6 text-center text-slate-500 italic"
                   >
                     Chưa có dòng hàng — bảng để trống khi xuất
@@ -184,14 +154,12 @@ export function ShipmentInvoiceSheetPreview({
               ) : (
                 items.map((it, idx) => {
                   const amount = invoiceLineAmountUsd(it);
-                  const gross = invoiceLineGrossWeightKg(it);
                   return (
                     <tr key={it.lineId} className="align-top">
-                      <td className="border border-black px-1 py-1.5 text-center">{idx + 1}</td>
-                      <td
-                        colSpan={2}
-                        className="border border-black px-1 py-1.5 text-left leading-snug"
-                      >
+                      <td className="border border-black px-1 py-1.5 text-center">
+                        {idx + 1}
+                      </td>
+                      <td className="border border-black px-1 py-1.5 text-left leading-snug">
                         {it.description || "—"}
                       </td>
                       <td className="border border-black px-1 py-1.5 text-center text-[10pt]">
@@ -209,57 +177,34 @@ export function ShipmentInvoiceSheetPreview({
                       <td className="border border-black px-1 py-1.5 text-right tabular-nums">
                         {fmtUsd(it.unitPriceUsd)}
                       </td>
-                      <td
-                        className="border border-black px-1 py-1.5 text-right font-normal tabular-nums"
-                        style={{ color: "#00B050" }}
-                      >
-                        {fmtUsd(amount)}
-                      </td>
                       <td className="border border-black px-1 py-1.5 text-right tabular-nums">
-                        {fmtUsd(it.kgPerUnit)}
-                      </td>
-                      <td
-                        className="border border-black px-1 py-1.5 text-right tabular-nums"
-                        style={{ color: "#00B050" }}
-                      >
-                        {fmtUsd(gross)}
+                        {fmtUsd(amount)}
                       </td>
                     </tr>
                   );
                 })
               )}
+              {/* TOTAL row */}
               <tr className="font-bold">
-                <td
-                  colSpan={3}
-                  className="border border-black px-1 py-2 text-center text-[12pt]"
-                >
+                <td className="border border-black px-1 py-2" />
+                <td className="border border-black px-1 py-2 text-left text-[12pt]">
                   TOTAL
                 </td>
                 <td className="border border-black" />
                 <td className="border border-black" />
                 <td className="border border-black" />
-                <td className="border border-black px-1 py-2 text-center tabular-nums">
-                  {fmtQty(totals.totalQuantity)}
+                <td className="border border-black" />
+                <td className="border border-black px-1 py-2 text-right tabular-nums">
+                  {fmtUsd(totals.totalAmountUsd > 0 ? totals.totalAmountUsd : 0)}
                 </td>
-                <td className="border border-black" />
-                <td className="border border-black" />
-                <td
-                  className="border border-black px-1 py-2 text-center tabular-nums"
-                  style={{ color: "#00B050" }}
-                >
+                <td className="border border-black px-1 py-2 text-right tabular-nums">
                   {fmtUsd(totals.totalAmountUsd)}
-                </td>
-                <td className="border border-black" />
-                <td
-                  className="border border-black px-1 py-2 text-center tabular-nums"
-                  style={{ color: "#00B050" }}
-                >
-                  {fmtUsd(totals.totalGrossKg)}
                 </td>
               </tr>
             </tbody>
           </table>
 
+          {/* Footer */}
           <div className="mt-0 border-t border-black pt-2 text-[12pt] leading-relaxed">
             <p>
               <span className="font-bold">1. Total carton:</span>{" "}
@@ -269,6 +214,20 @@ export function ShipmentInvoiceSheetPreview({
               <span className="font-bold">2. Total gross weight:</span>{" "}
               <span className="ml-2">{kgFooter}</span>
             </p>
+          </div>
+
+          {/* Customs declaration note */}
+          <div className="mt-4 rounded border border-dashed border-indigo-400/50 bg-indigo-50/50 px-3 py-2 text-[10pt] text-indigo-800">
+            <p className="font-semibold">Tờ khai hải quan — Mapping dữ liệu:</p>
+            <ul className="mt-1 list-inside list-disc space-y-0.5 text-[9.5pt]">
+              <li>Mô tả hàng → Ô 30 "Mô tả hàng hóa"</li>
+              <li>Mã HS → Ô 31 "Mã số HS"</li>
+              <li>Xuất xứ → Ô 32 "Xuất xứ"</li>
+              <li>Số lượng × Đơn giá = Trị giá → Ô 37 "Trị giá hải quan"</li>
+              <li>Invoice No. → Ô 14 "Số hoá đơn thương mại"</li>
+              <li>Tổng kiện → Ô 29 "Số lượng kiện"</li>
+              <li>Tổng KG → Ô 33 "Trọng lượng"</li>
+            </ul>
           </div>
         </article>
       </div>

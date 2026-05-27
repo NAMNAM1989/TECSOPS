@@ -55,6 +55,18 @@ export function formatInvoiceSheetDate(at: Date = new Date()): string {
   return `${dd}${mon},${at.getFullYear()}`;
 }
 
+/** Chuyến bay kèm ngày bay trên invoice, ví dụ `SQ185/ 28MAY`. */
+export function formatInvoiceFlightLine(
+  shipment: Pick<Shipment, "flight" | "flightDate">,
+): string {
+  const flight = (shipment.flight ?? "").trim().toUpperCase();
+  const flightDate = (shipment.flightDate ?? "").trim().toUpperCase();
+  if (flight && flightDate) return `${flight}/ ${flightDate}`;
+  if (flight) return flight;
+  if (flightDate) return flightDate;
+  return "";
+}
+
 export function sanitizeInvoiceFilePart(s: string): string {
   return s.replace(/[<>:"/\\|?*\s]+/g, "_").slice(0, 80);
 }

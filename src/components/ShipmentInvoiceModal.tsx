@@ -14,6 +14,7 @@ import {
 import {
   buildInvoiceNumber,
   downloadShipmentInvoiceExcel,
+  formatInvoiceFlightLine,
 } from "../utils/exportShipmentInvoiceExcel";
 import { downloadShipmentInvoicePdf } from "../utils/exportShipmentInvoicePdf";
 import { ShipmentInvoiceItemPicker } from "./ShipmentInvoiceItemPicker";
@@ -83,6 +84,7 @@ export function ShipmentInvoiceModal({
     () => buildInvoiceNumber(shipment, customerDirectory),
     [shipment, customerDirectory]
   );
+  const flightLine = useMemo(() => formatInvoiceFlightLine(shipment), [shipment]);
 
   const cartonBadge = matchBadge("Kiện", shipment.pcs, totals.totalQuantity, " CTNS");
   const grossBadge = matchBadge("KG", shipment.kg, totals.totalGrossKg, " KGM");
@@ -214,7 +216,7 @@ export function ShipmentInvoiceModal({
       onWheel={stopScrollChain}
     >
       <div
-        className={`isolate mx-auto flex h-[calc(100vh-1rem)] max-h-[calc(100vh-1rem)] w-full max-w-[min(98vw,110rem)] min-h-0 flex-col overflow-hidden rounded-2xl border shadow-2xl contain-layout ${OPS.modal} ${OPS.border}`}
+        className={`isolate mx-auto flex h-[calc(100vh-0.5rem)] max-h-[calc(100vh-0.5rem)] w-full max-w-[min(99vw,120rem)] min-h-0 flex-col overflow-hidden rounded-2xl border shadow-2xl contain-layout ${OPS.modal} ${OPS.border}`}
         onClick={(e) => e.stopPropagation()}
         onWheel={stopScrollChain}
       >
@@ -225,7 +227,7 @@ export function ShipmentInvoiceModal({
                 Khai báo hải quan · AWB {shipment.awb || "—"}
               </h2>
               <p className={`mt-0.5 text-xs ${OPS.muted}`}>
-                {invoicePreview} · {shipment.flight || "—"} · {shipment.dest || "—"}
+                {invoicePreview} · {flightLine || "—"} · {shipment.dest || "—"}
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <span
@@ -251,15 +253,26 @@ export function ShipmentInvoiceModal({
                 </span>
               </div>
             </div>
-            <p className={`max-w-xs text-[11px] leading-snug ${OPS.muted}`}>
-              Nhập liệu tại đây — bấm ngoài nền không đóng. Khi xong, bấm{" "}
-              <strong className="font-semibold text-indigo-700 dark:text-indigo-300">Hoàn tất</strong>.
-            </p>
+            <div className="flex items-start gap-2">
+              <p className={`max-w-xs text-[11px] leading-snug ${OPS.muted}`}>
+                Nhập liệu tại đây — bấm ngoài nền không đóng. Khi xong, bấm{" "}
+                <strong className="font-semibold text-indigo-700 dark:text-indigo-300">Hoàn tất</strong>.
+              </p>
+              <button
+                type="button"
+                onClick={requestClose}
+                className="ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg font-bold text-slate-500 transition hover:bg-red-100 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-900/40 dark:hover:text-red-300"
+                aria-label="Đóng bảng"
+                title="Đóng"
+              >
+                ×
+              </button>
+            </div>
           </div>
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-          <div className="flex h-[min(22vh,200px)] min-h-0 max-h-[30vh] shrink-0 flex-col overflow-hidden border-b border-black/10 lg:h-full lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r dark:border-white/10">
+          <div className="flex h-[min(22vh,200px)] min-h-0 max-h-[30vh] shrink-0 flex-col overflow-hidden border-b border-black/10 lg:h-full lg:max-h-none lg:w-60 lg:border-b-0 lg:border-r dark:border-white/10">
             <ShipmentInvoiceItemPicker mode="pane" onPick={addFromCatalog} />
           </div>
 
@@ -272,128 +285,108 @@ export function ShipmentInvoiceModal({
               />
             </div>
 
-            <div className="flex min-h-0 w-full flex-col overflow-hidden lg:w-[min(42%,28rem)]">
+            <div className="flex min-h-0 w-full flex-col overflow-hidden lg:w-[min(38%,26rem)]">
             <div className={`flex items-center justify-between gap-2 border-b px-3 py-2 ${OPS.border}`}>
               <p className={`text-xs font-semibold ${OPS.secondary}`}>
                 Chỉnh dòng hàng — {items.length} dòng
               </p>
               <button type="button" onClick={addBlank} className={OPS.btnSmallAccent}>
-                + Dòng tự nhập
+                + Thêm dòng
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-scroll overflow-x-auto overscroll-contain px-2 py-2">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 space-y-2">
               {items.length === 0 ? (
                 <div className={`m-1 ${OPS.empty}`}>
-                  Chọn mặt hàng từ catalog bên trái hoặc thêm dòng tự nhập. Chưa có dòng thì bảng hàng trên
-                  invoice để trống khi xuất.
+                  Chọn mặt hàng từ catalog bên trái hoặc thêm dòng tự nhập.
                 </div>
               ) : (
-                <table className="w-full min-w-[42rem] border-separate border-spacing-0 text-xs">
-                  <thead className={OPS.tableHead}>
-                    <tr>
-                      <th className="w-8 px-1.5 py-1.5">#</th>
-                      <th className="min-w-[12rem] px-1.5 py-1.5">Mô tả hàng</th>
-                      <th className="w-24 px-1.5 py-1.5">HS</th>
-                      <th className="w-12 px-1.5 py-1.5">Ori</th>
-                      <th className="w-14 px-1.5 py-1.5 text-right">Kiện</th>
-                      <th className="w-12 px-1.5 py-1.5">Đv</th>
-                      <th className="w-16 px-1.5 py-1.5 text-right">USD</th>
-                      <th className="w-14 px-1.5 py-1.5 text-right">kg/đv</th>
-                      <th className="w-20 px-1.5 py-1.5 text-right">T.kg · USD</th>
-                      <th className="w-9 px-1.5 py-1.5"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((it, idx) => (
-                      <tr
-                        key={it.lineId}
-                        className={`border-b align-middle ${OPS.border} bg-transparent even:bg-black/[0.02] dark:even:bg-white/[0.02]`}
+                items.map((it, idx) => (
+                  <div
+                    key={it.lineId}
+                    className={`rounded-lg border p-2.5 ${OPS.border} bg-white/60 dark:bg-white/[0.03]`}
+                  >
+                    <div className="flex items-start justify-between gap-1 mb-1.5">
+                      <span className="shrink-0 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                        {idx + 1}
+                      </span>
+                      <span className="text-[10px] tabular-nums text-slate-500">
+                        {invoiceLineGrossWeightKg(it).toFixed(1)}kg · ${invoiceLineAmountUsd(it).toFixed(2)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(it.lineId)}
+                        className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"
+                        aria-label="Xóa dòng"
                       >
-                        <td className="px-1.5 py-1 text-slate-500">{idx + 1}</td>
-                        <td className="px-1.5 py-1">
-                          <input
-                            value={it.description}
-                            onChange={(e) => updateItem(it.lineId, { description: e.target.value })}
-                            className={`${OPS.input} w-full py-1.5 text-xs`}
-                          />
-                        </td>
-                        <td className="px-1.5 py-1">
-                          <input
-                            value={it.hsCode}
-                            onChange={(e) => updateItem(it.lineId, { hsCode: e.target.value })}
-                            className={`${OPS.input} w-full py-1.5 text-xs`}
-                          />
-                        </td>
-                        <td className="px-1.5 py-1">
-                          <input
-                            value={it.origin}
-                            onChange={(e) =>
-                              updateItem(it.lineId, { origin: e.target.value.toUpperCase() })
-                            }
-                            className={`${OPS.input} w-full py-1.5 text-xs`}
-                          />
-                        </td>
-                        <td className="px-1.5 py-1">
-                          <input
-                            type="number"
-                            value={it.quantity}
-                            onChange={(e) =>
-                              updateItem(it.lineId, { quantity: safeNumber(e.target.value) })
-                            }
-                            className={`${OPS.input} w-full py-1.5 text-right text-xs tabular-nums`}
-                          />
-                        </td>
-                        <td className="px-1.5 py-1">
-                          <input
-                            value={it.unit}
-                            onChange={(e) =>
-                              updateItem(it.lineId, { unit: e.target.value.toUpperCase() })
-                            }
-                            className={`${OPS.input} w-full py-1.5 text-xs`}
-                          />
-                        </td>
-                        <td className="px-1.5 py-1">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={it.unitPriceUsd}
-                            onChange={(e) =>
-                              updateItem(it.lineId, { unitPriceUsd: safeNumber(e.target.value) })
-                            }
-                            className={`${OPS.input} w-full py-1.5 text-right text-xs tabular-nums`}
-                          />
-                        </td>
-                        <td className="px-1.5 py-1">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={it.kgPerUnit}
-                            onChange={(e) =>
-                              updateItem(it.lineId, { kgPerUnit: safeNumber(e.target.value) })
-                            }
-                            className={`${OPS.input} w-full py-1.5 text-right text-xs tabular-nums`}
-                          />
-                        </td>
-                        <td className="px-1.5 py-1 text-right text-[11px] tabular-nums text-slate-500">
-                          {invoiceLineGrossWeightKg(it).toFixed(1)}
-                          <span className="mx-0.5 opacity-40">·</span>
-                          {invoiceLineAmountUsd(it).toFixed(1)}
-                        </td>
-                        <td className="px-1.5 py-1 text-right">
-                          <button
-                            type="button"
-                            onClick={() => removeItem(it.lineId)}
-                            className="rounded px-1.5 py-0.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
-                            aria-label="Xóa dòng"
-                          >
-                            ×
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        ×
+                      </button>
+                    </div>
+                    <input
+                      value={it.description}
+                      onChange={(e) => updateItem(it.lineId, { description: e.target.value })}
+                      placeholder="Mô tả hàng hóa"
+                      className={`${OPS.input} mb-1.5 w-full py-1.5 text-xs`}
+                    />
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div>
+                        <label className="block text-[9px] text-slate-500 mb-0.5">HS code</label>
+                        <input
+                          value={it.hsCode}
+                          onChange={(e) => updateItem(it.lineId, { hsCode: e.target.value })}
+                          className={`${OPS.input} w-full py-1 text-xs`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-slate-500 mb-0.5">Xuất xứ</label>
+                        <input
+                          value={it.origin}
+                          onChange={(e) => updateItem(it.lineId, { origin: e.target.value.toUpperCase() })}
+                          className={`${OPS.input} w-full py-1 text-xs`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-slate-500 mb-0.5">Đơn vị</label>
+                        <input
+                          value={it.unit}
+                          onChange={(e) => updateItem(it.lineId, { unit: e.target.value.toUpperCase() })}
+                          className={`${OPS.input} w-full py-1 text-xs`}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                      <div>
+                        <label className="block text-[9px] text-slate-500 mb-0.5">Số lượng</label>
+                        <input
+                          type="number"
+                          value={it.quantity}
+                          onChange={(e) => updateItem(it.lineId, { quantity: safeNumber(e.target.value) })}
+                          className={`${OPS.input} w-full py-1 text-right text-xs tabular-nums`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-slate-500 mb-0.5">Đơn giá $</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={it.unitPriceUsd}
+                          onChange={(e) => updateItem(it.lineId, { unitPriceUsd: safeNumber(e.target.value) })}
+                          className={`${OPS.input} w-full py-1 text-right text-xs tabular-nums`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-slate-500 mb-0.5">kg/đv</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={it.kgPerUnit}
+                          onChange={(e) => updateItem(it.lineId, { kgPerUnit: safeNumber(e.target.value) })}
+                          className={`${OPS.input} w-full py-1 text-right text-xs tabular-nums`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
             </div>

@@ -4,6 +4,7 @@ import type { Shipment } from "../types/shipment";
 import {
   buildInvoiceNumber,
   buildShipmentInvoiceXlsxBuffer,
+  formatInvoiceFlightLine,
   formatInvoiceSheetDate,
   resolveCustomerCode,
 } from "./exportShipmentInvoiceExcel";
@@ -47,11 +48,6 @@ function cellFormula(ws: ExcelJS.Worksheet, address: string): string | undefined
   return undefined;
 }
 
-function lastRowFromPrintArea(ws: ExcelJS.Worksheet): number {
-  const m = /:K(\d+)/i.exec(String(ws.pageSetup.printArea ?? ""));
-  return m ? parseInt(m[1], 10) : 0;
-}
-
 describe("exportShipmentInvoiceExcel helpers", () => {
   it("InvoiceNO = NNL + dest + mã khách + ddmmyy", () => {
     const at = new Date(2026, 4, 26, 12, 0, 0);
@@ -63,37 +59,33 @@ describe("exportShipmentInvoiceExcel helpers", () => {
     expect(formatInvoiceSheetDate(at)).toBe("20MAY,2026");
   });
 
+  it("formatInvoiceFlightLine gộp chuyến + ngày bay", () => {
+    expect(formatInvoiceFlightLine({ flight: "SQ185", flightDate: "28MAY" })).toBe("SQ185/ 28MAY");
+    expect(formatInvoiceFlightLine({ flight: "VJ085", flightDate: "" })).toBe("VJ085");
+    expect(formatInvoiceFlightLine({ flight: "", flightDate: "26MAY" })).toBe("26MAY");
+    expect(formatInvoiceFlightLine({ flight: "", flightDate: "" })).toBe("");
+  });
+
   it("resolveCustomerCode ưu tiên mã trên lô", () => {
     expect(resolveCustomerCode(base({ customerCode: "cy1" }), [])).toBe("CY1");
   });
 
-  it("điền header, CNEE, footer — giữ khung mẫu 28 dòng", async () => {
+  it("tạo file Excel mới không lỗi, có title + invoice no", async () => {
     const { buffer, invoiceNo } = await buildShipmentInvoiceXlsxBuffer(
-      base({
-        dest: "TPE",
-        customerCode: "EBB",
-        flight: "VJ085",
-        consigneeNamePrint: "DATONG INTERNATIONAL DEVELOPMENT CO., LTD.",
-        consigneeAddressPrint: "TAOYUAN CITY 33051, TAIWAN (R.O.C.)",
-        consigneePhonePrint: "03-383045",
-      }),
-      []
+      base({ dest: "TPE", customerCode: "EBB", flight: "VJ085" }),
+      [],
     );
     expect(invoiceNo).toMatch(/^NNLTPEEBB\d{6}$/);
 
     const ws = await loadSheet(buffer);
-    expect(ws.getCell("A1").value).toBe("NONCOMMERCIAL INVOICE");
-    expect(ws.getCell("G3").value).toBe(invoiceNo);
-    expect(ws.getCell("G5").value).toBe("VJ085");
-    expect(ws.getCell("C27").value).toBe("1 CTNS");
-    expect(ws.getCell("C28").value).toBe("10 KGM");
-    expect(lastRowFromPrintArea(ws)).toBe(28);
-    expect(ws.pageSetup.printArea).toBe("A1:K28");
-    expect(cellFormula(ws, "I16")).toBeUndefined();
-    expect(ws.getRow(16).hidden).toBeFalsy();
+    expect(ws.getCell("B1").value).toBe("NONCOMMERCIAL INVOICE");
+    // Invoice No ở F3
+    expect(ws.getCell("F3").value).toBe(invoiceNo);
+    // Flight + ngày bay ở F5
+    expect(ws.getCell("F5").value).toBe("VJ085/ 26MAY");
   });
 
-  it("ghi từng item với formula F*H và J*F", async () => {
+  it("ghi items với formula E*G (Amount)", async () => {
     const items = [
       emptyInvoiceLineItem({
         description: "BÁNH AFC. NSX: T03/2026",
@@ -115,23 +107,25 @@ describe("exportShipmentInvoiceExcel helpers", () => {
       }),
     ];
     const ws = await loadSheet(
-      (await buildShipmentInvoiceXlsxBuffer(base({ pcs: 82, kg: 41 }), [], { items })).buffer
+      (await buildShipmentInvoiceXlsxBuffer(base({ pcs: 82, kg: 41 }), [], { items })).buffer,
     );
 
-    expect(ws.getCell("A16").value).toBe(1);
-    expect(ws.getCell("A17").value).toBe(2);
-    expect(ws.getCell("F16").value).toBe(33);
-    expect(ws.getCell("H17").value).toBe(0.98);
-    expect(cellFormula(ws, "I16")).toBe("F16*H16");
-    expect(cellFormula(ws, "K17")).toBe("J17*F17");
-    expect(cellFormula(ws, "G26")).toBe("SUM(G16:G17)");
-    expect(ws.getCell("C27").value).toBe("82 CTNS");
-    expect(ws.getCell("C28").value).toBe("41 KGM");
-    expect(lastRowFromPrintArea(ws)).toBe(28);
-    expect(ws.getCell("B19").value).toBeNull();
+    // Tìm dòng có No=1 (goods area)
+    let goodsRow = 0;
+    for (let r = 1; r <= ws.rowCount; r++) {
+      if (ws.getCell(r, 1).value === 1) { goodsRow = r; break; }
+    }
+    expect(goodsRow).toBeGreaterThan(10);
+    // Item 1
+    expect(ws.getCell(goodsRow, 5).value).toBe(33); // Quantity
+    expect(ws.getCell(goodsRow, 7).value).toBe(0.62); // Price
+    expect(cellFormula(ws, `H${goodsRow}`)).toBe(`E${goodsRow}*G${goodsRow}`);
+    // Item 2
+    expect(ws.getCell(goodsRow + 1, 1).value).toBe(2);
+    expect(ws.getCell(goodsRow + 1, 5).value).toBe(49);
   });
 
-  it("10 dòng hàng — kết thúc dòng 28", async () => {
+  it("10 dòng hàng — tất cả có border + formula", async () => {
     const items = Array.from({ length: 10 }, (_, i) =>
       emptyInvoiceLineItem({
         description: `Mặt hàng ${i + 1}`,
@@ -141,61 +135,55 @@ describe("exportShipmentInvoiceExcel helpers", () => {
         unit: "BAG",
         unitPriceUsd: 0.5,
         kgPerUnit: 0.5,
-      })
+      }),
     );
     const ws = await loadSheet(
-      (await buildShipmentInvoiceXlsxBuffer(base({ pcs: 1, kg: 99 }), [], { items })).buffer
+      (await buildShipmentInvoiceXlsxBuffer(base({ pcs: 10, kg: 5 }), [], { items })).buffer,
     );
-    expect(lastRowFromPrintArea(ws)).toBe(28);
-    expect(ws.pageSetup.printArea).toBe("A1:K28");
-    expect(ws.getCell("A25").value).toBe(10);
-    expect(ws.getRow(25).hidden).toBeFalsy();
+
+    // Find item 10
+    let lastItemRow = 0;
+    for (let r = 1; r <= ws.rowCount; r++) {
+      if (ws.getCell(r, 1).value === 10) { lastItemRow = r; break; }
+    }
+    expect(lastItemRow).toBeGreaterThan(0);
+    expect(ws.getCell(lastItemRow, 2).value).toBe("Mặt hàng 10");
+    // TOTAL row should be right after
+    expect(ws.getCell(lastItemRow + 1, 2).value).toBe("TOTAL");
   });
 
-  it("7 dòng hàng — ẩn slot trống, TOTAL vẫn hàng 26", async () => {
-    const items = Array.from({ length: 7 }, (_, i) =>
+  it("12 dòng hàng — TOTAL + SUM đúng range", async () => {
+    const items = Array.from({ length: 12 }, (_, i) =>
       emptyInvoiceLineItem({
         description: `Mặt hàng ${i + 1}`,
-        hsCode: "19059090",
-        origin: "VN",
-        quantity: 1,
-        unit: "BAG",
-        unitPriceUsd: 0.5,
-        kgPerUnit: 0.5,
-      })
-    );
-    const ws = await loadSheet(
-      (await buildShipmentInvoiceXlsxBuffer(base({ pcs: 1, kg: 99 }), [], { items })).buffer
-    );
-    expect(lastRowFromPrintArea(ws)).toBe(28);
-    expect(ws.getCell("A22").value).toBe(7);
-    expect(ws.getCell("A23").value).toBeNull();
-    expect(ws.getCell("A26").value).toBe("TOTAL");
-  });
-
-  it("3 dòng hàng — SUM đúng vùng, footer C27/C28", async () => {
-    const items = Array.from({ length: 3 }, (_, i) =>
-      emptyInvoiceLineItem({
-        description: `Mặt hàng ${i + 1}`,
-        hsCode: "19059090",
+        hsCode: "00000000",
         origin: "VN",
         quantity: i + 1,
         unit: "BAG",
         unitPriceUsd: 1,
         kgPerUnit: 0.5,
-      })
+      }),
     );
     const ws = await loadSheet(
-      (await buildShipmentInvoiceXlsxBuffer(base({ pcs: 6, kg: 30 }), [], { items })).buffer
+      (await buildShipmentInvoiceXlsxBuffer(base({ pcs: 12, kg: 60 }), [], { items })).buffer,
     );
 
-    expect(ws.getCell("A18").value).toBe(3);
-    expect(cellFormula(ws, "G26")).toBe("SUM(G16:G18)");
-    expect(ws.getCell("C27").value).toBe("6 CTNS");
-    expect(ws.getCell("C28").value).toBe("30 KGM");
-    expect(lastRowFromPrintArea(ws)).toBe(28);
-    expect(ws.pageSetup.printArea).toBe("A1:K28");
-    expect(ws.getCell("A19").value).toBeFalsy();
+    // Find first goods row
+    let firstGoodsRow = 0;
+    for (let r = 1; r <= ws.rowCount; r++) {
+      if (ws.getCell(r, 1).value === 1) { firstGoodsRow = r; break; }
+    }
+    const lastGoodsRow = firstGoodsRow + 11; // 12 items
+    expect(ws.getCell(lastGoodsRow, 1).value).toBe(12);
+
+    // TOTAL row
+    const totalRow = lastGoodsRow + 1;
+    expect(ws.getCell(totalRow, 2).value).toBe("TOTAL");
+    expect(cellFormula(ws, `H${totalRow}`)).toBe(`SUM(H${firstGoodsRow}:H${lastGoodsRow})`);
+
+    // Footer
+    expect(ws.getCell(totalRow + 1, 2).value).toBe("1.   Total carton: 12 CTNS");
+    expect(ws.getCell(totalRow + 2, 2).value).toBe("2.   Total gross weight: 60 KGM");
   });
 
   it("mô tả dài — tự tăng chiều cao hàng (wrapText)", async () => {
@@ -214,14 +202,18 @@ describe("exportShipmentInvoiceExcel helpers", () => {
       }),
     ];
     const ws = await loadSheet(
-      (await buildShipmentInvoiceXlsxBuffer(base(), [], { items })).buffer
+      (await buildShipmentInvoiceXlsxBuffer(base(), [], { items })).buffer,
     );
-    expect(ws.getCell("B16").alignment?.wrapText).toBe(true);
-    expect(ws.getRow(16).height).toBeGreaterThan(47.25);
-    expect(ws.getCell("B16").value).toBe(longDesc);
+    let goodsRow = 0;
+    for (let r = 1; r <= ws.rowCount; r++) {
+      if (ws.getCell(r, 1).value === 1) { goodsRow = r; break; }
+    }
+    expect(ws.getCell(goodsRow, 2).alignment?.wrapText).toBe(true);
+    expect(ws.getRow(goodsRow).height).toBeGreaterThan(24);
+    expect(ws.getCell(goodsRow, 2).value).toBe(longDesc);
   });
 
-  it("buffer xuất ra load lại được (không hỏng XML/merge)", async () => {
+  it("buffer load lại không lỗi", async () => {
     const { buffer } = await buildShipmentInvoiceXlsxBuffer(base(), [], {
       items: [
         emptyInvoiceLineItem({
@@ -239,32 +231,36 @@ describe("exportShipmentInvoiceExcel helpers", () => {
     await wb2.xlsx.load(buffer);
     const ws2 = wb2.getWorksheet("NNL");
     expect(ws2).toBeTruthy();
-    expect((ws2?.model.merges?.length ?? 0) >= 20).toBe(true);
-    expect(ws2?.getCell("A16").value).toBe(1);
+    // No extra columns beyond H
+    expect(ws2!.columnCount).toBeLessThanOrEqual(8);
   });
 
-  it("12 dòng hàng — chèn thêm 2 dòng, footer dòng 30", async () => {
-    const items = Array.from({ length: 12 }, (_, i) =>
-      emptyInvoiceLineItem({
-        description: `Mặt hàng ${i + 1}`,
-        hsCode: "00000000",
-        origin: "VN",
-        quantity: i + 1,
-        unit: "BAG",
-        unitPriceUsd: 1,
-        kgPerUnit: 0.5,
-      })
-    );
-    const ws = await loadSheet(
-      (await buildShipmentInvoiceXlsxBuffer(base({ pcs: 12, kg: 60 }), [], { items })).buffer
-    );
-
-    expect(ws.getCell("A26").value).toBe(11);
-    expect(ws.getCell("A27").value).toBe(12);
-    expect(cellFormula(ws, "G28")).toBe("SUM(G16:G27)");
-    expect(ws.getCell("C29").value).toBe("12 CTNS");
-    expect(ws.getCell("C30").value).toBe("60 KGM");
-    expect(lastRowFromPrintArea(ws)).toBe(30);
-    expect(ws.pageSetup.printArea).toBe("A1:K30");
+  it("file không có column definitions > H (tránh HRESULT)", async () => {
+    const { buffer } = await buildShipmentInvoiceXlsxBuffer(base(), [], {
+      items: [
+        emptyInvoiceLineItem({
+          description: "Test item",
+          hsCode: "123",
+          origin: "VN",
+          quantity: 5,
+          unit: "BAG",
+          unitPriceUsd: 2,
+          kgPerUnit: 1,
+        }),
+      ],
+    });
+    // Check raw ZIP
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(buffer);
+    const sheetFile = Object.keys(zip.files).find((f) => f.includes("sheet"));
+    expect(sheetFile).toBeTruthy();
+    const xml = await zip.files[sheetFile!].async("string");
+    // No col definitions beyond col 8
+    const colDefs = [...xml.matchAll(/<col min="(\d+)" max="(\d+)"/g)];
+    for (const m of colDefs) {
+      expect(parseInt(m[2])).toBeLessThanOrEqual(8);
+    }
+    // No I/J/K cells
+    expect(xml).not.toMatch(/r="[IJK]\d+"/);
   });
 });

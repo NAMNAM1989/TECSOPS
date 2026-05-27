@@ -2,6 +2,8 @@ const DEFAULT_PCS = 99;
 const DEFAULT_GW = 1000;
 const DEFAULT_COMMODITY = "Garments";
 const DEFAULT_SHC = "0";
+const DEFAULT_VEHICLE_TYPE = "Ô tô";
+const ECARGO_VEHICLE_TYPES = new Set(["Ô tô", "Xe máy", "Xe ba gác", "Đi bộ"]);
 const MAWB_NORMALIZED = /^\d{3}-\d{8}$/;
 const MONTHS3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
@@ -59,6 +61,20 @@ export function todayIsoVietnam() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
 }
 
+export function clampEcargoVehicleType(raw) {
+  const s = String(raw ?? "").trim();
+  return ECARGO_VEHICLE_TYPES.has(s) ? s : undefined;
+}
+
+export function buildWarehouseArrivalFromOverrides(overrides = {}) {
+  const date = String(overrides.arrivalDate ?? "").trim();
+  const slot = String(overrides.arrivalTimeSlot ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$/.test(slot)) {
+    return { arrivalDate: date, timeSlot: slot.replace(/\s+/g, " ") };
+  }
+  return undefined;
+}
+
 const SCSC_WAREHOUSES = new Set(["TECS-SCSC", "KHO-SCSC"]);
 
 function isScscWarehouse(w) {
@@ -104,6 +120,8 @@ export function buildEcargoBookingFromShipment(row, vehicleNormalized, viewSessi
   const driverId = String(driverOverride.driverId ?? "")
     .trim()
     .replace(/\D/g, "");
+  const vehicleType = clampEcargoVehicleType(driverOverride.vehicleType) ?? DEFAULT_VEHICLE_TYPE;
+  const warehouseArrival = buildWarehouseArrivalFromOverrides(driverOverride);
 
   return {
     vehicleNo: normalizeVehicleNo(vehicleNormalized),
@@ -119,6 +137,8 @@ export function buildEcargoBookingFromShipment(row, vehicleNormalized, viewSessi
     grossWeight,
     commodity: DEFAULT_COMMODITY,
     shc: DEFAULT_SHC,
+    vehicleType,
+    ...(warehouseArrival ? { warehouseArrival } : {}),
     opsShipmentId: row.id,
     ...(driverName ? { driverName } : {}),
     ...(driverId ? { driverId } : {}),

@@ -554,6 +554,14 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         ecargoMap={ecargoRegister.map}
         onEcargoVehicleChange={ecargoRegister.setVehicle}
         onEcargoDriverChange={ecargoRegister.setDriver}
+        onEcargoWarehouseChange={(id, arrivalDate, arrivalTimeSlot) =>
+          ecargoRegister.setEcargoLine(id, { arrivalDate, arrivalTimeSlot })
+        }
+        onEcargoVehicleTypeChange={(id, vehicleType) =>
+          ecargoRegister.setEcargoLine(id, {
+            vehicleType: vehicleType as import("../utils/ecargoWarehousePlan").EcargoVehicleType,
+          })
+        }
         onApplyEcargoPrefill={ecargoRegister.applyCustomerEcargoPrefill}
         getEcargoSaveStatus={ecargoRegister.getSaveStatus}
         getEcargoJob={ecargoRegister.getJob}
@@ -578,6 +586,14 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         ecargoMap={ecargoRegister.map}
         onEcargoVehicleChange={ecargoRegister.setVehicle}
         onEcargoDriverChange={ecargoRegister.setDriver}
+        onEcargoWarehouseChange={(id, arrivalDate, arrivalTimeSlot) =>
+          ecargoRegister.setEcargoLine(id, { arrivalDate, arrivalTimeSlot })
+        }
+        onEcargoVehicleTypeChange={(id, vehicleType) =>
+          ecargoRegister.setEcargoLine(id, {
+            vehicleType: vehicleType as import("../utils/ecargoWarehousePlan").EcargoVehicleType,
+          })
+        }
         onApplyEcargoPrefill={ecargoRegister.applyCustomerEcargoPrefill}
         getEcargoSaveStatus={ecargoRegister.getSaveStatus}
         getEcargoJob={ecargoRegister.getJob}
@@ -609,6 +625,14 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         ecargoMap={ecargoRegister.map}
         onEcargoVehicleChange={ecargoRegister.setVehicle}
         onEcargoDriverChange={ecargoRegister.setDriver}
+        onEcargoWarehouseChange={(id, arrivalDate, arrivalTimeSlot) =>
+          ecargoRegister.setEcargoLine(id, { arrivalDate, arrivalTimeSlot })
+        }
+        onEcargoVehicleTypeChange={(id, vehicleType) =>
+          ecargoRegister.setEcargoLine(id, {
+            vehicleType: vehicleType as import("../utils/ecargoWarehousePlan").EcargoVehicleType,
+          })
+        }
         onApplyEcargoPrefill={ecargoRegister.applyCustomerEcargoPrefill}
         getEcargoSaveStatus={ecargoRegister.getSaveStatus}
         getEcargoJob={ecargoRegister.getJob}

@@ -25,6 +25,14 @@ import {
   type UpsertCustomerVehicleParams,
 } from "../utils/customerVehicleCore";
 import { ECARGO_SCSC_CREATE_URL } from "../utils/ecargoKhoScscCore";
+import {
+  buildEcargoArrivalTimeSlots,
+  DEFAULT_ECARGO_VEHICLE_TYPE,
+  ECARGO_VEHICLE_TYPES,
+  resolveEcargoWarehouseArrival,
+  todayIsoVietnam,
+  type EcargoVehicleType,
+} from "../utils/ecargoWarehousePlan";
 
 export type UseEcargoModalBodyControllerArgs = {
   row: Shipment;
@@ -32,13 +40,25 @@ export type UseEcargoModalBodyControllerArgs = {
   vehicleForEcargo: string;
   driverNameForEcargo?: string;
   driverIdForEcargo?: string;
+  arrivalDateForEcargo?: string;
+  arrivalTimeSlotForEcargo?: string;
+  vehicleTypeForEcargo?: string;
   viewSessionYmd: string;
   saveStatus: EcargoSaveStatus;
   job?: EcargoJobRecord;
   autoRegistering: boolean;
   onVehicleChange: (raw: string) => void;
   onDriverChange: (driverName: string, driverId: string) => void;
-  onAutoRegister: (opts?: { driverName?: string; driverId?: string; saveAsDefault?: boolean }) => Promise<void>;
+  onWarehouseArrivalChange?: (arrivalDate: string, arrivalTimeSlot: string) => void;
+  onVehicleTypeChange?: (vehicleType: EcargoVehicleType) => void;
+  onAutoRegister: (opts?: {
+    driverName?: string;
+    driverId?: string;
+    saveAsDefault?: boolean;
+    arrivalDate?: string;
+    arrivalTimeSlot?: string;
+    vehicleType?: EcargoVehicleType;
+  }) => Promise<void>;
   onSaveVehicleAsDefault?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   onRefreshJob?: () => void;
   onClose: () => void;
@@ -50,12 +70,17 @@ export function useEcargoModalBodyController({
   vehicleForEcargo,
   driverNameForEcargo = "",
   driverIdForEcargo = "",
+  arrivalDateForEcargo = "",
+  arrivalTimeSlotForEcargo = "",
+  vehicleTypeForEcargo = "",
   viewSessionYmd,
   saveStatus,
   job,
   autoRegistering,
   onVehicleChange,
   onDriverChange,
+  onWarehouseArrivalChange,
+  onVehicleTypeChange,
   onAutoRegister,
   onSaveVehicleAsDefault,
   onRefreshJob,
@@ -69,6 +94,25 @@ export function useEcargoModalBodyController({
       }),
     [customerDirectory, driverIdForEcargo, driverNameForEcargo, row, vehicleForEcargo]
   );
+
+  const arrivalTimeSlots = useMemo(() => buildEcargoArrivalTimeSlots(), []);
+
+  const [arrivalDate, setArrivalDate] = useState(() =>
+    resolveEcargoWarehouseArrival({
+      arrivalDate: arrivalDateForEcargo,
+      arrivalTimeSlot: arrivalTimeSlotForEcargo,
+    }).arrivalDate
+  );
+  const [arrivalTimeSlot, setArrivalTimeSlot] = useState(() =>
+    resolveEcargoWarehouseArrival({
+      arrivalDate: arrivalDateForEcargo,
+      arrivalTimeSlot: arrivalTimeSlotForEcargo,
+    }).arrivalTimeSlot
+  );
+  const [vehicleType, setVehicleType] = useState<EcargoVehicleType>(() => {
+    const fromPersisted = ECARGO_VEHICLE_TYPES.find((t) => t === vehicleTypeForEcargo);
+    return fromPersisted ?? DEFAULT_ECARGO_VEHICLE_TYPE;
+  });
 
   const [vehicleInput, setVehicleInput] = useState(prefill.vehicleInput);
   const [driverName, setDriverName] = useState(prefill.driverName);
@@ -86,7 +130,7 @@ export function useEcargoModalBodyController({
   const agentCode = (prefill.customer?.code || row.customerCode || row.customer || "").trim().toUpperCase();
   const agentLabel = prefill.customer?.name?.trim() || row.customer?.trim() || agentCode;
 
-  const prefillKey = `${row.id}|${prefill.vehicleInput}|${prefill.driverName}|${prefill.driverId}|${vehicleForEcargo}|${driverNameForEcargo ?? ""}|${prefill.appliedFromDefault}`;
+  const prefillKey = `${row.id}|${prefill.vehicleInput}|${prefill.driverName}|${prefill.driverId}|${vehicleForEcargo}|${driverNameForEcargo ?? ""}|${arrivalDateForEcargo}|${arrivalTimeSlotForEcargo}|${vehicleTypeForEcargo}|${prefill.appliedFromDefault}`;
 
   useLayoutEffect(() => {
     if (lastPrefillKeyRef.current === prefillKey) return;
@@ -94,6 +138,14 @@ export function useEcargoModalBodyController({
     setVehicleInput(prefill.vehicleInput);
     setDriverName(prefill.driverName);
     setDriverId(prefill.driverId);
+    const wh = resolveEcargoWarehouseArrival({
+      arrivalDate: arrivalDateForEcargo,
+      arrivalTimeSlot: arrivalTimeSlotForEcargo,
+    });
+    setArrivalDate(wh.arrivalDate);
+    setArrivalTimeSlot(wh.arrivalTimeSlot);
+    const vt = ECARGO_VEHICLE_TYPES.find((t) => t === vehicleTypeForEcargo);
+    setVehicleType(vt ?? DEFAULT_ECARGO_VEHICLE_TYPE);
     const shouldPersist =
       prefill.vehicleInput.length >= ECARGO_VEHICLE_MIN &&
       (!vehicleForEcargo.trim() || prefill.appliedFromDefault);
@@ -103,7 +155,15 @@ export function useEcargoModalBodyController({
         onDriverChange(prefill.driverName, prefill.driverId);
       }
     }
-  }, [driverNameForEcargo, onDriverChange, onVehicleChange, prefill, prefillKey, row.id, vehicleForEcargo]);
+  }, [arrivalDateForEcargo, arrivalTimeSlotForEcargo, driverNameForEcargo, onDriverChange, onVehicleChange, prefill, prefillKey, row.id, vehicleForEcargo, vehicleTypeForEcargo]);
+
+  const warehouseHint = useMemo(() => {
+    const today = todayIsoVietnam();
+    if (arrivalDate <= today) {
+      return "eCargo có thể yêu cầu ngày vào kho sau ngày hiện tại — thử chọn ngày mai nếu báo lỗi.";
+    }
+    return "Khung giờ nên cách hiện tại ≥ 6 giờ (quy tắc cut-off eCargo).";
+  }, [arrivalDate]);
 
   const pasteDate = useMemo(() => {
     const fromRow = (row.flightDate ?? "").trim();
@@ -180,7 +240,14 @@ export function useEcargoModalBodyController({
     setCopyError(null);
     setManualOpen(false);
     try {
-      await onAutoRegister({ saveAsDefault, driverName, driverId });
+      await onAutoRegister({
+        saveAsDefault,
+        driverName,
+        driverId,
+        arrivalDate,
+        arrivalTimeSlot,
+        vehicleType,
+      });
       onClose();
       if (saveAsDefault && prefill.customer && onSaveVehicleAsDefault) {
         void onSaveVehicleAsDefault({
@@ -199,6 +266,9 @@ export function useEcargoModalBodyController({
     driverId,
     driverName,
     effectiveVehicle,
+    arrivalDate,
+    arrivalTimeSlot,
+    vehicleType,
     onAutoRegister,
     onClose,
     onSaveVehicleAsDefault,
@@ -253,5 +323,22 @@ export function useEcargoModalBodyController({
     setVehicleInput,
     setDriverName,
     setDriverId,
+    arrivalDate,
+    arrivalTimeSlot,
+    arrivalTimeSlots,
+    vehicleType,
+    warehouseHint,
+    setArrivalDate: (date: string) => {
+      setArrivalDate(date);
+      onWarehouseArrivalChange?.(date, arrivalTimeSlot);
+    },
+    setArrivalTimeSlot: (slot: string) => {
+      setArrivalTimeSlot(slot);
+      onWarehouseArrivalChange?.(arrivalDate, slot);
+    },
+    setVehicleType: (type: EcargoVehicleType) => {
+      setVehicleType(type);
+      onVehicleTypeChange?.(type);
+    },
   };
 }

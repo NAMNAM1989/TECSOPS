@@ -417,6 +417,22 @@ export function applyMutation(state, mutation) {
         if (t) line.driverId = t;
         else delete line.driverId;
       }
+      if (mutation.arrivalDate !== undefined) {
+        const t = String(mutation.arrivalDate).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(t)) line.arrivalDate = t;
+        else delete line.arrivalDate;
+      }
+      if (mutation.arrivalTimeSlot !== undefined) {
+        const t = String(mutation.arrivalTimeSlot).trim();
+        if (/^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$/.test(t)) line.arrivalTimeSlot = t.replace(/\s+/g, " ");
+        else delete line.arrivalTimeSlot;
+      }
+      if (mutation.vehicleType !== undefined) {
+        const allowed = new Set(["Ô tô", "Xe máy", "Xe ba gác", "Đi bộ"]);
+        const t = String(mutation.vehicleType).trim();
+        if (allowed.has(t)) line.vehicleType = t;
+        else delete line.vehicleType;
+      }
       if (mutation.markedSubmitted !== undefined) {
         line.markedSubmitted = Boolean(mutation.markedSubmitted);
       }

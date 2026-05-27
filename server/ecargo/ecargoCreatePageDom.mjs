@@ -253,7 +253,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         setNativeValue(inputs[1], cfg.agent.name);
         chooseDocumentRadio("agent", cfg.agent.documentType);
         setNativeValue(inputs[2], cfg.agent.documentNo);
-        chooseVehicleRadio(cfg.vehicle.type);
+        chooseVehicleRadio(data.vehicleType || cfg.vehicle.type);
         setNativeValue(inputs[4], data.vehicleNo);
         setNativeValue(inputs[5], data.driverName || cfg.driver.name);
         chooseDocumentRadio("driver", cfg.driver.documentType);

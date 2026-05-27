@@ -37,10 +37,15 @@ import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
 import { resolveEcargoVehiclePrefill, vehicleDisplayLabel } from "../utils/customerVehicleCore";
 import { InlineCneeCell } from "./InlineCneeCell";
 
+import type { EcargoVehicleType } from "../utils/ecargoWarehousePlan";
+
 export type EcargoAutoRegisterOpts = {
   driverName?: string;
   driverId?: string;
   saveAsDefault?: boolean;
+  arrivalDate?: string;
+  arrivalTimeSlot?: string;
+  vehicleType?: EcargoVehicleType;
 };
 
 interface Props {
@@ -69,6 +74,8 @@ interface Props {
   ecargoMap: EcargoKhoScscPersistedMap;
   onEcargoVehicleChange: (id: string, raw: string) => void;
   onEcargoDriverChange?: (id: string, driverName: string, driverId: string) => void;
+  onEcargoWarehouseChange?: (id: string, arrivalDate: string, arrivalTimeSlot: string) => void;
+  onEcargoVehicleTypeChange?: (id: string, vehicleType: string) => void;
   onApplyEcargoPrefill?: (row: Shipment) => void;
   getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
   getEcargoJob: (id: string) => EcargoJobRecord | undefined;
@@ -117,6 +124,8 @@ export function DesktopShipmentTable({
   ecargoMap,
   onEcargoVehicleChange,
   onEcargoDriverChange,
+  onEcargoWarehouseChange,
+  onEcargoVehicleTypeChange,
   onApplyEcargoPrefill,
   getEcargoSaveStatus,
   getEcargoJob,
@@ -218,6 +227,8 @@ export function DesktopShipmentTable({
                   ecargoMap={ecargoMap}
                   onEcargoVehicleChange={onEcargoVehicleChange}
                   onEcargoDriverChange={onEcargoDriverChange}
+                  onEcargoWarehouseChange={onEcargoWarehouseChange}
+                  onEcargoVehicleTypeChange={onEcargoVehicleTypeChange}
                   onApplyEcargoPrefill={onApplyEcargoPrefill}
                   getEcargoSaveStatus={getEcargoSaveStatus}
                   getEcargoJob={getEcargoJob}
@@ -266,6 +277,8 @@ function WarehouseGroupRows({
   ecargoMap,
   onEcargoVehicleChange,
   onEcargoDriverChange,
+  onEcargoWarehouseChange,
+  onEcargoVehicleTypeChange,
   onApplyEcargoPrefill,
   getEcargoSaveStatus,
   getEcargoJob,
@@ -292,6 +305,8 @@ function WarehouseGroupRows({
   ecargoMap: EcargoKhoScscPersistedMap;
   onEcargoVehicleChange: (id: string, raw: string) => void;
   onEcargoDriverChange?: (id: string, driverName: string, driverId: string) => void;
+  onEcargoWarehouseChange?: (id: string, arrivalDate: string, arrivalTimeSlot: string) => void;
+  onEcargoVehicleTypeChange?: (id: string, vehicleType: string) => void;
   onApplyEcargoPrefill?: (row: Shipment) => void;
   getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
   getEcargoJob: (id: string) => EcargoJobRecord | undefined;
@@ -341,6 +356,8 @@ function WarehouseGroupRows({
           ecargoMap={ecargoMap}
           onEcargoVehicleChange={onEcargoVehicleChange}
           onEcargoDriverChange={onEcargoDriverChange}
+          onEcargoWarehouseChange={onEcargoWarehouseChange}
+          onEcargoVehicleTypeChange={onEcargoVehicleTypeChange}
           getEcargoSaveStatus={getEcargoSaveStatus}
           getEcargoJob={getEcargoJob}
           refreshEcargoJob={refreshEcargoJob}
@@ -380,6 +397,8 @@ function ShipmentRow({
   ecargoMap,
   onEcargoVehicleChange,
   onEcargoDriverChange,
+  onEcargoWarehouseChange,
+  onEcargoVehicleTypeChange,
   getEcargoSaveStatus,
   getEcargoJob,
   refreshEcargoJob,
@@ -409,6 +428,8 @@ function ShipmentRow({
   ecargoMap: EcargoKhoScscPersistedMap;
   onEcargoVehicleChange: (id: string, raw: string) => void;
   onEcargoDriverChange?: (id: string, driverName: string, driverId: string) => void;
+  onEcargoWarehouseChange?: (id: string, arrivalDate: string, arrivalTimeSlot: string) => void;
+  onEcargoVehicleTypeChange?: (id: string, vehicleType: string) => void;
   getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
   getEcargoJob: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob: (id: string) => void | Promise<void>;
@@ -755,12 +776,17 @@ function ShipmentRow({
         vehicleForEcargo={vehicleForEcargo}
         driverNameForEcargo={ecargoLine?.driverName ?? ""}
         driverIdForEcargo={ecargoLine?.driverId ?? ""}
+        arrivalDateForEcargo={ecargoLine?.arrivalDate ?? ""}
+        arrivalTimeSlotForEcargo={ecargoLine?.arrivalTimeSlot ?? ""}
+        vehicleTypeForEcargo={ecargoLine?.vehicleType ?? ""}
         viewSessionYmd={viewSessionYmd}
         saveStatus={getEcargoSaveStatus(row.id)}
         job={ecargoJob}
         autoRegistering={isEcargoAutoRegistering(row.id)}
         onVehicleChange={(raw) => onEcargoVehicleChange(row.id, raw)}
         onDriverChange={(name, id) => onEcargoDriverChange?.(row.id, name, id)}
+        onWarehouseArrivalChange={(date, slot) => onEcargoWarehouseChange?.(row.id, date, slot)}
+        onVehicleTypeChange={(type) => onEcargoVehicleTypeChange?.(row.id, type)}
         onAutoRegister={async (opts) => {
           await onEcargoAutoRegister(row, opts);
         }}

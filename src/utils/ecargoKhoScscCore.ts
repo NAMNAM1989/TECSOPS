@@ -1,9 +1,22 @@
+import type { EcargoVehicleType } from "./ecargoWarehousePlan";
+import {
+  clampEcargoVehicleType,
+  isValidEcargoArrivalDate,
+  isValidEcargoArrivalTimeSlot,
+} from "./ecargoWarehousePlan";
+
 /** Số xe + trạng thái đăng ký eCargo KHO SCSC — đồng bộ qua AppState server. */
 export type EcargoKhoScscLinePersisted = {
   vehicleInput: string;
   /** Tài xế — lấy từ hồ sơ khách hoặc nhập trên modal eCargo. */
   driverName?: string;
   driverId?: string;
+  /** Ngày hàng vào kho eCargo (YYYY-MM-DD). */
+  arrivalDate?: string;
+  /** Khung giờ vào kho, VD `07:00 - 08:00`. */
+  arrivalTimeSlot?: string;
+  /** Loại phương tiện vào kho trên form eCargo. */
+  vehicleType?: EcargoVehicleType;
   /** Người dùng đánh dấu đã dán/tạo phiếu trên trang eCargo. */
   markedSubmitted?: boolean;
   updatedAt?: string;
@@ -25,6 +38,13 @@ export function clampEcargoKhoScscLine(raw: unknown): EcargoKhoScscLinePersisted
   const vehicleInput = normalizeEcargoVehicleInput(String(o.vehicleInput ?? ""));
   const driverName = typeof o.driverName === "string" ? o.driverName.trim().slice(0, 120) : undefined;
   const driverId = typeof o.driverId === "string" ? o.driverId.replace(/\D/g, "").slice(0, 20) : undefined;
+  const arrivalDate = isValidEcargoArrivalDate(String(o.arrivalDate ?? ""))
+    ? String(o.arrivalDate).trim()
+    : undefined;
+  const arrivalTimeSlot = isValidEcargoArrivalTimeSlot(String(o.arrivalTimeSlot ?? ""))
+    ? String(o.arrivalTimeSlot).trim()
+    : undefined;
+  const vehicleType = clampEcargoVehicleType(o.vehicleType);
   const markedSubmitted = o.markedSubmitted === true;
   const updatedAt = typeof o.updatedAt === "string" && o.updatedAt.trim() ? o.updatedAt.trim() : undefined;
   if (!vehicleInput && !markedSubmitted) return null;
@@ -32,6 +52,9 @@ export function clampEcargoKhoScscLine(raw: unknown): EcargoKhoScscLinePersisted
     vehicleInput,
     ...(driverName ? { driverName } : {}),
     ...(driverId ? { driverId } : {}),
+    ...(arrivalDate ? { arrivalDate } : {}),
+    ...(arrivalTimeSlot ? { arrivalTimeSlot } : {}),
+    ...(vehicleType ? { vehicleType } : {}),
     ...(markedSubmitted ? { markedSubmitted: true } : {}),
     ...(updatedAt ? { updatedAt } : {}),
   };

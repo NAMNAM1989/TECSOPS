@@ -66,6 +66,8 @@ export function registerEcargoRoutes(app, deps) {
         vehicleNo = normalizeVehicleNo(state.ecargoKhoScsc?.[shipmentId]?.vehicleInput ?? "");
       }
 
+      const persistedLine = state.ecargoKhoScsc?.[shipmentId] ?? {};
+
       const readiness = getEcargoRegisterReadiness(row, vehicleNo, viewSessionYmd);
       if (!readiness.ready) {
         res.status(400).json({ error: readiness.hint });
@@ -87,8 +89,11 @@ export function registerEcargoRoutes(app, deps) {
       }
 
       let booking = buildEcargoBookingFromShipment(row, vehicleNo, viewSessionYmd, {
-        driverName: String(body.driverName ?? "").trim(),
-        driverId: String(body.driverId ?? "").trim(),
+        driverName: String(body.driverName ?? persistedLine.driverName ?? "").trim(),
+        driverId: String(body.driverId ?? persistedLine.driverId ?? "").trim(),
+        arrivalDate: String(body.arrivalDate ?? persistedLine.arrivalDate ?? "").trim(),
+        arrivalTimeSlot: String(body.arrivalTimeSlot ?? persistedLine.arrivalTimeSlot ?? "").trim(),
+        vehicleType: String(body.vehicleType ?? persistedLine.vehicleType ?? "").trim(),
       });
       if (clientBooking && typeof clientBooking.mawb === "string") {
         const draft = { ...clientBooking, vehicleNo: normalizeVehicleNo(clientBooking.vehicleNo || vehicleNo) };

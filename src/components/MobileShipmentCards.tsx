@@ -50,6 +50,8 @@ interface MobileShipmentCardsProps {
   ecargoMap?: EcargoKhoScscPersistedMap;
   onEcargoVehicleChange?: (id: string, raw: string) => void;
   onEcargoDriverChange?: (id: string, driverName: string, driverId: string) => void;
+  onEcargoWarehouseChange?: (id: string, arrivalDate: string, arrivalTimeSlot: string) => void;
+  onEcargoVehicleTypeChange?: (id: string, vehicleType: string) => void;
   onApplyEcargoPrefill?: (row: Shipment) => void;
   getEcargoSaveStatus?: (id: string) => EcargoSaveStatus;
   getEcargoJob?: (id: string) => EcargoJobRecord | undefined;
@@ -76,6 +78,8 @@ export function MobileShipmentCards({
   ecargoMap = {},
   onEcargoVehicleChange,
   onEcargoDriverChange,
+  onEcargoWarehouseChange,
+  onEcargoVehicleTypeChange,
   onApplyEcargoPrefill,
   getEcargoSaveStatus,
   getEcargoJob,
@@ -471,12 +475,17 @@ export function MobileShipmentCards({
           vehicleForEcargo={ecargoMap[ecargoModalRow.id]?.vehicleInput ?? ""}
           driverNameForEcargo={ecargoMap[ecargoModalRow.id]?.driverName ?? ""}
           driverIdForEcargo={ecargoMap[ecargoModalRow.id]?.driverId ?? ""}
+          arrivalDateForEcargo={ecargoMap[ecargoModalRow.id]?.arrivalDate ?? ""}
+          arrivalTimeSlotForEcargo={ecargoMap[ecargoModalRow.id]?.arrivalTimeSlot ?? ""}
+          vehicleTypeForEcargo={ecargoMap[ecargoModalRow.id]?.vehicleType ?? ""}
           viewSessionYmd={viewSessionYmd}
           saveStatus={getEcargoSaveStatus(ecargoModalRow.id)}
           job={getEcargoJob?.(ecargoModalRow.id)}
           autoRegistering={isEcargoAutoRegistering?.(ecargoModalRow.id) ?? false}
           onVehicleChange={(raw) => onEcargoVehicleChange(ecargoModalRow.id, raw)}
           onDriverChange={(name, id) => onEcargoDriverChange?.(ecargoModalRow.id, name, id)}
+          onWarehouseArrivalChange={(date, slot) => onEcargoWarehouseChange?.(ecargoModalRow.id, date, slot)}
+          onVehicleTypeChange={(type) => onEcargoVehicleTypeChange?.(ecargoModalRow.id, type)}
           onAutoRegister={async (opts) => {
             await onEcargoAutoRegister(ecargoModalRow, opts);
           }}

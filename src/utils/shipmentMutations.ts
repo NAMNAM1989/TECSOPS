@@ -16,8 +16,10 @@ import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
 import {
   normalizeEcargoKhoScscMap,
   normalizeEcargoVehicleInput,
+  type EcargoKhoScscLinePersisted,
   type EcargoKhoScscPersistedMap,
 } from "./ecargoKhoScscCore";
+import type { EcargoVehicleType } from "./ecargoWarehousePlan";
 import {
   clampScscWeighPrintSettings,
   defaultScscWeighPrintSettings,
@@ -55,6 +57,9 @@ export type ShipmentMutation =
       vehicleInput?: string;
       driverName?: string;
       driverId?: string;
+      arrivalDate?: string;
+      arrivalTimeSlot?: string;
+      vehicleType?: EcargoVehicleType;
       markedSubmitted?: boolean;
     }
   | { action: "MERGE_ECARGO_KHO_SCSC"; map: EcargoKhoScscPersistedMap };
@@ -191,6 +196,22 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
         const t = mutation.driverId.replace(/\D/g, "").slice(0, 20);
         if (t) line.driverId = t;
         else delete line.driverId;
+      }
+      if (mutation.arrivalDate !== undefined) {
+        const t = mutation.arrivalDate.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(t)) line.arrivalDate = t;
+        else delete line.arrivalDate;
+      }
+      if (mutation.arrivalTimeSlot !== undefined) {
+        const t = mutation.arrivalTimeSlot.trim();
+        if (/^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$/.test(t)) line.arrivalTimeSlot = t.replace(/\s+/g, " ");
+        else delete line.arrivalTimeSlot;
+      }
+      if (mutation.vehicleType !== undefined) {
+        const allowed = new Set(["Ô tô", "Xe máy", "Xe ba gác", "Đi bộ"]);
+        const t = mutation.vehicleType.trim();
+        if (allowed.has(t)) line.vehicleType = t as EcargoKhoScscLinePersisted["vehicleType"];
+        else delete line.vehicleType;
       }
       if (mutation.markedSubmitted !== undefined) {
         line.markedSubmitted = mutation.markedSubmitted;

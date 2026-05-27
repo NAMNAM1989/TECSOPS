@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import type { AppState, ShipmentMutation } from "../utils/shipmentMutations";
+import type { EcargoVehicleType } from "../utils/ecargoWarehousePlan";
+import {
+  clampEcargoVehicleType,
+  isValidEcargoArrivalDate,
+  isValidEcargoArrivalTimeSlot,
+} from "../utils/ecargoWarehousePlan";
 import {
   normalizeEcargoKhoScscMap,
   normalizeEcargoVehicleInput,
@@ -34,6 +40,9 @@ export type EcargoLinePatch = {
   vehicleInput?: string;
   driverName?: string;
   driverId?: string;
+  arrivalDate?: string;
+  arrivalTimeSlot?: string;
+  vehicleType?: EcargoVehicleType;
 };
 
 export function useEcargoKhoScscRegister(
@@ -139,6 +148,9 @@ export function useEcargoKhoScscRegister(
           serverLine.vehicleInput === draftLine.vehicleInput &&
           serverLine.driverName === draftLine.driverName &&
           serverLine.driverId === draftLine.driverId &&
+          serverLine.arrivalDate === draftLine.arrivalDate &&
+          serverLine.arrivalTimeSlot === draftLine.arrivalTimeSlot &&
+          serverLine.vehicleType === draftLine.vehicleType &&
           serverLine.markedSubmitted === draftLine.markedSubmitted
         ) {
           delete next[id];
@@ -197,6 +209,22 @@ export function useEcargoKhoScscRegister(
         patch.driverId !== undefined
           ? patch.driverId.replace(/\D/g, "").slice(0, 20)
           : prevLine?.driverId;
+      const arrivalDate =
+        patch.arrivalDate !== undefined
+          ? isValidEcargoArrivalDate(patch.arrivalDate)
+            ? patch.arrivalDate.trim()
+            : undefined
+          : prevLine?.arrivalDate;
+      const arrivalTimeSlot =
+        patch.arrivalTimeSlot !== undefined
+          ? isValidEcargoArrivalTimeSlot(patch.arrivalTimeSlot)
+            ? patch.arrivalTimeSlot.trim()
+            : undefined
+          : prevLine?.arrivalTimeSlot;
+      const vehicleType =
+        patch.vehicleType !== undefined
+          ? clampEcargoVehicleType(patch.vehicleType)
+          : prevLine?.vehicleType;
 
       setDraftOverlay((o) => ({
         ...o,
@@ -204,6 +232,9 @@ export function useEcargoKhoScscRegister(
           vehicleInput,
           ...(driverName ? { driverName } : {}),
           ...(driverId ? { driverId } : {}),
+          ...(arrivalDate ? { arrivalDate } : {}),
+          ...(arrivalTimeSlot ? { arrivalTimeSlot } : {}),
+          ...(vehicleType ? { vehicleType } : {}),
           markedSubmitted: prevLine?.markedSubmitted,
           updatedAt: prevLine?.updatedAt,
         },
@@ -214,6 +245,9 @@ export function useEcargoKhoScscRegister(
       if (patch.vehicleInput !== undefined) flushPatch.vehicleInput = vehicleInput;
       if (patch.driverName !== undefined) flushPatch.driverName = driverName ?? "";
       if (patch.driverId !== undefined) flushPatch.driverId = driverId ?? "";
+      if (patch.arrivalDate !== undefined) flushPatch.arrivalDate = arrivalDate ?? "";
+      if (patch.arrivalTimeSlot !== undefined) flushPatch.arrivalTimeSlot = arrivalTimeSlot ?? "";
+      if (patch.vehicleType !== undefined && vehicleType) flushPatch.vehicleType = vehicleType;
       scheduleFlush(shipmentId, flushPatch);
     },
     [map, scheduleFlush]
@@ -259,13 +293,31 @@ export function useEcargoKhoScscRegister(
     async (
       row: Shipment,
       viewSessionYmd: string,
-      opts?: { driverName?: string; driverId?: string }
+      opts?: {
+        driverName?: string;
+        driverId?: string;
+        arrivalDate?: string;
+        arrivalTimeSlot?: string;
+        vehicleType?: EcargoVehicleType;
+      }
     ) => {
       const shipmentId = row.id;
       const line = map[shipmentId];
       const vehicleInput = normalizeEcargoVehicleInput(line?.vehicleInput ?? "");
       const driverName = opts?.driverName?.trim() || line?.driverName?.trim() || undefined;
       const driverId = opts?.driverId?.trim() || line?.driverId?.trim() || undefined;
+      const arrivalDate =
+        (opts?.arrivalDate && isValidEcargoArrivalDate(opts.arrivalDate) ? opts.arrivalDate.trim() : undefined) ||
+        (line?.arrivalDate && isValidEcargoArrivalDate(line.arrivalDate) ? line.arrivalDate : undefined);
+      const arrivalTimeSlot =
+        (opts?.arrivalTimeSlot && isValidEcargoArrivalTimeSlot(opts.arrivalTimeSlot)
+          ? opts.arrivalTimeSlot.trim()
+          : undefined) ||
+        (line?.arrivalTimeSlot && isValidEcargoArrivalTimeSlot(line.arrivalTimeSlot)
+          ? line.arrivalTimeSlot
+          : undefined);
+      const vehicleType =
+        clampEcargoVehicleType(opts?.vehicleType) || clampEcargoVehicleType(line?.vehicleType);
 
       if (!canSendEcargoRegister(row, vehicleInput, viewSessionYmd)) {
         throw new Error("Chưa đủ dữ liệu để tự động đăng ký eCargo.");
@@ -306,6 +358,9 @@ export function useEcargoKhoScscRegister(
             vehicleNo: vehicleInput,
             driverName,
             driverId,
+            arrivalDate,
+            arrivalTimeSlot,
+            vehicleType,
             forceRetry,
           }),
         });

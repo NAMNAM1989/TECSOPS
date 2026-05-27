@@ -54,6 +54,8 @@ type Props = {
   ecargoMap?: EcargoKhoScscPersistedMap;
   onEcargoVehicleChange?: (id: string, raw: string) => void;
   onEcargoDriverChange?: (id: string, driverName: string, driverId: string) => void;
+  onEcargoWarehouseChange?: (id: string, arrivalDate: string, arrivalTimeSlot: string) => void;
+  onEcargoVehicleTypeChange?: (id: string, vehicleType: string) => void;
   onApplyEcargoPrefill?: (row: Shipment) => void;
   getEcargoSaveStatus?: (id: string) => EcargoSaveStatus;
   getEcargoJob?: (id: string) => EcargoJobRecord | undefined;
@@ -82,6 +84,8 @@ export function MobileShipmentEditSheet({
   ecargoMap = {},
   onEcargoVehicleChange,
   onEcargoDriverChange,
+  onEcargoWarehouseChange,
+  onEcargoVehicleTypeChange,
   onApplyEcargoPrefill,
   getEcargoSaveStatus,
   getEcargoJob,
@@ -553,6 +557,9 @@ export function MobileShipmentEditSheet({
           vehicleForEcargo={vehicleForEcargo}
           driverNameForEcargo={ecargoLine?.driverName ?? ""}
           driverIdForEcargo={ecargoLine?.driverId ?? ""}
+          arrivalDateForEcargo={ecargoLine?.arrivalDate ?? ""}
+          arrivalTimeSlotForEcargo={ecargoLine?.arrivalTimeSlot ?? ""}
+          vehicleTypeForEcargo={ecargoLine?.vehicleType ?? ""}
           viewSessionYmd={sessionDateYmd}
           saveStatus={getEcargoSaveStatus(shipment.id)}
           job={ecargoJob}
@@ -560,6 +567,8 @@ export function MobileShipmentEditSheet({
           onClose={() => setEcargoOpen(false)}
           onVehicleChange={(raw) => onEcargoVehicleChange(shipment.id, raw)}
           onDriverChange={(name, id) => onEcargoDriverChange?.(shipment.id, name, id)}
+          onWarehouseArrivalChange={(date, slot) => onEcargoWarehouseChange?.(shipment.id, date, slot)}
+          onVehicleTypeChange={(type) => onEcargoVehicleTypeChange?.(shipment.id, type)}
           onAutoRegister={async (opts) => {
             await onEcargoAutoRegister(shipment, opts);
           }}

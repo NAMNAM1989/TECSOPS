@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import type { Shipment, ShipmentStatus } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { MobileDimKgModal } from "./MobileDimKgModal";
-import { CutoffCountdown } from "./CutoffCountdown";
 import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { statusRowAccent, statusRowBg, statusRowSelected, flightNumberAccent } from "./statusStyles";
@@ -318,11 +317,21 @@ export function MobileShipmentCards({
                               </p>
                             </button>
                             <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                              <StatusSelect
-                                value={row.status}
-                                compact
-                                onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
-                              />
+                              <div className="flex max-w-[9rem] flex-col items-end gap-0.5">
+                                {row.note ? (
+                                  <span
+                                    className="line-clamp-2 max-w-full text-right text-[10px] leading-snug text-apple-secondary dark:text-slate-400"
+                                    title={row.note}
+                                  >
+                                    {row.note}
+                                  </span>
+                                ) : null}
+                                <StatusSelect
+                                  value={row.status}
+                                  compact
+                                  onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
+                                />
+                              </div>
                             </div>
                           </Box>
 
@@ -333,14 +342,6 @@ export function MobileShipmentCards({
                             >
                               {row.customer || "Chưa chọn khách"}
                             </span>
-                            {row.note ? (
-                              <span
-                                className="min-w-0 max-w-full truncate text-[11px] text-apple-secondary dark:text-slate-400"
-                                title={row.note}
-                              >
-                                · {row.note}
-                              </span>
-                            ) : null}
                           </Box>
 
                           {cneePreview ? (
@@ -356,13 +357,6 @@ export function MobileShipmentCards({
                             className="mt-2.5 flex flex-wrap items-center gap-2"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {row.cutoffNote ? (
-                              <span className={MOBILE.chipCutoff}>{row.cutoffNote}</span>
-                            ) : row.cutoff ? (
-                              <span className={MOBILE.chip}>
-                                CO <CutoffCountdown iso={row.cutoff} className="text-[10px]" />
-                              </span>
-                            ) : null}
                             <span className={MOBILE.chip}>
                               <span className="text-apple-tertiary dark:text-slate-500">K</span>
                               <InlineNumberEdit

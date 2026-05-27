@@ -9,7 +9,6 @@ import { InlineCustomerEdit } from "./InlineCustomerEdit";
 import { formatYmdToFlightDateDdMon, parseBookingDateLoose } from "../utils/bookingDateParse";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { InlineAwbEdit } from "./InlineAwbEdit";
-import { InlineCutoffBlock } from "./InlineCutoffBlock";
 import { MobileDimKgModal } from "./MobileDimKgModal";
 import { statusRowAccent, statusRowBg, statusRowSelected, flightNumberAccent } from "./statusStyles";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
@@ -90,15 +89,14 @@ const COL_HEADERS = [
   { key: "stt", label: "#", w: "w-8" },
   { key: "awb", label: "AWB / HAWB", w: "min-w-[9rem]" },
   { key: "flight", label: "CHUYẾN", w: "min-w-[5.5rem]" },
-  { key: "cutoff", label: "CUTOFF", w: "min-w-[5.5rem]" },
   { key: "dest", label: "DST", w: "w-12" },
   { key: "pcs", label: "KIỆN", w: "w-12 text-right" },
   { key: "kg", label: "KG", w: "w-12 text-right" },
   { key: "dim", label: "DIM", w: "w-14 text-right" },
   { key: "customer", label: "KHÁCH", w: "min-w-[4.75rem] max-w-[7rem]" },
   { key: "cnee", label: "CNEE", w: "min-w-[4.5rem] max-w-[8.5rem]" },
-  { key: "note", label: "NOTE", w: "min-w-[3.75rem] max-w-[7rem]" },
-  { key: "status", label: "TT", w: "min-w-[6.5rem]" },
+  { key: "note", label: "TÊN HÀNG", w: "min-w-[4.5rem] max-w-[7.5rem]" },
+  { key: "status", label: "TT", w: "min-w-[7rem]" },
   { key: "actions", label: "", w: "min-w-[5.5rem]" },
 ] as const;
 
@@ -558,34 +556,6 @@ function ShipmentRow({
           />
         </div>
       </td>
-      {/* Cutoff (giờ + ngày) + ghi chú cutoff — nhập inline */}
-      <td className={cell("mid", "align-top")}>
-        <div className="flex min-w-[5.5rem] flex-col gap-0">
-          <InlineCutoffBlock
-            rowId={row.id}
-            cutoffIso={row.cutoff}
-            sessionYear={sessionYear}
-            onCommit={(iso) => onUpdate(row.id, { cutoff: iso })}
-            onEnterAfterCommit={() => focusShipmentGridCell(row.id, "cutoffNote")}
-          />
-          <div className="mt-0.5 border-t border-dashed border-black/[0.08] pt-0.5 dark:border-white/10">
-            <InlineTextEdit
-              value={row.cutoffNote ?? ""}
-              placeholder="PER"
-              className={
-                row.cutoffNote?.trim()
-                  ? "text-[10px] font-bold uppercase tracking-wide text-indigo-800 dark:text-indigo-200"
-                  : "text-[9px] font-normal ops-grid-placeholder"
-              }
-              uppercase
-              maxLength={32}
-              gridNav={{ rowId: row.id, field: "cutoffNote" }}
-              onCommit={(v) => onUpdate(row.id, { cutoffNote: v })}
-              onEnterNavigateDown={() => focusShipmentGridCell(row.id, "dest")}
-            />
-          </div>
-        </div>
-      </td>
       {/* DEST */}
       <td className={cell("mid", "text-center")}>
         <InlineTextEdit
@@ -669,7 +639,12 @@ function ShipmentRow({
           gridNav={{ rowId: row.id, field: "customer" }}
           onCommit={(patch) => onUpdate(row.id, patch)}
           onEnterNavigateDown={hasNextRow ? navDownSameField("customer") : undefined}
-          onTabNavigateNext={() => focusShipmentGridCell(row.id, "note")}
+          onTabNavigateNext={() =>
+            focusShipmentGridCell(
+              row.id,
+              isScscWarehouse(row.warehouse) ? "goodsDescriptionPrint" : "note"
+            )
+          }
         />
       </td>
       {/* CNEE — gọn: chọn + tên + ℹ */}
@@ -686,54 +661,49 @@ function ShipmentRow({
           }}
         />
       </td>
-      {/* Note */}
+      {/* Tên hàng in — 2 dòng: tên hàng + YC khác in */}
       <td className={cell("mid", "align-top")}>
-        <div className="flex min-w-0 items-start gap-0.5">
-          <span
-            className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 dark:text-zinc-400"
-            title="Ghi chú"
-            aria-hidden
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-            </svg>
-          </span>
-          <InlineTextEdit
-            value={row.note ?? ""}
-            placeholder="…"
-            className="line-clamp-1 min-w-0 flex-1 text-left text-[10px] leading-snug ops-grid-cell-muted"
-            maxLength={2000}
-            gridNav={{ rowId: row.id, field: "note" }}
-            onCommit={(v) => onUpdate(row.id, { note: v })}
-            onEnterNavigateDown={hasNextRow ? navDownSameField("note") : undefined}
-          />
-        </div>
         {isScscWarehouse(row.warehouse) ? (
-          <div className="mt-1 space-y-0.5 border-t border-black/[0.06] pt-1 dark:border-white/[0.08]">
+          <div className="flex min-w-0 flex-col gap-0.5">
             <InlineTextEdit
               value={row.goodsDescriptionPrint ?? ""}
               placeholder="Tên hàng in"
-              className="line-clamp-2 min-w-0 text-left text-[9px] leading-snug text-violet-800 dark:text-violet-200"
+              className="line-clamp-2 min-w-0 text-left text-[10px] leading-snug text-violet-800 dark:text-violet-200"
               maxLength={SCSC_GOODS_DESCRIPTION_PRINT_MAX}
+              gridNav={{ rowId: row.id, field: "goodsDescriptionPrint" }}
               onCommit={(v) => onUpdate(row.id, { goodsDescriptionPrint: v })}
+              onEnterNavigateDown={() => focusShipmentGridCell(row.id, "otherRequirementsPrint")}
             />
             <InlineTextEdit
               value={row.otherRequirementsPrint ?? ""}
               placeholder="YC khác in"
               className="line-clamp-2 min-w-0 text-left text-[9px] leading-snug text-violet-700/90 dark:text-violet-300/90"
               maxLength={SCSC_OTHER_REQUIREMENTS_PRINT_MAX}
+              gridNav={{ rowId: row.id, field: "otherRequirementsPrint" }}
               onCommit={(v) => onUpdate(row.id, { otherRequirementsPrint: v })}
+              onEnterNavigateDown={() => focusShipmentGridCell(row.id, "note")}
             />
           </div>
         ) : null}
       </td>
-      {/* Status */}
-      <td className={cell("mid", "py-1")}>
-        <StatusSelect
-          value={row.status}
-          compact
-          onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
-        />
+      {/* TT — ghi chú + trạng thái */}
+      <td className={cell("mid", "py-1 align-top")}>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <InlineTextEdit
+            value={row.note ?? ""}
+            placeholder="Ghi chú"
+            className="line-clamp-2 min-w-0 text-left text-[10px] leading-snug ops-grid-cell-muted"
+            maxLength={2000}
+            gridNav={{ rowId: row.id, field: "note" }}
+            onCommit={(v) => onUpdate(row.id, { note: v })}
+            onEnterNavigateDown={hasNextRow ? navDownSameField("note") : undefined}
+          />
+          <StatusSelect
+            value={row.status}
+            compact
+            onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
+          />
+        </div>
       </td>
       {/* Actions — in nhãn + menu ⋮; eCargo (KHO SCSC) giữ ngoài */}
       <td className={cell("last", "overflow-visible py-0.5 align-middle")}>

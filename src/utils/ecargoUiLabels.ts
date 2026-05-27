@@ -44,6 +44,35 @@ export function ecargoKhoScscStatusSubline(job?: EcargoJobRecord): string | null
   return null;
 }
 
+/** Nhãn cực ngắn cho ô thao tác / lưới — chi tiết để trong `title` tooltip. */
+export function ecargoRowCompactLabel(job: EcargoJobRecord): string {
+  const code = job.verifyCode?.trim();
+  switch (job.status) {
+    case "queued":
+      return "Xếp hàng";
+    case "filling":
+      return "Điền form";
+    case "submitted":
+      return "Chờ mail";
+    case "waiting_verify_email":
+      return "Tìm mail";
+    case "mail_received":
+      return code ? `Mã ${code}` : "Có mail";
+    case "verifying":
+      return "Xác thực";
+    case "verified_waiting_qr":
+      return "Chờ QR";
+    case "qr_ready":
+      return "Có QR";
+    case "verified":
+      return "Xong";
+    case "error":
+      return "Lỗi";
+    default:
+      return ecargoJobStatusLabel(job.status).slice(0, 14) || "eCargo";
+  }
+}
+
 /** Thông báo hiển thị ngay trên thẻ/cột lô khi job eCargo đổi trạng thái. */
 export function describeEcargoRowNotification(job: EcargoJobRecord): {
   title: string;

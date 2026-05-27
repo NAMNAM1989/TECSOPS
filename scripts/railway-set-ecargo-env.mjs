@@ -5,40 +5,13 @@
  * Cần RAILWAY_TOKEN trong .env.local. KHÔNG copy REDIS_URL localhost.
  */
 import { execSync, spawnSync } from "node:child_process";
-import fs from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { applyRailwayProjectTokenEnv, projectRoot } from "./loadProjectEnv.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const root = projectRoot;
 const SERVICE = process.env.RAILWAY_SERVICE?.trim() || "chic-nurturing";
 const REDIS_SERVICE = process.env.RAILWAY_REDIS_SERVICE?.trim() || "Redis";
 
-function mergeEnvFile(rel, { override = false } = {}) {
-  const p = join(root, rel);
-  if (!fs.existsSync(p)) return;
-  for (const line of fs.readFileSync(p, "utf8").split("\n")) {
-    const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    const eq = t.indexOf("=");
-    if (eq <= 0) continue;
-    const key = t.slice(0, eq).trim();
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
-    let val = t.slice(eq + 1).trim();
-    if (
-      (val.startsWith('"') && val.endsWith('"')) ||
-      (val.startsWith("'") && val.endsWith("'"))
-    ) {
-      val = val.slice(1, -1);
-    }
-    if (override || process.env[key] === undefined) process.env[key] = val;
-  }
-}
-
-mergeEnvFile(".env");
-mergeEnvFile(".env.local", { override: true });
-delete process.env.RAILWAY_API_TOKEN;
-
-const token = process.env.RAILWAY_TOKEN?.trim();
+const token = applyRailwayProjectTokenEnv();
 if (!token) {
   console.error("[railway-set-ecargo-env] Thiếu RAILWAY_TOKEN trong .env.local");
   process.exit(1);

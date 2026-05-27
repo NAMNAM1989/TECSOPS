@@ -1,19 +1,20 @@
 ---
 name: tecsops-railway-state-persistence
 description: >-
-  Giữ dữ liệu TECSOPS trên Railway: Redis là nguồn sự thật, tránh seed lại / file
-  container. Dùng khi deploy mất dữ liệu, cấu hình REDIS_URL, backup/restore,
-  hoặc debug sau railway up / GitHub deploy.
+  Giữ dữ liệu TECSOPS trên Railway: Postgres (DATABASE_URL) hoặc Redis (REDIS_URL) là nguồn sự thật,
+  tránh seed lại / file container. Dùng khi deploy mất dữ liệu, cấu hình DATABASE_URL/REDIS_URL,
+  backup/restore, hoặc debug sau railway up / GitHub deploy.
 ---
 
 # TECSOPS — Không mất dữ liệu khi deploy Railway
 
 ## Kiến trúc (bắt buộc hiểu)
 
-- Toàn bộ shipment state là **một JSON** trong Redis, key mặc định **`tecsops:state`** (`REDIS_STATE_KEY`).
-- **Deploy / build image / `railway up` không tự xóa Redis.** Nếu sau deploy UI “trống” hoặc như reset, nguyên nhân gần như luôn là **ứng dụng đang kết nối Redis sai / Redis mới trống / hoặc đang dùng file trong container**.
+- **Postgres** (`DATABASE_URL`): nguồn chính cho app state JSONB + catalog in / weigh slips (khi bật).
+- **Redis** (`REDIS_URL`): hàng đợi eCargo, Socket.IO adapter; có thể vẫn giữ bản state JSON (`tecsops:state`) khi chưa migrate hết sang Postgres.
+- **Deploy / build image / `railway up` không tự xóa Postgres/Redis.** Nếu sau deploy UI “trống”, nguyên nhân gần như luôn là **URL DB sai / instance mới trống / hoặc đang dùng file trong container**.
 
-Tham chiếu mã: `server/index.mjs` (bắt buộc `REDIS_URL` trên Railway), `server/stateStore.mjs` (`loadState`: Redis trống → migrate từ `state.json` nếu có → nếu không thì **tạo state mới** và `SET` vào Redis).
+Tham chiếu mã: `server/index.mjs` (`GET /api/health` báo `postgres` + `redis`), `server/stateStore.mjs`, `server/postgresStateStore.mjs`.
 
 ## Nguyên nhân hay gặp (theo thứ tự ưu tiên kiểm tra)
 

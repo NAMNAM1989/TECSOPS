@@ -13,7 +13,6 @@ export default tseslint.config(
       "mcp/**",
       "scripts/**",
       "*.config.js",
-      "server/**",
       "**/*.test.ts",
       "**/*.integration.test.ts",
       "vitest.config.ts",
@@ -36,6 +35,33 @@ export default tseslint.config(
       ],
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
+    files: ["server/ecargo/**/*.mjs", "server/stateStore.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        Buffer: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+        document: "readonly",
+        window: "readonly",
+        getComputedStyle: "readonly",
+        location: "readonly",
+        Event: "readonly",
+        KeyboardEvent: "readonly",
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "no-undef": "error",
     },
   }
 );

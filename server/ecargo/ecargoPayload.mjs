@@ -1,6 +1,6 @@
 const DEFAULT_PCS = 99;
 const DEFAULT_GW = 1000;
-const DEFAULT_COMMODITY = "Garment";
+const DEFAULT_COMMODITY = "Garments";
 const DEFAULT_SHC = "0";
 const MAWB_NORMALIZED = /^\d{3}-\d{8}$/;
 const MONTHS3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];

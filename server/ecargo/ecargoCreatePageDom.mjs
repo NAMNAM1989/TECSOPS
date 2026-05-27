@@ -277,8 +277,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         setNativeValue(inputs[6], data.hawb && data.hawb !== "0" ? data.hawb : "");
         setNativeValue(inputs[7], data.pcs);
         setNativeValue(inputs[8], data.grossWeight);
-        if (inputs.length > 9 && data.commodity) {
-          setNativeValue(inputs[9], data.commodity);
+        if (inputs.length > 9) {
+          const rawCommodity = cfg?.bookingDefaults?.commodity || "Garments";
+          const commodity =
+            String(rawCommodity)
+              .replace(/[^a-zA-Z0-9 ]/g, " ")
+              .replace(/\s+/g, " ")
+              .trim() || "Garments";
+          setNativeValue(inputs[9], commodity);
         }
 
         if (data.shc && data.shc !== "0") {

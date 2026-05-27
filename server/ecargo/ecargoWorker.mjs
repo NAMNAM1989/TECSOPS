@@ -9,6 +9,7 @@ import {
   shutdownEcargoGmail,
   warmEcargoGmail,
   assertEcargoGmailReady,
+  markEcargoMailSeen,
   waitForEcargoQrEmail,
   waitForEcargoVerifyEmail,
 } from "./ecargoGmail.mjs";
@@ -169,6 +170,9 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
       const verifyOutcome = await runVerifyInContext(browserContext, mail.verifyUrl);
       if (!verifyOutcome.verifyClicked) {
         throw new Error("Không bấm được nút Xác Thực trên eCargo.");
+      }
+      if (mail.uid != null && mail.mailbox) {
+        await markEcargoMailSeen(mail.uid, mail.mailbox);
       }
       const verifyMs = Date.now() - tVerify;
       console.info(

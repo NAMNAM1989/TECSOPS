@@ -5,7 +5,7 @@ import { parseBookingDateLoose } from "./bookingDateParse";
 
 const DEFAULT_PCS = 99;
 const DEFAULT_GW = 1000;
-const DEFAULT_COMMODITY = "Garment";
+const DEFAULT_COMMODITY = "Garments";
 const DEFAULT_SHC = "0";
 
 /** MAWB chuẩn 11 số → `xxx-xxxxxxxx`. */

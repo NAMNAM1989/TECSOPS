@@ -141,6 +141,16 @@ async function openMailbox(client, mailbox) {
  * @param {number|string} uid
  * @param {string} mailbox
  */
+export async function markEcargoMailSeen(uid, mailbox) {
+  if (uid == null || !mailbox) return;
+  try {
+    const client = await getPooledImapClient();
+    await markMailSeen(client, uid, mailbox);
+  } catch (e) {
+    console.warn(`[ecargo-gmail] markEcargoMailSeen failed uid=${uid}:`, e?.message ?? e);
+  }
+}
+
 async function markMailSeen(client, uid, mailbox) {
   if (process.env.ECARGO_GMAIL_MARK_SEEN === "0") return;
   if (!client || uid == null || !mailbox) return;
@@ -218,6 +228,7 @@ async function pollScscMail(client, opts, pickFn, logLabel) {
   const timeoutMs = opts.timeoutMs ?? 8 * 60 * 1000;
   const pollMs = opts.pollMs ?? ECARGO_GMAIL_POLL_MS;
   const matchHints = opts.matchHints;
+  const markSeenOnPick = opts.markSeenOnPick !== false;
   const deadline = Date.now() + timeoutMs;
   const loadCandidates = opts.loadCandidates ?? loadVerifyCandidates;
 
@@ -229,7 +240,7 @@ async function pollScscMail(client, opts, pickFn, logLabel) {
       pollCount += 1;
       if (found) {
         console.info(`[ecargo-gmail] ${logLabel} uid=${found.uid} polls=${pollCount}`);
-        if (found.mailbox) {
+        if (markSeenOnPick && found.mailbox) {
           await markMailSeen(client, found.uid, found.mailbox);
         }
         return found;
@@ -286,7 +297,7 @@ export async function waitForEcargoVerifyEmail(opts = {}) {
 
   const found = await pollScscMail(
     client,
-    { ...opts, loadCandidates: loadVerifyCandidates },
+    { ...opts, loadCandidates: loadVerifyCandidates, markSeenOnPick: false },
     pickFreshVerifyMail,
     "verify"
   );
@@ -314,6 +325,7 @@ export async function waitForEcargoVerifyEmail(opts = {}) {
 
 /**
  * Đọc mail QR sau khi đã bấm Xác Thực (subject Phiếu đăng ký hàng vào kho).
+ * Không đánh dấu đã đọc — người dùng tự mở mail để lấy QR.
  * @param {{ notBeforeMs?: number; timeoutMs?: number; pollMs?: number; matchHints?: { registrationNo?: string; vehicleNo?: string; mawb?: string } }} opts
  */
 export async function waitForEcargoQrEmail(opts = {}) {
@@ -327,7 +339,7 @@ export async function waitForEcargoQrEmail(opts = {}) {
 
   const found = await pollScscMail(
     client,
-    { ...opts, loadCandidates: loadQrCandidates },
+    { ...opts, loadCandidates: loadQrCandidates, markSeenOnPick: false },
     pickFreshQrMail,
     "qr"
   );

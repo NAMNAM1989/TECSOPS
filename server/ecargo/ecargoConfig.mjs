@@ -33,7 +33,7 @@ export const FIXED_ECARGO_CONFIG = {
   bookingDefaults: {
     pcs: 99,
     grossWeight: 1000,
-    commodity: "Garment",
+    commodity: "Garments",
     hawb: "0",
     shc: "0",
   },

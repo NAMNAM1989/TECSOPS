@@ -16,7 +16,10 @@ import { createPostgresStateStore } from "./postgresStateStore.mjs";
 import { registerTsplRoutes } from "./tsplRoutes.mjs";
 import { registerLookupRoutes } from "./lookupRoutes.mjs";
 import { registerWeighSlipRoutes } from "./weighSlipRoutes.mjs";
-import { registerPrintPdfRoutes } from "./print/printPdfRoutes.mjs";
+import {
+  registerPrintPdfRoutes,
+  registerShipmentInvoicePdfRoute,
+} from "./print/printPdfRoutes.mjs";
 import { closeDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import {
   assertSocketGateOk,
@@ -171,6 +174,8 @@ app.post("/api/mutation", async (req, res) => {
 });
 
 registerTsplRoutes(app);
+registerShipmentInvoicePdfRoute(app);
+console.info("[api] print/pdf/shipment-invoice (không cần Postgres)");
 
 /** eCargo auto-register — cần Redis. */
 let ecargoRedisClient = null;

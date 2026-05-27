@@ -9,6 +9,7 @@ import {
   updatePrintProfileMeta,
 } from "./printTemplateStore.mjs";
 import { generateScscWeighPdfBuffer, sendPdfResponse } from "./printPdfService.mjs";
+import { convertInvoiceXlsxToPdf } from "./convertInvoiceXlsxToPdf.mjs";
 
 function compactValues(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
@@ -18,6 +19,44 @@ function compactValues(raw) {
     out[k] = String(v ?? "");
   }
   return out;
+}
+
+/**
+ * Invoice PDF — không cần Postgres (luôn bật khi chạy server).
+ */
+export function registerShipmentInvoicePdfRoute(app) {
+  /**
+   * POST /api/print/pdf/shipment-invoice
+   * Body JSON: { xlsxBase64, invoiceNo?, awb? } — PDF từ file Excel đã điền mẫu INV.xlsx.
+   */
+  app.post("/api/print/pdf/shipment-invoice", async (req, res, next) => {
+    try {
+      const body = req.body ?? {};
+      const b64 = typeof body.xlsxBase64 === "string" ? body.xlsxBase64.trim() : "";
+      if (!b64) {
+        res.status(400).json({
+          error:
+            "Thiếu xlsxBase64 — client gửi file Excel đã điền từ mẫu INV.xlsx để chuyển PDF.",
+        });
+        return;
+      }
+      const xlsxBuffer = Buffer.from(b64, "base64");
+      if (xlsxBuffer.length < 100) {
+        res.status(400).json({ error: "xlsxBase64 không hợp lệ." });
+        return;
+      }
+
+      const pdf = await convertInvoiceXlsxToPdf(xlsxBuffer);
+      const invoiceNo =
+        typeof body.invoiceNo === "string" ? body.invoiceNo.trim().replace(/\W+/g, "") : "INV";
+      const awbPart = String(body.awb ?? "AWB")
+        .replace(/\W+/g, "")
+        .slice(0, 20);
+      sendPdfResponse(res, pdf, `INV_${invoiceNo || "INV"}_${awbPart || "AWB"}.pdf`);
+    } catch (e) {
+      next(e);
+    }
+  });
 }
 
 export function registerPrintPdfRoutes(app) {

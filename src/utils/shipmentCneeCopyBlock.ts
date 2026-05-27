@@ -214,17 +214,18 @@ export function buildShipmentCneeTooltipLines(
   });
 }
 
-/** Một dòng CNEE chỉ đọc (mobile / gợi ý desktop). */
+/** Một dòng ngắn trên lưới — ưu tiên mã viết tắt; tên pháp lý xem trong pop-up. */
 export function formatShipmentCneeReadonlySummary(
   shipment: Shipment,
   directory: readonly CustomerDirectoryEntry[] = []
 ): string {
   const customer = findCustomerEntry(shipment, directory);
   const saved = resolveSavedConsigneeForBooking(shipment, customer);
-  const name = compactSpace(shipment.consigneeNamePrint?.trim() || saved?.consigneeName?.trim() || "");
   const label = saved?.label?.trim() || "";
-  if (label && name) return `${label} — ${name}`;
-  return label || name;
+  if (label) return label;
+  const name = compactSpace(shipment.consigneeNamePrint?.trim() || saved?.consigneeName?.trim() || "");
+  if (!name) return "";
+  return name.length > 28 ? `${name.slice(0, 26)}…` : name;
 }
 
 export async function copyShipmentCneeBlockToClipboard(

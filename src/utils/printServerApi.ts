@@ -70,3 +70,22 @@ export async function fetchScscWeighPdfBuffer(req: GenerateScscWeighPdfRequest):
   if (!res.ok) throw new Error(await readApiError(res));
   return res.arrayBuffer();
 }
+
+export type ShipmentInvoicePdfFromXlsxRequest = {
+  xlsxBase64: string;
+  invoiceNo: string;
+  awb: string;
+};
+
+/** PDF từ Excel đã điền mẫu INV.xlsx (cùng định dạng INV.pdf). */
+export async function fetchShipmentInvoicePdfFromXlsx(
+  req: ShipmentInvoicePdfFromXlsxRequest
+): Promise<ArrayBuffer> {
+  const res = await fetch("/api/print/pdf/shipment-invoice", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) throw new Error(await readApiError(res));
+  return res.arrayBuffer();
+}

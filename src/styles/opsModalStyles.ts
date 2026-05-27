@@ -74,6 +74,12 @@ export const OPS = {
     "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-black/[0.14] bg-white text-slate-600 shadow-[0_1px_2px_rgba(0,0,0,0.1)] transition-all hover:border-black/25 hover:bg-white hover:text-slate-900 hover:shadow-md active:scale-95 dark:border-white/22 dark:bg-slate-900 dark:text-slate-100 dark:shadow-[0_1px_4px_rgba(0,0,0,0.55)] dark:hover:border-white/35 dark:hover:bg-slate-800 dark:hover:text-white",
   actionIconOpen:
     "border-apple-blue/55 bg-apple-blue/10 text-apple-blue ring-1 ring-apple-blue/35 dark:border-sky-400/55 dark:bg-sky-500/20 dark:text-sky-200 dark:ring-sky-400/40",
+  actionIconEmerald:
+    "border-emerald-500/40 text-emerald-700 hover:border-emerald-500/55 hover:bg-emerald-500/10 dark:border-emerald-400/45 dark:text-emerald-300 dark:hover:bg-emerald-500/15",
+  actionIconCustoms:
+    "border-indigo-500/45 text-indigo-800 hover:border-indigo-500/60 hover:bg-indigo-500/10 dark:border-indigo-400/50 dark:text-indigo-200 dark:hover:bg-indigo-500/20",
+  actionToolbar:
+    "inline-flex max-w-full flex-nowrap items-center gap-px rounded-lg border border-black/[0.1] bg-white/95 p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.06)] dark:border-white/12 dark:bg-slate-900/90 dark:shadow-[0_1px_3px_rgba(0,0,0,0.35)]",
   actionIconSky:
     "border-sky-400/45 text-sky-700 dark:border-sky-400/45 dark:text-sky-300",
   actionIconSkyOpen:

@@ -14,6 +14,7 @@ import {
 } from "../utils/exportTcsAttachedDimsExcel";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { OPS } from "../styles/opsModalStyles";
+import { ShipmentInvoiceExportButton } from "./ShipmentInvoiceExportButton";
 
 type Props = {
   row: Shipment;
@@ -217,7 +218,15 @@ export function ShipmentRowActionsMenu({
   ) : null;
 
   return (
-    <div ref={wrapRef} className="inline-flex max-w-full flex-nowrap items-center justify-end gap-0.5">
+    <div ref={wrapRef} className={OPS.actionToolbar}>
+      {onUpdate ? (
+        <ShipmentInvoiceExportButton
+          shipment={row}
+          customerDirectory={customerDirectory}
+          onUpdate={onUpdate}
+          variant="toolbar"
+        />
+      ) : null}
       <ActionIconBtn label="In nhãn vận chuyển" onClick={() => onPrint(row)}>
         <IconPrintLabel />
       </ActionIconBtn>

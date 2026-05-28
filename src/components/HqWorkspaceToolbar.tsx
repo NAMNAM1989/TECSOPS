@@ -27,6 +27,8 @@ type Props = {
   onRedistributeTargets: () => void;
   onAddBlank: () => void;
   onRandomPick: () => void;
+  onBalanceQuantities: () => void;
+  balanceNotice?: string | null;
   onOpenCatalog: () => void;
   onSave: () => void;
   onExportExcel: () => void;
@@ -61,6 +63,8 @@ export function HqWorkspaceToolbar({
   onRedistributeTargets,
   onAddBlank,
   onRandomPick,
+  onBalanceQuantities,
+  balanceNotice,
   onOpenCatalog,
   onSave,
   onExportExcel,
@@ -153,9 +157,30 @@ export function HqWorkspaceToolbar({
         <button type="button" onClick={onRandomPick} className={OPS.btnSmallAccent}>
           Ngẫu nhiên
         </button>
+        <button
+          type="button"
+          onClick={onBalanceQuantities}
+          className={OPS.btnSmallAccent}
+          title="Phân bổ số lượng ngẫu nhiên — tổng KG hàng nhỏ hơn kg tờ (chừa bao bì)"
+        >
+          Cân SL/KG
+        </button>
         <button type="button" onClick={onOpenCatalog} className={OPS.btnSmallAccent}>
           Danh mục
         </button>
+
+        {balanceNotice ? (
+          <span
+            className={`max-w-md rounded-lg px-2.5 py-1 text-[10px] font-medium leading-snug ${
+              balanceNotice.startsWith("Đã cân") || balanceNotice.includes("Đã thêm")
+                ? "bg-emerald-500/15 text-emerald-900 dark:text-emerald-100"
+                : "bg-amber-500/15 text-amber-950 dark:text-amber-100"
+            }`}
+            role="status"
+          >
+            {balanceNotice}
+          </span>
+        ) : null}
 
         <span className="hidden h-5 w-px bg-black/10 sm:inline dark:bg-white/10" />
 

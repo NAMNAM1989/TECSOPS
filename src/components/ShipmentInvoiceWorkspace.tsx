@@ -49,6 +49,11 @@ import { HqWorkspaceToolbar } from "./HqWorkspaceToolbar";
 import { CustomsDeclarationIcon } from "./ShipmentInvoiceExportButton";
 import { useInvoiceCatalog } from "../hooks/useInvoiceCatalog";
 import { randomInvoiceLinesFromCatalog } from "../utils/invoiceRandomPick";
+import {
+  balanceDeclarationLineItems,
+  grossNetWeightBadge,
+  resolveSheetBalanceTargets,
+} from "../utils/invoiceQuantityBalance";
 import { OPS } from "../styles/opsModalStyles";
 
 type Props = {
@@ -99,6 +104,7 @@ export function ShipmentInvoiceWorkspace({
   const [catalogEditorOpen, setCatalogEditorOpen] = useState(false);
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(() => new Set());
   const [copyTargetId, setCopyTargetId] = useState("");
+  const [balanceNotice, setBalanceNotice] = useState<string | null>(null);
   const shipmentIdRef = useRef(shipment.id);
   const { staticItems, items: catalogItems } = useInvoiceCatalog(invoiceCatalog);
 
@@ -131,7 +137,7 @@ export function ShipmentInvoiceWorkspace({
     [targetKg, totals.totalGrossKg]
   );
   const cartonBadge = matchBadge("Kiện", targetPcs, totals.totalQuantity, " CTNS");
-  const grossBadge = matchBadge("KG", roundDeclarationKg(targetKg), totals.totalGrossKg, " KGM");
+  const grossBadge = grossNetWeightBadge(roundDeclarationKg(targetKg), totals.totalGrossKg);
   const totalsLock = useMemo(
     () => validateDeclarationsLock(declarations, shipment.pcs, shipment.kg),
     [declarations, shipment.kg, shipment.pcs]
@@ -207,13 +213,28 @@ export function ShipmentInvoiceWorkspace({
   }, []);
 
   const confirmExportIfMismatch = useCallback((): boolean => {
-    if (totalsLock.pcsOk && totalsLock.kgOk && targetsLock.pcsOk && targetsLock.kgOk) {
+    const sheetKg = roundDeclarationKg(targetKg);
+    if (sheetKg > 0 && totals.totalGrossKg >= sheetKg) {
+      const ok = window.confirm(
+        `Tổng KG hàng (${totals.totalGrossKg}) phải nhỏ hơn kg tờ (${sheetKg}) vì chưa tính bao bì. Vẫn xuất?`
+      );
+      if (!ok) return false;
+    }
+    if (totalsLock.pcsOk && totalsLock.kgOk && targetsLock.pcsOk && targetsLock.kgOk && grossBadge.ok) {
       return true;
     }
     return window.confirm(
       "Tổng kiện/kg chưa khớp mục tiêu hoặc lô hàng. Vẫn xuất invoice?"
     );
-  }, [targetsLock.kgOk, targetsLock.pcsOk, totalsLock.kgOk, totalsLock.pcsOk]);
+  }, [
+    grossBadge.ok,
+    targetKg,
+    targetsLock.kgOk,
+    targetsLock.pcsOk,
+    totals.totalGrossKg,
+    totalsLock.kgOk,
+    totalsLock.pcsOk,
+  ]);
 
   const addBlank = useCallback(() => {
     mutateActiveItems((rows) => [...rows, emptyInvoiceLineItem()]);
@@ -248,8 +269,77 @@ export function ShipmentInvoiceWorkspace({
       return;
     }
     const picked = randomInvoiceLinesFromCatalog(catalogItems, n);
-    mutateActiveItems((rows) => (rows.length === 0 ? picked : [...rows, ...picked]));
-  }, [catalogItems, mutateActiveItems]);
+    let { targetKg: sheetKg, targetPcs: sheetPcs } = resolveSheetBalanceTargets(
+      activeDeclaration,
+      shipment
+    );
+    const result =
+      sheetKg > 0
+        ? balanceDeclarationLineItems(picked, catalogItems, {
+            targetKg: sheetKg,
+            targetPcs: sheetPcs,
+          })
+        : { ok: true as const, items: picked, message: "Đã thêm hàng — nhập kg tờ rồi bấm Cân SL/KG." };
+    if (result.ok) {
+      setBalanceNotice(result.message);
+      mutateActiveItems((rows) => (rows.length === 0 ? result.items : [...rows, ...result.items]));
+    } else {
+      setBalanceNotice(result.message);
+      mutateActiveItems((rows) => (rows.length === 0 ? picked : [...rows, ...picked]));
+    }
+  }, [activeDeclaration, catalogItems, mutateActiveItems, shipment]);
+
+  const handleBalanceQuantities = useCallback(() => {
+    if (!activeDeclarationId || !activeDeclaration) {
+      setBalanceNotice("Không xác định được tờ khai đang mở.");
+      return;
+    }
+    if (items.length === 0) {
+      setBalanceNotice("Thêm ít nhất một dòng hàng trước.");
+      return;
+    }
+
+    let { targetKg: sheetKg, targetPcs: sheetPcs } = resolveSheetBalanceTargets(
+      activeDeclaration,
+      shipment
+    );
+
+    if (sheetKg <= 0) {
+      const raw = window.prompt(
+        "Nhập kg tờ khai để cân số lượng (vd. 100):",
+        shipment.kg != null ? String(shipment.kg) : "100"
+      );
+      if (raw == null) return;
+      sheetKg = roundDeclarationKg(Number(raw));
+      if (sheetKg <= 0) {
+        setBalanceNotice("Kg tờ không hợp lệ.");
+        return;
+      }
+      setDeclarations((prev) =>
+        updateDeclarationTargets(prev, activeDeclarationId, { targetKg: sheetKg })
+      );
+    }
+
+    const result = balanceDeclarationLineItems(items, catalogItems, {
+      targetKg: sheetKg,
+      targetPcs: sheetPcs,
+    });
+
+    setBalanceNotice(result.message);
+    if (!result.ok) return;
+
+    setDeclarations((prev) =>
+      updateDeclarationItems(prev, activeDeclarationId, result.items)
+    );
+    markDirty();
+  }, [
+    activeDeclaration,
+    activeDeclarationId,
+    catalogItems,
+    items,
+    markDirty,
+    shipment,
+  ]);
 
   const updateItem = useCallback(
     (lineId: string, patch: Partial<InvoiceLineItem>) => {
@@ -710,6 +800,8 @@ export function ShipmentInvoiceWorkspace({
           onRedistributeTargets={handleRedistributeTargets}
           onAddBlank={addBlank}
           onRandomPick={handleRandomPick}
+          onBalanceQuantities={handleBalanceQuantities}
+          balanceNotice={balanceNotice}
           onOpenCatalog={() => setCatalogEditorOpen(true)}
           onSave={() => void saveAll()}
           onExportExcel={() => void handleExportExcel()}
@@ -763,7 +855,10 @@ export function ShipmentInvoiceWorkspace({
 
       <footer className={`shrink-0 border-t px-4 py-1.5 sm:px-5 ${OPS.footer}`}>
         <p className={`text-[11px] ${OPS.muted}`}>
-          Tờ hiện tại: {totals.totalAmountUsd.toFixed(2)} USD · {totals.totalGrossKg} kg (làm tròn)
+          Tờ hiện tại: {totals.totalAmountUsd.toFixed(2)} USD · hàng {totals.totalGrossKg} kg
+          {targetKg != null && targetKg > 0
+            ? ` / tờ ${roundDeclarationKg(targetKg)} kg (chênh ≈ bao bì)`
+            : ""}
           {dirty ? (
             <span className="ml-1 font-semibold text-amber-700 dark:text-amber-300"> · Chưa lưu</span>
           ) : null}

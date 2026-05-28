@@ -31,10 +31,31 @@ describe("invoiceQuantityBalance", () => {
     ];
     const out = balanceLineQuantitiesToDeclaration(items, {
       targetKg: 100,
-      targetPcs: 40,
       rng: () => 0.3,
     });
     expect(totalsForInvoice(out).totalGrossKg).toBeLessThan(100);
+    expect(totalsForInvoice(out).totalQuantity).toBeGreaterThan(2);
+  });
+
+  it("350kg tờ — không ép tổng SL = CTNS footer (25)", () => {
+    const items = [
+      emptyInvoiceLineItem({ kgPerUnit: 1.0, quantity: 1 }),
+      emptyInvoiceLineItem({ kgPerUnit: 0.5, quantity: 1 }),
+      emptyInvoiceLineItem({ kgPerUnit: 1.0, quantity: 1 }),
+      emptyInvoiceLineItem({ kgPerUnit: 0.2, quantity: 1 }),
+      emptyInvoiceLineItem({ kgPerUnit: 0.5, quantity: 1 }),
+      emptyInvoiceLineItem({ kgPerUnit: 0.5, quantity: 1 }),
+      emptyInvoiceLineItem({ kgPerUnit: 0.5, quantity: 1 }),
+    ];
+    const out = balanceLineQuantitiesToDeclaration(items, {
+      targetKg: 350,
+      targetPcs: 25,
+      rng: () => 0.5,
+    });
+    const t = totalsForInvoice(out);
+    expect(t.totalGrossKg).toBeGreaterThan(280);
+    expect(t.totalGrossKg).toBeLessThan(350);
+    expect(t.totalQuantity).toBeGreaterThan(25);
   });
 
   it("grossNetWeightBadge — OK khi hàng < tờ", () => {

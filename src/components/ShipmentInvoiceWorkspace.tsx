@@ -269,15 +269,11 @@ export function ShipmentInvoiceWorkspace({
       return;
     }
     const picked = randomInvoiceLinesFromCatalog(catalogItems, n);
-    let { targetKg: sheetKg, targetPcs: sheetPcs } = resolveSheetBalanceTargets(
-      activeDeclaration,
-      shipment
-    );
+    let { targetKg: sheetKg } = resolveSheetBalanceTargets(activeDeclaration, shipment);
     const result =
       sheetKg > 0
         ? balanceDeclarationLineItems(picked, catalogItems, {
             targetKg: sheetKg,
-            targetPcs: sheetPcs,
           })
         : { ok: true as const, items: picked, message: "Đã thêm hàng — nhập kg tờ rồi bấm Cân SL/KG." };
     if (result.ok) {
@@ -299,10 +295,7 @@ export function ShipmentInvoiceWorkspace({
       return;
     }
 
-    let { targetKg: sheetKg, targetPcs: sheetPcs } = resolveSheetBalanceTargets(
-      activeDeclaration,
-      shipment
-    );
+    let { targetKg: sheetKg } = resolveSheetBalanceTargets(activeDeclaration, shipment);
 
     if (sheetKg <= 0) {
       const raw = window.prompt(
@@ -322,7 +315,6 @@ export function ShipmentInvoiceWorkspace({
 
     const result = balanceDeclarationLineItems(items, catalogItems, {
       targetKg: sheetKg,
-      targetPcs: sheetPcs,
     });
 
     setBalanceNotice(result.message);

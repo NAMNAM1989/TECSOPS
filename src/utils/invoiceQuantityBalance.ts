@@ -6,7 +6,7 @@ import type { Shipment } from "../types/shipment";
 export type BalanceLineQuantitiesOptions = {
   /** Kg mục tiêu tờ khai (gồm bao bì thực tế). */
   targetKg: number;
-  /** Tổng kiện mục tiêu — nếu có, điều chỉnh thêm cột số lượng. */
+  /** @deprecated Không dùng — CTNS footer ≠ tổng SL dòng hàng; cân chỉ theo targetKg. */
   targetPcs?: number | null;
   /** Tỷ lệ trọng lượng hàng (net) / kg tờ — random trong khoảng này. */
   netWeightRatioMin?: number;
@@ -162,46 +162,7 @@ export function balanceLineQuantitiesToDeclaration(
     next[pick.index]!.quantity += 1;
   }
 
-  const targetPcs =
-    options.targetPcs != null && options.targetPcs > 0 ? Math.round(options.targetPcs) : null;
-  if (targetPcs != null) {
-    alignQuantitiesToTargetPcs(next, eligible, targetPcs, targetKg, rng);
-  }
-
   return next;
-}
-
-function alignQuantitiesToTargetPcs(
-  items: InvoiceLineItem[],
-  eligible: { it: InvoiceLineItem; index: number }[],
-  targetPcs: number,
-  targetKg: number,
-  rng: () => number,
-): void {
-  let guard = 0;
-  while (guard++ < 8000) {
-    const qty = totalQuantity(items);
-    if (qty === targetPcs) break;
-
-    if (qty < targetPcs) {
-      const shuffled = eligible.slice().sort(() => rng() - 0.5);
-      let added = false;
-      for (const { index } of shuffled) {
-        const addKg = items[index]!.kgPerUnit;
-        if (totalGrossKg(items) + addKg >= targetKg) continue;
-        items[index]!.quantity += 1;
-        added = true;
-        break;
-      }
-      if (!added) break;
-      continue;
-    }
-
-    const candidates = eligible.filter(({ index }) => items[index]!.quantity > 1);
-    if (candidates.length === 0) break;
-    const pick = candidates[Math.floor(rng() * candidates.length)]!;
-    items[pick.index]!.quantity -= 1;
-  }
 }
 
 /** Badge: tổng KG hàng phải nhỏ hơn kg tờ (phần chênh = bao bì). */

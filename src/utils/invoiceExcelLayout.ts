@@ -94,7 +94,8 @@ export const GOODS_ROW_EXTRA_PADDING_PT = 4;
 export function displayLength(text: string): number {
   let width = 0;
   for (const ch of String(text ?? "")) {
-    width += /[\u0000-\u007F]/.test(ch) ? 1 : 1.18;
+    const cp = ch.codePointAt(0) ?? 0;
+    width += cp <= 0x7f ? 1 : 1.18;
   }
   return width;
 }

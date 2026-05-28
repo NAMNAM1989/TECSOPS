@@ -271,7 +271,7 @@ export function ShipmentInvoiceWorkspace({
       return;
     }
     const picked = randomInvoiceLinesFromCatalog(catalogItems, n);
-    let { targetKg: sheetKg } = resolveSheetBalanceTargets(activeDeclaration, shipment);
+    const { targetKg: sheetKg } = resolveSheetBalanceTargets(activeDeclaration, shipment);
     const result =
       sheetKg > 0
         ? balanceDeclarationLineItems(picked, catalogItems, {

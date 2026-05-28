@@ -43,7 +43,7 @@ export async function downloadShipmentInvoiceExcel(
 ): Promise<void> {
   let objectUrl: string | null = null;
   try {
-    const { buffer, invoiceNo } = await buildShipmentInvoiceXlsxBuffer(
+    const { buffer } = await buildShipmentInvoiceXlsxBuffer(
       shipment,
       directory,
       options,

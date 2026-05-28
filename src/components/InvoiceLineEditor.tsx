@@ -5,11 +5,7 @@ import {
   type InvoiceLineItem,
 } from "../types/invoiceItem";
 import { OPS } from "../styles/opsModalStyles";
-
-function safeNumber(v: string, fallback = 0): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
+import { LocaleNumberInput } from "./LocaleNumberInput";
 
 type Props = {
   index: number;
@@ -129,31 +125,29 @@ export const InvoiceLineEditor = memo(function InvoiceLineEditor({
       <div className="mt-1.5 grid grid-cols-3 gap-1.5">
         <div>
           <label className="mb-0.5 block text-[9px] text-slate-500">Số lượng</label>
-          <input
-            type="number"
+          <LocaleNumberInput
+            integer
             value={local.quantity}
-            onChange={(e) => updateField({ quantity: safeNumber(e.target.value) })}
-            className={`${OPS.input} w-full py-1 text-right text-xs tabular-nums`}
+            onCommit={(quantity) => updateField({ quantity: quantity ?? 0 })}
+            className="w-full py-1 text-right text-xs tabular-nums"
           />
         </div>
         <div>
           <label className="mb-0.5 block text-[9px] text-slate-500">Đơn giá $</label>
-          <input
-            type="number"
-            step="0.01"
+          <LocaleNumberInput
             value={local.unitPriceUsd}
-            onChange={(e) => updateField({ unitPriceUsd: safeNumber(e.target.value) })}
-            className={`${OPS.input} w-full py-1 text-right text-xs tabular-nums`}
+            maxDecimals={2}
+            onCommit={(unitPriceUsd) => updateField({ unitPriceUsd: unitPriceUsd ?? 0 })}
+            className="w-full py-1 text-right text-xs tabular-nums"
           />
         </div>
         <div>
           <label className="mb-0.5 block text-[9px] text-slate-500">kg/đv</label>
-          <input
-            type="number"
-            step="0.01"
+          <LocaleNumberInput
             value={local.kgPerUnit}
-            onChange={(e) => updateField({ kgPerUnit: safeNumber(e.target.value) })}
-            className={`${OPS.input} w-full py-1 text-right text-xs tabular-nums`}
+            maxDecimals={3}
+            onCommit={(kgPerUnit) => updateField({ kgPerUnit: kgPerUnit ?? 0 })}
+            className="w-full py-1 text-right text-xs tabular-nums"
           />
         </div>
       </div>

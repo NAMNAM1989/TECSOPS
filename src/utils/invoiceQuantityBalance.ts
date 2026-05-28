@@ -25,10 +25,6 @@ function totalGrossKg(items: readonly InvoiceLineItem[]): number {
   return totalsForInvoice([...items]).totalGrossKg;
 }
 
-function totalQuantity(items: readonly InvoiceLineItem[]): number {
-  return totalsForInvoice([...items]).totalQuantity;
-}
-
 /** Bổ sung kg/đv từ danh mục khi dòng chưa có. */
 export function enrichLineItemsKgFromCatalog(
   items: readonly InvoiceLineItem[],

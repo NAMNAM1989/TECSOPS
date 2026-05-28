@@ -7,6 +7,7 @@ import {
   emptyInvoiceCatalogItem,
 } from "../utils/invoiceCatalogCore";
 import { groupCatalog } from "../hooks/useInvoiceCatalog";
+import { LocaleNumberInput } from "./LocaleNumberInput";
 import { OPS } from "../styles/opsModalStyles";
 
 type Props = {
@@ -139,19 +140,21 @@ export function InvoiceCatalogEditor({ catalog, staticFallbackItems, onSave, onC
                       placeholder="XX"
                       className={`${OPS.input} py-1 text-[10px]`}
                     />
-                    <input
-                      type="number"
+                    <LocaleNumberInput
                       value={it.unitPriceUsd}
-                      onChange={(e) => updateItem(it.id, { unitPriceUsd: Number(e.target.value) || 0 })}
+                      maxDecimals={2}
+                      onCommit={(unitPriceUsd) =>
+                        updateItem(it.id, { unitPriceUsd: unitPriceUsd ?? 0 })
+                      }
                       placeholder="$"
-                      className={`${OPS.input} py-1 text-[10px] tabular-nums`}
+                      className="py-1 text-[10px] tabular-nums"
                     />
-                    <input
-                      type="number"
+                    <LocaleNumberInput
                       value={it.kgPerUnit}
-                      onChange={(e) => updateItem(it.id, { kgPerUnit: Number(e.target.value) || 0 })}
+                      maxDecimals={3}
+                      onCommit={(kgPerUnit) => updateItem(it.id, { kgPerUnit: kgPerUnit ?? 0 })}
                       placeholder="kg"
-                      className={`${OPS.input} py-1 text-[10px] tabular-nums`}
+                      className="py-1 text-[10px] tabular-nums"
                     />
                   </div>
                 </div>

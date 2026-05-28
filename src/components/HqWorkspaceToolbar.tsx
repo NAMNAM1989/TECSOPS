@@ -1,4 +1,5 @@
 import type { InvoiceDeclaration } from "../types/invoiceDeclaration";
+import { LocaleNumberInput } from "./LocaleNumberInput";
 import { OPS } from "../styles/opsModalStyles";
 
 type TargetsLock = {
@@ -107,26 +108,24 @@ export function HqWorkspaceToolbar({
           <span className={`font-semibold ${OPS.secondary}`}>Mục tiêu {activeDeclaration.label}:</span>
           <label className="flex items-center gap-1 tabular-nums">
             Kiện
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={activeDeclaration.targetPcs ?? ""}
-              onChange={(e) => onTargetPcsChange(e.target.value)}
-              className={`${OPS.input} w-16 py-1 text-right text-[11px]`}
-              aria-label="Mục tiêu kiện tờ này"
+            <LocaleNumberInput
+              integer
+              nullable
+              value={activeDeclaration.targetPcs ?? null}
+              onCommit={(n) => onTargetPcsChange(n != null && n > 0 ? String(n) : "")}
+              className="w-16 py-1 text-right text-[11px]"
+              placeholder="—"
             />
           </label>
           <label className="flex items-center gap-1 tabular-nums">
             Kg
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={activeDeclaration.targetKg ?? ""}
-              onChange={(e) => onTargetKgChange(e.target.value)}
-              className={`${OPS.input} w-16 py-1 text-right text-[11px]`}
-              aria-label="Mục tiêu kg tờ này"
+            <LocaleNumberInput
+              integer
+              nullable
+              value={activeDeclaration.targetKg ?? null}
+              onCommit={(n) => onTargetKgChange(n != null && n > 0 ? String(n) : "")}
+              className="w-16 py-1 text-right text-[11px]"
+              placeholder="—"
             />
           </label>
           <button type="button" onClick={onRedistributeTargets} className={OPS.btnSmallAccent}>

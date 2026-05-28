@@ -8,15 +8,11 @@ import {
 import type { InvoiceCatalog } from "../utils/invoiceCatalogCore";
 import { useInvoiceCatalog } from "../hooks/useInvoiceCatalog";
 import { SearchCombobox, type ComboboxOption } from "./SearchCombobox";
+import { LocaleNumberInput } from "./LocaleNumberInput";
 import { OPS } from "../styles/opsModalStyles";
 
 const ORIGIN_OPTIONS = ["VN", "CN", "US", "KR", "JP", "TH", "TW", "MY", "ID"] as const;
 const ORIGIN_COMBO_OPTIONS = ORIGIN_OPTIONS.map((o) => ({ value: o, label: o }));
-
-function safeNumber(v: string, fallback = 0): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
 
 type GridRowProps = {
   index: number;
@@ -123,11 +119,11 @@ const GridRow = memo(function GridRow({
         />
       </td>
       <td className="px-0.5 py-0.5 w-[4rem]">
-        <input
-          type="number"
+        <LocaleNumberInput
+          integer
           value={item.quantity}
-          onChange={(e) => onPatch(item.lineId, { quantity: safeNumber(e.target.value) })}
-          className={`${OPS.input} w-full py-1 text-right text-[11px] tabular-nums`}
+          onCommit={(quantity) => onPatch(item.lineId, { quantity: quantity ?? 0 })}
+          className="w-full py-1 text-right text-[11px] tabular-nums"
         />
       </td>
       <td className="px-0.5 py-0.5 w-[4rem]">
@@ -140,30 +136,28 @@ const GridRow = memo(function GridRow({
         />
       </td>
       <td className="px-0.5 py-0.5 w-[4.5rem]">
-        <input
-          type="number"
-          step="0.01"
+        <LocaleNumberInput
           value={item.unitPriceUsd}
-          onChange={(e) => onPatch(item.lineId, { unitPriceUsd: safeNumber(e.target.value) })}
-          className={`${OPS.input} w-full py-1 text-right text-[11px] tabular-nums`}
+          maxDecimals={2}
+          onCommit={(unitPriceUsd) => onPatch(item.lineId, { unitPriceUsd: unitPriceUsd ?? 0 })}
+          className="w-full py-1 text-right text-[11px] tabular-nums"
         />
       </td>
       <td className="px-1 py-0.5 text-right text-[11px] tabular-nums text-slate-700 dark:text-slate-300">
         {amount.toFixed(2)}
       </td>
       <td className="px-0.5 py-0.5 w-[4rem]">
-        <input
-          type="number"
-          step="0.01"
+        <LocaleNumberInput
           value={item.kgPerUnit}
-          onChange={(e) => onPatch(item.lineId, { kgPerUnit: safeNumber(e.target.value) })}
+          maxDecimals={3}
+          onCommit={(kgPerUnit) => onPatch(item.lineId, { kgPerUnit: kgPerUnit ?? 0 })}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
               onInsertAfter(item.lineId);
             }
           }}
-          className={`${OPS.input} w-full py-1 text-right text-[11px] tabular-nums`}
+          className="w-full py-1 text-right text-[11px] tabular-nums"
         />
       </td>
       <td className="px-1 py-0.5 text-right text-[11px] tabular-nums text-slate-700 dark:text-slate-300">

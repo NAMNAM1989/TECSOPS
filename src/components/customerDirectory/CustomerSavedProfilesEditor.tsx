@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type {
   CustomerDirectoryEntry,
   CustomerSavedConsignee,
@@ -59,6 +59,19 @@ const TAB_LABELS: { id: ProfileTab; label: string }[] = [
   { id: "vehicle", label: "Xe / TX" },
 ];
 
+function listIdsForTab(entry: CustomerDirectoryEntry, profileTab: ProfileTab): string[] {
+  switch (profileTab) {
+    case "shipper":
+      return (entry.savedShippers ?? []).map((s) => s.id);
+    case "consignee":
+      return (entry.savedConsignees ?? []).map((c) => c.id);
+    case "goods":
+      return (entry.savedGoods ?? []).map((g) => g.id);
+    case "vehicle":
+      return (entry.savedVehicles ?? []).map((v) => v.id);
+  }
+}
+
 function DefaultStar({
   active,
   onClick,
@@ -89,36 +102,77 @@ function ItemCard({
   defaultStar,
   onRemove,
   canRemove,
-  children,
+  editing,
+  onStartEdit,
+  viewContent,
+  editContent,
 }: {
   title: string;
   defaultStar: ReactNode;
   onRemove: () => void;
   canRemove: boolean;
-  children: ReactNode;
+  editing: boolean;
+  onStartEdit: () => void;
+  viewContent: ReactNode;
+  editContent: ReactNode;
 }) {
   return (
-    <div className={`mb-1.5 rounded-lg border p-2 ${CD.panelSoft}`}>
+    <div
+      className={`mb-1.5 rounded-lg border p-2 ${CD.panelSoft}${
+        editing ? " ring-1 ring-apple-blue/35 dark:ring-sky-400/40" : ""
+      }`}
+    >
       <div className="mb-1.5 flex items-center gap-1.5">
         {defaultStar}
         <span className={`min-w-0 flex-1 truncate text-[11px] font-semibold ${CD.secondary}`}>{title}</span>
-        {canRemove ? (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="shrink-0 text-[10px] font-semibold text-red-600 hover:underline dark:text-red-300"
-          >
-            Xóa
-          </button>
-        ) : null}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {!editing ? (
+            <button type="button" onClick={onStartEdit} className={CD.btnSmallAccent}>
+              Sửa
+            </button>
+          ) : null}
+          {canRemove ? (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="text-[10px] font-semibold text-red-600 hover:underline dark:text-red-300"
+            >
+              Xóa
+            </button>
+          ) : null}
+        </div>
       </div>
-      {children}
+      {editing ? editContent : viewContent}
     </div>
   );
 }
 
 function FieldLabel({ children }: { children: ReactNode }) {
   return <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>{children}</span>;
+}
+
+function ReadOnlyValue({
+  label,
+  value,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  multiline?: boolean;
+}) {
+  const text = value.trim();
+  return (
+    <div className={multiline ? "sm:col-span-2" : undefined}>
+      <FieldLabel>{label}</FieldLabel>
+      <p
+        className={`rounded-lg border border-black/[0.06] bg-black/[0.03] px-2 py-1 text-xs text-apple-label dark:border-white/10 dark:bg-black/20 dark:text-slate-200 ${
+          multiline ? "whitespace-pre-wrap break-words leading-relaxed" : "truncate"
+        }`}
+      >
+        {text || "—"}
+      </p>
+    </div>
+  );
 }
 
 export function CustomerSavedProfilesEditor({
@@ -144,6 +198,33 @@ export function CustomerSavedProfilesEditor({
 }: Props) {
   const [tab, setTab] = useState<ProfileTab>("shipper");
   const [ocrHint, setOcrHint] = useState<string | null>(null);
+  const [editingIds, setEditingIds] = useState<Set<string>>(() => new Set());
+  const [pendingEditTab, setPendingEditTab] = useState<ProfileTab | null>(null);
+
+  useEffect(() => {
+    setEditingIds(new Set());
+    setPendingEditTab(null);
+  }, [entry.id]);
+
+  useEffect(() => {
+    if (!savedSection || savedSection === "note" || savedSection === "identity") return;
+    const sectionTab = savedSection as ProfileTab;
+    setEditingIds((prev) => {
+      const next = new Set(prev);
+      const ids = listIdsForTab(entry, sectionTab);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  }, [savedSection, entry]);
+
+  useEffect(() => {
+    if (!pendingEditTab) return;
+    const ids = listIdsForTab(entry, pendingEditTab);
+    const lastId = ids[ids.length - 1];
+    if (!lastId) return;
+    setEditingIds((prev) => new Set(prev).add(lastId));
+    setPendingEditTab(null);
+  }, [entry, pendingEditTab]);
 
   const shippers = entry.savedShippers ?? [];
   const consignees = entry.savedConsignees ?? [];
@@ -205,10 +286,18 @@ export function CustomerSavedProfilesEditor({
       fn(idx, patch);
     };
 
-  const wrapAdd = (fn: () => void) => () => {
+  const wrapAdd = (fn: () => void, profileTab: ProfileTab) => () => {
     onEdit();
     fn();
+    setPendingEditTab(profileTab);
   };
+
+  const startEditItem = (id: string) => {
+    onEdit();
+    setEditingIds((prev) => new Set(prev).add(id));
+  };
+
+  const isEditingItem = (id: string) => editingIds.has(id);
 
   const patchShipper = wrapPatch(onPatchShipper);
   const patchConsignee = wrapPatch(onPatchConsignee);
@@ -256,7 +345,7 @@ export function CustomerSavedProfilesEditor({
           ))}
           <div className="ml-auto flex items-center gap-1">
             <SectionErrorHint errors={errors} section={tab} />
-            <button type="button" onClick={wrapAdd(tabAdd[tab])} className={CD.btnSmallAccent}>
+            <button type="button" onClick={wrapAdd(tabAdd[tab], tab)} className={CD.btnSmallAccent}>
               + Thêm
             </button>
             <CustomerSectionSaveButton
@@ -279,6 +368,8 @@ export function CustomerSavedProfilesEditor({
                   key={s.id}
                   title={s.shipperName.trim() || s.label.trim() || `#${idx + 1}`}
                   canRemove={shippers.length > 1}
+                  editing={isEditingItem(s.id)}
+                  onStartEdit={() => startEditItem(s.id)}
                   onRemove={() => onRemoveShipper(idx)}
                   defaultStar={
                     <DefaultStar
@@ -287,82 +378,92 @@ export function CustomerSavedProfilesEditor({
                       title="Mặc định"
                     />
                   }
-                >
-                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                    <label className="sm:col-span-2">
-                      <FieldLabel>Tên in phiếu</FieldLabel>
-                      <input
-                        className={fieldInputClass(Boolean(fe("shipper", "shipperName", s.id)))}
-                        value={s.shipperName}
-                        onChange={(e) => patchShipper(idx, { shipperName: e.target.value })}
-                        onBlur={() => fillLabelIfEmpty(idx, s.shipperName, patchShipper, s.label)}
-                      />
-                      <FieldErrorText message={fe("shipper", "shipperName", s.id)} />
-                    </label>
-                    <label>
-                      <FieldLabel>SĐT</FieldLabel>
-                      <input
-                        className={`${fieldInputClass(Boolean(fe("shipper", "shipperPhone", s.id)))} tabular-nums`}
-                        value={s.shipperPhone}
-                        onChange={(e) => patchShipper(idx, { shipperPhone: e.target.value })}
-                        onBlur={(e) =>
-                          patchShipper(idx, { shipperPhone: formatVnPhoneDisplay(e.target.value) })
-                        }
-                      />
-                      <FieldErrorText message={fe("shipper", "shipperPhone", s.id)} />
-                    </label>
-                    <label className="sm:col-span-2">
-                      <FieldLabel>Địa chỉ</FieldLabel>
-                      <textarea
-                        className={`${fieldInputClass(false)} resize-y whitespace-pre-wrap break-words leading-relaxed`}
-                        rows={2}
-                        value={s.shipperAddress}
-                        onChange={(e) => patchShipper(idx, { shipperAddress: e.target.value })}
-                        onBlur={(e) =>
-                          patchShipper(idx, {
-                            shipperAddress: normalizePrintAddressMultiline(e.target.value, 6),
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
-                  <details className="mt-1">
-                    <summary className={`cursor-pointer text-[10px] ${CD.muted}`}>Thêm (MST, email, OCR…)</summary>
-                    <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                      <label>
-                        <FieldLabel>Mã</FieldLabel>
-                        <input
-                          className={`${inputCls} font-mono uppercase`}
-                          value={s.label}
-                          onChange={(e) => patchShipper(idx, { label: e.target.value })}
-                          onBlur={(e) => patchShipper(idx, { label: normalizeAgentCode(e.target.value) })}
-                        />
-                      </label>
-                      <label>
-                        <FieldLabel>MST</FieldLabel>
-                        <input
-                          className={inputCls}
-                          value={s.taxCode}
-                          onChange={(e) => patchShipper(idx, { taxCode: e.target.value })}
-                        />
-                      </label>
-                      <label className="sm:col-span-2">
-                        <FieldLabel>Email (tùy chọn)</FieldLabel>
-                        <input
-                          className={inputCls}
-                          value={s.shipperEmail}
-                          onChange={(e) => patchShipper(idx, { shipperEmail: e.target.value })}
-                        />
-                      </label>
-                      <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-                        <button type="button" onClick={() => void applyOcrPaste(idx)} className={CD.btnSmallAccent}>
-                          Dán OCR
-                        </button>
-                        {ocrHint ? <span className={`text-[10px] ${CD.secondary}`}>{ocrHint}</span> : null}
-                      </div>
+                  viewContent={
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                      <ReadOnlyValue label="Tên in phiếu" value={s.shipperName} multiline />
+                      <ReadOnlyValue label="SĐT" value={s.shipperPhone} />
+                      <ReadOnlyValue label="Địa chỉ" value={s.shipperAddress} multiline />
                     </div>
-                  </details>
-                </ItemCard>
+                  }
+                  editContent={
+                    <>
+                      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                        <label className="sm:col-span-2">
+                          <FieldLabel>Tên in phiếu</FieldLabel>
+                          <input
+                            className={fieldInputClass(Boolean(fe("shipper", "shipperName", s.id)))}
+                            value={s.shipperName}
+                            onChange={(e) => patchShipper(idx, { shipperName: e.target.value })}
+                            onBlur={() => fillLabelIfEmpty(idx, s.shipperName, patchShipper, s.label)}
+                          />
+                          <FieldErrorText message={fe("shipper", "shipperName", s.id)} />
+                        </label>
+                        <label>
+                          <FieldLabel>SĐT</FieldLabel>
+                          <input
+                            className={`${fieldInputClass(Boolean(fe("shipper", "shipperPhone", s.id)))} tabular-nums`}
+                            value={s.shipperPhone}
+                            onChange={(e) => patchShipper(idx, { shipperPhone: e.target.value })}
+                            onBlur={(e) =>
+                              patchShipper(idx, { shipperPhone: formatVnPhoneDisplay(e.target.value) })
+                            }
+                          />
+                          <FieldErrorText message={fe("shipper", "shipperPhone", s.id)} />
+                        </label>
+                        <label className="sm:col-span-2">
+                          <FieldLabel>Địa chỉ</FieldLabel>
+                          <textarea
+                            className={`${fieldInputClass(false)} resize-y whitespace-pre-wrap break-words leading-relaxed`}
+                            rows={2}
+                            value={s.shipperAddress}
+                            onChange={(e) => patchShipper(idx, { shipperAddress: e.target.value })}
+                            onBlur={(e) =>
+                              patchShipper(idx, {
+                                shipperAddress: normalizePrintAddressMultiline(e.target.value, 6),
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+                      <details className="mt-1">
+                        <summary className={`cursor-pointer text-[10px] ${CD.muted}`}>Thêm (MST, email, OCR…)</summary>
+                        <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                          <label>
+                            <FieldLabel>Mã</FieldLabel>
+                            <input
+                              className={`${inputCls} font-mono uppercase`}
+                              value={s.label}
+                              onChange={(e) => patchShipper(idx, { label: e.target.value })}
+                              onBlur={(e) => patchShipper(idx, { label: normalizeAgentCode(e.target.value) })}
+                            />
+                          </label>
+                          <label>
+                            <FieldLabel>MST</FieldLabel>
+                            <input
+                              className={inputCls}
+                              value={s.taxCode}
+                              onChange={(e) => patchShipper(idx, { taxCode: e.target.value })}
+                            />
+                          </label>
+                          <label className="sm:col-span-2">
+                            <FieldLabel>Email (tùy chọn)</FieldLabel>
+                            <input
+                              className={inputCls}
+                              value={s.shipperEmail}
+                              onChange={(e) => patchShipper(idx, { shipperEmail: e.target.value })}
+                            />
+                          </label>
+                          <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+                            <button type="button" onClick={() => void applyOcrPaste(idx)} className={CD.btnSmallAccent}>
+                              Dán OCR
+                            </button>
+                            {ocrHint ? <span className={`text-[10px] ${CD.secondary}`}>{ocrHint}</span> : null}
+                          </div>
+                        </div>
+                      </details>
+                    </>
+                  }
+                />
               ))
             )
           ) : null}
@@ -376,6 +477,8 @@ export function CustomerSavedProfilesEditor({
                   key={c.id}
                   title={c.consigneeName.trim() || c.label.trim() || `#${idx + 1}`}
                   canRemove
+                  editing={isEditingItem(c.id)}
+                  onStartEdit={() => startEditItem(c.id)}
                   onRemove={() => onRemoveConsignee(idx)}
                   defaultStar={
                     <DefaultStar
@@ -384,46 +487,54 @@ export function CustomerSavedProfilesEditor({
                       title="Mặc định"
                     />
                   }
-                >
-                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                    <label className="sm:col-span-2">
-                      <FieldLabel>Tên</FieldLabel>
-                      <input
-                        className={fieldInputClass(Boolean(fe("consignee", "consigneeName", c.id)))}
-                        value={c.consigneeName}
-                        onChange={(e) => patchConsignee(idx, { consigneeName: e.target.value })}
-                        onBlur={() => fillLabelIfEmpty(idx, c.consigneeName, patchConsignee, c.label)}
-                      />
-                      <FieldErrorText message={fe("consignee", "consigneeName", c.id)} />
-                    </label>
-                    <label>
-                      <FieldLabel>SĐT</FieldLabel>
-                      <input
-                        className={`${fieldInputClass(Boolean(fe("consignee", "consigneePhone", c.id)))} tabular-nums`}
-                        value={c.consigneePhone}
-                        onChange={(e) => patchConsignee(idx, { consigneePhone: e.target.value })}
-                        onBlur={(e) =>
-                          patchConsignee(idx, { consigneePhone: formatVnPhoneDisplay(e.target.value) })
-                        }
-                      />
-                      <FieldErrorText message={fe("consignee", "consigneePhone", c.id)} />
-                    </label>
-                    <label className="sm:col-span-2">
-                      <FieldLabel>Địa chỉ</FieldLabel>
-                      <textarea
-                        className={`${fieldInputClass(false)} resize-y whitespace-pre-wrap break-words leading-relaxed`}
-                        rows={2}
-                        value={c.consigneeAddress}
-                        onChange={(e) => patchConsignee(idx, { consigneeAddress: e.target.value })}
-                        onBlur={(e) =>
-                          patchConsignee(idx, {
-                            consigneeAddress: normalizePrintAddressMultiline(e.target.value, 6),
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
-                </ItemCard>
+                  viewContent={
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                      <ReadOnlyValue label="Tên" value={c.consigneeName} multiline />
+                      <ReadOnlyValue label="SĐT" value={c.consigneePhone} />
+                      <ReadOnlyValue label="Địa chỉ" value={c.consigneeAddress} multiline />
+                    </div>
+                  }
+                  editContent={
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                      <label className="sm:col-span-2">
+                        <FieldLabel>Tên</FieldLabel>
+                        <input
+                          className={fieldInputClass(Boolean(fe("consignee", "consigneeName", c.id)))}
+                          value={c.consigneeName}
+                          onChange={(e) => patchConsignee(idx, { consigneeName: e.target.value })}
+                          onBlur={() => fillLabelIfEmpty(idx, c.consigneeName, patchConsignee, c.label)}
+                        />
+                        <FieldErrorText message={fe("consignee", "consigneeName", c.id)} />
+                      </label>
+                      <label>
+                        <FieldLabel>SĐT</FieldLabel>
+                        <input
+                          className={`${fieldInputClass(Boolean(fe("consignee", "consigneePhone", c.id)))} tabular-nums`}
+                          value={c.consigneePhone}
+                          onChange={(e) => patchConsignee(idx, { consigneePhone: e.target.value })}
+                          onBlur={(e) =>
+                            patchConsignee(idx, { consigneePhone: formatVnPhoneDisplay(e.target.value) })
+                          }
+                        />
+                        <FieldErrorText message={fe("consignee", "consigneePhone", c.id)} />
+                      </label>
+                      <label className="sm:col-span-2">
+                        <FieldLabel>Địa chỉ</FieldLabel>
+                        <textarea
+                          className={`${fieldInputClass(false)} resize-y whitespace-pre-wrap break-words leading-relaxed`}
+                          rows={2}
+                          value={c.consigneeAddress}
+                          onChange={(e) => patchConsignee(idx, { consigneeAddress: e.target.value })}
+                          onBlur={(e) =>
+                            patchConsignee(idx, {
+                              consigneeAddress: normalizePrintAddressMultiline(e.target.value, 6),
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  }
+                />
               ))
             )
           ) : null}
@@ -437,6 +548,8 @@ export function CustomerSavedProfilesEditor({
                   key={g.id}
                   title={g.goodsDescription.trim() || g.label.trim() || `#${idx + 1}`}
                   canRemove
+                  editing={isEditingItem(g.id)}
+                  onStartEdit={() => startEditItem(g.id)}
                   onRemove={() => onRemoveGoods(idx)}
                   defaultStar={
                     <DefaultStar
@@ -445,19 +558,21 @@ export function CustomerSavedProfilesEditor({
                       title="Mặc định"
                     />
                   }
-                >
-                  <label>
-                    <FieldLabel>Mô tả in phiếu</FieldLabel>
-                    <input
-                      className={fieldInputClass(Boolean(fe("goods", "goodsDescription", g.id)))}
-                      placeholder="GARMENT, SEAFOOD…"
-                      value={g.goodsDescription}
-                      onChange={(e) => patchGoods(idx, { goodsDescription: e.target.value })}
-                      onBlur={() => fillLabelIfEmpty(idx, g.goodsDescription, patchGoods, g.label)}
-                    />
-                    <FieldErrorText message={fe("goods", "goodsDescription", g.id)} />
-                  </label>
-                </ItemCard>
+                  viewContent={<ReadOnlyValue label="Mô tả in phiếu" value={g.goodsDescription} multiline />}
+                  editContent={
+                    <label>
+                      <FieldLabel>Mô tả in phiếu</FieldLabel>
+                      <input
+                        className={fieldInputClass(Boolean(fe("goods", "goodsDescription", g.id)))}
+                        placeholder="GARMENT, SEAFOOD…"
+                        value={g.goodsDescription}
+                        onChange={(e) => patchGoods(idx, { goodsDescription: e.target.value })}
+                        onBlur={() => fillLabelIfEmpty(idx, g.goodsDescription, patchGoods, g.label)}
+                      />
+                      <FieldErrorText message={fe("goods", "goodsDescription", g.id)} />
+                    </label>
+                  }
+                />
               ))
             )
           ) : null}
@@ -471,6 +586,8 @@ export function CustomerSavedProfilesEditor({
                   key={v.id}
                   title={v.licensePlate.trim() || v.driverName.trim() || `#${idx + 1}`}
                   canRemove
+                  editing={isEditingItem(v.id)}
+                  onStartEdit={() => startEditItem(v.id)}
                   onRemove={() => onRemoveVehicle(idx)}
                   defaultStar={
                     <DefaultStar
@@ -479,41 +596,49 @@ export function CustomerSavedProfilesEditor({
                       title="Xe mặc định"
                     />
                   }
-                >
-                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-                    <label>
-                      <FieldLabel>Biển số</FieldLabel>
-                      <input
-                        className={`${fieldInputClass(Boolean(fe("vehicle", "licensePlate", v.id)))} font-mono uppercase`}
-                        value={v.licensePlate}
-                        onChange={(e) => patchVehicle(idx, { licensePlate: e.target.value })}
-                        onBlur={(e) =>
-                          patchVehicle(idx, { licensePlate: formatVehicleLicensePlate(e.target.value) })
-                        }
-                      />
-                      <FieldErrorText message={fe("vehicle", "licensePlate", v.id)} />
-                    </label>
-                    <label>
-                      <FieldLabel>Tài xế</FieldLabel>
-                      <input
-                        className={fieldInputClass(Boolean(fe("vehicle", "driverName", v.id)))}
-                        value={v.driverName}
-                        onChange={(e) => patchVehicle(idx, { driverName: e.target.value })}
-                      />
-                      <FieldErrorText message={fe("vehicle", "driverName", v.id)} />
-                    </label>
-                    <label>
-                      <FieldLabel>CCCD</FieldLabel>
-                      <input
-                        className={`${fieldInputClass(Boolean(fe("vehicle", "driverId", v.id)))} font-mono`}
-                        inputMode="numeric"
-                        value={v.driverId}
-                        onChange={(e) => patchVehicle(idx, { driverId: e.target.value.replace(/\D/g, "") })}
-                      />
-                      <FieldErrorText message={fe("vehicle", "driverId", v.id)} />
-                    </label>
-                  </div>
-                </ItemCard>
+                  viewContent={
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                      <ReadOnlyValue label="Biển số" value={v.licensePlate} />
+                      <ReadOnlyValue label="Tài xế" value={v.driverName} />
+                      <ReadOnlyValue label="CCCD" value={v.driverId} />
+                    </div>
+                  }
+                  editContent={
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                      <label>
+                        <FieldLabel>Biển số</FieldLabel>
+                        <input
+                          className={`${fieldInputClass(Boolean(fe("vehicle", "licensePlate", v.id)))} font-mono uppercase`}
+                          value={v.licensePlate}
+                          onChange={(e) => patchVehicle(idx, { licensePlate: e.target.value })}
+                          onBlur={(e) =>
+                            patchVehicle(idx, { licensePlate: formatVehicleLicensePlate(e.target.value) })
+                          }
+                        />
+                        <FieldErrorText message={fe("vehicle", "licensePlate", v.id)} />
+                      </label>
+                      <label>
+                        <FieldLabel>Tài xế</FieldLabel>
+                        <input
+                          className={fieldInputClass(Boolean(fe("vehicle", "driverName", v.id)))}
+                          value={v.driverName}
+                          onChange={(e) => patchVehicle(idx, { driverName: e.target.value })}
+                        />
+                        <FieldErrorText message={fe("vehicle", "driverName", v.id)} />
+                      </label>
+                      <label>
+                        <FieldLabel>CCCD</FieldLabel>
+                        <input
+                          className={`${fieldInputClass(Boolean(fe("vehicle", "driverId", v.id)))} font-mono`}
+                          inputMode="numeric"
+                          value={v.driverId}
+                          onChange={(e) => patchVehicle(idx, { driverId: e.target.value.replace(/\D/g, "") })}
+                        />
+                        <FieldErrorText message={fe("vehicle", "driverId", v.id)} />
+                      </label>
+                    </div>
+                  }
+                />
               ))
             )
           ) : null}

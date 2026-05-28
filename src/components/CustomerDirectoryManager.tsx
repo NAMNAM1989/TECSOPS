@@ -96,6 +96,7 @@ export function CustomerDirectoryManager({
   const [senderDraft, setSenderDraft] = useState<ScscWeighPrintSettings>(defaultScscWeighPrintSettings());
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [unmatchedOpen, setUnmatchedOpen] = useState(false);
+  const [editingIdentity, setEditingIdentity] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -108,6 +109,7 @@ export function CustomerDirectoryManager({
     setDeleteModalOpen(false);
     setSavedSection(null);
     setValidationErrors([]);
+    setEditingIdentity(false);
   }, [initial, globalAgentsInitial, scscWeighPrintSettingsInitial, open]);
 
   const selected = draft.find((e) => e.id === selectedId) ?? null;
@@ -121,6 +123,7 @@ export function CustomerDirectoryManager({
   function selectCustomer(id: string) {
     setSelectedId(id);
     setValidationErrors([]);
+    setEditingIdentity(false);
     setDraft((rows) => rows.map((row) => (row.id === id ? ensureCustomerEditScaffold(row) : row)));
   }
 
@@ -283,6 +286,7 @@ export function CustomerDirectoryManager({
     const row = scaffoldNewCustomer(newId("customer"));
     setDraft((rows) => [...rows, row]);
     setSelectedId(row.id);
+    setEditingIdentity(true);
   }
 
   function removeCustomer(id: string) {
@@ -339,6 +343,7 @@ export function CustomerDirectoryManager({
         });
         if (opts?.flashKey) {
           setSavedSection(opts.flashKey);
+          if (opts.flashKey === "identity") setEditingIdentity(false);
           window.setTimeout(() => setSavedSection(null), 2000);
         }
         if (opts?.close) onClose();
@@ -515,42 +520,64 @@ export function CustomerDirectoryManager({
                 <section className={`rounded-lg border px-2.5 py-2 ${CD.card}`}>
                   <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                     <p className={`text-[10px] font-bold uppercase ${CD.muted}`}>Mã & tên</p>
-                    <CustomerSectionSaveButton
-                      compact
-                      saving={saving}
-                      saved={savedSection === "identity"}
-                      onSave={handleSaveSection("identity")}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start">
-                    <div className="w-full sm:max-w-[6rem]">
-                      <input
-                        value={selected.code}
-                        onChange={(e) => updateCustomer(selected.id, { code: e.target.value.toUpperCase() })}
-                        onBlur={(e) => updateCustomer(selected.id, { code: normalizeAgentCode(e.target.value) })}
-                        className={`w-full font-mono text-xs font-bold uppercase ${fieldInputClass(
-                          Boolean(getFieldValidationError(validationErrors, "identity", "code"))
-                        )}`}
-                        placeholder="Mã"
-                        spellCheck={false}
+                    <div className="flex items-center gap-1.5">
+                      {!editingIdentity ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditingIdentity(true)}
+                          className={CD.btnSmallAccent}
+                        >
+                          Sửa
+                        </button>
+                      ) : null}
+                      <CustomerSectionSaveButton
+                        compact
+                        saving={saving}
+                        saved={savedSection === "identity"}
+                        onSave={handleSaveSection("identity")}
                       />
-                      <FieldErrorText message={getFieldValidationError(validationErrors, "identity", "code")} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <input
-                        value={selected.name}
-                        onChange={(e) => updateCustomer(selected.id, { name: customerNameWhileTyping(e.target.value) })}
-                        onBlur={() =>
-                          updateCustomer(selected.id, { name: normalizeCustomerNameInput(selected.name) })
-                        }
-                        className={`w-full text-sm font-semibold uppercase ${fieldInputClass(
-                          Boolean(getFieldValidationError(validationErrors, "identity", "name"))
-                        )}`}
-                        placeholder="Tên công ty / đại lý"
-                      />
-                      <FieldErrorText message={getFieldValidationError(validationErrors, "identity", "name")} />
                     </div>
                   </div>
+                  {editingIdentity ? (
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start">
+                      <div className="w-full sm:max-w-[6rem]">
+                        <input
+                          value={selected.code}
+                          onChange={(e) => updateCustomer(selected.id, { code: e.target.value.toUpperCase() })}
+                          onBlur={(e) => updateCustomer(selected.id, { code: normalizeAgentCode(e.target.value) })}
+                          className={`w-full font-mono text-xs font-bold uppercase ${fieldInputClass(
+                            Boolean(getFieldValidationError(validationErrors, "identity", "code"))
+                          )}`}
+                          placeholder="Mã"
+                          spellCheck={false}
+                        />
+                        <FieldErrorText message={getFieldValidationError(validationErrors, "identity", "code")} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <input
+                          value={selected.name}
+                          onChange={(e) => updateCustomer(selected.id, { name: customerNameWhileTyping(e.target.value) })}
+                          onBlur={() =>
+                            updateCustomer(selected.id, { name: normalizeCustomerNameInput(selected.name) })
+                          }
+                          className={`w-full text-sm font-semibold uppercase ${fieldInputClass(
+                            Boolean(getFieldValidationError(validationErrors, "identity", "name"))
+                          )}`}
+                          placeholder="Tên công ty / đại lý"
+                        />
+                        <FieldErrorText message={getFieldValidationError(validationErrors, "identity", "name")} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start">
+                      <p className="w-full rounded-lg border border-black/[0.06] bg-black/[0.03] px-2 py-1 font-mono text-xs font-bold uppercase text-apple-label dark:border-white/10 dark:bg-black/20 dark:text-slate-200 sm:max-w-[6rem]">
+                        {selected.code.trim() || "—"}
+                      </p>
+                      <p className="min-w-0 flex-1 rounded-lg border border-black/[0.06] bg-black/[0.03] px-2 py-1 text-sm font-semibold uppercase text-apple-label dark:border-white/10 dark:bg-black/20 dark:text-slate-200">
+                        {normalizeCustomerNameInput(selected.name) || "—"}
+                      </p>
+                    </div>
+                  )}
                 </section>
 
                 <CustomerSavedProfilesEditor

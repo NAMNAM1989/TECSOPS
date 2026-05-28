@@ -1,3 +1,5 @@
+import { buildWarehouseArrivalPlan, sanitizeWarehouseArrivalPlan } from "./ecargoWarehouseCore.mjs";
+
 const DEFAULT_PCS = 99;
 const DEFAULT_GW = 1000;
 const DEFAULT_COMMODITY = "Garments";
@@ -6,6 +8,7 @@ const DEFAULT_VEHICLE_TYPE = "Ô tô";
 const ECARGO_VEHICLE_TYPES = new Set(["Ô tô", "Xe máy", "Xe ba gác", "Đi bộ"]);
 const MAWB_NORMALIZED = /^\d{3}-\d{8}$/;
 const MONTHS3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const ECARGO_WAREHOUSE_CFG = { warehouse: { timeRule: { after20h: { timeSlot: "07:00 - 08:00" } } } };
 
 export function normalizeVehicleNo(raw) {
   return String(raw ?? "")
@@ -66,11 +69,11 @@ export function clampEcargoVehicleType(raw) {
   return ECARGO_VEHICLE_TYPES.has(s) ? s : undefined;
 }
 
-export function buildWarehouseArrivalFromOverrides(overrides = {}) {
+export function buildWarehouseArrivalFromOverrides(overrides = {}, cfg = ECARGO_WAREHOUSE_CFG, now = new Date()) {
   const date = String(overrides.arrivalDate ?? "").trim();
   const slot = String(overrides.arrivalTimeSlot ?? "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$/.test(slot)) {
-    return { arrivalDate: date, timeSlot: slot.replace(/\s+/g, " ") };
+    return sanitizeWarehouseArrivalPlan({ arrivalDate: date, timeSlot: slot.replace(/\s+/g, " ") }, cfg, now);
   }
   return undefined;
 }
@@ -101,6 +104,14 @@ export function getEcargoRegisterReadiness(row, vehicleRaw, viewSessionYmd) {
       hint: "Ngày bay đã qua — eCargo không chấp nhận. Cập nhật ngày bay trên lô.",
     };
   }
+  const warehousePlan = buildWarehouseArrivalPlan(ECARGO_WAREHOUSE_CFG);
+  if (flightDateIso < warehousePlan.arrivalDate) {
+    return {
+      ready: false,
+      hint:
+        "Cut-off eCargo: không còn khung giờ vào kho hôm nay — ngày bay phải từ ngày mai trở đi, hoặc thử lại sáng sớm.",
+    };
+  }
   if (normalizeDestination(row.dest).length < 2) missing.push("DEST");
   if (missing.length === 0) return { ready: true, hint: "Sẵn sàng tự động đăng ký." };
   return { ready: false, hint: `Chưa đủ: ${missing.join(" · ")}` };
@@ -122,6 +133,11 @@ export function buildEcargoBookingFromShipment(row, vehicleNormalized, viewSessi
     .replace(/\D/g, "");
   const vehicleType = clampEcargoVehicleType(driverOverride.vehicleType) ?? DEFAULT_VEHICLE_TYPE;
   const warehouseArrival = buildWarehouseArrivalFromOverrides(driverOverride);
+  if (warehouseArrival && flightDateIso < warehouseArrival.arrivalDate) {
+    throw new Error(
+      "Cut-off eCargo: ngày vào kho sớm nhất còn hợp lệ muộn hơn ngày bay trên lô — cập nhật ngày bay hoặc chọn khung giờ sớm hơn."
+    );
+  }
 
   return {
     vehicleNo: normalizeVehicleNo(vehicleNormalized),

@@ -107,16 +107,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       /** Chọn khung giờ thực tế trên dropdown — eCargo chặn mở AWB nếu < 6h. */
       function resolveWarehouseTimeSlot(plan) {
         const pageSlots = listTimeSlotTexts();
-        if (plan?.timeSlot && pageSlots.includes(plan.timeSlot)) return plan.timeSlot;
-        if (!pageSlots.length) return plan?.timeSlot ?? "";
+        const slots = pageSlots.length ? pageSlots : [];
         const vn = todayAtVietnamTimeInBrowser();
         const bufferMinutes = 360;
         const nowMinutes = vn.hour * 60 + vn.minute;
-        const next = pageSlots.find((slot) => {
+        const arrivalDate = String(plan?.arrivalDate ?? vn.date);
+
+        if (arrivalDate > vn.date) {
+          if (plan?.timeSlot && slots.includes(plan.timeSlot)) return plan.timeSlot;
+          return slots[0] ?? plan?.timeSlot ?? "";
+        }
+
+        const next = slots.find((slot) => {
           const startHour = parseSlotStartHour(slot);
           return startHour >= 0 && startHour * 60 >= nowMinutes + bufferMinutes;
         });
-        return next ?? pageSlots[pageSlots.length - 1];
+        return next ?? slots[slots.length - 1] ?? plan?.timeSlot ?? "";
       }
 
       function parseSlotStartHour(slotText) {
@@ -240,9 +246,21 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         if (!plan?.arrivalDate || !plan?.timeSlot) {
           throw new Error("Thiếu kế hoạch ngày/giờ hàng vào kho.");
         }
-        setNativeValue(inputs[3], plan.arrivalDate);
-        const slot = resolveWarehouseTimeSlot(plan);
+        const vn = todayAtVietnamTimeInBrowser();
+        let arrivalDate = String(plan.arrivalDate);
+        if (arrivalDate < vn.date) {
+          arrivalDate = vn.date;
+        }
+        const slot = resolveWarehouseTimeSlot({ ...plan, arrivalDate });
         if (!slot) throw new Error("Không chọn được khung giờ hàng vào kho.");
+        const slotStart = parseSlotStartHour(slot);
+        const nowMinutes = vn.hour * 60 + vn.minute;
+        if (arrivalDate === vn.date && slotStart >= 0 && slotStart * 60 < nowMinutes + 360) {
+          const [y, mo, d] = vn.date.split("-").map(Number);
+          const next = new Date(Date.UTC(y, mo - 1, d + 1));
+          arrivalDate = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
+        }
+        setNativeValue(inputs[3], arrivalDate);
         selectTimeSlot(slot);
       }
 

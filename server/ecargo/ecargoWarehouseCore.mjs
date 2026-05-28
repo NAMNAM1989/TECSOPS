@@ -56,7 +56,42 @@ export function pickWarehouseTimeSlot(slots, vnNow, opts = {}) {
     const startHour = parseSlotStartHour(slot);
     return startHour >= 0 && startHour * 60 >= nowMinutes + bufferMinutes;
   });
-  return next ?? slots[slots.length - 1];
+  return next ?? "";
+}
+
+/**
+ * Giữ override người dùng nếu còn hợp lệ theo giờ VN + buffer 6h; ngược lại dùng kế hoạch mặc định.
+ * @param {{ arrivalDate?: string, timeSlot?: string }} plan
+ */
+export function sanitizeWarehouseArrivalPlan(plan, cfg = {}, now = new Date()) {
+  const vn = todayAtVietnamTime(now);
+  const defaults = buildWarehouseArrivalPlan(cfg, now);
+  const slots = buildStandardArrivalTimeSlots();
+  const after20Slot = cfg?.warehouse?.timeRule?.after20h?.timeSlot ?? "07:00 - 08:00";
+
+  const arrivalDate = String(plan?.arrivalDate ?? "").trim();
+  const timeSlot = String(plan?.timeSlot ?? "").trim();
+  if (!arrivalDate || !timeSlot) return defaults;
+  if (arrivalDate < vn.date) return defaults;
+
+  if (arrivalDate > vn.date) {
+    if (slots.includes(timeSlot)) return { arrivalDate, timeSlot };
+    return { arrivalDate, timeSlot: after20Slot };
+  }
+
+  const nowMinutes = vn.hour * 60 + vn.minute;
+  const startHour = parseSlotStartHour(timeSlot);
+  if (
+    slots.includes(timeSlot) &&
+    startHour >= 0 &&
+    startHour * 60 >= nowMinutes + ECARGO_WAREHOUSE_BUFFER_MINUTES
+  ) {
+    return { arrivalDate, timeSlot };
+  }
+
+  const picked = pickWarehouseTimeSlot(slots, vn);
+  if (picked) return { arrivalDate: vn.date, timeSlot: picked };
+  return { arrivalDate: tomorrowIsoFromVietnamDate(vn.date), timeSlot: after20Slot };
 }
 
 /**
@@ -76,8 +111,16 @@ export function buildWarehouseArrivalPlan(cfg, now = new Date()) {
     };
   }
 
+  const timeSlot = pickWarehouseTimeSlot(slots, vn);
+  if (!timeSlot) {
+    return {
+      arrivalDate: tomorrowIsoFromVietnamDate(vn.date),
+      timeSlot: after20Slot,
+    };
+  }
+
   return {
     arrivalDate: vn.date,
-    timeSlot: pickWarehouseTimeSlot(slots, vn),
+    timeSlot,
   };
 }

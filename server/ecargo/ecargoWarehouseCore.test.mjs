@@ -3,6 +3,7 @@ import {
   buildStandardArrivalTimeSlots,
   buildWarehouseArrivalPlan,
   pickWarehouseTimeSlot,
+  sanitizeWarehouseArrivalPlan,
   todayAtVietnamTime,
   tomorrowIsoFromVietnamDate,
 } from "./ecargoWarehouseCore.mjs";
@@ -20,6 +21,23 @@ describe("ecargoWarehouseCore", () => {
   it("pickWarehouseTimeSlot chọn slot cách hiện tại ≥ 6 giờ (quy tắc eCargo)", () => {
     expect(pickWarehouseTimeSlot(SLOTS, { hour: 1, minute: 14 })).toBe("08:00 - 09:00");
     expect(pickWarehouseTimeSlot(SLOTS, { hour: 10, minute: 0 })).toBe("16:00 - 17:00");
+    expect(pickWarehouseTimeSlot(SLOTS, { hour: 18, minute: 30 })).toBe("");
+  });
+
+  it("buildWarehouseArrivalPlan sau 18h chuyển sang ngày mai khi hết slot hôm nay", () => {
+    const plan = buildWarehouseArrivalPlan(CFG, new Date("2026-05-28T18:30:00+07:00"));
+    expect(plan.arrivalDate).toBe("2026-05-29");
+    expect(plan.timeSlot).toBe("07:00 - 08:00");
+  });
+
+  it("sanitizeWarehouseArrivalPlan bỏ khung giờ cũ đã qua cutoff", () => {
+    const now = new Date("2026-05-28T15:00:00+07:00");
+    const plan = sanitizeWarehouseArrivalPlan(
+      { arrivalDate: "2026-05-28", timeSlot: "08:00 - 09:00" },
+      CFG,
+      now
+    );
+    expect(plan.timeSlot).toBe("21:00 - 22:00");
   });
 
   it("buildWarehouseArrivalPlan ban ngày dùng hôm nay + slot tiếp theo", () => {

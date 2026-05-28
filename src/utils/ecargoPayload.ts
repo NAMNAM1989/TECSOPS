@@ -2,6 +2,7 @@ import type { EcargoRegisterFromOpsMessage, EcargoRegisterBuildInput } from "../
 import type { Shipment } from "../types/shipment";
 import { isScscWarehouse } from "../constants/warehouses";
 import { parseBookingDateLoose } from "./bookingDateParse";
+import { buildDefaultEcargoWarehouseArrival } from "./ecargoWarehousePlan";
 
 const DEFAULT_PCS = 99;
 const DEFAULT_GW = 1000;
@@ -93,6 +94,14 @@ export function getEcargoRegisterReadiness(
     return {
       ready: false,
       hint: "Ngày bay đã qua — eCargo không chấp nhận. Cập nhật ngày bay trên lô.",
+    };
+  }
+  const warehousePlan = buildDefaultEcargoWarehouseArrival();
+  if (flightDateIso < warehousePlan.arrivalDate) {
+    return {
+      ready: false,
+      hint:
+        "Cut-off eCargo: không còn khung giờ vào kho hôm nay — ngày bay phải từ ngày mai trở đi, hoặc thử lại sáng sớm.",
     };
   }
   if (normalizeDestination(row.dest).length < 2) missing.push("DEST");

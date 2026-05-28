@@ -65,7 +65,37 @@ export function pickEcargoWarehouseTimeSlot(
     const startHour = parseSlotStartHour(slot);
     return startHour >= 0 && startHour * 60 >= nowMinutes + bufferMinutes;
   });
-  return next ?? slots[slots.length - 1] ?? "";
+  return next ?? "";
+}
+
+function sanitizeEcargoWarehouseArrival(
+  plan: EcargoWarehouseArrival,
+  now = new Date()
+): EcargoWarehouseArrival {
+  const vn = todayAtVietnamTime(now);
+  const defaults = buildDefaultEcargoWarehouseArrival(now);
+  const slots = buildEcargoArrivalTimeSlots();
+
+  if (plan.arrivalDate < vn.date) return defaults;
+
+  if (plan.arrivalDate > vn.date) {
+    if (isValidEcargoArrivalTimeSlot(plan.arrivalTimeSlot, slots)) return plan;
+    return { arrivalDate: plan.arrivalDate, arrivalTimeSlot: defaults.arrivalTimeSlot };
+  }
+
+  const nowMinutes = vn.hour * 60 + vn.minute;
+  const startHour = parseSlotStartHour(plan.arrivalTimeSlot);
+  if (
+    isValidEcargoArrivalTimeSlot(plan.arrivalTimeSlot, slots) &&
+    startHour >= 0 &&
+    startHour * 60 >= nowMinutes + 360
+  ) {
+    return plan;
+  }
+
+  const picked = pickEcargoWarehouseTimeSlot(slots, vn);
+  if (picked) return { arrivalDate: vn.date, arrivalTimeSlot: picked };
+  return defaults;
 }
 
 /** Mặc định panel — khớp `buildWarehouseArrivalPlan` (server). */
@@ -78,9 +108,16 @@ export function buildDefaultEcargoWarehouseArrival(now = new Date()): EcargoWare
       arrivalTimeSlot: "07:00 - 08:00",
     };
   }
+  const arrivalTimeSlot = pickEcargoWarehouseTimeSlot(slots, vn);
+  if (!arrivalTimeSlot) {
+    return {
+      arrivalDate: tomorrowIsoFromDate(vn.date),
+      arrivalTimeSlot: "07:00 - 08:00",
+    };
+  }
   return {
     arrivalDate: vn.date,
-    arrivalTimeSlot: pickEcargoWarehouseTimeSlot(slots, vn),
+    arrivalTimeSlot,
   };
 }
 
@@ -109,5 +146,5 @@ export function resolveEcargoWarehouseArrival(
   const timeSlot = isValidEcargoArrivalTimeSlot(persisted?.arrivalTimeSlot ?? "", slots)
     ? String(persisted!.arrivalTimeSlot).trim()
     : fallback.arrivalTimeSlot;
-  return { arrivalDate, arrivalTimeSlot: timeSlot };
+  return sanitizeEcargoWarehouseArrival({ arrivalDate, arrivalTimeSlot: timeSlot }, now);
 }

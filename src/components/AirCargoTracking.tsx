@@ -686,7 +686,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onDelete={() => selected && onDelete(selected.id)}
         onAdd={() => void addBlankRowForWarehouse(activeWarehouse)}
         onQuickEdit={() => selected && openMobileEdit(selected)}
-        onDim={() => selected && openMobileEdit(selected, { tab: "dim" })}
       />
 
       <MobileShipmentEditSheet

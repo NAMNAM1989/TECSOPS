@@ -4,10 +4,12 @@ import { OPS } from "./opsModalStyles";
 export const MOBILE = {
   sheet: `${OPS.modal} flex max-h-[92vh] flex-col rounded-t-[28px] border shadow-[0_-8px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_-8px_40px_rgba(0,0,0,0.45)]`,
   sheetBackdrop: "fixed inset-0 z-[470] flex flex-col justify-end bg-black/35 backdrop-blur-sm md:hidden",
-  card: "relative overflow-hidden rounded-2xl border border-black/[0.06] shadow-dashboard-card transition-all dark:border-white/[0.08]",
-  cardInner: "relative z-10 bg-transparent px-3 py-3 transition-transform duration-200 ease-out",
-  cardMeta: "text-[11px] font-medium text-apple-secondary dark:text-slate-400",
-  awb: "font-mono text-[1.05rem] font-bold leading-tight tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark",
+  card: "relative overflow-hidden rounded-xl border border-black/[0.06] shadow-dashboard-card transition-all dark:border-white/[0.08]",
+  cardInner: "relative z-10 bg-transparent px-2.5 py-2 transition-transform duration-200 ease-out",
+  cardMeta: "text-[10px] font-medium text-apple-tertiary dark:text-slate-500",
+  customerName:
+    "truncate text-[13px] font-semibold uppercase leading-snug tracking-tight text-apple-label dark:text-slate-100",
+  awb: "font-mono text-[15px] font-bold leading-tight tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark",
   awbEmpty: "text-[13px] font-semibold text-apple-blue dark:text-sky-300",
   chip: "inline-flex items-center rounded-full bg-black/[0.05] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-apple-label dark:bg-white/[0.08] dark:text-slate-200",
   chipCutoff: "inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-semibold text-white",

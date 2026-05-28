@@ -26,3 +26,17 @@ export function StatusSelect({ value, onChange, compact }: StatusSelectProps) {
     </select>
   );
 }
+
+/** Chỉ hiển thị — dùng trên card mobile gọn (sửa status trong sheet). */
+export function StatusReadonly({ value, compact }: { value: ShipmentStatus; compact?: boolean }) {
+  return (
+    <span
+      className={`inline-block shrink-0 rounded-md border font-semibold ${statusSelectSurface[value]} ${
+        compact ? "max-w-[5.5rem] truncate px-1.5 py-0.5 text-[8px] leading-tight" : "px-2.5 py-1 text-xs"
+      }`}
+      title={statusLabel[value]}
+    >
+      {statusLabel[value]}
+    </span>
+  );
+}

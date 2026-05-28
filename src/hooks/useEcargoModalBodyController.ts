@@ -211,6 +211,7 @@ export function useEcargoModalBodyController({
     jobBusy ||
     autoRegistering ||
     displayJob?.status === "verified" ||
+    displayJob?.status === "qr_ready" ||
     (Boolean(displayJob?.message) && displayJob?.status !== "error") ||
     (displayJob?.status === "error" && !manualOpen);
 

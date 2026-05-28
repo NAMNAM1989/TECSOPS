@@ -224,6 +224,59 @@ export function pickFreshVerifyMail(candidates, notBeforeMs, hints) {
   return null;
 }
 
+export const MAX_QR_IMAGE_BYTES = 200 * 1024;
+
+/**
+ * Trích ảnh QR từ MIME mail SCSC (attachment PNG/JPEG hoặc data URI trong HTML).
+ * @param {string} rawMime
+ * @returns {string} data URL hoặc rỗng nếu không có / quá lớn
+ */
+export function extractQrImageDataUrl(rawMime) {
+  const raw = String(rawMime || "");
+  const html = decodeMimeBody(raw) || raw;
+
+  const dataUriMatch = html.match(
+    /src=["'](data:image\/(?:png|jpeg|jpg|gif);base64,[A-Za-z0-9+/=\s]+)["']/i
+  );
+  if (dataUriMatch?.[1]) {
+    const uri = dataUriMatch[1].replace(/\s+/g, "");
+    const base64Part = uri.split(",")[1] ?? "";
+    if (base64Part.length > 0 && base64Part.length <= MAX_QR_IMAGE_BYTES * 1.4) {
+      return uri;
+    }
+  }
+
+  const boundary = raw.match(/boundary="?([^"\s;]+)"?/i)?.[1];
+  if (!boundary) return "";
+
+  const esc = boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  for (const seg of raw.split(new RegExp(`--${esc}`))) {
+    const typeMatch = seg.match(/Content-Type:\s*image\/(png|jpeg|jpg|gif)/i);
+    if (!typeMatch) continue;
+    const enc = (seg.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i)?.[1] || "").toLowerCase();
+    const bodyMatch = seg.match(/\r?\n\r?\n([\s\S]+?)(?:\r?\n--|$)/);
+    if (!bodyMatch) continue;
+    let body = bodyMatch[1].replace(/\r?\n--[\s\S]*$/, "").trim();
+    /** @type {Buffer} */
+    let buf;
+    if (enc.includes("base64")) {
+      try {
+        buf = Buffer.from(body.replace(/\s+/g, ""), "base64");
+      } catch {
+        continue;
+      }
+    } else if (enc.includes("quoted-printable")) {
+      buf = Buffer.from(decodeQuotedPrintable(body), "binary");
+    } else {
+      buf = Buffer.from(body, "binary");
+    }
+    if (!buf.length || buf.length > MAX_QR_IMAGE_BYTES) continue;
+    const mime = typeMatch[1].toLowerCase().replace("jpg", "jpeg");
+    return `data:image/${mime};base64,${buf.toString("base64")}`;
+  }
+  return "";
+}
+
 /** @param {string} rawMime */
 export function parseQrMailRaw(rawMime, envelope = {}) {
   const raw = String(rawMime || "");
@@ -232,7 +285,9 @@ export function parseQrMailRaw(rawMime, envelope = {}) {
   const subject = String(envelope?.subject || "");
   const registrationNo = extractRegistrationNo(text, subject);
   if (!registrationNo) return null;
+  const qrImageDataUrl = extractQrImageDataUrl(raw);
   const hasQrImage =
+    Boolean(qrImageDataUrl) ||
     /Content-Type:\s*image\/(?:png|jpeg|jpg|gif)/i.test(raw) ||
     (/cid:|base64/i.test(raw) && /qr|mã\s*qr/i.test(`${subject}\n${text}`));
   return {
@@ -240,6 +295,7 @@ export function parseQrMailRaw(rawMime, envelope = {}) {
     qrSubject: subject || QR_SUBJECT,
     subject: subject || QR_SUBJECT,
     hasQrImage,
+    ...(qrImageDataUrl ? { qrImageDataUrl } : {}),
   };
 }
 

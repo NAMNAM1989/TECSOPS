@@ -62,6 +62,8 @@ interface MobileShipmentCardsProps {
   onEcargoAutoRegister?: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
   onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering?: (id: string) => boolean;
+  openEcargoRequestId?: string | null;
+  onEcargoRequestHandled?: () => void;
   pinnedOpenWarehouses?: readonly Warehouse[];
   highlightedShipmentId?: string | null;
   onAddBlankRow?: (warehouse: Warehouse) => void;
@@ -88,6 +90,8 @@ export function MobileShipmentCards({
   onEcargoAutoRegister,
   onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
+  openEcargoRequestId = null,
+  onEcargoRequestHandled,
   pinnedOpenWarehouses = [],
   highlightedShipmentId = null,
   onAddBlankRow,
@@ -124,6 +128,18 @@ export function MobileShipmentCards({
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
   }, [closeEcargoModal, openEcargoRowId]);
+
+  useEffect(() => {
+    if (!openEcargoRequestId) return;
+    const row = rows.find((r) => r.id === openEcargoRequestId && isScscWarehouse(r.warehouse));
+    if (!row) {
+      onEcargoRequestHandled?.();
+      return;
+    }
+    onApplyEcargoPrefill?.(row);
+    setOpenEcargoRowId(openEcargoRequestId);
+    onEcargoRequestHandled?.();
+  }, [onApplyEcargoPrefill, onEcargoRequestHandled, openEcargoRequestId, rows]);
 
   return (
     <>

@@ -4,9 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   decodeMimeBody,
+  extractQrImageDataUrl,
   extractVerifyCode,
   extractVerifyUrl,
   extractVerifyUrlFromRaw,
+  parseQrMailRaw,
   parseVerifyMailRaw,
   pickFreshQrMail,
   pickFreshVerifyMail,
@@ -179,5 +181,31 @@ describe("ecargoVerifyMail", () => {
     const picked = pickFreshQrMail(candidates, afterVerify, { registrationNo: "REGQR1" });
     expect(picked?.uid).toBe(100);
     expect(picked?.registrationNo).toBe("REGQR1");
+  });
+
+  it("trích ảnh QR base64 từ attachment PNG trong MIME", () => {
+    const tinyPngBase64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const raw = [
+      "Content-Type: multipart/mixed; boundary=qr-test",
+      "",
+      "--qr-test",
+      "Content-Type: text/plain",
+      "",
+      "Số REGIMG1",
+      "Mã QR",
+      "--qr-test",
+      "Content-Type: image/png",
+      "Content-Transfer-Encoding: base64",
+      "",
+      tinyPngBase64,
+      "--qr-test--",
+    ].join("\r\n");
+    const dataUrl = extractQrImageDataUrl(raw);
+    expect(dataUrl.startsWith("data:image/png;base64,")).toBe(true);
+    const parsed = parseQrMailRaw(raw, { subject: "Phiếu đăng ký hàng vào kho — REGIMG1" });
+    expect(parsed?.registrationNo).toBe("REGIMG1");
+    expect(parsed?.qrImageDataUrl).toBe(dataUrl);
+    expect(parsed?.hasQrImage).toBe(true);
   });
 });

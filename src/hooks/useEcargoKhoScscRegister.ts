@@ -34,6 +34,7 @@ export type EcargoToastItem = {
   tone: "info" | "success" | "error";
   title: string;
   body?: string;
+  actionLabel?: string;
 };
 
 export type EcargoLinePatch = {
@@ -60,6 +61,7 @@ export function useEcargoKhoScscRegister(
   const [jobsById, setJobsById] = useState<Record<string, EcargoJobRecord>>({});
   const [toasts, setToasts] = useState<EcargoToastItem[]>([]);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [openPanelRequestId, setOpenPanelRequestId] = useState<string | null>(null);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const pendingPatchRef = useRef<Map<string, EcargoLinePatch>>(new Map());
   const migrateStartedRef = useRef(false);
@@ -99,8 +101,17 @@ export function useEcargoKhoScscRegister(
         tone,
         title: desc.title,
         body: desc.detail ?? undefined,
+        ...(job.status === "qr_ready" ? { actionLabel: "Xem QR" } : {}),
       },
     ]);
+  }, []);
+
+  const requestOpenEcargoPanel = useCallback((shipmentId: string) => {
+    setOpenPanelRequestId(shipmentId);
+  }, []);
+
+  const clearOpenEcargoPanelRequest = useCallback(() => {
+    setOpenPanelRequestId(null);
   }, []);
 
   useEffect(() => {
@@ -428,10 +439,13 @@ export function useEcargoKhoScscRegister(
         }
         return next;
       });
+      for (const job of Object.values(jobs)) {
+        if (job?.status === "qr_ready") pushToastForJob(job);
+      }
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [pushToastForJob]);
 
   const dismissToast = useCallback((id: string) => {
     setToasts((list) => list.filter((t) => t.id !== id));
@@ -474,6 +488,16 @@ export function useEcargoKhoScscRegister(
     return () => window.clearInterval(timer);
   }, [jobsById, refreshJob]);
 
+  const handleToastAction = useCallback(
+    (item: EcargoToastItem) => {
+      if (item.actionLabel === "Xem QR") {
+        requestOpenEcargoPanel(item.shipmentId);
+      }
+      setToasts((list) => list.filter((t) => t.id !== item.id));
+    },
+    [requestOpenEcargoPanel]
+  );
+
   return {
     map,
     setVehicle,
@@ -489,5 +513,9 @@ export function useEcargoKhoScscRegister(
     isAutoRegistering,
     toasts,
     dismissToast,
+    handleToastAction,
+    openPanelRequestId,
+    requestOpenEcargoPanel,
+    clearOpenEcargoPanelRequest,
   };
 };

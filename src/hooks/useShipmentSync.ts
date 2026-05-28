@@ -245,6 +245,7 @@ function parseEcargoJobLoose(raw: unknown): EcargoJobRecord | null {
     qrReceivedAt: typeof o.qrReceivedAt === "string" ? o.qrReceivedAt : undefined,
     qrSubject: typeof o.qrSubject === "string" ? o.qrSubject : undefined,
     hasQrImage: typeof o.hasQrImage === "boolean" ? o.hasQrImage : undefined,
+    qrImageDataUrl: typeof o.qrImageDataUrl === "string" ? o.qrImageDataUrl : undefined,
     detailsUrl: typeof o.detailsUrl === "string" ? o.detailsUrl : undefined,
     stageMs:
       o.stageMs && typeof o.stageMs === "object"

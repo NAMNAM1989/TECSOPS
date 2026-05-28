@@ -4,9 +4,10 @@ import type { EcargoToastItem } from "../hooks/useEcargoKhoScscRegister";
 type Props = {
   items: readonly EcargoToastItem[];
   onDismiss: (id: string) => void;
+  onAction?: (item: EcargoToastItem) => void;
 };
 
-export function EcargoToastStack({ items, onDismiss }: Props) {
+export function EcargoToastStack({ items, onDismiss, onAction }: Props) {
   useEffect(() => {
     if (!items.length) return;
     const timers = items.map((t) =>
@@ -34,9 +35,18 @@ export function EcargoToastStack({ items, onDismiss }: Props) {
           }`}
         >
           <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-[12px] font-bold">{t.title}</p>
               {t.body ? <p className="mt-0.5 text-[11px] leading-snug opacity-90">{t.body}</p> : null}
+              {t.actionLabel && onAction ? (
+                <button
+                  type="button"
+                  onClick={() => onAction(t)}
+                  className="mt-1.5 rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white hover:bg-emerald-700"
+                >
+                  {t.actionLabel}
+                </button>
+              ) : null}
             </div>
             <button
               type="button"

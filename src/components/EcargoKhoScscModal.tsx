@@ -10,6 +10,7 @@ import { ECARGO_VEHICLE_MIN } from "../utils/ecargoKhoScscCore";
 import { ECARGO_VEHICLE_TYPES, type EcargoVehicleType } from "../utils/ecargoWarehousePlan";
 import { formatEcargoJobErrorMessage } from "../utils/formatEcargoJobErrorMessage";
 import { EcargoProgressChecklist } from "./EcargoProgressChecklist";
+import { EcargoQrPanel } from "./EcargoQrPanel";
 import {
   filterCustomerVehicles,
   formatVehicleLicensePlate,
@@ -498,7 +499,7 @@ function EcargoKhoScscModalBody({
             className={`rounded-lg px-3 py-2.5 text-[12px] leading-snug ring-1 ${
               localError || displayJob?.status === "error"
                 ? "bg-red-500/10 text-red-900 ring-red-500/15 dark:bg-red-400/10 dark:text-red-200 dark:ring-red-400/20"
-                : displayJob?.status === "verified"
+                : displayJob?.status === "verified" || displayJob?.status === "qr_ready"
                   ? "bg-emerald-500/10 text-emerald-900 ring-emerald-500/15 dark:bg-emerald-400/10 dark:text-emerald-200 dark:ring-emerald-400/20"
                   : "bg-sky-500/10 text-sky-950 ring-sky-500/15 dark:bg-sky-400/10 dark:text-sky-100 dark:ring-sky-400/20"
             }`}
@@ -516,6 +517,11 @@ function EcargoKhoScscModalBody({
               <EcargoProgressChecklist job={displayJob} className="mt-2 border-t border-black/[0.06] pt-2 dark:border-white/[0.08]" />
             ) : null}
           </div>
+        ) : null}
+
+        {displayJob &&
+        (displayJob.status === "qr_ready" || displayJob.status === "verified_waiting_qr") ? (
+          <EcargoQrPanel job={displayJob} awb={row.awb} />
         ) : null}
 
         <details className={`${ECARGO_SECTION} group`} open={showManualFallback}>
@@ -744,12 +750,15 @@ export function EcargoKhoScscTriggerButton({
   /** `icon` — chỉ biểu tượng xe (bảng desktop). */
   variant?: "default" | "icon";
 }) {
-  const verified = job?.status === "verified" || job?.status === "qr_ready";
+  const verified = job?.status === "verified";
+  const qrReady = job?.status === "qr_ready";
   const mailReceived = job?.status === "mail_received";
   const running = isEcargoJobRunning(job?.status);
   const errored = job?.status === "error";
 
-  const statusDot = verified ? (
+  const statusDot = qrReady ? (
+    <span className="absolute right-0 top-0 h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500 ring-1 ring-white dark:ring-slate-900" aria-hidden />
+  ) : verified ? (
     <span className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-slate-900" aria-hidden />
   ) : mailReceived ? (
     <span className="absolute right-0 top-0 h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500 ring-1 ring-white dark:ring-slate-900" aria-hidden />
@@ -788,6 +797,11 @@ export function EcargoKhoScscTriggerButton({
           open ? OPS.actionIconSkyOpen : ""
         } ${className}`}
       >
+        {qrReady ? (
+          <span className="absolute -left-0.5 -top-0.5 rounded bg-emerald-600 px-0.5 text-[7px] font-bold leading-none text-white">
+            QR
+          </span>
+        ) : null}
         {statusDot}
         {truckIcon}
       </button>
@@ -809,7 +823,14 @@ export function EcargoKhoScscTriggerButton({
           : "border-sky-500/80 bg-gradient-to-b from-white via-sky-50 to-sky-100 text-sky-800 hover:border-sky-600"
       } ${className}`}
     >
-      {verified ? (
+      {qrReady ? (
+        <>
+          <span className="absolute right-1 top-1 h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500 ring-1 ring-white" aria-hidden />
+          <span className="absolute left-1 top-1 rounded bg-emerald-600 px-1 text-[8px] font-bold leading-none text-white">
+            QR
+          </span>
+        </>
+      ) : verified ? (
         <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-1 ring-white" aria-hidden />
       ) : running ? (
         <span className="absolute right-1 top-1 h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500 ring-1 ring-white" aria-hidden />

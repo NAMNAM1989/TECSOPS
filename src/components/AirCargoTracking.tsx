@@ -75,8 +75,15 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   const { status, state, mutate, socketConnected, subscribeEcargoJob } = useShipmentSync(fallback);
   const ecargoRegister = useEcargoKhoScscRegister(state, mutate, subscribeEcargoJob);
-  const { hydrateJobs, hydrateKeyRef, toasts: ecargoToasts, dismissToast: dismissEcargoToast } =
-    ecargoRegister;
+  const {
+    hydrateJobs,
+    hydrateKeyRef,
+    toasts: ecargoToasts,
+    dismissToast: dismissEcargoToast,
+    handleToastAction: handleEcargoToastAction,
+    openPanelRequestId,
+    clearOpenEcargoPanelRequest,
+  } = ecargoRegister;
 
   const saveCustomerVehicleForEcargo = useCallback(
     async (params: UpsertCustomerVehicleParams) => {
@@ -644,6 +651,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
         onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
         isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
+        openEcargoRequestId={openPanelRequestId}
+        onEcargoRequestHandled={clearOpenEcargoPanelRequest}
       />
 
       <MobileShipmentCards
@@ -676,6 +685,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
         onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
         isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
+        openEcargoRequestId={openPanelRequestId}
+        onEcargoRequestHandled={clearOpenEcargoPanelRequest}
         onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
         onQuickEdit={(row) => openMobileEdit(row)}
       />
@@ -753,7 +764,11 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onSave={saveAirlineLabelOverrides}
       />
 
-      <EcargoToastStack items={ecargoToasts} onDismiss={dismissEcargoToast} />
+      <EcargoToastStack
+        items={ecargoToasts}
+        onDismiss={dismissEcargoToast}
+        onAction={handleEcargoToastAction}
+      />
     </div>
   );
 }

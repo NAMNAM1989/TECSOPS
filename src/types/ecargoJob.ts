@@ -28,6 +28,8 @@ export type EcargoJobRecord = {
   registrationNo?: string;
   qrSubject?: string;
   hasQrImage?: boolean;
+  /** Ảnh QR trích từ mail SCSC (data URL, tối đa ~200KB). */
+  qrImageDataUrl?: string;
   detailsUrl?: string;
   mailReceivedAt?: string;
   verifyClickedAt?: string;

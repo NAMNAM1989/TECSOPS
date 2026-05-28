@@ -265,7 +265,8 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
           verifyCode: mail.verifyCode,
           registrationNo: finalReg,
           qrSubject: qrMail.qrSubject,
-          hasQrImage: Boolean(qrMail.hasQrImage),
+          hasQrImage: Boolean(qrMail.qrImageDataUrl || qrMail.hasQrImage),
+          ...(qrMail.qrImageDataUrl ? { qrImageDataUrl: qrMail.qrImageDataUrl } : {}),
           qrReceivedAt: new Date().toISOString(),
           message:
             doneBits.length > 0

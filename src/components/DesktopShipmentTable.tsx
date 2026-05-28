@@ -83,6 +83,9 @@ interface Props {
   onEcargoAutoRegister: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
   onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering: (id: string) => boolean;
+  /** Mở panel eCargo từ toast «Xem QR». */
+  openEcargoRequestId?: string | null;
+  onEcargoRequestHandled?: () => void;
   /** Kho có kết quả tìm kiếm — highlight trên grid. */
   searchHighlightWarehouses?: readonly Warehouse[];
   /** Nhấp kết quả tìm kiếm — nháy dòng tương ứng. */
@@ -133,6 +136,8 @@ export function DesktopShipmentTable({
   onEcargoAutoRegister,
   onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
+  openEcargoRequestId = null,
+  onEcargoRequestHandled,
   searchHighlightWarehouses = [],
   highlightedShipmentId = null,
   selectedRowId = null,
@@ -248,6 +253,8 @@ export function DesktopShipmentTable({
                   onDelete={onDelete}
                   onPrint={onPrint}
                   onOpenDimModal={setDimModalRow}
+                  openEcargoRequestId={openEcargoRequestId}
+                  onEcargoRequestHandled={onEcargoRequestHandled}
                 />
               )}
             </tbody>
@@ -298,6 +305,8 @@ function WarehouseGroupRows({
   highlightedShipmentId = null,
   selectedRowId = null,
   onSelectRow,
+  openEcargoRequestId = null,
+  onEcargoRequestHandled,
 }: {
   group: Shipment[];
   sectionWarehouse: Warehouse;
@@ -328,9 +337,23 @@ function WarehouseGroupRows({
   highlightedShipmentId?: string | null;
   selectedRowId?: string | null;
   onSelectRow?: (id: string | null) => void;
+  openEcargoRequestId?: string | null;
+  onEcargoRequestHandled?: () => void;
 }) {
   const groupRowIds = group.map((r) => r.id);
   const [openEcargoRowId, setOpenEcargoRowId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openEcargoRequestId) return;
+    const row = group.find((r) => r.id === openEcargoRequestId && isScscWarehouse(r.warehouse));
+    if (!row) {
+      onEcargoRequestHandled?.();
+      return;
+    }
+    onApplyEcargoPrefill?.(row);
+    setOpenEcargoRowId(openEcargoRequestId);
+    onEcargoRequestHandled?.();
+  }, [group, onApplyEcargoPrefill, onEcargoRequestHandled, openEcargoRequestId]);
 
   useEffect(() => {
     if (!openEcargoRowId) return;

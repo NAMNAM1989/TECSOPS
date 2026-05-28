@@ -83,7 +83,7 @@ describe("exportShipmentInvoiceExcel helpers", () => {
     expect(invoiceNo).toMatch(/^EBBTPE\d{6}$/);
 
     const ws = await loadSheet(buffer);
-    expect(ws.getCell("B1").value).toBe("NONCOMMERCIAL INVOICE");
+    expect(ws.getCell("B1").value).toBe("NONCOMMERCIAL INVOICE & PACKING LIST");
     // Invoice No ở F3
     expect(ws.getCell("F3").value).toBe(invoiceNo);
     // Flight + ngày bay ở F5
@@ -192,7 +192,7 @@ describe("exportShipmentInvoiceExcel helpers", () => {
 
     // Footer
     expect(ws.getCell(totalRow + 1, 2).value).toBe("1.   Total carton: 12 CTNS");
-    expect(ws.getCell(totalRow + 2, 2).value).toBe("2.   Total gross weight: 39 KGM");
+    expect(ws.getCell(totalRow + 2, 2).value).toBe("2.   Total gross weight: 39.00 KGM");
   });
 
   it("mô tả dài — tự tăng chiều cao hàng (wrapText)", async () => {
@@ -218,7 +218,7 @@ describe("exportShipmentInvoiceExcel helpers", () => {
       if (ws.getCell(r, 1).value === 1) { goodsRow = r; break; }
     }
     expect(ws.getCell(goodsRow, 2).alignment?.wrapText).toBe(true);
-    expect(ws.getRow(goodsRow).height).toBeGreaterThan(24);
+    expect(ws.getRow(goodsRow).height).toBeGreaterThanOrEqual(48);
     expect(ws.getCell(goodsRow, 2).value).toBe(longDesc);
   });
 
@@ -278,9 +278,10 @@ describe("exportShipmentInvoiceExcel helpers", () => {
         break;
       }
     }
-    expect(tableHeaderRow).toBe(14);
-    expect(ws.getRow(tableHeaderRow).height).toBeGreaterThanOrEqual(44);
-    const expectedWidths = [4.5, 34, 10, 7, 12, 5, 13, 8, 9.01, 12];
+    expect(tableHeaderRow).toBe(13);
+    expect(ws.getRow(tableHeaderRow).height).toBeGreaterThanOrEqual(30);
+    expect(ws.getRow(tableHeaderRow).height).toBeLessThanOrEqual(48);
+    const expectedWidths = [4.5, 37, 10, 7, 12, 6.5, 13, 11.5, 9.01, 12];
     for (let col = 1; col <= 10; col++) {
       expect(ws.getColumn(col).width ?? expectedWidths[col - 1]).toBe(expectedWidths[col - 1]);
     }

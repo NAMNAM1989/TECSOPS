@@ -64,7 +64,7 @@ export function generateShipmentInvoicePdfBuffer(payload) {
       size: [PAGE_W, PAGE_H],
       margin: 0,
       autoFirstPage: true,
-      info: { Title: "NONCOMMERCIAL INVOICE", Creator: "TECSOPS" },
+      info: { Title: "NONCOMMERCIAL INVOICE & PACKING LIST", Creator: "TECSOPS" },
     });
     registerInvoicePdfFonts(doc);
 
@@ -77,7 +77,7 @@ export function generateShipmentInvoicePdfBuffer(payload) {
     let y = MARGIN_T;
 
     doc.font("Times-Bold").fontSize(18).fillColor(BLACK);
-    doc.text("NONCOMMERCIAL INVOICE", MARGIN_L, y, {
+    doc.text("NONCOMMERCIAL INVOICE & PACKING LIST", MARGIN_L, y, {
       width: CONTENT_W,
       align: "center",
     });

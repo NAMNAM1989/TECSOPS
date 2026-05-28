@@ -6,6 +6,7 @@ import {
   buildInvoiceExportPayload,
   type BuildInvoiceExportOptions,
 } from "../export/builders/buildInvoiceExportPayload";
+import { formatDeclarationKg } from "../types/invoiceItem";
 import { applyInvoiceExcelLayout } from "./invoiceExcelLayout.ts";
 
 export type FillInvoiceWorksheetOptions = BuildInvoiceExportOptions;
@@ -17,7 +18,7 @@ const FONT_TITLE: Partial<Font> = { name: "Times New Roman", size: 18, bold: tru
 const ALIGN_LEFT: Partial<Alignment> = { vertical: "middle", horizontal: "left" };
 const ALIGN_CENTER: Partial<Alignment> = { vertical: "middle", horizontal: "center" };
 const ALIGN_RIGHT: Partial<Alignment> = { vertical: "middle", horizontal: "right" };
-const ALIGN_WRAP: Partial<Alignment> = { vertical: "middle", wrapText: true };
+const ALIGN_DESC_WRAP: Partial<Alignment> = { vertical: "top", horizontal: "left", wrapText: true };
 const ALIGN_CENTER_WRAP: Partial<Alignment> = { ...ALIGN_CENTER, wrapText: true };
 
 const THIN_BORDER: Partial<Borders> = {
@@ -36,10 +37,10 @@ const COLUMNS = [
   { key: "origin", header: "Origin" },
   { key: "qty", header: "Quantity" },
   { key: "unit", header: "Unit" },
-  { key: "price", header: "U.Price\n(FCA)(USD)" },
-  { key: "amount", header: "Amount\n(USD)" },
-  { key: "spec", header: "Quy cách\n(kg/đv)" },
-  { key: "weight", header: "Trọng lượng\n(KG)" },
+  { key: "price", header: "U.Price (USD)" },
+  { key: "amount", header: "Amount (USD)" },
+  { key: "spec", header: "kg/đv" },
+  { key: "weight", header: "Trọng lượng (KG)" },
 ];
 
 export function buildInvoiceWorkbookFromPayload(
@@ -61,7 +62,7 @@ export function buildInvoiceWorkbookFromPayload(
   let row = 1;
   const titleRow = row;
   ws.getRow(row).height = 28;
-  ws.getCell(row, 2).value = "NONCOMMERCIAL INVOICE";
+  ws.getCell(row, 2).value = "NONCOMMERCIAL INVOICE & PACKING LIST";
   ws.getCell(row, 2).font = FONT_TITLE;
   ws.getCell(row, 2).alignment = ALIGN_LEFT;
   row += 2;
@@ -111,11 +112,10 @@ export function buildInvoiceWorkbookFromPayload(
   for (let i = 0; i < 4; i++) {
     ws.getCell(row, 2).value = payload.cnee.lines[i] ?? "";
     ws.getCell(row, 2).font = FONT_NORMAL;
-    ws.getCell(row, 2).alignment = ALIGN_WRAP;
+    ws.getCell(row, 2).alignment = ALIGN_DESC_WRAP;
     row++;
   }
   const cneeLastRow = row - 1;
-  row++;
 
   const headerRow = row;
   COLUMNS.forEach((col, i) => {
@@ -136,7 +136,7 @@ export function buildInvoiceWorkbookFromPayload(
 
     ws.getCell(row, 2).value = line.description;
     ws.getCell(row, 2).font = FONT_NORMAL;
-    ws.getCell(row, 2).alignment = ALIGN_WRAP;
+    ws.getCell(row, 2).alignment = ALIGN_DESC_WRAP;
     ws.getCell(row, 2).border = THIN_BORDER;
 
     ws.getCell(row, 3).value = line.hsCode;
@@ -209,7 +209,7 @@ export function buildInvoiceWorkbookFromPayload(
     sumWeightCell.font = FONT_BOLD;
     sumWeightCell.alignment = ALIGN_RIGHT;
     sumWeightCell.border = THIN_BORDER;
-    sumWeightCell.numFmt = "#,##0";
+    sumWeightCell.numFmt = "#,##0.00";
   }
   row++;
 
@@ -223,7 +223,7 @@ export function buildInvoiceWorkbookFromPayload(
 
   ws.getCell(row, 2).value =
     payload.footer.grossKg > 0
-      ? `2.   Total gross weight: ${payload.footer.grossKg} KGM`
+      ? `2.   Total gross weight: ${formatDeclarationKg(payload.footer.grossKg)} KGM`
       : "2.   Total gross weight:";
   ws.getCell(row, 2).font = FONT_BOLD;
   const footerLastRow = row;

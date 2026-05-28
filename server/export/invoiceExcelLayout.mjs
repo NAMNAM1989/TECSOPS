@@ -1,7 +1,11 @@
 /** Giữ đồng bộ với src/utils/invoiceExcelLayout.ts */
 
-export const DESCRIPTION_COL_INDEX = 1;
-export const DESCRIPTION_WRAP_TARGET_LINES = 3;
+export function fmtKg(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "0.00";
+  return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+export const DESCRIPTION_WRAP_TARGET_LINES = 4;
 export const HEADER_BLOCK_WRAP_TARGET_LINES = 2;
 export const INVOICE_SHEET_COL_COUNT = 10;
 export const PRE_HEADER_LEFT_MERGE_END_COL = 4;
@@ -9,16 +13,16 @@ export const PRE_HEADER_META_LABEL_COL = 5;
 export const PRE_HEADER_META_VALUE_COL = 6;
 export const PRE_HEADER_META_VALUE_MERGE_END_COL = 10;
 
-export const DESCRIPTION_COL_WIDTH = 34;
+export const DESCRIPTION_COL_WIDTH = 37;
 export const INVOICE_FIXED_COLUMN_WIDTHS = [
   4.5,
   DESCRIPTION_COL_WIDTH,
   10,
   7,
   12,
-  5,
+  6.5,
   13,
-  8,
+  11.5,
   9.01,
   12,
 ];
@@ -61,17 +65,21 @@ export const INVOICE_COLUMN_LIMITS = [
 ];
 
 const MIN_ROW_HEIGHT = 18;
-const ROW_PADDING_PT = 6;
-const ROW_HEIGHT_SAFETY_PT = 2;
-const CHARS_PER_COL_UNIT = 0.88;
+const ROW_PADDING_PT = 10;
+const ROW_HEIGHT_SAFETY_PT = 7;
+const CHARS_PER_COL_UNIT = 0.82;
 const FONT_SIZE_DEFAULT = 12;
-export const TABLE_HEADER_MIN_HEIGHT = 38;
-const TABLE_HEADER_EXTRA_PADDING_PT = 8;
+export const TABLE_HEADER_MIN_HEIGHT = 30;
+export const TABLE_HEADER_MAX_HEIGHT = 48;
+const TABLE_HEADER_EXTRA_PADDING_PT = 4;
+export const GOODS_ROW_MIN_HEIGHT = 48;
+export const GOODS_ROW_MAX_HEIGHT = 96;
+export const GOODS_ROW_EXTRA_PADDING_PT = 4;
 
 export function displayLength(text) {
   let width = 0;
   for (const ch of String(text ?? "")) {
-    width += /[\u0000-\u007F]/.test(ch) ? 1 : 1.12;
+    width += /[\u0000-\u007F]/.test(ch) ? 1 : 1.18;
   }
   return width;
 }
@@ -256,7 +264,7 @@ function applyPreHeaderTextAlignment(ws, row, col = DESCRIPTION_COL_INDEX + 1) {
 
 function appendHeaderBlockSamples(samples, payload) {
   samples[DESCRIPTION_COL_INDEX].push(
-    "NONCOMMERCIAL INVOICE",
+    "NONCOMMERCIAL INVOICE & PACKING LIST",
     ...(payload.shipper?.lines ?? []),
     "THE CNEE:",
   );
@@ -316,7 +324,7 @@ export function estimateTableHeaderRowHeight(columnHeaders, widths) {
         : 4;
     height = Math.max(height, cellHeight + padding);
   }
-  return height;
+  return Math.min(TABLE_HEADER_MAX_HEIGHT, height);
 }
 
 export function buildInvoiceColumnSamples(payload, columnHeaders) {
@@ -344,7 +352,9 @@ export function buildInvoiceColumnSamples(payload, columnHeaders) {
       cellTextForWidth(Number(line.quantity ?? 0) * Number(line.unitPriceUsd ?? 0)),
     );
     samples[8].push(cellTextForWidth(line.kgPerUnit));
-    samples[9].push(cellTextForWidth(Number(line.quantity ?? 0) * Number(line.kgPerUnit ?? 0)));
+    samples[9].push(
+      cellTextForWidth(fmtKg(Number(line.quantity ?? 0) * Number(line.kgPerUnit ?? 0))),
+    );
   }
 
   samples[1].push("TOTAL");
@@ -355,7 +365,7 @@ export function buildInvoiceColumnSamples(payload, columnHeaders) {
   );
   samples[1].push(
     payload.footer?.grossKg > 0
-      ? `2.   Total gross weight: ${payload.footer.grossKg} KGM`
+      ? `2.   Total gross weight: ${fmtKg(payload.footer.grossKg)} KGM`
       : "2.   Total gross weight:",
   );
 
@@ -472,7 +482,11 @@ export function applyInvoiceExcelLayout(ws, ctx) {
   if (ctx.goodsLastRow >= ctx.goodsFirstRow) {
     for (let row = ctx.goodsFirstRow; row <= ctx.goodsLastRow; row++) {
       applyGoodsRowWrap(ws, row);
-      autoFitInvoiceRowHeightFromSpecs(ws, row, buildGoodsRowHeightSpecs(ws, row, widths));
+      autoFitInvoiceRowHeightFromSpecs(ws, row, buildGoodsRowHeightSpecs(ws, row, widths), {
+        minHeight: GOODS_ROW_MIN_HEIGHT,
+        maxHeight: GOODS_ROW_MAX_HEIGHT,
+        extraPadding: GOODS_ROW_EXTRA_PADDING_PT,
+      });
     }
   }
 

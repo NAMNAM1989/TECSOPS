@@ -5,6 +5,11 @@ function fmtUsd(n: number): string {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function fmtKg(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function fmtQty(n: number): string {
   if (!Number.isFinite(n)) return "";
   return String(Math.round(n));
@@ -18,7 +23,7 @@ type Props = {
 export const InvoiceExportPreview = memo(function InvoiceExportPreview({ exportPayload: p }: Props) {
   const cartonFooter =
     p.footer.cartons != null && p.footer.cartons > 0 ? `${p.footer.cartons} CTNS` : "—";
-  const kgFooter = p.footer.grossKg > 0 ? `${p.footer.grossKg} KGM` : "—";
+  const kgFooter = p.footer.grossKg > 0 ? `${fmtKg(p.footer.grossKg)} KGM` : "—";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -30,7 +35,7 @@ export const InvoiceExportPreview = memo(function InvoiceExportPreview({ exportP
           className="mx-auto w-full max-w-[52rem] bg-white px-5 py-6 text-black shadow-md"
           style={{ fontFamily: '"Times New Roman", Times, serif' }}
         >
-          <h1 className="text-center text-[18pt] font-bold leading-tight">NONCOMMERCIAL INVOICE</h1>
+          <h1 className="text-center text-[18pt] font-bold leading-tight">NONCOMMERCIAL INVOICE &amp; PACKING LIST</h1>
 
           <div className="mt-4 grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-[12pt] leading-snug">
             <div className="space-y-0.5">
@@ -157,7 +162,7 @@ export const InvoiceExportPreview = memo(function InvoiceExportPreview({ exportP
                       {line.kgPerUnit > 0 ? fmtUsd(line.kgPerUnit) : "—"}
                     </td>
                     <td className="border border-black px-0.5 py-1 text-right text-[9pt] tabular-nums">
-                      {line.grossKg > 0 ? String(line.grossKg) : "—"}
+                      {fmtKg(line.grossKg)}
                     </td>
                   </tr>
                 ))
@@ -175,7 +180,7 @@ export const InvoiceExportPreview = memo(function InvoiceExportPreview({ exportP
                 </td>
                 <td className="border border-black" />
                 <td className="border border-black px-0.5 py-1.5 text-right tabular-nums">
-                  {p.totals.totalGrossKg > 0 ? String(p.totals.totalGrossKg) : "—"}
+                  {fmtKg(p.totals.totalGrossKg)}
                 </td>
               </tr>
             </tbody>

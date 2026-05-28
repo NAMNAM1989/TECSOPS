@@ -1,5 +1,6 @@
 import type { Worksheet } from "exceljs";
 import type { InvoiceExportPayload } from "../export/contracts/invoiceExportPayload";
+import { formatDeclarationKg } from "../types/invoiceItem";
 
 export interface ColumnWidthLimits {
   min: number;
@@ -9,7 +10,7 @@ export interface ColumnWidthLimits {
 
 export const DESCRIPTION_COL_INDEX = 1;
 /** Mục tiêu: mô tả hàng gói trong tối đa N dòng — cột rộng + hàng cao theo N dòng. */
-export const DESCRIPTION_WRAP_TARGET_LINES = 3;
+export const DESCRIPTION_WRAP_TARGET_LINES = 4;
 /** Phần header (dòng 1–13): shipper / meta / CNEE — gói trong ~2 dòng. */
 export const HEADER_BLOCK_WRAP_TARGET_LINES = 2;
 export const INVOICE_SHEET_COL_COUNT = 10;
@@ -19,16 +20,16 @@ export const PRE_HEADER_META_VALUE_COL = 6;
 export const PRE_HEADER_META_VALUE_MERGE_END_COL = 10;
 
 /** Độ rộng cột cố định theo layout invoice (A–J). */
-export const DESCRIPTION_COL_WIDTH = 34;
+export const DESCRIPTION_COL_WIDTH = 37;
 export const INVOICE_FIXED_COLUMN_WIDTHS: readonly number[] = [
   4.5, // A No
   DESCRIPTION_COL_WIDTH, // B Description
   10, // C HS code
   7, // D Origin
   12, // E Quantity
-  5, // F Unit
+  6.5, // F Unit
   13, // G U.Price
-  8, // H Amount
+  11.5, // H Amount (tránh #### với 1,095.65+)
   9.01, // I Quy cách (9.0 bị ExcelJS bỏ khi ghi file)
   12, // J Trọng lượng
 ];
@@ -77,18 +78,23 @@ export function getInvoiceFixedColumnWidths(): number[] {
 }
 
 const MIN_ROW_HEIGHT = 18;
-const ROW_PADDING_PT = 8;
-const ROW_HEIGHT_SAFETY_PT = 3;
-const CHARS_PER_COL_UNIT = 0.88;
+const ROW_PADDING_PT = 10;
+const ROW_HEIGHT_SAFETY_PT = 7;
+const CHARS_PER_COL_UNIT = 0.82;
 const FONT_SIZE_DEFAULT = 12;
-/** Dòng tiêu đề bảng (vd. G14: U.Price) — cao hơn để hiện đủ 2 dòng header. */
-export const TABLE_HEADER_MIN_HEIGHT = 38;
-const TABLE_HEADER_EXTRA_PADDING_PT = 8;
+/** Dòng tiêu đề bảng — gọn, 1 dòng header. */
+export const TABLE_HEADER_MIN_HEIGHT = 30;
+export const TABLE_HEADER_MAX_HEIGHT = 48;
+const TABLE_HEADER_EXTRA_PADDING_PT = 4;
+/** Hàng dữ liệu hàng hóa — đồng nhất, tránh quá thấp/cao lệch. */
+export const GOODS_ROW_MIN_HEIGHT = 48;
+export const GOODS_ROW_MAX_HEIGHT = 96;
+export const GOODS_ROW_EXTRA_PADDING_PT = 4;
 
 export function displayLength(text: string): number {
   let width = 0;
   for (const ch of String(text ?? "")) {
-    width += /[\u0000-\u007F]/.test(ch) ? 1 : 1.12;
+    width += /[\u0000-\u007F]/.test(ch) ? 1 : 1.18;
   }
   return width;
 }
@@ -330,7 +336,7 @@ function appendHeaderBlockSamples(
   payload: InvoiceExportPayload,
 ): void {
   samples[DESCRIPTION_COL_INDEX]!.push(
-    "NONCOMMERCIAL INVOICE",
+    "NONCOMMERCIAL INVOICE & PACKING LIST",
     ...(payload.shipper?.lines ?? []),
     "THE CNEE:",
   );
@@ -397,7 +403,7 @@ export function estimateTableHeaderRowHeight(
         : 4;
     height = Math.max(height, cellHeight + padding);
   }
-  return height;
+  return Math.min(TABLE_HEADER_MAX_HEIGHT, height);
 }
 
 export function buildInvoiceColumnSamples(
@@ -428,7 +434,7 @@ export function buildInvoiceColumnSamples(
       cellTextForWidth(Number(line.quantity ?? 0) * Number(line.unitPriceUsd ?? 0)),
     );
     samples[8]!.push(cellTextForWidth(line.kgPerUnit));
-    samples[9]!.push(cellTextForWidth(Number(line.quantity ?? 0) * Number(line.kgPerUnit ?? 0)));
+    samples[9]!.push(cellTextForWidth(formatDeclarationKg(Number(line.quantity ?? 0) * Number(line.kgPerUnit ?? 0))));
   }
 
   samples[1]!.push("TOTAL");
@@ -439,7 +445,7 @@ export function buildInvoiceColumnSamples(
   );
   samples[1]!.push(
     payload.footer?.grossKg != null && payload.footer.grossKg > 0
-      ? `2.   Total gross weight: ${payload.footer.grossKg} KGM`
+      ? `2.   Total gross weight: ${formatDeclarationKg(payload.footer.grossKg)} KGM`
       : "2.   Total gross weight:",
   );
 
@@ -576,7 +582,11 @@ export function applyInvoiceExcelLayout(ws: Worksheet, ctx: InvoiceExcelLayoutCo
   if (ctx.goodsLastRow >= ctx.goodsFirstRow) {
     for (let row = ctx.goodsFirstRow; row <= ctx.goodsLastRow; row++) {
       applyGoodsRowWrap(ws, row);
-      autoFitInvoiceRowHeightFromSpecs(ws, row, buildGoodsRowHeightSpecs(ws, row, widths));
+      autoFitInvoiceRowHeightFromSpecs(ws, row, buildGoodsRowHeightSpecs(ws, row, widths), {
+        minHeight: GOODS_ROW_MIN_HEIGHT,
+        maxHeight: GOODS_ROW_MAX_HEIGHT,
+        extraPadding: GOODS_ROW_EXTRA_PADDING_PT,
+      });
     }
   }
 

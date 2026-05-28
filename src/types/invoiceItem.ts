@@ -84,10 +84,15 @@ export interface InvoiceTotals {
   totalGrossKg: number;
 }
 
-/** Làm tròn kg hiển thị / footer mỗi tờ khai (số nguyên). */
+/** Làm tròn kg hiển thị / footer — 2 chữ số thập phân. */
 export function roundDeclarationKg(kg: number | null | undefined): number {
   if (kg == null || !Number.isFinite(kg)) return 0;
-  return Math.round(kg);
+  return Number(kg.toFixed(2));
+}
+
+/** Hiển thị kg trong UI HQ (luôn 2 số thập phân). */
+export function formatDeclarationKg(kg: number | null | undefined): string {
+  return roundDeclarationKg(kg).toFixed(2);
 }
 
 export function totalsForInvoice(items: InvoiceLineItem[]): InvoiceTotals {

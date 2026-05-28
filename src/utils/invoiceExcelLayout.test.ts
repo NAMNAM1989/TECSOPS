@@ -17,11 +17,11 @@ const LONG_DESC =
 describe("invoiceExcelLayout", () => {
   it("độ rộng cột cố định A–J theo layout", () => {
     expect(getInvoiceFixedColumnWidths()).toEqual([...INVOICE_FIXED_COLUMN_WIDTHS]);
-    expect(INVOICE_FIXED_COLUMN_WIDTHS[1]).toBe(34);
-    expect(INVOICE_FIXED_COLUMN_WIDTHS.slice(2)).toEqual([10, 7, 12, 5, 13, 8, 9.01, 12]);
+    expect(INVOICE_FIXED_COLUMN_WIDTHS[1]).toBe(37);
+    expect(INVOICE_FIXED_COLUMN_WIDTHS.slice(2)).toEqual([10, 7, 12, 6.5, 13, 11.5, 9.01, 12]);
   });
 
-  it("chiều cao hàng tăng theo nội dung wrap ở cột B (34)", () => {
+  it("chiều cao hàng tăng theo nội dung wrap ở cột B (37)", () => {
     const short = rowHeightForWrappedText("TEST", DESCRIPTION_COL_WIDTH);
     const long = rowHeightForWrappedText(LONG_DESC, DESCRIPTION_COL_WIDTH);
     expect(long).toBeGreaterThan(short);
@@ -57,7 +57,7 @@ describe("invoiceExcelLayout", () => {
     });
     const titleSpan = widths.slice(1).reduce((sum, w) => sum + w, 0);
     ws.mergeCells(1, 2, 1, INVOICE_SHEET_COL_COUNT);
-    ws.getCell(1, 2).value = "NONCOMMERCIAL INVOICE";
+    ws.getCell(1, 2).value = "NONCOMMERCIAL INVOICE & PACKING LIST";
     ws.getCell(1, 2).font = { size: 18 };
 
     const height = autoFitInvoiceRowHeightFromSpecs(

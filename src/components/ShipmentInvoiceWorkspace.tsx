@@ -11,6 +11,7 @@ import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import {
   emptyInvoiceLineItem,
+  formatDeclarationKg,
   roundDeclarationKg,
   totalsForInvoice,
   type InvoiceLineItem,
@@ -48,7 +49,7 @@ import { InvoiceCatalogEditor } from "./InvoiceCatalogEditor";
 import { HqWorkspaceToolbar } from "./HqWorkspaceToolbar";
 import { CustomsDeclarationIcon } from "./ShipmentInvoiceExportButton";
 import { useInvoiceCatalog } from "../hooks/useInvoiceCatalog";
-import { randomInvoiceLinesFromCatalog } from "../utils/invoiceRandomPick";
+import { randomInvoiceLinesFromCatalog, countUniqueCatalogCategories } from "../utils/invoiceRandomPick";
 import {
   balanceDeclarationLineItems,
   grossNetWeightBadge,
@@ -258,14 +259,15 @@ export function ShipmentInvoiceWorkspace({
       window.alert("Danh mục hàng trống — thêm mặt hàng trong «Sửa danh mục» trước.");
       return;
     }
+    const maxPick = countUniqueCatalogCategories(catalogItems);
     const raw = window.prompt(
-      `Chọn ngẫu nhiên bao nhiêu mặt hàng? (1–${catalogItems.length})`,
-      "6"
+      `Chọn ngẫu nhiên bao nhiêu loại/mặt hàng? (1–${maxPick}, mỗi loại tối đa 1 dòng)`,
+      String(Math.min(6, maxPick))
     );
     if (raw == null) return;
     const n = Number(raw);
-    if (!Number.isFinite(n) || n < 1 || n > catalogItems.length) {
-      window.alert(`Nhập số từ 1 đến ${catalogItems.length}.`);
+    if (!Number.isFinite(n) || n < 1 || n > maxPick) {
+      window.alert(`Nhập số từ 1 đến ${maxPick} (số loại hàng trong danh mục).`);
       return;
     }
     const picked = randomInvoiceLinesFromCatalog(catalogItems, n);
@@ -744,7 +746,7 @@ export function ShipmentInvoiceWorkspace({
                           : "bg-red-500/15 text-red-800 dark:text-red-200"
                       }`}
                     >
-                      Tổng kg {totalsLock.actualKg.toFixed(1)}
+                      Tổng kg {formatDeclarationKg(totalsLock.actualKg)}
                       {totalsLock.shipmentKg != null ? ` / ${totalsLock.shipmentKg} lô` : ""}
                       {!totalsLock.kgOk && totalsLock.shipmentKg != null
                         ? ` (${totalsLock.kgDelta > 0 ? "+" : ""}${totalsLock.kgDelta})`
@@ -754,7 +756,7 @@ export function ShipmentInvoiceWorkspace({
                 ) : null}
                 {declarations.length > 1 ? (
                   <span className={`rounded-full px-2.5 py-0.5 text-[11px] ${OPS.muted}`}>
-                    Tổng {declarations.length} tờ · {allTotals.totalQuantity} CTNS · {allTotals.totalGrossKg.toFixed(1)} kg
+                    Tổng {declarations.length} tờ · {allTotals.totalQuantity} CTNS · {formatDeclarationKg(allTotals.totalGrossKg)} kg
                   </span>
                 ) : (
                   <span className={`rounded-full px-2.5 py-0.5 text-[11px] ${OPS.muted}`}>
@@ -847,9 +849,9 @@ export function ShipmentInvoiceWorkspace({
 
       <footer className={`shrink-0 border-t px-4 py-1.5 sm:px-5 ${OPS.footer}`}>
         <p className={`text-[11px] ${OPS.muted}`}>
-          Tờ hiện tại: {totals.totalAmountUsd.toFixed(2)} USD · hàng {totals.totalGrossKg} kg
+          Tờ hiện tại: {totals.totalAmountUsd.toFixed(2)} USD · hàng {formatDeclarationKg(totals.totalGrossKg)} kg
           {targetKg != null && targetKg > 0
-            ? ` / tờ ${roundDeclarationKg(targetKg)} kg (chênh ≈ bao bì)`
+            ? ` / tờ ${formatDeclarationKg(targetKg)} kg (chênh ≈ bao bì)`
             : ""}
           {dirty ? (
             <span className="ml-1 font-semibold text-amber-700 dark:text-amber-300"> · Chưa lưu</span>

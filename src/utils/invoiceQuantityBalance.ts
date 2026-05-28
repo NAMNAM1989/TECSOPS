@@ -1,5 +1,5 @@
 import type { InvoiceCatalogItem, InvoiceLineItem } from "../types/invoiceItem";
-import { roundDeclarationKg, totalsForInvoice } from "../types/invoiceItem";
+import { roundDeclarationKg, totalsForInvoice, formatDeclarationKg } from "../types/invoiceItem";
 import type { InvoiceDeclaration } from "../types/invoiceDeclaration";
 import type { Shipment } from "../types/shipment";
 
@@ -169,24 +169,24 @@ export function grossNetWeightBadge(
   if (targetKg == null || targetKg <= 0) {
     return { ok: true, text: "KG hàng: —" };
   }
-  const roundedTarget = Math.round(targetKg);
+  const roundedTarget = roundDeclarationKg(targetKg);
   const ok = actualKg > 0 && actualKg < roundedTarget;
-  const packagingGap = roundedTarget - actualKg;
+  const packagingGap = Number((roundedTarget - actualKg).toFixed(2));
   if (ok) {
     return {
       ok: true,
-      text: `Hàng ${actualKg} KGM (< ${roundedTarget}, ~${packagingGap} bao bì)`,
+      text: `Hàng ${formatDeclarationKg(actualKg)} KGM (< ${formatDeclarationKg(roundedTarget)}, ~${formatDeclarationKg(packagingGap)} bao bì)`,
     };
   }
   if (actualKg >= roundedTarget) {
     return {
       ok: false,
-      text: `Hàng ${actualKg} KGM — phải < ${roundedTarget} KGM (chưa trừ bao bì)`,
+      text: `Hàng ${formatDeclarationKg(actualKg)} KGM — phải < ${formatDeclarationKg(roundedTarget)} KGM (chưa trừ bao bì)`,
     };
   }
   return {
     ok: false,
-    text: `Hàng ${actualKg} KGM / tờ ${roundedTarget} KGM`,
+    text: `Hàng ${formatDeclarationKg(actualKg)} KGM / tờ ${formatDeclarationKg(roundedTarget)} KGM`,
   };
 }
 

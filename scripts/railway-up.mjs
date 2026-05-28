@@ -38,7 +38,11 @@ if (!skipBuild) {
 }
 
 const detach = !process.argv.includes("--no-detach");
-const args = ["up", ...(detach ? ["--detach"] : [])];
+const service =
+  process.env.RAILWAY_SERVICE?.trim() ||
+  process.argv.find((a, i) => process.argv[i - 1] === "--service")?.trim() ||
+  "chic-nurturing";
+const args = ["up", ...(detach ? ["--detach"] : []), "--service", service];
 
 console.info("[railway:up] ▶ railway", args.join(" "), "\n");
 const r = spawnSync("railway", args, {

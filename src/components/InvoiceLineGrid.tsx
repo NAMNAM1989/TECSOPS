@@ -3,6 +3,7 @@ import type { InvoiceCatalogItem } from "../types/invoiceItem";
 import {
   invoiceLineAmountUsd,
   invoiceLineGrossWeightKg,
+  formatDeclarationKg,
   type InvoiceLineItem,
 } from "../types/invoiceItem";
 import type { InvoiceCatalog } from "../utils/invoiceCatalogCore";
@@ -14,13 +15,32 @@ import { OPS } from "../styles/opsModalStyles";
 const ORIGIN_OPTIONS = ["VN", "CN", "US", "KR", "JP", "TH", "TW", "MY", "ID"] as const;
 const ORIGIN_COMBO_OPTIONS = ORIGIN_OPTIONS.map((o) => ({ value: o, label: o }));
 
+function normalizeCategory(value: string | undefined): string {
+  return (value || "").trim().toUpperCase();
+}
+
+function catalogOptionsForCategory(
+  catalogItems: readonly InvoiceCatalogItem[],
+  category: string | undefined,
+): ComboboxOption[] {
+  const cat = normalizeCategory(category);
+  const filtered = cat
+    ? catalogItems.filter((it) => normalizeCategory(it.category || "KHÁC") === cat)
+    : catalogItems;
+  return filtered.map((it) => ({
+    value: it.id || `desc:${it.description}`,
+    label: it.description,
+    hint: `${it.category || "KHÁC"} · HS ${it.hsCode} · ${it.unitPriceUsd} USD`,
+  }));
+}
+
 type GridRowProps = {
   index: number;
   item: InvoiceLineItem;
   selected: boolean;
+  catalogItems: readonly InvoiceCatalogItem[];
   onToggleSelect: (lineId: string) => void;
   categoryOptions: ComboboxOption[];
-  descriptionOptions: ComboboxOption[];
   hsOptions: ComboboxOption[];
   unitOptions: ComboboxOption[];
   catalogByKey: Map<string, InvoiceCatalogItem>;
@@ -35,7 +55,7 @@ const GridRow = memo(function GridRow({
   selected,
   onToggleSelect,
   categoryOptions,
-  descriptionOptions,
+  catalogItems,
   hsOptions,
   unitOptions,
   catalogByKey,
@@ -45,6 +65,10 @@ const GridRow = memo(function GridRow({
 }: GridRowProps) {
   const amount = invoiceLineAmountUsd(item);
   const gross = invoiceLineGrossWeightKg(item);
+  const descriptionOptions = useMemo(
+    () => catalogOptionsForCategory(catalogItems, item.category),
+    [catalogItems, item.category],
+  );
 
   const applyCatalog = useCallback(
     (entry: InvoiceCatalogItem) => {
@@ -78,7 +102,8 @@ const GridRow = memo(function GridRow({
       <td className="px-0.5 py-0.5 min-w-[5rem]">
         <SearchCombobox
           value={item.category ?? ""}
-          onChange={(v) => onPatch(item.lineId, { category: v.toUpperCase() })}
+          commitMode="blur"
+          onChange={(v) => onPatch(item.lineId, { category: v.trim().toUpperCase() })}
           options={categoryOptions}
           placeholder="LOẠI"
           inputClassName="uppercase font-semibold text-[10px]"
@@ -161,7 +186,7 @@ const GridRow = memo(function GridRow({
         />
       </td>
       <td className="px-1 py-0.5 text-right text-[11px] tabular-nums text-slate-700 dark:text-slate-300">
-        {gross.toFixed(1)}
+        {formatDeclarationKg(gross)}
       </td>
       <td className="px-0.5 py-0.5 w-14 text-center">
         <div className="flex items-center justify-center gap-0.5">
@@ -236,14 +261,6 @@ export function InvoiceLineGrid({
       .sort((a, b) => a.localeCompare(b, "vi"))
       .map((c) => ({ value: c, label: c }));
   }, [catalogItems, items]);
-
-  const descriptionOptions = useMemo((): ComboboxOption[] => {
-    return catalogItems.map((it) => ({
-      value: it.id || `desc:${it.description}`,
-      label: it.description,
-      hint: `${it.category || "KHÁC"} · HS ${it.hsCode} · ${it.unitPriceUsd} USD`,
-    }));
-  }, [catalogItems]);
 
   const hsOptions = useMemo((): ComboboxOption[] => {
     const map = new Map<string, string>();
@@ -323,7 +340,7 @@ export function InvoiceLineGrid({
                   selected={selectedLineIds?.has(it.lineId) ?? false}
                   onToggleSelect={(id) => onToggleLineSelect?.(id)}
                   categoryOptions={categoryOptions}
-                  descriptionOptions={descriptionOptions}
+                  catalogItems={catalogItems}
                   hsOptions={hsOptions}
                   unitOptions={unitOptions}
                   catalogByKey={catalogByKey}

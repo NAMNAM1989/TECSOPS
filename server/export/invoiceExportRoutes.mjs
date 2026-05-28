@@ -5,6 +5,7 @@ import {
   MIME_XLSX,
   validateInvoicePayload,
 } from "./invoiceExportService.mjs";
+import { invoiceExportFileName } from "./invoiceExportFileName.mjs";
 
 function sanitizeFilePart(s) {
   return String(s ?? "")
@@ -37,22 +38,26 @@ export function registerInvoiceExportRoutes(app) {
       }
 
       const invoiceNo = sanitizeFilePart(payload.meta?.invoiceNo) || "INV";
-      const awb = sanitizeFilePart(payload.meta?.awb) || "AWB";
+      const awb = payload.meta?.awb ?? "";
+      const declarationSeq = Number(payload.meta?.declarationSeq) || 1;
+      const totalDeclarations = Number(payload.meta?.totalDeclarations) || 1;
 
       if (format === "pdf") {
         const pdf = await exportInvoicePdf(payload);
         console.info("[api/export/invoice] pdf done", { invoiceNo, ms: Date.now() - started });
-        sendPdfResponse(res, pdf, `INV_${invoiceNo}_${awb}.pdf`);
+        sendPdfResponse(
+          res,
+          pdf,
+          invoiceExportFileName(awb, declarationSeq, totalDeclarations, "pdf"),
+        );
         return;
       }
 
       const xlsx = await exportInvoiceXlsx(payload);
       console.info("[api/export/invoice] xlsx done", { invoiceNo, ms: Date.now() - started });
+      const xlsxName = invoiceExportFileName(awb, declarationSeq, totalDeclarations, "xlsx");
       res.setHeader("Content-Type", MIME_XLSX);
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="INV_${invoiceNo}_${awb}.xlsx"`
-      );
+      res.setHeader("Content-Disposition", `attachment; filename="${xlsxName}"`);
       res.send(xlsx);
     } catch (e) {
       console.error("[api/export/invoice]", e);

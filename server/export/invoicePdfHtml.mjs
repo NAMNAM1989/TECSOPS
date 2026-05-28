@@ -12,6 +12,12 @@ function fmtUsd(n) {
   return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function fmtKg(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v <= 0) return "";
+  return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function fmtQty(n) {
   const v = Number(n);
   if (!Number.isFinite(v)) return "";
@@ -39,7 +45,7 @@ export function buildInvoiceExportHtml(payload) {
         <td class="r">${fmtUsd(l.unitPriceUsd)}</td>
         <td class="r">${fmtUsd(l.amountUsd)}</td>
         <td class="r">${l.kgPerUnit > 0 ? fmtUsd(l.kgPerUnit) : ""}</td>
-        <td class="r">${l.grossKg > 0 ? String(l.grossKg) : ""}</td>
+        <td class="r">${fmtKg(l.grossKg)}</td>
       </tr>`
     )
     .join("");
@@ -50,7 +56,7 @@ export function buildInvoiceExportHtml(payload) {
       : "—";
   const kg =
     payload.footer?.grossKg != null && payload.footer.grossKg > 0
-      ? `${payload.footer.grossKg} KGM`
+      ? `${fmtKg(payload.footer.grossKg)} KGM`
       : "—";
 
   return `<!DOCTYPE html>
@@ -107,7 +113,7 @@ table.goods th { font-weight: bold; text-align: center; font-size: 9pt; }
 </style>
 </head>
 <body>
-<h1>NONCOMMERCIAL INVOICE</h1>
+<h1>NONCOMMERCIAL INVOICE & PACKING LIST</h1>
 <div class="header">
   <div class="header-left">
     ${shipper.map((l) => `<div>${escapeHtml(l)}</div>`).join("")}
@@ -146,7 +152,7 @@ table.goods th { font-weight: bold; text-align: center; font-size: 9pt; }
       <td></td><td></td><td></td><td></td><td></td>
       <td class="r">${fmtUsd(payload.totals?.totalAmountUsd ?? 0)}</td>
       <td></td>
-      <td class="r">${payload.totals?.totalGrossKg > 0 ? String(payload.totals.totalGrossKg) : ""}</td>
+      <td class="r">${fmtKg(payload.totals?.totalGrossKg ?? 0)}</td>
     </tr>
   </tbody>
 </table>

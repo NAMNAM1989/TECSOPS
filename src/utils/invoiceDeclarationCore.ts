@@ -52,9 +52,9 @@ export function validateDeclarationsLock(
 ): ShipmentTotalsLock {
   const sum = summarizeDeclarations(declarations);
   const actualPcs = sum.totalQuantity;
-  const actualKg = Number(sum.totalGrossKg.toFixed(1));
+  const actualKg = Number(sum.totalGrossKg.toFixed(2));
   const pcsDelta = shipmentPcs != null ? actualPcs - shipmentPcs : 0;
-  const kgDelta = shipmentKg != null ? Number((actualKg - shipmentKg).toFixed(1)) : 0;
+  const kgDelta = shipmentKg != null ? Number((actualKg - shipmentKg).toFixed(2)) : 0;
   const pcsOk = shipmentPcs == null || shipmentPcs <= 0 || Math.abs(pcsDelta) < 1e-3;
   const kgOk = shipmentKg == null || shipmentKg <= 0 || Math.abs(kgDelta) < 0.05;
   return {

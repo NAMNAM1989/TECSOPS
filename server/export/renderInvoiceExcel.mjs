@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { applyInvoiceExcelLayout } from "./invoiceExcelLayout.mjs";
+import { applyInvoiceExcelLayout, fmtKg } from "./invoiceExcelLayout.mjs";
 
 const FONT_NORMAL = { name: "Times New Roman", size: 12 };
 const FONT_BOLD = { ...FONT_NORMAL, bold: true };
@@ -23,10 +23,10 @@ const COLUMN_HEADERS = [
   "Origin",
   "Quantity",
   "Unit",
-  "U.Price\n(FCA)(USD)",
-  "Amount\n(USD)",
-  "Quy cách\n(kg/đv)",
-  "Trọng lượng\n(KG)",
+  "U.Price (USD)",
+  "Amount (USD)",
+  "kg/đv",
+  "Trọng lượng (KG)",
 ];
 
 /**
@@ -49,7 +49,7 @@ export async function renderInvoiceExcelBuffer(payload) {
   let row = 1;
   const titleRow = row;
   ws.getRow(row).height = 28;
-  ws.getCell(row, 2).value = "NONCOMMERCIAL INVOICE";
+  ws.getCell(row, 2).value = "NONCOMMERCIAL INVOICE & PACKING LIST";
   ws.getCell(row, 2).font = FONT_TITLE;
   ws.getCell(row, 2).alignment = ALIGN_LEFT;
   row += 2;
@@ -86,11 +86,10 @@ export async function renderInvoiceExcelBuffer(payload) {
   const cneeFirstRow = row;
   for (let i = 0; i < 4; i++) {
     ws.getCell(row, 2).value = payload.cnee.lines[i] ?? "";
-    ws.getCell(row, 2).alignment = ALIGN_WRAP;
+    ws.getCell(row, 2).alignment = { vertical: "top", horizontal: "left", wrapText: true };
     row++;
   }
   const cneeLastRow = row - 1;
-  row++;
 
   const headerRow = row;
   COLUMN_HEADERS.forEach((header, i) => {
@@ -108,7 +107,7 @@ export async function renderInvoiceExcelBuffer(payload) {
     ws.getCell(row, 1).alignment = ALIGN_CENTER;
     ws.getCell(row, 1).border = THIN_BORDER;
     ws.getCell(row, 2).value = line.description;
-    ws.getCell(row, 2).alignment = ALIGN_WRAP;
+    ws.getCell(row, 2).alignment = { vertical: "top", horizontal: "left", wrapText: true };
     ws.getCell(row, 2).border = THIN_BORDER;
     ws.getCell(row, 3).value = line.hsCode;
     ws.getCell(row, 3).alignment = ALIGN_CENTER;
@@ -154,7 +153,7 @@ export async function renderInvoiceExcelBuffer(payload) {
     ws.getCell(row, 8).numFmt = "#,##0.00";
     ws.getCell(row, 10).value = { formula: `SUM(J${goodsFirstRow}:J${goodsLastRow})` };
     ws.getCell(row, 10).font = FONT_BOLD;
-    ws.getCell(row, 10).numFmt = "#,##0";
+    ws.getCell(row, 10).numFmt = "#,##0.00";
   }
   row++;
 
@@ -167,7 +166,7 @@ export async function renderInvoiceExcelBuffer(payload) {
   row++;
   ws.getCell(row, 2).value =
     payload.footer?.grossKg > 0
-      ? `2.   Total gross weight: ${payload.footer.grossKg} KGM`
+      ? `2.   Total gross weight: ${fmtKg(payload.footer.grossKg)} KGM`
       : "2.   Total gross weight:";
   ws.getCell(row, 2).font = FONT_BOLD;
   const footerLastRow = row;

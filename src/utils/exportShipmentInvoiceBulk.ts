@@ -6,11 +6,13 @@ import { roundDeclarationKg, totalsForInvoice } from "../types/invoiceItem";
 import { buildInvoiceExportPayload } from "../export/builders/buildInvoiceExportPayload";
 import { fetchInvoiceExportBuffer } from "../export/api/invoiceExportClient";
 import { buildShipmentInvoiceXlsxBuffer } from "./exportShipmentInvoiceExcel";
-import { sanitizeInvoiceFilePart } from "./shipmentInvoiceCore";
+import {
+  invoiceExportFileName,
+  invoiceExportZipFileName,
+} from "./shipmentInvoiceCore";
 
 function zipFileName(shipment: Shipment, ext: "xlsx" | "pdf"): string {
-  const awb = sanitizeInvoiceFilePart((shipment.awb ?? "AWB").replace(/\s+/g, ""));
-  return `INV_${awb}_ALL_${ext}.zip`;
+  return invoiceExportZipFileName(shipment.awb ?? "", ext);
 }
 
 function buildDeclExportOpts(
@@ -41,9 +43,11 @@ export async function downloadAllDeclarationsExcelZip(
   const total = declarations.length;
   for (const decl of declarations) {
     const opts = buildDeclExportOpts(shipment, decl, total);
-    const { buffer, invoiceNo } = await buildShipmentInvoiceXlsxBuffer(shipment, directory, opts);
-    const name = sanitizeInvoiceFilePart(invoiceNo) || `to-${decl.seq}`;
-    zip.file(`INV_${name}.xlsx`, buffer);
+    const { buffer } = await buildShipmentInvoiceXlsxBuffer(shipment, directory, opts);
+    zip.file(
+      invoiceExportFileName(shipment.awb ?? "", decl.seq, total, "xlsx"),
+      buffer,
+    );
   }
   const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
   const url = URL.createObjectURL(blob);
@@ -72,8 +76,10 @@ export async function downloadAllDeclarationsPdfZip(
     const opts = buildDeclExportOpts(shipment, decl, total);
     const payload = buildInvoiceExportPayload(shipment, directory, opts);
     const pdfBuffer = await fetchInvoiceExportBuffer(payload, "pdf");
-    const name = sanitizeInvoiceFilePart(payload.meta.invoiceNo) || `to-${decl.seq}`;
-    zip.file(`INV_${name}.pdf`, pdfBuffer);
+    zip.file(
+      invoiceExportFileName(shipment.awb ?? "", decl.seq, total, "pdf"),
+      pdfBuffer,
+    );
   }
   const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
   const url = URL.createObjectURL(blob);

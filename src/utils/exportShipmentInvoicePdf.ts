@@ -29,7 +29,11 @@ export async function downloadShipmentInvoicePdf(
     objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = objectUrl;
-    a.download = defaultInvoicePdfFileName(payload.meta.invoiceNo, shipment.awb ?? "");
+    a.download = defaultInvoicePdfFileName(
+      shipment.awb ?? payload.meta.awb,
+      payload.meta.declarationSeq,
+      payload.meta.totalDeclarations,
+    );
     a.click();
   } catch (e) {
     console.error("[downloadShipmentInvoicePdf]", e);

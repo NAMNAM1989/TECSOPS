@@ -2,6 +2,7 @@ import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { lookupCustomerCodeByName } from "./customerDirectoryCore";
 import { findCustomerEntry } from "./mapBookingToScaleTicketFormData";
+import { rawAwbDigits } from "./awbFormat";
 
 const MONTHS_EN = [
   "JAN",
@@ -77,12 +78,44 @@ export function sanitizeInvoiceFilePart(s: string): string {
   return s.replace(/[<>:"/\\|?*\s]+/g, "_").slice(0, 80);
 }
 
-export function defaultInvoiceXlsxFileName(invoiceNo: string, awb: string): string {
-  const awbPart = sanitizeInvoiceFilePart(awb.replace(/\s+/g, ""));
-  return `INV_${sanitizeInvoiceFilePart(invoiceNo)}_${awbPart || "AWB"}.xlsx`;
+/** AWB trong tên file — chỉ chữ số (vd. 978-2009 2005 → 97820092005). */
+export function invoiceAwbFilePart(awb: string): string {
+  const digits = rawAwbDigits(awb);
+  return digits || sanitizeInvoiceFilePart(awb.replace(/\s+/g, "")) || "AWB";
 }
 
-export function defaultInvoicePdfFileName(invoiceNo: string, awb: string): string {
-  const awbPart = sanitizeInvoiceFilePart(awb.replace(/\s+/g, ""));
-  return `INV_${sanitizeInvoiceFilePart(invoiceNo)}_${awbPart || "AWB"}.pdf`;
+/** invoice_{awb}.xlsx hoặc invoice_{awb}_01.xlsx khi nhiều tờ khai. */
+export function invoiceExportFileName(
+  awb: string,
+  declarationSeq = 1,
+  totalDeclarations = 1,
+  ext: "xlsx" | "pdf",
+): string {
+  const awbPart = invoiceAwbFilePart(awb);
+  if (totalDeclarations > 1) {
+    const seq = String(declarationSeq).padStart(2, "0");
+    return `invoice_${awbPart}_${seq}.${ext}`;
+  }
+  return `invoice_${awbPart}.${ext}`;
+}
+
+export function defaultInvoiceXlsxFileName(
+  awb: string,
+  declarationSeq = 1,
+  totalDeclarations = 1,
+): string {
+  return invoiceExportFileName(awb, declarationSeq, totalDeclarations, "xlsx");
+}
+
+export function defaultInvoicePdfFileName(
+  awb: string,
+  declarationSeq = 1,
+  totalDeclarations = 1,
+): string {
+  return invoiceExportFileName(awb, declarationSeq, totalDeclarations, "pdf");
+}
+
+/** Tên file zip khi xuất tất cả tờ khai. */
+export function invoiceExportZipFileName(awb: string, ext: "xlsx" | "pdf"): string {
+  return `invoice_${invoiceAwbFilePart(awb)}_all.${ext}.zip`;
 }

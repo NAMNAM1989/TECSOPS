@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   invoiceLineAmountUsd,
   invoiceLineGrossWeightKg,
+  formatDeclarationKg,
   type InvoiceLineItem,
 } from "../types/invoiceItem";
 import { OPS } from "../styles/opsModalStyles";
@@ -79,7 +80,7 @@ export const InvoiceLineEditor = memo(function InvoiceLineEditor({
           {index + 1}
         </span>
         <span className="text-[10px] tabular-nums text-slate-500">
-          {invoiceLineGrossWeightKg(local).toFixed(1)}kg · ${invoiceLineAmountUsd(local).toFixed(2)}
+          {formatDeclarationKg(invoiceLineGrossWeightKg(local))}kg · ${invoiceLineAmountUsd(local).toFixed(2)}
         </span>
         <button
           type="button"

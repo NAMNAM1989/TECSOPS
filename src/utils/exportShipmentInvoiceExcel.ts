@@ -52,7 +52,11 @@ export async function downloadShipmentInvoiceExcel(
     objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = objectUrl;
-    a.download = defaultInvoiceXlsxFileName(invoiceNo, shipment.awb ?? "");
+    a.download = defaultInvoiceXlsxFileName(
+      shipment.awb ?? "",
+      options.declarationSeq ?? 1,
+      options.totalDeclarations ?? 1,
+    );
     a.click();
   } catch (e) {
     console.error("[downloadShipmentInvoiceExcel]", e);

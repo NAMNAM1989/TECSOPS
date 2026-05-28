@@ -45,12 +45,13 @@ export const SearchCombobox = memo(function SearchCombobox({
   const listId = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [query, setQuery] = useState(value);
   const [activeIdx, setActiveIdx] = useState(0);
 
   useEffect(() => {
-    setQuery(value);
-  }, [value]);
+    if (!focused) setQuery(value);
+  }, [focused, value]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -136,10 +137,16 @@ export const SearchCombobox = memo(function SearchCombobox({
           setOpen(true);
           if (commitMode === "live" && allowCustom) onChange(e.target.value);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setFocused(true);
+          setOpen(true);
+        }}
         onBlur={() => {
+          setFocused(false);
           window.setTimeout(() => {
-            if (allowCustom && query !== value) onChange(query);
+            setOpen(false);
+            if (!allowCustom) return;
+            if (commitMode === "blur" || query !== value) onChange(query);
           }, 120);
         }}
         onKeyDown={onKeyDown}

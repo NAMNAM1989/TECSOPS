@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isEcargoJobStaleActive,
   shouldBlockEcargoEnqueue,
+  shouldResumeEcargoQrOnly,
 } from "./ecargoJobStore.mjs";
 
 describe("shouldBlockEcargoEnqueue", () => {
@@ -30,5 +31,37 @@ describe("shouldBlockEcargoEnqueue", () => {
     };
     expect(isEcargoJobStaleActive(stale)).toBe(true);
     expect(shouldBlockEcargoEnqueue(stale, { forceRetry: true })).toBe(false);
+  });
+});
+
+describe("shouldResumeEcargoQrOnly", () => {
+  it("resume khi đã xác thực nhưng chưa có QR", () => {
+    expect(
+      shouldResumeEcargoQrOnly({
+        status: "verified",
+        verifyClickedAt: "2026-05-28T10:00:00.000Z",
+        registrationNo: "ABC1234",
+      })
+    ).toBe(true);
+    expect(
+      shouldResumeEcargoQrOnly({
+        status: "error",
+        verifyClickedAt: "2026-05-28T10:00:00.000Z",
+        registrationNo: "ABC1234",
+        message: "Hết thời gian chờ email QR",
+      })
+    ).toBe(true);
+  });
+
+  it("không resume khi đã qr_ready hoặc chưa xác thực", () => {
+    expect(
+      shouldResumeEcargoQrOnly({
+        status: "qr_ready",
+        verifyClickedAt: "2026-05-28T10:00:00.000Z",
+        registrationNo: "ABC1234",
+        qrReceivedAt: "2026-05-28T10:05:00.000Z",
+      })
+    ).toBe(false);
+    expect(shouldResumeEcargoQrOnly({ status: "error", message: "cutoff" })).toBe(false);
   });
 });

@@ -229,11 +229,17 @@ async function pollScscMail(client, opts, pickFn, logLabel) {
   const pollMs = opts.pollMs ?? ECARGO_GMAIL_POLL_MS;
   const matchHints = opts.matchHints;
   const markSeenOnPick = opts.markSeenOnPick !== false;
+  const shouldAbort = opts.shouldAbort;
   const deadline = Date.now() + timeoutMs;
   const loadCandidates = opts.loadCandidates ?? loadVerifyCandidates;
 
   let pollCount = 0;
   while (Date.now() < deadline) {
+    if (shouldAbort && (await shouldAbort())) {
+      const err = new Error("ECARGO_JOB_SUPERSEDED");
+      err.code = "ECARGO_JOB_SUPERSEDED";
+      throw err;
+    }
     try {
       const candidates = await loadCandidates(client, notBeforeMs, { includeAllMail: true });
       const found = pickFn(candidates, notBeforeMs, matchHints);
@@ -253,6 +259,11 @@ async function pollScscMail(client, opts, pickFn, logLabel) {
 
     const remaining = deadline - Date.now();
     if (remaining <= 0) break;
+    if (shouldAbort && (await shouldAbort())) {
+      const err = new Error("ECARGO_JOB_SUPERSEDED");
+      err.code = "ECARGO_JOB_SUPERSEDED";
+      throw err;
+    }
 
     // ImapFlow `client.idle()` không nhận tham số — nếu gọi IDLE thủ công sẽ block tới ~29 phút.
     // Dùng sleep thuần và để ImapFlow tự autoidle ở nền (maxIdleTime đã set 25s khi tạo client).

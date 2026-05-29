@@ -44,8 +44,11 @@ export async function patchEcargoJob(client, shipmentId, patch) {
 /**
  * @param {import('redis').RedisClientType} client
  * @param {object} job
+ * @param {{ prevJob?: object|null, resumeQrOnly?: boolean }} [opts]
  */
-export async function enqueueEcargoJob(client, job) {
+export async function enqueueEcargoJob(client, job, opts = {}) {
+  const prevJob = opts.prevJob ?? null;
+  const resumeQrOnly = opts.resumeQrOnly === true;
   const payload = {
     jobId: job.jobId,
     shipmentId: job.shipmentId,
@@ -54,10 +57,21 @@ export async function enqueueEcargoJob(client, job) {
     booking: job.booking,
     awb: job.awb,
     attempt: job.attempt,
+    resumeQrOnly,
     status: /** @type {EcargoJobStatus} */ ("queued"),
-    message: job.message,
+    message: resumeQrOnly
+      ? `Chờ mail QR phiếu ${prevJob?.registrationNo ?? "?"} — không tạo phiếu mới.`
+      : job.message,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    ...(resumeQrOnly && prevJob
+      ? {
+          verifyClickedAt: prevJob.verifyClickedAt,
+          verifyCode: prevJob.verifyCode,
+          verifyUrl: prevJob.verifyUrl,
+          registrationNo: prevJob.registrationNo,
+        }
+      : {}),
   };
   const key = `${ECARGO_JOB_KEY_PREFIX}${job.shipmentId}`;
   await client.set(key, JSON.stringify(payload), { EX: 60 * 60 * 48 });
@@ -138,6 +152,25 @@ export function shouldBlockEcargoEnqueue(existing, opts = {}) {
     return isEcargoJobActive(existing, 90_000);
   }
   return isEcargoJobActive(existing);
+}
+
+/** Chỉ chờ mail QR — không tạo phiếu / bấm Xác Thực lại (tránh SCSC gửi trùng mail QR). */
+export function shouldResumeEcargoQrOnly(prev) {
+  if (!prev?.verifyClickedAt || !prev?.registrationNo) return false;
+  if (prev.qrReceivedAt || prev.status === "qr_ready") return false;
+  return prev.status === "error" || prev.status === "verified";
+}
+
+/**
+ * Worker còn đúng jobId trong Redis — job supersede / đăng ký mới thì dừng sớm.
+ * @param {import('redis').RedisClientType} client
+ */
+export async function isEcargoJobCurrent(client, shipmentId, jobId) {
+  if (!client || !shipmentId || !jobId) return true;
+  const job = await getEcargoJob(client, shipmentId);
+  if (!job?.jobId) return true;
+  if (job.status === "superseded") return false;
+  return job.jobId === jobId;
 }
 
 /**

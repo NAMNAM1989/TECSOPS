@@ -1,5 +1,10 @@
 import { ECARGO_QUEUE_KEY, ECARGO_JOB_TIMEOUT_MS, ECARGO_JOB_KEY_PREFIX } from "./ecargoConfig.mjs";
-import { getEcargoJob, patchEcargoJob, isEcargoJobStaleActive } from "./ecargoJobStore.mjs";
+import {
+  getEcargoJob,
+  patchEcargoJob,
+  isEcargoJobStaleActive,
+  isEcargoJobCurrent,
+} from "./ecargoJobStore.mjs";
 import {
   closeEcargoContext,
   runEcargoPlaywrightSession,
@@ -59,12 +64,168 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
   };
 
   const updateJob = async (shipmentId, patch) => {
+    if (!(await isEcargoJobCurrent(storeClient, shipmentId, patch.jobId ?? jobIdRef.current))) {
+      const err = new Error("ECARGO_JOB_SUPERSEDED");
+      err.code = "ECARGO_JOB_SUPERSEDED";
+      throw err;
+    }
     const job = await patchEcargoJob(storeClient, shipmentId, patch);
     emitJob(job);
     return job;
   };
 
+  /** @type {{ current: string|undefined }} */
+  const jobIdRef = { current: undefined };
+
+  const assertJobCurrent = async (shipmentId, jobId) => {
+    if (!(await isEcargoJobCurrent(storeClient, shipmentId, jobId))) {
+      const err = new Error("ECARGO_JOB_SUPERSEDED");
+      err.code = "ECARGO_JOB_SUPERSEDED";
+      throw err;
+    }
+  };
+
+  const shouldAbortJob = (shipmentId, jobId) => async () =>
+    !(await isEcargoJobCurrent(storeClient, shipmentId, jobId));
+
+  const finishVerifiedWithoutQr = async (shipmentId, jobId, startedAt, mail, regNo, stageMs = {}) => {
+    const verifyDoneBits = [
+      regNo ? `Phiếu ${regNo}` : "",
+      mail?.verifyCode ? `Mã ${mail.verifyCode}` : "",
+    ].filter(Boolean);
+    await updateJob(shipmentId, {
+      status: "verified",
+      verifyCode: mail?.verifyCode,
+      registrationNo: regNo || undefined,
+      message:
+        verifyDoneBits.length > 0
+          ? `Đã xác thực — ${verifyDoneBits.join(" · ")} (chưa nhận mail QR)`
+          : "Đã xác thực thành công (chưa nhận mail QR).",
+      finishedAt: new Date().toISOString(),
+      durationMs: Date.now() - startedAt,
+      jobId,
+      stageMs,
+    });
+    if (deps.runMutation) {
+      const next = await deps.runMutation({
+        action: "PATCH_ECARGO_KHO_SCSC",
+        shipmentId,
+        markedSubmitted: true,
+      });
+      deps.io?.emit("sync", next);
+    }
+  };
+
+  const runQrWaitPhase = async ({
+    shipmentId,
+    jobId,
+    startedAt,
+    booking,
+    mail,
+    regNo,
+    verifyClickedAt,
+    stageMs = {},
+    browserContext = null,
+  }) => {
+    const skipQr = process.env.ECARGO_SKIP_QR_WAIT === "1";
+    if (skipQr) {
+      await updateJob(shipmentId, {
+        status: "verified",
+        verifyCode: mail?.verifyCode,
+        registrationNo: regNo || undefined,
+        message: "Đã tạo phiếu và xác thực (bỏ qua chờ QR).",
+        finishedAt: new Date().toISOString(),
+        durationMs: Date.now() - startedAt,
+        jobId,
+        stageMs,
+      });
+      if (deps.runMutation) {
+        const next = await deps.runMutation({
+          action: "PATCH_ECARGO_KHO_SCSC",
+          shipmentId,
+          markedSubmitted: true,
+        });
+        deps.io?.emit("sync", next);
+      }
+      return;
+    }
+
+    const tQr = Date.now();
+    const qrNotBefore = Date.parse(verifyClickedAt) - 2_000;
+    await updateJob(shipmentId, {
+      status: "verified_waiting_qr",
+      verifyClickedAt,
+      registrationNo: regNo,
+      message: `Đã xác thực phiếu ${regNo || "?"} — đang chờ mail QR (Phiếu đăng ký hàng vào kho)…`,
+      jobId,
+    });
+    console.info(`[ecargo] ${shipmentId} step4 gmail qr`);
+    let qrMail;
+    try {
+      qrMail = await waitForEcargoQrEmail({
+        notBeforeMs: Number.isFinite(qrNotBefore) ? qrNotBefore : Date.now() - 60_000,
+        timeoutMs: Math.min(ECARGO_JOB_TIMEOUT_MS, 12 * 60 * 1000),
+        matchHints: {
+          registrationNo: regNo || undefined,
+          mawb: booking.mawb,
+          vehicleNo: booking.vehicleNo,
+        },
+        shouldAbort: shouldAbortJob(shipmentId, jobId),
+      });
+    } catch (qrErr) {
+      if (qrErr?.code === "ECARGO_JOB_SUPERSEDED") throw qrErr;
+      const qrMsg = qrErr instanceof Error ? qrErr.message : String(qrErr);
+      console.warn(`[ecargo] ${shipmentId} qr wait:`, qrMsg);
+      if (browserContext) {
+        await closeEcargoContext(browserContext, { destroy: false });
+      }
+      await finishVerifiedWithoutQr(shipmentId, jobId, startedAt, mail, regNo, {
+        ...stageMs,
+        qrWait: Date.now() - tQr,
+      });
+      return;
+    }
+
+    const qrWaitMs = Date.now() - tQr;
+    console.info(`[ecargo] ${shipmentId} step4 done ${qrWaitMs}ms reg=${qrMail.registrationNo}`);
+    const finalReg = qrMail?.registrationNo || regNo;
+    const doneBits = [
+      finalReg ? `Phiếu ${finalReg}` : "",
+      mail?.verifyCode ? `Mã ${mail.verifyCode}` : "",
+    ].filter(Boolean);
+    await updateJob(shipmentId, {
+      status: "qr_ready",
+      verifyCode: mail?.verifyCode,
+      registrationNo: finalReg,
+      qrSubject: qrMail.qrSubject,
+      hasQrImage: Boolean(qrMail.qrImageDataUrl || qrMail.hasQrImage),
+      ...(qrMail.qrImageDataUrl ? { qrImageDataUrl: qrMail.qrImageDataUrl } : {}),
+      qrReceivedAt: new Date().toISOString(),
+      message:
+        doneBits.length > 0
+          ? `Đã có mail QR — ${doneBits.join(" · ")}${qrMail.hasQrImage ? " · có ảnh QR" : ""}`
+          : `Đã nhận email QR từ SCSC${qrMail.hasQrImage ? " (có ảnh)" : ""}.`,
+      finishedAt: new Date().toISOString(),
+      durationMs: Date.now() - startedAt,
+      stageMs: { ...stageMs, qrWait: qrWaitMs },
+      jobId,
+      resumeQrOnly: false,
+    });
+    if (deps.runMutation) {
+      const next = await deps.runMutation({
+        action: "PATCH_ECARGO_KHO_SCSC",
+        shipmentId,
+        markedSubmitted: true,
+      });
+      deps.io?.emit("sync", next);
+    }
+    if (browserContext) {
+      await closeEcargoContext(browserContext, { destroy: false });
+    }
+  };
+
   const processOne = async (shipmentId, jobId) => {
+    jobIdRef.current = jobId;
     const existing = await getEcargoJob(storeClient, shipmentId);
     if (jobId && existing?.jobId && existing.jobId !== jobId) {
       console.info(`[ecargo] skip superseded job ${shipmentId} (queued=${jobId} current=${existing.jobId})`);
@@ -85,6 +246,35 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
     }
 
     const startedAt = Date.now();
+
+    if (
+      existing?.resumeQrOnly &&
+      existing?.verifyClickedAt &&
+      existing?.registrationNo
+    ) {
+      console.info(`[ecargo] ${shipmentId} resume qr-only reg=${existing.registrationNo}`);
+      try {
+        await runQrWaitPhase({
+          shipmentId,
+          jobId,
+          startedAt,
+          booking,
+          mail: {
+            verifyCode: existing.verifyCode,
+          },
+          regNo: existing.registrationNo,
+          verifyClickedAt: existing.verifyClickedAt,
+        });
+      } catch (e) {
+        if (e?.code === "ECARGO_JOB_SUPERSEDED") {
+          console.info(`[ecargo] aborted superseded (qr-only) ${shipmentId} job=${jobId}`);
+          return;
+        }
+        throw e;
+      }
+      return;
+    }
+
     const mailHints = { mawb: booking.mawb, vehicleNo: booking.vehicleNo };
     /** @type {import('playwright').BrowserContext | null} */
     let browserContext = null;
@@ -120,6 +310,8 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
         jobId,
       });
 
+      await assertJobCurrent(shipmentId, jobId);
+
       await gmailReady;
       await assertEcargoGmailReady();
 
@@ -131,6 +323,7 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
         notBeforeMs: mailNotBefore,
         timeoutMs: Math.min(ECARGO_JOB_TIMEOUT_MS, 10 * 60 * 1000),
         matchHints: mailHints,
+        shouldAbort: shouldAbortJob(shipmentId, jobId),
       });
       const mailMs = Date.now() - tMail;
       const mailBits = [
@@ -190,128 +383,37 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
         jobId,
       });
 
-      // —— Bước 4: Chờ mail QR (tuỳ chọn) ——
-      const skipQr = process.env.ECARGO_SKIP_QR_WAIT === "1";
-      let qrMail = null;
-      if (!skipQr) {
-        const tQr = Date.now();
-        const qrNotBefore = Date.parse(verifyClickedAt) - 2_000;
-        await updateJob(shipmentId, {
-          message: `Đã xác thực phiếu ${regNo || "?"} — đang chờ mail QR (Phiếu đăng ký hàng vào kho)…`,
-          jobId,
-        });
-        console.info(`[ecargo] ${shipmentId} step4 gmail qr`);
-        try {
-          qrMail = await waitForEcargoQrEmail({
-            notBeforeMs: Number.isFinite(qrNotBefore) ? qrNotBefore : submittedAt,
-            timeoutMs: Math.min(ECARGO_JOB_TIMEOUT_MS, 12 * 60 * 1000),
-            matchHints: {
-              registrationNo: regNo || undefined,
-              mawb: booking.mawb,
-              vehicleNo: booking.vehicleNo,
-            },
-          });
-        } catch (qrErr) {
-          const qrMsg = qrErr instanceof Error ? qrErr.message : String(qrErr);
-          console.warn(`[ecargo] ${shipmentId} qr wait:`, qrMsg);
-          const verifyDoneBits = [
-            regNo ? `Phiếu ${regNo}` : "",
-            mail.verifyCode ? `Mã ${mail.verifyCode}` : "",
-          ].filter(Boolean);
-          await updateJob(shipmentId, {
-            status: "verified",
-            verifyCode: mail.verifyCode,
-            registrationNo: regNo || undefined,
-            message:
-              verifyDoneBits.length > 0
-                ? `Đã xác thực — ${verifyDoneBits.join(" · ")} (chưa nhận mail QR)`
-                : `Đã xác thực thành công (chưa nhận mail QR).`,
-            finishedAt: new Date().toISOString(),
-            durationMs: Date.now() - startedAt,
-            jobId,
-          });
-          if (deps.runMutation) {
-            const next = await deps.runMutation({
-              action: "PATCH_ECARGO_KHO_SCSC",
-              shipmentId,
-              markedSubmitted: true,
-            });
-            deps.io?.emit("sync", next);
-          }
-          await closeEcargoContext(browserContext, { destroy: false });
-          return;
-        }
-        const qrWaitMs = Date.now() - tQr;
-        console.info(`[ecargo] ${shipmentId} step4 done ${qrWaitMs}ms reg=${qrMail.registrationNo}`);
-        await updateJob(shipmentId, {
-          stageMs: { playwright: playwrightMs, verifyMail: mailMs, verify: verifyMs, qrWait: qrWaitMs },
-          jobId,
-        });
-      }
-
-      await closeEcargoContext(browserContext, { destroy: false });
-      browserContext = null;
-
-      const totalMs = Date.now() - startedAt;
-      const finalReg = qrMail?.registrationNo || regNo;
-      const doneBits = [
-        finalReg ? `Phiếu ${finalReg}` : "",
-        mail.verifyCode ? `Mã ${mail.verifyCode}` : "",
-      ].filter(Boolean);
-
-      if (qrMail) {
-        await updateJob(shipmentId, {
-          status: "qr_ready",
-          verifyCode: mail.verifyCode,
-          registrationNo: finalReg,
-          qrSubject: qrMail.qrSubject,
-          hasQrImage: Boolean(qrMail.qrImageDataUrl || qrMail.hasQrImage),
-          ...(qrMail.qrImageDataUrl ? { qrImageDataUrl: qrMail.qrImageDataUrl } : {}),
-          qrReceivedAt: new Date().toISOString(),
-          message:
-            doneBits.length > 0
-              ? `Đã có mail QR — ${doneBits.join(" · ")}${qrMail.hasQrImage ? " · có ảnh QR" : ""}`
-              : `Đã nhận email QR từ SCSC${qrMail.hasQrImage ? " (có ảnh)" : ""}.`,
-          finishedAt: new Date().toISOString(),
-          durationMs: totalMs,
-          jobId,
-        });
-      } else {
-        await updateJob(shipmentId, {
-          status: "verified",
-          verifyCode: mail.verifyCode,
-          registrationNo: finalReg || undefined,
-          message:
-            doneBits.length > 0
-              ? `Đã tạo phiếu và xác thực — ${doneBits.join(" · ")} (bỏ qua chờ QR)`
-              : "Đã tạo phiếu và xác thực thành công (bỏ qua chờ QR).",
-          finishedAt: new Date().toISOString(),
-          durationMs: totalMs,
-          jobId,
-        });
-      }
-      console.info(
-        `[ecargo] ${shipmentId} done ${totalMs}ms (pw=${playwrightMs} mail=${mailMs} verify=${verifyMs})`
-      );
-
-      if (deps.runMutation) {
-        const next = await deps.runMutation({
-          action: "PATCH_ECARGO_KHO_SCSC",
-          shipmentId,
-          markedSubmitted: true,
-        });
-        deps.io?.emit("sync", next);
-      }
+      await runQrWaitPhase({
+        shipmentId,
+        jobId,
+        startedAt,
+        booking,
+        mail,
+        regNo,
+        verifyClickedAt,
+        stageMs: { playwright: playwrightMs, verifyMail: mailMs, verify: verifyMs },
+        browserContext,
+      });
+      console.info(`[ecargo] ${shipmentId} done ${Date.now() - startedAt}ms`);
     } catch (e) {
+      if (e?.code === "ECARGO_JOB_SUPERSEDED") {
+        console.info(`[ecargo] aborted superseded ${shipmentId} job=${jobId}`);
+        await closeEcargoContext(browserContext, { destroy: true });
+        return;
+      }
       const message = e instanceof Error ? e.message : String(e);
       console.error("[ecargo] job failed", shipmentId, message);
       await closeEcargoContext(browserContext, { destroy: true });
-      await updateJob(shipmentId, {
-        status: "error",
-        message,
-        finishedAt: new Date().toISOString(),
-        jobId,
-      });
+      try {
+        await updateJob(shipmentId, {
+          status: "error",
+          message,
+          finishedAt: new Date().toISOString(),
+          jobId,
+        });
+      } catch (patchErr) {
+        if (patchErr?.code !== "ECARGO_JOB_SUPERSEDED") throw patchErr;
+      }
     }
   };
 

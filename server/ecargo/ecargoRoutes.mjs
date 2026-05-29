@@ -9,6 +9,7 @@ import {
   getEcargoJob,
   getEcargoJobsBatch,
   shouldBlockEcargoEnqueue,
+  shouldResumeEcargoQrOnly,
   supersedeEcargoJob,
   newEcargoJobId,
 } from "./ecargoJobStore.mjs";
@@ -105,19 +106,26 @@ export function registerEcargoRoutes(app, deps) {
         booking = draft;
       }
       const attempt = (existing?.attempt ?? 0) + 1;
-      const job = await enqueueEcargoJob(deps.redisClient, {
-        jobId,
-        shipmentId,
-        vehicleNo,
-        viewSessionYmd,
-        booking,
-        awb: row.awb,
-        attempt,
-        message:
-          attempt > 1
-            ? `Đăng ký lại (lần ${attempt}) — worker đang xử lý.`
-            : "Đã xếp hàng — worker đang xử lý.",
-      });
+      const resumeQrOnly = forceRetry && shouldResumeEcargoQrOnly(existing);
+      const job = await enqueueEcargoJob(
+        deps.redisClient,
+        {
+          jobId,
+          shipmentId,
+          vehicleNo,
+          viewSessionYmd,
+          booking,
+          awb: row.awb,
+          attempt,
+          message:
+            attempt > 1
+              ? resumeQrOnly
+                ? `Chờ mail QR (lần ${attempt}) — không tạo phiếu mới.`
+                : `Đăng ký lại (lần ${attempt}) — worker đang xử lý.`
+              : "Đã xếp hàng — worker đang xử lý.",
+        },
+        { prevJob: existing, resumeQrOnly }
+      );
 
       deps.io?.emit("ecargo-job", job);
       res.status(202).json({ job });

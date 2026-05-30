@@ -380,7 +380,19 @@ export function ShipmentInvoiceWorkspace({
     } finally {
       setBusy(false);
     }
-  }, [buildSavePayload, busy, declarations, onSave]);
+  }, [buildSavePayload, busy, onSave]);
+
+  const persistIfDirty = useCallback(async (): Promise<boolean> => {
+    if (!dirty) return true;
+    try {
+      await onSave(buildSavePayload());
+      setDirty(false);
+      return true;
+    } catch {
+      window.alert("Không lưu được dữ liệu khai báo. Kiểm tra kết nối và thử lại.");
+      return false;
+    }
+  }, [buildSavePayload, dirty, onSave]);
 
   const exportOpts = useMemo(
     () => ({
@@ -443,29 +455,36 @@ export function ShipmentInvoiceWorkspace({
 
   const handleFinish = useCallback(async () => {
     if (busy) return;
-    if (dirty) {
-      const ok = window.confirm("Lưu danh sách mặt hàng trước khi quay lại?");
-      if (!ok) return;
-    }
     setBusy(true);
     try {
-      if (dirty) {
-        await onSave(buildSavePayload());
-        setDirty(false);
-      }
+      if (!(await persistIfDirty())) return;
       onClose();
     } finally {
       setBusy(false);
     }
-  }, [buildSavePayload, busy, dirty, onClose, onSave]);
+  }, [busy, onClose, persistIfDirty]);
 
-  const requestClose = useCallback(() => {
+  const requestClose = useCallback(async () => {
+    if (busy) return;
     if (dirty) {
-      const ok = window.confirm("Bạn chưa lưu thay đổi. Quay lại bảng lô hàng?");
-      if (!ok) return;
+      const saveFirst = window.confirm(
+        "Lưu dữ liệu khai báo trước khi rời trang?\n\nChọn OK để lưu — dữ liệu vẫn giữ trên lô khi quay lại chỉnh sửa."
+      );
+      if (saveFirst) {
+        setBusy(true);
+        try {
+          if (!(await persistIfDirty())) return;
+        } finally {
+          setBusy(false);
+        }
+      } else {
+        const discard = window.confirm("Bỏ thay đổi chưa lưu và quay lại bảng lô hàng?");
+        if (!discard) return;
+        setDirty(false);
+      }
     }
     onClose();
-  }, [dirty, onClose]);
+  }, [busy, dirty, onClose, persistIfDirty]);
 
   const toggleLineSelect = useCallback((lineId: string) => {
     setSelectedLineIds((prev) => {
@@ -669,6 +688,16 @@ export function ShipmentInvoiceWorkspace({
   }, [declarations, markDirty, shipment.kg, shipment.pcs]);
 
   useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!dirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
@@ -682,7 +711,7 @@ export function ShipmentInvoiceWorkspace({
       }
       if (e.key === "Escape" && !catalogEditorOpen) {
         e.preventDefault();
-        requestClose();
+        void requestClose();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -769,7 +798,7 @@ export function ShipmentInvoiceWorkspace({
           </div>
           <button
             type="button"
-            onClick={requestClose}
+            onClick={() => void requestClose()}
             className="rounded-lg border border-black/10 px-3 py-1.5 text-xs font-medium hover:bg-black/[0.04] dark:border-white/10 dark:hover:bg-white/[0.06]"
           >
             ← Quay lại

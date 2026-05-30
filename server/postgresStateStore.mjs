@@ -224,6 +224,14 @@ async function ensureSchema(client) {
     ALTER TABLE ${SHIPMENTS_TABLE}
     ADD COLUMN IF NOT EXISTS customer_agent_id text REFERENCES ${CUSTOMER_AGENTS_TABLE}(id) ON DELETE SET NULL
   `);
+  await client.query(`
+    ALTER TABLE ${SHIPMENTS_TABLE}
+    ADD COLUMN IF NOT EXISTS invoice_items jsonb NULL
+  `);
+  await client.query(`
+    ALTER TABLE ${SHIPMENTS_TABLE}
+    ADD COLUMN IF NOT EXISTS invoice_declarations jsonb NULL
+  `);
   await ensureAirlineCatalogSchema(client);
   await ensureAirportSchema(client);
   await seedAirlineCatalogIfEmpty(client);
@@ -245,6 +253,44 @@ function intOrNull(v) {
 
 function jsonOrNull(v) {
   return v == null ? null : JSON.stringify(v);
+}
+
+/** HQ khai báo — gộp cột relational + blob JSON (migration dữ liệu cũ). */
+function hqFieldsFromBlobRow(row) {
+  if (!row || typeof row !== "object") return {};
+  const out = {};
+  if (Array.isArray(row.invoiceItems) && row.invoiceItems.length > 0) {
+    out.invoiceItems = row.invoiceItems;
+  }
+  if (Array.isArray(row.invoiceDeclarations) && row.invoiceDeclarations.length > 0) {
+    out.invoiceDeclarations = row.invoiceDeclarations;
+  }
+  return out;
+}
+
+function mergeShipmentHqFields(relational, blobRow) {
+  const decls = relational.invoiceDeclarations;
+  const items = relational.invoiceItems;
+  if (
+    (Array.isArray(decls) && decls.length > 0) ||
+    (Array.isArray(items) && items.length > 0)
+  ) {
+    return relational;
+  }
+  const fromBlob = hqFieldsFromBlobRow(blobRow);
+  if (!fromBlob.invoiceItems && !fromBlob.invoiceDeclarations) return relational;
+  return { ...relational, ...fromBlob };
+}
+
+function shipmentHqFromRow(row) {
+  const invoiceItems = Array.isArray(row.invoice_items) ? row.invoice_items : undefined;
+  const invoiceDeclarations = Array.isArray(row.invoice_declarations)
+    ? row.invoice_declarations
+    : undefined;
+  const out = {};
+  if (invoiceItems?.length) out.invoiceItems = invoiceItems;
+  if (invoiceDeclarations?.length) out.invoiceDeclarations = invoiceDeclarations;
+  return out;
 }
 
 function savedConsigneeFromRow(row) {
@@ -367,6 +413,7 @@ function shipmentFromRow(row) {
     consigneeEmailPrint: row.consignee_email_print || "",
     notifyNamePrint: row.notify_name_print || "",
     status: row.status,
+    ...shipmentHqFromRow(row),
   };
 }
 
@@ -431,14 +478,24 @@ async function loadRelationalSnapshot(client, key) {
     partiesByCustomer.get(cid).push(partyFromRow(r));
   }
   const blobCustomersById = new Map();
+  const blobRowsById = new Map();
   if (blob && typeof blob === "object" && Array.isArray(blob.customers)) {
     for (const bc of parseCustomersLoose(blob.customers)) {
       if (bc?.id) blobCustomersById.set(bc.id, bc);
     }
   }
+  if (blob && typeof blob === "object" && Array.isArray(blob.rows)) {
+    for (const br of blob.rows) {
+      if (br && typeof br === "object" && typeof br.id === "string" && br.id) {
+        blobRowsById.set(br.id, br);
+      }
+    }
+  }
   return {
     version: Number(metaRes.rows[0]?.version ?? 1),
-    rows: shipmentRes.rows.map(shipmentFromRow),
+    rows: shipmentRes.rows.map((row) =>
+      mergeShipmentHqFields(shipmentFromRow(row), blobRowsById.get(row.id))
+    ),
     customers: customerRes.rows.map((row) => {
       const cid = str(row.id).trim();
       const base = customerProfileFromRow(
@@ -597,7 +654,7 @@ async function replaceRelationalSnapshot(client, key, state) {
         shipper_name_print, shipper_address_print, shipper_phone_print, shipper_email_print, tax_code_print,
         agent_name_print, agent_address_print, agent_phone_print, agent_email_print, agent_tax_code_print,
         consignee_name_print, consignee_address_print, consignee_phone_print, consignee_email_print, notify_name_print,
-        status
+        status, invoice_items, invoice_declarations
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         $13,$14,$15,$16::jsonb,$17,
@@ -606,7 +663,7 @@ async function replaceRelationalSnapshot(client, key, state) {
         $28,$29,$30,$31,$32,
         $33,$34,$35,$36,$37,
         $38,$39,$40,$41,$42,
-        $43
+        $43, $44::jsonb, $45::jsonb
       )
       `,
       [
@@ -653,6 +710,12 @@ async function replaceRelationalSnapshot(client, key, state) {
         str(s.consigneeEmailPrint),
         str(s.notifyNamePrint),
         str(s.status),
+        jsonOrNull(Array.isArray(s.invoiceItems) && s.invoiceItems.length > 0 ? s.invoiceItems : null),
+        jsonOrNull(
+          Array.isArray(s.invoiceDeclarations) && s.invoiceDeclarations.length > 0
+            ? s.invoiceDeclarations
+            : null
+        ),
       ]
     );
   }
@@ -739,3 +802,5 @@ export function createPostgresStateStore(databaseUrl) {
     },
   };
 }
+
+export { hqFieldsFromBlobRow, mergeShipmentHqFields, shipmentHqFromRow };

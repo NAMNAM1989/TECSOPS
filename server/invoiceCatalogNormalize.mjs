@@ -43,9 +43,14 @@ export function normalizeInvoiceCatalogLoose(raw) {
   if (!raw || typeof raw !== "object") return emptyInvoiceCatalog();
   const itemsRaw = Array.isArray(raw.items) ? raw.items : [];
   const items = [];
+  const seen = new Set();
   for (const x of itemsRaw) {
     const item = clampItem(x);
-    if (item) items.push(item);
+    if (!item) continue;
+    const key = item.description.trim().replace(/\s+/g, " ").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(item);
     if (items.length >= LIMITS.itemCount) break;
   }
   const version = Number(raw.version);

@@ -33,6 +33,7 @@
     "restore:postgres-state": "node scripts/postgres-restore-state.mjs",
     "import:scsc-template": "node scripts/import-scsc-template.mjs",
     "sync:invoice-catalog": "node scripts/sync-invoice-catalog.mjs",
+    "gen:invoice-catalog-template": "node scripts/gen-invoice-catalog-template.mjs",
     "print-bridge": "node scripts/local-thermal-print-bridge.mjs",
     "railway:check": "node scripts/railway-check-token.mjs",
     "railway:up": "node scripts/railway-up.mjs"

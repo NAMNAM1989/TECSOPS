@@ -67,6 +67,31 @@ export type CatalogImportMergeResult = {
 
 const MAX_ITEMS = 500;
 
+/** Gộp danh mục nền (server/static) vào draft khi editor mở trước lúc JSON tải xong. */
+export function mergeCatalogDraftWithBase(
+  prev: readonly InvoiceCatalogItem[],
+  baseItems: readonly InvoiceCatalogItem[]
+): InvoiceCatalogItem[] {
+  if (baseItems.length === 0) return [...prev];
+
+  const pending = prev.filter((it) => !it.description.trim());
+  const established = prev.filter((it) => it.description.trim());
+
+  if (established.length > 0) {
+    return [...prev];
+  }
+
+  const base = baseItems.map((it) => clampInvoiceCatalogItem(it));
+  if (pending.length === 0) return base;
+
+  const seen = new Set(base.map((it) => catalogItemDedupeKey(it.description)));
+  const extraPending = pending.filter((it) => {
+    const key = catalogItemDedupeKey(it.description);
+    return !key || !seen.has(key);
+  });
+  return [...extraPending, ...base];
+}
+
 /** Gộp mặt hàng từ Excel vào danh mục hiện có — bỏ qua mô tả trùng. */
 export function mergeImportedCatalogItems(
   existing: readonly InvoiceCatalogItem[],
@@ -144,25 +169,42 @@ type ExcelWorksheet = {
 };
 
 /** Đọc sheet đầu tiên — cùng layout `data_invoice.xlsx` (A=LOẠI, B=mô tả, …). */
-export function parseInvoiceCatalogWorksheet(ws: ExcelWorksheet): InvoiceCatalogItem[] {
+export function parseInvoiceCatalogWorksheet(ws: ExcelWorksheet & {
+  eachRow?: (
+    cb: (row: ExcelRow, rowNumber: number) => void,
+    opts?: { includeEmpty?: boolean }
+  ) => void;
+}): InvoiceCatalogItem[] {
   const items: InvoiceCatalogItem[] = [];
-  for (let r = 2; r <= ws.rowCount; r++) {
-    const row = ws.getRow(r);
+
+  const readRow = (row: ExcelRow) => {
     const description = cellText(row.getCell("B"));
-    if (!description) continue;
-    items.push(
-      clampInvoiceCatalogItem({
-        id: newInvoiceCatalogItemId(),
-        category: cellText(row.getCell("A")),
-        description,
-        hsCode: cellText(row.getCell("C")),
-        origin: cellText(row.getCell("D")) || "VN",
-        sampleQuantity: cellNumber(row.getCell("E")),
-        unit: cellText(row.getCell("F")) || "PCE",
-        unitPriceUsd: cellNumber(row.getCell("G")),
-        kgPerUnit: cellNumber(row.getCell("I")),
-      })
-    );
+    if (!description) return null;
+    return clampInvoiceCatalogItem({
+      id: newInvoiceCatalogItemId(),
+      category: cellText(row.getCell("A")),
+      description,
+      hsCode: cellText(row.getCell("C")),
+      origin: cellText(row.getCell("D")) || "VN",
+      sampleQuantity: cellNumber(row.getCell("E")),
+      unit: cellText(row.getCell("F")) || "PCE",
+      unitPriceUsd: cellNumber(row.getCell("G")),
+      kgPerUnit: cellNumber(row.getCell("I")),
+    });
+  };
+
+  if (typeof ws.eachRow === "function") {
+    ws.eachRow((row, rowNumber) => {
+      if (rowNumber < 2) return;
+      const item = readRow(row);
+      if (item) items.push(item);
+    });
+    return items;
+  }
+
+  for (let r = 2; r <= ws.rowCount; r++) {
+    const item = readRow(ws.getRow(r));
+    if (item) items.push(item);
   }
   return items;
 }

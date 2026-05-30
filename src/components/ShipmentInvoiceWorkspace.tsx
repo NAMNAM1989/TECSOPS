@@ -103,11 +103,12 @@ export function ShipmentInvoiceWorkspace({
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [catalogEditorOpen, setCatalogEditorOpen] = useState(false);
+  const [catalogEditorKey, setCatalogEditorKey] = useState(0);
   const [selectedLineIds, setSelectedLineIds] = useState<Set<string>>(() => new Set());
   const [copyTargetId, setCopyTargetId] = useState("");
   const [balanceNotice, setBalanceNotice] = useState<string | null>(null);
   const shipmentIdRef = useRef(shipment.id);
-  const { staticItems, items: catalogItems } = useInvoiceCatalog(invoiceCatalog);
+  const { staticItems, items: catalogItems, loading: catalogLoading } = useInvoiceCatalog(invoiceCatalog);
 
   const activeDeclaration = useMemo(
     () => declarations.find((d) => d.id === activeId) ?? declarations[0],
@@ -796,7 +797,10 @@ export function ShipmentInvoiceWorkspace({
           onRandomPick={handleRandomPick}
           onBalanceQuantities={handleBalanceQuantities}
           balanceNotice={balanceNotice}
-          onOpenCatalog={() => setCatalogEditorOpen(true)}
+          onOpenCatalog={() => {
+            setCatalogEditorKey((k) => k + 1);
+            setCatalogEditorOpen(true);
+          }}
           onSave={() => void saveAll()}
           onExportExcel={() => void handleExportExcel()}
           onExportPdf={() => void handleExportPdf()}
@@ -821,12 +825,19 @@ export function ShipmentInvoiceWorkspace({
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-h-0 min-w-0 flex-[1.15] flex-col overflow-hidden border-r border-black/10 dark:border-white/10">
           {catalogEditorOpen ? (
-            <InvoiceCatalogEditor
-              catalog={invoiceCatalog ?? { version: 1, items: [] }}
-              staticFallbackItems={staticItems}
-              onSave={onSaveCatalog}
-              onClose={() => setCatalogEditorOpen(false)}
-            />
+            catalogLoading ? (
+              <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-xs text-apple-tertiary dark:text-slate-400">
+                Đang tải danh mục hàng…
+              </div>
+            ) : (
+              <InvoiceCatalogEditor
+                key={catalogEditorKey}
+                catalog={invoiceCatalog ?? { version: 1, items: [] }}
+                staticFallbackItems={staticItems}
+                onSave={onSaveCatalog}
+                onClose={() => setCatalogEditorOpen(false)}
+              />
+            )
           ) : (
             <InvoiceLineGrid
               items={items}

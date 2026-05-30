@@ -3,12 +3,13 @@ import type { InvoiceCatalogItem } from "../types/invoiceItem";
 import {
   catalogItemDedupeKey,
   findDuplicateCatalogDescriptions,
+  mergeCatalogDraftWithBase,
   mergeImportedCatalogItems,
   parseInvoiceCatalogWorksheet,
   validateCatalogItemsForSave,
 } from "./invoiceCatalogExcel";
 
-const base = (description: string, partial?: Partial<InvoiceCatalogItem>): InvoiceCatalogItem => ({
+const makeItem = (description: string, partial?: Partial<InvoiceCatalogItem>): InvoiceCatalogItem => ({
   id: `id-${description.slice(0, 4)}`,
   category: "BÁNH",
   description,
@@ -27,10 +28,24 @@ describe("catalogItemDedupeKey", () => {
   });
 });
 
+describe("mergeCatalogDraftWithBase", () => {
+  it("seed base khi draft trống", () => {
+    const seeded = [makeItem("Bánh mì")];
+    expect(mergeCatalogDraftWithBase([], seeded)).toHaveLength(1);
+  });
+
+  it("giữ pending khi base load sau", () => {
+    const pending = [{ ...makeItem(""), description: "", category: "KHÁC" }];
+    const merged = mergeCatalogDraftWithBase(pending, [makeItem("Có sẵn")]);
+    expect(merged).toHaveLength(2);
+    expect(merged[0]?.description).toBe("");
+  });
+});
+
 describe("mergeImportedCatalogItems", () => {
   it("bỏ qua mặt hàng trùng mô tả", () => {
-    const existing = [base("Bánh mì trắng")];
-    const imported = [base("bánh mì trắng"), base("Bún tươi")];
+    const existing = [makeItem("Bánh mì trắng")];
+    const imported = [makeItem("bánh mì trắng"), makeItem("Bún tươi")];
     const result = mergeImportedCatalogItems(existing, imported);
     expect(result.added).toBe(1);
     expect(result.skippedDuplicate).toBe(1);
@@ -40,14 +55,14 @@ describe("mergeImportedCatalogItems", () => {
 
 describe("validateCatalogItemsForSave", () => {
   it("chặn mô tả trống và trùng", () => {
-    expect(validateCatalogItemsForSave([base("")])).toEqual({
+    expect(validateCatalogItemsForSave([makeItem("")])).toEqual({
       ok: false,
       message: expect.stringContaining("chưa có mô tả"),
     });
     expect(
-      validateCatalogItemsForSave([base("A"), base("a")]).ok
+      validateCatalogItemsForSave([makeItem("A"), makeItem("a")]).ok
     ).toBe(false);
-    expect(findDuplicateCatalogDescriptions([base("A"), base("a")])).toHaveLength(1);
+    expect(findDuplicateCatalogDescriptions([makeItem("A"), makeItem("a")])).toHaveLength(1);
   });
 });
 

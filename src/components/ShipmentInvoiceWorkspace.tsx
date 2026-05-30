@@ -394,6 +394,29 @@ export function ShipmentInvoiceWorkspace({
     }
   }, [buildSavePayload, dirty, onSave]);
 
+  /**
+   * Auto-save: lưu im lặng sau 1.5s ngừng sửa (debounce). Người dùng không cần bấm
+   * «Lưu» — dữ liệu khai báo luôn được giữ trên lô. Lỗi thì giữ `dirty` để thử lại
+   * ở lần sửa kế hoặc khi đóng trang. Tạm dừng khi đang bận (xuất file / lưu tay).
+   */
+  const autoSaveRef = useRef<() => void>(() => {});
+  autoSaveRef.current = () => {
+    if (!dirty || busy) return;
+    void (async () => {
+      try {
+        await onSave(buildSavePayload());
+        setDirty(false);
+      } catch {
+        /* giữ dirty — sẽ lưu lại ở lần sửa kế hoặc khi đóng trang */
+      }
+    })();
+  };
+  useEffect(() => {
+    if (!dirty || busy) return;
+    const t = window.setTimeout(() => autoSaveRef.current(), 1500);
+    return () => window.clearTimeout(t);
+  }, [dirty, busy, declarations]);
+
   const exportOpts = useMemo(
     () => ({
       items,
@@ -466,25 +489,14 @@ export function ShipmentInvoiceWorkspace({
 
   const requestClose = useCallback(async () => {
     if (busy) return;
-    if (dirty) {
-      const saveFirst = window.confirm(
-        "Lưu dữ liệu khai báo trước khi rời trang?\n\nChọn OK để lưu — dữ liệu vẫn giữ trên lô khi quay lại chỉnh sửa."
-      );
-      if (saveFirst) {
-        setBusy(true);
-        try {
-          if (!(await persistIfDirty())) return;
-        } finally {
-          setBusy(false);
-        }
-      } else {
-        const discard = window.confirm("Bỏ thay đổi chưa lưu và quay lại bảng lô hàng?");
-        if (!discard) return;
-        setDirty(false);
-      }
+    setBusy(true);
+    try {
+      if (!(await persistIfDirty())) return;
+    } finally {
+      setBusy(false);
     }
     onClose();
-  }, [busy, dirty, onClose, persistIfDirty]);
+  }, [busy, onClose, persistIfDirty]);
 
   const toggleLineSelect = useCallback((lineId: string) => {
     setSelectedLineIds((prev) => {
@@ -894,8 +906,10 @@ export function ShipmentInvoiceWorkspace({
             ? ` / tờ ${formatDeclarationKg(targetKg)} kg (chênh ≈ bao bì)`
             : ""}
           {dirty ? (
-            <span className="ml-1 font-semibold text-amber-700 dark:text-amber-300"> · Chưa lưu</span>
-          ) : null}
+            <span className="ml-1 font-semibold text-amber-700 dark:text-amber-300"> · Tự động lưu…</span>
+          ) : (
+            <span className="ml-1 font-semibold text-emerald-700 dark:text-emerald-300"> · Đã lưu</span>
+          )}
         </p>
       </footer>
     </div>

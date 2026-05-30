@@ -476,8 +476,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   return (
     <div className="mx-auto max-w-[1600px] px-3 py-4 sm:px-4 lg:px-6">
-      <div className="sticky top-0 z-40 -mx-3 mb-4 bg-dashboard-canvas/90 px-3 pb-3 pt-1 backdrop-blur-lg dark:bg-dashboard-canvas-dark/90 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
-      <header className="mb-3 space-y-3">
+      <div className="sticky top-0 z-40 -mx-3 mb-3 bg-dashboard-canvas/90 px-3 pb-2 pt-1 backdrop-blur-lg dark:bg-dashboard-canvas-dark/90 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
+      <header className="mb-2 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <h1 className="text-xl font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark sm:text-2xl">

@@ -122,7 +122,7 @@ export function SmartSearchBar({
           aria-controls="smart-search-listbox"
           role="combobox"
         />
-        {trimmed && (
+        {trimmed ? (
           <button
             type="button"
             onClick={() => {
@@ -135,6 +135,13 @@ export function SmartSearchBar({
           >
             ×
           </button>
+        ) : (
+          <kbd
+            className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-black/[0.1] bg-black/[0.03] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-apple-tertiary sm:inline-block dark:border-white/10 dark:bg-white/[0.06] dark:text-ops-tertiary"
+            title="Nhấn / hoặc F để tìm nhanh"
+          >
+            /
+          </kbd>
         )}
       </div>
 

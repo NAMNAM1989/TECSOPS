@@ -6,7 +6,7 @@ export const MOBILE = {
   sheetBackdrop: "fixed inset-0 z-[470] flex flex-col justify-end bg-black/35 backdrop-blur-sm md:hidden",
   card: "relative overflow-hidden rounded-xl border border-black/[0.06] shadow-dashboard-card transition-all dark:border-white/[0.08]",
   cardInner: "relative z-10 bg-transparent px-2.5 py-2 transition-transform duration-200 ease-out",
-  cardMeta: "text-[10px] font-medium text-apple-tertiary dark:text-slate-500",
+  cardMeta: "text-[10.5px] font-medium text-apple-secondary dark:text-slate-400",
   customerName:
     "truncate text-[13px] font-semibold uppercase leading-snug tracking-tight text-apple-label dark:text-slate-100",
   awb: "font-mono text-[15px] font-bold leading-tight tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark",

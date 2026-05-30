@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { StatusSelect } from "./StatusBadge";
@@ -350,7 +350,7 @@ function WarehouseGroupRows({
   openEcargoRequestId?: string | null;
   onEcargoRequestHandled?: () => void;
 }) {
-  const groupRowIds = group.map((r) => r.id);
+  const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);
   const [openEcargoRowId, setOpenEcargoRowId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -425,7 +425,7 @@ function WarehouseGroupRows({
   );
 }
 
-function ShipmentRow({
+function ShipmentRowImpl({
   row,
   sectionWarehouse,
   viewSessionYmd,
@@ -846,3 +846,33 @@ function ShipmentRow({
     </>
   );
 }
+
+type ShipmentRowProps = Parameters<typeof ShipmentRowImpl>[0];
+
+/**
+ * Memo theo dữ liệu của RIÊNG dòng: chỉ render lại khi chính lô / ecargo line /
+ * job / trạng thái chọn-mở-highlight của dòng đó đổi. Bỏ qua `allRows` (chỉ dùng
+ * cảnh báo trùng AWB phía client — máy chủ vẫn chặn trùng) và các callback ổn định,
+ * nhờ vậy sửa 1 ô không bắt cả bảng render lại.
+ */
+const ShipmentRow = memo(ShipmentRowImpl, (prev: ShipmentRowProps, next: ShipmentRowProps) => {
+  const id = prev.row.id;
+  if (next.row.id !== id) return false;
+  return (
+    prev.row === next.row &&
+    prev.sectionWarehouse === next.sectionWarehouse &&
+    prev.viewSessionYmd === next.viewSessionYmd &&
+    prev.ecargoTableOpen === next.ecargoTableOpen &&
+    prev.highlighted === next.highlighted &&
+    prev.selected === next.selected &&
+    prev.groupRowIds === next.groupRowIds &&
+    prev.customerDirectory === next.customerDirectory &&
+    prev.globalAgents === next.globalAgents &&
+    prev.scscWeighPrintSettings === next.scscWeighPrintSettings &&
+    prev.ecargoMap[id] === next.ecargoMap[id] &&
+    prev.getEcargoJob(id) === next.getEcargoJob(id) &&
+    prev.getEcargoSaveStatus(id) === next.getEcargoSaveStatus(id) &&
+    prev.isEcargoAutoRegistering(id) === next.isEcargoAutoRegistering(id) &&
+    (prev.isEcargoFetchingQr?.(id) ?? false) === (next.isEcargoFetchingQr?.(id) ?? false)
+  );
+});

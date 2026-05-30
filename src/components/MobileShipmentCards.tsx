@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import { StatusReadonly } from "./StatusBadge";
+import { StatusSelect } from "./StatusBadge";
+import { InlineNumberEdit } from "./InlineNumberEdit";
 import { statusRowAccent, statusRowBg, statusRowSelected } from "./statusStyles";
 import {
   warehouseLabel,
@@ -39,6 +40,173 @@ function formatMobileLotMeta(row: Shipment): string {
   return parts.join(" · ");
 }
 
+type EcargoLine = EcargoKhoScscPersistedMap[string];
+
+/** Ô số sửa nhanh trên card (Kiện/Kg) — nhãn + input lớn đủ chạm. */
+function MobileQuickNumber({
+  label,
+  value,
+  onCommit,
+}: {
+  label: string;
+  value: number | null;
+  onCommit: (v: number | null) => void;
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-lg bg-black/[0.045] px-2 py-0.5 dark:bg-white/[0.07]"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-apple-secondary dark:text-slate-400">
+        {label}
+      </span>
+      <InlineNumberEdit
+        value={value}
+        compact
+        placeholder="—"
+        className="min-h-[26px] px-1.5 text-[14px]"
+        onCommit={onCommit}
+      />
+    </span>
+  );
+}
+
+/**
+ * Card 1 lô — memo theo dữ liệu riêng của lô (lô / ecargo line / job / chọn / mở /
+ * highlight). `content-visibility:auto` cho phép trình duyệt bỏ qua render+layout
+ * các card ngoài màn hình → cuộn mượt trên list dài (mobile). Sửa nhanh PCS/KG/trạng
+ * thái ngay trên card, không phải mở sheet (giảm 1 lớp thao tác).
+ */
+const MobileShipmentCard = memo(
+  function MobileShipmentCard({
+    row,
+    selected,
+    highlighted,
+    ecargoOpen,
+    ecargoLine,
+    ecargoJob,
+    customerDirectory,
+    canEcargo,
+    onOpenEdit,
+    onToggleEcargo,
+    onUpdate,
+  }: {
+    row: Shipment;
+    selected: boolean;
+    highlighted: boolean;
+    ecargoOpen: boolean;
+    ecargoLine: EcargoLine | undefined;
+    ecargoJob: EcargoJobRecord | undefined;
+    customerDirectory: readonly CustomerDirectoryEntry[];
+    canEcargo: boolean;
+    onOpenEdit: (row: Shipment) => void;
+    onToggleEcargo: (row: Shipment) => void;
+    onUpdate: (id: string, patch: Partial<Shipment>) => void;
+  }) {
+    const rowAccent = statusRowAccent[row.status];
+    const rowSurface = selected ? statusRowSelected : statusRowBg[row.status];
+    const awbTrim = (row.awb ?? "").trim();
+    const hawbTrim = (row.hawb ?? "").trim();
+    const showEcargoKhoScsc = isScscWarehouse(row.warehouse);
+    const vehicleForEcargo = ecargoLine?.vehicleInput ?? "";
+    const ecargoPrefill = useMemo(
+      () =>
+        resolveEcargoVehiclePrefill(row, customerDirectory, vehicleForEcargo, {
+          driverName: ecargoLine?.driverName,
+          driverId: ecargoLine?.driverId,
+        }),
+      [row, customerDirectory, vehicleForEcargo, ecargoLine?.driverName, ecargoLine?.driverId]
+    );
+    const effectiveEcargoVehicle = vehicleForEcargo.trim() || ecargoPrefill.vehicleInput;
+    const ecargoReady = effectiveEcargoVehicle.trim().length >= ECARGO_VEHICLE_MIN;
+
+    return (
+      <Box
+        id={`mobile-shipment-${row.id}`}
+        style={{ contentVisibility: "auto", containIntrinsicSize: "0 110px" }}
+        className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
+          selected ? "ring-1 ring-apple-blue/50 dark:ring-sky-400/45" : ""
+        } ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}
+      >
+        <div className={MOBILE.cardInner}>
+          <div className="flex items-start justify-between gap-2">
+            <button
+              type="button"
+              className="min-w-0 flex-1 text-left active:opacity-90"
+              onClick={() => onOpenEdit(row)}
+            >
+              {awbTrim ? (
+                <p className={MOBILE.awb}>
+                  {awbTrim}
+                  {hawbTrim ? (
+                    <span className="ml-1 text-[11px] font-semibold text-apple-secondary dark:text-slate-400">
+                      /{hawbTrim}
+                    </span>
+                  ) : null}
+                </p>
+              ) : (
+                <p className={MOBILE.awbEmpty}>+ Nhập AWB</p>
+              )}
+            </button>
+            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+              <StatusSelect value={row.status} onChange={(s) => onUpdate(row.id, { status: s })} />
+            </div>
+          </div>
+          <button
+            type="button"
+            className="block w-full text-left active:opacity-90"
+            onClick={() => onOpenEdit(row)}
+          >
+            <p className={`mt-0.5 ${MOBILE.customerName}`} title={row.customer}>
+              {row.customer?.trim() || "Chưa chọn khách"}
+            </p>
+            <p className={`mt-0.5 truncate ${MOBILE.cardMeta}`}>{formatMobileLotMeta(row)}</p>
+          </button>
+          <div className="mt-1.5 flex items-center gap-2 border-t border-black/[0.05] pt-1.5 dark:border-white/[0.07]">
+            <MobileQuickNumber
+              label="Kiện"
+              value={row.pcs}
+              onCommit={(v) => onUpdate(row.id, { pcs: v })}
+            />
+            <MobileQuickNumber label="Kg" value={row.kg} onCommit={(v) => onUpdate(row.id, { kg: v })} />
+            {showEcargoKhoScsc && canEcargo ? (
+              <div className="ml-auto shrink-0">
+                <EcargoKhoScscTriggerButton
+                  rowId={row.id}
+                  open={ecargoOpen}
+                  hasVehicle={ecargoReady}
+                  job={ecargoJob}
+                  variant="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleEcargo(row);
+                  }}
+                  title={
+                    ecargoReady
+                      ? `eCargo · ${effectiveEcargoVehicle}`
+                      : ecargoPrefill.defaultVehicle
+                        ? `Xe mặc định: ${vehicleDisplayLabel(ecargoPrefill.defaultVehicle)}`
+                        : "eCargo — nhập xe & đăng ký"
+                  }
+                />
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </Box>
+    );
+  },
+  (prev, next) =>
+    prev.row === next.row &&
+    prev.selected === next.selected &&
+    prev.highlighted === next.highlighted &&
+    prev.ecargoOpen === next.ecargoOpen &&
+    prev.ecargoLine === next.ecargoLine &&
+    prev.ecargoJob === next.ecargoJob &&
+    prev.customerDirectory === next.customerDirectory &&
+    prev.canEcargo === next.canEcargo
+);
+
 interface MobileShipmentCardsProps {
   rows: Shipment[];
   selectedId: string | null;
@@ -75,6 +243,7 @@ export function MobileShipmentCards({
   rows,
   selectedId,
   onSelect,
+  onUpdate,
   onQuickEdit,
   customerDirectory = [],
   activeWarehouse = "TECS-TCS",
@@ -123,6 +292,30 @@ export function MobileShipmentCards({
       : undefined;
 
   const closeEcargoModal = useCallback(() => setOpenEcargoRowId(null), []);
+
+  const openEcargoRowIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    openEcargoRowIdRef.current = openEcargoRowId;
+  }, [openEcargoRowId]);
+
+  const handleOpenEdit = useCallback(
+    (row: Shipment) => {
+      onSelect(row.id);
+      onQuickEdit?.(row);
+    },
+    [onSelect, onQuickEdit]
+  );
+
+  const handleToggleEcargo = useCallback(
+    (row: Shipment) => {
+      const opening = openEcargoRowIdRef.current !== row.id;
+      setOpenEcargoRowId(opening ? row.id : null);
+      if (opening) onApplyEcargoPrefill?.(row);
+    },
+    [onApplyEcargoPrefill]
+  );
+
+  const canEcargo = Boolean(onEcargoVehicleChange && onEcargoAutoRegister && getEcargoSaveStatus);
 
   useEffect(() => {
     if (!openEcargoRowId) return;
@@ -210,93 +403,22 @@ export function MobileShipmentCards({
               ) : null}
               {!collapsed && group.length > 0 ? (
                 <div className="space-y-1.5">
-                  {group.map((row) => {
-                    const selected = selectedId === row.id;
-                    const rowAccent = statusRowAccent[row.status];
-                    const rowSurface = selected ? statusRowSelected : statusRowBg[row.status];
-                    const awbTrim = (row.awb ?? "").trim();
-                    const hawbTrim = (row.hawb ?? "").trim();
-                    const showEcargoKhoScsc = isScscWarehouse(row.warehouse);
-                    const ecargoLine = ecargoMap[row.id];
-                    const vehicleForEcargo = ecargoLine?.vehicleInput ?? "";
-                    const ecargoPrefill = resolveEcargoVehiclePrefill(row, customerDirectory, vehicleForEcargo, {
-                      driverName: ecargoLine?.driverName,
-                      driverId: ecargoLine?.driverId,
-                    });
-                    const effectiveEcargoVehicle = vehicleForEcargo.trim() || ecargoPrefill.vehicleInput;
-                    const ecargoReady = effectiveEcargoVehicle.trim().length >= ECARGO_VEHICLE_MIN;
-                    const ecargoJob = getEcargoJob?.(row.id);
-                    const ecargoOpen = openEcargoRowId === row.id;
-
-                    const openEdit = () => {
-                      onSelect(row.id);
-                      onQuickEdit?.(row);
-                    };
-
-                    return (
-                      <Box
-                        id={`mobile-shipment-${row.id}`}
-                        key={row.id}
-                        className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
-                          selected
-                            ? "ring-1 ring-apple-blue/50 dark:ring-sky-400/45"
-                            : ""
-                        } ${highlightedShipmentId === row.id ? "ring-2 ring-amber-400/70" : ""}`}
-                      >
-                        <div className={`${MOBILE.cardInner} flex items-stretch gap-2`}>
-                          <button
-                            type="button"
-                            className="min-w-0 flex-1 text-left active:opacity-90"
-                            onClick={openEdit}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              {awbTrim ? (
-                                <p className={`min-w-0 flex-1 ${MOBILE.awb}`}>
-                                  {awbTrim}
-                                  {hawbTrim ? (
-                                    <span className="ml-1 text-[11px] font-semibold text-apple-secondary dark:text-slate-400">
-                                      /{hawbTrim}
-                                    </span>
-                                  ) : null}
-                                </p>
-                              ) : (
-                                <p className={MOBILE.awbEmpty}>+ Nhập AWB</p>
-                              )}
-                              <StatusReadonly value={row.status} compact />
-                            </div>
-                            <p className={`mt-0.5 ${MOBILE.customerName}`} title={row.customer}>
-                              {row.customer?.trim() || "Chưa chọn khách"}
-                            </p>
-                            <p className={`mt-0.5 truncate ${MOBILE.cardMeta}`}>{formatMobileLotMeta(row)}</p>
-                          </button>
-                          {showEcargoKhoScsc && onEcargoVehicleChange && onEcargoAutoRegister && getEcargoSaveStatus ? (
-                            <div className="flex shrink-0 flex-col justify-center">
-                              <EcargoKhoScscTriggerButton
-                                rowId={row.id}
-                                open={ecargoOpen}
-                                hasVehicle={ecargoReady}
-                                job={ecargoJob}
-                                variant="icon"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const opening = openEcargoRowId !== row.id;
-                                  setOpenEcargoRowId((id) => (id === row.id ? null : row.id));
-                                  if (opening) onApplyEcargoPrefill?.(row);
-                                }}
-                                title={
-                                  ecargoReady
-                                    ? `eCargo · ${effectiveEcargoVehicle}`
-                                    : ecargoPrefill.defaultVehicle
-                                      ? `Xe mặc định: ${vehicleDisplayLabel(ecargoPrefill.defaultVehicle)}`
-                                      : "eCargo — nhập xe & đăng ký"
-                                }
-                              />
-                            </div>
-                          ) : null}
-                        </div>
-                      </Box>
-                    );
-                  })}
+                  {group.map((row) => (
+                    <MobileShipmentCard
+                      key={row.id}
+                      row={row}
+                      selected={selectedId === row.id}
+                      highlighted={highlightedShipmentId === row.id}
+                      ecargoOpen={openEcargoRowId === row.id}
+                      ecargoLine={ecargoMap[row.id]}
+                      ecargoJob={getEcargoJob?.(row.id)}
+                      customerDirectory={customerDirectory}
+                      canEcargo={canEcargo}
+                      onOpenEdit={handleOpenEdit}
+                      onToggleEcargo={handleToggleEcargo}
+                      onUpdate={onUpdate}
+                    />
+                  ))}
                 </div>
               ) : null}
             </section>

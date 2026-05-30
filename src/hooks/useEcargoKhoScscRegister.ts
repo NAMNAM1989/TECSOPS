@@ -70,6 +70,12 @@ export function useEcargoKhoScscRegister(
   const hydrateKeyRef = useRef("");
   /** Lô user vừa bấm «Lấy mã QR» — tự mở panel khi qr_ready. */
   const qrFetchPendingRef = useRef(new Set<string>());
+  /** Lô user vừa tự đăng ký phiên này → tự lấy QR khi job sang «verified» (1 chạm). */
+  const autoQrPendingRef = useRef(new Map<string, string>());
+  /** Refs đọc state/fetchQr mới nhất trong handler socket mà không phải re-subscribe. */
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const fetchQrRef = useRef<((row: Shipment, viewSessionYmd: string) => Promise<void>) | null>(null);
 
   const map = useMemo(
     () => ({ ...serverMap, ...draftOverlay }),
@@ -124,6 +130,17 @@ export function useEcargoKhoScscRegister(
       pushToastForJob(job);
       setSubmittingId((id) => (id === job.shipmentId ? null : id));
       setFetchingQrId((id) => (id === job.shipmentId ? null : id));
+      // 1 chạm: lô vừa tự đăng ký phiên này → tự lấy QR khi phiếu đã xác thực.
+      if (job.status === "verified" && autoQrPendingRef.current.has(job.shipmentId)) {
+        const ymd = autoQrPendingRef.current.get(job.shipmentId) ?? "";
+        autoQrPendingRef.current.delete(job.shipmentId);
+        const row = stateRef.current?.rows.find((r) => r.id === job.shipmentId);
+        if (row && fetchQrRef.current) {
+          void fetchQrRef.current(row, ymd).catch(() => {
+            /* lỗi lấy QR — user có thể bấm «Lấy lại ảnh QR» trong panel */
+          });
+        }
+      }
       if (job.status === "qr_ready" && qrFetchPendingRef.current.has(job.shipmentId)) {
         qrFetchPendingRef.current.delete(job.shipmentId);
         requestOpenEcargoPanel(job.shipmentId);
@@ -398,6 +415,10 @@ export function useEcargoKhoScscRegister(
           }
           setJobsById((prev) => ({ ...prev, [shipmentId]: o.job! }));
         }
+        // 1 chạm: nhớ lô này để tự lấy QR khi job sang «verified», và tự mở panel
+        // khi qr_ready (kể cả khi worker tới thẳng qr_ready không qua bước lấy QR).
+        autoQrPendingRef.current.set(shipmentId, viewSessionYmd);
+        qrFetchPendingRef.current.add(shipmentId);
         setToasts((list) => [
           ...list.filter((t) => t.shipmentId !== shipmentId).slice(-4),
           {
@@ -405,7 +426,7 @@ export function useEcargoKhoScscRegister(
             shipmentId,
             tone: "info",
             title: "Đã bắt đầu đăng ký eCargo",
-            body: "Modal đã đóng — theo dõi tiến trình trên dòng lô.",
+            body: "Tự động lấy QR khi xác thực xong — theo dõi trên dòng lô.",
           },
         ]);
         // Worker chạy nền — không giữ submittingId (tránh modal/UI treo).
@@ -487,6 +508,7 @@ export function useEcargoKhoScscRegister(
     },
     [jobsById, map]
   );
+  fetchQrRef.current = fetchQr;
 
   const isAutoRegistering = useCallback(
     (shipmentId: string) => submittingId === shipmentId,

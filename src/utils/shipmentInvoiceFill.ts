@@ -165,7 +165,7 @@ export function buildInvoiceWorkbookFromPayload(
     ws.getCell(row, 7).border = THIN_BORDER;
     ws.getCell(row, 7).numFmt = "#,##0.00";
 
-    ws.getCell(row, 8).value = { formula: `E${row}*G${row}` };
+    ws.getCell(row, 8).value = { formula: `E${row}*G${row}`, result: line.amountUsd };
     ws.getCell(row, 8).font = FONT_NORMAL;
     ws.getCell(row, 8).alignment = ALIGN_RIGHT;
     ws.getCell(row, 8).border = THIN_BORDER;
@@ -177,7 +177,7 @@ export function buildInvoiceWorkbookFromPayload(
     ws.getCell(row, 9).border = THIN_BORDER;
     ws.getCell(row, 9).numFmt = "#,##0.00";
 
-    ws.getCell(row, 10).value = { formula: `E${row}*I${row}` };
+    ws.getCell(row, 10).value = { formula: `E${row}*I${row}`, result: line.grossKg };
     ws.getCell(row, 10).font = FONT_NORMAL;
     ws.getCell(row, 10).alignment = ALIGN_RIGHT;
     ws.getCell(row, 10).border = THIN_BORDER;
@@ -198,14 +198,20 @@ export function buildInvoiceWorkbookFromPayload(
   }
   if (payload.lines.length > 0) {
     const sumAmtCell = ws.getCell(row, 8);
-    sumAmtCell.value = { formula: `SUM(H${goodsFirstRow}:H${goodsLastRow})` };
+    sumAmtCell.value = {
+      formula: `SUM(H${goodsFirstRow}:H${goodsLastRow})`,
+      result: payload.totals.totalAmountUsd,
+    };
     sumAmtCell.font = FONT_BOLD;
     sumAmtCell.alignment = ALIGN_RIGHT;
     sumAmtCell.border = THIN_BORDER;
     sumAmtCell.numFmt = "#,##0.00";
 
     const sumWeightCell = ws.getCell(row, 10);
-    sumWeightCell.value = { formula: `SUM(J${goodsFirstRow}:J${goodsLastRow})` };
+    sumWeightCell.value = {
+      formula: `SUM(J${goodsFirstRow}:J${goodsLastRow})`,
+      result: payload.totals.totalGrossKg,
+    };
     sumWeightCell.font = FONT_BOLD;
     sumWeightCell.alignment = ALIGN_RIGHT;
     sumWeightCell.border = THIN_BORDER;

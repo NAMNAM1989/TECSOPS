@@ -127,6 +127,9 @@ describe("exportShipmentInvoiceExcel helpers", () => {
     expect(cellFormula(ws, `H${goodsRow}`)).toBe(`E${goodsRow}*G${goodsRow}`);
     expect(ws.getCell(goodsRow, 9).value).toBe(0.5); // Quy cách
     expect(cellFormula(ws, `J${goodsRow}`)).toBe(`E${goodsRow}*I${goodsRow}`);
+    // Phải có giá trị cache (result) — viewer không tự recalc vẫn thấy Amount/Trọng lượng
+    expect((ws.getCell(`H${goodsRow}`).value as { result?: number }).result).toBeCloseTo(33 * 0.62, 2);
+    expect((ws.getCell(`J${goodsRow}`).value as { result?: number }).result).toBeCloseTo(33 * 0.5, 2);
     // Item 2
     expect(ws.getCell(goodsRow + 1, 1).value).toBe(2);
     expect(ws.getCell(goodsRow + 1, 5).value).toBe(49);

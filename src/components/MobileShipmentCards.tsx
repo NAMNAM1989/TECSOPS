@@ -54,17 +54,17 @@ function MobileQuickNumber({
 }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-lg bg-black/[0.045] px-2 py-0.5 dark:bg-white/[0.07]"
+      className="inline-flex items-center gap-0.5 rounded-md bg-black/[0.04] px-1.5 py-px dark:bg-white/[0.06]"
       onClick={(e) => e.stopPropagation()}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-apple-secondary dark:text-slate-400">
+      <span className="text-[9px] font-semibold uppercase tracking-wide text-apple-secondary dark:text-slate-400">
         {label}
       </span>
       <InlineNumberEdit
         value={value}
         compact
         placeholder="—"
-        className="min-h-[26px] px-1.5 text-[14px]"
+        className="min-h-[22px] px-1 text-[12px]"
         onCommit={onCommit}
       />
     </span>
@@ -123,13 +123,13 @@ const MobileShipmentCard = memo(
     return (
       <Box
         id={`mobile-shipment-${row.id}`}
-        style={{ contentVisibility: "auto", containIntrinsicSize: "0 110px" }}
+        style={{ contentVisibility: "auto", containIntrinsicSize: "0 84px" }}
         className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
           selected ? "ring-1 ring-apple-blue/50 dark:ring-sky-400/45" : ""
         } ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}
       >
         <div className={MOBILE.cardInner}>
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-1.5">
             <button
               type="button"
               className="min-w-0 flex-1 text-left active:opacity-90"
@@ -139,7 +139,7 @@ const MobileShipmentCard = memo(
                 <p className={MOBILE.awb}>
                   {awbTrim}
                   {hawbTrim ? (
-                    <span className="ml-1 text-[11px] font-semibold text-apple-secondary dark:text-slate-400">
+                    <span className="ml-0.5 text-[10px] font-bold text-red-700/80 dark:text-red-400/75">
                       /{hawbTrim}
                     </span>
                   ) : null}
@@ -147,22 +147,20 @@ const MobileShipmentCard = memo(
               ) : (
                 <p className={MOBILE.awbEmpty}>+ Nhập AWB</p>
               )}
+              <p className={`mt-0.5 ${MOBILE.customerName}`} title={row.customer}>
+                {row.customer?.trim() || "Chưa chọn khách"}
+              </p>
+              <p className={`mt-px ${MOBILE.cardMeta}`}>{formatMobileLotMeta(row)}</p>
             </button>
-            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-              <StatusSelect value={row.status} onChange={(s) => onUpdate(row.id, { status: s })} />
+            <div className="shrink-0 pt-px" onClick={(e) => e.stopPropagation()}>
+              <StatusSelect
+                compact
+                value={row.status}
+                onChange={(s) => onUpdate(row.id, { status: s })}
+              />
             </div>
           </div>
-          <button
-            type="button"
-            className="block w-full text-left active:opacity-90"
-            onClick={() => onOpenEdit(row)}
-          >
-            <p className={`mt-0.5 ${MOBILE.customerName}`} title={row.customer}>
-              {row.customer?.trim() || "Chưa chọn khách"}
-            </p>
-            <p className={`mt-0.5 truncate ${MOBILE.cardMeta}`}>{formatMobileLotMeta(row)}</p>
-          </button>
-          <div className="mt-1.5 flex items-center gap-2 border-t border-black/[0.05] pt-1.5 dark:border-white/[0.07]">
+          <div className="mt-1 flex items-center gap-1.5 border-t border-black/[0.04] pt-1 dark:border-white/[0.06]">
             <MobileQuickNumber
               label="Kiện"
               value={row.pcs}
@@ -340,7 +338,7 @@ export function MobileShipmentCards({
 
   return (
     <>
-      <Box className="space-y-3 pb-[max(5.5rem,env(safe-area-inset-bottom))] md:hidden">
+      <Box className="space-y-2 pb-[max(5rem,env(safe-area-inset-bottom))] md:hidden">
         {warehouseSections.map((wh) => {
           const group = rowsByWarehouse[wh];
           const collapsed = searchActive
@@ -359,10 +357,10 @@ export function MobileShipmentCards({
                   type="button"
                   onClick={() => toggle(wh)}
                   aria-expanded={!collapsed}
-                  className="mb-2 flex w-full items-center gap-2 rounded-xl px-1 py-1 text-left active:bg-black/[0.03] dark:active:bg-white/[0.06]"
+                  className="mb-1 flex w-full items-center gap-1.5 rounded-lg px-0.5 py-0.5 text-left active:bg-black/[0.03] dark:active:bg-white/[0.06]"
                 >
                   <Chevron collapsed={collapsed} />
-                  <h2 className="text-[15px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
+                  <h2 className="text-[13px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
                     {warehouseLabel[wh]}
                   </h2>
                   <span className="rounded-full bg-dashboard-primary/90 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-slate-600">
@@ -371,11 +369,11 @@ export function MobileShipmentCards({
                 </button>
               ) : (
                 <Box
-                  className={`mb-2 flex items-center justify-between gap-2 px-0.5 py-0.5 ${
-                    isActiveWarehouse ? "border-l-2 border-apple-blue pl-2 dark:border-sky-400" : ""
+                  className={`mb-1 flex items-center justify-between gap-1.5 px-0.5 py-0 ${
+                    isActiveWarehouse ? "border-l-2 border-apple-blue pl-1.5 dark:border-sky-400" : ""
                   }`}
                 >
-                  <h2 className="text-[14px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
+                  <h2 className="text-[12px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
                     {warehouseLabel[wh]}
                   </h2>
                   <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-apple-secondary dark:bg-white/[0.08] dark:text-slate-300">
@@ -402,7 +400,7 @@ export function MobileShipmentCards({
                 )
               ) : null}
               {!collapsed && group.length > 0 ? (
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   {group.map((row) => (
                     <MobileShipmentCard
                       key={row.id}

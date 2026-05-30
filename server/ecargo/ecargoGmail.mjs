@@ -1,4 +1,4 @@
-import { ECARGO_GMAIL_POLL_MS, ECARGO_GMAIL_USER } from "./ecargoConfig.mjs";
+import { ECARGO_GMAIL_POLL_MS, ECARGO_GMAIL_USER, ECARGO_QR_GMAIL_POLL_MS, ECARGO_QR_TIMEOUT_MS, isEcargoQrInboxOnly, isEcargoQrSingleScan } from "./ecargoConfig.mjs";
 import {
   ECARGO_FROM,
   messageReceivedMs,
@@ -230,6 +230,7 @@ async function pollScscMail(client, opts, pickFn, logLabel) {
   const matchHints = opts.matchHints;
   const markSeenOnPick = opts.markSeenOnPick !== false;
   const shouldAbort = opts.shouldAbort;
+  const inboxFirstPolls = Math.max(0, Number(opts.inboxFirstPolls) || 0);
   const deadline = Date.now() + timeoutMs;
   const loadCandidates = opts.loadCandidates ?? loadVerifyCandidates;
 
@@ -241,7 +242,8 @@ async function pollScscMail(client, opts, pickFn, logLabel) {
       throw err;
     }
     try {
-      const candidates = await loadCandidates(client, notBeforeMs, { includeAllMail: true });
+      const includeAllMail = inboxFirstPolls <= 0 || pollCount >= inboxFirstPolls;
+      const candidates = await loadCandidates(client, notBeforeMs, { includeAllMail });
       const found = pickFn(candidates, notBeforeMs, matchHints);
       pollCount += 1;
       if (found) {
@@ -271,6 +273,41 @@ async function pollScscMail(client, opts, pickFn, logLabel) {
     await sleep(waitMs);
   }
 
+  return null;
+}
+
+/** Một lần search IMAP — không poll lặp (dùng khi user bấm «Lấy mã QR»). */
+async function fetchScscMailOnce(client, opts, pickFn, logLabel) {
+  const notBeforeMs = opts.notBeforeMs ?? Date.now() - 60_000;
+  const loadCandidates = opts.loadCandidates ?? loadVerifyCandidates;
+  const includeAllMail = opts.includeAllMail === true;
+
+  const loadOnce = async (imapClient) => {
+    const candidates = await loadCandidates(imapClient, notBeforeMs, { includeAllMail });
+    return pickFn(candidates, notBeforeMs, opts.matchHints);
+  };
+
+  try {
+    const found = await loadOnce(client);
+    if (found) {
+      console.info(`[ecargo-gmail] ${logLabel} once uid=${found.uid}`);
+      if (opts.markSeenOnPick !== false && found.mailbox) {
+        await markMailSeen(client, found.uid, found.mailbox);
+      }
+      return found;
+    }
+  } catch {
+    resetPool();
+    client = await getPooledImapClient();
+    const found = await loadOnce(client);
+    if (found) {
+      console.info(`[ecargo-gmail] ${logLabel} once(retry) uid=${found.uid}`);
+      if (opts.markSeenOnPick !== false && found.mailbox) {
+        await markMailSeen(client, found.uid, found.mailbox);
+      }
+      return found;
+    }
+  }
   return null;
 }
 
@@ -348,9 +385,34 @@ export async function waitForEcargoQrEmail(opts = {}) {
     throw e;
   }
 
+  const qrOpts = {
+    ...opts,
+    loadCandidates: loadQrCandidates,
+    markSeenOnPick: false,
+    includeAllMail: !isEcargoQrInboxOnly(),
+  };
+
+  if (isEcargoQrSingleScan()) {
+    const found = await fetchScscMailOnce(client, qrOpts, pickFreshQrMail, "qr");
+    if (found) {
+      console.info(
+        `[ecargo-gmail] qr reg=${found.registrationNo} subject=${found.qrSubject ?? "?"} received=${found.receivedMs ?? "?"} (single scan)`
+      );
+      return found;
+    }
+    throw new Error(
+      "Chưa thấy mail QR trên Gmail (một lần quét). Bấm «Lấy mã QR» lại khi SCSC đã gửi «Phiếu đăng ký hàng vào kho»."
+    );
+  }
+
   const found = await pollScscMail(
     client,
-    { ...opts, loadCandidates: loadQrCandidates, markSeenOnPick: false },
+    {
+      pollMs: ECARGO_QR_GMAIL_POLL_MS,
+      inboxFirstPolls: isEcargoQrInboxOnly() ? 999 : 10,
+      timeoutMs: opts.timeoutMs ?? ECARGO_QR_TIMEOUT_MS,
+      ...qrOpts,
+    },
     pickFreshQrMail,
     "qr"
   );

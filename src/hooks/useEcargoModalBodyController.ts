@@ -4,6 +4,7 @@ import type { Shipment } from "../types/shipment";
 import type { EcargoJobRecord } from "../types/ecargoJob";
 import {
   canRetryEcargoJob,
+  canFetchEcargoQrAction,
   ecargoJobStatusLabel,
   isEcargoJobRunning,
   isEcargoJobTerminal,
@@ -51,6 +52,7 @@ export type UseEcargoModalBodyControllerArgs = {
   onDriverChange: (driverName: string, driverId: string) => void;
   onWarehouseArrivalChange?: (arrivalDate: string, arrivalTimeSlot: string) => void;
   onVehicleTypeChange?: (vehicleType: EcargoVehicleType) => void;
+  markedSubmitted?: boolean;
   onAutoRegister: (opts?: {
     driverName?: string;
     driverId?: string;
@@ -59,6 +61,8 @@ export type UseEcargoModalBodyControllerArgs = {
     arrivalTimeSlot?: string;
     vehicleType?: EcargoVehicleType;
   }) => Promise<void>;
+  onFetchQr?: () => Promise<void>;
+  fetchQrBusy?: boolean;
   onSaveVehicleAsDefault?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   onRefreshJob?: () => void;
   onClose: () => void;
@@ -76,12 +80,15 @@ export function useEcargoModalBodyController({
   viewSessionYmd,
   saveStatus,
   job,
+  markedSubmitted = false,
   autoRegistering,
   onVehicleChange,
   onDriverChange,
   onWarehouseArrivalChange,
   onVehicleTypeChange,
   onAutoRegister,
+  onFetchQr,
+  fetchQrBusy = false,
   onSaveVehicleAsDefault,
   onRefreshJob,
   onClose,
@@ -196,8 +203,25 @@ export function useEcargoModalBodyController({
   }, [autoRegistering, job]);
   const jobLabel = displayJob ? ecargoJobStatusLabel(displayJob.status) : "";
   const jobBusy =
-    autoRegistering || (isEcargoJobRunning(displayJob?.status) && !canRetryEcargoJob(job));
-  const canSubmit = readiness.ready && !autoRegistering && (!jobBusy || canRetryEcargoJob(job));
+    autoRegistering ||
+    fetchQrBusy ||
+    (isEcargoJobRunning(displayJob?.status) && !canRetryEcargoJob(job));
+  const canSubmit = readiness.ready && !autoRegistering && !fetchQrBusy && (!jobBusy || canRetryEcargoJob(job));
+  const showFetchQrButton = Boolean(onFetchQr);
+  const fetchQrEnabled = Boolean(
+    onFetchQr && !fetchQrBusy && !autoRegistering && canFetchEcargoQrAction(job, markedSubmitted)
+  );
+  const fetchQrHint = useMemo(() => {
+    if (!onFetchQr || !showFetchQrButton) return null;
+    if (fetchQrEnabled) return null;
+    if (fetchQrBusy || job?.status === "verified_waiting_qr") {
+      return "Đang quét mail QR một lần — nếu chưa có mail, bấm lại sau vài phút.";
+    }
+    if (markedSubmitted || job?.registrationNo) {
+      return "Đang tải trạng thái job — thử bấm lại sau vài giây.";
+    }
+    return "Hoàn tất «Tự động đăng ký eCargo» trước khi lấy QR.";
+  }, [fetchQrBusy, fetchQrEnabled, job?.registrationNo, job?.status, markedSubmitted, onFetchQr, showFetchQrButton]);
   const registerButtonLabel = useMemo(() => {
     if (autoRegistering) return "Đang gửi lệnh…";
     if (jobBusy) return "Đang tự động đăng ký…";
@@ -218,6 +242,11 @@ export function useEcargoModalBodyController({
   useEffect(() => {
     refreshJobRef.current?.();
   }, [row.id]);
+
+  useEffect(() => {
+    if (!onFetchQr) return;
+    refreshJobRef.current?.();
+  }, [job?.status, job?.updatedAt, onFetchQr]);
 
   useEffect(() => {
     if (job?.status === "error" || localError) setManualOpen(true);
@@ -277,6 +306,16 @@ export function useEcargoModalBodyController({
     saveAsDefault,
   ]);
 
+  const handleFetchQr = useCallback(async () => {
+    if (!onFetchQr || !fetchQrEnabled) return;
+    setLocalError(null);
+    try {
+      await onFetchQr();
+    } catch (e) {
+      setLocalError(formatEcargoJobErrorMessage(e instanceof Error ? e.message : String(e)));
+    }
+  }, [fetchQrEnabled, onFetchQr]);
+
   const copyPasteBlock = useCallback(async () => {
     setCopyError(null);
     const ok = await copyTextToClipboard(pasteBlock);
@@ -317,8 +356,13 @@ export function useEcargoModalBodyController({
     registerButtonLabel,
     showManualFallback,
     showAutoStatusBox,
+    showFetchQrButton,
+    fetchQrEnabled,
+    fetchQrHint,
+    fetchQrBusy,
     applyVehicleFields,
     handleAuto,
+    handleFetchQr,
     copyPasteBlock,
     openEcargoSite,
     setVehicleInput,

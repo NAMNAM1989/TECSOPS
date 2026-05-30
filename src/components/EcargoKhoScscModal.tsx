@@ -291,12 +291,15 @@ function EcargoKhoScscModalBody({
   viewSessionYmd,
   saveStatus,
   job,
+  markedSubmitted = false,
   autoRegistering,
   onVehicleChange,
   onDriverChange,
   onWarehouseArrivalChange,
   onVehicleTypeChange,
   onAutoRegister,
+  onFetchQr,
+  fetchQrBusy = false,
   onSaveVehicleAsDefault,
   onRefreshJob,
   onClose,
@@ -312,6 +315,7 @@ function EcargoKhoScscModalBody({
   viewSessionYmd: string;
   saveStatus: EcargoSaveStatus;
   job?: EcargoJobRecord;
+  markedSubmitted?: boolean;
   autoRegistering: boolean;
   onVehicleChange: (raw: string) => void;
   onDriverChange: (driverName: string, driverId: string) => void;
@@ -325,6 +329,8 @@ function EcargoKhoScscModalBody({
     arrivalTimeSlot?: string;
     vehicleType?: EcargoVehicleType;
   }) => Promise<void>;
+  onFetchQr?: () => Promise<void>;
+  fetchQrBusy?: boolean;
   onSaveVehicleAsDefault?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   onRefreshJob?: () => void;
   onClose: () => void;
@@ -351,9 +357,14 @@ function EcargoKhoScscModalBody({
     registerButtonLabel,
     showAutoStatusBox,
     showManualFallback,
+    showFetchQrButton,
+    fetchQrEnabled,
+    fetchQrHint,
+    fetchQrBusy: fetchQrBusyState,
     pasteBlock,
     applyVehicleFields,
     handleAuto,
+    handleFetchQr,
     copyPasteBlock,
     openEcargoSite,
     setVehicleInput,
@@ -379,12 +390,15 @@ function EcargoKhoScscModalBody({
     viewSessionYmd,
     saveStatus,
     job,
+    markedSubmitted,
     autoRegistering,
     onVehicleChange,
     onDriverChange,
     onWarehouseArrivalChange,
     onVehicleTypeChange,
     onAutoRegister,
+    onFetchQr,
+    fetchQrBusy,
     onSaveVehicleAsDefault,
     onRefreshJob,
     onClose,
@@ -519,8 +533,22 @@ function EcargoKhoScscModalBody({
           </div>
         ) : null}
 
-        {displayJob &&
-        (displayJob.status === "qr_ready" || displayJob.status === "verified_waiting_qr") ? (
+        {onFetchQr ? (
+          <EcargoQrPanel
+            job={
+              displayJob ?? {
+                shipmentId: row.id,
+                status: markedSubmitted ? "verified" : "queued",
+                message: markedSubmitted ? "Đã đăng ký eCargo trên hệ thống." : undefined,
+              }
+            }
+            awb={row.awb}
+            onFetchQr={fetchQrEnabled ? handleFetchQr : undefined}
+            fetchQrBusy={fetchQrBusyState || job?.status === "verified_waiting_qr"}
+            showFetchAction={showFetchQrButton}
+            fetchQrEnabled={fetchQrEnabled}
+          />
+        ) : displayJob?.status === "qr_ready" ? (
           <EcargoQrPanel job={displayJob} awb={row.awb} />
         ) : null}
 
@@ -558,6 +586,26 @@ function EcargoKhoScscModalBody({
       </div>
 
       <div className="sticky bottom-0 border-t border-black/[0.05] bg-white/95 px-4 py-3 backdrop-blur-sm dark:border-white/[0.06] dark:bg-dashboard-surface-dark/95 sm:px-5">
+        {showFetchQrButton ? (
+          <>
+            <button
+              type="button"
+              disabled={!fetchQrEnabled}
+              aria-label="Lấy mã QR eCargo"
+              onClick={() => void handleFetchQr()}
+              className="mb-2 w-full rounded-xl border border-amber-500/30 bg-amber-500/10 py-2.5 text-[13px] font-bold uppercase tracking-wide text-amber-950 transition hover:bg-amber-500/15 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100"
+            >
+              {fetchQrBusyState || job?.status === "verified_waiting_qr"
+                ? "Đang lấy QR…"
+                : "Lấy mã QR"}
+            </button>
+            {fetchQrHint ? (
+              <p className="-mt-1 mb-2 text-center text-[10px] leading-snug text-dashboard-muted dark:text-slate-500">
+                {fetchQrHint}
+              </p>
+            ) : null}
+          </>
+        ) : null}
         <button
           type="button"
           disabled={!canSubmit}
@@ -569,7 +617,7 @@ function EcargoKhoScscModalBody({
         </button>
         {!showAutoStatusBox ? (
           <p className="mt-2 text-center text-[10px] leading-snug text-dashboard-muted dark:text-slate-500">
-            Tự điền form · tạo phiếu · xác thực mail
+            Tự điền form · tạo phiếu · xác thực — QR lấy riêng khi vào kho
           </p>
         ) : null}
         <button
@@ -598,12 +646,15 @@ export function EcargoKhoScscCenterModal({
   viewSessionYmd,
   saveStatus,
   job,
+  markedSubmitted = false,
   autoRegistering,
   onVehicleChange,
   onDriverChange,
   onWarehouseArrivalChange,
   onVehicleTypeChange,
   onAutoRegister,
+  onFetchQr,
+  fetchQrBusy = false,
   onSaveVehicleAsDefault,
   onRefreshJob,
   onClose,
@@ -620,6 +671,7 @@ export function EcargoKhoScscCenterModal({
   viewSessionYmd: string;
   saveStatus: EcargoSaveStatus;
   job?: EcargoJobRecord;
+  markedSubmitted?: boolean;
   autoRegistering: boolean;
   onVehicleChange: (raw: string) => void;
   onDriverChange?: (driverName: string, driverId: string) => void;
@@ -633,6 +685,8 @@ export function EcargoKhoScscCenterModal({
     arrivalTimeSlot?: string;
     vehicleType?: EcargoVehicleType;
   }) => Promise<void>;
+  onFetchQr?: () => Promise<void>;
+  fetchQrBusy?: boolean;
   onSaveVehicleAsDefault?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   onRefreshJob?: () => void;
   onClose: () => void;
@@ -713,12 +767,15 @@ export function EcargoKhoScscCenterModal({
             viewSessionYmd={viewSessionYmd}
             saveStatus={saveStatus}
             job={job}
+            markedSubmitted={markedSubmitted}
             autoRegistering={autoRegistering}
             onVehicleChange={onVehicleChange}
             onDriverChange={handleDriverChange}
             onWarehouseArrivalChange={onWarehouseArrivalChange}
             onVehicleTypeChange={onVehicleTypeChange}
             onAutoRegister={onAutoRegister}
+            onFetchQr={onFetchQr}
+            fetchQrBusy={fetchQrBusy}
             onSaveVehicleAsDefault={onSaveVehicleAsDefault}
             onRefreshJob={onRefreshJob}
             onClose={onClose}

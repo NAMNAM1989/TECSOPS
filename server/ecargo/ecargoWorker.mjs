@@ -1,4 +1,4 @@
-import { ECARGO_QUEUE_KEY, ECARGO_JOB_TIMEOUT_MS, ECARGO_JOB_KEY_PREFIX } from "./ecargoConfig.mjs";
+import { ECARGO_QUEUE_KEY, ECARGO_JOB_TIMEOUT_MS, ECARGO_JOB_KEY_PREFIX, ECARGO_QR_TIMEOUT_MS } from "./ecargoConfig.mjs";
 import {
   getEcargoJob,
   patchEcargoJob,
@@ -26,7 +26,7 @@ import { warmEcargoPlaywright } from "./ecargoPlaywright.mjs";
  * 2. waiting_verify_email             Chờ mail «Mã xác thực…» (sau submittedAt)
  * 3. mail_received                    Parse link + mã từ Gmail
  * 4. verifying                        Mở link Verify + bấm nút Xác Thực
- * 5. verified_waiting_qr → qr_ready   Chờ mail QR (tuỳ chọn)
+ * 5. verified (mặc định) — QR chỉ khi user bấm «Lấy mã QR» (resumeQrOnly)
  */
 export function startEcargoWorker(redisOrDeps, legacyDeps) {
   /** @type {import('redis').RedisClientType | null} */
@@ -88,7 +88,15 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
   const shouldAbortJob = (shipmentId, jobId) => async () =>
     !(await isEcargoJobCurrent(storeClient, shipmentId, jobId));
 
-  const finishVerifiedWithoutQr = async (shipmentId, jobId, startedAt, mail, regNo, stageMs = {}) => {
+  const finishVerifiedSuccess = async (
+    shipmentId,
+    jobId,
+    startedAt,
+    mail,
+    regNo,
+    stageMs = {},
+    verifyClickedAt
+  ) => {
     const verifyDoneBits = [
       regNo ? `Phiếu ${regNo}` : "",
       mail?.verifyCode ? `Mã ${mail.verifyCode}` : "",
@@ -97,10 +105,11 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
       status: "verified",
       verifyCode: mail?.verifyCode,
       registrationNo: regNo || undefined,
+      verifyClickedAt,
       message:
         verifyDoneBits.length > 0
-          ? `Đã xác thực — ${verifyDoneBits.join(" · ")} (chưa nhận mail QR)`
-          : "Đã xác thực thành công (chưa nhận mail QR).",
+          ? `Đã xác thực — ${verifyDoneBits.join(" · ")}. Bấm «Lấy mã QR» khi cần vào kho.`
+          : "Đã xác thực thành công. Bấm «Lấy mã QR» khi cần vào kho.",
       finishedAt: new Date().toISOString(),
       durationMs: Date.now() - startedAt,
       jobId,
@@ -114,6 +123,26 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
       });
       deps.io?.emit("sync", next);
     }
+  };
+
+  const finishVerifiedWithoutQr = async (
+    shipmentId,
+    jobId,
+    startedAt,
+    mail,
+    regNo,
+    stageMs = {},
+    verifyClickedAt
+  ) => {
+    await finishVerifiedSuccess(
+      shipmentId,
+      jobId,
+      startedAt,
+      mail,
+      regNo,
+      stageMs,
+      verifyClickedAt
+    );
   };
 
   const runQrWaitPhase = async ({
@@ -151,20 +180,23 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
     }
 
     const tQr = Date.now();
-    const qrNotBefore = Date.parse(verifyClickedAt) - 2_000;
+    const anchorMs = Date.parse(String(verifyClickedAt ?? ""));
+    const qrNotBefore = Number.isFinite(anchorMs)
+      ? anchorMs - 2_000
+      : Date.now() - 30 * 60 * 1000;
     await updateJob(shipmentId, {
       status: "verified_waiting_qr",
       verifyClickedAt,
       registrationNo: regNo,
-      message: `Đã xác thực phiếu ${regNo || "?"} — đang chờ mail QR (Phiếu đăng ký hàng vào kho)…`,
+      message: `Đang quét mail QR phiếu ${regNo || "?"} (theo yêu cầu)…`,
       jobId,
     });
-    console.info(`[ecargo] ${shipmentId} step4 gmail qr`);
+    console.info(`[ecargo] ${shipmentId} step4 gmail qr (user requested)`);
     let qrMail;
     try {
       qrMail = await waitForEcargoQrEmail({
         notBeforeMs: Number.isFinite(qrNotBefore) ? qrNotBefore : Date.now() - 60_000,
-        timeoutMs: Math.min(ECARGO_JOB_TIMEOUT_MS, 12 * 60 * 1000),
+        timeoutMs: Math.min(ECARGO_JOB_TIMEOUT_MS, ECARGO_QR_TIMEOUT_MS),
         matchHints: {
           registrationNo: regNo || undefined,
           mawb: booking.mawb,
@@ -179,10 +211,18 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
       if (browserContext) {
         await closeEcargoContext(browserContext, { destroy: false });
       }
-      await finishVerifiedWithoutQr(shipmentId, jobId, startedAt, mail, regNo, {
-        ...stageMs,
-        qrWait: Date.now() - tQr,
-      });
+      await finishVerifiedWithoutQr(
+        shipmentId,
+        jobId,
+        startedAt,
+        mail,
+        regNo,
+        {
+          ...stageMs,
+          qrWait: Date.now() - tQr,
+        },
+        verifyClickedAt
+      );
       return;
     }
 
@@ -249,8 +289,7 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
 
     if (
       existing?.resumeQrOnly &&
-      existing?.verifyClickedAt &&
-      existing?.registrationNo
+      (existing?.verifyClickedAt || existing?.registrationNo || existing?.verifyCode)
     ) {
       console.info(`[ecargo] ${shipmentId} resume qr-only reg=${existing.registrationNo}`);
       try {
@@ -263,7 +302,10 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
             verifyCode: existing.verifyCode,
           },
           regNo: existing.registrationNo,
-          verifyClickedAt: existing.verifyClickedAt,
+          verifyClickedAt:
+            existing.verifyClickedAt ||
+            existing.mailReceivedAt ||
+            new Date(Date.now() - 30 * 60 * 1000).toISOString(),
         });
       } catch (e) {
         if (e?.code === "ECARGO_JOB_SUPERSEDED") {
@@ -374,26 +416,21 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
 
       const verifyClickedAt = new Date().toISOString();
       const regNo = verifyOutcome.registrationNo || mail.registrationNo || "";
-      await updateJob(shipmentId, {
-        status: "verified_waiting_qr",
-        verifyClickedAt,
-        registrationNo: regNo || mail.registrationNo,
-        message: verifyOutcome.verifyMessage,
-        stageMs: { playwright: playwrightMs, verifyMail: mailMs, verify: verifyMs },
-        jobId,
-      });
+      const stageMs = { playwright: playwrightMs, verifyMail: mailMs, verify: verifyMs };
 
-      await runQrWaitPhase({
+      if (browserContext) {
+        await closeEcargoContext(browserContext, { destroy: false });
+        browserContext = null;
+      }
+      await finishVerifiedSuccess(
         shipmentId,
         jobId,
         startedAt,
-        booking,
         mail,
         regNo,
-        verifyClickedAt,
-        stageMs: { playwright: playwrightMs, verifyMail: mailMs, verify: verifyMs },
-        browserContext,
-      });
+        stageMs,
+        verifyClickedAt
+      );
       console.info(`[ecargo] ${shipmentId} done ${Date.now() - startedAt}ms`);
     } catch (e) {
       if (e?.code === "ECARGO_JOB_SUPERSEDED") {

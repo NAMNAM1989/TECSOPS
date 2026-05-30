@@ -34,6 +34,9 @@ function setVar(key, value) {
 // Reference Redis plugin trên Railway (internal URL)
 setVar("REDIS_URL", `\${{${REDIS_SERVICE}.REDIS_URL}}`);
 setVar("ECARGO_WORKER_ENABLED", "1");
+setVar("ECARGO_QR_WAIT_MODE", "on_demand");
+setVar("ECARGO_QR_POLL_MODE", "single");
+setVar("ECARGO_QR_INBOX_ONLY", "1");
 
 for (const key of ["ECARGO_GMAIL_USER", "ECARGO_GMAIL_APP_PASSWORD", "ECARGO_CONTACT_EMAIL"]) {
   const val = process.env[key]?.trim();

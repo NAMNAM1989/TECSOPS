@@ -69,15 +69,76 @@ export function registerEcargoRoutes(app, deps) {
 
       const persistedLine = state.ecargoKhoScsc?.[shipmentId] ?? {};
 
+      const forceRetry = body.forceRetry === true;
+      const fetchQrOnly = body.fetchQrOnly === true;
+      const existing = await getEcargoJob(deps.redisClient, shipmentId);
+      const jobId = newEcargoJobId();
+
+      if (fetchQrOnly) {
+        if (!existing?.registrationNo && !existing?.verifyClickedAt && !existing?.verifyCode) {
+          res.status(400).json({ error: "Chưa có phiếu đã xác thực — đăng ký eCargo trước." });
+          return;
+        }
+        if (existing.status === "qr_ready") {
+          res.status(400).json({ error: "Đã có mã QR cho lô này." });
+          return;
+        }
+        if (!shouldResumeEcargoQrOnly(existing) && existing.status !== "verified_waiting_qr") {
+          res.status(400).json({ error: "Chưa có phiếu đã xác thực — đăng ký eCargo trước." });
+          return;
+        }
+        if (shouldBlockEcargoEnqueue(existing, { forceRetry: true, fetchQrOnly: true })) {
+          res.json({ job: existing, reused: true });
+          deps.io?.emit("ecargo-job", existing);
+          return;
+        }
+        let qrBooking = existing.booking;
+        if (!qrBooking) {
+          qrBooking = buildEcargoBookingFromShipment(
+            row,
+            existing.vehicleNo || vehicleNo,
+            existing.viewSessionYmd || viewSessionYmd,
+            {
+              driverName: String(persistedLine.driverName ?? "").trim(),
+              driverId: String(persistedLine.driverId ?? "").trim(),
+              arrivalDate: String(persistedLine.arrivalDate ?? "").trim(),
+              arrivalTimeSlot: String(persistedLine.arrivalTimeSlot ?? "").trim(),
+              vehicleType: String(persistedLine.vehicleType ?? "").trim(),
+            }
+          );
+        }
+        if (!qrBooking) {
+          res.status(400).json({ error: "Thiếu dữ liệu booking — đăng ký eCargo lại trước khi lấy QR." });
+          return;
+        }
+        if (existing.status !== "superseded") {
+          await supersedeEcargoJob(deps.redisClient, shipmentId, jobId);
+        }
+        const resumeQrOnly = true;
+        const job = await enqueueEcargoJob(
+          deps.redisClient,
+          {
+            jobId,
+            shipmentId,
+            vehicleNo: existing.vehicleNo || vehicleNo,
+            viewSessionYmd: existing.viewSessionYmd || viewSessionYmd,
+            booking: qrBooking,
+            awb: existing.awb || row.awb,
+            attempt: (existing.attempt ?? 0) + 1,
+            message: `Quét mail QR phiếu ${existing.registrationNo ?? "?"} (một lần)…`,
+          },
+          { prevJob: existing, resumeQrOnly }
+        );
+        deps.io?.emit("ecargo-job", job);
+        res.status(202).json({ job });
+        return;
+      }
+
       const readiness = getEcargoRegisterReadiness(row, vehicleNo, viewSessionYmd);
       if (!readiness.ready) {
         res.status(400).json({ error: readiness.hint });
         return;
       }
-
-      const forceRetry = body.forceRetry === true;
-      const existing = await getEcargoJob(deps.redisClient, shipmentId);
-      const jobId = newEcargoJobId();
 
       if (shouldBlockEcargoEnqueue(existing, { forceRetry })) {
         res.json({ job: existing, reused: true });
@@ -106,7 +167,6 @@ export function registerEcargoRoutes(app, deps) {
         booking = draft;
       }
       const attempt = (existing?.attempt ?? 0) + 1;
-      const resumeQrOnly = forceRetry && shouldResumeEcargoQrOnly(existing);
       const job = await enqueueEcargoJob(
         deps.redisClient,
         {
@@ -119,12 +179,10 @@ export function registerEcargoRoutes(app, deps) {
           attempt,
           message:
             attempt > 1
-              ? resumeQrOnly
-                ? `Chờ mail QR (lần ${attempt}) — không tạo phiếu mới.`
-                : `Đăng ký lại (lần ${attempt}) — worker đang xử lý.`
+              ? `Đăng ký lại (lần ${attempt}) — worker đang xử lý.`
               : "Đã xếp hàng — worker đang xử lý.",
         },
-        { prevJob: existing, resumeQrOnly }
+        { prevJob: existing, resumeQrOnly: false }
       );
 
       deps.io?.emit("ecargo-job", job);

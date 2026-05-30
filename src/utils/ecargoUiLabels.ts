@@ -145,7 +145,7 @@ export function describeEcargoRowNotification(job: EcargoJobRecord): {
         detail:
           job.message ||
           [code && `Mã ${code}`, reg && `Phiếu ${reg}`, speed].filter(Boolean).join(" · ") ||
-          "Đã tạo phiếu và xác thực thành công.",
+          "Đã tạo phiếu và xác thực — bấm «Lấy mã QR» khi vào kho.",
       };
     case "error":
       return {

@@ -183,6 +183,31 @@ describe("ecargoVerifyMail", () => {
     expect(picked?.registrationNo).toBe("REGQR1");
   });
 
+  it("trích ảnh QR qua cid: trong multipart/related", () => {
+    const tinyPngBase64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const raw = [
+      "Content-Type: multipart/related; boundary=rel-bound",
+      "",
+      "--rel-bound",
+      "Content-Type: text/html; charset=utf-8",
+      "",
+      '<html><body>Số REGCID1 Mã QR<img src="cid:qr-image-001"></body></html>',
+      "--rel-bound",
+      "Content-Type: image/png",
+      "Content-Transfer-Encoding: base64",
+      "Content-ID: <qr-image-001>",
+      "",
+      tinyPngBase64,
+      "--rel-bound--",
+    ].join("\r\n");
+    const dataUrl = extractQrImageDataUrl(raw);
+    expect(dataUrl.startsWith("data:image/png;base64,")).toBe(true);
+    const parsed = parseQrMailRaw(raw, { subject: "Phiếu đăng ký hàng vào kho — REGCID1" });
+    expect(parsed?.registrationNo).toBe("REGCID1");
+    expect(parsed?.qrImageDataUrl).toBe(dataUrl);
+  });
+
   it("trích ảnh QR base64 từ attachment PNG trong MIME", () => {
     const tinyPngBase64 =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";

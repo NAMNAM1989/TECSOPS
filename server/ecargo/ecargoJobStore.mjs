@@ -58,9 +58,10 @@ export async function enqueueEcargoJob(client, job, opts = {}) {
     awb: job.awb,
     attempt: job.attempt,
     resumeQrOnly,
+    qrFetchRequestedAt: resumeQrOnly ? new Date().toISOString() : undefined,
     status: /** @type {EcargoJobStatus} */ ("queued"),
     message: resumeQrOnly
-      ? `Chờ mail QR phiếu ${prevJob?.registrationNo ?? "?"} — không tạo phiếu mới.`
+      ? `Quét mail QR phiếu ${prevJob?.registrationNo ?? "?"} — một lần theo yêu cầu.`
       : job.message,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -145,6 +146,14 @@ export function isEcargoJobStaleActive(job) {
  */
 export function shouldBlockEcargoEnqueue(existing, opts = {}) {
   if (!existing?.status || existing.status === "superseded") return false;
+  if (opts.fetchQrOnly) {
+    if (existing.status === "qr_ready") return true;
+    if (existing.status === "verified_waiting_qr") {
+      if (isEcargoJobStaleActive(existing)) return false;
+      return isEcargoJobActive(existing, 90_000);
+    }
+    return false;
+  }
   if (opts.forceRetry) {
     if (existing.status === "error") return false;
     if (existing.status === "verified" || existing.status === "qr_ready") return false;
@@ -156,8 +165,10 @@ export function shouldBlockEcargoEnqueue(existing, opts = {}) {
 
 /** Chỉ chờ mail QR — không tạo phiếu / bấm Xác Thực lại (tránh SCSC gửi trùng mail QR). */
 export function shouldResumeEcargoQrOnly(prev) {
-  if (!prev?.verifyClickedAt || !prev?.registrationNo) return false;
   if (prev.qrReceivedAt || prev.status === "qr_ready") return false;
+  if (prev.status === "verified_waiting_qr") return true;
+  const hasAnchor = prev?.verifyClickedAt || prev?.registrationNo || prev?.verifyCode;
+  if (!hasAnchor) return false;
   return prev.status === "error" || prev.status === "verified";
 }
 

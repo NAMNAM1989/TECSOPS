@@ -20,7 +20,7 @@ import {
 import { credFetch } from "../apiFetch";
 import { canSendEcargoRegister } from "../utils/ecargoPayload";
 import type { EcargoJobRecord } from "../types/ecargoJob";
-import { canRetryEcargoJob, isEcargoJobTerminal } from "../types/ecargoJob";
+import { canRetryEcargoJob, canFetchEcargoQrAction, isEcargoJobTerminal } from "../types/ecargoJob";
 import { describeEcargoRowNotification } from "../utils/ecargoUiLabels";
 import { computeEcargoSeedFromCustomer } from "../utils/customerVehicleCore";
 
@@ -61,12 +61,15 @@ export function useEcargoKhoScscRegister(
   const [jobsById, setJobsById] = useState<Record<string, EcargoJobRecord>>({});
   const [toasts, setToasts] = useState<EcargoToastItem[]>([]);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [fetchingQrId, setFetchingQrId] = useState<string | null>(null);
   const [openPanelRequestId, setOpenPanelRequestId] = useState<string | null>(null);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const pendingPatchRef = useRef<Map<string, EcargoLinePatch>>(new Map());
   const migrateStartedRef = useRef(false);
   const toastSeenRef = useRef<Map<string, EcargoJobRecord["status"]>>(new Map());
   const hydrateKeyRef = useRef("");
+  /** Lô user vừa bấm «Lấy mã QR» — tự mở panel khi qr_ready. */
+  const qrFetchPendingRef = useRef(new Set<string>());
 
   const map = useMemo(
     () => ({ ...serverMap, ...draftOverlay }),
@@ -120,8 +123,13 @@ export function useEcargoKhoScscRegister(
       setJobsById((prev) => ({ ...prev, [job.shipmentId]: job }));
       pushToastForJob(job);
       setSubmittingId((id) => (id === job.shipmentId ? null : id));
+      setFetchingQrId((id) => (id === job.shipmentId ? null : id));
+      if (job.status === "qr_ready" && qrFetchPendingRef.current.has(job.shipmentId)) {
+        qrFetchPendingRef.current.delete(job.shipmentId);
+        requestOpenEcargoPanel(job.shipmentId);
+      }
     });
-  }, [pushToastForJob, subscribeEcargoJob]);
+  }, [pushToastForJob, requestOpenEcargoPanel, subscribeEcargoJob]);
 
   useEffect(() => {
     if (!state || migrateStartedRef.current || isEcargoLocalMigrated()) return;
@@ -410,9 +418,84 @@ export function useEcargoKhoScscRegister(
     [flushEcargoLine, jobsById, map]
   );
 
+  const fetchQr = useCallback(
+    async (row: Shipment, viewSessionYmd: string) => {
+      const shipmentId = row.id;
+      let prevJob = jobsById[shipmentId];
+      try {
+        const res = await fetch(`/api/ecargo/jobs/${encodeURIComponent(shipmentId)}`, {
+          ...credFetch,
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const body: unknown = await res.json().catch(() => ({}));
+          const o = body && typeof body === "object" ? (body as { job?: EcargoJobRecord }) : {};
+          if (o.job?.status) {
+            prevJob = o.job;
+            setJobsById((prev) => ({ ...prev, [shipmentId]: o.job! }));
+          }
+        }
+      } catch {
+        /* dùng cache local */
+      }
+
+      const markedSubmitted = map[shipmentId]?.markedSubmitted;
+      if (!canFetchEcargoQrAction(prevJob, markedSubmitted)) {
+        throw new Error("Chưa có phiếu đã xác thực — đăng ký eCargo trước.");
+      }
+
+      setFetchingQrId(shipmentId);
+      qrFetchPendingRef.current.add(shipmentId);
+      setJobsById((prev) => ({
+        ...prev,
+        [shipmentId]: {
+          ...(prev[shipmentId] ?? prevJob ?? {}),
+          shipmentId,
+          status: "verified_waiting_qr",
+          message: "Đang quét mail QR (một lần)…",
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+      try {
+        const res = await fetch("/api/ecargo/jobs", {
+          ...credFetch,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shipmentId,
+            viewSessionYmd,
+            fetchQrOnly: true,
+            forceRetry: true,
+          }),
+        });
+        const body: unknown = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+          throw new Error(typeof o.error === "string" ? o.error : "Không gửi được lệnh lấy QR.");
+        }
+        const o = body as { job?: EcargoJobRecord; reused?: boolean };
+        if (o.job) {
+          setJobsById((prev) => ({ ...prev, [shipmentId]: o.job! }));
+        }
+        if (o.reused || o.job?.status === "qr_ready" || o.job?.status === "error") {
+          setFetchingQrId(null);
+        }
+      } catch (e) {
+        setFetchingQrId(null);
+        throw e;
+      }
+    },
+    [jobsById, map]
+  );
+
   const isAutoRegistering = useCallback(
     (shipmentId: string) => submittingId === shipmentId,
     [submittingId]
+  );
+
+  const isFetchingQr = useCallback(
+    (shipmentId: string) => fetchingQrId === shipmentId,
+    [fetchingQrId]
   );
 
   const hydrateJobs = useCallback(async (shipmentIds: string[]) => {
@@ -510,7 +593,9 @@ export function useEcargoKhoScscRegister(
     hydrateJobs,
     hydrateKeyRef,
     autoRegister,
+    fetchQr,
     isAutoRegistering,
+    isFetchingQr,
     toasts,
     dismissToast,
     handleToastAction,

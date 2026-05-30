@@ -81,8 +81,10 @@ interface Props {
   getEcargoJob: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob: (id: string) => void | Promise<void>;
   onEcargoAutoRegister: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
+  onEcargoFetchQr?: (row: Shipment) => void | Promise<void>;
   onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering: (id: string) => boolean;
+  isEcargoFetchingQr?: (id: string) => boolean;
   /** Mở panel eCargo từ toast «Xem QR». */
   openEcargoRequestId?: string | null;
   onEcargoRequestHandled?: () => void;
@@ -134,8 +136,10 @@ export function DesktopShipmentTable({
   getEcargoJob,
   refreshEcargoJob,
   onEcargoAutoRegister,
+  onEcargoFetchQr,
   onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
+  isEcargoFetchingQr,
   openEcargoRequestId = null,
   onEcargoRequestHandled,
   searchHighlightWarehouses = [],
@@ -239,8 +243,10 @@ export function DesktopShipmentTable({
                   getEcargoJob={getEcargoJob}
                   refreshEcargoJob={refreshEcargoJob}
                   onEcargoAutoRegister={onEcargoAutoRegister}
+                  onEcargoFetchQr={onEcargoFetchQr}
                   onSaveCustomerVehicleForEcargo={onSaveCustomerVehicleForEcargo}
                   isEcargoAutoRegistering={isEcargoAutoRegistering}
+                  isEcargoFetchingQr={isEcargoFetchingQr}
                   highlightedShipmentId={highlightedShipmentId}
                   selectedRowId={selectedRowId}
                   onSelectRow={onSelectRow}
@@ -291,8 +297,10 @@ function WarehouseGroupRows({
   getEcargoJob,
   refreshEcargoJob,
   onEcargoAutoRegister,
+  onEcargoFetchQr,
   onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
+  isEcargoFetchingQr,
   allRows,
   customerDirectory,
   globalAgents,
@@ -321,8 +329,10 @@ function WarehouseGroupRows({
   getEcargoJob: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob: (id: string) => void | Promise<void>;
   onEcargoAutoRegister: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
+  onEcargoFetchQr?: (row: Shipment) => void | Promise<void>;
   onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering: (id: string) => boolean;
+  isEcargoFetchingQr?: (id: string) => boolean;
   allRows: Shipment[];
   customerDirectory: readonly CustomerDirectoryEntry[];
   globalAgents?: import("../types/globalAgents").GlobalAgentCatalog;
@@ -385,8 +395,10 @@ function WarehouseGroupRows({
           getEcargoJob={getEcargoJob}
           refreshEcargoJob={refreshEcargoJob}
           onEcargoAutoRegister={onEcargoAutoRegister}
+          onEcargoFetchQr={onEcargoFetchQr}
           onSaveCustomerVehicleForEcargo={onSaveCustomerVehicleForEcargo}
           isEcargoAutoRegistering={isEcargoAutoRegistering}
+          isEcargoFetchingQr={isEcargoFetchingQr}
           groupRowIds={groupRowIds}
           allRows={allRows}
           customerDirectory={customerDirectory}
@@ -426,8 +438,10 @@ function ShipmentRow({
   getEcargoJob,
   refreshEcargoJob,
   onEcargoAutoRegister,
+  onEcargoFetchQr,
   onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
+  isEcargoFetchingQr,
   groupRowIds,
   allRows,
   customerDirectory,
@@ -457,8 +471,10 @@ function ShipmentRow({
   getEcargoJob: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob: (id: string) => void | Promise<void>;
   onEcargoAutoRegister: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
+  onEcargoFetchQr?: (row: Shipment) => void | Promise<void>;
   onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering: (id: string) => boolean;
+  isEcargoFetchingQr?: (id: string) => boolean;
   groupRowIds: string[];
   allRows: Shipment[];
   customerDirectory: readonly CustomerDirectoryEntry[];
@@ -805,6 +821,7 @@ function ShipmentRow({
         viewSessionYmd={viewSessionYmd}
         saveStatus={getEcargoSaveStatus(row.id)}
         job={ecargoJob}
+        markedSubmitted={ecargoLine?.markedSubmitted}
         autoRegistering={isEcargoAutoRegistering(row.id)}
         onVehicleChange={(raw) => onEcargoVehicleChange(row.id, raw)}
         onDriverChange={(name, id) => onEcargoDriverChange?.(row.id, name, id)}
@@ -813,6 +830,14 @@ function ShipmentRow({
         onAutoRegister={async (opts) => {
           await onEcargoAutoRegister(row, opts);
         }}
+        onFetchQr={
+          onEcargoFetchQr
+            ? async () => {
+                await onEcargoFetchQr(row);
+              }
+            : undefined
+        }
+        fetchQrBusy={isEcargoFetchingQr?.(row.id) ?? false}
         onSaveVehicleAsDefault={onSaveCustomerVehicleForEcargo}
         onRefreshJob={() => void refreshEcargoJob(row.id)}
         onClose={onCloseEcargoTable}

@@ -649,6 +649,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         getEcargoJob={ecargoRegister.getJob}
         refreshEcargoJob={ecargoRegister.refreshJob}
         onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
+        onEcargoFetchQr={(row) => ecargoRegister.fetchQr(row, selectedYmd)}
+        isEcargoFetchingQr={ecargoRegister.isFetchingQr}
         onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
         isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
         openEcargoRequestId={openPanelRequestId}
@@ -683,6 +685,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         getEcargoJob={ecargoRegister.getJob}
         refreshEcargoJob={ecargoRegister.refreshJob}
         onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
+        onEcargoFetchQr={(row) => ecargoRegister.fetchQr(row, selectedYmd)}
+        isEcargoFetchingQr={ecargoRegister.isFetchingQr}
         onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
         isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
         openEcargoRequestId={openPanelRequestId}
@@ -723,6 +727,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         getEcargoJob={ecargoRegister.getJob}
         refreshEcargoJob={ecargoRegister.refreshJob}
         onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
+        onEcargoFetchQr={(row) => ecargoRegister.fetchQr(row, selectedYmd)}
+        isEcargoFetchingQr={ecargoRegister.isFetchingQr}
         onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
         isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
         onClose={() => {

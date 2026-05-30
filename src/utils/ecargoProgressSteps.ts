@@ -59,21 +59,30 @@ const STEPS: StepDef[] = [
   {
     id: "verify-click",
     label: "Bấm Xác thực trên trang eCargo",
-    doneAt: "verified_waiting_qr",
+    doneAt: "verified",
     active: ["mail_received", "verifying"],
   },
   {
     id: "qr-mail",
-    label: "Chờ email QR (nếu bật)",
+    label: "Lấy mã QR (khi cần vào kho)",
     doneAt: "qr_ready",
     active: ["verified_waiting_qr"],
+    detail: (job) =>
+      job.status === "verified"
+        ? "Bấm «Lấy mã QR» trên dòng lô hoặc trong modal khi đến cổng kho."
+        : undefined,
   },
 ];
 
 function stepState(job: EcargoJobRecord | undefined, def: StepDef): EcargoProgressStepState {
   const s = job?.status;
   if (!s) return "pending";
-  if (s === "verified" || s === "qr_ready") return "done";
+  if (s === "qr_ready") return "done";
+  if (s === "verified_waiting_qr" && def.id === "verify-click") return "done";
+  if (s === "verified") {
+    if (def.id === "qr-mail") return "pending";
+    return rank(s) >= rank(def.doneAt) ? "done" : def.active.includes(s) ? "active" : "pending";
+  }
   if (s === "error") {
     const failedRank = failedStepRankOnError(job);
     const myRank = STEPS.findIndex((d) => d.id === def.id);

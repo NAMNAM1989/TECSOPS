@@ -89,6 +89,29 @@ export function canRetryEcargoJob(job?: EcargoJobRecord): boolean {
   return true;
 }
 
+/** Đã xác thực phiếu — có thể bấm «Lấy mã QR» (không tạo phiếu mới). */
+export function canFetchEcargoQr(job?: EcargoJobRecord): boolean {
+  if (!job?.status) return false;
+  if (job.status === "qr_ready") return false;
+  if (job.status === "verified_waiting_qr") return canRetryEcargoJob(job);
+  const hasVerifiedAnchor = Boolean(
+    job.verifyClickedAt || job.registrationNo || job.verifyCode || job.mailReceivedAt
+  );
+  if (!hasVerifiedAnchor) return false;
+  return job.status === "verified" || job.status === "error";
+}
+
+/** UI/hook: có thể bấm «Lấy mã QR» (khớp validation client + server). */
+export function canFetchEcargoQrAction(
+  job?: EcargoJobRecord,
+  markedSubmitted?: boolean
+): boolean {
+  if (canFetchEcargoQr(job)) return true;
+  if (!markedSubmitted || !job?.status) return false;
+  if (job.status === "qr_ready") return false;
+  return Boolean(job.registrationNo || job.verifyCode || job.verifyClickedAt);
+}
+
 export function isEcargoJobRunning(status: EcargoJobStatus | undefined): boolean {
   return (
     status === "queued" ||

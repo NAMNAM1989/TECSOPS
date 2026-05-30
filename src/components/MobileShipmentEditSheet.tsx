@@ -61,8 +61,10 @@ type Props = {
   getEcargoJob?: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob?: (id: string) => void | Promise<void>;
   onEcargoAutoRegister?: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
+  onEcargoFetchQr?: (row: Shipment) => void | Promise<void>;
   onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering?: (id: string) => boolean;
+  isEcargoFetchingQr?: (id: string) => boolean;
   onClose: () => void;
   onSave: (patch: Partial<Shipment>) => void;
 };
@@ -91,8 +93,10 @@ export function MobileShipmentEditSheet({
   getEcargoJob,
   refreshEcargoJob,
   onEcargoAutoRegister,
+  onEcargoFetchQr,
   onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
+  isEcargoFetchingQr,
   onClose,
   onSave,
 }: Props) {
@@ -563,6 +567,7 @@ export function MobileShipmentEditSheet({
           viewSessionYmd={sessionDateYmd}
           saveStatus={getEcargoSaveStatus(shipment.id)}
           job={ecargoJob}
+          markedSubmitted={ecargoLine?.markedSubmitted}
           autoRegistering={isEcargoAutoRegistering?.(shipment.id) ?? false}
           onClose={() => setEcargoOpen(false)}
           onVehicleChange={(raw) => onEcargoVehicleChange(shipment.id, raw)}
@@ -572,6 +577,14 @@ export function MobileShipmentEditSheet({
           onAutoRegister={async (opts) => {
             await onEcargoAutoRegister(shipment, opts);
           }}
+          onFetchQr={
+            onEcargoFetchQr
+              ? async () => {
+                  await onEcargoFetchQr(shipment);
+                }
+              : undefined
+          }
+          fetchQrBusy={isEcargoFetchingQr?.(shipment.id) ?? false}
           onSaveVehicleAsDefault={onSaveCustomerVehicleForEcargo}
           onRefreshJob={() => void refreshEcargoJob?.(shipment.id)}
         />

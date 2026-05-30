@@ -24,6 +24,27 @@ describe("shouldBlockEcargoEnqueue", () => {
     expect(shouldBlockEcargoEnqueue(fresh, { forceRetry: true })).toBe(true);
   });
 
+  it("fetchQrOnly chặn khi đã qr_ready hoặc đang chờ QR active", () => {
+    expect(
+      shouldBlockEcargoEnqueue(
+        { status: "qr_ready", verifyClickedAt: "2026-05-28T10:00:00.000Z" },
+        { fetchQrOnly: true }
+      )
+    ).toBe(true);
+    expect(
+      shouldBlockEcargoEnqueue(
+        { status: "verified_waiting_qr", updatedAt: new Date().toISOString() },
+        { fetchQrOnly: true }
+      )
+    ).toBe(true);
+    expect(
+      shouldBlockEcargoEnqueue(
+        { status: "verified", verifyClickedAt: "2026-05-28T10:00:00.000Z" },
+        { fetchQrOnly: true }
+      )
+    ).toBe(false);
+  });
+
   it("forceRetry cho phép job active kẹt", () => {
     const stale = {
       status: "waiting_verify_email",
@@ -49,6 +70,15 @@ describe("shouldResumeEcargoQrOnly", () => {
         verifyClickedAt: "2026-05-28T10:00:00.000Z",
         registrationNo: "ABC1234",
         message: "Hết thời gian chờ email QR",
+      })
+    ).toBe(true);
+  });
+
+  it("resume khi verified_waiting_qr (job cũ inline)", () => {
+    expect(
+      shouldResumeEcargoQrOnly({
+        status: "verified_waiting_qr",
+        verifyClickedAt: "2026-05-28T10:00:00.000Z",
       })
     ).toBe(true);
   });

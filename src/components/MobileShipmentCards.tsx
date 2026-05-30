@@ -60,8 +60,10 @@ interface MobileShipmentCardsProps {
   getEcargoJob?: (id: string) => EcargoJobRecord | undefined;
   refreshEcargoJob?: (id: string) => void | Promise<void>;
   onEcargoAutoRegister?: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
+  onEcargoFetchQr?: (row: Shipment) => void | Promise<void>;
   onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
   isEcargoAutoRegistering?: (id: string) => boolean;
+  isEcargoFetchingQr?: (id: string) => boolean;
   openEcargoRequestId?: string | null;
   onEcargoRequestHandled?: () => void;
   pinnedOpenWarehouses?: readonly Warehouse[];
@@ -88,8 +90,10 @@ export function MobileShipmentCards({
   getEcargoJob,
   refreshEcargoJob,
   onEcargoAutoRegister,
+  onEcargoFetchQr,
   onSaveCustomerVehicleForEcargo,
   isEcargoAutoRegistering,
+  isEcargoFetchingQr,
   openEcargoRequestId = null,
   onEcargoRequestHandled,
   pinnedOpenWarehouses = [],
@@ -314,6 +318,7 @@ export function MobileShipmentCards({
           viewSessionYmd={viewSessionYmd}
           saveStatus={getEcargoSaveStatus(ecargoModalRow.id)}
           job={getEcargoJob?.(ecargoModalRow.id)}
+          markedSubmitted={ecargoMap[ecargoModalRow.id]?.markedSubmitted}
           autoRegistering={isEcargoAutoRegistering?.(ecargoModalRow.id) ?? false}
           onVehicleChange={(raw) => onEcargoVehicleChange(ecargoModalRow.id, raw)}
           onDriverChange={(name, id) => onEcargoDriverChange?.(ecargoModalRow.id, name, id)}
@@ -322,6 +327,14 @@ export function MobileShipmentCards({
           onAutoRegister={async (opts) => {
             await onEcargoAutoRegister(ecargoModalRow, opts);
           }}
+          onFetchQr={
+            onEcargoFetchQr
+              ? async () => {
+                  await onEcargoFetchQr(ecargoModalRow);
+                }
+              : undefined
+          }
+          fetchQrBusy={isEcargoFetchingQr?.(ecargoModalRow.id) ?? false}
           onSaveVehicleAsDefault={onSaveCustomerVehicleForEcargo}
           onRefreshJob={() => void refreshEcargoJob?.(ecargoModalRow.id)}
           onClose={closeEcargoModal}

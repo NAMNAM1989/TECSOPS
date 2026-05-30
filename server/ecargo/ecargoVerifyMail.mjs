@@ -226,8 +226,102 @@ export function pickFreshVerifyMail(candidates, notBeforeMs, hints) {
 
 export const MAX_QR_IMAGE_BYTES = 200 * 1024;
 
+/** @param {string} cid */
+function normalizeContentId(cid) {
+  return String(cid || "").replace(/^<|>$/g, "").trim();
+}
+
+/** @param {string} raw @param {string} boundary */
+function listBoundarySegments(raw, boundary) {
+  const esc = boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return raw.split(new RegExp(`--${esc}`)).filter((s) => s && !/^--\s*$/.test(s.trim()));
+}
+
+/** @param {string} seg */
+function imageBufferFromMimeSegment(seg) {
+  const typeMatch = seg.match(/Content-Type:\s*image\/(png|jpeg|jpg|gif)/i);
+  if (!typeMatch) return null;
+  const enc = (seg.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i)?.[1] || "").toLowerCase();
+  const bodyMatch = seg.match(/\r?\n\r?\n([\s\S]+?)(?:\r?\n--|$)/);
+  if (!bodyMatch) return null;
+  const body = bodyMatch[1].replace(/\r?\n--[\s\S]*$/, "").trim();
+  /** @type {Buffer} */
+  let buf;
+  if (enc.includes("base64")) {
+    try {
+      buf = Buffer.from(body.replace(/\s+/g, ""), "base64");
+    } catch {
+      return null;
+    }
+  } else if (enc.includes("quoted-printable")) {
+    buf = Buffer.from(decodeQuotedPrintable(body), "binary");
+  } else {
+    buf = Buffer.from(body, "binary");
+  }
+  if (!buf.length || buf.length > MAX_QR_IMAGE_BYTES) return null;
+  const mime = typeMatch[1].toLowerCase().replace("jpg", "jpeg");
+  return { mime, buf };
+}
+
 /**
- * Trích ảnh QR từ MIME mail SCSC (attachment PNG/JPEG hoặc data URI trong HTML).
+ * Thu thập ảnh từ MIME (kể cả multipart/related lồng nhau) và map Content-ID → data URL.
+ * @param {string} rawMime
+ */
+function collectQrImageCandidates(rawMime) {
+  /** @type {Map<string, string>} */
+  const byCid = new Map();
+  /** @type {string[]} */
+  const images = [];
+
+  /** @param {string} mimeText */
+  function walk(mimeText) {
+    const boundary = mimeText.match(/boundary="?([^"\s;]+)"?/i)?.[1];
+    if (!boundary) {
+      const img = imageBufferFromMimeSegment(mimeText);
+      if (img) {
+        images.push(`data:image/${img.mime};base64,${img.buf.toString("base64")}`);
+      }
+      return;
+    }
+    for (const seg of listBoundarySegments(mimeText, boundary)) {
+      if (/Content-Type:\s*multipart\//i.test(seg)) {
+        const nestedBoundary = seg.match(/boundary="?([^"\s;]+)"?/i)?.[1];
+        if (nestedBoundary && seg.includes(`--${nestedBoundary}`)) {
+          walk(seg);
+        }
+        continue;
+      }
+      const img = imageBufferFromMimeSegment(seg);
+      if (!img) continue;
+      const dataUrl = `data:image/${img.mime};base64,${img.buf.toString("base64")}`;
+      const cid = normalizeContentId(seg.match(/Content-ID:\s*<?([^>\r\n]+)>?/i)?.[1]);
+      if (cid) byCid.set(cid, dataUrl);
+      images.push(dataUrl);
+    }
+  }
+
+  walk(String(rawMime || ""));
+  return { byCid, images };
+}
+
+/** @param {string} html @param {Map<string, string>} byCid */
+function resolveCidImageFromHtml(html, byCid) {
+  const cidRef =
+    html.match(/src=["']cid:([^"']+)["']/i)?.[1] ||
+    html.match(/background=["']cid:([^"']+)["']/i)?.[1];
+  if (!cidRef) return "";
+  const key = normalizeContentId(cidRef);
+  if (byCid.has(key)) return byCid.get(key) ?? "";
+  const base = key.split("@")[0];
+  for (const [k, v] of byCid) {
+    const nk = normalizeContentId(k);
+    if (nk === key || nk.split("@")[0] === base) return v;
+  }
+  return "";
+}
+
+/**
+ * Trích ảnh QR từ MIME mail SCSC (attachment PNG/JPEG, cid: trong HTML, hoặc data URI).
  * @param {string} rawMime
  * @returns {string} data URL hoặc rỗng nếu không có / quá lớn
  */
@@ -246,35 +340,14 @@ export function extractQrImageDataUrl(rawMime) {
     }
   }
 
-  const boundary = raw.match(/boundary="?([^"\s;]+)"?/i)?.[1];
-  if (!boundary) return "";
+  const { byCid, images } = collectQrImageCandidates(raw);
 
-  const esc = boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  for (const seg of raw.split(new RegExp(`--${esc}`))) {
-    const typeMatch = seg.match(/Content-Type:\s*image\/(png|jpeg|jpg|gif)/i);
-    if (!typeMatch) continue;
-    const enc = (seg.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i)?.[1] || "").toLowerCase();
-    const bodyMatch = seg.match(/\r?\n\r?\n([\s\S]+?)(?:\r?\n--|$)/);
-    if (!bodyMatch) continue;
-    let body = bodyMatch[1].replace(/\r?\n--[\s\S]*$/, "").trim();
-    /** @type {Buffer} */
-    let buf;
-    if (enc.includes("base64")) {
-      try {
-        buf = Buffer.from(body.replace(/\s+/g, ""), "base64");
-      } catch {
-        continue;
-      }
-    } else if (enc.includes("quoted-printable")) {
-      buf = Buffer.from(decodeQuotedPrintable(body), "binary");
-    } else {
-      buf = Buffer.from(body, "binary");
-    }
-    if (!buf.length || buf.length > MAX_QR_IMAGE_BYTES) continue;
-    const mime = typeMatch[1].toLowerCase().replace("jpg", "jpeg");
-    return `data:image/${mime};base64,${buf.toString("base64")}`;
-  }
-  return "";
+  const cidUrl = resolveCidImageFromHtml(html, byCid);
+  if (cidUrl) return cidUrl;
+
+  const png = images.find((u) => u.startsWith("data:image/png"));
+  if (png) return png;
+  return images[0] ?? "";
 }
 
 /** @param {string} rawMime */

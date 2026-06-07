@@ -497,11 +497,13 @@ function ShipmentRowImpl({
   const bg = statusRowBg[row.status];
   const accent = statusRowAccent[row.status];
   const cell = (part: "first" | "mid" | "last", extra = "") => {
-    const round = part === "first" ? "rounded-l-[6px]" : part === "last" ? "rounded-r-[6px]" : "";
+    const round = part === "first" ? "rounded-l-2xl" : part === "last" ? "rounded-r-2xl" : "";
     const accentCls = part === "first" ? accent : "";
-    const hl = highlighted ? "ring-1 ring-inset ring-apple-blue/45" : "";
+    const hl = highlighted ? "ring-2 ring-inset ring-apple-blue/50 dark:ring-sky-400/40" : "";
     const surface = selected ? statusRowSelected : bg;
-    return `${surface} ${accentCls} ${round} ${hl} border-0 px-1 py-0.5 shadow-dashboard-card ${extra}`.trim();
+    return `${surface} ${accentCls} ${round} ${hl} border-y border-black/[0.02] dark:border-white/[0.04] ${
+      part === "first" ? "border-l border-black/[0.02] dark:border-white/[0.04]" : ""
+    } ${part === "last" ? "border-r border-black/[0.02] dark:border-white/[0.04]" : ""} px-2.5 py-1.5 transition-all duration-200 group-hover/row:shadow-apple-sm ${extra}`.trim();
   };
   const sessionYear = parseInt(row.sessionDate.slice(0, 4), 10) || new Date().getFullYear();
   const rowIdx = groupRowIds.indexOf(row.id);
@@ -563,7 +565,9 @@ function ShipmentRowImpl({
     <tr
       id={`shipment-row-${row.id}`}
       onClick={() => onSelectRow?.(row.id)}
-      className="group/row cursor-pointer transition-all hover:brightness-[0.99]"
+      className={`group/row cursor-pointer transition-all duration-200 hover:-translate-y-0.5 ${
+        selected ? "scale-[1.002]" : ""
+      }`}
     >
       {/* # */}
       <td className={cell("first", "text-center text-[10px] font-semibold tabular-nums text-apple-secondary dark:text-zinc-400")}>

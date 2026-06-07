@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { InvoiceDeclaration } from "../types/invoiceDeclaration";
 import { LocaleNumberInput } from "./LocaleNumberInput";
 import { OPS } from "../styles/opsModalStyles";
@@ -47,6 +48,110 @@ type Props = {
   onCopyTargetChange: (id: string) => void;
 };
 
+function ToolGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div
+      className="flex items-center gap-1 rounded-xl border border-black/[0.08] bg-black/[0.03] p-1 dark:border-white/[0.08] dark:bg-black/25"
+      role="group"
+      aria-label={label}
+    >
+      <span className="hidden shrink-0 pl-1.5 pr-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-500 lg:inline">
+        {label}
+      </span>
+      <div className="flex flex-wrap items-center gap-0.5">{children}</div>
+    </div>
+  );
+}
+
+function ToolBtn({
+  onClick,
+  disabled,
+  title,
+  children,
+  active,
+  variant = "default",
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+  children: ReactNode;
+  active?: boolean;
+  variant?: "default" | "primary" | "success" | "danger";
+}) {
+  const variantCls =
+    variant === "primary"
+      ? "bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
+      : variant === "success"
+        ? "text-emerald-800 hover:bg-emerald-500/15 dark:text-emerald-200"
+        : variant === "danger"
+          ? "text-red-700 hover:bg-red-500/10 dark:text-red-300"
+          : active
+            ? "bg-indigo-500/15 text-indigo-900 dark:bg-indigo-500/25 dark:text-indigo-100"
+            : "text-slate-700 hover:bg-black/[0.06] dark:text-slate-200 dark:hover:bg-white/[0.08]";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${variantCls}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MenuBtn({
+  onClick,
+  disabled,
+  children,
+  className = "",
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`block w-full px-3 py-2 text-left text-[11px] font-medium text-slate-700 hover:bg-indigo-500/10 disabled:opacity-50 dark:text-slate-200 dark:hover:bg-indigo-500/15 ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DropdownPanel({
+  summary,
+  align = "right",
+  children,
+}: {
+  summary: ReactNode;
+  align?: "left" | "right";
+  children: ReactNode;
+}) {
+  return (
+    <details className="relative">
+      <summary
+        className={`cursor-pointer list-none rounded-lg border border-black/[0.1] bg-white/80 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-black/[0.04] dark:border-white/12 dark:bg-ops-elevated dark:text-slate-200 dark:hover:bg-white/[0.06] [&::-webkit-details-marker]:hidden`}
+      >
+        {summary}
+      </summary>
+      <div
+        className={`absolute z-40 mt-1 min-w-[11rem] overflow-hidden rounded-xl border border-black/10 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-ops-elevated ${
+          align === "right" ? "right-0" : "left-0"
+        }`}
+      >
+        {children}
+      </div>
+    </details>
+  );
+}
+
 export function HqWorkspaceToolbar({
   declarations,
   activeId,
@@ -83,59 +188,118 @@ export function HqWorkspaceToolbar({
   onCopyTargetChange,
 }: Props) {
   return (
-    <div className={`shrink-0 border-b ${OPS.border}`}>
-      <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 sm:px-5">
-        {declarations.map((d) => (
-          <button
-            key={d.id}
-            type="button"
-            onClick={() => onSelectTab(d.id)}
-            className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
-              d.id === activeId
-                ? "bg-indigo-600 text-white"
-                : "border border-black/10 bg-white text-slate-700 hover:bg-indigo-500/10 dark:border-white/10 dark:bg-ops-elevated dark:text-slate-200"
-            }`}
-          >
-            {d.label}
-            {d.targetPcs != null ? ` · ${d.targetPcs} CTNS` : ""}
-            {d.targetKg != null ? ` · ${d.targetKg} kg` : ""}
-          </button>
-        ))}
+    <div className={`shrink-0 border-t ${OPS.border}`}>
+      {/* Tabs tờ khai */}
+      <div className="flex flex-wrap items-center gap-1 border-b border-black/[0.04] px-3 py-2 dark:border-white/[0.04] sm:px-4">
+        <span className="mr-1 hidden text-[10px] font-bold uppercase tracking-wide text-slate-500 sm:inline">
+          Tờ
+        </span>
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+          {declarations.map((d) => {
+            const active = d.id === activeId;
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => onSelectTab(d.id)}
+                className={`max-w-full truncate rounded-lg px-2.5 py-1.5 text-[11px] font-semibold tabular-nums transition ${
+                  active
+                    ? "bg-indigo-600 text-white shadow-sm shadow-indigo-900/20"
+                    : "border border-transparent bg-black/[0.04] text-slate-600 hover:border-indigo-500/30 hover:bg-indigo-500/10 dark:bg-white/[0.06] dark:text-slate-300 dark:hover:bg-indigo-500/15"
+                }`}
+              >
+                {d.label}
+                {d.targetPcs != null ? ` · ${d.targetPcs} CTNS` : ""}
+                {d.targetKg != null ? ` · ${d.targetKg} kg` : ""}
+              </button>
+            );
+          })}
+        </div>
+        <DropdownPanel summary="Tờ khai ▾" align="right">
+          <MenuBtn onClick={onSplit}>Chia lô…</MenuBtn>
+          <MenuBtn onClick={onAddDeclaration}>+ Tờ mới</MenuBtn>
+          {multiDecl ? (
+            <>
+              <div className="my-1 border-t border-black/5 dark:border-white/5" />
+              <MenuBtn onClick={onAutoDistribute}>Chia hàng tự động</MenuBtn>
+              <MenuBtn onClick={() => onApplyTemplate("scale")}>Nhân mẫu tờ 1</MenuBtn>
+              <MenuBtn onClick={() => onApplyTemplate("zero")}>Mẫu SL = 0</MenuBtn>
+              <div className="border-t border-black/5 px-3 py-2 dark:border-white/5">
+                <select
+                  value={copyTargetId}
+                  onChange={(e) => onCopyTargetChange(e.target.value)}
+                  className={`${OPS.input} w-full py-1 text-[10px]`}
+                >
+                  <option value="">Copy sang…</option>
+                  {declarations
+                    .filter((d) => d.id !== activeId)
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.label}
+                      </option>
+                    ))}
+                </select>
+                <div className="mt-1.5 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onCopyLines("append", false)}
+                    className="flex-1 rounded-md border border-black/10 px-1 py-1 text-[10px] font-medium dark:border-white/10"
+                  >
+                    Copy →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onCopyLines("append", true)}
+                    className="flex-1 rounded-md border border-black/10 px-1 py-1 text-[10px] font-medium dark:border-white/10"
+                  >
+                    Mọi tờ
+                  </button>
+                </div>
+              </div>
+              <MenuBtn onClick={onRemoveDeclaration} className="text-red-600 dark:text-red-400">
+                Xóa tờ này
+              </MenuBtn>
+            </>
+          ) : null}
+        </DropdownPanel>
       </div>
 
+      {/* Mục tiêu kiện/kg — gọn trên một hàng */}
       {showTargets && activeDeclaration ? (
-        <div className="flex flex-wrap items-center gap-2 border-t border-black/[0.06] px-4 py-2 text-[11px] dark:border-white/[0.06] sm:px-5">
-          <span className={`font-semibold ${OPS.secondary}`}>Mục tiêu {activeDeclaration.label}:</span>
-          <label className="flex items-center gap-1 tabular-nums">
-            Kiện
-            <LocaleNumberInput
-              integer
-              nullable
-              value={activeDeclaration.targetPcs ?? null}
-              onCommit={(n) => onTargetPcsChange(n != null && n > 0 ? String(n) : "")}
-              className="w-16 py-1 text-right text-[11px]"
-              placeholder="—"
-            />
-          </label>
-          <label className="flex items-center gap-1 tabular-nums">
-            Kg
-            <LocaleNumberInput
-              integer
-              nullable
-              value={activeDeclaration.targetKg ?? null}
-              onCommit={(n) => onTargetKgChange(n != null && n > 0 ? String(n) : "")}
-              className="w-16 py-1 text-right text-[11px]"
-              placeholder="—"
-            />
-          </label>
-          <button type="button" onClick={onRedistributeTargets} className={OPS.btnSmallAccent}>
-            Chia đều lô
-          </button>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-black/[0.04] px-3 py-2 text-[11px] dark:border-white/[0.04] sm:px-4">
+          <span className={`shrink-0 font-semibold ${OPS.secondary}`}>
+            Mục tiêu {activeDeclaration.label}
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 tabular-nums">
+              <span className="text-slate-500 dark:text-slate-400">Kiện</span>
+              <LocaleNumberInput
+                integer
+                nullable
+                value={activeDeclaration.targetPcs ?? null}
+                onCommit={(n) => onTargetPcsChange(n != null && n > 0 ? String(n) : "")}
+                className="w-14 rounded-md py-1 text-right text-[11px]"
+                placeholder="—"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 tabular-nums">
+              <span className="text-slate-500 dark:text-slate-400">Kg</span>
+              <LocaleNumberInput
+                integer
+                nullable
+                value={activeDeclaration.targetKg ?? null}
+                onCommit={(n) => onTargetKgChange(n != null && n > 0 ? String(n) : "")}
+                className="w-14 rounded-md py-1 text-right text-[11px]"
+                placeholder="—"
+              />
+            </label>
+            <ToolBtn onClick={onRedistributeTargets}>Chia đều lô</ToolBtn>
+          </div>
           <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ${
+            className={`ml-auto rounded-lg px-2 py-1 text-[10px] font-semibold tabular-nums ${
               targetsLock.pcsOk && targetsLock.kgOk
-                ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
-                : "bg-amber-500/15 text-amber-900 dark:text-amber-100"
+                ? "bg-emerald-500/12 text-emerald-800 dark:text-emerald-200"
+                : "bg-amber-500/12 text-amber-900 dark:text-amber-100"
             }`}
           >
             Đã gán {targetsLock.assignedPcs}/{shipmentPcs ?? "—"} CTNS · {targetsLock.assignedKg}/
@@ -147,148 +311,71 @@ export function HqWorkspaceToolbar({
         </div>
       ) : null}
 
+      {/* Thanh thao tác chính — nhóm logic */}
       <div
-        className={`sticky top-0 z-20 flex flex-wrap items-center gap-2 border-t border-black/[0.06] px-4 py-2 dark:border-white/[0.06] sm:px-5 ${OPS.footer}`}
+        className={`sticky top-0 z-20 flex flex-wrap items-center gap-2 px-3 py-2 sm:px-4 ${OPS.footer}`}
       >
-        <button type="button" onClick={onAddBlank} className={OPS.btnSmallAccent}>
-          + Dòng
-        </button>
-        <button type="button" onClick={onRandomPick} className={OPS.btnSmallAccent}>
-          Ngẫu nhiên
-        </button>
-        <button
-          type="button"
-          onClick={onBalanceQuantities}
-          className={OPS.btnSmallAccent}
-          title="Phân bổ số lượng ngẫu nhiên — tổng KG hàng nhỏ hơn kg tờ (chừa bao bì)"
-        >
-          Cân SL/KG
-        </button>
-        <button type="button" onClick={onOpenCatalog} className={OPS.btnSmallAccent}>
-          Danh mục
-        </button>
+        <ToolGroup label="Soạn">
+          <ToolBtn onClick={onAddBlank} title="Ctrl+Enter">
+            + Dòng
+          </ToolBtn>
+          <ToolBtn onClick={onRandomPick}>Ngẫu nhiên</ToolBtn>
+          <ToolBtn
+            onClick={onBalanceQuantities}
+            title="Tổng KG hàng nhỏ hơn kg tờ (chừa bao bì)"
+          >
+            Cân SL/KG
+          </ToolBtn>
+          <ToolBtn onClick={onOpenCatalog}>Danh mục</ToolBtn>
+        </ToolGroup>
+
+        <ToolGroup label="Xuất">
+          <ToolBtn onClick={onExportExcel} disabled={busy} variant="success">
+            Excel
+          </ToolBtn>
+          <ToolBtn onClick={onExportPdf} disabled={busy}>
+            PDF
+          </ToolBtn>
+          {multiDecl && onExportAllExcel && onExportAllPdf ? (
+            <DropdownPanel summary="ZIP ▾" align="left">
+              <MenuBtn onClick={onExportAllExcel} disabled={busy}>
+                ZIP Excel (mọi tờ)
+              </MenuBtn>
+              <MenuBtn onClick={onExportAllPdf} disabled={busy}>
+                ZIP PDF (mọi tờ)
+              </MenuBtn>
+            </DropdownPanel>
+          ) : null}
+        </ToolGroup>
 
         {balanceNotice ? (
-          <span
-            className={`max-w-md rounded-lg px-2.5 py-1 text-[10px] font-medium leading-snug ${
+          <p
+            className={`max-w-sm flex-1 rounded-lg px-2.5 py-1.5 text-[10px] font-medium leading-snug ${
               balanceNotice.startsWith("Đã cân") || balanceNotice.includes("Đã thêm")
-                ? "bg-emerald-500/15 text-emerald-900 dark:text-emerald-100"
-                : "bg-amber-500/15 text-amber-950 dark:text-amber-100"
+                ? "bg-emerald-500/12 text-emerald-900 dark:text-emerald-100"
+                : "bg-amber-500/12 text-amber-950 dark:text-amber-100"
             }`}
             role="status"
           >
             {balanceNotice}
-          </span>
-        ) : null}
+          </p>
+        ) : (
+          <span className="hidden flex-1 sm:block" aria-hidden />
+        )}
 
-        <span className="hidden h-5 w-px bg-black/10 sm:inline dark:bg-white/10" />
-
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={busy || !dirty}
-          className={`${OPS.btnSmallAccent} disabled:opacity-50`}
-        >
-          Lưu
-        </button>
-        <button
-          type="button"
-          onClick={onExportExcel}
-          disabled={busy}
-          className="rounded-full border border-emerald-600/50 bg-emerald-600/10 px-3 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-600/20 disabled:opacity-50 dark:text-emerald-200"
-        >
-          Excel A4
-        </button>
-        <button
-          type="button"
-          onClick={onExportPdf}
-          disabled={busy}
-          className="rounded-full border border-sky-600/50 bg-sky-600/10 px-3 py-1 text-[11px] font-semibold text-sky-900 hover:bg-sky-600/20 disabled:opacity-50 dark:text-sky-200"
-        >
-          PDF A4
-        </button>
-        {multiDecl && onExportAllExcel && onExportAllPdf ? (
-          <>
-            <button
-              type="button"
-              onClick={onExportAllExcel}
-              disabled={busy}
-              className="rounded-full border border-emerald-700/40 px-2.5 py-1 text-[10px] font-semibold text-emerald-900 dark:text-emerald-200"
-            >
-              ZIP Excel
-            </button>
-            <button
-              type="button"
-              onClick={onExportAllPdf}
-              disabled={busy}
-              className="rounded-full border border-sky-700/40 px-2.5 py-1 text-[10px] font-semibold text-sky-950 dark:text-sky-100"
-            >
-              ZIP PDF
-            </button>
-          </>
-        ) : null}
-        <button
-          type="button"
-          onClick={onFinish}
-          disabled={busy}
-          className="rounded-full bg-indigo-600 px-4 py-1 text-[11px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-        >
-          Hoàn tất
-        </button>
-
-        <details className="relative ml-auto">
-          <summary className={`cursor-pointer list-none rounded-md border px-2.5 py-1 text-[11px] font-medium ${OPS.border}`}>
-            Tờ khai ▾
-          </summary>
-          <div className="absolute right-0 z-30 mt-1 min-w-[12rem] rounded-lg border border-black/10 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-ops-elevated">
-            <button type="button" onClick={onSplit} className="block w-full px-3 py-1.5 text-left text-[11px] hover:bg-indigo-500/10">
-              Chia lô…
-            </button>
-            <button type="button" onClick={onAddDeclaration} className="block w-full px-3 py-1.5 text-left text-[11px] hover:bg-indigo-500/10">
-              + Tờ mới
-            </button>
-            {multiDecl ? (
-              <>
-                <button type="button" onClick={onAutoDistribute} className="block w-full px-3 py-1.5 text-left text-[11px] hover:bg-indigo-500/10">
-                  Chia hàng tự động
-                </button>
-                <button type="button" onClick={() => onApplyTemplate("scale")} className="block w-full px-3 py-1.5 text-left text-[11px] hover:bg-indigo-500/10">
-                  Nhân mẫu tờ 1
-                </button>
-                <button type="button" onClick={() => onApplyTemplate("zero")} className="block w-full px-3 py-1.5 text-left text-[11px] hover:bg-indigo-500/10">
-                  Mẫu SL = 0
-                </button>
-                <div className="border-t border-black/5 px-3 py-1.5 dark:border-white/5">
-                  <select
-                    value={copyTargetId}
-                    onChange={(e) => onCopyTargetChange(e.target.value)}
-                    className={`${OPS.input} w-full py-1 text-[10px]`}
-                  >
-                    <option value="">Copy sang…</option>
-                    {declarations
-                      .filter((d) => d.id !== activeId)
-                      .map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.label}
-                        </option>
-                      ))}
-                  </select>
-                  <div className="mt-1 flex gap-1">
-                    <button type="button" onClick={() => onCopyLines("append", false)} className="flex-1 rounded border px-1 py-0.5 text-[10px]">
-                      Copy →
-                    </button>
-                    <button type="button" onClick={() => onCopyLines("append", true)} className="flex-1 rounded border px-1 py-0.5 text-[10px]">
-                      Copy mọi tờ
-                    </button>
-                  </div>
-                </div>
-                <button type="button" onClick={onRemoveDeclaration} className="block w-full px-3 py-1.5 text-left text-[11px] text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
-                  Xóa tờ này
-                </button>
-              </>
-            ) : null}
-          </div>
-        </details>
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          <ToolBtn
+            onClick={onSave}
+            disabled={busy || !dirty}
+            active={dirty}
+            title="Ctrl+S"
+          >
+            {dirty ? "● Lưu" : "Đã lưu"}
+          </ToolBtn>
+          <ToolBtn onClick={onFinish} disabled={busy} variant="primary">
+            Hoàn tất
+          </ToolBtn>
+        </div>
       </div>
     </div>
   );

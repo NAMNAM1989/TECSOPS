@@ -6,6 +6,7 @@ export default {
     extend: {
       fontFamily: {
         sans: [
+          '"Plus Jakarta Sans"',
           "-apple-system",
           "BlinkMacSystemFont",
           '"SF Pro Text"',
@@ -26,10 +27,10 @@ export default {
       },
       colors: {
         dashboard: {
-          canvas: "#F4F6F9",
-          "canvas-dark": "#0B0F19",
+          canvas: "#F1F4F9",
+          "canvas-dark": "#060814",
           surface: "#FFFFFF",
-          "surface-dark": "#1E293B",
+          "surface-dark": "#111625",
           primary: "#0F172A",
           "primary-dark": "#F8FAFC",
           muted: "#64748B",

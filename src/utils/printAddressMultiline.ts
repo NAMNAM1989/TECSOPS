@@ -4,6 +4,7 @@
  */
 
 export function normalizePrintAddressMultiline(value: string, maxLines = 6): string {
+  if (value == null || typeof value !== "string") return "";
   const lines = value
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")

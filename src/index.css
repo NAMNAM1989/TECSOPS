@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,6 +12,20 @@
     @apply min-h-screen bg-dashboard-canvas text-dashboard-primary antialiased dark:bg-dashboard-canvas-dark dark:text-dashboard-primary-dark;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .dark .glass-panel {
+    background: rgba(17, 22, 37, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   /* Dark mode: màu apple.* gốc là tối — map sang tông sáng để đọc trên nền kho/tables. */
@@ -84,3 +100,17 @@
 .animate-cnee-magnify-panel {
   animation: cnee-magnify-panel-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+
+@keyframes cnee-slide-up-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-cnee-slide-up {
+  animation: cnee-slide-up-in 0.28s cubic-bezier(0.32, 0.94, 0.6, 1) forwards;
+}
+

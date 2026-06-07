@@ -6,48 +6,24 @@ import {
 import { getBuiltinTemplate } from "../core/defaultTemplates";
 import type { A4WeighReceiptPrinterProfile } from "../../printing/printTypes";
 import { defaultScscWeighPrintSettings } from "../../printing/scscWeigh/scscWeighPrintSettingsCore";
-import { mapWeighSlipRecordToScaleTicketFormData } from "../../utils/mapWeighSlipRecordToScaleTicketFormData";
-import type { WeighSlipRecord } from "../../types/weighSlip";
+import type { ScaleTicketFormData } from "../../utils/mapBookingToScaleTicketFormData";
 
-function minimalForm() {
-  const rec: WeighSlipRecord = {
-    id: "t",
-    status: "draft",
-    templateName: "scsc_a4_v1",
-    customerId: "",
-    customerConsigneeId: "",
-    legacyShipmentId: "",
-    mawbNo: "738-12345678",
-    hawbNo: "",
-    shipperName: "S",
-    shipperAddress: "A",
-    shipperContact: "",
-    shipperEmailFax: "",
-    shipperTaxCode: "",
-    consigneeName: "C",
-    consigneeAddress: "B",
-    consigneeTaxAccount: "",
-    notifyAgentName: "G",
-    notifyAgentAddress: "",
-    notifyAgentContact: "",
-    notifyOther: "",
-    destinationAirport: "NRT",
+function minimalForm(): ScaleTicketFormData {
+  return {
+    awb: "738-1234 5678",
     flightNo: "VN1",
     flightDate: "2026-05-16",
-    hawbCountStatus: "",
-    goodsDescription: "G",
-    hsCode: "",
+    destinationAirport: "NRT",
     pieces: 1,
     grossWeight: 1,
     chargeableWeight: 1,
-    dimensions: "",
-    handlingInstruction: "",
-    internalNote: "",
-    printFormSnapshot: null,
-    createdAt: "",
-    updatedAt: "",
-  };
-  return mapWeighSlipRecordToScaleTicketFormData(rec);
+    goodsDescription: "G",
+    shipperName: "S",
+    shipperAddress: "A",
+    consigneeName: "C",
+    consigneeAddress: "B",
+    notifyName: "G",
+  } as any;
 }
 
 const baseProfile = (): A4WeighReceiptPrinterProfile => ({

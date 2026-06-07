@@ -476,15 +476,15 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   return (
     <div className="mx-auto max-w-[1600px] px-3 py-4 sm:px-4 lg:px-6">
-      <div className="sticky top-0 z-40 -mx-3 mb-3 bg-dashboard-canvas/90 px-3 pb-2 pt-1 backdrop-blur-lg dark:bg-dashboard-canvas-dark/90 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
+      <div className="sticky top-0 z-40 -mx-3 mb-3 border-b border-black/[0.04] bg-white/70 px-3 pb-2 pt-2.5 backdrop-blur-xl dark:border-white/[0.05] dark:bg-[#060814]/70 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
       <header className="mb-2 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h1 className="text-xl font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark sm:text-2xl">
+            <h1 className="text-xl font-bold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark sm:text-2xl">
               Hàng lên sân bay
             </h1>
             <span className="text-[11px] text-dashboard-muted dark:text-dashboard-muted-dark">
-              <span className="font-semibold text-dashboard-primary dark:text-dashboard-primary-dark">{workDateLabel}</span>
+              <span className="font-bold text-dashboard-primary dark:text-dashboard-primary-dark">{workDateLabel}</span>
               {daysWithData > 0 && (
                 <span className="text-apple-tertiary">
                   {" "}
@@ -494,7 +494,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             </span>
             {!isViewingToday && (
               <span
-                className="rounded bg-amber-100/90 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950"
+                className="rounded-full bg-amber-100/90 px-2 py-0.5 text-[9px] font-bold text-amber-950 uppercase tracking-wider"
                 title="Vẫn sửa / thêm lô được"
               >
                 Ngày khác
@@ -511,16 +511,16 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             <button
               type="button"
               onClick={toggleDarkMode}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/[0.05] bg-white text-dashboard-primary shadow-dashboard-card hover:bg-dashboard-canvas dark:border-white/[0.08] dark:bg-dashboard-surface-dark dark:text-dashboard-primary-dark dark:hover:bg-ops-elevated"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/[0.05] bg-white text-dashboard-primary shadow-dashboard-card hover:bg-dashboard-canvas dark:border-white/[0.08] dark:bg-[#111625] dark:text-dashboard-primary-dark dark:hover:bg-ops-elevated transition-all duration-200 active:scale-90"
               title={darkMode ? "Chế độ sáng" : "Chế độ tối (Ops ban đêm)"}
               aria-label={darkMode ? "Bật chế độ sáng" : "Bật chế độ tối"}
             >
               {darkMode ? (
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                <svg className="h-3.5 w-3.5 transition-transform duration-300 hover:rotate-45" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
                 </svg>
               ) : (
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                <svg className="h-3.5 w-3.5 transition-transform duration-300 hover:rotate-12" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
                 </svg>
               )}

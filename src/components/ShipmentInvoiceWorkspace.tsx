@@ -56,6 +56,7 @@ import {
   resolveSheetBalanceTargets,
 } from "../utils/invoiceQuantityBalance";
 import { OPS } from "../styles/opsModalStyles";
+import { A4_WIDTH_MM } from "../utils/printMmUnits";
 
 type Props = {
   shipment: Shipment;
@@ -747,64 +748,57 @@ export function ShipmentInvoiceWorkspace({
                 {" · "}
                 {flightLine || "—"} · {shipment.dest || "—"}
               </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] sm:text-[11px]">
                 <span
-                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-semibold tabular-nums ${
                     cartonBadge.ok
-                      ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
-                      : "bg-amber-500/15 text-amber-900 dark:text-amber-100"
+                      ? "bg-emerald-500/12 text-emerald-800 dark:text-emerald-200"
+                      : "bg-amber-500/12 text-amber-900 dark:text-amber-100"
                   }`}
                 >
-                  {cartonBadge.text}
+                  Kiện {totals.totalQuantity}
+                  {targetPcs != null && targetPcs > 0 ? ` / ${targetPcs}` : ""} CTNS
                 </span>
                 <span
-                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-semibold tabular-nums ${
                     grossBadge.ok
-                      ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
-                      : "bg-amber-500/15 text-amber-900 dark:text-amber-100"
+                      ? "bg-emerald-500/12 text-emerald-800 dark:text-emerald-200"
+                      : "bg-amber-500/12 text-amber-900 dark:text-amber-100"
                   }`}
                 >
-                  {grossBadge.text}
+                  Kg hàng {formatDeclarationKg(totals.totalGrossKg)}
+                  {targetKg != null && targetKg > 0 ? ` / ${formatDeclarationKg(targetKg)} tờ` : ""}
                 </span>
                 {showShipmentLock ? (
                   <>
+                    <span className="hidden h-3 w-px bg-black/15 dark:bg-white/15 sm:inline" />
                     <span
-                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                      className={`rounded-md px-2 py-0.5 font-semibold tabular-nums ${
                         totalsLock.pcsOk
-                          ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
-                          : "bg-red-500/15 text-red-800 dark:text-red-200"
+                          ? "text-emerald-800 dark:text-emerald-200"
+                          : "text-red-700 dark:text-red-300"
                       }`}
                     >
-                      Tổng kiện {totalsLock.actualPcs}
-                      {totalsLock.shipmentPcs != null ? ` / ${totalsLock.shipmentPcs} lô` : ""}
-                      {!totalsLock.pcsOk && totalsLock.shipmentPcs != null
-                        ? ` (${totalsLock.pcsDelta > 0 ? "+" : ""}${totalsLock.pcsDelta})`
-                        : ""}
+                      Σ kiện {totalsLock.actualPcs}
+                      {totalsLock.shipmentPcs != null ? `/${totalsLock.shipmentPcs}` : ""}
                     </span>
                     <span
-                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                      className={`rounded-md px-2 py-0.5 font-semibold tabular-nums ${
                         totalsLock.kgOk
-                          ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
-                          : "bg-red-500/15 text-red-800 dark:text-red-200"
+                          ? "text-emerald-800 dark:text-emerald-200"
+                          : "text-red-700 dark:text-red-300"
                       }`}
                     >
-                      Tổng kg {formatDeclarationKg(totalsLock.actualKg)}
-                      {totalsLock.shipmentKg != null ? ` / ${totalsLock.shipmentKg} lô` : ""}
-                      {!totalsLock.kgOk && totalsLock.shipmentKg != null
-                        ? ` (${totalsLock.kgDelta > 0 ? "+" : ""}${totalsLock.kgDelta})`
-                        : ""}
+                      Σ kg {formatDeclarationKg(totalsLock.actualKg)}
+                      {totalsLock.shipmentKg != null ? `/${totalsLock.shipmentKg}` : ""}
                     </span>
                   </>
                 ) : null}
-                {declarations.length > 1 ? (
-                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] ${OPS.muted}`}>
-                    Tổng {declarations.length} tờ · {allTotals.totalQuantity} CTNS · {formatDeclarationKg(allTotals.totalGrossKg)} kg
-                  </span>
-                ) : (
-                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] ${OPS.muted}`}>
-                    Lô: {shipment.pcs ?? "—"} CTNS · {shipment.kg ?? "—"} KGM
-                  </span>
-                )}
+                <span className={`rounded-md px-2 py-0.5 tabular-nums ${OPS.muted}`}>
+                  {declarations.length > 1
+                    ? `${declarations.length} tờ · ${allTotals.totalQuantity} CTNS · ${formatDeclarationKg(allTotals.totalGrossKg)} kg`
+                    : `Lô ${shipment.pcs ?? "—"} CTNS · ${shipment.kg ?? "—"} kg`}
+                </span>
               </div>
             </div>
           </div>
@@ -864,7 +858,7 @@ export function ShipmentInvoiceWorkspace({
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="flex min-h-0 min-w-0 flex-[1.15] flex-col overflow-hidden border-r border-black/10 dark:border-white/10">
+        <div className="flex min-h-0 min-w-0 flex-[1.05] flex-col overflow-hidden border-r border-black/10 dark:border-white/10">
           {catalogEditorOpen ? (
             catalogLoading ? (
               <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-xs text-apple-tertiary dark:text-slate-400">
@@ -894,9 +888,12 @@ export function ShipmentInvoiceWorkspace({
           )}
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-[0.85] flex-col overflow-hidden bg-slate-50/50 dark:bg-black/20">
+        <aside
+          className="flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-black/10 dark:border-white/10"
+          style={{ width: `calc(${A4_WIDTH_MM}mm + 2.5rem)`, minWidth: `calc(${A4_WIDTH_MM}mm + 2.5rem)` }}
+        >
           <InvoiceExportPreview exportPayload={exportPayloadPreview} />
-        </div>
+        </aside>
       </div>
 
       <footer className={`shrink-0 border-t px-4 py-1.5 sm:px-5 ${OPS.footer}`}>

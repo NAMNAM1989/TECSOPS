@@ -1,200 +1,145 @@
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import type { InvoiceExportPayload } from "../contracts/invoiceExportPayload";
-
-function fmtUsd(n: number): string {
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtKg(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return "—";
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function fmtQty(n: number): string {
-  if (!Number.isFinite(n)) return "";
-  return String(Math.round(n));
-}
+import { A4_HEIGHT_MM, A4_WIDTH_MM } from "../../utils/printMmUnits";
+import { InvoiceA4Document } from "./InvoiceA4Document";
+import { useA4PreviewScale } from "./useA4PreviewScale";
 
 type Props = {
   exportPayload: InvoiceExportPayload;
 };
 
-/** Preview web từ export payload — cùng nội dung với Excel/PDF, layout riêng. */
+function IconBtn({
+  onClick,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-black/[0.06] hover:text-slate-800 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-100"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Xem trước đúng khổ A4 thật (210×297 mm) — mặc định 100%, cuộn nếu cần. */
 export const InvoiceExportPreview = memo(function InvoiceExportPreview({ exportPayload: p }: Props) {
-  const cartonFooter =
-    p.footer.cartons != null && p.footer.cartons > 0 ? `${p.footer.cartons} CTNS` : "—";
-  const kgFooter = p.footer.grossKg > 0 ? `${fmtKg(p.footer.grossKg)} KGM` : "—";
+  const {
+    viewportRef,
+    pageRef,
+    scale,
+    isActualSize,
+    scaledW,
+    scaledH,
+    zoomPercent,
+    mode,
+    setActualSize,
+    setFitToPanel,
+    zoomIn,
+    zoomOut,
+  } = useA4PreviewScale(
+    `${p.meta.invoiceNo}|${p.lines.length}|${p.totals.totalAmountUsd}|${p.totals.totalGrossKg}`
+  );
+
+  const seq =
+    p.meta.totalDeclarations > 1
+      ? ` · Tờ ${p.meta.declarationSeq}/${p.meta.totalDeclarations}`
+      : "";
+
+  const pageNode = (
+    <InvoiceA4Document ref={pageRef} payload={p} className="shadow-[0_2px_12px_rgba(0,0,0,0.12)] ring-1 ring-black/10" />
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <p className="mb-2 shrink-0 text-center text-[11px] font-medium text-slate-600 dark:text-slate-400">
-        Xem trước Invoice · A4 · cùng dữ liệu export
-      </p>
-      <div className="min-h-0 flex-1 overflow-auto rounded-lg bg-slate-200/80 p-3 dark:bg-slate-900/80">
-        <article
-          className="mx-auto w-full max-w-[52rem] bg-white px-5 py-6 text-black shadow-md"
-          style={{ fontFamily: '"Times New Roman", Times, serif' }}
-        >
-          <h1 className="text-center text-[18pt] font-bold leading-tight">NONCOMMERCIAL INVOICE &amp; PACKING LIST</h1>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white/90 px-3 py-2 dark:border-white/[0.08] dark:bg-ops-surface/95">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[11px] font-semibold text-slate-800 dark:text-slate-100">
+            Xem trước A4
+            <span className="ml-1.5 font-mono font-medium text-indigo-700 dark:text-indigo-300">
+              {p.meta.invoiceNo}
+            </span>
+            {seq ? <span className="font-normal text-slate-500 dark:text-slate-400">{seq}</span> : null}
+          </p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+            {isActualSize
+              ? `Cỡ in thật · ${A4_WIDTH_MM}×${A4_HEIGHT_MM} mm · cuộn để xem toàn trang`
+              : `${zoomPercent}% · ${A4_WIDTH_MM}×${A4_HEIGHT_MM} mm`}
+          </p>
+        </div>
 
-          <div className="mt-4 grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-[12pt] leading-snug">
-            <div className="space-y-0.5">
-              {p.shipper.lines.map((line) => (
-                <p key={line}>{line}</p>
-              ))}
+        <div className="flex items-center gap-0.5 rounded-lg border border-black/[0.08] bg-black/[0.03] p-0.5 dark:border-white/10 dark:bg-black/30">
+          <IconBtn onClick={zoomOut} title="Thu nhỏ">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M5 12h14" />
+            </svg>
+          </IconBtn>
+          <span className="min-w-[2.75rem] select-none text-center text-[11px] font-semibold tabular-nums text-slate-600 dark:text-slate-300">
+            {zoomPercent}%
+          </span>
+          <IconBtn onClick={zoomIn} title="Phóng to">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </IconBtn>
+        </div>
+
+        <div className="flex rounded-lg border border-black/[0.08] bg-black/[0.03] p-0.5 dark:border-white/10 dark:bg-black/30">
+          <button
+            type="button"
+            onClick={setActualSize}
+            title="210×297 mm — cùng cỡ khi in"
+            className={`rounded-md px-2.5 py-1 text-[10px] font-semibold transition ${
+              mode === "actual"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-slate-600 hover:bg-black/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.06]"
+            }`}
+          >
+            A4 thật
+          </button>
+          <button
+            type="button"
+            onClick={setFitToPanel}
+            title="Thu nhỏ vừa khung xem"
+            className={`rounded-md px-2.5 py-1 text-[10px] font-semibold transition ${
+              mode === "fit"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-slate-600 hover:bg-black/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.06]"
+            }`}
+          >
+            Vừa khung
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={viewportRef}
+        className="min-h-0 flex-1 overflow-auto bg-neutral-400 dark:bg-neutral-700"
+      >
+        <div className="inline-flex min-h-full min-w-full justify-center p-5">
+          {isActualSize ? (
+            <div className="shrink-0 self-start">{pageNode}</div>
+          ) : (
+            <div className="relative shrink-0 self-start" style={{ width: scaledW, height: scaledH }}>
+              <div
+                className="origin-top-left"
+                style={{
+                  width: `${A4_WIDTH_MM}mm`,
+                  transform: `scale(${scale})`,
+                }}
+              >
+                {pageNode}
+              </div>
             </div>
-            <div className="min-w-[14rem] space-y-0.5 text-left">
-              <p>
-                <span className="inline-block w-[5.5rem]">Invoice No.:</span>
-                <span className="font-bold">{p.meta.invoiceNo}</span>
-              </p>
-              <p>
-                <span className="inline-block w-[5.5rem]">Date:</span>
-                <span>{p.meta.dateStr}</span>
-              </p>
-              <p>
-                <span className="inline-block w-[5.5rem]">Flight:</span>
-                <span>{p.meta.flightLine || "—"}</span>
-              </p>
-              <p className="font-semibold">NO PAYMENT</p>
-            </div>
-          </div>
-
-          <div className="mt-4 text-[12pt] leading-snug">
-            <p className="font-bold">THE CNEE:</p>
-            {p.cnee.lines.length === 0 ? (
-              <p className="text-slate-500 italic">(Chưa có địa chỉ CNEE)</p>
-            ) : (
-              p.cnee.lines.map((line, i) => (
-                <p key={`${i}-${line.slice(0, 24)}`} className="max-w-[85%]">
-                  {line}
-                </p>
-              ))
-            )}
-          </div>
-
-          <table className="mt-5 w-full table-fixed border-collapse text-[10pt]">
-            <colgroup>
-              <col style={{ width: "4%" }} />
-              <col style={{ width: "28%" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "6%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "7%" }} />
-              <col style={{ width: "9%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "9%" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className="border border-black px-0.5 py-1 text-center text-[8.5pt] font-bold leading-tight">
-                  No
-                </th>
-                <th className="border border-black px-1 py-1 text-center text-[8.5pt] font-bold leading-tight">
-                  Description
-                  <br />
-                  of goods
-                </th>
-                <th className="border border-black px-0.5 py-1 text-center text-[8.5pt] font-bold leading-tight">
-                  HS code
-                </th>
-                <th className="border border-black px-0.5 py-1 text-center text-[8.5pt] font-bold leading-tight">
-                  Origin
-                </th>
-                <th className="border border-black px-0.5 py-1 text-center text-[8.5pt] font-bold leading-tight">
-                  Qty
-                </th>
-                <th className="border border-black px-0.5 py-1 text-center text-[8.5pt] font-bold leading-tight">
-                  Unit
-                </th>
-                <th className="border border-black px-0.5 py-1 text-center text-[8.5pt] font-bold leading-tight">
-                  U.Price
-                  <br />
-                  <span className="font-normal text-[7.5pt]">(USD)</span>
-                </th>
-                <th className="border border-black px-0.5 py-1 text-center text-[8.5pt] font-bold leading-tight">
-                  Amount
-                  <br />
-                  <span className="font-normal text-[7.5pt]">(USD)</span>
-                </th>
-                <th className="border border-black px-0.5 py-1 text-center text-[8.5pt] font-bold leading-tight">
-                  Quy cách
-                  <br />
-                  <span className="font-normal text-[7.5pt]">(kg/đv)</span>
-                </th>
-                <th className="border border-black px-0.5 py-1 text-center text-[8.5pt] font-bold leading-tight">
-                  Trọng
-                  <br />
-                  lượng
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {p.lines.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="border border-black px-2 py-6 text-center italic text-slate-500">
-                    Chưa có dòng hàng
-                  </td>
-                </tr>
-              ) : (
-                p.lines.map((line) => (
-                  <tr key={line.no} className="align-top">
-                    <td className="border border-black px-0.5 py-1 text-center tabular-nums">{line.no}</td>
-                    <td className="border border-black px-1 py-1 text-left text-[9.5pt] leading-snug break-words [overflow-wrap:anywhere]">
-                      {line.description || "—"}
-                    </td>
-                    <td className="border border-black px-0.5 py-1 text-center text-[8.5pt]">
-                      {line.hsCode || "—"}
-                    </td>
-                    <td className="border border-black px-0.5 py-1 text-center text-[9pt]">{line.origin}</td>
-                    <td className="border border-black px-0.5 py-1 text-right text-[9pt] tabular-nums">
-                      {fmtQty(line.quantity)}
-                    </td>
-                    <td className="border border-black px-0.5 py-1 text-center text-[8.5pt]">{line.unit}</td>
-                    <td className="border border-black px-0.5 py-1 text-right text-[9pt] tabular-nums">
-                      {fmtUsd(line.unitPriceUsd)}
-                    </td>
-                    <td className="border border-black px-0.5 py-1 text-right text-[9pt] tabular-nums">
-                      {fmtUsd(line.amountUsd)}
-                    </td>
-                    <td className="border border-black px-0.5 py-1 text-right text-[9pt] tabular-nums">
-                      {line.kgPerUnit > 0 ? fmtUsd(line.kgPerUnit) : "—"}
-                    </td>
-                    <td className="border border-black px-0.5 py-1 text-right text-[9pt] tabular-nums">
-                      {fmtKg(line.grossKg)}
-                    </td>
-                  </tr>
-                ))
-              )}
-              <tr className="font-bold">
-                <td className="border border-black" />
-                <td className="border border-black px-1 py-1.5 text-left text-[10pt]">TOTAL</td>
-                <td className="border border-black" />
-                <td className="border border-black" />
-                <td className="border border-black" />
-                <td className="border border-black" />
-                <td className="border border-black" />
-                <td className="border border-black px-0.5 py-1.5 text-right tabular-nums">
-                  {fmtUsd(p.totals.totalAmountUsd)}
-                </td>
-                <td className="border border-black" />
-                <td className="border border-black px-0.5 py-1.5 text-right tabular-nums">
-                  {fmtKg(p.totals.totalGrossKg)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div className="mt-2 text-[12pt] leading-relaxed">
-            <p>
-              <span className="font-bold">1. Total carton:</span> {cartonFooter}
-            </p>
-            <p className="mt-1">
-              <span className="font-bold">2. Total gross weight:</span> {kgFooter}
-            </p>
-          </div>
-        </article>
+          )}
+        </div>
       </div>
     </div>
   );

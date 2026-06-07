@@ -381,9 +381,12 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className={`text-[19px] font-semibold tracking-tight ${OPS.title}`}>In nhãn</h2>
-              <p className={`text-xs ${OPS.secondary}`}>
-                Tem {shipment.awb} · {shipment.customer}
-              </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className={`inline-block h-2 w-2 rounded-full ${bridgeOnline ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`} />
+                <span className={`text-[10px] ${OPS.secondary}`}>
+                  {shipment.awb} · {shipment.customer} · {bridgeOnline ? "Bridge Online" : "Bridge Offline"}
+                </span>
+              </div>
             </div>
             <button
               type="button"
@@ -403,18 +406,6 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
             airlineLabelOverrides={airlineLabelOverrides}
           />
 
-          <div className={`mt-4 rounded-2xl border px-3 py-3 ${OPS.panelSoft}`}>
-            <p
-              className={`text-center text-[11px] font-semibold ${
-                bridgeOnline ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-200"
-              }`}
-            >
-              {bridgeOnline
-                ? "Print Bridge đang chạy — in trực tiếp TSPL (không hộp thoại)"
-                : "Print Bridge chưa chạy — trên PC quầy: npm run print-bridge"}
-            </p>
-          </div>
-
           <div className="mt-4">
             <p className={`mb-2 text-center text-xs font-semibold ${OPS.secondary}`}>Chọn khổ tem</p>
             <div className="flex gap-2">
@@ -427,13 +418,13 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                     key={fmt}
                     type="button"
                     onClick={() => pickFormat(fmt)}
-                    className={`flex-1 rounded-2xl border-2 px-3 py-3.5 text-center transition-all active:scale-[0.98] ${
+                    className={`flex-1 rounded-2xl border-2 px-3 py-3 text-center transition-all active:scale-[0.98] ${
                       selected ? OPS.formatBtnOn : OPS.formatBtnOff
                     }`}
                   >
-                    <span className="block text-[15px] font-bold leading-tight">{labelSheetFormatLabel(fmt)}</span>
+                    <span className="block text-[14px] font-bold leading-tight">{labelSheetFormatLabel(fmt)}</span>
                     <span
-                      className={`mt-1 block truncate text-[10px] font-medium ${
+                      className={`mt-1 block truncate text-[9px] font-medium ${
                         selected ? OPS.formatBtnSubOn : OPS.formatBtnSubOff
                       }`}
                     >
@@ -449,17 +440,24 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
             </div>
           </div>
 
-          <ThermalWindowsPrinterNamesPanel
-            store={store}
-            bridgePrinters={bridgePrinters}
-            onSave={saveWindowsPrinterName}
-          />
+          <details className="mt-3 rounded-2xl border border-black/10 dark:border-white/10 overflow-hidden bg-black/[0.01] dark:bg-white/[0.01]">
+            <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-semibold text-dashboard-muted dark:text-dashboard-muted-dark hover:bg-black/[0.03] dark:hover:bg-white/[0.03] focus:outline-none">
+              Cấu hình máy in Windows (Print Bridge)
+            </summary>
+            <div className="border-t border-black/5 dark:border-white/5 bg-white dark:bg-dashboard-surface-dark px-1 py-1">
+              <ThermalWindowsPrinterNamesPanel
+                store={store}
+                bridgePrinters={bridgePrinters}
+                onSave={saveWindowsPrinterName}
+              />
+            </div>
+          </details>
 
           {printMsg ? (
             <p className={`mt-3 ${OPS.msgBox}`}>{printMsg}</p>
           ) : null}
 
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void handlePrint()}

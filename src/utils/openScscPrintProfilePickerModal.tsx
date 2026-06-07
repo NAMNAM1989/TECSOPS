@@ -137,39 +137,40 @@ function PrintContentSection(props: {
   );
 }
 
-function PickSection(props: {
+function PickDropdown(props: {
   title: string;
-  name: string;
   useBooking: boolean;
-  onUseBooking: () => void;
   bookingLabel: string;
   items: { id: string; title: string }[];
   selectedId: string;
-  onSelect: (id: string) => void;
+  onChange: (useBooking: boolean, selectedId: string) => void;
 }) {
-  const { title, name, useBooking, onUseBooking, bookingLabel, items, selectedId, onSelect } = props;
+  const { title, useBooking, bookingLabel, items, selectedId, onChange } = props;
+  const displayBookingLabel = bookingLabel.length > 30 ? bookingLabel.slice(0, 27) + "..." : bookingLabel;
+
   return (
-    <section className={`rounded-xl border p-3 ${OPS.card}`}>
-      <p className={`mb-2 px-0.5 text-[10px] font-semibold uppercase ${OPS.muted}`}>{title}</p>
-      <label className={OPS.pickPrimary}>
-        <input type="radio" name={name} checked={useBooking} onChange={onUseBooking} />
-        <span className={`text-xs ${OPS.title}`}>{bookingLabel}</span>
-      </label>
-      {items.map((item) => (
-        <label
-          key={item.id}
-          className={OPS.pickItem}
-        >
-          <input
-            type="radio"
-            name={name}
-            checked={!useBooking && selectedId === item.id}
-            onChange={() => onSelect(item.id)}
-          />
-          <span className={`block text-sm font-semibold ${OPS.title}`}>{item.title}</span>
-        </label>
-      ))}
-    </section>
+    <div className="flex flex-col gap-1">
+      <span className={`px-0.5 text-[10px] font-bold uppercase tracking-wide ${OPS.secondary}`}>{title}</span>
+      <select
+        value={useBooking ? "booking" : selectedId}
+        onChange={(e) => {
+          const val = e.target.value;
+          if (val === "booking") {
+            onChange(true, "");
+          } else {
+            onChange(false, val);
+          }
+        }}
+        className={`w-full rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${OPS.input}`}
+      >
+        <option value="booking">Theo lô: {displayBookingLabel || "(mặc định)"}</option>
+        {items.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.title}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
@@ -337,100 +338,81 @@ function PrintProfilePickerOverlay(props: {
         </div>
         <div className="flex min-h-0 flex-1 flex-col lg:min-h-[min(82vh,820px)] lg:flex-row">
           <div className={`min-h-0 shrink-0 space-y-3 overflow-y-auto border-b p-3 lg:w-80 lg:max-w-[22rem] lg:border-b-0 lg:border-r ${OPS.aside} ${OPS.border}`}>
-            <ScscWeighSenderSettings
-              compact
-              activeWarehouse={printWarehouse}
-              settings={senderSettings}
-              onChange={updateSenderSettings}
-            />
-            {sections.includes("shipper") ? (
-              <PickSection
-                title="Shipper"
-                name="shipper-pick"
-                useBooking={useBookingShipper}
-                onUseBooking={() => {
-                  setUseBookingShipper(true);
-                  setShipperId("");
-                }}
-                bookingLabel={
-                  bookingShipperLabel.trim() ? `Theo lô: ${bookingShipperLabel}` : "Theo lô (đã nhập trên booking)"
-                }
-                items={shippers.map((s) => ({ id: s.id, title: shipperTitle(s) }))}
-                selectedId={shipperId}
-                onSelect={(id) => {
-                  setUseBookingShipper(false);
-                  setShipperId(id);
-                }}
-              />
-            ) : null}
-            {sections.includes("consignee") ? (
-              <PickSection
-                title="CNEE"
-                name="cnee-pick"
-                useBooking={useBookingConsignee}
-                onUseBooking={() => {
-                  setUseBookingConsignee(true);
-                  setConsigneeId("");
-                }}
-                bookingLabel={
-                  bookingConsigneeLabel.trim() ? `Theo lô: ${bookingConsigneeLabel}` : "Theo lô (đã nhập trên booking)"
-                }
-                items={consignees.map((c) => ({ id: c.id, title: cneeTitle(c) }))}
-                selectedId={consigneeId}
-                onSelect={(id) => {
-                  setUseBookingConsignee(false);
-                  setConsigneeId(id);
-                }}
-              />
-            ) : null}
-            {sections.includes("agent") ? (
-              <PickSection
-                title="Agent"
-                name="agent-pick"
-                useBooking={useBookingAgent}
-                onUseBooking={() => {
-                  setUseBookingAgent(true);
-                  setAgentId("");
-                }}
-                bookingLabel={
-                  bookingAgentLabel.trim()
-                    ? `Theo lô: ${bookingAgentLabel}`
-                    : "Theo lô / Agent mặc định trên booking"
-                }
-                items={agents.map((a) => ({ id: a.id, title: agentTitle(a) }))}
-                selectedId={agentId}
-                onSelect={(id) => {
-                  setUseBookingAgent(false);
-                  setAgentId(id);
-                }}
-              />
-            ) : null}
-            {sections.includes("goods") ? (
-              <PickSection
-                title="Tên hàng"
-                name="goods-pick"
-                useBooking={useBookingGoods}
-                onUseBooking={() => {
-                  setUseBookingGoods(true);
-                  setGoodsId("");
-                  setGoodsText(resolveScscGoodsDescriptionPrint(shipment, undefined));
-                  setOtherText(resolveScscOtherRequirementsPrint(shipment, customer));
-                }}
-                bookingLabel={
-                  bookingGoodsLabel.trim() ? `Theo lô: ${bookingGoodsLabel}` : "Theo lô (đã nhập trên booking)"
-                }
-                items={goods.map((g) => ({ id: g.id, title: goodsTitle(g) }))}
-                selectedId={goodsId}
-                onSelect={(id) => {
-                  setUseBookingGoods(false);
-                  setGoodsId(id);
-                  const g = goods.find((x) => x.id === id);
-                  if (g) {
-                    setGoodsText(clipScscGoodsDescriptionPrint(g.goodsDescription));
-                  }
-                }}
-              />
-            ) : null}
+            <details className="rounded-xl border border-black/10 dark:border-white/10 overflow-hidden bg-black/[0.01] dark:bg-white/[0.01]">
+              <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-semibold text-dashboard-muted dark:text-dashboard-muted-dark hover:bg-black/[0.03] dark:hover:bg-white/[0.03] focus:outline-none">
+                Người gửi (Phiếu cân)
+              </summary>
+              <div className="border-t border-black/5 dark:border-white/5 bg-white dark:bg-dashboard-surface-dark px-1 py-1">
+                <ScscWeighSenderSettings
+                  compact
+                  activeWarehouse={printWarehouse}
+                  settings={senderSettings}
+                  onChange={updateSenderSettings}
+                />
+              </div>
+            </details>
+
+            <div className={`rounded-xl border p-3 flex flex-col gap-3 ${OPS.card}`}>
+              <p className={`-mb-1 px-0.5 text-[10px] font-bold uppercase tracking-wider ${OPS.muted}`}>Hồ sơ in ấn</p>
+              {sections.includes("shipper") && (
+                <PickDropdown
+                  title="Shipper"
+                  useBooking={useBookingShipper}
+                  bookingLabel={bookingShipperLabel.trim() || "Theo lô"}
+                  items={shippers.map((s) => ({ id: s.id, title: shipperTitle(s) }))}
+                  selectedId={shipperId}
+                  onChange={(useB, id) => {
+                    setUseBookingShipper(useB);
+                    setShipperId(id);
+                  }}
+                />
+              )}
+              {sections.includes("consignee") && (
+                <PickDropdown
+                  title="CNEE"
+                  useBooking={useBookingConsignee}
+                  bookingLabel={bookingConsigneeLabel.trim() || "Theo lô"}
+                  items={consignees.map((c) => ({ id: c.id, title: cneeTitle(c) }))}
+                  selectedId={consigneeId}
+                  onChange={(useB, id) => {
+                    setUseBookingConsignee(useB);
+                    setConsigneeId(id);
+                  }}
+                />
+              )}
+              {sections.includes("agent") && (
+                <PickDropdown
+                  title="Agent"
+                  useBooking={useBookingAgent}
+                  bookingLabel={bookingAgentLabel.trim() || "Theo lô / Mặc định"}
+                  items={agents.map((a) => ({ id: a.id, title: agentTitle(a) }))}
+                  selectedId={agentId}
+                  onChange={(useB, id) => {
+                    setUseBookingAgent(useB);
+                    setAgentId(id);
+                  }}
+                />
+              )}
+              {sections.includes("goods") && (
+                <PickDropdown
+                  title="Tên hàng"
+                  useBooking={useBookingGoods}
+                  bookingLabel={bookingGoodsLabel.trim() || "Theo lô"}
+                  items={goods.map((g) => ({ id: g.id, title: goodsTitle(g) }))}
+                  selectedId={goodsId}
+                  onChange={(useB, id) => {
+                    setUseBookingGoods(useB);
+                    setGoodsId(id);
+                    const g = goods.find((x) => x.id === id);
+                    setGoodsText(resolveScscGoodsDescriptionPrint(shipment, g));
+                    if (!useB && g) {
+                      setOtherText(resolveScscOtherRequirementsPrint(shipment, customer));
+                    }
+                  }}
+                />
+              )}
+            </div>
+
             <PrintContentSection
               goodsText={goodsText}
               otherText={otherText}

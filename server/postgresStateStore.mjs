@@ -11,7 +11,6 @@ import {
   seedAirlineCatalogIfEmpty,
 } from "./airlineCatalog.mjs";
 import { ensureAirportSchema, seedAirportsIfEmpty } from "./airportCatalog.mjs";
-import { ensureWeighSlipSchema } from "./weighSlipSchema.mjs";
 import { normalizeEcargoKhoScscMapLoose } from "./ecargoKhoScscNormalize.mjs";
 import { parseCustomersLoose } from "./customerDirectoryValidate.mjs";
 
@@ -236,7 +235,6 @@ async function ensureSchema(client) {
   await ensureAirportSchema(client);
   await seedAirlineCatalogIfEmpty(client);
   await seedAirportsIfEmpty(client);
-  await ensureWeighSlipSchema(client);
 }
 
 function str(v) {

@@ -357,26 +357,28 @@ export function MobileShipmentCards({
                   type="button"
                   onClick={() => toggle(wh)}
                   aria-expanded={!collapsed}
-                  className="mb-1 flex w-full items-center gap-1.5 rounded-lg px-0.5 py-0.5 text-left active:bg-black/[0.03] dark:active:bg-white/[0.06]"
+                  className="mb-2 flex w-full items-center justify-between rounded-xl bg-black/[0.03] dark:bg-white/[0.04] px-3 py-2.5 text-left transition active:scale-[0.98]"
                 >
-                  <Chevron collapsed={collapsed} />
-                  <h2 className="text-[13px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
-                    {warehouseLabel[wh]}
-                  </h2>
-                  <span className="rounded-full bg-dashboard-primary/90 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-slate-600">
+                  <div className="flex items-center gap-2">
+                    <Chevron collapsed={collapsed} />
+                    <h2 className="text-[13px] font-bold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
+                      {warehouseLabel[wh]}
+                    </h2>
+                  </div>
+                  <span className="rounded-full bg-indigo-600 dark:bg-indigo-500 px-2.5 py-0.5 text-[10px] font-bold tabular-nums text-white shadow-sm">
                     {group.length}
                   </span>
                 </button>
               ) : (
                 <Box
-                  className={`mb-1 flex items-center justify-between gap-1.5 px-0.5 py-0 ${
-                    isActiveWarehouse ? "border-l-2 border-apple-blue pl-1.5 dark:border-sky-400" : ""
+                  className={`mb-2 flex items-center justify-between rounded-xl bg-black/[0.02] dark:bg-white/[0.03] px-3 py-2.5 ${
+                    isActiveWarehouse ? "border-l-2 border-apple-blue dark:border-sky-400" : ""
                   }`}
                 >
-                  <h2 className="text-[12px] font-semibold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
+                  <h2 className="text-[13px] font-bold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark">
                     {warehouseLabel[wh]}
                   </h2>
-                  <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-apple-secondary dark:bg-white/[0.08] dark:text-slate-300">
+                  <span className="rounded-full bg-black/[0.06] dark:bg-white/[0.1] px-2.5 py-0.5 text-[10px] font-bold tabular-nums text-apple-secondary dark:text-slate-300">
                     {group.length}
                   </span>
                 </Box>
@@ -482,47 +484,45 @@ export function StickyMobileActions({
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
-    <Box className="no-print fixed bottom-0 left-0 right-0 z-40 md:hidden">
-      <Box className="px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5">
-        <Box className="rounded-[18px] border border-black/[0.06] bg-white/90 px-2.5 py-2 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-ops-surface/95">
-          {selected ? (
-            <Box className="flex gap-2">
-              <button type="button" onClick={onQuickEdit} className={`min-w-0 flex-1 ${MOBILE.primaryBtn} py-2.5`}>
-                Sửa lô
-              </button>
-              <div className="relative shrink-0">
-                <button
-                  type="button"
-                  aria-expanded={moreOpen}
-                  aria-haspopup="menu"
-                  onClick={() => setMoreOpen((v) => !v)}
-                  className={`min-h-11 min-w-11 rounded-full border px-3 text-lg font-semibold leading-none active:scale-[0.98] ${MOBILE.secondaryBtn}`}
-                  title="Thêm"
-                >
-                  ⋯
-                </button>
-                {moreOpen ? (
-                  <Box className="absolute bottom-full right-0 z-50 mb-2 min-w-[9rem] overflow-hidden rounded-xl border border-black/[0.1] bg-white py-1 shadow-apple-md dark:border-white/12 dark:bg-ops-elevated">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMoreOpen(false);
-                        if (confirm(`Xóa ${(selected.awb ?? "").trim() || "lô này"}?`)) onDelete();
-                      }}
-                      className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-red-700 active:bg-red-50 dark:text-red-300 dark:active:bg-red-500/15"
-                    >
-                      Xóa lô
-                    </button>
-                  </Box>
-                ) : null}
-              </div>
-            </Box>
-          ) : (
-            <button type="button" onClick={onAdd} className={`w-full ${MOBILE.primaryBtn} py-2.5`}>
-              + Booking · {warehouseLabel[activeWarehouse]}
+    <Box className="no-print fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[calc(100%-2.5rem)] max-w-[440px] -translate-x-1/2 md:hidden">
+      <Box className="rounded-[28px] border border-black/[0.05] bg-white/85 dark:bg-[#111625]/85 p-2 shadow-apple-md backdrop-blur-xl dark:border-white/[0.06]">
+        {selected ? (
+          <Box className="flex gap-2">
+            <button type="button" onClick={onQuickEdit} className={`min-w-0 flex-1 ${MOBILE.primaryBtn} py-2.5`}>
+              Sửa lô
             </button>
-          )}
-        </Box>
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                aria-expanded={moreOpen}
+                aria-haspopup="menu"
+                onClick={() => setMoreOpen((v) => !v)}
+                className={`min-h-11 min-w-11 rounded-full border px-3 text-lg font-semibold leading-none active:scale-[0.98] ${MOBILE.secondaryBtn}`}
+                title="Thêm"
+              >
+                ⋯
+              </button>
+              {moreOpen ? (
+                <Box className="absolute bottom-full right-0 z-50 mb-2 min-w-[9rem] overflow-hidden rounded-xl border border-black/[0.1] bg-white py-1 shadow-apple-md dark:border-white/12 dark:bg-[#1e293b]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      if (confirm(`Xóa ${(selected.awb ?? "").trim() || "lô này"}?`)) onDelete();
+                    }}
+                    className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-red-700 active:bg-red-50 dark:text-red-300 dark:active:bg-red-500/15"
+                  >
+                    Xóa lô
+                  </button>
+                </Box>
+              ) : null}
+            </div>
+          </Box>
+        ) : (
+          <button type="button" onClick={onAdd} className={`w-full ${MOBILE.primaryBtn} py-2.5`}>
+            + Booking · {warehouseLabel[activeWarehouse]}
+          </button>
+        )}
       </Box>
     </Box>
   );
@@ -539,7 +539,7 @@ function Box({ className, children, ...rest }: React.HTMLAttributes<HTMLDivEleme
 function Chevron({ collapsed }: { collapsed: boolean }) {
   return (
     <svg
-      className={`h-4 w-4 shrink-0 text-dashboard-muted transition-transform dark:text-dashboard-muted-dark ${
+      className={`h-4 w-4 shrink-0 text-dashboard-muted transition-transform duration-200 ease-out dark:text-dashboard-muted-dark ${
         collapsed ? "" : "rotate-90"
       }`}
       fill="none"

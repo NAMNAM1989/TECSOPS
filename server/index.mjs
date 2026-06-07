@@ -15,7 +15,6 @@ import {
 import { createPostgresStateStore } from "./postgresStateStore.mjs";
 import { registerTsplRoutes } from "./tsplRoutes.mjs";
 import { registerLookupRoutes } from "./lookupRoutes.mjs";
-import { registerWeighSlipRoutes } from "./weighSlipRoutes.mjs";
 import {
   registerPrintPdfRoutes,
   registerShipmentInvoicePdfRoute,
@@ -191,7 +190,6 @@ registerEcargoRoutes(app, {
 
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);
-  registerWeighSlipRoutes(app);
   registerPrintPdfRoutes(app);
   console.info("[api] lookup + weigh-slips + print/pdf (Postgres)");
 } else {

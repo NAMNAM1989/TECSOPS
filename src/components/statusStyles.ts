@@ -24,14 +24,14 @@ export const statusRowBg: Record<ShipmentStatus, string> = {
 };
 
 export const statusRowAccent: Record<ShipmentStatus, string> = {
-  PENDING: "border-l-[3px] border-l-blue-400",
-  RECEIVED: "border-l-[3px] border-l-amber-400",
-  VOLUME_DONE: "border-l-[3px] border-l-cyan-400",
-  CUSTOMS: "border-l-[3px] border-l-sky-500",
-  SECURITY: "border-l-[3px] border-l-orange-400",
-  OLA_PULL: "border-l-[3px] border-l-fuchsia-500",
-  WEIGH_SLIP: "border-l-[3px] border-l-lime-500",
-  COMPLETED: "border-l-[3px] border-l-emerald-400",
+  PENDING: "border-l-2 border-l-blue-400/80 dark:border-l-blue-400/60",
+  RECEIVED: "border-l-2 border-l-amber-400/80 dark:border-l-amber-400/60",
+  VOLUME_DONE: "border-l-2 border-l-cyan-400/80 dark:border-l-cyan-400/60",
+  CUSTOMS: "border-l-2 border-l-sky-500/80 dark:border-l-sky-500/60",
+  SECURITY: "border-l-2 border-l-orange-400/80 dark:border-l-orange-400/60",
+  OLA_PULL: "border-l-2 border-l-fuchsia-500/80 dark:border-l-fuchsia-500/60",
+  WEIGH_SLIP: "border-l-2 border-l-lime-500/80 dark:border-l-lime-500/60",
+  COMPLETED: "border-l-2 border-l-emerald-400/80 dark:border-l-emerald-400/60",
 };
 
 /** @deprecated */
@@ -39,26 +39,26 @@ export const statusRowBorder: Record<ShipmentStatus, string> = statusRowAccent;
 
 /** Hàng được chọn — tint amber nhẹ. */
 export const statusRowSelected =
-  "bg-amber-50/80 ring-1 ring-amber-200/60 dark:bg-amber-500/[0.08] dark:ring-amber-400/25";
+  "bg-amber-500/[0.04] ring-1 ring-amber-500/30 dark:bg-amber-500/[0.08] dark:ring-amber-400/20";
 
-/** Dropdown trạng thái — nền tint 15% (translucent). */
+/** Dropdown trạng thái — nền tint 10% (translucent). */
 export const statusSelectSurface: Record<ShipmentStatus, string> = {
   PENDING:
-    "bg-blue-500/15 text-blue-700 border-blue-500/20 dark:bg-blue-400/15 dark:text-blue-200 dark:border-blue-400/25",
+    "bg-blue-500/10 text-blue-600 border-blue-500/15 dark:bg-blue-400/10 dark:text-blue-300 dark:border-blue-400/20",
   RECEIVED:
-    "bg-amber-500/15 text-amber-800 border-amber-500/20 dark:bg-amber-400/15 dark:text-amber-200 dark:border-amber-400/25",
+    "bg-amber-500/10 text-amber-700 border-amber-500/15 dark:bg-amber-400/10 dark:text-amber-300 dark:border-amber-400/20",
   VOLUME_DONE:
-    "bg-cyan-500/15 text-cyan-800 border-cyan-500/20 dark:bg-cyan-400/15 dark:text-cyan-200 dark:border-cyan-400/25",
+    "bg-cyan-500/10 text-cyan-700 border-cyan-500/15 dark:bg-cyan-400/10 dark:text-cyan-300 dark:border-cyan-400/20",
   CUSTOMS:
-    "bg-sky-500/15 text-sky-800 border-sky-500/20 dark:bg-sky-400/15 dark:text-sky-200 dark:border-sky-400/25",
+    "bg-sky-500/10 text-sky-700 border-sky-500/15 dark:bg-sky-400/10 dark:text-sky-300 dark:border-sky-400/20",
   SECURITY:
-    "bg-orange-500/15 text-orange-800 border-orange-500/20 dark:bg-orange-400/15 dark:text-orange-200 dark:border-orange-400/25",
+    "bg-orange-500/10 text-orange-700 border-orange-500/15 dark:bg-orange-400/10 dark:text-orange-300 dark:border-orange-400/20",
   OLA_PULL:
-    "bg-fuchsia-500/15 text-fuchsia-800 border-fuchsia-500/20 dark:bg-fuchsia-400/15 dark:text-fuchsia-200 dark:border-fuchsia-400/25",
+    "bg-fuchsia-500/10 text-fuchsia-700 border-fuchsia-500/15 dark:bg-fuchsia-400/10 dark:text-fuchsia-300 dark:border-fuchsia-400/20",
   WEIGH_SLIP:
-    "bg-lime-500/15 text-lime-800 border-lime-500/20 dark:bg-lime-400/15 dark:text-lime-200 dark:border-lime-400/25",
+    "bg-lime-500/10 text-lime-700 border-lime-500/15 dark:bg-lime-400/10 dark:text-lime-300 dark:border-lime-400/20",
   COMPLETED:
-    "bg-emerald-500/15 text-emerald-800 border-emerald-500/20 dark:bg-emerald-400/15 dark:text-emerald-300 dark:border-emerald-400/25",
+    "bg-emerald-500/10 text-emerald-700 border-emerald-500/15 dark:bg-emerald-400/10 dark:text-emerald-300 dark:border-emerald-400/20",
 };
 
 export const statusBadge: Record<ShipmentStatus, string> = {

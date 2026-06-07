@@ -283,13 +283,13 @@ export function MobileShipmentEditSheet({
             </button>
           </div>
 
-          <div className="flex gap-1.5 px-3 py-2">
+          <div className="mx-3 my-2 flex gap-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] p-1">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`flex-1 rounded-full py-2.5 text-[12px] font-semibold transition ${
+                className={`flex-1 rounded-full py-2 text-[12px] font-semibold transition-all duration-200 ${
                   tab === t.id ? MOBILE.tabActive : MOBILE.tabIdle
                 }`}
               >

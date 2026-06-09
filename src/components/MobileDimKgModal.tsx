@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import { useDimSpeechRecognition } from "../hooks/useDimSpeechRecognition";
 import {
@@ -137,6 +137,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   const [combo, setCombo] = useState("");
   const [lines, setLines] = useState<DimPieceLine[]>(() => cloneLines(row.dimLines));
   const [voicePreview, setVoicePreview] = useState<VoiceDimPreview | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   const { listening, liveCaption, start, finalize, speechOk } = useDimSpeechRecognition();
 
@@ -201,6 +203,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     }
     appendQuads(parsed);
     setCombo("");
+    // Keep focus inside the textarea on mobile for faster sequential entry
+    textareaRef.current?.focus();
   };
 
   const startVoiceCalc = useCallback(() => {
@@ -257,14 +261,16 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
   return (
     <div
-      className="no-print fixed inset-0 z-[60] flex items-end justify-center bg-black/30 p-3 sm:items-center sm:p-4"
+      className="no-print fixed inset-0 z-[480] flex items-end justify-center bg-black/30 p-3 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="dim-modal-title"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
-        className="flex max-h-[min(92vh,680px)] w-full max-w-sm flex-col overflow-hidden rounded-[1.35rem] border border-black/[0.06] bg-white shadow-2xl shadow-black/10"
+        className="flex max-h-[min(92dvh,680px)] w-full max-w-sm flex-col overflow-hidden rounded-[1.35rem] border border-black/[0.06] bg-white shadow-2xl shadow-black/10 transition-all duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="shrink-0 bg-gradient-to-b from-slate-50/90 to-white px-4 pb-3 pt-4">
@@ -286,13 +292,15 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2.5">
           <div className="space-y-2.5">
-            <DimMicTotalRow
-              speechOk={speechOk}
-              listening={listening}
-              liveCaption={liveCaption}
-              totalDimLabel={totalDimLabel}
-              onMicPress={startVoiceCalc}
-            />
+            {!isInputFocused && (
+              <DimMicTotalRow
+                speechOk={speechOk}
+                listening={listening}
+                liveCaption={liveCaption}
+                totalDimLabel={totalDimLabel}
+                onMicPress={startVoiceCalc}
+              />
+            )}
 
             {voicePreview ? (
               <div
@@ -343,8 +351,9 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 </span>
               </div>
               <textarea
+                ref={textareaRef}
                 id="dim-combo"
-                rows={4}
+                rows={isInputFocused ? 2 : 4}
                 aria-describedby="dim-combo-hint"
                 inputMode="text"
                 enterKeyHint="enter"
@@ -353,7 +362,23 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 autoCorrect="off"
                 spellCheck={false}
                 value={combo}
-                onChange={(e) => setCombo(normalizeDimComboInput(e.target.value))}
+                onFocus={() => setIsInputFocused(true)}
+                onBlur={() => setIsInputFocused(false)}
+                onChange={(e) => {
+                  const el = e.target;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  const val = el.value;
+                  const normalized = normalizeDimComboInput(val);
+                  setCombo(normalized);
+                  
+                  // Restore cursor position in next tick to prevent cursor jump in React
+                  requestAnimationFrame(() => {
+                    if (el) {
+                      el.setSelectionRange(start, end);
+                    }
+                  });
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
                     const multiLine = combo.includes("\n");
@@ -382,7 +407,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   }
                 }}
                 placeholder={"40-50-30-4\n60-50-30-5"}
-                className="max-h-40 min-h-[5rem] w-full resize-y rounded-2xl border border-black/[0.07] bg-slate-50/40 px-3 py-2.5 font-mono text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/18"
+                className="max-h-40 min-h-[5rem] w-full resize-y rounded-2xl border border-black/[0.07] bg-slate-50/40 px-3 py-2.5 font-mono text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/18 transition-all duration-200"
               />
               <p id="dim-combo-hint" className="sr-only">
                 {DIM_INPUT_HINT}
@@ -395,7 +420,11 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   <button
                     key={n}
                     type="button"
-                    onClick={() => setCombo((c) => appendDimComboNumber(c, n))}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setCombo((c) => appendDimComboNumber(c, n));
+                      textareaRef.current?.focus();
+                    }}
                     className="shrink-0 min-h-[34px] min-w-[2.65rem] rounded-xl border border-black/[0.08] bg-white px-2.5 text-xs font-bold tabular-nums text-apple-label shadow-sm active:scale-[0.98] active:bg-black/[0.03]"
                   >
                     {n}
@@ -403,13 +432,15 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 ))}
                 <button
                   type="button"
-                  onClick={() =>
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
                     setCombo((c) => {
                       const t = c.trim();
                       if (!t) return c;
                       return t.endsWith("×") ? t : `${t}×`;
-                    })
-                  }
+                    });
+                    textareaRef.current?.focus();
+                  }}
                   className="shrink-0 min-h-[34px] min-w-[2.65rem] rounded-xl border border-apple-blue/25 bg-apple-blue/8 px-2.5 text-xs font-bold text-apple-blue active:scale-[0.98]"
                   aria-label="Dấu nhân"
                 >
@@ -418,6 +449,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
               </div>
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={addFromCombo}
                 className="mt-2 w-full rounded-2xl bg-apple-blue py-2.5 text-sm font-semibold text-white shadow-sm active:scale-[0.99]"
               >
@@ -461,47 +493,49 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
               </div>
             ) : null}
 
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-[10px] font-semibold text-apple-secondary">Các dòng</span>
-                <span className="text-[10px] text-apple-tertiary">{lines.length}</span>
-              </div>
-              {lines.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-black/[0.12] py-5 text-center text-xs text-apple-tertiary">
-                  Chưa có dòng
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {lines.map((line, idx) => {
-                    const sub = lineDimKg(line, divisor, dimPolicy);
-                    return (
-                      <li
-                        key={`${idx}-${line.lCm}-${line.wCm}-${line.hCm}-${line.pcs}`}
-                        className="flex items-center justify-between gap-2 rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2.5"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="font-mono text-xs font-semibold text-apple-label">
-                            {line.lCm}×{line.wCm}×{line.hCm}{" "}
-                            <span className="text-apple-secondary">×{line.pcs}</span>
-                          </p>
-                          <p className="mt-0.5 text-[11px] font-medium tabular-nums text-apple-secondary">
-                            →{" "}
-                            {sub != null ? `${formatDimKgDisplay(sub, dimPolicy)} kg` : "—"}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeLine(idx)}
-                          className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[10px] font-semibold text-red-600"
+            {!isInputFocused && (
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-apple-secondary">Các dòng</span>
+                  <span className="text-[10px] text-apple-tertiary">{lines.length}</span>
+                </div>
+                {lines.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-black/[0.12] py-5 text-center text-xs text-apple-tertiary">
+                    Chưa có dòng
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {lines.map((line, idx) => {
+                      const sub = lineDimKg(line, divisor, dimPolicy);
+                      return (
+                        <li
+                          key={`${idx}-${line.lCm}-${line.wCm}-${line.hCm}-${line.pcs}`}
+                          className="flex items-center justify-between gap-2 rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2.5"
                         >
-                          Xóa
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-mono text-xs font-semibold text-apple-label">
+                              {line.lCm}×{line.wCm}×{line.hCm}{" "}
+                              <span className="text-apple-secondary">×{line.pcs}</span>
+                            </p>
+                            <p className="mt-0.5 text-[11px] font-medium tabular-nums text-apple-secondary">
+                              →{" "}
+                              {sub != null ? `${formatDimKgDisplay(sub, dimPolicy)} kg` : "—"}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeLine(idx)}
+                            className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[10px] font-semibold text-red-600"
+                          >
+                            Xóa
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

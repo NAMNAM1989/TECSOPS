@@ -191,9 +191,9 @@ registerEcargoRoutes(app, {
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);
   registerPrintPdfRoutes(app);
-  console.info("[api] lookup + weigh-slips + print/pdf (Postgres)");
+  console.info("[api] lookup + print/pdf (Postgres)");
 } else {
-  console.info("[api] weigh-slips / lookup / print disabled — cần DATABASE_URL");
+  console.info("[api] lookup / print disabled — cần DATABASE_URL");
 }
 
 const distDir = path.join(__dirname, "..", "dist");

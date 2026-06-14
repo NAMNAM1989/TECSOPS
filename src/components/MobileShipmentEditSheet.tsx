@@ -36,7 +36,8 @@ import { isEcargoJobRunning, isEcargoJobTerminal } from "../types/ecargoJob";
 import { CustomerPickerField } from "./CustomerPickerField";
 import { buildShipmentCneeDisplayLines } from "../utils/shipmentCneeCopyBlock";
 import { copyTextToClipboard } from "../utils/copyTextToClipboard";
-import { MOBILE } from "../styles/mobileOpsStyles";
+import { MOBILE, mobileSheetBackdrop } from "../styles/mobileOpsStyles";
+import { useMobileLayout } from "../hooks/useMobileLayout";
 import { OPS } from "../styles/opsModalStyles";
 
 type TabId = "lot" | "notify" | "dim";
@@ -100,6 +101,7 @@ export function MobileShipmentEditSheet({
   onClose,
   onSave,
 }: Props) {
+  const { isMobile } = useMobileLayout();
   const [tab, setTab] = useState<TabId>("lot");
   const [dimOpen, setDimOpen] = useState(false);
   const [ecargoOpen, setEcargoOpen] = useState(false);
@@ -255,7 +257,7 @@ export function MobileShipmentEditSheet({
   return (
     <>
       <div
-        className={MOBILE.sheetBackdrop}
+        className={mobileSheetBackdrop(isMobile)}
         role="dialog"
         aria-modal="true"
         aria-label="Sửa lô hàng"

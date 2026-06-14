@@ -38,7 +38,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["server/ecargo/**/*.mjs", "server/stateStore.mjs"],
+    files: ["server/ecargo/**/*.mjs", "server/sheets/**/*.mjs", "server/stateStore.mjs"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
@@ -46,6 +46,9 @@ export default tseslint.config(
         console: "readonly",
         process: "readonly",
         Buffer: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+        AbortSignal: "readonly",
         setTimeout: "readonly",
         clearTimeout: "readonly",
         setInterval: "readonly",

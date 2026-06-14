@@ -42,6 +42,7 @@ import {
   printThermalLabelTspl,
 } from "../thermalLabel/thermalLabelTspl";
 import { canPrintWeighReceiptScsc, printWeighReceiptScsc } from "../../utils/printWeighReceiptScsc";
+import { openCsdPdfForShipment } from "../../utils/csdPdfPrint";
 import { ScscPrintTemplateEditor } from "./ScscPrintTemplateEditor";
 import type { ShipmentMutation } from "../../utils/shipmentMutations";
 import type { AppState } from "../../utils/shipmentMutations";
@@ -161,6 +162,26 @@ export function PrintCenter({
       return;
     }
 
+    if (docType === "csd-form") {
+      let ok = 0;
+      let err = "";
+      for (const s of targets) {
+        if (!String(s.awb ?? "").trim()) continue;
+        try {
+          await openCsdPdfForShipment(s);
+          ok += 1;
+        } catch (e) {
+          err = e instanceof Error ? e.message : String(e);
+        }
+      }
+      setStatusMsg(
+        ok
+          ? `Đã mở ${ok} PDF CSD (IATA) — lưu/in từ tab trình duyệt.`
+          : err || "Không xuất được PDF CSD."
+      );
+      return;
+    }
+
     if (docType === "scsc-weigh") {
       let n = 0;
       let viaPdf = 0;
@@ -241,8 +262,16 @@ export function PrintCenter({
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-4 lg:grid-cols-[1fr_340px]">
         <div className="flex min-h-0 flex-col gap-3 overflow-hidden rounded-2xl border bg-white p-4">
           <DocTypeTabs docType={docType} onChange={setDocType} />
+          {docType === "csd-form" ? (
+            <p className="rounded-xl border border-orange-200/80 bg-orange-50/80 px-3 py-2 text-[11px] text-orange-950">
+              Form <strong>IATA Consignment Security Declaration</strong> — xuất PDF tự điền từ lô (AWB, DEST,
+              RA, SPX, X-ray, ngày/giờ). Mở tab PDF để lưu hoặc in.
+            </p>
+          ) : null}
           <PrinterProfileSelector
-            docType={docType === "dim-report" ? "thermal-label" : docType}
+            docType={
+              docType === "dim-report" || docType === "csd-form" ? "thermal-label" : docType
+            }
             store={store}
             onChangeActive={(id) => (docType === "scsc-weigh" ? setActiveA4(id) : pickThermalProfile(id))}
             onEditProfiles={() => setProfileEditorOpen(true)}
@@ -387,6 +416,7 @@ function DocTypeTabs({ docType, onChange }: { docType: PrintDocumentType; onChan
     { k: "thermal-label", label: "Nhãn nhiệt" },
     { k: "scsc-weigh", label: "Tờ cân SCSC" },
     { k: "dim-report", label: "DIM" },
+    { k: "csd-form", label: "CSD (PDF)" },
   ];
   return (
     <div className="flex flex-wrap gap-2">

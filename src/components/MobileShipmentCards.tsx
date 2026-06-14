@@ -25,15 +25,13 @@ import {
 import type { EcargoAutoRegisterOpts } from "./DesktopShipmentTable";
 import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
 import { resolveEcargoVehiclePrefill, vehicleDisplayLabel } from "../utils/customerVehicleCore";
-import { MOBILE } from "../styles/mobileOpsStyles";
+import { MOBILE, mobileOnlyVisibility } from "../styles/mobileOpsStyles";
+import { useMobileLayout } from "../hooks/useMobileLayout";
 
-function formatMobileLotMeta(row: Shipment): string {
+function formatMobileFlightMeta(row: Shipment): string {
   const parts: string[] = [];
   if ((row.flight ?? "").trim()) parts.push((row.flight ?? "").trim());
   if ((row.dest ?? "").trim()) parts.push((row.dest ?? "").trim());
-  const pcs = row.pcs != null && String(row.pcs).trim() !== "" ? String(row.pcs) : "—";
-  const kg = row.kg != null && String(row.kg).trim() !== "" ? String(row.kg) : "—";
-  parts.push(`${pcs}K/${kg}G`);
   if (row.dimWeightKg != null) {
     parts.push(`DIM ${formatShipmentDimWeightKg(row.flight, row.dimWeightKg)}`);
   }
@@ -54,17 +52,17 @@ function MobileQuickNumber({
 }) {
   return (
     <span
-      className="inline-flex items-center gap-0.5 rounded-md bg-black/[0.04] px-1.5 py-px dark:bg-white/[0.06]"
+      className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-black/[0.04] px-1 py-px dark:bg-white/[0.06]"
       onClick={(e) => e.stopPropagation()}
     >
-      <span className="text-[9px] font-semibold uppercase tracking-wide text-apple-secondary dark:text-slate-400">
+      <span className="text-[8px] font-semibold uppercase tracking-wide text-apple-secondary dark:text-slate-400">
         {label}
       </span>
       <InlineNumberEdit
         value={value}
         compact
         placeholder="—"
-        className="min-h-[22px] px-1 text-[12px]"
+        className="min-h-[20px] px-0.5 text-[11px]"
         onCommit={onCommit}
       />
     </span>
@@ -123,20 +121,20 @@ const MobileShipmentCard = memo(
     return (
       <Box
         id={`mobile-shipment-${row.id}`}
-        style={{ contentVisibility: "auto", containIntrinsicSize: "0 84px" }}
+        style={{ contentVisibility: "auto", containIntrinsicSize: "0 58px" }}
         className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
           selected ? "ring-1 ring-apple-blue/50 dark:ring-sky-400/45" : ""
         } ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}
       >
         <div className={MOBILE.cardInner}>
-          <div className="flex items-start gap-1.5">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               className="min-w-0 flex-1 text-left active:opacity-90"
               onClick={() => onOpenEdit(row)}
             >
               {awbTrim ? (
-                <p className={MOBILE.awb}>
+                <p className={`truncate ${MOBILE.awb} text-red-600 dark:text-red-400`}>
                   {awbTrim}
                   {hawbTrim ? (
                     <span className="ml-0.5 text-[10px] font-bold text-red-700/80 dark:text-red-400/75">
@@ -147,48 +145,53 @@ const MobileShipmentCard = memo(
               ) : (
                 <p className={MOBILE.awbEmpty}>+ Nhập AWB</p>
               )}
-              <p className={`mt-0.5 ${MOBILE.customerName}`} title={row.customer}>
-                {row.customer?.trim() || "Chưa chọn khách"}
-              </p>
-              <p className={`mt-px ${MOBILE.cardMeta}`}>{formatMobileLotMeta(row)}</p>
+              <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
+                <span className={`max-w-[38%] truncate ${MOBILE.customerName}`} title={row.customer}>
+                  {row.customer?.trim() || "Chưa chọn khách"}
+                </span>
+                {formatMobileFlightMeta(row) ? (
+                  <>
+                    <span className="text-[10px] text-apple-tertiary dark:text-slate-500">·</span>
+                    <span className={`min-w-0 max-w-[34%] truncate ${MOBILE.cardMeta}`}>
+                      {formatMobileFlightMeta(row)}
+                    </span>
+                  </>
+                ) : null}
+                <MobileQuickNumber
+                  label="Kiện"
+                  value={row.pcs}
+                  onCommit={(v) => onUpdate(row.id, { pcs: v })}
+                />
+                <MobileQuickNumber label="Kg" value={row.kg} onCommit={(v) => onUpdate(row.id, { kg: v })} />
+                {showEcargoKhoScsc && canEcargo ? (
+                  <EcargoKhoScscTriggerButton
+                    rowId={row.id}
+                    open={ecargoOpen}
+                    hasVehicle={ecargoReady}
+                    job={ecargoJob}
+                    variant="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleEcargo(row);
+                    }}
+                    title={
+                      ecargoReady
+                        ? `eCargo · ${effectiveEcargoVehicle}`
+                        : ecargoPrefill.defaultVehicle
+                          ? `Xe mặc định: ${vehicleDisplayLabel(ecargoPrefill.defaultVehicle)}`
+                          : "eCargo — nhập xe & đăng ký"
+                    }
+                  />
+                ) : null}
+              </div>
             </button>
-            <div className="shrink-0 pt-px" onClick={(e) => e.stopPropagation()}>
+            <div className="shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
               <StatusSelect
                 compact
                 value={row.status}
                 onChange={(s) => onUpdate(row.id, { status: s })}
               />
             </div>
-          </div>
-          <div className="mt-1 flex items-center gap-1.5 border-t border-black/[0.04] pt-1 dark:border-white/[0.06]">
-            <MobileQuickNumber
-              label="Kiện"
-              value={row.pcs}
-              onCommit={(v) => onUpdate(row.id, { pcs: v })}
-            />
-            <MobileQuickNumber label="Kg" value={row.kg} onCommit={(v) => onUpdate(row.id, { kg: v })} />
-            {showEcargoKhoScsc && canEcargo ? (
-              <div className="ml-auto shrink-0">
-                <EcargoKhoScscTriggerButton
-                  rowId={row.id}
-                  open={ecargoOpen}
-                  hasVehicle={ecargoReady}
-                  job={ecargoJob}
-                  variant="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleEcargo(row);
-                  }}
-                  title={
-                    ecargoReady
-                      ? `eCargo · ${effectiveEcargoVehicle}`
-                      : ecargoPrefill.defaultVehicle
-                        ? `Xe mặc định: ${vehicleDisplayLabel(ecargoPrefill.defaultVehicle)}`
-                        : "eCargo — nhập xe & đăng ký"
-                  }
-                />
-              </div>
-            ) : null}
           </div>
         </div>
       </Box>
@@ -267,6 +270,7 @@ export function MobileShipmentCards({
   highlightedShipmentId = null,
   onAddBlankRow,
 }: MobileShipmentCardsProps) {
+  const { isMobile } = useMobileLayout();
   const [openEcargoRowId, setOpenEcargoRowId] = useState<string | null>(null);
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
   const warehouseSections = useMemo((): Warehouse[] => {
@@ -338,7 +342,7 @@ export function MobileShipmentCards({
 
   return (
     <>
-      <Box className="space-y-2 pb-[max(5rem,env(safe-area-inset-bottom))] md:hidden">
+      <Box className={`space-y-2 pb-[max(5rem,env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}>
         {warehouseSections.map((wh) => {
           const group = rowsByWarehouse[wh];
           const collapsed = searchActive
@@ -481,10 +485,11 @@ export function StickyMobileActions({
   onAdd,
   onQuickEdit,
 }: StickyMobileActionsProps) {
+  const { isMobile } = useMobileLayout();
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
-    <Box className="no-print fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[calc(100%-2.5rem)] max-w-[440px] -translate-x-1/2 md:hidden">
+    <Box className={`no-print fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[calc(100%-2.5rem)] max-w-[440px] -translate-x-1/2 ${mobileOnlyVisibility(isMobile)}`}>
       <Box className="rounded-[28px] border border-black/[0.05] bg-white/85 dark:bg-[#111625]/85 p-2 shadow-apple-md backdrop-blur-xl dark:border-white/[0.06]">
         {selected ? (
           <Box className="flex gap-2">

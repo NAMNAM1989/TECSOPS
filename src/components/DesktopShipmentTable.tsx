@@ -36,6 +36,7 @@ import { buildShipmentPatchForSavedConsignee } from "../utils/customerConsigneeS
 import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
 import { resolveEcargoVehiclePrefill, vehicleDisplayLabel } from "../utils/customerVehicleCore";
 import { InlineCneeCell } from "./InlineCneeCell";
+import { useMobileLayout } from "../hooks/useMobileLayout";
 
 import type { EcargoVehicleType } from "../utils/ecargoWarehousePlan";
 
@@ -64,7 +65,7 @@ interface Props {
    */
   activeWarehouse: Warehouse;
   onActiveWarehouseChange: (wh: Warehouse) => void;
-  /** Lô dùng tính metric trên thẻ kho (trước lọc kho / sau lọc trạng thái). */
+  /** Lô dùng tính metric trên thẻ kho (cùng bộ lọc trạng thái + tìm kiếm như bảng). */
   metricRows: Shipment[];
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
@@ -148,6 +149,7 @@ export function DesktopShipmentTable({
   onSelectRow,
   onAddBlankRow,
 }: Props) {
+  const { isMobile } = useMobileLayout();
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const group = useMemo(
     () => rows.filter((r) => r.warehouse === activeWarehouse),
@@ -156,7 +158,7 @@ export function DesktopShipmentTable({
 
   return (
     <>
-    <div className="hidden md:block space-y-4">
+    <div className={isMobile ? "hidden" : "hidden md:block space-y-4"}>
       <WarehouseGridPicker
         rows={metricRows}
         active={activeWarehouse}
@@ -580,7 +582,7 @@ function ShipmentRowImpl({
             rowId={row.id}
             value={row.awb}
             allRows={allRows}
-            className="font-shipment-data text-[1.2rem] font-bold leading-tight text-dashboard-primary dark:text-dashboard-primary-dark"
+            className="font-shipment-data text-[1.2rem] font-bold leading-tight"
             onCommit={(awb) => onUpdate(row.id, { awb })}
             onEnterNavigateDown={() => focusShipmentGridCell(row.id, "hawb")}
           />

@@ -100,7 +100,13 @@ async function getBrowser() {
      * Mặc định headless trên Railway / production.
      */
     const headed = process.env.ECARGO_HEADED === "1";
-    const slowMo = Number(process.env.ECARGO_SLOWMO) || (headed ? 120 : 0);
+    const slowMoRaw = process.env.ECARGO_SLOWMO;
+    const slowMo =
+      slowMoRaw !== undefined && slowMoRaw !== ""
+        ? Number(slowMoRaw)
+        : headed
+          ? 120
+          : 0;
     browserPromise = chromium
       .launch({
         headless: !headed,

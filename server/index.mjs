@@ -19,6 +19,7 @@ import {
   registerPrintPdfRoutes,
   registerShipmentInvoicePdfRoute,
 } from "./print/printPdfRoutes.mjs";
+import { registerCsdPrintRoutes } from "./print/csdPrintRoutes.mjs";
 import { registerInvoiceExportRoutes } from "./export/invoiceExportRoutes.mjs";
 import { closeDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import {
@@ -29,6 +30,8 @@ import {
 import { registerEcargoRoutes } from "./ecargo/ecargoRoutes.mjs";
 import { setEcargoStateSnapshot } from "./ecargo/ecargoStateCache.mjs";
 import { startEcargoWorker } from "./ecargo/ecargoWorker.mjs";
+import { isEcargoWorkerEnabled } from "./ecargo/ecargoConfig.mjs";
+import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
@@ -83,7 +86,7 @@ app.get("/api/health", (_req, res) => {
     service: "tecsops",
     storage: { postgres, redis, fileFallback: !postgres && !redis },
     features: {
-      ecargo: redis && process.env.ECARGO_WORKER_ENABLED !== "0",
+      ecargo: isEcargoWorkerEnabled(),
       printCatalog: postgres,
     },
   });
@@ -188,9 +191,15 @@ registerEcargoRoutes(app, {
   io,
 });
 
+registerSheetsRoutes(app, {
+  io,
+  setEcargoStateSnapshot,
+});
+
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);
   registerPrintPdfRoutes(app);
+  registerCsdPrintRoutes(app);
   console.info("[api] lookup + print/pdf (Postgres)");
 } else {
   console.info("[api] lookup / print disabled — cần DATABASE_URL");
@@ -246,34 +255,41 @@ async function start() {
     const pubClient = createClient({ url: redisUrl });
     const subClient = pubClient.duplicate();
     const stateClient = createClient({ url: redisUrl });
-    /** Client riêng cho BRPOP — tránh block GET/SET state trên cùng connection. */
-    const ecargoQueueClient = createClient({ url: redisUrl });
 
     pubClient.on("error", (err) => console.error("[redis pub]", err.message));
     subClient.on("error", (err) => console.error("[redis sub]", err.message));
     stateClient.on("error", (err) => console.error("[redis state]", err.message));
-    ecargoQueueClient.on("error", (err) => console.error("[redis ecargo-queue]", err.message));
 
-    await Promise.all([
-      pubClient.connect(),
-      subClient.connect(),
-      stateClient.connect(),
-      ecargoQueueClient.connect(),
-    ]);
+    const connectTasks = [pubClient.connect(), subClient.connect(), stateClient.connect()];
+    /** Client riêng cho BRPOP — chỉ khi worker bật. */
+    let ecargoQueueClient = null;
+    if (isEcargoWorkerEnabled()) {
+      ecargoQueueClient = createClient({ url: redisUrl });
+      ecargoQueueClient.on("error", (err) => console.error("[redis ecargo-queue]", err.message));
+      connectTasks.push(ecargoQueueClient.connect());
+    }
+
+    await Promise.all(connectTasks);
     io.adapter(createAdapter(pubClient, subClient));
     setRedisStateClient(stateClient);
     ecargoRedisClient = stateClient;
-    startEcargoWorker({
-      queueClient: ecargoQueueClient,
-      storeClient: stateClient,
-      io,
-      runMutation: async (mutation) => {
-        const next = await runMutation(mutation);
-        setEcargoStateSnapshot(next);
-        io.emit("sync", next);
-        return next;
-      },
-    });
+    if (ecargoQueueClient) {
+      startEcargoWorker({
+        queueClient: ecargoQueueClient,
+        storeClient: stateClient,
+        io,
+        runMutation: async (mutation) => {
+          const next = await runMutation(mutation);
+          setEcargoStateSnapshot(next);
+          io.emit("sync", next);
+          return next;
+        },
+      });
+    } else {
+      console.info(
+        "[ecargo] Worker tắt — API đọc job Redis vẫn hoạt động; POST /api/ecargo/jobs trả 503"
+      );
+    }
     console.info(
       databaseUrl
         ? "[redis] Socket.IO adapter + bootstrap/rollback state available (Postgres is primary)"

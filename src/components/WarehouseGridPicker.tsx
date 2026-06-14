@@ -42,7 +42,7 @@ export function WarehouseGridPicker({
       className={
         compact
           ? `flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] ${className}`
-          : `grid grid-cols-2 gap-2 xl:grid-cols-4 xl:gap-3 ${className}`
+          : `grid grid-cols-2 gap-1.5 xl:grid-cols-4 xl:gap-2 ${className}`
       }
       role="tablist"
       aria-label="Chọn kho"
@@ -57,8 +57,8 @@ export function WarehouseGridPicker({
             key={wh}
             role="tab"
             aria-selected={isActive}
-            className={`group relative shrink-0 rounded-2xl text-left transition-all duration-200 ${
-              compact ? "min-w-[8.5rem] p-2.5" : "p-3"
+            className={`group relative shrink-0 rounded-xl text-left transition-all duration-200 ${
+              compact ? "min-w-[8.5rem] p-2.5" : "p-2"
             } ${
               isActive
                 ? `bg-white ring-2 ${CARD_RING[wh]} dark:bg-dashboard-surface-dark`
@@ -71,7 +71,7 @@ export function WarehouseGridPicker({
                 title={`Thêm lô ${warehouseLabel[wh]}`}
                 aria-label={`Thêm lô ${warehouseLabel[wh]}`}
                 onClick={() => onAddRow(wh)}
-                className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-apple-blue/40 bg-apple-blue text-[15px] font-bold leading-none text-white shadow-sm transition hover:bg-apple-blue-hover active:scale-95 dark:border-sky-400/40"
+                className="absolute right-1.5 top-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border border-apple-blue/40 bg-apple-blue text-[13px] font-bold leading-none text-white shadow-sm transition hover:bg-apple-blue-hover active:scale-95 dark:border-sky-400/40"
               >
                 +
               </button>
@@ -79,16 +79,12 @@ export function WarehouseGridPicker({
             <button
               type="button"
               onClick={() => onSelect(wh)}
-              className="block w-full rounded-2xl text-left active:scale-[0.99]"
+              className="block w-full rounded-xl text-left active:scale-[0.99]"
             >
-              <p
-                className={`pr-8 font-bold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark ${
-                  compact ? "text-[10px]" : "text-[11px]"
-                }`}
-              >
+              <p className="pr-7 text-[10px] font-bold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark">
                 {warehouseLabel[wh]}
               </p>
-              <div className={`grid grid-cols-3 gap-2 ${compact ? "mt-1.5 gap-1" : "mt-2"}`}>
+              <div className={`grid grid-cols-3 ${compact ? "mt-1.5 gap-1" : "mt-1 gap-1"}`}>
                 <Metric label="Lô" value={m.lots} large={isActive} compact={compact} />
                 <Metric label="Kiện" value={m.pcs} large={isActive} compact={compact} />
                 <Metric label="Kg" value={m.kg.toLocaleString()} large={isActive} compact={compact} />
@@ -114,12 +110,12 @@ function Metric({
 }) {
   return (
     <div>
-      <p className="text-[9px] font-semibold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark">
+      <p className="text-[8px] font-semibold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark">
         {label}
       </p>
       <p
-        className={`font-semibold tabular-nums text-dashboard-primary dark:text-dashboard-primary-dark ${
-          large ? (compact ? "text-base" : "text-lg") : compact ? "text-xs" : "text-sm"
+        className={`font-semibold tabular-nums leading-tight text-dashboard-primary dark:text-dashboard-primary-dark ${
+          large ? (compact ? "text-sm" : "text-sm") : compact ? "text-[11px]" : "text-xs"
         }`}
       >
         {value}

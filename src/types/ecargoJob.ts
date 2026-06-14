@@ -12,6 +12,7 @@ export type EcargoJobStatus =
   | "superseded";
 
 /** Job đang chạy quá lâu không cập nhật — cho phép đăng ký lại. */
+/** Job UI coi là kẹt — khớp server `ECARGO_STALE_JOB_MS` (mặc định 3 phút). */
 export const ECARGO_STALE_JOB_MS = 3 * 60 * 1000;
 
 export type EcargoJobRecord = {

@@ -13,6 +13,7 @@ import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentEditSheet";
 import { CustomerDirectoryManager } from "./CustomerDirectoryManager";
+import { GoogleSheetImportModal } from "./GoogleSheetImportModal";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
@@ -44,6 +45,7 @@ import {
   type UpsertCustomerVehicleParams,
 } from "../utils/customerVehicleCore";
 import { useOpsTheme } from "../hooks/useOpsTheme";
+import { useMobileLayout } from "../hooks/useMobileLayout";
 import { useHqRoute } from "../hooks/useHqRoute";
 import { ShipmentInvoicePage } from "./ShipmentInvoicePage";
 import type { HqInvoiceSavePayload } from "../types/invoiceDeclaration";
@@ -73,7 +75,8 @@ function formatWorkDateLabel(d: Date): string {
 export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const fallback = useMemo(() => ({ rows: loadRows() ?? initialShipments }), []);
 
-  const { status, state, mutate, socketConnected, subscribeEcargoJob } = useShipmentSync(fallback);
+  const { status, state, mutate, socketConnected, subscribeEcargoJob, refreshState } =
+    useShipmentSync(fallback);
   const ecargoRegister = useEcargoKhoScscRegister(state, mutate, subscribeEcargoJob);
   const {
     hydrateJobs,
@@ -103,11 +106,13 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
   const [excelExporting, setExcelExporting] = useState(false);
+  const [sheetImportOpen, setSheetImportOpen] = useState(false);
   const [customerDirOpen, setCustomerDirOpen] = useState(false);
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { dark: darkMode, toggle: toggleDarkMode } = useOpsTheme();
+  const { isMobile, forceMobile, toggleForceMobile } = useMobileLayout();
   const { shipmentId: hqShipmentId, close: closeHqPage } = useHqRoute();
   const [hqDesktop, setHqDesktop] = useState(() => isDesktopViewport());
 
@@ -171,11 +176,19 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   useEffect(() => {
     setActiveWarehouse((prev) => {
-      const hasInActive = statusFilteredRows.some((r) => r.warehouse === prev);
+      const hasInActive = filteredViewRows.some((r) => r.warehouse === prev);
       if (hasInActive) return prev;
-      return firstWarehouseWithLots(statusFilteredRows);
+      return firstWarehouseWithLots(filteredViewRows);
     });
-  }, [statusFilteredRows]);
+  }, [filteredViewRows]);
+
+  const handleActiveWarehouseChange = useCallback(
+    (wh: Warehouse) => {
+      setActiveWarehouse(wh);
+      void refreshState();
+    },
+    [refreshState]
+  );
 
   const clearViewFilters = useCallback(() => {
     setStatusFilter("ALL");
@@ -481,7 +494,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <h1 className="text-xl font-bold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark sm:text-2xl">
-              Hàng lên sân bay
+              OPS Handling AirCargo
             </h1>
             <span className="text-[11px] text-dashboard-muted dark:text-dashboard-muted-dark">
               <span className="font-bold text-dashboard-primary dark:text-dashboard-primary-dark">{workDateLabel}</span>
@@ -503,11 +516,22 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
             <SyncBadge status={status} socketConnected={socketConnected} />
-            <span className="hidden sm:contents">
-              <StatInline label="Lô" value={filteredViewRows.length} />
-              <StatInline label="Kiện" value={totalPcs} />
-              <StatInline label="Kg" value={totalKg.toLocaleString()} />
-            </span>
+            <button
+              type="button"
+              onClick={toggleForceMobile}
+              className={`inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-[10px] font-semibold shadow-dashboard-card transition-all active:scale-95 ${
+                forceMobile
+                  ? "border-sky-400/50 bg-sky-500/15 text-sky-700 dark:border-sky-400/40 dark:bg-sky-500/20 dark:text-sky-200"
+                  : "border-black/[0.05] bg-white text-dashboard-muted hover:text-dashboard-primary dark:border-white/[0.08] dark:bg-[#111625] dark:text-dashboard-muted-dark dark:hover:text-dashboard-primary-dark"
+              }`}
+              title={forceMobile ? "Tắt xem mobile — về giao diện desktop" : "Bật xem mobile trên màn hình rộng (thiết kế UI)"}
+              aria-pressed={forceMobile}
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+              </svg>
+              Mobile
+            </button>
             <button
               type="button"
               onClick={toggleDarkMode}
@@ -529,7 +553,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2">
+          <div className={isMobile ? "hidden" : "hidden md:flex md:flex-wrap md:items-center md:gap-2"}>
             <NewBookingButton
               activeWarehouse={activeWarehouse}
               onAdd={(wh) => void addBlankRowForWarehouse(wh)}
@@ -542,6 +566,15 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             </DashboardToolbarButton>
             <DashboardToolbarButton onClick={() => setAirlineLabelSettingsOpen(true)} title="Tên hãng trên tem">
               Tên hãng
+            </DashboardToolbarButton>
+            <DashboardToolbarButton
+              onClick={() => setSheetImportOpen(true)}
+              title="Nhập lô từ Google Sheet BOOK HẰNG NGÀY"
+            >
+              <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 7.5h9M12 3v9" />
+              </svg>
+              Sheet
             </DashboardToolbarButton>
             <DashboardToolbarButton
               disabled={excelExporting}
@@ -567,12 +600,18 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         </div>
       </header>
 
-      <div className="space-y-3 md:hidden">
+      {forceMobile ? (
+        <p className="mb-2 rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-1.5 text-center text-[11px] font-semibold text-sky-800 dark:border-sky-400/25 dark:bg-sky-500/10 dark:text-sky-200">
+          Chế độ xem mobile — thiết kế giao diện. Nhấn nút <span className="font-bold">Mobile</span> góc phải để tắt.
+        </p>
+      ) : null}
+
+      <div className={isMobile ? "space-y-3" : "space-y-3 md:hidden"}>
         <WarehouseGridPicker
           compact
-          rows={statusFilteredRows}
+          rows={filteredViewRows}
           active={activeWarehouse}
-          onSelect={setActiveWarehouse}
+          onSelect={handleActiveWarehouseChange}
           onAddRow={(wh) => void addBlankRowForWarehouse(wh)}
           highlightWarehouses={searchHighlightWarehouses}
         />
@@ -580,15 +619,22 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
       {viewRows.length > 0 && (
         <div className="space-y-3">
-          <SmartSearchBar
-            value={searchQuery}
-            onChange={setSearchQuery}
-            searchableRows={statusFilteredRows}
-            matchedRows={filteredViewRows}
-            searchContext={searchContext}
-            inputRef={searchInputRef}
-            onSelectMatch={scrollToShipmentMatch}
-          />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:pt-1.5">
+              <StatInline label="Lô" value={filteredViewRows.length} />
+              <StatInline label="Kiện" value={totalPcs} />
+              <StatInline label="Kg" value={totalKg.toLocaleString()} />
+            </div>
+            <SmartSearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              searchableRows={statusFilteredRows}
+              matchedRows={filteredViewRows}
+              searchContext={searchContext}
+              inputRef={searchInputRef}
+              onSelectMatch={scrollToShipmentMatch}
+            />
+          </div>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
             <StatusFilterBar compact dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
             {(statusFilter !== "ALL" || searchQuery.trim()) && (
@@ -622,8 +668,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         scscWeighPrintSettings={scscWeighPrintSettings}
         saveScscWeighPrintSettings={saveScscWeighPrintSettings}
         activeWarehouse={activeWarehouse}
-        onActiveWarehouseChange={setActiveWarehouse}
-        metricRows={statusFilteredRows}
+        onActiveWarehouseChange={handleActiveWarehouseChange}
+        metricRows={filteredViewRows}
         searchHighlightWarehouses={searchHighlightWarehouses}
         highlightedShipmentId={highlightedShipmentId}
         selectedRowId={selectedId}
@@ -770,6 +816,18 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onSave={saveAirlineLabelOverrides}
       />
 
+      <GoogleSheetImportModal
+        open={sheetImportOpen}
+        sessionYmd={selectedYmd}
+        onClose={() => setSheetImportOpen(false)}
+        onApplied={(count) => {
+          if (count > 0) {
+            window.alert(`Đã nhập ${count} lô từ Google Sheet.`);
+          }
+          setSheetImportOpen(false);
+        }}
+      />
+
       <EcargoToastStack
         items={ecargoToasts}
         onDismiss={dismissEcargoToast}
@@ -818,9 +876,13 @@ function SyncBadge({
 
 function StatInline({ label, value }: { label: string; value: string | number }) {
   return (
-    <span className="rounded-full border border-black/[0.05] bg-white/90 px-2 py-0.5 text-[10px] text-dashboard-muted shadow-dashboard-card dark:border-white/[0.08] dark:bg-dashboard-surface-dark/90 dark:text-dashboard-muted-dark">
-      {label}{" "}
-      <span className="font-semibold tabular-nums text-dashboard-primary dark:text-dashboard-primary-dark">{value}</span>
+    <span className="inline-flex min-w-[3.5rem] flex-col items-center rounded-xl border border-black/[0.06] bg-white/95 px-2.5 py-1 shadow-dashboard-card dark:border-white/[0.08] dark:bg-dashboard-surface-dark/95">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark">
+        {label}
+      </span>
+      <span className="text-sm font-bold tabular-nums leading-tight text-dashboard-primary dark:text-dashboard-primary-dark">
+        {value}
+      </span>
     </span>
   );
 }

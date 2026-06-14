@@ -1,4 +1,10 @@
-import { ECARGO_QUEUE_KEY, ECARGO_JOB_TIMEOUT_MS, ECARGO_JOB_KEY_PREFIX, ECARGO_QR_TIMEOUT_MS } from "./ecargoConfig.mjs";
+import {
+  ECARGO_QUEUE_KEY,
+  ECARGO_JOB_TIMEOUT_MS,
+  ECARGO_JOB_KEY_PREFIX,
+  ECARGO_QR_TIMEOUT_MS,
+  isEcargoWorkerEnabled,
+} from "./ecargoConfig.mjs";
 import {
   getEcargoJob,
   patchEcargoJob,
@@ -6,9 +12,11 @@ import {
   isEcargoJobCurrent,
 } from "./ecargoJobStore.mjs";
 import {
+  closeEcargoBrowser,
   closeEcargoContext,
   runEcargoPlaywrightSession,
   runVerifyInContext,
+  warmEcargoPlaywright,
 } from "./ecargoPlaywright.mjs";
 import {
   shutdownEcargoGmail,
@@ -18,7 +26,6 @@ import {
   waitForEcargoQrEmail,
   waitForEcargoVerifyEmail,
 } from "./ecargoGmail.mjs";
-import { warmEcargoPlaywright } from "./ecargoPlaywright.mjs";
 
 /**
  * Luồng eCargo (tuần tự — bước sau phụ thuộc bước trước):
@@ -52,8 +59,14 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
     console.info("[ecargo] Worker tắt — không có Redis.");
     return () => {};
   }
-  if (process.env.ECARGO_WORKER_ENABLED === "0") {
-    console.info("[ecargo] Worker tắt — ECARGO_WORKER_ENABLED=0");
+  if (!isEcargoWorkerEnabled()) {
+    if (process.env.ECARGO_WORKER_ENABLED === "0") {
+      console.info("[ecargo] Worker tắt — ECARGO_WORKER_ENABLED=0");
+    } else {
+      console.info(
+        "[ecargo] Worker tắt — local cần ECARGO_WORKER_ENABLED=1; Railway tự bật khi có REDIS_URL"
+      );
+    }
     return () => {};
   }
 
@@ -116,12 +129,11 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
       stageMs,
     });
     if (deps.runMutation) {
-      const next = await deps.runMutation({
+      await deps.runMutation({
         action: "PATCH_ECARGO_KHO_SCSC",
         shipmentId,
         markedSubmitted: true,
       });
-      deps.io?.emit("sync", next);
     }
   };
 
@@ -169,12 +181,11 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
         stageMs,
       });
       if (deps.runMutation) {
-        const next = await deps.runMutation({
+        await deps.runMutation({
           action: "PATCH_ECARGO_KHO_SCSC",
           shipmentId,
           markedSubmitted: true,
         });
-        deps.io?.emit("sync", next);
       }
       return;
     }
@@ -252,12 +263,11 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
       resumeQrOnly: false,
     });
     if (deps.runMutation) {
-      const next = await deps.runMutation({
+      await deps.runMutation({
         action: "PATCH_ECARGO_KHO_SCSC",
         shipmentId,
         markedSubmitted: true,
       });
-      deps.io?.emit("sync", next);
     }
     if (browserContext) {
       await closeEcargoContext(browserContext, { destroy: false });
@@ -321,6 +331,10 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
     /** @type {import('playwright').BrowserContext | null} */
     let browserContext = null;
     try {
+      await warmEcargoPlaywright().catch((e) =>
+        console.warn(`[ecargo] ${shipmentId} playwright warm:`, e?.message ?? e)
+      );
+
       const gmailReady = warmEcargoGmail().catch((e) => {
         console.warn(`[ecargo] ${shipmentId} gmail warm:`, e?.message ?? e);
       });
@@ -454,10 +468,6 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
     }
   };
 
-  void warmEcargoPlaywright().catch((e) =>
-    console.warn("[ecargo] warm playwright:", e?.message ?? e)
-  );
-  void warmEcargoGmail().catch((e) => console.warn("[ecargo] warm gmail:", e?.message ?? e));
   void recoverOrphanedEcargoJobs(storeClient, emitJob).catch((e) =>
     console.warn("[ecargo] recover stale jobs:", e?.message ?? e)
   );
@@ -490,6 +500,9 @@ export function startEcargoWorker(redisOrDeps, legacyDeps) {
   return () => {
     stopped = true;
     void shutdownEcargoGmail();
+    void closeEcargoBrowser().catch((e) =>
+      console.warn("[ecargo] close browser:", e?.message ?? e)
+    );
   };
 }
 

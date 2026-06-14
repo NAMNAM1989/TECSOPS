@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const API_PORT = Number(process.env.PORT || 3001);
 const VITE_PORT = Number(process.env.VITE_PORT || 5173);
+const enableEcargoWorker = process.argv.includes("--ecargo");
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -67,11 +68,19 @@ freePort(VITE_PORT);
 await sleep(800);
 
 console.info(`[dev] Khởi động API :${API_PORT}…`);
-const server = run("node", ["server/index.mjs"]);
+const server = run("node", ["server/index.mjs"], {
+  TECSOPS_DEV: "1",
+  ECARGO_WORKER_ENABLED: enableEcargoWorker ? "1" : "0",
+});
+if (enableEcargoWorker) {
+  console.info("[dev] eCargo worker BẬT (--ecargo)");
+} else {
+  console.info("[dev] eCargo worker TẮT — dùng npm run dev:ecargo khi cần test");
+}
 
 const ready = await waitForApi();
 if (!ready) {
-  console.error(`[dev] API không sẵn sàng sau 60s — kiểm tra Redis / .env.local`);
+  console.error(`[dev] API không sẵn sàng sau 60s — kiểm tra log server / .env.local`);
   server.kill("SIGTERM");
   process.exit(1);
 }

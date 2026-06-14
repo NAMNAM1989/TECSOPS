@@ -14,6 +14,7 @@ import {
   newEcargoJobId,
 } from "./ecargoJobStore.mjs";
 import { loadShipmentRowForEcargo, setEcargoStateSnapshot } from "./ecargoStateCache.mjs";
+import { isEcargoWorkerEnabled } from "./ecargoConfig.mjs";
 
 /**
  * @param {import('express').Express} app
@@ -37,6 +38,13 @@ export function registerEcargoRoutes(app, deps) {
     try {
       if (!deps.redisClient) {
         res.status(503).json({ error: "eCargo worker cần Redis (REDIS_URL)." });
+        return;
+      }
+      if (!isEcargoWorkerEnabled()) {
+        res.status(503).json({
+          error:
+            "eCargo worker đang tắt — local: set ECARGO_WORKER_ENABLED=1 trong .env.local khi cần test.",
+        });
         return;
       }
 
@@ -211,7 +219,7 @@ export function registerEcargoRoutes(app, deps) {
   app.get("/api/ecargo/health", (_req, res) => {
     res.json({
       ok: true,
-      worker: deps.redisClient ? process.env.ECARGO_WORKER_ENABLED !== "0" : false,
+      worker: isEcargoWorkerEnabled(),
       gmail: Boolean(process.env.ECARGO_GMAIL_APP_PASSWORD?.trim()),
     });
   });

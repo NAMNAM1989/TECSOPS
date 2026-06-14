@@ -87,7 +87,7 @@ export function SmartSearchBar({
   };
 
   return (
-    <div ref={rootRef} className="relative mx-auto w-full max-w-2xl flex-1">
+    <div ref={rootRef} className="relative min-w-0 w-full flex-1">
       <div className="relative">
         <svg
           className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-apple-tertiary dark:text-ops-tertiary"

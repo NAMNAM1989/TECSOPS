@@ -1,0 +1,257 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { SheetBookSyncResult, SheetBookSyncRow } from "../types/googleSheetBook";
+import { applyBookGoogleSheetRows, syncBookGoogleSheet } from "../utils/googleSheetBookApi";
+import { warehouseLabel } from "../constants/warehouses";
+import type { Warehouse } from "../types/shipment";
+
+type Props = {
+  sessionYmd: string;
+  open: boolean;
+  onClose: () => void;
+  onApplied: (appliedCount: number) => void;
+};
+
+export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [sync, setSync] = useState<SheetBookSyncResult | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  const [error, setError] = useState<string | null>(null);
+
+  const runSync = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await syncBookGoogleSheet(sessionYmd);
+      setSync(result);
+      const next = new Set<number>();
+      for (const row of result.rows) {
+        if (row.syncStatus !== "duplicate") next.add(row.index);
+      }
+      setSelected(next);
+    } catch (e) {
+      setSync(null);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionYmd]);
+
+  useEffect(() => {
+    if (!open) return;
+    void runSync();
+  }, [open, runSync]);
+
+  const toggle = (index: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+
+  const selectableRows = useMemo(
+    () => (sync?.rows ?? []).filter((r) => r.syncStatus !== "duplicate"),
+    [sync]
+  );
+
+  const onApply = async () => {
+    if (!sync || selected.size === 0) return;
+    setApplying(true);
+    setError(null);
+    try {
+      const result = await applyBookGoogleSheetRows(
+        sync.sessionDate,
+        [...selected],
+        sync.sheetTab,
+        sync.spreadsheetId
+      );
+      onApplied(result.appliedCount + (result.updatedCount ?? 0));
+      if (result.errorCount > 0) {
+        setError(
+          `Đã nhập ${result.appliedCount} · cập nhật ${result.updatedCount ?? 0} lô. ${result.errorCount} lỗi: ${result.errors.map((x) => x.awb).join(", ")}`
+        );
+      } else {
+        onClose();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl dark:bg-zinc-900 sm:rounded-2xl"
+        role="dialog"
+        aria-labelledby="sheet-import-title"
+      >
+        <header className="flex items-start justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
+          <div>
+            <h2 id="sheet-import-title" className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+              Nhập từ Google Sheet
+            </h2>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              BOOK HẰNG NGÀY · tab{" "}
+              <span className="font-mono text-zinc-700 dark:text-zinc-300">{sync?.sheetTab ?? "…"}</span> ·
+              chỉ lô ngày{" "}
+              <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                {sync?.sessionFlightDate ?? "…"}
+              </span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          >
+            Đóng
+          </button>
+        </header>
+
+        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-4 py-2 dark:border-zinc-800">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => void runSync()}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {loading ? "Đang kéo Sheet…" : "Kéo Sheet lại"}
+          </button>
+          {sync && (
+            <span className="text-xs text-zinc-500">
+              {sync.total} lô ngày {sync.sessionFlightDate}
+              {sync.skippedByDate > 0 ? ` · bỏ ${sync.skippedByDate} lô cutoff ngày khác` : ""}
+              {" · "}
+              {sync.newCount ?? 0} mới
+              {(sync.updateCount ?? 0) > 0 ? ` · ${sync.updateCount} cập nhật` : ""}
+              {sync.total - sync.importable > 0 ? ` · ${sync.total - sync.importable} đã khớp` : ""}
+            </span>
+          )}
+        </div>
+
+        {error && (
+          <p className="mx-4 mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            {error}
+          </p>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+          {!sync && !loading && !error && (
+            <p className="p-4 text-sm text-zinc-500">Chưa có dữ liệu — bấm «Kéo Sheet lại».</p>
+          )}
+          {sync && sync.rows.length === 0 && (
+            <p className="p-4 text-sm text-zinc-500">Tab Sheet không có lô AWB hợp lệ cho ngày này.</p>
+          )}
+          {sync && sync.rows.length > 0 && (
+            <table className="w-full min-w-[640px] border-collapse text-left text-[11px]">
+              <thead>
+                <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-700">
+                  <th className="w-8 p-2" />
+                  <th className="p-2">AWB</th>
+                  <th className="p-2">Chuyến</th>
+                  <th className="p-2">DEST</th>
+                  <th className="p-2">Kho</th>
+                  <th className="p-2">Kiện/Kg</th>
+                  <th className="p-2">Khách</th>
+                  <th className="p-2">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sync.rows.map((row) => (
+                  <SheetRow key={`${row.index}-${row.awb}`} row={row} checked={selected.has(row.index)} onToggle={toggle} />
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 dark:border-zinc-700">
+          <button
+            type="button"
+            onClick={() => setSelected(new Set(selectableRows.map((r) => r.index)))}
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Chọn tất cả mới
+          </button>
+          <button
+            type="button"
+            disabled={applying || selected.size === 0}
+            onClick={() => void onApply()}
+            className="rounded-lg bg-apple-blue px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {applying ? "Đang nhập…" : `Nhập / cập nhật ${selected.size} lô`}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function SheetRow({
+  row,
+  checked,
+  onToggle,
+}: {
+  row: SheetBookSyncRow;
+  checked: boolean;
+  onToggle: (index: number) => void;
+}) {
+  const wh = row.warehouse as Warehouse;
+  const whLabel = warehouseLabel[wh] ?? row.warehouse;
+  const disabled = row.syncStatus === "duplicate";
+  return (
+    <tr
+      className={`border-b border-zinc-100 dark:border-zinc-800 ${disabled ? "opacity-50" : ""}`}
+    >
+      <td className="p-2 text-center">
+        <input
+          type="checkbox"
+          disabled={disabled}
+          checked={checked}
+          onChange={() => onToggle(row.index)}
+          aria-label={`Chọn ${row.awb}`}
+        />
+      </td>
+      <td className="p-2 font-mono">{row.awb}</td>
+      <td className="p-2">
+        {row.flight}
+        {row.flightDate ? `/${row.flightDate}` : ""}
+      </td>
+      <td className="p-2">{row.dest}</td>
+      <td className="p-2">
+        {whLabel}
+        {row.needsUpdate && row.existingWarehouse && row.existingWarehouse !== row.warehouse ? (
+          <span className="ml-1 text-amber-700" title={`Trên web: ${row.existingWarehouse}`}>
+            ← {row.existingWarehouse}
+          </span>
+        ) : null}
+      </td>
+      <td className="p-2">
+        {row.pcs != null || row.kg != null ? `${row.pcs ?? "—"} / ${row.kg ?? "—"}` : "—"}
+      </td>
+      <td className="p-2 max-w-[120px] truncate" title={row.customer}>
+        {row.customer}
+        {!row.customerKnown && row.customer ? (
+          <span className="ml-1 text-amber-600" title="Chưa khớp danh bạ">
+            ?
+          </span>
+        ) : null}
+      </td>
+      <td className="p-2">
+        {row.syncStatus === "duplicate" ? (
+          <span className="text-zinc-500">Đã khớp</span>
+        ) : row.syncStatus === "update" ? (
+          <span className="text-amber-700">Cập nhật</span>
+        ) : (
+          <span className="text-emerald-700">Mới</span>
+        )}
+      </td>
+    </tr>
+  );
+}

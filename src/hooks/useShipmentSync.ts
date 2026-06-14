@@ -222,7 +222,19 @@ export function useShipmentSync(fallback: Fallback) {
     }
   }, []);
 
-  return { status, state, mutate, socketConnected, subscribeEcargoJob };
+  const refreshState = useCallback(async (): Promise<void> => {
+    if (!apiOkRef.current) return;
+    try {
+      const res = await fetch("/api/state", { ...credFetch, cache: "no-store" });
+      if (!res.ok) throw new Error(String(res.status));
+      const parsed = parseAppState(await res.json());
+      if (parsed) setState((prev) => pickNewerState(prev, parsed));
+    } catch (e) {
+      debugWarn("sync:refresh", e);
+    }
+  }, []);
+
+  return { status, state, mutate, socketConnected, subscribeEcargoJob, refreshState };
 }
 
 function parseEcargoJobLoose(raw: unknown): EcargoJobRecord | null {

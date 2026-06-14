@@ -82,7 +82,9 @@ export function InlineAwbEdit({
           setEditing(true);
         }}
         className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 dark:hover:bg-white/[0.08] ${className} ${
-          !value || rawAwbDigits(value).length === 0 ? "ops-grid-placeholder" : "dark:text-zinc-50"
+          !value || rawAwbDigits(value).length === 0
+            ? "ops-grid-placeholder"
+            : "text-red-600 dark:text-red-400"
         }`}
       >
         {value && rawAwbDigits(value).length > 0 ? value : "Nhập AWB"}
@@ -124,7 +126,7 @@ export function InlineAwbEdit({
         }
       }}
       onClick={(e) => e.stopPropagation()}
-      className={`w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 font-mono text-sm font-semibold tabular-nums tracking-tight antialiased focus:outline-none focus:ring-2 focus:ring-apple-blue/20 dark:bg-ops-elevated dark:text-zinc-50 ${className}`}
+      className={`w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 font-mono text-sm font-semibold tabular-nums tracking-tight text-red-600 antialiased focus:outline-none focus:ring-2 focus:ring-apple-blue/20 dark:bg-ops-elevated dark:text-red-400 ${className}`}
     />
   );
 }

@@ -564,8 +564,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             >
               Khách & in
             </DashboardToolbarButton>
-            <DashboardToolbarButton onClick={() => setAirlineLabelSettingsOpen(true)} title="Tên hãng trên tem">
-              Tên hãng
+            <DashboardToolbarButton onClick={() => setAirlineLabelSettingsOpen(true)} title="Tên hãng trên tem & up mẫu CSD theo AWB">
+              Hãng / CSD
             </DashboardToolbarButton>
             <DashboardToolbarButton
               onClick={() => setSheetImportOpen(true)}
@@ -587,15 +587,30 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
               Excel
             </DashboardToolbarButton>
           </div>
-          <div className="min-w-0 flex-1 md:flex-none">
-            <OpsDatePicker
-              value={selectedYmd}
-              onChange={(v) => setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)))}
-              onPrev={goPrevDay}
-              onNext={goNextDay}
-              onToday={goToday}
-              isViewingToday={isViewingToday}
-            />
+          <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-none">
+            <div className="min-w-0 flex-1">
+              <OpsDatePicker
+                value={selectedYmd}
+                onChange={(v) => setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)))}
+                onPrev={goPrevDay}
+                onNext={goNextDay}
+                onToday={goToday}
+                isViewingToday={isViewingToday}
+              />
+            </div>
+            {isMobile ? (
+              <button
+                type="button"
+                onClick={() => setSheetImportOpen(true)}
+                title="Nhập lô từ Google Sheet BOOK HẰNG NGÀY"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-50 px-3 text-[11px] font-semibold text-emerald-900 shadow-dashboard-card active:scale-[0.98] dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-100"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 7.5h9M12 3v9" />
+                </svg>
+                Sheet
+              </button>
+            ) : null}
           </div>
         </div>
       </header>

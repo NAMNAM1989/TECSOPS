@@ -1,12 +1,14 @@
 import { mmFontToPt } from "./printMmUnits.mjs";
+import { CSD_A4_PAGE } from "./csdAirlineCatalog.mjs";
 
-/** US Letter — khớp `public/print-templates/csd-template.pdf`. */
+/** A4 — mẫu CSD mặc định (fallback khi hãng chưa gán form riêng). */
 export const CSD_TEMPLATE = {
-  code: "iata-csd-letter",
-  name: "IATA Consignment Security Declaration",
-  page_width_mm: 215.9,
-  page_height_mm: 279.4,
-  background_asset_url: "/print-templates/csd-template.png",
+  code: "csd-a4-default",
+  name: "CSD IATA (A4 — mặc định)",
+  page_width_mm: CSD_A4_PAGE.page_width_mm,
+  page_height_mm: CSD_A4_PAGE.page_height_mm,
+  background_asset_url: "/print-templates/csd/_default/background.png",
+  paper: "A4",
 };
 
 function field(key, x, y, width, fontPt, extra = {}) {
@@ -33,44 +35,42 @@ function fieldMm(key, x, y, width, fontMm, extra = {}) {
 
 /** Tọa độ căn theo form IATA CSD mẫu (mm, gốc trên-trái). */
 export function buildCsdDefaultFields() {
+  const noWipe = { wipe: false };
   return [
-    fieldMm("raCategoryIdentifier", 26, 54, 78, 2.8, { bold: true, wipe: true, wipe_h_mm: 5 }),
-    fieldMm("uniqueConsignmentId", 108, 54, 100, 2.8, { bold: true, wipe: true, wipe_h_mm: 5 }),
+    fieldMm("raCategoryIdentifier", 26, 54, 78, 2.8, { bold: true, ...noWipe }),
+    fieldMm("uniqueConsignmentId", 108, 54, 100, 2.8, { bold: true, ...noWipe }),
     fieldMm("contentsOfConsignment", 26, 62, 183, 2.6, {
       multiline: true,
       max_lines: 4,
       line_height_mm: 3.2,
       height_mm: 12,
-      wipe: true,
-      wipe_h_mm: 13,
+      ...noWipe,
     }),
-    fieldMm("consolidationMark", 25.5, 69.2, 5, 2.4, { align: "center" }),
-    fieldMm("origin", 26, 82.5, 42, 2.8, { bold: true, wipe: true, wipe_h_mm: 6 }),
-    fieldMm("destination", 71, 82.5, 33, 2.8, { bold: true, wipe: true, wipe_h_mm: 6 }),
-    fieldMm("transferTransit", 108, 82.5, 100, 2.5, { wipe: true, wipe_h_mm: 6 }),
-    fieldMm("securityStatus", 26, 105.5, 26, 2.8, { bold: true, wipe: true, wipe_h_mm: 7 }),
-    fieldMm("receivedFrom", 55, 105.5, 38, 2.5, { wipe: true, wipe_h_mm: 7 }),
-    fieldMm("screeningMethod", 98, 105.5, 40, 2.5, { wipe: true, wipe_h_mm: 7 }),
-    fieldMm("groundsExemption", 143, 105.5, 66, 2.5, { wipe: true, wipe_h_mm: 7 }),
-    fieldMm("otherScreening", 26, 134, 183, 2.5, { wipe: true, wipe_h_mm: 6 }),
-    fieldMm("issuedByName", 26, 153.5, 92, 2.5, { wipe: true, wipe_h_mm: 5 }),
-    fieldMm("issuedDate", 123, 153.5, 32, 2.5, { wipe: true, wipe_h_mm: 5 }),
-    fieldMm("issuedTime", 160, 153.5, 28, 2.5, { wipe: true, wipe_h_mm: 5 }),
+    fieldMm("consolidationMark", 25.5, 69.2, 5, 2.4, { align: "center", ...noWipe }),
+    fieldMm("origin", 26, 82.5, 42, 2.8, { bold: true, ...noWipe }),
+    fieldMm("destination", 71, 82.5, 33, 2.8, { bold: true, ...noWipe }),
+    fieldMm("transferTransit", 108, 82.5, 100, 2.5, { ...noWipe }),
+    fieldMm("securityStatus", 26, 105.5, 26, 2.8, { bold: true, ...noWipe }),
+    fieldMm("receivedFrom", 55, 105.5, 38, 2.5, { ...noWipe }),
+    fieldMm("screeningMethod", 98, 105.5, 40, 2.5, { ...noWipe }),
+    fieldMm("groundsExemption", 143, 105.5, 66, 2.5, { ...noWipe }),
+    fieldMm("otherScreening", 26, 134, 183, 2.5, { ...noWipe }),
+    fieldMm("issuedByName", 26, 153.5, 92, 2.5, { ...noWipe }),
+    fieldMm("issuedDate", 123, 153.5, 32, 2.5, { ...noWipe }),
+    fieldMm("issuedTime", 160, 153.5, 28, 2.5, { ...noWipe }),
     fieldMm("acceptedEntity", 26, 167.5, 183, 2.4, {
       multiline: true,
       max_lines: 2,
       line_height_mm: 3.2,
       height_mm: 8,
-      wipe: true,
-      wipe_h_mm: 9,
+      ...noWipe,
     }),
     fieldMm("additionalSecurityInfo", 26, 187, 183, 2.2, {
       multiline: true,
       max_lines: 10,
       line_height_mm: 3,
       height_mm: 72,
-      wipe: true,
-      wipe_h_mm: 74,
+      ...noWipe,
     }),
   ];
 }

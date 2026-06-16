@@ -10,6 +10,7 @@
     "dev": "node scripts/dev.mjs",
     "dev:ecargo": "node scripts/dev.mjs --ecargo",
     "dev:concurrent": "concurrently -k -n srv,vite -c blue,green \"node server/index.mjs\" \"vite\"",
+    "init:csd-slots": "node scripts/init-csd-airline-slots.mjs",
     "setup:ecargo": "npx playwright install chromium",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",

@@ -1,0 +1,12 @@
+{
+  "code": "csd-a4-default",
+  "name": "CSD IATA (A4 — vector)",
+  "paper": "A4",
+  "renderMode": "vector",
+  "page_width_mm": 210,
+  "page_height_mm": 297,
+  "offset_x_mm": 0,
+  "offset_y_mm": 0,
+  "scale_x": 1,
+  "scale_y": 1
+}

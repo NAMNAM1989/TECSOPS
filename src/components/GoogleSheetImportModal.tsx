@@ -3,6 +3,8 @@ import type { SheetBookSyncResult, SheetBookSyncRow } from "../types/googleSheet
 import { applyBookGoogleSheetRows, syncBookGoogleSheet } from "../utils/googleSheetBookApi";
 import { warehouseLabel } from "../constants/warehouses";
 import type { Warehouse } from "../types/shipment";
+import { useMobileLayout } from "../hooks/useMobileLayout";
+import { MOBILE } from "../styles/mobileOpsStyles";
 
 type Props = {
   sessionYmd: string;
@@ -12,6 +14,7 @@ type Props = {
 };
 
 export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }: Props) {
+  const { isMobile } = useMobileLayout();
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [sync, setSync] = useState<SheetBookSyncResult | null>(null);
@@ -84,15 +87,23 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
 
   if (!open) return null;
 
+  const shellClass = isMobile
+    ? `${MOBILE.sheet} flex max-h-[92vh] w-full flex-col overflow-hidden border-t shadow-[0_-12px_48px_rgba(0,0,0,0.2)] dark:border-white/10`
+    : "flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900";
+
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+    <div
+      className={`fixed inset-0 z-[480] flex bg-black/40 p-0 ${isMobile ? "flex-col justify-end" : "items-end justify-center sm:items-center sm:p-4"}`}
+      onClick={onClose}
+    >
       <div
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl dark:bg-zinc-900 sm:rounded-2xl"
+        className={shellClass}
         role="dialog"
         aria-labelledby="sheet-import-title"
+        onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-start justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-          <div>
+          <div className="min-w-0 flex-1">
             <h2 id="sheet-import-title" className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
               Nhập từ Google Sheet
             </h2>
@@ -108,7 +119,7 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="shrink-0 rounded-lg px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
           >
             Đóng
           </button>
@@ -119,18 +130,15 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
             type="button"
             disabled={loading}
             onClick={() => void runSync()}
-            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             {loading ? "Đang kéo Sheet…" : "Kéo Sheet lại"}
           </button>
           {sync && (
-            <span className="text-xs text-zinc-500">
-              {sync.total} lô ngày {sync.sessionFlightDate}
-              {sync.skippedByDate > 0 ? ` · bỏ ${sync.skippedByDate} lô cutoff ngày khác` : ""}
-              {" · "}
-              {sync.newCount ?? 0} mới
+            <span className="text-xs leading-snug text-zinc-500">
+              {sync.total} lô · {sync.newCount ?? 0} mới
               {(sync.updateCount ?? 0) > 0 ? ` · ${sync.updateCount} cập nhật` : ""}
-              {sync.total - sync.importable > 0 ? ` · ${sync.total - sync.importable} đã khớp` : ""}
+              {sync.skippedByDate > 0 ? ` · bỏ ${sync.skippedByDate} ngày khác` : ""}
             </span>
           )}
         </div>
@@ -141,14 +149,26 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
           </p>
         )}
 
-        <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+        <div className="min-h-0 flex-1 overflow-auto px-2 py-2 sm:px-2">
           {!sync && !loading && !error && (
             <p className="p-4 text-sm text-zinc-500">Chưa có dữ liệu — bấm «Kéo Sheet lại».</p>
           )}
           {sync && sync.rows.length === 0 && (
             <p className="p-4 text-sm text-zinc-500">Tab Sheet không có lô AWB hợp lệ cho ngày này.</p>
           )}
-          {sync && sync.rows.length > 0 && (
+          {sync && sync.rows.length > 0 && isMobile ? (
+            <ul className="space-y-2 px-1 pb-2">
+              {sync.rows.map((row) => (
+                <SheetRowCard
+                  key={`${row.index}-${row.awb}`}
+                  row={row}
+                  checked={selected.has(row.index)}
+                  onToggle={toggle}
+                />
+              ))}
+            </ul>
+          ) : null}
+          {sync && sync.rows.length > 0 && !isMobile ? (
             <table className="w-full min-w-[640px] border-collapse text-left text-[11px]">
               <thead>
                 <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-700">
@@ -164,18 +184,23 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
               </thead>
               <tbody>
                 {sync.rows.map((row) => (
-                  <SheetRow key={`${row.index}-${row.awb}`} row={row} checked={selected.has(row.index)} onToggle={toggle} />
+                  <SheetRowTable
+                    key={`${row.index}-${row.awb}`}
+                    row={row}
+                    checked={selected.has(row.index)}
+                    onToggle={toggle}
+                  />
                 ))}
               </tbody>
             </table>
-          )}
+          ) : null}
         </div>
 
-        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 dark:border-zinc-700">
+        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-zinc-700">
           <button
             type="button"
             onClick={() => setSelected(new Set(selectableRows.map((r) => r.index)))}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            className="rounded-lg px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             Chọn tất cả mới
           </button>
@@ -183,7 +208,7 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
             type="button"
             disabled={applying || selected.size === 0}
             onClick={() => void onApply()}
-            className="rounded-lg bg-apple-blue px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            className={`rounded-lg bg-apple-blue px-4 py-2.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50 ${isMobile ? "min-h-11 flex-1 sm:flex-none" : ""}`}
           >
             {applying ? "Đang nhập…" : `Nhập / cập nhật ${selected.size} lô`}
           </button>
@@ -193,7 +218,82 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
   );
 }
 
-function SheetRow({
+function syncStatusLabel(row: SheetBookSyncRow) {
+  if (row.syncStatus === "duplicate") return { text: "Đã khớp", cls: "text-zinc-500" };
+  if (row.syncStatus === "update") return { text: "Cập nhật", cls: "text-amber-700 dark:text-amber-300" };
+  return { text: "Mới", cls: "text-emerald-700 dark:text-emerald-300" };
+}
+
+function SheetRowCard({
+  row,
+  checked,
+  onToggle,
+}: {
+  row: SheetBookSyncRow;
+  checked: boolean;
+  onToggle: (index: number) => void;
+}) {
+  const wh = row.warehouse as Warehouse;
+  const whLabel = warehouseLabel[wh] ?? row.warehouse;
+  const disabled = row.syncStatus === "duplicate";
+  const status = syncStatusLabel(row);
+
+  return (
+    <li>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && onToggle(row.index)}
+        className={`w-full rounded-2xl border px-3 py-3 text-left transition active:scale-[0.99] ${
+          disabled
+            ? "border-zinc-200/80 bg-zinc-50 opacity-60 dark:border-zinc-700 dark:bg-zinc-900/50"
+            : checked
+              ? "border-emerald-400/60 bg-emerald-50/90 ring-1 ring-emerald-400/30 dark:border-emerald-500/40 dark:bg-emerald-500/10"
+              : "border-black/[0.08] bg-white dark:border-white/10 dark:bg-ops-elevated"
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <span
+            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+              checked && !disabled
+                ? "border-emerald-600 bg-emerald-600 text-white"
+                : "border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-800"
+            }`}
+            aria-hidden
+          >
+            {checked && !disabled ? "✓" : ""}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+              <span className="font-mono text-sm font-bold text-zinc-900 dark:text-zinc-100">{row.awb}</span>
+              <span className={`text-[10px] font-semibold uppercase ${status.cls}`}>{status.text}</span>
+            </div>
+            <p className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+              {row.flight}
+              {row.flightDate ? ` / ${row.flightDate}` : ""} · {row.dest} · {whLabel}
+            </p>
+            <p className="mt-0.5 truncate text-[11px] text-zinc-500">
+              {row.pcs != null || row.kg != null ? `${row.pcs ?? "—"} kiện / ${row.kg ?? "—"} kg` : "— kiện/kg"}
+              {row.customer ? ` · ${row.customer}` : ""}
+              {!row.customerKnown && row.customer ? (
+                <span className="ml-1 text-amber-600" title="Chưa khớp danh bạ">
+                  ?
+                </span>
+              ) : null}
+            </p>
+            {row.needsUpdate && row.existingWarehouse && row.existingWarehouse !== row.warehouse ? (
+              <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-300">
+                Web đang {row.existingWarehouse} → Sheet {whLabel}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </button>
+    </li>
+  );
+}
+
+function SheetRowTable({
   row,
   checked,
   onToggle,

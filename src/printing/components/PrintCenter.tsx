@@ -42,7 +42,7 @@ import {
   printThermalLabelTspl,
 } from "../thermalLabel/thermalLabelTspl";
 import { canPrintWeighReceiptScsc, printWeighReceiptScsc } from "../../utils/printWeighReceiptScsc";
-import { openCsdPdfForShipment } from "../../utils/csdPdfPrint";
+import { CsdFormPrintPanel, printCsdBatch } from "./CsdFormPrintPanel";
 import { ScscPrintTemplateEditor } from "./ScscPrintTemplateEditor";
 import type { ShipmentMutation } from "../../utils/shipmentMutations";
 import type { AppState } from "../../utils/shipmentMutations";
@@ -163,20 +163,10 @@ export function PrintCenter({
     }
 
     if (docType === "csd-form") {
-      let ok = 0;
-      let err = "";
-      for (const s of targets) {
-        if (!String(s.awb ?? "").trim()) continue;
-        try {
-          await openCsdPdfForShipment(s);
-          ok += 1;
-        } catch (e) {
-          err = e instanceof Error ? e.message : String(e);
-        }
-      }
+      const { ok, err } = await printCsdBatch(targets);
       setStatusMsg(
         ok
-          ? `Đã mở ${ok} PDF CSD (IATA) — lưu/in từ tab trình duyệt.`
+          ? `Đã mở ${ok} PDF CSD (A4) — mẫu tự chọn theo prefix AWB.`
           : err || "Không xuất được PDF CSD."
       );
       return;
@@ -263,10 +253,7 @@ export function PrintCenter({
         <div className="flex min-h-0 flex-col gap-3 overflow-hidden rounded-2xl border bg-white p-4">
           <DocTypeTabs docType={docType} onChange={setDocType} />
           {docType === "csd-form" ? (
-            <p className="rounded-xl border border-orange-200/80 bg-orange-50/80 px-3 py-2 text-[11px] text-orange-950">
-              Form <strong>IATA Consignment Security Declaration</strong> — xuất PDF tự điền từ lô (AWB, DEST,
-              RA, SPX, X-ray, ngày/giờ). Mở tab PDF để lưu hoặc in.
-            </p>
+            <CsdFormPrintPanel rows={rows} selectedIds={selectedIds} />
           ) : null}
           <PrinterProfileSelector
             docType={

@@ -30,7 +30,10 @@ export function drawFieldText(doc, field, text, profile = {}) {
   const lineHeightMm = box.lineHeightMm;
 
   const align = field.align === "center" || field.align === "right" ? field.align : "left";
-  const fontName = field.bold ? "Helvetica-Bold" : "Helvetica";
+  const fontName =
+    field.font_name ||
+    field.fontName ||
+    (field.bold ? "Helvetica-Bold" : "Helvetica");
 
   let fontPt = clamp(Number(field.font_size_pt) || 9, 4, 36) * box.fontScale;
   const minPt = 4;

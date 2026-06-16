@@ -1,13 +1,9 @@
 import PDFDocument from "pdfkit";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import fs from "node:fs";
 import { mmToPt } from "./printMmUnits.mjs";
 import { drawFieldText } from "./printPdfText.mjs";
-import { buildCsdDefaultFields, CSD_TEMPLATE } from "./csdTemplateDefaults.mjs";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PUBLIC_DIR = path.join(__dirname, "..", "..", "public");
+import { registerCsdPdfFonts, csdFontForField } from "./csdPdfFonts.mjs";
+import { drawIataCsdVectorForm } from "./csdVectorForm.mjs";
+import { resolveCsdRenderMode } from "./csdRenderMode.mjs";
 
 function normalizeDrawField(field) {
   return {
@@ -21,6 +17,9 @@ function normalizeDrawField(field) {
     align: field.align ?? "left",
     multiline: Boolean(field.multiline),
     bold: Boolean(field.bold),
+    font_name: field.font_name ?? field.fontName ?? null,
+    wipe: Boolean(field.wipe),
+    wipe_h_mm: field.wipe_h_mm,
   };
 }
 
@@ -35,16 +34,38 @@ function wipeField(doc, field) {
   doc.restore();
 }
 
+function drawOverlayBackground(doc, bgPath, pageW, pageH) {
+  doc.image(bgPath, 0, 0, {
+    fit: [mmToPt(pageW), mmToPt(pageH)],
+    align: "center",
+    valign: "center",
+  });
+}
+
 /**
- * @param {{ values: Record<string, string>; includeBackground?: boolean }} opts
+ * @param {{
+ *   values: Record<string, string>;
+ *   includeBackground?: boolean;
+ *   bundle?: import("./csdTemplateLoader.mjs").loadCsdTemplateBundle extends (...args: any) => infer R ? R : never;
+ * }} opts
  * @returns {Promise<Buffer>}
  */
 export function generateCsdPdfBuffer(opts) {
   const values = opts.values && typeof opts.values === "object" ? opts.values : {};
-  const template = CSD_TEMPLATE;
-  const fields = buildCsdDefaultFields();
+  const bundle = opts.bundle;
+  if (!bundle) {
+    throw new Error("Thiếu bundle mẫu CSD.");
+  }
+
+  const template = bundle.meta;
+  const fields = bundle.fields;
   const pageW = template.page_width_mm;
   const pageH = template.page_height_mm;
+  const offsetX = bundle.offset_x_mm ?? 0;
+  const offsetY = bundle.offset_y_mm ?? 0;
+  const scaleX = bundle.scale_x ?? 1;
+  const scaleY = bundle.scale_y ?? 1;
+  const renderMode = resolveCsdRenderMode(bundle);
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -62,26 +83,34 @@ export function generateCsdPdfBuffer(opts) {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const includeBg = opts.includeBackground !== false;
-    if (includeBg && template.background_asset_url) {
-      const rel = template.background_asset_url.replace(/^\//, "");
-      const bgPath = path.join(PUBLIC_DIR, rel);
-      if (fs.existsSync(bgPath)) {
-        doc.image(bgPath, 0, 0, { width: mmToPt(pageW), height: mmToPt(pageH) });
-      } else {
-        const pdfPath = path.join(PUBLIC_DIR, "print-templates", "csd-template.pdf");
-        if (fs.existsSync(pdfPath)) {
-          console.warn("[csd] thiếu PNG nền — chỉ in text lên trang trắng");
-        }
-      }
-    }
+    const fonts = registerCsdPdfFonts(doc);
+    const profile = { offsetXmm: offsetX, offsetYMm: offsetY, scaleX, scaleY };
 
-    for (const field of fields) {
-      const key = field.field_key;
-      const text = values[key] ?? "";
-      if (!String(text).trim() && key !== "consolidationMark") continue;
-      wipeField(doc, field);
-      drawFieldText(doc, normalizeDrawField(field), text, { offsetXmm: 0, offsetYMm: 0, scaleX: 1, scaleY: 1 });
+    if (renderMode === "vector") {
+      drawIataCsdVectorForm(doc, fonts, template);
+      for (const field of fields) {
+        const key = field.field_key;
+        const text = values[key] ?? "";
+        if (!String(text).trim() && key !== "consolidationMark") continue;
+        const normalized = normalizeDrawField(field);
+        normalized.font_name = csdFontForField(fonts, normalized);
+        normalized.wipe = false;
+        drawFieldText(doc, normalized, text, profile);
+      }
+    } else {
+      const includeBg = opts.includeBackground !== false;
+      if (includeBg && bundle.backgroundPath) {
+        drawOverlayBackground(doc, bundle.backgroundPath, pageW, pageH);
+      }
+      for (const field of fields) {
+        const key = field.field_key;
+        const text = values[key] ?? "";
+        if (!String(text).trim() && key !== "consolidationMark") continue;
+        const normalized = normalizeDrawField(field);
+        wipeField(doc, normalized);
+        normalized.font_name = csdFontForField(fonts, normalized);
+        drawFieldText(doc, normalized, text, profile);
+      }
     }
 
     doc.end();
@@ -89,3 +118,5 @@ export function generateCsdPdfBuffer(opts) {
 }
 
 export { sendPdfResponse } from "./printPdfService.mjs";
+
+export { resolveCsdRenderMode } from "./csdRenderMode.mjs";

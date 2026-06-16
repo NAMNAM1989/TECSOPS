@@ -1,0 +1,11 @@
+{
+  "awbPrefix": "006",
+  "airlineName": "DELTA AIR LINES",
+  "name": "DELTA AIR LINES CSD",
+  "paper": "A4",
+  "page_width_mm": 210,
+  "page_height_mm": 297,
+  "status": "ready",
+  "renderMode": "vector",
+  "note": "Form vector IATA (AWB Editor style)"
+}

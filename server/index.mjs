@@ -179,7 +179,8 @@ app.post("/api/mutation", async (req, res) => {
 registerTsplRoutes(app);
 registerShipmentInvoicePdfRoute(app);
 registerInvoiceExportRoutes(app);
-console.info("[api] print/pdf/shipment-invoice + export/invoice (không cần Postgres)");
+registerCsdPrintRoutes(app);
+console.info("[api] print/pdf/shipment-invoice + export/invoice + csd (không cần Postgres)");
 
 /** eCargo auto-register — cần Redis. */
 let ecargoRedisClient = null;
@@ -199,10 +200,9 @@ registerSheetsRoutes(app, {
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);
   registerPrintPdfRoutes(app);
-  registerCsdPrintRoutes(app);
-  console.info("[api] lookup + print/pdf (Postgres)");
+  console.info("[api] lookup + print/pdf/scsc-weigh (Postgres)");
 } else {
-  console.info("[api] lookup / print disabled — cần DATABASE_URL");
+  console.info("[api] lookup / print/scsc-weigh disabled — cần DATABASE_URL");
 }
 
 const distDir = path.join(__dirname, "..", "dist");

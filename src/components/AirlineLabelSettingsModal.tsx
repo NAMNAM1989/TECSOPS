@@ -9,6 +9,14 @@ import {
   DEFAULT_AIRLINE_BY_FLIGHT_PREFIX,
 } from "../constants/airlineLabelDefaults";
 import { OPS, opsInput } from "../styles/opsModalStyles";
+import type { CsdTemplateSlotStatus } from "../types/csdTemplate";
+import {
+  buildCsdStatusMap,
+  deleteCsdTemplateBackground,
+  fetchCsdTemplateCatalog,
+  normalizeAwbPrefix,
+  uploadCsdTemplateBackground,
+} from "../utils/csdTemplateUpload";
 
 type Props = {
   open: boolean;
@@ -63,10 +71,88 @@ function rowsToEffectiveFlight(rows: EditableRow[]): Record<string, string> {
   return o;
 }
 
+function CsdTemplateRowActions({
+  awbPrefix,
+  status,
+  uploading,
+  onUpload,
+  onDelete,
+}: {
+  awbPrefix: string;
+  airlineName?: string;
+  status: CsdTemplateSlotStatus | undefined;
+  uploading: boolean;
+  onUpload: (file: File) => void | Promise<void>;
+  onDelete: () => void | Promise<void>;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const ready = status === "ready";
+  const canAct = awbPrefix.length === 3;
+
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+      <span
+        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+          ready
+            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+            : "bg-amber-500/15 text-amber-800 dark:text-amber-200"
+        }`}
+        title={ready ? "Đã có mẫu CSD — in kèm tem nhãn sẽ dùng form này" : "Chưa up mẫu — in CSD dùng form IATA mặc định"}
+      >
+        {ready ? "CSD ✓" : "CSD —"}
+      </span>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        disabled={!canAct || uploading}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) void onUpload(file);
+        }}
+      />
+      <button
+        type="button"
+        disabled={!canAct || uploading}
+        onClick={() => inputRef.current?.click()}
+        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold disabled:opacity-40 ${OPS.btnSmallAccent}`}
+        title="Up scan form CSD A4 (PNG/JPG)"
+      >
+        {uploading ? "Đang up…" : "Up mẫu CSD"}
+      </button>
+      {ready ? (
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => void onDelete()}
+          className="rounded-full px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-500/10 disabled:opacity-40 dark:text-amber-300"
+          title="Xóa mẫu riêng — quay về form IATA mặc định"
+        >
+          Xóa mẫu
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave }: Props) {
   const [awbRows, setAwbRows] = useState<EditableRow[]>([]);
   const [flightRows, setFlightRows] = useState<EditableRow[]>([]);
+  const [csdStatusByPrefix, setCsdStatusByPrefix] = useState<Record<string, CsdTemplateSlotStatus>>({});
+  const [csdUploadingPrefix, setCsdUploadingPrefix] = useState<string | null>(null);
+  const [csdError, setCsdError] = useState<string | null>(null);
   const wasOpen = useRef(false);
+
+  const refreshCsdCatalog = async () => {
+    try {
+      const catalog = await fetchCsdTemplateCatalog();
+      setCsdStatusByPrefix(buildCsdStatusMap(catalog));
+    } catch {
+      /* catalog optional — không chặn modal */
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -74,6 +160,8 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
         const { byAwb, byFlight } = mergeAirlineLookupMaps(value);
         setAwbRows(recordToRows(byAwb, "awb"));
         setFlightRows(recordToRows(byFlight, "flt"));
+        setCsdError(null);
+        void refreshCsdCatalog();
       }
     }
     wasOpen.current = open;
@@ -105,12 +193,12 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
         <div className={`flex items-start justify-between border-b px-5 py-4 ${OPS.border}`}>
           <div>
             <h2 id="airline-label-settings-title" className={`text-[19px] font-semibold tracking-tight ${OPS.title}`}>
-              Tên hãng trên tem nhãn
+              Tên hãng & mẫu CSD
             </h2>
             <p className={`mt-1 text-xs leading-relaxed ${OPS.secondary}`}>
               Danh sách đầy đủ theo bảng hệ thống ({defaultAwbCount} mã AWB + {defaultFltCount} prefix chuyến) và mọi hãng bạn đã thêm.
-              Sửa tên hoặc thêm dòng mới; <span className={`font-semibold ${OPS.title}`}>Lưu</span> chỉ ghi các thay đổi so với mặc
-              định. Xóa một dòng có sẵn trong bảng gốc = quay lại tên mặc định khi in.
+              Sửa tên hoặc thêm dòng mới; <span className={`font-semibold ${OPS.title}`}>Up mẫu CSD</span> gắn scan form A4 theo từng mã AWB
+              (in CSD kèm tem nhãn sẽ tự chọn mẫu hãng). <span className={`font-semibold ${OPS.title}`}>Lưu</span> chỉ ghi tên hãng thay đổi so với mặc định.
             </p>
           </div>
           <button
@@ -126,6 +214,11 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
         </div>
 
         <div className="max-h-[min(70vh,560px)] space-y-5 overflow-y-auto px-5 py-4">
+          {csdError ? (
+            <p className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-700 dark:text-red-300">
+              {csdError}
+            </p>
+          ) : null}
           <section>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h3 className={`text-[11px] font-bold uppercase tracking-wide ${OPS.secondary}`}>
@@ -140,8 +233,13 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
               </button>
             </div>
             <div className="space-y-2">
-              {awbRows.map((row, idx) => (
-                <div key={row.id} className="flex flex-wrap items-center gap-2">
+              {awbRows.map((row, idx) => {
+                const prefix = normalizeAwbPrefix(row.key);
+                return (
+                <div
+                  key={row.id}
+                  className={`flex flex-wrap items-center gap-2 rounded-2xl border px-2 py-2 ${OPS.border} ${OPS.panelSoft}`}
+                >
                   <input
                     type="text"
                     inputMode="numeric"
@@ -163,7 +261,39 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
                       const t = e.target.value;
                       setAwbRows((rows) => rows.map((x, i) => (i === idx ? { ...x, name: t } : x)));
                     }}
-                    className={`min-w-[12rem] flex-1 text-sm font-semibold ${OPS.inputLg}`}
+                    className={`min-w-[10rem] flex-1 text-sm font-semibold ${OPS.inputLg}`}
+                  />
+                  <CsdTemplateRowActions
+                    awbPrefix={prefix}
+                    airlineName={row.name}
+                    status={prefix ? csdStatusByPrefix[prefix] : undefined}
+                    uploading={csdUploadingPrefix === prefix}
+                    onUpload={async (file) => {
+                      if (!prefix) return;
+                      setCsdError(null);
+                      setCsdUploadingPrefix(prefix);
+                      try {
+                        const saved = await uploadCsdTemplateBackground(prefix, file, row.name);
+                        setCsdStatusByPrefix((m) => ({ ...m, [saved.awbPrefix]: saved.status }));
+                      } catch (e) {
+                        setCsdError(e instanceof Error ? e.message : "Không up được mẫu CSD.");
+                      } finally {
+                        setCsdUploadingPrefix(null);
+                      }
+                    }}
+                    onDelete={async () => {
+                      if (!prefix) return;
+                      setCsdError(null);
+                      setCsdUploadingPrefix(prefix);
+                      try {
+                        const result = await deleteCsdTemplateBackground(prefix);
+                        setCsdStatusByPrefix((m) => ({ ...m, [result.awbPrefix]: result.status }));
+                      } catch (e) {
+                        setCsdError(e instanceof Error ? e.message : "Không xóa được mẫu CSD.");
+                      } finally {
+                        setCsdUploadingPrefix(null);
+                      }
+                    }}
                   />
                   <button
                     type="button"
@@ -173,7 +303,8 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
                     Xóa
                   </button>
                 </div>
-              ))}
+              );
+              })}
             </div>
           </section>
 

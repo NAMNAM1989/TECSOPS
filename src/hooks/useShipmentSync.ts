@@ -234,7 +234,15 @@ export function useShipmentSync(fallback: Fallback) {
     }
   }, []);
 
-  return { status, state, mutate, socketConnected, subscribeEcargoJob, refreshState };
+  const applyRemoteState = useCallback((raw: unknown): boolean => {
+    const parsed = parseAppState(raw);
+    if (!parsed) return false;
+    setState((prev) => pickNewerState(prev, parsed));
+    saveRows(parsed.rows);
+    return true;
+  }, []);
+
+  return { status, state, mutate, socketConnected, subscribeEcargoJob, refreshState, applyRemoteState };
 }
 
 function parseEcargoJobLoose(raw: unknown): EcargoJobRecord | null {

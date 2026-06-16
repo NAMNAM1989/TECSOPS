@@ -75,7 +75,7 @@ function formatWorkDateLabel(d: Date): string {
 export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const fallback = useMemo(() => ({ rows: loadRows() ?? initialShipments }), []);
 
-  const { status, state, mutate, socketConnected, subscribeEcargoJob, refreshState } =
+  const { status, state, mutate, socketConnected, subscribeEcargoJob, refreshState, applyRemoteState } =
     useShipmentSync(fallback);
   const ecargoRegister = useEcargoKhoScscRegister(state, mutate, subscribeEcargoJob);
   const {
@@ -835,7 +835,9 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         open={sheetImportOpen}
         sessionYmd={selectedYmd}
         onClose={() => setSheetImportOpen(false)}
-        onApplied={(count) => {
+        onApplied={(count, serverState) => {
+          const merged = serverState ? applyRemoteState(serverState) : false;
+          if (!merged) void refreshState();
           if (count > 0) {
             window.alert(`Đã nhập ${count} lô từ Google Sheet.`);
           }

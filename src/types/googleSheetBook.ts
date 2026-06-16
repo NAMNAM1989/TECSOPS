@@ -1,4 +1,9 @@
-export type SheetBookSyncStatus = "new" | "update" | "duplicate";
+export type SheetBookSyncStatus =
+  | "new"
+  | "update"
+  | "duplicate"
+  | "sheet_duplicate"
+  | "awb_taken";
 
 export type SheetBookSyncRow = {
   index: number;
@@ -17,6 +22,9 @@ export type SheetBookSyncRow = {
   syncStatus: SheetBookSyncStatus;
   duplicate: boolean;
   needsUpdate: boolean;
+  blocked: boolean;
+  sheetDuplicateOfIndex: number | null;
+  takenSessionDate: string | null;
   existingWarehouse: string | null;
   duplicateId: string | null;
 };
@@ -33,6 +41,8 @@ export type SheetBookSyncResult = {
   importable: number;
   newCount: number;
   updateCount: number;
+  sheetDuplicateCount?: number;
+  awbTakenCount?: number;
   rows: SheetBookSyncRow[];
 };
 
@@ -42,4 +52,6 @@ export type SheetBookApplyResult = {
   skippedCount: number;
   errorCount: number;
   errors: { awb: string; error: string }[];
+  /** State sau khi nhập — dùng cập nhật UI ngay (không chỉ dựa Socket). */
+  state?: unknown;
 };

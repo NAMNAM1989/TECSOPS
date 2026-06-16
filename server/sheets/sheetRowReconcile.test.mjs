@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  awbKeyForMatch,
   findExistingInSession,
+  findExistingOtherSession,
+  resolveSheetRowSyncStatus,
+  sheetAwbFirstIndexByKey,
+  sheetRowIsBlocked,
   sheetRowNeedsUpdate,
   sheetRowSyncStatus,
 } from "./sheetRowReconcile.mjs";
@@ -81,5 +86,48 @@ describe("sheetRowReconcile", () => {
         lookupId
       )
     ).toBe(true);
+  });
+
+  it("phát hiện AWB trùng trong cùng batch Sheet", () => {
+    const rows = [
+      { awb: "235-4501 1960" },
+      { awb: "235 45011960" },
+    ];
+    const first = sheetAwbFirstIndexByKey(rows);
+    const key = awbKeyForMatch(rows[0].awb);
+    expect(first.get(key)).toBe(0);
+
+    const resolved = resolveSheetRowSyncStatus(
+      { existing: null, otherSession: null, sheetFirstIndex: 0, rowIndex: 1 },
+      rows[1],
+      "2026-06-13",
+      customers,
+      lookupCode,
+      lookupId
+    );
+    expect(resolved.syncStatus).toBe("sheet_duplicate");
+    expect(sheetRowIsBlocked(resolved.syncStatus)).toBe(true);
+  });
+
+  it("chặn ADD khi AWB đã có phiên khác", () => {
+    const other = {
+      id: "old-1",
+      sessionDate: "2026-06-12",
+      awb: "618-5440 5131",
+      warehouse: "TECS-TCS",
+    };
+    const globalState = { rows: [other] };
+    expect(findExistingOtherSession(globalState, "2026-06-13", "61854405131")?.id).toBe("old-1");
+
+    const resolved = resolveSheetRowSyncStatus(
+      { existing: null, otherSession: other, sheetFirstIndex: 0, rowIndex: 0 },
+      { awb: "618-5440 5131", warehouse: "TECS-SCSC", customer: "" },
+      "2026-06-13",
+      customers,
+      lookupCode,
+      lookupId
+    );
+    expect(resolved.syncStatus).toBe("awb_taken");
+    expect(resolved.takenSessionDate).toBe("2026-06-12");
   });
 });

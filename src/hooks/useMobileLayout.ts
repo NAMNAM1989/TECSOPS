@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { isDesktopViewport } from "../utils/hqRoute";
 
 const STORAGE_KEY = "tecsops-force-mobile-layout";
+const FORCE_MOBILE_EVENT = "tecsops-force-mobile-change";
 
 function readForceMobileFromStorage(): boolean {
   if (typeof window === "undefined") return false;
@@ -56,6 +57,15 @@ export function useMobileLayout() {
     return () => mq.removeEventListener("change", sync);
   }, []);
 
+  useEffect(() => {
+    const onForceMobile = (e: Event) => {
+      const next = (e as CustomEvent<boolean>).detail;
+      if (typeof next === "boolean") setForceMobileState(next);
+    };
+    window.addEventListener(FORCE_MOBILE_EVENT, onForceMobile);
+    return () => window.removeEventListener(FORCE_MOBILE_EVENT, onForceMobile);
+  }, []);
+
   const isMobile = forceMobile || viewportMobile;
 
   const setForceMobile = useCallback((next: boolean) => {
@@ -65,6 +75,9 @@ export function useMobileLayout() {
       else localStorage.removeItem(STORAGE_KEY);
     } catch {
       /* ignore */
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(FORCE_MOBILE_EVENT, { detail: next }));
     }
   }, []);
 

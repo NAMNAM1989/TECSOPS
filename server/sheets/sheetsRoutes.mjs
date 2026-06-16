@@ -6,8 +6,12 @@ import {
 import { parseBookHangNgayGrid } from "./bookHangNgayParser.mjs";
 import { filterRowsForSessionDate, sessionYmdToFlightDateToken } from "./bookDateMatch.mjs";
 import {
+  awbKeyForMatch,
   findExistingInSession,
-  sheetRowSyncStatus,
+  findExistingOtherSession,
+  resolveSheetRowSyncStatus,
+  sheetAwbFirstIndexByKey,
+  sheetRowIsBlocked,
   sheetRowToPatch,
 } from "./sheetRowReconcile.mjs";
 import { loadState, runMutation } from "../stateStore.mjs";
@@ -59,16 +63,20 @@ function parsedRowToShipment(row, sessionDate, customers) {
   };
 }
 
-function mapSyncRow(row, index, sessionDate, sessionFlightDate, state, customers) {
+function mapSyncRow(row, index, sessionDate, sessionFlightDate, state, customers, awbFirstIndex) {
   const existing = findExistingInSession(state, sessionDate, row.awb);
-  const syncStatus = sheetRowSyncStatus(
-    existing,
+  const otherSession = findExistingOtherSession(state, sessionDate, row.awb);
+  const key = awbKeyForMatch(row.awb);
+  const sheetFirstIndex = key ? (awbFirstIndex.get(key) ?? index) : index;
+  const resolved = resolveSheetRowSyncStatus(
+    { existing, otherSession, sheetFirstIndex, rowIndex: index },
     row,
     sessionDate,
     customers,
     lookupCustomerCode,
     lookupCustomerId
   );
+  const { syncStatus, sheetDuplicateOfIndex, takenSessionDate } = resolved;
   const customerCode = lookupCustomerCode(customers, row.customer);
   return {
     index,
@@ -90,6 +98,9 @@ function mapSyncRow(row, index, sessionDate, sessionFlightDate, state, customers
     syncStatus,
     duplicate: syncStatus === "duplicate",
     needsUpdate: syncStatus === "update",
+    blocked: sheetRowIsBlocked(syncStatus),
+    sheetDuplicateOfIndex,
+    takenSessionDate,
     existingWarehouse: existing?.warehouse ?? null,
     duplicateId: existing?.id ?? null,
   };
@@ -126,8 +137,9 @@ export function registerSheetsRoutes(app, deps) {
       const state = await loadState();
       const customers = Array.isArray(state.customers) ? state.customers : [];
 
+      const awbFirstIndex = sheetAwbFirstIndexByKey(dated);
       const rows = dated.map((row, index) =>
-        mapSyncRow(row, index, sessionDate, sessionFlightDate, state, customers)
+        mapSyncRow(row, index, sessionDate, sessionFlightDate, state, customers, awbFirstIndex)
       );
 
       res.json({
@@ -139,9 +151,11 @@ export function registerSheetsRoutes(app, deps) {
         totalInTab: parsed.length,
         skippedByDate: parsed.length - dated.length,
         total: rows.length,
-        importable: rows.filter((r) => r.syncStatus !== "duplicate").length,
+        importable: rows.filter((r) => !r.blocked).length,
         newCount: rows.filter((r) => r.syncStatus === "new").length,
         updateCount: rows.filter((r) => r.syncStatus === "update").length,
+        sheetDuplicateCount: rows.filter((r) => r.syncStatus === "sheet_duplicate").length,
+        awbTakenCount: rows.filter((r) => r.syncStatus === "awb_taken").length,
         rows,
       });
     } catch (e) {
@@ -183,20 +197,42 @@ export function registerSheetsRoutes(app, deps) {
       const updated = [];
       const skipped = [];
       const errors = [];
+      /** @type {Set<string>} */
+      const batchAwbKeys = new Set();
+      const awbFirstIndex = sheetAwbFirstIndexByKey(parsed);
 
       for (const row of selected) {
+        const parsedIndex = parsed.indexOf(row);
+        const awbKey = awbKeyForMatch(row.awb);
+        if (awbKey && batchAwbKeys.has(awbKey)) {
+          skipped.push({ awb: row.awb, reason: "Trùng AWB trong lần chọn — chỉ nhập dòng đầu" });
+          continue;
+        }
+
         const existing = findExistingInSession(state, sessionDate, row.awb);
-        const syncStatus = sheetRowSyncStatus(
-          existing,
+        const otherSession = findExistingOtherSession(state, sessionDate, row.awb);
+        const sheetFirstIndex = awbFirstIndex.get(awbKey) ?? parsedIndex;
+        const resolved = resolveSheetRowSyncStatus(
+          { existing, otherSession, sheetFirstIndex, rowIndex: parsedIndex },
           row,
           sessionDate,
           state.customers ?? [],
           lookupCustomerCode,
           lookupCustomerId
         );
+        const syncStatus = resolved.syncStatus;
 
-        if (syncStatus === "duplicate") {
-          skipped.push({ awb: row.awb, reason: "Đã khớp Sheet — không đổi" });
+        if (sheetRowIsBlocked(syncStatus)) {
+          if (syncStatus === "duplicate") {
+            skipped.push({ awb: row.awb, reason: "Đã khớp Sheet — không đổi" });
+          } else if (syncStatus === "sheet_duplicate") {
+            skipped.push({ awb: row.awb, reason: "Trùng AWB trong Sheet — bỏ dòng sau" });
+          } else if (syncStatus === "awb_taken") {
+            skipped.push({
+              awb: row.awb,
+              reason: `AWB đã có phiên ${resolved.takenSessionDate ?? "khác"}`,
+            });
+          }
           continue;
         }
 
@@ -217,6 +253,7 @@ export function registerSheetsRoutes(app, deps) {
               warehouse: row.warehouse,
               fromWarehouse: existing.warehouse,
             });
+            if (awbKey) batchAwbKeys.add(awbKey);
             continue;
           }
 
@@ -225,6 +262,7 @@ export function registerSheetsRoutes(app, deps) {
           deps.setEcargoStateSnapshot?.(state);
           deps.io?.emit("sync", state);
           applied.push({ awb: row.awb, warehouse: row.warehouse });
+          if (awbKey) batchAwbKeys.add(awbKey);
         } catch (e) {
           errors.push({ awb: row.awb, error: String(e?.message ?? e) });
         }

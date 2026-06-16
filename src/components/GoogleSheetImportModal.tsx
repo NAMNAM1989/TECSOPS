@@ -10,12 +10,12 @@ type Props = {
   sessionYmd: string;
   open: boolean;
   onClose: () => void;
-  onApplied: (appliedCount: number) => void;
+  onApplied: (appliedCount: number, serverState?: unknown) => void;
 };
 
 export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }: Props) {
   const { isMobile } = useMobileLayout();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [sync, setSync] = useState<SheetBookSyncResult | null>(null);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
@@ -29,7 +29,13 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
       setSync(result);
       const next = new Set<number>();
       for (const row of result.rows) {
-        if (row.syncStatus !== "duplicate") next.add(row.index);
+        const ok =
+          row.blocked !== undefined
+            ? !row.blocked
+            : row.syncStatus !== "duplicate" &&
+              row.syncStatus !== "sheet_duplicate" &&
+              row.syncStatus !== "awb_taken";
+        if (ok) next.add(row.index);
       }
       setSelected(next);
     } catch (e) {
@@ -41,7 +47,13 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
   }, [sessionYmd]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setLoading(false);
+      setSync(null);
+      setError(null);
+      setSelected(new Set());
+      return;
+    }
     void runSync();
   }, [open, runSync]);
 
@@ -55,7 +67,15 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
   };
 
   const selectableRows = useMemo(
-    () => (sync?.rows ?? []).filter((r) => r.syncStatus !== "duplicate"),
+    () =>
+      (sync?.rows ?? []).filter(
+        (r) =>
+          r.blocked !== undefined
+            ? !r.blocked
+            : r.syncStatus !== "duplicate" &&
+              r.syncStatus !== "sheet_duplicate" &&
+              r.syncStatus !== "awb_taken"
+      ),
     [sync]
   );
 
@@ -70,7 +90,7 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
         sync.sheetTab,
         sync.spreadsheetId
       );
-      onApplied(result.appliedCount + (result.updatedCount ?? 0));
+      onApplied(result.appliedCount + (result.updatedCount ?? 0), result.state);
       if (result.errorCount > 0) {
         setError(
           `Đã nhập ${result.appliedCount} · cập nhật ${result.updatedCount ?? 0} lô. ${result.errorCount} lỗi: ${result.errors.map((x) => x.awb).join(", ")}`
@@ -88,7 +108,7 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
   if (!open) return null;
 
   const shellClass = isMobile
-    ? `${MOBILE.sheet} flex max-h-[92vh] w-full flex-col overflow-hidden border-t shadow-[0_-12px_48px_rgba(0,0,0,0.2)] dark:border-white/10`
+    ? `${MOBILE.sheet} flex max-h-[92vh] w-full flex-col overflow-hidden border-t bg-white shadow-[0_-12px_48px_rgba(0,0,0,0.2)] dark:border-white/10 dark:bg-ops-surface`
     : "flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900";
 
   return (
@@ -138,6 +158,10 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
             <span className="text-xs leading-snug text-zinc-500">
               {sync.total} lô · {sync.newCount ?? 0} mới
               {(sync.updateCount ?? 0) > 0 ? ` · ${sync.updateCount} cập nhật` : ""}
+              {(sync.sheetDuplicateCount ?? 0) > 0
+                ? ` · ${sync.sheetDuplicateCount} trùng Sheet`
+                : ""}
+              {(sync.awbTakenCount ?? 0) > 0 ? ` · ${sync.awbTakenCount} AWB đã có` : ""}
               {sync.skippedByDate > 0 ? ` · bỏ ${sync.skippedByDate} ngày khác` : ""}
             </span>
           )}
@@ -150,6 +174,9 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
         )}
 
         <div className="min-h-0 flex-1 overflow-auto px-2 py-2 sm:px-2">
+          {loading && !sync ? (
+            <p className="p-4 text-sm text-zinc-500">Đang kéo dữ liệu từ Google Sheet…</p>
+          ) : null}
           {!sync && !loading && !error && (
             <p className="p-4 text-sm text-zinc-500">Chưa có dữ liệu — bấm «Kéo Sheet lại».</p>
           )}
@@ -220,8 +247,24 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
 
 function syncStatusLabel(row: SheetBookSyncRow) {
   if (row.syncStatus === "duplicate") return { text: "Đã khớp", cls: "text-zinc-500" };
+  if (row.syncStatus === "sheet_duplicate") {
+    return { text: "Trùng Sheet", cls: "text-red-700 dark:text-red-300" };
+  }
+  if (row.syncStatus === "awb_taken") {
+    return { text: "AWB đã có", cls: "text-red-700 dark:text-red-300" };
+  }
   if (row.syncStatus === "update") return { text: "Cập nhật", cls: "text-amber-700 dark:text-amber-300" };
   return { text: "Mới", cls: "text-emerald-700 dark:text-emerald-300" };
+}
+
+function rowBlockHint(row: SheetBookSyncRow): string | null {
+  if (row.syncStatus === "sheet_duplicate" && row.sheetDuplicateOfIndex != null) {
+    return `AWB trùng dòng Sheet #${row.sheetDuplicateOfIndex + 1} — chỉ giữ dòng đầu`;
+  }
+  if (row.syncStatus === "awb_taken") {
+    return `AWB đã có phiên ${row.takenSessionDate ?? "khác"} — không thêm mới`;
+  }
+  return null;
 }
 
 function SheetRowCard({
@@ -235,8 +278,13 @@ function SheetRowCard({
 }) {
   const wh = row.warehouse as Warehouse;
   const whLabel = warehouseLabel[wh] ?? row.warehouse;
-  const disabled = row.syncStatus === "duplicate";
+  const disabled =
+    row.blocked ??
+    (row.syncStatus === "duplicate" ||
+      row.syncStatus === "sheet_duplicate" ||
+      row.syncStatus === "awb_taken");
   const status = syncStatusLabel(row);
+  const blockHint = rowBlockHint(row);
 
   return (
     <li>
@@ -286,6 +334,9 @@ function SheetRowCard({
                 Web đang {row.existingWarehouse} → Sheet {whLabel}
               </p>
             ) : null}
+            {blockHint ? (
+              <p className="mt-1 text-[10px] text-red-700 dark:text-red-300">{blockHint}</p>
+            ) : null}
           </div>
         </div>
       </button>
@@ -304,7 +355,12 @@ function SheetRowTable({
 }) {
   const wh = row.warehouse as Warehouse;
   const whLabel = warehouseLabel[wh] ?? row.warehouse;
-  const disabled = row.syncStatus === "duplicate";
+  const disabled =
+    row.blocked ??
+    (row.syncStatus === "duplicate" ||
+      row.syncStatus === "sheet_duplicate" ||
+      row.syncStatus === "awb_taken");
+  const blockHint = rowBlockHint(row);
   return (
     <tr
       className={`border-b border-zinc-100 dark:border-zinc-800 ${disabled ? "opacity-50" : ""}`}
@@ -346,6 +402,14 @@ function SheetRowTable({
       <td className="p-2">
         {row.syncStatus === "duplicate" ? (
           <span className="text-zinc-500">Đã khớp</span>
+        ) : row.syncStatus === "sheet_duplicate" ? (
+          <span className="text-red-700" title={blockHint ?? undefined}>
+            Trùng Sheet
+          </span>
+        ) : row.syncStatus === "awb_taken" ? (
+          <span className="text-red-700" title={blockHint ?? undefined}>
+            AWB đã có
+          </span>
         ) : row.syncStatus === "update" ? (
           <span className="text-amber-700">Cập nhật</span>
         ) : (

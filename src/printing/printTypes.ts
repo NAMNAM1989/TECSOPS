@@ -2,7 +2,7 @@ import type { LabelSheetFormat } from "../utils/labelSheetFormat";
 import type { LabelTemplateV1 } from "../label-designer/core/types";
 
 /** Loại tài liệu in trong Print Center. */
-export type PrintDocumentType = "thermal-label" | "scsc-weigh" | "dim-report" | "csd-form";
+export type PrintDocumentType = "thermal-label" | "scsc-weigh" | "dim-report";
 
 /** Cách gửi lệnh in tới máy. */
 export type PrintDeliveryMode = "tspl-tcp" | "browser-print" | "download-tspl";

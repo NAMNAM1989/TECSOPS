@@ -19,7 +19,6 @@ import {
   registerPrintPdfRoutes,
   registerShipmentInvoicePdfRoute,
 } from "./print/printPdfRoutes.mjs";
-import { registerCsdPrintRoutes } from "./print/csdPrintRoutes.mjs";
 import { registerInvoiceExportRoutes } from "./export/invoiceExportRoutes.mjs";
 import { closeDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import {
@@ -179,8 +178,7 @@ app.post("/api/mutation", async (req, res) => {
 registerTsplRoutes(app);
 registerShipmentInvoicePdfRoute(app);
 registerInvoiceExportRoutes(app);
-registerCsdPrintRoutes(app);
-console.info("[api] print/pdf/shipment-invoice + export/invoice + csd (không cần Postgres)");
+console.info("[api] print/pdf/shipment-invoice + export/invoice (không cần Postgres)");
 
 /** eCargo auto-register — cần Redis. */
 let ecargoRedisClient = null;

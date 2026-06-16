@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { SheetBookSyncResult, SheetBookSyncRow } from "../types/googleSheetBook";
+import { isSheetRowSelectable, type SheetBookSyncResult, type SheetBookSyncRow } from "../types/googleSheetBook";
 import { applyBookGoogleSheetRows, syncBookGoogleSheet } from "../utils/googleSheetBookApi";
 import { warehouseLabel } from "../constants/warehouses";
 import type { Warehouse } from "../types/shipment";
@@ -29,13 +29,7 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
       setSync(result);
       const next = new Set<number>();
       for (const row of result.rows) {
-        const ok =
-          row.blocked !== undefined
-            ? !row.blocked
-            : row.syncStatus !== "duplicate" &&
-              row.syncStatus !== "sheet_duplicate" &&
-              row.syncStatus !== "awb_taken";
-        if (ok) next.add(row.index);
+        if (isSheetRowSelectable(row)) next.add(row.index);
       }
       setSelected(next);
     } catch (e) {
@@ -67,15 +61,7 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
   };
 
   const selectableRows = useMemo(
-    () =>
-      (sync?.rows ?? []).filter(
-        (r) =>
-          r.blocked !== undefined
-            ? !r.blocked
-            : r.syncStatus !== "duplicate" &&
-              r.syncStatus !== "sheet_duplicate" &&
-              r.syncStatus !== "awb_taken"
-      ),
+    () => (sync?.rows ?? []).filter(isSheetRowSelectable),
     [sync]
   );
 
@@ -278,11 +264,7 @@ function SheetRowCard({
 }) {
   const wh = row.warehouse as Warehouse;
   const whLabel = warehouseLabel[wh] ?? row.warehouse;
-  const disabled =
-    row.blocked ??
-    (row.syncStatus === "duplicate" ||
-      row.syncStatus === "sheet_duplicate" ||
-      row.syncStatus === "awb_taken");
+  const disabled = !isSheetRowSelectable(row);
   const status = syncStatusLabel(row);
   const blockHint = rowBlockHint(row);
 
@@ -355,11 +337,7 @@ function SheetRowTable({
 }) {
   const wh = row.warehouse as Warehouse;
   const whLabel = warehouseLabel[wh] ?? row.warehouse;
-  const disabled =
-    row.blocked ??
-    (row.syncStatus === "duplicate" ||
-      row.syncStatus === "sheet_duplicate" ||
-      row.syncStatus === "awb_taken");
+  const disabled = !isSheetRowSelectable(row);
   const blockHint = rowBlockHint(row);
   return (
     <tr

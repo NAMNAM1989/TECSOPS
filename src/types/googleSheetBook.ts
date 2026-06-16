@@ -55,3 +55,13 @@ export type SheetBookApplyResult = {
   /** State sau khi nhập — dùng cập nhật UI ngay (không chỉ dựa Socket). */
   state?: unknown;
 };
+
+/** Dòng có thể tick chọn trong modal nhập Sheet. */
+export function isSheetRowSelectable(row: Pick<SheetBookSyncRow, "blocked" | "syncStatus">): boolean {
+  if (row.blocked !== undefined) return !row.blocked;
+  return (
+    row.syncStatus !== "duplicate" &&
+    row.syncStatus !== "sheet_duplicate" &&
+    row.syncStatus !== "awb_taken"
+  );
+}

@@ -39,9 +39,6 @@ import { copyTextToClipboard } from "../utils/copyTextToClipboard";
 import { MOBILE, mobileSheetBackdrop } from "../styles/mobileOpsStyles";
 import { useMobileLayout } from "../hooks/useMobileLayout";
 import { OPS } from "../styles/opsModalStyles";
-import { canPrintCsdForm, previewCsdFormForShipment, printCsdFormForShipment } from "../utils/csdPdfPrint";
-import { CsdPdfPreviewModal } from "./CsdPdfPreviewModal";
-import type { CsdTemplateResolve } from "../types/csdTemplate";
 
 type TabId = "lot" | "notify" | "dim";
 
@@ -109,8 +106,6 @@ export function MobileShipmentEditSheet({
   const [dimOpen, setDimOpen] = useState(false);
   const [ecargoOpen, setEcargoOpen] = useState(false);
   const [copyOk, setCopyOk] = useState(false);
-  const [csdPreview, setCsdPreview] = useState<{ url: string; meta: CsdTemplateResolve | null } | null>(null);
-  const csdPreviewRevokeRef = useRef<(() => void) | null>(null);
   const awbRef = useRef<HTMLInputElement>(null);
   const hawbRef = useRef<HTMLInputElement>(null);
 
@@ -183,8 +178,6 @@ export function MobileShipmentEditSheet({
     }, 120);
     return () => window.clearTimeout(t);
   }, [open, focusField, shipment?.id]);
-
-  useEffect(() => () => csdPreviewRevokeRef.current?.(), []);
 
   const notifyPreview = useMemo(() => {
     if (!shipment) return "";
@@ -544,38 +537,6 @@ export function MobileShipmentEditSheet({
           </div>
 
           <div className={`border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${OPS.border}`}>
-            {shipment && canPrintCsdForm({ awb }) ? (
-              <div className="mb-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    void previewCsdFormForShipment({ ...shipment, awb })
-                      .then(({ pdfUrl, revoke, resolved }) => {
-                        csdPreviewRevokeRef.current?.();
-                        csdPreviewRevokeRef.current = revoke;
-                        setCsdPreview({ url: pdfUrl, meta: resolved });
-                      })
-                      .catch((e) => {
-                        alert(e instanceof Error ? e.message : "Không xem trước được CSD.");
-                      })
-                  }
-                  className={`flex-1 rounded-xl border border-sky-300/70 bg-white py-2.5 text-sm font-semibold text-sky-900 dark:border-sky-400/35 dark:bg-ops-surface dark:text-sky-100`}
-                >
-                  Xem trước CSD
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void printCsdFormForShipment({ ...shipment, awb }).catch((e) => {
-                      alert(e instanceof Error ? e.message : "Không in được CSD.");
-                    })
-                  }
-                  className={`flex-1 rounded-xl border border-sky-300/70 bg-sky-50/90 py-2.5 text-sm font-semibold text-sky-900 dark:border-sky-400/35 dark:bg-sky-500/15 dark:text-sky-100`}
-                >
-                  In CSD
-                </button>
-              </div>
-            ) : null}
             <div className="flex gap-2">
               <button type="button" onClick={onClose} className={`flex-1 ${MOBILE.secondaryBtn}`}>
                 Hủy
@@ -630,19 +591,6 @@ export function MobileShipmentEditSheet({
           fetchQrBusy={isEcargoFetchingQr?.(shipment.id) ?? false}
           onSaveVehicleAsDefault={onSaveCustomerVehicleForEcargo}
           onRefreshJob={() => void refreshEcargoJob?.(shipment.id)}
-        />
-      ) : null}
-
-      {csdPreview ? (
-        <CsdPdfPreviewModal
-          pdfUrl={csdPreview.url}
-          meta={csdPreview.meta}
-          awb={awb}
-          onClose={() => {
-            csdPreviewRevokeRef.current?.();
-            csdPreviewRevokeRef.current = null;
-            setCsdPreview(null);
-          }}
         />
       ) : null}
     </>

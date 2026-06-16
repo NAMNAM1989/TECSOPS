@@ -15,9 +15,6 @@ import {
 import { isTcsWarehouse } from "../constants/warehouses";
 import { OPS } from "../styles/opsModalStyles";
 import { ShipmentInvoiceExportButton } from "./ShipmentInvoiceExportButton";
-import { canPrintCsdForm, previewCsdFormForShipment, printCsdFormForShipment } from "../utils/csdPdfPrint";
-import { CsdPdfPreviewModal } from "./CsdPdfPreviewModal";
-import type { CsdTemplateResolve } from "../types/csdTemplate";
 
 type Props = {
   row: Shipment;
@@ -91,28 +88,6 @@ function IconDimReport() {
   );
 }
 
-function IconCsdPreview() {
-  return (
-    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function IconCsdForm() {
-  return (
-    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9 12h6m-6 4h3m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-      />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4" />
-    </svg>
-  );
-}
-
 function IconKebabVertical() {
   return (
     <svg className={iconCls} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -134,8 +109,6 @@ export function ShipmentRowActionsMenu({
   onUpdate,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [csdPreview, setCsdPreview] = useState<{ url: string; meta: CsdTemplateResolve | null } | null>(null);
-  const csdPreviewRevokeRef = useRef<(() => void) | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -143,33 +116,8 @@ export function ShipmentRowActionsMenu({
 
   const showWeigh = canPrintWeighReceiptScsc(row);
   const showDim = canPrintDimScscReport(row);
-  const showCsd = canPrintCsdForm(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   const menuExtras = (showDim ? 1 : 0) + (showTcsDim ? 2 : 0) + 1;
-
-  const printCsd = () =>
-    void printCsdFormForShipment(row).catch((e) => {
-      alert(e instanceof Error ? e.message : "Không in được CSD.");
-    });
-
-  const previewCsd = () =>
-    void previewCsdFormForShipment(row)
-      .then(({ pdfUrl, revoke, resolved }) => {
-        csdPreviewRevokeRef.current?.();
-        csdPreviewRevokeRef.current = revoke;
-        setCsdPreview({ url: pdfUrl, meta: resolved });
-      })
-      .catch((e) => {
-        alert(e instanceof Error ? e.message : "Không xem trước được CSD.");
-      });
-
-  const closeCsdPreview = () => {
-    csdPreviewRevokeRef.current?.();
-    csdPreviewRevokeRef.current = null;
-    setCsdPreview(null);
-  };
-
-  useEffect(() => () => csdPreviewRevokeRef.current?.(), []);
 
   const confirmDelete = () => {
     if (confirm(`Xóa lô AWB ${row.awb || "(chưa có AWB)"}?`)) onDelete(row.id);
@@ -277,16 +225,6 @@ export function ShipmentRowActionsMenu({
       <ActionIconBtn label="In nhãn vận chuyển" onClick={() => onPrint(row)}>
         <IconPrintLabel />
       </ActionIconBtn>
-      {showCsd ? (
-        <>
-          <ActionIconBtn label="Xem trước CSD" onClick={previewCsd}>
-            <IconCsdPreview />
-          </ActionIconBtn>
-          <ActionIconBtn label="In CSD (PDF A4)" onClick={printCsd}>
-            <IconCsdForm />
-          </ActionIconBtn>
-        </>
-      ) : null}
       {showWeigh ? (
         <ActionIconBtn label="In tờ cân SCSC" onClick={printWeigh}>
           <IconWeighSlip />
@@ -313,14 +251,6 @@ export function ShipmentRowActionsMenu({
         <IconKebabVertical />
       </button>
       {typeof document !== "undefined" && dropdownMenu ? createPortal(dropdownMenu, document.body) : null}
-      {csdPreview ? (
-        <CsdPdfPreviewModal
-          pdfUrl={csdPreview.url}
-          meta={csdPreview.meta}
-          awb={row.awb}
-          onClose={closeCsdPreview}
-        />
-      ) : null}
     </div>
   );
 }

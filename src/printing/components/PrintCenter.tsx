@@ -42,7 +42,6 @@ import {
   printThermalLabelTspl,
 } from "../thermalLabel/thermalLabelTspl";
 import { canPrintWeighReceiptScsc, printWeighReceiptScsc } from "../../utils/printWeighReceiptScsc";
-import { CsdFormPrintPanel, printCsdBatch } from "./CsdFormPrintPanel";
 import { ScscPrintTemplateEditor } from "./ScscPrintTemplateEditor";
 import type { ShipmentMutation } from "../../utils/shipmentMutations";
 import type { AppState } from "../../utils/shipmentMutations";
@@ -162,16 +161,6 @@ export function PrintCenter({
       return;
     }
 
-    if (docType === "csd-form") {
-      const { ok, err } = await printCsdBatch(targets);
-      setStatusMsg(
-        ok
-          ? `Đã mở ${ok} PDF CSD (A4) — mẫu tự chọn theo prefix AWB.`
-          : err || "Không xuất được PDF CSD."
-      );
-      return;
-    }
-
     if (docType === "scsc-weigh") {
       let n = 0;
       let viaPdf = 0;
@@ -252,13 +241,8 @@ export function PrintCenter({
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-4 lg:grid-cols-[1fr_340px]">
         <div className="flex min-h-0 flex-col gap-3 overflow-hidden rounded-2xl border bg-white p-4">
           <DocTypeTabs docType={docType} onChange={setDocType} />
-          {docType === "csd-form" ? (
-            <CsdFormPrintPanel rows={rows} selectedIds={selectedIds} />
-          ) : null}
           <PrinterProfileSelector
-            docType={
-              docType === "dim-report" || docType === "csd-form" ? "thermal-label" : docType
-            }
+            docType={docType === "dim-report" ? "thermal-label" : docType}
             store={store}
             onChangeActive={(id) => (docType === "scsc-weigh" ? setActiveA4(id) : pickThermalProfile(id))}
             onEditProfiles={() => setProfileEditorOpen(true)}
@@ -403,7 +387,6 @@ function DocTypeTabs({ docType, onChange }: { docType: PrintDocumentType; onChan
     { k: "thermal-label", label: "Nhãn nhiệt" },
     { k: "scsc-weigh", label: "Tờ cân SCSC" },
     { k: "dim-report", label: "DIM" },
-    { k: "csd-form", label: "CSD (PDF)" },
   ];
   return (
     <div className="flex flex-wrap gap-2">

@@ -234,10 +234,13 @@ export function useShipmentSync(fallback: Fallback) {
     }
   }, []);
 
-  const applyRemoteState = useCallback((raw: unknown): boolean => {
+  const applyRemoteState = useCallback((raw: unknown, opts?: { force?: boolean }): boolean => {
     const parsed = parseAppState(raw);
     if (!parsed) return false;
-    setState((prev) => pickNewerState(prev, parsed));
+    setState((prev) => {
+      if (opts?.force) return hydratePrinterProfiles(parsed);
+      return pickNewerState(prev, parsed);
+    });
     saveRows(parsed.rows);
     return true;
   }, []);

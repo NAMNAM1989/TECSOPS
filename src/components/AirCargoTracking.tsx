@@ -564,8 +564,8 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             >
               Khách & in
             </DashboardToolbarButton>
-            <DashboardToolbarButton onClick={() => setAirlineLabelSettingsOpen(true)} title="Tên hãng trên tem & up mẫu CSD theo AWB">
-              Hãng / CSD
+            <DashboardToolbarButton onClick={() => setAirlineLabelSettingsOpen(true)} title="Tên hãng in trên tem nhãn">
+              Tên hãng
             </DashboardToolbarButton>
             <DashboardToolbarButton
               onClick={() => setSheetImportOpen(true)}
@@ -836,8 +836,11 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         sessionYmd={selectedYmd}
         onClose={() => setSheetImportOpen(false)}
         onApplied={(count, serverState) => {
-          const merged = serverState ? applyRemoteState(serverState) : false;
-          if (!merged) void refreshState();
+          if (serverState) {
+            if (!applyRemoteState(serverState, { force: true })) void refreshState();
+          } else if (count > 0) {
+            void refreshState();
+          }
           if (count > 0) {
             window.alert(`Đã nhập ${count} lô từ Google Sheet.`);
           }

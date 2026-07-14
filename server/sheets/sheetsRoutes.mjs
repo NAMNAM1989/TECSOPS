@@ -1,5 +1,5 @@
 import {
-  fetchGoogleSheetGrid,
+  fetchBookHangNgayGridForSession,
   getBookSpreadsheetId,
   sessionYmdToBookSheetTab,
 } from "./googleSheetFetch.mjs";
@@ -36,7 +36,7 @@ function parsedRowToShipment(row, sessionDate, customers) {
     sessionDate,
     ...patch,
     hawb: "",
-    dimWeightKg: null,
+    dimWeightKg: row.dimWeightKg ?? null,
     dimLines: null,
     dimDivisor: null,
     globalAgentId: "",
@@ -55,6 +55,7 @@ function parsedRowToShipment(row, sessionDate, customers) {
     agentPhonePrint: "",
     agentEmailPrint: "",
     agentTaxCodePrint: "",
+    consigneeNamePrint: row.consigneeNamePrint || "",
     consigneeAddressPrint: "",
     consigneePhonePrint: "",
     consigneeEmailPrint: "",
@@ -91,7 +92,9 @@ function mapSyncRow(row, index, sessionDate, sessionFlightDate, state, customers
     warehouse: row.warehouse,
     pcs: row.pcs,
     kg: row.kg,
+    dimWeightKg: row.dimWeightKg ?? null,
     customer: row.customer,
+    note: row.note,
     customerCode,
     customerKnown: Boolean(customerCode),
     consigneePreview: row.consigneeNamePrint.slice(0, 120),
@@ -108,13 +111,13 @@ function mapSyncRow(row, index, sessionDate, sessionFlightDate, state, customers
 
 /**
  * @param {import('express').Express} app
- * @param {{ io?: import('socket.io').Server, setEcargoStateSnapshot?: (s: object) => void }} deps
+ * @param {{ io?: import('socket.io').Server }} deps
  */
 export function registerSheetsRoutes(app, deps) {
   app.get("/api/sheets/book/config", (_req, res) => {
     res.json({
       spreadsheetId: getBookSpreadsheetId(),
-      sheetTabExample: sessionYmdToBookSheetTab("2026-06-13"),
+      sheetTabExample: sessionYmdToBookSheetTab("2026-07-13"),
     });
   });
 
@@ -126,11 +129,14 @@ export function registerSheetsRoutes(app, deps) {
         return;
       }
 
-      const sheetTab =
-        String(req.query.sheetTab ?? "").trim() || sessionYmdToBookSheetTab(sessionDate);
+      const preferredTab = String(req.query.sheetTab ?? "").trim();
       const spreadsheetId = String(req.query.spreadsheetId ?? "").trim() || getBookSpreadsheetId();
 
-      const grid = await fetchGoogleSheetGrid(spreadsheetId, sheetTab);
+      const { grid, sheetTab } = await fetchBookHangNgayGridForSession(
+        spreadsheetId,
+        sessionDate,
+        preferredTab
+      );
       const parsed = parseBookHangNgayGrid(grid, sessionDate);
       const dated = filterRowsForSessionDate(parsed, sessionDate);
       const sessionFlightDate = sessionYmdToFlightDateToken(sessionDate);
@@ -169,8 +175,7 @@ export function registerSheetsRoutes(app, deps) {
       const body = req.body;
       const sessionDate = String(body?.sessionDate ?? "").trim();
       const indices = Array.isArray(body?.indices) ? body.indices.map(Number) : [];
-      const sheetTab =
-        String(body?.sheetTab ?? "").trim() || sessionYmdToBookSheetTab(sessionDate);
+      const preferredTab = String(body?.sheetTab ?? "").trim();
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) {
         res.status(400).json({ error: "Thiếu sessionDate (YYYY-MM-DD)." });
@@ -182,7 +187,12 @@ export function registerSheetsRoutes(app, deps) {
       }
 
       const spreadsheetId = String(body?.spreadsheetId ?? "").trim() || getBookSpreadsheetId();
-      const grid = await fetchGoogleSheetGrid(spreadsheetId, sheetTab);
+      const { grid, sheetTab } = await fetchBookHangNgayGridForSession(
+        spreadsheetId,
+        sessionDate,
+        preferredTab
+      );
+      void sheetTab;
       const parsed = filterRowsForSessionDate(parseBookHangNgayGrid(grid, sessionDate), sessionDate);
       const pickSet = new Set(indices.filter((n) => Number.isInteger(n) && n >= 0));
       const selected = parsed.filter((_, i) => pickSet.has(i));
@@ -246,7 +256,6 @@ export function registerSheetsRoutes(app, deps) {
               lookupCustomerId
             );
             state = await runMutation({ action: "UPDATE", id: existing.id, patch });
-            deps.setEcargoStateSnapshot?.(state);
             deps.io?.emit("sync", state);
             updated.push({
               awb: row.awb,
@@ -259,7 +268,6 @@ export function registerSheetsRoutes(app, deps) {
 
           const shipment = parsedRowToShipment(row, sessionDate, state.customers ?? []);
           state = await runMutation({ action: "ADD", shipment });
-          deps.setEcargoStateSnapshot?.(state);
           deps.io?.emit("sync", state);
           applied.push({ awb: row.awb, warehouse: row.warehouse });
           if (awbKey) batchAwbKeys.add(awbKey);

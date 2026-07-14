@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { assertCustomerDirectoryValid } from "../utils/customerDirectoryCore";
 import type {
@@ -12,19 +12,15 @@ import {
   validateCustomerEntrySection,
 } from "../utils/customerDirectoryValidation";
 import type { CustomerSavedConsignee, CustomerSavedGoods, CustomerSavedShipper, CustomerSavedVehicle } from "../types/customerDirectory";
-import type { GlobalAgentCatalog } from "../types/globalAgents";
-import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
-import { GlobalAgentsSettings } from "./GlobalAgentsSettings";
-import { ScscWeighSenderSettings } from "./ScscWeighSenderSettings";
 import { CustomerSavedProfilesEditor } from "./customerDirectory/CustomerSavedProfilesEditor";
 import { CustomerProfileStickyActionBar } from "./customerDirectory/CustomerProfileStickyActionBar";
 import { CustomerSectionSaveButton } from "./customerDirectory/CustomerSectionSaveButton";
 import { FieldErrorText, fieldInputClass } from "./customerDirectory/CustomerValidationField";
 import { getFieldValidationError } from "../utils/customerDirectoryValidation";
 import { CustomerDeleteConfirmModal } from "./customerDirectory/CustomerDeleteConfirmModal";
-import { clampGlobalAgentCatalog, defaultGlobalAgentCatalog } from "../utils/globalAgentsCore";
 import {
   clampCustomerDirectoryEntry,
+  customerDirectoryListCode,
   emptyCustomerSavedConsignee,
   emptyCustomerSavedGoods,
   emptyCustomerSavedShipper,
@@ -35,38 +31,25 @@ import {
   scaffoldNewCustomer,
   withNewDefault,
 } from "../utils/customerDirectoryScaffold";
-import {
-  clampScscWeighPrintSettings,
-  defaultScscWeighPrintSettings,
-} from "../printing/scscWeigh/scscWeighPrintSettingsCore";
 import { normalizeAgentCode } from "../utils/customerProfileInputFormat";
 import { normalizeCustomerNameInput, customerNameWhileTyping } from "../utils/customerShipmentPatch";
-import { UnmatchedCustomerReportModal } from "./UnmatchedCustomerReportModal";
-import type { UnmatchedCustomerRow } from "../utils/fetchAppStateRows";
+import {
+  normalizeCustomerPrefix,
+  normalizeCustomerShortCode,
+} from "../utils/customerCodeOps";
+import {
+  applyCustomsOpsImport,
+  CUSTOMS_OPS_TEMPLATE_URL,
+  downloadCustomsOpsExport,
+  parseCustomsOpsWorkbook,
+} from "../utils/customerCustomsOpsExcel";
 import { CD } from "./customerDirectory/customerDirectoryStyles";
-
-type MainTab = "profiles" | "agents";
-
-const MAIN_SECTIONS: { id: MainTab; label: string; hint: string }[] = [
-  { id: "profiles", label: "Danh sách khách", hint: "Mã, tên, hồ sơ in" },
-  { id: "agents", label: "Agent & SCSC", hint: "Agent toàn cục, người gửi in phiếu" },
-];
 
 type Props = {
   open: boolean;
   initial: readonly CustomerDirectoryEntry[];
-  globalAgentsInitial: GlobalAgentCatalog;
-  scscWeighPrintSettingsInitial?: ScscWeighPrintSettings;
   onClose: () => void;
-  onSave: (payload: {
-    customers: CustomerDirectoryEntry[];
-    globalAgents: GlobalAgentCatalog;
-    scscWeighPrintSettings?: ScscWeighPrintSettings;
-  }) => Promise<void>;
-  /** Áp dụng gợi ý map customer_id cho lô trên dashboard. */
-  onApplyUnmatchedShipments?: (
-    rows: UnmatchedCustomerRow[]
-  ) => Promise<{ updated: number; failed: number }>;
+  onSave: (customers: CustomerDirectoryEntry[]) => Promise<void>;
 };
 
 function newId(prefix: string): string {
@@ -79,11 +62,8 @@ function newId(prefix: string): string {
 export function CustomerDirectoryManager({
   open,
   initial,
-  globalAgentsInitial,
-  scscWeighPrintSettingsInitial,
   onClose,
   onSave,
-  onApplyUnmatchedShipments,
 }: Props) {
   const [draft, setDraft] = useState<CustomerDirectoryEntry[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -91,12 +71,10 @@ export function CustomerDirectoryManager({
   const [saving, setSaving] = useState(false);
   const [savedSection, setSavedSection] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<CustomerFieldError[]>([]);
-  const [mainTab, setMainTab] = useState<MainTab>("profiles");
-  const [globalAgentsDraft, setGlobalAgentsDraft] = useState<GlobalAgentCatalog>(defaultGlobalAgentCatalog());
-  const [senderDraft, setSenderDraft] = useState<ScscWeighPrintSettings>(defaultScscWeighPrintSettings());
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [unmatchedOpen, setUnmatchedOpen] = useState(false);
   const [editingIdentity, setEditingIdentity] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -104,20 +82,24 @@ export function CustomerDirectoryManager({
     setDraft(next);
     setSelectedId((prev) => (prev && next.some((e) => e.id === prev) ? prev : next[0]?.id ?? null));
     setQuery("");
-    setGlobalAgentsDraft(clampGlobalAgentCatalog(globalAgentsInitial));
-    setSenderDraft(clampScscWeighPrintSettings(scscWeighPrintSettingsInitial));
     setDeleteModalOpen(false);
     setSavedSection(null);
     setValidationErrors([]);
     setEditingIdentity(false);
-  }, [initial, globalAgentsInitial, scscWeighPrintSettingsInitial, open]);
+  }, [initial, open]);
 
   const selected = draft.find((e) => e.id === selectedId) ?? null;
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return draft;
-    return draft.filter((e) => e.code.toLowerCase().includes(needle) || e.name.toLowerCase().includes(needle));
+    return draft.filter(
+      (e) =>
+        e.code.toLowerCase().includes(needle) ||
+        e.name.toLowerCase().includes(needle) ||
+        (e.shortCode ?? "").toLowerCase().includes(needle) ||
+        (e.prefix ?? "").toLowerCase().includes(needle)
+    );
   }, [draft, query]);
 
   function selectCustomer(id: string) {
@@ -289,6 +271,34 @@ export function CustomerDirectoryManager({
     setEditingIdentity(true);
   }
 
+  async function onImportFile(file: File | null) {
+    if (!file) return;
+    setImporting(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const rows = await parseCustomsOpsWorkbook(buf);
+      const result = applyCustomsOpsImport(draft, rows);
+      setDraft(result.customers.map((e) => clampCustomerDirectoryEntry(e)));
+      const errHint =
+        result.errors.length > 0
+          ? `\n${result.errors
+              .slice(0, 5)
+              .map((e) => `Dòng ${e.rowNumber}: ${e.message}`)
+              .join("\n")}${result.errors.length > 5 ? `\n… +${result.errors.length - 5} lỗi` : ""}`
+          : "";
+      window.alert(
+        `Import customs_ops: tạo ${result.created}, cập nhật ${result.updated}, bỏ ${result.skipped}.${errHint}\nNhớ bấm Lưu để ghi máy chủ.`
+      );
+      const last = result.customers[result.customers.length - 1];
+      if (last) setSelectedId(last.id);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Không đọc được file Excel.");
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  }
+
   function removeCustomer(id: string) {
     setDraft((rows) => {
       const next = rows.filter((row) => row.id !== id);
@@ -310,7 +320,7 @@ export function CustomerDirectoryManager({
             setValidationErrors(filterValidationErrorsForSection(check.errors, sectionKey));
             return;
           }
-          const normalizedOne = normalizeCustomerEntryForSave(current);
+          const normalizedOne = normalizeCustomerEntryForSave(current, draft);
           nextDraft = draft.map((e) => (e.id === selectedId ? normalizedOne : e));
           setDraft(nextDraft);
           setValidationErrors([]);
@@ -322,7 +332,7 @@ export function CustomerDirectoryManager({
           window.alert(check.summary);
           return;
         }
-        nextDraft = draft.map((e) => normalizeCustomerEntryForSave(e));
+        nextDraft = draft.map((e) => normalizeCustomerEntryForSave(e, draft));
         setDraft(nextDraft);
         setValidationErrors([]);
       }
@@ -336,11 +346,7 @@ export function CustomerDirectoryManager({
       }
       setSaving(true);
       try {
-        await onSave({
-          customers: normalized,
-          globalAgents: clampGlobalAgentCatalog(globalAgentsDraft),
-          scscWeighPrintSettings: clampScscWeighPrintSettings(senderDraft),
-        });
+        await onSave(normalized);
         if (opts?.flashKey) {
           setSavedSection(opts.flashKey);
           if (opts.flashKey === "identity") setEditingIdentity(false);
@@ -353,7 +359,7 @@ export function CustomerDirectoryManager({
         setSaving(false);
       }
     },
-    [draft, globalAgentsDraft, onClose, onSave, selectedId, senderDraft]
+    [draft, onClose, onSave, selectedId]
   );
 
   const handleSave = useCallback(() => void persistDraft({ close: true }), [persistDraft]);
@@ -377,14 +383,8 @@ export function CustomerDirectoryManager({
 
   if (!open) return null;
 
-  const mainTitle =
-    mainTab === "agents"
-      ? "Agent & người gửi SCSC"
-      : selected
-        ? selected.name || "Khách mới"
-        : "Chọn khách hàng";
-
-  const mainSubtitle = MAIN_SECTIONS.find((s) => s.id === mainTab)?.hint ?? "";
+  const mainTitle = selected ? selected.name || "Khách mới" : "Chọn khách hàng";
+  const mainSubtitle = "Mã, tên, hồ sơ in";
 
   return (
     <div
@@ -397,41 +397,21 @@ export function CustomerDirectoryManager({
         <aside className={`flex w-[min(100%,16rem)] shrink-0 flex-col border-r sm:w-60 ${CD.aside}`}>
           <div className={`border-b px-2.5 py-2.5 ${CD.border}`}>
             <h2 id="customer-manager-title" className={`text-sm font-semibold tracking-tight ${CD.title}`}>
-              Khách hàng & Cài đặt
+              Danh bạ khách
             </h2>
             <p className={`mt-0.5 text-[10px] leading-snug ${CD.muted}`}>
-              Hồ sơ in & agent SCSC
+              Prefix · Code · Short Code · hồ sơ in
             </p>
           </div>
 
-          <nav className="space-y-0.5 p-1.5" aria-label="Khu vực cài đặt">
-            {MAIN_SECTIONS.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => setMainTab(section.id)}
-                className={`w-full rounded-lg px-2.5 py-2 text-left transition ${
-                  mainTab === section.id ? CD.navActive : CD.navIdle
-                }`}
-              >
-                <span className={`block text-xs font-semibold ${CD.title}`}>
-                  {section.label}
-                </span>
-                <span className={`mt-0.5 block text-[10px] leading-snug ${CD.muted}`}>
-                  {section.hint}
-                </span>
-              </button>
-            ))}
-          </nav>
 
-          {mainTab === "profiles" ? (
             <>
               <div className={`border-t px-2.5 py-2 ${CD.border}`}>
                 <input
                   type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Tìm mã / tên…"
+                  placeholder="Tìm mã / short / tên…"
                   className={`w-full text-xs font-medium ${CD.input}`}
                 />
                 <button
@@ -441,15 +421,37 @@ export function CustomerDirectoryManager({
                 >
                   + Thêm khách
                 </button>
-                {onApplyUnmatchedShipments ? (
+                <div className="mt-1.5 grid grid-cols-2 gap-1">
+                  <a
+                    href={CUSTOMS_OPS_TEMPLATE_URL}
+                    download="customs_ops.xlsx"
+                    className={`rounded-lg border px-2 py-1.5 text-center text-[10px] font-semibold ${CD.btnSmallAccent}`}
+                  >
+                    Mẫu Excel
+                  </a>
                   <button
                     type="button"
-                    onClick={() => setUnmatchedOpen(true)}
-                    className="mt-1.5 w-full rounded-lg border border-amber-300/60 bg-amber-50 px-2 py-1.5 text-[10px] font-semibold text-amber-950 hover:bg-amber-100 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-200"
+                    disabled={importing}
+                    onClick={() => importInputRef.current?.click()}
+                    className={`rounded-lg border px-2 py-1.5 text-[10px] font-semibold disabled:opacity-50 ${CD.btnSmallAccent}`}
                   >
-                    Lô chưa map khách…
+                    {importing ? "Đang nhập…" : "Import"}
                   </button>
-                ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void downloadCustomsOpsExport(draft)}
+                    className={`col-span-2 rounded-lg border px-2 py-1.5 text-[10px] font-semibold ${CD.btnSmallAccent}`}
+                  >
+                    Export Excel
+                  </button>
+                </div>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="hidden"
+                  onChange={(e) => void onImportFile(e.target.files?.[0] ?? null)}
+                />
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
@@ -466,7 +468,10 @@ export function CustomerDirectoryManager({
                       {normalizeCustomerNameInput(customer.name) || "Chưa đặt tên"}
                     </span>
                     <span className={`mt-0.5 block truncate font-mono text-[10px] uppercase ${CD.muted}`}>
-                      {customer.code || "—"}
+                      {customerDirectoryListCode(customer)}
+                      {customer.shortCode && customer.code && customer.shortCode !== customer.code
+                        ? ` · ${customer.code}`
+                        : ""}
                     </span>
                   </button>
                 ))}
@@ -477,18 +482,13 @@ export function CustomerDirectoryManager({
                 ) : null}
               </div>
             </>
-          ) : (
-            <p className={`border-t px-3 py-4 text-[10px] leading-snug ${CD.border} ${CD.muted}`}>
-              Chọn mục bên trên để chỉnh cài đặt chung — không gắn với từng khách.
-            </p>
-          )}
         </aside>
 
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <div className={`flex shrink-0 items-start justify-between gap-3 border-b px-3 py-2.5 ${CD.border}`}>
             <div className="min-w-0">
               <p className={`text-[10px] font-semibold uppercase tracking-wide ${CD.muted}`}>
-                {MAIN_SECTIONS.find((s) => s.id === mainTab)?.label}
+                Danh sách khách
               </p>
               <h3 className={`truncate text-base font-semibold ${CD.title}`}>
                 {mainTitle}
@@ -510,16 +510,13 @@ export function CustomerDirectoryManager({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-            {mainTab === "agents" ? (
-              <div className="mx-auto max-w-3xl space-y-4 py-1">
-                <GlobalAgentsSettings catalog={globalAgentsDraft} onChange={setGlobalAgentsDraft} />
-                <ScscWeighSenderSettings settings={senderDraft} onChange={setSenderDraft} />
-              </div>
-            ) : selected ? (
+            {selected ? (
               <div className="mx-auto max-w-4xl space-y-2.5">
                 <section className={`rounded-lg border px-2.5 py-2 ${CD.card}`}>
                   <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                    <p className={`text-[10px] font-bold uppercase ${CD.muted}`}>Mã & tên</p>
+                    <p className={`text-[10px] font-bold uppercase ${CD.muted}`}>
+                      Account (customs_ops)
+                    </p>
                     <div className="flex items-center gap-1.5">
                       {!editingIdentity ? (
                         <button
@@ -539,26 +536,76 @@ export function CustomerDirectoryManager({
                     </div>
                   </div>
                   {editingIdentity ? (
-                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start">
-                      <div className="w-full sm:max-w-[6rem]">
+                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                      <div>
+                        <label className={`mb-0.5 block text-[10px] font-semibold ${CD.muted}`}>Prefix</label>
+                        <input
+                          value={selected.prefix ?? ""}
+                          onChange={(e) =>
+                            updateCustomer(selected.id, {
+                              prefix: normalizeCustomerPrefix(e.target.value),
+                            })
+                          }
+                          className={`w-full font-mono text-xs font-bold uppercase ${fieldInputClass(
+                            Boolean(getFieldValidationError(validationErrors, "identity", "prefix"))
+                          )}`}
+                          placeholder="GLO"
+                          spellCheck={false}
+                          maxLength={5}
+                        />
+                        <FieldErrorText message={getFieldValidationError(validationErrors, "identity", "prefix")} />
+                      </div>
+                      <div>
+                        <label className={`mb-0.5 block text-[10px] font-semibold ${CD.muted}`}>
+                          Customer Code
+                        </label>
                         <input
                           value={selected.code}
                           onChange={(e) => updateCustomer(selected.id, { code: e.target.value.toUpperCase() })}
-                          onBlur={(e) => updateCustomer(selected.id, { code: normalizeAgentCode(e.target.value) })}
+                          onBlur={(e) =>
+                            updateCustomer(selected.id, { code: normalizeAgentCode(e.target.value) })
+                          }
                           className={`w-full font-mono text-xs font-bold uppercase ${fieldInputClass(
                             Boolean(getFieldValidationError(validationErrors, "identity", "code"))
                           )}`}
-                          placeholder="Mã"
+                          placeholder="Tự sinh nếu trống"
                           spellCheck={false}
                         />
                         <FieldErrorText message={getFieldValidationError(validationErrors, "identity", "code")} />
                       </div>
-                      <div className="min-w-0 flex-1">
+                      <div>
+                        <label className={`mb-0.5 block text-[10px] font-semibold ${CD.muted}`}>Short Code</label>
+                        <input
+                          value={selected.shortCode ?? ""}
+                          onChange={(e) =>
+                            updateCustomer(selected.id, {
+                              shortCode: normalizeCustomerShortCode(e.target.value),
+                            })
+                          }
+                          className={`w-full font-mono text-xs font-bold uppercase ${fieldInputClass(
+                            Boolean(getFieldValidationError(validationErrors, "identity", "shortCode"))
+                          )}`}
+                          placeholder="GLO"
+                          spellCheck={false}
+                          maxLength={10}
+                        />
+                        <FieldErrorText
+                          message={getFieldValidationError(validationErrors, "identity", "shortCode")}
+                        />
+                      </div>
+                      <div className="col-span-2 sm:col-span-1 sm:col-start-auto">
+                        <label className={`mb-0.5 block text-[10px] font-semibold ${CD.muted}`}>
+                          Customer Name
+                        </label>
                         <input
                           value={selected.name}
-                          onChange={(e) => updateCustomer(selected.id, { name: customerNameWhileTyping(e.target.value) })}
+                          onChange={(e) =>
+                            updateCustomer(selected.id, { name: customerNameWhileTyping(e.target.value) })
+                          }
                           onBlur={() =>
-                            updateCustomer(selected.id, { name: normalizeCustomerNameInput(selected.name) })
+                            updateCustomer(selected.id, {
+                              name: normalizeCustomerNameInput(selected.name),
+                            })
                           }
                           className={`w-full text-sm font-semibold uppercase ${fieldInputClass(
                             Boolean(getFieldValidationError(validationErrors, "identity", "name"))
@@ -567,15 +614,36 @@ export function CustomerDirectoryManager({
                         />
                         <FieldErrorText message={getFieldValidationError(validationErrors, "identity", "name")} />
                       </div>
+                      <p className={`col-span-2 text-[10px] leading-snug sm:col-span-4 ${CD.muted}`}>
+                        Để trống Code + có Prefix → hệ thống sinh mã (vd. GLO000001). Name bắt buộc.
+                      </p>
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start">
-                      <p className="w-full rounded-lg border border-black/[0.06] bg-black/[0.03] px-2 py-1 font-mono text-xs font-bold uppercase text-apple-label dark:border-white/10 dark:bg-black/20 dark:text-slate-200 sm:max-w-[6rem]">
-                        {selected.code.trim() || "—"}
-                      </p>
-                      <p className="min-w-0 flex-1 rounded-lg border border-black/[0.06] bg-black/[0.03] px-2 py-1 text-sm font-semibold uppercase text-apple-label dark:border-white/10 dark:bg-black/20 dark:text-slate-200">
-                        {normalizeCustomerNameInput(selected.name) || "—"}
-                      </p>
+                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                      <div>
+                        <p className={`text-[10px] font-semibold ${CD.muted}`}>Prefix</p>
+                        <p className="rounded-lg border border-black/[0.06] bg-black/[0.03] px-2 py-1 font-mono text-xs font-bold uppercase dark:border-white/10 dark:bg-black/20">
+                          {selected.prefix?.trim() || "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className={`text-[10px] font-semibold ${CD.muted}`}>Customer Code</p>
+                        <p className="rounded-lg border border-black/[0.06] bg-black/[0.03] px-2 py-1 font-mono text-xs font-bold uppercase dark:border-white/10 dark:bg-black/20">
+                          {selected.code.trim() || "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className={`text-[10px] font-semibold ${CD.muted}`}>Short Code</p>
+                        <p className="rounded-lg border border-black/[0.06] bg-black/[0.03] px-2 py-1 font-mono text-xs font-bold uppercase dark:border-white/10 dark:bg-black/20">
+                          {selected.shortCode?.trim() || "—"}
+                        </p>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1">
+                        <p className={`text-[10px] font-semibold ${CD.muted}`}>Customer Name</p>
+                        <p className="rounded-lg border border-black/[0.06] bg-black/[0.03] px-2 py-1 text-sm font-semibold uppercase dark:border-white/10 dark:bg-black/20">
+                          {normalizeCustomerNameInput(selected.name) || "—"}
+                        </p>
+                      </div>
                     </div>
                   )}
                 </section>
@@ -620,7 +688,7 @@ export function CustomerDirectoryManager({
             onCancel={onClose}
             deleteLabel="Xóa khách"
             onDelete={
-              selected && mainTab === "profiles"
+              selected
                 ? () => setDeleteModalOpen(true)
                 : undefined
             }
@@ -638,13 +706,6 @@ export function CustomerDirectoryManager({
           setDeleteModalOpen(false);
         }}
       />
-      {onApplyUnmatchedShipments ? (
-        <UnmatchedCustomerReportModal
-          open={unmatchedOpen}
-          onClose={() => setUnmatchedOpen(false)}
-          onApplySuggestions={onApplyUnmatchedShipments}
-        />
-      ) : null}
     </div>
   );
 }

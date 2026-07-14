@@ -57,11 +57,11 @@ describe("canPrintDimScscReport", () => {
 
   it("false khi kho TCS dù có dimLines", () => {
     expect(canPrintDimScscReport(sampleShipment({ warehouse: "TECS-TCS" }))).toBe(false);
-    expect(canPrintDimScscReport(sampleShipment({ warehouse: "KHO-TCS" }))).toBe(false);
+    expect(canPrintDimScscReport(sampleShipment({ warehouse: "TECS-TCS" }))).toBe(false);
   });
 
   it("true khi KHO SCSC và có dimLines", () => {
-    expect(canPrintDimScscReport(sampleShipment({ warehouse: "KHO-SCSC" }))).toBe(true);
+    expect(canPrintDimScscReport(sampleShipment({ warehouse: "TECS-SCSC" }))).toBe(true);
   });
 });
 
@@ -84,7 +84,7 @@ describe("printDimReport", () => {
 
   it("từ chối KHO TCS dù có dimLines", () => {
     const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
-    printDimReport(sampleShipment({ warehouse: "KHO-TCS" }));
+    printDimReport(sampleShipment({ warehouse: "TECS-TCS" }));
     expect(alert).toHaveBeenCalledWith(expect.stringContaining("SCSC"));
   });
 

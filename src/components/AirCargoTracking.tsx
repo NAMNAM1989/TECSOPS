@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
-import { initialShipments } from "../data/mockShipments";
 import { loadRows } from "../utils/shipmentStorage";
 import {
   addLocalDays,
@@ -19,8 +18,7 @@ import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { SmartSearchBar } from "./SmartSearchBar";
-import { WAREHOUSE_ORDER, isScscWarehouse } from "../constants/warehouses";
-import { EcargoToastStack } from "./EcargoToastStack";
+import { WAREHOUSE_ORDER } from "../constants/warehouses";
 import { NewBookingButton } from "./NewBookingButton";
 import { WarehouseGridPicker } from "./WarehouseGridPicker";
 import { DashboardToolbarButton } from "./DashboardToolbarButton";
@@ -28,29 +26,10 @@ import { OpsDatePicker } from "./OpsDatePicker";
 import { firstWarehouseWithLots } from "../utils/warehouseMetrics";
 import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
-import { useEcargoKhoScscRegister } from "../hooks/useEcargoKhoScscRegister";
 import { debugError } from "../utils/debugLog";
-import type { UnmatchedCustomerRow } from "../utils/fetchAppStateRows";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { AirlineLabelSettingsModal } from "./AirlineLabelSettingsModal";
-import { defaultGlobalAgentCatalog } from "../utils/globalAgentsCore";
-import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
-import {
-  clampScscWeighPrintSettings,
-  defaultScscWeighPrintSettings,
-} from "../printing/scscWeigh/scscWeighPrintSettingsCore";
-import { setScscWeighPrintSettingsCache } from "../printing/scscWeigh/scscWeighPrintSettingsRuntime";
-import {
-  upsertCustomerVehicleInDirectory,
-  type UpsertCustomerVehicleParams,
-} from "../utils/customerVehicleCore";
-import { useOpsTheme } from "../hooks/useOpsTheme";
-import { useMobileLayout } from "../hooks/useMobileLayout";
-import { useHqRoute } from "../hooks/useHqRoute";
-import { ShipmentInvoicePage } from "./ShipmentInvoicePage";
-import type { HqInvoiceSavePayload } from "../types/invoiceDeclaration";
-import type { InvoiceCatalog } from "../utils/invoiceCatalogCore";
-import { isDesktopViewport } from "../utils/hqRoute";
+import { useIsMobile } from "../hooks/useIsMobile";
 import {
   countShipmentsByWarehouse,
   shipmentMatchesSearchQuery,
@@ -62,7 +41,6 @@ interface AirCargoTrackingProps {
   onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
 }
 
-
 function formatWorkDateLabel(d: Date): string {
   const months = [
     "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
@@ -73,29 +51,11 @@ function formatWorkDateLabel(d: Date): string {
 }
 
 export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
-  const fallback = useMemo(() => ({ rows: loadRows() ?? initialShipments }), []);
+  const fallback = useMemo(() => ({ rows: loadRows() ?? [] }), []);
 
-  const { status, state, mutate, socketConnected, subscribeEcargoJob, refreshState, applyRemoteState } =
+  const { status, state, mutate, socketConnected, refreshState, applyRemoteState } =
     useShipmentSync(fallback);
-  const ecargoRegister = useEcargoKhoScscRegister(state, mutate, subscribeEcargoJob);
-  const {
-    hydrateJobs,
-    hydrateKeyRef,
-    toasts: ecargoToasts,
-    dismissToast: dismissEcargoToast,
-    handleToastAction: handleEcargoToastAction,
-    openPanelRequestId,
-    clearOpenEcargoPanelRequest,
-  } = ecargoRegister;
 
-  const saveCustomerVehicleForEcargo = useCallback(
-    async (params: UpsertCustomerVehicleParams) => {
-      if (!state) return;
-      const next = upsertCustomerVehicleInDirectory(state.customers, params);
-      await mutate({ action: "SET_CUSTOMERS", customers: next });
-    },
-    [mutate, state]
-  );
   const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobileEditShipment, setMobileEditShipment] = useState<Shipment | null>(null);
@@ -111,10 +71,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const { dark: darkMode, toggle: toggleDarkMode } = useOpsTheme();
-  const { isMobile, forceMobile, toggleForceMobile } = useMobileLayout();
-  const { shipmentId: hqShipmentId, close: closeHqPage } = useHqRoute();
-  const [hqDesktop, setHqDesktop] = useState(() => isDesktopViewport());
+  const isMobile = useIsMobile();
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -128,11 +85,9 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
 
   const searchContext = useMemo(
     (): ShipmentSearchContext => ({
-      ecargoMap: ecargoRegister.map,
       customers: state?.customers ?? [],
-      getEcargoJob: ecargoRegister.getJob,
     }),
-    [ecargoRegister.map, ecargoRegister.getJob, state?.customers]
+    [state?.customers]
   );
 
   const statusFilteredRows = useMemo(() => {
@@ -149,17 +104,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       shipmentMatchesSearchQuery(r, searchQuery, searchContext)
     );
   }, [statusFilteredRows, searchQuery, searchContext]);
-
-  useEffect(() => {
-    const ids = filteredViewRows
-      .filter((r) => isScscWarehouse(r.warehouse))
-      .map((r) => r.id);
-    if (!ids.length) return;
-    const key = `${selectedYmd}|${ids.length}|${ids.join(",")}`;
-    if (hydrateKeyRef.current === key) return;
-    hydrateKeyRef.current = key;
-    void hydrateJobs(ids);
-  }, [filteredViewRows, hydrateJobs, hydrateKeyRef, selectedYmd]);
 
   const searchHighlightWarehouses = useMemo((): Warehouse[] => {
     if (!searchActive) return [];
@@ -237,23 +181,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     [mutate]
   );
 
-  const scscWeighPrintSettings = state?.scscWeighPrintSettings ?? defaultScscWeighPrintSettings();
-
-  useEffect(() => {
-    if (state?.scscWeighPrintSettings) {
-      setScscWeighPrintSettingsCache(state.scscWeighPrintSettings);
-    }
-  }, [state?.scscWeighPrintSettings]);
-
-  const saveScscWeighPrintSettings = useCallback(
-    async (settings: ScscWeighPrintSettings) => {
-      const next = clampScscWeighPrintSettings(settings);
-      setScscWeighPrintSettingsCache(next);
-      await runMutate({ action: "SET_SCSC_WEIGH_PRINT_SETTINGS", settings: next });
-    },
-    [runMutate]
-  );
-
   const onUpdate = useCallback(
     (id: string, patch: Partial<Shipment>) => {
       void runMutate({ action: "UPDATE", id, patch });
@@ -268,34 +195,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     [runMutate]
   );
 
-  const applyUnmatchedCustomerSuggestions = useCallback(
-    async (rows: UnmatchedCustomerRow[]) => {
-      let updated = 0;
-      let failed = 0;
-      for (const row of rows) {
-        if (!row.suggestedCustomerId) continue;
-        try {
-          const out = await runMutate({
-            action: "UPDATE",
-            id: row.id,
-            patch: {
-              customerId: row.suggestedCustomerId,
-              customerCode: row.suggestedCustomerCode,
-              customer: row.suggestedCustomerName,
-            },
-          });
-          if (out) updated += 1;
-          else failed += 1;
-        } catch {
-          failed += 1;
-        }
-      }
-      return { updated, failed };
-    },
-    [runMutate]
-  );
-
-  /** Desktop / mobile: thêm dòng trống đúng kho. Mobile mở form nhập AWB ngay. */
   const addBlankRowForWarehouse = useCallback(
     async (warehouse: Warehouse) => {
       setStatusFilter("ALL");
@@ -375,10 +274,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const goNextDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, 1)));
   const goToday = () => setSelectedViewDate(startOfLocalDay(new Date()));
 
-  /**
-   * Xuất Excel: ưu tiên `GET /api/state` (đủ mọi lô ngày đó, khớp máy chủ), fallback state React khi offline.
-   * Thứ tự dòng = thứ tự trong API/state (không sắp theo kho). Không lọc theo trạng thái UI.
-   */
   const onDownloadDayExcel = useCallback(async () => {
     setExcelExporting(true);
     try {
@@ -409,81 +304,13 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     []
   );
 
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const sync = () => setHqDesktop(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-
-  useEffect(() => {
-    if (hqShipmentId && !hqDesktop) closeHqPage();
-  }, [hqShipmentId, hqDesktop, closeHqPage]);
-
   const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
-
-  const hqShipment = useMemo(() => {
-    if (!hqShipmentId || !state) return null;
-    return state.rows.find((r) => r.id === hqShipmentId) ?? null;
-  }, [hqShipmentId, state]);
-
-  const saveHqItems = useCallback(
-    async (payload: HqInvoiceSavePayload) => {
-      if (!hqShipment) return;
-      await mutate({
-        action: "UPDATE",
-        id: hqShipment.id,
-        patch: {
-          invoiceItems: payload.invoiceItems,
-          invoiceDeclarations: payload.invoiceDeclarations,
-        },
-      });
-    },
-    [hqShipment, mutate]
-  );
-
-  const saveHqCatalog = useCallback(
-    async (catalog: InvoiceCatalog) => {
-      await mutate({ action: "SET_INVOICE_CATALOG", catalog });
-    },
-    [mutate]
-  );
 
   if (status === "loading" || !state) {
     return (
       <div className="mx-auto max-w-[1600px] px-4 py-16 text-center text-apple-secondary">
         <p className="font-semibold text-apple-label">Đang tải dữ liệu…</p>
       </div>
-    );
-  }
-
-  if (hqShipmentId && hqDesktop) {
-    if (!hqShipment) {
-      return (
-        <div className="fixed inset-0 z-[700] flex flex-col items-center justify-center gap-3 bg-white px-6 dark:bg-dashboard-surface-dark">
-          <p className="text-center text-sm text-dashboard-muted dark:text-slate-400">
-            Không tìm thấy lô hàng cho trang HQ.
-          </p>
-          <button
-            type="button"
-            onClick={closeHqPage}
-            className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
-          >
-            Quay lại
-          </button>
-        </div>
-      );
-    }
-    return (
-      <ShipmentInvoicePage
-        shipment={hqShipment}
-        customerDirectory={state.customers}
-        invoiceCatalog={state.invoiceCatalog}
-        onSave={saveHqItems}
-        onSaveCatalog={saveHqCatalog}
-        onClose={closeHqPage}
-      />
     );
   }
 
@@ -516,53 +343,20 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
             <SyncBadge status={status} socketConnected={socketConnected} />
-            <button
-              type="button"
-              onClick={toggleForceMobile}
-              className={`inline-flex h-8 items-center gap-1 rounded-full border px-2.5 text-[10px] font-semibold shadow-dashboard-card transition-all active:scale-95 ${
-                forceMobile
-                  ? "border-sky-400/50 bg-sky-500/15 text-sky-700 dark:border-sky-400/40 dark:bg-sky-500/20 dark:text-sky-200"
-                  : "border-black/[0.05] bg-white text-dashboard-muted hover:text-dashboard-primary dark:border-white/[0.08] dark:bg-[#111625] dark:text-dashboard-muted-dark dark:hover:text-dashboard-primary-dark"
-              }`}
-              title={forceMobile ? "Tắt xem mobile — về giao diện desktop" : "Bật xem mobile trên màn hình rộng (thiết kế UI)"}
-              aria-pressed={forceMobile}
-            >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
-              </svg>
-              Mobile
-            </button>
-            <button
-              type="button"
-              onClick={toggleDarkMode}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/[0.05] bg-white text-dashboard-primary shadow-dashboard-card hover:bg-dashboard-canvas dark:border-white/[0.08] dark:bg-[#111625] dark:text-dashboard-primary-dark dark:hover:bg-ops-elevated transition-all duration-200 active:scale-90"
-              title={darkMode ? "Chế độ sáng" : "Chế độ tối (Ops ban đêm)"}
-              aria-label={darkMode ? "Bật chế độ sáng" : "Bật chế độ tối"}
-            >
-              {darkMode ? (
-                <svg className="h-3.5 w-3.5 transition-transform duration-300 hover:rotate-45" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-                </svg>
-              ) : (
-                <svg className="h-3.5 w-3.5 transition-transform duration-300 hover:rotate-12" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
-                </svg>
-              )}
-            </button>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className={isMobile ? "hidden" : "hidden md:flex md:flex-wrap md:items-center md:gap-2"}>
+          <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
             <NewBookingButton
               activeWarehouse={activeWarehouse}
               onAdd={(wh) => void addBlankRowForWarehouse(wh)}
             />
             <DashboardToolbarButton
               onClick={() => setCustomerDirOpen(true)}
-              title="Danh bạ khách, hồ sơ in, agent, mẫu phiếu cân"
+              title="Danh bạ khách, hồ sơ in"
             >
-              Khách & in
+              Khách
             </DashboardToolbarButton>
             <DashboardToolbarButton onClick={() => setAirlineLabelSettingsOpen(true)} title="Tên hãng in trên tem nhãn">
               Tên hãng
@@ -598,28 +392,9 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
                 isViewingToday={isViewingToday}
               />
             </div>
-            {isMobile ? (
-              <button
-                type="button"
-                onClick={() => setSheetImportOpen(true)}
-                title="Nhập lô từ Google Sheet BOOK HẰNG NGÀY"
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-50 px-3 text-[11px] font-semibold text-emerald-900 shadow-dashboard-card active:scale-[0.98] dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-100"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 7.5h9M12 3v9" />
-                </svg>
-                Sheet
-              </button>
-            ) : null}
           </div>
         </div>
       </header>
-
-      {forceMobile ? (
-        <p className="mb-2 rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-1.5 text-center text-[11px] font-semibold text-sky-800 dark:border-sky-400/25 dark:bg-sky-500/10 dark:text-sky-200">
-          Chế độ xem mobile — thiết kế giao diện. Nhấn nút <span className="font-bold">Mobile</span> góc phải để tắt.
-        </p>
-      ) : null}
 
       <div className={isMobile ? "space-y-3" : "space-y-3 md:hidden"}>
         <WarehouseGridPicker
@@ -679,9 +454,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         rows={filteredViewRows}
         allRows={allRows}
         customerDirectory={state.customers}
-        globalAgents={state.globalAgents}
-        scscWeighPrintSettings={scscWeighPrintSettings}
-        saveScscWeighPrintSettings={saveScscWeighPrintSettings}
         activeWarehouse={activeWarehouse}
         onActiveWarehouseChange={handleActiveWarehouseChange}
         metricRows={filteredViewRows}
@@ -694,28 +466,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onDelete={onDelete}
         onPrint={requestPrintLabel}
         viewSessionYmd={selectedYmd}
-        ecargoMap={ecargoRegister.map}
-        onEcargoVehicleChange={ecargoRegister.setVehicle}
-        onEcargoDriverChange={ecargoRegister.setDriver}
-        onEcargoWarehouseChange={(id, arrivalDate, arrivalTimeSlot) =>
-          ecargoRegister.setEcargoLine(id, { arrivalDate, arrivalTimeSlot })
-        }
-        onEcargoVehicleTypeChange={(id, vehicleType) =>
-          ecargoRegister.setEcargoLine(id, {
-            vehicleType: vehicleType as import("../utils/ecargoWarehousePlan").EcargoVehicleType,
-          })
-        }
-        onApplyEcargoPrefill={ecargoRegister.applyCustomerEcargoPrefill}
-        getEcargoSaveStatus={ecargoRegister.getSaveStatus}
-        getEcargoJob={ecargoRegister.getJob}
-        refreshEcargoJob={ecargoRegister.refreshJob}
-        onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
-        onEcargoFetchQr={(row) => ecargoRegister.fetchQr(row, selectedYmd)}
-        isEcargoFetchingQr={ecargoRegister.isFetchingQr}
-        onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
-        isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
-        openEcargoRequestId={openPanelRequestId}
-        onEcargoRequestHandled={clearOpenEcargoPanelRequest}
       />
 
       <MobileShipmentCards
@@ -724,34 +474,13 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         onSelect={setSelectedId}
         onUpdate={onUpdate}
         onDelete={onDelete}
+        onPrint={requestPrintLabel}
         customerDirectory={state.customers}
         activeWarehouse={activeWarehouse}
         searchActive={searchActive}
         pinnedOpenWarehouses={searchHighlightWarehouses}
         highlightedShipmentId={highlightedShipmentId}
         viewSessionYmd={selectedYmd}
-        ecargoMap={ecargoRegister.map}
-        onEcargoVehicleChange={ecargoRegister.setVehicle}
-        onEcargoDriverChange={ecargoRegister.setDriver}
-        onEcargoWarehouseChange={(id, arrivalDate, arrivalTimeSlot) =>
-          ecargoRegister.setEcargoLine(id, { arrivalDate, arrivalTimeSlot })
-        }
-        onEcargoVehicleTypeChange={(id, vehicleType) =>
-          ecargoRegister.setEcargoLine(id, {
-            vehicleType: vehicleType as import("../utils/ecargoWarehousePlan").EcargoVehicleType,
-          })
-        }
-        onApplyEcargoPrefill={ecargoRegister.applyCustomerEcargoPrefill}
-        getEcargoSaveStatus={ecargoRegister.getSaveStatus}
-        getEcargoJob={ecargoRegister.getJob}
-        refreshEcargoJob={ecargoRegister.refreshJob}
-        onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
-        onEcargoFetchQr={(row) => ecargoRegister.fetchQr(row, selectedYmd)}
-        isEcargoFetchingQr={ecargoRegister.isFetchingQr}
-        onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
-        isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
-        openEcargoRequestId={openPanelRequestId}
-        onEcargoRequestHandled={clearOpenEcargoPanelRequest}
         onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
         onQuickEdit={(row) => openMobileEdit(row)}
       />
@@ -771,27 +500,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         focusField={mobileEditFocus}
         sessionDateYmd={selectedYmd}
         customerDirectory={state.customers}
-        globalAgents={state.globalAgents}
-        ecargoMap={ecargoRegister.map}
-        onEcargoVehicleChange={ecargoRegister.setVehicle}
-        onEcargoDriverChange={ecargoRegister.setDriver}
-        onEcargoWarehouseChange={(id, arrivalDate, arrivalTimeSlot) =>
-          ecargoRegister.setEcargoLine(id, { arrivalDate, arrivalTimeSlot })
-        }
-        onEcargoVehicleTypeChange={(id, vehicleType) =>
-          ecargoRegister.setEcargoLine(id, {
-            vehicleType: vehicleType as import("../utils/ecargoWarehousePlan").EcargoVehicleType,
-          })
-        }
-        onApplyEcargoPrefill={ecargoRegister.applyCustomerEcargoPrefill}
-        getEcargoSaveStatus={ecargoRegister.getSaveStatus}
-        getEcargoJob={ecargoRegister.getJob}
-        refreshEcargoJob={ecargoRegister.refreshJob}
-        onEcargoAutoRegister={(row, opts) => ecargoRegister.autoRegister(row, selectedYmd, opts)}
-        onEcargoFetchQr={(row) => ecargoRegister.fetchQr(row, selectedYmd)}
-        isEcargoFetchingQr={ecargoRegister.isFetchingQr}
-        onSaveCustomerVehicleForEcargo={saveCustomerVehicleForEcargo}
-        isEcargoAutoRegistering={ecargoRegister.isAutoRegistering}
         onClose={() => {
           setMobileEditShipment(null);
           setMobileEditFocus(null);
@@ -805,22 +513,10 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
       <CustomerDirectoryManager
         open={customerDirOpen}
         initial={state.customers}
-        globalAgentsInitial={state.globalAgents ?? defaultGlobalAgentCatalog()}
-        scscWeighPrintSettingsInitial={
-          state.scscWeighPrintSettings ?? defaultScscWeighPrintSettings()
-        }
         onClose={() => setCustomerDirOpen(false)}
-        onSave={async (payload) => {
-          await mutate({ action: "SET_GLOBAL_AGENTS", catalog: payload.globalAgents });
-          await mutate({ action: "SET_CUSTOMERS", customers: payload.customers });
-          if (payload.scscWeighPrintSettings) {
-            await mutate({
-              action: "SET_SCSC_WEIGH_PRINT_SETTINGS",
-              settings: payload.scscWeighPrintSettings,
-            });
-          }
+        onSave={async (customers) => {
+          await mutate({ action: "SET_CUSTOMERS", customers });
         }}
-        onApplyUnmatchedShipments={applyUnmatchedCustomerSuggestions}
       />
 
       <AirlineLabelSettingsModal
@@ -846,12 +542,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
           }
           setSheetImportOpen(false);
         }}
-      />
-
-      <EcargoToastStack
-        items={ecargoToasts}
-        onDismiss={dismissEcargoToast}
-        onAction={handleEcargoToastAction}
       />
     </div>
   );
@@ -906,4 +596,3 @@ function StatInline({ label, value }: { label: string; value: string | number })
     </span>
   );
 }
-

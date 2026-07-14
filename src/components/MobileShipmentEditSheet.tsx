@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Shipment, ShipmentStatus } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import type { GlobalAgentCatalog } from "../types/globalAgents";
 import { DESTINATIONS } from "../data/customers";
-import { findCustomerEntry } from "../utils/mapBookingToScaleTicketFormData";
+import { findCustomerEntry } from "../utils/customerBookingResolve";
 import { buildShipmentPatchForCustomerSelection, normalizeCustomerNameInput } from "../utils/customerShipmentPatch";
 import {
   buildShipmentPatchForSavedConsignee,
@@ -20,24 +19,11 @@ import {
   SCSC_GOODS_DESCRIPTION_PRINT_MAX,
   SCSC_OTHER_REQUIREMENTS_PRINT_MAX,
 } from "../utils/scscPrintContent";
-import {
-  ECARGO_VEHICLE_MIN,
-  EcargoKhoScscCenterModal,
-  EcargoKhoScscTriggerButton,
-} from "./EcargoKhoScscModal";
-import type { EcargoAutoRegisterOpts } from "./DesktopShipmentTable";
-import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
-import { resolveEcargoVehiclePrefill, vehicleDisplayLabel } from "../utils/customerVehicleCore";
-import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStorage";
-import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
-import type { EcargoJobRecord } from "../types/ecargoJob";
-import { EcargoRowNotice } from "./EcargoRowNotice";
-import { isEcargoJobRunning, isEcargoJobTerminal } from "../types/ecargoJob";
 import { CustomerPickerField } from "./CustomerPickerField";
 import { buildShipmentCneeDisplayLines } from "../utils/shipmentCneeCopyBlock";
 import { copyTextToClipboard } from "../utils/copyTextToClipboard";
 import { MOBILE, mobileSheetBackdrop } from "../styles/mobileOpsStyles";
-import { useMobileLayout } from "../hooks/useMobileLayout";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { OPS } from "../styles/opsModalStyles";
 
 type TabId = "lot" | "notify" | "dim";
@@ -49,23 +35,8 @@ type Props = {
   shipment: Shipment | null;
   sessionDateYmd: string;
   customerDirectory: readonly CustomerDirectoryEntry[];
-  globalAgents?: GlobalAgentCatalog;
   initialTab?: TabId;
   focusField?: MobileEditFocus;
-  ecargoMap?: EcargoKhoScscPersistedMap;
-  onEcargoVehicleChange?: (id: string, raw: string) => void;
-  onEcargoDriverChange?: (id: string, driverName: string, driverId: string) => void;
-  onEcargoWarehouseChange?: (id: string, arrivalDate: string, arrivalTimeSlot: string) => void;
-  onEcargoVehicleTypeChange?: (id: string, vehicleType: string) => void;
-  onApplyEcargoPrefill?: (row: Shipment) => void;
-  getEcargoSaveStatus?: (id: string) => EcargoSaveStatus;
-  getEcargoJob?: (id: string) => EcargoJobRecord | undefined;
-  refreshEcargoJob?: (id: string) => void | Promise<void>;
-  onEcargoAutoRegister?: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
-  onEcargoFetchQr?: (row: Shipment) => void | Promise<void>;
-  onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
-  isEcargoAutoRegistering?: (id: string) => boolean;
-  isEcargoFetchingQr?: (id: string) => boolean;
   onClose: () => void;
   onSave: (patch: Partial<Shipment>) => void;
 };
@@ -81,30 +52,14 @@ export function MobileShipmentEditSheet({
   shipment,
   sessionDateYmd,
   customerDirectory,
-  globalAgents,
   initialTab = "lot",
   focusField = null,
-  ecargoMap = {},
-  onEcargoVehicleChange,
-  onEcargoDriverChange,
-  onEcargoWarehouseChange,
-  onEcargoVehicleTypeChange,
-  onApplyEcargoPrefill,
-  getEcargoSaveStatus,
-  getEcargoJob,
-  refreshEcargoJob,
-  onEcargoAutoRegister,
-  onEcargoFetchQr,
-  onSaveCustomerVehicleForEcargo,
-  isEcargoAutoRegistering,
-  isEcargoFetchingQr,
   onClose,
   onSave,
 }: Props) {
-  const { isMobile } = useMobileLayout();
+  const isMobile = useIsMobile();
   const [tab, setTab] = useState<TabId>("lot");
   const [dimOpen, setDimOpen] = useState(false);
-  const [ecargoOpen, setEcargoOpen] = useState(false);
   const [copyOk, setCopyOk] = useState(false);
   const awbRef = useRef<HTMLInputElement>(null);
   const hawbRef = useRef<HTMLInputElement>(null);
@@ -132,7 +87,16 @@ export function MobileShipmentEditSheet({
   const [dimLines, setDimLines] = useState<Shipment["dimLines"]>(null);
 
   const applyCustomerFromDirectory = (name: string, entry?: CustomerDirectoryEntry) => {
-    const patch = buildShipmentPatchForCustomerSelection(customerDirectory, name, entry, globalAgents);
+    const patch = buildShipmentPatchForCustomerSelection(
+      customerDirectory,
+      name,
+      entry,
+      {
+        customerShipperId: shipment?.customerShipperId,
+        customerConsigneeId,
+        customerGoodsId: shipment?.customerGoodsId,
+      }
+    );
     setCustomer(normalizeCustomerNameInput(patch.customer ?? name));
     setCustomerId((patch.customerId ?? "").trim());
     if (patch.customerConsigneeId) {
@@ -150,7 +114,6 @@ export function MobileShipmentEditSheet({
     if (!open || !shipment) return;
     setTab(initialTab);
     setDimOpen(false);
-    setEcargoOpen(false);
     setCopyOk(false);
     setAwb((shipment.awb ?? "").trim());
     setHawb((shipment.hawb ?? "").trim());
@@ -168,7 +131,7 @@ export function MobileShipmentEditSheet({
     setStatus(shipment.status);
     setDimWeightKg(shipment.dimWeightKg);
     setDimLines(shipment.dimLines);
-  }, [open, shipment?.id, initialTab]);
+  }, [open, shipment, initialTab]);
 
   useEffect(() => {
     if (!open || !focusField) return;
@@ -196,22 +159,21 @@ export function MobileShipmentEditSheet({
 
   const entry = findCustomerEntry(shipment, customerDirectory);
   const savedConsignees = entry?.savedConsignees ?? [];
-  const showEcargo = isScscWarehouse(shipment.warehouse);
   const showScscPrintFields = isScscWarehouse(shipment.warehouse);
-  const ecargoLine = ecargoMap[shipment.id];
-  const vehicleForEcargo = ecargoLine?.vehicleInput ?? "";
-  const ecargoPrefill = resolveEcargoVehiclePrefill(shipment, customerDirectory, vehicleForEcargo, {
-    driverName: ecargoLine?.driverName,
-    driverId: ecargoLine?.driverId,
-  });
-  const effectiveEcargoVehicle = vehicleForEcargo.trim() || ecargoPrefill.vehicleInput;
-  const ecargoReady = effectiveEcargoVehicle.trim().length >= ECARGO_VEHICLE_MIN;
-  const ecargoJob = getEcargoJob?.(shipment.id);
 
   const handleSave = () => {
     const ymd = parseBookingDateLoose(flightDateText.trim(), sessionYear);
     const flightDate = ymd ? formatYmdToFlightDateDdMon(ymd) : flightDateText.trim();
-    const customerPatch = buildShipmentPatchForCustomerSelection(customerDirectory, customer, undefined, globalAgents);
+    const customerPatch = buildShipmentPatchForCustomerSelection(
+      customerDirectory,
+      customer,
+      undefined,
+      {
+        customerShipperId: shipment.customerShipperId,
+        customerConsigneeId,
+        customerGoodsId: shipment.customerGoodsId,
+      }
+    );
     const consigneePatch = customerConsigneeId
       ? buildShipmentPatchForSavedConsignee(savedConsignees.find((x) => x.id === customerConsigneeId))
       : {};
@@ -378,7 +340,7 @@ export function MobileShipmentEditSheet({
                 {showScscPrintFields ? (
                   <>
                     <Field
-                      label="Tên hàng in phiếu cân"
+                      label="Tên hàng"
                       hint={`${goodsDescriptionPrint.length}/${SCSC_GOODS_DESCRIPTION_PRINT_MAX}`}
                     >
                       <textarea
@@ -392,7 +354,7 @@ export function MobileShipmentEditSheet({
                       />
                     </Field>
                     <Field
-                      label="Yêu cầu khác in phiếu"
+                      label="Yêu cầu xử lý"
                       hint={`${otherRequirementsPrint.length}/${SCSC_OTHER_REQUIREMENTS_PRINT_MAX}`}
                     >
                       <textarea
@@ -453,7 +415,7 @@ export function MobileShipmentEditSheet({
                   </button>
                 </div>
                 <p className="text-[11px] leading-relaxed text-apple-tertiary dark:text-slate-500">
-                  Trên điện thoại chỉ cần xem và sao chép thông báo. Cấu hình in chi tiết dùng trên máy tính.
+                  Hồ sơ khách và CNEE chi tiết được quản lý trong Danh bạ.
                 </p>
               </div>
             ) : null}
@@ -505,33 +467,6 @@ export function MobileShipmentEditSheet({
                     Nhập DIM
                   </button>
                 </div>
-                {showEcargo && onEcargoVehicleChange && onEcargoAutoRegister && getEcargoSaveStatus ? (
-                  <div className="rounded-2xl border border-sky-200/80 bg-sky-50/50 p-4 dark:border-sky-400/25 dark:bg-sky-500/10">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[12px] font-semibold text-sky-900 dark:text-sky-200">eCargo kho SCSC</p>
-                      <EcargoKhoScscTriggerButton
-                        rowId={shipment.id}
-                        open={ecargoOpen}
-                        hasVehicle={ecargoReady}
-                        job={ecargoJob}
-                        onClick={() => {
-                          const opening = !ecargoOpen;
-                          setEcargoOpen((v) => !v);
-                          if (opening) onApplyEcargoPrefill?.(shipment);
-                        }}
-                        title={
-                          ecargoPrefill.defaultVehicle
-                            ? `Xe mặc định: ${vehicleDisplayLabel(ecargoPrefill.defaultVehicle)}`
-                            : undefined
-                        }
-                      />
-                    </div>
-                    {ecargoJob &&
-                    (isEcargoJobRunning(ecargoJob.status) || isEcargoJobTerminal(ecargoJob.status)) ? (
-                      <EcargoRowNotice job={ecargoJob} awb={shipment.awb} compact className="mt-2" />
-                    ) : null}
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </div>
@@ -554,43 +489,6 @@ export function MobileShipmentEditSheet({
           row={{ ...shipment, dimWeightKg, dimLines }}
           onClose={() => setDimOpen(false)}
           onSave={onDimSave}
-        />
-      ) : null}
-
-      {ecargoOpen && showEcargo && onEcargoVehicleChange && onEcargoAutoRegister && getEcargoSaveStatus ? (
-        <EcargoKhoScscCenterModal
-          rowId={shipment.id}
-          row={shipment}
-          customerDirectory={customerDirectory}
-          vehicleForEcargo={vehicleForEcargo}
-          driverNameForEcargo={ecargoLine?.driverName ?? ""}
-          driverIdForEcargo={ecargoLine?.driverId ?? ""}
-          arrivalDateForEcargo={ecargoLine?.arrivalDate ?? ""}
-          arrivalTimeSlotForEcargo={ecargoLine?.arrivalTimeSlot ?? ""}
-          vehicleTypeForEcargo={ecargoLine?.vehicleType ?? ""}
-          viewSessionYmd={sessionDateYmd}
-          saveStatus={getEcargoSaveStatus(shipment.id)}
-          job={ecargoJob}
-          markedSubmitted={ecargoLine?.markedSubmitted}
-          autoRegistering={isEcargoAutoRegistering?.(shipment.id) ?? false}
-          onClose={() => setEcargoOpen(false)}
-          onVehicleChange={(raw) => onEcargoVehicleChange(shipment.id, raw)}
-          onDriverChange={(name, id) => onEcargoDriverChange?.(shipment.id, name, id)}
-          onWarehouseArrivalChange={(date, slot) => onEcargoWarehouseChange?.(shipment.id, date, slot)}
-          onVehicleTypeChange={(type) => onEcargoVehicleTypeChange?.(shipment.id, type)}
-          onAutoRegister={async (opts) => {
-            await onEcargoAutoRegister(shipment, opts);
-          }}
-          onFetchQr={
-            onEcargoFetchQr
-              ? async () => {
-                  await onEcargoFetchQr(shipment);
-                }
-              : undefined
-          }
-          fetchQrBusy={isEcargoFetchingQr?.(shipment.id) ?? false}
-          onSaveVehicleAsDefault={onSaveCustomerVehicleForEcargo}
-          onRefreshJob={() => void refreshEcargoJob?.(shipment.id)}
         />
       ) : null}
     </>

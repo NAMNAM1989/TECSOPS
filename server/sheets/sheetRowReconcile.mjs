@@ -70,6 +70,7 @@ export function sheetRowToPatch(row, sessionDate, customers, lookupCustomerCode,
     warehouse: row.warehouse,
     pcs: row.pcs,
     kg: row.kg,
+    dimWeightKg: row.dimWeightKg ?? null,
     customer,
     customerCode: lookupCustomerCode(customers, customer),
     customerId: lookupCustomerId(customers, customer),
@@ -91,6 +92,7 @@ export function sheetRowNeedsUpdate(existing, row, sessionDate, customers, looku
   if (normStr(existing.dest).toUpperCase() !== normStr(patch.dest).toUpperCase()) return true;
   if (normNum(existing.pcs) !== normNum(patch.pcs)) return true;
   if (normNum(existing.kg) !== normNum(patch.kg)) return true;
+  if (normNum(existing.dimWeightKg) !== normNum(patch.dimWeightKg)) return true;
   if (normStr(existing.note) !== normStr(patch.note)) return true;
   if (normStr(existing.consigneeNamePrint) !== normStr(patch.consigneeNamePrint)) return true;
   return false;

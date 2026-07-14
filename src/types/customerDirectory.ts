@@ -39,7 +39,7 @@ export type CustomerSavedShipper = {
   taxCode: string;
 };
 
-/** Xe / tài xế lưu sẵn theo khách — dùng khi đăng ký eCargo KHO SCSC. */
+/** Xe / tài xế lưu sẵn theo khách. */
 export type CustomerSavedVehicle = {
   id: string;
   /** Biển số xe (VD: 50H17480). */
@@ -89,9 +89,19 @@ export type CustomerDirectoryEntry = {
 
   id: string;
 
+  /** Mã khách (Customer Code) — khóa đồng bộ, vd. GLO000001. */
   code: string;
 
   name: string;
+
+  /**
+   * Prefix sinh mã (customs_ops) — 2–5 chữ A–Z.
+   * Khi tạo mới để trống Code, hệ thống cấp `{PREFIX}{000001…}`.
+   */
+  prefix?: string;
+
+  /** Short Code — tối đa 10 ký tự, gõ tắt tìm kiếm. */
+  shortCode?: string;
 
   /** @deprecated Chỉ dùng khi migrate JSON cũ — dữ liệu mới nằm trong `savedShippers`. */
   shipperName?: string;
@@ -110,7 +120,7 @@ export type CustomerDirectoryEntry = {
   defaultConsigneeId?: string;
   /** Tên hàng mặc định khi có nhiều `savedGoods`. */
   defaultGoodsId?: string;
-  /** Xe mặc định khi có nhiều `savedVehicles` (đăng ký eCargo). */
+  /** Xe mặc định khi có nhiều `savedVehicles`. */
   defaultVehicleId?: string;
 
   /** Shipper lưu sẵn (ưu tiên khi có `customerShipperId` trên booking). */
@@ -122,7 +132,7 @@ export type CustomerDirectoryEntry = {
   /** Tên hàng lưu sẵn (ưu tiên khi có `customerGoodsId` trên booking). */
   savedGoods?: CustomerSavedGoods[];
 
-  /** Xe / tài xế lưu sẵn — auto-fill eCargo theo mã khách (Agent). */
+  /** Xe / tài xế lưu sẵn theo mã khách. */
   savedVehicles?: CustomerSavedVehicle[];
 
   /** Yêu cầu khác in trên phiếu cân SCSC (theo từng khách). */

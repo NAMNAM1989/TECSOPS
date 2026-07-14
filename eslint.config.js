@@ -38,7 +38,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["server/ecargo/**/*.mjs", "server/sheets/**/*.mjs", "server/stateStore.mjs"],
+    files: ["server/**/*.mjs"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
@@ -53,6 +53,7 @@ export default tseslint.config(
         clearTimeout: "readonly",
         setInterval: "readonly",
         clearInterval: "readonly",
+        structuredClone: "readonly",
         document: "readonly",
         window: "readonly",
         getComputedStyle: "readonly",

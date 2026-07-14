@@ -1,8 +1,7 @@
 import pg from "pg";
 import { normalizeAirlineLabelOverridesLoose } from "./airlineLabelOverridesNormalize.mjs";
 import { normalizePrinterProfilesCatalogLoose } from "./printerProfilesNormalize.mjs";
-import { normalizeGlobalAgentsLoose } from "./globalAgentsNormalize.mjs";
-import { normalizeScscWeighPrintSettingsLoose } from "./scscWeighPrintSettingsNormalize.mjs";
+import { postgresSslOption } from "./postgresSsl.mjs";
 import {
   ensureAirlineCatalogSchema,
   loadAirlineDisplayOverrides,
@@ -11,12 +10,25 @@ import {
   seedAirlineCatalogIfEmpty,
 } from "./airlineCatalog.mjs";
 import { ensureAirportSchema, seedAirportsIfEmpty } from "./airportCatalog.mjs";
-import { normalizeEcargoKhoScscMapLoose } from "./ecargoKhoScscNormalize.mjs";
 import { parseCustomersLoose } from "./customerDirectoryValidate.mjs";
 
 const { Pool } = pg;
 
 const DEFAULT_STATE_KEY = "tecsops:state";
+
+function normalizeWarehouse(raw, fallback = "TECS-TCS") {
+  const u = String(raw ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/_/g, "-");
+  if (u === "TECS-SCSC" || u === "KHO-SCSC") return "TECS-SCSC";
+  if (u === "TECS-TCS" || u === "KHO-TCS") return "TECS-TCS";
+  if (u.includes("SCSC") || u.includes("SCCS")) return "TECS-SCSC";
+  if (u.includes("TCS")) return "TECS-TCS";
+  return fallback;
+}
+
 const TABLE_NAME = "app_state";
 const CUSTOMERS_TABLE = "customers";
 const CUSTOMER_PROFILES_TABLE = "customer_print_profiles";
@@ -28,13 +40,24 @@ const SHIPMENTS_TABLE = "shipments";
 const STATE_META_TABLE = "state_meta";
 
 function stateKey() {
-  return process.env.POSTGRES_STATE_KEY || process.env.REDIS_STATE_KEY || DEFAULT_STATE_KEY;
+  return process.env.POSTGRES_STATE_KEY || DEFAULT_STATE_KEY;
+}
+
+/** Bỏ key legacy khỏi blob JSON khi lưu — load vẫn bỏ qua nếu còn. */
+function stripLegacyStateKeys(state) {
+  if (!state || typeof state !== "object") return state;
+  const next = { ...state };
+  delete next.globalAgents;
+  delete next.scscWeighPrintSettings;
+  delete next.ecargoKhoScsc;
+  delete next.invoiceCatalog;
+  return next;
 }
 
 function makePool(databaseUrl) {
   return new Pool({
     connectionString: databaseUrl,
-    ssl: databaseUrl.includes("railway.internal") ? false : { rejectUnauthorized: false },
+    ssl: postgresSslOption(databaseUrl),
     max: 5,
     idleTimeoutMillis: 30_000,
   });
@@ -315,18 +338,6 @@ function savedShipperFromRow(row) {
   };
 }
 
-function savedAgentFromRow(row) {
-  return {
-    id: row.id || "",
-    label: row.label || "",
-    agentName: row.agent_name || "",
-    agentAddress: row.agent_address || "",
-    agentPhone: row.agent_phone || "",
-    agentEmail: row.agent_email || "",
-    agentTaxCode: row.agent_vat_code || "",
-  };
-}
-
 function partyFromRow(row) {
   const type = str(row.party_type).toUpperCase();
   const allowed = new Set(["SHIPPER", "CNEE", "NOTIFY", "OTHER"]);
@@ -354,6 +365,8 @@ function mergeCustomerBlobProfile(base, fromBlob) {
   if (!fromBlob || typeof fromBlob !== "object") return base;
   return {
     ...base,
+    ...(fromBlob.prefix ? { prefix: fromBlob.prefix } : {}),
+    ...(fromBlob.shortCode ? { shortCode: fromBlob.shortCode } : {}),
     savedGoods: fromBlob.savedGoods ?? base.savedGoods,
     savedVehicles: fromBlob.savedVehicles ?? [],
     ...(fromBlob.defaultShipperId ? { defaultShipperId: fromBlob.defaultShipperId } : {}),
@@ -379,7 +392,7 @@ function shipmentFromRow(row) {
     cutoffNote: row.cutoff_note,
     note: row.note,
     dest: row.dest,
-    warehouse: row.warehouse,
+    warehouse: normalizeWarehouse(row.warehouse),
     pcs: row.pcs,
     kg: row.kg,
     dimWeightKg: row.dim_weight_kg,
@@ -416,9 +429,9 @@ function shipmentFromRow(row) {
 }
 
 async function loadRelationalSnapshot(client, key) {
-  const [customerRes, consigneeRes, shipperRes, partyRes, shipmentRes, metaRes, jsonRes] = await Promise.all([
-    client.query(
-      `
+  // `pg` không hỗ trợ chạy nhiều query đồng thời trên cùng một client.
+  // Chạy tuần tự để tránh hàng đợi nội bộ/deprecation và giữ đúng transaction hiện tại.
+  const customerRes = await client.query(`
       SELECT c.id, c.code, c.name,
              p.shipper_name, p.shipper_address, p.shipper_phone, p.shipper_email, p.shipper_vat_code,
              p.agent_name, p.agent_address, p.agent_phone, p.agent_email, p.agent_vat_code,
@@ -426,33 +439,38 @@ async function loadRelationalSnapshot(client, key) {
       FROM ${CUSTOMERS_TABLE} c
       LEFT JOIN ${CUSTOMER_PROFILES_TABLE} p ON p.customer_id = c.id
       ORDER BY c.code ASC, c.name ASC
-      `
-    ),
-    client.query(
-      `SELECT * FROM ${CUSTOMER_CONSIGNEES_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`
-    ),
-    client.query(`SELECT * FROM ${CUSTOMER_SHIPPERS_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`),
-    client.query(
-      `SELECT * FROM ${CUSTOMER_PARTIES_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`
-    ),
-    client.query(`SELECT * FROM ${SHIPMENTS_TABLE} ORDER BY session_date ASC, warehouse ASC, stt ASC, id ASC`),
-    client.query(`SELECT version FROM ${STATE_META_TABLE} WHERE id = $1`, [key]),
-    client.query(`SELECT state FROM ${TABLE_NAME} WHERE id = $1`, [key]),
-  ]);
-  if (customerRes.rows.length === 0 && shipmentRes.rows.length === 0) return null;
+  `);
+  const consigneeRes = await client.query(
+    `SELECT * FROM ${CUSTOMER_CONSIGNEES_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`
+  );
+  const shipperRes = await client.query(
+    `SELECT * FROM ${CUSTOMER_SHIPPERS_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`
+  );
+  const partyRes = await client.query(
+    `SELECT * FROM ${CUSTOMER_PARTIES_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`
+  );
+  const shipmentRes = await client.query(
+    `SELECT * FROM ${SHIPMENTS_TABLE} ORDER BY session_date ASC, warehouse ASC, stt ASC, id ASC`
+  );
+  const metaRes = await client.query(`SELECT version FROM ${STATE_META_TABLE} WHERE id = $1`, [key]);
+  const jsonRes = await client.query(`SELECT state FROM ${TABLE_NAME} WHERE id = $1`, [key]);
   const blob = jsonRes.rows[0]?.state;
+  // DB cũ có thể chỉ có blob và chưa có state_meta: khi đó giữ fallback
+  // để migration đọc được state cũ. Khi state_meta đã tồn tại, snapshot
+  // relational rỗng là trạng thái hợp lệ (ví dụ người dùng xóa hết lô).
+  if (
+    customerRes.rows.length === 0 &&
+    shipmentRes.rows.length === 0 &&
+    metaRes.rows.length === 0
+  ) {
+    return null;
+  }
   const blobOverrides =
     blob && typeof blob === "object" ? blob.airlineLabelOverrides : undefined;
   await migrateAirlineOverridesFromBlob(client, blobOverrides);
   const airlineLabelOverrides = await loadAirlineDisplayOverrides(client);
   const printerProfiles = normalizePrinterProfilesCatalogLoose(
     blob && typeof blob === "object" ? blob.printerProfiles : undefined
-  );
-  const globalAgents = normalizeGlobalAgentsLoose(
-    blob && typeof blob === "object" ? blob.globalAgents : undefined
-  );
-  const scscWeighPrintSettings = normalizeScscWeighPrintSettingsLoose(
-    blob && typeof blob === "object" ? blob.scscWeighPrintSettings : undefined
   );
   const consigneeByCustomer = new Map();
   for (const r of consigneeRes.rows) {
@@ -506,11 +524,6 @@ async function loadRelationalSnapshot(client, key) {
     }),
     airlineLabelOverrides,
     printerProfiles,
-    globalAgents,
-    scscWeighPrintSettings,
-    ecargoKhoScsc: normalizeEcargoKhoScscMapLoose(
-      blob && typeof blob === "object" ? blob.ecargoKhoScsc : undefined
-    ),
   };
 }
 
@@ -652,7 +665,7 @@ async function replaceRelationalSnapshot(client, key, state) {
         shipper_name_print, shipper_address_print, shipper_phone_print, shipper_email_print, tax_code_print,
         agent_name_print, agent_address_print, agent_phone_print, agent_email_print, agent_tax_code_print,
         consignee_name_print, consignee_address_print, consignee_phone_print, consignee_email_print, notify_name_print,
-        status, invoice_items, invoice_declarations
+        status
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         $13,$14,$15,$16::jsonb,$17,
@@ -661,7 +674,7 @@ async function replaceRelationalSnapshot(client, key, state) {
         $28,$29,$30,$31,$32,
         $33,$34,$35,$36,$37,
         $38,$39,$40,$41,$42,
-        $43, $44::jsonb, $45::jsonb
+        $43
       )
       `,
       [
@@ -708,16 +721,11 @@ async function replaceRelationalSnapshot(client, key, state) {
         str(s.consigneeEmailPrint),
         str(s.notifyNamePrint),
         str(s.status),
-        jsonOrNull(Array.isArray(s.invoiceItems) && s.invoiceItems.length > 0 ? s.invoiceItems : null),
-        jsonOrNull(
-          Array.isArray(s.invoiceDeclarations) && s.invoiceDeclarations.length > 0
-            ? s.invoiceDeclarations
-            : null
-        ),
       ]
     );
   }
 
+  const blobState = stripLegacyStateKeys(state);
   await client.query(
     `
     INSERT INTO ${STATE_META_TABLE} (id, version, updated_at)
@@ -733,7 +741,7 @@ async function replaceRelationalSnapshot(client, key, state) {
     ON CONFLICT (id)
     DO UPDATE SET state = EXCLUDED.state, updated_at = now()
     `,
-    [key, JSON.stringify(state)]
+    [key, JSON.stringify(blobState)]
   );
 }
 

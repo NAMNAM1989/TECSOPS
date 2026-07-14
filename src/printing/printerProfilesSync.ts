@@ -9,12 +9,9 @@ import {
 } from "./printerProfilesCore";
 import {
   createDefaultPrinterProfileStore,
-  DEFAULT_A4_WEIGH_PROFILE_ID,
   DEFAULT_THERMAL_PROFILE_ID,
 } from "./printerProfiles";
 import { loadPrinterProfileStore, savePrinterProfileStore } from "./printerProfileStorage";
-import { isA4WeighProfile } from "./printerProfileStorage";
-import { syncLegacyScscOffsetsFromProfile } from "./printerProfileStorage";
 
 export function catalogFromLocalStore(store: PrinterProfileStoreV1): PrinterProfilesCatalog {
   return {
@@ -36,7 +33,6 @@ export function mergeServerCatalogIntoLocalStore(serverRaw: unknown): PrinterPro
   });
 
   let activeThermalProfileId = local.activeThermalProfileId;
-  let activeA4WeighProfileId = local.activeA4WeighProfileId;
 
   if (!mergedProfiles.some((p) => p.id === activeThermalProfileId)) {
     activeThermalProfileId =
@@ -44,18 +40,11 @@ export function mergeServerCatalogIntoLocalStore(serverRaw: unknown): PrinterPro
       mergedProfiles.find((p) => p.type === "thermal-tspl")?.id ??
       DEFAULT_THERMAL_PROFILE_ID;
   }
-  if (!mergedProfiles.some((p) => p.id === activeA4WeighProfileId)) {
-    activeA4WeighProfileId =
-      mergedProfiles.find((p) => p.id === DEFAULT_A4_WEIGH_PROFILE_ID)?.id ??
-      mergedProfiles.find((p) => p.type === "a4-browser")?.id ??
-      DEFAULT_A4_WEIGH_PROFILE_ID;
-  }
 
   const next: PrinterProfileStoreV1 = {
     version: 1,
     profiles: mergedProfiles.length ? mergedProfiles : createDefaultPrinterProfileStore().profiles,
     activeThermalProfileId,
-    activeA4WeighProfileId,
     updatedAt: (() => {
       const localAt = Date.parse(local.updatedAt || "");
       const serverAt = Date.parse(serverCatalog.updatedAt || "");
@@ -72,12 +61,10 @@ export function mergeServerCatalogIntoLocalStore(serverRaw: unknown): PrinterPro
   };
 
   savePrinterProfileStore(next);
-  const a4 = next.profiles.find((p) => p.id === activeA4WeighProfileId);
-  if (a4 && isA4WeighProfile(a4)) syncLegacyScscOffsetsFromProfile(a4);
   return next;
 }
 
-/** Đẩy profile máy in local lên server (giữ tọa độ phiếu cân SCSC sau khi lưu). */
+/** Đẩy profile máy in local lên server. */
 export async function pushLocalPrinterProfilesCatalog(): Promise<boolean> {
   try {
     const store = loadPrinterProfileStore();

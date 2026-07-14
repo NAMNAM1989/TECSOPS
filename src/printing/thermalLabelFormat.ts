@@ -2,13 +2,13 @@ import type { LabelSheetFormat } from "../utils/labelSheetFormat";
 import { saveLabelSheetFormat } from "../utils/labelSheetFormat";
 import type { PrinterProfile, PrinterProfileStoreV1, ThermalLabelPrinterProfile } from "./printTypes";
 
-/** Kích thước tem + khổ trang TSPL/CSS theo từng loại tem. */
+/** Kích thước tem + khổ trang theo từng loại tem (XP-470B: trang = tem, không xoay). */
 export const THERMAL_LABEL_FORMAT_PRESETS: Record<
   LabelSheetFormat,
   Pick<ThermalLabelPrinterProfile, "labelWidthMm" | "labelHeightMm" | "pageWidthMm" | "pageHeightMm">
 > = {
-  "100x80": { labelWidthMm: 100, labelHeightMm: 80, pageWidthMm: 80, pageHeightMm: 100 },
-  "100x50": { labelWidthMm: 100, labelHeightMm: 50, pageWidthMm: 50, pageHeightMm: 100 },
+  "100x80": { labelWidthMm: 100, labelHeightMm: 80, pageWidthMm: 100, pageHeightMm: 80 },
+  "100x50": { labelWidthMm: 100, labelHeightMm: 50, pageWidthMm: 100, pageHeightMm: 50 },
 };
 
 export function labelSheetFormatLabel(f: LabelSheetFormat): string {

@@ -13,8 +13,6 @@ export function computeWarehouseMetrics(
   const out = {
     "TECS-TCS": { lots: 0, pcs: 0, kg: 0 },
     "TECS-SCSC": { lots: 0, pcs: 0, kg: 0 },
-    "KHO-TCS": { lots: 0, pcs: 0, kg: 0 },
-    "KHO-SCSC": { lots: 0, pcs: 0, kg: 0 },
   } as Record<Warehouse, WarehouseMetrics>;
 
   for (const row of rows) {

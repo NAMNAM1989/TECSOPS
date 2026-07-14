@@ -1,15 +1,10 @@
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import type { EcargoJobRecord } from "../types/ecargoJob";
 import type { Shipment, Warehouse } from "../types/shipment";
 import { rawAwbDigits } from "./awbFormat";
-import type { EcargoKhoScscPersistedMap } from "./ecargoKhoScscCore";
-import { normalizeEcargoVehicleInput } from "./ecargoKhoScscCore";
-import { findCustomerByShipment, resolveEcargoVehiclePrefill } from "./customerVehicleCore";
+import { findCustomerByShipment } from "./customerVehicleCore";
 
 export type ShipmentSearchContext = {
-  ecargoMap: EcargoKhoScscPersistedMap;
   customers: readonly CustomerDirectoryEntry[];
-  getEcargoJob?: (id: string) => EcargoJobRecord | undefined;
 };
 
 export type ShipmentSearchMatchKind = "mawb" | "hawb" | "vehicle" | "driver" | "other";
@@ -22,17 +17,21 @@ export type ShipmentSearchMatch = {
 };
 
 function vehicleTokens(raw: string): string[] {
-  const normalized = normalizeEcargoVehicleInput(raw);
   const lower = raw.trim().toLowerCase();
-  return [...new Set([lower, normalized.toLowerCase()].filter(Boolean))];
+  const compact = lower.replace(/[^a-z0-9]/g, "");
+  return [...new Set([lower, compact].filter(Boolean))];
 }
 
-/** Haystack đầy đủ cho một lô — gồm MAWB/HAWB, số xe, tài xế. */
-export function buildShipmentSearchHaystack(shipment: Shipment, ctx: ShipmentSearchContext): string {
-  const savedVehicle = ctx.ecargoMap[shipment.id]?.vehicleInput ?? "";
-  const jobVehicle = ctx.getEcargoJob?.(shipment.id)?.vehicleNo ?? "";
-  const prefill = resolveEcargoVehiclePrefill(shipment, ctx.customers, savedVehicle);
+function getCustomerVehiclesForShipment(
+  shipment: Shipment,
+  customers: readonly CustomerDirectoryEntry[]
+) {
+  const entry = findCustomerByShipment(shipment, customers);
+  return entry?.savedVehicles ?? [];
+}
 
+/** Haystack đầy đủ cho một lô. */
+export function buildShipmentSearchHaystack(shipment: Shipment, ctx: ShipmentSearchContext): string {
   const parts = [
     shipment.awb,
     rawAwbDigits(shipment.awb),
@@ -50,14 +49,6 @@ export function buildShipmentSearchHaystack(shipment: Shipment, ctx: ShipmentSea
     shipment.pcs != null ? String(shipment.pcs) : "",
     shipment.kg != null ? String(shipment.kg) : "",
     shipment.dimWeightKg != null ? String(shipment.dimWeightKg) : "",
-    savedVehicle,
-    ...vehicleTokens(savedVehicle),
-    jobVehicle,
-    ...vehicleTokens(jobVehicle),
-    prefill.vehicleInput,
-    ...vehicleTokens(prefill.vehicleInput),
-    prefill.driverName,
-    prefill.driverId,
   ];
 
   for (const v of getCustomerVehiclesForShipment(shipment, ctx.customers)) {
@@ -66,14 +57,6 @@ export function buildShipmentSearchHaystack(shipment: Shipment, ctx: ShipmentSea
   }
 
   return parts.map((x) => String(x ?? "").toLowerCase()).join(" ");
-}
-
-function getCustomerVehiclesForShipment(
-  shipment: Shipment,
-  customers: readonly CustomerDirectoryEntry[]
-) {
-  const entry = findCustomerByShipment(shipment, customers);
-  return entry?.savedVehicles ?? [];
 }
 
 function queryTokens(raw: string): string[] {
@@ -91,9 +74,9 @@ function awbDigitsMatch(shipment: Shipment, query: string): boolean {
 }
 
 function vehicleMatch(haystackVehicles: string[], query: string): boolean {
-  const qNorm = normalizeEcargoVehicleInput(query).toLowerCase();
   const qRaw = query.trim().toLowerCase();
-  if (qNorm.length >= 3 && haystackVehicles.some((v) => v.includes(qNorm))) return true;
+  const qCompact = qRaw.replace(/[^a-z0-9]/g, "");
+  if (qCompact.length >= 3 && haystackVehicles.some((v) => v.includes(qCompact))) return true;
   if (qRaw.length >= 3 && haystackVehicles.some((v) => v.includes(qRaw))) return true;
   return false;
 }
@@ -108,23 +91,12 @@ function resolveMatchKind(shipment: Shipment, query: string, ctx: ShipmentSearch
     return "mawb";
   }
 
-  const savedVehicle = ctx.ecargoMap[shipment.id]?.vehicleInput ?? "";
-  const jobVehicle = ctx.getEcargoJob?.(shipment.id)?.vehicleNo ?? "";
-  const prefill = resolveEcargoVehiclePrefill(shipment, ctx.customers, savedVehicle);
-  const vehicles = [
-    savedVehicle,
-    jobVehicle,
-    prefill.vehicleInput,
-    ...getCustomerVehiclesForShipment(shipment, ctx.customers).map((v) => v.licensePlate),
-  ];
+  const vehicles = getCustomerVehiclesForShipment(shipment, ctx.customers).map((v) => v.licensePlate);
   const vehicleHay = vehicles.flatMap((v) => vehicleTokens(v));
   if (vehicleMatch(vehicleHay, q)) return "vehicle";
 
-  const drivers = [
-    prefill.driverName,
-    prefill.driverId,
-    ...getCustomerVehiclesForShipment(shipment, ctx.customers).flatMap((v) => [v.driverName, v.driverId]),
-  ]
+  const drivers = getCustomerVehiclesForShipment(shipment, ctx.customers)
+    .flatMap((v) => [v.driverName, v.driverId])
     .map((d) => d.trim().toLowerCase())
     .filter(Boolean);
   if (drivers.some((d) => d.includes(qLower))) return "driver";
@@ -144,25 +116,14 @@ export function shipmentMatchesSearchQuery(
   const hay = buildShipmentSearchHaystack(shipment, ctx);
   if (tokens.every((t) => hay.includes(t))) return true;
 
-  // Cho phép gõ nhanh MAWB/HAWB dạng số hoặc biển số không cần token hóa.
   if (awbDigitsMatch(shipment, q)) return true;
 
-  const savedVehicle = ctx.ecargoMap[shipment.id]?.vehicleInput ?? "";
-  const jobVehicle = ctx.getEcargoJob?.(shipment.id)?.vehicleNo ?? "";
-  const prefill = resolveEcargoVehiclePrefill(shipment, ctx.customers, savedVehicle);
-  const vehicles = [
-    savedVehicle,
-    jobVehicle,
-    prefill.vehicleInput,
-    ...getCustomerVehiclesForShipment(shipment, ctx.customers).map((v) => v.licensePlate),
-  ];
+  const vehicles = getCustomerVehiclesForShipment(shipment, ctx.customers).map((v) => v.licensePlate);
   if (vehicleMatch(vehicles.flatMap((v) => vehicleTokens(v)), q)) return true;
 
   const qLower = q.toLowerCase();
-  const drivers = [
-    prefill.driverName,
-    ...getCustomerVehiclesForShipment(shipment, ctx.customers).map((v) => v.driverName),
-  ]
+  const drivers = getCustomerVehiclesForShipment(shipment, ctx.customers)
+    .map((v) => v.driverName)
     .map((d) => d.trim().toLowerCase())
     .filter(Boolean);
   return drivers.some((d) => d.includes(qLower));
@@ -181,13 +142,12 @@ export function buildShipmentSearchMatches(
   for (const shipment of rows) {
     if (!shipmentMatchesSearchQuery(shipment, q, ctx)) continue;
 
-    const savedVehicle = ctx.ecargoMap[shipment.id]?.vehicleInput ?? "";
-    const prefill = resolveEcargoVehiclePrefill(shipment, ctx.customers, savedVehicle);
+    const vehicles = getCustomerVehiclesForShipment(shipment, ctx.customers);
     const kind = resolveMatchKind(shipment, q, ctx);
     const awbLabel = shipment.awb.trim() || "—";
     const hawbLabel = shipment.hawb?.trim();
-    const vehicleLabel = prefill.vehicleInput.trim() || savedVehicle.trim();
-    const driverLabel = prefill.driverName.trim();
+    const vehicleLabel = vehicles[0]?.licensePlate?.trim() ?? "";
+    const driverLabel = vehicles[0]?.driverName?.trim() ?? "";
 
     let label = awbLabel;
     if (hawbLabel) label += ` / ${hawbLabel}`;
@@ -220,8 +180,6 @@ export function countShipmentsByWarehouse(rows: readonly Shipment[]): Record<War
     {
       "TECS-TCS": 0,
       "TECS-SCSC": 0,
-      "KHO-TCS": 0,
-      "KHO-SCSC": 0,
     } as Record<Warehouse, number>
   );
 }

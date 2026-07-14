@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import {
+  clampAirlineLabelOverrides,
   mergeAirlineLookupMaps,
   overridesFromEffectiveMaps,
 } from "../utils/airlineLabelOverridesCore";
-import {
-  DEFAULT_AIRLINE_BY_AWB_PREFIX,
-  DEFAULT_AIRLINE_BY_FLIGHT_PREFIX,
-} from "../constants/airlineLabelDefaults";
+import { DEFAULT_AIRLINE_BY_FLIGHT_PREFIX } from "../constants/airlineLabelDefaults";
 import { OPS, opsInput } from "../styles/opsModalStyles";
 
 type Props = {
@@ -24,31 +22,10 @@ function newId(): string {
   return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
 }
 
-/** id ổn định theo key (danh sách từ bảng gốc); dòng mới dùng uuid */
-function recordToRows(rec: Record<string, string>, idPrefix: "awb" | "flt"): EditableRow[] {
+function recordToFlightRows(rec: Record<string, string>): EditableRow[] {
   return Object.entries(rec)
-    .map(([key, name]) => ({ id: `${idPrefix}:${key}`, key, name }))
-    .sort((a, b) => {
-      if (idPrefix === "awb") {
-        const na = parseInt(a.key.replace(/\D/g, ""), 10);
-        const nb = parseInt(b.key.replace(/\D/g, ""), 10);
-        if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
-      }
-      return a.key.localeCompare(b.key);
-    });
-}
-
-function rowsToEffectiveAwb(rows: EditableRow[]): Record<string, string> {
-  const o: Record<string, string> = {};
-  for (const r of rows) {
-    const d = r.key.replace(/\D/g, "");
-    if (d.length === 0) continue;
-    const k = d.slice(0, 3).padStart(3, "0");
-    const n = r.name.replace(/\s+/g, " ").trim();
-    if (!n) continue;
-    o[k] = n.slice(0, 80);
-  }
-  return o;
+    .map(([key, name]) => ({ id: `flt:${key}`, key, name }))
+    .sort((a, b) => a.key.localeCompare(b.key));
 }
 
 function rowsToEffectiveFlight(rows: EditableRow[]): Record<string, string> {
@@ -64,16 +41,18 @@ function rowsToEffectiveFlight(rows: EditableRow[]): Record<string, string> {
 }
 
 export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave }: Props) {
-  const [awbRows, setAwbRows] = useState<EditableRow[]>([]);
   const [flightRows, setFlightRows] = useState<EditableRow[]>([]);
   const wasOpen = useRef(false);
+  /** Giữ ghi đè AWB cũ (không còn chỉnh trên UI) để không mất khi Lưu. */
+  const preservedAwbRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     if (open) {
       if (!wasOpen.current) {
-        const { byAwb, byFlight } = mergeAirlineLookupMaps(value);
-        setAwbRows(recordToRows(byAwb, "awb"));
-        setFlightRows(recordToRows(byFlight, "flt"));
+        const clamped = clampAirlineLabelOverrides(value ?? {});
+        preservedAwbRef.current = { ...clamped.byAwbPrefix };
+        const { byFlight } = mergeAirlineLookupMaps(value);
+        setFlightRows(recordToFlightRows(byFlight));
       }
     }
     wasOpen.current = open;
@@ -81,17 +60,21 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
 
   if (!open) return null;
 
-  const buildPayload = (): AirlineLabelOverrides =>
-    overridesFromEffectiveMaps(rowsToEffectiveAwb(awbRows), rowsToEffectiveFlight(flightRows));
+  const buildPayload = (): AirlineLabelOverrides => {
+    const fromFlightUi = overridesFromEffectiveMaps({}, rowsToEffectiveFlight(flightRows));
+    return clampAirlineLabelOverrides({
+      byAwbPrefix: preservedAwbRef.current,
+      byFlightPrefix: fromFlightUi.byFlightPrefix,
+    });
+  };
 
   const handleSave = () => void onSave(buildPayload());
 
   const resetToFactoryDefaults = () => {
-    setAwbRows(recordToRows({ ...DEFAULT_AIRLINE_BY_AWB_PREFIX }, "awb"));
-    setFlightRows(recordToRows({ ...DEFAULT_AIRLINE_BY_FLIGHT_PREFIX }, "flt"));
+    preservedAwbRef.current = {};
+    setFlightRows(recordToFlightRows({ ...DEFAULT_AIRLINE_BY_FLIGHT_PREFIX }));
   };
 
-  const defaultAwbCount = Object.keys(DEFAULT_AIRLINE_BY_AWB_PREFIX).length;
   const defaultFltCount = Object.keys(DEFAULT_AIRLINE_BY_FLIGHT_PREFIX).length;
 
   return (
@@ -101,15 +84,22 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
       aria-modal="true"
       aria-labelledby="airline-label-settings-title"
     >
-      <div className={`max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-[28px] border shadow-apple-md ${OPS.modal} ${OPS.border}`}>
+      <div
+        className={`max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-[28px] border shadow-apple-md ${OPS.modal} ${OPS.border}`}
+      >
         <div className={`flex items-start justify-between border-b px-5 py-4 ${OPS.border}`}>
           <div>
-            <h2 id="airline-label-settings-title" className={`text-[19px] font-semibold tracking-tight ${OPS.title}`}>
+            <h2
+              id="airline-label-settings-title"
+              className={`text-[19px] font-semibold tracking-tight ${OPS.title}`}
+            >
               Tên hãng trên tem
             </h2>
             <p className={`mt-1 text-xs leading-relaxed ${OPS.secondary}`}>
-              Danh sách đầy đủ theo bảng hệ thống ({defaultAwbCount} mã AWB + {defaultFltCount} prefix chuyến) và mọi hãng bạn đã thêm.
-              Sửa tên hoặc thêm dòng mới. <span className={`font-semibold ${OPS.title}`}>Lưu</span> chỉ ghi tên hãng thay đổi so với mặc định.
+              Danh sách theo <span className={`font-semibold ${OPS.title}`}>prefix cột chuyến bay</span>{" "}
+              (vd. VN773 → VN → VIETNAM AIRLINES). Tem nhãn lấy tên từ đây trước;{" "}
+              {defaultFltCount} prefix mặc định + mọi dòng bạn thêm.{" "}
+              <span className={`font-semibold ${OPS.title}`}>Lưu</span> chỉ ghi tên khác bảng gốc.
             </p>
           </div>
           <button
@@ -124,61 +114,7 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
           </button>
         </div>
 
-        <div className="max-h-[min(70vh,560px)] space-y-5 overflow-y-auto px-5 py-4">
-          <section>
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h3 className={`text-[11px] font-bold uppercase tracking-wide ${OPS.secondary}`}>
-                Theo 3 số đầu AWB ({awbRows.length} dòng)
-              </h3>
-              <button
-                type="button"
-                onClick={() => setAwbRows((r) => [...r, { id: `new:${newId()}`, key: "", name: "" }])}
-                className={OPS.btnSmallAccent}
-              >
-                + Thêm mã AWB
-              </button>
-            </div>
-            <div className="space-y-2">
-              {awbRows.map((row, idx) => (
-                <div
-                  key={row.id}
-                  className={`flex flex-wrap items-center gap-2 rounded-2xl border px-2 py-2 ${OPS.border} ${OPS.panelSoft}`}
-                >
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="978"
-                    maxLength={3}
-                    value={row.key}
-                    onChange={(e) => {
-                      const d = e.target.value.replace(/\D/g, "").slice(0, 3);
-                      setAwbRows((rows) => rows.map((x, i) => (i === idx ? { ...x, key: d } : x)));
-                    }}
-                    className={`w-16 text-center font-mono text-sm font-semibold ${opsInput}`}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Tên hãng in trên tem"
-                    maxLength={80}
-                    value={row.name}
-                    onChange={(e) => {
-                      const t = e.target.value;
-                      setAwbRows((rows) => rows.map((x, i) => (i === idx ? { ...x, name: t } : x)));
-                    }}
-                    className={`min-w-[10rem] flex-1 text-sm font-semibold ${OPS.inputLg}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setAwbRows((rows) => rows.filter((_, i) => i !== idx))}
-                    className="rounded-full px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/15"
-                  >
-                    Xóa
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
-
+        <div className="max-h-[min(70vh,560px)] space-y-4 overflow-y-auto px-5 py-4">
           <section>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h3 className={`text-[11px] font-bold uppercase tracking-wide ${OPS.secondary}`}>
@@ -192,12 +128,20 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
                 + Thêm prefix
               </button>
             </div>
+            <div className="mb-2 grid grid-cols-[4rem_1fr_auto] gap-2 px-2 text-[10px] font-bold uppercase tracking-wide text-zinc-400">
+              <span>Prefix</span>
+              <span>Tên in trên tem</span>
+              <span />
+            </div>
             <div className="space-y-2">
               {flightRows.map((row, idx) => (
-                <div key={row.id} className="flex flex-wrap items-center gap-2">
+                <div
+                  key={row.id}
+                  className={`flex flex-wrap items-center gap-2 rounded-2xl border px-2 py-2 ${OPS.border} ${OPS.panelSoft}`}
+                >
                   <input
                     type="text"
-                    placeholder="VJ"
+                    placeholder="VN"
                     maxLength={3}
                     value={row.key}
                     onChange={(e) => {
@@ -205,6 +149,7 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
                       setFlightRows((rows) => rows.map((x, i) => (i === idx ? { ...x, key: k } : x)));
                     }}
                     className={`w-16 text-center font-mono text-sm font-semibold uppercase ${opsInput}`}
+                    title="Prefix lấy từ cột chuyến (2–3 ký tự đầu)"
                   />
                   <input
                     type="text"
@@ -230,7 +175,9 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
           </section>
         </div>
 
-        <div className={`flex flex-col gap-2 border-t px-5 py-4 sm:flex-row sm:items-center sm:justify-between ${OPS.border}`}>
+        <div
+          className={`flex flex-col gap-2 border-t px-5 py-4 sm:flex-row sm:items-center sm:justify-between ${OPS.border}`}
+        >
           <button
             type="button"
             onClick={resetToFactoryDefaults}

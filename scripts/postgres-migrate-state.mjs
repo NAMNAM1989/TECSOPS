@@ -5,11 +5,9 @@
  * Nguồn dữ liệu:
  *   --from-file <backup.json>  Backup format hoặc state JSON thuần
  *   --from-api <url>           Ví dụ https://.../api/state
- *   REDIS_URL                  Nếu không truyền nguồn, đọc Redis key tecsops:state
  *
  *   DATABASE_URL=... node scripts/postgres-migrate-state.mjs --from-file backup.json
  */
-import { createClient } from "redis";
 import {
   postgresStateKey,
   readStateStringFromFile,
@@ -26,22 +24,6 @@ const dryRun = process.argv.includes("--dry-run");
 const fromFile = argValue("--from-file");
 const fromApi = argValue("--from-api");
 
-async function readFromRedis() {
-  const redisUrl = process.env.REDIS_URL?.trim();
-  if (!redisUrl) throw new Error("No source provided. Set REDIS_URL or pass --from-file/--from-api.");
-  const key = process.env.REDIS_STATE_KEY || "tecsops:state";
-  const client = createClient({ url: redisUrl });
-  client.on("error", (err) => console.error("[redis]", err.message));
-  await client.connect();
-  try {
-    const val = await client.get(key);
-    if (!val) throw new Error(`Redis key ${key} does not exist.`);
-    return val;
-  } finally {
-    await client.quit();
-  }
-}
-
 async function readSourceStateString() {
   if (fromFile) return readStateStringFromFile(fromFile);
   if (fromApi) {
@@ -49,7 +31,7 @@ async function readSourceStateString() {
     if (!res.ok) throw new Error(`API state HTTP ${res.status}`);
     return JSON.stringify(await res.json());
   }
-  return readFromRedis();
+  throw new Error("No source provided. Pass --from-file <path> or --from-api <url>.");
 }
 
 let stateString;

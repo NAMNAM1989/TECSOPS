@@ -10,17 +10,25 @@ export function sessionYmdToFlightDateToken(sessionYmd) {
   return `${day}${MONTHS3[mon]}`;
 }
 
-/** Trích DDMMM từ cutoff note (vd. «17:00 - 13JUN»). */
+const MONTH3_SET = new Set(MONTHS3);
+
+/** Trích DDMMM từ cutoff note (vd. «17:00 - 13JUN»). Chỉ nhận tháng JAN…DEC — tránh «BUP 1 PMC» → 1PMC. */
 export function extractCutoffOpsDateToken(cutoffNote) {
   const t = String(cutoffNote ?? "").trim();
   if (!t) return "";
-  const m = /(\d{1,2}[A-Za-z]{3})/.exec(t.replace(/\s/g, ""));
-  return m ? m[1].toUpperCase() : "";
+  const compact = t.replace(/\s/g, "");
+  const re = /(\d{1,2})([A-Za-z]{3})/g;
+  let m;
+  while ((m = re.exec(compact))) {
+    const mon = m[2].toUpperCase();
+    if (MONTH3_SET.has(mon)) return `${parseInt(m[1], 10)}${mon}`;
+  }
+  return "";
 }
 
 /**
  * Chỉ giữ lô thuộc ngày phiên đang xem trên web.
- * Tab Sheet đã theo ngày (vd. 13JUNE2026) — mặc định giữ mọi dòng.
+ * Tab Sheet đã theo ngày (vd. «NGÀY 13 JUL») — mặc định giữ mọi dòng.
  * Chỉ bỏ khi cutoff/note ghi rõ ngày vận hành khác phiên (vd. «17:00 - 14JUN»).
  */
 export function rowMatchesSessionDate(row, sessionYmd) {

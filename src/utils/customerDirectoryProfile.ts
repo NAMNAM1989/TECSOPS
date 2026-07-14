@@ -8,11 +8,18 @@ import type {
   CustomerSavedVehicle,
 } from "../types/customerDirectory";
 import { normalizePrintAddressMultiline } from "./printAddressMultiline";
+import {
+  inferPrefixFromCustomerCode,
+  normalizeCustomerPrefix,
+  normalizeCustomerShortCode,
+} from "./customerCodeOps";
 
 /** Giới hạn độ dài — đồng bộ client / server. */
 export const CUSTOMER_PROFILE_LIMITS = {
   code: 40,
   name: 200,
+  prefix: 5,
+  shortCode: 10,
   shipperName: 120,
   shipperAddress: 300,
   shipperPhone: 40,
@@ -309,10 +316,18 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
   if (savedConsignees.length === 1) defaultConsigneeId = savedConsignees[0]!.id;
   if (savedGoods.length === 1) defaultGoodsId = savedGoods[0]!.id;
   if (savedVehicles.length === 1) defaultVehicleId = savedVehicles[0]!.id;
+  const code = clip(migrated.code, L.code).trim();
+  const prefix =
+    normalizeCustomerPrefix(clip(migrated.prefix, L.prefix)) ||
+    inferPrefixFromCustomerCode(code) ||
+    undefined;
+  const shortCode = normalizeCustomerShortCode(clip(migrated.shortCode, L.shortCode)) || undefined;
   return {
     id: clip(migrated.id, 80).trim(),
-    code: clip(migrated.code, L.code).trim(),
+    code,
     name: clip(migrated.name, L.name).trim(),
+    ...(prefix ? { prefix } : {}),
+    ...(shortCode ? { shortCode } : {}),
     defaultShipperId: defaultShipperId || undefined,
     defaultConsigneeId: defaultConsigneeId || undefined,
     defaultGoodsId: defaultGoodsId || undefined,
@@ -372,10 +387,17 @@ export function emptyCustomerProfileRow(id: string): CustomerDirectoryEntry {
     id,
     code: "",
     name: "",
+    prefix: "",
+    shortCode: "",
     savedShippers: [],
     savedConsignees: [],
     savedGoods: [],
     savedVehicles: [],
     parties: [],
   };
+}
+
+/** Dòng sidebar: Short Code ưu tiên, fallback Code. */
+export function customerDirectoryListCode(e: CustomerDirectoryEntry): string {
+  return (e.shortCode?.trim() || e.code.trim() || "—").toUpperCase();
 }

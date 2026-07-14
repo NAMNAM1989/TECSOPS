@@ -92,7 +92,7 @@ export const OPS = {
     "border-emerald-300/80 bg-emerald-50 text-emerald-950 hover:border-emerald-500 hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-100 dark:hover:bg-emerald-500/25",
   formatBtnSubOn: "text-emerald-100",
   formatBtnSubOff: "text-emerald-800/75 dark:text-emerald-200/80",
-  /** Khung xem trước A4 — nền xám nhạt (light) / tối (dark) giống PrintCenter. */
+  /** Khung xem trước — nền xám nhạt (light) / tối (dark). */
   printPreviewFrame:
     "relative overflow-hidden rounded-xl border border-black/[0.1] bg-[#e8eaee] shadow-inner dark:border-white/10 dark:bg-black/40 dark:shadow-none",
   printCoordsToggle:

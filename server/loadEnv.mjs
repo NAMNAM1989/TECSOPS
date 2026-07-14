@@ -26,13 +26,6 @@ function mergeEnvFile(rel, { override = false } = {}) {
       val = val.slice(1, -1);
     }
     if (override || process.env[key] === undefined) {
-      if (
-        override &&
-        key === "ECARGO_WORKER_ENABLED" &&
-        process.env.TECSOPS_DEV === "1"
-      ) {
-        continue;
-      }
       process.env[key] = val;
     }
   }

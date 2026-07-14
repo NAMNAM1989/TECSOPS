@@ -1,4 +1,5 @@
 import pg from "pg";
+import { postgresSslOption } from "./postgresSsl.mjs";
 
 const { Pool } = pg;
 
@@ -15,8 +16,9 @@ export function getDbPool() {
   if (!pool) {
     pool = new Pool({
       connectionString: databaseUrl,
-      ssl: databaseUrl.includes("railway.internal") ? false : { rejectUnauthorized: false },
+      ssl: postgresSslOption(databaseUrl),
       max: 8,
+      connectionTimeoutMillis: 3_000,
       idleTimeoutMillis: 30_000,
     });
   }

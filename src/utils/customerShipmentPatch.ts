@@ -1,8 +1,7 @@
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import type { GlobalAgentCatalog } from "../types/globalAgents";
 import type { Shipment } from "../types/shipment";
 import { lookupCustomerCodeByName, lookupCustomerEntryByName } from "./customerDirectoryCore";
-import { buildShipmentPrintProfilePatch } from "./scscPrintProfileLink";
+import { buildShipmentPrintProfilePatch } from "./customerPrintProfileLink";
 
 function norm(s: string): string {
   return s.trim().toLowerCase();
@@ -43,7 +42,9 @@ export function filterCustomerDirectoryEntries(
   for (const entry of directory) {
     const code = entry.code.trim().toLowerCase();
     const name = entry.name.trim().toLowerCase();
-    if (code.includes(q) || name.includes(q)) {
+    const shortCode = (entry.shortCode ?? "").trim().toLowerCase();
+    const prefix = (entry.prefix ?? "").trim().toLowerCase();
+    if (code.includes(q) || name.includes(q) || shortCode.includes(q) || prefix.includes(q)) {
       hits.push(entry);
       if (hits.length >= limit) break;
     }
@@ -65,12 +66,15 @@ function resolveCustomerEntry(
   );
 }
 
-/** Patch lô khi chọn / gõ khách — mã, id, Shipper/CNEE/Agent/Tên hàng mặc định từ danh bạ. */
+/** Patch lô khi chọn / gõ khách — mã, id, Shipper/CNEE/Tên hàng mặc định từ danh bạ. */
 export function buildShipmentPatchForCustomerSelection(
   directory: readonly CustomerDirectoryEntry[],
   customerName: string,
   entry?: CustomerDirectoryEntry,
-  globalAgents?: GlobalAgentCatalog
+  booking?: Pick<
+    Shipment,
+    "customerShipperId" | "customerConsigneeId" | "customerGoodsId"
+  >
 ): Partial<Shipment> {
   const trimmed = normalizeCustomerNameInput(customerName);
   const resolved = resolveCustomerEntry(directory, trimmed, entry);
@@ -81,6 +85,6 @@ export function buildShipmentPatchForCustomerSelection(
     customer: trimmed,
     customerCode: code,
     customerId,
-    ...buildShipmentPrintProfilePatch(resolved, globalAgents),
+    ...buildShipmentPrintProfilePatch(resolved, booking),
   };
 }

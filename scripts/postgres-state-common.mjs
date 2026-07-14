@@ -1,32 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import pg from "pg";
-
-const { Pool } = pg;
+import "../server/loadEnv.mjs";
+import { createPostgresStateStore } from "../server/postgresStateStore.mjs";
 
 export const DEFAULT_STATE_KEY = "tecsops:state";
-export const TABLE_NAME = "app_state";
 
 export function postgresStateKey() {
-  return process.env.POSTGRES_STATE_KEY || process.env.REDIS_STATE_KEY || DEFAULT_STATE_KEY;
-}
-
-export function makePgPool(databaseUrl) {
-  return new Pool({
-    connectionString: databaseUrl,
-    ssl: databaseUrl.includes("railway.internal") ? false : { rejectUnauthorized: false },
-    max: 3,
-  });
-}
-
-export async function ensurePostgresStateSchema(client) {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
-      id text PRIMARY KEY,
-      state jsonb NOT NULL,
-      updated_at timestamptz NOT NULL DEFAULT now()
-    )
-  `);
+  return process.env.POSTGRES_STATE_KEY || DEFAULT_STATE_KEY;
 }
 
 export function stateStringFromPayload(payload) {
@@ -65,44 +45,25 @@ export function readStateStringFromFile(fileArg) {
 }
 
 export async function writeStateStringToPostgres(databaseUrl, stateString) {
-  const pool = makePgPool(databaseUrl);
-  const key = postgresStateKey();
+  const state = parseStateString(stateString);
+  const store = createPostgresStateStore(databaseUrl);
   try {
-    const client = await pool.connect();
-    try {
-      await ensurePostgresStateSchema(client);
-      await client.query(
-        `
-        INSERT INTO ${TABLE_NAME} (id, state, updated_at)
-        VALUES ($1, $2::jsonb, now())
-        ON CONFLICT (id)
-        DO UPDATE SET state = EXCLUDED.state, updated_at = now()
-        `,
-        [key, stateString]
-      );
-    } finally {
-      client.release();
-    }
+    await store.saveState(state);
+    return store.key;
   } finally {
-    await pool.end();
+    await store.close();
   }
-  return key;
 }
 
 export async function readStateStringFromPostgres(databaseUrl) {
-  const pool = makePgPool(databaseUrl);
-  const key = postgresStateKey();
+  const store = createPostgresStateStore(databaseUrl);
   try {
-    const client = await pool.connect();
-    try {
-      await ensurePostgresStateSchema(client);
-      const res = await client.query(`SELECT state FROM ${TABLE_NAME} WHERE id = $1`, [key]);
-      const state = res.rows[0]?.state ?? null;
-      return { key, stateString: state ? JSON.stringify(state) : null };
-    } finally {
-      client.release();
-    }
+    const state = await store.loadRawState();
+    return {
+      key: store.key,
+      stateString: state ? JSON.stringify(state) : null,
+    };
   } finally {
-    await pool.end();
+    await store.close();
   }
 }

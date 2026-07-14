@@ -3,7 +3,7 @@ import { isSheetRowSelectable, type SheetBookSyncResult, type SheetBookSyncRow }
 import { applyBookGoogleSheetRows, syncBookGoogleSheet } from "../utils/googleSheetBookApi";
 import { warehouseLabel } from "../constants/warehouses";
 import type { Warehouse } from "../types/shipment";
-import { useMobileLayout } from "../hooks/useMobileLayout";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { MOBILE } from "../styles/mobileOpsStyles";
 
 type Props = {
@@ -14,7 +14,7 @@ type Props = {
 };
 
 export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }: Props) {
-  const { isMobile } = useMobileLayout();
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
   const [sync, setSync] = useState<SheetBookSyncResult | null>(null);

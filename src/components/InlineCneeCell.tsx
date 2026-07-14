@@ -7,7 +7,7 @@ import {
 import {
   formatSavedConsigneeDetailTitle,
 } from "../utils/customerConsigneeShipmentPatch";
-import { findCustomerEntry, resolveSavedConsigneeForBooking } from "../utils/mapBookingToScaleTicketFormData";
+import { findCustomerEntry, resolveSavedConsigneeForBooking } from "../utils/customerBookingResolve";
 import { InlineConsigneeSelect } from "./InlineConsigneeSelect";
 import { HoverMagnifyText } from "./HoverMagnifyText";
 

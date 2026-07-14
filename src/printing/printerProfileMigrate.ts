@@ -13,9 +13,9 @@ function isThermalProfile(p: PrinterProfile): p is ThermalLabelPrinterProfile {
 
 /** Chuẩn hóa store cũ: thêm khổ tem, profile 100×50, migrate id legacy. */
 export function migratePrinterProfileStore(store: PrinterProfileStoreV1): PrinterProfileStoreV1 {
-  let profiles = store.profiles.map((p) =>
-    isThermalProfile(p) ? withThermalLabelFormat(p) : p
-  );
+  let profiles = store.profiles
+    .filter(isThermalProfile)
+    .map((p) => withThermalLabelFormat(p));
 
   if (!profiles.some((p) => p.id === DEFAULT_THERMAL_PROFILE_100x50_ID)) {
     profiles = [...profiles, DEFAULT_THERMAL_LABEL_PROFILE_100x50];

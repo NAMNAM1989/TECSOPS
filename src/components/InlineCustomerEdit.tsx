@@ -13,8 +13,11 @@ import {
 interface Props {
   value: string;
   customerId?: string;
+  profileSelection?: Pick<
+    Shipment,
+    "customerShipperId" | "customerConsigneeId" | "customerGoodsId"
+  >;
   customerDirectory: readonly CustomerDirectoryEntry[];
-  globalAgents?: import("../types/globalAgents").GlobalAgentCatalog;
   placeholder?: string;
   onCommit: (patch: Partial<Shipment>) => void;
   className?: string;
@@ -28,8 +31,8 @@ interface Props {
 export function InlineCustomerEdit({
   value,
   customerId = "",
+  profileSelection,
   customerDirectory,
-  globalAgents,
   placeholder = "Khách",
   onCommit,
   className = "",
@@ -77,7 +80,14 @@ export function InlineCustomerEdit({
     skipBlurCommitRef.current = true;
     setEditing(false);
     setListOpen(false);
-    onCommit(buildShipmentPatchForCustomerSelection(customerDirectory, entry.name, entry, globalAgents));
+    onCommit(
+      buildShipmentPatchForCustomerSelection(
+        customerDirectory,
+        entry.name,
+        entry,
+        profileSelection
+      )
+    );
     queueMicrotask(() => {
       skipBlurCommitRef.current = false;
       advance?.();
@@ -90,7 +100,14 @@ export function InlineCustomerEdit({
     setListOpen(false);
     const trimmed = normalizeCustomerNameInput(draft).slice(0, maxLength);
     if (trimmed !== normalizeCustomerNameInput(value) || !customerId) {
-      onCommit(buildShipmentPatchForCustomerSelection(customerDirectory, trimmed, undefined, globalAgents));
+      onCommit(
+        buildShipmentPatchForCustomerSelection(
+          customerDirectory,
+          trimmed,
+          undefined,
+          profileSelection
+        )
+      );
     }
     queueMicrotask(() => {
       skipBlurCommitRef.current = false;

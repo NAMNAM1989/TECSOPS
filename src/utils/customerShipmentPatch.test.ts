@@ -11,7 +11,26 @@ const directory: CustomerDirectoryEntry[] = [
     code: "ABC01",
     name: "ABC Logistics",
     savedShippers: [],
-    savedConsignees: [],
+    savedConsignees: [
+      {
+        id: "cnee-default",
+        label: "Mặc định",
+        consigneeName: "DEFAULT CNEE",
+        consigneeAddress: "",
+        consigneePhone: "",
+        consigneeEmail: "",
+        notifyName: "",
+      },
+      {
+        id: "cnee-picked",
+        label: "Đã chọn",
+        consigneeName: "PICKED CNEE",
+        consigneeAddress: "",
+        consigneePhone: "",
+        consigneeEmail: "",
+        notifyName: "",
+      },
+    ],
     savedGoods: [],
     savedVehicles: [],
     parties: [],
@@ -53,5 +72,17 @@ describe("buildShipmentPatchForCustomerSelection", () => {
   it("uppercases free-text customer name", () => {
     const patch = buildShipmentPatchForCustomerSelection(directory, "  abc logistics  ");
     expect(patch.customer).toBe("ABC LOGISTICS");
+  });
+
+  it("giữ CNEE đã chọn khi cập nhật lại cùng khách", () => {
+    const patch = buildShipmentPatchForCustomerSelection(
+      directory,
+      "ABC Logistics",
+      directory[0],
+      { customerConsigneeId: "cnee-picked" }
+    );
+
+    expect(patch.customerConsigneeId).toBe("cnee-picked");
+    expect(patch.consigneeNamePrint).toBe("PICKED CNEE");
   });
 });

@@ -45,28 +45,13 @@ export function baseContractState() {
         parties: [],
       },
     ],
-    globalAgents: { agents: [], defaultAgentId: "" },
     airlineLabelOverrides: { byAwbPrefix: {}, byFlightPrefix: {} },
-    printerProfiles: { profiles: [], activeProfileId: "" },
-    scscWeighPrintSettings: {
-      senders: {
-        "TECS-SCSC": { name: "", address: "", phone: "" },
-        "KHO-SCSC": { name: "", address: "", phone: "" },
-      },
-      defaultWarehouse: "TECS-SCSC",
-    },
-    ecargoKhoScsc: {},
-    invoiceCatalog: { version: 1, items: [] },
+    printerProfiles: { version: 1, profiles: [] },
   };
 }
 
 /** Bỏ trường thay đổi theo thời gian — so sánh contract ổn định. */
 export function normalizeStateForContract(state) {
-  const ecargo = {};
-  for (const [id, line] of Object.entries(state.ecargoKhoScsc ?? {})) {
-    const { updatedAt: _u, ...rest } = line;
-    ecargo[id] = rest;
-  }
   const printerProfiles = state.printerProfiles
     ? (() => {
         const { updatedAt: _t, ...rest } = state.printerProfiles;
@@ -77,11 +62,7 @@ export function normalizeStateForContract(state) {
     version: state.version,
     rows: state.rows.map((r) => ({ ...r })),
     customers: state.customers,
-    globalAgents: state.globalAgents,
     airlineLabelOverrides: state.airlineLabelOverrides,
     printerProfiles,
-    scscWeighPrintSettings: state.scscWeighPrintSettings,
-    ecargoKhoScsc: ecargo,
-    invoiceCatalog: state.invoiceCatalog ?? { version: 1, items: [] },
   };
 }

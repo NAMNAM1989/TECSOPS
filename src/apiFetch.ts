@@ -1,2 +1,2 @@
-/** Gửi cookie đăng nhập trang (`tecsops_gate`) khi gọi API cùng origin. */
+/** Tuỳ chọn fetch cùng origin (giữ credentials nếu trình duyệt gửi cookie sẵn có). */
 export const credFetch: RequestInit = { credentials: "include" };

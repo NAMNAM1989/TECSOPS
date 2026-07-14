@@ -1,12 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import type { GlobalAgentCatalog } from "../types/globalAgents";
-import type { ScscWeighPrintSettings } from "../types/scscWeighPrintSettings";
 import { canPrintDimScscReport, printDimReport } from "../utils/printDimReport";
 import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
-import { canPrintWeighReceiptScsc, printWeighReceiptScscWithConsigneeChoice } from "../utils/printWeighReceiptScsc";
 import {
   canExportTcsDimTemplate,
   downloadTcsAttachedDimsExcel,
@@ -14,17 +10,16 @@ import {
 } from "../utils/exportTcsAttachedDimsExcel";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { OPS } from "../styles/opsModalStyles";
-import { ShipmentInvoiceExportButton } from "./ShipmentInvoiceExportButton";
+import { createPortal } from "react-dom";
+import type { CSSProperties } from "react";
 
 type Props = {
   row: Shipment;
   customerDirectory: readonly CustomerDirectoryEntry[];
-  globalAgents?: GlobalAgentCatalog;
-  scscWeighPrintSettings?: ScscWeighPrintSettings;
-  saveScscWeighPrintSettings?: (settings: ScscWeighPrintSettings) => void | Promise<void>;
   onPrint: (s: Shipment) => void;
   onDelete: (id: string) => void;
   onUpdate?: (id: string, patch: Partial<Shipment>) => void;
+  compact?: boolean;
 };
 
 const iconCls = "h-3.5 w-3.5";
@@ -68,18 +63,6 @@ function IconPrintLabel() {
   );
 }
 
-function IconWeighSlip() {
-  return (
-    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9 12h6m-6 4h4m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-      />
-    </svg>
-  );
-}
-
 function IconDimReport() {
   return (
     <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
@@ -100,13 +83,9 @@ function IconKebabVertical() {
 
 export function ShipmentRowActionsMenu({
   row,
-  customerDirectory,
-  globalAgents,
-  scscWeighPrintSettings,
-  saveScscWeighPrintSettings,
+  customerDirectory: _customerDirectory,
   onPrint,
   onDelete,
-  onUpdate,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -114,7 +93,6 @@ export function ShipmentRowActionsMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
 
-  const showWeigh = canPrintWeighReceiptScsc(row);
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   const menuExtras = (showDim ? 1 : 0) + (showTcsDim ? 2 : 0) + 1;
@@ -123,16 +101,7 @@ export function ShipmentRowActionsMenu({
     if (confirm(`Xóa lô AWB ${row.awb || "(chưa có AWB)"}?`)) onDelete(row.id);
   };
 
-  const printWeigh = () =>
-    void printWeighReceiptScscWithConsigneeChoice(row, {
-      customerDirectory,
-      globalAgents,
-      scscWeighPrintSettings,
-      saveScscWeighPrintSettings,
-      onSaveShipment: onUpdate,
-    });
-
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!menuOpen) {
       setMenuStyle(null);
       return;
@@ -219,17 +188,9 @@ export function ShipmentRowActionsMenu({
 
   return (
     <div ref={wrapRef} className={OPS.actionToolbar}>
-      {onUpdate ? (
-        <ShipmentInvoiceExportButton shipment={row} variant="toolbar" />
-      ) : null}
       <ActionIconBtn label="In nhãn vận chuyển" onClick={() => onPrint(row)}>
         <IconPrintLabel />
       </ActionIconBtn>
-      {showWeigh ? (
-        <ActionIconBtn label="In tờ cân SCSC" onClick={printWeigh}>
-          <IconWeighSlip />
-        </ActionIconBtn>
-      ) : null}
       {showDim ? (
         <ActionIconBtn label="In DIM SCSC" onClick={() => printDimReport(row)}>
           <IconDimReport />

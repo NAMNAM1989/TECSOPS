@@ -18,10 +18,10 @@ const baseThermal = (): ThermalLabelPrinterProfile =>
     dpi: 203,
     labelWidthMm: 100,
     labelHeightMm: 80,
-    pageWidthMm: 80,
-    pageHeightMm: 100,
+    pageWidthMm: 100,
+    pageHeightMm: 80,
     gapMm: 2,
-    rotation: 90,
+    rotation: 0,
     offsetXmm: 0,
     offsetYmm: 0,
     speed: 4,
@@ -35,7 +35,8 @@ describe("thermalLabelFormat", () => {
     const p = withThermalLabelFormat(baseThermal(), "100x50");
     expect(p.labelSheetFormat).toBe("100x50");
     expect(p.labelHeightMm).toBe(50);
-    expect(p.pageWidthMm).toBe(50);
+    expect(p.pageWidthMm).toBe(100);
+    expect(p.pageHeightMm).toBe(50);
   });
 
   it("suy ra khổ từ chiều cao tem cũ", () => {

@@ -1,9 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
-import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import { migrateShipmentStatus, workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus.mjs";
-import { buildDefaultCustomerDirectoryFromSeed } from "./customerDirectorySeed.mjs";
 import {
   parseCustomersLoose,
   validateCustomerDirectoryPayload,
@@ -16,34 +11,24 @@ import {
   emptyPrinterProfilesCatalog,
   normalizePrinterProfilesCatalogLoose,
 } from "./printerProfilesNormalize.mjs";
-import { normalizeGlobalAgentsLoose } from "./globalAgentsNormalize.mjs";
-import { normalizeScscWeighPrintSettingsLoose } from "./scscWeighPrintSettingsNormalize.mjs";
-import {
-  normalizeEcargoKhoScscMapLoose,
-  normalizeEcargoVehicleInput,
-} from "./ecargoKhoScscNormalize.mjs";
-import { normalizeInvoiceCatalogLoose } from "./invoiceCatalogNormalize.mjs";
 
-const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "KHO-TCS", "KHO-SCSC"];
-function isKnownWarehouse(w) {
-  return WAREHOUSE_ORDER.includes(w);
+const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC"];
+
+function normalizeWarehouse(raw, fallback = "TECS-TCS") {
+  const u = String(raw ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/_/g, "-");
+  if (u === "TECS-SCSC" || u === "KHO-SCSC") return "TECS-SCSC";
+  if (u === "TECS-TCS" || u === "KHO-TCS") return "TECS-TCS";
+  if (u.includes("SCSC") || u.includes("SCCS")) return "TECS-SCSC";
+  if (u.includes("TCS")) return "TECS-TCS";
+  return fallback;
 }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
-const STATE_FILE = path.join(DATA_DIR, "state.json");
-const INITIAL_FILE = path.join(__dirname, "initialRows.json");
-const SEED_SESSION_DAY = "2026-04-06";
-
-const REDIS_STATE_KEY = process.env.REDIS_STATE_KEY || "tecsops:state";
-const REDIS_LOCK_KEY = process.env.REDIS_LOCK_KEY || "tecsops:state-lock";
-
-/** Production: không seed từ initialRows.json khi Redis/file trống — tránh ghi đè kỳ vọng "trống". */
-function shouldSkipDemoSeed() {
-  return (
-    process.env.TECSOPS_DISABLE_DEMO_SEED === "1" || process.env.TECSOPS_EMPTY_INITIAL === "1"
-  );
-}
+/** @type {ReturnType<import('./postgresStateStore.mjs').createPostgresStateStore> | null} */
+let postgresStateStore = null;
 
 function emptyInitialState() {
   return {
@@ -52,27 +37,7 @@ function emptyInitialState() {
     customers: [],
     airlineLabelOverrides: emptyAirlineLabelOverrides(),
     printerProfiles: emptyPrinterProfilesCatalog(),
-    globalAgents: normalizeGlobalAgentsLoose(undefined),
-    scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(undefined),
-    ecargoKhoScsc: {},
-    invoiceCatalog: normalizeInvoiceCatalogLoose(undefined),
   };
-}
-
-/** @type {import('redis').RedisClientType | null} */
-let redisStateClient = null;
-/** @type {ReturnType<import('./postgresStateStore.mjs').createPostgresStateStore> | null} */
-let postgresStateStore = null;
-
-const UNLOCK_SCRIPT = `
-if redis.call("get", KEYS[1]) == ARGV[1] then
-  return redis.call("del", KEYS[1])
-end
-return 0
-`;
-
-function ensureDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
 /** STT theo từng sessionDate + warehouse, giữ thứ tự xuất hiện từng ngày */
@@ -92,7 +57,7 @@ function renumberSttForAll(rows) {
     const dayRows = byDay.get(key);
     const c = Object.fromEntries(WAREHOUSE_ORDER.map((w) => [w, 0]));
     for (const r of dayRows) {
-      const wh = isKnownWarehouse(r.warehouse) ? r.warehouse : "TECS-TCS";
+      const wh = normalizeWarehouse(r.warehouse);
       out.push({ ...r, stt: ++c[wh] });
     }
   }
@@ -122,6 +87,7 @@ function migrateRows(rows, workDateIso) {
   return rows.map((r) => {
     const base = {
       ...r,
+      warehouse: normalizeWarehouse(r.warehouse),
       sessionDate:
         typeof r.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.sessionDate)
           ? r.sessionDate
@@ -173,35 +139,7 @@ function nextNewId(rows) {
 }
 
 export function createInitialState() {
-  const raw = JSON.parse(fs.readFileSync(INITIAL_FILE, "utf8"));
-  const withS = raw.map((r) => ({
-    ...r,
-    sessionDate:
-      typeof r.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.sessionDate)
-        ? r.sessionDate
-        : SEED_SESSION_DAY,
-    note: typeof r.note === "string" ? r.note : "",
-    customerCode: typeof r.customerCode === "string" ? r.customerCode : "",
-    dimWeightKg:
-      r.dimWeightKg === null || typeof r.dimWeightKg === "number" ? r.dimWeightKg : null,
-    dimLines: normalizeDimLines(r.dimLines),
-    dimDivisor: r.dimDivisor === 5000 || r.dimDivisor === 6000 ? r.dimDivisor : null,
-  }));
-  return {
-    version: 1,
-    rows: renumberSttForAll(withS),
-    customers: buildDefaultCustomerDirectoryFromSeed(),
-    airlineLabelOverrides: emptyAirlineLabelOverrides(),
-    printerProfiles: emptyPrinterProfilesCatalog(),
-    globalAgents: normalizeGlobalAgentsLoose(undefined),
-    scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(undefined),
-    ecargoKhoScsc: {},
-    invoiceCatalog: normalizeInvoiceCatalogLoose(undefined),
-  };
-}
-
-function keepEcargoMap(state) {
-  return normalizeEcargoKhoScscMapLoose(state?.ecargoKhoScsc);
+  return emptyInitialState();
 }
 
 function finishState(state, rows, extras = {}) {
@@ -209,22 +147,10 @@ function finishState(state, rows, extras = {}) {
     version: state.version + 1,
     rows: renumberSttForAll(rows),
     customers: extras.customers ?? state.customers ?? [],
-    globalAgents: extras.globalAgents ?? normalizeGlobalAgentsLoose(state.globalAgents),
     airlineLabelOverrides:
       extras.airlineLabelOverrides ?? normalizeAirlineLabelOverridesLoose(state.airlineLabelOverrides),
     printerProfiles: extras.printerProfiles ?? normalizePrinterProfilesCatalogLoose(state.printerProfiles),
-    scscWeighPrintSettings:
-      extras.scscWeighPrintSettings ?? normalizeScscWeighPrintSettingsLoose(state.scscWeighPrintSettings),
-    ecargoKhoScsc: extras.ecargoKhoScsc ?? keepEcargoMap(state),
-    invoiceCatalog: extras.invoiceCatalog ?? normalizeInvoiceCatalogLoose(state.invoiceCatalog),
   };
-}
-
-/**
- * @param {import('redis').RedisClientType | null} client
- */
-export function setRedisStateClient(client) {
-  redisStateClient = client;
 }
 
 /**
@@ -238,44 +164,14 @@ function normalizeState(raw) {
   if (!raw || !raw.rows || !Array.isArray(raw.rows) || typeof raw.version !== "number") return null;
   const merged = migrateRows(raw.rows, raw.workDateIso);
   const hasCustomersKey = Object.prototype.hasOwnProperty.call(raw, "customers");
-  let customers = parseCustomersLoose(hasCustomersKey ? raw.customers : undefined);
-  if (!hasCustomersKey) {
-    customers = shouldSkipDemoSeed() ? [] : buildDefaultCustomerDirectoryFromSeed();
-  }
+  const customers = parseCustomersLoose(hasCustomersKey ? raw.customers : undefined);
   return {
     version: raw.version,
     rows: renumberSttForAll(merged),
     customers,
     airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(raw.airlineLabelOverrides),
     printerProfiles: normalizePrinterProfilesCatalogLoose(raw.printerProfiles),
-    globalAgents: normalizeGlobalAgentsLoose(raw.globalAgents),
-    scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(raw.scscWeighPrintSettings),
-    ecargoKhoScsc: normalizeEcargoKhoScscMapLoose(raw.ecargoKhoScsc),
-    invoiceCatalog: normalizeInvoiceCatalogLoose(raw.invoiceCatalog),
   };
-}
-
-function loadStateFile() {
-  ensureDir();
-  try {
-    if (fs.existsSync(STATE_FILE)) {
-      const raw = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
-      const n = normalizeState(raw);
-      if (n) return n;
-    }
-  } catch (e) {
-    console.error("[state] load error", e.message);
-  }
-  const fresh = shouldSkipDemoSeed() ? emptyInitialState() : createInitialState();
-  saveStateFile(fresh);
-  return fresh;
-}
-
-function saveStateFile(state) {
-  ensureDir();
-  const tmp = `${STATE_FILE}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(state), "utf8");
-  fs.renameSync(tmp, STATE_FILE);
 }
 
 function normalizeOrThrow(raw, source) {
@@ -284,88 +180,25 @@ function normalizeOrThrow(raw, source) {
   throw new Error(`[state] Dữ liệu ${source} không hợp lệ.`);
 }
 
-async function loadStateFromRedis() {
-  if (!redisStateClient) return null;
-  const raw = await redisStateClient.get(REDIS_STATE_KEY);
-  if (!raw) return null;
-  try {
-    return normalizeOrThrow(JSON.parse(raw), `Redis (${REDIS_STATE_KEY})`);
-  } catch (e) {
-    console.error("[state] redis load/parse error", e.message);
-    throw new Error(
-      `[state] Dữ liệu Redis (${REDIS_STATE_KEY}) lỗi hoặc hỏng. Không tự seed lại. Khôi phục từ backup.`
-    );
-  }
-}
-
-function loadStateFileIfExists() {
-  ensureDir();
-  try {
-    if (fs.existsSync(STATE_FILE)) {
-      return normalizeOrThrow(JSON.parse(fs.readFileSync(STATE_FILE, "utf8")), STATE_FILE);
-    }
-  } catch (e) {
-    console.warn("[state] load file existing bỏ qua:", e.message);
-  }
-  return null;
-}
-
-async function bootstrapStateForEmptyStore() {
-  const redis = await loadStateFromRedis();
-  if (redis) return redis;
-
-  const disk = loadStateFileIfExists();
-  if (disk) return disk;
-
-  return shouldSkipDemoSeed() ? emptyInitialState() : createInitialState();
-}
-
 /** @returns {Promise<object>} */
 export async function loadState() {
-  if (postgresStateStore) {
-    const raw = await postgresStateStore.loadRawState();
-    if (raw) return normalizeOrThrow(raw, `Postgres (${postgresStateStore.key})`);
-    const fresh = await bootstrapStateForEmptyStore();
-    await postgresStateStore.saveState(fresh);
-    console.info(`[state] đã bootstrap state vào Postgres (${postgresStateStore.key})`);
-    return fresh;
+  if (!postgresStateStore) {
+    throw new Error("[state] Postgres chưa cấu hình (DATABASE_URL).");
   }
-
-  if (redisStateClient) {
-    const parsed = await loadStateFromRedis();
-    if (!parsed) {
-      try {
-        if (fs.existsSync(STATE_FILE)) {
-          const disk = normalizeState(JSON.parse(fs.readFileSync(STATE_FILE, "utf8")));
-          if (disk) {
-            await redisStateClient.set(REDIS_STATE_KEY, JSON.stringify(disk));
-            console.info("[state] đã migrate state.json → Redis");
-            return disk;
-          }
-        }
-      } catch (e) {
-        console.warn("[state] migrate file → Redis bỏ qua:", e.message);
-      }
-      const fresh = shouldSkipDemoSeed() ? emptyInitialState() : createInitialState();
-      await redisStateClient.set(REDIS_STATE_KEY, JSON.stringify(fresh));
-      return fresh;
-    }
-    return parsed;
-  }
-  return loadStateFile();
+  const raw = await postgresStateStore.loadRawState();
+  if (raw) return normalizeOrThrow(raw, `Postgres (${postgresStateStore.key})`);
+  const fresh = emptyInitialState();
+  await postgresStateStore.saveState(fresh);
+  console.info(`[state] đã bootstrap state trống vào Postgres (${postgresStateStore.key})`);
+  return fresh;
 }
 
 /** @param {object} state */
 export async function saveState(state) {
-  if (postgresStateStore) {
-    await postgresStateStore.saveState(state);
-    return;
+  if (!postgresStateStore) {
+    throw new Error("[state] Postgres chưa cấu hình (DATABASE_URL).");
   }
-  if (redisStateClient) {
-    await redisStateClient.set(REDIS_STATE_KEY, JSON.stringify(state));
-    return;
-  }
-  saveStateFile(state);
+  await postgresStateStore.saveState(state);
 }
 
 /**
@@ -381,16 +214,6 @@ export function applyMutation(state, mutation) {
       const list = validateCustomerDirectoryPayload(mutation.customers);
       return finishState(state, rows, { customers: list });
     }
-    case "SET_GLOBAL_AGENTS": {
-      return finishState(state, rows, {
-        globalAgents: normalizeGlobalAgentsLoose(mutation?.catalog),
-      });
-    }
-    case "SET_SCSC_WEIGH_PRINT_SETTINGS": {
-      return finishState(state, rows, {
-        scscWeighPrintSettings: normalizeScscWeighPrintSettingsLoose(mutation?.settings),
-      });
-    }
     case "SET_AIRLINE_LABEL_OVERRIDES": {
       return finishState(state, rows, {
         airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(mutation?.overrides),
@@ -400,65 +223,6 @@ export function applyMutation(state, mutation) {
       return finishState(state, rows, {
         printerProfiles: normalizePrinterProfilesCatalogLoose(mutation?.catalog),
       });
-    }
-    case "SET_INVOICE_CATALOG": {
-      return finishState(state, rows, {
-        invoiceCatalog: normalizeInvoiceCatalogLoose(mutation?.catalog),
-      });
-    }
-    case "PATCH_ECARGO_KHO_SCSC": {
-      const shipmentId = String(mutation?.shipmentId ?? "").trim();
-      if (!shipmentId) throw new Error("PATCH_ECARGO_KHO_SCSC requires shipmentId");
-      if (!rows.some((r) => r.id === shipmentId)) {
-        throw new Error(`Shipment not found: ${shipmentId}`);
-      }
-      const prev = keepEcargoMap(state);
-      const line = { ...(prev[shipmentId] ?? { vehicleInput: "" }) };
-      if (mutation.vehicleInput !== undefined) {
-        line.vehicleInput = normalizeEcargoVehicleInput(mutation.vehicleInput);
-      }
-      if (mutation.driverName !== undefined) {
-        const t = String(mutation.driverName).trim().slice(0, 120);
-        if (t) line.driverName = t;
-        else delete line.driverName;
-      }
-      if (mutation.driverId !== undefined) {
-        const t = String(mutation.driverId).replace(/\D/g, "").slice(0, 20);
-        if (t) line.driverId = t;
-        else delete line.driverId;
-      }
-      if (mutation.arrivalDate !== undefined) {
-        const t = String(mutation.arrivalDate).trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(t)) line.arrivalDate = t;
-        else delete line.arrivalDate;
-      }
-      if (mutation.arrivalTimeSlot !== undefined) {
-        const t = String(mutation.arrivalTimeSlot).trim();
-        if (/^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$/.test(t)) line.arrivalTimeSlot = t.replace(/\s+/g, " ");
-        else delete line.arrivalTimeSlot;
-      }
-      if (mutation.vehicleType !== undefined) {
-        const allowed = new Set(["Ô tô", "Xe máy", "Xe ba gác", "Đi bộ"]);
-        const t = String(mutation.vehicleType).trim();
-        if (allowed.has(t)) line.vehicleType = t;
-        else delete line.vehicleType;
-      }
-      if (mutation.markedSubmitted !== undefined) {
-        line.markedSubmitted = Boolean(mutation.markedSubmitted);
-      }
-      line.updatedAt = new Date().toISOString();
-      const nextMap = { ...prev, [shipmentId]: line };
-      if (!line.vehicleInput && !line.markedSubmitted) {
-        delete nextMap[shipmentId];
-      }
-      return finishState(state, rows, { ecargoKhoScsc: nextMap });
-    }
-    case "MERGE_ECARGO_KHO_SCSC": {
-      const merged = {
-        ...keepEcargoMap(state),
-        ...normalizeEcargoKhoScscMapLoose(mutation?.map),
-      };
-      return finishState(state, rows, { ecargoKhoScsc: merged });
     }
     case "UPDATE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
@@ -476,9 +240,7 @@ export function applyMutation(state, mutation) {
       const i = rows.findIndex((r) => r.id === mutation.id);
       if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
       rows.splice(i, 1);
-      const ecargo = { ...keepEcargoMap(state) };
-      delete ecargo[mutation.id];
-      return finishState(state, rows, { ecargoKhoScsc: ecargo });
+      break;
     }
     case "ADD": {
       const s = mutation.shipment;
@@ -493,64 +255,26 @@ export function applyMutation(state, mutation) {
     }
     default:
       throw new Error(
-        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, PATCH_ECARGO_KHO_SCSC, MERGE_ECARGO_KHO_SCSC, UPDATE, DELETE, ADD. ` +
-          `Nếu vừa cập nhật code — hãy dừng toàn bộ process Node rồi chạy lại "npm run dev" (cần cả API + Vite).`
+        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, UPDATE, DELETE, ADD.`
       );
   }
 
   return finishState(state, rows);
 }
 
-/**
- * @param {() => Promise<T>} fn
- * @returns {Promise<T>}
- * @template T
- */
-async function withDistributedLock(fn) {
-  if (!redisStateClient) return fn();
-  const token = randomUUID();
-  for (let attempt = 0; attempt < 120; attempt++) {
-    const ok = await redisStateClient.set(REDIS_LOCK_KEY, token, { NX: true, EX: 25 });
-    if (ok) {
-      try {
-        return await fn();
-      } finally {
-        await redisStateClient.eval(UNLOCK_SCRIPT, {
-          keys: [REDIS_LOCK_KEY],
-          arguments: [token],
-        });
-      }
-    }
-    await new Promise((r) => setTimeout(r, 15 + Math.random() * 40));
-  }
-  throw new Error("Không lấy được khóa state (Redis); thử lại sau.");
-}
-
 let tail = Promise.resolve();
 
 export function runMutation(mutation) {
   const result = tail.then(async () => {
-    if (postgresStateStore) {
-      return postgresStateStore.runLocked(async (currentRaw) => {
-        const current = currentRaw
-          ? normalizeOrThrow(currentRaw, `Postgres (${postgresStateStore.key})`)
-          : await bootstrapStateForEmptyStore();
-        return applyMutation(current, mutation);
-      });
+    if (!postgresStateStore) {
+      throw new Error("[state] Postgres chưa cấu hình (DATABASE_URL).");
     }
-
-    if (redisStateClient) {
-      return withDistributedLock(async () => {
-        const current = await loadState();
-        const next = applyMutation(current, mutation);
-        await saveState(next);
-        return next;
-      });
-    }
-    const current = loadStateFile();
-    const next = applyMutation(current, mutation);
-    saveStateFile(next);
-    return next;
+    return postgresStateStore.runLocked(async (currentRaw) => {
+      const current = currentRaw
+        ? normalizeOrThrow(currentRaw, `Postgres (${postgresStateStore.key})`)
+        : emptyInitialState();
+      return applyMutation(current, mutation);
+    });
   });
   tail = result.catch(async (err) => {
     console.error("[mutation]", err);

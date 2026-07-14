@@ -1,0 +1,21 @@
+# Postgres local cho TECSOPS (`npm run dev`). Không dùng cho production.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tecsops-postgres
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: tecsops
+      POSTGRES_PASSWORD: tecsops
+      POSTGRES_DB: tecsops
+    volumes:
+      - tecsops_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tecsops -d tecsops"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  tecsops_pgdata:

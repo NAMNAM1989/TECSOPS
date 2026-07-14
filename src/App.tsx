@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { Shipment } from "./types/shipment";
 import { AirCargoTracking } from "./components/AirCargoTracking";
 import { PrintShippingLabel } from "./components/PrintShippingLabel";
-import { SitePasswordGate } from "./components/SitePasswordGate";
 import type { AirlineLabelOverrides } from "./utils/airlineLabelOverridesCore";
 
 type PrintJob = { shipment: Shipment; airlineLabelOverrides?: AirlineLabelOverrides | null };
@@ -11,7 +10,7 @@ export default function App() {
   const [printJob, setPrintJob] = useState<PrintJob | null>(null);
 
   return (
-    <SitePasswordGate>
+    <>
       <div className="no-print min-h-screen">
         <AirCargoTracking
           onRequestPrint={(shipment, airlineLabelOverrides) =>
@@ -26,6 +25,6 @@ export default function App() {
           onClose={() => setPrintJob(null)}
         />
       )}
-    </SitePasswordGate>
+    </>
   );
 }

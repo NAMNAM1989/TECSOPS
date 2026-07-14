@@ -4,7 +4,6 @@ import type { Shipment } from "../types/shipment";
 import { saveRows } from "../utils/shipmentStorage";
 import { credFetch } from "../apiFetch";
 import { parseAppState } from "../utils/appStateParse";
-import { buildDefaultCustomerDirectory } from "../utils/defaultCustomerDirectory";
 import {
   loadCustomerDirectoryFromStorage,
   saveCustomerDirectoryToStorage,
@@ -19,8 +18,6 @@ import {
   loadAirlineLabelOverridesFromStorage,
   saveAirlineLabelOverridesToStorage,
 } from "../utils/airlineLabelOverridesStorage";
-import { mergeServerCatalogIntoLocalStore } from "../printing/printerProfilesSync";
-import type { EcargoJobRecord } from "../types/ecargoJob";
 
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
@@ -30,24 +27,15 @@ const SOCKET_IO_PATH = "/socket.io/" as const;
 const SOCKET_RECONNECT_DELAY_MS = 1000;
 const SOCKET_RECONNECT_DELAY_MAX_MS = 10000;
 
-/** Giữ bản sao mới hơn hoặc bằng `version` (tránh ghi đè do gói tin lệch thứ tự). */
-function hydratePrinterProfiles(next: AppState): AppState {
-  if (next.printerProfiles && next.printerProfiles.profiles.length > 0) {
-    mergeServerCatalogIntoLocalStore(next.printerProfiles);
-  }
-  return next;
-}
-
 function pickNewerState(prev: AppState | null, next: AppState): AppState {
-  const picked = !prev || next.version >= prev.version ? next : prev;
-  return hydratePrinterProfiles(picked);
+  return !prev || next.version >= prev.version ? next : prev;
 }
 
 function offlineBootstrapState(rows: Shipment[]): AppState {
   return {
     version: 0,
     rows,
-    customers: loadCustomerDirectoryFromStorage() ?? buildDefaultCustomerDirectory(),
+    customers: loadCustomerDirectoryFromStorage() ?? [],
     airlineLabelOverrides: loadAirlineLabelOverridesFromStorage() ?? undefined,
   };
 }
@@ -61,7 +49,6 @@ export function useShipmentSync(fallback: Fallback) {
   const [state, setState] = useState<AppState | null>(null);
   const apiOkRef = useRef(false);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
-  const ecargoJobListenersRef = useRef(new Set<(job: EcargoJobRecord) => void>());
   const fallbackRef = useRef(fallback);
   fallbackRef.current = fallback;
 
@@ -122,11 +109,6 @@ export function useShipmentSync(fallback: Fallback) {
         if (apiOkRef.current) setStatus("degraded");
       });
       socket.on("sync", onSync);
-      socket.on("ecargo-job", (payload: unknown) => {
-        const job = parseEcargoJobLoose(payload);
-        if (!job) return;
-        for (const fn of ecargoJobListenersRef.current) fn(job);
-      });
     })();
 
     return () => {
@@ -134,13 +116,6 @@ export function useShipmentSync(fallback: Fallback) {
       setSocketConnected(false);
       socketRef.current?.close();
       socketRef.current = null;
-    };
-  }, []);
-
-  const subscribeEcargoJob = useCallback((fn: (job: EcargoJobRecord) => void) => {
-    ecargoJobListenersRef.current.add(fn);
-    return () => {
-      ecargoJobListenersRef.current.delete(fn);
     };
   }, []);
 
@@ -158,9 +133,6 @@ export function useShipmentSync(fallback: Fallback) {
           }
           if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
             saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
-          }
-          if (mutation.action === "SET_PRINTER_PROFILES" && next.printerProfiles) {
-            mergeServerCatalogIntoLocalStore(next.printerProfiles);
           }
           computed = next;
           return next;
@@ -238,58 +210,12 @@ export function useShipmentSync(fallback: Fallback) {
     const parsed = parseAppState(raw);
     if (!parsed) return false;
     setState((prev) => {
-      if (opts?.force) return hydratePrinterProfiles(parsed);
+      if (opts?.force) return parsed;
       return pickNewerState(prev, parsed);
     });
     saveRows(parsed.rows);
     return true;
   }, []);
 
-  return { status, state, mutate, socketConnected, subscribeEcargoJob, refreshState, applyRemoteState };
-}
-
-function parseEcargoJobLoose(raw: unknown): EcargoJobRecord | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  const shipmentId = typeof o.shipmentId === "string" ? o.shipmentId : "";
-  const status = typeof o.status === "string" ? o.status : "";
-  if (!shipmentId || !status) return null;
-  return {
-    shipmentId,
-    status: status as EcargoJobRecord["status"],
-    jobId: typeof o.jobId === "string" ? o.jobId : undefined,
-    vehicleNo: typeof o.vehicleNo === "string" ? o.vehicleNo : undefined,
-    message: typeof o.message === "string" ? o.message : undefined,
-    verifyUrl: typeof o.verifyUrl === "string" ? o.verifyUrl : undefined,
-    verifyCode: typeof o.verifyCode === "string" ? o.verifyCode : undefined,
-    registrationNo: typeof o.registrationNo === "string" ? o.registrationNo : undefined,
-    mailReceivedAt: typeof o.mailReceivedAt === "string" ? o.mailReceivedAt : undefined,
-    verifyClickedAt: typeof o.verifyClickedAt === "string" ? o.verifyClickedAt : undefined,
-    qrReceivedAt: typeof o.qrReceivedAt === "string" ? o.qrReceivedAt : undefined,
-    qrSubject: typeof o.qrSubject === "string" ? o.qrSubject : undefined,
-    hasQrImage: typeof o.hasQrImage === "boolean" ? o.hasQrImage : undefined,
-    qrImageDataUrl: typeof o.qrImageDataUrl === "string" ? o.qrImageDataUrl : undefined,
-    detailsUrl: typeof o.detailsUrl === "string" ? o.detailsUrl : undefined,
-    stageMs:
-      o.stageMs && typeof o.stageMs === "object"
-        ? {
-            playwright:
-              typeof (o.stageMs as Record<string, unknown>).playwright === "number"
-                ? ((o.stageMs as Record<string, unknown>).playwright as number)
-                : undefined,
-            verify:
-              typeof (o.stageMs as Record<string, unknown>).verify === "number"
-                ? ((o.stageMs as Record<string, unknown>).verify as number)
-                : undefined,
-            qrWait:
-              typeof (o.stageMs as Record<string, unknown>).qrWait === "number"
-                ? ((o.stageMs as Record<string, unknown>).qrWait as number)
-                : undefined,
-          }
-        : undefined,
-    updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : undefined,
-    createdAt: typeof o.createdAt === "string" ? o.createdAt : undefined,
-    finishedAt: typeof o.finishedAt === "string" ? o.finishedAt : undefined,
-    durationMs: typeof o.durationMs === "number" ? o.durationMs : undefined,
-  };
+  return { status, state, mutate, socketConnected, refreshState, applyRemoteState };
 }

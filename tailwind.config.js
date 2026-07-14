@@ -70,19 +70,9 @@ export default {
           "0%": { opacity: "0", transform: "translateY(-6px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        "ecargo-backdrop-in": {
-          "0%": { opacity: "0" },
-          "100%": { opacity: "1" },
-        },
-        "ecargo-card-in": {
-          "0%": { opacity: "0", transform: "scale(0.9) translateY(1rem)" },
-          "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
-        },
       },
       animation: {
         "tecsops-actions-strip": "tecsops-actions-strip 0.2s ease-out forwards",
-        "ecargo-backdrop-in": "ecargo-backdrop-in 0.22s ease-out forwards",
-        "ecargo-card-in": "ecargo-card-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards",
       },
     },
   },

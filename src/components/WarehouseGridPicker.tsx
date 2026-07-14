@@ -7,10 +7,6 @@ const CARD_RING: Record<Warehouse, string> = {
     "ring-sky-400/50 shadow-[0_0_20px_rgba(56,189,248,0.18)] dark:ring-sky-400/40 dark:shadow-[0_0_24px_rgba(56,189,248,0.12)]",
   "TECS-SCSC":
     "ring-violet-400/50 shadow-[0_0_20px_rgba(167,139,250,0.18)] dark:ring-violet-400/40 dark:shadow-[0_0_24px_rgba(167,139,250,0.12)]",
-  "KHO-TCS":
-    "ring-amber-400/50 shadow-[0_0_20px_rgba(251,191,36,0.16)] dark:ring-amber-400/35 dark:shadow-[0_0_24px_rgba(251,191,36,0.1)]",
-  "KHO-SCSC":
-    "ring-emerald-400/50 shadow-[0_0_20px_rgba(52,211,153,0.18)] dark:ring-emerald-400/40 dark:shadow-[0_0_24px_rgba(52,211,153,0.12)]",
 };
 
 interface Props {

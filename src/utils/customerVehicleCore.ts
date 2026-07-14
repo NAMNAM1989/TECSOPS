@@ -5,8 +5,11 @@ import {
   clampCustomerSavedVehicle,
   emptyCustomerSavedVehicle,
 } from "./customerDirectoryProfile";
-import { findCustomerEntry } from "./mapBookingToScaleTicketFormData";
-import { normalizeEcargoVehicleInput, ECARGO_VEHICLE_MIN } from "./ecargoKhoScscCore";
+import { findCustomerEntry } from "./customerBookingResolve";
+import {
+  normalizeVehiclePlateInput as normalizeEcargoVehicleInput,
+  VEHICLE_PLATE_MIN as ECARGO_VEHICLE_MIN,
+} from "./vehiclePlateNormalize";
 
 function norm(s: string): string {
   return s.trim().toLowerCase();

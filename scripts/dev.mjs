@@ -1,26 +1,72 @@
 /**
  * Dev ổn định: giải phóng port, khởi động API trước, chờ sẵn sàng rồi mới chạy Vite.
  * Tránh lỗi proxy ECONNREFUSED khi Vite start trước server.
+ *
+ * Cần DATABASE_URL trong .env.local (Postgres). Local: `docker compose up -d`
  */
 import { spawn } from "node:child_process";
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const API_PORT = Number(process.env.PORT || 3001);
 const VITE_PORT = Number(process.env.VITE_PORT || 5173);
-const enableEcargoWorker = process.argv.includes("--ecargo");
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function readEnvFileValue(rel, key) {
+  const p = path.join(root, rel);
+  if (!fs.existsSync(p)) return "";
+  for (const line of fs.readFileSync(p, "utf8").split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith("#")) continue;
+    const eq = t.indexOf("=");
+    if (eq <= 0) continue;
+    if (t.slice(0, eq).trim() !== key) continue;
+    let val = t.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    return val.trim();
+  }
+  return "";
+}
+
+function ensureDatabaseUrlHint() {
+  const fromEnv = process.env.DATABASE_URL?.trim();
+  const fromLocal = readEnvFileValue(".env.local", "DATABASE_URL");
+  const fromDot = readEnvFileValue(".env", "DATABASE_URL");
+  if (fromEnv || fromLocal || fromDot) return;
+  console.error(`
+[dev] Thiếu DATABASE_URL.
+
+  1) Khởi động Postgres local:
+       docker compose up -d
+
+  2) Thêm vào .env.local:
+       DATABASE_URL=postgresql://tecsops:tecsops@127.0.0.1:5434/tecsops
+
+`);
+  process.exit(1);
+}
+
 function freePort(port) {
   if (process.platform === "win32") {
     try {
-      execSync(
-        `powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"`,
+      execFileSync(
+        "powershell",
+        [
+          "-NoProfile",
+          "-Command",
+          `Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`,
+        ],
         { stdio: "ignore" }
       );
     } catch {
@@ -40,7 +86,7 @@ function freePort(port) {
 
 async function waitForApi(maxMs = 60_000) {
   const deadline = Date.now() + maxMs;
-  const url = `http://127.0.0.1:${API_PORT}/api/auth/gate`;
+  const url = `http://127.0.0.1:${API_PORT}/api/health`;
   while (Date.now() < deadline) {
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
@@ -54,13 +100,17 @@ async function waitForApi(maxMs = 60_000) {
 }
 
 function run(cmd, args, extraEnv = {}) {
+  // Windows: shell chỉ khi cần resolve .cmd (npx); tránh DEP0190 với node.
+  const useShell = process.platform === "win32" && cmd !== "node";
   return spawn(cmd, args, {
     cwd: root,
     stdio: "inherit",
     env: { ...process.env, ...extraEnv },
-    shell: process.platform === "win32",
+    shell: useShell,
   });
 }
+
+ensureDatabaseUrlHint();
 
 console.info(`[dev] Giải phóng port ${API_PORT}, ${VITE_PORT}…`);
 freePort(API_PORT);
@@ -70,17 +120,14 @@ await sleep(800);
 console.info(`[dev] Khởi động API :${API_PORT}…`);
 const server = run("node", ["server/index.mjs"], {
   TECSOPS_DEV: "1",
-  ECARGO_WORKER_ENABLED: enableEcargoWorker ? "1" : "0",
 });
-if (enableEcargoWorker) {
-  console.info("[dev] eCargo worker BẬT (--ecargo)");
-} else {
-  console.info("[dev] eCargo worker TẮT — dùng npm run dev:ecargo khi cần test");
-}
 
 const ready = await waitForApi();
 if (!ready) {
-  console.error(`[dev] API không sẵn sàng sau 60s — kiểm tra log server / .env.local`);
+  console.error(
+    `[dev] API không sẵn sàng sau 60s — kiểm tra log server / DATABASE_URL trong .env.local\n` +
+      `      Postgres local: docker compose up -d  (port 5434)`
+  );
   server.kill("SIGTERM");
   process.exit(1);
 }

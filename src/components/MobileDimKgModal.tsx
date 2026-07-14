@@ -1,10 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
-import { useDimSpeechRecognition } from "../hooks/useDimSpeechRecognition";
-import {
-  numbersFromDimVoiceTranscript,
-  preprocessDimVoiceTranscript,
-} from "../utils/dimVoiceTranscript";
 import {
   type DimDivisor,
   type DimPieceLine,
@@ -13,7 +8,6 @@ import {
   dimRoundingPolicyFromFlight,
   formatDimKgDisplay,
   lineDimKg,
-  parseDimLineQuadsFromNumbers,
   totalDimKgFromLines,
   tryParseDimPieceLinesFromComboText,
 } from "../utils/volumetricDim";
@@ -63,84 +57,28 @@ const DIM_QUICK_NUMS = ["120", "100", "80", "60", "50", "40", "30", "25", "20"] 
 const DIM_INPUT_HINT =
   "Mỗi dòng: D-R-C-kiện hoặc D×R×C×kiện. Enter thêm dòng · Shift+Enter xuống dòng · Ctrl+Enter luôn thêm.";
 
-/** Mic + tổng DIM — layout gọn. */
-function DimMicTotalRow({
-  speechOk,
-  listening,
-  liveCaption,
-  totalDimLabel,
-  onMicPress,
-}: {
-  speechOk: boolean;
-  listening: boolean;
-  liveCaption: string;
-  totalDimLabel: string;
-  onMicPress: () => void;
-}) {
+/** Tổng DIM — layout gọn. */
+function DimTotalRow({ totalDimLabel }: { totalDimLabel: string }) {
   return (
     <section
       className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/90 to-white p-2.5 shadow-sm"
-      aria-label="Mic và tổng DIM"
+      aria-label="Tổng DIM"
     >
-      <div className="flex items-center gap-2.5">
-        <div className="relative shrink-0">
-          {listening ? (
-            <div className="absolute inset-x-0 -top-0.5 flex h-5 items-end justify-center gap-0.5" aria-hidden>
-              {[0, 1, 2, 3, 4].map((i) => (
-                <span
-                  key={i}
-                  className="w-0.5 origin-bottom rounded-full bg-violet-500 motion-safe:animate-[dim-voice-bar_0.9s_ease-in-out_infinite]"
-                  style={{ animationDelay: `${i * 0.12}s`, height: `${8 + (i % 3) * 5}px` }}
-                />
-              ))}
-            </div>
-          ) : null}
-          <button
-            type="button"
-            disabled={!speechOk}
-            onClick={onMicPress}
-            aria-pressed={listening}
-            aria-label={listening ? "Dừng mic" : "Mic — đọc số D R C kiện"}
-            className={`relative mt-0.5 flex h-12 w-12 items-center justify-center rounded-2xl shadow-sm transition-transform touch-manipulation active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45 ${
-              listening
-                ? "bg-gradient-to-br from-rose-500 to-orange-500 text-white ring-2 ring-rose-200/90"
-                : "bg-gradient-to-br from-violet-600 to-indigo-600 text-white ring-1 ring-violet-300/60"
-            }`}
-          >
-            <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 0014 0h-2zm-5 8c-2.21 0-4-1.12-4-2.5V16h8v.5C16 20.88 14.21 22 12 22z" />
-            </svg>
-          </button>
-        </div>
-        <div className="min-w-0 flex-1 text-right">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-apple-tertiary">Tổng DIM</p>
-          <p className="text-[1.65rem] font-bold leading-tight tabular-nums tracking-tight text-apple-label">
-            {totalDimLabel}
-          </p>
-          {listening ? (
-            <p className="mt-0.5 line-clamp-2 text-left text-[10px] text-violet-700" aria-live="polite">
-              {liveCaption.trim() ? liveCaption : "Đang nghe…"}
-            </p>
-          ) : null}
-        </div>
+      <div className="min-w-0 flex-1 text-right">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-apple-tertiary">Tổng DIM</p>
+        <p className="text-[1.65rem] font-bold leading-tight tabular-nums tracking-tight text-apple-label">
+          {totalDimLabel}
+        </p>
       </div>
     </section>
   );
 }
 
-type VoiceDimPreview = {
-  transcript: string;
-  parsed: DimPieceLine[];
-};
-
 export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps) {
   const [combo, setCombo] = useState("");
   const [lines, setLines] = useState<DimPieceLine[]>(() => cloneLines(row.dimLines));
-  const [voicePreview, setVoicePreview] = useState<VoiceDimPreview | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
-
-  const { listening, liveCaption, start, finalize, speechOk } = useDimSpeechRecognition();
 
   const dimPolicy: DimRoundingPolicyId = useMemo(
     () => dimRoundingPolicyFromFlight(row.flight),
@@ -173,19 +111,6 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     setLines((prev) => [...prev, ...parsed]);
   }, []);
 
-  const applyVoicePreview = useCallback(() => {
-    if (!voicePreview?.parsed.length) return;
-    const parsed = voicePreview.parsed;
-    const nextSum = lines.reduce((s, l) => s + l.pcs, 0) + parsed.reduce((s, l) => s + l.pcs, 0);
-    if (declaredPcs != null && nextSum > declaredPcs) {
-      window.alert(
-        `Dư kiện: nếu thêm nhóm này, tổng kiện (${nextSum}) vượt kiện lô (${declaredPcs}).`
-      );
-      return;
-    }
-    appendQuads(parsed);
-    setVoicePreview(null);
-  }, [appendQuads, declaredPcs, lines, voicePreview]);
 
   const addFromCombo = () => {
     const parsedResult = tryParseDimPieceLinesFromComboText(combo);
@@ -207,35 +132,6 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     textareaRef.current?.focus();
   };
 
-  const startVoiceCalc = useCallback(() => {
-    if (listening) {
-      finalize();
-      return;
-    }
-    setVoicePreview(null);
-    start({
-      continuous: false,
-      interimResults: false,
-      onFinal: (text) => {
-        if (!text.trim()) {
-          window.alert("Chưa nghe được câu thoại — thử lại.");
-          return;
-        }
-        const nums = numbersFromDimVoiceTranscript(text);
-        const parsed = parseDimLineQuadsFromNumbers(nums);
-        if (parsed.length > 0) {
-          setVoicePreview({ transcript: text.trim(), parsed });
-          return;
-        }
-        const normalized = preprocessDimVoiceTranscript(text).replace(/\s+/g, "");
-        setCombo(normalizeDimComboInput(normalized));
-        window.alert(
-          "Chưa đủ bộ số (cần ít nhất D×R×C hoặc D×R×C×kiện). Đã đưa phần nhận được vào ô nhập — sửa rồi bấm Thêm dòng."
-        );
-      },
-      onErrorMessage: (m) => window.alert(m),
-    });
-  }, [finalize, listening, start]);
 
   const removeLine = (index: number) => {
     setLines((prev) => prev.filter((_, i) => i !== index));
@@ -292,51 +188,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2.5">
           <div className="space-y-2.5">
-            {!isInputFocused && (
-              <DimMicTotalRow
-                speechOk={speechOk}
-                listening={listening}
-                liveCaption={liveCaption}
-                totalDimLabel={totalDimLabel}
-                onMicPress={startVoiceCalc}
-              />
-            )}
-
-            {voicePreview ? (
-              <div
-                className="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-2.5"
-                role="region"
-                aria-label="Kết quả nhận từ giọng"
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-900/75">Giọng nói</p>
-                <p className="mt-1 line-clamp-3 text-[11px] text-apple-label">{voicePreview.transcript}</p>
-                <p className="mt-1 font-mono text-xs font-semibold text-emerald-950">
-                  {voicePreview.parsed
-                    .map((l) => {
-                      const kg = lineDimKg(l, divisor, dimPolicy);
-                      const kgPart = kg != null ? ` → ${formatDimKgDisplay(kg, dimPolicy)} kg` : "";
-                      return `${l.lCm}×${l.wCm}×${l.hCm}×${l.pcs}${kgPart}`;
-                    })
-                    .join(" · ")}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={applyVoicePreview}
-                    className="min-h-[40px] flex-1 rounded-xl bg-emerald-600 py-2 text-sm font-semibold text-white active:scale-[0.99]"
-                  >
-                    Thêm vào danh sách
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVoicePreview(null)}
-                    className="min-h-[40px] rounded-xl border border-black/[0.12] px-3 py-2 text-sm font-semibold text-apple-secondary"
-                  >
-                    Bỏ qua
-                  </button>
-                </div>
-              </div>
-            ) : null}
+            {!isInputFocused && <DimTotalRow totalDimLabel={totalDimLabel} />}
 
             <div>
               <div className="mb-1.5 flex items-center justify-between gap-2">

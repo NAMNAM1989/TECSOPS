@@ -3,33 +3,15 @@ import express from "express";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createClient } from "redis";
 import { Server } from "socket.io";
-import { createAdapter } from "@socket.io/redis-adapter";
 import {
   loadState,
   runMutation,
   setPostgresStateStore,
-  setRedisStateClient,
 } from "./stateStore.mjs";
 import { createPostgresStateStore } from "./postgresStateStore.mjs";
-import { registerTsplRoutes } from "./tsplRoutes.mjs";
 import { registerLookupRoutes } from "./lookupRoutes.mjs";
-import {
-  registerPrintPdfRoutes,
-  registerShipmentInvoicePdfRoute,
-} from "./print/printPdfRoutes.mjs";
-import { registerInvoiceExportRoutes } from "./export/invoiceExportRoutes.mjs";
-import { closeDbPool, isDatabaseConfigured } from "./dbPool.mjs";
-import {
-  assertSocketGateOk,
-  getSitePassword,
-  registerSitePasswordGate,
-} from "./authSiteGate.mjs";
-import { registerEcargoRoutes } from "./ecargo/ecargoRoutes.mjs";
-import { setEcargoStateSnapshot } from "./ecargo/ecargoStateCache.mjs";
-import { startEcargoWorker } from "./ecargo/ecargoWorker.mjs";
-import { isEcargoWorkerEnabled } from "./ecargo/ecargoConfig.mjs";
+import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -58,37 +40,27 @@ const io = new Server(httpServer, {
   cors: socketIoCorsOptions(),
 });
 
-io.use((socket, next) => {
-  try {
-    assertSocketGateOk(socket);
-    next();
-  } catch (e) {
-    next(e);
-  }
-});
-
 app.use(express.json({ limit: "2mb" }));
 
-/** Luôn công khai — client biết có cần màn hình đăng nhập hay không (không lộ mật khẩu). */
-app.get("/api/auth/gate", (_req, res) => {
-  res.status(200).json({ required: Boolean(getSitePassword()) });
-});
-
-registerSitePasswordGate(app);
-
-/** Healthcheck Railway / load balancer — luôn 200 khi process sống. */
-app.get("/api/health", (_req, res) => {
-  const postgres = Boolean(process.env.DATABASE_URL?.trim());
-  const redis = Boolean(process.env.REDIS_URL?.trim());
-  res.status(200).json({
-    ok: true,
-    service: "tecsops",
-    storage: { postgres, redis, fileFallback: !postgres && !redis },
-    features: {
-      ecargo: isEcargoWorkerEnabled(),
-      printCatalog: postgres,
-    },
-  });
+/** Healthcheck Railway / load balancer — xác nhận cả process và Postgres. */
+app.get("/api/health", async (_req, res) => {
+  try {
+    const pool = getDbPool();
+    if (!pool) throw new Error("DATABASE_URL is not configured");
+    await pool.query("SELECT 1");
+    res.status(200).json({
+      ok: true,
+      service: "tecsops",
+      storage: { postgres: true },
+    });
+  } catch (e) {
+    console.error("[api/health]", e?.message ?? e);
+    res.status(503).json({
+      ok: false,
+      service: "tecsops",
+      storage: { postgres: false },
+    });
+  }
 });
 
 app.get("/api/state", async (_req, res) => {
@@ -102,61 +74,6 @@ app.get("/api/state", async (_req, res) => {
   }
 });
 
-function normalizeText(v) {
-  return String(v ?? "").trim().toLowerCase();
-}
-
-function buildUnmatchedCustomerRows(state) {
-  const rows = Array.isArray(state?.rows) ? state.rows : [];
-  const customers = Array.isArray(state?.customers) ? state.customers : [];
-  const byId = new Map(customers.map((c) => [normalizeText(c.id), c]));
-  const byCode = new Map(customers.map((c) => [normalizeText(c.code), c]));
-  const byName = new Map(customers.map((c) => [normalizeText(c.name), c]));
-
-  const out = [];
-  for (const r of rows) {
-    const customerId = normalizeText(r.customerId);
-    if (customerId && byId.has(customerId)) continue;
-
-    const code = normalizeText(r.customerCode);
-    const name = normalizeText(r.customer);
-    const suggested = byCode.get(code) ?? byName.get(name) ?? byCode.get(name) ?? null;
-    out.push({
-      id: r.id,
-      awb: r.awb,
-      sessionDate: r.sessionDate,
-      warehouse: r.warehouse,
-      flight: r.flight,
-      flightDate: r.flightDate,
-      customer: r.customer,
-      customerCode: r.customerCode,
-      customerId: r.customerId || "",
-      suggestedCustomerId: suggested?.id ?? "",
-      suggestedCustomerCode: suggested?.code ?? "",
-      suggestedCustomerName: suggested?.name ?? "",
-    });
-  }
-  return out;
-}
-
-app.get("/api/reports/customer-unmatched", async (_req, res) => {
-  try {
-    const state = await loadState();
-    const unmatched = buildUnmatchedCustomerRows(state);
-    res.json({
-      generatedAt: new Date().toISOString(),
-      totalRows: Array.isArray(state.rows) ? state.rows.length : 0,
-      unmatchedCount: unmatched.length,
-      rows: unmatched,
-    });
-  } catch (e) {
-    console.error("[api/reports/customer-unmatched]", e);
-    res.status(500).json({
-      error: isProduction ? "Failed to build unmatched report" : String(e?.message ?? e),
-    });
-  }
-});
-
 app.post("/api/mutation", async (req, res) => {
   try {
     const body = req.body;
@@ -165,7 +82,6 @@ app.post("/api/mutation", async (req, res) => {
       return;
     }
     const next = await runMutation(body);
-    setEcargoStateSnapshot(next);
     io.emit("sync", next);
     res.json(next);
   } catch (e) {
@@ -175,32 +91,11 @@ app.post("/api/mutation", async (req, res) => {
   }
 });
 
-registerTsplRoutes(app);
-registerShipmentInvoicePdfRoute(app);
-registerInvoiceExportRoutes(app);
-console.info("[api] print/pdf/shipment-invoice + export/invoice (không cần Postgres)");
-
-/** eCargo auto-register — cần Redis. */
-let ecargoRedisClient = null;
-registerEcargoRoutes(app, {
-  get redisClient() {
-    return ecargoRedisClient;
-  },
-  loadState,
-  io,
-});
-
-registerSheetsRoutes(app, {
-  io,
-  setEcargoStateSnapshot,
-});
+registerSheetsRoutes(app, { io });
 
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);
-  registerPrintPdfRoutes(app);
-  console.info("[api] lookup + print/pdf/scsc-weigh (Postgres)");
-} else {
-  console.info("[api] lookup / print/scsc-weigh disabled — cần DATABASE_URL");
+  console.info("[api] lookup (Postgres)");
 }
 
 const distDir = path.join(__dirname, "..", "dist");
@@ -226,88 +121,25 @@ app.use((err, _req, res, _next) => {
 const PORT = Number(process.env.PORT) || 3001;
 
 async function start() {
-  const redisUrl = process.env.REDIS_URL?.trim();
   const databaseUrl = process.env.DATABASE_URL?.trim();
-  /** Railway inject các biến này — dùng để tránh chạy production chỉ với file (mất dữ liệu mỗi deploy). */
-  const onRailway = Boolean(
-    process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_SERVICE_ID
-  );
-  const allowFileWithoutRedis = process.env.ALLOW_FILE_STATE_ON_RAILWAY === "1";
-
-  if (onRailway && !databaseUrl && !redisUrl && !allowFileWithoutRedis) {
+  if (!databaseUrl) {
     console.error(
-      "[FATAL] Railway: thiếu DATABASE_URL/REDIS_URL. Thêm Railway Postgres (ưu tiên) hoặc Redis, gán biến cho service app, rồi deploy lại. " +
-        "Nếu bạn cố ý chỉ dùng file trong container (dễ mất khi redeploy), set ALLOW_FILE_STATE_ON_RAILWAY=1."
+      "[FATAL] Thiếu DATABASE_URL. Thêm Postgres (local hoặc Railway) rồi khởi động lại."
     );
     process.exit(1);
   }
 
-  if (databaseUrl) {
-    setPostgresStateStore(createPostgresStateStore(databaseUrl));
-    console.info("[postgres] state storage (table app_state, key tecsops:state)");
-  } else {
-    setPostgresStateStore(null);
-  }
-
-  if (redisUrl) {
-    const pubClient = createClient({ url: redisUrl });
-    const subClient = pubClient.duplicate();
-    const stateClient = createClient({ url: redisUrl });
-
-    pubClient.on("error", (err) => console.error("[redis pub]", err.message));
-    subClient.on("error", (err) => console.error("[redis sub]", err.message));
-    stateClient.on("error", (err) => console.error("[redis state]", err.message));
-
-    const connectTasks = [pubClient.connect(), subClient.connect(), stateClient.connect()];
-    /** Client riêng cho BRPOP — chỉ khi worker bật. */
-    let ecargoQueueClient = null;
-    if (isEcargoWorkerEnabled()) {
-      ecargoQueueClient = createClient({ url: redisUrl });
-      ecargoQueueClient.on("error", (err) => console.error("[redis ecargo-queue]", err.message));
-      connectTasks.push(ecargoQueueClient.connect());
-    }
-
-    await Promise.all(connectTasks);
-    io.adapter(createAdapter(pubClient, subClient));
-    setRedisStateClient(stateClient);
-    ecargoRedisClient = stateClient;
-    if (ecargoQueueClient) {
-      startEcargoWorker({
-        queueClient: ecargoQueueClient,
-        storeClient: stateClient,
-        io,
-        runMutation: async (mutation) => {
-          const next = await runMutation(mutation);
-          setEcargoStateSnapshot(next);
-          io.emit("sync", next);
-          return next;
-        },
-      });
-    } else {
-      console.info(
-        "[ecargo] Worker tắt — API đọc job Redis vẫn hoạt động; POST /api/ecargo/jobs trả 503"
-      );
-    }
-    console.info(
-      databaseUrl
-        ? "[redis] Socket.IO adapter + bootstrap/rollback state available (Postgres is primary)"
-        : "[redis] Socket.IO adapter + state storage (key tecsops:state)"
-    );
-  } else {
-    setRedisStateClient(null);
-    console.info(
-      databaseUrl
-        ? "[socket] Socket.IO in-memory (Postgres state; single app replica recommended without Redis adapter)"
-        : "[state] file local + Socket.IO in-memory (một instance hoặc cùng volume)"
-    );
-  }
+  setPostgresStateStore(createPostgresStateStore(databaseUrl));
+  console.info("[postgres] state storage (table app_state)");
 
   try {
-    setEcargoStateSnapshot(await loadState());
+    await loadState();
   } catch (e) {
     console.error("[state] bootstrap state failed:", e?.message ?? e);
     process.exit(1);
   }
+
+  console.info("[socket] Socket.IO in-memory (Postgres state; single app replica)");
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.info(`[server] http://0.0.0.0:${PORT} (static + /api + socket.io)`);
@@ -317,7 +149,6 @@ async function start() {
 io.on("connection", async (socket) => {
   try {
     const initial = await loadState();
-    setEcargoStateSnapshot(initial);
     socket.emit("sync", initial);
   } catch (e) {
     console.error("[socket] initial sync", e);

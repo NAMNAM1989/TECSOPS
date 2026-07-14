@@ -18,16 +18,20 @@ const baseRow = (patch: Partial<Shipment> = {}): Shipment => ({
   customerCode: "ABC01",
   dest: "SIN",
   warehouse: "TECS-SCSC",
-  status: "pending",
+  status: "PENDING",
   pcs: 1,
   kg: 10,
+  dimWeightKg: null,
+  dimLines: null,
+  dimDivisor: null,
   cutoff: "18:00",
+  cutoffNote: "",
+  note: "",
   ...patch,
 });
 
 describe("shipmentSearch", () => {
   const ctx = {
-    ecargoMap: { s1: { vehicleInput: "50H17480" } },
     customers: [
       {
         id: "c1",

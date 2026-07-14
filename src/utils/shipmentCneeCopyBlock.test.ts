@@ -16,7 +16,7 @@ function baseShipment(overrides: Partial<Shipment> = {}): Shipment {
     id: "s1",
     stt: 1,
     sessionDate: "2026-05-17",
-    warehouse: "KHO-SCSC",
+    warehouse: "TECS-SCSC",
     status: "PENDING",
     customer: "Công ty ABC",
     customerCode: "CYL",

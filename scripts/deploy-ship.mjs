@@ -2,7 +2,7 @@
  * Một lệnh deploy an toàn: nạp .env/.env.local (nếu có) → deploy:safe → git push.
  * Nếu push báo "Everything up-to-date", tự kích hoạt build lại: POST RAILWAY_DEPLOY_HOOK_URL (nếu có),
  * hoặc empty commit + push (trừ khi TECSOPS_NO_EMPTY_REDEPLOY=1).
- * Dữ liệu production phụ thuộc Redis trên Railway (REDIS_URL cố định) — script nhắc backup khi có REDIS_URL.
+ * Dữ liệu production phụ thuộc Postgres trên Railway (DATABASE_URL cố định).
  */
 import { execSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -101,8 +101,7 @@ mergeEnvFile(".env");
 mergeEnvFile(".env.local");
 
 console.info(
-  "\n[deploy:ship] Nhắc an toàn dữ liệu: trên Railway, service app phải luôn có REDIS_URL trỏ cùng một Redis production " +
-    "(không ALLOW_FILE_STATE_ON_RAILWAY). Chi tiết: .cursor/skills/tecsops-railway-state-persistence/SKILL.md\n"
+  "\n[deploy:ship] Nhắc an toàn dữ liệu: trên Railway, service app phải luôn có DATABASE_URL trỏ cùng một Postgres production. Chi tiết: docs/railway-safe-deploy.md\n"
 );
 
 try {

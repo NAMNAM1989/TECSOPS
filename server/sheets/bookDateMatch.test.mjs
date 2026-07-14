@@ -13,6 +13,8 @@ describe("bookDateMatch", () => {
 
   it("extractCutoffOpsDateToken", () => {
     expect(extractCutoffOpsDateToken("17:00 - 13JUN")).toBe("13JUN");
+    expect(extractCutoffOpsDateToken("BUP 1 PMC")).toBe("");
+    expect(extractCutoffOpsDateToken("PER")).toBe("");
   });
 
   it("giữ lô cutoff 13JUN dù chuyến bay 14JUN", () => {

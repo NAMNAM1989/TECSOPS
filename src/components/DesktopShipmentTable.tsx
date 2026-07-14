@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { StatusSelect } from "./StatusBadge";
@@ -16,82 +16,25 @@ import {
   SCSC_GOODS_DESCRIPTION_PRINT_MAX,
   SCSC_OTHER_REQUIREMENTS_PRINT_MAX,
 } from "../utils/scscPrintContent";
-import {
-  isScscWarehouse,
-  warehouseLabel,
-} from "../constants/warehouses";
+import { isScscWarehouse, warehouseLabel } from "../constants/warehouses";
 import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
-import type { EcargoKhoScscPersistedMap } from "../utils/ecargoRegisterLocalStorage";
-import type { EcargoSaveStatus } from "../hooks/useEcargoKhoScscRegister";
-import type { EcargoJobRecord } from "../types/ecargoJob";
-import {
-  ECARGO_VEHICLE_MIN,
-  EcargoKhoScscCenterModal,
-  EcargoKhoScscTriggerButton,
-} from "./EcargoKhoScscModal";
-import { EcargoRowNotice } from "./EcargoRowNotice";
-import { isEcargoJobRunning, isEcargoJobTerminal } from "../types/ecargoJob";
-import { findCustomerEntry } from "../utils/mapBookingToScaleTicketFormData";
+import { findCustomerEntry } from "../utils/customerBookingResolve";
 import { buildShipmentPatchForSavedConsignee } from "../utils/customerConsigneeShipmentPatch";
-import type { UpsertCustomerVehicleParams } from "../utils/customerVehicleCore";
-import { resolveEcargoVehiclePrefill, vehicleDisplayLabel } from "../utils/customerVehicleCore";
 import { InlineCneeCell } from "./InlineCneeCell";
-import { useMobileLayout } from "../hooks/useMobileLayout";
-
-import type { EcargoVehicleType } from "../utils/ecargoWarehousePlan";
-
-export type EcargoAutoRegisterOpts = {
-  driverName?: string;
-  driverId?: string;
-  saveAsDefault?: boolean;
-  arrivalDate?: string;
-  arrivalTimeSlot?: string;
-  vehicleType?: EcargoVehicleType;
-};
+import { useIsMobile } from "../hooks/useIsMobile";
 
 interface Props {
   rows: Shipment[];
-  /** Toàn bộ lô (kiểm tra trùng AWB khi sửa inline). */
   allRows: Shipment[];
-  /** Danh bạ khách — dùng để đồng bộ mã khi sửa tên ô lưới. */
   customerDirectory?: readonly CustomerDirectoryEntry[];
-  globalAgents?: import("../types/globalAgents").GlobalAgentCatalog;
-  scscWeighPrintSettings?: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings;
-  saveScscWeighPrintSettings?: (
-    settings: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings
-  ) => void | Promise<void>;
-  /**
-   * Kho đang active — chỉ render bảng chi tiết cho kho này.
-   */
   activeWarehouse: Warehouse;
   onActiveWarehouseChange: (wh: Warehouse) => void;
-  /** Lô dùng tính metric trên thẻ kho (cùng bộ lọc trạng thái + tìm kiếm như bảng). */
   metricRows: Shipment[];
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
-  /** Ngày phiên đang xem (YYYY-MM-DD) — parse ngày bay eCargo theo năm trên OPS. */
   viewSessionYmd: string;
-  ecargoMap: EcargoKhoScscPersistedMap;
-  onEcargoVehicleChange: (id: string, raw: string) => void;
-  onEcargoDriverChange?: (id: string, driverName: string, driverId: string) => void;
-  onEcargoWarehouseChange?: (id: string, arrivalDate: string, arrivalTimeSlot: string) => void;
-  onEcargoVehicleTypeChange?: (id: string, vehicleType: string) => void;
-  onApplyEcargoPrefill?: (row: Shipment) => void;
-  getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
-  getEcargoJob: (id: string) => EcargoJobRecord | undefined;
-  refreshEcargoJob: (id: string) => void | Promise<void>;
-  onEcargoAutoRegister: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
-  onEcargoFetchQr?: (row: Shipment) => void | Promise<void>;
-  onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
-  isEcargoAutoRegistering: (id: string) => boolean;
-  isEcargoFetchingQr?: (id: string) => boolean;
-  /** Mở panel eCargo từ toast «Xem QR». */
-  openEcargoRequestId?: string | null;
-  onEcargoRequestHandled?: () => void;
-  /** Kho có kết quả tìm kiếm — highlight trên grid. */
   searchHighlightWarehouses?: readonly Warehouse[];
-  /** Nhấp kết quả tìm kiếm — nháy dòng tương ứng. */
   highlightedShipmentId?: string | null;
   selectedRowId?: string | null;
   onSelectRow?: (id: string | null) => void;
@@ -117,384 +60,161 @@ export function DesktopShipmentTable({
   rows,
   allRows,
   customerDirectory = [],
-  globalAgents,
-  scscWeighPrintSettings,
-  saveScscWeighPrintSettings,
   activeWarehouse,
   onActiveWarehouseChange,
   metricRows,
+  searchHighlightWarehouses,
+  highlightedShipmentId,
+  selectedRowId,
+  onSelectRow,
+  onAddBlankRow,
   onUpdate,
   onDelete,
   onPrint,
   viewSessionYmd,
-  ecargoMap,
-  onEcargoVehicleChange,
-  onEcargoDriverChange,
-  onEcargoWarehouseChange,
-  onEcargoVehicleTypeChange,
-  onApplyEcargoPrefill,
-  getEcargoSaveStatus,
-  getEcargoJob,
-  refreshEcargoJob,
-  onEcargoAutoRegister,
-  onEcargoFetchQr,
-  onSaveCustomerVehicleForEcargo,
-  isEcargoAutoRegistering,
-  isEcargoFetchingQr,
-  openEcargoRequestId = null,
-  onEcargoRequestHandled,
-  searchHighlightWarehouses = [],
-  highlightedShipmentId = null,
-  selectedRowId = null,
-  onSelectRow,
-  onAddBlankRow,
 }: Props) {
-  const { isMobile } = useMobileLayout();
+  const isMobile = useIsMobile();
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const group = useMemo(
     () => rows.filter((r) => r.warehouse === activeWarehouse),
     [rows, activeWarehouse]
   );
+  const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);
 
   return (
     <>
-    <div className={isMobile ? "hidden" : "hidden md:block space-y-4"}>
-      <WarehouseGridPicker
-        rows={metricRows}
-        active={activeWarehouse}
-        onSelect={onActiveWarehouseChange}
-        onAddRow={onAddBlankRow}
-        highlightWarehouses={searchHighlightWarehouses}
-      />
+      <div className={isMobile ? "hidden" : "hidden md:block space-y-4"}>
+        <WarehouseGridPicker
+          rows={metricRows}
+          active={activeWarehouse}
+          onSelect={onActiveWarehouseChange}
+          onAddRow={onAddBlankRow}
+          highlightWarehouses={searchHighlightWarehouses}
+        />
 
-      <section
-        id={`warehouse-section-${activeWarehouse}`}
-        className="overflow-hidden rounded-2xl bg-white shadow-dashboard-card transition-opacity duration-200 dark:bg-dashboard-surface-dark"
-      >
-        <div className="flex items-center justify-between gap-2 border-b border-black/[0.04] px-3 py-2 dark:border-white/[0.06]">
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-dashboard-primary dark:text-dashboard-primary-dark">
-              {warehouseLabel[activeWarehouse]}
-            </h2>
-            <p className="text-[10px] text-dashboard-muted dark:text-dashboard-muted-dark">
-              {group.length} lô · cuộn để xem thêm
-            </p>
-          </div>
-          {onAddBlankRow ? (
-            <button
-              type="button"
-              onClick={() => onAddBlankRow(activeWarehouse)}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-apple-blue px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm hover:bg-apple-blue-hover active:scale-[0.98]"
-              title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (N)`}
-            >
-              + Booking
-            </button>
-          ) : null}
-        </div>
-        <div
-          className={`overflow-auto px-2 py-2 ${
-            group.length > 6 ? "max-h-[min(78vh,720px)]" : ""
-          }`}
+        <section
+          id={`warehouse-section-${activeWarehouse}`}
+          className="overflow-hidden rounded-2xl bg-white shadow-dashboard-card transition-opacity duration-200 dark:bg-dashboard-surface-dark"
         >
-          <table className="w-full border-separate border-spacing-x-0 border-spacing-y-1.5 text-left text-[11px] leading-tight">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-dashboard-canvas/95 backdrop-blur-sm dark:bg-dashboard-canvas-dark/95">
-                {COL_HEADERS.map((c) => {
-                  const w =
-                    c.key === "actions"
-                      ? isScscWarehouse(activeWarehouse)
-                        ? "min-w-[6.75rem] w-[6.75rem]"
-                        : "min-w-[5.5rem] w-[5.5rem]"
-                      : c.w;
-                  return (
+          <div className="flex items-center justify-between gap-2 border-b border-black/[0.04] px-3 py-2 dark:border-white/[0.06]">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-dashboard-primary dark:text-dashboard-primary-dark">
+                {warehouseLabel[activeWarehouse]}
+              </h2>
+              <p className="text-[10px] text-dashboard-muted dark:text-dashboard-muted-dark">
+                {group.length} lô · cuộn để xem thêm
+              </p>
+            </div>
+            {onAddBlankRow ? (
+              <button
+                type="button"
+                onClick={() => onAddBlankRow(activeWarehouse)}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-apple-blue px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm hover:bg-apple-blue-hover active:scale-[0.98]"
+                title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (N)`}
+              >
+                + Booking
+              </button>
+            ) : null}
+          </div>
+          <div
+            className={`overflow-auto px-2 py-2 ${
+              group.length > 6 ? "max-h-[min(78vh,720px)]" : ""
+            }`}
+          >
+            <table className="w-full border-separate border-spacing-x-0 border-spacing-y-1.5 text-left text-[11px] leading-tight">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-dashboard-canvas/95 backdrop-blur-sm dark:bg-dashboard-canvas-dark/95">
+                  {COL_HEADERS.map((c) => (
                     <th
                       key={c.key}
-                      className={`whitespace-nowrap px-1.5 py-1.5 text-[8px] font-semibold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark ${w}`}
+                      className={`whitespace-nowrap px-1.5 py-1.5 text-[8px] font-semibold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark ${c.w}`}
                     >
                       {c.label}
                     </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {group.length === 0 ? (
-                <tr>
-                  <td colSpan={COL_HEADERS.length} className="px-3 py-6 text-center">
-                    <button
-                      type="button"
-                      onClick={() => onAddBlankRow?.(activeWarehouse)}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-apple-blue px-4 py-2 text-[11px] font-semibold text-white shadow-sm hover:bg-apple-blue-hover active:scale-[0.98]"
-                    >
-                      + Booking · {warehouseLabel[activeWarehouse]}
-                    </button>
-                  </td>
+                  ))}
                 </tr>
-              ) : (
-                <WarehouseGroupRows
-                  group={group}
-                  sectionWarehouse={activeWarehouse}
-                  viewSessionYmd={viewSessionYmd}
-                  ecargoMap={ecargoMap}
-                  onEcargoVehicleChange={onEcargoVehicleChange}
-                  onEcargoDriverChange={onEcargoDriverChange}
-                  onEcargoWarehouseChange={onEcargoWarehouseChange}
-                  onEcargoVehicleTypeChange={onEcargoVehicleTypeChange}
-                  onApplyEcargoPrefill={onApplyEcargoPrefill}
-                  getEcargoSaveStatus={getEcargoSaveStatus}
-                  getEcargoJob={getEcargoJob}
-                  refreshEcargoJob={refreshEcargoJob}
-                  onEcargoAutoRegister={onEcargoAutoRegister}
-                  onEcargoFetchQr={onEcargoFetchQr}
-                  onSaveCustomerVehicleForEcargo={onSaveCustomerVehicleForEcargo}
-                  isEcargoAutoRegistering={isEcargoAutoRegistering}
-                  isEcargoFetchingQr={isEcargoFetchingQr}
-                  highlightedShipmentId={highlightedShipmentId}
-                  selectedRowId={selectedRowId}
-                  onSelectRow={onSelectRow}
-                  allRows={allRows}
-                  customerDirectory={customerDirectory}
-                  globalAgents={globalAgents}
-                  scscWeighPrintSettings={scscWeighPrintSettings}
-                  saveScscWeighPrintSettings={saveScscWeighPrintSettings}
-                  onUpdate={onUpdate}
-                  onDelete={onDelete}
-                  onPrint={onPrint}
-                  onOpenDimModal={setDimModalRow}
-                  openEcargoRequestId={openEcargoRequestId}
-                  onEcargoRequestHandled={onEcargoRequestHandled}
-                />
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-    {dimModalRow ? (
-      <MobileDimKgModal
-        key={dimModalRow.id}
-        row={dimModalRow}
-        onClose={() => setDimModalRow(null)}
-        onSave={(payload) => {
-          onUpdate(dimModalRow.id, payload);
-          setDimModalRow(null);
-        }}
-      />
-    ) : null}
-    </>
-  );
-}
-
-function WarehouseGroupRows({
-  group,
-  sectionWarehouse,
-  viewSessionYmd,
-  ecargoMap,
-  onEcargoVehicleChange,
-  onEcargoDriverChange,
-  onEcargoWarehouseChange,
-  onEcargoVehicleTypeChange,
-  onApplyEcargoPrefill,
-  getEcargoSaveStatus,
-  getEcargoJob,
-  refreshEcargoJob,
-  onEcargoAutoRegister,
-  onEcargoFetchQr,
-  onSaveCustomerVehicleForEcargo,
-  isEcargoAutoRegistering,
-  isEcargoFetchingQr,
-  allRows,
-  customerDirectory,
-  globalAgents,
-  scscWeighPrintSettings,
-  saveScscWeighPrintSettings,
-  onUpdate,
-  onDelete,
-  onPrint,
-  onOpenDimModal,
-  highlightedShipmentId = null,
-  selectedRowId = null,
-  onSelectRow,
-  openEcargoRequestId = null,
-  onEcargoRequestHandled,
-}: {
-  group: Shipment[];
-  sectionWarehouse: Warehouse;
-  viewSessionYmd: string;
-  ecargoMap: EcargoKhoScscPersistedMap;
-  onEcargoVehicleChange: (id: string, raw: string) => void;
-  onEcargoDriverChange?: (id: string, driverName: string, driverId: string) => void;
-  onEcargoWarehouseChange?: (id: string, arrivalDate: string, arrivalTimeSlot: string) => void;
-  onEcargoVehicleTypeChange?: (id: string, vehicleType: string) => void;
-  onApplyEcargoPrefill?: (row: Shipment) => void;
-  getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
-  getEcargoJob: (id: string) => EcargoJobRecord | undefined;
-  refreshEcargoJob: (id: string) => void | Promise<void>;
-  onEcargoAutoRegister: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
-  onEcargoFetchQr?: (row: Shipment) => void | Promise<void>;
-  onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
-  isEcargoAutoRegistering: (id: string) => boolean;
-  isEcargoFetchingQr?: (id: string) => boolean;
-  allRows: Shipment[];
-  customerDirectory: readonly CustomerDirectoryEntry[];
-  globalAgents?: import("../types/globalAgents").GlobalAgentCatalog;
-  scscWeighPrintSettings?: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings;
-  saveScscWeighPrintSettings?: (
-    settings: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings
-  ) => void | Promise<void>;
-  onUpdate: (id: string, patch: Partial<Shipment>) => void;
-  onDelete: (id: string) => void;
-  onPrint: (s: Shipment) => void;
-  onOpenDimModal: (s: Shipment) => void;
-  highlightedShipmentId?: string | null;
-  selectedRowId?: string | null;
-  onSelectRow?: (id: string | null) => void;
-  openEcargoRequestId?: string | null;
-  onEcargoRequestHandled?: () => void;
-}) {
-  const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);
-  const [openEcargoRowId, setOpenEcargoRowId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!openEcargoRequestId) return;
-    const row = group.find((r) => r.id === openEcargoRequestId && isScscWarehouse(r.warehouse));
-    if (!row) {
-      onEcargoRequestHandled?.();
-      return;
-    }
-    onApplyEcargoPrefill?.(row);
-    setOpenEcargoRowId(openEcargoRequestId);
-    onEcargoRequestHandled?.();
-  }, [group, onApplyEcargoPrefill, onEcargoRequestHandled, openEcargoRequestId]);
-
-  useEffect(() => {
-    if (!openEcargoRowId) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      const panel = document.querySelector(`[data-ecargo-panel="${openEcargoRowId}"]`);
-      const trig = document.querySelector(`[data-ecargo-trigger="${openEcargoRowId}"]`);
-      if (panel?.contains(t) || trig?.contains(t)) return;
-      setOpenEcargoRowId(null);
-    };
-    document.addEventListener("mousedown", onDown, true);
-    return () => document.removeEventListener("mousedown", onDown, true);
-  }, [openEcargoRowId]);
-
-  return (
-    <>
-      {group.map((row) => (
-        <ShipmentRow
-          key={row.id}
-          row={row}
-          sectionWarehouse={sectionWarehouse}
-          viewSessionYmd={viewSessionYmd}
-          ecargoMap={ecargoMap}
-          onEcargoVehicleChange={onEcargoVehicleChange}
-          onEcargoDriverChange={onEcargoDriverChange}
-          onEcargoWarehouseChange={onEcargoWarehouseChange}
-          onEcargoVehicleTypeChange={onEcargoVehicleTypeChange}
-          getEcargoSaveStatus={getEcargoSaveStatus}
-          getEcargoJob={getEcargoJob}
-          refreshEcargoJob={refreshEcargoJob}
-          onEcargoAutoRegister={onEcargoAutoRegister}
-          onEcargoFetchQr={onEcargoFetchQr}
-          onSaveCustomerVehicleForEcargo={onSaveCustomerVehicleForEcargo}
-          isEcargoAutoRegistering={isEcargoAutoRegistering}
-          isEcargoFetchingQr={isEcargoFetchingQr}
-          groupRowIds={groupRowIds}
-          allRows={allRows}
-          customerDirectory={customerDirectory}
-          globalAgents={globalAgents}
-          scscWeighPrintSettings={scscWeighPrintSettings}
-          saveScscWeighPrintSettings={saveScscWeighPrintSettings}
-          onUpdate={onUpdate}
-          onDelete={onDelete}
-          onPrint={onPrint}
-          onOpenDimModal={onOpenDimModal}
-          highlighted={highlightedShipmentId === row.id}
-          selected={selectedRowId === row.id}
-          onSelectRow={onSelectRow}
-          ecargoTableOpen={openEcargoRowId === row.id}
-          onToggleEcargoTable={() => {
-            const opening = openEcargoRowId !== row.id;
-            setOpenEcargoRowId((p) => (p === row.id ? null : row.id));
-            if (opening) onApplyEcargoPrefill?.(row);
+              </thead>
+              <tbody>
+                {group.length === 0 ? (
+                  <tr>
+                    <td colSpan={COL_HEADERS.length} className="px-3 py-6 text-center">
+                      <button
+                        type="button"
+                        onClick={() => onAddBlankRow?.(activeWarehouse)}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-apple-blue px-4 py-2 text-[11px] font-semibold text-white shadow-sm hover:bg-apple-blue-hover active:scale-[0.98]"
+                      >
+                        + Booking · {warehouseLabel[activeWarehouse]}
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
+                  group.map((row, rowIdx) => (
+                    <ShipmentTableRow
+                      key={row.id}
+                      row={row}
+                      rowIdx={rowIdx}
+                      groupRowIds={groupRowIds}
+                      viewSessionYmd={viewSessionYmd}
+                      highlighted={highlightedShipmentId === row.id}
+                      selected={selectedRowId === row.id}
+                      onSelectRow={onSelectRow}
+                      allRows={allRows}
+                      customerDirectory={customerDirectory}
+                      onUpdate={onUpdate}
+                      onDelete={onDelete}
+                      onPrint={onPrint}
+                      onOpenDimModal={setDimModalRow}
+                    />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+      {dimModalRow ? (
+        <MobileDimKgModal
+          key={dimModalRow.id}
+          row={dimModalRow}
+          onClose={() => setDimModalRow(null)}
+          onSave={(payload) => {
+            onUpdate(dimModalRow.id, payload);
+            setDimModalRow(null);
           }}
-          onCloseEcargoTable={() => setOpenEcargoRowId((p) => (p === row.id ? null : p))}
         />
-      ))}
+      ) : null}
     </>
   );
 }
 
-function ShipmentRowImpl({
+function ShipmentTableRowImpl({
   row,
-  sectionWarehouse,
-  viewSessionYmd,
-  ecargoMap,
-  onEcargoVehicleChange,
-  onEcargoDriverChange,
-  onEcargoWarehouseChange,
-  onEcargoVehicleTypeChange,
-  getEcargoSaveStatus,
-  getEcargoJob,
-  refreshEcargoJob,
-  onEcargoAutoRegister,
-  onEcargoFetchQr,
-  onSaveCustomerVehicleForEcargo,
-  isEcargoAutoRegistering,
-  isEcargoFetchingQr,
+  rowIdx,
   groupRowIds,
-  allRows,
-  customerDirectory,
-  globalAgents,
-  scscWeighPrintSettings,
-  saveScscWeighPrintSettings,
-  onUpdate,
-  onDelete,
-  onPrint,
-  onOpenDimModal,
-  ecargoTableOpen,
-  onToggleEcargoTable,
-  onCloseEcargoTable,
+  viewSessionYmd,
   highlighted = false,
   selected = false,
   onSelectRow,
+  allRows,
+  customerDirectory,
+  onUpdate,
+  onDelete,
+  onPrint,
+  onOpenDimModal,
 }: {
   row: Shipment;
-  sectionWarehouse: Warehouse;
-  viewSessionYmd: string;
-  ecargoMap: EcargoKhoScscPersistedMap;
-  onEcargoVehicleChange: (id: string, raw: string) => void;
-  onEcargoDriverChange?: (id: string, driverName: string, driverId: string) => void;
-  onEcargoWarehouseChange?: (id: string, arrivalDate: string, arrivalTimeSlot: string) => void;
-  onEcargoVehicleTypeChange?: (id: string, vehicleType: string) => void;
-  getEcargoSaveStatus: (id: string) => EcargoSaveStatus;
-  getEcargoJob: (id: string) => EcargoJobRecord | undefined;
-  refreshEcargoJob: (id: string) => void | Promise<void>;
-  onEcargoAutoRegister: (row: Shipment, opts?: EcargoAutoRegisterOpts) => void | Promise<void>;
-  onEcargoFetchQr?: (row: Shipment) => void | Promise<void>;
-  onSaveCustomerVehicleForEcargo?: (params: UpsertCustomerVehicleParams) => void | Promise<void>;
-  isEcargoAutoRegistering: (id: string) => boolean;
-  isEcargoFetchingQr?: (id: string) => boolean;
+  rowIdx: number;
   groupRowIds: string[];
+  viewSessionYmd: string;
+  highlighted?: boolean;
+  selected?: boolean;
+  onSelectRow?: (id: string | null) => void;
   allRows: Shipment[];
   customerDirectory: readonly CustomerDirectoryEntry[];
-  globalAgents?: import("../types/globalAgents").GlobalAgentCatalog;
-  scscWeighPrintSettings?: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings;
-  saveScscWeighPrintSettings?: (
-    settings: import("../types/scscWeighPrintSettings").ScscWeighPrintSettings
-  ) => void | Promise<void>;
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
-  ecargoTableOpen: boolean;
-  onToggleEcargoTable: () => void;
-  onCloseEcargoTable: () => void;
-  highlighted?: boolean;
-  selected?: boolean;
-  onSelectRow?: (id: string | null) => void;
 }) {
   const bg = statusRowBg[row.status];
   const accent = statusRowAccent[row.status];
@@ -507,45 +227,16 @@ function ShipmentRowImpl({
       part === "first" ? "border-l border-black/[0.02] dark:border-white/[0.04]" : ""
     } ${part === "last" ? "border-r border-black/[0.02] dark:border-white/[0.04]" : ""} px-2.5 py-1.5 transition-all duration-200 group-hover/row:shadow-apple-sm ${extra}`.trim();
   };
-  const sessionYear = parseInt(row.sessionDate.slice(0, 4), 10) || new Date().getFullYear();
-  const rowIdx = groupRowIds.indexOf(row.id);
-  const hasNextRow = rowIdx >= 0 && rowIdx < groupRowIds.length - 1;
-  const showEcargoKhoScsc = isScscWarehouse(row.warehouse) && sectionWarehouse === row.warehouse;
-  const ecargoLine = ecargoMap[row.id];
-  const vehicleForEcargo = ecargoLine?.vehicleInput ?? "";
-  const ecargoJob = getEcargoJob(row.id);
-  const ecargoPrefill = useMemo(
-    () =>
-      resolveEcargoVehiclePrefill(row, customerDirectory, vehicleForEcargo, {
-        driverName: ecargoLine?.driverName,
-        driverId: ecargoLine?.driverId,
-      }),
-    [customerDirectory, ecargoLine?.driverId, ecargoLine?.driverName, row, vehicleForEcargo]
-  );
-  const effectiveEcargoVehicle = vehicleForEcargo.trim() || ecargoPrefill.vehicleInput;
-  const ecargoReady = effectiveEcargoVehicle.trim().length >= ECARGO_VEHICLE_MIN;
-  const ecargoButtonTitle = ecargoReady
-    ? `eCargo · ${effectiveEcargoVehicle}${ecargoPrefill.driverName ? ` · ${ecargoPrefill.driverName}` : ""}`
-    : ecargoPrefill.defaultVehicle
-      ? `eCargo — xe mặc định: ${vehicleDisplayLabel(ecargoPrefill.defaultVehicle)}`
-      : ecargoPrefill.customer
-        ? "eCargo — chưa có biển số trên lô (kiểm tra hồ sơ khách)"
-        : "eCargo — đăng ký kho SCSC";
+
+  const hasNextRow = rowIdx < groupRowIds.length - 1;
+  const sessionYear = parseInt((viewSessionYmd || row.sessionDate || "").slice(0, 4), 10) || new Date().getFullYear();
+
   const customerEntry = findCustomerEntry(row, customerDirectory);
   const savedConsigneeOptions = customerEntry?.savedConsignees ?? [];
-  useEffect(() => {
-    if (!ecargoTableOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseEcargoTable();
-    };
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, [ecargoTableOpen, onCloseEcargoTable]);
 
   const navDownSameField = (field: string) => () => {
     if (!hasNextRow) return;
-    const nextId = groupRowIds[rowIdx + 1];
-    focusShipmentGridCell(nextId, field);
+    focusShipmentGridCell(groupRowIds[rowIdx + 1], field);
   };
 
   const onFlightDateCommit = (t: string) => {
@@ -563,7 +254,6 @@ function ShipmentRowImpl({
   };
 
   return (
-    <>
     <tr
       id={`shipment-row-${row.id}`}
       onClick={() => onSelectRow?.(row.id)}
@@ -571,11 +261,9 @@ function ShipmentRowImpl({
         selected ? "scale-[1.002]" : ""
       }`}
     >
-      {/* # */}
       <td className={cell("first", "text-center text-[10px] font-semibold tabular-nums text-apple-secondary dark:text-zinc-400")}>
         {row.stt}
       </td>
-      {/* AWB + HAWB — nhập inline (thêm dòng từ « Nhập booking »). */}
       <td className={cell("mid", "align-top")}>
         <div className="flex min-w-[8.5rem] flex-col gap-0">
           <InlineAwbEdit
@@ -597,7 +285,6 @@ function ShipmentRowImpl({
           />
         </div>
       </td>
-      {/* Flight — 2 dòng: chuyến + ngày, Enter xuống ô kế */}
       <td className={cell("mid", "align-top")}>
         <div className="flex min-w-[5.5rem] flex-col gap-0">
           <InlineTextEdit
@@ -622,7 +309,6 @@ function ShipmentRowImpl({
           />
         </div>
       </td>
-      {/* DEST */}
       <td className={cell("mid", "text-center")}>
         <InlineTextEdit
           value={row.dest}
@@ -635,7 +321,6 @@ function ShipmentRowImpl({
           onEnterNavigateDown={hasNextRow ? navDownSameField("dest") : undefined}
         />
       </td>
-      {/* PCS — inline edit */}
       <td className={cell("mid", "text-right")}>
         <InlineNumberEdit
           value={row.pcs}
@@ -646,7 +331,6 @@ function ShipmentRowImpl({
           onEnterNavigateDown={hasNextRow ? navDownSameField("pcs") : undefined}
         />
       </td>
-      {/* KG — inline edit */}
       <td className={cell("mid", "text-right")}>
         <InlineNumberEdit
           value={row.kg}
@@ -657,7 +341,6 @@ function ShipmentRowImpl({
           onEnterNavigateDown={hasNextRow ? navDownSameField("kg") : undefined}
         />
       </td>
-      {/* DIM kg — khi đã có D×R×C: chỉ hiển thị + modal (tránh sửa nhanh làm mất dimLines → mất in DIM) */}
       <td className={cell("mid", "text-right align-top")}>
         <div className="flex flex-col items-end gap-0">
           {(row.dimLines?.length ?? 0) > 0 ? (
@@ -692,13 +375,12 @@ function ShipmentRowImpl({
           </button>
         </div>
       </td>
-      {/* Customer */}
       <td className={cell("mid")}>
         <InlineCustomerEdit
           value={row.customer}
           customerId={row.customerId}
+          profileSelection={row}
           customerDirectory={customerDirectory}
-          globalAgents={globalAgents}
           placeholder="Khách"
           className="min-w-0 text-[12px] font-semibold ops-grid-cell"
           maxLength={120}
@@ -713,7 +395,6 @@ function ShipmentRowImpl({
           }
         />
       </td>
-      {/* CNEE — gọn: chọn + tên + ℹ */}
       <td className={cell("mid", "align-middle")}>
         <InlineCneeCell
           shipment={row}
@@ -727,7 +408,6 @@ function ShipmentRowImpl({
           }}
         />
       </td>
-      {/* Tên hàng in — 2 dòng: tên hàng + YC khác in */}
       <td className={cell("mid", "align-top")}>
         {isScscWarehouse(row.warehouse) ? (
           <div className="flex min-w-0 flex-col gap-0.5">
@@ -752,7 +432,6 @@ function ShipmentRowImpl({
           </div>
         ) : null}
       </td>
-      {/* TT — ghi chú + trạng thái */}
       <td className={cell("mid", "py-1 align-top")}>
         <div className="flex min-w-0 flex-col gap-0.5">
           <InlineTextEdit
@@ -771,114 +450,28 @@ function ShipmentRowImpl({
           />
         </div>
       </td>
-      {/* Actions — in nhãn + menu ⋮; eCargo (KHO SCSC) giữ ngoài */}
       <td className={cell("last", "overflow-visible py-0.5 align-middle")}>
-        <div className="flex flex-col items-end gap-0.5">
-          <div className="flex max-w-full flex-nowrap items-center justify-end gap-0.5">
-            {showEcargoKhoScsc ? (
-              <EcargoKhoScscTriggerButton
-                variant="icon"
-                rowId={row.id}
-                open={ecargoTableOpen}
-                hasVehicle={ecargoReady}
-                job={ecargoJob}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleEcargoTable();
-                }}
-                title={ecargoButtonTitle}
-              />
-            ) : null}
-            <ShipmentRowActionsMenu
-              row={row}
-              customerDirectory={customerDirectory}
-              globalAgents={globalAgents}
-              scscWeighPrintSettings={scscWeighPrintSettings}
-              saveScscWeighPrintSettings={saveScscWeighPrintSettings}
-              onPrint={onPrint}
-              onDelete={onDelete}
-              onUpdate={onUpdate}
-            />
-          </div>
-          {showEcargoKhoScsc &&
-          ecargoJob &&
-          (isEcargoJobRunning(ecargoJob.status) || isEcargoJobTerminal(ecargoJob.status)) ? (
-            <EcargoRowNotice
-              job={ecargoJob}
-              awb={row.awb}
-              compact
-              className="min-w-0 max-w-[4.75rem] text-right"
-            />
-          ) : null}
-        </div>
+        <ShipmentRowActionsMenu
+          row={row}
+          customerDirectory={customerDirectory}
+          onPrint={onPrint}
+          onDelete={onDelete}
+          onUpdate={onUpdate}
+        />
       </td>
     </tr>
-    {showEcargoKhoScsc && ecargoTableOpen ? (
-      <EcargoKhoScscCenterModal
-        rowId={row.id}
-        row={row}
-        customerDirectory={customerDirectory}
-        vehicleForEcargo={vehicleForEcargo}
-        driverNameForEcargo={ecargoLine?.driverName ?? ""}
-        driverIdForEcargo={ecargoLine?.driverId ?? ""}
-        arrivalDateForEcargo={ecargoLine?.arrivalDate ?? ""}
-        arrivalTimeSlotForEcargo={ecargoLine?.arrivalTimeSlot ?? ""}
-        vehicleTypeForEcargo={ecargoLine?.vehicleType ?? ""}
-        viewSessionYmd={viewSessionYmd}
-        saveStatus={getEcargoSaveStatus(row.id)}
-        job={ecargoJob}
-        markedSubmitted={ecargoLine?.markedSubmitted}
-        autoRegistering={isEcargoAutoRegistering(row.id)}
-        onVehicleChange={(raw) => onEcargoVehicleChange(row.id, raw)}
-        onDriverChange={(name, id) => onEcargoDriverChange?.(row.id, name, id)}
-        onWarehouseArrivalChange={(date, slot) => onEcargoWarehouseChange?.(row.id, date, slot)}
-        onVehicleTypeChange={(type) => onEcargoVehicleTypeChange?.(row.id, type)}
-        onAutoRegister={async (opts) => {
-          await onEcargoAutoRegister(row, opts);
-        }}
-        onFetchQr={
-          onEcargoFetchQr
-            ? async () => {
-                await onEcargoFetchQr(row);
-              }
-            : undefined
-        }
-        fetchQrBusy={isEcargoFetchingQr?.(row.id) ?? false}
-        onSaveVehicleAsDefault={onSaveCustomerVehicleForEcargo}
-        onRefreshJob={() => void refreshEcargoJob(row.id)}
-        onClose={onCloseEcargoTable}
-      />
-    ) : null}
-    </>
   );
 }
 
-type ShipmentRowProps = Parameters<typeof ShipmentRowImpl>[0];
-
-/**
- * Memo theo dữ liệu của RIÊNG dòng: chỉ render lại khi chính lô / ecargo line /
- * job / trạng thái chọn-mở-highlight của dòng đó đổi. Bỏ qua `allRows` (chỉ dùng
- * cảnh báo trùng AWB phía client — máy chủ vẫn chặn trùng) và các callback ổn định,
- * nhờ vậy sửa 1 ô không bắt cả bảng render lại.
- */
-const ShipmentRow = memo(ShipmentRowImpl, (prev: ShipmentRowProps, next: ShipmentRowProps) => {
-  const id = prev.row.id;
-  if (next.row.id !== id) return false;
+const ShipmentTableRow = memo(ShipmentTableRowImpl, (prev, next) => {
   return (
     prev.row === next.row &&
-    prev.sectionWarehouse === next.sectionWarehouse &&
-    prev.viewSessionYmd === next.viewSessionYmd &&
-    prev.ecargoTableOpen === next.ecargoTableOpen &&
+    prev.rowIdx === next.rowIdx &&
     prev.highlighted === next.highlighted &&
     prev.selected === next.selected &&
-    prev.groupRowIds === next.groupRowIds &&
+    prev.viewSessionYmd === next.viewSessionYmd &&
     prev.customerDirectory === next.customerDirectory &&
-    prev.globalAgents === next.globalAgents &&
-    prev.scscWeighPrintSettings === next.scscWeighPrintSettings &&
-    prev.ecargoMap[id] === next.ecargoMap[id] &&
-    prev.getEcargoJob(id) === next.getEcargoJob(id) &&
-    prev.getEcargoSaveStatus(id) === next.getEcargoSaveStatus(id) &&
-    prev.isEcargoAutoRegistering(id) === next.isEcargoAutoRegistering(id) &&
-    (prev.isEcargoFetchingQr?.(id) ?? false) === (next.isEcargoFetchingQr?.(id) ?? false)
+    prev.allRows === next.allRows &&
+    prev.groupRowIds === next.groupRowIds
   );
 });

@@ -4,7 +4,7 @@ import { parseFlightDateDisplayToYmd, ymdToDdMon } from "./bookingDateParse";
 import {
   findCustomerEntry,
   resolveSavedConsigneeForBooking,
-} from "./mapBookingToScaleTicketFormData";
+} from "./customerBookingResolve";
 import { resolvePrintAddressForShipment } from "./printAddressMultiline";
 
 function compactSpace(s: string): string {

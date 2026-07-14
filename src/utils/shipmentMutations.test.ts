@@ -96,10 +96,10 @@ describe("applyShipmentMutation SET_PRINTER_PROFILES", () => {
             dpi: 203,
             labelWidthMm: 100,
             labelHeightMm: 80,
-            pageWidthMm: 80,
-            pageHeightMm: 100,
+            pageWidthMm: 100,
+            pageHeightMm: 80,
             gapMm: 2,
-            rotation: 90,
+            rotation: 0,
             offsetXmm: 0,
             offsetYmm: 0,
             speed: 4,
@@ -113,34 +113,6 @@ describe("applyShipmentMutation SET_PRINTER_PROFILES", () => {
     expect(next.version).toBe(2);
     expect(next.printerProfiles?.profiles).toHaveLength(1);
     expect(next.printerProfiles?.profiles[0]?.name).toBe("Quầy 1");
-  });
-});
-
-describe("applyShipmentMutation SET_INVOICE_CATALOG", () => {
-  it("lưu danh mục mặt hàng HQ", () => {
-    const state: AppState = { version: 1, rows: [], customers: [] };
-    const next = applyShipmentMutation(state, {
-      action: "SET_INVOICE_CATALOG",
-      catalog: {
-        version: 1,
-        items: [
-          {
-            id: "inv-test",
-            category: "BÁNH",
-            description: "Test item",
-            hsCode: "19059090",
-            origin: "VN",
-            sampleQuantity: 1,
-            unit: "BAG",
-            unitPriceUsd: 1,
-            kgPerUnit: 0.5,
-          },
-        ],
-      },
-    });
-    expect(next.version).toBe(2);
-    expect(next.invoiceCatalog?.items).toHaveLength(1);
-    expect(next.invoiceCatalog?.items[0]?.description).toBe("Test item");
   });
 });
 

@@ -579,7 +579,7 @@ export function CustomerSavedProfilesEditor({
 
           {tab === "vehicle" ? (
             vehicles.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${CD.muted}`}>Chưa có xe — cần nếu dùng eCargo.</p>
+              <p className={`py-3 text-center text-[11px] ${CD.muted}`}>Chưa có xe — thêm biển số / tài xế nếu cần.</p>
             ) : (
               vehicles.map((v, idx) => (
                 <ItemCard

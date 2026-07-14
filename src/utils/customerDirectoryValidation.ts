@@ -7,8 +7,16 @@ import type {
 } from "../types/customerDirectory";
 import { clampCustomerDirectoryEntry } from "./customerDirectoryProfile";
 import { normalizeAgentCode } from "./customerProfileInputFormat";
+import {
+  CUSTOMER_SHORT_CODE_MAX,
+  ensureCustomerCodeForSave,
+  inferPrefixFromCustomerCode,
+  isValidCustomerPrefix,
+  normalizeCustomerPrefix,
+  normalizeCustomerShortCode,
+} from "./customerCodeOps";
 import { formatVehicleLicensePlate } from "./customerVehicleCore";
-import { ECARGO_VEHICLE_MIN } from "./ecargoKhoScscCore";
+import { VEHICLE_PLATE_MIN as ECARGO_VEHICLE_MIN } from "./vehiclePlateNormalize";
 
 export type CustomerProfileSection =
   | "identity"
@@ -116,9 +124,21 @@ function validateIdentity(
   const errors: CustomerFieldError[] = [];
   const code = entry.code.trim();
   const name = entry.name.trim();
+  const prefix = normalizeCustomerPrefix(entry.prefix ?? "") || inferPrefixFromCustomerCode(code);
+  const shortCode = normalizeCustomerShortCode(entry.shortCode ?? "");
+
+  if (!name) {
+    errors.push({ section: "identity", field: "name", message: "Tên khách không được để trống." });
+  }
 
   if (!code) {
-    errors.push({ section: "identity", field: "code", message: "Mã khách không được để trống." });
+    if (!isValidCustomerPrefix(prefix)) {
+      errors.push({
+        section: "identity",
+        field: "prefix",
+        message: "Thiếu mã — nhập Prefix (2–5 chữ A–Z) để hệ thống tự sinh Customer Code.",
+      });
+    }
   } else if (!isValidAgentCode(code)) {
     errors.push({
       section: "identity",
@@ -135,10 +155,29 @@ function validateIdentity(
         message: `Mã «${code}» đã tồn tại (khách «${dup.name || dup.code}»).`,
       });
     }
+    if (prefix && isValidCustomerPrefix(prefix) && !normalizeAgentCode(code).startsWith(prefix)) {
+      errors.push({
+        section: "identity",
+        field: "prefix",
+        message: `Prefix «${prefix}» phải khớp đầu Customer Code «${code}».`,
+      });
+    }
   }
 
-  if (!name) {
-    errors.push({ section: "identity", field: "name", message: "Tên khách không được để trống." });
+  if (entry.prefix?.trim() && !isValidCustomerPrefix(entry.prefix)) {
+    errors.push({
+      section: "identity",
+      field: "prefix",
+      message: "Prefix phải gồm 2–5 chữ cái A–Z.",
+    });
+  }
+
+  if (shortCode.length > CUSTOMER_SHORT_CODE_MAX) {
+    errors.push({
+      section: "identity",
+      field: "shortCode",
+      message: `Short Code tối đa ${CUSTOMER_SHORT_CODE_MAX} ký tự.`,
+    });
   }
 
   if (!entry.id.trim()) {
@@ -430,11 +469,26 @@ export function getFieldValidationError(
   )?.message;
 }
 
-/** Chuẩn hóa trước khi lưu — bỏ dòng hoàn toàn trống. */
-export function normalizeCustomerEntryForSave(entry: CustomerDirectoryEntry): CustomerDirectoryEntry {
+/** Chuẩn hóa trước khi lưu — bỏ dòng hoàn toàn trống; tự sinh Code từ Prefix nếu thiếu. */
+export function normalizeCustomerEntryForSave(
+  entry: CustomerDirectoryEntry,
+  allEntries: readonly CustomerDirectoryEntry[] = []
+): CustomerDirectoryEntry {
+  const otherCodes = allEntries.filter((e) => e.id !== entry.id).map((e) => e.code);
+  let code = normalizeAgentCode(entry.code);
+  let prefix =
+    normalizeCustomerPrefix(entry.prefix ?? "") || inferPrefixFromCustomerCode(code);
+  if (!code && isValidCustomerPrefix(prefix)) {
+    const allocated = ensureCustomerCodeForSave({ code, prefix }, otherCodes);
+    code = allocated.code;
+    prefix = allocated.prefix;
+  }
+  const shortCode = normalizeCustomerShortCode(entry.shortCode ?? "");
   return clampCustomerDirectoryEntry({
     ...entry,
-    code: normalizeAgentCode(entry.code),
+    code,
+    prefix,
+    shortCode,
     savedShippers: (entry.savedShippers ?? []).filter((s) => !isSavedShipperEmpty(s)),
     savedConsignees: (entry.savedConsignees ?? []).filter((c) => !isSavedConsigneeEmpty(c)),
     savedGoods: (entry.savedGoods ?? []).filter((g) => !isSavedGoodsEmpty(g)),

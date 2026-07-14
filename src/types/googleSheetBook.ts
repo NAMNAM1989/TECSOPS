@@ -16,9 +16,12 @@ export type SheetBookSyncRow = {
   warehouse: string;
   pcs: number | null;
   kg: number | null;
+  dimWeightKg?: number | null;
   customer: string;
   customerCode: string;
   customerKnown: boolean;
+  note?: string;
+  consigneePreview?: string;
   syncStatus: SheetBookSyncStatus;
   duplicate: boolean;
   needsUpdate: boolean;

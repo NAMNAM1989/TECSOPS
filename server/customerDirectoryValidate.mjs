@@ -2,6 +2,8 @@
 const L = {
   code: 40,
   name: 200,
+  prefix: 5,
+  shortCode: 10,
   shipperName: 120,
   shipperAddress: 300,
   shipperPhone: 40,
@@ -37,6 +39,28 @@ const L = {
 function sliceStr(v, max) {
   const s = typeof v === "string" ? v : "";
   return s.slice(0, max);
+}
+
+function normalizePrefixLoose(v) {
+  return sliceStr(v, L.prefix)
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "");
+}
+
+function normalizeShortCodeLoose(v) {
+  return sliceStr(v, L.shortCode).trim().toUpperCase().replace(/\s+/g, "");
+}
+
+function accountFieldsFromItem(item, code, name) {
+  const prefix = normalizePrefixLoose(item.prefix);
+  const shortCode = normalizeShortCodeLoose(item.shortCode);
+  return {
+    code: sliceStr(code, L.code).trim(),
+    name: sliceStr(name, L.name).trim(),
+    ...(prefix ? { prefix } : {}),
+    ...(shortCode ? { shortCode } : {}),
+  };
 }
 
 function normalizePartyType(value) {
@@ -224,8 +248,7 @@ export function parseCustomersLoose(raw) {
     const savedVehicles = parseSavedVehiclesLoose(item);
     out.push({
       id: sliceStr(id, 80).trim(),
-      code: sliceStr(code, L.code).trim(),
-      name: sliceStr(name, L.name).trim(),
+      ...accountFieldsFromItem(item, code, name),
       shipperName: sliceStr(item.shipperName, L.shipperName).trim(),
       shipperAddress: sliceStr(item.shipperAddress, L.shipperAddress).trim(),
       shipperPhone: sliceStr(item.shipperPhone, L.shipperPhone).trim(),
@@ -330,8 +353,7 @@ export function validateCustomerDirectoryPayload(raw) {
     }
     out.push({
       id: sliceStr(id, 80).trim(),
-      code: sliceStr(code, L.code).trim(),
-      name: sliceStr(name, L.name).trim(),
+      ...accountFieldsFromItem(item, code, name),
       shipperName: sliceStr(item.shipperName, L.shipperName).trim(),
       shipperAddress: sliceStr(item.shipperAddress, L.shipperAddress).trim(),
       shipperPhone: sliceStr(item.shipperPhone, L.shipperPhone).trim(),

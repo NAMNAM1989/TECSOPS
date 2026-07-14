@@ -22,11 +22,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // Konva/react-konva chỉ dùng trong PrintShippingLabel — tách riêng
-          if (id.includes("node_modules/konva") || id.includes("node_modules/react-konva")) {
-            return "vendor-konva";
-          }
-          // socket.io-client dùng ngay khi mount — giữ gần main
           if (id.includes("node_modules/socket.io-client") || id.includes("node_modules/engine.io-client")) {
             return "vendor-socketio";
           }

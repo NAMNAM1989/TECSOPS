@@ -169,6 +169,8 @@ export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntr
         id,
         code,
         name,
+        prefix: trimStr(o.prefix),
+        shortCode: trimStr(o.shortCode),
         shipperName: trimStr(o.shipperName),
         shipperAddress: trimStr(o.shipperAddress) || trimStr(o.address),
         shipperPhone: trimStr(o.shipperPhone) || trimStr(o.phone),

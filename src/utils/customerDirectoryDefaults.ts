@@ -4,8 +4,6 @@ import type {
   CustomerSavedGoods,
   CustomerSavedShipper,
 } from "../types/customerDirectory";
-import type { GlobalAgentCatalog, GlobalAgentEntry } from "../types/globalAgents";
-import { findGlobalAgentById } from "./globalAgentsCore";
 
 function norm(s: string): string {
   return s.trim().toLowerCase();
@@ -36,12 +34,6 @@ export function resolveDefaultGoods(entry: CustomerDirectoryEntry | undefined): 
   if (defId) return list.find((x) => norm(x.id) === norm(defId));
   if (list.length === 1) return list[0];
   return undefined;
-}
-
-export function resolveDefaultGlobalAgent(catalog: GlobalAgentCatalog): GlobalAgentEntry | undefined {
-  const list = catalog.agents.filter((x) => x.id.trim());
-  if (!list.length) return undefined;
-  return findGlobalAgentById(catalog, catalog.defaultAgentId);
 }
 
 export function profileOptionLabel(label: string, primary: string, fallbackId: string): string {

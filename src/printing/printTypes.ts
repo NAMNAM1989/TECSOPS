@@ -1,8 +1,6 @@
 import type { LabelSheetFormat } from "../utils/labelSheetFormat";
-import type { LabelTemplateV1 } from "../label-designer/core/types";
-
-/** Loại tài liệu in trong Print Center. */
-export type PrintDocumentType = "thermal-label" | "scsc-weigh" | "dim-report";
+/** Loại tài liệu in (nhãn nhiệt / báo cáo DIM). */
+export type PrintDocumentType = "thermal-label" | "dim-report";
 
 /** Cách gửi lệnh in tới máy. */
 export type PrintDeliveryMode = "tspl-tcp" | "browser-print" | "download-tspl";
@@ -36,10 +34,6 @@ export type ThermalLabelPrinterProfile = {
   copiesDefault: number;
   /** Khổ tem cố định cho máy này (100×50 hoặc 100×80). */
   labelSheetFormat: LabelSheetFormat;
-  /** Ghi đè tọa độ/cỡ từng ô tem (kéo trên căn chỉnh). */
-  thermalFieldOverrides?: ThermalFieldOverridesMap;
-  /** Template Label Designer (ưu tiên hơn overrides cũ). */
-  labelTemplate?: LabelTemplateV1;
   notes?: string;
 };
 
@@ -55,66 +49,11 @@ export type ThermalFieldOverride = {
 
 export type ThermalFieldOverridesMap = Record<string, ThermalFieldOverride>;
 
-/** Tuỳ chỉnh tọa độ/cỡ một ô in SCSC (lưu trên profile A4). */
-export type ScscFieldOverride = {
-  x?: number;
-  y?: number;
-  width?: number;
-  heightMm?: number;
-  fontMm?: number;
-  fontPt?: number;
-  lineHeightMm?: number;
-  align?: "left" | "center" | "right";
-  wrapText?: boolean;
-  multiline?: boolean;
-  bold?: boolean;
-};
-
-export type ScscFieldOverridesMap = Record<string, ScscFieldOverride>;
-
-/** Profile máy in tờ cân A4 (browser). */
-export type A4WeighReceiptPrinterProfile = {
-  id: string;
-  name: string;
-  type: "a4-browser";
-  paper: "A4";
-  offsetXmm: number;
-  offsetYmm: number;
-  scaleX: number;
-  scaleY: number;
-  templateVersion: string;
-  /** Khoảng cách dòng Shipper/Agent/CNEE (mm). Mặc định 6. */
-  partyLineGapMm?: number;
-  /** Cỡ chữ dòng địa chỉ (mm) — căn theo partyLineGapMm. */
-  partyAddressFontMm?: number;
-  /** Cỡ chữ tên party (mm). */
-  partyNameFontMm?: number;
-  /** Cỡ chữ SĐT/Email/MST/Notify (mm). */
-  partyContactFontMm?: number;
-  /** Ghi đè tọa độ/cỡ từng ô SCSC (kéo trên preview). */
-  scscFieldOverrides?: ScscFieldOverridesMap;
-  /** Template Label Designer cho phiếu SCSC A4. */
-  labelTemplate?: LabelTemplateV1;
-  notes?: string;
-};
-
-export type PrinterProfile = ThermalLabelPrinterProfile | A4WeighReceiptPrinterProfile;
+export type PrinterProfile = ThermalLabelPrinterProfile;
 
 export type PrinterProfileStoreV1 = {
   version: 1;
   activeThermalProfileId: string;
-  activeA4WeighProfileId: string;
   profiles: PrinterProfile[];
   updatedAt: string;
-};
-
-export type CalibrationMeasurement = {
-  /** Sai lệch đo được: dương = in bị lệch sang phải (thermal) / xuống (A4 offset Y). */
-  errorXmm: number;
-  errorYmm: number;
-  /** Kích thước in thực tế trên giấy (mm), nếu người dùng đo được. */
-  measuredWidthMm?: number;
-  measuredHeightMm?: number;
-  expectedWidthMm?: number;
-  expectedHeightMm?: number;
 };

@@ -61,7 +61,8 @@ export async function printShipmentThermalBrowser(
   await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
 
   try {
-    const res = await printThermalLabelsFromIframe({ format, host });
+    const copies = Math.max(1, s.pcs ?? 1);
+    const res = await printThermalLabelsFromIframe({ format, host, copies });
     if (!res.ok) throw new Error(res.error);
   } finally {
     root.unmount();

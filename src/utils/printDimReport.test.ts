@@ -110,7 +110,7 @@ describe("printDimReport", () => {
     });
 
     const s = sampleShipment();
-    const policy = dimRoundingPolicyFromFlight(s.flight);
+    const policy = dimRoundingPolicyFromFlight(s.flight, s.awb);
     const div = scscDimDivisor(s);
     const kg1 = lineDimKg(s.dimLines![0]!, div, policy);
     const kg2 = lineDimKg(s.dimLines![1]!, div, policy);

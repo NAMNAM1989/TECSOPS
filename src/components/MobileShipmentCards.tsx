@@ -22,7 +22,7 @@ function formatMobileFlightMeta(row: Shipment): string {
   if ((row.flight ?? "").trim()) parts.push((row.flight ?? "").trim());
   if ((row.dest ?? "").trim()) parts.push((row.dest ?? "").trim());
   if (row.dimWeightKg != null) {
-    parts.push(`DIM ${formatShipmentDimWeightKg(row.flight, row.dimWeightKg)}`);
+    parts.push(`DIM ${formatShipmentDimWeightKg(row.flight, row.dimWeightKg, row.awb)}`);
   }
   return parts.join(" · ");
 }

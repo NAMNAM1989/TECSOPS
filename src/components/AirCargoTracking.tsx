@@ -14,11 +14,12 @@ import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentE
 import { CustomerDirectoryManager } from "./CustomerDirectoryManager";
 import { GoogleSheetImportModal } from "./GoogleSheetImportModal";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
+import { downloadScscDimDayExcel } from "../utils/exportScscDimListExcel";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { SmartSearchBar } from "./SmartSearchBar";
-import { WAREHOUSE_ORDER } from "../constants/warehouses";
+import { WAREHOUSE_ORDER, isScscWarehouse } from "../constants/warehouses";
 import { NewBookingButton } from "./NewBookingButton";
 import { WarehouseGridPicker } from "./WarehouseGridPicker";
 import { DashboardToolbarButton } from "./DashboardToolbarButton";
@@ -66,6 +67,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
   const [excelExporting, setExcelExporting] = useState(false);
+  const [scscDimExporting, setScscDimExporting] = useState(false);
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
   const [customerDirOpen, setCustomerDirOpen] = useState(false);
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
@@ -293,6 +295,27 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
     }
   }, [allRows, selectedYmd, state]);
 
+  const onDownloadScscDimDay = useCallback(async () => {
+    setScscDimExporting(true);
+    try {
+      let rows = filterShipmentsBySessionYmd(allRows, selectedYmd).filter((r) =>
+        isScscWarehouse(r.warehouse)
+      );
+      const snap = await fetchAppStateSnapshot();
+      if (snap) {
+        rows = filterShipmentsBySessionYmd(snap.rows, selectedYmd).filter((r) =>
+          isScscWarehouse(r.warehouse)
+        );
+      }
+      await downloadScscDimDayExcel(rows, selectedYmd);
+    } catch (e) {
+      debugError("ui:excel-scsc-dim-day", e);
+      window.alert(e instanceof Error ? e.message : "Không tạo được file DIM SCSC.");
+    } finally {
+      setScscDimExporting(false);
+    }
+  }, [allRows, selectedYmd]);
+
   const openMobileEdit = useCallback(
     (s: Shipment, opts?: { tab?: "lot" | "notify" | "dim"; focus?: MobileEditFocus }) => {
       startTransition(() => {
@@ -380,6 +403,18 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
               </svg>
               Excel
             </DashboardToolbarButton>
+            {isScscWarehouse(activeWarehouse) ? (
+              <DashboardToolbarButton
+                disabled={scscDimExporting}
+                onClick={() => void onDownloadScscDimDay()}
+                title="Xuất LIST DIM SCSC (mọi lô đã nhập chi tiết DIM trong ngày)"
+              >
+                <svg className="h-3.5 w-3.5 text-violet-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h10M8 7v10" />
+                </svg>
+                {scscDimExporting ? "DIM…" : "DIM SCSC"}
+              </DashboardToolbarButton>
+            ) : null}
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-none">
             <div className="min-w-0 flex-1">

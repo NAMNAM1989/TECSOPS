@@ -448,7 +448,7 @@ export function MobileShipmentEditSheet({
                 <div className={`rounded-2xl border p-4 ${OPS.panelSoft}`}>
                   {dimWeightKg != null ? (
                     <p className="text-[13px] font-semibold text-apple-label dark:text-slate-100">
-                      DIM {formatShipmentDimWeightKg(shipment.flight, dimWeightKg)} kg
+                      DIM {formatShipmentDimWeightKg(shipment.flight, dimWeightKg, shipment.awb)} kg
                       {(dimLines?.length ?? 0) > 0 ? (
                         <span className="font-normal text-apple-secondary dark:text-slate-400">
                           {" "}

@@ -11,6 +11,8 @@ import {
   totalDimKgFromLines,
   tryParseDimPieceLinesFromComboText,
 } from "../utils/volumetricDim";
+import { collectScscDimLimitWarnings } from "../utils/scscAirlineLimitsCheck";
+import { resolveScscAirlineDimRule } from "../utils/scscChargeableWeight";
 
 export type MobileDimSavePayload = {
   dimWeightKg: number | null;
@@ -81,8 +83,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   const [isInputFocused, setIsInputFocused] = useState(false);
 
   const dimPolicy: DimRoundingPolicyId = useMemo(
-    () => dimRoundingPolicyFromFlight(row.flight),
-    [row.flight]
+    () => dimRoundingPolicyFromFlight(row.flight, row.awb),
+    [row.flight, row.awb]
   );
 
   /** Cùng quy tắc với LIST SCSC / in: 6000 (IATA) hoặc 5000 nếu cấu hình theo tiền tố hãng. */
@@ -105,6 +107,15 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     declaredPcs != null && lines.length > 0 && sumDimPcs > declaredPcs;
   const pcsShort =
     declaredPcs != null && lines.length > 0 && sumDimPcs < declaredPcs;
+
+  const limitWarnings = useMemo(
+    () => collectScscDimLimitWarnings(row.flight, row.awb, lines),
+    [row.flight, row.awb, lines]
+  );
+  const airlineRule = useMemo(
+    () => resolveScscAirlineDimRule(row.flight, row.awb),
+    [row.flight, row.awb]
+  );
 
   const appendQuads = useCallback((parsed: DimPieceLine[]) => {
     if (parsed.length === 0) return;
@@ -174,22 +185,47 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
             <h2 id="dim-modal-title" className="text-[1.05rem] font-semibold tracking-tight text-apple-label">
               Nhập DIM
             </h2>
-            {dimPolicy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND" ? (
+            {dimPolicy !== "STANDARD_IATA_2DP" ? (
               <span
-                className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900"
-                title="VietJet: DIM mỗi dòng cắt 3 số lẻ"
+                className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-apple-label"
+                title="Quy tắc Chargeable Weight theo SCSC Required airline"
               >
-                VJ
+                {dimPolicy === "DP3_ROUND_0_5"
+                  ? "SCSC · 0.5"
+                  : dimPolicy === "DP3_ROUND_1"
+                    ? "SCSC · 1kg"
+                    : dimPolicy === "DP2_ROUND_0_5"
+                      ? "SCSC · 2dp/0.5"
+                      : dimPolicy === "ROUND_INTEGER"
+                        ? "SCSC · tròn"
+                        : dimPolicy === "QR_SPECIAL"
+                          ? "SCSC · QR"
+                          : "SCSC"}
               </span>
             ) : null}
           </div>
           <p className="mt-0.5 text-[11px] text-apple-tertiary">Dài × Rộng × Cao × kiện (cm)</p>
+          {airlineRule ? (
+            <p className="mt-1 text-[10px] font-medium text-apple-secondary">
+              {airlineRule.codes.join("/")} · {airlineRule.chargeableNote}
+            </p>
+          ) : null}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2.5">
           <div className="space-y-2.5">
             {!isInputFocused && <DimTotalRow totalDimLabel={totalDimLabel} />}
 
+            {limitWarnings.length > 0 ? (
+              <div className="space-y-1 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950">
+                {limitWarnings.map((w, i) => (
+                  <p key={i} className={w.kind === "dims" ? "font-semibold" : "opacity-90"}>
+                    {w.kind === "dims" ? "⚠ " : "ℹ "}
+                    {w.message}
+                  </p>
+                ))}
+              </div>
+            ) : null}
             <div>
               <div className="mb-1.5 flex items-center justify-between gap-2">
                 <label htmlFor="dim-combo" className="text-xs font-semibold text-apple-label">

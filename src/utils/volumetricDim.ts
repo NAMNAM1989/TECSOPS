@@ -1,17 +1,24 @@
+import {
+  applyScscChargeableRounding,
+  applyScscTotalRounding,
+  formatScscChargeableKg,
+  scscChargeableKindFromShipment,
+  type ScscChargeableRoundKind,
+} from "./scscChargeableWeight";
+
 /** Hệ số thể tích phổ biến: cm³/kg (IATA thường 6000; một số hãng/điều kiện 5000). */
 export const DIM_DIVISORS = [6000, 5000] as const;
 export type DimDivisor = (typeof DIM_DIVISORS)[number];
 
 /**
- * Tiền tố mã chuyến (2–3 chữ đầu, ví dụ VJ, VN, QH) dùng hệ số **5000** cm³/kg.
- * Để trống → mọi chuyến dùng **6000** (chuẩn IATA phổ biến).
- * Cập nhật theo tài liệu hãng (PDF “Required airline”) — không đoán bừa; thêm từng hãng khi có quy định rõ.
+ * Tiền tố mã chuyến (2–3 chữ đầu) dùng hệ số **5000** cm³/kg.
+ * Tài liệu SCSC Required airline (29MAR2025) không nêu 5000 — danh sách trống → luôn 6000.
  */
 export const DIM_DIVISOR_5000_FLIGHT_PREFIXES: readonly string[] = [];
 
 function flightPrefix(flight: string): string {
   const head = flight.trim().toUpperCase().replace(/\s+/g, "");
-  return head.match(/^([A-Z]{2,3})/)?.[1] ?? "";
+  return head.match(/^([A-Z0-9]{2,3})/)?.[1] ?? "";
 }
 
 /** Hệ số L×W×H (cm³/kg) theo ký hiệu hãng — mặc định 6000. */
@@ -22,43 +29,50 @@ export function dimDivisorFromFlight(flight: string): DimDivisor {
 }
 
 /**
- * Quy tắc quy đổi DIM (kg) từ dimLines — một số hãng khác cách xử lý phần thập phân.
- * - STANDARD_IATA_2DP: làm tròn 2 số lẻ mỗi dòng và tổng (mặc định).
- * - VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND: chuyến VJ* — mỗi dòng cắt (truncate) 3 chữ thập phân,
- *   tổng = tổng các dòng đã cắt, không làm tròn lại tổng.
+ * Quy tắc quy đổi DIM (kg) — cột Chargeable Weight SCSC Required airline.
+ * Alias cũ `VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND` → `DP3_ROUND_0_5`.
  */
-export const DIM_ROUNDING_POLICY_IDS = ["STANDARD_IATA_2DP", "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND"] as const;
-export type DimRoundingPolicyId = (typeof DIM_ROUNDING_POLICY_IDS)[number];
+export type DimRoundingPolicyId = ScscChargeableRoundKind | "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND";
 
-/** Suy ra chính sách từ mã chuyến (tiền tố hãng). */
-export function dimRoundingPolicyFromFlight(flight: string): DimRoundingPolicyId {
-  const head = flight.trim().toUpperCase().replace(/\s+/g, "");
-  if (/^VJ/.test(head)) return "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND";
-  return "STANDARD_IATA_2DP";
+export const DIM_ROUNDING_POLICY_IDS = [
+  "DP3_ROUND_0_5",
+  "DP3_ROUND_1",
+  "DP2_ROUND_0_5",
+  "ROUND_INTEGER",
+  "QR_SPECIAL",
+  "STANDARD_IATA_2DP",
+  "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND",
+] as const;
+
+function normalizePolicy(policy: DimRoundingPolicyId): ScscChargeableRoundKind {
+  if (policy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND") return "DP3_ROUND_0_5";
+  return policy;
 }
 
-function truncatePositiveKg(n: number, decimalPlaces: number): number {
+/** Suy ra chính sách từ mã chuyến (+ AWB nếu có). */
+export function dimRoundingPolicyFromFlight(flight: string, awb = ""): DimRoundingPolicyId {
+  return scscChargeableKindFromShipment(flight, awb);
+}
+
+export function truncatePositiveKg(n: number, decimalPlaces: number): number {
   if (!Number.isFinite(n) || n <= 0) return n;
   const f = 10 ** decimalPlaces;
   return Math.floor(n * f + 1e-9) / f;
 }
 
-/**
- * Hiển thị kg DIM theo chính sách.
- * VJ: luôn **cắt** (truncate) đúng 3 chữ số thập phân — bỏ nhiễu float kiểu 1392.1080000000002.
- */
+/** Hiển thị kg DIM theo chính sách SCSC. */
 export function formatDimKgDisplay(kg: number, policy: DimRoundingPolicyId): string {
-  if (policy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND") {
-    const t = truncatePositiveKg(kg, 3);
-    return t.toFixed(3);
-  }
-  return String(Math.round(kg * 100) / 100);
+  return formatScscChargeableKg(kg, normalizePolicy(policy));
 }
 
-/** DIM kg trên lô (cột bảng / Excel / in) — theo mã chuyến. */
-export function formatShipmentDimWeightKg(flight: string, dimWeightKg: number | null): string {
+/** DIM kg trên lô — theo mã chuyến (+ AWB). */
+export function formatShipmentDimWeightKg(
+  flight: string,
+  dimWeightKg: number | null,
+  awb = ""
+): string {
   if (dimWeightKg == null) return "—";
-  return formatDimKgDisplay(dimWeightKg, dimRoundingPolicyFromFlight(flight));
+  return formatDimKgDisplay(dimWeightKg, dimRoundingPolicyFromFlight(flight, awb));
 }
 
 /** Một nhóm kiện cùng kích thước (cm). */
@@ -70,7 +84,7 @@ export type DimPieceLine = {
   pcs: number;
 };
 
-/** Trích các số dương từ chuỗi (gõ tay, dán, hoặc transcript giọng nói). */
+/** Trích các số dương từ chuỗi. */
 export function parsePositiveNumbersFromText(s: string): number[] {
   const m = s.replace(/,/g, ".").match(/\d+(?:\.\d+)?/g);
   if (!m) return [];
@@ -91,8 +105,7 @@ export function volumetricKgFromCm(
   if (lengthCm <= 0 || widthCm <= 0 || heightCm <= 0) return null;
   const v = (lengthCm * widthCm * heightCm) / divisor;
   if (!Number.isFinite(v) || v <= 0) return null;
-  if (policy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND") return truncatePositiveKg(v, 3);
-  return Math.round(v * 100) / 100;
+  return applyScscChargeableRounding(v, normalizePolicy(policy));
 }
 
 export function parseKgInput(t: string): number | null {
@@ -108,7 +121,7 @@ export function normalizePieceCount(n: number): number {
   return Math.max(1, Math.min(99999, Math.floor(n)));
 }
 
-/** DIM một dòng = (D×R×C÷hệ số) × số kiện. */
+/** DIM một dòng = làm tròn((D×R×C÷hệ số) × số kiện) theo hãng SCSC. */
 export function lineDimKg(
   line: DimPieceLine,
   divisor: DimDivisor,
@@ -118,9 +131,12 @@ export function lineDimKg(
   if (!Number.isFinite(rawUnit) || rawUnit <= 0) return null;
   const pcs = normalizePieceCount(line.pcs);
   const rawLine = rawUnit * pcs;
-  if (policy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND") return truncatePositiveKg(rawLine, 3);
-  const unit = Math.round(rawUnit * 100) / 100;
-  return Math.round(unit * pcs * 100) / 100;
+  const kind = normalizePolicy(policy);
+  if (kind === "STANDARD_IATA_2DP") {
+    const unit = Math.round(rawUnit * 100) / 100;
+    return Math.round(unit * pcs * 100) / 100;
+  }
+  return applyScscChargeableRounding(rawLine, kind);
 }
 
 export function totalDimKgFromLines(
@@ -129,20 +145,16 @@ export function totalDimKgFromLines(
   policy: DimRoundingPolicyId = "STANDARD_IATA_2DP"
 ): number | null {
   if (lines.length === 0) return null;
+  const kind = normalizePolicy(policy);
   let sum = 0;
   for (const line of lines) {
-    const x = lineDimKg(line, divisor, policy);
+    const x = lineDimKg(line, divisor, kind);
     if (x === null) return null;
     sum += x;
   }
-  if (policy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND") return truncatePositiveKg(sum, 3);
-  return Math.round(sum * 100) / 100;
+  return applyScscTotalRounding(sum, kind);
 }
 
-/**
- * Gom dãy số thành các dòng [D,R,C,Kiện].
- * Cứ 4 số = 1 dòng; còn đúng 3 số cuối → Kiện = 1.
- */
 export function parseDimLineQuadsFromNumbers(nums: number[]): DimPieceLine[] {
   const out: DimPieceLine[] = [];
   let i = 0;
@@ -171,9 +183,6 @@ export function parseDimLineQuadsFromNumbers(nums: number[]): DimPieceLine[] {
   return out;
 }
 
-/**
- * Giống parseDimLineQuadsFromNumbers nhưng bắt buộc dùng hết dãy số (không bỏ sót số thừa).
- */
 export function parseDimLineQuadsFromNumbersStrict(nums: number[]): DimPieceLine[] | null {
   if (nums.length === 0) return null;
   const out: DimPieceLine[] = [];
@@ -205,10 +214,6 @@ export function parseDimLineQuadsFromNumbersStrict(nums: number[]): DimPieceLine
 
 const DIM_COMBO_LINE_SPLIT = /[\n;]+/;
 
-/**
- * Ô nhập DIM: mỗi dòng (hoặc mỗi đoạn sau ;) là một hoặc nhiều nhóm D×R×C×kiện / D×R×C (kiện=1).
- * Phân cách số: - × * khoảng trắng… (parsePositiveNumbersFromText).
- */
 export function tryParseDimPieceLinesFromComboText(raw: string):
   | { ok: true; lines: DimPieceLine[] }
   | { ok: false; error: string } {

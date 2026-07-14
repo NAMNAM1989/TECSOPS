@@ -48,7 +48,7 @@ describe("buildScscDimListModel", () => {
     const s = sample();
     const m = buildScscDimListModel(s);
     expect(m).not.toBeNull();
-    const policy = dimRoundingPolicyFromFlight(s.flight);
+    const policy = dimRoundingPolicyFromFlight(s.flight, s.awb);
     const div = scscDimDivisor(s);
     const kg = lineDimKg(s.dimLines![0]!, div, policy);
     expect(m!.rows).toHaveLength(1);
@@ -56,11 +56,12 @@ describe("buildScscDimListModel", () => {
     expect(m!.totalPcs).toBe(4);
   });
 
-  it("VJ: numFmt Excel 3 chữ số thập phân", () => {
+  it("VJ: numFmt Excel bậc 0.5 (1 số lẻ)", () => {
     const s = sample({ flight: "VJ999", dimLines: [{ lCm: 10, wCm: 10, hCm: 10, pcs: 1 }] });
     const m = buildScscDimListModel(s);
     expect(m).not.toBeNull();
-    expect(dimKgExcelNumFmt(m!.policy)).toBe("0.000");
+    expect(m!.policy).toBe("DP3_ROUND_0_5");
+    expect(dimKgExcelNumFmt(m!.policy)).toBe("0.0");
   });
 
   it("dimDivisor null: dùng hệ số suy từ mã chuyến (khớp dimDivisorFromFlight)", () => {

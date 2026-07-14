@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyQrOneDecimalRule,
+  applyScscChargeableRounding,
+  resolveScscAirlineDimRule,
+  scscChargeableKindFromShipment,
+} from "./scscChargeableWeight";
+import {
   dimDivisorFromFlight,
   dimRoundingPolicyFromFlight,
   formatDimKgDisplay,
@@ -64,64 +70,95 @@ describe("tryParseDimPieceLinesFromComboText", () => {
 });
 
 describe("dimDivisorFromFlight", () => {
-  it("mặc định 6000 (IATA) khi chưa cấu hình tiền tố 5000 trong DIM_DIVISOR_5000_FLIGHT_PREFIXES", () => {
+  it("mặc định 6000 (IATA) — SCSC Required airline không nêu 5000", () => {
     expect(dimDivisorFromFlight("VN601")).toBe(6000);
     expect(dimDivisorFromFlight("QH202")).toBe(6000);
     expect(dimDivisorFromFlight("VJ123")).toBe(6000);
   });
-
-  it("6000 khi mã chuyến trống hoặc không có tiền tố chữ", () => {
-    expect(dimDivisorFromFlight("")).toBe(6000);
-    expect(dimDivisorFromFlight("123")).toBe(6000);
-  });
 });
 
-describe("dimRoundingPolicyFromFlight", () => {
-  it("nhận VJ từ mã chuyến", () => {
-    expect(dimRoundingPolicyFromFlight("VJ123")).toBe("VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND");
-    expect(dimRoundingPolicyFromFlight("vj 999")).toBe("VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND");
+describe("SCSC Required airline — resolve + rounding", () => {
+  it("VJ / AWB 978 → DP3_ROUND_0_5", () => {
+    expect(dimRoundingPolicyFromFlight("VJ123")).toBe("DP3_ROUND_0_5");
+    expect(scscChargeableKindFromShipment("", "978-1111 2222")).toBe("DP3_ROUND_0_5");
+    expect(resolveScscAirlineDimRule("VJ081")?.codes).toContain("VJ");
   });
 
-  it("mặc định chuẩn IATA cho hãng khác", () => {
+  it("TK / SQ / TR → làm tròn bậc 1 (SQ+TR cùng 618)", () => {
+    expect(dimRoundingPolicyFromFlight("TK001")).toBe("DP3_ROUND_1");
+    expect(dimRoundingPolicyFromFlight("SQ177")).toBe("DP3_ROUND_1");
+    expect(dimRoundingPolicyFromFlight("TR305")).toBe("DP3_ROUND_1");
+    expect(resolveScscAirlineDimRule("SQ177")?.codes).toEqual(["SQ", "TR"]);
+    expect(resolveScscAirlineDimRule("TR305")?.codes).toEqual(["SQ", "TR"]);
+    expect(scscChargeableKindFromShipment("", "618-1234 5678")).toBe("DP3_ROUND_1");
+  });
+
+  it("CX/LD → 2 số lẻ + 0.5", () => {
+    expect(dimRoundingPolicyFromFlight("CX766")).toBe("DP2_ROUND_0_5");
+    expect(dimRoundingPolicyFromFlight("LD562")).toBe("DP2_ROUND_0_5");
+  });
+
+  it("TG / 6E / BD → làm tròn số nguyên", () => {
+    expect(dimRoundingPolicyFromFlight("TG610")).toBe("ROUND_INTEGER");
+    expect(dimRoundingPolicyFromFlight("6E123")).toBe("ROUND_INTEGER");
+    expect(dimRoundingPolicyFromFlight("BD100")).toBe("ROUND_INTEGER");
+  });
+
+  it("QR → QR_SPECIAL", () => {
+    expect(dimRoundingPolicyFromFlight("QR846")).toBe("QR_SPECIAL");
+    expect(scscChargeableKindFromShipment("", "157-1234 5678")).toBe("QR_SPECIAL");
+  });
+
+  it("hãng lạ → STANDARD_IATA_2DP", () => {
     expect(dimRoundingPolicyFromFlight("VN601")).toBe("STANDARD_IATA_2DP");
     expect(dimRoundingPolicyFromFlight("")).toBe("STANDARD_IATA_2DP");
   });
-});
 
-describe("DIM theo chính sách VJ (cắt 3 số lẻ / dòng, tổng không làm tròn)", () => {
-  const div = 6000 as const;
-  /** Kích thước sao cho (D×R×C)/6000 có nhiều chữ thập phân */
-  const line = { lCm: 77, wCm: 58, hCm: 42, pcs: 3 };
-
-  it("VJ: dòng cắt 3 chữ thập phân, khác làm tròn 2 số lẻ chuẩn", () => {
-    const rawUnit = (77 * 58 * 42) / div;
-    expect(rawUnit * 3).toBeGreaterThan(93.546);
-
-    const vj = lineDimKg(line, div, "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND");
-    const std = lineDimKg(line, div, "STANDARD_IATA_2DP");
-    expect(vj).not.toBe(std);
-    expect(vj).toBe(Math.floor(rawUnit * 3 * 1000 + 1e-9) / 1000);
+  it("DP3_ROUND_0_5: 10.234 → 10.0; 10.3 → 10.5", () => {
+    expect(applyScscChargeableRounding(10.234, "DP3_ROUND_0_5")).toBe(10);
+    expect(applyScscChargeableRounding(10.3, "DP3_ROUND_0_5")).toBe(10.5);
   });
 
-  it("VJ: tổng cắt 3 số lẻ sau khi cộng (khớp truncate của tổng)", () => {
+  it("QR one-decimal rule", () => {
+    expect(applyQrOneDecimalRule(10.0)).toBe(10);
+    expect(applyQrOneDecimalRule(10.14)).toBe(10.5);
+    expect(applyQrOneDecimalRule(10.49)).toBe(10.5);
+    expect(applyQrOneDecimalRule(10.5)).toBe(11);
+    expect(applyQrOneDecimalRule(10.91)).toBe(11);
+  });
+});
+
+describe("DIM theo chính sách VJ (SCSC: 3 số lẻ → làm tròn 0.5)", () => {
+  const div = 6000 as const;
+  const line = { lCm: 77, wCm: 58, hCm: 42, pcs: 3 };
+
+  it("VJ: dòng làm tròn bậc 0.5, khác IATA 2dp", () => {
+    const raw = ((77 * 58 * 42) / div) * 3;
+    const vj = lineDimKg(line, div, "DP3_ROUND_0_5");
+    const std = lineDimKg(line, div, "STANDARD_IATA_2DP");
+    expect(vj).not.toBe(std);
+    expect(vj).toBe(applyScscChargeableRounding(raw, "DP3_ROUND_0_5"));
+  });
+
+  it("VJ: tổng = tổng dòng đã làm tròn (bậc 0.5)", () => {
     const lines = [
       { lCm: 77, wCm: 58, hCm: 42, pcs: 3 },
       { lCm: 40, wCm: 50, hCm: 30, pcs: 1 },
     ];
-    const a = lineDimKg(lines[0], div, "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND")!;
-    const b = lineDimKg(lines[1], div, "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND")!;
-    const tot = totalDimKgFromLines(lines, div, "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND")!;
-    expect(tot).toBe(Math.floor((a + b) * 1000 + 1e-9) / 1000);
+    const a = lineDimKg(lines[0], div, "DP3_ROUND_0_5")!;
+    const b = lineDimKg(lines[1], div, "DP3_ROUND_0_5")!;
+    const tot = totalDimKgFromLines(lines, div, "DP3_ROUND_0_5")!;
+    expect(tot).toBe(a + b);
   });
 });
 
 describe("formatDimKgDisplay / formatShipmentDimWeightKg", () => {
-  it("VJ: bỏ nhiễu float, luôn 3 số lẻ", () => {
-    expect(formatDimKgDisplay(1392.1080000000002, "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND")).toBe("1392.108");
+  it("VJ: hiển thị 1 số lẻ sau làm tròn 0.5", () => {
+    expect(formatDimKgDisplay(10.5, "DP3_ROUND_0_5")).toBe("10.5");
+    expect(formatShipmentDimWeightKg("VJ081", 10.5)).toBe("10.5");
   });
 
-  it("formatShipmentDimWeightKg theo chuyến", () => {
-    expect(formatShipmentDimWeightKg("VJ081", 1392.1080000000002)).toBe("1392.108");
+  it("IATA: 2 số lẻ", () => {
     expect(formatShipmentDimWeightKg("VN601", 139.205)).toBe("139.21");
   });
 });

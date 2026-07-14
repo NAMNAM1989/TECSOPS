@@ -116,7 +116,7 @@ function dayReportRowValues(
     r.dest,
     r.pcs ?? "",
     r.kg ?? "",
-    r.dimWeightKg != null ? formatShipmentDimWeightKg(r.flight, r.dimWeightKg) : "",
+    r.dimWeightKg != null ? formatShipmentDimWeightKg(r.flight, r.dimWeightKg, r.awb) : "",
     r.customer,
     code,
   ];

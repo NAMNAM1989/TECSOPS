@@ -47,7 +47,7 @@ export function buildScscDimListModel(s: Shipment): ScscDimListModel | null {
   if (!lines?.length) return null;
 
   const divisor = scscDimDivisor(s);
-  const policy = dimRoundingPolicyFromFlight(s.flight);
+  const policy = dimRoundingPolicyFromFlight(s.flight, s.awb);
   let totalPcs = 0;
   const rows: ScscDimListRow[] = lines.map((line, i) => {
     totalPcs += line.pcs;
@@ -63,7 +63,7 @@ export function buildScscDimListModel(s: Shipment): ScscDimListModel | null {
   });
 
   const dimKgStrip =
-    s.dimWeightKg != null ? `${formatShipmentDimWeightKg(s.flight, s.dimWeightKg)} kg` : "—";
+    s.dimWeightKg != null ? `${formatShipmentDimWeightKg(s.flight, s.dimWeightKg, s.awb)} kg` : "—";
 
   return { policy, divisor, rows, totalPcs, dimKgStrip };
 }
@@ -75,5 +75,14 @@ export function formatLineDimKgLabel(kg: number | null, policy: DimRoundingPolic
 
 /** Định dạng số DIM (kg) trên ô Excel theo chính sách chuyến. */
 export function dimKgExcelNumFmt(policy: DimRoundingPolicyId): string {
-  return policy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND" ? "0.000" : "0.00";
+  if (policy === "DP3_ROUND_1" || policy === "ROUND_INTEGER") return "0";
+  if (
+    policy === "DP3_ROUND_0_5" ||
+    policy === "DP2_ROUND_0_5" ||
+    policy === "QR_SPECIAL" ||
+    policy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND"
+  ) {
+    return "0.0";
+  }
+  return "0.00";
 }

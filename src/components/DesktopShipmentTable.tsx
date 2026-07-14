@@ -345,7 +345,7 @@ function ShipmentTableRowImpl({
         <div className="flex flex-col items-end gap-0">
           {(row.dimLines?.length ?? 0) > 0 ? (
             <span className="font-mono text-[10px] font-semibold tabular-nums ops-grid-cell">
-              {formatShipmentDimWeightKg(row.flight, row.dimWeightKg)}
+              {formatShipmentDimWeightKg(row.flight, row.dimWeightKg, row.awb)}
             </span>
           ) : (
             <InlineNumberEdit

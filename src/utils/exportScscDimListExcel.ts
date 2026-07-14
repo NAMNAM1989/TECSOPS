@@ -81,17 +81,11 @@ function styleBodyCell(cell: Cell, col: number) {
   };
 }
 
-async function buildListScscWorkbook(s: Shipment, model: ScscDimListModel) {
-  const ExcelJS = (await import("exceljs")).default;
-  const wb = new ExcelJS.Workbook();
-  wb.creator = "TECSOPS";
-  wb.created = new Date();
-
-  const sheet = wb.addWorksheet("LIST SCSC", {
-    views: [{ state: "frozen", ySplit: ROW_TABLE_HEADER }],
-    properties: { defaultRowHeight: 18 },
-  });
-
+async function fillListScscSheet(
+  sheet: import("exceljs").Worksheet,
+  s: Shipment,
+  model: ScscDimListModel
+) {
   sheet.columns = [
     { width: 18 },
     { width: 14 },
@@ -173,8 +167,80 @@ async function buildListScscWorkbook(s: Shipment, model: ScscDimListModel) {
     fitToHeight: 0,
     margins: { left: 0.6, right: 0.6, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 },
   };
+}
 
+async function buildListScscWorkbook(s: Shipment, model: ScscDimListModel) {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "TECSOPS";
+  wb.created = new Date();
+
+  const sheet = wb.addWorksheet("LIST SCSC", {
+    views: [{ state: "frozen", ySplit: ROW_TABLE_HEADER }],
+    properties: { defaultRowHeight: 18 },
+  });
+  await fillListScscSheet(sheet, s, model);
   return wb;
+}
+
+function uniqueSheetName(used: Set<string>, base: string): string {
+  let name = base.slice(0, 28) || "DIM";
+  if (!used.has(name)) {
+    used.add(name);
+    return name;
+  }
+  let i = 2;
+  while (used.has(`${name}_${i}`)) i++;
+  const n = `${name}_${i}`.slice(0, 31);
+  used.add(n);
+  return n;
+}
+
+/**
+ * Xuất nhiều lô SCSC đã có DIM → 1 file Excel, mỗi lô 1 sheet.
+ * Trả về số sheet đã ghi.
+ */
+export async function downloadScscDimDayExcel(
+  shipments: readonly Shipment[],
+  sessionYmd: string
+): Promise<number> {
+  const ready = shipments.filter((s) => canPrintDimScscReport(s));
+  if (ready.length === 0) {
+    window.alert(
+      "Chưa có lô TECS-SCSC nào đã nhập chi tiết DIM (D×R×C×kiện) trong ngày này."
+    );
+    return 0;
+  }
+
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "TECSOPS";
+  wb.created = new Date();
+  const used = new Set<string>();
+
+  for (const s of ready) {
+    const model = buildScscDimListModel(s);
+    if (!model) continue;
+    const base = awbForFilename(s.awb) || `STT${s.stt}`;
+    const sheet = wb.addWorksheet(uniqueSheetName(used, base), {
+      views: [{ state: "frozen", ySplit: ROW_TABLE_HEADER }],
+      properties: { defaultRowHeight: 18 },
+    });
+    await fillListScscSheet(sheet, s, model);
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: MIME_XLSX });
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = `LIST_SCSC_DIM_${sessionYmd}.xlsx`;
+    a.click();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+  return ready.length;
 }
 
 /** Excel LIST SCSC — meta không viền; chỉ bảng DIM có lưới đen. */

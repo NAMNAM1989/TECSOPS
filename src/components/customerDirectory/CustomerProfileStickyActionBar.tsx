@@ -2,22 +2,26 @@ import { CD } from "./customerDirectoryStyles";
 
 type Props = {
   saving: boolean;
+  dirty: boolean;
   onSave: () => void;
-  onCancel: () => void;
+  onDiscard: () => void;
   deleteLabel?: string;
   onDelete?: () => void;
 };
 
-/** Thanh hành động cố định dưới cùng — Luôn thấy Lưu / Hủy khi cuộn. */
+/** Thanh hành động — một Lưu, Hủy khi dirty. */
 export function CustomerProfileStickyActionBar({
   saving,
+  dirty,
   onSave,
-  onCancel,
+  onDiscard,
   deleteLabel,
   onDelete,
 }: Props) {
   return (
-    <div className={`sticky bottom-0 z-20 shrink-0 px-3 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-md sm:px-4 ${CD.footer}`}>
+    <div
+      className={`sticky bottom-0 z-20 shrink-0 px-3 py-2.5 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-md sm:px-4 ${CD.footer}`}
+    >
       <div className="flex items-center gap-2">
         {onDelete ? (
           <button
@@ -31,21 +35,26 @@ export function CustomerProfileStickyActionBar({
           <span className="hidden flex-1 sm:block" />
         )}
         <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 sm:flex-none">
-          <span className={`hidden text-[10px] lg:inline ${CD.muted}`}>Ctrl+S lưu</span>
+          {dirty ? (
+            <span className={`hidden text-[10px] sm:inline ${CD.muted}`}>Chưa lưu · Ctrl+S</span>
+          ) : (
+            <span className={`hidden text-[10px] sm:inline ${CD.muted}`}>Đã lưu</span>
+          )}
           <button
             type="button"
-            onClick={onCancel}
-            className={`rounded-full border px-4 py-2 text-sm font-semibold ${CD.tabIdle}`}
+            disabled={!dirty || saving}
+            onClick={onDiscard}
+            className={`rounded-full border px-4 py-2 text-sm font-semibold disabled:opacity-40 ${CD.tabIdle}`}
           >
             Hủy
           </button>
           <button
             type="button"
-            disabled={saving}
+            disabled={!dirty || saving}
             onClick={onSave}
-            className="min-w-[9rem] rounded-full bg-apple-blue px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-apple-blue-hover disabled:cursor-wait disabled:opacity-70"
+            className="min-w-[7rem] rounded-full bg-apple-blue px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-apple-blue-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? "Đang lưu…" : "Lưu & đóng"}
+            {saving ? "Đang lưu…" : "Lưu"}
           </button>
         </div>
       </div>

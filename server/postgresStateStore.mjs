@@ -363,17 +363,33 @@ function customerProfileFromRow(row, savedShippers = [], savedConsignees = [], p
 /** Hồ sơ chỉ nằm trong JSON blob (xe/tài xế, hàng, mặc định…) — gộp lên bản relational. */
 function mergeCustomerBlobProfile(base, fromBlob) {
   if (!fromBlob || typeof fromBlob !== "object") return base;
+  const defaultRate =
+    fromBlob.defaultRate === null || typeof fromBlob.defaultRate === "number"
+      ? fromBlob.defaultRate
+      : base.defaultRate;
   return {
     ...base,
-    ...(fromBlob.prefix ? { prefix: fromBlob.prefix } : {}),
-    ...(fromBlob.shortCode ? { shortCode: fromBlob.shortCode } : {}),
-    savedGoods: fromBlob.savedGoods ?? base.savedGoods,
-    savedVehicles: fromBlob.savedVehicles ?? [],
-    ...(fromBlob.defaultShipperId ? { defaultShipperId: fromBlob.defaultShipperId } : {}),
-    ...(fromBlob.defaultConsigneeId ? { defaultConsigneeId: fromBlob.defaultConsigneeId } : {}),
-    ...(fromBlob.defaultGoodsId ? { defaultGoodsId: fromBlob.defaultGoodsId } : {}),
-    ...(fromBlob.defaultVehicleId ? { defaultVehicleId: fromBlob.defaultVehicleId } : {}),
-    ...(fromBlob.otherRequirementsPrint
+    ...(typeof fromBlob.prefix === "string" ? { prefix: fromBlob.prefix } : {}),
+    ...(typeof fromBlob.shortCode === "string" ? { shortCode: fromBlob.shortCode } : {}),
+    ...(typeof fromBlob.taxCode === "string" ? { taxCode: fromBlob.taxCode } : {}),
+    ...(typeof fromBlob.address === "string" ? { address: fromBlob.address } : {}),
+    ...(typeof fromBlob.email === "string" ? { email: fromBlob.email } : {}),
+    ...(typeof fromBlob.phone === "string" ? { phone: fromBlob.phone } : {}),
+    ...(defaultRate !== undefined ? { defaultRate } : {}),
+    ...(typeof fromBlob.customerType === "string" ? { customerType: fromBlob.customerType } : {}),
+    savedGoods: Array.isArray(fromBlob.savedGoods) ? fromBlob.savedGoods : base.savedGoods ?? [],
+    savedVehicles: Array.isArray(fromBlob.savedVehicles) ? fromBlob.savedVehicles : [],
+    ...(typeof fromBlob.defaultShipperId === "string"
+      ? { defaultShipperId: fromBlob.defaultShipperId }
+      : {}),
+    ...(typeof fromBlob.defaultConsigneeId === "string"
+      ? { defaultConsigneeId: fromBlob.defaultConsigneeId }
+      : {}),
+    ...(typeof fromBlob.defaultGoodsId === "string" ? { defaultGoodsId: fromBlob.defaultGoodsId } : {}),
+    ...(typeof fromBlob.defaultVehicleId === "string"
+      ? { defaultVehicleId: fromBlob.defaultVehicleId }
+      : {}),
+    ...(typeof fromBlob.otherRequirementsPrint === "string"
       ? { otherRequirementsPrint: fromBlob.otherRequirementsPrint }
       : {}),
   };

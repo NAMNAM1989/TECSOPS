@@ -64,6 +64,8 @@ export function useShipmentSync(fallback: Fallback) {
         if (cancelled) return;
         apiOkRef.current = true;
         setState(parsed);
+        saveRows(parsed.rows);
+        saveCustomerDirectoryToStorage(parsed.customers);
         setStatus("degraded");
       } catch (e) {
         if (cancelled) return;
@@ -89,7 +91,14 @@ export function useShipmentSync(fallback: Fallback) {
 
       const mergeIfNewer = (next: AppState) => {
         if (cancelled) return;
-        setState((prev) => pickNewerState(prev, next));
+        setState((prev) => {
+          const picked = pickNewerState(prev, next);
+          if (picked === next || (prev && picked.version !== prev.version)) {
+            saveRows(picked.rows);
+            saveCustomerDirectoryToStorage(picked.customers);
+          }
+          return picked;
+        });
       };
 
       const onSync = (payload: unknown) => {
@@ -128,7 +137,7 @@ export function useShipmentSync(fallback: Fallback) {
         try {
           const next = applyShipmentMutation(prev, mutation);
           saveRows(next.rows);
-          if (mutation.action === "SET_CUSTOMERS") {
+          if (mutation.action === "SET_CUSTOMERS" || mutation.action === "RESET_TRIAL_DATA") {
             saveCustomerDirectoryToStorage(next.customers);
           }
           if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
@@ -181,7 +190,7 @@ export function useShipmentSync(fallback: Fallback) {
       }
       setState((prev) => pickNewerState(prev, next));
       saveRows(next.rows);
-      if (mutation.action === "SET_CUSTOMERS") {
+      if (mutation.action === "SET_CUSTOMERS" || mutation.action === "RESET_TRIAL_DATA") {
         saveCustomerDirectoryToStorage(next.customers);
       }
       return next;
@@ -200,7 +209,11 @@ export function useShipmentSync(fallback: Fallback) {
       const res = await fetch("/api/state", { ...credFetch, cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       const parsed = parseAppState(await res.json());
-      if (parsed) setState((prev) => pickNewerState(prev, parsed));
+      if (parsed) {
+        setState((prev) => pickNewerState(prev, parsed));
+        saveRows(parsed.rows);
+        saveCustomerDirectoryToStorage(parsed.customers);
+      }
     } catch (e) {
       debugWarn("sync:refresh", e);
     }
@@ -214,6 +227,7 @@ export function useShipmentSync(fallback: Fallback) {
       return pickNewerState(prev, parsed);
     });
     saveRows(parsed.rows);
+    saveCustomerDirectoryToStorage(parsed.customers);
     return true;
   }, []);
 

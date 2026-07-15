@@ -25,6 +25,15 @@ export default defineConfig({
           if (id.includes("node_modules/socket.io-client") || id.includes("node_modules/engine.io-client")) {
             return "vendor-socketio";
           }
+          if (id.includes("node_modules/exceljs") || id.includes("node_modules/xlsx")) {
+            return "vendor-excel";
+          }
+          if (id.includes("/src/pages/CustomersPage") || id.includes("/src/components/customerDirectory/")) {
+            return "page-customers";
+          }
+          if (id.includes("/src/components/PrintShippingLabel") || id.includes("/src/printing/")) {
+            return "page-print";
+          }
         },
       },
     },

@@ -34,6 +34,9 @@ const L = {
   savedVehicleDriverId: 20,
   savedVehicleCount: 30,
   otherRequirementsPrint: 200,
+  address: 300,
+  email: 120,
+  phone: 40,
 };
 
 function sliceStr(v, max) {
@@ -52,14 +55,48 @@ function normalizeShortCodeLoose(v) {
   return sliceStr(v, L.shortCode).trim().toUpperCase().replace(/\s+/g, "");
 }
 
+function normalizeCustomerTypeLoose(v) {
+  const u = String(v ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+  if (u === "FORWARDER" || u === "DIRECT_SHIPPER" || u === "AGENT" || u === "OTHER") return u;
+  if (u === "FORWARD" || u === "FWDR") return "FORWARDER";
+  if (u === "DIRECT" || u === "SHIPPER" || u === "DIRECTSHIPPER") return "DIRECT_SHIPPER";
+  if (u === "AG") return "AGENT";
+  return "DIRECT_SHIPPER";
+}
+
+function parseDefaultRateLoose(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number" && Number.isFinite(v)) return Math.max(0, v);
+  const s = String(v).trim().replace(/,/g, "").replace(/\s/g, "");
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.max(0, n) : null;
+}
+
 function accountFieldsFromItem(item, code, name) {
   const prefix = normalizePrefixLoose(item.prefix);
   const shortCode = normalizeShortCodeLoose(item.shortCode);
+  const taxCode = sliceStr(item.taxCode, L.taxCode).trim();
+  const address = sliceStr(item.address, L.address).trim();
+  const email = sliceStr(item.email, L.email).trim();
+  const phone = sliceStr(item.phone, L.phone).trim();
+  const defaultRate = parseDefaultRateLoose(item.defaultRate);
+  const rawType = String(item.customerType ?? "").trim();
+  const customerType = rawType ? normalizeCustomerTypeLoose(rawType) : "";
   return {
     code: sliceStr(code, L.code).trim(),
     name: sliceStr(name, L.name).trim(),
     ...(prefix ? { prefix } : {}),
     ...(shortCode ? { shortCode } : {}),
+    ...(taxCode ? { taxCode } : {}),
+    ...(address ? { address } : {}),
+    ...(email ? { email } : {}),
+    ...(phone ? { phone } : {}),
+    ...(defaultRate != null ? { defaultRate } : {}),
+    ...(customerType ? { customerType } : {}),
   };
 }
 

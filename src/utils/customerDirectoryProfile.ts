@@ -7,6 +7,7 @@ import type {
   CustomerSavedShipper,
   CustomerSavedVehicle,
 } from "../types/customerDirectory";
+import { normalizeCustomerType, parseDefaultRate } from "./customerAccountFields";
 import { normalizePrintAddressMultiline } from "./printAddressMultiline";
 import {
   inferPrefixFromCustomerCode,
@@ -46,6 +47,9 @@ export const CUSTOMER_PROFILE_LIMITS = {
   savedVehicleDriverId: 20,
   savedVehicleCount: 30,
   otherRequirementsPrint: 200,
+  address: 300,
+  email: 120,
+  phone: 40,
 } as const;
 
 export const CUSTOMER_PARTY_TYPES: readonly CustomerPartyType[] = ["SHIPPER", "CNEE", "NOTIFY", "OTHER"];
@@ -286,7 +290,7 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
     ? migrated.savedConsignees
         .slice(0, L.savedConsigneeCount)
         .map((x) => clampCustomerSavedConsignee(x as CustomerSavedConsignee))
-        .filter((x) => x.consigneeName || x.label || x.consigneeAddress || x.consigneePhone || x.notifyName)
+        .filter((x) => x.consigneeName || x.label || x.consigneeAddress || x.consigneePhone || x.consigneeEmail || x.notifyName)
     : [];
   const savedGoods = Array.isArray(migrated.savedGoods)
     ? migrated.savedGoods
@@ -322,12 +326,25 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
     inferPrefixFromCustomerCode(code) ||
     undefined;
   const shortCode = normalizeCustomerShortCode(clip(migrated.shortCode, L.shortCode)) || undefined;
+  const taxCode = clip(migrated.taxCode, L.taxCode).trim() || undefined;
+  const address = clip(migrated.address, L.address).trim() || undefined;
+  const email = clip(migrated.email, L.email).trim() || undefined;
+  const phone = clip(migrated.phone, L.phone).trim() || undefined;
+  const defaultRate = parseDefaultRate(migrated.defaultRate);
+  const rawType = String(migrated.customerType ?? "").trim();
+  const customerType = rawType ? normalizeCustomerType(rawType) : undefined;
   return {
     id: clip(migrated.id, 80).trim(),
     code,
     name: clip(migrated.name, L.name).trim(),
     ...(prefix ? { prefix } : {}),
     ...(shortCode ? { shortCode } : {}),
+    ...(taxCode ? { taxCode } : {}),
+    ...(address ? { address } : {}),
+    ...(email ? { email } : {}),
+    ...(phone ? { phone } : {}),
+    ...(defaultRate != null ? { defaultRate } : {}),
+    ...(customerType ? { customerType } : {}),
     defaultShipperId: defaultShipperId || undefined,
     defaultConsigneeId: defaultConsigneeId || undefined,
     defaultGoodsId: defaultGoodsId || undefined,

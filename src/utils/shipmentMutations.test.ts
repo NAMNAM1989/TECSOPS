@@ -152,3 +152,17 @@ describe("applyShipmentMutation SET_CUSTOMERS", () => {
     ).toThrow(/đã tồn tại/i);
   });
 });
+
+describe("applyShipmentMutation RESET_TRIAL_DATA", () => {
+  it("xóa rows và customers, giữ version tăng", () => {
+    const state: AppState = {
+      version: 5,
+      rows: [emptyRow("a")],
+      customers: [cust("1", "A", "Acme")],
+    };
+    const next = applyShipmentMutation(state, { action: "RESET_TRIAL_DATA" });
+    expect(next.version).toBe(6);
+    expect(next.rows).toEqual([]);
+    expect(next.customers).toEqual([]);
+  });
+});

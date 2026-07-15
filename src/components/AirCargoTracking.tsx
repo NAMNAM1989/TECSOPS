@@ -1,18 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition, lazy, Suspense } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
-import { loadRows } from "../utils/shipmentStorage";
 import {
   addLocalDays,
   formatLocalSessionDate,
   parseSessionDateYmd,
   startOfLocalDay,
 } from "../utils/sessionDate";
-import { useShipmentSync } from "../hooks/useShipmentSync";
+import type { useShipmentSync } from "../hooks/useShipmentSync";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentEditSheet";
-import { CustomerDirectoryManager } from "./CustomerDirectoryManager";
-import { GoogleSheetImportModal } from "./GoogleSheetImportModal";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { downloadScscDimDayExcel } from "../utils/exportScscDimListExcel";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
@@ -29,7 +26,6 @@ import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { debugError } from "../utils/debugLog";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
-import { AirlineLabelSettingsModal } from "./AirlineLabelSettingsModal";
 import { useIsMobile } from "../hooks/useIsMobile";
 import {
   countShipmentsByWarehouse,
@@ -38,7 +34,19 @@ import {
   type ShipmentSearchMatch,
 } from "../utils/shipmentSearch";
 
+const GoogleSheetImportModal = lazy(() =>
+  import("./GoogleSheetImportModal").then((m) => ({ default: m.GoogleSheetImportModal }))
+);
+const AirlineLabelSettingsModal = lazy(() =>
+  import("./AirlineLabelSettingsModal").then((m) => ({ default: m.AirlineLabelSettingsModal }))
+);
+
+type SyncApi = ReturnType<typeof useShipmentSync>;
+
 interface AirCargoTrackingProps {
+  sync: SyncApi;
+  onNavigateCustomers: () => void;
+  onPrefetchCustomers?: () => void;
   onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
 }
 
@@ -51,11 +59,13 @@ function formatWorkDateLabel(d: Date): string {
   return `${day}-${months[d.getMonth()]}-${d.getFullYear()}`;
 }
 
-export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
-  const fallback = useMemo(() => ({ rows: loadRows() ?? [] }), []);
-
-  const { status, state, mutate, socketConnected, refreshState, applyRemoteState } =
-    useShipmentSync(fallback);
+export function AirCargoTracking({
+  sync,
+  onNavigateCustomers,
+  onPrefetchCustomers,
+  onRequestPrint,
+}: AirCargoTrackingProps) {
+  const { status, state, mutate, socketConnected, refreshState, applyRemoteState } = sync;
 
   const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -69,7 +79,6 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   const [excelExporting, setExcelExporting] = useState(false);
   const [scscDimExporting, setScscDimExporting] = useState(false);
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
-  const [customerDirOpen, setCustomerDirOpen] = useState(false);
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -338,14 +347,17 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] px-3 py-4 sm:px-4 lg:px-6">
-      <div className="sticky top-0 z-40 -mx-3 mb-3 border-b border-black/[0.04] bg-white/70 px-3 pb-2 pt-2.5 backdrop-blur-xl dark:border-white/[0.05] dark:bg-[#060814]/70 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
-      <header className="mb-2 space-y-2">
+    <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-4 lg:px-6">
+      <div className="sticky top-0 z-40 -mx-3 mb-3 border-b border-slate-200/70 bg-[#E8EEF4]/85 px-3 pb-2.5 pt-2.5 backdrop-blur-xl dark:border-white/[0.06] dark:bg-[#070B14]/85 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
+      <header className="mb-2 space-y-2.5">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h1 className="text-xl font-bold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark sm:text-2xl">
-              OPS Handling AirCargo
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+            <h1 className="text-xl font-extrabold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark sm:text-2xl">
+              TECS<span className="text-teal-600 dark:text-teal-400">OPS</span>
             </h1>
+            <span className="hidden text-[11px] font-medium text-dashboard-muted dark:text-dashboard-muted-dark sm:inline">
+              Air cargo handling
+            </span>
             <span className="text-[11px] text-dashboard-muted dark:text-dashboard-muted-dark">
               <span className="font-bold text-dashboard-primary dark:text-dashboard-primary-dark">{workDateLabel}</span>
               {daysWithData > 0 && (
@@ -357,7 +369,7 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
             </span>
             {!isViewingToday && (
               <span
-                className="rounded-full bg-amber-100/90 px-2 py-0.5 text-[9px] font-bold text-amber-950 uppercase tracking-wider"
+                className="rounded-md bg-amber-100/90 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-950"
                 title="Vẫn sửa / thêm lô được"
               >
                 Ngày khác
@@ -376,7 +388,9 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
               onAdd={(wh) => void addBlankRowForWarehouse(wh)}
             />
             <DashboardToolbarButton
-              onClick={() => setCustomerDirOpen(true)}
+              onClick={onNavigateCustomers}
+              onMouseEnter={onPrefetchCustomers}
+              onFocus={onPrefetchCustomers}
               title="Danh bạ khách, hồ sơ in"
             >
               Khách
@@ -545,39 +559,35 @@ export function AirCargoTracking({ onRequestPrint }: AirCargoTrackingProps) {
         }}
       />
 
-      <CustomerDirectoryManager
-        open={customerDirOpen}
-        initial={state.customers}
-        onClose={() => setCustomerDirOpen(false)}
-        onSave={async (customers) => {
-          await mutate({ action: "SET_CUSTOMERS", customers });
-        }}
-      />
-
-      <AirlineLabelSettingsModal
-        open={airlineLabelSettingsOpen}
-        onClose={() => setAirlineLabelSettingsOpen(false)}
-        value={state.airlineLabelOverrides}
-        saving={airlineLabelSaving}
-        onSave={saveAirlineLabelOverrides}
-      />
-
-      <GoogleSheetImportModal
-        open={sheetImportOpen}
-        sessionYmd={selectedYmd}
-        onClose={() => setSheetImportOpen(false)}
-        onApplied={(count, serverState) => {
-          if (serverState) {
-            if (!applyRemoteState(serverState, { force: true })) void refreshState();
-          } else if (count > 0) {
-            void refreshState();
-          }
-          if (count > 0) {
-            window.alert(`Đã nhập ${count} lô từ Google Sheet.`);
-          }
-          setSheetImportOpen(false);
-        }}
-      />
+      <Suspense fallback={null}>
+        {airlineLabelSettingsOpen ? (
+          <AirlineLabelSettingsModal
+            open={airlineLabelSettingsOpen}
+            onClose={() => setAirlineLabelSettingsOpen(false)}
+            value={state.airlineLabelOverrides}
+            saving={airlineLabelSaving}
+            onSave={saveAirlineLabelOverrides}
+          />
+        ) : null}
+        {sheetImportOpen ? (
+          <GoogleSheetImportModal
+            open={sheetImportOpen}
+            sessionYmd={selectedYmd}
+            onClose={() => setSheetImportOpen(false)}
+            onApplied={(count, serverState) => {
+              if (serverState) {
+                if (!applyRemoteState(serverState, { force: true })) void refreshState();
+              } else if (count > 0) {
+                void refreshState();
+              }
+              if (count > 0) {
+                window.alert(`Đã nhập ${count} lô từ Google Sheet.`);
+              }
+              setSheetImportOpen(false);
+            }}
+          />
+        ) : null}
+      </Suspense>
     </div>
   );
 }

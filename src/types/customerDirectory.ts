@@ -85,6 +85,15 @@ export type CustomerParty = {
 
 /** Một dòng danh bạ khách — mã + tên + nhiều mẫu copy nhanh, lưu cùng state máy chủ. */
 
+export type CustomerType = "FORWARDER" | "DIRECT_SHIPPER" | "AGENT" | "OTHER";
+
+export const CUSTOMER_TYPES: readonly CustomerType[] = [
+  "FORWARDER",
+  "DIRECT_SHIPPER",
+  "AGENT",
+  "OTHER",
+];
+
 export type CustomerDirectoryEntry = {
 
   id: string;
@@ -103,6 +112,24 @@ export type CustomerDirectoryEntry = {
   /** Short Code — tối đa 10 ký tự, gõ tắt tìm kiếm. */
   shortCode?: string;
 
+  /** MST account (cột Tax Code Excel). */
+  taxCode?: string;
+
+  /** Địa chỉ account (Excel). */
+  address?: string;
+
+  /** Email account (Excel). */
+  email?: string;
+
+  /** SĐT account (Excel). */
+  phone?: string;
+
+  /** Đơn giá cố định VND/kg (Excel Default Rate). */
+  defaultRate?: number | null;
+
+  /** FORWARDER | DIRECT_SHIPPER | AGENT | OTHER */
+  customerType?: CustomerType;
+
   /** @deprecated Chỉ dùng khi migrate JSON cũ — dữ liệu mới nằm trong `savedShippers`. */
   shipperName?: string;
   /** @deprecated */
@@ -111,8 +138,6 @@ export type CustomerDirectoryEntry = {
   shipperPhone?: string;
   /** @deprecated */
   shipperEmail?: string;
-  /** @deprecated */
-  taxCode?: string;
 
   /** Shipper mặc định khi khách có nhiều `savedShippers`. */
   defaultShipperId?: string;

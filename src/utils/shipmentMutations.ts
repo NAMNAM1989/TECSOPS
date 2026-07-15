@@ -27,6 +27,7 @@ export type ShipmentMutation =
   | { action: "DELETE"; id: string }
   | { action: "ADD"; shipment: Omit<Shipment, "id" | "stt"> }
   | { action: "SET_CUSTOMERS"; customers: CustomerDirectoryEntry[] }
+  | { action: "RESET_TRIAL_DATA" }
   | { action: "SET_AIRLINE_LABEL_OVERRIDES"; overrides: AirlineLabelOverrides }
   | { action: "SET_PRINTER_PROFILES"; catalog: PrinterProfilesCatalog };
 
@@ -104,6 +105,9 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
       return nextState(state, rows, {
         customers: mutation.customers.map((e) => clampCustomerDirectoryEntry(e)),
       });
+    }
+    case "RESET_TRIAL_DATA": {
+      return nextState(state, [], { customers: [] });
     }
     case "SET_AIRLINE_LABEL_OVERRIDES": {
       return nextState(state, rows, {

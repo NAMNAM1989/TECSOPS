@@ -214,6 +214,10 @@ export function applyMutation(state, mutation) {
       const list = validateCustomerDirectoryPayload(mutation.customers);
       return finishState(state, rows, { customers: list });
     }
+    case "RESET_TRIAL_DATA": {
+      /** Xóa lô + danh bạ thử nghiệm; giữ tên hãng / profile máy in. */
+      return finishState(state, [], { customers: [] });
+    }
     case "SET_AIRLINE_LABEL_OVERRIDES": {
       return finishState(state, rows, {
         airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(mutation?.overrides),
@@ -255,7 +259,7 @@ export function applyMutation(state, mutation) {
     }
     default:
       throw new Error(
-        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, UPDATE, DELETE, ADD.`
+        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: RESET_TRIAL_DATA, SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, UPDATE, DELETE, ADD.`
       );
   }
 

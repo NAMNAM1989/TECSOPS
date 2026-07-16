@@ -86,6 +86,7 @@ export function ShipmentRowActionsMenu({
   customerDirectory: _customerDirectory,
   onPrint,
   onDelete,
+  compact = false,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -188,13 +189,17 @@ export function ShipmentRowActionsMenu({
 
   return (
     <div ref={wrapRef} className={OPS.actionToolbar}>
-      <ActionIconBtn label="In nhãn vận chuyển" onClick={() => onPrint(row)}>
-        <IconPrintLabel />
-      </ActionIconBtn>
-      {showDim ? (
-        <ActionIconBtn label="In DIM SCSC" onClick={() => printDimReport(row)}>
-          <IconDimReport />
-        </ActionIconBtn>
+      {!compact ? (
+        <>
+          <ActionIconBtn label="In nhãn vận chuyển" onClick={() => onPrint(row)}>
+            <IconPrintLabel />
+          </ActionIconBtn>
+          {showDim ? (
+            <ActionIconBtn label="In DIM SCSC" onClick={() => printDimReport(row)}>
+              <IconDimReport />
+            </ActionIconBtn>
+          ) : null}
+        </>
       ) : null}
       <button
         ref={triggerRef}

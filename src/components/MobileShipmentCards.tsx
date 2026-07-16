@@ -64,7 +64,6 @@ const MobileShipmentCard = memo(
     onOpenEdit,
     onUpdate,
     onDelete,
-    onPrint,
   }: {
     row: Shipment;
     selected: boolean;
@@ -73,76 +72,88 @@ const MobileShipmentCard = memo(
     onOpenEdit: (row: Shipment) => void;
     onUpdate: (id: string, patch: Partial<Shipment>) => void;
     onDelete: (id: string) => void;
-    onPrint: (s: Shipment) => void;
   }) {
     const rowAccent = statusRowAccent[row.status];
     const rowSurface = selected ? statusRowSelected : statusRowBg[row.status];
     const awbTrim = (row.awb ?? "").trim();
     const hawbTrim = (row.hawb ?? "").trim();
+    const noteTrim = (row.note ?? "").trim();
 
     return (
       <Box
         id={`mobile-shipment-${row.id}`}
-        style={{ contentVisibility: "auto", containIntrinsicSize: "0 88px" }}
+        style={{ contentVisibility: "auto", containIntrinsicSize: "0 64px" }}
         className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
           selected ? "ring-1 ring-apple-blue/50 dark:ring-sky-400/45" : ""
         } ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}
       >
         <div className={MOBILE.cardInner}>
-          <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            className="w-full text-left active:opacity-90"
+            onClick={() => onOpenEdit(row)}
+          >
+            {awbTrim ? (
+              <p className={`truncate ${MOBILE.awb} text-red-600 dark:text-red-400`}>
+                {awbTrim}
+                {hawbTrim ? (
+                  <span className="ml-0.5 text-[10px] font-bold text-red-700/80 dark:text-red-400/75">
+                    /{hawbTrim}
+                  </span>
+                ) : null}
+              </p>
+            ) : (
+              <p className={MOBILE.awbEmpty}>+ Nhập AWB</p>
+            )}
+            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
+              <span className={`max-w-[38%] truncate ${MOBILE.customerName}`} title={row.customer}>
+                {row.customer?.trim() || "Chưa chọn khách"}
+              </span>
+              {formatMobileFlightMeta(row) ? (
+                <>
+                  <span className="text-[10px] text-apple-tertiary dark:text-slate-500">·</span>
+                  <span className={`min-w-0 max-w-[34%] truncate ${MOBILE.cardMeta}`}>
+                    {formatMobileFlightMeta(row)}
+                  </span>
+                </>
+              ) : null}
+              <MobileQuickNumber
+                label="Kiện"
+                value={row.pcs}
+                onCommit={(v) => onUpdate(row.id, { pcs: v })}
+              />
+              <MobileQuickNumber label="Kg" value={row.kg} onCommit={(v) => onUpdate(row.id, { kg: v })} />
+            </div>
+          </button>
+          <div className="mt-1 flex min-w-0 items-start gap-1">
             <button
               type="button"
-              className="min-w-0 flex-1 text-left active:opacity-90"
+              className="min-w-0 flex-1 text-left active:opacity-80"
               onClick={() => onOpenEdit(row)}
             >
-              {awbTrim ? (
-                <p className={`truncate ${MOBILE.awb} text-red-600 dark:text-red-400`}>
-                  {awbTrim}
-                  {hawbTrim ? (
-                    <span className="ml-0.5 text-[10px] font-bold text-red-700/80 dark:text-red-400/75">
-                      /{hawbTrim}
-                    </span>
-                  ) : null}
-                </p>
-              ) : (
-                <p className={MOBILE.awbEmpty}>+ Nhập AWB</p>
-              )}
-              <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
-                <span className={`max-w-[38%] truncate ${MOBILE.customerName}`} title={row.customer}>
-                  {row.customer?.trim() || "Chưa chọn khách"}
-                </span>
-                {formatMobileFlightMeta(row) ? (
-                  <>
-                    <span className="text-[10px] text-apple-tertiary dark:text-slate-500">·</span>
-                    <span className={`min-w-0 max-w-[34%] truncate ${MOBILE.cardMeta}`}>
-                      {formatMobileFlightMeta(row)}
-                    </span>
-                  </>
-                ) : null}
-                <MobileQuickNumber
-                  label="Kiện"
-                  value={row.pcs}
-                  onCommit={(v) => onUpdate(row.id, { pcs: v })}
-                />
-                <MobileQuickNumber label="Kg" value={row.kg} onCommit={(v) => onUpdate(row.id, { kg: v })} />
-              </div>
+              <span
+                className={`block break-words whitespace-pre-wrap text-[11px] leading-snug ops-grid-note ${
+                  noteTrim ? "" : "ops-grid-placeholder"
+                }`}
+              >
+                {noteTrim || "Ghi chú"}
+              </span>
             </button>
-            <div className="shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
+            <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <StatusSelect
                 compact
                 value={row.status}
                 onChange={(s) => onUpdate(row.id, { status: s })}
               />
+              <ShipmentRowActionsMenu
+                compact
+                row={row}
+                customerDirectory={customerDirectory}
+                onPrint={() => {}}
+                onDelete={onDelete}
+                onUpdate={onUpdate}
+              />
             </div>
-          </div>
-          <div className="mt-1.5 flex justify-end" onClick={(e) => e.stopPropagation()}>
-            <ShipmentRowActionsMenu
-              row={row}
-              customerDirectory={customerDirectory}
-              onPrint={onPrint}
-              onDelete={onDelete}
-              onUpdate={onUpdate}
-            />
           </div>
         </div>
       </Box>
@@ -161,7 +172,6 @@ interface MobileShipmentCardsProps {
   onSelect: (id: string | null) => void;
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
-  onPrint: (s: Shipment) => void;
   onQuickEdit?: (row: Shipment) => void;
   customerDirectory?: readonly CustomerDirectoryEntry[];
   activeWarehouse?: Warehouse;
@@ -178,7 +188,6 @@ export function MobileShipmentCards({
   onSelect,
   onUpdate,
   onDelete,
-  onPrint,
   onQuickEdit,
   customerDirectory = [],
   activeWarehouse = "TECS-TCS",
@@ -263,7 +272,6 @@ export function MobileShipmentCards({
                     onOpenEdit={handleOpenEdit}
                     onUpdate={onUpdate}
                     onDelete={onDelete}
-                    onPrint={onPrint}
                   />
                 ))
               : null}

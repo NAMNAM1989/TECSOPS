@@ -523,7 +523,6 @@ export function AirCargoTracking({
         onSelect={setSelectedId}
         onUpdate={onUpdate}
         onDelete={onDelete}
-        onPrint={requestPrintLabel}
         customerDirectory={state.customers}
         activeWarehouse={activeWarehouse}
         searchActive={searchActive}

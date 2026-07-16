@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
-import { warehouseLabel } from "../constants/warehouses";
 import { statusLabel } from "./statusStyles";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { NewBookingButton } from "./NewBookingButton";
@@ -120,15 +119,11 @@ export function OpsMobileStickyHeader({
 
   const searchActive = searchQuery.trim().length > 0;
   const { lotCount, totalKg, totalsTitle } = useMemo(() => {
-    const rows = searchActive
-      ? filteredViewRows
-      : filteredViewRows.filter((r) => r.warehouse === activeWarehouse);
+    const rows = filteredViewRows;
     const kg = rows.reduce((sum, r) => sum + (r.kg ?? 0), 0);
-    const title = searchActive
-      ? "Tổng lô khớp bộ lọc"
-      : `Tổng ${warehouseLabel[activeWarehouse]}`;
+    const title = searchActive ? "Tổng lô khớp bộ lọc" : "Tổng cả ngày (2 kho)";
     return { lotCount: rows.length, totalKg: kg, totalsTitle: title };
-  }, [filteredViewRows, activeWarehouse, searchActive]);
+  }, [filteredViewRows, searchActive]);
 
   return (
     <div className="space-y-1 pt-[env(safe-area-inset-top)]">

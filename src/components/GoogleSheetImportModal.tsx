@@ -21,11 +21,11 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
 
-  const runSync = useCallback(async () => {
+  const runSync = useCallback(async (refresh = false) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await syncBookGoogleSheet(sessionYmd);
+      const result = await syncBookGoogleSheet(sessionYmd, { refresh });
       setSync(result);
       const next = new Set<number>();
       for (const row of result.rows) {
@@ -135,7 +135,7 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
           <button
             type="button"
             disabled={loading}
-            onClick={() => void runSync()}
+            onClick={() => void runSync(true)}
             className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             {loading ? "Đang kéo Sheet…" : "Kéo Sheet lại"}

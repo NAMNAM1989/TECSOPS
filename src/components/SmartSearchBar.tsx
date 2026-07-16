@@ -24,6 +24,8 @@ interface SmartSearchBarProps {
   searchContext: ShipmentSearchContext;
   inputRef?: RefObject<HTMLInputElement>;
   onSelectMatch?: (match: ShipmentSearchMatch) => void;
+  /** Gọn — mobile header */
+  compact?: boolean;
 }
 
 export function SmartSearchBar({
@@ -34,6 +36,7 @@ export function SmartSearchBar({
   searchContext,
   inputRef,
   onSelectMatch,
+  compact = false,
 }: SmartSearchBarProps) {
   const localRef = useRef<HTMLInputElement>(null);
   const mergedRef = inputRef ?? localRef;
@@ -88,7 +91,9 @@ export function SmartSearchBar({
     <div ref={rootRef} className="relative min-w-0 w-full flex-1">
       <div className="relative">
         <svg
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-apple-tertiary dark:text-ops-tertiary"
+          className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-apple-tertiary dark:text-ops-tertiary ${
+            compact ? "left-2.5 h-3.5 w-3.5" : "left-3 h-4 w-4"
+          }`}
           fill="none"
           stroke="currentColor"
           strokeWidth={2}
@@ -111,10 +116,12 @@ export function SmartSearchBar({
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="MAWB / HAWB · Số xe · Tên tài xế… (/ hoặc F)"
+          placeholder={compact ? "MAWB / xe / tài xế…" : "MAWB / HAWB · Số xe · Tên tài xế… (/ hoặc F)"}
           autoComplete="off"
           spellCheck={false}
-          className="h-10 w-full rounded-full border border-black/[0.06] bg-white py-2 pl-10 pr-10 text-[13px] font-medium text-dashboard-primary shadow-dashboard-card placeholder:font-normal placeholder:text-dashboard-muted focus:border-apple-blue/40 focus:outline-none focus:ring-2 focus:ring-apple-blue/15 dark:border-white/10 dark:bg-dashboard-surface-dark dark:text-dashboard-primary-dark dark:placeholder:text-dashboard-muted-dark"
+          className={`w-full rounded-full border border-black/[0.06] bg-white font-medium text-dashboard-primary shadow-dashboard-card placeholder:font-normal placeholder:text-dashboard-muted focus:border-apple-blue/40 focus:outline-none focus:ring-2 focus:ring-apple-blue/15 dark:border-white/10 dark:bg-dashboard-surface-dark dark:text-dashboard-primary-dark dark:placeholder:text-dashboard-muted-dark ${
+            compact ? "h-7 py-0.5 pl-8 pr-7 text-[11px]" : "h-10 py-2 pl-10 pr-10 text-[13px]"
+          }`}
           aria-label="Tìm kiếm thông minh MAWB, HAWB, số xe, tài xế"
           aria-expanded={open && suggestions.length > 0}
           aria-controls="smart-search-listbox"
@@ -143,7 +150,7 @@ export function SmartSearchBar({
         )}
       </div>
 
-      {trimmed && matchedRows.length > 0 && (
+      {trimmed && matchedRows.length > 0 && !compact ? (
         <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
           <span className="text-[10px] font-semibold text-apple-secondary dark:text-ops-secondary">
             {matchedRows.length} lô
@@ -157,7 +164,7 @@ export function SmartSearchBar({
             </span>
           ))}
         </div>
-      )}
+      ) : null}
 
       {open && trimmed && suggestions.length > 0 && (
         <ul

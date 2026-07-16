@@ -286,3 +286,30 @@ export function runMutation(mutation) {
   });
   return result;
 }
+
+/** Nhiều mutation trong một lần khóa Postgres — nhanh hơn khi nhập hàng loạt từ Sheet. */
+export function runBatchMutations(mutations) {
+  const list = Array.isArray(mutations) ? mutations : [];
+  if (!list.length) {
+    return tail.then(async () => loadState());
+  }
+  const result = tail.then(async () => {
+    if (!postgresStateStore) {
+      throw new Error("[state] Postgres chưa cấu hình (DATABASE_URL).");
+    }
+    return postgresStateStore.runLocked(async (currentRaw) => {
+      let state = currentRaw
+        ? normalizeOrThrow(currentRaw, `Postgres (${postgresStateStore.key})`)
+        : emptyInitialState();
+      for (const mutation of list) {
+        state = applyMutation(state, mutation);
+      }
+      return state;
+    });
+  });
+  tail = result.catch(async (err) => {
+    console.error("[mutation:batch]", err);
+    return loadState();
+  });
+  return result;
+}

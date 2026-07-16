@@ -3,18 +3,17 @@ import {
   getBookSpreadsheetId,
   sessionYmdToBookSheetTab,
 } from "./googleSheetFetch.mjs";
+import { getCachedGrid, setCachedGrid } from "./sheetFetchCache.mjs";
 import { parseBookHangNgayGrid } from "./bookHangNgayParser.mjs";
 import { filterRowsForSessionDate, sessionYmdToFlightDateToken } from "./bookDateMatch.mjs";
 import {
   awbKeyForMatch,
-  findExistingInSession,
-  findExistingOtherSession,
   resolveSheetRowSyncStatus,
   sheetAwbFirstIndexByKey,
   sheetRowIsBlocked,
   sheetRowToPatch,
 } from "./sheetRowReconcile.mjs";
-import { loadState, runMutation } from "../stateStore.mjs";
+import { loadState, runBatchMutations, runMutation } from "../stateStore.mjs";
 
 function lookupCustomerCode(customers, customerName) {
   const t = String(customerName ?? "").trim().toLowerCase();
@@ -28,6 +27,67 @@ function lookupCustomerId(customers, customerName) {
   if (!t) return "";
   const hit = customers.find((e) => String(e.name ?? "").trim().toLowerCase() === t);
   return hit?.id?.trim() ?? "";
+}
+
+function buildCustomerLookups(customers) {
+  /** @type {Map<string, { code?: string, id?: string }>} */
+  const byName = new Map();
+  for (const e of customers) {
+    const key = String(e.name ?? "").trim().toLowerCase();
+    if (!key) continue;
+    byName.set(key, { code: e.code?.trim(), id: e.id?.trim() });
+  }
+  return {
+    code: (name) => byName.get(String(name ?? "").trim().toLowerCase())?.code ?? "",
+    id: (name) => byName.get(String(name ?? "").trim().toLowerCase())?.id ?? "",
+  };
+}
+
+function buildAwbIndexes(rows, sessionDate) {
+  /** @type {Map<string, object>} */
+  const inSession = new Map();
+  /** @type {Map<string, object>} */
+  const otherSession = new Map();
+  for (const r of rows) {
+    const key = awbKeyForMatch(r.awb);
+    if (!key || key.length < 11) continue;
+    if (r.sessionDate === sessionDate) {
+      if (!inSession.has(key)) inSession.set(key, r);
+    } else if (!otherSession.has(key)) {
+      otherSession.set(key, r);
+    }
+  }
+  return { inSession, otherSession };
+}
+
+function findExistingInSessionIndexed(indexes, awb) {
+  const key = awbKeyForMatch(awb);
+  if (!key) return null;
+  return indexes.inSession.get(key) ?? null;
+}
+
+function findExistingOtherSessionIndexed(indexes, awb) {
+  const key = awbKeyForMatch(awb);
+  if (key.length < 11) return null;
+  return indexes.otherSession.get(key) ?? null;
+}
+
+async function loadBookGridForSession(spreadsheetId, sessionDate, preferredTab, forceRefresh = false) {
+  const preferred = String(preferredTab ?? "").trim();
+  if (!forceRefresh && preferred) {
+    const cached = getCachedGrid(spreadsheetId, sessionDate, preferred);
+    if (cached?.grid?.length) {
+      return { grid: cached.grid, sheetTab: cached.sheetTab, gid: "" };
+    }
+  }
+
+  const { grid, sheetTab, gid } = await fetchBookHangNgayGridForSession(
+    spreadsheetId,
+    sessionDate,
+    preferredTab
+  );
+  setCachedGrid(spreadsheetId, sessionDate, sheetTab, grid);
+  return { grid, sheetTab, gid };
 }
 
 function parsedRowToShipment(row, sessionDate, customers) {
@@ -64,21 +124,29 @@ function parsedRowToShipment(row, sessionDate, customers) {
   };
 }
 
-function mapSyncRow(row, index, sessionDate, sessionFlightDate, state, customers, awbFirstIndex) {
-  const existing = findExistingInSession(state, sessionDate, row.awb);
-  const otherSession = findExistingOtherSession(state, sessionDate, row.awb);
+function mapSyncRow(
+  row,
+  index,
+  sessionDate,
+  sessionFlightDate,
+  awbIndexes,
+  customerLookups,
+  awbFirstIndex
+) {
+  const existing = findExistingInSessionIndexed(awbIndexes, row.awb);
+  const otherSession = findExistingOtherSessionIndexed(awbIndexes, row.awb);
   const key = awbKeyForMatch(row.awb);
   const sheetFirstIndex = key ? (awbFirstIndex.get(key) ?? index) : index;
   const resolved = resolveSheetRowSyncStatus(
     { existing, otherSession, sheetFirstIndex, rowIndex: index },
     row,
     sessionDate,
-    customers,
-    lookupCustomerCode,
-    lookupCustomerId
+    [],
+    customerLookups.code,
+    customerLookups.id
   );
   const { syncStatus, sheetDuplicateOfIndex, takenSessionDate } = resolved;
-  const customerCode = lookupCustomerCode(customers, row.customer);
+  const customerCode = customerLookups.code(row.customer);
   return {
     index,
     sheetRowIndex: row.sheetRowIndex,
@@ -130,22 +198,34 @@ export function registerSheetsRoutes(app, deps) {
       }
 
       const preferredTab = String(req.query.sheetTab ?? "").trim();
+      const forceRefresh = req.query.refresh === "1" || req.query.refresh === "true";
       const spreadsheetId = String(req.query.spreadsheetId ?? "").trim() || getBookSpreadsheetId();
 
-      const { grid, sheetTab } = await fetchBookHangNgayGridForSession(
+      const { grid, sheetTab } = await loadBookGridForSession(
         spreadsheetId,
         sessionDate,
-        preferredTab
+        preferredTab,
+        forceRefresh
       );
       const parsed = parseBookHangNgayGrid(grid, sessionDate);
       const dated = filterRowsForSessionDate(parsed, sessionDate);
       const sessionFlightDate = sessionYmdToFlightDateToken(sessionDate);
       const state = await loadState();
       const customers = Array.isArray(state.customers) ? state.customers : [];
+      const customerLookups = buildCustomerLookups(customers);
+      const awbIndexes = buildAwbIndexes(state.rows, sessionDate);
 
       const awbFirstIndex = sheetAwbFirstIndexByKey(dated);
       const rows = dated.map((row, index) =>
-        mapSyncRow(row, index, sessionDate, sessionFlightDate, state, customers, awbFirstIndex)
+        mapSyncRow(
+          row,
+          index,
+          sessionDate,
+          sessionFlightDate,
+          awbIndexes,
+          customerLookups,
+          awbFirstIndex
+        )
       );
 
       res.json({
@@ -187,12 +267,11 @@ export function registerSheetsRoutes(app, deps) {
       }
 
       const spreadsheetId = String(body?.spreadsheetId ?? "").trim() || getBookSpreadsheetId();
-      const { grid, sheetTab } = await fetchBookHangNgayGridForSession(
+      const { grid, sheetTab } = await loadBookGridForSession(
         spreadsheetId,
         sessionDate,
         preferredTab
       );
-      void sheetTab;
       const parsed = filterRowsForSessionDate(parseBookHangNgayGrid(grid, sessionDate), sessionDate);
       const pickSet = new Set(indices.filter((n) => Number.isInteger(n) && n >= 0));
       const selected = parsed.filter((_, i) => pickSet.has(i));
@@ -203,6 +282,8 @@ export function registerSheetsRoutes(app, deps) {
       }
 
       let state = await loadState();
+      const customerLookups = buildCustomerLookups(state.customers ?? []);
+      const awbIndexes = buildAwbIndexes(state.rows, sessionDate);
       const applied = [];
       const updated = [];
       const skipped = [];
@@ -210,6 +291,8 @@ export function registerSheetsRoutes(app, deps) {
       /** @type {Set<string>} */
       const batchAwbKeys = new Set();
       const awbFirstIndex = sheetAwbFirstIndexByKey(parsed);
+      /** @type {object[]} */
+      const pendingMutations = [];
 
       for (const row of selected) {
         const parsedIndex = parsed.indexOf(row);
@@ -219,16 +302,16 @@ export function registerSheetsRoutes(app, deps) {
           continue;
         }
 
-        const existing = findExistingInSession(state, sessionDate, row.awb);
-        const otherSession = findExistingOtherSession(state, sessionDate, row.awb);
+        const existing = findExistingInSessionIndexed(awbIndexes, row.awb);
+        const otherSession = findExistingOtherSessionIndexed(awbIndexes, row.awb);
         const sheetFirstIndex = awbFirstIndex.get(awbKey) ?? parsedIndex;
         const resolved = resolveSheetRowSyncStatus(
           { existing, otherSession, sheetFirstIndex, rowIndex: parsedIndex },
           row,
           sessionDate,
-          state.customers ?? [],
-          lookupCustomerCode,
-          lookupCustomerId
+          [],
+          customerLookups.code,
+          customerLookups.id
         );
         const syncStatus = resolved.syncStatus;
 
@@ -251,12 +334,11 @@ export function registerSheetsRoutes(app, deps) {
             const patch = sheetRowToPatch(
               row,
               sessionDate,
-              state.customers ?? [],
-              lookupCustomerCode,
-              lookupCustomerId
+              [],
+              customerLookups.code,
+              customerLookups.id
             );
-            state = await runMutation({ action: "UPDATE", id: existing.id, patch });
-            deps.io?.emit("sync", state);
+            pendingMutations.push({ action: "UPDATE", id: existing.id, patch });
             updated.push({
               awb: row.awb,
               warehouse: row.warehouse,
@@ -267,12 +349,21 @@ export function registerSheetsRoutes(app, deps) {
           }
 
           const shipment = parsedRowToShipment(row, sessionDate, state.customers ?? []);
-          state = await runMutation({ action: "ADD", shipment });
-          deps.io?.emit("sync", state);
+          pendingMutations.push({ action: "ADD", shipment });
           applied.push({ awb: row.awb, warehouse: row.warehouse });
           if (awbKey) batchAwbKeys.add(awbKey);
         } catch (e) {
           errors.push({ awb: row.awb, error: String(e?.message ?? e) });
+        }
+      }
+
+      if (pendingMutations.length) {
+        try {
+          state = await runBatchMutations(pendingMutations);
+          deps.io?.emit("sync", state);
+        } catch (e) {
+          res.status(500).json({ error: String(e?.message ?? e) });
+          return;
         }
       }
 

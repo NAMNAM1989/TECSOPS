@@ -48,7 +48,7 @@ function MobileQuickNumber({
         value={value}
         compact
         placeholder="—"
-        className="min-h-[20px] px-0.5 text-[11px]"
+        className="min-h-[18px] px-0.5 text-[10px]"
         onCommit={onCommit}
       />
     </span>
@@ -79,67 +79,38 @@ const MobileShipmentCard = memo(
     const hawbTrim = (row.hawb ?? "").trim();
     const noteTrim = (row.note ?? "").trim();
 
+    const flightMeta = formatMobileFlightMeta(row);
+    const hasNote = noteTrim.length > 0;
+
     return (
       <Box
         id={`mobile-shipment-${row.id}`}
-        style={{ contentVisibility: "auto", containIntrinsicSize: "0 64px" }}
+        style={{ contentVisibility: "auto", containIntrinsicSize: hasNote ? "0 52px" : "0 40px" }}
         className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
           selected ? "ring-1 ring-apple-blue/50 dark:ring-sky-400/45" : ""
         } ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}
       >
         <div className={MOBILE.cardInner}>
-          <button
-            type="button"
-            className="w-full text-left active:opacity-90"
-            onClick={() => onOpenEdit(row)}
-          >
-            {awbTrim ? (
-              <p className={`truncate ${MOBILE.awb} text-red-600 dark:text-red-400`}>
-                {awbTrim}
-                {hawbTrim ? (
-                  <span className="ml-0.5 text-[10px] font-bold text-red-700/80 dark:text-red-400/75">
-                    /{hawbTrim}
-                  </span>
-                ) : null}
-              </p>
-            ) : (
-              <p className={MOBILE.awbEmpty}>+ Nhập AWB</p>
-            )}
-            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
-              <span className={`max-w-[38%] truncate ${MOBILE.customerName}`} title={row.customer}>
-                {row.customer?.trim() || "Chưa chọn khách"}
-              </span>
-              {formatMobileFlightMeta(row) ? (
-                <>
-                  <span className="text-[10px] text-apple-tertiary dark:text-slate-500">·</span>
-                  <span className={`min-w-0 max-w-[34%] truncate ${MOBILE.cardMeta}`}>
-                    {formatMobileFlightMeta(row)}
-                  </span>
-                </>
-              ) : null}
-              <MobileQuickNumber
-                label="Kiện"
-                value={row.pcs}
-                onCommit={(v) => onUpdate(row.id, { pcs: v })}
-              />
-              <MobileQuickNumber label="Kg" value={row.kg} onCommit={(v) => onUpdate(row.id, { kg: v })} />
-            </div>
-          </button>
-          <div className="mt-1 flex min-w-0 items-start gap-1">
+          <div className="flex min-w-0 items-center gap-1">
             <button
               type="button"
-              className="min-w-0 flex-1 text-left active:opacity-80"
+              className="min-w-0 flex-1 text-left active:opacity-90"
               onClick={() => onOpenEdit(row)}
             >
-              <span
-                className={`block break-words whitespace-pre-wrap text-[11px] leading-snug ops-grid-note ${
-                  noteTrim ? "" : "ops-grid-placeholder"
-                }`}
-              >
-                {noteTrim || "Ghi chú"}
-              </span>
+              {awbTrim ? (
+                <p className={`truncate ${MOBILE.awb} text-red-600 dark:text-red-400`}>
+                  {awbTrim}
+                  {hawbTrim ? (
+                    <span className="ml-0.5 text-[9px] font-bold text-red-700/80 dark:text-red-400/75">
+                      /{hawbTrim}
+                    </span>
+                  ) : null}
+                </p>
+              ) : (
+                <p className={MOBILE.awbEmpty}>+ AWB</p>
+              )}
             </button>
-            <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
               <StatusSelect
                 compact
                 value={row.status}
@@ -155,6 +126,43 @@ const MobileShipmentCard = memo(
               />
             </div>
           </div>
+          <button
+            type="button"
+            className="mt-0.5 flex w-full min-w-0 items-center gap-1 text-left active:opacity-90"
+            onClick={() => onOpenEdit(row)}
+          >
+            <span className={`min-w-0 max-w-[42%] truncate ${MOBILE.customerName}`} title={row.customer}>
+              {row.customer?.trim() || "—"}
+            </span>
+            {flightMeta ? (
+              <span className={`min-w-0 flex-1 truncate ${MOBILE.cardMeta}`}>{flightMeta}</span>
+            ) : (
+              <span className="flex-1" />
+            )}
+            <span className="inline-flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+              <MobileQuickNumber
+                label="K"
+                value={row.pcs}
+                onCommit={(v) => onUpdate(row.id, { pcs: v })}
+              />
+              <MobileQuickNumber
+                label="G"
+                value={row.kg}
+                onCommit={(v) => onUpdate(row.id, { kg: v })}
+              />
+            </span>
+          </button>
+          {hasNote ? (
+            <button
+              type="button"
+              className="mt-0.5 w-full text-left active:opacity-80"
+              onClick={() => onOpenEdit(row)}
+            >
+              <span className="line-clamp-2 text-[10px] leading-snug ops-grid-note" title={noteTrim}>
+                {noteTrim}
+              </span>
+            </button>
+          ) : null}
         </div>
       </Box>
     );
@@ -194,7 +202,7 @@ export function MobileShipmentCards({
   searchActive = false,
   pinnedOpenWarehouses = [],
   highlightedShipmentId = null,
-  onAddBlankRow,
+  onAddBlankRow: _onAddBlankRow,
 }: MobileShipmentCardsProps) {
   const isMobile = useIsMobile();
   const rowsByWarehouse = useMemo(() => partitionShipmentsByWarehouse(rows), [rows]);
@@ -221,63 +229,54 @@ export function MobileShipmentCards({
   );
 
   return (
-    <div className={`space-y-3 ${mobileOnlyVisibility(isMobile)}`}>
-      {warehouseSections.map((wh) => {
-        const group = rowsByWarehouse[wh];
-        if (!searchActive && group.length === 0 && wh !== activeWarehouse) return null;
-        const collapsed = isCollapsed(wh);
-        return (
-          <section key={wh} id={`warehouse-section-${wh}`} className="space-y-1.5">
-            <button
-              type="button"
-              onClick={() => toggle(wh)}
-              className="flex w-full items-center gap-2 rounded-xl px-1 py-1 text-left"
-            >
-              <Chevron collapsed={collapsed} />
-              <span className="text-[12px] font-bold text-dashboard-primary dark:text-dashboard-primary-dark">
-                {warehouseLabel[wh]}
-              </span>
-              <span className="text-[10px] text-dashboard-muted dark:text-dashboard-muted-dark">
-                {group.length} lô
-              </span>
-              {onAddBlankRow && wh === activeWarehouse ? (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddBlankRow(wh);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onAddBlankRow(wh);
-                    }
-                  }}
-                  className="ml-auto rounded-full bg-apple-blue px-2 py-0.5 text-[10px] font-semibold text-white"
+    <div className={`space-y-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}>
+      {searchActive
+        ? warehouseSections.map((wh) => {
+            const group = rowsByWarehouse[wh];
+            if (group.length === 0) return null;
+            const collapsed = isCollapsed(wh);
+            return (
+              <section key={wh} id={`warehouse-section-${wh}`} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => toggle(wh)}
+                  className="flex w-full items-center gap-1.5 px-0.5 py-0.5 text-left"
                 >
-                  + Booking
-                </span>
-              ) : null}
-            </button>
-            {!collapsed
-              ? group.map((row) => (
-                  <MobileShipmentCard
-                    key={row.id}
-                    row={row}
-                    selected={selectedId === row.id}
-                    highlighted={highlightedShipmentId === row.id}
-                    customerDirectory={customerDirectory}
-                    onOpenEdit={handleOpenEdit}
-                    onUpdate={onUpdate}
-                    onDelete={onDelete}
-                  />
-                ))
-              : null}
-          </section>
-        );
-      })}
+                  <Chevron collapsed={collapsed} />
+                  <span className="text-[10px] font-bold text-dashboard-primary dark:text-dashboard-primary-dark">
+                    {warehouseLabel[wh]}
+                  </span>
+                  <span className="text-[9px] text-dashboard-muted dark:text-dashboard-muted-dark">{group.length}</span>
+                </button>
+                {!collapsed
+                  ? group.map((row) => (
+                      <MobileShipmentCard
+                        key={row.id}
+                        row={row}
+                        selected={selectedId === row.id}
+                        highlighted={highlightedShipmentId === row.id}
+                        customerDirectory={customerDirectory}
+                        onOpenEdit={handleOpenEdit}
+                        onUpdate={onUpdate}
+                        onDelete={onDelete}
+                      />
+                    ))
+                  : null}
+              </section>
+            );
+          })
+        : (rowsByWarehouse[activeWarehouse] ?? []).map((row) => (
+            <MobileShipmentCard
+              key={row.id}
+              row={row}
+              selected={selectedId === row.id}
+              highlighted={highlightedShipmentId === row.id}
+              customerDirectory={customerDirectory}
+              onOpenEdit={handleOpenEdit}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+            />
+          ))}
     </div>
   );
 }
@@ -302,12 +301,12 @@ export function StickyMobileActions({
 
   return (
     <Box
-      className={`no-print fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[calc(100%-2.5rem)] max-w-[440px] -translate-x-1/2 ${mobileOnlyVisibility(isMobile)}`}
+      className={`no-print fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[440px] -translate-x-1/2 ${mobileOnlyVisibility(isMobile)}`}
     >
-      <Box className="rounded-[28px] border border-black/[0.05] bg-white/85 dark:bg-[#111625]/85 p-2 shadow-apple-md backdrop-blur-xl dark:border-white/[0.06]">
+      <Box className="rounded-[22px] border border-black/[0.05] bg-white/90 dark:bg-[#111625]/90 p-1.5 shadow-apple-md backdrop-blur-xl dark:border-white/[0.06]">
         {selected ? (
-          <Box className="flex gap-2">
-            <button type="button" onClick={onQuickEdit} className={`min-w-0 flex-1 ${MOBILE.primaryBtn} py-2.5`}>
+          <Box className="flex gap-1.5">
+            <button type="button" onClick={onQuickEdit} className={`min-w-0 flex-1 ${MOBILE.primaryBtn} py-2 text-[13px]`}>
               Sửa lô
             </button>
             <div className="relative shrink-0">
@@ -316,7 +315,7 @@ export function StickyMobileActions({
                 aria-expanded={moreOpen}
                 aria-haspopup="menu"
                 onClick={() => setMoreOpen((v) => !v)}
-                className={`min-h-11 min-w-11 rounded-full border px-3 text-lg font-semibold leading-none active:scale-[0.98] ${MOBILE.secondaryBtn}`}
+                className={`min-h-9 min-w-9 rounded-full border px-2.5 text-lg font-semibold leading-none active:scale-[0.98] ${MOBILE.secondaryBtn}`}
                 title="Thêm"
               >
                 ⋯
@@ -338,7 +337,7 @@ export function StickyMobileActions({
             </div>
           </Box>
         ) : (
-          <button type="button" onClick={onAdd} className={`w-full ${MOBILE.primaryBtn} py-2.5`}>
+          <button type="button" onClick={onAdd} className={`w-full ${MOBILE.primaryBtn} py-2 text-[13px]`}>
             + Booking · {warehouseLabel[activeWarehouse]}
           </button>
         )}
@@ -358,7 +357,7 @@ function Box({ className, children, ...rest }: React.HTMLAttributes<HTMLDivEleme
 function Chevron({ collapsed }: { collapsed: boolean }) {
   return (
     <svg
-      className={`h-4 w-4 shrink-0 text-dashboard-muted transition-transform duration-200 ease-out dark:text-dashboard-muted-dark ${
+      className={`h-3.5 w-3.5 shrink-0 text-dashboard-muted transition-transform duration-200 ease-out dark:text-dashboard-muted-dark ${
         collapsed ? "" : "rotate-90"
       }`}
       fill="none"

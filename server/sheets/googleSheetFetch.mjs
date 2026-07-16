@@ -2,6 +2,13 @@
  * Tải tab Google Sheet công khai qua gviz (không cần API key khi file share link).
  */
 
+import {
+  getCachedSessionTab,
+  getCachedTabList,
+  setCachedSessionTab,
+  setCachedTabList,
+} from "./sheetFetchCache.mjs";
+
 const MONTHS3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const MONTHS_FULL = [
   "JANUARY",
@@ -61,16 +68,42 @@ function parseGvizPayload(text, sheetLabel) {
   });
 }
 
+/** Chỉ cột A–L + đủ hàng booking — nhỏ hơn payload gviz full sheet. */
+export const BOOK_SHEET_GVIZ_RANGE = "A1:L280";
+
+function normGridText(s) {
+  return String(s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+/** Nhận diện layout BOOK HẰNG NGÀY — tránh dùng nhầm tab mặc định của gviz. */
+export function isLikelyBookHangNgayGrid(grid) {
+  if (!Array.isArray(grid) || grid.length < 8) return false;
+  for (const row of grid) {
+    const cells = row.cells ?? [];
+    const joined = normGridText(cells.join(" "));
+    if (joined.includes("cap nhat danh sach hang len san bay")) return true;
+    if (normGridText(cells[0] ?? "") === "vlc-tecs" || joined.includes("vlc-tecs")) return true;
+    const awbHeader = normGridText(cells[1] ?? cells[0] ?? "");
+    if (awbHeader.includes("awb") && awbHeader.includes("booking")) return true;
+  }
+  return false;
+}
+
 async function fetchGviz(spreadsheetId, params) {
   const url = new URL(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq`);
   url.searchParams.set("tqx", "out:json");
-  for (const [k, v] of Object.entries(params)) {
+  const { range = BOOK_SHEET_GVIZ_RANGE, ...rest } = params;
+  if (range) url.searchParams.set("range", range);
+  for (const [k, v] of Object.entries(rest)) {
     if (v != null && v !== "") url.searchParams.set(k, String(v));
   }
 
   const res = await fetch(url.toString(), {
-    headers: { "User-Agent": "TECSOPS/1.0" },
-    signal: AbortSignal.timeout(45_000),
+    headers: { "User-Agent": "TECSOPS/1.0", Accept: "application/json,text/plain,*/*" },
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     throw new Error(`Không đọc được Google Sheet (HTTP ${res.status}).`);
@@ -126,6 +159,58 @@ export async function listPublicBookSheetTabs(spreadsheetId) {
     out.push({ gid: "", title });
   }
   return out;
+}
+
+async function loadTabList(spreadsheetId, listTabsFn) {
+  const cached = getCachedTabList(spreadsheetId);
+  if (cached) return cached;
+  const tabs = await listTabsFn(spreadsheetId);
+  setCachedTabList(spreadsheetId, tabs);
+  return tabs;
+}
+
+function resolveTabFromList(tabs, candidates, sessionYmd) {
+  const normCandidates = candidates.map((c) => ({ raw: c, norm: normalizeTabTitle(c) }));
+
+  /** @type {{ title: string, gid: string } | null} */
+  let resolved = null;
+  for (const cand of normCandidates) {
+    const hit = tabs.find((t) => normalizeTabTitle(t.title) === cand.norm);
+    if (hit) {
+      resolved = { title: hit.title, gid: hit.gid };
+      break;
+    }
+  }
+
+  if (!resolved) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(sessionYmd).trim());
+    if (m) {
+      const day = Number(m[3]);
+      const mmm = MONTHS3[Number(m[2]) - 1];
+      const hit = tabs.find((t) => {
+        const compact = normalizeTabTitle(t.title).replace(/\s+/g, "");
+        const dm = compact.match(
+          /(?:^|\D)(\d{1,2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(?:\d{2,4})?(?:\D|$)/
+        );
+        if (!dm) return false;
+        return Number(dm[1]) === day && dm[2] === mmm;
+      });
+      if (hit) resolved = { title: hit.title, gid: hit.gid };
+    }
+  }
+
+  return resolved;
+}
+
+async function fetchResolvedBookGrid(id, resolved, fetchByGid, fetchByName) {
+  const grid = resolved.gid
+    ? await fetchByGid(id, resolved.gid)
+    : await fetchByName(id, resolved.title);
+  return grid;
+}
+
+function cacheResolvedSessionTab(id, sessionYmd, resolved) {
+  setCachedSessionTab(id, sessionYmd, { gid: resolved.gid, title: resolved.title });
 }
 
 function normalizeTabTitle(s) {
@@ -223,6 +308,7 @@ export async function fetchBookHangNgayGridForSession(
   const listTabs = deps.listTabs ?? listPublicBookSheetTabs;
   const fetchByGid = deps.fetchByGid ?? fetchGoogleSheetGridByGid;
   const fetchByName = deps.fetchByName ?? fetchGoogleSheetGrid;
+  const useProductionFastPath = listTabs === listPublicBookSheetTabs;
 
   const sessionCandidates = bookSheetTabCandidates(sessionYmd);
   if (!sessionCandidates.length) throw new Error("sessionDate phải dạng YYYY-MM-DD.");
@@ -231,62 +317,60 @@ export async function fetchBookHangNgayGridForSession(
   const preferredNorm = preferred ? normalizeTabTitle(preferred) : "";
   const sessionNorms = new Set(sessionCandidates.map((c) => normalizeTabTitle(c)));
 
-  // Chỉ chấp nhận sheetTab từ client khi khớp ngày phiên — tránh kéo tab ngày 13 khi đang xem 14.
   const preferredOk = Boolean(preferred && sessionNorms.has(preferredNorm));
   const candidates = preferredOk
     ? [preferred, ...sessionCandidates.filter((c) => normalizeTabTitle(c) !== preferredNorm)]
     : sessionCandidates;
 
+  const primary = sessionCandidates[0];
+
+  const sessionCached = getCachedSessionTab(id, sessionYmd);
+  if (sessionCached && (sessionCached.gid || sessionCached.title)) {
+    const resolved = { title: sessionCached.title || primary, gid: sessionCached.gid };
+    const grid = await fetchResolvedBookGrid(id, resolved, fetchByGid, fetchByName);
+    if (isLikelyBookHangNgayGrid(grid)) {
+      return { grid, sheetTab: resolved.title, gid: resolved.gid };
+    }
+  }
+
+  if (useProductionFastPath) {
+    const tabsPromise = loadTabList(id, listTabs);
+    let directGrid = null;
+    try {
+      directGrid = await fetchByName(id, primary);
+    } catch {
+      directGrid = null;
+    }
+    if (directGrid && isLikelyBookHangNgayGrid(directGrid)) {
+      void tabsPromise
+        .then((tabs) => {
+          const hit = resolveTabFromList(tabs, candidates, sessionYmd);
+          if (hit) cacheResolvedSessionTab(id, sessionYmd, hit);
+          else cacheResolvedSessionTab(id, sessionYmd, { title: primary, gid: "" });
+        })
+        .catch(() => {
+          cacheResolvedSessionTab(id, sessionYmd, { title: primary, gid: "" });
+        });
+      return { grid: directGrid, sheetTab: primary, gid: "" };
+    }
+  }
+
   let tabs = [];
   try {
-    tabs = await listTabs(id);
+    tabs = await loadTabList(id, listTabs);
   } catch {
     tabs = [];
   }
 
-  const normCandidates = candidates.map((c) => ({ raw: c, norm: normalizeTabTitle(c) }));
+  const resolved = resolveTabFromList(tabs, candidates, sessionYmd);
 
-  /** @type {{ title: string, gid: string } | null} */
-  let resolved = null;
-  for (const cand of normCandidates) {
-    const hit = tabs.find((t) => normalizeTabTitle(t.title) === cand.norm);
-    if (hit) {
-      resolved = { title: hit.title, gid: hit.gid };
-      break;
-    }
-  }
-
-  if (!resolved) {
-    // Khớp tab có đúng ngày+tháng trong tên (vd. «NGÀY 13 JUL»), không fuzzy includes (tránh 1JUL khớp 11JUL).
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(sessionYmd).trim());
-    if (m) {
-      const day = Number(m[3]);
-      const mmm = MONTHS3[Number(m[2]) - 1];
-      const hit = tabs.find((t) => {
-        const compact = normalizeTabTitle(t.title).replace(/\s+/g, "");
-        const dm = compact.match(
-          /(?:^|\D)(\d{1,2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(?:\d{2,4})?(?:\D|$)/
-        );
-        if (!dm) return false;
-        return Number(dm[1]) === day && dm[2] === mmm;
-      });
-      if (hit) resolved = { title: hit.title, gid: hit.gid };
-    }
-  }
-
-  if (resolved?.gid) {
-    const grid = await fetchByGid(id, resolved.gid);
+  if (resolved?.gid || resolved?.title) {
+    cacheResolvedSessionTab(id, sessionYmd, resolved);
+    const grid = await fetchResolvedBookGrid(id, resolved, fetchByGid, fetchByName);
     return { grid, sheetTab: resolved.title, gid: resolved.gid };
   }
 
-  if (resolved?.title) {
-    const grid = await fetchByName(id, resolved.title);
-    return { grid, sheetTab: resolved.title, gid: "" };
-  }
-
-  const primary = sessionCandidates[0];
   const available = tabs.map((t) => t.title).filter(Boolean);
-  // gviz trả sheet mặc định nếu tên tab không tồn tại — không được fallback im lặng.
   if (tabs.length > 0) {
     const hint = available.length
       ? ` Có tab: ${available.slice(0, 12).join(", ")}${available.length > 12 ? "…" : ""}.`

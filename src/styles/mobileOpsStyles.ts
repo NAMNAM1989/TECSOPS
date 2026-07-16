@@ -4,13 +4,13 @@ import { OPS } from "./opsModalStyles";
 export const MOBILE = {
   sheet: `glass-panel flex max-h-[92vh] flex-col rounded-t-[32px] border shadow-[0_-12px_48px_rgba(0,0,0,0.12)] animate-cnee-slide-up`,
   sheetBackdrop: "fixed inset-0 z-[470] flex flex-col justify-end bg-black/40 backdrop-blur-md md:hidden animate-cnee-magnify-backdrop",
-  card: "relative overflow-hidden rounded-[20px] border border-black/[0.04] bg-white dark:bg-dashboard-surface-dark shadow-apple transition-all duration-200 hover:shadow-apple-md dark:border-white/[0.05]",
-  cardInner: "relative z-10 bg-transparent px-2.5 py-1.5 transition-transform duration-200 ease-out",
-  cardMeta: "truncate text-[10px] font-medium leading-tight text-apple-secondary dark:text-slate-400",
+  card: "relative overflow-hidden rounded-[14px] border border-black/[0.04] bg-white dark:bg-dashboard-surface-dark shadow-sm transition-all duration-200 dark:border-white/[0.05]",
+  cardInner: "relative z-10 bg-transparent px-2 py-1 transition-transform duration-200 ease-out",
+  cardMeta: "truncate text-[9px] font-medium leading-tight text-apple-secondary dark:text-slate-400",
   customerName:
-    "truncate text-[11px] font-extrabold uppercase tracking-wide leading-tight text-indigo-700 dark:text-indigo-300",
-  awb: "font-mono text-[13px] font-extrabold leading-none tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark",
-  awbEmpty: "text-[13px] font-semibold text-apple-blue hover:text-apple-blue-hover dark:text-sky-400 dark:hover:text-sky-300",
+    "truncate text-[10px] font-extrabold uppercase tracking-wide leading-tight text-indigo-700 dark:text-indigo-300",
+  awb: "font-mono text-[12px] font-extrabold leading-none tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark",
+  awbEmpty: "text-[12px] font-semibold text-apple-blue hover:text-apple-blue-hover dark:text-sky-400 dark:hover:text-sky-300",
   chip: "inline-flex items-center rounded-full bg-black/[0.04] px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wide tabular-nums text-apple-label dark:bg-white/[0.06] dark:text-slate-200",
   chipCutoff: "inline-flex items-center rounded-full bg-red-500 px-2 py-0.5 text-[9px] font-bold text-white uppercase tracking-wide",
   primaryBtn:

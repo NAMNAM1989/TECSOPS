@@ -7,14 +7,18 @@ export type StatusFilterValue = ShipmentStatus | "ALL";
 
 interface StatusFilterBarProps {
   /** Các lô trong ngày đang xem (chưa lọc) */
-  dayRows: Shipment[];
+  dayRows: readonly Shipment[];
   value: StatusFilterValue;
   onChange: (v: StatusFilterValue) => void;
   /** Gọn — không khung lớn, không tiêu đề/ghi chú */
   compact?: boolean;
+  /** Ẩn tab trạng thái count=0 — mobile */
+  hideEmpty?: boolean;
+  /** Siêu gọn — mobile header */
+  dense?: boolean;
 }
 
-export function StatusFilterBar({ dayRows, value, onChange, compact }: StatusFilterBarProps) {
+export function StatusFilterBar({ dayRows, value, onChange, compact, hideEmpty, dense }: StatusFilterBarProps) {
   const counts = useMemo(() => {
     const m = new Map<ShipmentStatus, number>();
     for (const st of SHIPMENT_STATUS_ORDER) m.set(st, 0);
@@ -34,21 +38,27 @@ export function StatusFilterBar({ dayRows, value, onChange, compact }: StatusFil
     >
       <FilterSegment
         compact={compact}
+        dense={dense}
         active={value === "ALL"}
         onClick={() => onChange("ALL")}
         label="Tất cả"
         count={dayRows.length}
       />
-      {SHIPMENT_STATUS_ORDER.map((st) => (
-        <FilterSegment
-          key={st}
-          compact={compact}
-          active={value === st}
-          onClick={() => onChange(st)}
-          label={statusLabel[st]}
-          count={counts.get(st) ?? 0}
-        />
-      ))}
+      {SHIPMENT_STATUS_ORDER.map((st) => {
+        const count = counts.get(st) ?? 0;
+        if (hideEmpty && count === 0 && value !== st) return null;
+        return (
+          <FilterSegment
+            key={st}
+            compact={compact}
+            dense={dense}
+            active={value === st}
+            onClick={() => onChange(st)}
+            label={statusLabel[st]}
+            count={count}
+          />
+        );
+      })}
     </div>
   );
 
@@ -101,12 +111,14 @@ function FilterSegment({
   label,
   count,
   compact,
+  dense,
 }: {
   active: boolean;
   onClick: () => void;
   label: string;
   count: number;
   compact?: boolean;
+  dense?: boolean;
 }) {
   const isEmpty = count === 0;
 
@@ -117,7 +129,7 @@ function FilterSegment({
       aria-selected={active}
       onClick={onClick}
       className={`relative shrink-0 whitespace-nowrap rounded-full font-semibold leading-tight transition-all duration-200 active:scale-[0.98] ${
-        compact ? "px-2.5 py-1 text-[10px]" : "px-3 py-1.5 text-[11px] sm:text-xs"
+        dense ? "px-2 py-0.5 text-[9px]" : compact ? "px-2.5 py-1 text-[10px]" : "px-3 py-1.5 text-[11px] sm:text-xs"
       } ${
         isEmpty && !active ? "opacity-40" : "opacity-100"
       } ${

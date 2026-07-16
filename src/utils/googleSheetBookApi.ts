@@ -1,8 +1,12 @@
 import { credFetch } from "../apiFetch";
 import type { SheetBookApplyResult, SheetBookSyncResult } from "../types/googleSheetBook";
 
-export async function syncBookGoogleSheet(sessionDate: string): Promise<SheetBookSyncResult> {
+export async function syncBookGoogleSheet(
+  sessionDate: string,
+  opts?: { refresh?: boolean }
+): Promise<SheetBookSyncResult> {
   const q = new URLSearchParams({ sessionDate });
+  if (opts?.refresh) q.set("refresh", "1");
   const res = await fetch(`/api/sheets/book/sync?${q}`, { ...credFetch });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

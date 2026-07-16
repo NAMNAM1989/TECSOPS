@@ -19,6 +19,8 @@ interface Props {
   highlightWarehouses?: readonly Warehouse[];
   /** Dải ngang cuộn — dùng trên mobile. */
   compact?: boolean;
+  /** Ẩn nút + trên thẻ — mobile dùng FAB. */
+  hideAddButton?: boolean;
   className?: string;
 }
 
@@ -29,6 +31,7 @@ export function WarehouseGridPicker({
   onAddRow,
   highlightWarehouses = [],
   compact = false,
+  hideAddButton = false,
   className = "",
 }: Props) {
   const metrics = computeWarehouseMetrics(rows);
@@ -37,7 +40,7 @@ export function WarehouseGridPicker({
     <div
       className={
         compact
-          ? `flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] ${className}`
+          ? `grid grid-cols-2 gap-1.5 ${className}`
           : `grid grid-cols-2 gap-1.5 xl:grid-cols-4 xl:gap-2 ${className}`
       }
       role="tablist"
@@ -54,14 +57,14 @@ export function WarehouseGridPicker({
             role="tab"
             aria-selected={isActive}
             className={`group relative shrink-0 rounded-xl text-left transition-all duration-200 ${
-              compact ? "min-w-[8.5rem] p-2.5" : "p-2"
+              compact ? "p-1.5" : "p-2"
             } ${
               isActive
                 ? `bg-white ring-2 ${CARD_RING[wh]} dark:bg-dashboard-surface-dark`
                 : "bg-white/80 shadow-dashboard-card hover:bg-white hover:shadow-dashboard-card-hover dark:bg-dashboard-surface-dark/80 dark:hover:bg-dashboard-surface-dark"
             } ${hasSearchHit && !isActive ? "ring-1 ring-apple-blue/30" : ""}`}
           >
-            {onAddRow ? (
+            {onAddRow && !hideAddButton ? (
               <button
                 type="button"
                 title={`Thêm lô ${warehouseLabel[wh]}`}
@@ -77,10 +80,12 @@ export function WarehouseGridPicker({
               onClick={() => onSelect(wh)}
               className="block w-full rounded-xl text-left active:scale-[0.99]"
             >
-              <p className="pr-7 text-[10px] font-bold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark">
+              <p className={`font-bold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark ${
+                compact ? "pr-5 text-[9px]" : "pr-7 text-[10px]"
+              }`}>
                 {warehouseLabel[wh]}
               </p>
-              <div className={`grid grid-cols-3 ${compact ? "mt-1.5 gap-1" : "mt-1 gap-1"}`}>
+              <div className={`grid grid-cols-3 ${compact ? "mt-1 gap-0.5" : "mt-1 gap-1"}`}>
                 <Metric label="Lô" value={m.lots} large={isActive} compact={compact} />
                 <Metric label="Kiện" value={m.pcs} large={isActive} compact={compact} />
                 <Metric label="Kg" value={m.kg.toLocaleString()} large={isActive} compact={compact} />

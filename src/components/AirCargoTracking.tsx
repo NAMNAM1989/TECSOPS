@@ -18,9 +18,9 @@ import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { WAREHOUSE_ORDER, isScscWarehouse } from "../constants/warehouses";
 import { NewBookingButton } from "./NewBookingButton";
-import { WarehouseGridPicker } from "./WarehouseGridPicker";
 import { DashboardToolbarButton } from "./DashboardToolbarButton";
 import { OpsDatePicker } from "./OpsDatePicker";
+import { OpsMobileStickyHeader } from "./OpsMobileStickyHeader";
 import { firstWarehouseWithLots } from "../utils/warehouseMetrics";
 import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
@@ -347,8 +347,37 @@ export function AirCargoTracking({
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-4 lg:px-6">
-      <div className="sticky top-0 z-40 -mx-3 mb-3 border-b border-slate-200/70 bg-[#E8EEF4]/85 px-3 pb-2.5 pt-2.5 backdrop-blur-xl dark:border-white/[0.06] dark:bg-[#070B14]/85 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6">
+    <div className="mx-auto max-w-[1600px] px-3 py-2 sm:px-4 sm:py-3 lg:px-6">
+      <div className="sticky top-0 z-40 -mx-3 mb-1.5 border-b border-slate-200/70 bg-[#E8EEF4]/85 px-3 pb-1 pt-1 backdrop-blur-xl dark:border-white/[0.06] dark:bg-[#070B14]/85 sm:-mx-4 sm:mb-3 sm:px-4 sm:pb-2.5 sm:pt-2.5 lg:-mx-6 lg:px-6">
+      {isMobile ? (
+        <OpsMobileStickyHeader
+          selectedYmd={selectedYmd}
+          onDateChange={(v) => setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)))}
+          onPrevDay={goPrevDay}
+          onNextDay={goNextDay}
+          onToday={goToday}
+          isViewingToday={isViewingToday}
+          syncStatus={status}
+          socketConnected={socketConnected}
+          activeWarehouse={activeWarehouse}
+          onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
+          onOpenSheetImport={() => setSheetImportOpen(true)}
+          filteredViewRows={filteredViewRows}
+          viewRows={viewRows}
+          onWarehouseChange={handleActiveWarehouseChange}
+          searchHighlightWarehouses={searchHighlightWarehouses}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          statusFilteredRows={statusFilteredRows}
+          searchContext={searchContext}
+          searchInputRef={searchInputRef}
+          onSelectSearchMatch={scrollToShipmentMatch}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          onClearFilters={clearViewFilters}
+        />
+      ) : (
+        <>
       <header className="mb-2 space-y-2.5">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
@@ -445,17 +474,6 @@ export function AirCargoTracking({
         </div>
       </header>
 
-      <div className={isMobile ? "space-y-3" : "space-y-3 md:hidden"}>
-        <WarehouseGridPicker
-          compact
-          rows={filteredViewRows}
-          active={activeWarehouse}
-          onSelect={handleActiveWarehouseChange}
-          onAddRow={(wh) => void addBlankRowForWarehouse(wh)}
-          highlightWarehouses={searchHighlightWarehouses}
-        />
-      </div>
-
       {viewRows.length > 0 && (
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
@@ -487,6 +505,8 @@ export function AirCargoTracking({
             )}
           </div>
         </div>
+      )}
+        </>
       )}
       </div>
 

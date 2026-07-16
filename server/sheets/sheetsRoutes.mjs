@@ -3,17 +3,18 @@ import {
   getBookSpreadsheetId,
   sessionYmdToBookSheetTab,
 } from "./googleSheetFetch.mjs";
-import { getCachedGrid, setCachedGrid } from "./sheetFetchCache.mjs";
+import { getCachedGrid, getCachedGridForSession, getCachedSyncResult, setCachedGrid, setCachedSyncResult, syncResultCacheKey } from "./sheetFetchCache.mjs";
 import { parseBookHangNgayGrid } from "./bookHangNgayParser.mjs";
 import { filterRowsForSessionDate, sessionYmdToFlightDateToken } from "./bookDateMatch.mjs";
 import {
   awbKeyForMatch,
+  resolveExistingForSheetRow,
   resolveSheetRowSyncStatus,
   sheetAwbFirstIndexByKey,
   sheetRowIsBlocked,
   sheetRowToPatch,
 } from "./sheetRowReconcile.mjs";
-import { loadState, runBatchMutations, runMutation } from "../stateStore.mjs";
+import { loadState, peekStateVersion, runBatchMutations } from "../stateStore.mjs";
 
 function lookupCustomerCode(customers, customerName) {
   const t = String(customerName ?? "").trim().toLowerCase();
@@ -60,12 +61,6 @@ function buildAwbIndexes(rows, sessionDate) {
   return { inSession, otherSession };
 }
 
-function findExistingInSessionIndexed(indexes, awb) {
-  const key = awbKeyForMatch(awb);
-  if (!key) return null;
-  return indexes.inSession.get(key) ?? null;
-}
-
 function findExistingOtherSessionIndexed(indexes, awb) {
   const key = awbKeyForMatch(awb);
   if (key.length < 11) return null;
@@ -74,10 +69,16 @@ function findExistingOtherSessionIndexed(indexes, awb) {
 
 async function loadBookGridForSession(spreadsheetId, sessionDate, preferredTab, forceRefresh = false) {
   const preferred = String(preferredTab ?? "").trim();
-  if (!forceRefresh && preferred) {
-    const cached = getCachedGrid(spreadsheetId, sessionDate, preferred);
-    if (cached?.grid?.length) {
-      return { grid: cached.grid, sheetTab: cached.sheetTab, gid: "" };
+  if (!forceRefresh) {
+    const cachedSession = getCachedGridForSession(spreadsheetId, sessionDate);
+    if (cachedSession?.grid?.length) {
+      return { grid: cachedSession.grid, sheetTab: cachedSession.sheetTab, gid: "" };
+    }
+    if (preferred) {
+      const cached = getCachedGrid(spreadsheetId, sessionDate, preferred);
+      if (cached?.grid?.length) {
+        return { grid: cached.grid, sheetTab: cached.sheetTab, gid: "" };
+      }
     }
   }
 
@@ -131,9 +132,10 @@ function mapSyncRow(
   sessionFlightDate,
   awbIndexes,
   customerLookups,
-  awbFirstIndex
+  awbFirstIndex,
+  sessionRows
 ) {
-  const existing = findExistingInSessionIndexed(awbIndexes, row.awb);
+  const existing = resolveExistingForSheetRow(sessionRows, awbIndexes, sessionDate, row);
   const otherSession = findExistingOtherSessionIndexed(awbIndexes, row.awb);
   const key = awbKeyForMatch(row.awb);
   const sheetFirstIndex = key ? (awbFirstIndex.get(key) ?? index) : index;
@@ -201,6 +203,20 @@ export function registerSheetsRoutes(app, deps) {
       const forceRefresh = req.query.refresh === "1" || req.query.refresh === "true";
       const spreadsheetId = String(req.query.spreadsheetId ?? "").trim() || getBookSpreadsheetId();
 
+      if (!forceRefresh) {
+        try {
+          const stateVersion = await peekStateVersion();
+          const syncKey = syncResultCacheKey(spreadsheetId, sessionDate, stateVersion);
+          const cachedSync = getCachedSyncResult(syncKey);
+          if (cachedSync) {
+            res.json(cachedSync);
+            return;
+          }
+        } catch {
+          // peekVersion thất bại — tiếp tục sync đầy đủ
+        }
+      }
+
       const { grid, sheetTab } = await loadBookGridForSession(
         spreadsheetId,
         sessionDate,
@@ -224,11 +240,12 @@ export function registerSheetsRoutes(app, deps) {
           sessionFlightDate,
           awbIndexes,
           customerLookups,
-          awbFirstIndex
+          awbFirstIndex,
+          state.rows
         )
       );
 
-      res.json({
+      const payload = {
         sessionDate,
         sessionFlightDate,
         sheetTab,
@@ -243,7 +260,10 @@ export function registerSheetsRoutes(app, deps) {
         sheetDuplicateCount: rows.filter((r) => r.syncStatus === "sheet_duplicate").length,
         awbTakenCount: rows.filter((r) => r.syncStatus === "awb_taken").length,
         rows,
-      });
+      };
+
+      setCachedSyncResult(syncResultCacheKey(spreadsheetId, sessionDate, state.version), payload);
+      res.json(payload);
     } catch (e) {
       console.error("[api/sheets/book/sync]", e);
       res.status(500).json({ error: String(e?.message ?? e) });
@@ -290,6 +310,8 @@ export function registerSheetsRoutes(app, deps) {
       const errors = [];
       /** @type {Set<string>} */
       const batchAwbKeys = new Set();
+      /** @type {Set<string>} */
+      const claimedBlankBookingIds = new Set();
       const awbFirstIndex = sheetAwbFirstIndexByKey(parsed);
       /** @type {object[]} */
       const pendingMutations = [];
@@ -302,7 +324,13 @@ export function registerSheetsRoutes(app, deps) {
           continue;
         }
 
-        const existing = findExistingInSessionIndexed(awbIndexes, row.awb);
+        const existing = resolveExistingForSheetRow(
+          state.rows,
+          awbIndexes,
+          sessionDate,
+          row,
+          claimedBlankBookingIds
+        );
         const otherSession = findExistingOtherSessionIndexed(awbIndexes, row.awb);
         const sheetFirstIndex = awbFirstIndex.get(awbKey) ?? parsedIndex;
         const resolved = resolveSheetRowSyncStatus(
@@ -345,6 +373,7 @@ export function registerSheetsRoutes(app, deps) {
               fromWarehouse: existing.warehouse,
             });
             if (awbKey) batchAwbKeys.add(awbKey);
+            if (!awbKeyForMatch(existing.awb)) claimedBlankBookingIds.add(existing.id);
             continue;
           }
 

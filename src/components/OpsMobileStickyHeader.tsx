@@ -21,6 +21,7 @@ interface Props {
   activeWarehouse: Warehouse;
   onAddBooking: (wh: Warehouse) => void;
   onOpenSheetImport: () => void;
+  onPrefetchSheetImport?: () => void;
   filteredViewRows: readonly Shipment[];
   viewRows: readonly Shipment[];
   onWarehouseChange: (wh: Warehouse) => void;
@@ -94,6 +95,7 @@ export function OpsMobileStickyHeader({
   activeWarehouse,
   onAddBooking,
   onOpenSheetImport,
+  onPrefetchSheetImport,
   filteredViewRows,
   viewRows,
   onWarehouseChange,
@@ -152,7 +154,10 @@ export function OpsMobileStickyHeader({
         </div>
         <MobileHeaderTotals lotCount={lotCount} totalKg={totalKg} title={totalsTitle} />
         <NewBookingButton iconOnly activeWarehouse={activeWarehouse} onAdd={onAddBooking} />
-        <OpsMobileSheetButton onOpenSheetImport={onOpenSheetImport} />
+        <OpsMobileSheetButton
+          onOpenSheetImport={onOpenSheetImport}
+          onPrefetchSheetImport={onPrefetchSheetImport}
+        />
       </div>
 
       <OpsMobileWarehouseChips

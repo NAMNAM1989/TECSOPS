@@ -21,6 +21,57 @@ export function awbKeyForMatch(awb) {
   return key.length >= 11 ? key.slice(0, 11) : key.length >= 8 ? key : "";
 }
 
+export function isValidAwb(awb) {
+  return awbDigitsKey(awb).length === 11;
+}
+
+/**
+ * Lô booking trống AWB nhưng đã có dữ liệu khớp dòng Sheet (chuyến/khách/DEST/kho/kiện-kg).
+ */
+export function blankBookingMatchesSheetRow(existing, row, sessionDate) {
+  if (!existing || existing.sessionDate !== sessionDate) return false;
+  if (isValidAwb(existing.awb) || !isValidAwb(row.awb)) return false;
+
+  const flight = normStr(row.flight).toUpperCase();
+  if (!flight || flight !== normStr(existing.flight).toUpperCase()) return false;
+  if (normCustomer(existing.customer) !== normCustomer(row.customer)) return false;
+  if (normStr(existing.dest).toUpperCase() !== normStr(row.dest).toUpperCase()) return false;
+  if (normStr(existing.warehouse) !== normStr(row.warehouse)) return false;
+
+  const ePcs = normNum(existing.pcs);
+  const sPcs = normNum(row.pcs);
+  if (ePcs != null && sPcs != null && ePcs !== sPcs) return false;
+
+  const eKg = normNum(existing.kg);
+  const sKg = normNum(row.kg);
+  if (eKg != null && sKg != null && eKg !== sKg) return false;
+
+  return true;
+}
+
+/** Tìm lô cùng phiên thiếu AWB nhưng khớp fingerprint Sheet. */
+export function findBlankAwbBookingInSession(rows, sessionDate, sheetRow, claimedIds = null) {
+  for (const r of rows) {
+    if (r.sessionDate !== sessionDate) continue;
+    if (claimedIds?.has(r.id)) continue;
+    if (blankBookingMatchesSheetRow(r, sheetRow, sessionDate)) return r;
+  }
+  return null;
+}
+
+/**
+ * Khớp theo AWB trước; nếu không có — thử ghép lô booking trống AWB.
+ * @param {{ inSession: Map<string, object> }} awbIndexes
+ */
+export function resolveExistingForSheetRow(rows, awbIndexes, sessionDate, sheetRow, claimedBlankIds = null) {
+  const key = awbKeyForMatch(sheetRow.awb);
+  if (key.length >= 11) {
+    const byAwb = awbIndexes.inSession.get(key) ?? null;
+    if (byAwb) return byAwb;
+  }
+  return findBlankAwbBookingInSession(rows, sessionDate, sheetRow, claimedBlankIds);
+}
+
 /** Tìm lô cùng AWB trong phiên (bất kể kho). */
 export function findExistingInSession(state, sessionDate, awb) {
   const key = awbKeyForMatch(awb);
@@ -82,6 +133,8 @@ export function sheetRowToPatch(row, sessionDate, customers, lookupCustomerCode,
 export function sheetRowNeedsUpdate(existing, row, sessionDate, customers, lookupCustomerCode, lookupCustomerId) {
   if (!existing) return false;
   const patch = sheetRowToPatch(row, sessionDate, customers, lookupCustomerCode, lookupCustomerId);
+
+  if (isValidAwb(patch.awb) && !isValidAwb(existing.awb)) return true;
 
   if (existing.warehouse !== patch.warehouse) return true;
   if (normCustomer(existing.customer) !== normCustomer(patch.customer)) return true;

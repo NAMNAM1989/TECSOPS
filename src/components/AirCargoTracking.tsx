@@ -33,6 +33,8 @@ import {
   type ShipmentSearchContext,
   type ShipmentSearchMatch,
 } from "../utils/shipmentSearch";
+import { syncBookGoogleSheet } from "../utils/googleSheetBookApi";
+import type { SheetBookSyncResult } from "../types/googleSheetBook";
 
 const GoogleSheetImportModal = lazy(() =>
   import("./GoogleSheetImportModal").then((m) => ({ default: m.GoogleSheetImportModal }))
@@ -79,6 +81,9 @@ export function AirCargoTracking({
   const [excelExporting, setExcelExporting] = useState(false);
   const [scscDimExporting, setScscDimExporting] = useState(false);
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
+  const sheetSyncPrefetchRef = useRef<{ sessionYmd: string; promise: Promise<SheetBookSyncResult> } | null>(
+    null
+  );
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +92,23 @@ export function AirCargoTracking({
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
   const isViewingToday = selectedYmd === todayYmd;
+
+  const prefetchSheetImport = useCallback(() => {
+    if (sheetSyncPrefetchRef.current?.sessionYmd === selectedYmd) return;
+    sheetSyncPrefetchRef.current = {
+      sessionYmd: selectedYmd,
+      promise: syncBookGoogleSheet(selectedYmd).catch((e) => {
+        if (sheetSyncPrefetchRef.current?.sessionYmd === selectedYmd) {
+          sheetSyncPrefetchRef.current = null;
+        }
+        throw e;
+      }),
+    };
+  }, [selectedYmd]);
+
+  useEffect(() => {
+    sheetSyncPrefetchRef.current = null;
+  }, [selectedYmd]);
 
   const allRows = state?.rows ?? [];
   const viewRows = useMemo(
@@ -362,6 +384,7 @@ export function AirCargoTracking({
           activeWarehouse={activeWarehouse}
           onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
           onOpenSheetImport={() => setSheetImportOpen(true)}
+          onPrefetchSheetImport={prefetchSheetImport}
           filteredViewRows={filteredViewRows}
           viewRows={viewRows}
           onWarehouseChange={handleActiveWarehouseChange}
@@ -428,6 +451,9 @@ export function AirCargoTracking({
               Tên hãng
             </DashboardToolbarButton>
             <DashboardToolbarButton
+              onPointerDown={prefetchSheetImport}
+              onMouseEnter={prefetchSheetImport}
+              onFocus={prefetchSheetImport}
               onClick={() => setSheetImportOpen(true)}
               title="Nhập lô từ Google Sheet BOOK HẰNG NGÀY"
             >
@@ -592,6 +618,7 @@ export function AirCargoTracking({
           <GoogleSheetImportModal
             open={sheetImportOpen}
             sessionYmd={selectedYmd}
+            sheetSyncPrefetchRef={sheetSyncPrefetchRef}
             onClose={() => setSheetImportOpen(false)}
             onApplied={(count, serverState) => {
               if (serverState) {

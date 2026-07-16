@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   awbKeyForMatch,
+  blankBookingMatchesSheetRow,
+  findBlankAwbBookingInSession,
   findExistingInSession,
   findExistingOtherSession,
+  resolveExistingForSheetRow,
   resolveSheetRowSyncStatus,
   sheetAwbFirstIndexByKey,
   sheetRowIsBlocked,
@@ -129,5 +132,55 @@ describe("sheetRowReconcile", () => {
     );
     expect(resolved.syncStatus).toBe("awb_taken");
     expect(resolved.takenSessionDate).toBe("2026-06-12");
+  });
+
+  it("ghép lô booking trống AWB với dòng Sheet cùng chuyến/khách/DEST", () => {
+    const blankBooking = {
+      id: "new-blank",
+      sessionDate: "2026-07-16",
+      awb: "",
+      warehouse: "TECS-TCS",
+      customer: "CITYLINK",
+      flight: "MH767",
+      flightDate: "16JUL",
+      dest: "KUL",
+      pcs: 12,
+      kg: 174,
+      cutoff: "16:00",
+      cutoffNote: "16JUL",
+      note: "",
+      consigneeNamePrint: "",
+    };
+    const sheetRow = {
+      awb: "232-1827 6484",
+      warehouse: "TECS-TCS",
+      customer: "CITYLINK",
+      flight: "MH767",
+      flightDate: "16JUL",
+      cutoff: "16:00",
+      cutoffNote: "16JUL",
+      dest: "KUL",
+      pcs: 12,
+      kg: 174,
+      note: "",
+      consigneeNamePrint: "CITY LINK EXPRESS SDN BHD",
+    };
+    const rows = [blankBooking];
+    const awbIndexes = { inSession: new Map(), otherSession: new Map() };
+
+    expect(blankBookingMatchesSheetRow(blankBooking, sheetRow, "2026-07-16")).toBe(true);
+    expect(findBlankAwbBookingInSession(rows, "2026-07-16", sheetRow)?.id).toBe("new-blank");
+    expect(resolveExistingForSheetRow(rows, awbIndexes, "2026-07-16", sheetRow)?.id).toBe("new-blank");
+
+    const resolved = resolveSheetRowSyncStatus(
+      { existing: blankBooking, otherSession: null, sheetFirstIndex: 0, rowIndex: 0 },
+      sheetRow,
+      "2026-07-16",
+      customers,
+      lookupCode,
+      lookupId
+    );
+    expect(resolved.syncStatus).toBe("update");
+    expect(sheetRowIsBlocked(resolved.syncStatus)).toBe(false);
   });
 });

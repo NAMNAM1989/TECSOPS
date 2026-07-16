@@ -193,6 +193,14 @@ export async function loadState() {
   return fresh;
 }
 
+/** Chỉ đọc version — dùng kiểm tra cache sync Sheet. */
+export async function peekStateVersion() {
+  if (!postgresStateStore) {
+    throw new Error("[state] Postgres chưa cấu hình (DATABASE_URL).");
+  }
+  return postgresStateStore.peekVersion();
+}
+
 /** @param {object} state */
 export async function saveState(state) {
   if (!postgresStateStore) {

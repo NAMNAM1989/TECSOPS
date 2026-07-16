@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from "react";
 import { isSheetRowSelectable, type SheetBookSyncResult, type SheetBookSyncRow } from "../types/googleSheetBook";
 import { applyBookGoogleSheetRows, syncBookGoogleSheet } from "../utils/googleSheetBookApi";
 import { warehouseLabel } from "../constants/warehouses";
@@ -9,11 +9,18 @@ import { MOBILE } from "../styles/mobileOpsStyles";
 type Props = {
   sessionYmd: string;
   open: boolean;
+  sheetSyncPrefetchRef?: MutableRefObject<{ sessionYmd: string; promise: Promise<SheetBookSyncResult> } | null>;
   onClose: () => void;
   onApplied: (appliedCount: number, serverState?: unknown) => void;
 };
 
-export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }: Props) {
+export function GoogleSheetImportModal({
+  sessionYmd,
+  open,
+  sheetSyncPrefetchRef,
+  onClose,
+  onApplied,
+}: Props) {
   const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
@@ -25,7 +32,19 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
     setLoading(true);
     setError(null);
     try {
-      const result = await syncBookGoogleSheet(sessionYmd, { refresh });
+      let result: SheetBookSyncResult;
+      if (!refresh) {
+        const prefetched = sheetSyncPrefetchRef?.current;
+        if (prefetched?.sessionYmd === sessionYmd) {
+          sheetSyncPrefetchRef.current = null;
+          result = await prefetched.promise;
+        } else {
+          result = await syncBookGoogleSheet(sessionYmd);
+        }
+      } else {
+        sheetSyncPrefetchRef && (sheetSyncPrefetchRef.current = null);
+        result = await syncBookGoogleSheet(sessionYmd, { refresh });
+      }
       setSync(result);
       const next = new Set<number>();
       for (const row of result.rows) {
@@ -38,7 +57,7 @@ export function GoogleSheetImportModal({ sessionYmd, open, onClose, onApplied }:
     } finally {
       setLoading(false);
     }
-  }, [sessionYmd]);
+  }, [sessionYmd, sheetSyncPrefetchRef]);
 
   useEffect(() => {
     if (!open) {

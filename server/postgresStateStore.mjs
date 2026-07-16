@@ -781,6 +781,12 @@ export function createPostgresStateStore(databaseUrl) {
 
   return {
     key,
+    async peekVersion() {
+      return withClient(async (client) => {
+        const res = await client.query(`SELECT version FROM ${STATE_META_TABLE} WHERE id = $1`, [key]);
+        return Number(res.rows[0]?.version ?? 0);
+      });
+    },
     async loadRawState() {
       return withClient(async (client) => {
         const relational = await loadRelationalSnapshot(client, key);

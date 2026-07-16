@@ -1,14 +1,16 @@
 interface Props {
   onOpenSheetImport: () => void;
+  onPrefetchSheetImport?: () => void;
 }
 
 /** Mobile OPS — chỉ nhập Google Sheet (không menu phụ). */
-export function OpsMobileSheetButton({ onOpenSheetImport }: Props) {
+export function OpsMobileSheetButton({ onOpenSheetImport, onPrefetchSheetImport }: Props) {
   return (
     <button
       type="button"
       title="Nhập lô từ Google Sheet BOOK HẰNG NGÀY"
       aria-label="Nhập Sheet"
+      onPointerDown={() => onPrefetchSheetImport?.()}
       onClick={onOpenSheetImport}
       className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200/80 bg-white font-semibold text-dashboard-primary shadow-sm transition hover:border-emerald-500/35 hover:bg-emerald-50/70 active:scale-[0.98] dark:border-white/[0.08] dark:bg-dashboard-surface-dark dark:text-dashboard-primary-dark dark:hover:bg-ops-elevated"
     >

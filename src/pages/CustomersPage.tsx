@@ -30,7 +30,7 @@ import {
 } from "../utils/customerDirectoryScaffold";
 import { formatVnPhoneDisplay, normalizeAgentCode } from "../utils/customerProfileInputFormat";
 import { normalizeCustomerNameInput, customerNameWhileTyping } from "../utils/customerShipmentPatch";
-import { normalizeCustomerShortCode } from "../utils/customerCodeOps";
+import { normalizeCustomerShortCode, shortCodeWhileTyping } from "../utils/customerCodeOps";
 import {
   formatDefaultRate,
   normalizeCustomerType,
@@ -711,12 +711,18 @@ export function CustomersPage({
                           value={selected.shortCode ?? ""}
                           onChange={(e) =>
                             updateCustomer(selected.id, {
+                              shortCode: shortCodeWhileTyping(e.target.value),
+                            })
+                          }
+                          onBlur={(e) =>
+                            updateCustomer(selected.id, {
                               shortCode: normalizeCustomerShortCode(e.target.value),
                             })
                           }
                           className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-mono text-xs font-bold uppercase outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/25 dark:border-white/10 dark:bg-slate-950"
                           maxLength={10}
                           spellCheck={false}
+                          placeholder="VD: CÔNG CHÚA"
                         />
                       </label>
                       <label className="block">

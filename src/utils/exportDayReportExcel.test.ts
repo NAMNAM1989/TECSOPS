@@ -113,6 +113,63 @@ describe("prepareDayReportRows", () => {
     expect(code).toBe("HTS");
   });
 
+  it("Excel: khớp Short Code bỏ khoảng trắng (CONG CHUA → CCE)", () => {
+    const dir = [
+      {
+        id: "1",
+        code: "CCE",
+        name: "CONG CHUA EXPRESS",
+        shortCode: "CONGCHUA",
+        parties: [],
+      },
+    ];
+    expect(
+      resolveExportCustomerCode(
+        { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "CONG CHUA", customerCode: "" },
+        dir
+      )
+    ).toBe("CCE");
+    expect(
+      resolveExportCustomerCode(
+        { ...base("b", "TECS-TCS", 1, ymd, "111-1111 1112"), customer: "CÔNG CHÚA", customerCode: "" },
+        dir
+      )
+    ).toBe("CCE");
+  });
+
+  it("Excel: khớp Short dài → xuất Customer Code (LINO/CITYLINK/MR.PHI)", () => {
+    const dir = [
+      { id: "1", code: "LNE", name: "LINO EXPRESS", shortCode: "LINO", parties: [] },
+      { id: "2", code: "CTL", name: "CITYLINK EXPRESS", shortCode: "CITYLINK", parties: [] },
+      { id: "3", code: "MRP", name: "MR PHI", shortCode: "MRPHI", parties: [] },
+      { id: "4", code: "TTE", name: "THANH TAM EXPRESS", shortCode: "THANHTAM", parties: [] },
+    ];
+    expect(
+      resolveExportCustomerCode(
+        { ...base("a", "TECS-TCS", 1, ymd, "1"), customer: "LINO", customerCode: "" },
+        dir
+      )
+    ).toBe("LNE");
+    expect(
+      resolveExportCustomerCode(
+        { ...base("b", "TECS-TCS", 1, ymd, "2"), customer: "CITYLINK", customerCode: "" },
+        dir
+      )
+    ).toBe("CTL");
+    expect(
+      resolveExportCustomerCode(
+        { ...base("c", "TECS-TCS", 1, ymd, "3"), customer: "MR.PHI", customerCode: "" },
+        dir
+      )
+    ).toBe("MRP");
+    expect(
+      resolveExportCustomerCode(
+        { ...base("d", "TECS-TCS", 1, ymd, "4"), customer: "THANH TAM", customerCode: "" },
+        dir
+      )
+    ).toBe("TTE");
+  });
+
   it("Excel: không có danh bạ — dùng tên lô nếu là mã 2–5 chữ", () => {
     const code = resolveExportCustomerCode(
       { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "LINO", customerCode: "" },

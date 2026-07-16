@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  compactCustomerMatchKey,
   inferLetterKeyFromCustomerCode,
   isValidCustomerSyncCode,
+  normalizeCustomerShortCode,
   normalizeCustomerSyncCode,
+  shortCodeWhileTyping,
 } from "./customerCodeOps";
 import { applyCustomsOpsImport } from "./customerCustomsOpsExcel";
 import { scaffoldNewCustomer } from "./customerDirectoryScaffold";
@@ -17,6 +20,18 @@ describe("customerCodeOps", () => {
   it("infer letter key from legacy sequential code", () => {
     expect(inferLetterKeyFromCustomerCode("ABC000001")).toBe("ABC");
     expect(inferLetterKeyFromCustomerCode("GLO")).toBe("GLO");
+  });
+
+  it("Short Code giữ khoảng trắng giữa từ", () => {
+    expect(normalizeCustomerShortCode("công  chúa")).toBe("CÔNG CHÚA");
+    expect(shortCodeWhileTyping("CÔNG ")).toBe("CÔNG ");
+    expect(normalizeCustomerShortCode("  CÔNG CHÚA  ")).toBe("CÔNG CHÚA");
+  });
+
+  it("compactCustomerMatchKey bỏ dấu và khoảng trắng", () => {
+    expect(compactCustomerMatchKey("CÔNG CHÚA")).toBe("CONGCHUA");
+    expect(compactCustomerMatchKey("CONGCHUA")).toBe("CONGCHUA");
+    expect(compactCustomerMatchKey("MR.PHI")).toBe("MRPHI");
   });
 });
 

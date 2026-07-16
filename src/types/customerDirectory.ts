@@ -103,7 +103,7 @@ export type CustomerDirectoryEntry = {
 
   name: string;
 
-  /** Short Code — tối đa 10 ký tự, gõ tắt tìm kiếm (trống = dùng Code). */
+  /** Short Code — tối đa 10 ký tự (cho phép khoảng trắng giữa từ), gõ tắt tìm kiếm (trống = dùng Code). */
   shortCode?: string;
 
   /** MST account (cột Tax Code Excel). */

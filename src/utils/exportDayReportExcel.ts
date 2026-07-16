@@ -5,7 +5,11 @@ import { filterShipmentsBySessionYmd } from "./filterShipmentsBySessionYmd";
 import { lookupCustomerEntryByName } from "./customerDirectoryCore";
 import { findCustomerEntry } from "./customerBookingResolve";
 import { formatDefaultRate } from "./customerAccountFields";
-import { inferLetterKeyFromCustomerCode, normalizeCustomerShortCode } from "./customerCodeOps";
+import {
+  compactCustomerMatchKey,
+  inferLetterKeyFromCustomerCode,
+  normalizeCustomerShortCode,
+} from "./customerCodeOps";
 import { normalizeAgentCode } from "./customerProfileInputFormat";
 
 /** Excel giới hạn 31 ký tự / tên sheet. */
@@ -129,41 +133,22 @@ function isExactSyncCode(raw: string): boolean {
   return /^[A-Z]{2,5}$/.test(normalizeAgentCode(raw));
 }
 
+/** Mã xuất Excel từ danh bạ: ưu tiên Customer Code 2–5 chữ. */
 function exportCodeFromDirectoryEntry(entry: CustomerDirectoryEntry): string {
   const code = normalizeAgentCode(entry.code);
   if (isExactSyncCode(code)) return code;
-  const short = normalizeCustomerShortCode(entry.shortCode ?? "");
-  if (short && isExactSyncCode(short)) return short;
   const letterKey = inferLetterKeyFromCustomerCode(code);
   if (letterKey) return letterKey;
-  return code;
-}
-
-function findDirectoryForExport(
-  r: Shipment,
-  customerDirectory: readonly CustomerDirectoryEntry[]
-): CustomerDirectoryEntry | undefined {
-  const byBooking = findCustomerEntry(r, customerDirectory);
-  if (byBooking) return byBooking;
-
-  const name = (r.customer ?? "").trim().toLowerCase();
-  const codeOnLot = normalizeAgentCode(r.customerCode ?? "").toLowerCase();
-  if (!name && !codeOnLot) return undefined;
-
-  return customerDirectory.find((e) => {
-    const code = e.code.trim().toLowerCase();
-    const short = (e.shortCode ?? "").trim().toLowerCase();
-    if (codeOnLot && (code === codeOnLot || short === codeOnLot)) return true;
-    if (name && (code === name || short === name || e.name.trim().toLowerCase() === name)) {
-      return true;
-    }
-    return false;
-  });
+  const shortCompact = compactCustomerMatchKey(entry.shortCode ?? "");
+  if (isExactSyncCode(shortCompact)) return shortCompact;
+  const short = normalizeCustomerShortCode(entry.shortCode ?? "");
+  if (short && isExactSyncCode(normalizeAgentCode(short))) return normalizeAgentCode(short);
+  return code || shortCompact || "";
 }
 
 /**
  * Mã khách xuất Excel:
- * 1) danh bạ (id / code / short / tên)
+ * 1) danh bạ (id / code / short / tên — khớp cả bỏ khoảng trắng/dấu)
  * 2) customerCode trên lô
  * 3) tên lô nếu đã là mã 2–5 chữ (VD: HTS, LINO)
  */
@@ -171,7 +156,7 @@ export function resolveExportCustomerCode(
   r: Shipment,
   customerDirectory: readonly CustomerDirectoryEntry[]
 ): string {
-  const entry = findDirectoryForExport(r, customerDirectory);
+  const entry = findCustomerEntry(r, customerDirectory);
   if (entry) return exportCodeFromDirectoryEntry(entry);
 
   const onLot = normalizeAgentCode(r.customerCode ?? "");
@@ -179,11 +164,15 @@ export function resolveExportCustomerCode(
     if (isExactSyncCode(onLot)) return onLot;
     const letterKey = inferLetterKeyFromCustomerCode(onLot);
     if (letterKey) return letterKey;
+    const onLotCompact = compactCustomerMatchKey(onLot);
+    if (isExactSyncCode(onLotCompact)) return onLotCompact;
     return onLot;
   }
 
   const asCode = normalizeAgentCode(r.customer ?? "");
   if (isExactSyncCode(asCode)) return asCode;
+  const asCompact = compactCustomerMatchKey(r.customer ?? "");
+  if (isExactSyncCode(asCompact)) return asCompact;
 
   return "";
 }
@@ -193,7 +182,7 @@ function resolveExportPrice(
   customerDirectory: readonly CustomerDirectoryEntry[]
 ): string | number {
   const entry =
-    findDirectoryForExport(r, customerDirectory) ??
+    findCustomerEntry(r, customerDirectory) ??
     lookupCustomerEntryByName(customerDirectory, r.customer);
   if (entry?.defaultRate != null && Number.isFinite(entry.defaultRate)) {
     return entry.defaultRate;

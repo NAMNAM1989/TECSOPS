@@ -5,10 +5,24 @@ import type {
   CustomerSavedGoods,
   CustomerSavedShipper,
 } from "../types/customerDirectory";
+import { compactCustomerMatchKey } from "./customerCodeOps";
 import { lookupCustomerEntryByName } from "./customerDirectoryCore";
 
 function norm(s: string): string {
   return s.trim().toLowerCase();
+}
+
+function findByCompactKey(
+  directory: readonly CustomerDirectoryEntry[],
+  raw: string
+): CustomerDirectoryEntry | undefined {
+  const key = compactCustomerMatchKey(raw);
+  if (!key) return undefined;
+  return (
+    directory.find((e) => compactCustomerMatchKey(e.code) === key) ??
+    directory.find((e) => compactCustomerMatchKey(e.shortCode ?? "") === key) ??
+    directory.find((e) => compactCustomerMatchKey(e.name) === key)
+  );
 }
 
 export function findCustomerEntry(
@@ -25,6 +39,8 @@ export function findCustomerEntry(
   if (codeRaw) {
     const byCode = directory.find((e) => norm(e.code) === norm(codeRaw));
     if (byCode) return byCode;
+    const byCompactCode = findByCompactKey(directory, codeRaw);
+    if (byCompactCode) return byCompactCode;
   }
   if (nameRaw) {
     const byLookup = lookupCustomerEntryByName(directory, nameRaw);
@@ -33,6 +49,10 @@ export function findCustomerEntry(
     if (byName) return byName;
     const nameAsCode = directory.find((e) => norm(e.code) === norm(nameRaw));
     if (nameAsCode) return nameAsCode;
+    const nameAsShort = directory.find((e) => norm(e.shortCode ?? "") === norm(nameRaw));
+    if (nameAsShort) return nameAsShort;
+    const byCompactName = findByCompactKey(directory, nameRaw);
+    if (byCompactName) return byCompactName;
   }
   return undefined;
 }

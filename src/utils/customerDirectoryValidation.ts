@@ -9,11 +9,9 @@ import { clampCustomerDirectoryEntry } from "./customerDirectoryProfile";
 import { normalizeAgentCode } from "./customerProfileInputFormat";
 import {
   CUSTOMER_SHORT_CODE_MAX,
-  ensureCustomerCodeForSave,
-  inferPrefixFromCustomerCode,
-  isValidCustomerPrefix,
-  normalizeCustomerPrefix,
+  isValidCustomerSyncCode,
   normalizeCustomerShortCode,
+  normalizeCustomerSyncCode,
 } from "./customerCodeOps";
 import { formatVehicleLicensePlate } from "./customerVehicleCore";
 import { VEHICLE_PLATE_MIN as ECARGO_VEHICLE_MIN } from "./vehiclePlateNormalize";
@@ -122,9 +120,8 @@ function validateIdentity(
   allEntries: readonly CustomerDirectoryEntry[]
 ): CustomerFieldError[] {
   const errors: CustomerFieldError[] = [];
-  const code = entry.code.trim();
+  const code = normalizeAgentCode(entry.code);
   const name = entry.name.trim();
-  const prefix = normalizeCustomerPrefix(entry.prefix ?? "") || inferPrefixFromCustomerCode(code);
   const shortCode = normalizeCustomerShortCode(entry.shortCode ?? "");
 
   if (!name) {
@@ -132,13 +129,17 @@ function validateIdentity(
   }
 
   if (!code) {
-    if (!isValidCustomerPrefix(prefix)) {
-      errors.push({
-        section: "identity",
-        field: "prefix",
-        message: "Thiếu mã — nhập Prefix (2–5 chữ A–Z) để hệ thống tự sinh Customer Code.",
-      });
-    }
+    errors.push({
+      section: "identity",
+      field: "code",
+      message: "Customer Code bắt buộc (VD: GLO — 2–5 chữ A–Z).",
+    });
+  } else if (code.length <= 5 && !isValidCustomerSyncCode(code)) {
+    errors.push({
+      section: "identity",
+      field: "code",
+      message: "Customer Code phải gồm 2–5 chữ cái A–Z (VD: GLO, ABC).",
+    });
   } else if (!isValidAgentCode(code)) {
     errors.push({
       section: "identity",
@@ -155,21 +156,6 @@ function validateIdentity(
         message: `Mã «${code}» đã tồn tại (khách «${dup.name || dup.code}»).`,
       });
     }
-    if (prefix && isValidCustomerPrefix(prefix) && !normalizeAgentCode(code).startsWith(prefix)) {
-      errors.push({
-        section: "identity",
-        field: "prefix",
-        message: `Prefix «${prefix}» phải khớp đầu Customer Code «${code}».`,
-      });
-    }
-  }
-
-  if (entry.prefix?.trim() && !isValidCustomerPrefix(entry.prefix)) {
-    errors.push({
-      section: "identity",
-      field: "prefix",
-      message: "Prefix phải gồm 2–5 chữ cái A–Z.",
-    });
   }
 
   if (shortCode.length > CUSTOMER_SHORT_CODE_MAX) {
@@ -469,25 +455,18 @@ export function getFieldValidationError(
   )?.message;
 }
 
-/** Chuẩn hóa trước khi lưu — bỏ dòng hoàn toàn trống; tự sinh Code từ Prefix nếu thiếu. */
+/** Chuẩn hóa trước khi lưu — bỏ dòng trống; Short Code mặc định = Customer Code (2–5 chữ). */
 export function normalizeCustomerEntryForSave(
   entry: CustomerDirectoryEntry,
-  allEntries: readonly CustomerDirectoryEntry[] = []
+  _allEntries: readonly CustomerDirectoryEntry[] = []
 ): CustomerDirectoryEntry {
-  const otherCodes = allEntries.filter((e) => e.id !== entry.id).map((e) => e.code);
-  let code = normalizeAgentCode(entry.code);
-  let prefix =
-    normalizeCustomerPrefix(entry.prefix ?? "") || inferPrefixFromCustomerCode(code);
-  if (!code && isValidCustomerPrefix(prefix)) {
-    const allocated = ensureCustomerCodeForSave({ code, prefix }, otherCodes);
-    code = allocated.code;
-    prefix = allocated.prefix;
-  }
-  const shortCode = normalizeCustomerShortCode(entry.shortCode ?? "");
+  const code = normalizeAgentCode(entry.code);
+  const shortCode =
+    normalizeCustomerShortCode(entry.shortCode ?? "") ||
+    (isValidCustomerSyncCode(code) ? normalizeCustomerSyncCode(code) : "");
   return clampCustomerDirectoryEntry({
     ...entry,
     code,
-    prefix,
     shortCode,
     savedShippers: (entry.savedShippers ?? []).filter((s) => !isSavedShipperEmpty(s)),
     savedConsignees: (entry.savedConsignees ?? []).filter((c) => !isSavedConsigneeEmpty(c)),

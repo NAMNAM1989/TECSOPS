@@ -2,7 +2,6 @@
 const L = {
   code: 40,
   name: 200,
-  prefix: 5,
   shortCode: 10,
   shipperName: 120,
   shipperAddress: 300,
@@ -44,13 +43,6 @@ function sliceStr(v, max) {
   return s.slice(0, max);
 }
 
-function normalizePrefixLoose(v) {
-  return sliceStr(v, L.prefix)
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z]/g, "");
-}
-
 function normalizeShortCodeLoose(v) {
   return sliceStr(v, L.shortCode).trim().toUpperCase().replace(/\s+/g, "");
 }
@@ -77,7 +69,6 @@ function parseDefaultRateLoose(v) {
 }
 
 function accountFieldsFromItem(item, code, name) {
-  const prefix = normalizePrefixLoose(item.prefix);
   const shortCode = normalizeShortCodeLoose(item.shortCode);
   const taxCode = sliceStr(item.taxCode, L.taxCode).trim();
   const address = sliceStr(item.address, L.address).trim();
@@ -89,7 +80,6 @@ function accountFieldsFromItem(item, code, name) {
   return {
     code: sliceStr(code, L.code).trim(),
     name: sliceStr(name, L.name).trim(),
-    ...(prefix ? { prefix } : {}),
     ...(shortCode ? { shortCode } : {}),
     ...(taxCode ? { taxCode } : {}),
     ...(address ? { address } : {}),

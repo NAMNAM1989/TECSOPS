@@ -9,17 +9,12 @@ import type {
 } from "../types/customerDirectory";
 import { normalizeCustomerType, parseDefaultRate } from "./customerAccountFields";
 import { normalizePrintAddressMultiline } from "./printAddressMultiline";
-import {
-  inferPrefixFromCustomerCode,
-  normalizeCustomerPrefix,
-  normalizeCustomerShortCode,
-} from "./customerCodeOps";
+import { normalizeCustomerShortCode } from "./customerCodeOps";
 
 /** Giới hạn độ dài — đồng bộ client / server. */
 export const CUSTOMER_PROFILE_LIMITS = {
   code: 40,
   name: 200,
-  prefix: 5,
   shortCode: 10,
   shipperName: 120,
   shipperAddress: 300,
@@ -321,10 +316,6 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
   if (savedGoods.length === 1) defaultGoodsId = savedGoods[0]!.id;
   if (savedVehicles.length === 1) defaultVehicleId = savedVehicles[0]!.id;
   const code = clip(migrated.code, L.code).trim();
-  const prefix =
-    normalizeCustomerPrefix(clip(migrated.prefix, L.prefix)) ||
-    inferPrefixFromCustomerCode(code) ||
-    undefined;
   const shortCode = normalizeCustomerShortCode(clip(migrated.shortCode, L.shortCode)) || undefined;
   const taxCode = clip(migrated.taxCode, L.taxCode).trim() || undefined;
   const address = clip(migrated.address, L.address).trim() || undefined;
@@ -337,7 +328,6 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
     id: clip(migrated.id, 80).trim(),
     code,
     name: clip(migrated.name, L.name).trim(),
-    ...(prefix ? { prefix } : {}),
     ...(shortCode ? { shortCode } : {}),
     ...(taxCode ? { taxCode } : {}),
     ...(address ? { address } : {}),
@@ -404,7 +394,6 @@ export function emptyCustomerProfileRow(id: string): CustomerDirectoryEntry {
     id,
     code: "",
     name: "",
-    prefix: "",
     shortCode: "",
     savedShippers: [],
     savedConsignees: [],

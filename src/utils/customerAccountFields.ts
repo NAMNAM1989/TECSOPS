@@ -1,4 +1,4 @@
-/** Helpers chuẩn hóa cột Excel Import Customers (10 cột). */
+/** Helpers chuẩn hóa cột Excel Import Customers (9 cột). */
 import type { CustomerType } from "../types/customerDirectory";
 import { CUSTOMER_TYPES } from "../types/customerDirectory";
 

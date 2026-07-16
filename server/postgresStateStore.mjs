@@ -369,7 +369,6 @@ function mergeCustomerBlobProfile(base, fromBlob) {
       : base.defaultRate;
   return {
     ...base,
-    ...(typeof fromBlob.prefix === "string" ? { prefix: fromBlob.prefix } : {}),
     ...(typeof fromBlob.shortCode === "string" ? { shortCode: fromBlob.shortCode } : {}),
     ...(typeof fromBlob.taxCode === "string" ? { taxCode: fromBlob.taxCode } : {}),
     ...(typeof fromBlob.address === "string" ? { address: fromBlob.address } : {}),

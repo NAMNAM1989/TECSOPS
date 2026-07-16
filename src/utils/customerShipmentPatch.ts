@@ -43,8 +43,7 @@ export function filterCustomerDirectoryEntries(
     const code = entry.code.trim().toLowerCase();
     const name = entry.name.trim().toLowerCase();
     const shortCode = (entry.shortCode ?? "").trim().toLowerCase();
-    const prefix = (entry.prefix ?? "").trim().toLowerCase();
-    if (code.includes(q) || name.includes(q) || shortCode.includes(q) || prefix.includes(q)) {
+    if (code.includes(q) || name.includes(q) || shortCode.includes(q)) {
       hits.push(entry);
       if (hits.length >= limit) break;
     }

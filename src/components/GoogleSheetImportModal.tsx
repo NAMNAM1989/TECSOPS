@@ -36,13 +36,13 @@ export function GoogleSheetImportModal({
       if (!refresh) {
         const prefetched = sheetSyncPrefetchRef?.current;
         if (prefetched?.sessionYmd === sessionYmd) {
-          sheetSyncPrefetchRef.current = null;
+          if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
           result = await prefetched.promise;
         } else {
           result = await syncBookGoogleSheet(sessionYmd);
         }
       } else {
-        sheetSyncPrefetchRef && (sheetSyncPrefetchRef.current = null);
+        if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
         result = await syncBookGoogleSheet(sessionYmd, { refresh });
       }
       setSync(result);

@@ -2,8 +2,13 @@ import type { Borders, Cell, Fill, Font, Workbook } from "exceljs";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { filterShipmentsBySessionYmd } from "./filterShipmentsBySessionYmd";
-import { formatShipmentDimWeightKg } from "./volumetricDim";
-import { lookupCustomerCodeByName } from "./customerDirectoryCore";
+import { lookupCustomerCodeByName, lookupCustomerEntryByName } from "./customerDirectoryCore";
+import { formatDefaultRate } from "./customerAccountFields";
+import {
+  inferLetterKeyFromCustomerCode,
+  isValidCustomerSyncCode,
+  normalizeCustomerSyncCode,
+} from "./customerCodeOps";
 
 /** Excel giới hạn 31 ký tự / tên sheet. */
 const EXCEL_MAX_SHEET_NAME_LENGTH = 31;
@@ -13,29 +18,33 @@ const DEFAULT_DATA_ROW_HEIGHT = 18;
 const DATA_BODY_FONT_SIZE = 11;
 const HEADER_FONT_SIZE = 10;
 
-/** Cột 1-based: AWB (font monospace). */
-const COL_STT = 1;
-const COL_AWB = 3;
+/** Cột 1-based: MAWB (font monospace). */
+const COL_MAWB = 4;
 
 const MIME_XLSX =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-const DAY_REPORT_HEADERS = [
-  "STT",
-  "Ngày hàng vào",
-  "AWB",
-  "DEST",
-  "Số kiện",
-  "Số KG",
-  "VOLUME WEIGHT",
-  "Tên khách hàng",
-  "Mã Khách Hàng",
+/** Đúng mẫu Import Shipments (shipment-import-template.xlsx). */
+export const SHIPMENT_EXPORT_HEADERS = [
+  "Date",
+  "Customer",
+  "Customer Code",
+  "MAWB",
+  "Destination",
+  "PCS",
+  "Gross Weight",
+  "Volume Weight",
+  "Price",
+  "Min Chargeable Kg",
+  "Surcharge",
+  "Warehouse Cost",
+  "Customs Cost",
+  "Labor Cost",
 ] as const;
 
-/** Cột (1-based) căn phải: số kiện, KG, VOLUME WEIGHT */
-const NUMERIC_RIGHT_ALIGN_COLS = new Set([5, 6, 7]);
+/** Cột (1-based) căn phải: số liệu / chi phí */
+const NUMERIC_RIGHT_ALIGN_COLS = new Set([6, 7, 8, 9, 10, 11, 12, 13, 14]);
 
-/** Xanh lá đậm — tương phản tốt với chữ trắng */
 const HEADER_FILL: Fill = {
   type: "pattern",
   pattern: "solid",
@@ -62,8 +71,24 @@ const BORDER: Partial<Borders> = {
   right: { style: "thin", color: { argb: "FFE5E7EB" } },
 };
 
-/** Độ rộng cột: đủ cho tiêu đề + nút AutoFilter (Excel vẽ mũi tên lọc bên phải ô). */
-const COLUMN_WIDTHS: readonly number[] = [8, 22, 22, 10, 14, 12, 22, 36, 16];
+const COLUMN_WIDTHS: readonly number[] = [
+  12, 32, 14, 16, 12, 8, 14, 14, 12, 16, 12, 14, 14, 12,
+];
+
+const GUIDE_LINES = [
+  "HƯỚNG DẪN IMPORT SHIPMENT",
+  "",
+  "1. Không thay đổi tên cột ở sheet 'Import Shipments'.",
+  "2. Date: định dạng YYYY-MM-DD (vd 2026-07-01).",
+  "3. Customer: tên khách hàng (bắt buộc). Nếu chưa tồn tại, hệ thống tự tạo mới.",
+  "4. Customer Code (VD: ABC — 2-5 ký tự chữ A-Z, tùy chọn): dùng để khớp đúng khách khi trùng tên. Trống = khớp theo tên.",
+  "5. MAWB: đúng 11 chữ số + check digit modulo 7 (vd 160-1234 5675). Trùng MAWB sẽ báo lỗi.",
+  "6. Warehouse Cost: trống = Chargeable Weight × rate/kg (Settings). Customs/Labor: trống = Gross Weight × rate/kg.",
+  "7. Nhập 0 tường minh = miễn phí. Surcharge: tổng VND phụ phí (trống = 0).",
+  "8. Min Chargeable Kg: optional. Trống = không áp min (hoặc lấy min đã cấu hình trên khách nếu có). Billing Weight = max(CW, Min).",
+  "9. Origin mặc định là SGN, không cần nhập.",
+  "10. File xuất từ OPS dùng cùng mẫu — có thể chỉnh rồi import lại khi tính năng Import Excel sẵn sàng.",
+] as const;
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -82,7 +107,7 @@ function applyCellBorder(cell: Cell) {
 }
 
 /**
- * Hiển thị ngày phiên (sessionDate) dạng dd/mm/yyyy cho báo cáo.
+ * Hiển thị ngày phiên (sessionDate) dạng dd/mm/yyyy (helper giữ tương thích).
  * Chuỗi không khớp YYYY-MM-DD được trả nguyên (fallback an toàn).
  */
 export function formatYmdToVnDisplay(ymd: string): string {
@@ -91,34 +116,77 @@ export function formatYmdToVnDisplay(ymd: string): string {
   return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
-/** Tên sheet theo ngày phiên (giữ đúng chuỗi đầu vào + cắt 31 ký tự như Excel). */
-function sheetTitleForDayReport(sessionDateYmd: string): string {
-  return `Ngay_${sessionDateYmd}`.slice(0, EXCEL_MAX_SHEET_NAME_LENGTH);
+/** Date cột mẫu: luôn YYYY-MM-DD. */
+export function formatYmdForShipmentExport(ymd: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : ymd.trim();
+}
+
+function sheetTitleForDayReport(_sessionDateYmd: string): string {
+  return "Import Shipments".slice(0, EXCEL_MAX_SHEET_NAME_LENGTH);
+}
+
+/** Mã khách xuất Excel: ưu tiên Short / Code 2–5 chữ / suy từ mã cũ. */
+export function resolveExportCustomerCode(
+  r: Shipment,
+  customerDirectory: readonly CustomerDirectoryEntry[]
+): string {
+  const entry =
+    lookupCustomerEntryByName(customerDirectory, r.customer) ??
+    customerDirectory.find(
+      (e) =>
+        e.code.trim().toLowerCase() === String(r.customerCode ?? "").trim().toLowerCase()
+    );
+  if (entry) {
+    const short = (entry.shortCode ?? "").trim().toUpperCase();
+    if (short && isValidCustomerSyncCode(short)) return normalizeCustomerSyncCode(short);
+    const code = entry.code.trim().toUpperCase();
+    if (isValidCustomerSyncCode(code)) return normalizeCustomerSyncCode(code);
+    const letterKey = inferLetterKeyFromCustomerCode(code);
+    if (letterKey) return letterKey;
+    return code;
+  }
+  return (
+    lookupCustomerCodeByName(customerDirectory, r.customer) ||
+    (r.customerCode && String(r.customerCode).trim()) ||
+    ""
+  );
+}
+
+function resolveExportPrice(
+  r: Shipment,
+  customerDirectory: readonly CustomerDirectoryEntry[]
+): string | number {
+  const entry = lookupCustomerEntryByName(customerDirectory, r.customer);
+  if (entry?.defaultRate != null && Number.isFinite(entry.defaultRate)) {
+    return entry.defaultRate;
+  }
+  const formatted = formatDefaultRate(entry?.defaultRate);
+  return formatted || "";
 }
 
 /**
- * Một dòng dữ liệu (giá trị ô) từ một lô.
- * `reportStt` = STT **báo cáo** 1…n liên tục trên file (không dùng `r.stt` theo từng kho).
+ * Một dòng dữ liệu đúng 14 cột mẫu Import Shipments.
  */
 function dayReportRowValues(
   r: Shipment,
-  reportStt: number,
   customerDirectory: readonly CustomerDirectoryEntry[]
 ): (string | number)[] {
-  const code =
-    lookupCustomerCodeByName(customerDirectory, r.customer) ||
-    (r.customerCode && String(r.customerCode).trim()) ||
-    "";
   return [
-    reportStt,
-    formatYmdToVnDisplay(r.sessionDate),
-    r.awb,
-    r.dest,
+    formatYmdForShipmentExport(r.sessionDate),
+    r.customer?.trim() ?? "",
+    resolveExportCustomerCode(r, customerDirectory),
+    r.awb?.trim() ?? "",
+    (r.dest ?? "").trim().toUpperCase(),
     r.pcs ?? "",
     r.kg ?? "",
-    r.dimWeightKg != null ? formatShipmentDimWeightKg(r.flight, r.dimWeightKg, r.awb) : "",
-    r.customer,
-    code,
+    r.dimWeightKg != null && Number.isFinite(r.dimWeightKg) ? r.dimWeightKg : "",
+    resolveExportPrice(r, customerDirectory),
+    "", // Min Chargeable Kg — chưa có trên lô
+    "", // Surcharge
+    "", // Warehouse Cost
+    "", // Customs Cost
+    "", // Labor Cost
   ];
 }
 
@@ -130,8 +198,7 @@ function styleHeaderCell(cell: Cell, colNumber: number) {
     vertical: "middle" as const,
     wrapText: true,
   };
-  if (colNumber === COL_STT) cell.alignment = { ...baseAlign, horizontal: "center" };
-  else if (NUMERIC_RIGHT_ALIGN_COLS.has(colNumber)) cell.alignment = { ...baseAlign, horizontal: "right" };
+  if (NUMERIC_RIGHT_ALIGN_COLS.has(colNumber)) cell.alignment = { ...baseAlign, horizontal: "right" };
   else cell.alignment = { ...baseAlign, horizontal: "left" };
 }
 
@@ -140,11 +207,10 @@ function styleBodyCell(cell: Cell, colNumber: number, rowIndexZeroBased: number)
   if (isZebra) cell.fill = ZEBRA_FILL;
   applyCellBorder(cell);
   cell.font = {
-    name: colNumber === COL_AWB ? "Consolas" : "Calibri",
+    name: colNumber === COL_MAWB ? "Consolas" : "Calibri",
     size: DATA_BODY_FONT_SIZE,
   } as Font;
-  if (colNumber === COL_STT) cell.alignment = { vertical: "middle", horizontal: "center" };
-  else if (NUMERIC_RIGHT_ALIGN_COLS.has(colNumber))
+  if (NUMERIC_RIGHT_ALIGN_COLS.has(colNumber))
     cell.alignment = { vertical: "middle", horizontal: "right" };
   else
     cell.alignment = {
@@ -155,21 +221,18 @@ function styleBodyCell(cell: Cell, colNumber: number, rowIndexZeroBased: number)
 
 /** Tên file mặc định khi tải từ trình duyệt. */
 export function defaultDayReportFileName(sessionDateYmd: string, now = new Date()): string {
-  return `OPS_bao_cao_${compactYmd(sessionDateYmd)}_${fileTimeStamp(now)}.xlsx`;
+  return `OPS_shipments_${compactYmd(sessionDateYmd)}_${fileTimeStamp(now)}.xlsx`;
 }
 
 /**
- * Lọc đúng ngày phiên (trim), **giữ thứ tự** các phần tử trong `rows` (trên → dưới như nguồn / API),
- * không sắp theo kho hay STT toàn cục.
+ * Lọc đúng ngày phiên (trim), **giữ thứ tự** các phần tử trong `rows`.
  */
 export function prepareDayReportRows(rows: Shipment[], sessionDateYmd: string): Shipment[] {
   return filterShipmentsBySessionYmd(rows, sessionDateYmd);
 }
 
 /**
- * Workbook báo cáo ngày — định dạng: header xanh, viền, zebra, freeze hàng 1, AutoFilter.
- * `exceljs` chỉ được tải khi gọi hàm này (dynamic import).
- * Gồm **mọi lô** (mọi kho) khớp `sessionDateYmd`, thứ tự dòng = thứ tự trong `prepareDayReportRows`.
+ * Workbook xuất lô ngày — đúng mẫu Import Shipments (+ sheet Hướng dẫn).
  */
 export async function buildDayReportWorkbook(
   rows: Shipment[],
@@ -192,14 +255,14 @@ export async function buildDayReportWorkbook(
 
   sheet.columns = COLUMN_WIDTHS.map((width) => ({ width }));
 
-  const headerRow = sheet.addRow([...DAY_REPORT_HEADERS]);
+  const headerRow = sheet.addRow([...SHIPMENT_EXPORT_HEADERS]);
   headerRow.height = DEFAULT_HEADER_ROW_HEIGHT;
   headerRow.eachCell((cell, colNumber) => {
     styleHeaderCell(cell, colNumber);
   });
 
   dayRows.forEach((r, idx) => {
-    const row = sheet.addRow(dayReportRowValues(r, idx + 1, customerDirectory));
+    const row = sheet.addRow(dayReportRowValues(r, customerDirectory));
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       styleBodyCell(cell, colNumber, idx);
     });
@@ -207,14 +270,20 @@ export async function buildDayReportWorkbook(
 
   sheet.autoFilter = {
     from: { row: 1, column: 1 },
-    to: { row: 1, column: DAY_REPORT_HEADERS.length },
+    to: { row: 1, column: SHIPMENT_EXPORT_HEADERS.length },
   };
+
+  const guide = wb.addWorksheet("Hướng dẫn");
+  GUIDE_LINES.forEach((line, i) => {
+    guide.getRow(i + 1).getCell(1).value = line;
+  });
+  guide.getColumn(1).width = 110;
 
   return wb;
 }
 
 /**
- * Tải file .xlsx: toàn bộ lô **mọi kho** đúng `sessionDate` (ngày báo cáo), không lọc theo trạng thái UI.
+ * Tải file .xlsx: toàn bộ lô **mọi kho** đúng `sessionDate`, mẫu Import Shipments.
  */
 export async function downloadDayReportExcel(
   rows: Shipment[],

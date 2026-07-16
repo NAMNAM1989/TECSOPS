@@ -98,18 +98,12 @@ export type CustomerDirectoryEntry = {
 
   id: string;
 
-  /** Mã khách (Customer Code) — khóa đồng bộ, vd. GLO000001. */
+  /** Mã khách (Customer Code) — khóa đồng bộ, vd. GLO (2–5 chữ A–Z). */
   code: string;
 
   name: string;
 
-  /**
-   * Prefix sinh mã (customs_ops) — 2–5 chữ A–Z.
-   * Khi tạo mới để trống Code, hệ thống cấp `{PREFIX}{000001…}`.
-   */
-  prefix?: string;
-
-  /** Short Code — tối đa 10 ký tự, gõ tắt tìm kiếm. */
+  /** Short Code — tối đa 10 ký tự, gõ tắt tìm kiếm (trống = dùng Code). */
   shortCode?: string;
 
   /** MST account (cột Tax Code Excel). */

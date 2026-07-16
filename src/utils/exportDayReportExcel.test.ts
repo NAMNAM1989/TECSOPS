@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Shipment } from "../types/shipment";
 import {
+  SHIPMENT_EXPORT_HEADERS,
   buildDayReportWorkbook,
   defaultDayReportFileName,
+  formatYmdForShipmentExport,
   prepareDayReportRows,
+  resolveExportCustomerCode,
 } from "./exportDayReportExcel";
 
 function base(id: string, warehouse: Shipment["warehouse"], stt: number, sessionDate: string, awb: string): Shipment {
@@ -60,70 +63,54 @@ describe("prepareDayReportRows", () => {
     expect(prepareDayReportRows(rows, ` ${ymd} `)).toHaveLength(1);
   });
 
-  it("Excel: cột STT là 1…n liên tục (không lặp STT theo kho)", async () => {
-    const rows: Shipment[] = [
-      base("sc", "TECS-SCSC", 11, ymd, "111-1111 1111"),
-      base("tc", "TECS-TCS", 1, ymd, "222-2222 2222"),
-    ];
-    const wb = await buildDayReportWorkbook(rows, ymd);
-    const sh = wb.worksheets[0];
-    expect(sh.getRow(2).getCell(1).value).toBe(1);
-    expect(sh.getRow(3).getCell(1).value).toBe(2);
-  });
-
-  it("Excel: có cột Mã Khách Hàng và tra mã theo danh bạ", async () => {
-    const rows: Shipment[] = [
-      { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "ACME", customerCode: "" },
-    ];
-    const wb = await buildDayReportWorkbook(rows, ymd, [
-      {
-        id: "1",
-        code: "M1",
-        name: "ACME",
-        parties: [],
-      },
-    ]);
-    const sh = wb.worksheets[0];
-    expect(sh.getRow(1).getCell(9).value).toBe("Mã Khách Hàng");
-    expect(sh.getRow(2).getCell(9).value).toBe("M1");
-  });
-
-  it("Excel: ưu tiên mã khách hàng trong danh bạ hơn mã cũ đã lưu ở lô", async () => {
-    const rows: Shipment[] = [
-      { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "ACME", customerCode: "OLD" },
-    ];
-    const wb = await buildDayReportWorkbook(rows, ymd, [
-      {
-        id: "1",
-        code: "NEW",
-        name: "ACME",
-        parties: [],
-      },
-    ]);
-    const sh = wb.worksheets[0];
-    expect(sh.getRow(2).getCell(9).value).toBe("NEW");
-  });
-
-  it("Excel: bám định dạng mẫu 9 cột và không xuất cột Note", async () => {
+  it("Excel: đúng 14 cột mẫu Import Shipments", async () => {
     const wb = await buildDayReportWorkbook([base("a", "TECS-TCS", 1, ymd, "111-1111 1111")], ymd);
     const sh = wb.worksheets[0];
-    expect(sh.getRow(1).cellCount).toBe(9);
-    expect(sh.getRow(1).values).toEqual([
-      undefined,
-      "STT",
-      "Ngày hàng vào",
-      "AWB",
-      "DEST",
-      "Số kiện",
-      "Số KG",
-      "VOLUME WEIGHT",
-      "Tên khách hàng",
-      "Mã Khách Hàng",
-    ]);
+    expect(sh.name).toBe("Import Shipments");
+    expect(sh.getRow(1).cellCount).toBe(14);
+    expect(sh.getRow(1).values).toEqual([undefined, ...SHIPMENT_EXPORT_HEADERS]);
+    expect(wb.worksheets.some((s) => s.name === "Hướng dẫn")).toBe(true);
   });
 
-  it("tên file download theo OPS_bao_cao_yyyymmdd_hhmmss", () => {
+  it("Excel: Date YYYY-MM-DD, MAWB, Destination, PCS, Gross/Volume", async () => {
+    const row = {
+      ...base("a", "TECS-TCS", 1, ymd, "160-1234 5675"),
+      customer: "ABC Trading",
+      dest: "tpe",
+      pcs: 5,
+      kg: 120,
+      dimWeightKg: 100,
+    };
+    const wb = await buildDayReportWorkbook([row], ymd, [
+      { id: "1", code: "ABC", name: "ABC Trading", shortCode: "ABC", defaultRate: 18000, parties: [] },
+    ]);
+    const sh = wb.worksheets[0];
+    const r2 = sh.getRow(2);
+    expect(r2.getCell(1).value).toBe("2026-04-07");
+    expect(r2.getCell(2).value).toBe("ABC Trading");
+    expect(r2.getCell(3).value).toBe("ABC");
+    expect(r2.getCell(4).value).toBe("160-1234 5675");
+    expect(r2.getCell(5).value).toBe("TPE");
+    expect(r2.getCell(6).value).toBe(5);
+    expect(r2.getCell(7).value).toBe(120);
+    expect(r2.getCell(8).value).toBe(100);
+    expect(r2.getCell(9).value).toBe(18000);
+  });
+
+  it("Excel: Customer Code ưu tiên shortCode danh bạ", () => {
+    const code = resolveExportCustomerCode(
+      { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "ACME", customerCode: "OLD" },
+      [{ id: "1", code: "ACME000001", name: "ACME", shortCode: "ACM", parties: [] }]
+    );
+    expect(code).toBe("ACM");
+  });
+
+  it("formatYmdForShipmentExport giữ YYYY-MM-DD", () => {
+    expect(formatYmdForShipmentExport("2026-07-01")).toBe("2026-07-01");
+  });
+
+  it("tên file download theo OPS_shipments_yyyymmdd_hhmmss", () => {
     const name = defaultDayReportFileName(ymd, new Date(2026, 3, 30, 14, 17, 5));
-    expect(name).toBe("OPS_bao_cao_20260407_141705.xlsx");
+    expect(name).toBe("OPS_shipments_20260407_141705.xlsx");
   });
 });

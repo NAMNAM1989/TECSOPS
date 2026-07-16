@@ -1,5 +1,5 @@
 /**
- * Import danh bạ từ Excel (mẫu Import Customers 10 cột) vào Postgres.
+ * Import danh bạ từ Excel (mẫu Import Customers 9 cột) vào Postgres.
  *
  *   npx tsx scripts/import-customers-xlsx.ts [path.xlsx]
  */

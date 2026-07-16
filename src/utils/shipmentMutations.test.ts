@@ -121,13 +121,13 @@ describe("applyShipmentMutation SET_CUSTOMERS", () => {
     const state: AppState = {
       version: 3,
       rows: [emptyRow("a")],
-      customers: [cust("1", "A", "Old")],
+      customers: [cust("1", "OLD", "Old")],
     };
     const next = applyShipmentMutation(state, {
       action: "SET_CUSTOMERS",
       customers: [
-        cust("n1", "M1", "ACME"),
-        cust("n2", "M2", "Beta", {
+        cust("n1", "ACM", "ACME"),
+        cust("n2", "BET", "Beta", {
           parties: [{ id: "s1", type: "SHIPPER", label: "HCM", content: "Line1\nLine2" }],
         }),
       ],
@@ -135,8 +135,8 @@ describe("applyShipmentMutation SET_CUSTOMERS", () => {
     expect(next.version).toBe(4);
     expect(next.rows).toHaveLength(1);
     expect(next.customers).toEqual([
-      cust("n1", "M1", "ACME"),
-      cust("n2", "M2", "Beta", {
+      cust("n1", "ACM", "ACME"),
+      cust("n2", "BET", "Beta", {
         parties: [{ id: "s1", type: "SHIPPER", label: "HCM", content: "Line1\nLine2" }],
       }),
     ]);
@@ -147,7 +147,7 @@ describe("applyShipmentMutation SET_CUSTOMERS", () => {
     expect(() =>
       applyShipmentMutation(state, {
         action: "SET_CUSTOMERS",
-        customers: [cust("a", "X", "A"), cust("b", "x", "B")],
+        customers: [cust("a", "ABC", "A"), cust("b", "abc", "B")],
       })
     ).toThrow(/đã tồn tại/i);
   });

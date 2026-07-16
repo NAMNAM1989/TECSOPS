@@ -287,7 +287,7 @@ export function registerSheetsRoutes(app, deps) {
       }
 
       const spreadsheetId = String(body?.spreadsheetId ?? "").trim() || getBookSpreadsheetId();
-      const { grid, sheetTab } = await loadBookGridForSession(
+      const { grid } = await loadBookGridForSession(
         spreadsheetId,
         sessionDate,
         preferredTab

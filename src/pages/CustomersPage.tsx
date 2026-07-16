@@ -30,10 +30,7 @@ import {
 } from "../utils/customerDirectoryScaffold";
 import { formatVnPhoneDisplay, normalizeAgentCode } from "../utils/customerProfileInputFormat";
 import { normalizeCustomerNameInput, customerNameWhileTyping } from "../utils/customerShipmentPatch";
-import {
-  normalizeCustomerPrefix,
-  normalizeCustomerShortCode,
-} from "../utils/customerCodeOps";
+import { normalizeCustomerShortCode } from "../utils/customerCodeOps";
 import {
   formatDefaultRate,
   normalizeCustomerType,
@@ -189,7 +186,7 @@ export function CustomersPage({
       }
       if (!needle) return true;
       const contact = contactOf(e);
-      return [e.code, e.name, e.shortCode, e.prefix, contact.phone, contact.email, contact.taxCode]
+      return [e.code, e.name, e.shortCode, contact.phone, contact.email, contact.taxCode]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(needle));
     });
@@ -691,24 +688,11 @@ export function CustomersPage({
                         Xóa khách
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       <label className="block">
-                        <span className="mb-0.5 block text-[10px] font-semibold text-slate-500">Prefix</span>
-                        <input
-                          value={selected.prefix ?? ""}
-                          onChange={(e) =>
-                            updateCustomer(selected.id, {
-                              prefix: normalizeCustomerPrefix(e.target.value),
-                            })
-                          }
-                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-mono text-xs font-bold uppercase outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/25 dark:border-white/10 dark:bg-slate-950"
-                          placeholder="GLO"
-                          maxLength={5}
-                          spellCheck={false}
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="mb-0.5 block text-[10px] font-semibold text-slate-500">Code</span>
+                        <span className="mb-0.5 block text-[10px] font-semibold text-slate-500">
+                          Customer Code
+                        </span>
                         <input
                           value={selected.code}
                           onChange={(e) => updateCustomer(selected.id, { code: e.target.value.toUpperCase() })}
@@ -716,7 +700,8 @@ export function CustomersPage({
                             updateCustomer(selected.id, { code: normalizeAgentCode(e.target.value) })
                           }
                           className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 font-mono text-xs font-bold uppercase outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/25 dark:border-white/10 dark:bg-slate-950"
-                          placeholder="Tự sinh"
+                          placeholder="GLO"
+                          maxLength={40}
                           spellCheck={false}
                         />
                       </label>

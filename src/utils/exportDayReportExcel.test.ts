@@ -97,12 +97,56 @@ describe("prepareDayReportRows", () => {
     expect(r2.getCell(9).value).toBe(18000);
   });
 
-  it("Excel: Customer Code ưu tiên shortCode danh bạ", () => {
+  it("Excel: Customer Code ưu tiên code danh bạ 2–5 chữ", () => {
     const code = resolveExportCustomerCode(
-      { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "ACME", customerCode: "OLD" },
-      [{ id: "1", code: "ACME000001", name: "ACME", shortCode: "ACM", parties: [] }]
+      { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "ACME", customerCode: "" },
+      [{ id: "1", code: "ACM", name: "ACME", shortCode: "ACM", parties: [] }]
     );
     expect(code).toBe("ACM");
+  });
+
+  it("Excel: khớp danh bạ khi tên lô = Customer Code (HTS)", () => {
+    const code = resolveExportCustomerCode(
+      { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "HTS", customerCode: "" },
+      [{ id: "1", code: "HTS", name: "HTS Logistics", shortCode: "HTS", parties: [] }]
+    );
+    expect(code).toBe("HTS");
+  });
+
+  it("Excel: không có danh bạ — dùng tên lô nếu là mã 2–5 chữ", () => {
+    const code = resolveExportCustomerCode(
+      { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "LINO", customerCode: "" },
+      []
+    );
+    expect(code).toBe("LINO");
+  });
+
+  it("Excel: không cắt tên dài thành mã giả", () => {
+    const code = resolveExportCustomerCode(
+      {
+        ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"),
+        customer: "CITYLINK",
+        customerCode: "",
+      },
+      []
+    );
+    expect(code).toBe("");
+  });
+
+  it("Excel: dùng customerCode trên lô khi có", () => {
+    const code = resolveExportCustomerCode(
+      { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "Someone", customerCode: "GLO" },
+      []
+    );
+    expect(code).toBe("GLO");
+  });
+
+  it("Excel: suy mã từ GLO000001 trong danh bạ", () => {
+    const code = resolveExportCustomerCode(
+      { ...base("a", "TECS-TCS", 1, ymd, "111-1111 1111"), customer: "ACME", customerCode: "OLD" },
+      [{ id: "1", code: "ACME000001", name: "ACME", shortCode: "", parties: [] }]
+    );
+    expect(code).toBe("ACME");
   });
 
   it("formatYmdForShipmentExport giữ YYYY-MM-DD", () => {

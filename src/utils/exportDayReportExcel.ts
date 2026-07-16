@@ -2,13 +2,11 @@ import type { Borders, Cell, Fill, Font, Workbook } from "exceljs";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { filterShipmentsBySessionYmd } from "./filterShipmentsBySessionYmd";
-import { lookupCustomerCodeByName, lookupCustomerEntryByName } from "./customerDirectoryCore";
+import { lookupCustomerEntryByName } from "./customerDirectoryCore";
+import { findCustomerEntry } from "./customerBookingResolve";
 import { formatDefaultRate } from "./customerAccountFields";
-import {
-  inferLetterKeyFromCustomerCode,
-  isValidCustomerSyncCode,
-  normalizeCustomerSyncCode,
-} from "./customerCodeOps";
+import { inferLetterKeyFromCustomerCode, normalizeCustomerShortCode } from "./customerCodeOps";
+import { normalizeAgentCode } from "./customerProfileInputFormat";
 
 /** Excel giới hạn 31 ký tự / tên sheet. */
 const EXCEL_MAX_SHEET_NAME_LENGTH = 31;
@@ -126,43 +124,81 @@ function sheetTitleForDayReport(_sessionDateYmd: string): string {
   return "Import Shipments".slice(0, EXCEL_MAX_SHEET_NAME_LENGTH);
 }
 
-/** Mã khách xuất Excel: ưu tiên Short / Code 2–5 chữ / suy từ mã cũ. */
+/** Đúng 2–5 chữ A–Z (không cắt tên dài kiểu CITYLINK → CITYL). */
+function isExactSyncCode(raw: string): boolean {
+  return /^[A-Z]{2,5}$/.test(normalizeAgentCode(raw));
+}
+
+function exportCodeFromDirectoryEntry(entry: CustomerDirectoryEntry): string {
+  const code = normalizeAgentCode(entry.code);
+  if (isExactSyncCode(code)) return code;
+  const short = normalizeCustomerShortCode(entry.shortCode ?? "");
+  if (short && isExactSyncCode(short)) return short;
+  const letterKey = inferLetterKeyFromCustomerCode(code);
+  if (letterKey) return letterKey;
+  return code;
+}
+
+function findDirectoryForExport(
+  r: Shipment,
+  customerDirectory: readonly CustomerDirectoryEntry[]
+): CustomerDirectoryEntry | undefined {
+  const byBooking = findCustomerEntry(r, customerDirectory);
+  if (byBooking) return byBooking;
+
+  const name = (r.customer ?? "").trim().toLowerCase();
+  const codeOnLot = normalizeAgentCode(r.customerCode ?? "").toLowerCase();
+  if (!name && !codeOnLot) return undefined;
+
+  return customerDirectory.find((e) => {
+    const code = e.code.trim().toLowerCase();
+    const short = (e.shortCode ?? "").trim().toLowerCase();
+    if (codeOnLot && (code === codeOnLot || short === codeOnLot)) return true;
+    if (name && (code === name || short === name || e.name.trim().toLowerCase() === name)) {
+      return true;
+    }
+    return false;
+  });
+}
+
+/**
+ * Mã khách xuất Excel:
+ * 1) danh bạ (id / code / short / tên)
+ * 2) customerCode trên lô
+ * 3) tên lô nếu đã là mã 2–5 chữ (VD: HTS, LINO)
+ */
 export function resolveExportCustomerCode(
   r: Shipment,
   customerDirectory: readonly CustomerDirectoryEntry[]
 ): string {
-  const entry =
-    lookupCustomerEntryByName(customerDirectory, r.customer) ??
-    customerDirectory.find(
-      (e) =>
-        e.code.trim().toLowerCase() === String(r.customerCode ?? "").trim().toLowerCase()
-    );
-  if (entry) {
-    const short = (entry.shortCode ?? "").trim().toUpperCase();
-    if (short && isValidCustomerSyncCode(short)) return normalizeCustomerSyncCode(short);
-    const code = entry.code.trim().toUpperCase();
-    if (isValidCustomerSyncCode(code)) return normalizeCustomerSyncCode(code);
-    const letterKey = inferLetterKeyFromCustomerCode(code);
+  const entry = findDirectoryForExport(r, customerDirectory);
+  if (entry) return exportCodeFromDirectoryEntry(entry);
+
+  const onLot = normalizeAgentCode(r.customerCode ?? "");
+  if (onLot) {
+    if (isExactSyncCode(onLot)) return onLot;
+    const letterKey = inferLetterKeyFromCustomerCode(onLot);
     if (letterKey) return letterKey;
-    return code;
+    return onLot;
   }
-  return (
-    lookupCustomerCodeByName(customerDirectory, r.customer) ||
-    (r.customerCode && String(r.customerCode).trim()) ||
-    ""
-  );
+
+  const asCode = normalizeAgentCode(r.customer ?? "");
+  if (isExactSyncCode(asCode)) return asCode;
+
+  return "";
 }
 
 function resolveExportPrice(
   r: Shipment,
   customerDirectory: readonly CustomerDirectoryEntry[]
 ): string | number {
-  const entry = lookupCustomerEntryByName(customerDirectory, r.customer);
+  const entry =
+    findDirectoryForExport(r, customerDirectory) ??
+    lookupCustomerEntryByName(customerDirectory, r.customer);
   if (entry?.defaultRate != null && Number.isFinite(entry.defaultRate)) {
     return entry.defaultRate;
   }
-  const formatted = formatDefaultRate(entry?.defaultRate);
-  return formatted || "";
+  return formatDefaultRate(entry?.defaultRate) || "";
 }
 
 /**

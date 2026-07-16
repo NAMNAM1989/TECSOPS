@@ -437,7 +437,7 @@ function ShipmentTableRowImpl({
           <InlineTextEdit
             value={row.note ?? ""}
             placeholder="Ghi chú"
-            className="line-clamp-2 min-w-0 text-left text-[10px] leading-snug ops-grid-cell-muted"
+            className="ops-grid-note line-clamp-2 min-w-0 text-left text-[10px] leading-snug"
             maxLength={2000}
             gridNav={{ rowId: row.id, field: "note" }}
             onCommit={(v) => onUpdate(row.id, { note: v })}

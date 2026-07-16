@@ -56,6 +56,15 @@
   .ops-grid-placeholder {
     @apply italic text-apple-tertiary dark:text-zinc-400;
   }
+
+  /** Ghi chú lô — đỏ đậm để ops nhận nhanh trên lưới. */
+  .ops-grid-note {
+    @apply font-semibold text-red-800 dark:text-red-400;
+  }
+
+  .ops-grid-note.ops-grid-placeholder {
+    @apply italic font-semibold text-red-800/85 dark:text-red-400/85;
+  }
 }
 
 @keyframes dim-voice-bar {

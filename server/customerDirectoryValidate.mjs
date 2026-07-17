@@ -43,8 +43,13 @@ function sliceStr(v, max) {
   return s.slice(0, max);
 }
 
+/** Short Code — giữ khoảng trắng giữa từ (khớp `normalizeCustomerShortCode` phía client). */
 function normalizeShortCodeLoose(v) {
-  return sliceStr(v, L.shortCode).trim().toUpperCase().replace(/\s+/g, "");
+  return String(v ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .slice(0, L.shortCode);
 }
 
 function normalizeCustomerTypeLoose(v) {

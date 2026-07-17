@@ -14,6 +14,8 @@ const HEADER_ROW: (string | number)[] = [
   "",
 ];
 
+const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 function awbForFilename(awb: string): string {
   return awb.replace(/[^\dA-Za-z-]+/g, "_").slice(0, 40) || "AWB";
 }
@@ -26,65 +28,60 @@ export function canExportTcsDimTemplate(s: Shipment): boolean {
   return isTcsWarehouse(s.warehouse) && (s.dimLines?.length ?? 0) > 0;
 }
 
-/** Xuất một sheet đúng mẫu ATTACHED_LIST_DIMS cho một lô TCS — dynamic import xlsx để không vào bundle chính. */
+/** Xuất một sheet đúng mẫu ATTACHED_LIST_DIMS cho một lô TCS — dynamic import exceljs. */
 export async function downloadTcsAttachedDimsExcel(s: Shipment): Promise<void> {
   if (!canExportTcsDimTemplate(s) || !s.dimLines) {
     window.alert("Chỉ áp dụng cho kho TCS (TECS-TCS hoặc KHO TCS) và lô đã có nhập DIM (chi tiết kiện).");
     return;
   }
 
-  const XLSX = await import("xlsx");
-
-  const applyDimCellsTwoDecimals = (ws: ReturnType<typeof XLSX.utils.aoa_to_sheet>) => {
-    const ref = ws["!ref"];
-    if (!ref) return;
-    const range = XLSX.utils.decode_range(ref);
-    for (let r = 1; r <= range.e.r; r++) {
-      for (let c = 0; c <= 3; c++) {
-        const a = XLSX.utils.encode_cell({ r, c });
-        const cell = ws[a];
-        if (!cell || cell.v === "" || cell.v == null) continue;
-        const n = typeof cell.v === "number" ? cell.v : Number(cell.v);
-        if (!Number.isFinite(n)) continue;
-        ws[a] = { t: "n", v: round2(n), z: "0.00" };
+  let objectUrl: string | null = null;
+  try {
+    const ExcelJS = await import("exceljs");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Sheet1");
+    ws.addRow(HEADER_ROW);
+    for (const l of s.dimLines) {
+      const row = ws.addRow([
+        round2(l.lCm),
+        round2(l.wCm),
+        round2(l.hCm),
+        round2(l.pcs),
+        "",
+        "",
+        "",
+        "",
+        "",
+      ]);
+      for (let c = 1; c <= 4; c++) {
+        row.getCell(c).numFmt = "0.00";
       }
     }
-  };
+    ws.columns = [
+      { width: 12 },
+      { width: 12 },
+      { width: 12 },
+      { width: 10 },
+      { width: 4 },
+      { width: 4 },
+      { width: 4 },
+      { width: 4 },
+      { width: 4 },
+    ];
 
-  const aoa: (string | number)[][] = [
-    HEADER_ROW,
-    ...s.dimLines.map((l) => [
-      round2(l.lCm),
-      round2(l.wCm),
-      round2(l.hCm),
-      round2(l.pcs),
-      "",
-      "",
-      "",
-      "",
-      "",
-    ]),
-  ];
-
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  applyDimCellsTwoDecimals(ws);
-  ws["!cols"] = [
-    { wch: 12 },
-    { wch: 12 },
-    { wch: 12 },
-    { wch: 10 },
-    { wch: 4 },
-    { wch: 4 },
-    { wch: 4 },
-    { wch: 4 },
-    { wch: 4 },
-  ];
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-
-  const fname = `ATTACHED_LIST_DIMS_${awbForFilename(s.awb)}.xlsx`;
-  XLSX.writeFile(wb, fname);
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: MIME_XLSX });
+    objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = `ATTACHED_LIST_DIMS_${awbForFilename(s.awb)}.xlsx`;
+    a.click();
+  } catch (e) {
+    console.error("[downloadTcsAttachedDimsExcel]", e);
+    window.alert(e instanceof Error ? e.message : "Không tạo được file Excel.");
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
 }
 
 /** In nhanh bảng DIM cùng layout (4 cột) trong trình duyệt. */

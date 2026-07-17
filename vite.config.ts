@@ -25,7 +25,7 @@ export default defineConfig({
           if (id.includes("node_modules/socket.io-client") || id.includes("node_modules/engine.io-client")) {
             return "vendor-socketio";
           }
-          if (id.includes("node_modules/exceljs") || id.includes("node_modules/xlsx")) {
+          if (id.includes("node_modules/exceljs")) {
             return "vendor-excel";
           }
           if (id.includes("/src/pages/CustomersPage") || id.includes("/src/components/customerDirectory/")) {

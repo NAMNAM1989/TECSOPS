@@ -44,4 +44,4 @@ python -m app.main discovery
 - `discovery_artifacts/locators.json` — login confirmed; AWB chờ discovery
 - `app/browser/pages/awb_page.py` — Page Object thật
 - `app/services/agent_api.py` — `/session/open|status|close` + jobs + portal
-- `src/components/TcsPortalModal.tsx` — UI session / chế độ thật
+- `src/components/TcsPortalInlineBar.tsx` + `useTcsPortalActions` — UI session / chế độ thật

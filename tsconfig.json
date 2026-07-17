@@ -15,8 +15,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "allowJs": true,
+    "checkJs": false
   },
-  "include": ["src"],
+  "include": ["src", "shared"],
   "exclude": ["src/**/*.test.ts"]
 }

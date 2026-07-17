@@ -17,15 +17,20 @@ server/data/*.tmp
 .env.*
 !.env.example
 
-# Backup state Redis (có thể chứa dữ liệu thật — không commit nhầm)
+# Backup state (có thể chứa dữ liệu thật — không commit nhầm)
+backups/
 tecsops-state-*.json
 **/tecsops-state-*.json
 tecsops-postgres-state-*.json
 **/tecsops-postgres-state-*.json
+tecsops-prod-state-*.json
+**/tecsops-prod-state-*.json
 
 # Debug / scratch (không commit)
 tmp/
+.tmp-*
 outputs/
+output/
 .openclaw/
 
 # TCS AWB sidecar runtime
@@ -35,5 +40,7 @@ tcs-awb-automation/screenshots/
 tcs-awb-automation/logs/
 tcs-awb-automation/data/
 tcs-awb-automation/browser_profile/
+tcs-awb-automation/browser_profile_chromium/
 tcs-awb-automation/discovery_artifacts/
 tcs-awb-automation/**/__pycache__/
+tcs-awb-automation/.pytest_cache/

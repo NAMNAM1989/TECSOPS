@@ -1,6 +1,7 @@
 /**
  * Smoke E2E — Playwright (không xóa dữ liệu thật).
- * Chạy: node scripts/qa-smoke-e2e.mjs
+ * Chạy: npm run qa:smoke
+ * (hoặc: node scripts/qa-smoke-e2e.mjs)
  */
 import { chromium } from "playwright";
 import { createWriteStream } from "node:fs";

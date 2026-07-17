@@ -11,7 +11,7 @@
     "dev:db": "docker compose up -d",
     "tcs:agent": "node scripts/tcs-agent.mjs",
     "tcs:agent:real": "node scripts/tcs-agent.mjs --real",
-    "dev:concurrent": "concurrently -k -n srv,vite -c blue,green \"node server/index.mjs\" \"vite\"",
+    "qa:smoke": "node scripts/qa-smoke-e2e.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "eslint src",
@@ -40,15 +40,13 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1",
-    "xlsx": "^0.18.5"
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
-    "concurrently": "^9.1.2",
     "eslint": "^9.39.4",
     "jsdom": "^25.0.1",
     "playwright": "^1.49.1",

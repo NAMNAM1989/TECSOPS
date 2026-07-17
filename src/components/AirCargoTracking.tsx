@@ -16,7 +16,10 @@ import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { SmartSearchBar } from "./SmartSearchBar";
-import { WAREHOUSE_ORDER, isScscWarehouse } from "../constants/warehouses";
+import { TcsPortalInlineBar } from "./TcsPortalInlineBar";
+import { TcsPortalActionsProvider } from "./TcsPortalActionsContext";
+import { useTcsPortalActions } from "../hooks/useTcsPortalActions";
+import { WAREHOUSE_ORDER, isScscWarehouse, isTcsWarehouse } from "../constants/warehouses";
 import { NewBookingButton } from "./NewBookingButton";
 import { DashboardToolbarButton } from "./DashboardToolbarButton";
 import { OpsDatePicker } from "./OpsDatePicker";
@@ -86,6 +89,21 @@ export function AirCargoTracking({
   );
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
+  /** Menu dòng: giới hạn thao tác TCS cho 1 AWB (không mở modal) */
+  const [tcsFocusShipment, setTcsFocusShipment] = useState<Shipment | null>(null);
+
+  const focusTcsShipment = useCallback((single?: Shipment) => {
+    if (single) {
+      setActiveWarehouse(single.warehouse);
+      setTcsFocusShipment(single);
+      return;
+    }
+    setTcsFocusShipment(null);
+  }, []);
+
+  useEffect(() => {
+    if (!isTcsWarehouse(activeWarehouse)) setTcsFocusShipment(null);
+  }, [activeWarehouse]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
 
@@ -220,6 +238,35 @@ export function AirCargoTracking({
     },
     [runMutate]
   );
+
+  const onMarkReceptionCompleted = useCallback(
+    async (shipmentIds: string[]) => {
+      for (const id of shipmentIds) {
+        await runMutate({ action: "UPDATE", id, patch: { status: "RECEPTION_COMPLETED" } });
+      }
+    },
+    [runMutate]
+  );
+
+  /** Sau Quét ESID: hiện các lô vừa gán HOÀN THÀNH TIẾP NHẬN trên bảng Ops */
+  const onReceptionScanDone = useCallback(
+    (info: { readyCount: number; updatedCount: number }) => {
+      if (info.readyCount <= 0 && info.updatedCount <= 0) return;
+      setStatusFilter("RECEPTION_COMPLETED");
+      setSearchQuery("");
+      setActiveWarehouse("TECS-TCS");
+    },
+    []
+  );
+
+  const tcsPortal = useTcsPortalActions({
+    sessionYmd: selectedYmd,
+    rows: viewRows,
+    focusShipment: tcsFocusShipment,
+    onMarkReceptionCompleted,
+    onReceptionScanDone,
+    active: isTcsWarehouse(activeWarehouse),
+  });
 
   const onDelete = useCallback(
     (id: string) => {
@@ -369,6 +416,7 @@ export function AirCargoTracking({
   }
 
   return (
+    <TcsPortalActionsProvider value={tcsPortal}>
     <div className="mx-auto max-w-[1600px] px-3 py-2 sm:px-4 sm:py-3 lg:px-6">
       <div className="sticky top-0 z-40 -mx-3 mb-1.5 border-b border-slate-200/70 bg-[#E8EEF4]/85 px-3 pb-1 pt-1 backdrop-blur-xl dark:border-white/[0.06] dark:bg-[#070B14]/85 sm:-mx-4 sm:mb-3 sm:px-4 sm:pb-2.5 sm:pt-2.5 lg:-mx-6 lg:px-6">
       {isMobile ? (
@@ -385,6 +433,15 @@ export function AirCargoTracking({
           onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
           onOpenSheetImport={() => setSheetImportOpen(true)}
           onPrefetchSheetImport={prefetchSheetImport}
+          tcsPortalBar={
+            isTcsWarehouse(activeWarehouse) ? (
+              <TcsPortalInlineBar
+                compact
+                tcs={tcsPortal}
+                onClearFocus={() => setTcsFocusShipment(null)}
+              />
+            ) : null
+          }
           filteredViewRows={filteredViewRows}
           viewRows={viewRows}
           onWarehouseChange={handleActiveWarehouseChange}
@@ -508,15 +565,23 @@ export function AirCargoTracking({
               <StatInline label="Kiện" value={totalPcs} />
               <StatInline label="Kg" value={totalKg.toLocaleString()} />
             </div>
-            <SmartSearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
-              searchableRows={statusFilteredRows}
-              matchedRows={filteredViewRows}
-              searchContext={searchContext}
-              inputRef={searchInputRef}
-              onSelectMatch={scrollToShipmentMatch}
-            />
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <SmartSearchBar
+                value={searchQuery}
+                onChange={setSearchQuery}
+                searchableRows={statusFilteredRows}
+                matchedRows={filteredViewRows}
+                searchContext={searchContext}
+                inputRef={searchInputRef}
+                onSelectMatch={scrollToShipmentMatch}
+              />
+              {isTcsWarehouse(activeWarehouse) ? (
+                <TcsPortalInlineBar
+                  tcs={tcsPortal}
+                  onClearFocus={() => setTcsFocusShipment(null)}
+                />
+              ) : null}
+            </div>
           </div>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
             <StatusFilterBar compact dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
@@ -560,6 +625,7 @@ export function AirCargoTracking({
         onUpdate={onUpdate}
         onDelete={onDelete}
         onPrint={requestPrintLabel}
+        onOpenTcsPortal={(s) => focusTcsShipment(s)}
         viewSessionYmd={selectedYmd}
       />
 
@@ -577,6 +643,7 @@ export function AirCargoTracking({
         viewSessionYmd={selectedYmd}
         onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
         onQuickEdit={(row) => openMobileEdit(row)}
+        onOpenTcsPortal={(s) => focusTcsShipment(s)}
       />
 
       <StickyMobileActions
@@ -635,6 +702,7 @@ export function AirCargoTracking({
         ) : null}
       </Suspense>
     </div>
+    </TcsPortalActionsProvider>
   );
 }
 

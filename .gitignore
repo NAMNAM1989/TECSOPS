@@ -27,3 +27,13 @@ tecsops-postgres-state-*.json
 tmp/
 outputs/
 .openclaw/
+
+# TCS AWB sidecar runtime
+tcs-awb-automation/.venv/
+tcs-awb-automation/output/
+tcs-awb-automation/screenshots/
+tcs-awb-automation/logs/
+tcs-awb-automation/data/
+tcs-awb-automation/browser_profile/
+tcs-awb-automation/discovery_artifacts/
+tcs-awb-automation/**/__pycache__/

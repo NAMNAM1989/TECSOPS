@@ -1,7 +1,7 @@
 import type { Shipment, ShipmentStatus } from "../types/shipment";
 import { awbDigitsKey } from "./awbFormat";
 
-/** Thứ tự hiển thị / lọc — 3 bước tự động, sau đó 5 bước NV chọn. */
+/** Thứ tự hiển thị / lọc — 3 bước tự động, sau đó các bước NV chọn. */
 export const SHIPMENT_STATUS_ORDER: ShipmentStatus[] = [
   "PENDING",
   "RECEIVED",
@@ -9,11 +9,19 @@ export const SHIPMENT_STATUS_ORDER: ShipmentStatus[] = [
   "CUSTOMS",
   "SECURITY",
   "OLA_PULL",
+  "RECEPTION_COMPLETED",
   "WEIGH_SLIP",
   "COMPLETED",
 ];
 
-const MANUAL: ShipmentStatus[] = ["CUSTOMS", "SECURITY", "OLA_PULL", "WEIGH_SLIP", "COMPLETED"];
+const MANUAL: ShipmentStatus[] = [
+  "CUSTOMS",
+  "SECURITY",
+  "OLA_PULL",
+  "RECEPTION_COMPLETED",
+  "WEIGH_SLIP",
+  "COMPLETED",
+];
 
 const LEGACY_MAP: Partial<Record<string, ShipmentStatus>> = {
   AT_RISK: "RECEIVED",

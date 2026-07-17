@@ -7,6 +7,7 @@ export const statusLabel: Record<ShipmentStatus, string> = {
   CUSTOMS: "HẢI QUAN",
   SECURITY: "AN NINH",
   OLA_PULL: "KÉO OLA",
+  RECEPTION_COMPLETED: "HOÀN THÀNH TIẾP NHẬN",
   WEIGH_SLIP: "NỘP TỜ CÂN",
   COMPLETED: "HOÀN THÀNH",
 };
@@ -19,6 +20,7 @@ export const statusRowBg: Record<ShipmentStatus, string> = {
   CUSTOMS: "bg-white dark:bg-dashboard-surface-dark",
   SECURITY: "bg-white dark:bg-dashboard-surface-dark",
   OLA_PULL: "bg-white dark:bg-dashboard-surface-dark",
+  RECEPTION_COMPLETED: "bg-white dark:bg-dashboard-surface-dark",
   WEIGH_SLIP: "bg-white dark:bg-dashboard-surface-dark",
   COMPLETED: "bg-white dark:bg-dashboard-surface-dark",
 };
@@ -30,6 +32,7 @@ export const statusRowAccent: Record<ShipmentStatus, string> = {
   CUSTOMS: "border-l-2 border-l-sky-500/80 dark:border-l-sky-500/60",
   SECURITY: "border-l-2 border-l-orange-400/80 dark:border-l-orange-400/60",
   OLA_PULL: "border-l-2 border-l-fuchsia-500/80 dark:border-l-fuchsia-500/60",
+  RECEPTION_COMPLETED: "border-l-2 border-l-teal-500/80 dark:border-l-teal-500/60",
   WEIGH_SLIP: "border-l-2 border-l-lime-500/80 dark:border-l-lime-500/60",
   COMPLETED: "border-l-2 border-l-emerald-400/80 dark:border-l-emerald-400/60",
 };
@@ -55,6 +58,8 @@ export const statusSelectSurface: Record<ShipmentStatus, string> = {
     "bg-orange-500/10 text-orange-700 border-orange-500/15 dark:bg-orange-400/10 dark:text-orange-300 dark:border-orange-400/20",
   OLA_PULL:
     "bg-fuchsia-500/10 text-fuchsia-700 border-fuchsia-500/15 dark:bg-fuchsia-400/10 dark:text-fuchsia-300 dark:border-fuchsia-400/20",
+  RECEPTION_COMPLETED:
+    "bg-teal-500/10 text-teal-700 border-teal-500/15 dark:bg-teal-400/10 dark:text-teal-300 dark:border-teal-400/20",
   WEIGH_SLIP:
     "bg-lime-500/10 text-lime-700 border-lime-500/15 dark:bg-lime-400/10 dark:text-lime-300 dark:border-lime-400/20",
   COMPLETED:
@@ -68,6 +73,8 @@ export const statusBadge: Record<ShipmentStatus, string> = {
   CUSTOMS: "bg-sky-500/15 text-sky-900 dark:bg-sky-400/15 dark:text-sky-200 font-bold",
   SECURITY: "bg-orange-500/15 text-orange-900 dark:bg-orange-400/15 dark:text-orange-200 font-bold",
   OLA_PULL: "bg-fuchsia-500/15 text-fuchsia-900 dark:bg-fuchsia-400/15 dark:text-fuchsia-200 font-bold",
+  RECEPTION_COMPLETED:
+    "bg-teal-500/15 text-teal-900 dark:bg-teal-400/15 dark:text-teal-200 font-bold",
   WEIGH_SLIP: "bg-lime-500/15 text-lime-900 dark:bg-lime-400/15 dark:text-lime-200 font-bold",
   COMPLETED: "bg-emerald-500/15 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-300 font-bold",
 };
@@ -79,6 +86,7 @@ export const statusCardBg: Record<ShipmentStatus, string> = {
   CUSTOMS: "bg-sky-50/95 border-sky-200/60 dark:bg-sky-500/10 dark:border-sky-400/30",
   SECURITY: "bg-orange-50/95 border-orange-200/60 dark:bg-orange-500/10 dark:border-orange-400/30",
   OLA_PULL: "bg-fuchsia-50/95 border-fuchsia-200/60 dark:bg-fuchsia-500/10 dark:border-fuchsia-400/30",
+  RECEPTION_COMPLETED: "bg-teal-50/95 border-teal-200/60 dark:bg-teal-500/10 dark:border-teal-400/30",
   WEIGH_SLIP: "bg-lime-50/95 border-lime-200/60 dark:bg-lime-500/10 dark:border-lime-400/30",
   COMPLETED: "bg-emerald-50/95 border-emerald-200/60 dark:bg-emerald-500/10 dark:border-emerald-400/30",
 };

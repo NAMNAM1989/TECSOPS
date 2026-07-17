@@ -36,6 +36,7 @@ export function StatusReadonly({ value, compact }: { value: ShipmentStatus; comp
     CUSTOMS: "bg-sky-500 dark:bg-sky-400 shadow-[0_0_6px_rgba(14,165,233,0.5)]",
     SECURITY: "bg-orange-400 dark:bg-orange-300 shadow-[0_0_6px_rgba(251,146,60,0.5)]",
     OLA_PULL: "bg-fuchsia-500 dark:bg-fuchsia-400 shadow-[0_0_6px_rgba(217,70,239,0.5)]",
+    RECEPTION_COMPLETED: "bg-teal-500 dark:bg-teal-400 shadow-[0_0_6px_rgba(20,184,166,0.5)]",
     WEIGH_SLIP: "bg-lime-500 dark:bg-lime-400 shadow-[0_0_6px_rgba(132,204,22,0.5)]",
     COMPLETED: "bg-emerald-400 dark:bg-emerald-300 shadow-[0_0_6px_rgba(52,211,153,0.5)]",
   }[value];

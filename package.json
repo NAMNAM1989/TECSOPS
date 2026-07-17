@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:db": "docker compose up -d",
+    "tcs:agent": "node scripts/tcs-agent.mjs",
+    "tcs:agent:real": "node scripts/tcs-agent.mjs --real",
     "dev:concurrent": "concurrently -k -n srv,vite -c blue,green \"node server/index.mjs\" \"vite\"",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",

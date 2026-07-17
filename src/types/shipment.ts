@@ -8,6 +8,7 @@ export type ShipmentStatus =
   | "CUSTOMS" // HẢI QUAN
   | "SECURITY" // AN NINH
   | "OLA_PULL" // KÉO OLA
+  | "RECEPTION_COMPLETED" // HOÀN THÀNH TIẾP NHẬN
   | "WEIGH_SLIP" // NỘP TỜ CÂN
   | "COMPLETED"; // HOÀN THÀNH
 

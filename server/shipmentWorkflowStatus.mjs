@@ -29,11 +29,19 @@ const ORDER = [
   "CUSTOMS",
   "SECURITY",
   "OLA_PULL",
+  "RECEPTION_COMPLETED",
   "WEIGH_SLIP",
   "COMPLETED",
 ];
 
-const MANUAL = new Set(["CUSTOMS", "SECURITY", "OLA_PULL", "WEIGH_SLIP", "COMPLETED"]);
+const MANUAL = new Set([
+  "CUSTOMS",
+  "SECURITY",
+  "OLA_PULL",
+  "RECEPTION_COMPLETED",
+  "WEIGH_SLIP",
+  "COMPLETED",
+]);
 
 const LEGACY_MAP = {
   AT_RISK: "RECEIVED",

@@ -87,4 +87,17 @@ describe("migrateShipmentStatus", () => {
       })
     ).toBe("OLA_PULL");
   });
+
+  it("giữ RECEPTION_COMPLETED (không bị derive lại RECEIVED)", () => {
+    expect(
+      migrateShipmentStatus({
+        ...base(),
+        status: "RECEPTION_COMPLETED",
+        awb: "23218276370",
+        pcs: 10,
+        dimWeightKg: null,
+        dimLines: null,
+      })
+    ).toBe("RECEPTION_COMPLETED");
+  });
 });

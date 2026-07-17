@@ -5,7 +5,14 @@ interface SummaryBarProps {
   warehouse: Warehouse;
 }
 
-const POST_VOLUME: ShipmentStatus[] = ["CUSTOMS", "SECURITY", "OLA_PULL", "WEIGH_SLIP", "COMPLETED"];
+const POST_VOLUME: ShipmentStatus[] = [
+  "CUSTOMS",
+  "SECURITY",
+  "OLA_PULL",
+  "RECEPTION_COMPLETED",
+  "WEIGH_SLIP",
+  "COMPLETED",
+];
 
 /** Thẻ chỉ số gọn — góc phải header kho. */
 export function SummaryBar({ rows, warehouse }: SummaryBarProps) {

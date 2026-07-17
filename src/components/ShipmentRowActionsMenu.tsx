@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { canPrintDimScscReport, printDimReport } from "../utils/printDimReport";
@@ -10,8 +11,7 @@ import {
 } from "../utils/exportTcsAttachedDimsExcel";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { OPS } from "../styles/opsModalStyles";
-import { createPortal } from "react-dom";
-import type { CSSProperties } from "react";
+import { useTcsPortalActionsContext } from "./TcsPortalActionsContext";
 
 type Props = {
   row: Shipment;
@@ -19,6 +19,8 @@ type Props = {
   onPrint: (s: Shipment) => void;
   onDelete: (id: string) => void;
   onUpdate?: (id: string, patch: Partial<Shipment>) => void;
+  /** @deprecated dùng PDF ESID / In ESID trong menu */
+  onOpenTcsPortal?: (s: Shipment) => void;
   compact?: boolean;
 };
 
@@ -81,57 +83,69 @@ function IconKebabVertical() {
   );
 }
 
+function menuPositionFromTrigger(btn: HTMLElement): CSSProperties {
+  const tr = btn.getBoundingClientRect();
+  const gap = 4;
+  const approxH = 140;
+  let top = tr.bottom + gap;
+  if (top + approxH > window.innerHeight - 8) {
+    top = Math.max(8, tr.top - approxH - gap);
+  }
+  return {
+    position: "fixed",
+    top,
+    right: Math.max(8, window.innerWidth - tr.right),
+    zIndex: 450,
+    minWidth: "9.5rem",
+  };
+}
+
 export function ShipmentRowActionsMenu({
   row,
   customerDirectory: _customerDirectory,
   onPrint,
   onDelete,
+  onOpenTcsPortal: _onOpenTcsPortal,
   compact = false,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+  const menuId = useId();
+  const tcs = useTcsPortalActionsContext();
 
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
-  const menuExtras = (showDim ? 1 : 0) + (showTcsDim ? 2 : 0) + 1;
+  const showTcsEsid = isTcsWarehouse(row.warehouse) && Boolean(tcs);
+  const menuExtras = (showDim ? 1 : 0) + (showTcsDim ? 2 : 0) + (showTcsEsid ? 2 : 0) + 1;
 
   const confirmDelete = () => {
     if (confirm(`Xóa lô AWB ${row.awb || "(chưa có AWB)"}?`)) onDelete(row.id);
   };
 
+  const openMenu = () => {
+    const btn = triggerRef.current;
+    if (btn) setMenuStyle(menuPositionFromTrigger(btn));
+    setMenuOpen(true);
+  };
+
+  const closeMenu = () => {
+    setMenuOpen(false);
+    setMenuStyle(null);
+  };
+
   useEffect(() => {
-    if (!menuOpen) {
-      setMenuStyle(null);
-      return;
-    }
+    if (!menuOpen) return;
     const update = () => {
       const btn = triggerRef.current;
-      const menu = menuRef.current;
       if (!btn) return;
-      const tr = btn.getBoundingClientRect();
-      const gap = 4;
-      const menuH = menu?.offsetHeight ?? 160;
-      let top = tr.bottom + gap;
-      if (top + menuH > window.innerHeight - 8) {
-        top = Math.max(8, tr.top - menuH - gap);
-      }
-      setMenuStyle({
-        position: "fixed",
-        top,
-        right: Math.max(8, window.innerWidth - tr.right),
-        zIndex: 450,
-        minWidth: "9.5rem",
-      });
+      setMenuStyle(menuPositionFromTrigger(btn));
     };
-    update();
-    const id = requestAnimationFrame(update);
     window.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);
     return () => {
-      cancelAnimationFrame(id);
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
     };
@@ -139,31 +153,38 @@ export function ShipmentRowActionsMenu({
 
   useEffect(() => {
     if (!menuOpen) return;
-    const close = (e: MouseEvent) => {
+    const close = (e: Event) => {
       const t = e.target as Node;
       if (wrapRef.current?.contains(t)) return;
       if (menuRef.current?.contains(t)) return;
-      setMenuOpen(false);
+      closeMenu();
     };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    const timer = window.setTimeout(() => {
+      document.addEventListener("pointerdown", close, true);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("pointerdown", close, true);
+    };
   }, [menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
+      if (e.key === "Escape") closeMenu();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
-  const menuItem = (label: string, onClick: () => void, tone?: "danger") => (
+  const menuItem = (label: string, onClick: () => void, tone?: "danger", testId?: string) => (
     <button
       type="button"
+      role="menuitem"
+      data-testid={testId}
       onClick={(e) => {
         e.stopPropagation();
-        setMenuOpen(false);
+        closeMenu();
         onClick();
       }}
       className={`${OPS.dropdownItem} ${tone === "danger" ? OPS.dropdownItemDanger : ""}`}
@@ -172,20 +193,45 @@ export function ShipmentRowActionsMenu({
     </button>
   );
 
-  const dropdownMenu = menuOpen ? (
-    <div
-      ref={menuRef}
-      style={menuStyle ?? { position: "fixed", visibility: "hidden", right: 0, top: 0, zIndex: 450 }}
-      className={OPS.dropdown}
-      role="menu"
-    >
-      {showDim ? menuItem("Excel DIM", () => downloadScscDimListExcel(row)) : null}
-      {showTcsDim ? menuItem("In DIM TCS", () => printTcsAttachedDimsList(row)) : null}
-      {showTcsDim ? menuItem("Excel TCS", () => void downloadTcsAttachedDimsExcel(row)) : null}
-      {menuExtras > 1 ? <div className={`my-0.5 border-t ${OPS.border}`} aria-hidden /> : null}
-      {menuItem("Xóa lô", confirmDelete, "danger")}
-    </div>
-  ) : null;
+  const dropdown =
+    menuOpen && menuStyle ? (
+      <div
+        ref={menuRef}
+        id={menuId}
+        role="menu"
+        data-testid={`row-actions-dropdown-${row.id}`}
+        style={menuStyle}
+        className={OPS.dropdown}
+      >
+        {showDim ? menuItem("Excel DIM", () => downloadScscDimListExcel(row)) : null}
+        {showTcsDim ? menuItem("In DIM TCS", () => printTcsAttachedDimsList(row)) : null}
+        {showTcsDim ? menuItem("Excel TCS", () => void downloadTcsAttachedDimsExcel(row)) : null}
+        {showTcsEsid
+          ? menuItem(
+              "PDF ESID",
+              () => {
+                if (tcs?.busy) return;
+                void tcs?.downloadEsidFor(row);
+              },
+              undefined,
+              `row-pdf-esid-${row.id}`
+            )
+          : null}
+        {showTcsEsid
+          ? menuItem(
+              "In ESID",
+              () => {
+                if (tcs?.busy) return;
+                void tcs?.printEsidFor(row);
+              },
+              undefined,
+              `row-print-esid-${row.id}`
+            )
+          : null}
+        {menuExtras > 1 ? <div className={`my-0.5 border-t ${OPS.border}`} aria-hidden /> : null}
+        {menuItem("Xóa lô", confirmDelete, "danger", `row-delete-${row.id}`)}
+      </div>
+    ) : null;
 
   return (
     <div ref={wrapRef} className={OPS.actionToolbar}>
@@ -208,15 +254,18 @@ export function ShipmentRowActionsMenu({
         aria-label="Menu thao tác lô hàng"
         aria-expanded={menuOpen}
         aria-haspopup="menu"
+        aria-controls={menuOpen ? menuId : undefined}
+        data-testid={`row-actions-menu-${row.id}`}
         onClick={(e) => {
           e.stopPropagation();
-          setMenuOpen((v) => !v);
+          if (menuOpen) closeMenu();
+          else openMenu();
         }}
         className={`${OPS.actionIcon} ${menuOpen ? OPS.actionIconOpen : ""}`}
       >
         <IconKebabVertical />
       </button>
-      {typeof document !== "undefined" && dropdownMenu ? createPortal(dropdownMenu, document.body) : null}
+      {typeof document !== "undefined" && dropdown ? createPortal(dropdown, document.body) : null}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { OpsMobileSheetButton } from "./OpsMobileToolbarMenu";
 import { OpsMobileWarehouseChips } from "./OpsMobileWarehouseChips";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
+import type { ReactNode } from "react";
 
 interface Props {
   selectedYmd: string;
@@ -22,6 +23,8 @@ interface Props {
   onAddBooking: (wh: Warehouse) => void;
   onOpenSheetImport: () => void;
   onPrefetchSheetImport?: () => void;
+  /** Thanh Cổng TCS dưới ô tìm kiếm (TECS-TCS) */
+  tcsPortalBar?: ReactNode;
   filteredViewRows: readonly Shipment[];
   viewRows: readonly Shipment[];
   onWarehouseChange: (wh: Warehouse) => void;
@@ -96,6 +99,7 @@ export function OpsMobileStickyHeader({
   onAddBooking,
   onOpenSheetImport,
   onPrefetchSheetImport,
+  tcsPortalBar,
   filteredViewRows,
   viewRows,
   onWarehouseChange,
@@ -169,37 +173,40 @@ export function OpsMobileStickyHeader({
 
       {viewRows.length > 0 ? (
         <div className="space-y-1">
-          <div className="flex min-w-0 items-center gap-1">
-            <div className="min-w-0 flex-1">
-              <SmartSearchBar
-                compact
-                value={searchQuery}
-                onChange={onSearchChange}
-                searchableRows={statusFilteredRows}
-                matchedRows={filteredViewRows}
-                searchContext={searchContext}
-                inputRef={searchInputRef}
-                onSelectMatch={onSelectSearchMatch}
-              />
+          <div className="space-y-1">
+            <div className="flex min-w-0 items-center gap-1">
+              <div className="min-w-0 flex-1">
+                <SmartSearchBar
+                  compact
+                  value={searchQuery}
+                  onChange={onSearchChange}
+                  searchableRows={statusFilteredRows}
+                  matchedRows={filteredViewRows}
+                  searchContext={searchContext}
+                  inputRef={searchInputRef}
+                  onSelectMatch={onSelectSearchMatch}
+                />
+              </div>
+              {!showStatusBar ? (
+                <button
+                  type="button"
+                  onClick={() => setStatusExpanded(true)}
+                  className="shrink-0 rounded-full border border-black/[0.06] bg-white px-2 py-1 text-[9px] font-semibold text-dashboard-muted dark:border-white/[0.08] dark:bg-dashboard-surface-dark dark:text-dashboard-muted-dark"
+                >
+                  Lọc ST
+                </button>
+              ) : null}
+              {filtersActive ? (
+                <button
+                  type="button"
+                  onClick={onClearFilters}
+                  className="shrink-0 rounded-full px-1.5 py-1 text-[9px] font-semibold text-apple-blue"
+                >
+                  Xóa
+                </button>
+              ) : null}
             </div>
-            {!showStatusBar ? (
-              <button
-                type="button"
-                onClick={() => setStatusExpanded(true)}
-                className="shrink-0 rounded-full border border-black/[0.06] bg-white px-2 py-1 text-[9px] font-semibold text-dashboard-muted dark:border-white/[0.08] dark:bg-dashboard-surface-dark dark:text-dashboard-muted-dark"
-              >
-                Lọc ST
-              </button>
-            ) : null}
-            {filtersActive ? (
-              <button
-                type="button"
-                onClick={onClearFilters}
-                className="shrink-0 rounded-full px-1.5 py-1 text-[9px] font-semibold text-apple-blue"
-              >
-                Xóa
-              </button>
-            ) : null}
+            {tcsPortalBar}
           </div>
 
           {showStatusBar ? (

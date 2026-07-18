@@ -1,5 +1,5 @@
 const url =
-  "https://docs.google.com/spreadsheets/d/14wnnHgFvQRGvcOPjz7c1PsOO5fun5z6Z/gviz/tq?tqx=out:json&sheet=13JUNE2026";
+  "https://docs.google.com/spreadsheets/d/15EHqZuuYznL2_VkCnpENHgc_mmBTSJGgrNG3iv5ZvA4/gviz/tq?tqx=out:json&gid=1796826417";
 const r = await fetch(url);
 const t = await r.text();
 const start = t.indexOf("{");

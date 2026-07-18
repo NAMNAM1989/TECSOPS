@@ -63,6 +63,9 @@ class Settings:
     captcha_ocr: bool = True
     captcha_ocr_attempts: int = 3
     captcha_manual_timeout_s: int = 180
+    # Server/Railway: Chrome headless (không có màn hình) + tự mở session lúc boot
+    headless: bool = False
+    auto_open: bool = False
 
     @property
     def has_login_credentials(self) -> bool:
@@ -94,6 +97,8 @@ def load_settings() -> Settings:
         captcha_ocr=_env_bool("TCS_CAPTCHA_OCR", True),
         captcha_ocr_attempts=int(os.getenv("TCS_CAPTCHA_OCR_ATTEMPTS", "3")),
         captcha_manual_timeout_s=int(os.getenv("TCS_CAPTCHA_MANUAL_TIMEOUT_S", "180")),
+        headless=_env_bool("TCS_HEADLESS", False),
+        auto_open=_env_bool("TCS_AUTO_OPEN", False),
     )
 
 

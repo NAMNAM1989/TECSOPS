@@ -213,9 +213,17 @@ def make_handler(state: AgentState):
                 return
 
             if path == "/session/open":
+                with state.lock:
+                    if state.running:
+                        self._json(
+                            409,
+                            {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"},
+                        )
+                        return
+                    state.running = True
                 try:
                     def _open() -> dict[str, Any]:
-                        st = state.sessions.open(headless=False)
+                        st = state.sessions.open(headless=state.settings.headless)
                         data = st.to_dict()
                         state.session_snapshot = data
                         return data
@@ -239,6 +247,9 @@ def make_handler(state: AgentState):
                     except Exception:
                         pass
                     self._json(500, {"ok": False, "error": "SESSION_OPEN_FAILED", "message": str(e)})
+                finally:
+                    with state.lock:
+                        state.running = False
                 return
             if path == "/session/close":
                 def _close() -> dict[str, Any]:
@@ -549,10 +560,9 @@ def make_handler(state: AgentState):
                     "results": enriched,
                 }
                 state.last_job = summary
-                # Sau bấm IN hộp Save/In OS có thể chặn page — không đọc DOM session
+                # Hộp in OS (USER_*) có thể chặn page — không đọc DOM session
                 opened_dialog = any(
-                    (r.normalized_status or "") in {"DOWNLOADED", "PRINTED"}
-                    and str(getattr(r, "print_status", "") or "").startswith("USER_")
+                    str(getattr(r, "print_status", "") or "").startswith("USER_")
                     for r in results
                 )
                 if opened_dialog:
@@ -580,12 +590,47 @@ def make_handler(state: AgentState):
     return Handler
 
 
+def _auto_open_session(state: AgentState) -> None:
+    """Railway/server: tự mở Chrome headless + login OCR lúc boot (không có người bấm nút)."""
+    settings = state.settings
+    if settings.mock:
+        return
+
+    def _open() -> None:
+        with state.lock:
+            if state.running:
+                return
+            state.running = True
+        try:
+            st = state.sessions.open(headless=settings.headless)
+            state.session_snapshot = st.to_dict()
+            print(
+                f"[auto-open] open={st.open} logged_in={st.logged_in} · {st.message}"
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[auto-open] LỖI mở session: {e}")
+        finally:
+            with state.lock:
+                state.running = False
+
+    def _runner() -> None:
+        try:
+            state.call_on_worker(_open)
+        except Exception as e:  # noqa: BLE001
+            print(f"[auto-open] runner lỗi: {e}")
+
+    threading.Thread(target=_runner, name="tcs-auto-open", daemon=True).start()
+
+
 def serve_agent(settings: Settings | None = None) -> None:
     settings = settings or load_settings()
     ensure_runtime_dirs(settings)
     state = AgentState(settings)
     host = settings.agent_host
     port = settings.agent_port
+    if settings.auto_open and not settings.mock:
+        print("[auto-open] TCS_AUTO_OPEN=1 → mở Chrome headless + login OCR…")
+        _auto_open_session(state)
     # ThreadingHTTPServer: /health trả lời khi job đang chạy trên worker.
     # Playwright vẫn chỉ chạy trên 1 worker thread (call_on_worker).
     httpd = ThreadingHTTPServer((host, port), make_handler(state))

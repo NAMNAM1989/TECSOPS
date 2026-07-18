@@ -132,8 +132,9 @@ if (!ready) {
   process.exit(1);
 }
 
-console.info(`[dev] API OK — khởi động Vite :${VITE_PORT}…`);
-const vite = run("npx", ["vite", "--host", "127.0.0.1", "--port", String(VITE_PORT), "--strictPort"], {
+console.info(`[dev] API OK — khởi động Vite :${VITE_PORT} (LAN 0.0.0.0)…`);
+// 0.0.0.0: máy khác mở http://IP-máy-kho:5173 → proxy /tcs-agent → agent local
+const vite = run("npx", ["vite", "--host", "0.0.0.0", "--port", String(VITE_PORT), "--strictPort"], {
   VITE_PROXY_PORT: String(API_PORT),
 });
 

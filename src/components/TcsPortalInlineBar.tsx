@@ -1,5 +1,10 @@
 import type { TcsPortalActions } from "../hooks/useTcsPortalActions";
-import { downloadPdfFromAgent } from "../utils/tcsPortalAgentApi";
+import {
+  clearTcsAgentBaseUrl,
+  downloadPdfFromAgent,
+  getTcsAgentBaseUrl,
+  setTcsAgentBaseUrl,
+} from "../utils/tcsPortalAgentApi";
 
 type Props = {
   tcs: TcsPortalActions;
@@ -14,6 +19,20 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
   const btnGhost =
     `${btn} border border-sky-500/25 bg-sky-50/90 text-sky-900 hover:bg-sky-100 dark:border-sky-400/30 dark:bg-sky-950/50 dark:text-sky-100 dark:hover:bg-sky-900/50`;
   const btnScan = `${btn} bg-sky-600 text-white hover:bg-sky-700 shadow-sm`;
+
+  const configureAgentUrl = () => {
+    const current = getTcsAgentBaseUrl();
+    const next = window.prompt(
+      "URL agent TCS (để trống = proxy /tcs-agent qua máy đang mở Ops).\n" +
+        "Máy khác trong LAN: giữ trống và mở Ops bằng IP máy kho.\n" +
+        "Tuỳ chọn: http://IP-máy-kho:8765 hoặc HTTPS tunnel.",
+      current.includes("/tcs-agent") ? "" : current
+    );
+    if (next === null) return;
+    if (!next.trim()) clearTcsAgentBaseUrl();
+    else setTcsAgentBaseUrl(next);
+    void tcs.refreshHealth();
+  };
 
   return (
     <div className={`flex min-w-0 flex-col ${compact ? "gap-0.5" : "gap-1"}`}>
@@ -32,7 +51,7 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
                 ? "bg-amber-500/15 text-amber-900 dark:text-amber-200"
                 : "bg-slate-500/15 text-slate-700 dark:text-slate-300"
           }`}
-          title={`Agent ${tcs.health?.ok ? "OK" : "offline"} · ${tcs.sessionLabel}`}
+          title={`Agent ${tcs.health?.ok ? "OK" : "offline"} · ${tcs.sessionLabel} · ${getTcsAgentBaseUrl()}`}
         >
           TCS · {tcs.sessionLabel}
         </span>
@@ -48,6 +67,15 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           title={`Lọc ESID theo ngày phiên → lô Hoàn thành tiếp nhận → cập nhật Ops. PDF/In từng lô: menu ⋮ trên dòng.`}
         >
           Quét
+        </button>
+        <button
+          type="button"
+          className={btnGhost}
+          disabled={tcs.busy}
+          onClick={configureAgentUrl}
+          title={`URL agent: ${getTcsAgentBaseUrl()}`}
+        >
+          URL
         </button>
 
         {tcs.busy ? (
@@ -69,7 +97,7 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
             </button>
           ) : null}
           {tcs.error ? (
-            <p className="min-w-0 truncate text-[10px] font-medium text-red-600">{tcs.error}</p>
+            <p className="min-w-0 text-[10px] font-medium text-red-600">{tcs.error}</p>
           ) : tcs.message ? (
             <p className="min-w-0 truncate text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
               {tcs.message}
@@ -79,11 +107,13 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
                   <button
                     type="button"
                     className="font-semibold underline"
-                    onClick={() =>
-                      downloadPdfFromAgent(tcs.results[0].pdf_name || tcs.results[0].downloaded_file || "")
-                    }
+                    onClick={() => {
+                      void downloadPdfFromAgent(
+                        tcs.results[0].pdf_name || tcs.results[0].downloaded_file || ""
+                      );
+                    }}
                   >
-                    mở PDF
+                    Tải PDF
                   </button>
                 </>
               ) : null}

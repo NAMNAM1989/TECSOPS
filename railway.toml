@@ -1,11 +1,14 @@
+# Dockerfile builder: image gồm Node server + agent Playwright (Chromium headless).
+# Ops mở từ máy bất kỳ → proxy /tcs-agent (Express) → agent 127.0.0.1:8765 trong container.
 [build]
-builder = "nixpacks"
-buildCommand = "npm run build"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 # Postgres (DATABASE_URL) bắt buộc. Socket.IO in-memory — chạy 1 replica.
-# Không seed/migrate lúc start — chỉ check an toàn rồi start (xem docs/railway-safe-deploy.md)
-startCommand = "npm run start:railway"
+# start-fullstack: check an toàn → chạy agent Python (headless) + Node server.
+# Mount Railway Volume vào TCS_BROWSER_PROFILE để giữ session TCS qua các lần redeploy.
+startCommand = "node scripts/start-fullstack.mjs"
 restartPolicyType = "ON_FAILURE"
 healthcheckPath = "/api/health"
-healthcheckTimeout = 120
+healthcheckTimeout = 180

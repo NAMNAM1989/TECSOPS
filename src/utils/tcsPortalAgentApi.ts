@@ -1,6 +1,20 @@
 import type { TcsPortalJobPayload } from "./tcsPortalJob";
 
-const DEFAULT_BASE = "http://127.0.0.1:8765";
+/** localStorage override — IP/tunnel tùy chỉnh */
+export const TCS_AGENT_URL_LS_KEY = "tecsops-tcs-agent-url";
+
+/**
+ * Mặc định: same-origin `/tcs-agent` (Vite/Express proxy → Playwright trên máy kho).
+ * Máy khác mở Ops qua IP máy kho vẫn tới đúng agent; không hardcode 127.0.0.1.
+ */
+function defaultAgentBase(): string {
+  const fromEnv = String(import.meta.env.VITE_TCS_AGENT_URL || "").trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/tcs-agent`;
+  }
+  return "/tcs-agent";
+}
 
 export type TcsAgentSession = {
   open?: boolean;
@@ -59,12 +73,52 @@ export type TcsAgentJobResponse = {
 
 function agentBase(): string {
   try {
-    const fromLs = localStorage.getItem("tecsops-tcs-agent-url");
+    const fromLs = localStorage.getItem(TCS_AGENT_URL_LS_KEY);
     if (fromLs?.trim()) return fromLs.trim().replace(/\/$/, "");
   } catch {
     /* ignore */
   }
-  return DEFAULT_BASE;
+  return defaultAgentBase();
+}
+
+export function setTcsAgentBaseUrl(url: string): string {
+  const cleaned = url.trim().replace(/\/$/, "");
+  if (!cleaned) {
+    try {
+      localStorage.removeItem(TCS_AGENT_URL_LS_KEY);
+    } catch {
+      /* ignore */
+    }
+    return defaultAgentBase();
+  }
+  try {
+    localStorage.setItem(TCS_AGENT_URL_LS_KEY, cleaned);
+  } catch {
+    /* ignore */
+  }
+  return cleaned;
+}
+
+export function clearTcsAgentBaseUrl(): string {
+  return setTcsAgentBaseUrl("");
+}
+
+export function agentOfflineHint(base = agentBase()): string {
+  const isLoopback = /^(https?:\/\/)?(127\.0\.0\.1|localhost)(:|\/|$)/i.test(base);
+  const isProxy = base.includes("/tcs-agent") || base.endsWith("/tcs-agent");
+  if (isProxy) {
+    return (
+      `Agent Offline (${base}). Trên máy kho chạy: npm run tcs:agent:real. ` +
+      `Máy khác: mở Ops bằng IP máy kho (vd. http://192.168.x.x:5173), không dùng 127.0.0.1 trên máy khác.`
+    );
+  }
+  if (isLoopback) {
+    return (
+      `Agent Offline (${base}). 127.0.0.1 chỉ đúng trên máy đang chạy agent. ` +
+      `Máy khác: xóa URL tùy chỉnh (dùng proxy /tcs-agent) hoặc mở Ops qua IP máy kho.`
+    );
+  }
+  return `Agent Offline (${base}). Kiểm tra máy kho đang chạy npm run tcs:agent:real và URL/firewall.`;
 }
 
 export async function pingTcsAgent(timeoutMs = 2500): Promise<TcsAgentHealth | null> {
@@ -109,7 +163,7 @@ export async function openTcsAgentSession(): Promise<{ ok: boolean; message?: st
   } catch {
     return {
       ok: false,
-      message: `Không kết nối agent (${agentBase()}). Chạy: npm run tcs:agent -- --real`,
+      message: agentOfflineHint(),
       open: false,
       logged_in: false,
       url: "",
@@ -162,7 +216,7 @@ export async function scanTcsEsidReception(
     return {
       ok: false,
       error: "AGENT_OFFLINE",
-      message: `Không kết nối được agent (${base}). Chạy: npm run tcs:agent:real`,
+      message: agentOfflineHint(base),
     };
   }
   let body: TcsEsidScanResponse;
@@ -222,7 +276,7 @@ export async function prepareTcsEsid(
     return {
       ok: false,
       error: "AGENT_OFFLINE",
-      message: `Không kết nối được agent (${base}). Chạy: npm run tcs:agent:real`,
+      message: agentOfflineHint(base),
     };
   }
   let body: TcsEsidPrepareResponse;
@@ -260,7 +314,7 @@ export async function submitTcsPortalJob(payload: TcsPortalJobPayload): Promise<
     return {
       ok: false,
       error: "AGENT_OFFLINE",
-      message: `Không kết nối được agent (${base}). Chạy: npm run tcs:agent hoặc npm run tcs:agent -- --real`,
+      message: agentOfflineHint(base),
     };
   }
   let body: TcsAgentJobResponse;
@@ -292,13 +346,32 @@ export function tcsAgentPdfUrl(pdfNameOrPath: string): string {
   return `${agentBase()}/docs?file=${encodeURIComponent(name)}`;
 }
 
-export function downloadPdfFromAgent(pdfNameOrPath: string): void {
+/**
+ * Tải PDF ESID về máy (Downloads) — không mở tab xem/in.
+ * Fetch blob rồi gắn download (ổn định hơn mở URL trực tiếp).
+ */
+export async function downloadPdfFromAgent(pdfNameOrPath: string): Promise<boolean> {
   const name = pdfNameOrPath.replace(/^.*[/\\]/, "");
-  if (!name.toLowerCase().endsWith(".pdf")) return;
-  const a = document.createElement("a");
-  a.href = tcsAgentPdfUrl(name);
-  a.download = name;
-  a.target = "_blank";
-  a.rel = "noopener";
-  a.click();
+  if (!name.toLowerCase().endsWith(".pdf")) return false;
+  try {
+    const res = await fetch(tcsAgentPdfUrl(name));
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    if (blob.size < 100) return false;
+    const url = URL.createObjectURL(blob);
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } finally {
+      window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }

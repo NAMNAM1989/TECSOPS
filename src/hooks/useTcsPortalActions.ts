@@ -11,6 +11,7 @@ import {
 import {
   downloadPdfFromAgent,
   fetchTcsSessionStatus,
+  agentOfflineHint,
   getTcsAgentBaseUrl,
   openTcsAgentSession,
   pingTcsAgent,
@@ -119,7 +120,7 @@ export function useTcsPortalActions({
     const online = await pingTcsAgent();
     setHealth(online);
     if (!online?.ok) {
-      setError(`Agent Offline (${getTcsAgentBaseUrl()}). Chạy: npm run tcs:agent:real`);
+      setError(agentOfflineHint(getTcsAgentBaseUrl()));
       return false;
     }
     let s = await fetchTcsSessionStatus();
@@ -153,7 +154,7 @@ export function useTcsPortalActions({
       const online = await pingTcsAgent();
       setHealth(online);
       if (!online?.ok) {
-        setError(`Agent Offline (${getTcsAgentBaseUrl()}). Chạy: npm run tcs:agent:real`);
+        setError(agentOfflineHint(getTcsAgentBaseUrl()));
         return;
       }
       const res = await openTcsAgentSession();
@@ -285,9 +286,7 @@ export function useTcsPortalActions({
         return;
       }
       setBusy(true);
-      setBusyLabel(
-        kind === "PRINT" ? "Đang mở hộp in ESID…" : "PDF ESID: mở hộp Save PDF trên Chrome…"
-      );
+      setBusyLabel(kind === "PRINT" ? "Đang mở hộp in ESID…" : "PDF ESID: đang tải file…");
       const t0 = performance.now();
       try {
         if (!(await ensureSessionReady())) return;
@@ -299,12 +298,26 @@ export function useTcsPortalActions({
         }
         setResults(res.results || []);
         const n = res.ok_count ?? (res.results || []).length;
-        setDownloadedCount(0);
-        setMessage(
-          kind === "PRINT"
-            ? `In ESID: đã mở hộp in trên Chrome · ${n} phiếu · ${sec}s — tự chọn máy in và bấm In${printDryRun ? " (dry-run)" : ""}`
-            : `PDF ESID: đã mở hộp Save PDF trên Chrome · ${n} phiếu · ${sec}s — chọn Save as PDF và tự bấm Save`
-        );
+        if (kind === "PRINT") {
+          setDownloadedCount(0);
+          setMessage(
+            `In ESID: đã mở hộp in trên Chrome · ${n} phiếu · ${sec}s — tự chọn máy in và bấm In${printDryRun ? " (dry-run)" : ""}`
+          );
+        } else {
+          const firstPdf = (res.results || []).find((r) => r.pdf_name || r.downloaded_file);
+          const pdfName = firstPdf?.pdf_name || firstPdf?.downloaded_file || "";
+          let saved = false;
+          if (pdfName) {
+            saved = await downloadPdfFromAgent(pdfName);
+          }
+          const dl = saved ? 1 : res.downloaded_count ?? 0;
+          setDownloadedCount(dl);
+          setMessage(
+            saved
+              ? `PDF ESID: đã tải file về máy · ${sec}s`
+              : `PDF ESID: agent đã sẵn file · ${sec}s — bấm «Tải PDF» nếu trình duyệt chặn`
+          );
+        }
         void refreshHealth();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Lỗi job");
@@ -398,8 +411,8 @@ export function useTcsPortalActions({
             ? `In ESID …${digits.slice(-8)} (mở hộp in trên Chrome)`
             : `In ESID …${digits.slice(-8)} (đang tìm ESID rồi mở hộp in…)`
           : hot
-            ? `PDF ESID …${digits.slice(-8)} (mở hộp Save PDF — bạn tự bấm Save)`
-            : `PDF ESID …${digits.slice(-8)} (đang tìm ESID rồi mở Save…)`
+            ? `PDF ESID …${digits.slice(-8)} (đang lấy file…)`
+            : `PDF ESID …${digits.slice(-8)} (đang tìm ESID rồi lấy PDF…)`
       );
       const t0 = performance.now();
       try {
@@ -418,17 +431,25 @@ export function useTcsPortalActions({
           setError(row0?.error_message || status || "ESID thất bại");
           return;
         }
-        setDownloadedCount(0);
         setPreparedAwb("");
         preparedAtRef.current = 0;
         const hotNote = res.hot_path ? " · hot" : "";
         if (kind === "PRINT") {
+          setDownloadedCount(0);
           setMessage(
             `In ESID …${digits.slice(-8)} · ${sec}s${hotNote} — hộp thoại in đã mở trên Chrome TCS, hãy chọn máy in và bấm In`
           );
         } else {
+          const pdfName = row0?.pdf_name || row0?.downloaded_file || "";
+          const saved = pdfName ? await downloadPdfFromAgent(pdfName) : false;
+          setDownloadedCount(saved || pdfName ? 1 : 0);
+          const shortName = pdfName ? String(pdfName).replace(/^.*[/\\]/, "") : "";
           setMessage(
-            `PDF ESID …${digits.slice(-8)} · ${sec}s${hotNote} — hộp Save PDF đã mở trên Chrome TCS: chọn Save as PDF, tên file gợi ý theo AWB, rồi tự bấm Save`
+            saved
+              ? `PDF ESID …${digits.slice(-8)} · ${sec}s${hotNote} — đã tải ${shortName} về máy`
+              : pdfName
+                ? `PDF ESID …${digits.slice(-8)} · ${sec}s${hotNote} — file sẵn sàng, bấm «Tải PDF»`
+                : `PDF ESID …${digits.slice(-8)} · ${sec}s${hotNote}`
           );
         }
         void refreshHealth();
@@ -452,7 +473,7 @@ export function useTcsPortalActions({
   );
 
   const downloadPdf = useCallback((name: string) => {
-    downloadPdfFromAgent(name);
+    void downloadPdfFromAgent(name);
   }, []);
 
   const sessionLabel = busy

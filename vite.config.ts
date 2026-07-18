@@ -5,16 +5,28 @@ import react from "@vitejs/plugin-react";
 const apiPort = process.env.VITE_PROXY_PORT ?? "3001";
 const apiTarget = `http://127.0.0.1:${apiPort}`;
 
+const tcsAgentTarget = (process.env.VITE_TCS_AGENT_PROXY_TARGET || "http://127.0.0.1:8765").replace(
+  /\/$/,
+  ""
+);
+
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: "127.0.0.1",
+    // 0.0.0.0: máy khác trong LAN mở http://IP-máy-kho:5173
+    host: true,
     proxy: {
       "/api": { target: apiTarget, changeOrigin: true },
       "/socket.io": {
         target: apiTarget,
         ws: true,
         changeOrigin: true,
+      },
+      // Same-origin → agent Playwright trên máy kho (không lộ :8765 ra LAN)
+      "/tcs-agent": {
+        target: tcsAgentTarget,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/tcs-agent/, ""),
       },
     },
   },

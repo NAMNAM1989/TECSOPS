@@ -48,9 +48,12 @@ class SessionManager:
     def reload_locators(self) -> None:
         self.locators = LocatorsConfig.load(locators_path(self.settings.discovery_dir))
 
+    def _has_live_session(self) -> bool:
+        return bool(self.session and self.session.is_alive())
+
     @property
     def page(self):
-        return self.session.page if self.session else None
+        return self.session.page if self._has_live_session() else None
 
     def open(self, *, headless: bool = False, auto_login: bool = True) -> SessionStatus:
         """
@@ -59,14 +62,14 @@ class SessionManager:
         Cách 2: nếu cần login + TCS_CAPTCHA_OCR → OCR tự điền.
         """
         self.reload_locators()
-        if self.session and self.session.page:
+        if self._has_live_session():
             try:
                 # Ưu tiên Agent home, không ép về AwbLogin (tránh mất session)
-                self.session.page.goto(AGENT_HOME, wait_until="domcontentloaded", timeout=60000)
+                BrowserSession._goto_fast(self.session.page, AGENT_HOME)
             except Exception:
                 self.close()
-        # Zombie: session object còn nhưng page=None (lần open trước lỗi) → phải mở lại
-        if not self.session or not self.session.page:
+        # Zombie: page/context đã đóng hoặc lần open trước lỗi → phải mở lại.
+        if not self._has_live_session():
             self.close()
             self.session = BrowserSession(self.settings)
             try:
@@ -91,8 +94,9 @@ class SessionManager:
         return st
 
     def _ensure_login(self) -> tuple[bool, str]:
-        if not self.session or not self.session.page:
+        if not self._has_live_session():
             return False, ""
+        assert self.session is not None
         portal = AwbPortalPage(self.session.page, self.locators)
         if not portal.is_login_page():
             return False, "Session còn hiệu lực — không cần CAPTCHA"
@@ -114,8 +118,9 @@ class SessionManager:
     def _try_fill_credentials_only(self) -> bool:
         if not self.settings.has_login_credentials:
             return False
-        if not self.session or not self.session.page:
+        if not self._has_live_session():
             return False
+        assert self.session is not None
         try:
             portal = AwbPortalPage(self.session.page, self.locators)
             if not portal.is_login_page():
@@ -138,8 +143,15 @@ class SessionManager:
         creds = self.settings.has_login_credentials
         ocr = self.settings.captcha_ocr
         prefer = self.settings.prefer_session
-        if not self.session or not self.session.page:
-            tip = "Chrome chưa mở — POST /session/open"
+        if not self._has_live_session():
+            had_stale_session = self.session is not None
+            if had_stale_session:
+                self.close()
+            tip = (
+                "Chrome đã đóng — mở lại phiên TCS"
+                if had_stale_session
+                else "Chrome chưa mở — POST /session/open"
+            )
             if creds and ocr:
                 tip += " (ưu tiên session; nếu cần sẽ OCR CAPTCHA)"
             elif creds:
@@ -154,6 +166,7 @@ class SessionManager:
                 captcha_ocr=ocr,
                 prefer_session=prefer,
             )
+        assert self.session is not None
         page = self.session.page
         try:
             url = page.url or ""
@@ -193,6 +206,9 @@ class SessionManager:
 
     def portal(self) -> AwbPortalPage:
         self.reload_locators()
-        if not self.session or not self.session.page:
+        if not self._has_live_session():
+            if self.session is not None:
+                self.close()
             raise RuntimeError("NO_BROWSER")
+        assert self.session is not None
         return AwbPortalPage(self.session.page, self.locators)

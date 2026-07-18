@@ -1,0 +1,33 @@
+node_modules
+dist
+.git
+.github
+*.log
+
+# Frontend/build caches
+.vite
+coverage
+.test-state
+
+# Local secrets (KHÔNG đưa vào image — dùng Railway Variables). Loại ở MỌI cấp thư mục.
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Agent Python — venv, cache, dữ liệu chạy cục bộ (login/PDF sẽ tạo lại trong container/volume)
+tcs-awb-automation/.venv
+tcs-awb-automation/**/__pycache__
+tcs-awb-automation/.pytest_cache
+tcs-awb-automation/browser_profile
+tcs-awb-automation/browser_profile_recovery
+tcs-awb-automation/output
+tcs-awb-automation/screenshots
+tcs-awb-automation/logs
+tcs-awb-automation/data/tcs_awb.db
+
+# Docs/memory/agent transcripts không cần cho runtime
+memory
+agent-transcripts

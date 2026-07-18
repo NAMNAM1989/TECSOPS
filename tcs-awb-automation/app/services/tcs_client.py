@@ -153,19 +153,46 @@ class TcsClient:
         skip_prepare: bool = False,
     ) -> LookupOutcome:
         """
-        PDF ESID: danh sách → AWB# 8 số → IN → mở hộp Save PDF.
-        Không tự lưu file — user chọn Save as PDF và bấm Save trên Chrome.
-        skip_prepare: hot-path sau /esid/prepare.
+        PDF ESID = tải file: prepare (hoặc hot-path) → IN → tự lưu PDF vào dest
+        (stub print + iframe/popup/CDP). Không mở hộp in/Save cho user.
         """
-        del dest  # giữ chữ ký API; không ghi file tự động
         if self.mock:
-            return LookupOutcome("SAVE_PDF_DIALOG_MOCK", NormalizedStatus.DOWNLOADED)
-        return self._open_esid_in_dialog(
-            awb_digits,
-            session_date=session_date,
-            for_save_pdf=True,
-            skip_prepare=skip_prepare,
-        )
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(b"%PDF-1.4 mock esid\n")
+            return LookupOutcome(
+                "PDF_MOCK",
+                NormalizedStatus.DOWNLOADED,
+                downloaded_path=str(dest),
+            )
+        if self._portal is None:
+            return LookupOutcome("", NormalizedStatus.NEEDS_LOGIN, "NO_BROWSER", "Chưa mở Chrome session")
+        try:
+            loc = self._locators()
+            if not loc or not loc.esid_list_confirmed:
+                return LookupOutcome(
+                    "",
+                    NormalizedStatus.SITE_CHANGED,
+                    "NO_ESID_LOCATORS",
+                    "Chưa có locator ESID",
+                )
+            esid = EsidListPage(self._portal.page, loc)
+            path = esid.download_awb_pdf(
+                awb_digits,
+                dest,
+                session_date=session_date or None,
+                skip_prepare=skip_prepare,
+            )
+            return LookupOutcome(
+                "PDF_SAVED",
+                NormalizedStatus.DOWNLOADED,
+                downloaded_path=str(path),
+            )
+        except NeedsLoginError as e:
+            return LookupOutcome("", NormalizedStatus.NEEDS_LOGIN, "NEEDS_LOGIN", str(e))
+        except SiteChangedError as e:
+            return LookupOutcome("", NormalizedStatus.SITE_CHANGED, "SITE_CHANGED", str(e))
+        except Exception as e:
+            return LookupOutcome("", NormalizedStatus.FAILED, "DOWNLOAD_ERROR", str(e)[:300])
 
     def print_esid_dialog(
         self,

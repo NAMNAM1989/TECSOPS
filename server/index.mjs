@@ -13,6 +13,7 @@ import { createPostgresStateStore } from "./postgresStateStore.mjs";
 import { registerLookupRoutes } from "./lookupRoutes.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
+import { registerTcsAgentProxy } from "./tcsAgentProxy.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
@@ -39,6 +40,9 @@ const io = new Server(httpServer, {
   path: "/socket.io/",
   cors: socketIoCorsOptions(),
 });
+
+// Proxy agent TRƯỚC express.json — giữ raw body cho POST /jobs, /esid/*
+registerTcsAgentProxy(app);
 
 app.use(express.json({ limit: "2mb" }));
 
@@ -102,7 +106,13 @@ const distDir = path.join(__dirname, "..", "dist");
 app.use(express.static(distDir));
 
 app.get("*", (req, res, next) => {
-  if (req.path.startsWith("/api") || req.path.startsWith("/socket.io")) return next();
+  if (
+    req.path.startsWith("/api") ||
+    req.path.startsWith("/socket.io") ||
+    req.path.startsWith("/tcs-agent")
+  ) {
+    return next();
+  }
   res.sendFile(path.join(distDir, "index.html"), (err) => {
     if (err) next(err);
   });

@@ -222,8 +222,8 @@ class BatchService:
     ) -> AwbJobResult:
         """
         ESID: danh sách → AWB# 8 số → nút IN.
-        - DOWNLOAD (PDF ESID): mở hộp Save PDF — user tự bấm Save (không tự ghi file).
-        - PRINT: mở hộp thoại in — user tự chọn máy in.
+        - DOWNLOAD (PDF ESID): tự lưu file PDF → Ops tải về máy (không mở hộp in).
+        - PRINT (In ESID): mở hộp thoại in — user tự chọn máy in.
         """
         if job.mock:
             # Mock vẫn tạo file giả để test pipeline
@@ -237,45 +237,52 @@ class BatchService:
         prepared = getattr(client, "_prepared_awb", None) or ""
         skip_prepare = bool(prepared) and prepared == row.awb_digits
         result.tcs_status_raw = (
-            "ESID IN → hộp Save PDF (hot)"
+            "ESID IN → PDF (hot)"
             if want_pdf and skip_prepare
-            else "ESID IN → hộp Save PDF"
+            else "ESID IN → PDF"
             if want_pdf
             else "ESID IN → hộp thoại in (hot)"
             if skip_prepare
             else "ESID IN → hộp thoại in"
         )
         if want_pdf:
+            fname = build_document_filename(row.awb_digits, row.document_type or "ESID")
+            fpath = self.settings.output_dir / "docs" / fname
             pr = client.download_pdf(
                 row.awb_digits,
-                self.settings.output_dir / "docs" / "_unused.pdf",
+                fpath,
                 session_date=job.session_date or None,
                 skip_prepare=skip_prepare,
             )
+            result.normalized_status = pr.normalized.value
+            result.error_code = pr.error_code
+            result.error_message = pr.error_message
+            if pr.normalized == NormalizedStatus.DOWNLOADED:
+                out = Path(pr.downloaded_path) if pr.downloaded_path else fpath
+                if verify_download(out):
+                    result.downloaded_file = str(out)
+                    result.error_message = ""
+                    result.print_status = "AUTO_PDF"
+                    result.tcs_status_raw = f"Đã tải PDF ESID ({out.name})"
+                else:
+                    result.normalized_status = NormalizedStatus.FAILED.value
+                    result.error_code = "DOWNLOAD_EMPTY"
+                    result.error_message = "PDF rỗng hoặc không hợp lệ"
         else:
             pr = client.print_esid_dialog(
                 row.awb_digits,
                 session_date=job.session_date or None,
                 skip_prepare=skip_prepare,
             )
-        result.normalized_status = pr.normalized.value
-        result.error_code = pr.error_code
-        result.error_message = pr.error_message
-        if want_pdf and pr.normalized == NormalizedStatus.DOWNLOADED:
-            result.print_status = "USER_SAVE_PDF_DIALOG"
-            result.error_message = ""
-            suggest = (pr.tcs_status_raw or "").replace("SAVE_PDF_DIALOG:", "") or ""
-            result.tcs_status_raw = (
-                "Đã bấm IN — hộp Save PDF đã mở; chọn Save as PDF"
-                + (f", tên gợi ý {suggest}.pdf" if suggest else "")
-                + " rồi tự bấm Save"
-            )
-        elif (not want_pdf) and pr.normalized == NormalizedStatus.PRINTED:
-            result.print_status = "USER_PRINT_DIALOG"
-            result.error_message = ""
-            result.tcs_status_raw = (
-                "Đã bấm IN — hộp thoại in đã mở trên Chrome, chọn máy in và In"
-            )
+            result.normalized_status = pr.normalized.value
+            result.error_code = pr.error_code
+            result.error_message = pr.error_message
+            if pr.normalized == NormalizedStatus.PRINTED:
+                result.print_status = "USER_PRINT_DIALOG"
+                result.error_message = ""
+                result.tcs_status_raw = (
+                    "Đã bấm IN — hộp thoại in đã mở trên Chrome, chọn máy in và In"
+                )
         result.end_time = datetime.now().isoformat(timespec="seconds")
         result.duration_seconds = round((datetime.now() - started).total_seconds(), 3)
         return result

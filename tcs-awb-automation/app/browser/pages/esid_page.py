@@ -3,12 +3,35 @@ from __future__ import annotations
 
 import base64
 import re
+import time
 from pathlib import Path
 from typing import Any
 
 from app.browser.locators import LocatorRef, LocatorsConfig
 from app.browser.pages.awb_page import NeedsLoginError, SiteChangedError
 from app.data.models import NormalizedStatus
+
+# Nội dung trang shell TCS (không phải phiếu in)
+_SITE_CHROME_MARKERS = (
+    "giới thiệu",
+    "danh sách esid",
+    "khai báo esid",
+    "đăng ký xe",
+    "hotline",
+)
+_ESID_DOC_MARKERS = (
+    "esid",
+    "air waybill",
+    "shipper",
+    "consignee",
+    "người gửi",
+    "người nhận",
+    "số không vận đơn",
+    "awb",
+    "hướng dẫn gửi hàng",
+    "instruction for despatch",
+    "despatch",
+)
 
 
 RECEPTION_STATUS = "Hoàn thành tiếp nhận"
@@ -69,8 +92,14 @@ class EsidListPage:
             self._click_list_tab()
             return
         home = self._cfg().get("home_url") or "https://www.tcs.com.vn/Esid/Export"
-        self.page.goto(home, wait_until="domcontentloaded", timeout=60000)
-        self.page.wait_for_timeout(250)
+        # TCS có request giữ DOMContentLoaded gần 60s; chỉ cần navigation commit,
+        # search_by_awb_last8 sẽ chờ đúng ô AWB# sau đó.
+        self.page.goto(home, wait_until="commit", timeout=15000)
+        try:
+            self.page.wait_for_load_state("domcontentloaded", timeout=3000)
+        except Exception:
+            pass
+        self.page.wait_for_timeout(100)
         self._click_list_tab()
 
     def _wait_search_results(self, last8: str = "") -> None:
@@ -638,7 +667,7 @@ class EsidListPage:
         except Exception:
             pass
 
-        # Về tab danh sách rồi nhập AWB# (đúng quy trình user)
+        # Về tab danh sách rồi nhập AWB#; nếu miss → lọc ngày phiên rồi tìm lại
         self.goto_list(force=False)
         self.search_by_awb_last8(awb_digits)
         matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
@@ -647,6 +676,25 @@ class EsidListPage:
             self.clear_awb_filters()
             self.search_by_flight_date(session_date)
             matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
+            # Giữ filter ngày, chỉ điền AWB# (không clear_date như search_by_awb_last8)
+            if not matched:
+                try:
+                    last8 = awb_digits[3:]
+                    awb_ref = self.esid_ref("awb_last")
+                    inp = self._resolve(awb_ref) if awb_ref else self.page.get_by_placeholder("AWB#")
+                    inp.first.fill("")
+                    inp.first.fill(last8)
+                    submit_ref = self.esid_ref("submit")
+                    if submit_ref:
+                        self._resolve(submit_ref).first.click()
+                    else:
+                        self.page.get_by_role(
+                            "button", name=re.compile(r"TÌM KIẾM|Tim kiem", re.I)
+                        ).first.click()
+                    self._wait_search_results(last8)
+                    matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
+                except Exception:
+                    pass
 
         if not matched:
             raise SiteChangedError(
@@ -701,79 +749,197 @@ class EsidListPage:
         self.prepare_esid_detail(awb_digits, session_date=session_date)
         self.fire_in_dialog(suggest_pdf_filename=suggest_pdf_filename)
 
-    def click_print_download(self, dest_path: Path, *, timeout_ms: int = 8000) -> Path:
-        """
-        PDF ESID (đúng hướng Save as PDF):
-        Đã ở màn có nút IN → kéo xuống cuối → bấm IN → lấy file PDF
-        (download / tab in / CDP printToPDF = Save as PDF, không chụp màn hình trước khi bấm IN).
-        """
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-        # Chặn hộp in OS treo agent; vẫn gọi print layout rồi Save-as-PDF qua CDP
+    def _text_looks_like_site_chrome(self, text: str) -> bool:
+        low = (text or "").lower()
+        hits = sum(1 for m in _SITE_CHROME_MARKERS if m in low)
+        return hits >= 2
+
+    def _text_looks_like_esid_doc(self, text: str) -> bool:
+        low = (text or "").lower()
+        hits = sum(1 for m in _ESID_DOC_MARKERS if m in low)
+        return hits >= 2 and len((text or "").strip()) >= 80
+
+    def _frame_inner_text(self, frame) -> str:
+        try:
+            return str(frame.evaluate("() => (document.body && document.body.innerText || '').trim()") or "")
+        except Exception:
+            return ""
+
+    def _richest_print_frame(self):
+        """Frame/popup document giàu nội dung phiếu (không phải shell TCS)."""
+        best = None
+        best_score = 0
+        for fr in self.page.frames:
+            if fr == self.page.main_frame:
+                continue
+            text = self._frame_inner_text(fr)
+            if len(text) < 40:
+                continue
+            score = len(text)
+            if self._text_looks_like_esid_doc(text):
+                score += 800
+            if self._text_looks_like_site_chrome(text):
+                score -= 600
+            if score > best_score:
+                best_score = score
+                best = fr
+        return best if best_score >= 120 else None
+
+    def _pdf_from_frame_html(self, frame, dest_path: Path) -> Path:
+        """In PDF từ HTML của iframe/about:blank (không chụp shell trang chính)."""
+        try:
+            html = frame.content()
+        except Exception as e:
+            raise SiteChangedError(f"Không đọc được HTML frame in: {e}") from e
+        if not html or len(html) < 80:
+            raise SiteChangedError("Frame in rỗng")
+        ctx = self.page.context
+        tmp = ctx.new_page()
+        try:
+            tmp.set_content(html, wait_until="domcontentloaded")
+            tmp.wait_for_timeout(200)
+            sample = ""
+            try:
+                sample = tmp.evaluate("() => (document.body && document.body.innerText || '').trim()")
+            except Exception:
+                pass
+            if self._text_looks_like_site_chrome(sample) and not self._text_looks_like_esid_doc(sample):
+                raise SiteChangedError("Frame in vẫn là giao diện web, không phải phiếu ESID")
+            return self._pdf_from_page(tmp, dest_path)
+        finally:
+            try:
+                tmp.close()
+            except Exception:
+                pass
+
+    def _install_print_hooks(self) -> None:
+        """Chặn OS print; giữ window.open để bắt cửa sổ/iframe phiếu."""
         try:
             self.page.evaluate(
                 """() => {
                   window.__tcsPrintInvoked = false;
-                  window.print = () => { window.__tcsPrintInvoked = true; };
+                  window.__tcsOpened = [];
+                  const wo = window.open;
+                  window.open = function(url, name, features) {
+                    const w = wo.call(this, url, name, features);
+                    try { window.__tcsOpened.push(String(url||'')); } catch (e) {}
+                    if (w) {
+                      try { w.print = function() { window.__tcsPrintInvoked = true; }; } catch (e) {}
+                    }
+                    return w;
+                  };
+                  window.print = function() { window.__tcsPrintInvoked = true; };
                 }"""
             )
         except Exception:
             pass
 
-        btn = self._scroll_to_in_button()
-        pages_before = list(self.page.context.pages)
-        download = None
+    def _click_in_button(self) -> None:
         try:
-            with self.page.expect_download(timeout=timeout_ms) as di:
-                btn.first.click(timeout=4000, no_wait_after=True)
-            download = di.value
+            btn = self._scroll_to_in_button()
+            btn.first.click(timeout=4000, no_wait_after=True)
+            return
         except Exception:
-            try:
-                btn.first.click(timeout=4000, no_wait_after=True)
-            except Exception:
-                pass
+            pass
+        ok = self.page.evaluate(
+            """() => {
+              const el = [...document.querySelectorAll('button,a,input,[role=button]')]
+                .find(e => /^(IN|In)$/.test((e.innerText||e.value||'').trim())
+                  && (e.offsetParent || e.getClientRects().length));
+              if (!el) return false;
+              el.scrollIntoView({block:'center'});
+              el.click();
+              return true;
+            }"""
+        )
+        if not ok:
+            raise SiteChangedError("Không bấm được nút IN")
 
-        if download is not None:
-            download.save_as(str(dest_path))
-            if dest_path.exists() and dest_path.stat().st_size > 100:
-                return dest_path
+    def click_print_download(self, dest_path: Path, *, timeout_ms: int = 10000) -> Path:
+        """
+        Bấm IN → lấy đúng phiếu ESID:
+        1) file download, 2) popup/tab in, 3) iframe/about:blank HTML → PDF,
+        KHÔNG fallback chụp cả trang shell TCS.
+        """
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        self._install_print_hooks()
+        context = self.page.context
+        pages_before = list(context.pages)
 
-        self.page.wait_for_timeout(600)
+        # TCS: bấm IN → ghi phiếu vào iframe about:blank (hiếm khi download/popup).
+        # Không dùng expect_download (dễ treo khi không có file).
+        self._click_in_button()
 
-        # Tab/popup mới sau khi bấm IN (bản in / PDF)
         popup = None
-        for _ in range(12):
-            for p in self.page.context.pages:
-                if p not in pages_before and p != self.page:
-                    popup = p
-                    break
+        deadline = time.time() + max(8.0, timeout_ms / 1000)
+        while time.time() < deadline:
+            if popup is None:
+                for p in context.pages:
+                    if p not in pages_before and p != self.page:
+                        popup = p
+                        break
             if popup is not None:
                 break
-            self.page.wait_for_timeout(150)
+            rich = self._richest_print_frame()
+            if rich is not None:
+                return self._pdf_from_frame_html(rich, dest_path)
+            self.page.wait_for_timeout(200)
+
         if popup is not None:
             try:
                 popup.wait_for_load_state("domcontentloaded", timeout=8000)
             except Exception:
                 pass
+            for _ in range(25):
+                try:
+                    sample = popup.evaluate(
+                        "() => (document.body && document.body.innerText || '').trim()"
+                    )
+                    if sample and len(sample) > 60:
+                        break
+                except Exception:
+                    pass
+                try:
+                    popup.wait_for_timeout(200)
+                except Exception:
+                    self.page.wait_for_timeout(200)
             try:
-                path = self._pdf_from_page(popup, dest_path)
+                sample = popup.evaluate(
+                    "() => (document.body && document.body.innerText || '').trim()"
+                )
+            except Exception:
+                sample = ""
+            if self._text_looks_like_site_chrome(sample) and not self._text_looks_like_esid_doc(sample):
                 try:
                     popup.close()
                 except Exception:
                     pass
-                if path.exists() and path.stat().st_size > 100:
-                    return path
-            except Exception:
-                pass
-
-        # Save as PDF qua CDP trên trang sau khi bấm IN (nội dung phiếu in)
-        for _ in range(2):
-            self._dismiss_os_print_dialog()
+                raise SiteChangedError("Popup sau IN vẫn là giao diện web, không phải phiếu ESID")
+            path = self._pdf_from_page(popup, dest_path)
             try:
-                self.page.keyboard.press("Escape")
+                popup.close()
             except Exception:
                 pass
-            self.page.wait_for_timeout(150)
-        return self._pdf_from_page(self.page, dest_path)
+            if path.exists() and path.stat().st_size > 100:
+                return path
+
+        rich = self._richest_print_frame()
+        if rich is not None:
+            return self._pdf_from_frame_html(rich, dest_path)
+
+        # Từ chối chụp shell trang chính (đây là lỗi user đã gặp)
+        try:
+            main_sample = self.page.evaluate(
+                "() => (document.body && document.body.innerText || '').trim().slice(0, 1200)"
+            )
+        except Exception:
+            main_sample = ""
+        self._dismiss_os_print_dialog()
+        raise SiteChangedError(
+            "Sau IN không thấy phiếu ESID (download/popup/iframe). "
+            "Không lưu PDF trang web. "
+            f"Mẫu trang: {(main_sample or '')[:160]!r}"
+        )
 
     def download_awb_pdf(
         self,
@@ -781,16 +947,28 @@ class EsidListPage:
         dest_path: Path,
         *,
         session_date: str | None = None,
+        skip_prepare: bool = False,
     ) -> Path:
         """
-        Legacy (script): tự lấy PDF sau IN.
-        Ops/agent thật dùng click_in_for_user_print — user tự Save trên hộp thoại.
+        PDF ESID = tải file PDF về (không mở hộp in cho user).
+        Chuẩn bị chi tiết → stub window.print → bấm IN trên TCS → lưu file
+        từ iframe/popup/CDP vào dest_path. Ops sẽ fetch file về Downloads.
         """
-        self.prepare_esid_detail(awb_digits, session_date=session_date or None)
+        try:
+            self._dismiss_os_print_dialog()
+        except Exception:
+            pass
+        if skip_prepare and self._in_button_visible():
+            pass
+        else:
+            self.prepare_esid_detail(awb_digits, session_date=session_date or None)
         path = self.click_print_download(dest_path)
         try:
+            # PDF path: luôn đóng hộp in OS nếu lỡ bật — không để user in
+            self._dismiss_os_print_dialog()
+            self.page.keyboard.press("Escape")
             self._click_list_tab()
-            self.page.wait_for_timeout(150)
+            self.page.wait_for_timeout(100)
         except Exception:
             pass
         return path

@@ -82,7 +82,8 @@ class BatchService:
         client = TcsClient(
             mock=job.mock,
             discovery_report=self.settings.discovery_dir.parent / "discovery_report.md",
-            locators_file=loc_file if loc_file.exists() else None,
+            # Luôn truyền path — TcsClient fallback DEFAULT_LOCATORS nếu file chưa có
+            locators_file=loc_file,
             portal=portal,
         )
         # Hot-path: AWB đã /esid/prepare — bỏ search lại nếu nút IN còn

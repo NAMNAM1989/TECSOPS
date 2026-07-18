@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any
 
 
+# Selector UI TCS (không secret) — đủ để Railway/container chạy PDF ESID
+# khi discovery_artifacts/ chưa mount. Cập nhật khi TCS đổi DOM.
 DEFAULT_LOCATORS: dict[str, Any] = {
-    "version": 1,
+    "version": 2,
     "base_url": "https://www.tcs.com.vn/AwbLogin",
     "login": {
         "confirmed": True,
@@ -18,17 +20,55 @@ DEFAULT_LOCATORS: dict[str, Any] = {
         "login_url_substr": "awblogin",
     },
     "awb_lookup": {
-        "confirmed": False,
+        "confirmed": True,
+        "home_url": "https://www.tcs.com.vn/Awb/Agent",
+        "awb_mode": "split",
+        "awb_first": {"by": "id", "value": "awbFirst"},
+        "awb_last": {"by": "id", "value": "awbLast"},
         "awb_input": None,
-        "submit": None,
+        "submit": {"by": "role", "role": "button", "name": "KIỂM TRA"},
         "status_text": None,
         "download_button": None,
-        "print_button": None,
-        "completed_keywords": ["đã hoàn tất thủ tục hải quan", "hoàn tất thủ tục hải quan"],
-        "reception_keywords": ["hoàn thành tiếp nhận", "ngày tiếp nhận", "đã tiếp nhận"],
-        "not_completed_keywords": ["chưa hoàn thành", "chua hoan thanh", "pending", "đang xử lý"],
-        "result_ready_selector": None,
-        "notes": "Điền sau discovery bước lookup_sample / download_or_print. Đặt confirmed=true khi đã xác nhận.",
+        "print_button": {"by": "role", "role": "button", "name": "IN"},
+        "arrival_notice_tab": {"by": "text", "value": "PHIẾU THÔNG BÁO HÀNG ĐẾN"},
+        "completed_keywords": [
+            "đã hoàn tất thủ tục hải quan",
+            "hoàn tất thủ tục hải quan",
+            "đã hoàn tất",
+            "finish",
+        ],
+        "reception_keywords": [
+            "hoàn thành tiếp nhận",
+            "đã tiếp nhận",
+            "ngày tiếp nhận",
+            "thông tin tiếp nhận",
+        ],
+        "not_completed_keywords": [
+            "chưa được hoàn tất thủ tục hải quan",
+            "chưa hoàn tất thủ tục",
+            "chưa hoàn thành",
+            "chua hoan thanh",
+            "pending",
+            "đang xử lý",
+            "không tìm thấy",
+            "not found",
+        ],
+        "result_ready_selector": "#awbFirst",
+        "notes": "/Awb/Agent — awbFirst+awbLast+KIỂM TRA",
+    },
+    "esid_list": {
+        "confirmed": True,
+        "home_url": "https://www.tcs.com.vn/Esid/Export",
+        "tab": {"by": "text", "value": "DANH SÁCH ESID"},
+        "awb_first": {"by": "placeholder", "value": "Prefix"},
+        "awb_last": {"by": "placeholder", "value": "AWB#"},
+        "date_from": {"by": "id", "value": "search-form_dateSearch"},
+        "date_to": {"by": "placeholder", "value": "Ngày kết thúc"},
+        "date_format": "DD-MM-YYYY",
+        "submit": {"by": "role", "role": "button", "name": "TÌM KIẾM"},
+        "print_button": {"by": "role", "role": "button", "name": "IN"},
+        "reception_status": "Hoàn thành tiếp nhận",
+        "notes": "PDF ESID: danh sách → AWB# → IN → lưu file",
     },
 }
 

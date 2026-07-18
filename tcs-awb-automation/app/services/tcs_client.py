@@ -54,7 +54,9 @@ class TcsClient:
                 return LocatorsConfig.load(alt)
             if path.exists():
                 return LocatorsConfig.load(path)
-        return None
+        # Railway/container: discovery_artifacts gitignore → DEFAULT_LOCATORS (file ảo không tồn tại)
+        fallback = self.locators_file or Path("locators.default.json")
+        return LocatorsConfig.load(fallback)
 
     def has_discovery(self) -> bool:
         loc = self._locators()

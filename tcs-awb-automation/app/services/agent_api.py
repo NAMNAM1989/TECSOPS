@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from app import __version__
 from app.browser.pages.awb_page import NeedsLoginError, SiteChangedError
 from app.browser.session_manager import SessionManager
+from app.browser.locators import ensure_default_locators, locators_path
 from app.config import Settings, ensure_runtime_dirs, load_settings
 from app.data.repository import Repository
 from app.services.awb_service import validate_ops_payload
@@ -365,7 +366,7 @@ def make_handler(state: AgentState):
                 client = TcsClient(
                     mock=False,
                     discovery_report=state.settings.discovery_dir.parent / "discovery_report.md",
-                    locators_file=loc_file if loc_file.exists() else None,
+                    locators_file=loc_file,
                     portal=state.sessions.portal(),
                 )
                 info = client.prepare_esid(awb, session_date=session_date or None)
@@ -625,6 +626,8 @@ def _auto_open_session(state: AgentState) -> None:
 def serve_agent(settings: Settings | None = None) -> None:
     settings = settings or load_settings()
     ensure_runtime_dirs(settings)
+    # Seed locators.json từ DEFAULT nếu container chưa có discovery_artifacts/
+    ensure_default_locators(locators_path(settings.discovery_dir))
     state = AgentState(settings)
     host = settings.agent_host
     port = settings.agent_port

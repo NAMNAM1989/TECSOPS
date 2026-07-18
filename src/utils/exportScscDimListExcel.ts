@@ -184,7 +184,7 @@ async function buildListScscWorkbook(s: Shipment, model: ScscDimListModel) {
 }
 
 function uniqueSheetName(used: Set<string>, base: string): string {
-  let name = base.slice(0, 28) || "DIM";
+  const name = base.slice(0, 28) || "DIM";
   if (!used.has(name)) {
     used.add(name);
     return name;

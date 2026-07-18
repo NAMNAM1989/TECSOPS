@@ -614,8 +614,18 @@ class EsidListPage:
         self.page.wait_for_timeout(150)
         return btn
 
+    def _in_button_visible(self) -> bool:
+        try:
+            btn = self.page.get_by_role("button", name=re.compile(r"^IN$", re.I))
+            return btn.count() > 0 and btn.first.is_visible(timeout=800)
+        except Exception:
+            return False
+
     def prepare_esid_detail(self, awb_digits: str, *, session_date: str | None = None) -> None:
-        """AWB# 8 số → TÌM KIẾM → mở dòng; nếu trống thì lọc theo ngày phiên."""
+        """
+        Danh sách ESID → nhập 8 số cuối ô AWB# → TÌM KIẾM → mở dòng (nếu chưa thấy nút IN).
+        Fallback lọc ngày phiên chỉ khi AWB# không ra dòng.
+        """
         url = (self.page.url or "").lower()
         if "awblogin" in url or "checkoutlogin" in url:
             raise NeedsLoginError("Cần đăng nhập trước khi vào ESID")
@@ -628,17 +638,11 @@ class EsidListPage:
         except Exception:
             pass
 
-        matched: list[dict[str, str]] = []
-        # 1) Đã lọc đúng ngày từ Quét ESID → dùng lại (nhanh)
-        if session_date and self._list_date_ymd == session_date and self._on_esid_list():
-            matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
+        # Về tab danh sách rồi nhập AWB# (đúng quy trình user)
+        self.goto_list(force=False)
+        self.search_by_awb_last8(awb_digits)
+        matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
 
-        # 2) Quy trình: nhập 8 số cuối AWB#
-        if not matched:
-            self.search_by_awb_last8(awb_digits)
-            matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
-
-        # 3) Fallback: lọc theo ngày phiên Ops
         if not matched and session_date:
             self.clear_awb_filters()
             self.search_by_flight_date(session_date)
@@ -649,83 +653,126 @@ class EsidListPage:
                 f"Không thấy dòng ESID cho AWB …{awb_digits[3:]} sau khi tìm AWB#"
                 + (f" / ngày {session_date}" if session_date else "")
             )
+
+        # Nếu sau tìm kiếm đã có nút IN (chi tiết hiện sẵn) → không cần bấm dòng
+        if self._in_button_visible():
+            return
         try:
             self.open_detail_row(awb_digits, require_reception=True)
         except SiteChangedError:
             self.open_detail_row(awb_digits, require_reception=False)
 
-    def click_in_for_user_print(self, awb_digits: str, *, session_date: str | None = None) -> None:
-        """
-        In ESID: AWB# 8 số → chi tiết → kéo xuống bấm IN.
-        Không chặn window.print — để hộp thoại in Windows/Chrome cho user tự chọn máy in.
-        """
-        self.prepare_esid_detail(awb_digits, session_date=session_date)
+    def fire_in_dialog(self, *, suggest_pdf_filename: str | None = None) -> None:
+        """Đã ở màn có nút IN → đặt tên file gợi ý (nếu có) → bấm IN mở hộp Save/In."""
+        if suggest_pdf_filename:
+            try:
+                # Chrome «Save as PDF» dùng title làm tên file mặc định
+                self.page.evaluate(
+                    """(name) => {
+                      document.title = name;
+                      const t = document.querySelector('title');
+                      if (t) t.textContent = name;
+                    }""",
+                    suggest_pdf_filename,
+                )
+            except Exception:
+                pass
         btn = self._scroll_to_in_button()
-        # no_wait_after: dialog in hệ thống sẽ làm click/navigation treo nếu chờ
         btn.first.click(timeout=4000, no_wait_after=True)
         self.page.wait_for_timeout(400)
 
-    def click_print_download(self, dest_path: Path, *, timeout_ms: int = 2500) -> Path:
+    def click_in_for_user_print(
+        self,
+        awb_digits: str,
+        *,
+        session_date: str | None = None,
+        suggest_pdf_filename: str | None = None,
+        skip_prepare: bool = False,
+    ) -> None:
         """
-        PDF ESID: đã ở trang chi tiết → kéo xuống bấm IN → lưu PDF.
-        Stub window.print → bấm IN → Escape (nếu còn hộp in) → page.pdf / CDP.
+        Danh sách → AWB# 8 số → kéo xuống bấm IN → hộp thoại in/Save PDF (user tự bấm).
+        skip_prepare=True: hot-path (đã prepare) — chỉ fire IN nếu nút còn visible.
         """
-        del timeout_ms  # giữ chữ ký API cũ
+        if skip_prepare:
+            if not self._in_button_visible():
+                raise SiteChangedError("Hot-path miss: không còn nút IN — cần prepare lại")
+            self.fire_in_dialog(suggest_pdf_filename=suggest_pdf_filename)
+            return
+        self.prepare_esid_detail(awb_digits, session_date=session_date)
+        self.fire_in_dialog(suggest_pdf_filename=suggest_pdf_filename)
+
+    def click_print_download(self, dest_path: Path, *, timeout_ms: int = 8000) -> Path:
+        """
+        PDF ESID (đúng hướng Save as PDF):
+        Đã ở màn có nút IN → kéo xuống cuối → bấm IN → lấy file PDF
+        (download / tab in / CDP printToPDF = Save as PDF, không chụp màn hình trước khi bấm IN).
+        """
         dest_path.parent.mkdir(parents=True, exist_ok=True)
+        # Chặn hộp in OS treo agent; vẫn gọi print layout rồi Save-as-PDF qua CDP
         try:
             self.page.evaluate(
                 """() => {
+                  window.__tcsPrintInvoked = false;
                   window.print = () => { window.__tcsPrintInvoked = true; };
-                  try {
-                    const proto = window.HTMLIFrameElement && HTMLIFrameElement.prototype;
-                    if (proto) {
-                      const desc = Object.getOwnPropertyDescriptor(proto, 'contentWindow');
-                    }
-                  } catch (e) {}
                 }"""
             )
         except Exception:
             pass
 
         btn = self._scroll_to_in_button()
-        # Ưu tiên lưu PDF trang chi tiết trước (tránh treo khi hộp in OS chặn page.pdf)
-        try:
-            path = self._pdf_from_page(self.page, dest_path)
-        except Exception:
-            path = None
-
         pages_before = list(self.page.context.pages)
+        download = None
         try:
-            btn.first.click(timeout=3000, no_wait_after=True)
+            with self.page.expect_download(timeout=timeout_ms) as di:
+                btn.first.click(timeout=4000, no_wait_after=True)
+            download = di.value
         except Exception:
-            pass
-        self.page.wait_for_timeout(400)
-        self._dismiss_os_print_dialog()
-        try:
-            self.page.keyboard.press("Escape")
-        except Exception:
-            pass
+            try:
+                btn.first.click(timeout=4000, no_wait_after=True)
+            except Exception:
+                pass
 
+        if download is not None:
+            download.save_as(str(dest_path))
+            if dest_path.exists() and dest_path.stat().st_size > 100:
+                return dest_path
+
+        self.page.wait_for_timeout(600)
+
+        # Tab/popup mới sau khi bấm IN (bản in / PDF)
         popup = None
-        for p in self.page.context.pages:
-            if p not in pages_before and p != self.page:
-                popup = p
+        for _ in range(12):
+            for p in self.page.context.pages:
+                if p not in pages_before and p != self.page:
+                    popup = p
+                    break
+            if popup is not None:
                 break
+            self.page.wait_for_timeout(150)
         if popup is not None:
             try:
-                popup.wait_for_load_state("domcontentloaded", timeout=4000)
-                alt = self._pdf_from_page(popup, dest_path)
+                popup.wait_for_load_state("domcontentloaded", timeout=8000)
+            except Exception:
+                pass
+            try:
+                path = self._pdf_from_page(popup, dest_path)
                 try:
                     popup.close()
                 except Exception:
                     pass
-                if alt.exists() and alt.stat().st_size > 100:
-                    return alt
+                if path.exists() and path.stat().st_size > 100:
+                    return path
             except Exception:
                 pass
 
-        if path is not None and path.exists() and path.stat().st_size > 100:
-            return path
+        # Save as PDF qua CDP trên trang sau khi bấm IN (nội dung phiếu in)
+        for _ in range(2):
+            self._dismiss_os_print_dialog()
+            try:
+                self.page.keyboard.press("Escape")
+            except Exception:
+                pass
+            self.page.wait_for_timeout(150)
         return self._pdf_from_page(self.page, dest_path)
 
     def download_awb_pdf(
@@ -736,8 +783,8 @@ class EsidListPage:
         session_date: str | None = None,
     ) -> Path:
         """
-        PDF ESID: nhập 8 số cuối AWB# → chi tiết → kéo xuống bấm IN → lưu PDF.
-        (session_date giữ tham số tương thích API cũ — không dùng cho flow này.)
+        Legacy (script): tự lấy PDF sau IN.
+        Ops/agent thật dùng click_in_for_user_print — user tự Save trên hộp thoại.
         """
         self.prepare_esid_detail(awb_digits, session_date=session_date or None)
         path = self.click_print_download(dest_path)

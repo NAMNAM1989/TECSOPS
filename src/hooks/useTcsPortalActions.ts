@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { awbDigitsKey } from "../utils/awbFormat";
@@ -14,6 +14,7 @@ import {
   getTcsAgentBaseUrl,
   openTcsAgentSession,
   pingTcsAgent,
+  prepareTcsEsid,
   scanTcsEsidReception,
   submitTcsPortalJob,
   type TcsAgentHealth,
@@ -21,6 +22,8 @@ import {
   type TcsAgentSession,
   type TcsEsidScanItem,
 } from "../utils/tcsPortalAgentApi";
+
+const PREPARED_TTL_MS = 120_000;
 
 export type TcsPortalActionsOpts = {
   sessionYmd: string;
@@ -52,12 +55,20 @@ export function useTcsPortalActions({
   const [busyLabel, setBusyLabel] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  /** Tránh poll /health ghi đè Offline khi đang chờ job dài trên agent */
+  const busyRef = useRef(false);
+  busyRef.current = busy;
   const [readyItems, setReadyItems] = useState<TcsEsidScanItem[]>([]);
   const [scanTotal, setScanTotal] = useState(0);
   const [opsStatusUpdated, setOpsStatusUpdated] = useState(0);
   const [results, setResults] = useState<TcsAgentJobResultRow[]>([]);
   const [downloadedCount, setDownloadedCount] = useState(0);
   const [printDryRun, setPrintDryRun] = useState(false);
+  /** AWB đã pre-warm (menu ⋮) — hot-path PDF/In ~1–3s */
+  const [preparedAwb, setPreparedAwb] = useState("");
+  const preparedAtRef = useRef(0);
+  const prepareTimerRef = useRef<number | null>(null);
+  const prepareInFlightRef = useRef("");
 
   const sourceRows = useMemo(() => {
     if (focusShipment) return [focusShipment];
@@ -83,9 +94,17 @@ export function useTcsPortalActions({
   }, [eligible, readyItems]);
 
   const refreshHealth = useCallback(async () => {
+    // Job dài chiếm worker: bỏ poll tạm — tránh nhãn Offline giả khi UI đang busy
+    if (busyRef.current) return;
     const h = await pingTcsAgent();
+    if (busyRef.current) return;
+    if (!h?.ok) {
+      // Giữ session cũ nếu chỉ mất 1 lần ping (tránh nhấp nháy Offline)
+      setHealth((prev) => (prev?.ok ? prev : h));
+      return;
+    }
     setHealth(h);
-    if (h?.session) setSession(h.session);
+    if (h.session) setSession(h.session);
     else setSession(await fetchTcsSessionStatus());
   }, []);
 
@@ -266,7 +285,9 @@ export function useTcsPortalActions({
         return;
       }
       setBusy(true);
-      setBusyLabel(kind === "PRINT" ? "Đang in ESID…" : "Đang tải PDF ESID…");
+      setBusyLabel(
+        kind === "PRINT" ? "Đang mở hộp in ESID…" : "PDF ESID: mở hộp Save PDF trên Chrome…"
+      );
       const t0 = performance.now();
       try {
         if (!(await ensureSessionReady())) return;
@@ -277,17 +298,12 @@ export function useTcsPortalActions({
           return;
         }
         setResults(res.results || []);
-        const pdfRows = (res.results || []).filter((r) => r.pdf_name || r.downloaded_file);
-        const n = res.downloaded_count ?? pdfRows.length;
-        setDownloadedCount(n);
-        // Tự mở PDF ESID vừa tải (tối đa 5 tab để tránh spam)
-        for (const row of pdfRows.slice(0, 5)) {
-          downloadPdfFromAgent(row.pdf_name || row.downloaded_file || "");
-        }
+        const n = res.ok_count ?? (res.results || []).length;
+        setDownloadedCount(0);
         setMessage(
           kind === "PRINT"
-            ? `In ESID xong ${sec}s · ${n} phiếu${printDryRun ? " (dry-run — chưa gửi máy in)" : ""}`
-            : `PDF ESID xong ${sec}s · ${n} file`
+            ? `In ESID: đã mở hộp in trên Chrome · ${n} phiếu · ${sec}s — tự chọn máy in và bấm In${printDryRun ? " (dry-run)" : ""}`
+            : `PDF ESID: đã mở hộp Save PDF trên Chrome · ${n} phiếu · ${sec}s — chọn Save as PDF và tự bấm Save`
         );
         void refreshHealth();
       } catch (e) {
@@ -302,6 +318,51 @@ export function useTcsPortalActions({
 
   const downloadReady = useCallback(() => runJob("DOWNLOAD"), [runJob]);
   const printReady = useCallback(() => runJob("PRINT"), [runJob]);
+
+  const isPreparedHot = useCallback(
+    (digits: string) => {
+      if (!digits || digits !== preparedAwb) return false;
+      return Date.now() - preparedAtRef.current < PREPARED_TTL_MS;
+    },
+    [preparedAwb]
+  );
+
+  /** Pre-warm khi mở menu ⋮ — fire-and-forget, lỗi im lặng */
+  const prepareEsidFor = useCallback(
+    (shipment: Shipment) => {
+      if (!isTcsWarehouse(shipment.warehouse)) return;
+      if (busyRef.current) return;
+      const digits = awbDigitsKey(shipment.awb);
+      if (digits.length !== 11) return;
+      if (isPreparedHot(digits)) return;
+      if (prepareInFlightRef.current === digits) return;
+
+      if (prepareTimerRef.current != null) {
+        window.clearTimeout(prepareTimerRef.current);
+      }
+      prepareTimerRef.current = window.setTimeout(() => {
+        prepareTimerRef.current = null;
+        if (busyRef.current) return;
+        if (isPreparedHot(digits)) return;
+        prepareInFlightRef.current = digits;
+        const ymd = String(shipment.sessionDate || sessionYmd).trim() || sessionYmd;
+        void prepareTcsEsid(digits, ymd)
+          .then((res) => {
+            if (res.ok && res.prepared) {
+              setPreparedAwb(digits);
+              preparedAtRef.current = Date.now();
+            }
+          })
+          .catch(() => {
+            /* im lặng — cold-path vẫn chạy khi bấm PDF */
+          })
+          .finally(() => {
+            if (prepareInFlightRef.current === digits) prepareInFlightRef.current = "";
+          });
+      }, 150);
+    },
+    [isPreparedHot, sessionYmd]
+  );
 
   /** Menu dòng: PDF / In ESID cho đúng 1 AWB */
   const runJobForShipment = useCallback(
@@ -329,11 +390,16 @@ export function useTcsPortalActions({
         setError("Không tạo được job ESID cho AWB này.");
         return;
       }
+      const hot = isPreparedHot(digits) || prepareInFlightRef.current === digits;
       setBusy(true);
       setBusyLabel(
         kind === "PRINT"
-          ? `In ESID …${digits.slice(-8)} (mở hộp in trên Chrome)`
-          : `PDF ESID …${digits.slice(-8)}`
+          ? hot
+            ? `In ESID …${digits.slice(-8)} (mở hộp in trên Chrome)`
+            : `In ESID …${digits.slice(-8)} (đang tìm ESID rồi mở hộp in…)`
+          : hot
+            ? `PDF ESID …${digits.slice(-8)} (mở hộp Save PDF — bạn tự bấm Save)`
+            : `PDF ESID …${digits.slice(-8)} (đang tìm ESID rồi mở Save…)`
       );
       const t0 = performance.now();
       try {
@@ -352,19 +418,18 @@ export function useTcsPortalActions({
           setError(row0?.error_message || status || "ESID thất bại");
           return;
         }
+        setDownloadedCount(0);
+        setPreparedAwb("");
+        preparedAtRef.current = 0;
+        const hotNote = res.hot_path ? " · hot" : "";
         if (kind === "PRINT") {
-          setDownloadedCount(0);
           setMessage(
-            `In ESID …${digits.slice(-8)} · ${sec}s — hộp thoại in đã mở trên Chrome TCS, hãy chọn máy in và bấm In`
+            `In ESID …${digits.slice(-8)} · ${sec}s${hotNote} — hộp thoại in đã mở trên Chrome TCS, hãy chọn máy in và bấm In`
           );
         } else {
-          const pdfRows = (res.results || []).filter((r) => r.pdf_name || r.downloaded_file);
-          const n = res.downloaded_count ?? pdfRows.length;
-          setDownloadedCount(n);
-          for (const r of pdfRows.slice(0, 3)) {
-            downloadPdfFromAgent(r.pdf_name || r.downloaded_file || "");
-          }
-          setMessage(`PDF ESID …${digits.slice(-8)} · ${sec}s · ${n} file`);
+          setMessage(
+            `PDF ESID …${digits.slice(-8)} · ${sec}s${hotNote} — hộp Save PDF đã mở trên Chrome TCS: chọn Save as PDF, tên file gợi ý theo AWB, rồi tự bấm Save`
+          );
         }
         void refreshHealth();
       } catch (e) {
@@ -374,7 +439,7 @@ export function useTcsPortalActions({
         setBusyLabel("");
       }
     },
-    [ensureSessionReady, printDryRun, refreshHealth, sessionYmd]
+    [ensureSessionReady, isPreparedHot, printDryRun, refreshHealth, sessionYmd]
   );
 
   const downloadEsidFor = useCallback(
@@ -390,13 +455,15 @@ export function useTcsPortalActions({
     downloadPdfFromAgent(name);
   }, []);
 
-  const sessionLabel = !health?.ok
-    ? "Offline"
-    : !session?.open
-      ? "Chưa mở"
-      : session.logged_in
-        ? "Đã login"
-        : "Cần CAPTCHA";
+  const sessionLabel = busy
+    ? "Đang xử lý"
+    : !health?.ok
+      ? "Offline"
+      : !session?.open
+        ? "Chưa mở"
+        : session.logged_in
+          ? "Đã login"
+          : "Cần CAPTCHA";
 
   return {
     eligibleCount: eligible.length,
@@ -421,6 +488,8 @@ export function useTcsPortalActions({
     printReady,
     downloadEsidFor,
     printEsidFor,
+    prepareEsidFor,
+    preparedAwb,
     downloadPdf,
     refreshHealth,
     clearFocusHint: focusShipment

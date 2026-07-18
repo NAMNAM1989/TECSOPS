@@ -129,6 +129,8 @@ export function ShipmentRowActionsMenu({
     const btn = triggerRef.current;
     if (btn) setMenuStyle(menuPositionFromTrigger(btn));
     setMenuOpen(true);
+    // Pre-warm ESID trên Chrome TCS (nền) — bấm PDF/In sau đó dùng hot-path
+    if (showTcsEsid) tcs?.prepareEsidFor?.(row);
   };
 
   const closeMenu = () => {

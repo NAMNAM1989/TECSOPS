@@ -21,6 +21,8 @@ export type TcsAgentHealth = {
   running?: boolean;
   docs_dir?: string;
   session?: TcsAgentSession;
+  prepared_awb?: string | null;
+  preparing_awb?: string | null;
 };
 
 export type TcsAgentJobResultRow = {
@@ -49,6 +51,7 @@ export type TcsAgentJobResponse = {
   report_path?: string;
   docs_dir?: string;
   mock?: boolean;
+  hot_path?: boolean;
   results?: TcsAgentJobResultRow[];
   error?: string;
   message?: string;
@@ -181,6 +184,64 @@ export async function scanTcsEsidReception(
       ready: body.ready,
       total: body.total,
       ready_count: body.ready_count,
+    };
+  }
+  return body;
+}
+
+export type TcsEsidPrepareResponse = {
+  ok: boolean;
+  prepared?: boolean;
+  awb?: string;
+  has_in_button?: boolean;
+  elapsed_ms?: number;
+  cached?: boolean;
+  hot_path?: boolean;
+  error?: string;
+  message?: string;
+};
+
+/** Pre-warm trang chi tiết ESID (nút IN) — gọi khi mở menu ⋮ */
+export async function prepareTcsEsid(
+  awb: string,
+  sessionDate?: string
+): Promise<TcsEsidPrepareResponse> {
+  const base = agentBase();
+  let res: Response;
+  try {
+    res = await fetch(`${base}/esid/prepare`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        warehouse: "TECS-TCS",
+        awb,
+        session_date: sessionDate || undefined,
+      }),
+    });
+  } catch {
+    return {
+      ok: false,
+      error: "AGENT_OFFLINE",
+      message: `Không kết nối được agent (${base}). Chạy: npm run tcs:agent:real`,
+    };
+  }
+  let body: TcsEsidPrepareResponse;
+  try {
+    body = (await res.json()) as TcsEsidPrepareResponse;
+  } catch {
+    return {
+      ok: false,
+      error: "BAD_RESPONSE",
+      message: `Agent trả về phản hồi không hợp lệ (HTTP ${res.status})`,
+    };
+  }
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: body.error || `HTTP_${res.status}`,
+      message: body.message || "Prepare ESID thất bại",
+      awb: body.awb,
+      elapsed_ms: body.elapsed_ms,
     };
   }
   return body;

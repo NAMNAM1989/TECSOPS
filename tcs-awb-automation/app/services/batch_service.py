@@ -73,6 +73,7 @@ class BatchService:
         on_progress: ProgressCb | None = None,
         *,
         portal: "AwbPortalPage | None" = None,
+        prepared_awb: str | None = None,
     ) -> tuple[list[AwbJobResult], Path]:
         self._stop = False
         self._pause = False
@@ -84,6 +85,8 @@ class BatchService:
             locators_file=loc_file if loc_file.exists() else None,
             portal=portal,
         )
+        # Hot-path: AWB đã /esid/prepare — bỏ search lại nếu nút IN còn
+        client._prepared_awb = (prepared_awb or "").strip() or None  # type: ignore[attr-defined]
         results: list[AwbJobResult] = []
         checkpoint = self.repo.get_checkpoint(job.job_id)
         start_stt = (checkpoint or {}).get("last_stt", 0)
@@ -218,31 +221,61 @@ class BatchService:
         started: datetime,
     ) -> AwbJobResult:
         """
-        ESID: AWB# 8 số → chi tiết → nút IN.
-        - DOWNLOAD: lưu PDF (download / page.pdf).
-        - PRINT: mở hộp thoại in trên Chrome cho user (không tự gửi máy in Windows).
+        ESID: danh sách → AWB# 8 số → nút IN.
+        - DOWNLOAD (PDF ESID): mở hộp Save PDF — user tự bấm Save (không tự ghi file).
+        - PRINT: mở hộp thoại in — user tự chọn máy in.
         """
-        if row.action == Action.PRINT and not job.mock:
-            result.tcs_status_raw = "ESID IN → hộp thoại in"
-            pr = client.print_esid_dialog(
-                row.awb_digits,
-                session_date=job.session_date or None,
-            )
-            result.normalized_status = pr.normalized.value
-            result.error_code = pr.error_code
-            result.error_message = pr.error_message
-            if pr.normalized == NormalizedStatus.PRINTED:
-                result.print_status = "USER_PRINT_DIALOG"
-                result.error_message = ""
-                result.tcs_status_raw = (
-                    "Đã bấm IN — hộp thoại in đã mở trên Chrome, chọn máy in và In"
-                )
+        if job.mock:
+            # Mock vẫn tạo file giả để test pipeline
+            result.tcs_status_raw = "ESID IN → PDF (mock)"
+            self._attach_pdf(job, row, client, result, result.tcs_status_raw)
             result.end_time = datetime.now().isoformat(timespec="seconds")
             result.duration_seconds = round((datetime.now() - started).total_seconds(), 3)
             return result
 
-        result.tcs_status_raw = "ESID IN → PDF"
-        self._attach_pdf(job, row, client, result, result.tcs_status_raw)
+        want_pdf = row.action == Action.DOWNLOAD
+        prepared = getattr(client, "_prepared_awb", None) or ""
+        skip_prepare = bool(prepared) and prepared == row.awb_digits
+        result.tcs_status_raw = (
+            "ESID IN → hộp Save PDF (hot)"
+            if want_pdf and skip_prepare
+            else "ESID IN → hộp Save PDF"
+            if want_pdf
+            else "ESID IN → hộp thoại in (hot)"
+            if skip_prepare
+            else "ESID IN → hộp thoại in"
+        )
+        if want_pdf:
+            pr = client.download_pdf(
+                row.awb_digits,
+                self.settings.output_dir / "docs" / "_unused.pdf",
+                session_date=job.session_date or None,
+                skip_prepare=skip_prepare,
+            )
+        else:
+            pr = client.print_esid_dialog(
+                row.awb_digits,
+                session_date=job.session_date or None,
+                skip_prepare=skip_prepare,
+            )
+        result.normalized_status = pr.normalized.value
+        result.error_code = pr.error_code
+        result.error_message = pr.error_message
+        if want_pdf and pr.normalized == NormalizedStatus.DOWNLOADED:
+            result.print_status = "USER_SAVE_PDF_DIALOG"
+            result.error_message = ""
+            suggest = (pr.tcs_status_raw or "").replace("SAVE_PDF_DIALOG:", "") or ""
+            result.tcs_status_raw = (
+                "Đã bấm IN — hộp Save PDF đã mở; chọn Save as PDF"
+                + (f", tên gợi ý {suggest}.pdf" if suggest else "")
+                + " rồi tự bấm Save"
+            )
+        elif (not want_pdf) and pr.normalized == NormalizedStatus.PRINTED:
+            result.print_status = "USER_PRINT_DIALOG"
+            result.error_message = ""
+            result.tcs_status_raw = (
+                "Đã bấm IN — hộp thoại in đã mở trên Chrome, chọn máy in và In"
+            )
         result.end_time = datetime.now().isoformat(timespec="seconds")
         result.duration_seconds = round((datetime.now() - started).total_seconds(), 3)
         return result

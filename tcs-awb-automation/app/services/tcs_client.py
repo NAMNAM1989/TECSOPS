@@ -108,46 +108,90 @@ class TcsClient:
         except Exception as e:
             return LookupOutcome("", NormalizedStatus.FAILED, "LOOKUP_ERROR", str(e))
 
+    def prepare_esid(
+        self,
+        awb_digits: str,
+        *,
+        session_date: str | None = None,
+    ) -> dict:
+        """
+        Pre-warm: danh sách → AWB# → chi tiết đến khi thấy nút IN.
+        Trả dict {ok, awb, has_in_button, message} hoặc raise NeedsLogin/SiteChanged.
+        """
+        if self.mock:
+            return {
+                "ok": True,
+                "awb": awb_digits,
+                "has_in_button": True,
+                "message": "PREPARE_MOCK",
+                "hot_path": True,
+            }
+        if self._portal is None:
+            raise NeedsLoginError("Chưa mở Chrome session")
+        loc = self._locators()
+        if not loc or not loc.esid_list_confirmed:
+            raise SiteChangedError("Chưa có locator ESID")
+        esid = EsidListPage(self._portal.page, loc)
+        esid.prepare_esid_detail(awb_digits, session_date=session_date or None)
+        has_in = esid._in_button_visible()
+        if not has_in:
+            raise SiteChangedError("Đã mở chi tiết nhưng không thấy nút IN")
+        return {
+            "ok": True,
+            "awb": awb_digits,
+            "has_in_button": True,
+            "message": "ESID sẵn sàng (nút IN)",
+            "hot_path": True,
+        }
+
     def download_pdf(
         self,
         awb_digits: str,
         dest: Path,
         *,
         session_date: str | None = None,
+        skip_prepare: bool = False,
     ) -> LookupOutcome:
+        """
+        PDF ESID: danh sách → AWB# 8 số → IN → mở hộp Save PDF.
+        Không tự lưu file — user chọn Save as PDF và bấm Save trên Chrome.
+        skip_prepare: hot-path sau /esid/prepare.
+        """
+        del dest  # giữ chữ ký API; không ghi file tự động
         if self.mock:
-            return LookupOutcome("", NormalizedStatus.FAILED, "MOCK", "download_pdf không dùng ở mock")
-        if self._portal is None:
-            return LookupOutcome("", NormalizedStatus.NEEDS_LOGIN, "NO_BROWSER", "Chưa mở Chrome session")
-        try:
-            loc = self._locators()
-            # Flow: AWB# 8 số → chi tiết → IN → lưu PDF
-            if loc and loc.esid_list_confirmed:
-                esid = EsidListPage(self._portal.page, loc)
-                path = esid.download_awb_pdf(awb_digits, dest, session_date=session_date or None)
-                if path.exists() and path.stat().st_size > 0:
-                    return LookupOutcome("PDF_ESID", NormalizedStatus.DOWNLOADED, downloaded_path=str(path))
-                return LookupOutcome("", NormalizedStatus.FAILED, "DOWNLOAD_EMPTY", "File PDF ESID rỗng")
-            path = self._portal.download_document(dest)
-            if path.exists() and path.stat().st_size > 0:
-                return LookupOutcome("PDF", NormalizedStatus.DOWNLOADED, downloaded_path=str(path))
-            return LookupOutcome("", NormalizedStatus.FAILED, "DOWNLOAD_EMPTY", "File PDF rỗng")
-        except NeedsLoginError as e:
-            return LookupOutcome("", NormalizedStatus.NEEDS_LOGIN, "NEEDS_LOGIN", str(e))
-        except SiteChangedError as e:
-            return LookupOutcome("", NormalizedStatus.SITE_CHANGED, "SITE_CHANGED", str(e))
-        except Exception as e:
-            return LookupOutcome("", NormalizedStatus.FAILED, "DOWNLOAD_ERROR", str(e)[:300])
+            return LookupOutcome("SAVE_PDF_DIALOG_MOCK", NormalizedStatus.DOWNLOADED)
+        return self._open_esid_in_dialog(
+            awb_digits,
+            session_date=session_date,
+            for_save_pdf=True,
+            skip_prepare=skip_prepare,
+        )
 
     def print_esid_dialog(
         self,
         awb_digits: str,
         *,
         session_date: str | None = None,
+        skip_prepare: bool = False,
     ) -> LookupOutcome:
         """In ESID: AWB# 8 số → IN → mở hộp thoại in cho user (không tự gửi máy in)."""
         if self.mock:
             return LookupOutcome("PRINT_DIALOG_MOCK", NormalizedStatus.PRINTED)
+        return self._open_esid_in_dialog(
+            awb_digits,
+            session_date=session_date,
+            for_save_pdf=False,
+            skip_prepare=skip_prepare,
+        )
+
+    def _open_esid_in_dialog(
+        self,
+        awb_digits: str,
+        *,
+        session_date: str | None = None,
+        for_save_pdf: bool = False,
+        skip_prepare: bool = False,
+    ) -> LookupOutcome:
         if self._portal is None:
             return LookupOutcome("", NormalizedStatus.NEEDS_LOGIN, "NO_BROWSER", "Chưa mở Chrome session")
         try:
@@ -159,15 +203,41 @@ class TcsClient:
                     "NO_ESID_LOCATORS",
                     "Chưa có locator ESID",
                 )
+            from app.utils.awb import safe_filename_awb
+
             esid = EsidListPage(self._portal.page, loc)
-            esid.click_in_for_user_print(awb_digits, session_date=session_date or None)
+            suggest = f"{safe_filename_awb(awb_digits)}_ESID" if for_save_pdf else None
+            try:
+                esid.click_in_for_user_print(
+                    awb_digits,
+                    session_date=session_date or None,
+                    suggest_pdf_filename=suggest,
+                    skip_prepare=skip_prepare,
+                )
+            except SiteChangedError:
+                # Hot-path miss → cold full prepare
+                if skip_prepare:
+                    esid.click_in_for_user_print(
+                        awb_digits,
+                        session_date=session_date or None,
+                        suggest_pdf_filename=suggest,
+                        skip_prepare=False,
+                    )
+                else:
+                    raise
+            if for_save_pdf:
+                return LookupOutcome(
+                    f"SAVE_PDF_DIALOG:{suggest}",
+                    NormalizedStatus.DOWNLOADED,
+                )
             return LookupOutcome("PRINT_DIALOG", NormalizedStatus.PRINTED)
         except NeedsLoginError as e:
             return LookupOutcome("", NormalizedStatus.NEEDS_LOGIN, "NEEDS_LOGIN", str(e))
         except SiteChangedError as e:
             return LookupOutcome("", NormalizedStatus.SITE_CHANGED, "SITE_CHANGED", str(e))
         except Exception as e:
-            return LookupOutcome("", NormalizedStatus.FAILED, "PRINT_ERROR", str(e)[:300])
+            code = "DOWNLOAD_ERROR" if for_save_pdf else "PRINT_ERROR"
+            return LookupOutcome("", NormalizedStatus.FAILED, code, str(e)[:300])
 
     def _mock_lookup(self, awb_digits: str, *, ops_status: str = "") -> LookupOutcome:
         if not awb_digits or len(awb_digits) != 11:

@@ -1,4 +1,4 @@
-"""Live: PDF ESID (AWB# → IN → PDF) + In ESID (hộp thoại)."""
+"""Live: PDF ESID (danh sách → AWB# → IN → Save PDF) + In ESID (hộp thoại)."""
 from __future__ import annotations
 
 import sys
@@ -39,41 +39,29 @@ def main() -> int:
             manual_timeout_s=90,
             debug_dir=settings.screenshots_dir / "captcha",
         )
-        print("login", ok, msg, f"{time.perf_counter()-t0:.1f}s")
+        print("login", ok, msg, f"{time.perf_counter()-t0:.1f}s", flush=True)
         if not ok:
             return 2
         esid = EsidListPage(page, loc)
-        print("step prepare", awb, session_date, flush=True)
         if mode == "print":
+            print("step PRINT: list → AWB# → IN → dialog", flush=True)
             esid.click_in_for_user_print(awb, session_date=session_date)
             print("PRINT_DIALOG_OPEN", f"{time.perf_counter()-t0:.1f}s", flush=True)
             print("DONE_OK", flush=True)
-            time.sleep(8)  # để user thấy hộp in
+            time.sleep(6)
             return 0
         fpath = settings.output_dir / "docs" / build_document_filename(awb, "ESID")
-        print("step search AWB# last8", awb[3:], flush=True)
-        esid.search_by_awb_last8(awb)
-        rows = esid.list_row_statuses()
-        matched = esid._match_rows_for_awb(awb, rows)
-        print("step rows", len(rows), "matched", len(matched), flush=True)
-        if not matched and session_date:
-            print("step fallback date", session_date, flush=True)
-            esid.clear_awb_filters()
-            esid.search_by_flight_date(session_date)
-            matched = esid._match_rows_for_awb(awb, esid.list_row_statuses())
-            print("step matched after date", len(matched), flush=True)
-        if not matched:
-            print("DONE_FAIL no row", flush=True)
-            return 1
-        print("step open detail", flush=True)
-        try:
-            esid.open_detail_row(awb, require_reception=True)
-        except Exception:
-            esid.open_detail_row(awb, require_reception=False)
-        print("step click IN → PDF", flush=True)
-        path = esid.click_print_download(fpath)
+        print("step PDF: list → AWB# last8 → scroll IN → Save PDF", awb[3:], "→", fpath, flush=True)
+        path = esid.download_awb_pdf(awb, fpath, session_date=session_date)
         ok_pdf = verify_download(path)
-        print("pdf_ok", ok_pdf, "size", path.stat().st_size if path.exists() else 0, path, flush=True)
+        print(
+            "pdf_ok",
+            ok_pdf,
+            "size",
+            path.stat().st_size if path.exists() else 0,
+            path,
+            flush=True,
+        )
         print("DONE_OK" if ok_pdf else "DONE_FAIL", f"{time.perf_counter()-t0:.1f}s", flush=True)
         return 0 if ok_pdf else 1
     finally:

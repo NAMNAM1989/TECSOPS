@@ -148,6 +148,78 @@ export function clampLongestEdgeAtMost(
   });
 }
 
+/** Phóng cạnh dài lên maxCm (giữ tỉ lệ) — dùng khi mục tiêu kg cao hơn mẫu đo. */
+export function scaleLongestEdgeToMax(
+  line: SizeTemplate,
+  maxCm = DIM_MAX_LONG_EDGE_CM
+): SizeTemplate {
+  const maxEdge = longestEdgeCm(line);
+  if (maxEdge <= 0 || maxEdge >= maxCm - 1e-6) {
+    return clampLongestEdgeAtMost(line, maxCm);
+  }
+  const scale = maxCm / maxEdge;
+  return clampLongestEdgeAtMost(
+    {
+      lCm: roundCm(line.lCm * scale),
+      wCm: roundCm(line.wCm * scale),
+      hCm: roundCm(line.hCm * scale),
+    },
+    maxCm
+  );
+}
+
+/** Mở rộng 2 cạnh ngắn hơn (≤ maxCm) để tăng kg DIM khi còn kiện thiếu. */
+export function buildVolumeExpansionVariants(
+  base: SizeTemplate,
+  maxCm = DIM_MAX_LONG_EDGE_CM
+): SizeTemplate[] {
+  const scaled = scaleLongestEdgeToMax(base, maxCm);
+  const [l, w, h] = [scaled.lCm, scaled.wCm, scaled.hCm].sort((a, b) => b - a);
+  const out: SizeTemplate[] = [];
+  const seen = new Set<string>();
+
+  const add = (candidate: SizeTemplate) => {
+    const fixed = clampLongestEdgeAtMost(candidate, maxCm);
+    if (longestEdgeCm(fixed) > maxCm + 1e-6) return;
+    if (!satisfiesMaxOneEdgeBelowMin(fixed)) return;
+    const key = `${fixed.lCm}|${fixed.wCm}|${fixed.hCm}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(fixed);
+  };
+
+  const bumps = [0, 2, 5, 8, 12, 15, 20];
+  for (const dw of bumps) {
+    for (const dh of bumps) {
+      add({
+        lCm: l,
+        wCm: Math.min(maxCm, w + dw),
+        hCm: Math.min(maxCm, h + dh),
+      });
+    }
+  }
+
+  return out;
+}
+
+/** Trần tổng DIM khả thi: đo thật + kiện còn lại × mẫu nặng nhất (cạnh ≤65 cm). */
+export function computeMaxAchievableDimTotal(
+  manualNorm: DimPieceLine[],
+  templates: DimPieceLine[],
+  remainingPcs: number,
+  divisor: DimDivisor,
+  dimCtx: ScscDimRoundContext
+): number | null {
+  const manualTotal = totalDimKgFromLines(manualNorm, divisor, dimCtx);
+  if (manualTotal == null) return null;
+  let maxUnit = 0;
+  for (const t of templates) {
+    const uk = lineDimKg({ ...t, pcs: 1 }, divisor, dimCtx);
+    if (uk != null && uk > maxUnit) maxUnit = uk;
+  }
+  return manualTotal + maxUnit * Math.max(0, remainingPcs);
+}
+
 export function normalizeDimLineEdges(line: DimPieceLine): DimPieceLine {
   const [lCm, wCm, hCm] = [line.lCm, line.wCm, line.hCm]
     .map(roundCm)
@@ -456,6 +528,10 @@ export function buildSmartDimTemplates(
         pcs: 1,
         estimated: true,
       });
+    }
+    push({ ...scaleLongestEdgeToMax(base), pcs: 1, estimated: true });
+    for (const expanded of buildVolumeExpansionVariants(base)) {
+      push({ ...expanded, pcs: 1, estimated: true });
     }
   }
 
@@ -1317,6 +1393,22 @@ export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillR
     userSpecified &&
     totalDim < targetKg - DIM_TARGET_MATCH_TOLERANCE_KG - 1e-6
   ) {
+    const maxAch = computeMaxAchievableDimTotal(
+      manualNorm,
+      templates,
+      input.remainingPcs,
+      input.divisor,
+      input.dimCtx
+    );
+    if (
+      maxAch != null &&
+      targetKg > maxAch + DIM_TARGET_MATCH_TOLERANCE_KG + 1e-6
+    ) {
+      return {
+        ok: false,
+        error: `Mục tiêu ${targetKg} kg không khả thi với mẫu đo và cạnh ≤ ${DIM_MAX_LONG_EDGE_CM} cm — tối đa ~${maxAch.toFixed(0)} kg. Thử giảm mục tiêu hoặc thêm mẫu đo lớn hơn.`,
+      };
+    }
     return {
       ok: false,
       error: `Không khớp mục tiêu ${targetKg} kg (đạt ${totalDim.toFixed(1)} kg, lệch > ${DIM_TARGET_MATCH_TOLERANCE_KG} kg). Thử giảm mục tiêu hoặc thêm mẫu đo.`,

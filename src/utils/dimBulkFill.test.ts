@@ -279,6 +279,30 @@ describe("generateRandomDimFill — tổng DIM trong vùng ~5% dưới kg lô", 
     expect(r.ok).toBe(false);
   });
 
+  it("lô 61856474342 — 60×40×40×5, mục tiêu 1000 kg khớp ±1", () => {
+    const SQ_CTX = { flight: "SQ185", awb: "618-5647 4342" } as const;
+    const manual = [{ lCm: 60, wCm: 40, hCm: 40, pcs: 5 }];
+    const target = 1000;
+    const r = generateRandomDimFill({
+      manualLines: manual,
+      remainingPcs: 37,
+      declaredKg: 1163,
+      poolId: "smart",
+      divisor: 6000,
+      dimCtx: SQ_CTX,
+      seed: dimRandomSeed("618-5647-4342", 42, 1163),
+      targetTotalDimKg: target,
+    });
+    expect(r.ok, !r.ok ? r.error : undefined).toBe(true);
+    if (r.ok) {
+      expect(r.lines.reduce((s, l) => s + l.pcs, 0)).toBe(42);
+      expect(r.totalDim).toBeLessThanOrEqual(target + 1e-6);
+      expect(r.totalDim).toBeGreaterThanOrEqual(target - DIM_TARGET_MATCH_TOLERANCE_KG - 1e-6);
+      const estimated = r.lines.filter((l) => l.estimated);
+      expect(estimated.every((l) => longestEdgeCm(l) <= DIM_MAX_LONG_EDGE_CM + 1e-6)).toBe(true);
+    }
+  });
+
   it("targetEstimatedLineCount → đúng số dòng ước tính", () => {
     const r = generateRandomDimFill({
       manualLines: manual,

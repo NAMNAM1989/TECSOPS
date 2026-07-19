@@ -57,6 +57,11 @@ describe("dimEntryRandomFill", () => {
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.lines.reduce((s, l) => s + l.pcs, 0)).toBe(96);
+      const snap = snapshotDimEntry(r.lines, lot96, 6000, TR_CTX);
+      expect(snap.remainingPcs).toBe(0);
+      expect(snap.pcsMatch).toBe(true);
+      expect(snap.canRandomFill).toBe(false);
+      expect(snap.workflowStep).toBe(3);
     }
   });
 });

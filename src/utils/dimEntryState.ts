@@ -75,6 +75,11 @@ export function snapshotDimEntry(
   const pcsMatch =
     lot.declaredPcs != null && lines.length > 0 && sumDimPcs === lot.declaredPcs;
 
+  const remainingPcs =
+    lot.declaredPcs != null && lines.length > 0
+      ? Math.max(0, lot.declaredPcs - sumDimPcs)
+      : preview.remainingPcs;
+
   let dimBelowGross: boolean | null = null;
   if (totalDim != null && lot.declaredKg != null && lot.declaredKg > 0) {
     dimBelowGross = totalDim < lot.declaredKg;
@@ -83,7 +88,7 @@ export function snapshotDimEntry(
   let workflowStep: DimEntryWorkflowStep = 1;
   if (measured.length === 0) {
     workflowStep = 1;
-  } else if (preview.remainingPcs > 0) {
+  } else if (remainingPcs > 0) {
     workflowStep = 2;
   } else {
     workflowStep = 3;
@@ -103,7 +108,7 @@ export function snapshotDimEntry(
     sumMeasuredPcs,
     sumEstimatedPcs,
     sumDimPcs,
-    remainingPcs: preview.remainingPcs,
+    remainingPcs,
     totalDim,
     floorKg: preview.floorKg,
     ceilingKg: preview.ceilingKg,
@@ -112,7 +117,7 @@ export function snapshotDimEntry(
       lot.declaredKg != null &&
       lot.declaredKg > 0 &&
       measured.length > 0 &&
-      preview.remainingPcs > 0,
+      remainingPcs > 0,
     pcsExcess,
     pcsShort,
     pcsMatch,

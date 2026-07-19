@@ -274,7 +274,7 @@ export function buildSmartDimTemplates(
   const fallbackPool: Exclude<DimRandomPoolId, "smart"> =
     poolId === "smart" ? "mix" : poolId;
   for (const t of [...POOL_MICRO, ...DIM_RANDOM_POOLS[fallbackPool].templates]) {
-    push(t);
+    push({ ...t, pcs: 1, estimated: true });
   }
 
   return out;

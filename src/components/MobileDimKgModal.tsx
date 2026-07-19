@@ -18,6 +18,7 @@ import {
   consolidateDimPieceLines,
   DIM_TOTAL_BAND_BELOW_RATIO,
   dimRandomSeed,
+  normalizeDimLineEdges,
   previewSmartDimFill,
   splitMeasuredAndEstimated,
 } from "../utils/dimBulkFill";
@@ -208,54 +209,86 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     [lines, declaredPcs, declaredKg]
   );
 
-  const appendQuads = useCallback(
-    (parsed: DimPieceLine[]) => {
-      if (parsed.length === 0) return;
-      const measured = parsed.map((l) => ({ ...l, estimated: false as const }));
+  const appendRowsFromCombo = useCallback(
+    (opts?: { thenSmartFill?: boolean }) => {
+      const parsedResult = tryParseDimPieceLinesFromComboText(combo);
+      if (!parsedResult.ok) {
+        window.alert(parsedResult.error);
+        return false;
+      }
+      const parsed = parsedResult.lines.map((l) =>
+        normalizeDimLineEdges({ ...l, estimated: false as const })
+      );
+      const addPcs = parsed.reduce((s, l) => s + l.pcs, 0);
+      const nextSum = sumDimPcs + addPcs;
+      if (declaredPcs != null && nextSum > declaredPcs) {
+        window.alert(
+          `Dư kiện: nếu thêm dòng này, tổng kiện (${nextSum}) vượt kiện lô (${declaredPcs}).`
+        );
+        return false;
+      }
       setLines((prev) => {
-        const manualOnly = consolidateDimPieceLines([
-          ...splitMeasuredAndEstimated(prev).measured,
-          ...measured,
-        ]);
-        return runSmartPipeline(manualOnly);
+        const next = [...prev, ...parsed];
+        if (opts?.thenSmartFill ?? autoSmartFill) {
+          const manualOnly = consolidateDimPieceLines([
+            ...splitMeasuredAndEstimated(next).measured,
+          ]);
+          return runSmartPipeline(manualOnly);
+        }
+        setAutoFillNote(null);
+        return next;
       });
+      setCombo("");
+      textareaRef.current?.focus();
+      return true;
     },
-    [runSmartPipeline]
+    [autoSmartFill, combo, declaredPcs, runSmartPipeline, sumDimPcs]
   );
 
-  const handleRegenerateEstimated = () => {
-    setLines((prev) => runSmartPipeline(splitMeasuredAndEstimated(prev).measured));
+  const handleMergeSamples = () => {
+    setLines((prev) => consolidateDimPieceLines(prev));
+    setAutoFillNote(null);
+  };
+
+  const handleRandomFill = () => {
+    if (declaredPcs == null || declaredKg == null || declaredKg <= 0) {
+      window.alert("Cần kiện lô và kg lô trên lô hàng để sinh DIM ngẫu nhiên.");
+      return;
+    }
+    const measured = consolidateDimPieceLines(splitMeasuredAndEstimated(lines).measured);
+    if (measured.length === 0) {
+      window.alert("Thêm ít nhất một mẫu kiện đo trước khi sinh ngẫu nhiên.");
+      return;
+    }
+    const { lines: next, error } = applySmartDimAutoFill(measured, {
+      declaredPcs,
+      declaredKg,
+      divisor,
+      dimCtx,
+      seed: smartSeed,
+      poolId: "smart",
+      enabled: true,
+    });
+    setAutoFillNote(error ?? null);
+    if (!error) setAutoFillNote(null);
+    setLines(next);
+  };
+
+  const canRandomFill =
+    declaredPcs != null &&
+    declaredKg != null &&
+    declaredKg > 0 &&
+    splitMeasuredAndEstimated(lines).measured.length > 0 &&
+    smartPreview.remainingPcs > 0;
+
+  const removeLine = (index: number) => {
+    setLines((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleClearEstimated = () => {
     setAutoFillNote(null);
     setLines((prev) => consolidateDimPieceLines(splitMeasuredAndEstimated(prev).measured));
   };
-
-  const removeLine = (index: number) => {
-    setLines((prev) => runSmartPipeline(prev.filter((_, i) => i !== index)));
-  };
-
-  const addFromCombo = () => {
-    const parsedResult = tryParseDimPieceLinesFromComboText(combo);
-    if (!parsedResult.ok) {
-      window.alert(parsedResult.error);
-      return;
-    }
-    const parsed = parsedResult.lines;
-    const nextSum = lines.reduce((s, l) => s + l.pcs, 0) + parsed.reduce((s, l) => s + l.pcs, 0);
-    if (declaredPcs != null && nextSum > declaredPcs) {
-      window.alert(
-        `Dư kiện: nếu thêm dòng này, tổng kiện (${nextSum}) vượt kiện lô (${declaredPcs}).`
-      );
-      return;
-    }
-    appendQuads(parsed);
-    setCombo("");
-    // Keep focus inside the textarea on mobile for faster sequential entry
-    textareaRef.current?.focus();
-  };
-
 
   const handleSave = () => {
     if (lines.length > 0 && totalDim != null) {
@@ -405,7 +438,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                       (!multiLine && !e.shiftKey);
                     if (submit) {
                       e.preventDefault();
-                      addFromCombo();
+                      appendRowsFromCombo();
                     }
                     return;
                   }
@@ -464,14 +497,37 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   ×
                 </button>
               </div>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={addFromCombo}
-                className="mt-2 w-full rounded-2xl bg-apple-blue py-2.5 text-sm font-semibold text-white shadow-sm active:scale-[0.99]"
-              >
-                Thêm & gộp mẫu
-              </button>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => appendRowsFromCombo()}
+                  className="rounded-2xl bg-apple-blue py-2.5 text-xs font-semibold text-white shadow-sm active:scale-[0.99] sm:text-sm"
+                  title="Thêm dòng từ ô nhập — không gộp kiện giống nhau"
+                >
+                  Thêm dòng
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleMergeSamples}
+                  disabled={lines.length < 2}
+                  className="rounded-2xl border border-black/[0.12] bg-white py-2.5 text-xs font-semibold text-apple-label shadow-sm active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45 sm:text-sm"
+                  title="Gộp các dòng cùng kích thước (D×R×C) thành một dòng"
+                >
+                  Gộp mẫu
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleRandomFill}
+                  disabled={!canRandomFill}
+                  className="rounded-2xl border border-violet-300/80 bg-violet-600 py-2.5 text-xs font-semibold text-white shadow-sm active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-violet-300 sm:text-sm"
+                  title="Sinh kiện ước tính còn lại — tổng DIM ~95–99.9% kg lô"
+                >
+                  Ngẫu nhiên
+                </button>
+              </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-apple-secondary">
                   <input
@@ -480,21 +536,24 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                     onChange={(e) => {
                       setAutoSmartFill(e.target.checked);
                       if (e.target.checked) {
-                        setLines((prev) => runSmartPipeline(prev));
+                        setLines((prev) =>
+                          runSmartPipeline(splitMeasuredAndEstimated(prev).measured)
+                        );
                       } else {
                         handleClearEstimated();
                       }
                     }}
                     className="rounded border-black/20"
                   />
-                  Tự sinh kiện còn lại (tổng DIM ~95–99.9% kg lô)
+                  Tự sinh sau Thêm dòng (tổng DIM ~95–99.9% kg lô)
                 </label>
                 {sumEstimatedPcs > 0 ? (
                   <>
                     <button
                       type="button"
-                      onClick={handleRegenerateEstimated}
-                      className="text-[11px] font-semibold text-sky-700 underline-offset-2 hover:underline"
+                      onClick={handleRandomFill}
+                      disabled={!canRandomFill}
+                      className="text-[11px] font-semibold text-sky-700 underline-offset-2 hover:underline disabled:opacity-45"
                     >
                       Sinh lại
                     </button>

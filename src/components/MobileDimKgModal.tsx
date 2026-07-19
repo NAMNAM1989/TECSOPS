@@ -281,7 +281,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
   return (
     <div
-      className="no-print fixed inset-0 z-[480] flex items-end justify-center bg-black/30 p-3 sm:items-center sm:p-4"
+      className="no-print fixed inset-0 z-[480] flex items-end justify-center bg-black/30 p-2 sm:items-center sm:p-4 md:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="dim-modal-title"
@@ -290,10 +290,10 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
       }}
     >
       <div
-        className="flex max-h-[min(92dvh,680px)] w-full max-w-sm flex-col overflow-hidden rounded-[1.35rem] border border-black/[0.06] bg-white shadow-2xl shadow-black/10 transition-all duration-200"
+        className="flex max-h-[min(94dvh,760px)] w-full max-w-[min(100%,26rem)] flex-col overflow-hidden rounded-[1.35rem] border border-black/[0.06] bg-white shadow-2xl shadow-black/10 transition-all duration-200 sm:max-h-[min(92dvh,860px)] sm:max-w-xl md:max-h-[min(92dvh,920px)] md:max-w-3xl lg:max-w-4xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 bg-gradient-to-b from-slate-50/90 to-white px-4 pb-3 pt-4">
+        <div className="shrink-0 bg-gradient-to-b from-slate-50/90 to-white px-4 pb-3 pt-4 sm:px-5 sm:pt-5 md:px-6">
           <div className="flex items-start justify-between gap-2">
             <h2 id="dim-modal-title" className="text-[1.05rem] font-semibold tracking-tight text-apple-label">
               Nhập DIM
@@ -324,27 +324,19 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
           ) : null}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-2.5">
-          <div className="space-y-2.5">
-            {!isInputFocused && declaredPcs != null ? (
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 md:px-6 md:py-4">
+          <div className="space-y-3 md:grid md:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] md:items-start md:gap-5 md:space-y-0">
+            <div className="space-y-3 md:min-h-0">
+            <div className={isInputFocused ? "hidden md:block" : undefined}>
               <DimSmartProgress
                 measuredPcs={sumMeasuredPcs}
                 estimatedPcs={sumEstimatedPcs}
-                declaredPcs={declaredPcs}
-                floorKg={smartPreview.floorKg}
-                ceilingKg={smartPreview.ceilingKg}
+                declaredPcs={declaredPcs ?? (sumDimPcs || 1)}
+                floorKg={declaredPcs != null ? smartPreview.floorKg : 0}
+                ceilingKg={declaredPcs != null ? smartPreview.ceilingKg : 0}
                 totalDimLabel={totalDimLabel}
               />
-            ) : !isInputFocused ? (
-              <DimSmartProgress
-                measuredPcs={sumMeasuredPcs}
-                estimatedPcs={sumEstimatedPcs}
-                declaredPcs={sumDimPcs || 1}
-                floorKg={0}
-                ceilingKg={0}
-                totalDimLabel={totalDimLabel}
-              />
-            ) : null}
+            </div>
 
             {limitWarnings.length > 0 ? (
               <div className="space-y-1 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950">
@@ -378,7 +370,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
               <textarea
                 ref={textareaRef}
                 id="dim-combo"
-                rows={isInputFocused ? 2 : 4}
+                rows={isInputFocused ? 3 : 5}
                 aria-describedby="dim-combo-hint"
                 inputMode="text"
                 enterKeyHint="enter"
@@ -432,7 +424,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   }
                 }}
                 placeholder={"40×50×30×10\n55×45×35×5"}
-                className="max-h-40 min-h-[5rem] w-full resize-y rounded-2xl border border-black/[0.07] bg-slate-50/40 px-3 py-2.5 font-mono text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/18 transition-all duration-200"
+                className="max-h-52 min-h-[6rem] w-full resize-y rounded-2xl border border-black/[0.07] bg-slate-50/40 px-3 py-2.5 font-mono text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/18 transition-all duration-200 sm:min-h-[7rem] md:max-h-64 md:text-[15px]"
               />
               <p id="dim-combo-hint" className="sr-only">
                 {DIM_INPUT_HINT}
@@ -520,7 +512,13 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 <p className="mt-1.5 text-[10px] font-medium text-amber-800">{autoFillNote}</p>
               ) : null}
             </div>
+            </div>
 
+            <div
+              className={`space-y-3 md:min-h-0 md:max-h-[min(58dvh,520px)] md:overflow-y-auto md:overscroll-contain md:rounded-2xl md:border md:border-black/[0.06] md:bg-slate-50/30 md:p-3 ${
+                isInputFocused ? "hidden md:block" : ""
+              }`}
+            >
             {declaredPcs != null ? (
               <div
                 className={`rounded-xl border px-3 py-2 text-[11px] leading-snug ${
@@ -557,15 +555,15 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
               </div>
             ) : null}
 
-            {!isInputFocused && (
-              <div>
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-[10px] font-semibold text-apple-secondary">Các dòng</span>
-                  <span className="text-[10px] text-apple-tertiary">{lines.length}</span>
+            <div className="md:mt-0">
+                <div className="mb-1.5 flex items-center justify-between md:mb-2">
+                  <span className="text-[11px] font-semibold text-apple-secondary sm:text-xs">Các dòng</span>
+                  <span className="text-[10px] text-apple-tertiary sm:text-[11px]">{lines.length}</span>
                 </div>
                 {lines.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-black/[0.12] py-5 text-center text-xs text-apple-tertiary">
-                    Chưa có dòng
+                  <p className="rounded-xl border border-dashed border-black/[0.12] py-8 text-center text-xs text-apple-tertiary md:min-h-[12rem] md:py-12">
+                    <span className="md:hidden">Chưa có dòng</span>
+                    <span className="hidden md:inline">Chưa có dòng — thêm mẫu kiện bên trái</span>
                   </p>
                 ) : (
                   <ul className="space-y-2">
@@ -574,10 +572,10 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                       return (
                         <li
                           key={`${idx}-${line.lCm}-${line.wCm}-${line.hCm}-${line.pcs}`}
-                          className="flex items-center justify-between gap-2 rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2.5"
+                          className="flex items-center justify-between gap-2 rounded-xl border border-black/[0.08] bg-white px-3 py-2.5 shadow-sm"
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="font-mono text-xs font-semibold text-apple-label">
+                            <p className="font-mono text-xs font-semibold text-apple-label sm:text-[13px]">
                               {line.lCm}×{line.wCm}×{line.hCm}{" "}
                               <span className="text-apple-secondary">×{line.pcs}</span>
                               {line.estimated ? (
@@ -607,11 +605,11 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   </ul>
                 )}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-black/[0.06] p-4 pt-3">
+        <div className="shrink-0 border-t border-black/[0.06] p-4 pt-3 sm:px-5 sm:pb-4 md:px-6">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"

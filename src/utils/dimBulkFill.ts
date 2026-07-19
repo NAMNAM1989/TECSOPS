@@ -13,6 +13,12 @@ export const DIM_TOTAL_CEILING_RATIO = 0.999;
 /** Ngưỡng cạnh tối thiểu SCSC — tối đa 1 cạnh được dưới mức này. */
 export const DIM_MIN_EDGE_CM = 25;
 
+/** Số dòng DIM mục tiêu cho lô nhiều kiện (tổng cả đo + ước tính). */
+export const DIM_LOT_LINE_COUNT_MIN = 13;
+export const DIM_LOT_LINE_COUNT_MAX = 17;
+/** Lô từ ngưỡng này trở lên → mục tiêu 13–17 dòng. */
+export const DIM_LOT_LINE_COUNT_PCS_THRESHOLD = 40;
+
 /** @deprecated Hành vi cũ 90% tổng — chỉ test legacy. */
 export const DIM_RANDOM_FILL_CAP_RATIO = 0.9;
 
@@ -175,6 +181,106 @@ export function computeTotalDimTargets(
   const ceilingKg = declaredKg * ceilingRatio;
   const targetKg = floorKg + (ceilingKg - floorKg) * rng();
   return { floorKg, ceilingKg, targetKg };
+}
+
+/** Mục tiêu số dòng DIM trên lô (đo + ước tính). Lô lớn → 13–17 dòng. */
+export function computeTargetLotLineCount(totalLotPcs: number, seed: number): number {
+  if (totalLotPcs < DIM_LOT_LINE_COUNT_PCS_THRESHOLD) {
+    return Math.max(3, Math.min(10, Math.ceil(totalLotPcs / 5)));
+  }
+  const rng = mulberry32(seed ^ 0x4c494e);
+  return (
+    DIM_LOT_LINE_COUNT_MIN +
+    Math.floor(rng() * (DIM_LOT_LINE_COUNT_MAX - DIM_LOT_LINE_COUNT_MIN + 1))
+  );
+}
+
+function lineKey(line: DimPieceLine): string {
+  return consolidateKey(normalizeDimLineEdges(line));
+}
+
+/** Thêm biến thể ±1–3 cm để sinh nhiều dòng size khác nhau. */
+function expandTemplateVariants(
+  templates: DimPieceLine[],
+  seed: number,
+  maxExtra = 48
+): DimPieceLine[] {
+  const seen = new Set(templates.map(lineKey));
+  const out = [...templates];
+  const rng = mulberry32(seed ^ 0x564152);
+  const deltas = [-3, -2, -1, 1, 2, 3];
+
+  for (const base of templates) {
+    if (out.length - templates.length >= maxExtra) break;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const fixed = enforceMaxOneEdgeBelowMin({
+        lCm: roundCm(base.lCm + deltas[Math.floor(rng() * deltas.length)]!),
+        wCm: roundCm(base.wCm + deltas[Math.floor(rng() * deltas.length)]!),
+        hCm: roundCm(base.hCm + deltas[Math.floor(rng() * deltas.length)]!),
+      });
+      const n = normalizeDimLineEdges({ ...fixed, pcs: 1, estimated: true });
+      if (!satisfiesMaxOneEdgeBelowMin(n)) continue;
+      const key = lineKey(n);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(n);
+      if (out.length - templates.length >= maxExtra) break;
+    }
+  }
+  return out;
+}
+
+/** Tách dòng pcs lớn sang size lệch nhẹ để tăng số dòng hiển thị. */
+function diversifyGeneratedLines(
+  generated: DimPieceLine[],
+  targetEstimatedLines: number,
+  ceilingKg: number,
+  manualNorm: DimPieceLine[],
+  divisor: DimDivisor,
+  dimCtx: ScscDimRoundContext,
+  rng: () => number
+): DimPieceLine[] {
+  let lines = consolidateDimPieceLines(generated);
+  let guard = 0;
+
+  const withinCeiling = (next: DimPieceLine[]): boolean => {
+    const total = mergedTotalDim(manualNorm, next, divisor, dimCtx);
+    return total != null && total <= ceilingKg + 1e-9;
+  };
+
+  while (lines.length < targetEstimatedLines && guard++ < 300) {
+    const splittable = [...lines].filter((l) => l.pcs >= 2).sort((a, b) => b.pcs - a.pcs)[0];
+    if (!splittable) break;
+
+    let variant: DimPieceLine | null = null;
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const fixed = enforceMaxOneEdgeBelowMin({
+        lCm: roundCm(splittable.lCm + (rng() > 0.5 ? 1 : -1) * (1 + Math.floor(rng() * 3))),
+        wCm: roundCm(splittable.wCm + (rng() > 0.5 ? 1 : -1) * (1 + Math.floor(rng() * 3))),
+        hCm: roundCm(splittable.hCm + (rng() > 0.5 ? 1 : -1) * (1 + Math.floor(rng() * 2))),
+      });
+      const n = normalizeDimLineEdges({ ...fixed, pcs: 1, estimated: true });
+      if (!satisfiesMaxOneEdgeBelowMin(n)) continue;
+      if (lineKey(n) === lineKey(splittable)) continue;
+      variant = n;
+      break;
+    }
+    if (!variant) break;
+
+    const move = Math.min(
+      splittable.pcs - 1,
+      Math.max(1, Math.ceil(splittable.pcs / (targetEstimatedLines - lines.length + 1)))
+    );
+    const trial = consolidateDimPieceLines([
+      ...lines.filter((l) => l !== splittable),
+      { ...splittable, pcs: splittable.pcs - move },
+      { ...variant, pcs: move },
+    ]);
+    if (!withinCeiling(trial)) continue;
+    lines = trial;
+  }
+
+  return lines;
 }
 
 export type RandomDimFillInput = {
@@ -402,7 +508,10 @@ export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillR
     };
   }
 
-  const templates = buildSmartDimTemplates(manualNorm, input.poolId);
+  const templates = expandTemplateVariants(
+    buildSmartDimTemplates(manualNorm, input.poolId),
+    input.seed
+  );
   const unitKgs = templates.map((t) => lineDimKg(t, input.divisor, input.dimCtx));
   if (unitKgs.some((k) => k == null)) {
     return { ok: false, error: "Mẫu kích thước không hợp lệ." };
@@ -410,6 +519,10 @@ export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillR
 
   const rng = mulberry32(input.seed);
   let generated: DimPieceLine[] = [];
+  const totalLotPcs =
+    manualNorm.reduce((s, l) => s + l.pcs, 0) + input.remainingPcs;
+  const targetTotalLines = computeTargetLotLineCount(totalLotPcs, input.seed);
+  const targetEstimatedLines = Math.max(1, targetTotalLines - manualNorm.length);
 
   const currentTotalDim = (): number =>
     mergedTotalDim(manualNorm, generated, input.divisor, input.dimCtx) ?? manualTotal;
@@ -419,6 +532,11 @@ export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillR
     const remainingBudget = ceilingKg - curTotal;
     if (remainingBudget <= 1e-6) return null;
     const idealUnitKg = remainingBudget / remainingSlots;
+    const genLines = consolidateDimPieceLines(generated);
+    const estLineCount = genLines.length;
+    const wantMoreLines =
+      totalLotPcs >= DIM_LOT_LINE_COUNT_PCS_THRESHOLD &&
+      estLineCount < targetEstimatedLines;
 
     let bestTi: number | null = null;
     let bestScore = -Infinity;
@@ -429,13 +547,26 @@ export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillR
       if (uk > remainingBudget + 1e-6) return null;
 
       const candidate = { ...templates[ti]!, pcs: 1, estimated: true as const };
+      const candidateKey = lineKey(candidate);
+      const isNewLine = !genLines.some((l) => lineKey(l) === candidateKey);
+      if (estLineCount >= targetEstimatedLines && isNewLine) return null;
       const nextGen = consolidateDimPieceLines([...generated, candidate]);
       const trialTotal = mergedTotalDim(manualNorm, nextGen, input.divisor, input.dimCtx);
       if (trialTotal == null || trialTotal > ceilingKg + 1e-9) return null;
 
       const totalScore = -Math.abs(targetKg - trialTotal);
       const unitScore = -Math.abs(idealUnitKg - uk);
-      return totalScore + unitScore * Math.min(remainingSlots, 20) * 0.2;
+      let diversityScore = 0;
+      if (wantMoreLines) {
+        diversityScore += isNewLine ? 800 : -400;
+      } else if (
+        totalLotPcs >= DIM_LOT_LINE_COUNT_PCS_THRESHOLD &&
+        estLineCount > targetEstimatedLines + 1 &&
+        !isNewLine
+      ) {
+        diversityScore += 40;
+      }
+      return totalScore + unitScore * Math.min(remainingSlots, 20) * 0.2 + diversityScore;
     };
 
     for (const ti of shuffled) {
@@ -466,6 +597,18 @@ export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillR
     }
     const candidate = { ...templates[ti]!, pcs: 1, estimated: true as const };
     generated = consolidateDimPieceLines([...generated, candidate]);
+  }
+
+  if (totalLotPcs >= DIM_LOT_LINE_COUNT_PCS_THRESHOLD) {
+    generated = diversifyGeneratedLines(
+      generated,
+      targetEstimatedLines,
+      ceilingKg,
+      manualNorm,
+      input.divisor,
+      input.dimCtx,
+      rng
+    );
   }
 
   const merged = consolidateDimPieceLines([...manualNorm, ...generated]);

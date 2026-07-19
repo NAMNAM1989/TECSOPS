@@ -4,6 +4,9 @@ import {
   buildSmartDimTemplates,
   consolidateDimPieceLines,
   countEdgesBelowMin,
+  computeTargetLotLineCount,
+  DIM_LOT_LINE_COUNT_MAX,
+  DIM_LOT_LINE_COUNT_MIN,
   DIM_TOTAL_BAND_BELOW_RATIO,
   DIM_TOTAL_CEILING_RATIO,
   DIM_RANDOM_FILL_CAP_RATIO,
@@ -124,6 +127,31 @@ describe("generateRandomDimFill — tổng DIM trong vùng ~5% dưới kg lô", 
       expect(r.totalDim).toBeLessThan(1000);
       expect(r.totalDim).toBeGreaterThanOrEqual(950 - 1e-6);
       expect(r.totalDim).toBeLessThanOrEqual(999 + 1e-6);
+    }
+  });
+
+  it("lô 96 kiện → khoảng 13–17 dòng DIM", () => {
+    const declaredKg = 1150;
+    const seed = dimRandomSeed("lot-96", 96, declaredKg);
+    const r = generateRandomDimFill({
+      manualLines: [
+        { lCm: 40, wCm: 50, hCm: 30, pcs: 10 },
+        { lCm: 55, wCm: 45, hCm: 35, pcs: 6 },
+      ],
+      remainingPcs: 80,
+      declaredKg,
+      poolId: "smart",
+      divisor: 6000,
+      dimCtx: TR_CTX,
+      seed,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(computeTargetLotLineCount(96, seed)).toBeGreaterThanOrEqual(DIM_LOT_LINE_COUNT_MIN);
+      expect(computeTargetLotLineCount(96, seed)).toBeLessThanOrEqual(DIM_LOT_LINE_COUNT_MAX);
+      expect(r.lines.length).toBeGreaterThanOrEqual(DIM_LOT_LINE_COUNT_MIN);
+      expect(r.lines.length).toBeLessThanOrEqual(DIM_LOT_LINE_COUNT_MAX);
+      expect(r.lines.reduce((s, l) => s + l.pcs, 0)).toBe(96);
     }
   });
 

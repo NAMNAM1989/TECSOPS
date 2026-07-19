@@ -1,11 +1,12 @@
 import type { Borders, Cell, Font } from "exceljs";
 import type { Shipment } from "../types/shipment";
 import { canPrintDimScscReport } from "./printDimReport";
-import { buildScscDimListModel, dimKgExcelNumFmt, type ScscDimListModel } from "./scscDimListReport";
+import { buildScscDimListModel, dimKgExcelLineNumFmt, scscDimLineNoteLabel, scscDimListHasEstimatedRows, type ScscDimListModel } from "./scscDimListReport";
 
 const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 const LAST_COL = 6;
+const NOTE_COL = 7;
 const BLACK = "FF000000";
 
 /** Meta không viền — bắt đầu từ hàng 1; sau meta là dòng trống + header bảng DIM */
@@ -86,6 +87,9 @@ async function fillListScscSheet(
   s: Shipment,
   model: ScscDimListModel
 ) {
+  const showNoteCol = scscDimListHasEstimatedRows(model.rows);
+  const tableLastCol = showNoteCol ? NOTE_COL : LAST_COL;
+
   sheet.columns = [
     { width: 18 },
     { width: 14 },
@@ -93,6 +97,7 @@ async function fillListScscSheet(
     { width: 14 },
     { width: 12 },
     { width: 16 },
+    ...(showNoteCol ? [{ width: 10 }] : []),
   ];
 
   const flightDate = `${s.flight.trim()} / ${s.flightDate.trim()}`;
@@ -111,7 +116,7 @@ async function fillListScscSheet(
     const [k, v] = metaRows[i]!;
     row.getCell(1).value = k;
     styleMetaLabel(row.getCell(1));
-    sheet.mergeCells(r, 2, r, LAST_COL);
+    sheet.mergeCells(r, 2, r, tableLastCol);
     const vCell = row.getCell(2);
     vCell.value = v;
     styleMetaValue(vCell);
@@ -119,7 +124,7 @@ async function fillListScscSheet(
 
   sheet.getRow(ROW_SPACER_BEFORE_TABLE).height = 8;
 
-  const headers = ["STT", "DÀI", "RỘNG", "CAO", "SỐ KIỆN", "DIM (kg)"];
+  const headers = ["STT", "DÀI", "RỘNG", "CAO", "SỐ KIỆN", "DIM (kg)", ...(showNoteCol ? ["GHI CHÚ"] : [])];
   const headerRow = sheet.getRow(ROW_TABLE_HEADER);
   headerRow.height = 26;
   headers.forEach((text, i) => {
@@ -128,7 +133,7 @@ async function fillListScscSheet(
     styleTableHeaderCell(cell);
   });
 
-  const dimFmt = dimKgExcelNumFmt(model.policy);
+  const dimFmt = dimKgExcelLineNumFmt(model.rule?.lineRound);
   const cmFmt = "0.00";
   const dataStart = ROW_TABLE_HEADER + 1;
 
@@ -141,13 +146,16 @@ async function fillListScscSheet(
     row.getCell(4).value = r.hCm;
     row.getCell(5).value = r.pcs;
     row.getCell(6).value = r.dimKg != null ? r.dimKg : "—";
+    if (showNoteCol) {
+      row.getCell(NOTE_COL).value = scscDimLineNoteLabel(r);
+    }
 
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       styleBodyCell(cell, colNumber);
       if (colNumber >= 2 && colNumber <= 4) {
         cell.numFmt = cmFmt;
       }
-      if (colNumber === LAST_COL && r.dimKg != null) {
+      if (colNumber === 6 && r.dimKg != null) {
         cell.numFmt = dimFmt;
       }
     });
@@ -156,7 +164,7 @@ async function fillListScscSheet(
   const lastDataRow = dataStart + model.rows.length - 1;
   sheet.autoFilter = {
     from: { row: ROW_TABLE_HEADER, column: 1 },
-    to: { row: lastDataRow, column: LAST_COL },
+    to: { row: lastDataRow, column: tableLastCol },
   };
 
   sheet.pageSetup = {

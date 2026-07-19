@@ -77,7 +77,13 @@ function normalizeDimLines(raw) {
     if (typeof l !== "number" || typeof w !== "number" || typeof h !== "number" || typeof p !== "number")
       continue;
     if (!(l > 0 && w > 0 && h > 0 && p > 0)) continue;
-    out.push({ lCm: l, wCm: w, hCm: h, pcs: Math.max(1, Math.floor(p)) });
+    out.push({
+      lCm: l,
+      wCm: w,
+      hCm: h,
+      pcs: Math.max(1, Math.floor(p)),
+      ...(item.estimated === true ? { estimated: true } : {}),
+    });
   }
   return out.length ? out : null;
 }

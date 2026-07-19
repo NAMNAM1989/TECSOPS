@@ -2,6 +2,7 @@ import type { DimPieceLine, Shipment, ShipmentStatus, Warehouse } from "../types
 import { WAREHOUSE_ORDER } from "../constants/warehouses";
 import { formatLocalSessionDate, startOfLocalDay } from "./sessionDate";
 import { SHIPMENT_STATUS_ORDER, migrateShipmentStatus } from "./shipmentWorkflowStatus";
+import { normalizeDimLineEdges } from "./dimBulkFill";
 
 const ROWS_KEY = "tecsops-shipments-v1";
 const WORK_DATE_KEY = "tecsops-work-date-v1";
@@ -33,7 +34,8 @@ function isDimPieceLine(o: unknown): o is DimPieceLine {
     x.lCm > 0 &&
     x.wCm > 0 &&
     x.hCm > 0 &&
-    x.pcs > 0
+    x.pcs > 0 &&
+    (x.estimated === undefined || typeof x.estimated === "boolean")
   );
 }
 
@@ -43,12 +45,15 @@ function normalizeDimLines(raw: unknown): DimPieceLine[] | null {
   const out: DimPieceLine[] = [];
   for (const item of raw) {
     if (!isDimPieceLine(item)) continue;
-    out.push({
-      lCm: item.lCm,
-      wCm: item.wCm,
-      hCm: item.hCm,
-      pcs: Math.max(1, Math.floor(item.pcs)),
-    });
+    out.push(
+      normalizeDimLineEdges({
+        lCm: item.lCm,
+        wCm: item.wCm,
+        hCm: item.hCm,
+        pcs: Math.max(1, Math.floor(item.pcs)),
+        ...(item.estimated ? { estimated: true } : {}),
+      })
+    );
   }
   return out.length > 0 ? out : null;
 }

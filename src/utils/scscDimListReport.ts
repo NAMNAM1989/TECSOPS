@@ -1,19 +1,18 @@
 import type { Shipment } from "../types/shipment";
 import { isScscWarehouse } from "../constants/warehouses";
+import type { ScscAirlineDimRule, ScscLineDimRoundKind } from "../constants/scscAirlineChargeableRules";
 import {
   dimDivisorFromFlight,
-  dimRoundingPolicyFromFlight,
   formatDimKgDisplay,
+  formatLineDimKgDisplay,
   formatShipmentDimWeightKg,
   lineDimKg,
+  resolveScscDimRuleFromFlight,
+  totalDimKgFromLines,
   type DimDivisor,
-  type DimRoundingPolicyId,
+  type ScscDimRoundContext,
 } from "./volumetricDim";
 
-/**
- * Hệ số dùng cho LIST SCSC / in / Excel: ưu tiên giá trị đã lưu trên lô;
- * nếu chưa có (dữ liệu cũ) → suy từ mã chuyến (`dimDivisorFromFlight`).
- */
 export function scscDimDivisor(s: Shipment): DimDivisor {
   if (s.dimDivisor === 5000 || s.dimDivisor === 6000) return s.dimDivisor;
   return dimDivisorFromFlight(s.flight);
@@ -30,28 +29,30 @@ export type ScscDimListRow = {
   hCm: number;
   pcs: number;
   dimKg: number | null;
+  estimated?: boolean;
 };
 
 export type ScscDimListModel = {
-  policy: DimRoundingPolicyId;
+  rule: ScscAirlineDimRule | null;
+  dimCtx: ScscDimRoundContext;
   divisor: DimDivisor;
   rows: ScscDimListRow[];
   totalPcs: number;
   dimKgStrip: string;
 };
 
-/** Dữ liệu bảng DIM SCSC — cùng logic với modal nhập (lineDimKg + chính sách theo chuyến). */
 export function buildScscDimListModel(s: Shipment): ScscDimListModel | null {
   if (!isScscWarehouse(s.warehouse)) return null;
   const lines = s.dimLines;
   if (!lines?.length) return null;
 
   const divisor = scscDimDivisor(s);
-  const policy = dimRoundingPolicyFromFlight(s.flight, s.awb);
+  const dimCtx: ScscDimRoundContext = { flight: s.flight, awb: s.awb };
+  const rule = resolveScscDimRuleFromFlight(s.flight, s.awb);
   let totalPcs = 0;
   const rows: ScscDimListRow[] = lines.map((line, i) => {
     totalPcs += line.pcs;
-    const dimKg = lineDimKg(line, divisor, policy);
+    const dimKg = lineDimKg(line, divisor, dimCtx);
     return {
       stt: i + 1,
       lCm: round2(line.lCm),
@@ -59,30 +60,62 @@ export function buildScscDimListModel(s: Shipment): ScscDimListModel | null {
       hCm: round2(line.hCm),
       pcs: line.pcs,
       dimKg,
+      ...(line.estimated ? { estimated: true } : {}),
     };
   });
 
+  const computedTotal = totalDimKgFromLines(lines, divisor, dimCtx);
+  const totalKg = computedTotal ?? s.dimWeightKg;
   const dimKgStrip =
-    s.dimWeightKg != null ? `${formatShipmentDimWeightKg(s.flight, s.dimWeightKg, s.awb)} kg` : "—";
+    totalKg != null ? `${formatShipmentDimWeightKg(s.flight, totalKg, s.awb)} kg` : "—";
 
-  return { policy, divisor, rows, totalPcs, dimKgStrip };
+  return { rule, dimCtx, divisor, rows, totalPcs, dimKgStrip };
 }
 
-export function formatLineDimKgLabel(kg: number | null, policy: DimRoundingPolicyId): string {
+export function formatLineDimKgLabel(
+  kg: number | null,
+  ctx: ScscDimRoundContext
+): string {
   if (kg == null) return "—";
-  return formatDimKgDisplay(kg, policy);
+  return formatLineDimKgDisplay(kg, ctx);
 }
 
-/** Định dạng số DIM (kg) trên ô Excel theo chính sách chuyến. */
-export function dimKgExcelNumFmt(policy: DimRoundingPolicyId): string {
-  if (policy === "DP3_ROUND_1" || policy === "ROUND_INTEGER") return "0";
-  if (
-    policy === "DP3_ROUND_0_5" ||
-    policy === "DP2_ROUND_0_5" ||
-    policy === "QR_SPECIAL" ||
-    policy === "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND"
-  ) {
-    return "0.0";
+export function formatTotalDimKgLabel(
+  kg: number | null,
+  ctx: ScscDimRoundContext
+): string {
+  if (kg == null) return "—";
+  return formatDimKgDisplay(kg, ctx);
+}
+
+export function scscDimListHasEstimatedRows(rows: readonly ScscDimListRow[]): boolean {
+  return rows.some((r) => r.estimated);
+}
+
+export function scscDimLineNoteLabel(row: ScscDimListRow): string {
+  return row.estimated ? "ƯT" : "";
+}
+
+/** Định dạng số DIM (kg) từng dòng trên Excel — theo cột «Dim CỦA MỖI DÒNG». */
+export function dimKgExcelLineNumFmt(lineRound: ScscLineDimRoundKind | null | undefined): string {
+  switch (lineRound) {
+    case "TRUNCATE_3DP":
+      return "0.000";
+    case "TRUNCATE_2DP":
+      return "0.00";
+    case "ROUND_INTEGER":
+      return "0";
+    case "QR_LINE":
+      return "0.0";
+    default:
+      return "0.000";
   }
-  return "0.00";
+}
+
+/** @deprecated Dùng dimKgExcelLineNumFmt(rule.lineRound). */
+export function dimKgExcelNumFmt(ctx: ScscDimRoundContext): string {
+  if (typeof ctx === "object" && "lineRound" in ctx) {
+    return dimKgExcelLineNumFmt(ctx.lineRound);
+  }
+  return "0.000";
 }

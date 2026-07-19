@@ -23,10 +23,16 @@ describe("collectScscDimLimitWarnings", () => {
     expect(w.some((x) => x.kind === "dims")).toBe(true);
   });
 
-  it("SQ/TR cùng rule — TR dims", () => {
-    const w = collectScscDimLimitWarnings("TR305", "618-1111 2222", [
+  it("SQ/TR cùng AWB — TR dims; SQ không max dims", () => {
+    const tr = collectScscDimLimitWarnings("TR305", "618-1111 2222", [
       { lCm: 160, wCm: 130, hCm: 110, pcs: 1 },
     ]);
-    expect(w.some((x) => x.kind === "dims")).toBe(true);
+    expect(tr.some((x) => x.kind === "dims")).toBe(true);
+
+    const sq = collectScscDimLimitWarnings("SQ177", "618-1111 2222", [
+      { lCm: 160, wCm: 130, hCm: 110, pcs: 1 },
+    ]);
+    expect(sq.some((x) => x.kind === "dims")).toBe(false);
+    expect(sq.some((x) => x.kind === "note")).toBe(true);
   });
 });

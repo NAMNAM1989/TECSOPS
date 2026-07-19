@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Shipment } from "../types/shipment";
-import { dimDivisorFromFlight, dimRoundingPolicyFromFlight, lineDimKg } from "./volumetricDim";
-import { buildScscDimListModel, dimKgExcelNumFmt, scscDimDivisor } from "./scscDimListReport";
+import { lineDimKg, totalDimKgFromLines } from "./volumetricDim";
+import {
+  buildScscDimListModel,
+  dimKgExcelLineNumFmt,
+  scscDimDivisor,
+  scscDimLineNoteLabel,
+  scscDimListHasEstimatedRows,
+} from "./scscDimListReport";
 
 function sample(over: Partial<Shipment> = {}): Shipment {
   return {
@@ -31,7 +37,6 @@ function sample(over: Partial<Shipment> = {}): Shipment {
 describe("buildScscDimListModel", () => {
   it("null khi không phải SCSC", () => {
     expect(buildScscDimListModel(sample({ warehouse: "TECS-TCS" }))).toBeNull();
-    expect(buildScscDimListModel(sample({ warehouse: "TECS-TCS" }))).toBeNull();
   });
 
   it("KHO SCSC dùng cùng model SCSC", () => {
@@ -48,24 +53,49 @@ describe("buildScscDimListModel", () => {
     const s = sample();
     const m = buildScscDimListModel(s);
     expect(m).not.toBeNull();
-    const policy = dimRoundingPolicyFromFlight(s.flight, s.awb);
     const div = scscDimDivisor(s);
-    const kg = lineDimKg(s.dimLines![0]!, div, policy);
+    const kg = lineDimKg(s.dimLines![0]!, div, m!.dimCtx);
     expect(m!.rows).toHaveLength(1);
     expect(m!.rows[0]!.dimKg).toBe(kg);
     expect(m!.totalPcs).toBe(4);
   });
 
-  it("VJ: numFmt Excel bậc 0.5 (1 số lẻ)", () => {
+  it("VJ: Excel numFmt dòng 3 số lẻ", () => {
     const s = sample({ flight: "VJ999", dimLines: [{ lCm: 10, wCm: 10, hCm: 10, pcs: 1 }] });
     const m = buildScscDimListModel(s);
     expect(m).not.toBeNull();
-    expect(m!.policy).toBe("DP3_ROUND_0_5");
-    expect(dimKgExcelNumFmt(m!.policy)).toBe("0.0");
+    expect(m!.rule?.lineRound).toBe("TRUNCATE_3DP");
+    expect(dimKgExcelLineNumFmt(m!.rule?.lineRound)).toBe("0.000");
   });
 
-  it("dimDivisor null: dùng hệ số suy từ mã chuyến (khớp dimDivisorFromFlight)", () => {
+  it("dimDivisor null: dùng hệ số suy từ mã chuyến", () => {
     const s = sample({ dimDivisor: null });
-    expect(scscDimDivisor(s)).toBe(dimDivisorFromFlight(s.flight));
+    expect(scscDimDivisor(s)).toBe(6000);
+  });
+
+  it("dimKgStrip header = tổng tính từ dimLines", () => {
+    const s = sample({ dimWeightKg: 999 });
+    const m = buildScscDimListModel(s);
+    expect(m).not.toBeNull();
+    const policy = m!.dimCtx;
+    const total = totalDimKgFromLines(s.dimLines!, scscDimDivisor(s), policy);
+    expect(m!.dimKgStrip).toContain(String(total));
+    expect(m!.dimKgStrip).not.toContain("999");
+  });
+
+  it("estimated → ghi chú ƯT tách khỏi số DIM", () => {
+    const m = buildScscDimListModel(
+      sample({
+        dimLines: [
+          { lCm: 35, wCm: 35, hCm: 35, pcs: 1 },
+          { lCm: 30, wCm: 25, hCm: 20, pcs: 3, estimated: true },
+        ],
+      })
+    );
+    expect(m).not.toBeNull();
+    const rows = m!.rows;
+    expect(scscDimListHasEstimatedRows(rows)).toBe(true);
+    expect(scscDimLineNoteLabel(rows[1]!)).toBe("ƯT");
+    expect(scscDimLineNoteLabel(rows[0]!)).toBe("");
   });
 });

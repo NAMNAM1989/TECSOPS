@@ -54,7 +54,7 @@ export function printDimReport(s: Shipment): void {
         <td class="num">${line.wCm.toFixed(2)}</td>
         <td class="num">${line.hCm.toFixed(2)}</td>
         <td class="num">${line.pcs}</td>
-        <td class="num dim">${esc(formatLineDimKgLabel(line.dimKg, model.policy))}</td>
+        <td class="num dim">${esc(formatLineDimKgLabel(line.dimKg, model.dimCtx))}</td>
       </tr>`
     )
     .join("\n");

@@ -7,21 +7,26 @@ import {
   formatDimKgDisplay,
   formatLineDimKgDisplay,
   lineDimKg,
-  totalDimKgFromLines,
-  tryParseDimPieceLinesFromComboText,
   type ScscDimRoundContext,
 } from "../utils/volumetricDim";
 import { collectScscDimLimitWarnings } from "../utils/scscAirlineLimitsCheck";
 import { resolveScscAirlineDimRule } from "../utils/scscChargeableWeight";
+import { consolidateDimPieceLines, DIM_TOTAL_BAND_BELOW_RATIO } from "../utils/dimBulkFill";
 import {
-  applySmartDimAutoFill,
-  consolidateDimPieceLines,
-  DIM_TOTAL_BAND_BELOW_RATIO,
-  dimRandomSeed,
-  normalizeDimLineEdges,
-  previewSmartDimFill,
-  splitMeasuredAndEstimated,
-} from "../utils/dimBulkFill";
+  appendDimComboNumber,
+  dimEntryAddMeasuredFromCombo,
+  dimEntryClearEstimated,
+  dimEntryMergeLines,
+  dimEntryRandomFill,
+  dimEntryRemoveLine,
+  dimEntrySeed,
+  dimEntryValidateSave,
+  normalizeDimComboInput,
+  parseRandomLineCountInput,
+  parseTargetDimKgInput,
+  snapshotDimEntry,
+  type DimEntryWorkflowStep,
+} from "../utils/dimEntryState";
 
 export type MobileDimSavePayload = {
   dimWeightKg: number | null;
@@ -35,90 +40,119 @@ interface MobileDimKgModalProps {
   onSave: (payload: MobileDimSavePayload) => void;
 }
 
+const DIM_QUICK_NUMS = ["120", "100", "80", "60", "50", "40", "30", "25", "20"] as const;
+
+const WORKFLOW_STEPS: { step: DimEntryWorkflowStep; label: string; hint: string }[] = [
+  { step: 1, label: "Đo mẫu", hint: "Nhập hoặc dán size đo thật (D×R×C×kiện)" },
+  { step: 2, label: "Sinh ước tính", hint: "Chỉ khi còn kiện thiếu — Ngẫu nhiên phần còn lại" },
+  { step: 3, label: "Kiểm & lưu", hint: "Khớp kiện, DIM dưới kg lô" },
+];
+
 function cloneLines(lines: DimPieceLine[] | null): DimPieceLine[] {
   if (!lines?.length) return [];
   return lines.map((l) => ({ ...l }));
 }
 
-/**
- * Chuẩn hóa ô nhập DIM: giữ xuống dòng (dán nhiều dòng desktop), tab → space;
- * phím "," trên bàn phím số → × giữa các cạnh.
- */
-function normalizeDimComboInput(raw: string): string {
-  return raw
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(/\t/g, " ")
-    .replace(/,/g, "×")
-    .replace(/\u060C/g, "×")
-    .replace(/\*/g, "×");
-}
-
-function appendDimComboNumber(combo: string, num: string): string {
-  const c = combo.trim();
-  if (!c) return num;
-  const last = c.slice(-1);
-  if (last === "×") return c + num;
-  if (/\d/.test(last)) return `${c}×${num}`;
-  return `${c}${num}`;
-}
-
-const DIM_QUICK_NUMS = ["120", "100", "80", "60", "50", "40", "30", "25", "20"] as const;
-
-const DIM_INPUT_HINT =
-  "Nhập vài mẫu kiện đo (vd. 40×50×30×10) — phần còn lại tự sinh sao cho tổng DIM dưới kg lô và trong ~5% (lô 1000 kg → ~950 kg). Kiện sinh ngẫu nhiên: tối đa 1 cạnh dưới 25 cm.";
-
-/** Tiến độ kiện đo / tự sinh. */
-function DimSmartProgress({
-  measuredPcs,
-  estimatedPcs,
-  declaredPcs,
-  floorKg,
-  ceilingKg,
-  totalDimLabel,
-}: {
-  measuredPcs: number;
-  estimatedPcs: number;
-  declaredPcs: number;
-  floorKg: number;
-  ceilingKg: number;
-  totalDimLabel: string;
-}) {
-  const pct = declaredPcs > 0 ? Math.min(100, Math.round((measuredPcs / declaredPcs) * 100)) : 0;
+function DimWorkflowSteps({ active }: { active: DimEntryWorkflowStep }) {
   return (
-    <section className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/90 to-white p-2.5 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-apple-tertiary">Tổng DIM</p>
-          <p className="text-[1.45rem] font-bold leading-tight tabular-nums tracking-tight text-apple-label">
-            {totalDimLabel}
-          </p>
-        </div>
-        <div className="text-right text-[10px] tabular-nums text-apple-secondary">
-          <p>
-            <span className="font-semibold text-emerald-700">Đo {measuredPcs}</span>
-            {estimatedPcs > 0 ? (
-              <>
-                {" "}
-                · <span className="font-semibold text-violet-700">ƯT {estimatedPcs}</span>
-              </>
-            ) : null}
-          </p>
-          <p className="mt-0.5">/ {declaredPcs} kiện</p>
-        </div>
+    <nav
+      className="flex gap-1 rounded-2xl border border-black/[0.06] bg-slate-50/80 p-1"
+      aria-label="Quy trình nhập DIM"
+    >
+      {WORKFLOW_STEPS.map(({ step, label }) => {
+        const isActive = step === active;
+        const isDone = step < active;
+        return (
+          <div
+            key={step}
+            className={`min-w-0 flex-1 rounded-xl px-2 py-1.5 text-center transition-colors ${
+              isActive
+                ? "bg-white shadow-sm ring-1 ring-apple-blue/20"
+                : isDone
+                  ? "text-emerald-800"
+                  : "text-apple-tertiary"
+            }`}
+          >
+            <p className="text-[10px] font-bold tabular-nums">{step}</p>
+            <p className={`truncate text-[10px] font-semibold ${isActive ? "text-apple-label" : ""}`}>
+              {label}
+            </p>
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
+function DimLineSection({
+  title,
+  tone,
+  lines,
+  startIndex,
+  divisor,
+  dimCtx,
+  onRemove,
+  emptyHint,
+}: {
+  title: string;
+  tone: "measured" | "estimated";
+  lines: DimPieceLine[];
+  startIndex: number;
+  divisor: DimDivisor;
+  dimCtx: ScscDimRoundContext;
+  onRemove: (index: number) => void;
+  emptyHint?: string;
+}) {
+  const border =
+    tone === "measured" ? "border-emerald-200/80 bg-emerald-50/40" : "border-violet-200/80 bg-violet-50/30";
+  const badge =
+    tone === "measured"
+      ? "bg-emerald-100 text-emerald-900"
+      : "bg-violet-100 text-violet-900";
+
+  return (
+    <section className={`rounded-xl border ${border} p-2`}>
+      <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5">
+        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${badge}`}>
+          {title}
+        </span>
+        <span className="text-[10px] tabular-nums text-apple-secondary">
+          {lines.length} dòng · {lines.reduce((s, l) => s + l.pcs, 0)} kiện
+        </span>
       </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/[0.06]">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-violet-500 transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      {estimatedPcs > 0 && floorKg > 0 ? (
-        <p className="mt-1.5 text-[10px] text-violet-800/90">
-          Mục tiêu tổng DIM: {floorKg.toFixed(0)}–{Math.floor(ceilingKg)} kg (dưới kg lô, trong ~
-          {Math.round(DIM_TOTAL_BAND_BELOW_RATIO * 100)}%)
-        </p>
-      ) : null}
+      {lines.length === 0 ? (
+        <p className="py-4 text-center text-[11px] text-apple-tertiary">{emptyHint ?? "Chưa có"}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {lines.map((line, i) => {
+            const idx = startIndex + i;
+            const sub = lineDimKg(line, divisor, dimCtx);
+            return (
+              <li
+                key={`${idx}-${line.lCm}-${line.wCm}-${line.hCm}-${line.pcs}`}
+                className="flex items-center justify-between gap-2 rounded-lg border border-black/[0.06] bg-white px-2.5 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-xs font-semibold text-apple-label">
+                    {line.lCm}×{line.wCm}×{line.hCm}{" "}
+                    <span className="text-apple-secondary">×{line.pcs}</span>
+                  </p>
+                  <p className="mt-0.5 text-[10px] tabular-nums text-apple-secondary">
+                    {sub != null ? `${formatLineDimKgDisplay(sub, dimCtx)} kg` : "—"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemove(idx)}
+                  className="shrink-0 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-600"
+                >
+                  Xóa
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 }
@@ -130,11 +164,18 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [autoSmartFill, setAutoSmartFill] = useState(true);
-  const [autoFillNote, setAutoFillNote] = useState<string | null>(null);
+  const [autoRandomAfterAdd, setAutoRandomAfterAdd] = useState(false);
+  const [actionNote, setActionNote] = useState<string | null>(null);
+  const [randomNonce, setRandomNonce] = useState(0);
+  const [randomLineCountInput, setRandomLineCountInput] = useState("");
+  const [randomTargetKgInput, setRandomTargetKgInput] = useState("");
 
-  const smartSeed = useMemo(
-    () => dimRandomSeed(row.id, row.pcs ?? 0, row.kg ?? 0),
+  const lot = useMemo(
+    () => ({
+      shipmentId: row.id,
+      declaredPcs: row.pcs,
+      declaredKg: row.kg,
+    }),
     [row.id, row.pcs, row.kg]
   );
 
@@ -142,49 +183,16 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     () => ({ flight: row.flight, awb: row.awb }),
     [row.flight, row.awb]
   );
-
   const divisor: DimDivisor = useMemo(() => dimDivisorFromFlight(row.flight), [row.flight]);
+  const seed = useMemo(() => dimEntrySeed(lot), [lot]);
 
-  const declaredPcs = row.pcs;
-  const declaredKg = row.kg;
-
-  const runSmartPipeline = useCallback(
-    (baseLines: DimPieceLine[]): DimPieceLine[] => {
-      const consolidated = consolidateDimPieceLines(baseLines);
-      if (!autoSmartFill || declaredPcs == null || declaredKg == null || declaredKg <= 0) {
-        return consolidated;
-      }
-      const { lines: next, autoFilled, error } = applySmartDimAutoFill(consolidated, {
-        declaredPcs,
-        declaredKg,
-        divisor,
-        dimCtx,
-        seed: smartSeed,
-        poolId: "smart",
-        enabled: true,
-      });
-      setAutoFillNote(error ?? null);
-      if (autoFilled && !error) setAutoFillNote(null);
-      return next;
-    },
-    [autoSmartFill, declaredPcs, declaredKg, divisor, dimCtx, smartSeed]
+  const snap = useMemo(
+    () => snapshotDimEntry(lines, lot, divisor, dimCtx),
+    [lines, lot, divisor, dimCtx]
   );
 
-  const totalDim = useMemo(
-    () => totalDimKgFromLines(lines, divisor, dimCtx),
-    [lines, divisor, dimCtx]
-  );
-
-  const totalDimLabel = useMemo(() => {
-    if (totalDim == null) return "—";
-    return `${formatDimKgDisplay(totalDim, dimCtx)} kg`;
-  }, [totalDim, dimCtx]);
-
-  const sumDimPcs = useMemo(() => lines.reduce((s, l) => s + l.pcs, 0), [lines]);
-  const pcsExcess =
-    declaredPcs != null && lines.length > 0 && sumDimPcs > declaredPcs;
-  const pcsShort =
-    declaredPcs != null && lines.length > 0 && sumDimPcs < declaredPcs;
+  const totalDimLabel =
+    snap.totalDim != null ? `${formatDimKgDisplay(snap.totalDim, dimCtx)} kg` : "—";
 
   const limitWarnings = useMemo(
     () => collectScscDimLimitWarnings(row.flight, row.awb, lines),
@@ -195,122 +203,84 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     [row.flight, row.awb]
   );
 
-  const sumMeasuredPcs = useMemo(
-    () => splitMeasuredAndEstimated(lines).measured.reduce((s, l) => s + l.pcs, 0),
-    [lines]
-  );
-  const sumEstimatedPcs = useMemo(
-    () => splitMeasuredAndEstimated(lines).estimated.reduce((s, l) => s + l.pcs, 0),
-    [lines]
-  );
-
-  const smartPreview = useMemo(
-    () => previewSmartDimFill(lines, declaredPcs, declaredKg),
-    [lines, declaredPcs, declaredKg]
-  );
-
-  const appendRowsFromCombo = useCallback(
-    (opts?: { thenSmartFill?: boolean }) => {
-      const parsedResult = tryParseDimPieceLinesFromComboText(combo);
-      if (!parsedResult.ok) {
-        window.alert(parsedResult.error);
-        return false;
-      }
-      const parsed = parsedResult.lines.map((l) =>
-        normalizeDimLineEdges({ ...l, estimated: false as const })
-      );
-      const addPcs = parsed.reduce((s, l) => s + l.pcs, 0);
-      const nextSum = sumDimPcs + addPcs;
-      if (declaredPcs != null && nextSum > declaredPcs) {
-        window.alert(
-          `Dư kiện: nếu thêm dòng này, tổng kiện (${nextSum}) vượt kiện lô (${declaredPcs}).`
-        );
-        return false;
-      }
-      setLines((prev) => {
-        const next = [...prev, ...parsed];
-        if (opts?.thenSmartFill ?? autoSmartFill) {
-          const manualOnly = consolidateDimPieceLines([
-            ...splitMeasuredAndEstimated(next).measured,
-          ]);
-          return runSmartPipeline(manualOnly);
-        }
-        setAutoFillNote(null);
-        return next;
-      });
-      setCombo("");
-      textareaRef.current?.focus();
-      return true;
-    },
-    [autoSmartFill, combo, declaredPcs, runSmartPipeline, sumDimPcs]
+  const randomParams = useMemo(
+    () =>
+      lot.declaredPcs != null && lot.declaredKg != null
+        ? {
+            declaredPcs: lot.declaredPcs,
+            declaredKg: lot.declaredKg,
+            divisor,
+            dimCtx,
+            seed,
+          }
+        : null,
+    [lot, divisor, dimCtx, seed]
   );
 
-  const handleMergeSamples = () => {
-    setLines((prev) => consolidateDimPieceLines(prev));
-    setAutoFillNote(null);
-  };
-
-  const handleRandomFill = () => {
-    if (declaredPcs == null || declaredKg == null || declaredKg <= 0) {
-      window.alert("Cần kiện lô và kg lô trên lô hàng để sinh DIM ngẫu nhiên.");
-      return;
-    }
-    const measured = consolidateDimPieceLines(splitMeasuredAndEstimated(lines).measured);
-    if (measured.length === 0) {
-      window.alert("Thêm ít nhất một mẫu kiện đo trước khi sinh ngẫu nhiên.");
-      return;
-    }
-    const { lines: next, error } = applySmartDimAutoFill(measured, {
-      declaredPcs,
-      declaredKg,
-      divisor,
-      dimCtx,
-      seed: smartSeed,
-      poolId: "smart",
-      enabled: true,
-    });
-    setAutoFillNote(error ?? null);
-    if (!error) setAutoFillNote(null);
+  const applyMutation = useCallback((next: DimPieceLine[], note?: string | null) => {
     setLines(next);
+    setActionNote(note ?? null);
+  }, []);
+
+  const handleAddRows = useCallback(() => {
+    const r = dimEntryAddMeasuredFromCombo(lines, combo, lot, {
+      thenRandomFill: autoRandomAfterAdd,
+      randomFillParams: randomParams ?? undefined,
+    });
+    if (!r.ok) {
+      window.alert(r.error);
+      return;
+    }
+    applyMutation(r.lines, r.note ?? null);
+    setCombo("");
+    textareaRef.current?.focus();
+  }, [lines, combo, lot, autoRandomAfterAdd, randomParams, applyMutation]);
+
+  const handleMerge = () => {
+    const r = dimEntryMergeLines(lines);
+    if (!r.ok) {
+      window.alert(r.error);
+      return;
+    }
+    applyMutation(r.lines, "Đã gộp các dòng cùng kích thước.");
   };
 
-  const canRandomFill =
-    declaredPcs != null &&
-    declaredKg != null &&
-    declaredKg > 0 &&
-    splitMeasuredAndEstimated(lines).measured.length > 0 &&
-    smartPreview.remainingPcs > 0;
-
-  const removeLine = (index: number) => {
-    setLines((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleClearEstimated = () => {
-    setAutoFillNote(null);
-    setLines((prev) => consolidateDimPieceLines(splitMeasuredAndEstimated(prev).measured));
+  const handleRandom = () => {
+    if (!randomParams) {
+      window.alert("Cần kiện lô và kg lô trên lô hàng.");
+      return;
+    }
+    const targetEstimatedLineCount = parseRandomLineCountInput(randomLineCountInput);
+    const targetTotalDimKg = parseTargetDimKgInput(randomTargetKgInput);
+    const r = dimEntryRandomFill(lines, lot, {
+      ...randomParams,
+      regenerationNonce: randomNonce,
+      targetEstimatedLineCount,
+      targetTotalDimKg,
+    });
+    if (!r.ok) {
+      window.alert(r.error);
+      setActionNote(r.error);
+      return;
+    }
+    setRandomNonce((n) => n + 1);
+    applyMutation(r.lines, r.note ?? null);
   };
 
   const handleSave = () => {
-    if (lines.length > 0 && totalDim != null) {
-      if (pcsExcess) {
-        window.alert(
-          `Dư kiện: tổng kiện DIM (${sumDimPcs}) lớn hơn kiện lô (${declaredPcs}). Giảm kiện trong các dòng hoặc sửa số kiện lô.`
-        );
-        return;
-      }
-      onSave({
-        dimWeightKg: totalDim,
-        dimLines: consolidateDimPieceLines(lines),
-        dimDivisor: divisor,
-      });
+    const r = dimEntryValidateSave(lines, lot, divisor, dimCtx);
+    if (!r.ok) {
+      window.alert(r.error);
       return;
     }
-    window.alert("Thêm ít nhất một dòng D×R×C×kiện.");
+    onSave({
+      dimWeightKg: snap.totalDim,
+      dimLines: r.lines,
+      dimDivisor: divisor,
+    });
   };
 
-  const handleClear = () => {
-    onSave({ dimWeightKg: null, dimLines: null, dimDivisor: null });
-  };
+  const workflowHint = WORKFLOW_STEPS.find((s) => s.step === snap.workflowStep)?.hint ?? "";
 
   return (
     <div
@@ -323,373 +293,336 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
       }}
     >
       <div
-        className="flex max-h-[min(94dvh,760px)] w-full max-w-[min(100%,26rem)] flex-col overflow-hidden rounded-[1.35rem] border border-black/[0.06] bg-white shadow-2xl shadow-black/10 transition-all duration-200 sm:max-h-[min(92dvh,860px)] sm:max-w-xl md:max-h-[min(92dvh,920px)] md:max-w-3xl lg:max-w-4xl"
+        className="flex max-h-[min(94dvh,760px)] w-full max-w-[min(100%,26rem)] flex-col overflow-hidden rounded-[1.35rem] border border-black/[0.06] bg-white shadow-2xl shadow-black/10 sm:max-h-[min(92dvh,860px)] sm:max-w-xl md:max-h-[min(92dvh,920px)] md:max-w-3xl lg:max-w-4xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 bg-gradient-to-b from-slate-50/90 to-white px-4 pb-3 pt-4 sm:px-5 sm:pt-5 md:px-6">
+        {/* Header + ngữ cảnh lô */}
+        <div className="shrink-0 border-b border-black/[0.06] bg-gradient-to-b from-slate-50/90 to-white px-4 pb-3 pt-4 sm:px-5 md:px-6">
           <div className="flex items-start justify-between gap-2">
-            <h2 id="dim-modal-title" className="text-[1.05rem] font-semibold tracking-tight text-apple-label">
-              Nhập DIM
-            </h2>
+            <div>
+              <h2 id="dim-modal-title" className="text-[1.05rem] font-semibold tracking-tight text-apple-label">
+                Nhập DIM
+              </h2>
+              <p className="mt-0.5 text-[11px] text-apple-tertiary">
+                {row.awb} · {row.flight}
+                {airlineRule ? ` · ${airlineRule.codes.join("/")}` : ""}
+              </p>
+            </div>
             {airlineRule ? (
-              <span
-                className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-apple-label"
-                title="Quy tắc DIM SCSC (dòng + tổng)"
-              >
-                SCSC ·{" "}
-                {airlineRule.totalRound === "ROUND_1"
-                  ? "tổng 1kg"
-                  : airlineRule.totalRound === "ROUND_INTEGER"
-                    ? "tròn"
-                    : airlineRule.totalRound === "QR_TOTAL"
-                      ? "QR"
-                      : airlineRule.lineRound === "TRUNCATE_2DP"
-                        ? "2dp/0.5"
-                        : "0.5"}
+              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold">
+                SCSC · {airlineRule.chargeableNote.slice(0, 24)}
               </span>
             ) : null}
           </div>
-          <p className="mt-0.5 text-[11px] text-apple-tertiary">Dài × Rộng × Cao × kiện (cm)</p>
-          {airlineRule ? (
-            <p className="mt-1 text-[10px] font-medium text-apple-secondary">
-              {airlineRule.codes.join("/")} · {airlineRule.chargeableNote}
+
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-xl bg-black/[0.03] px-2.5 py-2">
+              <p className="text-[9px] font-medium uppercase text-apple-tertiary">Kiện lô</p>
+              <p className="text-sm font-bold tabular-nums">{lot.declaredPcs ?? "—"}</p>
+            </div>
+            <div className="rounded-xl bg-black/[0.03] px-2.5 py-2">
+              <p className="text-[9px] font-medium uppercase text-apple-tertiary">Kg lô</p>
+              <p className="text-sm font-bold tabular-nums">{lot.declaredKg ?? "—"}</p>
+            </div>
+            <div className="rounded-xl bg-violet-50 px-2.5 py-2">
+              <p className="text-[9px] font-medium uppercase text-violet-700/80">Tổng DIM</p>
+              <p className="text-sm font-bold tabular-nums text-violet-900">{totalDimLabel}</p>
+            </div>
+            <div
+              className={`rounded-xl px-2.5 py-2 ${
+                snap.pcsExcess
+                  ? "bg-red-50"
+                  : snap.pcsMatch
+                    ? "bg-emerald-50"
+                    : "bg-amber-50"
+              }`}
+            >
+              <p className="text-[9px] font-medium uppercase text-apple-tertiary">Kiện DIM</p>
+              <p className="text-sm font-bold tabular-nums">
+                {snap.sumDimPcs}
+                {lot.declaredPcs != null ? (
+                  <span className="text-xs font-medium text-apple-secondary"> / {lot.declaredPcs}</span>
+                ) : null}
+              </p>
+            </div>
+          </div>
+
+          {lot.declaredKg != null && snap.totalDim != null ? (
+            <p
+              className={`mt-2 text-[10px] font-medium ${
+                snap.dimBelowGross ? "text-emerald-800" : "text-red-800"
+              }`}
+            >
+              {snap.dimBelowGross
+                ? `DIM thấp hơn kg lô ${(lot.declaredKg - snap.totalDim).toFixed(1)} kg — phù hợp chargeable.`
+                : `DIM ≥ kg lô — cần sinh lại hoặc giảm size.`}
+              {snap.remainingPcs > 0 && lot.declaredKg > 0 ? (
+                <span className="text-apple-secondary">
+                  {" "}
+                  Mục tiêu ~{snap.floorKg.toFixed(0)}–{Math.floor(snap.ceilingKg)} kg (
+                  {Math.round(DIM_TOTAL_BAND_BELOW_RATIO * 100)}% dưới kg lô).
+                </span>
+              ) : null}
             </p>
           ) : null}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 md:px-6 md:py-4">
-          <div className="space-y-3 md:grid md:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] md:items-start md:gap-5 md:space-y-0">
-            <div className="space-y-3 md:min-h-0">
-            <div className={isInputFocused ? "hidden md:block" : undefined}>
-              <DimSmartProgress
-                measuredPcs={sumMeasuredPcs}
-                estimatedPcs={sumEstimatedPcs}
-                declaredPcs={declaredPcs ?? (sumDimPcs || 1)}
-                floorKg={declaredPcs != null ? smartPreview.floorKg : 0}
-                ceilingKg={declaredPcs != null ? smartPreview.ceilingKg : 0}
-                totalDimLabel={totalDimLabel}
-              />
-            </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 md:px-6">
+          <div className="space-y-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-5 md:space-y-0">
+            {/* Cột trái — nhập & thao tác */}
+            <div className="space-y-3">
+              <DimWorkflowSteps active={snap.workflowStep} />
+              <p className="text-[10px] leading-snug text-apple-secondary">{workflowHint}</p>
 
-            {limitWarnings.length > 0 ? (
-              <div className="space-y-1 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950">
-                {limitWarnings.map((w, i) => (
-                  <p key={i} className={w.kind === "dims" ? "font-semibold" : "opacity-90"}>
-                    {w.kind === "dims" ? "⚠ " : "ℹ "}
-                    {w.message}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-            <div>
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <label htmlFor="dim-combo" className="text-xs font-semibold text-apple-label">
-                  Nhập mẫu kiện đo
-                </label>
-                <span
-                  className="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full bg-black/[0.05] text-[11px] font-bold text-apple-tertiary"
-                  title={DIM_INPUT_HINT}
-                >
-                  ?
-                </span>
-              </div>
-              {declaredPcs != null && smartPreview.remainingPcs > 0 ? (
-                <p className="mb-2 rounded-xl bg-emerald-50/90 px-2.5 py-1.5 text-[10px] leading-snug text-emerald-900">
-                  Còn <strong>{smartPreview.remainingPcs}</strong> kiện — sau khi thêm mẫu, phần còn lại{" "}
-                  {autoSmartFill ? "tự sinh" : "có thể sinh"} sao cho tổng DIM dưới kg lô (~
-                  {smartPreview.floorKg.toFixed(0)}–{Math.floor(smartPreview.ceilingKg)} kg).
-                </p>
+              {limitWarnings.length > 0 ? (
+                <div className="space-y-1 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950">
+                  {limitWarnings.map((w, i) => (
+                    <p key={i}>{w.kind === "dims" ? "⚠ " : "ℹ "}{w.message}</p>
+                  ))}
+                </div>
               ) : null}
-              <textarea
-                ref={textareaRef}
-                id="dim-combo"
-                rows={isInputFocused ? 3 : 5}
-                aria-describedby="dim-combo-hint"
-                inputMode="text"
-                enterKeyHint="enter"
-                autoComplete="off"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                value={combo}
-                onFocus={() => setIsInputFocused(true)}
-                onBlur={() => setIsInputFocused(false)}
-                onChange={(e) => {
-                  const el = e.target;
-                  const start = el.selectionStart;
-                  const end = el.selectionEnd;
-                  const val = el.value;
-                  const normalized = normalizeDimComboInput(val);
-                  setCombo(normalized);
-                  
-                  // Restore cursor position in next tick to prevent cursor jump in React
-                  requestAnimationFrame(() => {
-                    if (el) {
-                      el.setSelectionRange(start, end);
-                    }
-                  });
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
-                    const multiLine = combo.includes("\n");
-                    const submit =
-                      e.ctrlKey ||
-                      e.metaKey ||
-                      (!multiLine && !e.shiftKey);
-                    if (submit) {
-                      e.preventDefault();
-                      appendRowsFromCombo();
-                    }
-                    return;
-                  }
-                  if (e.key === "," || e.key === "\u060C") {
-                    e.preventDefault();
-                    const el = e.currentTarget;
-                    const startPos = el.selectionStart ?? combo.length;
-                    const end = el.selectionEnd ?? combo.length;
-                    const ins = "×";
-                    const next = combo.slice(0, startPos) + ins + combo.slice(end);
-                    setCombo(next);
-                    const pos = startPos + ins.length;
-                    requestAnimationFrame(() => {
-                      el.setSelectionRange(pos, pos);
-                    });
-                  }
-                }}
-                placeholder={"40×50×30×10\n55×45×35×5"}
-                className="max-h-52 min-h-[6rem] w-full resize-y rounded-2xl border border-black/[0.07] bg-slate-50/40 px-3 py-2.5 font-mono text-sm text-apple-label placeholder:text-apple-tertiary focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/18 transition-all duration-200 sm:min-h-[7rem] md:max-h-64 md:text-[15px]"
-              />
-              <p id="dim-combo-hint" className="sr-only">
-                {DIM_INPUT_HINT}
-              </p>
-              <div
-                className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                aria-label="Số nhanh cm"
-              >
-                {DIM_QUICK_NUMS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      setCombo((c) => appendDimComboNumber(c, n));
-                      textareaRef.current?.focus();
-                    }}
-                    className="shrink-0 min-h-[34px] min-w-[2.65rem] rounded-xl border border-black/[0.08] bg-white px-2.5 text-xs font-bold tabular-nums text-apple-label shadow-sm active:scale-[0.98] active:bg-black/[0.03]"
-                  >
-                    {n}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    setCombo((c) => {
-                      const t = c.trim();
-                      if (!t) return c;
-                      return t.endsWith("×") ? t : `${t}×`;
-                    });
-                    textareaRef.current?.focus();
-                  }}
-                  className="shrink-0 min-h-[34px] min-w-[2.65rem] rounded-xl border border-apple-blue/25 bg-apple-blue/8 px-2.5 text-xs font-bold text-apple-blue active:scale-[0.98]"
-                  aria-label="Dấu nhân"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => appendRowsFromCombo()}
-                  className="rounded-2xl bg-apple-blue py-2.5 text-xs font-semibold text-white shadow-sm active:scale-[0.99] sm:text-sm"
-                  title="Thêm dòng từ ô nhập — không gộp kiện giống nhau"
-                >
-                  Thêm dòng
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={handleMergeSamples}
-                  disabled={lines.length < 2}
-                  className="rounded-2xl border border-black/[0.12] bg-white py-2.5 text-xs font-semibold text-apple-label shadow-sm active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45 sm:text-sm"
-                  title="Gộp các dòng cùng kích thước (D×R×C) thành một dòng"
-                >
-                  Gộp mẫu
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={handleRandomFill}
-                  disabled={!canRandomFill}
-                  className="rounded-2xl border border-violet-300/80 bg-violet-600 py-2.5 text-xs font-semibold text-white shadow-sm active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-violet-300 sm:text-sm"
-                  title="Sinh kiện ước tính còn lại — tổng DIM ~95–99.9% kg lô"
-                >
-                  Ngẫu nhiên
-                </button>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-apple-secondary">
-                  <input
-                    type="checkbox"
-                    checked={autoSmartFill}
-                    onChange={(e) => {
-                      setAutoSmartFill(e.target.checked);
-                      if (e.target.checked) {
-                        setLines((prev) =>
-                          runSmartPipeline(splitMeasuredAndEstimated(prev).measured)
-                        );
-                      } else {
-                        handleClearEstimated();
-                      }
-                    }}
-                    className="rounded border-black/20"
-                  />
-                  Tự sinh sau Thêm dòng (tổng DIM ~95–99.9% kg lô)
+
+              <div>
+                <label htmlFor="dim-combo" className="text-xs font-semibold text-apple-label">
+                  Bước 1 — Nhập mẫu đo (D×R×C×kiện)
                 </label>
-                {sumEstimatedPcs > 0 ? (
-                  <>
+                <textarea
+                  ref={textareaRef}
+                  id="dim-combo"
+                  rows={isInputFocused ? 3 : 4}
+                  value={combo}
+                  onFocus={() => setIsInputFocused(true)}
+                  onBlur={() => setIsInputFocused(false)}
+                  onChange={(e) => {
+                    const el = e.target;
+                    const start = el.selectionStart;
+                    const end = el.selectionEnd;
+                    setCombo(normalizeDimComboInput(el.value));
+                    requestAnimationFrame(() => el.setSelectionRange(start, end));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
+                      const multiLine = combo.includes("\n");
+                      if (e.ctrlKey || e.metaKey || (!multiLine && !e.shiftKey)) {
+                        e.preventDefault();
+                        handleAddRows();
+                      }
+                    }
+                    if (e.key === "," || e.key === "\u060C") {
+                      e.preventDefault();
+                      const el = e.currentTarget;
+                      const pos = el.selectionStart ?? combo.length;
+                      const end = el.selectionEnd ?? combo.length;
+                      setCombo(combo.slice(0, pos) + "×" + combo.slice(end));
+                    }
+                  }}
+                  placeholder={"40×50×30×10\n40 50 30 10\nDán từ Excel cũng được"}
+                  className="mt-1.5 max-h-48 min-h-[5.5rem] w-full resize-y rounded-2xl border border-black/[0.07] bg-slate-50/40 px-3 py-2.5 font-mono text-sm focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/18"
+                />
+
+                <div className="mt-2 flex gap-1 overflow-x-auto pb-0.5">
+                  {DIM_QUICK_NUMS.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setCombo((c) => appendDimComboNumber(c, n));
+                        textareaRef.current?.focus();
+                      }}
+                      className="shrink-0 min-h-[32px] min-w-[2.5rem] rounded-lg border border-black/[0.08] bg-white px-2 text-xs font-bold tabular-nums"
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+
+                <div
+                  className={`mt-2 grid gap-2 ${snap.canRandomFill ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"}`}
+                >
+                  <button
+                    type="button"
+                    onClick={handleAddRows}
+                    className="rounded-xl bg-apple-blue py-2.5 text-xs font-semibold text-white sm:text-sm"
+                  >
+                    Thêm dòng
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleMerge}
+                    disabled={lines.length < 2}
+                    className="rounded-xl border border-black/[0.12] bg-white py-2.5 text-xs font-semibold disabled:opacity-40 sm:text-sm"
+                  >
+                    Gộp mẫu
+                  </button>
+                  {snap.canRandomFill ? (
                     <button
                       type="button"
-                      onClick={handleRandomFill}
-                      disabled={!canRandomFill}
-                      className="text-[11px] font-semibold text-sky-700 underline-offset-2 hover:underline disabled:opacity-45"
+                      onClick={handleRandom}
+                      className="col-span-2 rounded-xl bg-violet-600 py-2.5 text-xs font-semibold text-white sm:col-span-1 sm:text-sm"
                     >
-                      Sinh lại
+                      Ngẫu nhiên
                     </button>
+                  ) : null}
+                </div>
+
+                {snap.canRandomFill ? (
+                  <div className="mt-2 space-y-2 rounded-xl border border-violet-100 bg-violet-50/30 p-2.5">
+                    <p className="text-[10px] font-semibold text-violet-900">Tùy chọn Ngẫu nhiên</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label>
+                        <span className="text-[10px] font-medium text-apple-secondary">
+                          Tổng DIM mục tiêu (kg)
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          step={0.1}
+                          inputMode="decimal"
+                          value={randomTargetKgInput}
+                          onChange={(e) => setRandomTargetKgInput(e.target.value)}
+                          placeholder={
+                            lot.declaredKg != null
+                              ? `~${Math.round(lot.declaredKg * (1 - DIM_TOTAL_BAND_BELOW_RATIO))} (tự)`
+                              : "950"
+                          }
+                          className="mt-0.5 w-full rounded-lg border border-violet-200 bg-white px-2.5 py-1.5 text-sm font-semibold tabular-nums focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                        />
+                      </label>
+                      <label>
+                        <span className="text-[10px] font-medium text-apple-secondary">
+                          Số dòng ước tính
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={snap.remainingPcs}
+                          inputMode="numeric"
+                          value={randomLineCountInput}
+                          onChange={(e) => setRandomLineCountInput(e.target.value)}
+                          placeholder={
+                            snap.targetLineCount
+                              ? `${snap.targetLineCount.min}–${snap.targetLineCount.max} (tự)`
+                              : String(Math.min(snap.remainingPcs, 10))
+                          }
+                          className="mt-0.5 w-full rounded-lg border border-violet-200 bg-white px-2.5 py-1.5 text-sm font-semibold tabular-nums focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                        />
+                      </label>
+                    </div>
+                    <p className="text-[10px] leading-snug text-apple-tertiary">
+                      Nhập kg tổng (vd. lô 1000 kg → <strong>950</strong>) — hệ thống tự cân bằng
+                      khớp ±1 kg. Để trống = tự chọn ~95–99.9% kg lô.
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                  {snap.canRandomFill ? (
+                    <label className="flex cursor-pointer items-center gap-1.5 text-apple-secondary">
+                      <input
+                        type="checkbox"
+                        checked={autoRandomAfterAdd}
+                        onChange={(e) => setAutoRandomAfterAdd(e.target.checked)}
+                        className="rounded"
+                      />
+                      Tự sinh ngẫu nhiên sau Thêm dòng
+                    </label>
+                  ) : null}
+                  {snap.sumEstimatedPcs > 0 ? (
                     <button
                       type="button"
-                      onClick={handleClearEstimated}
-                      className="text-[11px] font-semibold text-apple-secondary underline-offset-2 hover:underline"
+                      onClick={() => applyMutation(dimEntryClearEstimated(lines), "Đã xóa kiện ước tính.")}
+                      className="font-semibold text-apple-secondary underline-offset-2 hover:underline"
                     >
-                      Chỉ giữ đo thật
+                      Xóa ước tính
                     </button>
-                  </>
+                  ) : null}
+                </div>
+
+                {actionNote ? (
+                  <p className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1 text-[10px] text-amber-900">
+                    {actionNote}
+                  </p>
+                ) : null}
+
+                {snap.canRandomFill && snap.remainingPcs > 0 && snap.measured.length > 0 ? (
+                  <p className="mt-2 text-[10px] text-emerald-900">
+                    Còn <strong>{snap.remainingPcs}</strong> kiện — có thể bấm{" "}
+                    <strong>Ngẫu nhiên</strong> hoặc nhập thêm đo thật.
+                  </p>
+                ) : snap.pcsMatch && snap.measured.length > 0 ? (
+                  <p className="mt-2 text-[10px] text-emerald-900">
+                    Đủ kiện — không cần Ngẫu nhiên. Kiểm tra DIM rồi lưu.
+                  </p>
                 ) : null}
               </div>
-              {autoFillNote ? (
-                <p className="mt-1.5 text-[10px] font-medium text-amber-800">{autoFillNote}</p>
-              ) : null}
-            </div>
             </div>
 
+            {/* Cột phải — danh sách tách đo / ước tính */}
             <div
-              className={`space-y-3 md:min-h-0 md:max-h-[min(58dvh,520px)] md:overflow-y-auto md:overscroll-contain md:rounded-2xl md:border md:border-black/[0.06] md:bg-slate-50/30 md:p-3 ${
+              className={`space-y-2 md:max-h-[min(58dvh,520px)] md:overflow-y-auto md:rounded-2xl md:border md:border-black/[0.06] md:bg-slate-50/30 md:p-3 ${
                 isInputFocused ? "hidden md:block" : ""
               }`}
             >
-            {declaredPcs != null ? (
-              <div
-                className={`rounded-xl border px-3 py-2 text-[11px] leading-snug ${
-                  lines.length === 0
-                    ? "border-black/[0.08] bg-black/[0.03] text-apple-secondary"
-                    : pcsExcess
-                      ? "border-red-300 bg-red-50 text-red-950"
-                      : pcsShort
-                        ? "border-amber-200 bg-amber-50/90 text-amber-950"
-                        : "border-emerald-200 bg-emerald-50/90 text-emerald-950"
-                }`}
-                role="status"
-              >
-                <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                  <span className="font-semibold">Kiện lô (K): {declaredPcs}</span>
-                  {lines.length > 0 ? (
-                    <>
-                      <span className="text-apple-tertiary">→</span>
-                      <span className="font-mono font-bold">Tổng kiện DIM: {sumDimPcs}</span>
-                    </>
-                  ) : null}
-                </div>
-                {lines.length > 0 ? (
-                  <p className="mt-1.5 text-[11px] font-medium leading-snug">
-                    {pcsExcess ? (
-                      <span className="text-red-800">Dư kiện — không lưu được. Giảm kiện trong các dòng.</span>
-                    ) : pcsShort ? (
-                      <span className="text-amber-900">Thiếu kiện so với lô — vẫn có thể lưu DIM.</span>
-                    ) : (
-                      <span className="text-emerald-800">Khớp kiện.</span>
-                    )}
-                  </p>
-                ) : null}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-apple-label">Danh sách DIM</span>
+                <span className="text-[10px] text-apple-tertiary">
+                  {snap.lineCount} dòng
+                  {snap.targetLineCount
+                    ? ` · mục tiêu ${snap.targetLineCount.min}–${snap.targetLineCount.max}`
+                    : ""}
+                </span>
               </div>
-            ) : null}
 
-            <div className="md:mt-0">
-                <div className="mb-1.5 flex items-center justify-between md:mb-2">
-                  <span className="text-[11px] font-semibold text-apple-secondary sm:text-xs">Các dòng</span>
-                  <span className="text-[10px] text-apple-tertiary sm:text-[11px]">{lines.length}</span>
-                </div>
-                {lines.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-black/[0.12] py-8 text-center text-xs text-apple-tertiary md:min-h-[12rem] md:py-12">
-                    <span className="md:hidden">Chưa có dòng</span>
-                    <span className="hidden md:inline">Chưa có dòng — thêm mẫu kiện bên trái</span>
-                  </p>
-                ) : (
-                  <ul className="space-y-2">
-                    {lines.map((line, idx) => {
-                      const sub = lineDimKg(line, divisor, dimCtx);
-                      return (
-                        <li
-                          key={`${idx}-${line.lCm}-${line.wCm}-${line.hCm}-${line.pcs}`}
-                          className="flex items-center justify-between gap-2 rounded-xl border border-black/[0.08] bg-white px-3 py-2.5 shadow-sm"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="font-mono text-xs font-semibold text-apple-label sm:text-[13px]">
-                              {line.lCm}×{line.wCm}×{line.hCm}{" "}
-                              <span className="text-apple-secondary">×{line.pcs}</span>
-                              {line.estimated ? (
-                                <span
-                                  className="ml-1 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-bold uppercase text-violet-800"
-                                  title="Kích thước ước tính (sinh ngẫu nhiên)"
-                                >
-                                  ƯT
-                                </span>
-                              ) : null}
-                            </p>
-                            <p className="mt-0.5 text-[11px] font-medium tabular-nums text-apple-secondary">
-                              →{" "}
-                              {sub != null ? `${formatLineDimKgDisplay(sub, dimCtx)} kg` : "—"}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeLine(idx)}
-                            className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[10px] font-semibold text-red-600"
-                          >
-                            Xóa
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
+              <DimLineSection
+                title="Đo thật"
+                tone="measured"
+                lines={snap.measured}
+                startIndex={0}
+                divisor={divisor}
+                dimCtx={dimCtx}
+                onRemove={(idx) => applyMutation(dimEntryRemoveLine(lines, idx))}
+                emptyHint="Nhập mẫu đo bên trái"
+              />
+              <DimLineSection
+                title="Ước tính"
+                tone="estimated"
+                lines={snap.estimated}
+                startIndex={snap.measured.length}
+                divisor={divisor}
+                dimCtx={dimCtx}
+                onRemove={(idx) => applyMutation(dimEntryRemoveLine(lines, idx))}
+                emptyHint={
+                  snap.canRandomFill
+                    ? "Bấm Ngẫu nhiên sau khi có mẫu đo"
+                    : "Không cần ước tính — nhập đủ kiện đo thật"
+                }
+              />
             </div>
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-black/[0.06] p-4 pt-3 sm:px-5 sm:pb-4 md:px-6">
+        <div className="shrink-0 border-t border-black/[0.06] p-4 sm:px-5 md:px-6">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={pcsExcess}
-              title={pcsExcess ? "Dư kiện so với lô — không lưu được" : undefined}
-              className="min-w-0 flex-1 rounded-full bg-apple-blue px-3 py-2.5 text-sm font-semibold text-white hover:bg-apple-blue-hover disabled:cursor-not-allowed disabled:bg-apple-tertiary disabled:text-white/85"
+              disabled={snap.pcsExcess}
               onClick={handleSave}
+              className="min-w-0 flex-1 rounded-full bg-apple-blue py-2.5 text-sm font-semibold text-white disabled:bg-apple-tertiary"
             >
               Lưu DIM
             </button>
             <button
               type="button"
-              className="rounded-full border border-black/[0.12] px-3 py-2.5 text-sm font-semibold text-apple-label hover:bg-black/[0.03]"
-              onClick={handleClear}
+              onClick={() => onSave({ dimWeightKg: null, dimLines: null, dimDivisor: null })}
+              className="rounded-full border border-black/[0.12] px-3 py-2.5 text-sm font-semibold"
             >
               Xóa DIM
             </button>
             <button
               type="button"
-              className="rounded-full border border-black/[0.12] px-3 py-2.5 text-sm font-semibold text-apple-secondary hover:bg-black/[0.03]"
               onClick={onClose}
+              className="rounded-full border border-black/[0.12] px-3 py-2.5 text-sm font-semibold text-apple-secondary"
             >
               Hủy
             </button>

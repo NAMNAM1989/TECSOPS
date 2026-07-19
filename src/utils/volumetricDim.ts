@@ -298,18 +298,36 @@ export type DimPieceLine = {
 
 
 
+export function normalizeDimEdgeCm(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  return Math.max(1, Math.round(n));
+}
+
 export function parsePositiveNumbersFromText(s: string): number[] {
+  return extractNumbersFromDimText(s);
+}
 
-  const m = s.replace(/,/g, ".").match(/\d+(?:\.\d+)?/g);
+/** Trích số từ text DIM — hỗ trợ dán Excel, khoảng trắng, x/X/*, dấu gạch, tab. */
+export function extractNumbersFromDimText(s: string): number[] {
+  const normalized = s
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\t/g, " ")
+    .replace(/,/g, ".")
+    .replace(/[×xX*]/g, " ")
+    .replace(/[\\/|;|\u060C]/g, " ")
+    .replace(/[-–—]+/g, " ")
+    .replace(/\b(cm|mm|kgs?|kiện|kien|pcs|pc|p)\b/gi, " ")
+    .replace(/\b[dDrRcChH]\s*[:=]?\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
+  const m = normalized.match(/\d+(?:\.\d+)?/g);
   if (!m) return [];
 
   return m
-
     .map((x) => Number(x))
-
     .filter((n) => Number.isFinite(n) && n > 0);
-
 }
 
 
@@ -468,11 +486,11 @@ export function parseDimLineQuadsFromNumbers(nums: number[]): DimPieceLine[] {
 
       out.push({
 
-        lCm: nums[i],
+        lCm: normalizeDimEdgeCm(nums[i]),
 
-        wCm: nums[i + 1],
+        wCm: normalizeDimEdgeCm(nums[i + 1]),
 
-        hCm: nums[i + 2],
+        hCm: normalizeDimEdgeCm(nums[i + 2]),
 
         pcs: normalizePieceCount(nums[i + 3]),
 
@@ -484,11 +502,11 @@ export function parseDimLineQuadsFromNumbers(nums: number[]): DimPieceLine[] {
 
       out.push({
 
-        lCm: nums[i],
+        lCm: normalizeDimEdgeCm(nums[i]),
 
-        wCm: nums[i + 1],
+        wCm: normalizeDimEdgeCm(nums[i + 1]),
 
-        hCm: nums[i + 2],
+        hCm: normalizeDimEdgeCm(nums[i + 2]),
 
         pcs: 1,
 
@@ -526,11 +544,11 @@ export function parseDimLineQuadsFromNumbersStrict(nums: number[]): DimPieceLine
 
       out.push({
 
-        lCm: nums[i],
+        lCm: normalizeDimEdgeCm(nums[i]),
 
-        wCm: nums[i + 1],
+        wCm: normalizeDimEdgeCm(nums[i + 1]),
 
-        hCm: nums[i + 2],
+        hCm: normalizeDimEdgeCm(nums[i + 2]),
 
         pcs: normalizePieceCount(nums[i + 3]),
 
@@ -542,11 +560,11 @@ export function parseDimLineQuadsFromNumbersStrict(nums: number[]): DimPieceLine
 
       out.push({
 
-        lCm: nums[i],
+        lCm: normalizeDimEdgeCm(nums[i]),
 
-        wCm: nums[i + 1],
+        wCm: normalizeDimEdgeCm(nums[i + 1]),
 
-        hCm: nums[i + 2],
+        hCm: normalizeDimEdgeCm(nums[i + 2]),
 
         pcs: 1,
 
@@ -604,7 +622,25 @@ export function tryParseDimPieceLinesFromComboText(raw: string):
 
     const line = physicalLines[idx];
 
-    const nums = parsePositiveNumbersFromText(line);
+    const nums = extractNumbersFromDimText(line);
+
+    if (nums.length === 0) {
+
+      return {
+
+        ok: false,
+
+        error:
+
+          physicalLines.length > 1
+
+            ? `Dòng ${idx + 1} không có số hợp lệ: "${line}"`
+
+            : "Không nhận diện được số — thử D×R×C×kiện hoặc dán từ Excel.",
+
+      };
+
+    }
 
     const parsed = parseDimLineQuadsFromNumbersStrict(nums);
 
@@ -614,9 +650,13 @@ export function tryParseDimPieceLinesFromComboText(raw: string):
 
         physicalLines.length > 1
 
-          ? `Dòng ${idx + 1} không hợp lệ (mỗi nhóm đúng 4 số: D-R-C-kiện, hoặc 3 số: D-R-C): "${line}"`
+          ? `Dòng ${idx + 1} không hợp lệ (mỗi nhóm 4 số D-R-C-kiện hoặc 3 số D-R-C): "${line}"`
 
-          : "Số không khớp nhóm — mỗi nhóm cần đúng 4 số (D, R, C, kiện) hoặc 3 số (D, R, C), lặp lại cho nhiều nhóm.";
+          : nums.length % 4 === 1 || nums.length % 4 === 2
+
+            ? `Số lượng số (${nums.length}) không khớp nhóm 3 hoặc 4 — kiểm tra lại dòng dán.`
+
+            : "Số không khớp nhóm — mỗi nhóm cần 4 số (D, R, C, kiện) hoặc 3 số (D, R, C).";
 
       return { ok: false, error: hint };
 

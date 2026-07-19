@@ -33,6 +33,36 @@ describe("tryParseDimPieceLinesFromComboText", () => {
       expect(r.lines).toEqual([{ lCm: 120, wCm: 50, hCm: 30, pcs: 4 }]);
     }
   });
+
+  it("khoảng trắng thay ×", () => {
+    const r = tryParseDimPieceLinesFromComboText("40 50 30 10");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.lines).toEqual([{ lCm: 40, wCm: 50, hCm: 30, pcs: 10 }]);
+  });
+
+  it("x/X và dấu gạch", () => {
+    const r = tryParseDimPieceLinesFromComboText("40x50x30x10");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.lines[0]).toEqual({ lCm: 40, wCm: 50, hCm: 30, pcs: 10 });
+    const r2 = tryParseDimPieceLinesFromComboText("40-50-30-10");
+    expect(r2.ok).toBe(true);
+  });
+
+  it("nhiều nhóm trên một dòng", () => {
+    const r = tryParseDimPieceLinesFromComboText("40 50 30 10 55 45 35 5");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.lines).toHaveLength(2);
+  });
+
+  it("làm tròn cạnh thành số nguyên", () => {
+    const r = tryParseDimPieceLinesFromComboText("40.6×50.2×30.1×2");
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.lines[0]!.lCm).toBe(41);
+      expect(r.lines[0]!.wCm).toBe(50);
+      expect(r.lines[0]!.hCm).toBe(30);
+    }
+  });
 });
 
 describe("dimDivisorFromFlight", () => {

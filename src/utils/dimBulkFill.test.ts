@@ -7,12 +7,16 @@ import {
   computeTargetLotLineCount,
   DIM_LOT_LINE_COUNT_MAX,
   DIM_LOT_LINE_COUNT_MIN,
+  DIM_MAX_LONG_EDGE_CM,
+  DIM_MAX_PCS_PER_ESTIMATED_LINE,
+  DIM_TARGET_MATCH_TOLERANCE_KG,
   DIM_TOTAL_BAND_BELOW_RATIO,
   DIM_TOTAL_CEILING_RATIO,
   DIM_RANDOM_FILL_CAP_RATIO,
   dimRandomSeed,
   enforceMaxOneEdgeBelowMin,
   generateRandomDimFill,
+  longestEdgeCm,
   normalizeDimLineEdges,
   previewSmartDimFill,
   satisfiesMaxOneEdgeBelowMin,
@@ -108,6 +112,11 @@ describe("generateRandomDimFill — tổng DIM trong vùng ~5% dưới kg lô", 
       expect(r.totalDim).toBeLessThanOrEqual(declaredKg * DIM_TOTAL_CEILING_RATIO + 1e-6);
       const estimatedLines = r.lines.filter((l) => l.estimated);
       expect(estimatedLines.every((l) => satisfiesMaxOneEdgeBelowMin(l))).toBe(true);
+      expect(estimatedLines.every((l) => longestEdgeCm(l) <= DIM_MAX_LONG_EDGE_CM + 1e-6)).toBe(
+        true
+      );
+      const maxPcs = estimatedLines.reduce((m, l) => Math.max(m, l.pcs), 0);
+      expect(maxPcs).toBeLessThanOrEqual(DIM_MAX_PCS_PER_ESTIMATED_LINE);
     }
   });
 
@@ -164,11 +173,150 @@ describe("generateRandomDimFill — tổng DIM trong vùng ~5% dưới kg lô", 
       divisor: 6000 as const,
       dimCtx: TR_CTX,
       seed: dimRandomSeed("lot-1", 100, 2000),
+      regenerationNonce: 0,
     };
     const a = generateRandomDimFill(base);
     const b = generateRandomDimFill(base);
     expect(a.ok && b.ok).toBe(true);
     if (a.ok && b.ok) expect(a.lines).toEqual(b.lines);
+  });
+
+  it("regenerationNonce khác → phân bổ kiện khác", () => {
+    const base = {
+      manualLines: manual,
+      remainingPcs: 90,
+      declaredKg: 2000,
+      poolId: "smart" as const,
+      divisor: 6000 as const,
+      dimCtx: TR_CTX,
+      seed: dimRandomSeed("lot-1", 100, 2000),
+    };
+    const a = generateRandomDimFill({ ...base, regenerationNonce: 0 });
+    const b = generateRandomDimFill({ ...base, regenerationNonce: 1 });
+    expect(a.ok && b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      const pcsA = a.lines.filter((l) => l.estimated).map((l) => l.pcs).sort((x, y) => x - y);
+      const pcsB = b.lines.filter((l) => l.estimated).map((l) => l.pcs).sort((x, y) => x - y);
+      expect(pcsA).not.toEqual(pcsB);
+    }
+  });
+
+  it("targetTotalDimKg → tổng DIM khớp mục tiêu người dùng", () => {
+    const declaredKg = 1000;
+    const target = 950;
+    const r = generateRandomDimFill({
+      manualLines: [{ lCm: 40, wCm: 50, hCm: 30, pcs: 5 }],
+      remainingPcs: 95,
+      declaredKg,
+      poolId: "smart",
+      divisor: 6000,
+      dimCtx: TR_CTX,
+      seed: dimRandomSeed("lot-target-kg", 100, declaredKg),
+      targetTotalDimKg: target,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.totalDim).toBeLessThanOrEqual(target + 1e-6);
+      expect(r.totalDim).toBeGreaterThanOrEqual(target - DIM_TARGET_MATCH_TOLERANCE_KG - 1e-6);
+      expect(r.targetKg).toBe(target);
+    }
+  });
+
+  it("targetTotalDimKg lặp 20 lần — luôn khớp ±1 kg", () => {
+    const target = 980;
+    const manual = [{ lCm: 40, wCm: 50, hCm: 30, pcs: 10 }];
+    for (let nonce = 0; nonce < 20; nonce++) {
+      const r = generateRandomDimFill({
+        manualLines: manual,
+        remainingPcs: 90,
+        declaredKg: 1150,
+        poolId: "smart",
+        divisor: 6000,
+        dimCtx: TR_CTX,
+        seed: dimRandomSeed("lot-repeat", 100, 1150),
+        regenerationNonce: nonce,
+        targetTotalDimKg: target,
+        targetEstimatedLineCount: 15,
+      });
+      expect(r.ok, !r.ok ? r.error : undefined).toBe(true);
+      if (r.ok) {
+        expect(r.totalDim).toBeLessThanOrEqual(target + 1e-6);
+        expect(r.totalDim).toBeGreaterThanOrEqual(target - DIM_TARGET_MATCH_TOLERANCE_KG - 1e-6);
+      }
+    }
+  });
+
+  it("tổng DIM output = tổng dùng khi tune (không gộp ước tính)", () => {
+    const r = generateRandomDimFill({
+      manualLines: [{ lCm: 40, wCm: 50, hCm: 30, pcs: 5 }],
+      remainingPcs: 95,
+      declaredKg: 1000,
+      poolId: "smart",
+      divisor: 6000,
+      dimCtx: TR_CTX,
+      seed: dimRandomSeed("lot-consistency", 100, 1000),
+      targetTotalDimKg: 950,
+      targetEstimatedLineCount: 12,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const recomputed = totalDimKgFromLines(r.lines, 6000, TR_CTX);
+      expect(recomputed).toBe(r.totalDim);
+    }
+  });
+
+  it("targetTotalDimKg quá thấp → lỗi", () => {
+    const r = generateRandomDimFill({
+      manualLines: [{ lCm: 60, wCm: 50, hCm: 40, pcs: 10 }],
+      remainingPcs: 90,
+      declaredKg: 2000,
+      poolId: "smart",
+      divisor: 6000,
+      dimCtx: TR_CTX,
+      seed: dimRandomSeed("lot-low", 100, 2000),
+      targetTotalDimKg: 100,
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  it("targetEstimatedLineCount → đúng số dòng ước tính", () => {
+    const r = generateRandomDimFill({
+      manualLines: manual,
+      remainingPcs: 90,
+      declaredKg: 2000,
+      poolId: "smart",
+      divisor: 6000,
+      dimCtx: TR_CTX,
+      seed: dimRandomSeed("lot-20lines", 100, 2000),
+      targetEstimatedLineCount: 20,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const est = r.lines.filter((l) => l.estimated);
+      expect(est.length).toBe(20);
+      expect(est.every((l) => Number.isInteger(l.lCm) && l.lCm > 0)).toBe(true);
+    }
+  });
+
+  it("mẫu đo 120 cm → ước tính cạnh dài ≤ 65 cm", () => {
+    const r = generateRandomDimFill({
+      manualLines: [{ lCm: 120, wCm: 25, hCm: 25, pcs: 5 }],
+      remainingPcs: 90,
+      declaredKg: 2000,
+      poolId: "smart",
+      divisor: 6000,
+      dimCtx: TR_CTX,
+      seed: dimRandomSeed("lot-long", 95, 2000),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const est = r.lines.filter((l) => l.estimated);
+      expect(est.length).toBeGreaterThan(0);
+      expect(est.every((l) => longestEdgeCm(l) <= DIM_MAX_LONG_EDGE_CM + 1e-6)).toBe(true);
+      expect(est.reduce((m, l) => Math.max(m, l.pcs), 0)).toBeLessThanOrEqual(
+        DIM_MAX_PCS_PER_ESTIMATED_LINE
+      );
+    }
   });
 
   it("legacy capRatio 90% tổng (tương thích cũ)", () => {

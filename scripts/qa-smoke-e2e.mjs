@@ -55,7 +55,7 @@ async function main() {
     if ((await pdfBar.count()) === 0) ok("TCS-02", "Toolbar không còn PDF ESID hàng loạt (đúng)");
     else fail("TCS-02", "Toolbar vẫn còn nút PDF ESID — cần bỏ");
 
-    // PDF/In ESID theo từng lô trên menu ⋮
+    // Tải PDF ESID theo từng lô trên menu ⋮ (đã bỏ In ESID)
     const menus = page.getByRole("button", { name: "Menu thao tác lô hàng" });
     const n = await menus.count();
     if (n > 0) ok("MENU-01", `${n} menu dòng`);
@@ -64,12 +64,12 @@ async function main() {
     if (n > 0) {
       await menus.first().click();
       await page.waitForTimeout(200);
-      const pdfItem = page.getByRole("menuitem", { name: "PDF ESID" });
+      const pdfItem = page.getByRole("menuitem", { name: /Tải PDF ESID|PDF ESID/ });
       const printItem = page.getByRole("menuitem", { name: "In ESID" });
-      if (await pdfItem.count()) ok("MENU-02", "Menu dòng có PDF ESID");
-      else fail("MENU-02", "Menu dòng không có PDF ESID");
-      if (await printItem.count()) ok("MENU-03", "Menu dòng có In ESID");
-      else fail("MENU-03", "Menu dòng không có In ESID");
+      if (await pdfItem.count()) ok("MENU-02", "Menu dòng có Tải PDF ESID");
+      else fail("MENU-02", "Menu dòng không có Tải PDF ESID");
+      if ((await printItem.count()) === 0) ok("MENU-03", "Menu dòng đã bỏ In ESID (đúng)");
+      else fail("MENU-03", "Menu dòng vẫn còn In ESID — cần gỡ");
       await page.keyboard.press("Escape");
     }
 

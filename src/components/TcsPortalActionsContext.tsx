@@ -15,7 +15,7 @@ export function TcsPortalActionsProvider({
   );
 }
 
-/** Menu dòng lấy PDF ESID / In ESID từ Cổng TCS */
+/** Menu dòng lấy PDF ESID từ Cổng TCS */
 export function useTcsPortalActionsContext(): TcsPortalActions | null {
   return useContext(TcsPortalActionsContext);
 }

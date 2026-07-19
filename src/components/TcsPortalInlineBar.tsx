@@ -64,7 +64,7 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           className={btnScan}
           disabled={tcs.busy || tcs.eligibleCount === 0}
           onClick={() => void tcs.scan()}
-          title="Quét ESID (tách riêng): lọc theo ngày phiên → cập nhật status Ops. Tải PDF / In: menu ⋮ từng dòng (1 AWB, tìm AWB# 8 số)."
+          title="Quét ESID (tách riêng): lọc theo ngày phiên → cập nhật status Ops. Tải PDF ESID: menu ⋮ từng dòng (1 AWB, tìm AWB# 8 số)."
         >
           Quét
         </button>

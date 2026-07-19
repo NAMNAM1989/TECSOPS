@@ -12,7 +12,6 @@ from app.data.models import Action, AwbJobResult, AwbJobRow, BatchJob, Normalize
 from app.data.repository import Repository
 from app.services.download_service import build_document_filename, verify_download, write_placeholder_pdf
 from app.services.excel_service import export_result_excel
-from app.services.print_service import print_with_dedupe
 from app.services.tcs_client import TcsClient
 from app.utils.logging_setup import setup_logging
 
@@ -165,8 +164,19 @@ class BatchService:
             result.duration_seconds = (datetime.now() - started).total_seconds()
             return result
 
-        # DOWNLOAD/PRINT thật: bỏ LOOKUP riêng (trước đây search ESID 2 lần / AWB).
-        if row.action in {Action.DOWNLOAD, Action.PRINT} and not job.mock:
+        # In ESID (PRINT) đã bỏ — chỉ còn Tải PDF ESID (DOWNLOAD).
+        if row.action == Action.PRINT:
+            result.normalized_status = NormalizedStatus.FAILED.value
+            result.error_code = "PRINT_REMOVED"
+            result.error_message = (
+                "In ESID đã gỡ — dùng action DOWNLOAD (Tải PDF ESID) rồi in từ file"
+            )
+            result.end_time = datetime.now().isoformat(timespec="seconds")
+            result.duration_seconds = (datetime.now() - started).total_seconds()
+            return result
+
+        # DOWNLOAD thật: bỏ LOOKUP riêng (trước đây search ESID 2 lần / AWB).
+        if row.action == Action.DOWNLOAD and not job.mock:
             return self._download_print_fast(job, row, client, result, started)
 
         retries = 0
@@ -195,13 +205,11 @@ class BatchService:
         if outcome.normalized in downloadable and row.action in {
             Action.LOOKUP,
             Action.DOWNLOAD,
-            Action.PRINT,
         }:
             self._attach_pdf(job, row, client, result, outcome.tcs_status_raw)
 
         if outcome.normalized == NormalizedStatus.NOT_COMPLETED:
             result.normalized_status = NormalizedStatus.NOT_COMPLETED.value
-            # Không in
 
         if job.mock and row.action == Action.REGISTER and job.confirm_register:
             result.tcs_status_raw = "Đã đăng ký (mock)"
@@ -222,9 +230,8 @@ class BatchService:
         started: datetime,
     ) -> AwbJobResult:
         """
-        ESID 1 AWB: danh sách → AWB# 8 số → mở phiếu → IN.
-        - DOWNLOAD: tự lưu PDF → Ops tải về máy.
-        - PRINT: mở hộp thoại in — user chọn máy in.
+        ESID 1 AWB: danh sách → AWB# 8 số → mở phiếu → IN → lưu PDF.
+        Ops tải file về máy rồi in từ PDF (không còn mở hộp thoại In ESID).
         Không lọc ngày / không phụ thuộc Quét ESID (status Ops).
         """
         if job.mock:
@@ -235,56 +242,31 @@ class BatchService:
             result.duration_seconds = round((datetime.now() - started).total_seconds(), 3)
             return result
 
-        want_pdf = row.action == Action.DOWNLOAD
         prepared = getattr(client, "_prepared_awb", None) or ""
         skip_prepare = bool(prepared) and prepared == row.awb_digits
-        result.tcs_status_raw = (
-            "ESID IN → PDF (hot)"
-            if want_pdf and skip_prepare
-            else "ESID IN → PDF"
-            if want_pdf
-            else "ESID IN → hộp thoại in (hot)"
-            if skip_prepare
-            else "ESID IN → hộp thoại in"
+        result.tcs_status_raw = "ESID IN → PDF (hot)" if skip_prepare else "ESID IN → PDF"
+        fname = build_document_filename(row.awb_digits, row.document_type or "ESID")
+        fpath = self.settings.output_dir / "docs" / fname
+        pr = client.download_pdf(
+            row.awb_digits,
+            fpath,
+            session_date=None,
+            skip_prepare=skip_prepare,
         )
-        if want_pdf:
-            fname = build_document_filename(row.awb_digits, row.document_type or "ESID")
-            fpath = self.settings.output_dir / "docs" / fname
-            pr = client.download_pdf(
-                row.awb_digits,
-                fpath,
-                session_date=None,
-                skip_prepare=skip_prepare,
-            )
-            result.normalized_status = pr.normalized.value
-            result.error_code = pr.error_code
-            result.error_message = pr.error_message
-            if pr.normalized == NormalizedStatus.DOWNLOADED:
-                out = Path(pr.downloaded_path) if pr.downloaded_path else fpath
-                if verify_download(out):
-                    result.downloaded_file = str(out)
-                    result.error_message = ""
-                    result.print_status = "AUTO_PDF"
-                    result.tcs_status_raw = f"Đã tải PDF ESID ({out.name})"
-                else:
-                    result.normalized_status = NormalizedStatus.FAILED.value
-                    result.error_code = "DOWNLOAD_EMPTY"
-                    result.error_message = "PDF rỗng hoặc không hợp lệ"
-        else:
-            pr = client.print_esid_dialog(
-                row.awb_digits,
-                session_date=None,
-                skip_prepare=skip_prepare,
-            )
-            result.normalized_status = pr.normalized.value
-            result.error_code = pr.error_code
-            result.error_message = pr.error_message
-            if pr.normalized == NormalizedStatus.PRINTED:
-                result.print_status = "USER_PRINT_DIALOG"
+        result.normalized_status = pr.normalized.value
+        result.error_code = pr.error_code
+        result.error_message = pr.error_message
+        if pr.normalized == NormalizedStatus.DOWNLOADED:
+            out = Path(pr.downloaded_path) if pr.downloaded_path else fpath
+            if verify_download(out):
+                result.downloaded_file = str(out)
                 result.error_message = ""
-                result.tcs_status_raw = (
-                    "Đã bấm IN — hộp thoại in đã mở trên Chrome, chọn máy in và In"
-                )
+                result.print_status = "AUTO_PDF"
+                result.tcs_status_raw = f"Đã tải PDF ESID ({out.name})"
+            else:
+                result.normalized_status = NormalizedStatus.FAILED.value
+                result.error_code = "DOWNLOAD_EMPTY"
+                result.error_message = "PDF rỗng hoặc không hợp lệ"
         result.end_time = datetime.now().isoformat(timespec="seconds")
         result.duration_seconds = round((datetime.now() - started).total_seconds(), 3)
         return result
@@ -320,24 +302,6 @@ class BatchService:
         if verify_download(fpath):
             result.downloaded_file = str(fpath)
             result.normalized_status = NormalizedStatus.DOWNLOADED.value
-            if row.action == Action.PRINT and job.mock:
-                ok, pstatus = print_with_dedupe(
-                    self.repo,
-                    awb_digits=row.awb_digits,
-                    document_type=row.document_type,
-                    path=fpath,
-                    dry_run=job.dry_run,
-                    copies=row.print_copies,
-                )
-                result.print_status = pstatus
-                if ok:
-                    result.normalized_status = NormalizedStatus.PRINTED.value
-                elif pstatus == "SKIPPED_DUPLICATE":
-                    result.normalized_status = NormalizedStatus.SKIPPED_DUPLICATE.value
-                else:
-                    result.normalized_status = NormalizedStatus.FAILED.value
-                    result.error_code = "PRINT_FAILED"
-                    result.error_message = pstatus
         else:
             result.normalized_status = NormalizedStatus.FAILED.value
             result.error_code = "DOWNLOAD_EMPTY"

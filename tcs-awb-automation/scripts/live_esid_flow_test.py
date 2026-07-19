@@ -1,4 +1,4 @@
-"""Live: PDF ESID (danh sách → AWB# → IN → Save PDF) + In ESID (hộp thoại)."""
+"""Live: PDF ESID (danh sách → AWB# → IN → Save PDF). In ESID đã gỡ."""
 from __future__ import annotations
 
 import sys
@@ -19,8 +19,7 @@ from app.services.download_service import build_document_filename, verify_downlo
 
 def main() -> int:
     awb = "".join(c for c in (sys.argv[1] if len(sys.argv) > 1 else "23218276370") if c.isdigit())[:11]
-    mode = (sys.argv[2] if len(sys.argv) > 2 else "pdf").lower()
-    session_date = sys.argv[3] if len(sys.argv) > 3 else "2026-07-17"
+    session_date = sys.argv[2] if len(sys.argv) > 2 else "2026-07-17"
     settings = load_settings()
     ensure_runtime_dirs(settings)
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
@@ -43,13 +42,6 @@ def main() -> int:
         if not ok:
             return 2
         esid = EsidListPage(page, loc)
-        if mode == "print":
-            print("step PRINT: list → AWB# → IN → dialog", flush=True)
-            esid.click_in_for_user_print(awb, session_date=session_date)
-            print("PRINT_DIALOG_OPEN", f"{time.perf_counter()-t0:.1f}s", flush=True)
-            print("DONE_OK", flush=True)
-            time.sleep(6)
-            return 0
         fpath = settings.output_dir / "docs" / build_document_filename(awb, "ESID")
         print("step PDF: list → AWB# last8 → scroll IN → Save PDF", awb[3:], "→", fpath, flush=True)
         path = esid.download_awb_pdf(awb, fpath, session_date=session_date)

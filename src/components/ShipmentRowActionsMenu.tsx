@@ -19,7 +19,7 @@ type Props = {
   onPrint: (s: Shipment) => void;
   onDelete: (id: string) => void;
   onUpdate?: (id: string, patch: Partial<Shipment>) => void;
-  /** @deprecated dùng PDF ESID / In ESID trong menu */
+  /** @deprecated dùng Tải PDF ESID trong menu */
   onOpenTcsPortal?: (s: Shipment) => void;
   compact?: boolean;
 };
@@ -119,7 +119,7 @@ export function ShipmentRowActionsMenu({
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   const showTcsEsid = isTcsWarehouse(row.warehouse) && Boolean(tcs);
-  const menuExtras = (showDim ? 1 : 0) + (showTcsDim ? 2 : 0) + (showTcsEsid ? 2 : 0) + 1;
+  const menuExtras = (showDim ? 1 : 0) + (showTcsDim ? 2 : 0) + (showTcsEsid ? 1 : 0) + 1;
 
   const confirmDelete = () => {
     if (confirm(`Xóa lô AWB ${row.awb || "(chưa có AWB)"}?`)) onDelete(row.id);
@@ -129,7 +129,7 @@ export function ShipmentRowActionsMenu({
     const btn = triggerRef.current;
     if (btn) setMenuStyle(menuPositionFromTrigger(btn));
     setMenuOpen(true);
-    // Pre-warm ESID trên Chrome TCS (nền) — bấm PDF/In sau đó dùng hot-path
+    // Pre-warm ESID trên Chrome TCS (nền) — bấm Tải PDF sau đó dùng hot-path
     if (showTcsEsid) tcs?.prepareEsidFor?.(row);
   };
 
@@ -217,17 +217,6 @@ export function ShipmentRowActionsMenu({
               },
               undefined,
               `row-pdf-esid-${row.id}`
-            )
-          : null}
-        {showTcsEsid
-          ? menuItem(
-              "In ESID",
-              () => {
-                if (tcs?.busy) return;
-                void tcs?.printEsidFor(row);
-              },
-              undefined,
-              `row-print-esid-${row.id}`
             )
           : null}
         {menuExtras > 1 ? <div className={`my-0.5 border-t ${OPS.border}`} aria-hidden /> : null}

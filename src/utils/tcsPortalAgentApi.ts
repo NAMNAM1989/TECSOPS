@@ -108,26 +108,29 @@ export function agentOfflineHint(base = agentBase()): string {
   const isProxy = base.includes("/tcs-agent") || base.endsWith("/tcs-agent");
   if (isProxy) {
     return (
-      `Agent Offline (${base}). Trên máy kho chạy: npm run tcs:agent:real. ` +
-      `Máy khác: mở Ops bằng IP máy kho (vd. http://192.168.x.x:5173), không dùng 127.0.0.1 trên máy khác.`
+      `Agent Offline (${base}). Trên máy kho: restart npm run dev (tự chạy agent) hoặc npm run tcs:agent:real. ` +
+      `Máy khác: mở Ops bằng IP máy kho (vd. http://192.168.x.x:5173), không dùng 127.0.0.1.`
     );
   }
   if (isLoopback) {
     return (
       `Agent Offline (${base}). 127.0.0.1 chỉ đúng trên máy đang chạy agent. ` +
-      `Máy khác: xóa URL tùy chỉnh (dùng proxy /tcs-agent) hoặc mở Ops qua IP máy kho.`
+      `Máy khác: xóa URL tùy chỉnh (nút URL → để trống = proxy /tcs-agent) và mở Ops qua IP máy kho.`
     );
   }
-  return `Agent Offline (${base}). Kiểm tra máy kho đang chạy npm run tcs:agent:real và URL/firewall.`;
+  return `Agent Offline (${base}). Kiểm tra agent đang chạy và URL/firewall.`;
 }
 
-export async function pingTcsAgent(timeoutMs = 2500): Promise<TcsAgentHealth | null> {
+export async function pingTcsAgent(timeoutMs = 3500): Promise<TcsAgentHealth | null> {
   const ctrl = new AbortController();
   const t = window.setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(`${agentBase()}/health`, { signal: ctrl.signal });
     if (!res.ok) return null;
-    return (await res.json()) as TcsAgentHealth;
+    const body = (await res.json()) as TcsAgentHealth & { error?: string };
+    // Proxy Express/Vite khi agent chết trả 502 JSON { ok:false, error:AGENT_OFFLINE }
+    if (body && body.ok === false) return null;
+    return body;
   } catch {
     return null;
   } finally {

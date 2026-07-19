@@ -133,8 +133,9 @@ class TcsClient:
         loc = self._locators()
         if not loc or not loc.esid_list_confirmed:
             raise SiteChangedError("Chưa có locator ESID")
+        _ = session_date  # mở phiếu chỉ AWB# 8 số — không lọc ngày
         esid = EsidListPage(self._portal.page, loc)
-        esid.prepare_esid_detail(awb_digits, session_date=session_date or None)
+        esid.prepare_esid_detail(awb_digits, session_date=None)
         has_in = esid._in_button_visible()
         if not has_in:
             raise SiteChangedError("Đã mở chi tiết nhưng không thấy nút IN")
@@ -235,7 +236,8 @@ class TcsClient:
             from app.utils.awb import safe_filename_awb
 
             esid = EsidListPage(self._portal.page, loc)
-            suggest = f"{safe_filename_awb(awb_digits)}_ESID" if for_save_pdf else None
+            # Luôn gợi ý tên theo AWB — Chrome «Save as PDF» dùng document.title
+            suggest = f"{safe_filename_awb(awb_digits)}_ESID"
             try:
                 esid.click_in_for_user_print(
                     awb_digits,
@@ -259,7 +261,7 @@ class TcsClient:
                     f"SAVE_PDF_DIALOG:{suggest}",
                     NormalizedStatus.DOWNLOADED,
                 )
-            return LookupOutcome("PRINT_DIALOG", NormalizedStatus.PRINTED)
+            return LookupOutcome(f"PRINT_DIALOG:{suggest}", NormalizedStatus.PRINTED)
         except NeedsLoginError as e:
             return LookupOutcome("", NormalizedStatus.NEEDS_LOGIN, "NEEDS_LOGIN", str(e))
         except SiteChangedError as e:

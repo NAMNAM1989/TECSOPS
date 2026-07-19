@@ -18,19 +18,25 @@ _SITE_CHROME_MARKERS = (
     "khai báo esid",
     "đăng ký xe",
     "hotline",
+    "tìm kiếm",
+    "đăng xuất",
+    "awb login",
 )
-_ESID_DOC_MARKERS = (
-    "esid",
-    "air waybill",
-    "shipper",
-    "consignee",
-    "người gửi",
-    "người nhận",
-    "số không vận đơn",
-    "awb",
-    "hướng dẫn gửi hàng",
+# Marker MẠNH của phiếu in thật — không dùng "esid"/"awb" đơn lẻ (có trên UI list)
+_ESID_BILL_MARKERS = (
+    "shipper's instruction",
+    "shippers instruction",
     "instruction for despatch",
-    "despatch",
+    "hướng dẫn gửi hàng",
+    "so khong van don",
+    "số không vận đơn",
+    "air waybill",
+    "người gửi hàng",
+    "người nhận hàng",
+    "consignee",
+    "shipper name",
+    "airport of departure",
+    "airport of destination",
 )
 
 
@@ -42,6 +48,9 @@ class EsidListPage:
         self.page = page
         self.locators = locators
         self._list_date_ymd: str | None = None
+        # AWB đang mở chi tiết (nút IN) — hot-path PDF/In gần tức thời
+        self._detail_awb: str | None = None
+        self._print_hooks_installed: bool = False
 
     def _cfg(self) -> dict[str, Any]:
         return self.locators.data.get("esid_list") or {}
@@ -80,9 +89,10 @@ class EsidListPage:
     def _click_list_tab(self) -> None:
         try:
             tab = self.page.get_by_text("DANH SÁCH ESID", exact=False)
-            if tab.count() > 0 and tab.first.is_visible(timeout=600):
-                tab.first.click(timeout=2000)
-                self.page.wait_for_timeout(150)
+            if tab.count() > 0 and tab.first.is_visible(timeout=400):
+                tab.first.click(timeout=1500, no_wait_after=True)
+                self.page.wait_for_timeout(50)
+                self._detail_awb = None
         except Exception:
             pass
 
@@ -102,22 +112,194 @@ class EsidListPage:
         self.page.wait_for_timeout(100)
         self._click_list_tab()
 
-    def _wait_search_results(self, last8: str = "") -> None:
-        """Chờ bảng kết quả thay vì networkidle (thường chậm 5–15s)."""
+    def _wait_search_results(self, last8: str = "", *, timeout_ms: int = 8000) -> bool:
+        """
+        Chờ bảng kết quả. Khi có last8: BẮT BUỘC thấy last8 trong bảng
+        (không chấp nhận list mặc định chỉ vì có chữ «Hoàn thành»).
+        """
         try:
             self.page.wait_for_function(
                 """(last8) => {
-                  const rows = document.querySelectorAll('table tbody tr, .ant-table-tbody tr');
-                  if (!rows.length) return false;
-                  const blob = [...rows].slice(0, 20).map(r => (r.innerText||'')).join(' ');
-                  if (last8 && blob.includes(last8)) return true;
-                  return /hoàn thành|tiếp nhận|không có|no data|empty|awb|esid/i.test(blob);
+                  const rows = [...document.querySelectorAll(
+                    '.ant-table-tbody tr, table tbody tr'
+                  )].filter(r => r.querySelectorAll('td').length >= 3);
+                  if (!rows.length) {
+                    return /không có|no data|empty/i.test(document.body.innerText||'');
+                  }
+                  const blob = rows.slice(0, 30).map(r => (r.innerText||'')).join(' ');
+                  if (last8) return blob.includes(last8);
+                  return /hoàn thành|tiếp nhận|không có|no data|empty/i.test(blob);
                 }""",
                 arg=last8 or "",
-                timeout=15000,
+                timeout=timeout_ms,
+            )
+            return True
+        except Exception:
+            self.page.wait_for_timeout(200)
+            return False
+
+    @staticmethod
+    def _set_react_input(locator, value: str) -> None:
+        """Gán giá trị input Ant/React — fill() thường không cập nhật form store."""
+        locator.first.wait_for(state="visible", timeout=8000)
+        locator.first.click(timeout=2000)
+        try:
+            locator.first.fill("")
+        except Exception:
+            pass
+        ok = locator.first.evaluate(
+            """(el, v) => {
+              const proto = window.HTMLInputElement.prototype;
+              const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+              const set = desc && desc.set;
+              const last = el.value;
+              if (set) set.call(el, v);
+              else el.value = v;
+              const tracker = el._valueTracker;
+              if (tracker && typeof tracker.setValue === 'function') {
+                try { tracker.setValue(last); } catch (e) {}
+              }
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+              return String(el.value || '') === String(v);
+            }""",
+            value,
+        )
+        if not ok:
+            locator.first.fill(value)
+        try:
+            locator.first.press("Tab")
+        except Exception:
+            pass
+
+    def _detail_ready_for(self, awb_digits: str) -> bool:
+        """True khi đang ở chi tiết đúng AWB và còn nút IN (hot-path)."""
+        if len(awb_digits) != 11:
+            return False
+        if self._detail_awb == awb_digits and self._in_button_visible():
+            return True
+        if not self._in_button_visible():
+            return False
+        # Không khớp chỉ bằng last8 — ô AWB# trên form list cũng chứa last8
+        display = f"{awb_digits[:3]}-{awb_digits[3:]}"
+        try:
+            blob = self.page.evaluate(
+                """() => {
+                  // Bỏ giá trị input tìm kiếm — tránh false hot-path
+                  const clone = document.body ? document.body.innerText : '';
+                  return (clone || '').slice(0, 6000);
+                }"""
             )
         except Exception:
-            self.page.wait_for_timeout(500)
+            return False
+        text = str(blob or "")
+        if awb_digits in text or display in text:
+            self._detail_awb = awb_digits
+            return True
+        return False
+
+    def _clear_date_filters_fast(self) -> None:
+        """
+        Xóa lọc ngày bay trước khi tìm AWB#.
+        Ant Design RangePicker ẩn nút X tới khi hover — gán value='' không đủ.
+        """
+        try:
+            # Hover từng picker để hiện .ant-picker-clear rồi bấm
+            pickers = self.page.locator(".ant-picker")
+            for i in range(min(pickers.count(), 4)):
+                try:
+                    pk = pickers.nth(i)
+                    if not pk.is_visible(timeout=200):
+                        continue
+                    pk.hover(timeout=800)
+                    clr = pk.locator(".ant-picker-clear")
+                    if clr.count() > 0:
+                        clr.first.click(timeout=800, force=True)
+                except Exception:
+                    pass
+            # Ctrl+A + Delete trên ô ngày
+            for sel in ("#search-form_dateSearch",):
+                try:
+                    loc = self.page.locator(sel)
+                    if loc.count() == 0 or not loc.first.is_visible(timeout=200):
+                        continue
+                    loc.first.click(timeout=500)
+                    loc.first.press("Control+A")
+                    loc.first.press("Backspace")
+                    loc.first.fill("")
+                except Exception:
+                    pass
+            try:
+                end = self.page.get_by_placeholder(re.compile(r"k[eế]t\s*th[uú]c", re.I))
+                if end.count() > 0 and end.first.is_visible(timeout=200):
+                    end.first.click(timeout=500)
+                    end.first.press("Control+A")
+                    end.first.press("Backspace")
+                    end.first.fill("")
+            except Exception:
+                pass
+            try:
+                self.page.keyboard.press("Escape")
+            except Exception:
+                pass
+            self.page.evaluate(
+                """() => {
+                  for (const c of document.querySelectorAll('.ant-picker-clear')) {
+                    try { c.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (e) {}
+                  }
+                }"""
+            )
+        except Exception:
+            pass
+        self._list_date_ymd = None
+
+    def _diag_search_state(self, awb_digits: str) -> dict[str, Any]:
+        """Snapshot form + bảng khi không thấy dòng — ghi file để debug."""
+        info: dict[str, Any] = {"awb": awb_digits}
+        try:
+            info["form"] = self.page.evaluate(
+                """() => {
+                  const val = (sel) => {
+                    const el = document.querySelector(sel);
+                    return el ? String(el.value||'') : null;
+                  };
+                  const byPh = (re) => {
+                    const el = [...document.querySelectorAll('input')].find(i => re.test(i.placeholder||''));
+                    return el ? String(el.value||'') : null;
+                  };
+                  return {
+                    url: location.href,
+                    date_start: val('#search-form_dateSearch'),
+                    date_end: byPh(/kết thúc|ket thuc/i),
+                    awb: byPh(/AWB#/i),
+                    prefix: byPh(/prefix/i),
+                    picker_texts: [...document.querySelectorAll('.ant-picker')].map(
+                      p => (p.innerText||'').trim().slice(0, 80)
+                    ),
+                  };
+                }"""
+            )
+        except Exception as e:
+            info["form_err"] = str(e)[:200]
+        try:
+            info["rows"] = self.list_row_statuses()[:15]
+            info["row_count"] = len(info["rows"])
+        except Exception as e:
+            info["rows_err"] = str(e)[:200]
+        try:
+            out = Path("output") / "diag_search"
+            out.mkdir(parents=True, exist_ok=True)
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            shot = out / f"{awb_digits}_{stamp}.png"
+            self.page.screenshot(path=str(shot), full_page=True)
+            info["screenshot"] = str(shot)
+            (out / f"{awb_digits}_{stamp}.json").write_text(
+                __import__("json").dumps(info, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            info["save_err"] = str(e)[:200]
+        return info
 
     @staticmethod
     def _ymd_to_dmy(ymd: str) -> str:
@@ -335,47 +517,87 @@ class EsidListPage:
         if len(awb_digits) != 11:
             raise SiteChangedError("AWB phải đủ 11 chữ số")
         last8 = awb_digits[3:]
-        self._list_date_ymd = None
+        prefix = awb_digits[:3]
+        self._detail_awb = None
         self.goto_list(force=force_reload)
-        self.clear_date_filters()
-        # Ô AWB# (8 số cuối) — placeholder quan sát thật
+        self._clear_date_filters_fast()
         awb_ref = self.esid_ref("awb_last")
         try:
             if awb_ref:
                 inp = self._resolve(awb_ref)
             else:
                 inp = self.page.get_by_placeholder("AWB#")
-            inp.first.wait_for(state="visible", timeout=12000)
-            inp.first.fill("")
-            inp.first.fill(last8)
+            self._set_react_input(inp, last8)
+            got = ""
+            try:
+                got = (inp.first.input_value(timeout=500) or "").strip()
+            except Exception:
+                pass
+            if got != last8:
+                raise SiteChangedError(
+                    f"Ô AWB# không giữ đủ 8 số (cần {last8!r}, được {got!r})"
+                )
+        except SiteChangedError:
+            raise
         except Exception as e:
-            # Input biến mất (SPA) → reload 1 lần
             if not force_reload:
                 self.search_by_awb_last8(awb_digits, force_reload=True)
                 return
             raise SiteChangedError(f"Không điền được ô AWB#: {e}") from e
 
-        # Prefix 3 số nếu có (tùy chọn)
         try:
             prefix_ref = self.esid_ref("awb_first")
             if prefix_ref:
-                self._resolve(prefix_ref).first.fill(awb_digits[:3])
+                self._set_react_input(self._resolve(prefix_ref), prefix)
             else:
                 pref = self.page.get_by_placeholder(re.compile(r"prefix", re.I))
                 if pref.count() > 0:
-                    pref.first.fill(awb_digits[:3])
+                    self._set_react_input(pref, prefix)
         except Exception:
             pass
 
-        submit_ref = self.esid_ref("submit")
-        try:
+        def _click_search() -> None:
+            # Chờ hết loading từ lần tìm trước (nút primary có ant-btn-loading)
+            try:
+                self.page.locator("button.ant-btn-loading").first.wait_for(
+                    state="detached", timeout=8000
+                )
+            except Exception:
+                pass
+            # Ưu tiên nút primary có chữ TÌM KIẾM — tránh nhầm #search-form_awbNum
+            primary = self.page.locator("button.ant-btn-primary").filter(
+                has_text=re.compile(r"TÌM\s*KIẾM|Tim\s*kiem", re.I)
+            )
+            if primary.count() > 0:
+                primary.first.click(timeout=5000, force=True)
+                return
+            submit_ref = self.esid_ref("submit")
             if submit_ref:
-                self._resolve(submit_ref).first.click()
-            else:
-                self.page.get_by_role("button", name=re.compile(r"TÌM KIẾM|Tim kiem", re.I)).first.click()
+                self._resolve(submit_ref).first.click(timeout=5000, force=True)
+                return
+            self.page.get_by_role(
+                "button", name=re.compile(r"^TÌM\s*KIẾM$|^Tim\s*kiem$", re.I)
+            ).first.click(timeout=5000, force=True)
+
+        try:
+            _click_search()
         except Exception as e:
             raise SiteChangedError(f"Không bấm TÌM KIẾM: {e}") from e
-        self._wait_search_results(last8)
+        ok = self._wait_search_results(last8, timeout_ms=12000)
+        if not ok:
+            # React form chưa nhận giá trị — set lại + bấm tìm lần 2
+            try:
+                self._set_react_input(
+                    self._resolve(awb_ref) if awb_ref else self.page.get_by_placeholder("AWB#"),
+                    last8,
+                )
+                _click_search()
+                ok = self._wait_search_results(last8, timeout_ms=12000)
+            except Exception:
+                ok = False
+        if not ok:
+            # Vẫn không thấy last8 trong bảng → để prepare đọc rows + diag
+            self.page.wait_for_timeout(300)
 
     def list_row_statuses(self) -> list[dict[str, str]]:
         """Đọc các dòng bảng ESID (awb/esid, status)."""
@@ -408,14 +630,31 @@ class EsidListPage:
         )
 
     def _match_rows_for_awb(self, awb_digits: str, rows: list[dict[str, str]]) -> list[dict[str, str]]:
+        """Ưu tiên khớp đủ 11 số / prefix+last8; fallback last8 trong ô AWB hoặc text dòng."""
         last8 = awb_digits[3:]
-        return [
-            r
-            for r in rows
-            if last8 in (r.get("awb") or "")
-            or awb_digits in (r.get("awb") or "")
-            or last8 in (r.get("text") or "")
-        ]
+        prefix = awb_digits[:3]
+        exact: list[dict[str, str]] = []
+        by_last8: list[dict[str, str]] = []
+        for r in rows:
+            awb_cell = r.get("awb") or ""
+            text = r.get("text") or ""
+            digits = self._digits(awb_cell)
+            if awb_digits in awb_cell or awb_digits in text or digits == awb_digits:
+                exact.append(r)
+                continue
+            if len(digits) >= 11 and digits[:11] == awb_digits:
+                exact.append(r)
+                continue
+            if len(digits) >= 8 and digits[-8:] == last8:
+                # Ưu tiên cùng prefix 3 số nếu ô có đủ
+                if len(digits) >= 11 and digits[:3] == prefix:
+                    exact.append(r)
+                else:
+                    by_last8.append(r)
+                continue
+            if last8 in awb_cell or last8 in text:
+                by_last8.append(r)
+        return exact or by_last8
 
     def inspect_awb(self, awb_digits: str) -> dict[str, Any]:
         """Tra 1 AWB trên ESID — trả thông tin dòng + ready nếu Hoàn thành tiếp nhận."""
@@ -514,42 +753,66 @@ class EsidListPage:
             return str(raw)[:800], NormalizedStatus.NOT_COMPLETED
 
     def open_detail_row(self, awb_digits: str, *, require_reception: bool = True) -> None:
-        """Bấm dòng chi tiết (ưu tiên trạng thái Hoàn thành tiếp nhận)."""
-        rows_loc = self.page.locator("table tbody tr, .ant-table-tbody tr")
+        """Bấm dòng chi tiết — JS click nhanh; fallback duyệt Playwright nếu cần."""
         last8 = awb_digits[3:]
-        n = rows_loc.count()
-        target = None
-        fallback = None
-        for i in range(n):
-            row = rows_loc.nth(i)
-            try:
-                text = (row.inner_text(timeout=2000) or "").strip()
-            except Exception:
-                continue
-            if last8 not in text and awb_digits not in text:
-                continue
-            if self._blob_is_reception("", text):
-                target = row
-                break
-            if fallback is None:
-                fallback = row
-        if target is None and not require_reception:
-            target = fallback
-        if target is None:
-            raise SiteChangedError(
-                f"Không thấy dòng ESID cho AWB …{last8}"
-                + (" với trạng thái Hoàn thành tiếp nhận" if require_reception else "")
-            )
-        target.click()
+        prefer_reception = bool(require_reception)
+        clicked = False
         try:
-            self.page.get_by_role("button", name=re.compile(r"^IN$", re.I)).first.wait_for(
-                state="visible", timeout=8000
+            clicked = bool(
+                self.page.evaluate(
+                    """({ last8, awb, preferReception }) => {
+                      const rows = [...document.querySelectorAll('table tbody tr, .ant-table-tbody tr')];
+                      const match = (tr) => {
+                        const t = (tr.innerText || '');
+                        return t.includes(awb) || t.includes(last8);
+                      };
+                      const isReception = (tr) => /hoàn thành tiếp nhận|hoan thanh tiep nhan/i.test(tr.innerText||'');
+                      let row = preferReception ? rows.find(tr => match(tr) && isReception(tr)) : null;
+                      if (!row) row = rows.find(match);
+                      if (!row) return false;
+                      row.scrollIntoView({ block: 'center' });
+                      row.click();
+                      return true;
+                    }""",
+                    {"last8": last8, "awb": awb_digits, "preferReception": prefer_reception},
+                )
             )
         except Exception:
-            try:
-                self.page.wait_for_load_state("domcontentloaded", timeout=4000)
-            except Exception:
-                self.page.wait_for_timeout(200)
+            clicked = False
+        if not clicked:
+            # Fallback cũ (chậm hơn) khi DOM lệch
+            rows_loc = self.page.locator("table tbody tr, .ant-table-tbody tr")
+            n = rows_loc.count()
+            target = None
+            fallback = None
+            for i in range(min(n, 40)):
+                row = rows_loc.nth(i)
+                try:
+                    text = (row.inner_text(timeout=800) or "").strip()
+                except Exception:
+                    continue
+                if last8 not in text and awb_digits not in text:
+                    continue
+                if self._blob_is_reception("", text):
+                    target = row
+                    break
+                if fallback is None:
+                    fallback = row
+            if target is None and not require_reception:
+                target = fallback
+            if target is None:
+                raise SiteChangedError(
+                    f"Không thấy dòng ESID cho AWB …{last8}"
+                    + (" với trạng thái Hoàn thành tiếp nhận" if require_reception else "")
+                )
+            target.click(no_wait_after=True)
+        try:
+            self.page.get_by_role("button", name=re.compile(r"^IN$", re.I)).first.wait_for(
+                state="visible", timeout=5000
+            )
+        except Exception:
+            self.page.wait_for_timeout(150)
+        self._detail_awb = awb_digits
 
     def _find_print_button(self):
         print_ref = self.esid_ref("print_button")
@@ -583,33 +846,44 @@ class EsidListPage:
             pass
 
     def _pdf_from_page(self, page, dest_path: Path) -> Path:
-        """Lưu PDF trang hiện tại (page.pdf có timeout)."""
+        """
+        Lưu PDF khớp Chrome «Save as PDF»:
+        - tôn trọng @page { size: A4 } (preferCSSPageSize)
+        - không dùng Letter mặc định của page.pdf
+        """
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        self._dismiss_os_print_dialog()
         try:
             page.keyboard.press("Escape")
         except Exception:
             pass
-        page.wait_for_timeout(200)
         try:
             page.emulate_media(media="print")
         except Exception:
             pass
+        last_err: Exception | None = None
         try:
-            page.pdf(path=str(dest_path), print_background=True)
-        except Exception:
-            # Fallback CDP trên cùng thread (không dùng thread pool — Playwright sync)
+            # 1) CDP — gần Chrome Save as PDF nhất
             try:
                 cdp = page.context.new_cdp_session(page)
                 try:
                     result = cdp.send(
                         "Page.printToPDF",
-                        {"printBackground": True, "preferCSSPageSize": True},
+                        {
+                            "printBackground": True,
+                            "preferCSSPageSize": True,
+                            "paperWidth": 8.27,
+                            "paperHeight": 11.69,
+                            "marginTop": 0,
+                            "marginBottom": 0,
+                            "marginLeft": 0,
+                            "marginRight": 0,
+                        },
                     )
                     data = base64.b64decode(result.get("data") or "")
-                    if len(data) < 100:
-                        raise SiteChangedError("printToPDF trả về rỗng")
-                    dest_path.write_bytes(data)
+                    if len(data) >= 100:
+                        dest_path.write_bytes(data)
+                        return dest_path
+                    raise SiteChangedError("printToPDF trả về rỗng")
                 finally:
                     try:
                         cdp.detach()
@@ -618,6 +892,18 @@ class EsidListPage:
             except SiteChangedError:
                 raise
             except Exception as e:
+                last_err = e
+            # 2) Fallback Playwright page.pdf — vẫn ép A4 + CSS page size
+            try:
+                page.pdf(
+                    path=str(dest_path),
+                    print_background=True,
+                    prefer_css_page_size=True,
+                    format="A4",
+                    margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
+                )
+            except Exception as e:
+                last_err = e
                 raise SiteChangedError(
                     f"Không lưu được PDF (đóng hộp in hệ thống nếu đang mở): {e}"
                 ) from e
@@ -627,107 +913,244 @@ class EsidListPage:
             except Exception:
                 pass
         if not dest_path.exists() or dest_path.stat().st_size < 100:
-            raise SiteChangedError("PDF rỗng sau khi lưu")
+            raise SiteChangedError(
+                f"PDF rỗng sau khi lưu{f' ({last_err})' if last_err else ''}"
+            )
         return dest_path
 
+    def _serialize_bill_html(self, frame) -> str:
+        """
+        HTML phiếu để in lại cho khớp Chrome:
+        - canvas (QR) → img data-URL (content() làm mất bitmap canvas)
+        - CSS/img tương đối → URL tuyệt đối + inline cssRules
+        - giữ @media print / @page A4
+        """
+        html = frame.evaluate(
+            """() => {
+              const ORIGIN = 'https://www.tcs.com.vn';
+              const abs = (u) => {
+                if (!u) return u;
+                const s = String(u);
+                if (/^(data:|blob:|https?:)/i.test(s)) return s;
+                try { return new URL(s, ORIGIN + '/').href; } catch (e) { return s; }
+              };
+              // QR trên canvas — chuyển img trước khi lấy HTML
+              for (const c of [...document.querySelectorAll('canvas')]) {
+                try {
+                  const img = document.createElement('img');
+                  img.src = c.toDataURL('image/png');
+                  img.setAttribute('style', c.getAttribute('style') || '');
+                  if (c.width) img.width = c.width;
+                  if (c.height) img.height = c.height;
+                  c.replaceWith(img);
+                } catch (e) {}
+              }
+              for (const el of document.querySelectorAll('link[href], script[src], img[src]')) {
+                const attr = el.hasAttribute('href') ? 'href' : 'src';
+                const v = el.getAttribute(attr);
+                if (v) el.setAttribute(attr, abs(v));
+              }
+              let cssText = '';
+              for (const sheet of document.styleSheets) {
+                try {
+                  cssText += [...sheet.cssRules].map(r => r.cssText).join('\\n') + '\\n';
+                } catch (e) {}
+              }
+              let head = document.head;
+              if (!head) {
+                head = document.createElement('head');
+                document.documentElement.insertBefore(head, document.body);
+              }
+              if (!head.querySelector('base')) {
+                const b = document.createElement('base');
+                b.href = ORIGIN + '/';
+                head.insertBefore(b, head.firstChild);
+              }
+              if (cssText && !head.querySelector('style[data-tcs-inline]')) {
+                const st = document.createElement('style');
+                st.setAttribute('data-tcs-inline', '1');
+                st.textContent = cssText;
+                head.appendChild(st);
+              }
+              if (!/size\\s*:\\s*A4/i.test(head.innerHTML || '')) {
+                const st = document.createElement('style');
+                st.textContent = '@media print { @page { size: A4 portrait; margin: 0; } html, body { margin: 0; } }';
+                head.appendChild(st);
+              }
+              return '<!DOCTYPE html>' + document.documentElement.outerHTML;
+            }"""
+        )
+        if not html or len(str(html)) < 120:
+            try:
+                html = frame.content()
+            except Exception as e:
+                raise SiteChangedError(f"Không đọc được HTML frame in: {e}") from e
+        return str(html)
+
     def _scroll_to_in_button(self):
-        try:
-            self.page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
-        except Exception:
-            pass
         btn = self._find_print_button()
         try:
-            btn.first.scroll_into_view_if_needed(timeout=3000)
+            btn.first.scroll_into_view_if_needed(timeout=1500)
         except Exception:
-            pass
-        self.page.wait_for_timeout(150)
+            try:
+                self.page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
+            except Exception:
+                pass
         return btn
 
     def _in_button_visible(self) -> bool:
         try:
             btn = self.page.get_by_role("button", name=re.compile(r"^IN$", re.I))
-            return btn.count() > 0 and btn.first.is_visible(timeout=800)
+            return btn.count() > 0 and btn.first.is_visible(timeout=250)
         except Exception:
             return False
 
     def prepare_esid_detail(self, awb_digits: str, *, session_date: str | None = None) -> None:
         """
-        Danh sách ESID → nhập 8 số cuối ô AWB# → TÌM KIẾM → mở dòng (nếu chưa thấy nút IN).
-        Fallback lọc ngày phiên chỉ khi AWB# không ra dòng.
+        Mở phiếu ESID (1 AWB): danh sách → AWB# 8 số → TÌM KIẾM → nút IN.
+        Hot: nếu đã đúng chi tiết AWB + IN → return ngay (~0ms).
         """
+        _ = session_date
         url = (self.page.url or "").lower()
         if "awblogin" in url or "checkoutlogin" in url:
             raise NeedsLoginError("Cần đăng nhập trước khi vào ESID")
         if len(awb_digits) != 11:
             raise SiteChangedError("AWB phải đủ 11 chữ số")
+
+        # Đã mở đúng phiếu → gần tức thời
+        if self._detail_ready_for(awb_digits):
+            return
+
+        # Đang ở chi tiết AWB khác → về list nhanh
+        if self._in_button_visible():
+            self._click_list_tab()
+            self._detail_awb = None
+
+        self.search_by_awb_last8(awb_digits)
+
+        if self._in_button_visible():
+            self._detail_awb = awb_digits
+            return
+
+        matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
+        if not matched:
+            # Thử lại: clear ngày kỹ hơn + tìm lại (Ant picker hay giữ ngày mặc định)
+            try:
+                self.clear_date_filters()
+                self.search_by_awb_last8(awb_digits, force_reload=True)
+                matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
+            except Exception:
+                matched = []
+        if not matched:
+            diag = self._diag_search_state(awb_digits)
+            form = diag.get("form") or {}
+            raise SiteChangedError(
+                f"Không thấy dòng ESID cho AWB …{awb_digits[3:]} sau khi tìm AWB# (8 số). "
+                f"date={form.get('date_start')!r}/{form.get('date_end')!r} "
+                f"awb_input={form.get('awb')!r} rows={diag.get('row_count')} "
+                f"shot={diag.get('screenshot') or ''}"
+            )
+        self.open_detail_row(awb_digits, require_reception=False)
+        # Chi tiết/drawer TCS đôi khi render nút IN chậm hơn click dòng
+        for _ in range(25):
+            if self._in_button_visible():
+                break
+            self.page.wait_for_timeout(80)
+        if not self._in_button_visible():
+            try:
+                self.page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
+            except Exception:
+                pass
+            self.page.wait_for_timeout(200)
+        if not self._in_button_visible():
+            raise SiteChangedError("Đã mở dòng nhưng không thấy nút IN")
+        self._detail_awb = awb_digits
+
+    def _set_document_title(self, target, title: str) -> None:
+        if not title:
+            return
         try:
-            self._dismiss_os_print_dialog()
-            self.page.keyboard.press("Escape")
-            self.page.wait_for_timeout(150)
+            target.evaluate(
+                """(name) => {
+                  document.title = name;
+                  const t = document.querySelector('title');
+                  if (t) t.textContent = name;
+                }""",
+                title,
+            )
         except Exception:
             pass
 
-        # Về tab danh sách rồi nhập AWB#; nếu miss → lọc ngày phiên rồi tìm lại
-        self.goto_list(force=False)
-        self.search_by_awb_last8(awb_digits)
-        matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
-
-        if not matched and session_date:
-            self.clear_awb_filters()
-            self.search_by_flight_date(session_date)
-            matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
-            # Giữ filter ngày, chỉ điền AWB# (không clear_date như search_by_awb_last8)
-            if not matched:
-                try:
-                    last8 = awb_digits[3:]
-                    awb_ref = self.esid_ref("awb_last")
-                    inp = self._resolve(awb_ref) if awb_ref else self.page.get_by_placeholder("AWB#")
-                    inp.first.fill("")
-                    inp.first.fill(last8)
-                    submit_ref = self.esid_ref("submit")
-                    if submit_ref:
-                        self._resolve(submit_ref).first.click()
-                    else:
-                        self.page.get_by_role(
-                            "button", name=re.compile(r"TÌM KIẾM|Tim kiem", re.I)
-                        ).first.click()
-                    self._wait_search_results(last8)
-                    matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
-                except Exception:
-                    pass
-
-        if not matched:
-            raise SiteChangedError(
-                f"Không thấy dòng ESID cho AWB …{awb_digits[3:]} sau khi tìm AWB#"
-                + (f" / ngày {session_date}" if session_date else "")
-            )
-
-        # Nếu sau tìm kiếm đã có nút IN (chi tiết hiện sẵn) → không cần bấm dòng
-        if self._in_button_visible():
-            return
-        try:
-            self.open_detail_row(awb_digits, require_reception=True)
-        except SiteChangedError:
-            self.open_detail_row(awb_digits, require_reception=False)
-
     def fire_in_dialog(self, *, suggest_pdf_filename: str | None = None) -> None:
-        """Đã ở màn có nút IN → đặt tên file gợi ý (nếu có) → bấm IN mở hộp Save/In."""
-        if suggest_pdf_filename:
+        """
+        Bấm IN → chờ phiếu ESID trong iframe → đặt tên AWB → in đúng phiếu
+        (không in shell «GIỚI THIỆU / Hotline»).
+        """
+        title = (suggest_pdf_filename or "").strip()
+        # Chặn print sớm trên shell; phiếu thật nằm iframe about:blank
+        self._install_print_hooks()
+        self._set_document_title(self.page, title)
+        self._click_in_button()
+        self.page.wait_for_timeout(350)
+
+        bill = None
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            bill = self._richest_print_frame()
+            if bill is not None:
+                break
+            # Popup phiếu?
+            for p in self.page.context.pages:
+                if p == self.page:
+                    continue
+                try:
+                    sample = p.evaluate(
+                        "() => (document.body && document.body.innerText || '').trim()"
+                    )
+                except Exception:
+                    sample = ""
+                if self._text_looks_like_esid_doc(sample or ""):
+                    self._set_document_title(p, title)
+                    try:
+                        p.evaluate(
+                            """() => {
+                              try { delete window.print; } catch (e) {}
+                              window.focus();
+                              window.print();
+                            }"""
+                        )
+                        return
+                    except Exception:
+                        pass
+            self.page.wait_for_timeout(80)
+
+        if bill is None:
+            # Hiếm: phiếu render thẳng vào trang (không iframe)
             try:
-                # Chrome «Save as PDF» dùng title làm tên file mặc định
-                self.page.evaluate(
-                    """(name) => {
-                      document.title = name;
-                      const t = document.querySelector('title');
-                      if (t) t.textContent = name;
-                    }""",
-                    suggest_pdf_filename,
+                main_sample = self.page.evaluate(
+                    "() => (document.body && document.body.innerText || '').trim()"
                 )
             except Exception:
-                pass
-        btn = self._scroll_to_in_button()
-        btn.first.click(timeout=4000, no_wait_after=True)
-        self.page.wait_for_timeout(400)
+                main_sample = ""
+            if self._text_looks_like_esid_doc(main_sample or ""):
+                bill = self.page.main_frame
+            else:
+                raise SiteChangedError(
+                    "Sau IN không thấy phiếu ESID để in. Không mở hộp in trên trang web."
+                )
+
+        self._set_document_title(bill, title)
+        # Gỡ stub print trên frame phiếu rồi gọi print thật
+        try:
+            bill.evaluate(
+                """() => {
+                  try { delete window.print; } catch (e) {}
+                  window.focus();
+                  window.print();
+                }"""
+            )
+        except Exception as e:
+            raise SiteChangedError(f"Không mở hộp in trên phiếu ESID: {e}") from e
 
     def click_in_for_user_print(
         self,
@@ -738,16 +1161,18 @@ class EsidListPage:
         skip_prepare: bool = False,
     ) -> None:
         """
-        Danh sách → AWB# 8 số → kéo xuống bấm IN → hộp thoại in/Save PDF (user tự bấm).
-        skip_prepare=True: hot-path (đã prepare) — chỉ fire IN nếu nút còn visible.
+        Danh sách → AWB# 8 số → IN → hộp thoại in/Save PDF trên phiếu thật.
+        Tên file mặc định = {AWB}_ESID (Chrome Save as PDF dùng document.title).
         """
-        if skip_prepare:
-            if not self._in_button_visible():
-                raise SiteChangedError("Hot-path miss: không còn nút IN — cần prepare lại")
-            self.fire_in_dialog(suggest_pdf_filename=suggest_pdf_filename)
+        from app.utils.awb import safe_filename_awb
+
+        _ = session_date
+        title = (suggest_pdf_filename or "").strip() or f"{safe_filename_awb(awb_digits)}_ESID"
+        if (skip_prepare or self._detail_ready_for(awb_digits)) and self._in_button_visible():
+            self.fire_in_dialog(suggest_pdf_filename=title)
             return
-        self.prepare_esid_detail(awb_digits, session_date=session_date)
-        self.fire_in_dialog(suggest_pdf_filename=suggest_pdf_filename)
+        self.prepare_esid_detail(awb_digits, session_date=None)
+        self.fire_in_dialog(suggest_pdf_filename=title)
 
     def _text_looks_like_site_chrome(self, text: str) -> bool:
         low = (text or "").lower()
@@ -755,9 +1180,26 @@ class EsidListPage:
         return hits >= 2
 
     def _text_looks_like_esid_doc(self, text: str) -> bool:
-        low = (text or "").lower()
-        hits = sum(1 for m in _ESID_DOC_MARKERS if m in low)
-        return hits >= 2 and len((text or "").strip()) >= 80
+        """True chỉ khi giống phiếu ESID in — từ chối shell web có chữ ESID/AWB."""
+        raw = (text or "").strip()
+        if len(raw) < 120:
+            return False
+        if self._text_looks_like_site_chrome(raw):
+            return False
+        low = raw.lower()
+        # Bỏ dấu tiếng Việt thô để khớp không dấu
+        low_ascii = (
+            low.replace("ố", "o")
+            .replace("ồ", "o")
+            .replace("ộ", "o")
+            .replace("ớ", "o")
+            .replace("ờ", "o")
+            .replace("ự", "u")
+            .replace("ư", "u")
+            .replace("đ", "d")
+        )
+        hits = sum(1 for m in _ESID_BILL_MARKERS if m in low or m in low_ascii)
+        return hits >= 2 or (hits >= 1 and len(raw) >= 280)
 
     def _frame_inner_text(self, frame) -> str:
         try:
@@ -766,45 +1208,77 @@ class EsidListPage:
             return ""
 
     def _richest_print_frame(self):
-        """Frame/popup document giàu nội dung phiếu (không phải shell TCS)."""
+        """Chỉ trả iframe/popup ĐÃ là phiếu ESID — không trả shell UI."""
         best = None
         best_score = 0
         for fr in self.page.frames:
             if fr == self.page.main_frame:
                 continue
             text = self._frame_inner_text(fr)
-            if len(text) < 40:
+            if not self._text_looks_like_esid_doc(text):
                 continue
-            score = len(text)
-            if self._text_looks_like_esid_doc(text):
-                score += 800
-            if self._text_looks_like_site_chrome(text):
-                score -= 600
+            score = len(text) + 1000
             if score > best_score:
                 best_score = score
                 best = fr
-        return best if best_score >= 120 else None
+        return best
 
-    def _pdf_from_frame_html(self, frame, dest_path: Path) -> Path:
-        """In PDF từ HTML của iframe/about:blank (không chụp shell trang chính)."""
+    def _pdf_from_frame_html(
+        self, frame, dest_path: Path, *, title: str | None = None
+    ) -> Path:
+        """In PDF từ HTML iframe phiếu — A4 + CSS đầy đủ (khớp Chrome Save as PDF)."""
         try:
-            html = frame.content()
+            html = self._serialize_bill_html(frame)
+        except SiteChangedError:
+            raise
         except Exception as e:
             raise SiteChangedError(f"Không đọc được HTML frame in: {e}") from e
-        if not html or len(html) < 80:
+        if not html or len(html) < 120:
             raise SiteChangedError("Frame in rỗng")
+        # Debug: TCS_DIAG_PDF=1 → ghi HTML/text phiếu cạnh PDF để đối chiếu
+        import os
+
+        if os.environ.get("TCS_DIAG_PDF", "").strip() in {"1", "true", "yes"}:
+            try:
+                dest_path.with_suffix(".frame.html").write_text(
+                    html, encoding="utf-8", errors="replace"
+                )
+                dest_path.with_suffix(".frame.txt").write_text(
+                    self._frame_inner_text(frame), encoding="utf-8", errors="replace"
+                )
+            except Exception:
+                pass
         ctx = self.page.context
         tmp = ctx.new_page()
         try:
-            tmp.set_content(html, wait_until="domcontentloaded")
-            tmp.wait_for_timeout(200)
-            sample = ""
+            # viewport gần khổ in A4 (px @ 96dpi) — giảm lệch layout
             try:
-                sample = tmp.evaluate("() => (document.body && document.body.innerText || '').trim()")
+                tmp.set_viewport_size({"width": 794, "height": 1123})
             except Exception:
                 pass
-            if self._text_looks_like_site_chrome(sample) and not self._text_looks_like_esid_doc(sample):
-                raise SiteChangedError("Frame in vẫn là giao diện web, không phải phiếu ESID")
+            tmp.set_content(html, wait_until="load")
+            try:
+                tmp.wait_for_load_state("networkidle", timeout=8000)
+            except Exception:
+                pass
+            try:
+                tmp.evaluate("() => (document.fonts && document.fonts.ready) || Promise.resolve()")
+            except Exception:
+                pass
+            tmp.wait_for_timeout(200)
+            if title:
+                self._set_document_title(tmp, title)
+            sample = ""
+            try:
+                sample = tmp.evaluate(
+                    "() => (document.body && document.body.innerText || '').trim()"
+                )
+            except Exception:
+                pass
+            if not self._text_looks_like_esid_doc(sample or ""):
+                raise SiteChangedError(
+                    "Frame sau IN không phải phiếu ESID (có vẻ là giao diện web). Không lưu PDF."
+                )
             return self._pdf_from_page(tmp, dest_path)
         finally:
             try:
@@ -814,11 +1288,21 @@ class EsidListPage:
 
     def _install_print_hooks(self) -> None:
         """Chặn OS print; giữ window.open để bắt cửa sổ/iframe phiếu."""
+        if self._print_hooks_installed:
+            try:
+                # Chỉ reset flag — không gắn lại hook mỗi lần IN
+                self.page.evaluate(
+                    "() => { window.__tcsPrintInvoked = false; window.__tcsOpened = []; }"
+                )
+                return
+            except Exception:
+                self._print_hooks_installed = False
         try:
             self.page.evaluate(
                 """() => {
                   window.__tcsPrintInvoked = false;
                   window.__tcsOpened = [];
+                  if (window.__tcsHooksReady) return;
                   const wo = window.open;
                   window.open = function(url, name, features) {
                     const w = wo.call(this, url, name, features);
@@ -829,8 +1313,10 @@ class EsidListPage:
                     return w;
                   };
                   window.print = function() { window.__tcsPrintInvoked = true; };
+                  window.__tcsHooksReady = true;
                 }"""
             )
+            self._print_hooks_installed = True
         except Exception:
             pass
 
@@ -855,66 +1341,89 @@ class EsidListPage:
         if not ok:
             raise SiteChangedError("Không bấm được nút IN")
 
-    def click_print_download(self, dest_path: Path, *, timeout_ms: int = 10000) -> Path:
+    def click_print_download(
+        self,
+        dest_path: Path,
+        *,
+        timeout_ms: int = 10000,
+        pdf_title: str | None = None,
+    ) -> Path:
         """
-        Bấm IN → lấy đúng phiếu ESID:
-        1) file download, 2) popup/tab in, 3) iframe/about:blank HTML → PDF,
-        KHÔNG fallback chụp cả trang shell TCS.
+        Bấm IN → chỉ lưu PDF khi bắt được phiếu ESID thật (iframe/popup).
+        KHÔNG bao giờ page.pdf trang shell TCS.
         """
         dest_path.parent.mkdir(parents=True, exist_ok=True)
+        title = (pdf_title or dest_path.stem or "ESID").strip()
+        self._set_document_title(self.page, title)
+
         self._install_print_hooks()
         context = self.page.context
         pages_before = list(context.pages)
 
-        # TCS: bấm IN → ghi phiếu vào iframe about:blank (hiếm khi download/popup).
-        # Không dùng expect_download (dễ treo khi không có file).
         self._click_in_button()
+        # Cho TCS kịp ghi phiếu vào iframe about:blank trước khi đọc
+        self.page.wait_for_timeout(350)
 
         popup = None
         deadline = time.time() + max(8.0, timeout_ms / 1000)
         while time.time() < deadline:
+            rich = self._richest_print_frame()
+            if rich is not None:
+                return self._pdf_from_frame_html(rich, dest_path, title=title)
             if popup is None:
                 for p in context.pages:
                     if p not in pages_before and p != self.page:
                         popup = p
                         break
             if popup is not None:
-                break
-            rich = self._richest_print_frame()
-            if rich is not None:
-                return self._pdf_from_frame_html(rich, dest_path)
-            self.page.wait_for_timeout(200)
-
-        if popup is not None:
-            try:
-                popup.wait_for_load_state("domcontentloaded", timeout=8000)
-            except Exception:
-                pass
-            for _ in range(25):
                 try:
                     sample = popup.evaluate(
                         "() => (document.body && document.body.innerText || '').trim()"
                     )
-                    if sample and len(sample) > 60:
+                except Exception:
+                    sample = ""
+                if self._text_looks_like_esid_doc(sample or ""):
+                    break
+                # Popup chưa có phiếu — tiếp tục chờ / tìm iframe
+                popup = None
+            self.page.wait_for_timeout(80)
+
+        if popup is not None:
+            try:
+                popup.wait_for_load_state("domcontentloaded", timeout=4000)
+            except Exception:
+                pass
+            for _ in range(30):
+                try:
+                    sample = popup.evaluate(
+                        "() => (document.body && document.body.innerText || '').trim()"
+                    )
+                    if self._text_looks_like_esid_doc(sample or ""):
                         break
                 except Exception:
-                    pass
-                try:
-                    popup.wait_for_timeout(200)
-                except Exception:
-                    self.page.wait_for_timeout(200)
+                    sample = ""
+                self.page.wait_for_timeout(80)
             try:
                 sample = popup.evaluate(
                     "() => (document.body && document.body.innerText || '').trim()"
                 )
             except Exception:
                 sample = ""
-            if self._text_looks_like_site_chrome(sample) and not self._text_looks_like_esid_doc(sample):
+            if not self._text_looks_like_esid_doc(sample or ""):
                 try:
                     popup.close()
                 except Exception:
                     pass
-                raise SiteChangedError("Popup sau IN vẫn là giao diện web, không phải phiếu ESID")
+                raise SiteChangedError(
+                    "Popup sau IN không phải phiếu ESID (giao diện web). Không lưu PDF."
+                )
+            try:
+                popup.evaluate(
+                    """(name) => { document.title = name; }""",
+                    title,
+                )
+            except Exception:
+                pass
             path = self._pdf_from_page(popup, dest_path)
             try:
                 popup.close()
@@ -925,9 +1434,8 @@ class EsidListPage:
 
         rich = self._richest_print_frame()
         if rich is not None:
-            return self._pdf_from_frame_html(rich, dest_path)
+            return self._pdf_from_frame_html(rich, dest_path, title=title)
 
-        # Từ chối chụp shell trang chính (đây là lỗi user đã gặp)
         try:
             main_sample = self.page.evaluate(
                 "() => (document.body && document.body.innerText || '').trim().slice(0, 1200)"
@@ -936,7 +1444,7 @@ class EsidListPage:
             main_sample = ""
         self._dismiss_os_print_dialog()
         raise SiteChangedError(
-            "Sau IN không thấy phiếu ESID (download/popup/iframe). "
+            "Sau IN không thấy phiếu ESID trong iframe/popup. "
             "Không lưu PDF trang web. "
             f"Mẫu trang: {(main_sample or '')[:160]!r}"
         )
@@ -950,25 +1458,27 @@ class EsidListPage:
         skip_prepare: bool = False,
     ) -> Path:
         """
-        PDF ESID = tải file PDF về (không mở hộp in cho user).
-        Chuẩn bị chi tiết → stub window.print → bấm IN trên TCS → lưu file
-        từ iframe/popup/CDP vào dest_path. Ops sẽ fetch file về Downloads.
+        PDF ESID = mở phiếu (AWB# 8 số) → bấm IN → lưu file phiếu (đặt tên theo AWB).
         """
-        try:
-            self._dismiss_os_print_dialog()
-        except Exception:
-            pass
-        if skip_prepare and self._in_button_visible():
+        from app.utils.awb import safe_filename_awb
+
+        _ = session_date
+        hot = skip_prepare or self._detail_ready_for(awb_digits)
+        if hot and self._in_button_visible():
             pass
         else:
-            self.prepare_esid_detail(awb_digits, session_date=session_date or None)
-        path = self.click_print_download(dest_path)
+            self.prepare_esid_detail(awb_digits, session_date=None)
+        title = f"{safe_filename_awb(awb_digits)}_ESID"
+        path = self.click_print_download(
+            dest_path, timeout_ms=10000, pdf_title=title
+        )
         try:
-            # PDF path: luôn đóng hộp in OS nếu lỡ bật — không để user in
-            self._dismiss_os_print_dialog()
             self.page.keyboard.press("Escape")
-            self._click_list_tab()
-            self.page.wait_for_timeout(100)
         except Exception:
             pass
+        try:
+            self._dismiss_os_print_dialog()
+        except Exception:
+            pass
+        self._detail_awb = awb_digits
         return path

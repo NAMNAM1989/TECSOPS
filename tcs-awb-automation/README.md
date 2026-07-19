@@ -2,6 +2,11 @@
 
 Tự động hóa cổng `https://www.tcs.com.vn/AwbLogin` cho **kho TECS-TCS**.
 
+### Quy trình ESID (Ops)
+
+- **Quét ESID** (toolbar): lọc theo ngày phiên → cập nhật status Ops «Hoàn thành tiếp nhận». **Không** chặn Tải/In.
+- **Tải PDF ESID / In ESID** (menu ⋮, **1 AWB**): tìm chỉ bằng ô **AWB# 8 số** → mở phiếu → IN → tải file hoặc hộp in. Tự chạy hết, không xác nhận tay.
+
 Ops (React) chọn lô → gửi job tới agent Playwright. Có 2 cách chạy:
 
 - **Máy kho (khuyến nghị)**: Chrome persistent + login TCS ổn định (session/OCR). Ops LAN/tunnel gọi qua proxy `/tcs-agent`.
@@ -23,10 +28,11 @@ Deploy:
 
 ### Máy khác trong LAN
 
-1. Máy kho: `npm run tcs:agent:real` + `npm run dev` (hoặc `npm start`).
+1. Máy kho: `npm run dev` — **tự chạy** API + Vite + agent REAL (`:8765`). Tắt auto: `TCS_AGENT_AUTO=0`.
 2. Máy khác: mở Ops bằng **IP máy kho** (vd. `http://192.168.1.50:5173`), không dùng `127.0.0.1`.
 3. Browser gọi same-origin `/tcs-agent` → Vite/Express proxy tới `127.0.0.1:8765` trên máy kho.
 4. Nút **URL** trên thanh Cổng TCS: để trống = proxy; chỉ điền nếu dùng tunnel HTTPS.
+5. Agent riêng (không qua `dev`): `npm run tcs:agent:real`.
 
 ## Cài đặt (máy kho Windows)
 

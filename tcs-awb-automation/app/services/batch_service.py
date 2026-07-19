@@ -222,9 +222,10 @@ class BatchService:
         started: datetime,
     ) -> AwbJobResult:
         """
-        ESID: danh sách → AWB# 8 số → nút IN.
-        - DOWNLOAD (PDF ESID): tự lưu file PDF → Ops tải về máy (không mở hộp in).
-        - PRINT (In ESID): mở hộp thoại in — user tự chọn máy in.
+        ESID 1 AWB: danh sách → AWB# 8 số → mở phiếu → IN.
+        - DOWNLOAD: tự lưu PDF → Ops tải về máy.
+        - PRINT: mở hộp thoại in — user chọn máy in.
+        Không lọc ngày / không phụ thuộc Quét ESID (status Ops).
         """
         if job.mock:
             # Mock vẫn tạo file giả để test pipeline
@@ -252,7 +253,7 @@ class BatchService:
             pr = client.download_pdf(
                 row.awb_digits,
                 fpath,
-                session_date=job.session_date or None,
+                session_date=None,
                 skip_prepare=skip_prepare,
             )
             result.normalized_status = pr.normalized.value
@@ -272,7 +273,7 @@ class BatchService:
         else:
             pr = client.print_esid_dialog(
                 row.awb_digits,
-                session_date=job.session_date or None,
+                session_date=None,
                 skip_prepare=skip_prepare,
             )
             result.normalized_status = pr.normalized.value

@@ -24,7 +24,8 @@ import {
   type TcsEsidScanItem,
 } from "../utils/tcsPortalAgentApi";
 
-const PREPARED_TTL_MS = 120_000;
+/** Giữ hot-path lâu hơn — bấm Tải PDF gần tức thời nếu đã mở menu ⋮ */
+const PREPARED_TTL_MS = 180_000;
 
 export type TcsPortalActionsOpts = {
   sessionYmd: string;
@@ -117,13 +118,17 @@ export function useTcsPortalActions({
   }, [active, refreshHealth]);
 
   const ensureSessionReady = useCallback(async (): Promise<boolean> => {
+    // Fast-path: đã login từ poll gần đây — bỏ 2 RTT ping/status trước mỗi PDF
+    if (health?.ok && session?.open && session?.logged_in) {
+      return true;
+    }
     const online = await pingTcsAgent();
     setHealth(online);
     if (!online?.ok) {
       setError(agentOfflineHint(getTcsAgentBaseUrl()));
       return false;
     }
-    let s = await fetchTcsSessionStatus();
+    let s = online.session || (await fetchTcsSessionStatus());
     setSession(s);
     if (!s?.open) {
       setBusyLabel("Đang mở Chrome…");
@@ -133,7 +138,7 @@ export function useTcsPortalActions({
         return false;
       }
       setSession(opened);
-      s = await fetchTcsSessionStatus();
+      s = opened.logged_in != null ? opened : await fetchTcsSessionStatus();
       setSession(s);
     }
     if (!s?.logged_in) {
@@ -142,7 +147,7 @@ export function useTcsPortalActions({
       return false;
     }
     return true;
-  }, [refreshHealth]);
+  }, [health?.ok, refreshHealth, session?.logged_in, session?.open]);
 
   const login = useCallback(async () => {
     setError("");
@@ -235,13 +240,13 @@ export function useTcsPortalActions({
       }
       setOpsStatusUpdated(updatedCount);
 
-      let msg = `Quét ESID xong ${sec}s · ${ready.length}/${res.total ?? awbs.length} hoàn thành tiếp nhận`;
+      let msg = `Quét ESID (status) ${sec}s · ${ready.length}/${res.total ?? awbs.length} hoàn thành tiếp nhận`;
       if (updatedCount > 0) {
-        msg += ` · đã gán HOÀN THÀNH TIẾP NHẬN cho ${updatedCount} lô trên Ops`;
+        msg += ` · đã cập nhật Ops cho ${updatedCount} lô (không ảnh hưởng Tải/In)`;
       } else if (ready.length > 0) {
-        msg += " · Ops đã đúng trạng thái (không cần đổi)";
+        msg += " · Ops đã đúng trạng thái";
       } else {
-        msg += " · chưa có lô sẵn sàng trên TCS";
+        msg += " · chưa có lô tiếp nhận trên TCS (ngày phiên)";
       }
       setMessage(msg);
       onReceptionScanDone?.({
@@ -266,71 +271,13 @@ export function useTcsPortalActions({
     sourceRows,
   ]);
 
-  const runJob = useCallback(
-    async (kind: "DOWNLOAD" | "PRINT") => {
-      setError("");
-      if (!readyAwbSet.size) {
-        setError("Chưa có lô sẵn sàng (Quét ESID hoặc Ops đã HOÀN THÀNH TIẾP NHẬN).");
-        return;
-      }
-      const payload = buildTcsPortalJob(sourceRows, {
-        sessionYmd,
-        action: kind,
-        dryRun: kind === "PRINT" ? printDryRun : false,
-        mock: false,
-        onlyCompleted: false,
-        awbDigitsFilter: readyAwbSet,
-      });
-      if (!payload.rows.length) {
-        setError("Không khớp AWB ready với danh sách Ops.");
-        return;
-      }
-      setBusy(true);
-      setBusyLabel(kind === "PRINT" ? "Đang mở hộp in ESID…" : "PDF ESID: đang tải file…");
-      const t0 = performance.now();
-      try {
-        if (!(await ensureSessionReady())) return;
-        const res = await submitTcsPortalJob(payload);
-        const sec = ((performance.now() - t0) / 1000).toFixed(1);
-        if (!res.ok) {
-          setError(res.message || res.error || "Agent lỗi");
-          return;
-        }
-        setResults(res.results || []);
-        const n = res.ok_count ?? (res.results || []).length;
-        if (kind === "PRINT") {
-          setDownloadedCount(0);
-          setMessage(
-            `In ESID: đã mở hộp in trên Chrome · ${n} phiếu · ${sec}s — tự chọn máy in và bấm In${printDryRun ? " (dry-run)" : ""}`
-          );
-        } else {
-          const firstPdf = (res.results || []).find((r) => r.pdf_name || r.downloaded_file);
-          const pdfName = firstPdf?.pdf_name || firstPdf?.downloaded_file || "";
-          let saved = false;
-          if (pdfName) {
-            saved = await downloadPdfFromAgent(pdfName);
-          }
-          const dl = saved ? 1 : res.downloaded_count ?? 0;
-          setDownloadedCount(dl);
-          setMessage(
-            saved
-              ? `PDF ESID: đã tải file về máy · ${sec}s`
-              : `PDF ESID: agent đã sẵn file · ${sec}s — bấm «Tải PDF» nếu trình duyệt chặn`
-          );
-        }
-        void refreshHealth();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Lỗi job");
-      } finally {
-        setBusy(false);
-        setBusyLabel("");
-      }
-    },
-    [ensureSessionReady, printDryRun, readyAwbSet, refreshHealth, sessionYmd, sourceRows]
-  );
-
-  const downloadReady = useCallback(() => runJob("DOWNLOAD"), [runJob]);
-  const printReady = useCallback(() => runJob("PRINT"), [runJob]);
+  /** Batch toolbar đã bỏ — PDF/In chỉ từ menu dòng (1 AWB). Giữ stub để tương thích. */
+  const downloadReady = useCallback(() => {
+    setError("PDF/In ESID chỉ chạy 1 AWB — dùng menu ⋮ trên dòng (Tải PDF / In).");
+  }, []);
+  const printReady = useCallback(() => {
+    setError("PDF/In ESID chỉ chạy 1 AWB — dùng menu ⋮ trên dòng (Tải PDF / In).");
+  }, []);
 
   const isPreparedHot = useCallback(
     (digits: string) => {
@@ -353,13 +300,13 @@ export function useTcsPortalActions({
       if (prepareTimerRef.current != null) {
         window.clearTimeout(prepareTimerRef.current);
       }
+      // Debounce rất ngắn — mở ⋮ là pre-warm ngay để Tải PDF ~1–2s
       prepareTimerRef.current = window.setTimeout(() => {
         prepareTimerRef.current = null;
         if (busyRef.current) return;
         if (isPreparedHot(digits)) return;
         prepareInFlightRef.current = digits;
-        const ymd = String(shipment.sessionDate || sessionYmd).trim() || sessionYmd;
-        void prepareTcsEsid(digits, ymd)
+        void prepareTcsEsid(digits)
           .then((res) => {
             if (res.ok && res.prepared) {
               setPreparedAwb(digits);
@@ -367,17 +314,20 @@ export function useTcsPortalActions({
             }
           })
           .catch(() => {
-            /* im lặng — cold-path vẫn chạy khi bấm PDF */
+            /* im lặng — cold-path vẫn chạy khi bấm Tải/In */
           })
           .finally(() => {
             if (prepareInFlightRef.current === digits) prepareInFlightRef.current = "";
           });
-      }, 150);
+      }, 40);
     },
-    [isPreparedHot, sessionYmd]
+    [isPreparedHot]
   );
 
-  /** Menu dòng: PDF / In ESID cho đúng 1 AWB */
+  /**
+   * Menu dòng — 1 AWB: mở phiếu (AWB# 8 số) rồi tự Tải PDF hoặc mở hộp In.
+   * Không phụ thuộc Quét ESID.
+   */
   const runJobForShipment = useCallback(
     async (shipment: Shipment, kind: "DOWNLOAD" | "PRINT") => {
       setError("");
@@ -399,24 +349,42 @@ export function useTcsPortalActions({
         onlyCompleted: false,
         awbDigitsFilter: new Set([digits]),
       });
+      // Agent tìm phiếu chỉ bằng AWB# — bỏ session_date để không lọc ngày
+      payload.session_date = "";
+      payload.sessionDate = "";
       if (!payload.rows.length) {
         setError("Không tạo được job ESID cho AWB này.");
         return;
       }
-      const hot = isPreparedHot(digits) || prepareInFlightRef.current === digits;
+      const wasPreparing = prepareInFlightRef.current === digits;
+      const hot = isPreparedHot(digits) || wasPreparing;
       setBusy(true);
       setBusyLabel(
         kind === "PRINT"
           ? hot
-            ? `In ESID …${digits.slice(-8)} (mở hộp in trên Chrome)`
-            : `In ESID …${digits.slice(-8)} (đang tìm ESID rồi mở hộp in…)`
+            ? `In ESID …${digits.slice(-8)} — hot-path…`
+            : `In ESID …${digits.slice(-8)} — tìm AWB#…`
           : hot
-            ? `PDF ESID …${digits.slice(-8)} (đang lấy file…)`
-            : `PDF ESID …${digits.slice(-8)} (đang tìm ESID rồi lấy PDF…)`
+            ? `Tải PDF …${digits.slice(-8)} — hot-path…`
+            : `Tải PDF …${digits.slice(-8)} — tìm AWB#…`
       );
       const t0 = performance.now();
       try {
         if (!(await ensureSessionReady())) return;
+        // Đợi pre-warm cùng AWB xong (agent cũng chờ) — tránh cold-path đụng prepare
+        if (wasPreparing || prepareInFlightRef.current === digits) {
+          setBusyLabel(
+            kind === "PRINT"
+              ? `In ESID …${digits.slice(-8)} — đang mở phiếu…`
+              : `Tải PDF …${digits.slice(-8)} — đang mở phiếu…`
+          );
+          const waitUntil = Date.now() + 90_000;
+          while (Date.now() < waitUntil) {
+            if (isPreparedHot(digits)) break;
+            if (prepareInFlightRef.current !== digits && !isPreparedHot(digits)) break;
+            await new Promise((r) => window.setTimeout(r, 100));
+          }
+        }
         const res = await submitTcsPortalJob(payload);
         const sec = ((performance.now() - t0) / 1000).toFixed(1);
         if (!res.ok) {
@@ -437,7 +405,7 @@ export function useTcsPortalActions({
         if (kind === "PRINT") {
           setDownloadedCount(0);
           setMessage(
-            `In ESID …${digits.slice(-8)} · ${sec}s${hotNote} — hộp thoại in đã mở trên Chrome TCS, hãy chọn máy in và bấm In`
+            `In ESID …${digits.slice(-8)} · ${sec}s${hotNote} — đã mở phiếu + hộp in trên Chrome; chọn máy in và bấm In`
           );
         } else {
           const pdfName = row0?.pdf_name || row0?.downloaded_file || "";
@@ -446,10 +414,10 @@ export function useTcsPortalActions({
           const shortName = pdfName ? String(pdfName).replace(/^.*[/\\]/, "") : "";
           setMessage(
             saved
-              ? `PDF ESID …${digits.slice(-8)} · ${sec}s${hotNote} — đã tải ${shortName} về máy`
+              ? `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — đã tải ${shortName} về máy`
               : pdfName
-                ? `PDF ESID …${digits.slice(-8)} · ${sec}s${hotNote} — file sẵn sàng, bấm «Tải PDF»`
-                : `PDF ESID …${digits.slice(-8)} · ${sec}s${hotNote}`
+                ? `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — file sẵn sàng, bấm «Tải PDF»`
+                : `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote}`
           );
         }
         void refreshHealth();

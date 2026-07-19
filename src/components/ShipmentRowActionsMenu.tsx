@@ -210,7 +210,7 @@ export function ShipmentRowActionsMenu({
         {showTcsDim ? menuItem("Excel TCS", () => void downloadTcsAttachedDimsExcel(row)) : null}
         {showTcsEsid
           ? menuItem(
-              "PDF ESID",
+              "Tải PDF ESID",
               () => {
                 if (tcs?.busy) return;
                 void tcs?.downloadEsidFor(row);

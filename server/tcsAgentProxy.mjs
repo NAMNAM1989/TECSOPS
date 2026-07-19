@@ -4,7 +4,7 @@
  * Máy khác mở Ops qua IP máy kho → browser chỉ gọi cùng origin → Express
  * chuyển tiếp tới agent local. Agent không cần bind 0.0.0.0 / mở firewall rộng.
  *
- * Railway: proxy tới 127.0.0.1 sẽ fail (đúng — không chạy Chrome TCS trên cloud).
+ * Local: `npm run dev` tự spawn agent. Railway all-in-one: start-fullstack chạy agent trong container.
  */
 import http from "node:http";
 import https from "node:https";
@@ -85,8 +85,8 @@ export function registerTcsAgentProxy(app) {
         error: "AGENT_OFFLINE",
         message:
           `Không nối được agent TCS (${targetBase}). ` +
-          "Trên máy kho chạy: npm run tcs:agent:real. " +
-          "Máy khác phải mở Ops qua IP máy kho (không dùng 127.0.0.1).",
+          "Local: npm run dev (tự chạy agent) hoặc npm run tcs:agent:real. " +
+          "Máy khác: mở Ops bằng IP máy kho — không dùng 127.0.0.1.",
         detail: String(err?.message || err),
       });
     });

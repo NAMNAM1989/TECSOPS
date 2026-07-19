@@ -27,6 +27,27 @@ export default defineConfig({
         target: tcsAgentTarget,
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/tcs-agent/, ""),
+        configure: (proxy) => {
+          proxy.on("error", (err, _req, res) => {
+            // Tránh HTTP 500 opaque — FE đọc được AGENT_OFFLINE
+            const body = JSON.stringify({
+              ok: false,
+              error: "AGENT_OFFLINE",
+              message:
+                `Không nối được agent TCS (${tcsAgentTarget}). ` +
+                "`npm run dev` sẽ tự chạy agent; hoặc chạy riêng: npm run tcs:agent:real. " +
+                "Máy khác: mở Ops bằng IP máy kho (không dùng 127.0.0.1).",
+              detail: String(err?.message || err),
+            });
+            if (res && typeof res.writeHead === "function" && !res.headersSent) {
+              res.writeHead(502, {
+                "Content-Type": "application/json; charset=utf-8",
+                "Content-Length": Buffer.byteLength(body),
+              });
+              res.end(body);
+            }
+          });
+        },
       },
     },
   },

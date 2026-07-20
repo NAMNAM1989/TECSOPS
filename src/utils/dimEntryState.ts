@@ -41,7 +41,7 @@ export type DimEntrySnapshot = {
   pcsExcess: boolean;
   pcsShort: boolean;
   pcsMatch: boolean;
-  /** Tổng DIM < kg lô (mục tiêu chargeable). */
+  /** true khi tổng DIM < kg lô (chargeable theo cân); false = chargeable theo DIM. */
   dimBelowGross: boolean | null;
   workflowStep: DimEntryWorkflowStep;
   targetLineCount: { min: number; max: number } | null;
@@ -250,12 +250,6 @@ export function dimEntryValidateSave(
     return {
       ok: false,
       error: `Dư kiện: tổng kiện DIM (${snap.sumDimPcs}) lớn hơn kiện lô (${lot.declaredPcs}).`,
-    };
-  }
-  if (snap.dimBelowGross === false) {
-    return {
-      ok: false,
-      error: `Tổng DIM (${snap.totalDim.toFixed(1)} kg) không nhỏ hơn kg lô (${lot.declaredKg} kg). Bấm Sinh lại hoặc chỉnh dòng.`,
     };
   }
   return { ok: true, lines: consolidateDimPieceLines(lines) };

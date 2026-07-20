@@ -76,6 +76,17 @@ describe("dimEntryValidateSave", () => {
     );
     expect(r.ok).toBe(false);
   });
+
+  it("cho lưu khi DIM volumetric lớn hơn cân lô", () => {
+    const lines = [{ lCm: 120, wCm: 80, hCm: 70, pcs: 96 }];
+    const r = dimEntryValidateSave(lines, LOT, 6000, TR_CTX);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const snap = snapshotDimEntry(r.lines, LOT, 6000, TR_CTX);
+      expect(snap.dimBelowGross).toBe(false);
+      expect((snap.totalDim ?? 0) > (LOT.declaredKg ?? 0)).toBe(true);
+    }
+  });
 });
 
 describe("dimEntryMergeLines", () => {

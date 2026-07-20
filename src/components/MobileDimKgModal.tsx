@@ -45,7 +45,7 @@ const DIM_QUICK_NUMS = ["120", "100", "80", "60", "50", "40", "30", "25", "20"] 
 const WORKFLOW_STEPS: { step: DimEntryWorkflowStep; label: string; hint: string }[] = [
   { step: 1, label: "Đo mẫu", hint: "Nhập hoặc dán size đo thật (D×R×C×kiện)" },
   { step: 2, label: "Sinh ước tính", hint: "Chỉ khi còn kiện thiếu — Ngẫu nhiên phần còn lại" },
-  { step: 3, label: "Kiểm & lưu", hint: "Khớp kiện, DIM dưới kg lô" },
+  { step: 3, label: "Kiểm & lưu", hint: "Khớp kiện lô — chargeable = max(cân, DIM)" },
 ];
 
 function cloneLines(lines: DimPieceLine[] | null): DimPieceLine[] {
@@ -348,19 +348,15 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
           </div>
 
           {lot.declaredKg != null && snap.totalDim != null ? (
-            <p
-              className={`mt-2 text-[10px] font-medium ${
-                snap.dimBelowGross ? "text-emerald-800" : "text-red-800"
-              }`}
-            >
+            <p className="mt-2 text-[10px] font-medium text-emerald-900">
               {snap.dimBelowGross
-                ? `DIM thấp hơn kg lô ${(lot.declaredKg - snap.totalDim).toFixed(1)} kg — phù hợp chargeable.`
-                : `DIM ≥ kg lô — cần sinh lại hoặc giảm size.`}
-              {snap.remainingPcs > 0 && lot.declaredKg > 0 ? (
+                ? `DIM ${snap.totalDim.toFixed(1)} kg < cân ${lot.declaredKg} kg — chargeable theo cân thực.`
+                : `DIM ${snap.totalDim.toFixed(1)} kg ≥ cân ${lot.declaredKg} kg — chargeable theo DIM (hàng cồng kềnh).`}
+              {snap.remainingPcs > 0 && lot.declaredKg > 0 && snap.dimBelowGross !== false ? (
                 <span className="text-apple-secondary">
                   {" "}
-                  Mục tiêu ~{snap.floorKg.toFixed(0)}–{Math.floor(snap.ceilingKg)} kg (
-                  {Math.round(DIM_TOTAL_BAND_BELOW_RATIO * 100)}% dưới kg lô).
+                  Gợi ý Ngẫu nhiên ~{snap.floorKg.toFixed(0)}–{Math.floor(snap.ceilingKg)} kg (
+                  {Math.round(DIM_TOTAL_BAND_BELOW_RATIO * 100)}% dưới cân).
                 </span>
               ) : null}
             </p>

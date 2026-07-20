@@ -16,6 +16,7 @@ import {
   openTcsAgentSession,
   pingTcsAgent,
   prepareTcsEsid,
+  pickEsidScanReadyItems,
   scanTcsEsidReception,
   submitTcsPortalJob,
   type TcsAgentHealth,
@@ -205,22 +206,7 @@ export function useTcsPortalActions({
         setScanTotal(res.total ?? 0);
         return;
       }
-      // Ghép ready từ mảng ready + items có normalized RECEPTION_COMPLETED
-      const readyByFlag = res.ready || [];
-      const readyByStatus = (res.items || []).filter(
-        (i) =>
-          i.ready ||
-          i.normalized_status === "RECEPTION_COMPLETED" ||
-          /hoàn thành tiếp nhận|hoan thanh tiep nhan/i.test(
-            `${i.tcs_status || ""} ${i.raw || ""}`
-          )
-      );
-      const readyMap = new Map<string, TcsEsidScanItem>();
-      for (const r of [...readyByFlag, ...readyByStatus]) {
-        const d = awbDigitsKey(r.awb);
-        if (d.length === 11) readyMap.set(d, { ...r, awb: d, ready: true });
-      }
-      const ready = [...readyMap.values()];
+      const ready = pickEsidScanReadyItems(res);
       setReadyItems(ready);
       setScanTotal(res.total ?? awbs.length);
 

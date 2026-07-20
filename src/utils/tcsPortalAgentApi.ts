@@ -199,6 +199,22 @@ export type TcsEsidScanResponse = {
   message?: string;
 };
 
+/**
+ * Chỉ lấy AWB agent xác nhận ready + RECEPTION_COMPLETED.
+ * Không đọc raw/message (tránh khớp nhầm cụm «Hoàn thành tiếp nhận» trong lỗi).
+ */
+export function pickEsidScanReadyItems(
+  res: Pick<TcsEsidScanResponse, "ready" | "items">
+): TcsEsidScanItem[] {
+  const map = new Map<string, TcsEsidScanItem>();
+  for (const r of [...(res.ready || []), ...(res.items || [])]) {
+    if (!r?.ready || r.normalized_status !== "RECEPTION_COMPLETED") continue;
+    const d = String(r.awb || "").replace(/\D/g, "").slice(0, 11);
+    if (d.length === 11) map.set(d, { ...r, awb: d, ready: true });
+  }
+  return [...map.values()];
+}
+
 export async function scanTcsEsidReception(
   awbs: string[],
   sessionDate?: string

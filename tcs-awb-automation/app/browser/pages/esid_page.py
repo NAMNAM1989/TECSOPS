@@ -321,13 +321,13 @@ class EsidListPage:
         start.first.fill("")
         start.first.fill(dmy_from)
         self.page.keyboard.press("Enter")
-        self.page.wait_for_timeout(150)
+        self.page.wait_for_timeout(40)
         end = self.page.get_by_placeholder("Ngày kết thúc")
         end.first.click()
         end.first.fill("")
         end.first.fill(dmy_to)
         self.page.keyboard.press("Enter")
-        self.page.wait_for_timeout(150)
+        self.page.wait_for_timeout(40)
         try:
             self.page.keyboard.press("Escape")
         except Exception:
@@ -369,15 +369,24 @@ class EsidListPage:
         self.goto_list(force=False)
         self.clear_awb_filters()
         self.set_flight_date_range(ymd, ymd_to)
-        submit_ref = self.esid_ref("submit")
+        # Nút primary TÌM KIẾM (force — tránh overlay Ant Form)
         try:
-            if submit_ref:
-                self._resolve(submit_ref).first.click()
+            primary = self.page.locator("button.ant-btn-primary").filter(
+                has_text=re.compile(r"TÌM\s*KIẾM|Tim\s*kiem", re.I)
+            )
+            if primary.count() > 0:
+                primary.first.click(timeout=4000, force=True)
             else:
-                self.page.get_by_role("button", name=re.compile(r"TÌM KIẾM|Tim kiem", re.I)).first.click()
+                submit_ref = self.esid_ref("submit")
+                if submit_ref:
+                    self._resolve(submit_ref).first.click(timeout=4000, force=True)
+                else:
+                    self.page.get_by_role(
+                        "button", name=re.compile(r"TÌM KIẾM|Tim kiem", re.I)
+                    ).first.click(timeout=4000, force=True)
         except Exception as e:
             raise SiteChangedError(f"Không bấm TÌM KIẾM: {e}") from e
-        self._wait_search_results("")
+        self._wait_search_results("", timeout_ms=6000)
         self._list_date_ymd = ymd
 
     def ensure_date_filtered_list(self, ymd: str) -> None:
@@ -396,11 +405,15 @@ class EsidListPage:
 
     @staticmethod
     def _blob_is_reception(status: str, text: str) -> bool:
+        """
+        Chỉ True khi có cụm đúng «Hoàn thành tiếp nhận» (hoặc không dấu).
+        Không tách «hoàn thành» + «tiếp nhận» — dễ khớp nhầm cột/header.
+        """
         blob = f"{status or ''} {text or ''}".lower()
-        if RECEPTION_STATUS.lower() in blob or "hoàn thành tiếp nhận" in blob or "hoan thanh tiep nhan" in blob:
-            return True
-        return ("hoàn thành" in blob or "hoan thanh" in blob) and (
-            "tiếp nhận" in blob or "tiep nhan" in blob
+        return (
+            RECEPTION_STATUS.lower() in blob
+            or "hoàn thành tiếp nhận" in blob
+            or "hoan thanh tiep nhan" in blob
         )
 
     @staticmethod
@@ -447,19 +460,38 @@ class EsidListPage:
         ready: list[dict[str, Any]] = []
         seen: set[str] = set()
         for item in reception:
+            # Chỉ khớp lô đã xác nhận tiếp nhận (agent đã lọc); ưu tiên đủ 11 số
+            if not item.get("ready") and item.get("normalized_status") != NormalizedStatus.RECEPTION_COMPLETED.value:
+                continue
+            if not self._blob_is_reception(
+                str(item.get("tcs_status") or ""), str(item.get("raw") or "")
+            ):
+                # Cho phép khi tcs_status đã gán đúng RECEPTION_STATUS
+                ts = str(item.get("tcs_status") or "")
+                if RECEPTION_STATUS.lower() not in ts.lower() and "hoan thanh tiep nhan" not in ts.lower():
+                    continue
             token = self._digits(str(item.get("awb") or ""))
             matched: str | None = None
-            if token in ops_set:
-                matched = token
+            if len(token) >= 11 and token[:11] in ops_set:
+                matched = token[:11]
             elif len(token) >= 8:
                 last8 = token[-8:]
-                for ops in ops_norm:
-                    if ops[3:] == last8 or ops.endswith(last8):
-                        matched = ops
-                        break
+                candidates = [ops for ops in ops_norm if ops[3:] == last8]
+                # Chỉ last8 khi khớp đúng 1 Ops AWB — tránh gán nhầm
+                if len(candidates) == 1:
+                    matched = candidates[0]
             if matched and matched not in seen:
                 seen.add(matched)
-                ready.append({**item, "awb": matched, "awb_last8": matched[3:], "ready": True})
+                ready.append(
+                    {
+                        **item,
+                        "awb": matched,
+                        "awb_last8": matched[3:],
+                        "ready": True,
+                        "normalized_status": NormalizedStatus.RECEPTION_COMPLETED.value,
+                        "tcs_status": RECEPTION_STATUS,
+                    }
+                )
         # items: mỗi ops AWB — ready nếu khớp
         items: list[dict[str, Any]] = []
         ready_set = {r["awb"] for r in ready}
@@ -476,27 +508,31 @@ class EsidListPage:
                         "normalized_status": NormalizedStatus.NOT_COMPLETED.value,
                         "tcs_status": "",
                         "error": "NOT_IN_RECEPTION_LIST",
-                        "raw": "Không có trên danh sách Hoàn thành tiếp nhận (theo ngày)",
+                        # Tránh cụm «Hoàn thành tiếp nhận» trong raw — FE từng regex nhầm
+                        "raw": "Không thấy trên TCS (ngày phiên) với trạng thái tiếp nhận xong",
                     }
                 )
         return ready, items
 
     def scan_by_flight_date(self, ymd: str, ops_awbs: list[str]) -> dict[str, Any]:
-        """Một lần lọc ngày → đọc bảng → khớp Ops. Nhanh hơn quét từng AWB."""
+        """Một lần lọc ngày → đọc mọi trang bảng → khớp Ops (chỉ dòng đủ chữ tiếp nhận)."""
         self.search_by_flight_date(ymd)
-        rows = self.list_row_statuses()
+        self._prefer_large_page_size()
+        rows = self.list_all_row_statuses(max_pages=40)
         reception: list[dict[str, Any]] = []
         for r in rows:
             if not self._blob_is_reception(r.get("status") or "", r.get("text") or ""):
                 continue
             token = self._digits(r.get("awb") or "")
+            if len(token) < 8:
+                continue
             reception.append(
                 {
-                    "awb": token or (r.get("awb") or "").strip(),
+                    "awb": token[:11] if len(token) >= 11 else token,
                     "awb_last8": token[-8:] if len(token) >= 8 else token,
                     "ready": True,
                     "normalized_status": NormalizedStatus.RECEPTION_COMPLETED.value,
-                    "tcs_status": r.get("status") or RECEPTION_STATUS,
+                    "tcs_status": RECEPTION_STATUS,
                     "flight": r.get("flight") or "",
                     "flight_date": r.get("flight_date") or "",
                     "esid_code": r.get("esid") or "",
@@ -600,23 +636,36 @@ class EsidListPage:
             self.page.wait_for_timeout(300)
 
     def list_row_statuses(self) -> list[dict[str, str]]:
-        """Đọc các dòng bảng ESID (awb/esid, status)."""
+        """Đọc các dòng bảng ESID (awb/esid, status) — trang hiện tại."""
         return self.page.evaluate(
             """() => {
-              const rows = [...document.querySelectorAll('table tbody tr, .ant-table-tbody tr')];
+              const rows = [...document.querySelectorAll(
+                '.ant-table-tbody tr, table tbody tr'
+              )].filter(tr => tr.querySelectorAll('td').length >= 3);
               return rows.map(tr => {
-                const cells = [...tr.querySelectorAll('td')].map(td => (td.innerText||'').trim().replace(/\\s+/g,' '));
+                const cells = [...tr.querySelectorAll('td')].map(td =>
+                  (td.innerText||'').trim().replace(/\\s+/g,' ')
+                );
                 const text = (tr.innerText||'').trim().replace(/\\s+/g,' ');
                 let status = '';
+                // Ưu tiên ô đúng cụm «Hoàn thành tiếp nhận» — không lấy «Hoàn thành» đơn
                 for (const c of cells) {
                   const low = c.toLowerCase();
-                  if (low.includes('tiếp nhận') || low.includes('tiep nhan') || low.includes('hoàn thành') || low.includes('hoan thanh')) {
+                  if (low.includes('hoàn thành tiếp nhận') || low.includes('hoan thanh tiep nhan')) {
                     status = c;
                     break;
                   }
                 }
-                if (!status && cells.length) status = cells[cells.length - 1] || '';
-                if (!status && /hoàn thành tiếp nhận/i.test(text)) status = 'Hoàn thành tiếp nhận';
+                if (!status && cells.length) {
+                  // Cột trạng thái thường là cột cuối có chữ
+                  for (let i = cells.length - 1; i >= 0; i--) {
+                    const c = cells[i] || '';
+                    if (c.length >= 4 && /[a-zA-Zà-ỹÀ-Ỹ]/.test(c)) {
+                      status = c;
+                      break;
+                    }
+                  }
+                }
                 return {
                   awb: cells[0] || '',
                   flight: cells[1] || '',
@@ -625,9 +674,77 @@ class EsidListPage:
                   status,
                   text: text.slice(0, 240)
                 };
-              }).filter(r => r.text);
+              }).filter(r => r.text && !/^\\d+$/.test(r.text.replace(/\\s/g,'').slice(0,20)));
             }"""
         )
+
+    def _prefer_large_page_size(self) -> None:
+        """Chọn page size lớn nhất (100) để giảm số lần lật trang khi quét."""
+        try:
+            changer = self.page.locator(".ant-pagination-options-size-changer")
+            if changer.count() == 0 or not changer.first.is_visible(timeout=400):
+                return
+            changer.first.click(timeout=800)
+            self.page.wait_for_timeout(80)
+            for label in ("100 / page", "100/page", "100"):
+                opt = self.page.get_by_text(label, exact=False)
+                if opt.count() > 0 and opt.first.is_visible(timeout=300):
+                    opt.first.click(timeout=800)
+                    self.page.wait_for_timeout(200)
+                    return
+            try:
+                self.page.keyboard.press("Escape")
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def _pagination_next(self) -> bool:
+        """Bấm trang kế. True nếu còn trang."""
+        try:
+            nxt = self.page.locator(
+                ".ant-pagination-next:not(.ant-pagination-disabled)"
+            )
+            if nxt.count() == 0 or not nxt.first.is_visible(timeout=200):
+                return False
+            before = ""
+            try:
+                rows = self.list_row_statuses()
+                before = (rows[0].get("awb") if rows else "") or ""
+            except Exception:
+                pass
+            nxt.first.click(timeout=1500)
+            # Chờ bảng đổi
+            for _ in range(25):
+                self.page.wait_for_timeout(60)
+                try:
+                    rows = self.list_row_statuses()
+                    after = (rows[0].get("awb") if rows else "") or ""
+                    if after and after != before:
+                        return True
+                except Exception:
+                    pass
+            return True
+        except Exception:
+            return False
+
+    def list_all_row_statuses(self, *, max_pages: int = 40) -> list[dict[str, str]]:
+        """Đọc mọi trang kết quả ESID (sau khi đã lọc ngày)."""
+        all_rows: list[dict[str, str]] = []
+        seen_keys: set[str] = set()
+        for page_i in range(max(1, max_pages)):
+            rows = self.list_row_statuses()
+            for r in rows:
+                key = f"{r.get('awb')}|{r.get('esid')}|{r.get('flight_date')}|{r.get('status')}"
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                all_rows.append(r)
+            if page_i + 1 >= max_pages:
+                break
+            if not self._pagination_next():
+                break
+        return all_rows
 
     def _match_rows_for_awb(self, awb_digits: str, rows: list[dict[str, str]]) -> list[dict[str, str]]:
         """Ưu tiên khớp đủ 11 số / prefix+last8; fallback last8 trong ô AWB hoặc text dòng."""
@@ -680,31 +797,27 @@ class EsidListPage:
         reception = [
             r
             for r in matched
-            if RECEPTION_STATUS.lower() in f"{r.get('status') or ''} {r.get('text') or ''}".lower()
+            if self._blob_is_reception(r.get("status") or "", r.get("text") or "")
         ]
         pick = reception[0] if reception else matched[0]
-        blob = f"{pick.get('status') or ''} {pick.get('text') or ''}".lower()
-        # Khớp linh hoạt: đủ cụm, hoặc có cả «hoàn thành» + «tiếp nhận»
-        ready = (
-            RECEPTION_STATUS.lower() in blob
-            or "hoàn thành tiếp nhận" in blob
-            or "hoan thanh tiep nhan" in blob
-            or (
-                ("hoàn thành" in blob or "hoan thanh" in blob)
-                and ("tiếp nhận" in blob or "tiep nhan" in blob)
-            )
+        ready = bool(reception) and self._blob_is_reception(
+            pick.get("status") or "", pick.get("text") or ""
         )
         if ready:
             norm = NormalizedStatus.RECEPTION_COMPLETED
-        elif "hoàn thành" in blob or "hoan thanh" in blob:
-            norm = NormalizedStatus.COMPLETED
+            tcs_status = RECEPTION_STATUS
         else:
-            norm = NormalizedStatus.NOT_COMPLETED
+            blob = f"{pick.get('status') or ''} {pick.get('text') or ''}".lower()
+            if "hoàn thành" in blob or "hoan thanh" in blob:
+                norm = NormalizedStatus.COMPLETED
+            else:
+                norm = NormalizedStatus.NOT_COMPLETED
+            tcs_status = pick.get("status") or ""
         base.update(
             {
                 "ready": ready,
                 "normalized_status": norm.value,
-                "tcs_status": pick.get("status") or (RECEPTION_STATUS if ready else ""),
+                "tcs_status": tcs_status,
                 "flight": pick.get("flight") or "",
                 "flight_date": pick.get("flight_date") or "",
                 "esid_code": pick.get("esid") or "",

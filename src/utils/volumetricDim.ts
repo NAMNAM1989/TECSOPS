@@ -261,21 +261,45 @@ export function formatDimKgDisplay(kg: number, ctx: ScscDimRoundContext): string
 
 
 /** DIM kg trên lô — theo mã chuyến (+ AWB). */
-
 export function formatShipmentDimWeightKg(
-
   flight: string,
-
   dimWeightKg: number | null,
-
   awb = ""
-
 ): string {
-
   if (dimWeightKg == null) return "—";
-
   return formatDimKgDisplay(dimWeightKg, { flight, awb });
+}
 
+export type ShipmentDimWeightInput = {
+  flight: string;
+  awb?: string;
+  dimWeightKg?: number | null;
+  dimLines?: DimPieceLine[] | null;
+  dimDivisor?: DimDivisor | null;
+};
+
+/** Tổng DIM hiển thị — ưu tiên dimWeightKg, fallback tính từ dimLines. */
+export function resolveShipmentDimWeightKg(input: ShipmentDimWeightInput): number | null {
+  if (input.dimWeightKg != null && Number.isFinite(input.dimWeightKg)) {
+    return input.dimWeightKg;
+  }
+  const lines = input.dimLines;
+  if (!lines?.length) return null;
+  const divisor =
+    input.dimDivisor === 5000 || input.dimDivisor === 6000
+      ? input.dimDivisor
+      : dimDivisorFromFlight(input.flight);
+  return totalDimKgFromLines(lines, divisor, {
+    flight: input.flight,
+    awb: input.awb ?? "",
+  });
+}
+
+/** Format DIM trên grid — khớp modal khi có dimLines nhưng thiếu dimWeightKg. */
+export function formatShipmentDimWeightDisplay(input: ShipmentDimWeightInput): string {
+  const kg = resolveShipmentDimWeightKg(input);
+  if (kg == null) return "—";
+  return formatDimKgDisplay(kg, { flight: input.flight, awb: input.awb ?? "" });
 }
 
 

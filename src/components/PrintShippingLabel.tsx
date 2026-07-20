@@ -104,7 +104,7 @@ export function LabelContent({
             Total pieces
           </div>
           <div className="pieces-val" style={{ fontSize: mm(piecesValMm) }}>
-            {d.pieces || "—"}
+            {d.pieces}
           </div>
         </div>
         {d.special === "cold" ? (

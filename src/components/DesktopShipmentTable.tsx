@@ -17,7 +17,7 @@ import {
   SCSC_OTHER_REQUIREMENTS_PRINT_MAX,
 } from "../utils/scscPrintContent";
 import { isScscWarehouse, warehouseLabel } from "../constants/warehouses";
-import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
+import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
 import { findCustomerEntry } from "../utils/customerBookingResolve";
 import { buildShipmentPatchForSavedConsignee } from "../utils/customerConsigneeShipmentPatch";
 import { InlineCneeCell } from "./InlineCneeCell";
@@ -350,7 +350,7 @@ function ShipmentTableRowImpl({
         <div className="flex flex-col items-end gap-0">
           {(row.dimLines?.length ?? 0) > 0 ? (
             <span className="font-mono text-[10px] font-semibold tabular-nums ops-grid-cell">
-              {formatShipmentDimWeightKg(row.flight, row.dimWeightKg, row.awb)}
+              {formatShipmentDimWeightDisplay(row)}
             </span>
           ) : (
             <InlineNumberEdit

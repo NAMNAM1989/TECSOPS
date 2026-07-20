@@ -7,6 +7,7 @@ import {
   formatDimKgDisplay,
   formatLineDimKgDisplay,
   lineDimKg,
+  totalDimKgFromLines,
   type ScscDimRoundContext,
 } from "../utils/volumetricDim";
 import { collectScscDimLimitWarnings } from "../utils/scscAirlineLimitsCheck";
@@ -274,7 +275,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
       return;
     }
     onSave({
-      dimWeightKg: snap.totalDim,
+      dimWeightKg: totalDimKgFromLines(r.lines, divisor, dimCtx),
       dimLines: r.lines,
       dimDivisor: divisor,
     });

@@ -11,7 +11,7 @@ import {
 import { parseBookingDateLoose, formatYmdToFlightDateDdMon } from "../utils/bookingDateParse";
 import { StatusSelect } from "./StatusBadge";
 import { MobileDimKgModal, type MobileDimSavePayload } from "./MobileDimKgModal";
-import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
+import { formatShipmentDimWeightDisplay, resolveShipmentDimWeightKg } from "../utils/volumetricDim";
 import { isScscWarehouse } from "../constants/warehouses";
 import {
   clipScscGoodsDescriptionPrint,
@@ -446,9 +446,9 @@ export function MobileShipmentEditSheet({
                   </Field>
                 </div>
                 <div className={`rounded-2xl border p-4 ${OPS.panelSoft}`}>
-                  {dimWeightKg != null ? (
+                  {resolveShipmentDimWeightKg({ ...shipment, dimWeightKg, dimLines }) != null ? (
                     <p className="text-[13px] font-semibold text-apple-label dark:text-slate-100">
-                      DIM {formatShipmentDimWeightKg(shipment.flight, dimWeightKg, shipment.awb)} kg
+                      DIM {formatShipmentDimWeightDisplay({ ...shipment, dimWeightKg, dimLines })} kg
                       {(dimLines?.length ?? 0) > 0 ? (
                         <span className="font-normal text-apple-secondary dark:text-slate-400">
                           {" "}

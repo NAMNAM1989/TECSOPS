@@ -12,6 +12,8 @@ import {
   formatDimKgDisplay,
   formatLineDimKgDisplay,
   formatShipmentDimWeightKg,
+  formatShipmentDimWeightDisplay,
+  resolveShipmentDimWeightKg,
   lineDimKg,
   parseDimLineQuadsFromNumbersStrict,
   totalDimKgFromLines,
@@ -142,6 +144,27 @@ describe("formatDimKgDisplay", () => {
 
   it("IATA: 2 số lẻ", () => {
     expect(formatShipmentDimWeightKg("VN601", 139.205)).toBe("139.21");
+  });
+});
+
+describe("resolveShipmentDimWeightKg", () => {
+  it("fallback tính từ dimLines khi dimWeightKg null", () => {
+    const lines = [{ lCm: 120, wCm: 80, hCm: 70, pcs: 35 }];
+    const kg = resolveShipmentDimWeightKg({
+      flight: "VU131",
+      awb: "759-0023 8000",
+      dimWeightKg: null,
+      dimLines: lines,
+      dimDivisor: 6000,
+    });
+    expect(kg).not.toBeNull();
+    expect(formatShipmentDimWeightDisplay({
+      flight: "VU131",
+      awb: "759-0023 8000",
+      dimWeightKg: null,
+      dimLines: lines,
+      dimDivisor: 6000,
+    })).not.toBe("—");
   });
 });
 

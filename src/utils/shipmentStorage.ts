@@ -3,6 +3,7 @@ import { WAREHOUSE_ORDER } from "../constants/warehouses";
 import { formatLocalSessionDate, startOfLocalDay } from "./sessionDate";
 import { SHIPMENT_STATUS_ORDER, migrateShipmentStatus } from "./shipmentWorkflowStatus";
 import { normalizeDimLineEdges } from "./dimBulkFill";
+import { dimDivisorFromFlight, totalDimKgFromLines } from "./volumetricDim";
 
 const ROWS_KEY = "tecsops-shipments-v1";
 const WORK_DATE_KEY = "tecsops-work-date-v1";
@@ -138,8 +139,15 @@ export function loadRows(): Shipment[] | null {
       const dimDivisor =
         item.dimDivisor === 5000 || item.dimDivisor === 6000 ? item.dimDivisor : null;
       const dimLines = normalizeDimLines(item.dimLines);
-      const dimWeightKg =
+      let dimWeightKg =
         item.dimWeightKg === null || typeof item.dimWeightKg === "number" ? item.dimWeightKg : null;
+      if ((dimWeightKg == null || !Number.isFinite(dimWeightKg)) && dimLines?.length) {
+        const flight = typeof item.flight === "string" ? item.flight : "";
+        const awb = typeof item.awb === "string" ? item.awb : "";
+        const div =
+          dimDivisor === 5000 || dimDivisor === 6000 ? dimDivisor : dimDivisorFromFlight(flight);
+        dimWeightKg = totalDimKgFromLines(dimLines, div, { flight, awb });
+      }
       const base: Shipment = {
         ...(item as Shipment),
         sessionDate: sd,

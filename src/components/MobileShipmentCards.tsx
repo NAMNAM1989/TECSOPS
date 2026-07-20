@@ -12,7 +12,7 @@ import {
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { useWarehouseSectionCollapse } from "../hooks/useWarehouseSectionCollapse";
 import type { Warehouse } from "../types/shipment";
-import { formatShipmentDimWeightKg } from "../utils/volumetricDim";
+import { formatShipmentDimWeightDisplay, resolveShipmentDimWeightKg } from "../utils/volumetricDim";
 import { MOBILE, mobileOnlyVisibility } from "../styles/mobileOpsStyles";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
@@ -21,8 +21,9 @@ function formatMobileFlightMeta(row: Shipment): string {
   const parts: string[] = [];
   if ((row.flight ?? "").trim()) parts.push((row.flight ?? "").trim());
   if ((row.dest ?? "").trim()) parts.push((row.dest ?? "").trim());
-  if (row.dimWeightKg != null) {
-    parts.push(`DIM ${formatShipmentDimWeightKg(row.flight, row.dimWeightKg, row.awb)}`);
+  const dimKg = resolveShipmentDimWeightKg(row);
+  if (dimKg != null) {
+    parts.push(`DIM ${formatShipmentDimWeightDisplay(row)}`);
   }
   return parts.join(" · ");
 }

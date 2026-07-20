@@ -5,7 +5,12 @@ import {
 } from "./googleSheetFetch.mjs";
 import { getCachedGrid, getCachedGridForSession, getCachedSyncResult, setCachedGrid, setCachedSyncResult, syncResultCacheKey } from "./sheetFetchCache.mjs";
 import { parseBookHangNgayGrid } from "./bookHangNgayParser.mjs";
-import { filterRowsForSessionDate, sessionYmdToFlightDateToken } from "./bookDateMatch.mjs";
+import { sessionYmdToFlightDateToken } from "./bookDateMatch.mjs";
+import {
+  buildCustomerLookups,
+  lookupCustomerCode,
+  lookupCustomerId,
+} from "./customerSheetLookup.mjs";
 import {
   awbKeyForMatch,
   resolveExistingForSheetRow,
@@ -15,34 +20,6 @@ import {
   sheetRowToPatch,
 } from "./sheetRowReconcile.mjs";
 import { loadState, peekStateVersion, runBatchMutations } from "../stateStore.mjs";
-
-function lookupCustomerCode(customers, customerName) {
-  const t = String(customerName ?? "").trim().toLowerCase();
-  if (!t) return "";
-  const hit = customers.find((e) => String(e.name ?? "").trim().toLowerCase() === t);
-  return hit?.code?.trim() ?? "";
-}
-
-function lookupCustomerId(customers, customerName) {
-  const t = String(customerName ?? "").trim().toLowerCase();
-  if (!t) return "";
-  const hit = customers.find((e) => String(e.name ?? "").trim().toLowerCase() === t);
-  return hit?.id?.trim() ?? "";
-}
-
-function buildCustomerLookups(customers) {
-  /** @type {Map<string, { code?: string, id?: string }>} */
-  const byName = new Map();
-  for (const e of customers) {
-    const key = String(e.name ?? "").trim().toLowerCase();
-    if (!key) continue;
-    byName.set(key, { code: e.code?.trim(), id: e.id?.trim() });
-  }
-  return {
-    code: (name) => byName.get(String(name ?? "").trim().toLowerCase())?.code ?? "",
-    id: (name) => byName.get(String(name ?? "").trim().toLowerCase())?.id ?? "",
-  };
-}
 
 function buildAwbIndexes(rows, sessionDate) {
   /** @type {Map<string, object>} */
@@ -223,16 +200,16 @@ export function registerSheetsRoutes(app, deps) {
         preferredTab,
         forceRefresh
       );
+      // Ngày phiên = ngày tab đã resolve — giữ mọi dòng trên tab (không lọc cutoff).
       const parsed = parseBookHangNgayGrid(grid, sessionDate);
-      const dated = filterRowsForSessionDate(parsed, sessionDate);
       const sessionFlightDate = sessionYmdToFlightDateToken(sessionDate);
       const state = await loadState();
       const customers = Array.isArray(state.customers) ? state.customers : [];
       const customerLookups = buildCustomerLookups(customers);
       const awbIndexes = buildAwbIndexes(state.rows, sessionDate);
 
-      const awbFirstIndex = sheetAwbFirstIndexByKey(dated);
-      const rows = dated.map((row, index) =>
+      const awbFirstIndex = sheetAwbFirstIndexByKey(parsed);
+      const rows = parsed.map((row, index) =>
         mapSyncRow(
           row,
           index,
@@ -252,7 +229,7 @@ export function registerSheetsRoutes(app, deps) {
         spreadsheetId,
         syncedAt: new Date().toISOString(),
         totalInTab: parsed.length,
-        skippedByDate: parsed.length - dated.length,
+        skippedByDate: 0,
         total: rows.length,
         importable: rows.filter((r) => !r.blocked).length,
         newCount: rows.filter((r) => r.syncStatus === "new").length,
@@ -292,7 +269,7 @@ export function registerSheetsRoutes(app, deps) {
         sessionDate,
         preferredTab
       );
-      const parsed = filterRowsForSessionDate(parseBookHangNgayGrid(grid, sessionDate), sessionDate);
+      const parsed = parseBookHangNgayGrid(grid, sessionDate);
       const pickSet = new Set(indices.filter((n) => Number.isInteger(n) && n >= 0));
       const selected = parsed.filter((_, i) => pickSet.has(i));
 

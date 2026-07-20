@@ -27,23 +27,15 @@ export function extractCutoffOpsDateToken(cutoffNote) {
 }
 
 /**
- * Chỉ giữ lô thuộc ngày phiên đang xem trên web.
- * Tab Sheet đã theo ngày (vd. «NGÀY 13 JUL») — mặc định giữ mọi dòng.
- * Chỉ bỏ khi cutoff/note ghi rõ ngày vận hành khác phiên (vd. «17:00 - 14JUN»).
+ * Ngày phiên = ngày tab Sheet đã resolve (vd. «NGÀY 20 JUL» → 2026-07-20).
+ * Giữ mọi dòng trên tab — cutoff/ngày bay (có thể N+1) chỉ là thông tin lô, không loại dòng.
  */
-export function rowMatchesSessionDate(row, sessionYmd) {
-  const sessionToken = sessionYmdToFlightDateToken(sessionYmd);
-  if (!sessionToken) return false;
-
-  const opsFromCutoff = extractCutoffOpsDateToken(row.cutoffNote);
-  if (opsFromCutoff) {
-    return opsFromCutoff === sessionToken;
-  }
-
-  return true;
+export function rowMatchesSessionDate(_row, sessionYmd) {
+  return Boolean(sessionYmdToFlightDateToken(sessionYmd));
 }
 
 /** @template {{ cutoffNote?: string, flightDate?: string }} T */
 export function filterRowsForSessionDate(rows, sessionYmd) {
-  return rows.filter((row) => rowMatchesSessionDate(row, sessionYmd));
+  if (!sessionYmdToFlightDateToken(sessionYmd)) return [];
+  return rows;
 }

@@ -17,32 +17,32 @@ describe("bookDateMatch", () => {
     expect(extractCutoffOpsDateToken("PER")).toBe("");
   });
 
-  it("giữ lô cutoff 13JUN dù chuyến bay 14JUN", () => {
-    const row = { flightDate: "14JUN", cutoffNote: "13JUN" };
-    expect(rowMatchesSessionDate(row, "2026-06-13")).toBe(true);
+  it("giữ mọi dòng trên tab — kể cả cutoff ngày khác phiên", () => {
+    expect(rowMatchesSessionDate({ flightDate: "14JUN", cutoffNote: "13JUN" }, "2026-06-13")).toBe(
+      true
+    );
+    expect(rowMatchesSessionDate({ flightDate: "14JUN", cutoffNote: "14JUN" }, "2026-06-13")).toBe(
+      true
+    );
+    expect(rowMatchesSessionDate({ flightDate: "21JUL", cutoffNote: "10:30 - 21JUL" }, "2026-07-20")).toBe(
+      true
+    );
+    expect(rowMatchesSessionDate({ flightDate: "", cutoffNote: "" }, "2026-06-13")).toBe(true);
   });
 
-  it("giữ lô chuyến bay 14JUN khi tab đã đúng ngày (không có cutoff)", () => {
-    const row = { flightDate: "14JUN", cutoffNote: "" };
-    expect(rowMatchesSessionDate(row, "2026-06-13")).toBe(true);
+  it("sessionDate không hợp lệ → không khớp", () => {
+    expect(rowMatchesSessionDate({ cutoffNote: "13JUN" }, "bad")).toBe(false);
   });
 
-  it("bỏ lô cutoff ghi ngày khác phiên", () => {
-    const row = { flightDate: "14JUN", cutoffNote: "14JUN" };
-    expect(rowMatchesSessionDate(row, "2026-06-13")).toBe(false);
-  });
-
-  it("giữ lô không ghi ngày (tab đã đúng ngày)", () => {
-    const row = { flightDate: "", cutoffNote: "" };
-    expect(rowMatchesSessionDate(row, "2026-06-13")).toBe(true);
-  });
-
-  it("filterRowsForSessionDate", () => {
+  it("filterRowsForSessionDate giữ toàn bộ khi tab đã đúng ngày", () => {
     const rows = [
       { flightDate: "14JUN", cutoffNote: "13JUN" },
       { flightDate: "14JUN", cutoffNote: "" },
       { flightDate: "14JUN", cutoffNote: "14JUN" },
+      { flightDate: "21JUL", cutoffNote: "10:30 - 21JUL", customer: "A TÚ" },
     ];
-    expect(filterRowsForSessionDate(rows, "2026-06-13")).toHaveLength(2);
+    expect(filterRowsForSessionDate(rows, "2026-06-13")).toHaveLength(4);
+    expect(filterRowsForSessionDate(rows, "2026-07-20")).toHaveLength(4);
+    expect(filterRowsForSessionDate(rows, "")).toHaveLength(0);
   });
 });

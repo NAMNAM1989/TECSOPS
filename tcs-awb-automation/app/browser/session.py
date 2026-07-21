@@ -78,30 +78,41 @@ class BrowserSession:
         self._playwright = sync_playwright().start()
 
         chrome_args = ["--disable-dev-shm-usage"]
-        if headless:
+        # Container / Xvfb: Chromium thường chạy root → cần no-sandbox
+        on_linux = sys.platform.startswith("linux")
+        has_display = bool(str(os.environ.get("DISPLAY") or "").strip())
+        on_xvfb = (not headless) and on_linux and has_display
+        if headless or on_xvfb:
             chrome_args += [
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
+            ]
+        if headless:
+            chrome_args += [
                 "--disable-gpu",
                 "--disable-software-rasterizer",
             ]
+        elif on_xvfb:
+            # Cửa sổ cố định trên framebuffer 1366x900 (noVNC)
+            chrome_args += ["--window-size=1366,900", "--window-position=0,0"]
         else:
+            # Máy kho Windows headed
             chrome_args += ["--start-maximized"]
 
         base_kwargs: dict[str, Any] = dict(
             headless=headless,
             accept_downloads=True,
-            viewport=None if not headless else {"width": 1366, "height": 900},
+            viewport={"width": 1366, "height": 900} if (headless or on_xvfb) else None,
             args=chrome_args,
             timeout=15000,
         )
 
         # Thứ tự thử:
-        # 1) Google Chrome (máy kho Windows có Chrome) — headed
-        # 2) Chromium bundled Playwright — profile chính (Railway + fallback)
+        # 1) Google Chrome (máy kho Windows) — headed, không dùng trên Xvfb container
+        # 2) Chromium bundled Playwright — profile chính (Railway Xvfb + fallback)
         # 3) Chromium + profile recovery
         attempts: list[tuple[str, Path, dict[str, Any]]] = []
-        if not headless and _system_chrome_likely():
+        if not headless and not on_xvfb and _system_chrome_likely():
             attempts.append(("chrome", primary_profile, {**base_kwargs, "channel": "chrome"}))
         attempts.append(("chromium", primary_profile, dict(base_kwargs)))
         attempts.append(("chromium_recovery", recovery_profile, dict(base_kwargs)))

@@ -45,7 +45,13 @@ Add whatever helps you do your job. This is your cheat sheet.
 - Nút **Login** Ops → mở cửa sổ Chrome TCS trên máy kho (trang ESID/Agent); Quét/Điền nhìn thấy trên cửa sổ đó.
 - Sau **Điền** ESID: kiểm tra form trên Chrome máy kho → HOÀN TẤT trên Chrome hoặc nút Ops.
 - Máy khác chỉ mở Ops qua IP máy kho; đừng mở tab TCS riêng (session khác).
-- Railway/container: `TCS_HEADLESS=1` — Login không hiện cửa sổ (cần agent máy kho).
+
+## TCS desktop — Railway (noVNC)
+
+- Image Docker: Xvfb `:99` + x11vnc + websockify/noVNC (`127.0.0.1:6080`) → Express proxy `/tcs-desktop`.
+- Variables: `TCS_VNC=1`, volume `TCS_BROWSER_PROFILE`. `TCS_VNC_PASSWORD` tùy chọn (trống = không hỏi pass).
+- Ops → nút **TCS desktop** → autoconnect noVNC → click/gõ trên Chrome agent.
+- Tắt VNC: `TCS_VNC=0` (agent headless). Health hint: `GET /api/tcs-desktop`.
 
 ## Related
 

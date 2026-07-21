@@ -47,8 +47,6 @@ export const CUSTOMER_PROFILE_LIMITS = {
   phone: 40,
 } as const;
 
-export const CUSTOMER_PARTY_TYPES: readonly CustomerPartyType[] = ["SHIPPER", "CNEE", "NOTIFY", "OTHER"];
-
 function clip(s: unknown, max: number): string {
   return String(s ?? "").slice(0, max);
 }
@@ -60,15 +58,6 @@ function fallbackPartyId(prefix = "party"): string {
 export function normalizeCustomerPartyType(value: unknown): CustomerPartyType {
   const raw = String(value ?? "").trim().toUpperCase();
   return raw === "SHIPPER" || raw === "CNEE" || raw === "NOTIFY" || raw === "OTHER" ? raw : "OTHER";
-}
-
-export function emptyCustomerParty(type: CustomerPartyType = "SHIPPER", label = ""): CustomerParty {
-  return {
-    id: fallbackPartyId(type.toLowerCase()),
-    type,
-    label,
-    content: "",
-  };
 }
 
 function newSavedConsigneeId(): string {
@@ -346,46 +335,6 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
     otherRequirementsPrint: clip(migrated.otherRequirementsPrint, L.otherRequirementsPrint).trim() || undefined,
     parties,
   };
-}
-
-/** Một dòng ngắn: mã · tên. */
-export function buildCustomerCodeNameLine(e: CustomerDirectoryEntry): string {
-  return `${e.code.trim()} · ${e.name.trim()}`.trim();
-}
-
-export function partyTypeLabel(type: CustomerPartyType): string {
-  if (type === "OTHER") return "KHÁC";
-  return type;
-}
-
-export function buildCustomerPartyTitle(p: CustomerParty): string {
-  const label = p.label.trim();
-  if (!label) return partyTypeLabel(p.type);
-  return label.toUpperCase() === p.type ? p.type : `${partyTypeLabel(p.type)} - ${label}`;
-}
-
-export function buildCustomerPartyBlock(p: CustomerParty): string {
-  const title = buildCustomerPartyTitle(p);
-  const content = p.content.trim();
-  if (!content) return title;
-  return `${title}:\n${content}`;
-}
-
-export function buildCustomerQuickCopyBlock(e: CustomerDirectoryEntry): string {
-  const blocks = e.parties
-    .filter((p) => p.content.trim())
-    .map(buildCustomerPartyBlock)
-    .filter(Boolean);
-  return blocks.length > 0 ? blocks.join("\n\n") : buildCustomerCodeNameLine(e);
-}
-
-export function customerPartiesByType(
-  entry: CustomerDirectoryEntry | undefined,
-  type: CustomerPartyType | "ALL"
-): CustomerParty[] {
-  if (!entry) return [];
-  if (type === "ALL") return entry.parties;
-  return entry.parties.filter((p) => p.type === type);
 }
 
 /** Một dòng trống cho form thêm mới. */

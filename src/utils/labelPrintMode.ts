@@ -49,15 +49,3 @@ export function loadLabelPrintFlipCcw(): boolean {
     return false;
   }
 }
-
-export function saveLabelPrintFlipCcw(on: boolean): void {
-  try {
-    localStorage.setItem(KEY_FLIP, on ? "1" : "0");
-  } catch {
-    /* ignore */
-  }
-}
-
-export function isXp470bPrintMode(mode: LabelPrintMode): boolean {
-  return mode === "xp470b";
-}

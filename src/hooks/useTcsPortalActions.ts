@@ -20,7 +20,6 @@ import {
   scanTcsEsidReception,
   declareFillTcsEsid,
   declareSubmitTcsEsid,
-  focusTcsAgentSession,
   tcsAgentDocUrl,
   submitTcsPortalJob,
   type TcsAgentHealth,
@@ -94,10 +93,8 @@ export function useTcsPortalActions({
   /** Sau Điền: ảnh form trên agent + nút HOÀN TẤT từ Ops */
   const [lastDeclarePreview, setLastDeclarePreview] =
     useState<EsidDeclarePreviewState | null>(null);
-  /** Sau Login headless (Railway): ảnh trang TCS để xem trên Ops */
+  /** Sau Login headless (Railway): ảnh trang TCS một lần (không poll) */
   const [loginPreviewUrl, setLoginPreviewUrl] = useState("");
-  /** Panel xem live screenshot trang TCS trên agent (Railway) */
-  const [liveViewOpen, setLiveViewOpen] = useState(false);
   /** AWB đã pre-warm (menu ⋮) — hot-path Tải PDF ~1–3s */
   const [preparedAwb, setPreparedAwb] = useState("");
   const preparedAtRef = useRef(0);
@@ -207,19 +204,17 @@ export function useTcsPortalActions({
       } else {
         setLoginPreviewUrl("");
       }
-      // Luôn bật xem live trên Ops — Railway không có cửa sổ, máy kho vẫn hữu ích
-      setLiveViewOpen(true);
       await refreshHealth();
       const sec = ((performance.now() - t0) / 1000).toFixed(1);
       if (res.visible_ok || res.headless === false) {
         setMessage(
           res.logged_in
-            ? `Đã mở Chrome + xem live trên Ops · ${sec}s`
-            : `Đã mở trang đăng nhập TCS + xem live trên Ops · ${sec}s — nhập CAPTCHA trên Chrome máy kho nếu có`
+            ? `Đã mở Chrome TCS · ${sec}s — dùng TCS desktop nếu xem từ máy khác`
+            : `Đã mở trang đăng nhập TCS · ${sec}s — nhập CAPTCHA trên Chrome / TCS desktop`
         );
       } else {
         setMessage(
-          `Đã login (headless) — xem live trang TCS bên dưới trên Ops · ${sec}s`
+          `Đã login (cloud) · ${sec}s — mở TCS desktop để thao tác trang TCS`
         );
       }
     } finally {
@@ -578,29 +573,6 @@ export function useTcsPortalActions({
     setLastDeclarePreview(null);
   }, []);
 
-  const focusAgentBrowser = useCallback(async () => {
-    setError("");
-    setBusy(true);
-    setBusyLabel("Hiện Chrome…");
-    try {
-      const res = await focusTcsAgentSession();
-      if (!res.ok) {
-        setError(res.message || "Không hiện được Chrome");
-        return;
-      }
-      if (res.headless) {
-        setMessage("Agent đang headless — không có cửa sổ Chrome. Chạy agent headed trên máy kho (TCS_HEADLESS=0).");
-      } else {
-        setMessage("Đã hiện cửa sổ Chrome trên máy kho — kiểm tra form KHAI BÁO ESID.");
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Lỗi hiện Chrome");
-    } finally {
-      setBusy(false);
-      setBusyLabel("");
-    }
-  }, []);
-
   /**
    * HOÀN TẤT form đang mở trên Chrome agent (sau khi xem preview).
    * Không điền lại — bắt buộc confirm ở UI trước khi gọi.
@@ -705,9 +677,6 @@ export function useTcsPortalActions({
     clearDeclarePreview,
     loginPreviewUrl,
     clearLoginPreview: () => setLoginPreviewUrl(""),
-    liveViewOpen,
-    setLiveViewOpen,
-    focusAgentBrowser,
     /** false = Chrome thật trên máy kho */
     agentHeadless: health?.headless ?? session?.headless,
     prepareEsidFor,

@@ -26,10 +26,6 @@ export function normalizeWarehouse(raw: unknown, fallback: Warehouse = "TECS-TCS
   return fallback;
 }
 
-export function isKnownWarehouse(w: string): w is Warehouse {
-  return (WAREHOUSE_ORDER as readonly string[]).includes(w);
-}
-
 /** Kho SCSC (phiếu cân / DIM SCSC). */
 export function isScscWarehouse(w: Warehouse): boolean {
   return w === "TECS-SCSC";

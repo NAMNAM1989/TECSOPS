@@ -1,6 +1,5 @@
 import { EsidRegistrantSettingsButton } from "./EsidRegistrantSettingsButton";
 import { EsidAgentSettingsButton } from "./EsidAgentSettingsButton";
-import { TcsLiveViewPanel } from "./TcsLiveViewPanel";
 import type { TcsPortalActions } from "../hooks/useTcsPortalActions";
 import {
   clearTcsAgentBaseUrl,
@@ -87,18 +86,23 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           className={btnGhost}
           disabled={tcs.busy}
           onClick={() => void tcs.login()}
-          title="Login TCS + tự mở xem live trang agent trên Ops"
+          title="Login TCS trên Chrome agent (xem/thao tác qua TCS desktop)"
         >
           Login
         </button>
         <button
           type="button"
           className={btnGhost}
-          disabled={tcs.busy && !tcs.liveViewOpen}
-          onClick={() => tcs.setLiveViewOpen(!tcs.liveViewOpen)}
-          title="Xem live màn hình Chrome agent (kể cả Railway headless)"
+          onClick={() => {
+            // noVNC: thao tác chuột/phím thật trên Chromium agent (Xvfb Railway)
+            const url =
+              "/tcs-desktop/vnc.html?autoconnect=1&resize=scale&path=" +
+              encodeURIComponent("tcs-desktop/websockify");
+            window.open(url, "tcs-desktop", "noopener,noreferrer");
+          }}
+          title="Mở desktop Chrome agent (noVNC) — click/gõ thật trên TCS"
         >
-          {tcs.liveViewOpen ? "Ẩn live" : "Xem live"}
+          TCS desktop
         </button>
         <button
           type="button"
@@ -127,6 +131,11 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           </span>
         ) : null}
       </div>
+
+      <p className="px-1 text-[9px] leading-snug text-slate-500 dark:text-slate-400">
+        Thao tác thật trên Chrome agent — nút <strong>TCS desktop</strong> (noVNC). Không dùng tab
+        tcs.com.vn trên máy bạn (session khác).
+      </p>
 
       {(tcs.message || tcs.error || tcs.clearFocusHint) && (
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-1">
@@ -165,14 +174,7 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
         </div>
       )}
 
-      <TcsLiveViewPanel
-        active={tcs.liveViewOpen}
-        busy={tcs.busy}
-        compact={compact}
-        onClose={() => tcs.setLiveViewOpen(false)}
-      />
-
-      {tcs.loginPreviewUrl && !tcs.liveViewOpen ? (
+      {tcs.loginPreviewUrl ? (
         <div className="mx-0.5 flex min-w-0 flex-col gap-1 rounded-xl border border-sky-500/25 bg-sky-50/70 p-2 dark:border-sky-400/20 dark:bg-sky-950/35">
           <div className="flex items-center justify-between gap-1">
             <p className="text-[10px] font-semibold text-sky-900 dark:text-sky-100">
@@ -191,6 +193,9 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
             alt="Preview trang TCS sau Login"
             className="mx-auto max-h-44 w-auto max-w-full object-contain rounded-lg border border-sky-500/20 bg-white"
           />
+          <p className="text-[9px] text-slate-500">
+            Thao tác thật: nút <strong>TCS desktop</strong>
+          </p>
         </div>
       ) : null}
 

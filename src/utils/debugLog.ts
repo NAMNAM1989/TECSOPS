@@ -13,10 +13,6 @@ function isVerboseDebug(): boolean {
   }
 }
 
-export function debugLog(scope: string, ...args: unknown[]): void {
-  if (isVerboseDebug()) console.log(`[TECSOPS][${scope}]`, ...args);
-}
-
 export function debugWarn(scope: string, ...args: unknown[]): void {
   if (isVerboseDebug()) console.warn(`[TECSOPS][${scope}]`, ...args);
 }

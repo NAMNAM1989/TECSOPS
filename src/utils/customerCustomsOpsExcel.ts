@@ -405,47 +405,6 @@ export async function buildCustomsOpsWorkbook(customers: readonly CustomerDirect
   return wb;
 }
 
-/** Tạo workbook mẫu (2 dòng ví dụ) — dùng ghi file tĩnh hoặc tải lại. */
-export async function buildCustomsOpsTemplateWorkbook() {
-  const ExcelJS = (await import("exceljs")).default;
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("Import Customers");
-  ws.addRow([...CUSTOMS_OPS_HEADERS]);
-  ws.addRow([
-    "GLO",
-    "Global Forwarding Vietnam Co., Ltd",
-    "GLO",
-    "0301234561",
-    "45 Nguyễn Văn Trỗi, Q. Phú Nhuận, TP.HCM",
-    "ops@example.vn",
-    "028-3845-1111",
-    18500,
-    "FORWARDER",
-  ]);
-  ws.addRow(["ABC", "ABC Trading & Export JSC", "ABC", "", "", "", "", "", "DIRECT_SHIPPER"]);
-  ws.getRow(1).font = { bold: true };
-  ws.columns = Array.from({ length: 9 }, () => ({ width: 18 }));
-
-  const guide = wb.addWorksheet("Hướng dẫn");
-  [
-    "HƯỚNG DẪN IMPORT / ĐỒNG BỘ KHÁCH HÀNG",
-    "",
-    "1. Không đổi tên cột ở sheet 'Import Customers'.",
-    "2. Customer Name: bắt buộc.",
-    "3. Customer Code (VD: GLO — 2-5 ký tự chữ cái A-Z): khóa đồng bộ. Mã đã tồn tại → cập nhật thông tin. Mã chưa tồn tại → tạo mới.",
-    "4. Short Code: tối đa 10 ký tự (cho phép khoảng trắng giữa từ), tùy chọn (trống = dùng Customer Code).",
-    "5. Default Rate: đơn giá cố định VND/kg (có thể để trống).",
-    "6. Customer Type: FORWARDER | DIRECT_SHIPPER | AGENT | OTHER (mặc định DIRECT_SHIPPER).",
-    "7. Customer Code sau khi tạo không thể đổi qua import.",
-    "8. File mẫu cũ có cột 'Prefix' vẫn dùng được — hệ thống tự coi Prefix là Customer Code.",
-  ].forEach((line, i) => {
-    guide.getRow(i + 1).getCell(1).value = line;
-  });
-  guide.getColumn(1).width = 110;
-
-  return wb;
-}
-
 export async function downloadCustomsOpsExport(customers: readonly CustomerDirectoryEntry[]) {
   const wb = await buildCustomsOpsWorkbook(customers);
   const buf = await wb.xlsx.writeBuffer();

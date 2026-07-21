@@ -63,15 +63,6 @@ export function buildVehicleEcargoInput(vehicle: Pick<CustomerSavedVehicle, "lic
   return formatVehicleLicensePlate(vehicle.licensePlate);
 }
 
-export function vehicleDisplayLabel(v: CustomerSavedVehicle): string {
-  const plate = v.licensePlate.trim();
-  const driver = v.driverName.trim();
-  const id = v.driverId.trim();
-  const driverPart = driver && id ? `${driver} · CCCD ${id}` : driver || (id ? `CCCD ${id}` : "");
-  if (plate && driverPart) return `${plate} · ${driverPart}`;
-  return plate || driverPart || "—";
-}
-
 export function filterCustomerVehicles(
   vehicles: readonly CustomerSavedVehicle[],
   query: string

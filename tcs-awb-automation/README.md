@@ -10,21 +10,27 @@ Tự động hóa cổng `https://www.tcs.com.vn/AwbLogin` cho **kho TECS-TCS**.
 Ops (React) chọn lô → gửi job tới agent Playwright. Có 2 cách chạy:
 
 - **Máy kho (khuyến nghị)**: Chrome **headed** (`TCS_HEADLESS=0`, mặc định khi `npm run dev` / `tcs:agent:real`) — sau **Điền** ESID, cửa sổ Chrome trên máy kho giữ form để kiểm tra tay, rồi HOÀN TẤT trên Chrome hoặc nút Ops. Ops LAN gọi qua proxy `/tcs-agent`.
-- **Railway all-in-one**: Node + agent **headless** — không có cửa sổ Chrome; chỉ xem ảnh preview + HOÀN TẤT từ Ops.
+- **Railway all-in-one**: Node + agent Chromium **headed trên Xvfb** + **noVNC** — Ops nút **TCS desktop** mở `/tcs-desktop` để click/gõ thật (không chỉ xem ảnh).
 
-### Railway all-in-one (Playwright headless trên cloud)
+### Railway all-in-one (noVNC desktop + Playwright)
 
-1 container = Node server + agent Python. Ops mở từ máy bất kỳ → proxy `/tcs-agent` (Express) → agent `127.0.0.1:8765` trong container.
+1 container = Node server + agent Python + Xvfb/x11vnc/noVNC. Ops mở từ máy bất kỳ → `/tcs-agent` (API) và `/tcs-desktop` (desktop Chrome).
 
 Deploy:
 
-1. `railway.toml` đã dùng `Dockerfile` (Node 20 + Playwright Chromium). Deploy như thường: `npm run railway:up`.
-2. Railway **Variables** (bắt buộc để tự login): `TCS_USERNAME`, `TCS_PASSWORD`. Ảnh đã set sẵn `TCS_HEADLESS=1 TCS_AUTO_OPEN=1 TCS_CAPTCHA_OCR=1 TCS_MOCK=0`.
+1. `railway.toml` dùng `Dockerfile` (Node 20 + Playwright Chromium + xvfb/novnc). Deploy: `npm run railway:up` / `npm run deploy:ship`.
+2. Railway **Variables**:
+   - Bắt buộc login: `TCS_USERNAME`, `TCS_PASSWORD`.
+   - Desktop: `TCS_VNC=1` (mặc định trong image). `TCS_VNC_PASSWORD` tùy chọn — trống = không hỏi pass (Ops công khai).
+   - Image mặc định: `TCS_HEADLESS=0`, `DISPLAY=:99`, `TCS_AUTO_OPEN=1`, `TCS_CAPTCHA_OCR=1`, `TCS_MOCK=0`.
+   - Tắt desktop (nhẹ hơn, chỉ ảnh): `TCS_VNC=0` → agent headless.
 3. Mount **Railway Volume** để giữ session/PDF qua redeploy:
    - `TCS_BROWSER_PROFILE=/app/tcs-awb-automation/browser_profile` (volume) — giữ cookie đã login.
    - `TCS_OUTPUT_DIR=/app/tcs-awb-automation/output` (volume) — giữ PDF.
 
-⚠️ **Rủi ro khi chạy trên Railway** (đã thống nhất chấp nhận): CAPTCHA phải dựa hoàn toàn vào OCR (không có người nhập tay); IP máy chủ ở nước ngoài có thể bị TCS chặn/đòi xác minh; session mất mỗi lần redeploy nếu **không** mount volume. Nếu login chập chờn → quay lại chạy agent trên máy kho (proxy vẫn giữ nguyên).
+**Dùng TCS desktop:** Ops → **TCS desktop** → thao tác trên Chromium agent (không cần pass nếu không set `TCS_VNC_PASSWORD`). Không mở tab `tcs.com.vn` trên máy bạn (session khác).
+
+⚠️ **Rủi ro**: image nặng hơn (RAM); CAPTCHA/IP Railway; session mất nếu không mount volume.
 
 ### Máy khác trong LAN
 

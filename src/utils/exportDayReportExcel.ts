@@ -108,16 +108,6 @@ function applyCellBorder(cell: Cell) {
   cell.border = BORDER as Borders;
 }
 
-/**
- * Hiển thị ngày phiên (sessionDate) dạng dd/mm/yyyy (helper giữ tương thích).
- * Chuỗi không khớp YYYY-MM-DD được trả nguyên (fallback an toàn).
- */
-export function formatYmdToVnDisplay(ymd: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
-  if (!m) return ymd;
-  return `${m[3]}/${m[2]}/${m[1]}`;
-}
-
 /** Date cột mẫu: luôn YYYY-MM-DD. */
 export function formatYmdForShipmentExport(ymd: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());

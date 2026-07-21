@@ -38,7 +38,6 @@ export type CustomerValidationResult = {
 };
 
 const AGENT_CODE_RE = /^[A-Z0-9][A-Z0-9._-]*$/;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function ok(): CustomerValidationResult {
   return { valid: true, errors: [], summary: "" };
@@ -65,12 +64,6 @@ export function isValidVnPhone(raw: string): boolean {
   const d = phoneDigits(raw);
   if (!d) return true;
   return d.length >= 9 && d.length <= 11;
-}
-
-export function isValidEmail(raw: string): boolean {
-  const s = raw.trim();
-  if (!s) return true;
-  return EMAIL_RE.test(s);
 }
 
 /** CCCD 12 so hoac CMND 9 so. */
@@ -428,17 +421,6 @@ function dedupeErrors(errors: CustomerFieldError[]): CustomerFieldError[] {
     out.push(e);
   }
   return out;
-}
-
-/** Lọc lỗi theo phần đang lưu. */
-export function filterValidationErrorsForSection(
-  errors: readonly CustomerFieldError[],
-  section: CustomerProfileSection
-): CustomerFieldError[] {
-  if (section === "identity" || section === "note") {
-    return errors.filter((e) => e.section === "identity" || e.section === section);
-  }
-  return errors.filter((e) => e.section === "identity" || e.section === section);
 }
 
 export function getFieldValidationError(

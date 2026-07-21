@@ -49,8 +49,8 @@ Add whatever helps you do your job. This is your cheat sheet.
 ## TCS desktop — Railway (noVNC)
 
 - Image Docker: Xvfb `:99` + x11vnc + websockify/noVNC (`127.0.0.1:6080`) → Express proxy `/tcs-desktop`.
-- Variables: `TCS_VNC=1`, **`TCS_VNC_PASSWORD`** (bắt buộc đổi trên Railway), volume `TCS_BROWSER_PROFILE`.
-- Ops → nút **TCS desktop** → `/tcs-desktop/vnc.html?autoconnect=1&resize=scale&path=tcs-desktop/websockify` → nhập password VNC → click/gõ trên Chrome agent.
+- Variables: `TCS_VNC=1`, volume `TCS_BROWSER_PROFILE`. `TCS_VNC_PASSWORD` tùy chọn (trống = không hỏi pass).
+- Ops → nút **TCS desktop** → autoconnect noVNC → click/gõ trên Chrome agent.
 - «Xem ảnh» = screenshot phụ (không thao tác). Tắt VNC: `TCS_VNC=0` (agent headless).
 - Health hint: `GET /api/tcs-desktop`.
 

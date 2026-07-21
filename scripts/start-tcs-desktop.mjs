@@ -83,11 +83,11 @@ export async function startTcsDesktop(children, opts = {}) {
   const display = (process.env.DISPLAY || ":99").trim() || ":99";
   const vncPort = Number(process.env.TCS_VNC_PORT || 5900);
   const novncPort = Number(process.env.TCS_NOVNC_PORT || 6080);
-  const password = String(process.env.TCS_VNC_PASSWORD || "tecsops").trim() || "tecsops";
-  if (!process.env.TCS_VNC_PASSWORD) {
-    console.warn(
-      "[tcs-desktop] TCS_VNC_PASSWORD chưa set — dùng mật khẩu mặc định (đổi trên Railway Variables)."
-    );
+  // Có mật khẩu chỉ khi set TCS_VNC_PASSWORD (không trống). Mặc định: không pass (-nopw).
+  const password = String(process.env.TCS_VNC_PASSWORD || "").trim();
+  const useAuth = Boolean(password);
+  if (!useAuth) {
+    console.info("[tcs-desktop] VNC không mật khẩu (TCS_VNC_PASSWORD trống) — -nopw");
   }
 
   const track = (name, child, { fatal = true } = {}) => {
@@ -124,27 +124,30 @@ export async function startTcsDesktop(children, opts = {}) {
   );
   await sleep(400);
 
-  const passfile = writeVncPassfile(password);
+  const x11Args = [
+    "-display",
+    display,
+    "-rfbport",
+    String(vncPort),
+    "-localhost",
+    "-forever",
+    "-shared",
+    "-noxdamage",
+    "-repeat",
+  ];
+  if (useAuth) {
+    x11Args.push("-rfbauth", writeVncPassfile(password));
+  } else {
+    x11Args.push("-nopw");
+  }
+
   console.info(`[tcs-desktop] x11vnc :${vncPort} (localhost) …`);
   track(
     "x11vnc",
-    spawn(
-      "x11vnc",
-      [
-        "-display",
-        display,
-        "-rfbport",
-        String(vncPort),
-        "-localhost",
-        "-forever",
-        "-shared",
-        "-noxdamage",
-        "-repeat",
-        "-rfbauth",
-        passfile,
-      ],
-      { stdio: "inherit", env: { ...process.env, DISPLAY: display } }
-    )
+    spawn("x11vnc", x11Args, {
+      stdio: "inherit",
+      env: { ...process.env, DISPLAY: display },
+    })
   );
 
   if (!(await waitPort("127.0.0.1", vncPort))) {
@@ -171,7 +174,8 @@ export async function startTcsDesktop(children, opts = {}) {
   }
 
   console.info(
-    `[tcs-desktop] OK — Ops mở /tcs-desktop/vnc.html (VNC password từ TCS_VNC_PASSWORD)`
+    `[tcs-desktop] OK — Ops mở /tcs-desktop/vnc.html` +
+      (useAuth ? " (có VNC password)" : " (không password)")
   );
   return {
     ok: true,

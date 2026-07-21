@@ -78,7 +78,10 @@ export function registerTcsDesktopProxy(app, httpServer) {
       enabled: true,
       path: "/tcs-desktop/vnc.html",
       hint:
-        "Mở /tcs-desktop/vnc.html?autoconnect=1&resize=scale&path=tcs-desktop/websockify — nhập mật khẩu TCS_VNC_PASSWORD",
+        "Mở /tcs-desktop/vnc.html?autoconnect=1&resize=scale&path=tcs-desktop/websockify" +
+        (process.env.TCS_VNC_PASSWORD?.trim()
+          ? " — nhập mật khẩu TCS_VNC_PASSWORD"
+          : " — không cần mật khẩu VNC"),
     });
   });
 }

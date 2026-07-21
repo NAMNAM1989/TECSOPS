@@ -21,16 +21,16 @@ Deploy:
 1. `railway.toml` dùng `Dockerfile` (Node 20 + Playwright Chromium + xvfb/novnc). Deploy: `npm run railway:up` / `npm run deploy:ship`.
 2. Railway **Variables**:
    - Bắt buộc login: `TCS_USERNAME`, `TCS_PASSWORD`.
-   - Desktop: `TCS_VNC=1` (mặc định trong image), **`TCS_VNC_PASSWORD=<secret>`** (đổi mật khẩu; không commit).
+   - Desktop: `TCS_VNC=1` (mặc định trong image). `TCS_VNC_PASSWORD` tùy chọn — trống = không hỏi pass (Ops công khai).
    - Image mặc định: `TCS_HEADLESS=0`, `DISPLAY=:99`, `TCS_AUTO_OPEN=1`, `TCS_CAPTCHA_OCR=1`, `TCS_MOCK=0`.
    - Tắt desktop (nhẹ hơn, chỉ ảnh): `TCS_VNC=0` → agent headless.
 3. Mount **Railway Volume** để giữ session/PDF qua redeploy:
    - `TCS_BROWSER_PROFILE=/app/tcs-awb-automation/browser_profile` (volume) — giữ cookie đã login.
    - `TCS_OUTPUT_DIR=/app/tcs-awb-automation/output` (volume) — giữ PDF.
 
-**Dùng TCS desktop:** Ops → **TCS desktop** → nhập mật khẩu VNC (`TCS_VNC_PASSWORD`) → thao tác trên Chromium agent. Không mở tab `tcs.com.vn` trên máy bạn (session khác). Ảnh live («Xem ảnh») chỉ xem, không click được.
+**Dùng TCS desktop:** Ops → **TCS desktop** → thao tác trên Chromium agent (không cần pass nếu không set `TCS_VNC_PASSWORD`). Không mở tab `tcs.com.vn` trên máy bạn (session khác). Ảnh live («Xem ảnh») chỉ xem, không click được.
 
-⚠️ **Rủi ro**: image nặng hơn (RAM); CAPTCHA/IP Railway; session mất nếu không mount volume; **không** để VNC không mật khẩu ra internet — luôn set `TCS_VNC_PASSWORD`.
+⚠️ **Rủi ro**: image nặng hơn (RAM); CAPTCHA/IP Railway; session mất nếu không mount volume.
 
 ### Máy khác trong LAN
 

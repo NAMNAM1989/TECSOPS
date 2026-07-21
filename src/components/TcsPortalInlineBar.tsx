@@ -101,7 +101,7 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
               encodeURIComponent("tcs-desktop/websockify");
             window.open(url, "tcs-desktop", "noopener,noreferrer");
           }}
-          title="Mở desktop Chrome agent (noVNC) — click/gõ thật trên TCS. Mật khẩu = TCS_VNC_PASSWORD trên Railway."
+          title="Mở desktop Chrome agent (noVNC) — click/gõ thật trên TCS"
         >
           TCS desktop
         </button>

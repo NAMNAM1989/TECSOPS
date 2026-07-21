@@ -1,10 +1,8 @@
 /**
  * Railway/Docker: agent Playwright + Node server (+ optional noVNC desktop).
  *
- * TCS_VNC=1 (mặc định trên Docker): Xvfb + x11vnc + noVNC → Ops `/tcs-desktop`
- * thao tác Chrome agent thật. Agent chạy headed trên DISPLAY=:99.
- *
- * TCS_VNC=0: agent headless như cũ (nhẹ hơn, không noVNC).
+ * TCS_VNC=0 (mặc định): agent headless — nhập liệu API-first từ Ops (nhanh).
+ * TCS_VNC=1: Xvfb + x11vnc + noVNC → `/tcs-desktop`; agent headed trên DISPLAY=:99.
  */
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";

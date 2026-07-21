@@ -160,12 +160,12 @@ export async function fetchTcsSessionStatus(): Promise<TcsAgentSession | null> {
 
 /**
  * Mở session Chrome agent.
- * visible=true (mặc định): bắt buộc cửa sổ Chrome thật + hiện trang TCS để kiểm tra tay.
+ * visible=true: máy kho headed. visible=false: cloud headless (API-first).
  */
 export async function openTcsAgentSession(
-  opts: { visible?: boolean } = { visible: true }
+  opts: { visible?: boolean } = {}
 ): Promise<{ ok: boolean; message?: string; error?: string } & TcsAgentSession> {
-  const visible = opts.visible !== false;
+  const visible = opts.visible === true;
   try {
     const res = await fetch(`${agentBase()}/session/open`, {
       method: "POST",

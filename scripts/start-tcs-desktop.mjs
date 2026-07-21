@@ -11,8 +11,9 @@ import path from "node:path";
 import net from "node:net";
 
 export function isTcsVncEnabled() {
-  const flag = (process.env.TCS_VNC || "1").trim().toLowerCase();
-  return flag !== "0" && flag !== "false" && flag !== "off";
+  // Mặc định tắt (API-first). Bật tường minh: TCS_VNC=1
+  const flag = (process.env.TCS_VNC || "0").trim().toLowerCase();
+  return flag === "1" || flag === "true" || flag === "on" || flag === "yes";
 }
 
 function sleep(ms) {

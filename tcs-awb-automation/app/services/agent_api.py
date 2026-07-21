@@ -233,7 +233,7 @@ def make_handler(state: AgentState):
                         )
                         return
                     state.running = True
-                # Ops Login: visible=true → Chrome headed + hiện trang TCS
+                # Ops Login: visible=true → headed (máy kho). Cloud gửi visible=false.
                 want_visible = bool(
                     payload.get("visible", False)
                     or payload.get("headed", False)

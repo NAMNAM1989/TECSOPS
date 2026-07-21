@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { EsidRegistrantSettingsButton } from "./EsidRegistrantSettingsButton";
 import { EsidAgentSettingsButton } from "./EsidAgentSettingsButton";
 import type { TcsPortalActions } from "../hooks/useTcsPortalActions";
@@ -15,6 +16,11 @@ type Props = {
   compact?: boolean;
 };
 
+type TcsDesktopInfo = {
+  enabled: boolean;
+  hint?: string;
+};
+
 export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props) {
   const btn =
     "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-45 active:scale-[0.98]";
@@ -25,6 +31,25 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
 
   const headed = tcs.agentHeadless === false;
   const headless = tcs.agentHeadless === true;
+  const [desktop, setDesktop] = useState<TcsDesktopInfo>({ enabled: false });
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/tcs-desktop", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return { enabled: false as const };
+        return (await res.json()) as TcsDesktopInfo;
+      })
+      .then((info) => {
+        if (!cancelled) setDesktop({ enabled: Boolean(info.enabled), hint: info.hint });
+      })
+      .catch(() => {
+        if (!cancelled) setDesktop({ enabled: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const configureAgentUrl = () => {
     const current = getTcsAgentBaseUrl();
@@ -86,23 +111,28 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           className={btnGhost}
           disabled={tcs.busy}
           onClick={() => void tcs.login()}
-          title="Login TCS trên Chrome agent (xem/thao tác qua TCS desktop)"
+          title="Login TCS trên agent — rồi Quét → Điền → HOÀN TẤT"
         >
           Login
         </button>
         <button
           type="button"
           className={btnGhost}
+          disabled={!desktop.enabled}
           onClick={() => {
-            // noVNC: thao tác chuột/phím thật trên Chromium agent (Xvfb Railway)
             const url =
               "/tcs-desktop/vnc.html?autoconnect=1&resize=scale&path=" +
               encodeURIComponent("tcs-desktop/websockify");
             window.open(url, "tcs-desktop", "noopener,noreferrer");
           }}
-          title="Mở desktop Chrome agent (noVNC) — click/gõ thật trên TCS"
+          title={
+            desktop.enabled
+              ? "Sửa tay qua noVNC (chậm) — chỉ khi TCS_VNC=1"
+              : desktop.hint ||
+                "Desktop tắt (TCS_VNC=0). Nhập liệu bằng Điền/HOÀN TẤT. Bật: TCS_VNC=1 trên Railway."
+          }
         >
-          TCS desktop
+          Sửa tay
         </button>
         <button
           type="button"
@@ -133,8 +163,9 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
       </div>
 
       <p className="px-1 text-[9px] leading-snug text-slate-500 dark:text-slate-400">
-        Thao tác thật trên Chrome agent — nút <strong>TCS desktop</strong> (noVNC). Không dùng tab
-        tcs.com.vn trên máy bạn (session khác).
+        Nhập liệu: <strong>Login → Quét → Điền → preview → HOÀN TẤT</strong>. Không dùng tab
+        tcs.com.vn trên máy bạn.
+        {desktop.enabled ? " «Sửa tay» = noVNC (chậm)." : ""}
       </p>
 
       {(tcs.message || tcs.error || tcs.clearFocusHint) && (
@@ -194,7 +225,7 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
             className="mx-auto max-h-44 w-auto max-w-full object-contain rounded-lg border border-sky-500/20 bg-white"
           />
           <p className="text-[9px] text-slate-500">
-            Thao tác thật: nút <strong>TCS desktop</strong>
+            Tiếp theo: Quét → Điền → kiểm tra preview form → HOÀN TẤT
           </p>
         </div>
       ) : null}

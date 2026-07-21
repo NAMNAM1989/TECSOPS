@@ -161,7 +161,9 @@ export function useTcsPortalActions({
     setSession(s);
     if (!s?.open) {
       setBusyLabel("Đang mở Chrome…");
-      const opened = await openTcsAgentSession();
+      const opened = await openTcsAgentSession({
+        visible: online.headless === false,
+      });
       if (!opened.ok) {
         setError(opened.message || "Không mở được Chrome");
         return false;
@@ -182,7 +184,7 @@ export function useTcsPortalActions({
     setError("");
     setMessage("");
     setBusy(true);
-    setBusyLabel("Đang tự mở trang TCS…");
+    setBusyLabel("Đang mở session TCS…");
     const t0 = performance.now();
     try {
       const online = await pingTcsAgent();
@@ -191,8 +193,9 @@ export function useTcsPortalActions({
         setError(agentOfflineHint(getTcsAgentBaseUrl()));
         return;
       }
-      // Một nút Login = mở browser + trang TCS (headed máy kho; Railway → headless + ảnh)
-      const res = await openTcsAgentSession({ visible: true });
+      // Máy kho headed → visible; cloud headless → API-first (không ép Xvfb)
+      const wantVisible = online.headless === false;
+      const res = await openTcsAgentSession({ visible: wantVisible });
       if (!res.ok) {
         setError(res.message || "Không mở được trang TCS");
         return;
@@ -209,12 +212,14 @@ export function useTcsPortalActions({
       if (res.visible_ok || res.headless === false) {
         setMessage(
           res.logged_in
-            ? `Đã mở Chrome TCS · ${sec}s — dùng TCS desktop nếu xem từ máy khác`
-            : `Đã mở trang đăng nhập TCS · ${sec}s — nhập CAPTCHA trên Chrome / TCS desktop`
+            ? `Đã mở Chrome TCS · ${sec}s — sẵn sàng Quét/Điền`
+            : `Đã mở trang đăng nhập TCS · ${sec}s — nhập CAPTCHA trên Chrome máy kho nếu cần`
         );
       } else {
         setMessage(
-          `Đã login (cloud) · ${sec}s — mở TCS desktop để thao tác trang TCS`
+          res.logged_in
+            ? `Đã login · ${sec}s — tiếp tục Quét → Điền → preview → HOÀN TẤT`
+            : `Đã mở session · ${sec}s — nếu cần CAPTCHA: máy kho headed hoặc TCS_VNC=1`
         );
       }
     } finally {

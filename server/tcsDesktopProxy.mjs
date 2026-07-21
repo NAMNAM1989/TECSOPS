@@ -1,6 +1,7 @@
 /**
  * Proxy same-origin `/tcs-desktop/*` → noVNC (websockify) trên 127.0.0.1:6080.
  * Bắt buộc WebSocket upgrade để thao tác chuột/phím trên Chrome agent (Xvfb).
+ * Mặc định tắt (TCS_VNC=0) — API-first; luôn expose GET /api/tcs-desktop.
  */
 import http from "node:http";
 import httpProxy from "http-proxy";
@@ -11,8 +12,8 @@ function novncTarget() {
 }
 
 function isDesktopEnabled() {
-  const flag = (process.env.TCS_VNC || "1").trim().toLowerCase();
-  return flag !== "0" && flag !== "false" && flag !== "off";
+  const flag = (process.env.TCS_VNC || "0").trim().toLowerCase();
+  return flag === "1" || flag === "true" || flag === "on" || flag === "yes";
 }
 
 /**
@@ -20,8 +21,33 @@ function isDesktopEnabled() {
  * @param {import("node:http").Server} httpServer
  */
 export function registerTcsDesktopProxy(app, httpServer) {
-  if (!isDesktopEnabled()) {
-    console.info("[tcs-desktop-proxy] tắt (TCS_VNC=0)");
+  const enabled = isDesktopEnabled();
+
+  // Health hint luôn có — FE biết desktop tắt/bật
+  app.get("/api/tcs-desktop", (_req, res) => {
+    if (!enabled) {
+      res.json({
+        ok: true,
+        enabled: false,
+        path: "/tcs-desktop/vnc.html",
+        hint: "TCS_VNC=0 — nhập liệu bằng Login → Quét → Điền → HOÀN TẤT. Bật desktop: TCS_VNC=1",
+      });
+      return;
+    }
+    res.json({
+      ok: true,
+      enabled: true,
+      path: "/tcs-desktop/vnc.html",
+      hint:
+        "Mở /tcs-desktop/vnc.html?autoconnect=1&resize=scale&path=tcs-desktop/websockify" +
+        (process.env.TCS_VNC_PASSWORD?.trim()
+          ? " — nhập mật khẩu TCS_VNC_PASSWORD"
+          : " — không cần mật khẩu VNC"),
+    });
+  });
+
+  if (!enabled) {
+    console.info("[tcs-desktop-proxy] tắt (TCS_VNC=0) — API-first");
     return;
   }
 
@@ -43,7 +69,7 @@ export function registerTcsDesktopProxy(app, httpServer) {
           error: "TCS_DESKTOP_OFFLINE",
           message:
             "noVNC chưa sẵn sàng. Container cần TCS_VNC=1 (Xvfb + websockify). " +
-            "Kiểm tra logs start-fullstack / TCS_VNC_PASSWORD.",
+            "Kiểm tra logs start-fullstack.",
           detail: String(err?.message || err),
         })
       );
@@ -59,30 +85,14 @@ export function registerTcsDesktopProxy(app, httpServer) {
   console.info(`[tcs-desktop-proxy] /tcs-desktop → ${target}`);
 
   app.use("/tcs-desktop", (req, res) => {
-    // Express strip mount: req.url = /vnc.html?...
     proxy.web(req, res, { target });
   });
 
   httpServer.on("upgrade", (req, socket, head) => {
     const url = req.url || "";
     if (!url.startsWith("/tcs-desktop")) return;
-    // Strip prefix so websockify sees /websockify
     req.url = url.replace(/^\/tcs-desktop/, "") || "/";
     proxy.ws(req, socket, head, { target });
-  });
-
-  // Health hint (không lộ password)
-  app.get("/api/tcs-desktop", (_req, res) => {
-    res.json({
-      ok: true,
-      enabled: true,
-      path: "/tcs-desktop/vnc.html",
-      hint:
-        "Mở /tcs-desktop/vnc.html?autoconnect=1&resize=scale&path=tcs-desktop/websockify" +
-        (process.env.TCS_VNC_PASSWORD?.trim()
-          ? " — nhập mật khẩu TCS_VNC_PASSWORD"
-          : " — không cần mật khẩu VNC"),
-    });
   });
 }
 

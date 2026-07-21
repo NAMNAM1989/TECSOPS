@@ -85,17 +85,31 @@ class SessionManager:
         Cách 1: vào /Awb/Agent — nếu cookie còn → đã login.
         Cách 2: nếu cần login + TCS_CAPTCHA_OCR → OCR tự điền.
 
-        visible=True (nút Login Ops): bắt buộc Chrome headed + đưa cửa sổ lên trước
-        để nhìn thấy trang TCS và thao tác thật.
+        visible=True (máy kho): Chrome headed + focus cửa sổ.
+        Cloud / TCS_HEADLESS=1: bỏ qua headed — API-first (Điền/HOÀN TẤT từ Ops).
         """
+        import os
+        import sys
+
         self.reload_locators()
-        # Ops Login (visible): đóng session cũ rồi mở lại — ưu tiên cửa sổ thật.
         visible_ok = False
         headed_err: str | None = None
-        if visible:
+
+        # Không ép headed khi agent đang cấu hình headless (Railway API-first)
+        # hoặc Linux không có DISPLAY (không VNC).
+        want_headed = bool(visible) and not bool(self.settings.headless)
+        if want_headed and sys.platform.startswith("linux"):
+            display = str(os.environ.get("DISPLAY") or "").strip()
+            if not display:
+                want_headed = False
+
+        if want_headed:
             headless = False
             if self._has_live_session():
                 self.close()
+        elif visible and self.settings.headless:
+            # Ops gửi visible nhưng cloud headless → mở nhanh, không thử headed
+            headless = True
 
         if self._has_live_session():
             try:
@@ -112,8 +126,7 @@ class SessionManager:
             except Exception as e:
                 self.close()
                 # Railway / không có display / không có Chrome: fallback headless
-                # để Login vẫn chạy (OCR), Ops xem ảnh preview trang TCS.
-                if visible:
+                if want_headed or visible:
                     headed_err = str(e)[:280]
                     self.session = BrowserSession(self.settings)
                     try:
@@ -165,15 +178,14 @@ class SessionManager:
                     else "Đã tự mở trang đăng nhập TCS trên Chrome — nhập CAPTCHA trên cửa sổ đó"
                 )
             else:
-                # Cloud: không có cửa sổ → ảnh preview để xem trên Ops
                 shot = self._capture_login_preview()
                 if shot.get("preview_file"):
                     st.preview_file = shot["preview_file"]
                     st.preview_url = shot["preview_url"]
                 st.visible_ok = False
                 tip = (
-                    "Railway: dùng nút TCS desktop (noVNC) để xem/thao tác Chrome agent. "
-                    "Máy kho: npm run tcs:agent:real (TCS_HEADLESS=0)."
+                    "Cloud headless: tiếp tục Quét → Điền → preview → HOÀN TẤT trên Ops. "
+                    "Máy kho: npm run tcs:agent:real. Desktop noVNC chỉ khi TCS_VNC=1."
                 )
                 if headed_err:
                     tip += f" (headed lỗi: {headed_err[:120]})"

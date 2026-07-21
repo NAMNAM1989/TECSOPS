@@ -87,18 +87,32 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           className={btnGhost}
           disabled={tcs.busy}
           onClick={() => void tcs.login()}
-          title="Login TCS + tự mở xem live trang agent trên Ops"
+          title="Login TCS trên Chrome agent (xem qua TCS desktop / live)"
         >
           Login
         </button>
         <button
           type="button"
           className={btnGhost}
+          onClick={() => {
+            // noVNC: thao tác chuột/phím thật trên Chromium agent (Xvfb Railway)
+            const url =
+              "/tcs-desktop/vnc.html?autoconnect=1&resize=scale&path=" +
+              encodeURIComponent("tcs-desktop/websockify");
+            window.open(url, "tcs-desktop", "noopener,noreferrer");
+          }}
+          title="Mở desktop Chrome agent (noVNC) — click/gõ thật trên TCS. Mật khẩu = TCS_VNC_PASSWORD trên Railway."
+        >
+          TCS desktop
+        </button>
+        <button
+          type="button"
+          className={btnGhost}
           disabled={tcs.busy && !tcs.liveViewOpen}
           onClick={() => tcs.setLiveViewOpen(!tcs.liveViewOpen)}
-          title="Xem live màn hình Chrome agent (kể cả Railway headless)"
+          title="Xem ảnh live (không thao tác được) — dùng TCS desktop để click/gõ"
         >
-          {tcs.liveViewOpen ? "Ẩn live" : "Xem live"}
+          {tcs.liveViewOpen ? "Ẩn ảnh" : "Xem ảnh"}
         </button>
         <button
           type="button"
@@ -127,6 +141,11 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           </span>
         ) : null}
       </div>
+
+      <p className="px-1 text-[9px] leading-snug text-slate-500 dark:text-slate-400">
+        Thao tác thật trên Chrome agent — nút <strong>TCS desktop</strong> (noVNC). Không dùng tab
+        tcs.com.vn trên máy bạn (session khác).
+      </p>
 
       {(tcs.message || tcs.error || tcs.clearFocusHint) && (
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-1">

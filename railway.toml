@@ -1,13 +1,13 @@
-# Dockerfile builder: image gồm Node server + agent Playwright (Chromium headless).
-# Ops mở từ máy bất kỳ → proxy /tcs-agent (Express) → agent 127.0.0.1:8765 trong container.
+# Dockerfile builder: image gồm Node server + agent Playwright + noVNC desktop.
+# Ops → /tcs-agent (API) + /tcs-desktop (noVNC thao tác Chrome trên Xvfb).
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
 # Postgres (DATABASE_URL) bắt buộc. Socket.IO in-memory — chạy 1 replica.
-# start-fullstack: check an toàn → chạy agent Python (headless) + Node server.
-# Mount Railway Volume vào TCS_BROWSER_PROFILE để giữ session TCS qua các lần redeploy.
+# start-fullstack: Xvfb/noVNC (TCS_VNC=1) → agent headed + Node.
+# Biến: TCS_VNC_PASSWORD (đổi secret), volume TCS_BROWSER_PROFILE giữ session.
 startCommand = "node scripts/start-fullstack.mjs"
 restartPolicyType = "ON_FAILURE"
 healthcheckPath = "/api/health"

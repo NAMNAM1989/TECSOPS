@@ -96,8 +96,8 @@ export function TcsLiveViewPanel({ active, busy = false, onClose, compact = fals
         <p className="text-[10px] text-slate-600 dark:text-slate-400">Đang lấy ảnh…</p>
       )}
       <p className="text-[9px] leading-snug text-slate-600 dark:text-slate-400">
-        Đây là màn hình Chrome của agent (Railway/máy kho) — cập nhật liên tục để kiểm tra Login /
-        Điền / HOÀN TẤT.
+        Ảnh xem nhanh (không click được). Muốn thao tác thật: nút <strong>TCS desktop</strong>{" "}
+        (noVNC).
       </p>
     </div>
   );

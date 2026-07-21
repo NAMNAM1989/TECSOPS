@@ -112,6 +112,9 @@ def fill_esid_declare(
     if gate:
         return gate
 
+    # Đưa Chrome lên trước để nhìn thấy thao tác điền thật (headed máy kho)
+    sessions.focus_if_headed()
+
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
     portal = AwbPortalPage(sessions.page, loc)
     declare = EsidDeclarePage(sessions.page, loc)
@@ -186,6 +189,8 @@ def submit_esid_declare(
     if gate:
         gate["submitted"] = False
         return gate
+
+    sessions.focus_if_headed()
 
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
     portal = AwbPortalPage(sessions.page, loc)

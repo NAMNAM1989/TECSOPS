@@ -9,6 +9,8 @@ from app.browser.pages.awb_page import AwbPortalPage
 from app.browser.session import AGENT_HOME, BrowserSession
 from app.config import Settings
 
+ESID_HOME = "https://www.tcs.com.vn/Esid/Export"
+
 
 @dataclass
 class SessionStatus:
@@ -21,6 +23,7 @@ class SessionStatus:
     credentials_filled: bool = False
     captcha_ocr: bool = False
     prefer_session: bool = True
+    headless: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -34,6 +37,7 @@ class SessionStatus:
             "credentials_filled": self.credentials_filled,
             "captcha_ocr": self.captcha_ocr,
             "prefer_session": self.prefer_session,
+            "headless": self.headless,
         }
 
 
@@ -55,27 +59,51 @@ class SessionManager:
     def page(self):
         return self.session.page if self._has_live_session() else None
 
-    def open(self, *, headless: bool = False, auto_login: bool = True) -> SessionStatus:
+    def open(
+        self,
+        *,
+        headless: bool = False,
+        auto_login: bool = True,
+        visible: bool = False,
+        show_portal: bool = True,
+    ) -> SessionStatus:
         """
         Mở Chrome persistent.
         Cách 1: vào /Awb/Agent — nếu cookie còn → đã login.
         Cách 2: nếu cần login + TCS_CAPTCHA_OCR → OCR tự điền.
+
+        visible=True (nút Login Ops): bắt buộc Chrome headed + đưa cửa sổ lên trước
+        để nhìn thấy trang TCS và thao tác thật.
         """
         self.reload_locators()
+        # Ops Login (visible): luôn đóng → mở lại Chrome headed để cửa sổ TỰ nhảy ra
+        # trước mặt — không cần bấm «Hiện Chrome» hay thao tác riêng.
+        if visible:
+            headless = False
+            if self._has_live_session():
+                self.close()
+
         if self._has_live_session():
             try:
                 # Ưu tiên Agent home, không ép về AwbLogin (tránh mất session)
                 BrowserSession._goto_fast(self.session.page, AGENT_HOME)
             except Exception:
                 self.close()
-        # Zombie: page/context đã đóng hoặc lần open trước lỗi → phải mở lại.
+        # Zombie / Login visible: mở Chrome mới
         if not self._has_live_session():
             self.close()
             self.session = BrowserSession(self.settings)
             try:
                 self.session.open(headless=headless)
-            except Exception:
+            except Exception as e:
                 self.close()
+                if visible:
+                    raise RuntimeError(
+                        "Không mở được Chrome có cửa sổ. "
+                        "Trên máy kho chạy: npm run tcs:agent:real (TCS_HEADLESS=0). "
+                        "Railway headless không hiện trang TCS để xem tay. "
+                        f"Chi tiết: {e}"
+                    ) from e
                 raise
 
         filled = False
@@ -91,7 +119,43 @@ class SessionManager:
             st.message = login_msg
         elif login_msg and st.logged_in:
             st.message = login_msg
+
+        # Tự mở trang TCS + đưa cửa sổ lên (một thao tác Login là đủ)
+        if show_portal and self._has_live_session():
+            self._show_tcs_portal(logged_in=st.logged_in)
+            if not headless:
+                self.focus_window()
+                try:
+                    import time as _time
+
+                    _time.sleep(0.25)
+                    self.focus_window()
+                except Exception:
+                    pass
+                if st.logged_in:
+                    st.message = "Đã tự mở trang TCS (ESID) trên Chrome — sẵn sàng Quét/Điền"
+                else:
+                    st.message = (
+                        "Đã tự mở trang đăng nhập TCS trên Chrome — "
+                        "nhập CAPTCHA trên cửa sổ đó (không cần bấm thêm)"
+                    )
         return st
+
+    def _show_tcs_portal(self, *, logged_in: bool) -> None:
+        """Tự mở trang TCS nhìn thấy được ngay sau Login."""
+        if not self._has_live_session() or self.session is None or self.session.page is None:
+            return
+        page = self.session.page
+        # Đã login → ESID Export; chưa → trang AwbLogin (CAPTCHA)
+        target = ESID_HOME if logged_in else self.settings.base_url
+        try:
+            BrowserSession._goto_fast(page, target)
+            page.wait_for_timeout(300)
+        except Exception:
+            try:
+                BrowserSession._goto_fast(page, AGENT_HOME if logged_in else self.settings.base_url)
+            except Exception:
+                pass
 
     def _ensure_login(self) -> tuple[bool, str]:
         if not self._has_live_session():
@@ -165,9 +229,11 @@ class SessionManager:
                 credentials_configured=creds,
                 captcha_ocr=ocr,
                 prefer_session=prefer,
+                headless=bool(self.settings.headless),
             )
         assert self.session is not None
         page = self.session.page
+        sess_headless = bool(getattr(self.session, "headless_mode", self.settings.headless))
         try:
             url = page.url or ""
             portal = AwbPortalPage(page, self.locators)
@@ -182,6 +248,8 @@ class SessionManager:
                 msg = "Cần đăng nhập (thiếu TCS_USERNAME/TCS_PASSWORD)"
             if logged_in and not self.locators.awb_lookup_confirmed:
                 msg += " — AWB locators chưa confirmed"
+            if not sess_headless:
+                msg += " · Chrome thật (headed)"
             return SessionStatus(
                 open=True,
                 logged_in=logged_in,
@@ -191,6 +259,7 @@ class SessionManager:
                 credentials_configured=creds,
                 captcha_ocr=ocr,
                 prefer_session=prefer,
+                headless=sess_headless,
             )
         except Exception as e:
             return SessionStatus(
@@ -202,6 +271,7 @@ class SessionManager:
                 credentials_configured=creds,
                 captcha_ocr=ocr,
                 prefer_session=prefer,
+                headless=sess_headless,
             )
 
     def focus_window(self) -> dict[str, Any]:
@@ -213,6 +283,14 @@ class SessionManager:
                 "message": "Chrome chưa mở — POST /session/open",
             }
         return self.session.focus_window()
+
+    def focus_if_headed(self) -> dict[str, Any]:
+        """Gọi trước mỗi thao tác để cửa sổ Chrome máy kho nhảy lên trước."""
+        if not self._has_live_session() or self.session is None:
+            return {"ok": False, "headless": True, "message": "no browser"}
+        if getattr(self.session, "headless_mode", True):
+            return {"ok": False, "headless": True, "message": "headless"}
+        return self.focus_window()
 
     def portal(self) -> AwbPortalPage:
         self.reload_locators()

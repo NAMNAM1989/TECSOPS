@@ -42,9 +42,10 @@ Add whatever helps you do your job. This is your cheat sheet.
 ## TCS agent — máy kho (headed)
 
 - Chạy Ops + agent trên máy kho: `npm run dev` hoặc `npm run tcs:agent:real` → mặc định `TCS_HEADLESS=0` (Chrome thật).
-- Sau **Điền** ESID: kiểm tra form trên cửa sổ Chrome máy kho → HOÀN TẤT trên Chrome hoặc nút Ops.
+- Nút **Login** Ops → mở cửa sổ Chrome TCS trên máy kho (trang ESID/Agent); Quét/Điền nhìn thấy trên cửa sổ đó.
+- Sau **Điền** ESID: kiểm tra form trên Chrome máy kho → HOÀN TẤT trên Chrome hoặc nút Ops.
 - Máy khác chỉ mở Ops qua IP máy kho; đừng mở tab TCS riêng (session khác).
-- Railway/container: `TCS_HEADLESS=1` (không có cửa sổ).
+- Railway/container: `TCS_HEADLESS=1` — Login không hiện cửa sổ (cần agent máy kho).
 
 ## Related
 

@@ -189,17 +189,39 @@ export async function focusTcsAgentSession(): Promise<{
   }
 }
 
-export async function openTcsAgentSession(): Promise<{ ok: boolean; message?: string } & TcsAgentSession> {
+/**
+ * Mở session Chrome agent.
+ * visible=true (mặc định): bắt buộc cửa sổ Chrome thật + hiện trang TCS để kiểm tra tay.
+ */
+export async function openTcsAgentSession(
+  opts: { visible?: boolean } = { visible: true }
+): Promise<{ ok: boolean; message?: string; error?: string } & TcsAgentSession> {
+  const visible = opts.visible !== false;
   try {
-    const res = await fetch(`${agentBase()}/session/open`, { method: "POST", body: "{}" });
-    const body = (await res.json()) as { ok?: boolean; message?: string } & TcsAgentSession;
+    const res = await fetch(`${agentBase()}/session/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visible, headed: visible, show_browser: visible }),
+    });
+    const body = (await res.json()) as {
+      ok?: boolean;
+      message?: string;
+      error?: string;
+    } & TcsAgentSession;
     if (!res.ok || body.ok === false || body.open === false) {
+      const headedFail =
+        body.error === "HEADED_REQUIRED" ||
+        /không mở được chrome có cửa sổ|TCS_HEADLESS|headed/i.test(body.message || "");
       return {
         ...body,
         ok: false,
-        message: body.message || "Không mở được Chrome",
+        message: headedFail
+          ? (body.message ||
+              "Cần Chrome thật trên máy kho: npm run tcs:agent:real (TCS_HEADLESS=0), mở Ops qua IP máy kho — không dùng Railway headless để Login xem tay.")
+          : body.message || "Không mở được Chrome",
         open: body.open ?? false,
         logged_in: body.logged_in ?? false,
+        headless: body.headless,
       };
     }
     return { ...body, ok: true };

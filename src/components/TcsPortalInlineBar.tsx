@@ -81,7 +81,13 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           {headed ? " · Chrome" : headless ? " · cloud" : ""}
         </span>
 
-        <button type="button" className={btnGhost} disabled={tcs.busy} onClick={() => void tcs.login()}>
+        <button
+          type="button"
+          className={btnGhost}
+          disabled={tcs.busy}
+          onClick={() => void tcs.login()}
+          title="Tự mở trang TCS trên Chrome máy kho — không cần thao tác riêng"
+        >
           Login
         </button>
         <button
@@ -200,17 +206,6 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           ) : null}
 
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            {headed || !headless ? (
-              <button
-                type="button"
-                className={btnGhost}
-                disabled={tcs.busy}
-                onClick={() => void tcs.focusAgentBrowser()}
-                title="Đưa cửa sổ Chrome agent lên trước trên máy kho"
-              >
-                Hiện Chrome
-              </button>
-            ) : null}
             <button
               type="button"
               className={btnSubmit}
@@ -222,7 +217,7 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
             </button>
             <span className="min-w-0 text-[9px] leading-snug text-slate-600 dark:text-slate-400">
               {headed
-                ? "Không mở tcs.com.vn trên máy bạn — session khác với Chrome máy kho."
+                ? "Trang TCS đã mở trên Chrome máy kho khi Login — kiểm tra form rồi HOÀN TẤT."
                 : "Agent headless (cloud): chỉ xem ảnh + HOÀN TẤT trên Ops. Muốn Chrome thật: chạy agent headed trên máy kho."}
             </span>
           </div>

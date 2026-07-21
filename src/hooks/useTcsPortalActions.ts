@@ -181,7 +181,7 @@ export function useTcsPortalActions({
     setError("");
     setMessage("");
     setBusy(true);
-    setBusyLabel("Đăng nhập…");
+    setBusyLabel("Đang tự mở trang TCS…");
     const t0 = performance.now();
     try {
       const online = await pingTcsAgent();
@@ -190,18 +190,25 @@ export function useTcsPortalActions({
         setError(agentOfflineHint(getTcsAgentBaseUrl()));
         return;
       }
-      const res = await openTcsAgentSession();
+      // Một nút Login = mở Chrome + vào trang TCS + đưa cửa sổ lên (không thao tác riêng)
+      const res = await openTcsAgentSession({ visible: true });
       if (!res.ok) {
-        setError(res.message || "Không mở được Chrome");
+        setError(res.message || "Không mở được trang TCS");
         return;
       }
       setSession(res);
       await refreshHealth();
       const sec = ((performance.now() - t0) / 1000).toFixed(1);
+      if (res.headless === true) {
+        setError(
+          "Agent đang headless — không tự mở được cửa sổ TCS. Trên máy kho: npm run tcs:agent:real (TCS_HEADLESS=0), mở Ops bằng IP máy kho."
+        );
+        return;
+      }
       setMessage(
         res.logged_in
-          ? `Đã login TCS (${sec}s)`
-          : `Chrome đã mở — nhập CAPTCHA rồi bấm Quét (${sec}s)`
+          ? `Đã tự mở trang TCS trên Chrome · ${sec}s — Quét/Điền sẽ hiện trên cửa sổ đó`
+          : `Đã tự mở trang đăng nhập TCS trên Chrome · ${sec}s — nhập CAPTCHA trên cửa sổ đó`
       );
     } finally {
       setBusy(false);

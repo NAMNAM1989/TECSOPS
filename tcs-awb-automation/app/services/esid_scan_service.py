@@ -59,6 +59,7 @@ def scan_esid_by_date(
     gate = _session_gate(sessions, settings)
     if gate:
         return gate
+    sessions.focus_if_headed()
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
     portal = sessions.portal()
     esid = EsidListPage(portal.page, loc)
@@ -121,6 +122,7 @@ def scan_esid_reception(
     gate = _session_gate(sessions, settings)
     if gate:
         return gate
+    sessions.focus_if_headed()
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
     portal = sessions.portal()
     esid = EsidListPage(portal.page, loc)

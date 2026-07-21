@@ -15,6 +15,8 @@ class BrowserSession:
         self._playwright = None
         self._context = None
         self.page = None
+        # True khi Chrome không có cửa sổ OS (Railway).
+        self.headless_mode: bool = True
 
     def is_alive(self) -> bool:
         """True khi context và page Playwright vẫn dùng được."""
@@ -42,6 +44,7 @@ class BrowserSession:
 
         # Không để sót driver cũ nếu lần open trước hỏng giữa chừng.
         self.close()
+        self.headless_mode = bool(headless)
         primary_profile = self.settings.browser_profile
         recovery_profile = primary_profile.with_name(f"{primary_profile.name}_recovery")
         primary_profile.mkdir(parents=True, exist_ok=True)
@@ -56,10 +59,13 @@ class BrowserSession:
                 "--disable-gpu",
                 "--disable-software-rasterizer",
             ]
+        else:
+            # Máy kho: cửa sổ thật để nhìn thao tác Login / Điền / HOÀN TẤT
+            chrome_args += ["--start-maximized"]
         launch_kwargs = dict(
             headless=headless,
             accept_downloads=True,
-            viewport={"width": 1366, "height": 900},
+            viewport=None if not headless else {"width": 1366, "height": 900},
             args=chrome_args,
             timeout=15000,
         )
@@ -125,7 +131,7 @@ class BrowserSession:
             notes.append("tab")
         except Exception as e:
             notes.append(f"tab_err:{e}")
-        # Un-minimize / normal bounds qua CDP (chỉ hữu ích khi headed)
+        # Un-minimize / maximize qua CDP + activate target
         try:
             cdp = self.page.context.new_cdp_session(self.page)
             try:
@@ -136,7 +142,26 @@ class BrowserSession:
                         "Browser.setWindowBounds",
                         {"windowId": wid, "bounds": {"windowState": "normal"}},
                     )
+                    try:
+                        cdp.send(
+                            "Browser.setWindowBounds",
+                            {"windowId": wid, "bounds": {"windowState": "maximized"}},
+                        )
+                    except Exception:
+                        pass
                     notes.append("window")
+                try:
+                    targets = cdp.send("Target.getTargets")
+                    for t in targets.get("targetInfos") or []:
+                        if t.get("type") != "page":
+                            continue
+                        url = str(t.get("url") or "")
+                        if "tcs.com.vn" in url or t.get("attached"):
+                            cdp.send("Target.activateTarget", {"targetId": t["targetId"]})
+                            notes.append("activate")
+                            break
+                except Exception as e:
+                    notes.append(f"act:{type(e).__name__}")
             finally:
                 try:
                     cdp.detach()
@@ -144,12 +169,45 @@ class BrowserSession:
                     pass
         except Exception as e:
             notes.append(f"cdp:{type(e).__name__}")
+        # Windows: AppActivate cửa sổ Chrome (tránh nằm dưới Ops)
+        if not self.headless_mode:
+            win_note = self._win_foreground_chrome()
+            if win_note:
+                notes.append(win_note)
+        headed = not bool(self.headless_mode)
         return {
             "ok": True,
-            "headless": bool(self.settings.headless),
-            "message": "Đã hiện Chrome" if not self.settings.headless else "Headless — không có cửa sổ OS",
+            "headless": not headed,
+            "message": "Đã hiện Chrome" if headed else "Headless — không có cửa sổ OS",
             "detail": "+".join(notes),
         }
+
+    @staticmethod
+    def _win_foreground_chrome() -> str:
+        """Đưa cửa sổ Chrome lên foreground trên Windows (máy kho)."""
+        import sys
+
+        if sys.platform != "win32":
+            return ""
+        try:
+            import subprocess
+
+            # AppActivate theo tiêu đề chứa TCS hoặc Chrome
+            ps = (
+                "$w = New-Object -ComObject WScript.Shell; "
+                "foreach ($t in @('*tcs.com.vn*','*TCS*','*Chromium*','*Chrome*')) { "
+                "  if ($w.AppActivate($t)) { exit 0 } "
+                "}; exit 1"
+            )
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps],
+                capture_output=True,
+                timeout=3,
+                check=False,
+            )
+            return "win_fg" if r.returncode == 0 else "win_fg_miss"
+        except Exception:
+            return "win_fg_err"
 
     def close(self) -> None:
         # Tách cleanup context/driver: context đã chết vẫn phải stop Playwright.

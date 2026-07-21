@@ -230,9 +230,19 @@ def make_handler(state: AgentState):
                         )
                         return
                     state.running = True
+                # Ops Login: visible=true → Chrome headed + hiện trang TCS
+                want_visible = bool(
+                    payload.get("visible", False)
+                    or payload.get("headed", False)
+                    or payload.get("show_browser", False)
+                )
                 try:
                     def _open() -> dict[str, Any]:
-                        st = state.sessions.open(headless=state.settings.headless)
+                        st = state.sessions.open(
+                            headless=False if want_visible else state.settings.headless,
+                            visible=want_visible,
+                            show_portal=True,
+                        )
                         data = st.to_dict()
                         state.session_snapshot = data
                         return data
@@ -255,7 +265,17 @@ def make_handler(state: AgentState):
                         state.call_on_worker(state.refresh_session_snapshot)
                     except Exception:
                         pass
-                    self._json(500, {"ok": False, "error": "SESSION_OPEN_FAILED", "message": str(e)})
+                    err_msg = str(e)
+                    code = "HEADED_REQUIRED" if want_visible else "SESSION_OPEN_FAILED"
+                    self._json(
+                        500,
+                        {
+                            "ok": False,
+                            "error": code,
+                            "message": err_msg,
+                            "headless": bool(state.settings.headless) and not want_visible,
+                        },
+                    )
                 finally:
                     with state.lock:
                         state.running = False
@@ -399,6 +419,7 @@ def make_handler(state: AgentState):
                         "error": "NEEDS_LOGIN",
                         "message": "Cần login TCS trước khi prepare ESID",
                     }
+                state.sessions.focus_if_headed()
                 loc_file = state.settings.discovery_dir / "locators.json"
                 client = TcsClient(
                     mock=False,
@@ -600,6 +621,7 @@ def make_handler(state: AgentState):
                             "error": "NEEDS_LOGIN",
                             "message": "Chrome đang ở trang login — nhập CAPTCHA rồi Đăng nhập, sau đó thử lại",
                         }
+                    state.sessions.focus_if_headed()
                     try:
                         portal = state.sessions.portal()
                     except Exception as e:

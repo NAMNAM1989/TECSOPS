@@ -262,6 +262,7 @@ export function AirCargoTracking({
   const tcsPortal = useTcsPortalActions({
     sessionYmd: selectedYmd,
     rows: viewRows,
+    customerDirectory: state.customers,
     focusShipment: tcsFocusShipment,
     onMarkReceptionCompleted,
     onReceptionScanDone,

@@ -320,6 +320,68 @@ export async function prepareTcsEsid(
   return body;
 }
 
+export type TcsEsidDeclareFillResponse = {
+  ok: boolean;
+  awb?: string;
+  submitted?: boolean;
+  fills?: Record<string, unknown>;
+  values?: Record<string, unknown>;
+  warnings?: string[];
+  message?: string;
+  error?: string;
+  elapsed_ms?: number;
+  shipment_id?: string;
+  timings?: {
+    ops_text_ms?: number;
+    flight_ms?: number;
+    selects_ms?: number;
+    party_ms?: number;
+    total_ms?: number;
+  };
+};
+
+/** Điền form KHAI BÁO ESID từ Ops — không HOÀN TẤT. */
+export async function declareFillTcsEsid(
+  payload: import("./buildEsidDeclareFillPayload").EsidDeclareFillPayload
+): Promise<TcsEsidDeclareFillResponse> {
+  const base = agentBase();
+  let res: Response;
+  try {
+    res = await fetch(`${base}/esid/declare-fill`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    return {
+      ok: false,
+      error: "AGENT_OFFLINE",
+      message: agentOfflineHint(base),
+    };
+  }
+  let body: TcsEsidDeclareFillResponse;
+  try {
+    body = (await res.json()) as TcsEsidDeclareFillResponse;
+  } catch {
+    return {
+      ok: false,
+      error: "BAD_RESPONSE",
+      message: `Agent trả về phản hồi không hợp lệ (HTTP ${res.status})`,
+    };
+  }
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: body.error || `HTTP_${res.status}`,
+      message: body.message || "Điền ESID thất bại",
+      awb: body.awb,
+      warnings: body.warnings,
+      elapsed_ms: body.elapsed_ms,
+    };
+  }
+  return body;
+}
+
 export async function submitTcsPortalJob(payload: TcsPortalJobPayload): Promise<TcsAgentJobResponse> {
   const base = agentBase();
   let res: Response;

@@ -70,6 +70,31 @@ DEFAULT_LOCATORS: dict[str, Any] = {
         "reception_status": "Hoàn thành tiếp nhận",
         "notes": "PDF ESID: danh sách → AWB# → IN → lưu file",
     },
+    # Live probe 2026-07-20 — cùng URL /Esid/Export, tab KHAI BÁO ESID.
+    # REGISTER vẫn khóa; dry-fill OK. Chi tiết: discovery_artifacts/esid_declare_locators.json
+    "esid_declare": {
+        "confirmed": True,
+        "home_url": "https://www.tcs.com.vn/Esid/Export",
+        "tab": {"by": "text", "value": "KHAI BÁO ESID"},
+        "awb_prefix": {"by": "id", "value": "codAwbPfx"},
+        "awb_number": {"by": "id", "value": "codAwbNum"},
+        "flight_no": {"by": "id", "value": "flightNo"},
+        "flight_date": {"by": "id", "value": "datFltOri"},
+        "dest_code": {"by": "id", "value": "codFds"},
+        "pcs": {"by": "id", "value": "qtyPcs"},
+        "shipper_name": {"by": "id", "value": "shipperId"},
+        "shipper_address": {"by": "id", "value": "addressShp"},
+        "consignee_name": {"by": "id", "value": "consigneeId"},
+        "consignee_address": {"by": "id", "value": "addressCne"},
+        "nature_of_goods": {"by": "id", "value": "natureOfGoods"},
+        "agree": {"by": "id", "value": "agreeConfirm"},
+        "registrant_name": {"by": "id", "value": "shpRegNam"},
+        "registrant_tel": {"by": "id", "value": "shpRegTel"},
+        "registrant_id": {"by": "id", "value": "shpRegIdx"},
+        "choose_flight": {"by": "role", "role": "button", "name": "CHỌN CHUYẾN BAY"},
+        "submit": {"by": "role", "role": "button", "name": "HOÀN TẤT"},
+        "notes": "Dry-fill only; không submit. Combobox shipper/agent/cnee cần chọn master TCS.",
+    },
 }
 
 

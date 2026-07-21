@@ -14,14 +14,20 @@ from app.config import ensure_runtime_dirs, load_settings
 from app.data.repository import Repository
 from app.services.batch_service import BatchService
 from app.services.excel_service import create_import_template, excel_to_validated_rows
+from app.services.esid_declare_excel import create_esid_declare_template
 from app.utils.logging_setup import setup_logging
 
 
 def cmd_template(args: argparse.Namespace) -> int:
     settings = load_settings()
     ensure_runtime_dirs(settings)
-    path = Path(args.out) if args.out else settings.templates_dir / "AWB_IMPORT_TEMPLATE.xlsx"
-    create_import_template(path)
+    kind = getattr(args, "kind", "awb") or "awb"
+    if kind == "esid":
+        path = Path(args.out) if args.out else settings.templates_dir / "ESID_DECLARE_TEMPLATE.xlsx"
+        create_esid_declare_template(path)
+    else:
+        path = Path(args.out) if args.out else settings.templates_dir / "AWB_IMPORT_TEMPLATE.xlsx"
+        create_import_template(path)
     print(f"Created {path}")
     return 0
 
@@ -151,8 +157,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="TCS AWB Automation sidecar (TECS-TCS only)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    t = sub.add_parser("template", help="Tạo AWB_IMPORT_TEMPLATE.xlsx")
+    t = sub.add_parser("template", help="Tạo AWB_IMPORT_TEMPLATE.xlsx hoặc ESID_DECLARE_TEMPLATE.xlsx")
     t.add_argument("--out", default="")
+    t.add_argument(
+        "--kind",
+        choices=("awb", "esid"),
+        default="awb",
+        help="awb = import tra cứu/PDF; esid = mẫu khai báo ESID",
+    )
     t.set_defaults(func=cmd_template)
 
     v = sub.add_parser("validate", help="Validate Excel import")

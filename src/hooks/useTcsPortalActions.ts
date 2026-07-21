@@ -18,12 +18,21 @@ import {
   prepareTcsEsid,
   pickEsidScanReadyItems,
   scanTcsEsidReception,
+  declareFillTcsEsid,
   submitTcsPortalJob,
   type TcsAgentHealth,
   type TcsAgentJobResultRow,
   type TcsAgentSession,
   type TcsEsidScanItem,
 } from "../utils/tcsPortalAgentApi";
+import { buildEsidDeclareFillPayload } from "../utils/buildEsidDeclareFillPayload";
+import { resolveShipmentForEsidDeclare } from "../utils/resolveShipmentForEsidDeclare";
+import {
+  getActiveEsidRegistrant,
+  registrantIsComplete,
+} from "../utils/esidRegistrantProfile";
+import { agentIsComplete, getActiveEsidAgent } from "../utils/esidAgentProfile";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 
 /** Giữ hot-path lâu hơn — bấm Tải PDF gần tức thời nếu đã mở menu ⋮ */
 const PREPARED_TTL_MS = 180_000;
@@ -31,6 +40,8 @@ const PREPARED_TTL_MS = 180_000;
 export type TcsPortalActionsOpts = {
   sessionYmd: string;
   rows: readonly Shipment[];
+  /** Danh bạ khách — resolve Shipper/CNEE khi Điền ESID */
+  customerDirectory?: readonly CustomerDirectoryEntry[];
   /** Chỉ thao tác 1 lô (từ menu dòng) */
   focusShipment?: Shipment | null;
   onMarkReceptionCompleted?: (shipmentIds: string[]) => void | Promise<void>;
@@ -47,6 +58,7 @@ export type TcsPortalActionsOpts = {
 export function useTcsPortalActions({
   sessionYmd,
   rows,
+  customerDirectory = [],
   focusShipment = null,
   onMarkReceptionCompleted,
   onReceptionScanDone,
@@ -269,7 +281,7 @@ export function useTcsPortalActions({
     [preparedAwb]
   );
 
-  /** Pre-warm khi mở menu ⋮ — fire-and-forget, lỗi im lặng */
+  /** Pre-warm PDF — chỉ gọi từ downloadEsidFor, không gắn hover/menu mở */
   const prepareEsidFor = useCallback(
     (shipment: Shipment) => {
       if (!isTcsWarehouse(shipment.warehouse)) return;
@@ -282,7 +294,6 @@ export function useTcsPortalActions({
       if (prepareTimerRef.current != null) {
         window.clearTimeout(prepareTimerRef.current);
       }
-      // Debounce rất ngắn — mở ⋮ là pre-warm ngay để Tải PDF ~1–2s
       prepareTimerRef.current = window.setTimeout(() => {
         prepareTimerRef.current = null;
         if (busyRef.current) return;
@@ -349,6 +360,8 @@ export function useTcsPortalActions({
       const t0 = performance.now();
       try {
         if (!(await ensureSessionReady())) return;
+        // Pre-warm chỉ khi bấm Tải PDF (không khi Điền / mở menu)
+        if (!hot) prepareEsidFor(shipment);
         // Đợi pre-warm cùng AWB xong (agent cũng chờ) — tránh cold-path đụng prepare
         if (wasPreparing || prepareInFlightRef.current === digits) {
           setBusyLabel(`Tải PDF …${digits.slice(-8)} — đang mở phiếu…`);
@@ -394,7 +407,109 @@ export function useTcsPortalActions({
         setBusyLabel("");
       }
     },
-    [ensureSessionReady, isPreparedHot, refreshHealth, sessionYmd]
+    [ensureSessionReady, isPreparedHot, prepareEsidFor, refreshHealth, sessionYmd]
+  );
+
+  /**
+   * Quy trình Điền ESID:
+   * nhảy thẳng KHAI BÁO (không tìm AWB trên danh sách) → party từ hồ sơ khách → số liệu Ops.
+   * Không bấm HOÀN TẤT.
+   */
+  const fillEsidDeclareFor = useCallback(
+    async (shipment: Shipment) => {
+      setError("");
+      setMessage("");
+      if (!isTcsWarehouse(shipment.warehouse)) {
+        setError("Chỉ kho TECS-TCS mới điền khai báo ESID.");
+        return;
+      }
+      const digits = awbDigitsKey(shipment.awb);
+      if (digits.length !== 11) {
+        setError("AWB phải đủ 11 số để điền ESID.");
+        return;
+      }
+      const registrant = getActiveEsidRegistrant();
+      if (!registrantIsComplete(registrant)) {
+        setError(
+          "Chưa đủ hồ sơ người khai (Họ tên / SĐT / CCCD). Bấm «Người khai» trên thanh TCS để lưu."
+        );
+        return;
+      }
+      const agent = getActiveEsidAgent();
+      if (!agentIsComplete(agent)) {
+        setError("Chưa có Agent cố định. Bấm «Agent» trên thanh TCS để nhập tên Agent.");
+        return;
+      }
+
+      const resolved = resolveShipmentForEsidDeclare(shipment, customerDirectory);
+      const payload = buildEsidDeclareFillPayload(resolved.shipment, registrant, agent);
+      if (!payload) {
+        setError("Không tạo được payload khai báo ESID.");
+        return;
+      }
+
+      // Hủy pre-warm PDF (tìm AWB trên list) — không để tranh browser với Điền
+      if (prepareTimerRef.current != null) {
+        window.clearTimeout(prepareTimerRef.current);
+        prepareTimerRef.current = null;
+      }
+      prepareInFlightRef.current = "";
+      setPreparedAwb("");
+      preparedAtRef.current = 0;
+
+      const custNote = resolved.customerLabel
+        ? ` · khách ${resolved.customerLabel}`
+        : "";
+      setBusy(true);
+      setBusyLabel(`Điền ESID …${digits.slice(-8)}${custNote}…`);
+      const t0 = performance.now();
+      try {
+        if (!(await ensureSessionReady())) return;
+
+        // Nếu agent còn bận prepare PDF → chờ rồi điền (không tự tìm AWB)
+        let res = await declareFillTcsEsid(payload);
+        for (let i = 0; i < 40 && res.error === "BUSY"; i++) {
+          setBusyLabel(`Điền ESID …${digits.slice(-8)} — chờ agent…`);
+          await new Promise((r) => window.setTimeout(r, 250));
+          res = await declareFillTcsEsid(payload);
+        }
+
+        const sec = ((performance.now() - t0) / 1000).toFixed(1);
+        if (!res.ok) {
+          setError(res.message || res.error || "Điền ESID thất bại");
+          return;
+        }
+        const warn = [
+          ...resolved.warnings,
+          ...(res.warnings || []),
+        ].filter(Boolean);
+        const partyBits = [
+          resolved.shipperFromProfile ? "Shipper✓" : null,
+          resolved.consigneeFromProfile ? "CNEE✓" : null,
+          agent.name ? "Agent✓" : null,
+          resolved.goodsFromProfile ? "Hàng✓" : null,
+        ].filter(Boolean);
+        const partyNote = partyBits.length ? ` · ${partyBits.join(" ")}` : "";
+        const warnNote = warn.length ? ` · ${warn[0]}` : "";
+        const tm = res.timings;
+        const breakDown =
+          tm && (tm.flight_ms != null || tm.selects_ms != null)
+            ? ` · flight ${((tm.flight_ms || 0) / 1000).toFixed(1)}s` +
+              (tm.selects_ms != null ? `/pay ${((tm.selects_ms || 0) / 1000).toFixed(1)}s` : "") +
+              (res.fills?.choose_flight_skipped ? " · skip modal" : "")
+            : "";
+        setMessage(
+          `Đã điền ESID …${digits.slice(-8)}${custNote}${partyNote} · ${sec}s (chưa HOÀN TẤT)${breakDown}${warnNote}`
+        );
+        void refreshHealth();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Lỗi điền ESID");
+      } finally {
+        setBusy(false);
+        setBusyLabel("");
+      }
+    },
+    [customerDirectory, ensureSessionReady, refreshHealth]
   );
 
   const downloadPdf = useCallback((name: string) => {
@@ -430,6 +545,7 @@ export function useTcsPortalActions({
     scan,
     downloadReady,
     downloadEsidFor,
+    fillEsidDeclareFor,
     prepareEsidFor,
     preparedAwb,
     downloadPdf,

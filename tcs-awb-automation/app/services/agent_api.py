@@ -21,6 +21,7 @@ from app.services.awb_service import validate_ops_payload
 from app.services.batch_service import BatchService
 from app.services.download_service import resolve_docs_file
 from app.services.esid_scan_service import scan_esid_reception
+from app.services.esid_declare_service import fill_esid_declare
 from app.services.tcs_client import TcsClient
 from app.utils.awb import digits_only
 
@@ -273,6 +274,9 @@ def make_handler(state: AgentState):
             if path == "/esid/scan":
                 self._handle_esid_scan(payload)
                 return
+            if path == "/esid/declare-fill":
+                self._handle_esid_declare_fill(payload)
+                return
             if path == "/control/pause":
                 state.batch.pause()
                 self._json(200, {"ok": True, "action": "pause"})
@@ -448,6 +452,31 @@ def make_handler(state: AgentState):
 
             try:
                 code, result = state.call_on_worker(_scan)
+                self._json(code, result)
+            except Exception as e:
+                self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
+            finally:
+                with state.lock:
+                    state.running = False
+
+        def _handle_esid_declare_fill(self, payload: dict[str, Any]) -> None:
+            """Điền form KHAI BÁO ESID từ Ops — mặc định không HOÀN TẤT."""
+            with state.lock:
+                if state.running:
+                    self._json(409, {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"})
+                    return
+                state.running = True
+
+            def _fill() -> tuple[int, dict[str, Any]]:
+                result = fill_esid_declare(state.sessions, state.settings, payload)
+                state.refresh_session_snapshot()
+                code = 200 if result.get("ok") else 400
+                if result.get("error") in {"NEEDS_LOGIN", "NO_BROWSER"}:
+                    code = 400
+                return code, result
+
+            try:
+                code, result = state.call_on_worker(_fill)
                 self._json(code, result)
             except Exception as e:
                 self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
@@ -640,10 +669,10 @@ def serve_agent(settings: Settings | None = None) -> None:
     mode = "MOCK" if settings.mock else "REAL"
     print(f"TCS AWB Agent [{mode}] http://{host}:{port} scope={settings.warehouse_scope}")
     print("GET  /health  /session/status  /docs?file=")
-    print("POST /session/open  /session/close  /jobs  /esid/prepare  /esid/scan  /control/pause|resume|stop")
+    print("POST /session/open  /session/close  /jobs  /esid/prepare  /esid/scan  /esid/declare-fill  /control/pause|resume|stop")
     if not settings.mock:
         print(
-            "REAL mode: POST /session/open → login → POST /esid/prepare (menu ⋮) → /jobs DOWNLOAD hot-path"
+            "REAL mode: POST /session/open → login → POST /esid/prepare|declare-fill → /jobs DOWNLOAD"
         )
     try:
         httpd.serve_forever()

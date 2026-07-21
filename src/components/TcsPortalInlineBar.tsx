@@ -1,3 +1,5 @@
+import { EsidRegistrantSettingsButton } from "./EsidRegistrantSettingsButton";
+import { EsidAgentSettingsButton } from "./EsidAgentSettingsButton";
 import type { TcsPortalActions } from "../hooks/useTcsPortalActions";
 import {
   clearTcsAgentBaseUrl,
@@ -77,6 +79,8 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
         >
           URL
         </button>
+        <EsidRegistrantSettingsButton disabled={tcs.busy} compact={compact} />
+        <EsidAgentSettingsButton disabled={tcs.busy} compact={compact} />
 
         {tcs.busy ? (
           <span className="truncate text-[10px] font-semibold text-sky-700 dark:text-sky-300">

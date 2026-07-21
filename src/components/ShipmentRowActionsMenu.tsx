@@ -9,6 +9,8 @@ import {
   downloadTcsAttachedDimsExcel,
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
+import { canExportEsidDeclare, downloadEsidDeclareExcel } from "../utils/exportEsidDeclareExcel";
+import { awbDigitsKey } from "../utils/awbFormat";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { OPS } from "../styles/opsModalStyles";
 import { useTcsPortalActionsContext } from "./TcsPortalActionsContext";
@@ -102,7 +104,7 @@ function menuPositionFromTrigger(btn: HTMLElement): CSSProperties {
 
 export function ShipmentRowActionsMenu({
   row,
-  customerDirectory: _customerDirectory,
+  customerDirectory,
   onPrint,
   onDelete,
   onOpenTcsPortal: _onOpenTcsPortal,
@@ -119,7 +121,15 @@ export function ShipmentRowActionsMenu({
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   const showTcsEsid = isTcsWarehouse(row.warehouse) && Boolean(tcs);
-  const menuExtras = (showDim ? 1 : 0) + (showTcsDim ? 2 : 0) + (showTcsEsid ? 1 : 0) + 1;
+  const showEsidExcel = canExportEsidDeclare(row);
+  const showFillEsid = showTcsEsid && awbDigitsKey(row.awb).length === 11;
+  const menuExtras =
+    (showDim ? 1 : 0) +
+    (showTcsDim ? 2 : 0) +
+    (showTcsEsid ? 1 : 0) +
+    (showFillEsid ? 1 : 0) +
+    (showEsidExcel ? 1 : 0) +
+    1;
 
   const confirmDelete = () => {
     if (confirm(`Xóa lô AWB ${row.awb || "(chưa có AWB)"}?`)) onDelete(row.id);
@@ -129,8 +139,7 @@ export function ShipmentRowActionsMenu({
     const btn = triggerRef.current;
     if (btn) setMenuStyle(menuPositionFromTrigger(btn));
     setMenuOpen(true);
-    // Pre-warm ESID trên Chrome TCS (nền) — bấm Tải PDF sau đó dùng hot-path
-    if (showTcsEsid) tcs?.prepareEsidFor?.(row);
+    // Không pre-warm tìm AWB khi mở ⋮ (tránh gõ vào ô tìm danh sách trước «Điền»).
   };
 
   const closeMenu = () => {
@@ -208,6 +217,17 @@ export function ShipmentRowActionsMenu({
         {showDim ? menuItem("Excel DIM", () => downloadScscDimListExcel(row)) : null}
         {showTcsDim ? menuItem("In DIM TCS", () => printTcsAttachedDimsList(row)) : null}
         {showTcsDim ? menuItem("Excel TCS", () => void downloadTcsAttachedDimsExcel(row)) : null}
+        {showFillEsid
+          ? menuItem(
+              "Điền",
+              () => {
+                if (tcs?.busy) return;
+                void tcs?.fillEsidDeclareFor(row);
+              },
+              undefined,
+              `row-fill-esid-${row.id}`
+            )
+          : null}
         {showTcsEsid
           ? menuItem(
               "Tải PDF ESID",
@@ -217,6 +237,16 @@ export function ShipmentRowActionsMenu({
               },
               undefined,
               `row-pdf-esid-${row.id}`
+            )
+          : null}
+        {showEsidExcel
+          ? menuItem(
+              "Excel khai báo ESID",
+              () => {
+                void downloadEsidDeclareExcel(row, customerDirectory);
+              },
+              undefined,
+              `row-excel-esid-declare-${row.id}`
             )
           : null}
         {menuExtras > 1 ? <div className={`my-0.5 border-t ${OPS.border}`} aria-hidden /> : null}

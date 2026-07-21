@@ -1,5 +1,6 @@
 /**
- * Hồ sơ người khai ESID (CCCD / họ tên / SĐT) — cố định trên máy Ops.
+ * Hồ sơ người khai ESID (CCCD / họ tên / SĐT).
+ * Lưu localStorage + đồng bộ Postgres (app_state) — dùng chung mọi máy Ops.
  * Đổi người khai = chọn hoặc thêm hồ sơ tên khác (không gắn theo từng lô).
  */
 export type EsidRegistrantProfile = {
@@ -44,10 +45,10 @@ export function emptyRegistrantStore(): EsidRegistrantStoreV1 {
   return { version: 1, activeId: p.id, profiles: [p] };
 }
 
-function normalizeStore(raw: unknown): EsidRegistrantStoreV1 | null {
-  if (!raw || typeof raw !== "object") return null;
+export function normalizeEsidRegistrantStore(raw: unknown): EsidRegistrantStoreV1 {
+  if (!raw || typeof raw !== "object") return emptyRegistrantStore();
   const o = raw as EsidRegistrantStoreV1;
-  if (o.version !== 1 || !Array.isArray(o.profiles)) return null;
+  if (o.version !== 1 || !Array.isArray(o.profiles)) return emptyRegistrantStore();
   const profiles = o.profiles
     .filter((p) => p && typeof p === "object")
     .map((p) => ({
@@ -62,10 +63,18 @@ function normalizeStore(raw: unknown): EsidRegistrantStoreV1 | null {
   return { version: 1, activeId, profiles };
 }
 
+export function esidRegistrantStoreHasUserData(store: EsidRegistrantStoreV1): boolean {
+  return store.profiles.some((p) => p.name.trim() || p.tel.trim() || p.cccd.trim());
+}
+
 export function loadEsidRegistrantStore(): EsidRegistrantStoreV1 {
   try {
-    const parsed = normalizeStore(JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"));
-    if (parsed) return parsed;
+    const parsed = normalizeEsidRegistrantStore(
+      JSON.parse(localStorage.getItem(STORAGE_KEY) || "null")
+    );
+    if (esidRegistrantStoreHasUserData(parsed) || localStorage.getItem(STORAGE_KEY)) {
+      return parsed;
+    }
   } catch {
     /* ignore */
   }
@@ -75,7 +84,7 @@ export function loadEsidRegistrantStore(): EsidRegistrantStoreV1 {
 }
 
 export function saveEsidRegistrantStore(store: EsidRegistrantStoreV1): void {
-  const next = normalizeStore(store) || emptyRegistrantStore();
+  const next = normalizeEsidRegistrantStore(store);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     notifyChanged();

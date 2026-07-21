@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from app.browser.locators import LocatorsConfig, locators_path
@@ -10,6 +12,8 @@ from app.browser.session import AGENT_HOME, BrowserSession
 from app.config import Settings
 
 ESID_HOME = "https://www.tcs.com.vn/Esid/Export"
+# Ảnh live cố định — Ops poll GET /session/screenshot
+LIVE_VIEW_NAME = "TCS_LIVE_VIEW.png"
 
 
 @dataclass
@@ -24,9 +28,14 @@ class SessionStatus:
     captcha_ocr: bool = False
     prefer_session: bool = True
     headless: bool = False
+    visible_ok: bool = False
+    preview_file: str | None = None
+    preview_url: str | None = None
+    browser_engine: str = ""
+    extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "open": self.open,
             "logged_in": self.logged_in,
             "url": self.url,
@@ -38,7 +47,13 @@ class SessionStatus:
             "captcha_ocr": self.captcha_ocr,
             "prefer_session": self.prefer_session,
             "headless": self.headless,
+            "visible_ok": self.visible_ok,
+            "preview_file": self.preview_file,
+            "preview_url": self.preview_url,
+            "browser_engine": self.browser_engine,
         }
+        data.update(self.extra or {})
+        return data
 
 
 class SessionManager:
@@ -76,8 +91,9 @@ class SessionManager:
         để nhìn thấy trang TCS và thao tác thật.
         """
         self.reload_locators()
-        # Ops Login (visible): luôn đóng → mở lại Chrome headed để cửa sổ TỰ nhảy ra
-        # trước mặt — không cần bấm «Hiện Chrome» hay thao tác riêng.
+        # Ops Login (visible): đóng session cũ rồi mở lại — ưu tiên cửa sổ thật.
+        visible_ok = False
+        headed_err: str | None = None
         if visible:
             headless = False
             if self._has_live_session():
@@ -85,26 +101,35 @@ class SessionManager:
 
         if self._has_live_session():
             try:
-                # Ưu tiên Agent home, không ép về AwbLogin (tránh mất session)
                 BrowserSession._goto_fast(self.session.page, AGENT_HOME)
             except Exception:
                 self.close()
-        # Zombie / Login visible: mở Chrome mới
+
         if not self._has_live_session():
             self.close()
             self.session = BrowserSession(self.settings)
             try:
                 self.session.open(headless=headless)
+                visible_ok = not headless
             except Exception as e:
                 self.close()
+                # Railway / không có display / không có Chrome: fallback headless
+                # để Login vẫn chạy (OCR), Ops xem ảnh preview trang TCS.
                 if visible:
-                    raise RuntimeError(
-                        "Không mở được Chrome có cửa sổ. "
-                        "Trên máy kho chạy: npm run tcs:agent:real (TCS_HEADLESS=0). "
-                        "Railway headless không hiện trang TCS để xem tay. "
-                        f"Chi tiết: {e}"
-                    ) from e
-                raise
+                    headed_err = str(e)[:280]
+                    self.session = BrowserSession(self.settings)
+                    try:
+                        self.session.open(headless=True)
+                        headless = True
+                        visible_ok = False
+                    except Exception as e2:
+                        self.close()
+                        raise RuntimeError(
+                            "Không mở được browser (headed lẫn headless). "
+                            f"Headed: {headed_err} · Headless: {e2}"
+                        ) from e2
+                else:
+                    raise
 
         filled = False
         login_msg = ""
@@ -115,12 +140,15 @@ class SessionManager:
 
         st = self.status()
         st.credentials_filled = filled
+        st.visible_ok = visible_ok and not headless
+        if self.session is not None:
+            st.browser_engine = getattr(self.session, "browser_engine", "") or ""
         if login_msg and not st.logged_in:
             st.message = login_msg
         elif login_msg and st.logged_in:
             st.message = login_msg
 
-        # Tự mở trang TCS + đưa cửa sổ lên (một thao tác Login là đủ)
+        # Tự mở trang TCS + focus (headed) hoặc chụp ảnh (headless/Railway)
         if show_portal and self._has_live_session():
             self._show_tcs_portal(logged_in=st.logged_in)
             if not headless:
@@ -132,14 +160,97 @@ class SessionManager:
                     self.focus_window()
                 except Exception:
                     pass
-                if st.logged_in:
-                    st.message = "Đã tự mở trang TCS (ESID) trên Chrome — sẵn sàng Quét/Điền"
-                else:
-                    st.message = (
-                        "Đã tự mở trang đăng nhập TCS trên Chrome — "
-                        "nhập CAPTCHA trên cửa sổ đó (không cần bấm thêm)"
-                    )
+                st.visible_ok = True
+                st.message = (
+                    "Đã tự mở trang TCS trên Chrome — sẵn sàng Quét/Điền"
+                    if st.logged_in
+                    else "Đã tự mở trang đăng nhập TCS trên Chrome — nhập CAPTCHA trên cửa sổ đó"
+                )
+            else:
+                # Cloud: không có cửa sổ → ảnh preview để xem trên Ops
+                shot = self._capture_login_preview()
+                if shot.get("preview_file"):
+                    st.preview_file = shot["preview_file"]
+                    st.preview_url = shot["preview_url"]
+                st.visible_ok = False
+                tip = (
+                    "Railway/headless: không hiện cửa sổ Chrome. "
+                    "Xem ảnh trang TCS trên Ops. "
+                    "Muốn cửa sổ thật: máy kho npm run tcs:agent:real (TCS_HEADLESS=0), mở Ops qua IP máy kho."
+                )
+                if headed_err:
+                    tip += f" (headed lỗi: {headed_err[:120]})"
+                st.message = (
+                    f"{'Đã login' if st.logged_in else 'Chrome headless đã mở'} — {tip}"
+                )
         return st
+
+    def live_view_path(self) -> Path:
+        docs = self.settings.output_dir / "docs"
+        docs.mkdir(parents=True, exist_ok=True)
+        return docs / LIVE_VIEW_NAME
+
+    def capture_live_screenshot(self) -> dict[str, Any]:
+        """
+        Chụp viewport trang TCS hiện tại → TCS_LIVE_VIEW.png.
+        Dùng cho Ops xem live khi agent headless (Railway).
+        """
+        path = self.live_view_path()
+        if not self._has_live_session() or self.session is None or self.session.page is None:
+            if path.is_file() and path.stat().st_size > 100:
+                return {
+                    "ok": True,
+                    "cached": True,
+                    "preview_file": LIVE_VIEW_NAME,
+                    "preview_url": f"/docs?file={LIVE_VIEW_NAME}",
+                    "bytes": path.stat().st_size,
+                }
+            return {"ok": False, "error": "NO_BROWSER", "message": "Chrome chưa mở"}
+        try:
+            self.session.page.screenshot(path=str(path), full_page=False, type="png")
+            if not path.is_file() or path.stat().st_size < 100:
+                return {"ok": False, "error": "EMPTY", "message": "Screenshot rỗng"}
+            return {
+                "ok": True,
+                "cached": False,
+                "preview_file": LIVE_VIEW_NAME,
+                "preview_url": f"/docs?file={LIVE_VIEW_NAME}",
+                "bytes": path.stat().st_size,
+                "url": getattr(self.session.page, "url", "") or "",
+                "headless": bool(getattr(self.session, "headless_mode", True)),
+            }
+        except Exception as e:
+            return {"ok": False, "error": "SHOT_FAILED", "message": str(e)[:200]}
+
+    def read_live_screenshot_bytes(self) -> bytes | None:
+        path = self.live_view_path()
+        if path.is_file() and path.stat().st_size > 100:
+            return path.read_bytes()
+        return None
+
+    def _capture_login_preview(self) -> dict[str, Any]:
+        """Screenshot sau Login + cập nhật live view."""
+        live = self.capture_live_screenshot()
+        if live.get("ok") and live.get("preview_file"):
+            # Giữ thêm bản timestamp để đối chiếu
+            docs = self.settings.output_dir / "docs"
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            name = f"TCS_LOGIN_PREVIEW_{stamp}.png"
+            src = self.live_view_path()
+            try:
+                dest = docs / name
+                dest.write_bytes(src.read_bytes())
+                return {
+                    "preview_file": name,
+                    "preview_url": f"/docs?file={name}",
+                    "live_file": LIVE_VIEW_NAME,
+                }
+            except Exception:
+                return {
+                    "preview_file": live.get("preview_file"),
+                    "preview_url": live.get("preview_url"),
+                }
+        return {}
 
     def _show_tcs_portal(self, *, logged_in: bool) -> None:
         """Tự mở trang TCS nhìn thấy được ngay sau Login."""
@@ -260,6 +371,8 @@ class SessionManager:
                 captcha_ocr=ocr,
                 prefer_session=prefer,
                 headless=sess_headless,
+                visible_ok=not sess_headless,
+                browser_engine=getattr(self.session, "browser_engine", "") or "",
             )
         except Exception as e:
             return SessionStatus(

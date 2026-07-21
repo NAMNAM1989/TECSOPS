@@ -3,6 +3,8 @@ import type { AppState } from "./shipmentMutations";
 import { parseCustomerDirectoryLoose } from "./customerDirectoryCore";
 import { clampAirlineLabelOverrides } from "./airlineLabelOverridesCore";
 import { clampPrinterProfilesCatalog } from "../printing/printerProfilesCore";
+import { normalizeEsidRegistrantStore } from "./esidRegistrantProfile";
+import { normalizeEsidAgentStore } from "./esidAgentProfile";
 
 export function parseAppState(raw: unknown): AppState | null {
   if (!raw || typeof raw !== "object") return null;
@@ -16,6 +18,12 @@ export function parseAppState(raw: unknown): AppState | null {
   const printerProfiles = clampPrinterProfilesCatalog(
     "printerProfiles" in o ? o.printerProfiles : undefined
   );
+  const esidRegistrantStore = normalizeEsidRegistrantStore(
+    "esidRegistrantStore" in o ? o.esidRegistrantStore : undefined
+  );
+  const esidAgentStore = normalizeEsidAgentStore(
+    "esidAgentStore" in o ? o.esidAgentStore : undefined
+  );
 
   return {
     version: o.version,
@@ -23,5 +31,7 @@ export function parseAppState(raw: unknown): AppState | null {
     customers,
     airlineLabelOverrides,
     printerProfiles,
+    esidRegistrantStore,
+    esidAgentStore,
   };
 }

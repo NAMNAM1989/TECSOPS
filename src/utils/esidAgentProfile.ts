@@ -1,5 +1,6 @@
 /**
- * Hồ sơ Agent ESID cố định trên máy Ops (giống người khai).
+ * Hồ sơ Agent ESID (giống người khai).
+ * Lưu localStorage + đồng bộ Postgres — dùng chung mọi máy Ops.
  * Điền form TCS agentId + address/tel/email/vat từ hồ sơ này — không lấy theo từng lô.
  */
 export type EsidAgentProfile = {
@@ -49,10 +50,10 @@ export function emptyAgentStore(): EsidAgentStoreV1 {
   return { version: 1, activeId: p.id, profiles: [p] };
 }
 
-function normalizeStore(raw: unknown): EsidAgentStoreV1 | null {
-  if (!raw || typeof raw !== "object") return null;
+export function normalizeEsidAgentStore(raw: unknown): EsidAgentStoreV1 {
+  if (!raw || typeof raw !== "object") return emptyAgentStore();
   const o = raw as EsidAgentStoreV1;
-  if (o.version !== 1 || !Array.isArray(o.profiles)) return null;
+  if (o.version !== 1 || !Array.isArray(o.profiles)) return emptyAgentStore();
   const profiles = o.profiles
     .filter((p) => p && typeof p === "object")
     .map((p) => ({
@@ -70,10 +71,18 @@ function normalizeStore(raw: unknown): EsidAgentStoreV1 | null {
   return { version: 1, activeId, profiles };
 }
 
+export function esidAgentStoreHasUserData(store: EsidAgentStoreV1): boolean {
+  return store.profiles.some(
+    (p) => p.name.trim() || p.address.trim() || p.tel.trim() || p.email.trim() || p.vat.trim()
+  );
+}
+
 export function loadEsidAgentStore(): EsidAgentStoreV1 {
   try {
-    const parsed = normalizeStore(JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"));
-    if (parsed) return parsed;
+    const parsed = normalizeEsidAgentStore(JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"));
+    if (esidAgentStoreHasUserData(parsed) || localStorage.getItem(STORAGE_KEY)) {
+      return parsed;
+    }
   } catch {
     /* ignore */
   }
@@ -83,7 +92,7 @@ export function loadEsidAgentStore(): EsidAgentStoreV1 {
 }
 
 export function saveEsidAgentStore(store: EsidAgentStoreV1): void {
-  const next = normalizeStore(store) || emptyAgentStore();
+  const next = normalizeEsidAgentStore(store);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     notifyChanged();

@@ -10,6 +10,7 @@ import {
   type EsidAgentProfile,
   type EsidAgentStoreV1,
 } from "../utils/esidAgentProfile";
+import { pushEsidAgentStore } from "../utils/esidProfilesSync";
 
 type Props = {
   disabled?: boolean;
@@ -62,6 +63,7 @@ export function EsidAgentSettingsButton({ disabled, compact }: Props) {
   const saveCurrent = () => {
     updateActiveEsidAgent({ name, address, tel, email, vat });
     setStore(loadEsidAgentStore());
+    void pushEsidAgentStore();
     setOpen(false);
   };
 
@@ -78,6 +80,7 @@ export function EsidAgentSettingsButton({ disabled, compact }: Props) {
     setTel(created.tel);
     setEmail(created.email);
     setVat(created.vat);
+    void pushEsidAgentStore();
   };
 
   const selectProfile = (p: EsidAgentProfile) => {
@@ -88,6 +91,7 @@ export function EsidAgentSettingsButton({ disabled, compact }: Props) {
     setTel(p.tel);
     setEmail(p.email);
     setVat(p.vat);
+    void pushEsidAgentStore();
   };
 
   const complete = agentIsComplete({ name });
@@ -111,7 +115,7 @@ export function EsidAgentSettingsButton({ disabled, compact }: Props) {
           aria-label="Hồ sơ Agent ESID"
         >
           <p className="mb-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-            Agent ESID (cố định trên máy)
+            Agent ESID (dùng chung mọi máy)
           </p>
           {store.profiles.filter((p) => p.name.trim()).length > 1 ? (
             <label className="mb-2 block text-[10px] text-slate-500">

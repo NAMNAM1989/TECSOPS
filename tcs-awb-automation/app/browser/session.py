@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import sys
+from pathlib import Path
 from typing import Any
 
 from app.config import Settings
@@ -7,16 +10,39 @@ from app.config import Settings
 AGENT_HOME = "https://www.tcs.com.vn/Awb/Agent"
 
 
+def _system_chrome_likely() -> bool:
+    """True khi máy có thể có Google Chrome (channel=chrome)."""
+    if sys.platform == "win32":
+        candidates = [
+            os.environ.get("PROGRAMFILES", r"C:\Program Files") + r"\Google\Chrome\Application\chrome.exe",
+            os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")
+            + r"\Google\Chrome\Application\chrome.exe",
+            os.environ.get("LOCALAPPDATA", "") + r"\Google\Chrome\Application\chrome.exe",
+        ]
+        return any(p and Path(p).is_file() for p in candidates)
+    return any(
+        Path(p).is_file()
+        for p in (
+            "/opt/google/chrome/chrome",
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+        )
+    )
+
+
 class BrowserSession:
-    """Persistent Chrome context — user tự đăng nhập / CAPTCHA."""
+    """Persistent Chrome/Chromium context — user tự đăng nhập / CAPTCHA."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._playwright = None
         self._context = None
         self.page = None
-        # True khi Chrome không có cửa sổ OS (Railway).
+        # True khi không có cửa sổ OS (Railway / headless).
         self.headless_mode: bool = True
+        self.browser_engine: str = ""
 
     def is_alive(self) -> bool:
         """True khi context và page Playwright vẫn dùng được."""
@@ -45,12 +71,12 @@ class BrowserSession:
         # Không để sót driver cũ nếu lần open trước hỏng giữa chừng.
         self.close()
         self.headless_mode = bool(headless)
+        self.browser_engine = ""
         primary_profile = self.settings.browser_profile
         recovery_profile = primary_profile.with_name(f"{primary_profile.name}_recovery")
         primary_profile.mkdir(parents=True, exist_ok=True)
         self._playwright = sync_playwright().start()
-        # Trong container (Railway) Chrome chạy bằng root, không có /dev/shm lớn,
-        # không có GPU → cần các cờ này để không crash lúc launch.
+
         chrome_args = ["--disable-dev-shm-usage"]
         if headless:
             chrome_args += [
@@ -60,53 +86,49 @@ class BrowserSession:
                 "--disable-software-rasterizer",
             ]
         else:
-            # Máy kho: cửa sổ thật để nhìn thao tác Login / Điền / HOÀN TẤT
             chrome_args += ["--start-maximized"]
-        launch_kwargs = dict(
+
+        base_kwargs: dict[str, Any] = dict(
             headless=headless,
             accept_downloads=True,
             viewport=None if not headless else {"width": 1366, "height": 900},
             args=chrome_args,
             timeout=15000,
         )
+
+        # Thứ tự thử:
+        # 1) Google Chrome (máy kho Windows có Chrome) — headed
+        # 2) Chromium bundled Playwright — profile chính (Railway + fallback)
+        # 3) Chromium + profile recovery
+        attempts: list[tuple[str, Path, dict[str, Any]]] = []
+        if not headless and _system_chrome_likely():
+            attempts.append(("chrome", primary_profile, {**base_kwargs, "channel": "chrome"}))
+        attempts.append(("chromium", primary_profile, dict(base_kwargs)))
+        attempts.append(("chromium_recovery", recovery_profile, dict(base_kwargs)))
+
+        errors: list[str] = []
         try:
-            last_err: Exception | None = None
-            # Profile có thể hỏng/treo sau khi Chrome bị kill. Thử Chrome/profile
-            # chính một lần; nếu lỗi thì dùng Chromium + profile recovery.
-            #
-            # Server/headless (container Railway): KHÔNG có channel "chrome" (chỉ có
-            # Chromium bundled). Dùng thẳng Chromium + profile CHÍNH để session bám
-            # đúng volume đã mount, tránh rơi xuống recovery profile ephemeral.
-            try:
-                if headless:
-                    self._context = self._playwright.chromium.launch_persistent_context(
-                        user_data_dir=str(primary_profile),
-                        **launch_kwargs,
-                    )
-                else:
-                    self._context = self._playwright.chromium.launch_persistent_context(
-                        user_data_dir=str(primary_profile),
-                        channel="chrome",
-                        **launch_kwargs,
-                    )
-            except Exception as e:
-                last_err = e
-            if self._context is None:
-                # Fallback Chromium — dùng profile recovery, OCR có thể login lại.
-                recovery_profile.mkdir(parents=True, exist_ok=True)
+            for label, profile_dir, kwargs in attempts:
+                profile_dir.mkdir(parents=True, exist_ok=True)
                 try:
                     self._context = self._playwright.chromium.launch_persistent_context(
-                        user_data_dir=str(recovery_profile),
-                        **launch_kwargs,
+                        user_data_dir=str(profile_dir),
+                        **kwargs,
                     )
+                    self.browser_engine = label
+                    break
                 except Exception as e:
-                    raise RuntimeError(
-                        f"Không mở được Chrome profile ({primary_profile}). "
-                        f"Đóng mọi Chrome Playwright đang mở rồi thử lại. Lỗi: {last_err or e}"
-                    ) from e
+                    errors.append(f"{label}: {e}")
+                    self._context = None
+
+            if self._context is None:
+                raise RuntimeError(
+                    f"Không mở được browser profile ({primary_profile}). "
+                    f"Đóng mọi Chrome Playwright đang mở rồi thử lại. "
+                    f"Lỗi: {' | '.join(errors[-3:])}"
+                )
 
             self.page = self._context.pages[0] if self._context.pages else self._context.new_page()
-            # Vào Agent trước — cookie persistent có thể đã login
             try:
                 self._goto_fast(self.page, AGENT_HOME)
             except Exception:
@@ -131,7 +153,6 @@ class BrowserSession:
             notes.append("tab")
         except Exception as e:
             notes.append(f"tab_err:{e}")
-        # Un-minimize / maximize qua CDP + activate target
         try:
             cdp = self.page.context.new_cdp_session(self.page)
             try:
@@ -169,7 +190,6 @@ class BrowserSession:
                     pass
         except Exception as e:
             notes.append(f"cdp:{type(e).__name__}")
-        # Windows: AppActivate cửa sổ Chrome (tránh nằm dưới Ops)
         if not self.headless_mode:
             win_note = self._win_foreground_chrome()
             if win_note:
@@ -180,19 +200,17 @@ class BrowserSession:
             "headless": not headed,
             "message": "Đã hiện Chrome" if headed else "Headless — không có cửa sổ OS",
             "detail": "+".join(notes),
+            "engine": self.browser_engine,
         }
 
     @staticmethod
     def _win_foreground_chrome() -> str:
         """Đưa cửa sổ Chrome lên foreground trên Windows (máy kho)."""
-        import sys
-
         if sys.platform != "win32":
             return ""
         try:
             import subprocess
 
-            # AppActivate theo tiêu đề chứa TCS hoặc Chrome
             ps = (
                 "$w = New-Object -ComObject WScript.Shell; "
                 "foreach ($t in @('*tcs.com.vn*','*TCS*','*Chromium*','*Chrome*')) { "

@@ -94,6 +94,10 @@ export function useTcsPortalActions({
   /** Sau Điền: ảnh form trên agent + nút HOÀN TẤT từ Ops */
   const [lastDeclarePreview, setLastDeclarePreview] =
     useState<EsidDeclarePreviewState | null>(null);
+  /** Sau Login headless (Railway): ảnh trang TCS để xem trên Ops */
+  const [loginPreviewUrl, setLoginPreviewUrl] = useState("");
+  /** Panel xem live screenshot trang TCS trên agent (Railway) */
+  const [liveViewOpen, setLiveViewOpen] = useState(false);
   /** AWB đã pre-warm (menu ⋮) — hot-path Tải PDF ~1–3s */
   const [preparedAwb, setPreparedAwb] = useState("");
   const preparedAtRef = useRef(0);
@@ -190,26 +194,34 @@ export function useTcsPortalActions({
         setError(agentOfflineHint(getTcsAgentBaseUrl()));
         return;
       }
-      // Một nút Login = mở Chrome + vào trang TCS + đưa cửa sổ lên (không thao tác riêng)
+      // Một nút Login = mở browser + trang TCS (headed máy kho; Railway → headless + ảnh)
       const res = await openTcsAgentSession({ visible: true });
       if (!res.ok) {
         setError(res.message || "Không mở được trang TCS");
         return;
       }
       setSession(res);
+      const previewName = (res.preview_file || "").replace(/^.*[/\\]/, "");
+      if (previewName) {
+        setLoginPreviewUrl(tcsAgentDocUrl(previewName));
+      } else {
+        setLoginPreviewUrl("");
+      }
+      // Luôn bật xem live trên Ops — Railway không có cửa sổ, máy kho vẫn hữu ích
+      setLiveViewOpen(true);
       await refreshHealth();
       const sec = ((performance.now() - t0) / 1000).toFixed(1);
-      if (res.headless === true) {
-        setError(
-          "Agent đang headless — không tự mở được cửa sổ TCS. Trên máy kho: npm run tcs:agent:real (TCS_HEADLESS=0), mở Ops bằng IP máy kho."
+      if (res.visible_ok || res.headless === false) {
+        setMessage(
+          res.logged_in
+            ? `Đã mở Chrome + xem live trên Ops · ${sec}s`
+            : `Đã mở trang đăng nhập TCS + xem live trên Ops · ${sec}s — nhập CAPTCHA trên Chrome máy kho nếu có`
         );
-        return;
+      } else {
+        setMessage(
+          `Đã login (headless) — xem live trang TCS bên dưới trên Ops · ${sec}s`
+        );
       }
-      setMessage(
-        res.logged_in
-          ? `Đã tự mở trang TCS trên Chrome · ${sec}s — Quét/Điền sẽ hiện trên cửa sổ đó`
-          : `Đã tự mở trang đăng nhập TCS trên Chrome · ${sec}s — nhập CAPTCHA trên cửa sổ đó`
-      );
     } finally {
       setBusy(false);
       setBusyLabel("");
@@ -691,6 +703,10 @@ export function useTcsPortalActions({
     submitEsidDeclare,
     lastDeclarePreview,
     clearDeclarePreview,
+    loginPreviewUrl,
+    clearLoginPreview: () => setLoginPreviewUrl(""),
+    liveViewOpen,
+    setLiveViewOpen,
     focusAgentBrowser,
     /** false = Chrome thật trên máy kho */
     agentHeadless: health?.headless ?? session?.headless,

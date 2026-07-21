@@ -72,6 +72,54 @@ describe("applyShipmentMutation SET_AIRLINE_LABEL_OVERRIDES", () => {
   });
 });
 
+describe("applyShipmentMutation SET_ESID profiles", () => {
+  it("SET_ESID_REGISTRANT_STORE + SET_ESID_AGENT_STORE", () => {
+    const state: AppState = {
+      version: 1,
+      rows: [],
+      customers: [],
+    };
+    const withReg = applyShipmentMutation(state, {
+      action: "SET_ESID_REGISTRANT_STORE",
+      store: {
+        version: 1,
+        activeId: "reg-a",
+        profiles: [
+          {
+            id: "reg-a",
+            name: "Nguyen Van A",
+            tel: "0901234567",
+            cccd: "001234567890",
+            updatedAt: "2026-07-21T00:00:00.000Z",
+          },
+        ],
+      },
+    });
+    expect(withReg.esidRegistrantStore?.profiles[0]?.name).toBe("Nguyen Van A");
+    const withAgt = applyShipmentMutation(withReg, {
+      action: "SET_ESID_AGENT_STORE",
+      store: {
+        version: 1,
+        activeId: "agt-a",
+        profiles: [
+          {
+            id: "agt-a",
+            name: "TECS AGENT",
+            address: "HN",
+            tel: "024123",
+            email: "a@b.c",
+            vat: "010",
+            fax: "",
+            updatedAt: "2026-07-21T00:00:00.000Z",
+          },
+        ],
+      },
+    });
+    expect(withAgt.esidAgentStore?.profiles[0]?.name).toBe("TECS AGENT");
+    expect(withAgt.esidRegistrantStore?.profiles[0]?.name).toBe("Nguyen Van A");
+  });
+});
+
 describe("applyShipmentMutation SET_PRINTER_PROFILES", () => {
   it("lưu catalog profile máy in", () => {
     const state: AppState = {

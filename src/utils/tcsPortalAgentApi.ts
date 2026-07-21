@@ -25,6 +25,11 @@ export type TcsAgentSession = {
   message?: string;
   /** true = Chrome không có cửa sổ (Railway); false = headed máy kho */
   headless?: boolean;
+  /** true = đã mở được cửa sổ OS thật */
+  visible_ok?: boolean;
+  preview_file?: string | null;
+  preview_url?: string | null;
+  browser_engine?: string;
 };
 
 export type TcsAgentHealth = {
@@ -209,19 +214,15 @@ export async function openTcsAgentSession(
       error?: string;
     } & TcsAgentSession;
     if (!res.ok || body.ok === false || body.open === false) {
-      const headedFail =
-        body.error === "HEADED_REQUIRED" ||
-        /không mở được chrome có cửa sổ|TCS_HEADLESS|headed/i.test(body.message || "");
       return {
         ...body,
         ok: false,
-        message: headedFail
-          ? (body.message ||
-              "Cần Chrome thật trên máy kho: npm run tcs:agent:real (TCS_HEADLESS=0), mở Ops qua IP máy kho — không dùng Railway headless để Login xem tay.")
-          : body.message || "Không mở được Chrome",
+        message: body.message || "Không mở được Chrome",
         open: body.open ?? false,
         logged_in: body.logged_in ?? false,
         headless: body.headless,
+        visible_ok: body.visible_ok,
+        preview_file: body.preview_file,
       };
     }
     return { ...body, ok: true };
@@ -565,6 +566,11 @@ export function getTcsAgentBaseUrl(): string {
 export function tcsAgentDocUrl(nameOrPath: string): string {
   const name = nameOrPath.replace(/^.*[/\\]/, "");
   return `${agentBase()}/docs?file=${encodeURIComponent(name)}`;
+}
+
+/** Ảnh live viewport TCS trên agent — thêm ?t= để bypass cache khi poll. */
+export function tcsAgentLiveScreenshotUrl(cacheBust = Date.now()): string {
+  return `${agentBase()}/session/screenshot?t=${cacheBust}`;
 }
 
 export function tcsAgentPdfUrl(pdfNameOrPath: string): string {

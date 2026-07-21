@@ -188,8 +188,49 @@ def make_handler(state: AgentState):
                         snap = state.call_on_worker(state.refresh_session_snapshot)
                     except Exception:
                         snap = dict(state.session_snapshot)
-                snap = {**snap, "headless": bool(state.settings.headless)}
+                # Ưu tiên headless thật của session đang mở
+                sess_hl = snap.get("headless")
+                if sess_hl is None:
+                    snap["headless"] = bool(state.settings.headless)
                 self._json(200, {"ok": True, **snap})
+                return
+            if path == "/session/screenshot":
+                # Ảnh live trang TCS (PNG) — Ops poll để xem khi headless/Railway
+                def _shot() -> tuple[bytes | None, dict[str, Any]]:
+                    meta = state.sessions.capture_live_screenshot()
+                    raw = state.sessions.read_live_screenshot_bytes()
+                    return raw, meta
+
+                try:
+                    if state.running:
+                        # Đang job: trả ảnh cache (không tranh Playwright worker)
+                        cached = state.sessions.read_live_screenshot_bytes()
+                        if cached:
+                            self._file(200, cached, "image/png", "TCS_LIVE_VIEW.png")
+                            return
+                        self._json(
+                            503,
+                            {
+                                "ok": False,
+                                "error": "BUSY",
+                                "message": "Agent đang chạy job — chờ ảnh live",
+                            },
+                        )
+                        return
+                    raw, meta = state.call_on_worker(_shot)
+                    if raw:
+                        self._file(200, raw, "image/png", "TCS_LIVE_VIEW.png")
+                        return
+                    self._json(
+                        404,
+                        {
+                            "ok": False,
+                            "error": meta.get("error") or "NO_SHOT",
+                            "message": meta.get("message") or "Chưa có ảnh — bấm Login trước",
+                        },
+                    )
+                except Exception as e:
+                    self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
                 return
             if path == "/last-job":
                 self._json(200, {"ok": True, "job": state.last_job})

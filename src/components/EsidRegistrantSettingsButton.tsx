@@ -10,6 +10,7 @@ import {
   type EsidRegistrantProfile,
   type EsidRegistrantStoreV1,
 } from "../utils/esidRegistrantProfile";
+import { pushEsidRegistrantStore } from "../utils/esidProfilesSync";
 
 type Props = {
   disabled?: boolean;
@@ -59,6 +60,7 @@ export function EsidRegistrantSettingsButton({ disabled, compact }: Props) {
   const saveCurrent = () => {
     updateActiveEsidRegistrant({ name, tel, cccd });
     setStore(loadEsidRegistrantStore());
+    void pushEsidRegistrantStore();
     setOpen(false);
   };
 
@@ -73,6 +75,7 @@ export function EsidRegistrantSettingsButton({ disabled, compact }: Props) {
     setName(created.name);
     setTel(created.tel);
     setCccd(created.cccd);
+    void pushEsidRegistrantStore();
   };
 
   const selectProfile = (p: EsidRegistrantProfile) => {
@@ -81,6 +84,7 @@ export function EsidRegistrantSettingsButton({ disabled, compact }: Props) {
     setName(p.name);
     setTel(p.tel);
     setCccd(p.cccd);
+    void pushEsidRegistrantStore();
   };
 
   const complete = registrantIsComplete({ name, tel, cccd });
@@ -108,7 +112,7 @@ export function EsidRegistrantSettingsButton({ disabled, compact }: Props) {
           aria-label="Hồ sơ người khai ESID"
         >
           <p className="mb-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-            Người khai ESID (cố định trên máy)
+            Người khai ESID (dùng chung mọi máy)
           </p>
           {store.profiles.filter((p) => p.name.trim()).length > 1 ? (
             <label className="mb-2 block text-[10px] text-slate-500">

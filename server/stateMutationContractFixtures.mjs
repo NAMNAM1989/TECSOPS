@@ -47,6 +47,27 @@ export function baseContractState() {
     ],
     airlineLabelOverrides: { byAwbPrefix: {}, byFlightPrefix: {} },
     printerProfiles: { version: 1, profiles: [] },
+    esidRegistrantStore: {
+      version: 1,
+      activeId: "reg-1",
+      profiles: [{ id: "reg-1", name: "", tel: "", cccd: "", updatedAt: "" }],
+    },
+    esidAgentStore: {
+      version: 1,
+      activeId: "agt-1",
+      profiles: [
+        {
+          id: "agt-1",
+          name: "",
+          address: "",
+          tel: "",
+          email: "",
+          vat: "",
+          fax: "",
+          updatedAt: "",
+        },
+      ],
+    },
   };
 }
 
@@ -64,5 +85,7 @@ export function normalizeStateForContract(state) {
     customers: state.customers,
     airlineLabelOverrides: state.airlineLabelOverrides,
     printerProfiles,
+    esidRegistrantStore: state.esidRegistrantStore,
+    esidAgentStore: state.esidAgentStore,
   };
 }

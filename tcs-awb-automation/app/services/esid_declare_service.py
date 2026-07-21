@@ -112,8 +112,9 @@ def fill_esid_declare(
     if gate:
         return gate
 
-    # Đưa Chrome lên trước để nhìn thấy thao tác điền thật (headed máy kho)
+    # Đưa Chrome lên trước (headed) + cập nhật ảnh live (Railway)
     sessions.focus_if_headed()
+    sessions.capture_live_screenshot()
 
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
     portal = AwbPortalPage(sessions.page, loc)
@@ -137,16 +138,23 @@ def fill_esid_declare(
                 result.setdefault("warnings", []).append(
                     f"Preview: {preview['preview_error']}"
                 )
+            sessions.capture_live_screenshot()
             # Đưa Chrome lên trước để nhìn form thật trên máy kho
-            if sessions.session is not None and not settings.headless:
+            if sessions.session is not None and not getattr(
+                sessions.session, "headless_mode", settings.headless
+            ):
                 focus = sessions.focus_window()
                 result["browser_focused"] = bool(focus.get("ok"))
                 result["headless"] = False
             else:
-                result["headless"] = bool(settings.headless)
+                result["headless"] = True
                 result["browser_focused"] = False
         else:
-            result["headless"] = bool(settings.headless)
+            result["headless"] = bool(
+                getattr(sessions.session, "headless_mode", settings.headless)
+                if sessions.session
+                else settings.headless
+            )
         result["elapsed_ms"] = time_ms() - t0
         result["shipment_id"] = shipment.get("shipment_id") or shipment.get("id") or ""
         return result

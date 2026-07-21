@@ -11,6 +11,12 @@ import {
   emptyPrinterProfilesCatalog,
   normalizePrinterProfilesCatalogLoose,
 } from "./printerProfilesNormalize.mjs";
+import {
+  emptyEsidAgentStore,
+  emptyEsidRegistrantStore,
+  normalizeEsidAgentStoreLoose,
+  normalizeEsidRegistrantStoreLoose,
+} from "./esidProfilesNormalize.mjs";
 
 const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC"];
 
@@ -37,6 +43,8 @@ function emptyInitialState() {
     customers: [],
     airlineLabelOverrides: emptyAirlineLabelOverrides(),
     printerProfiles: emptyPrinterProfilesCatalog(),
+    esidRegistrantStore: emptyEsidRegistrantStore(),
+    esidAgentStore: emptyEsidAgentStore(),
   };
 }
 
@@ -156,6 +164,9 @@ function finishState(state, rows, extras = {}) {
     airlineLabelOverrides:
       extras.airlineLabelOverrides ?? normalizeAirlineLabelOverridesLoose(state.airlineLabelOverrides),
     printerProfiles: extras.printerProfiles ?? normalizePrinterProfilesCatalogLoose(state.printerProfiles),
+    esidRegistrantStore:
+      extras.esidRegistrantStore ?? normalizeEsidRegistrantStoreLoose(state.esidRegistrantStore),
+    esidAgentStore: extras.esidAgentStore ?? normalizeEsidAgentStoreLoose(state.esidAgentStore),
   };
 }
 
@@ -177,6 +188,8 @@ function normalizeState(raw) {
     customers,
     airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(raw.airlineLabelOverrides),
     printerProfiles: normalizePrinterProfilesCatalogLoose(raw.printerProfiles),
+    esidRegistrantStore: normalizeEsidRegistrantStoreLoose(raw.esidRegistrantStore),
+    esidAgentStore: normalizeEsidAgentStoreLoose(raw.esidAgentStore),
   };
 }
 
@@ -242,6 +255,16 @@ export function applyMutation(state, mutation) {
         printerProfiles: normalizePrinterProfilesCatalogLoose(mutation?.catalog),
       });
     }
+    case "SET_ESID_REGISTRANT_STORE": {
+      return finishState(state, rows, {
+        esidRegistrantStore: normalizeEsidRegistrantStoreLoose(mutation?.store),
+      });
+    }
+    case "SET_ESID_AGENT_STORE": {
+      return finishState(state, rows, {
+        esidAgentStore: normalizeEsidAgentStoreLoose(mutation?.store),
+      });
+    }
     case "UPDATE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
       if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
@@ -273,7 +296,7 @@ export function applyMutation(state, mutation) {
     }
     default:
       throw new Error(
-        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: RESET_TRIAL_DATA, SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, UPDATE, DELETE, ADD.`
+        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: RESET_TRIAL_DATA, SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, SET_ESID_REGISTRANT_STORE, SET_ESID_AGENT_STORE, UPDATE, DELETE, ADD.`
       );
   }
 

@@ -1,5 +1,6 @@
 import { EsidRegistrantSettingsButton } from "./EsidRegistrantSettingsButton";
 import { EsidAgentSettingsButton } from "./EsidAgentSettingsButton";
+import { TcsLiveViewPanel } from "./TcsLiveViewPanel";
 import type { TcsPortalActions } from "../hooks/useTcsPortalActions";
 import {
   clearTcsAgentBaseUrl,
@@ -86,16 +87,25 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           className={btnGhost}
           disabled={tcs.busy}
           onClick={() => void tcs.login()}
-          title="Tự mở trang TCS trên Chrome máy kho — không cần thao tác riêng"
+          title="Login TCS + tự mở xem live trang agent trên Ops"
         >
           Login
+        </button>
+        <button
+          type="button"
+          className={btnGhost}
+          disabled={tcs.busy && !tcs.liveViewOpen}
+          onClick={() => tcs.setLiveViewOpen(!tcs.liveViewOpen)}
+          title="Xem live màn hình Chrome agent (kể cả Railway headless)"
+        >
+          {tcs.liveViewOpen ? "Ẩn live" : "Xem live"}
         </button>
         <button
           type="button"
           className={btnScan}
           disabled={tcs.busy || tcs.eligibleCount === 0}
           onClick={() => void tcs.scan()}
-          title="Quét ESID (tách riêng): lọc theo ngày phiên → cập nhật status Ops. Tải PDF ESID: menu ⋮ từng dòng (1 AWB, tìm AWB# 8 số)."
+          title="Quét ESID: lọc theo ngày phiên → cập nhật status Ops. Tải PDF: menu ⋮ từng dòng."
         >
           Quét
         </button>
@@ -154,6 +164,35 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           ) : null}
         </div>
       )}
+
+      <TcsLiveViewPanel
+        active={tcs.liveViewOpen}
+        busy={tcs.busy}
+        compact={compact}
+        onClose={() => tcs.setLiveViewOpen(false)}
+      />
+
+      {tcs.loginPreviewUrl && !tcs.liveViewOpen ? (
+        <div className="mx-0.5 flex min-w-0 flex-col gap-1 rounded-xl border border-sky-500/25 bg-sky-50/70 p-2 dark:border-sky-400/20 dark:bg-sky-950/35">
+          <div className="flex items-center justify-between gap-1">
+            <p className="text-[10px] font-semibold text-sky-900 dark:text-sky-100">
+              Ảnh sau Login
+            </p>
+            <button
+              type="button"
+              className="text-[10px] font-semibold text-slate-500 underline"
+              onClick={tcs.clearLoginPreview}
+            >
+              Đóng
+            </button>
+          </div>
+          <img
+            src={tcs.loginPreviewUrl}
+            alt="Preview trang TCS sau Login"
+            className="mx-auto max-h-44 w-auto max-w-full object-contain rounded-lg border border-sky-500/20 bg-white"
+          />
+        </div>
+      ) : null}
 
       {preview ? (
         <div

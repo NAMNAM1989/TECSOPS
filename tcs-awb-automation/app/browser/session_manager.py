@@ -204,6 +204,16 @@ class SessionManager:
                 prefer_session=prefer,
             )
 
+    def focus_window(self) -> dict[str, Any]:
+        """Đưa cửa sổ Chrome lên trước (headed máy kho)."""
+        if not self._has_live_session() or self.session is None:
+            return {
+                "ok": False,
+                "headless": bool(self.settings.headless),
+                "message": "Chrome chưa mở — POST /session/open",
+            }
+        return self.session.focus_window()
+
     def portal(self) -> AwbPortalPage:
         self.reload_locators()
         if not self._has_live_session():

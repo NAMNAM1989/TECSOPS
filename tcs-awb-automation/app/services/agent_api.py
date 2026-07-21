@@ -21,7 +21,7 @@ from app.services.awb_service import validate_ops_payload
 from app.services.batch_service import BatchService
 from app.services.download_service import resolve_docs_file
 from app.services.esid_scan_service import scan_esid_reception
-from app.services.esid_declare_service import fill_esid_declare
+from app.services.esid_declare_service import fill_esid_declare, submit_esid_declare
 from app.services.tcs_client import TcsClient
 from app.utils.awb import digits_only
 
@@ -131,7 +131,12 @@ def make_handler(state: AgentState):
         def _file(self, code: int, data: bytes, content_type: str, filename: str) -> None:
             self.send_response(code)
             self.send_header("Content-Type", content_type)
-            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            # Ảnh preview: inline để <img src="/docs?file=…"> load được; PDF vẫn attachment
+            if content_type.startswith("image/"):
+                self.send_header("Content-Disposition", f'inline; filename="{filename}"')
+                self.send_header("Cache-Control", "no-store")
+            else:
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
             self.send_header("Content-Length", str(len(data)))
             self._cors()
             self.end_headers()
@@ -166,9 +171,10 @@ def make_handler(state: AgentState):
                         "warehouse_scope": state.settings.warehouse_scope,
                         "mock": state.settings.mock,
                         "dry_run": state.settings.dry_run,
+                        "headless": bool(state.settings.headless),
                         "running": state.running,
                         "docs_dir": str(docs),
-                        "session": sess,
+                        "session": {**sess, "headless": bool(state.settings.headless)},
                         "prepared_awb": hot,
                         "preparing_awb": state.preparing_awb,
                     },
@@ -176,13 +182,14 @@ def make_handler(state: AgentState):
                 return
             if path == "/session/status":
                 if state.running:
-                    self._json(200, {"ok": True, **state.session_snapshot})
+                    snap = dict(state.session_snapshot)
                 else:
                     try:
                         snap = state.call_on_worker(state.refresh_session_snapshot)
                     except Exception:
                         snap = dict(state.session_snapshot)
-                    self._json(200, {"ok": True, **snap})
+                snap = {**snap, "headless": bool(state.settings.headless)}
+                self._json(200, {"ok": True, **snap})
                 return
             if path == "/last-job":
                 self._json(200, {"ok": True, "job": state.last_job})
@@ -265,6 +272,29 @@ def make_handler(state: AgentState):
                     state.session_snapshot = {"open": False, "logged_in": False, "url": "", "message": "closed"}
                 self._json(200, {"ok": True, "open": False})
                 return
+            if path == "/session/focus":
+                # Đưa cửa sổ Chrome lên trước (headed máy kho) — không đụng form
+                with state.lock:
+                    if state.running:
+                        self._json(
+                            409,
+                            {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"},
+                        )
+                        return
+                    state.running = True
+                try:
+                    def _focus() -> dict[str, Any]:
+                        return state.sessions.focus_window()
+
+                    result = state.call_on_worker(_focus)
+                    code = 200 if result.get("ok") else 400
+                    self._json(code, result)
+                except Exception as e:
+                    self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
+                finally:
+                    with state.lock:
+                        state.running = False
+                return
             if path == "/jobs":
                 self._handle_job(payload)
                 return
@@ -276,6 +306,9 @@ def make_handler(state: AgentState):
                 return
             if path == "/esid/declare-fill":
                 self._handle_esid_declare_fill(payload)
+                return
+            if path == "/esid/declare-submit":
+                self._handle_esid_declare_submit(payload)
                 return
             if path == "/control/pause":
                 state.batch.pause()
@@ -484,6 +517,31 @@ def make_handler(state: AgentState):
                 with state.lock:
                     state.running = False
 
+        def _handle_esid_declare_submit(self, payload: dict[str, Any]) -> None:
+            """HOÀN TẤT form KHAI BÁO đang mở — bắt buộc confirm_submit."""
+            with state.lock:
+                if state.running:
+                    self._json(409, {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"})
+                    return
+                state.running = True
+
+            def _submit() -> tuple[int, dict[str, Any]]:
+                result = submit_esid_declare(state.sessions, state.settings, payload)
+                state.refresh_session_snapshot()
+                code = 200 if result.get("ok") else 400
+                if result.get("error") in {"NEEDS_LOGIN", "NO_BROWSER", "CONFIRM_REQUIRED"}:
+                    code = 400
+                return code, result
+
+            try:
+                code, result = state.call_on_worker(_submit)
+                self._json(code, result)
+            except Exception as e:
+                self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
+            finally:
+                with state.lock:
+                    state.running = False
+
         def _handle_job(self, payload: dict[str, Any]) -> None:
             # Nếu đang prepare đúng AWB của job → chờ prepare xong rồi chạy hot-path
             try:
@@ -669,10 +727,13 @@ def serve_agent(settings: Settings | None = None) -> None:
     mode = "MOCK" if settings.mock else "REAL"
     print(f"TCS AWB Agent [{mode}] http://{host}:{port} scope={settings.warehouse_scope}")
     print("GET  /health  /session/status  /docs?file=")
-    print("POST /session/open  /session/close  /jobs  /esid/prepare  /esid/scan  /esid/declare-fill  /control/pause|resume|stop")
+    print(
+        f"mode={'HEADLESS' if settings.headless else 'HEADED'} · "
+        "POST /session/open|/close|/focus  /jobs  /esid/prepare|/scan|/declare-fill|/declare-submit"
+    )
     if not settings.mock:
         print(
-            "REAL mode: POST /session/open → login → POST /esid/prepare|declare-fill → /jobs DOWNLOAD"
+            "REAL mode: POST /session/open → login → POST /esid/prepare|declare-fill|declare-submit → /jobs DOWNLOAD"
         )
     try:
         httpd.serve_forever()

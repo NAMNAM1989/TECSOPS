@@ -55,17 +55,27 @@ export function spawnTcsAgent(opts = {}) {
   const real = opts.real !== false;
   const py = resolveAgentPython();
   const args = ["-m", "app.main", "agent", real ? "--real" : "--mock", ...(real ? [] : ["--dry-run"])];
+  // Máy kho / npm run dev: mặc định HEADED (Chrome thật) để xem form trước HOÀN TẤT.
+  // Railway/Docker: start-fullstack đặt TCS_HEADLESS=1.
+  const headless =
+    opts.env?.TCS_HEADLESS ??
+    process.env.TCS_HEADLESS ??
+    "0";
   const env = {
     ...process.env,
     ...(opts.env || {}),
     TCS_MOCK: real ? "0" : "1",
     TCS_DRY_RUN: real ? process.env.TCS_DRY_RUN || "0" : "1",
+    TCS_HEADLESS: String(headless),
     TCS_AGENT_HOST: process.env.TCS_AGENT_HOST || "127.0.0.1",
     TCS_AGENT_PORT: String(AGENT_PORT),
     PYTHONIOENCODING: "utf-8",
     PYTHONUNBUFFERED: "1",
   };
-  console.info(`[tcs-agent] ${py} ${args.join(" ")} (cwd=${agentDir})`);
+  const modeLabel = String(env.TCS_HEADLESS) === "1" || String(env.TCS_HEADLESS).toLowerCase() === "true"
+    ? "HEADLESS"
+    : "HEADED";
+  console.info(`[tcs-agent] ${modeLabel} · ${py} ${args.join(" ")} (cwd=${agentDir})`);
   return spawn(py, args, {
     cwd: agentDir,
     env,

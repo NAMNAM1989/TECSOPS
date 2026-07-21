@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import re
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from app.browser.locators import LocatorsConfig
 from app.browser.pages.awb_page import NeedsLoginError, SiteChangedError
 from app.browser.pages.esid_page import EsidListPage
+from app.utils.awb import digits_only
 
 ESID_HOME = "https://www.tcs.com.vn/Esid/Export"
 
@@ -1160,4 +1163,144 @@ class EsidDeclarePage:
                 if not submitted
                 else "Đã gửi HOÀN TẤT"
             ),
+        }
+
+    def read_form_awb(self) -> str:
+        """Đọc AWB (11 số) từ form KHAI BÁO đang mở."""
+        try:
+            raw = self.page.evaluate(
+                """() => {
+                  const pick = (id) => {
+                    const nodes = [...document.querySelectorAll('#' + id)];
+                    for (const n of nodes) {
+                      if (n.closest('.ant-modal')) continue;
+                      return String(n.value || '').trim();
+                    }
+                    return '';
+                  };
+                  return (pick('codAwbPfx') + pick('codAwbNum')).replace(/\\D/g, '');
+                }"""
+            )
+            return digits_only(str(raw or ""))
+        except Exception:
+            return ""
+
+    def capture_preview(self, docs_dir: Path, awb: str) -> dict[str, Any]:
+        """Screenshot viewport form → lưu dưới output/docs, trả preview_file/url."""
+        docs_dir = Path(docs_dir)
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        awb_d = digits_only(awb) or "unknown"
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        name = f"{awb_d}_ESID_DECLARE_PREVIEW_{stamp}.png"
+        path = docs_dir / name
+        try:
+            # Cuộn lên đầu form khai báo để ảnh thấy AWB/chuyến bay
+            try:
+                self.page.evaluate(
+                    """() => {
+                      const el = document.querySelector('#codAwbPfx')
+                        || document.querySelector('#codAwbNum');
+                      if (el) el.scrollIntoView({ block: 'start', behavior: 'instant' });
+                      else window.scrollTo(0, 0);
+                    }"""
+                )
+                self.page.wait_for_timeout(120)
+            except Exception:
+                pass
+            self.page.screenshot(path=str(path), full_page=False)
+            if not path.is_file() or path.stat().st_size < 100:
+                return {"preview_file": None, "preview_url": None, "preview_error": "Screenshot rỗng"}
+            return {
+                "preview_file": name,
+                "preview_url": f"/docs?file={name}",
+            }
+        except Exception as e:
+            return {
+                "preview_file": None,
+                "preview_url": None,
+                "preview_error": str(e)[:200],
+            }
+
+    def submit_open_declare(self, expected_awb: str) -> dict[str, Any]:
+        """
+        Tick đồng ý + HOÀN TẤT trên form đang mở (không điền lại).
+        Bắt buộc AWB trên form khớp expected_awb.
+        """
+        warnings: list[str] = []
+        awb_exp = digits_only(expected_awb)
+        if len(awb_exp) != 11:
+            return {
+                "ok": False,
+                "error": "VALIDATION",
+                "message": "AWB phải đủ 11 số",
+                "awb": awb_exp,
+                "submitted": False,
+                "warnings": warnings,
+            }
+
+        form_awb = self.read_form_awb()
+        if len(form_awb) != 11:
+            return {
+                "ok": False,
+                "error": "NO_FORM",
+                "message": "Không thấy form KHAI BÁO đang mở — hãy Điền lại trước khi HOÀN TẤT",
+                "awb": awb_exp,
+                "form_awb": form_awb,
+                "submitted": False,
+                "warnings": warnings,
+            }
+        if form_awb != awb_exp:
+            return {
+                "ok": False,
+                "error": "AWB_MISMATCH",
+                "message": f"Form đang mở AWB {form_awb}, không khớp {awb_exp} — hủy HOÀN TẤT",
+                "awb": awb_exp,
+                "form_awb": form_awb,
+                "submitted": False,
+                "warnings": warnings,
+            }
+
+        if not self._on_declare_form():
+            return {
+                "ok": False,
+                "error": "NO_FORM",
+                "message": "Không còn ở form KHAI BÁO — hãy Điền lại trước khi HOÀN TẤT",
+                "awb": awb_exp,
+                "form_awb": form_awb,
+                "submitted": False,
+                "warnings": warnings,
+            }
+
+        ok_agree = self._set_checkbox("agreeConfirm", True)
+        if not ok_agree:
+            warnings.append("Không tick được #agreeConfirm")
+
+        submitted = False
+        try:
+            btn = self.page.get_by_role("button", name=re.compile(r"HOÀN\s*TẤT", re.I))
+            btn.first.click(timeout=5000)
+            submitted = True
+            self.page.wait_for_timeout(600)
+        except Exception as e:
+            warnings.append(f"Không bấm HOÀN TẤT: {e}")
+            submitted = False
+
+        try:
+            blob = self.page.evaluate(
+                "() => (document.body && document.body.innerText || '').slice(0, 4000)"
+            )
+            if re.search(r"đã đăng ký|da dang ky", str(blob or ""), re.I):
+                warnings.append("TCS cảnh báo AWB đã đăng ký — kiểm tra danh sách ESID")
+        except Exception:
+            pass
+
+        return {
+            "ok": submitted,
+            "awb": awb_exp,
+            "form_awb": form_awb,
+            "submitted": submitted,
+            "agree_ticked": ok_agree,
+            "warnings": warnings,
+            "message": "Đã gửi HOÀN TẤT trên TCS" if submitted else "HOÀN TẤT thất bại",
+            "error": None if submitted else "SUBMIT_FAILED",
         }

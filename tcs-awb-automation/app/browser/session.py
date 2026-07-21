@@ -112,6 +112,45 @@ class BrowserSession:
             self.close()
             raise
 
+    def focus_window(self) -> dict[str, Any]:
+        """
+        Đưa tab/cửa sổ Chrome lên trước (headed máy kho).
+        Headless: chỉ bring_to_front tab (không có cửa sổ OS).
+        """
+        if not self.is_alive() or self.page is None:
+            return {"ok": False, "message": "Chrome chưa mở"}
+        notes: list[str] = []
+        try:
+            self.page.bring_to_front()
+            notes.append("tab")
+        except Exception as e:
+            notes.append(f"tab_err:{e}")
+        # Un-minimize / normal bounds qua CDP (chỉ hữu ích khi headed)
+        try:
+            cdp = self.page.context.new_cdp_session(self.page)
+            try:
+                info = cdp.send("Browser.getWindowForTarget")
+                wid = info.get("windowId")
+                if wid is not None:
+                    cdp.send(
+                        "Browser.setWindowBounds",
+                        {"windowId": wid, "bounds": {"windowState": "normal"}},
+                    )
+                    notes.append("window")
+            finally:
+                try:
+                    cdp.detach()
+                except Exception:
+                    pass
+        except Exception as e:
+            notes.append(f"cdp:{type(e).__name__}")
+        return {
+            "ok": True,
+            "headless": bool(self.settings.headless),
+            "message": "Đã hiện Chrome" if not self.settings.headless else "Headless — không có cửa sổ OS",
+            "detail": "+".join(notes),
+        }
+
     def close(self) -> None:
         # Tách cleanup context/driver: context đã chết vẫn phải stop Playwright.
         context, playwright = self._context, self._playwright

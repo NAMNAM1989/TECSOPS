@@ -12,9 +12,15 @@ import { spawnTcsAgent } from "./spawnTcsAgent.mjs";
 const wantReal = process.argv.includes("--real");
 const child = spawnTcsAgent({ real: wantReal, stdio: "inherit" });
 
+const headless =
+  process.env.TCS_HEADLESS === "1" ||
+  String(process.env.TCS_HEADLESS || "").toLowerCase() === "true";
 console.info(
   wantReal
-    ? "[tcs:agent] REAL — Ops proxy /tcs-agent → :8765. Login: nút Login trên Ops hoặc POST /session/open."
+    ? `[tcs:agent] REAL ${headless ? "HEADLESS" : "HEADED"} — Ops proxy /tcs-agent → :8765. ` +
+        (headless
+          ? "Login OCR/auto."
+          : "Chrome thật trên máy này — sau Điền xem form rồi HOÀN TẤT trên Chrome hoặc Ops.")
     : "[tcs:agent] MOCK — không cần login TCS."
 );
 

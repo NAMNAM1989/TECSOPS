@@ -11,6 +11,27 @@ from app.config import Settings
 from app.utils.awb import digits_only
 
 
+def _session_gate(
+    sessions: SessionManager, awb: str
+) -> dict[str, Any] | None:
+    st = sessions.status()
+    if not st.open or sessions.page is None:
+        return {
+            "ok": False,
+            "error": "NO_BROWSER",
+            "message": "Chưa mở Chrome — POST /session/open",
+            "awb": awb,
+        }
+    if not st.logged_in:
+        return {
+            "ok": False,
+            "error": "NEEDS_LOGIN",
+            "message": "Cần login TCS trước khi điền ESID",
+            "awb": awb,
+        }
+    return None
+
+
 def fill_esid_declare(
     sessions: SessionManager,
     settings: Settings,
@@ -87,25 +108,14 @@ def fill_esid_declare(
         "registrant_cccd": registrant.get("cccd") or payload.get("registrant_cccd") or "",
     }
 
-    st = sessions.status()
-    if not st.open or sessions.page is None:
-        return {
-            "ok": False,
-            "error": "NO_BROWSER",
-            "message": "Chưa mở Chrome — POST /session/open",
-            "awb": awb,
-        }
-    if not st.logged_in:
-        return {
-            "ok": False,
-            "error": "NEEDS_LOGIN",
-            "message": "Cần login TCS trước khi điền ESID",
-            "awb": awb,
-        }
+    gate = _session_gate(sessions, awb)
+    if gate:
+        return gate
 
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
     portal = AwbPortalPage(sessions.page, loc)
     declare = EsidDeclarePage(sessions.page, loc)
+    docs_dir = settings.output_dir / "docs"
     t0 = time_ms()
     try:
         if portal.is_login_page():
@@ -116,6 +126,24 @@ def fill_esid_declare(
                 "awb": awb,
             }
         result = declare.fill_declare(data, submit=submit)
+        # Ảnh preview phụ (Ops từ máy khác); headed: cửa sổ Chrome máy kho là nguồn kiểm tra
+        if result.get("ok") and not result.get("submitted"):
+            preview = declare.capture_preview(docs_dir, awb)
+            result.update(preview)
+            if preview.get("preview_error"):
+                result.setdefault("warnings", []).append(
+                    f"Preview: {preview['preview_error']}"
+                )
+            # Đưa Chrome lên trước để nhìn form thật trên máy kho
+            if sessions.session is not None and not settings.headless:
+                focus = sessions.focus_window()
+                result["browser_focused"] = bool(focus.get("ok"))
+                result["headless"] = False
+            else:
+                result["headless"] = bool(settings.headless)
+                result["browser_focused"] = False
+        else:
+            result["headless"] = bool(settings.headless)
         result["elapsed_ms"] = time_ms() - t0
         result["shipment_id"] = shipment.get("shipment_id") or shipment.get("id") or ""
         return result
@@ -125,6 +153,92 @@ def fill_esid_declare(
         return {"ok": False, "error": "SITE_CHANGED", "message": str(e), "awb": awb}
     except Exception as e:
         return {"ok": False, "error": "INTERNAL", "message": str(e)[:300], "awb": awb}
+
+
+def submit_esid_declare(
+    sessions: SessionManager,
+    settings: Settings,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """HOÀN TẤT form KHAI BÁO đang mở — bắt buộc confirm_submit."""
+    warehouse = str(payload.get("warehouse") or "TECS-TCS").upper()
+    if warehouse not in {"TECS-TCS", "KHO-TCS"}:
+        return {"ok": False, "error": "WAREHOUSE_SCOPE", "message": "Chỉ TECS-TCS"}
+
+    if not bool(payload.get("confirm_submit", False)):
+        return {
+            "ok": False,
+            "error": "CONFIRM_REQUIRED",
+            "message": "Cần confirm_submit: true để HOÀN TẤT trên TCS",
+            "submitted": False,
+        }
+
+    awb = digits_only(str(payload.get("awb") or ""))
+    if len(awb) != 11:
+        return {
+            "ok": False,
+            "error": "VALIDATION",
+            "message": "AWB phải đủ 11 số",
+            "submitted": False,
+        }
+
+    gate = _session_gate(sessions, awb)
+    if gate:
+        gate["submitted"] = False
+        return gate
+
+    loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
+    portal = AwbPortalPage(sessions.page, loc)
+    declare = EsidDeclarePage(sessions.page, loc)
+    docs_dir = settings.output_dir / "docs"
+    t0 = time_ms()
+    try:
+        if portal.is_login_page():
+            return {
+                "ok": False,
+                "error": "NEEDS_LOGIN",
+                "message": "Đang ở trang login",
+                "awb": awb,
+                "submitted": False,
+            }
+        result = declare.submit_open_declare(awb)
+        # Ảnh sau submit (thành công hoặc lỗi) để Ops đối chiếu
+        preview = declare.capture_preview(docs_dir, awb)
+        # Đổi tên nhẹ: after-submit dùng cùng field để FE refresh ảnh
+        if preview.get("preview_file"):
+            result["preview_file"] = preview["preview_file"]
+            result["preview_url"] = preview["preview_url"]
+        elif preview.get("preview_error"):
+            result.setdefault("warnings", []).append(
+                f"Preview sau submit: {preview['preview_error']}"
+            )
+        result["elapsed_ms"] = time_ms() - t0
+        result["shipment_id"] = payload.get("shipment_id") or ""
+        return result
+    except NeedsLoginError as e:
+        return {
+            "ok": False,
+            "error": "NEEDS_LOGIN",
+            "message": str(e),
+            "awb": awb,
+            "submitted": False,
+        }
+    except SiteChangedError as e:
+        return {
+            "ok": False,
+            "error": "SITE_CHANGED",
+            "message": str(e),
+            "awb": awb,
+            "submitted": False,
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": "INTERNAL",
+            "message": str(e)[:300],
+            "awb": awb,
+            "submitted": False,
+        }
 
 
 def time_ms() -> int:

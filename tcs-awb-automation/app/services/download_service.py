@@ -66,10 +66,11 @@ def verify_download(path: Path) -> bool:
 
 
 def resolve_docs_file(docs_dir: Path, name: str) -> Path | None:
-    """Chỉ cho phép file PDF nằm trong docs_dir (chống path traversal)."""
+    """Chỉ cho phép file PDF/PNG/JPG trong docs_dir (chống path traversal)."""
     if not name or "/" in name or "\\" in name or ".." in name:
         return None
-    if not name.lower().endswith(".pdf"):
+    lower = name.lower()
+    if not lower.endswith((".pdf", ".png", ".jpg", ".jpeg", ".webp")):
         return None
     docs_dir = docs_dir.resolve()
     candidate = (docs_dir / name).resolve()

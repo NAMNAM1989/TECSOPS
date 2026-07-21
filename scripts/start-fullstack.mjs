@@ -60,13 +60,15 @@ function run(name, cmd, args, opts = {}) {
   return child;
 }
 
-// 1) Agent Playwright (Python, REAL). Headless + auto-open lấy từ env TCS_HEADLESS/TCS_AUTO_OPEN.
+// 1) Agent Playwright (Python, REAL). Container không có display → mặc định headless.
 run("tcs-agent", pythonBin, ["-m", "app.main", "agent", "--real"], {
   cwd: agentDir,
   env: {
     PYTHONIOENCODING: "utf-8",
     PYTHONUNBUFFERED: "1",
     TCS_MOCK: "0",
+    TCS_HEADLESS: process.env.TCS_HEADLESS || "1",
+    TCS_AUTO_OPEN: process.env.TCS_AUTO_OPEN || "1",
     TCS_AGENT_HOST: process.env.TCS_AGENT_HOST || "127.0.0.1",
     TCS_AGENT_PORT: process.env.TCS_AGENT_PORT || "8765",
   },

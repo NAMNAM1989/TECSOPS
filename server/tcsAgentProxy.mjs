@@ -5,6 +5,8 @@
  * chuyển tiếp tới agent local. Agent không cần bind 0.0.0.0 / mở firewall rộng.
  *
  * Local: `npm run dev` tự spawn agent. Railway all-in-one: start-fullstack chạy agent trong container.
+ *
+ * Bao gồm cả GET /tcs-agent/docs?file=… (PDF ESID + ảnh preview form KHAI BÁO).
  */
 import http from "node:http";
 import https from "node:https";

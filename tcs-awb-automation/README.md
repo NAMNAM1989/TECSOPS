@@ -9,8 +9,8 @@ Tự động hóa cổng `https://www.tcs.com.vn/AwbLogin` cho **kho TECS-TCS**.
 
 Ops (React) chọn lô → gửi job tới agent Playwright. Có 2 cách chạy:
 
-- **Máy kho (khuyến nghị)**: Chrome persistent + login TCS ổn định (session/OCR). Ops LAN/tunnel gọi qua proxy `/tcs-agent`.
-- **Railway all-in-one**: đóng gói Node + agent Playwright (Chromium headless) chung 1 container — Ops mở từ **mọi máy** qua Railway. Xem cảnh báo bên dưới.
+- **Máy kho (khuyến nghị)**: Chrome **headed** (`TCS_HEADLESS=0`, mặc định khi `npm run dev` / `tcs:agent:real`) — sau **Điền** ESID, cửa sổ Chrome trên máy kho giữ form để kiểm tra tay, rồi HOÀN TẤT trên Chrome hoặc nút Ops. Ops LAN gọi qua proxy `/tcs-agent`.
+- **Railway all-in-one**: Node + agent **headless** — không có cửa sổ Chrome; chỉ xem ảnh preview + HOÀN TẤT từ Ops.
 
 ### Railway all-in-one (Playwright headless trên cloud)
 
@@ -28,11 +28,12 @@ Deploy:
 
 ### Máy khác trong LAN
 
-1. Máy kho: `npm run dev` — **tự chạy** API + Vite + agent REAL (`:8765`). Tắt auto: `TCS_AGENT_AUTO=0`.
+1. Máy kho: `npm run dev` — **tự chạy** API + Vite + agent REAL **headed** (`:8765`). Tắt auto: `TCS_AGENT_AUTO=0`. Ép headless: `TCS_HEADLESS=1`.
 2. Máy khác: mở Ops bằng **IP máy kho** (vd. `http://192.168.1.50:5173`), không dùng `127.0.0.1`.
 3. Browser gọi same-origin `/tcs-agent` → Vite/Express proxy tới `127.0.0.1:8765` trên máy kho.
-4. Nút **URL** trên thanh Cổng TCS: để trống = proxy; chỉ điền nếu dùng tunnel HTTPS.
-5. Agent riêng (không qua `dev`): `npm run tcs:agent:real`.
+4. Sau **Điền**: nhìn **Chrome trên máy kho** (nút Ops «Hiện Chrome»), không mở tcs.com.vn trên máy bạn.
+5. Nút **URL** trên thanh Cổng TCS: để trống = proxy; chỉ điền nếu dùng tunnel HTTPS.
+6. Agent riêng (không qua `dev`): `npm run tcs:agent:real`.
 
 ## Cài đặt (máy kho Windows)
 

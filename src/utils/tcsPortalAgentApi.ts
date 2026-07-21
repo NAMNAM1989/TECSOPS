@@ -23,6 +23,8 @@ export type TcsAgentSession = {
   url?: string;
   awb_locators_confirmed?: boolean;
   message?: string;
+  /** true = Chrome không có cửa sổ (Railway); false = headed máy kho */
+  headless?: boolean;
 };
 
 export type TcsAgentHealth = {
@@ -32,6 +34,8 @@ export type TcsAgentHealth = {
   warehouse_scope?: string;
   mock?: boolean;
   dry_run?: boolean;
+  /** Agent chạy headless (container) hay headed (máy kho có màn hình) */
+  headless?: boolean;
   running?: boolean;
   docs_dir?: string;
   session?: TcsAgentSession;
@@ -146,6 +150,42 @@ export async function fetchTcsSessionStatus(): Promise<TcsAgentSession | null> {
     return body;
   } catch {
     return null;
+  }
+}
+
+/** Đưa cửa sổ Chrome agent lên trước (headed máy kho). */
+export async function focusTcsAgentSession(): Promise<{
+  ok: boolean;
+  headless?: boolean;
+  message?: string;
+  detail?: string;
+  error?: string;
+}> {
+  const base = agentBase();
+  try {
+    const res = await fetch(`${base}/session/focus`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const body = (await res.json()) as {
+      ok?: boolean;
+      headless?: boolean;
+      message?: string;
+      detail?: string;
+      error?: string;
+    };
+    if (!res.ok || body.ok === false) {
+      return {
+        ok: false,
+        headless: body.headless,
+        message: body.message || "Không hiện được Chrome",
+        error: body.error,
+      };
+    }
+    return { ok: true, ...body };
+  } catch {
+    return { ok: false, message: agentOfflineHint(base), error: "AGENT_OFFLINE" };
   }
 }
 
@@ -331,6 +371,12 @@ export type TcsEsidDeclareFillResponse = {
   error?: string;
   elapsed_ms?: number;
   shipment_id?: string;
+  /** Tên file trong output/docs — load qua GET /docs?file= */
+  preview_file?: string | null;
+  preview_url?: string | null;
+  preview_error?: string;
+  headless?: boolean;
+  browser_focused?: boolean;
   timings?: {
     ops_text_ms?: number;
     flight_ms?: number;
@@ -338,6 +384,21 @@ export type TcsEsidDeclareFillResponse = {
     party_ms?: number;
     total_ms?: number;
   };
+};
+
+export type TcsEsidDeclareSubmitResponse = {
+  ok: boolean;
+  awb?: string;
+  form_awb?: string;
+  submitted?: boolean;
+  agree_ticked?: boolean;
+  warnings?: string[];
+  message?: string;
+  error?: string;
+  elapsed_ms?: number;
+  shipment_id?: string;
+  preview_file?: string | null;
+  preview_url?: string | null;
 };
 
 /** Điền form KHAI BÁO ESID từ Ops — không HOÀN TẤT. */
@@ -376,6 +437,62 @@ export async function declareFillTcsEsid(
       message: body.message || "Điền ESID thất bại",
       awb: body.awb,
       warnings: body.warnings,
+      elapsed_ms: body.elapsed_ms,
+      preview_file: body.preview_file,
+      preview_url: body.preview_url,
+    };
+  }
+  return body;
+}
+
+/** HOÀN TẤT form KHAI BÁO đang mở trên agent — bắt buộc confirm_submit. */
+export async function declareSubmitTcsEsid(opts: {
+  awb: string;
+  shipment_id?: string;
+  confirm_submit: true;
+}): Promise<TcsEsidDeclareSubmitResponse> {
+  const base = agentBase();
+  let res: Response;
+  try {
+    res = await fetch(`${base}/esid/declare-submit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        warehouse: "TECS-TCS",
+        awb: opts.awb,
+        shipment_id: opts.shipment_id || undefined,
+        confirm_submit: true,
+      }),
+    });
+  } catch {
+    return {
+      ok: false,
+      error: "AGENT_OFFLINE",
+      message: agentOfflineHint(base),
+      submitted: false,
+    };
+  }
+  let body: TcsEsidDeclareSubmitResponse;
+  try {
+    body = (await res.json()) as TcsEsidDeclareSubmitResponse;
+  } catch {
+    return {
+      ok: false,
+      error: "BAD_RESPONSE",
+      message: `Agent trả về phản hồi không hợp lệ (HTTP ${res.status})`,
+      submitted: false,
+    };
+  }
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: body.error || `HTTP_${res.status}`,
+      message: body.message || "HOÀN TẤT ESID thất bại",
+      awb: body.awb,
+      form_awb: body.form_awb,
+      warnings: body.warnings,
+      submitted: body.submitted ?? false,
+      preview_file: body.preview_file,
       elapsed_ms: body.elapsed_ms,
     };
   }
@@ -422,9 +539,14 @@ export function getTcsAgentBaseUrl(): string {
   return agentBase();
 }
 
-export function tcsAgentPdfUrl(pdfNameOrPath: string): string {
-  const name = pdfNameOrPath.replace(/^.*[/\\]/, "");
+/** URL file trong output/docs (PDF hoặc ảnh preview) qua proxy /tcs-agent. */
+export function tcsAgentDocUrl(nameOrPath: string): string {
+  const name = nameOrPath.replace(/^.*[/\\]/, "");
   return `${agentBase()}/docs?file=${encodeURIComponent(name)}`;
+}
+
+export function tcsAgentPdfUrl(pdfNameOrPath: string): string {
+  return tcsAgentDocUrl(pdfNameOrPath);
 }
 
 /**

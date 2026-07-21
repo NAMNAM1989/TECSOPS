@@ -4,7 +4,7 @@
  * TCS_VNC=1 (mặc định trên Docker): Xvfb + x11vnc + noVNC → Ops `/tcs-desktop`
  * thao tác Chrome agent thật. Agent chạy headed trên DISPLAY=:99.
  *
- * TCS_VNC=0: agent headless như cũ (nhẹ hơn, chỉ ảnh live).
+ * TCS_VNC=0: agent headless như cũ (nhẹ hơn, không noVNC).
  */
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";

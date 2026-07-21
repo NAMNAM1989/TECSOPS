@@ -145,12 +145,6 @@ export function formatCutoffDisplayFromLocalParts(ymd: string, hour: string, min
   return `${timePart} - ${ddmon}`;
 }
 
-export function formatCutoffDisplayVi(iso: string): string {
-  const { date, hour, minute } = splitIsoToLocalDateTime(iso);
-  if (!date) return "";
-  return formatCutoffDisplayFromLocalParts(date, hour, minute);
-}
-
 /** ISO cutoff → chuỗi giờ nhập tay (17H / 17H30). */
 export function cutoffIsoToTimeInputText(iso: string): string {
   if (!iso?.trim()) return "";

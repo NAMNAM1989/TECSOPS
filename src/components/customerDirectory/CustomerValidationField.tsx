@@ -1,5 +1,4 @@
 import type { CustomerFieldError, CustomerProfileSection } from "../../utils/customerDirectoryValidation";
-import { getFieldValidationError } from "../../utils/customerDirectoryValidation";
 import { CD, cdInput, cdInputInvalid } from "./customerDirectoryStyles";
 
 export function CustomerValidationBanner({ errors }: { errors: readonly CustomerFieldError[] }) {
@@ -15,15 +14,6 @@ export function CustomerValidationBanner({ errors }: { errors: readonly Customer
       ))}
     </div>
   );
-}
-
-export function useFieldError(
-  errors: readonly CustomerFieldError[],
-  section: CustomerProfileSection,
-  field: string,
-  itemId?: string
-): string | undefined {
-  return getFieldValidationError(errors, section, field, itemId);
 }
 
 export function fieldInputClass(invalid: boolean): string {

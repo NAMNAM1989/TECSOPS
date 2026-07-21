@@ -37,9 +37,6 @@ export const statusRowAccent: Record<ShipmentStatus, string> = {
   COMPLETED: "border-l-2 border-l-emerald-400/80 dark:border-l-emerald-400/60",
 };
 
-/** @deprecated */
-export const statusRowBorder: Record<ShipmentStatus, string> = statusRowAccent;
-
 /** Hàng được chọn — tint amber nhẹ. */
 export const statusRowSelected =
   "bg-amber-500/[0.04] ring-1 ring-amber-500/30 dark:bg-amber-500/[0.08] dark:ring-amber-400/20";
@@ -64,31 +61,6 @@ export const statusSelectSurface: Record<ShipmentStatus, string> = {
     "bg-lime-500/10 text-lime-700 border-lime-500/15 dark:bg-lime-400/10 dark:text-lime-300 dark:border-lime-400/20",
   COMPLETED:
     "bg-emerald-500/10 text-emerald-700 border-emerald-500/15 dark:bg-emerald-400/10 dark:text-emerald-300 dark:border-emerald-400/20",
-};
-
-export const statusBadge: Record<ShipmentStatus, string> = {
-  PENDING: "bg-blue-500/15 text-blue-800 dark:bg-blue-400/15 dark:text-blue-200 font-bold",
-  RECEIVED: "bg-amber-500/15 text-amber-900 dark:bg-amber-400/15 dark:text-amber-200 font-bold",
-  VOLUME_DONE: "bg-cyan-500/15 text-cyan-900 dark:bg-cyan-400/15 dark:text-cyan-200 font-bold",
-  CUSTOMS: "bg-sky-500/15 text-sky-900 dark:bg-sky-400/15 dark:text-sky-200 font-bold",
-  SECURITY: "bg-orange-500/15 text-orange-900 dark:bg-orange-400/15 dark:text-orange-200 font-bold",
-  OLA_PULL: "bg-fuchsia-500/15 text-fuchsia-900 dark:bg-fuchsia-400/15 dark:text-fuchsia-200 font-bold",
-  RECEPTION_COMPLETED:
-    "bg-teal-500/15 text-teal-900 dark:bg-teal-400/15 dark:text-teal-200 font-bold",
-  WEIGH_SLIP: "bg-lime-500/15 text-lime-900 dark:bg-lime-400/15 dark:text-lime-200 font-bold",
-  COMPLETED: "bg-emerald-500/15 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-300 font-bold",
-};
-
-export const statusCardBg: Record<ShipmentStatus, string> = {
-  PENDING: "bg-blue-50/95 border-blue-200/60 dark:bg-blue-500/10 dark:border-blue-400/30",
-  RECEIVED: "bg-amber-50/95 border-amber-200/60 dark:bg-amber-500/10 dark:border-amber-400/30",
-  VOLUME_DONE: "bg-cyan-50/95 border-cyan-200/60 dark:bg-cyan-500/10 dark:border-cyan-400/30",
-  CUSTOMS: "bg-sky-50/95 border-sky-200/60 dark:bg-sky-500/10 dark:border-sky-400/30",
-  SECURITY: "bg-orange-50/95 border-orange-200/60 dark:bg-orange-500/10 dark:border-orange-400/30",
-  OLA_PULL: "bg-fuchsia-50/95 border-fuchsia-200/60 dark:bg-fuchsia-500/10 dark:border-fuchsia-400/30",
-  RECEPTION_COMPLETED: "bg-teal-50/95 border-teal-200/60 dark:bg-teal-500/10 dark:border-teal-400/30",
-  WEIGH_SLIP: "bg-lime-50/95 border-lime-200/60 dark:bg-lime-500/10 dark:border-lime-400/30",
-  COMPLETED: "bg-emerald-50/95 border-emerald-200/60 dark:bg-emerald-500/10 dark:border-emerald-400/30",
 };
 
 /** Màu nhấn số hiệu chuyến bay. */

@@ -28,7 +28,7 @@ Deploy:
    - `TCS_BROWSER_PROFILE=/app/tcs-awb-automation/browser_profile` (volume) — giữ cookie đã login.
    - `TCS_OUTPUT_DIR=/app/tcs-awb-automation/output` (volume) — giữ PDF.
 
-**Dùng TCS desktop:** Ops → **TCS desktop** → thao tác trên Chromium agent (không cần pass nếu không set `TCS_VNC_PASSWORD`). Không mở tab `tcs.com.vn` trên máy bạn (session khác). Ảnh live («Xem ảnh») chỉ xem, không click được.
+**Dùng TCS desktop:** Ops → **TCS desktop** → thao tác trên Chromium agent (không cần pass nếu không set `TCS_VNC_PASSWORD`). Không mở tab `tcs.com.vn` trên máy bạn (session khác).
 
 ⚠️ **Rủi ro**: image nặng hơn (RAM); CAPTCHA/IP Railway; session mất nếu không mount volume.
 

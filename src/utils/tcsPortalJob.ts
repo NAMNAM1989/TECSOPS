@@ -132,14 +132,3 @@ export function buildTcsPortalJob(
     createdAt: new Date().toISOString(),
   };
 }
-
-export function downloadTcsPortalJobJson(payload: TcsPortalJobPayload): void {
-  const stamp = payload.sessionDate.replace(/\D/g, "") || "job";
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `TCS_PORTAL_JOB_${stamp}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}

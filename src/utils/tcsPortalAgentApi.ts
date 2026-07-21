@@ -1,7 +1,7 @@
 import type { TcsPortalJobPayload } from "./tcsPortalJob";
 
 /** localStorage override — IP/tunnel tùy chỉnh */
-export const TCS_AGENT_URL_LS_KEY = "tecsops-tcs-agent-url";
+const TCS_AGENT_URL_LS_KEY = "tecsops-tcs-agent-url";
 
 /**
  * Mặc định: same-origin `/tcs-agent` (Vite/Express proxy → Playwright trên máy kho).
@@ -155,42 +155,6 @@ export async function fetchTcsSessionStatus(): Promise<TcsAgentSession | null> {
     return body;
   } catch {
     return null;
-  }
-}
-
-/** Đưa cửa sổ Chrome agent lên trước (headed máy kho). */
-export async function focusTcsAgentSession(): Promise<{
-  ok: boolean;
-  headless?: boolean;
-  message?: string;
-  detail?: string;
-  error?: string;
-}> {
-  const base = agentBase();
-  try {
-    const res = await fetch(`${base}/session/focus`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "{}",
-    });
-    const body = (await res.json()) as {
-      ok?: boolean;
-      headless?: boolean;
-      message?: string;
-      detail?: string;
-      error?: string;
-    };
-    if (!res.ok || body.ok === false) {
-      return {
-        ok: false,
-        headless: body.headless,
-        message: body.message || "Không hiện được Chrome",
-        error: body.error,
-      };
-    }
-    return { ok: true, ...body };
-  } catch {
-    return { ok: false, message: agentOfflineHint(base), error: "AGENT_OFFLINE" };
   }
 }
 
@@ -568,12 +532,7 @@ export function tcsAgentDocUrl(nameOrPath: string): string {
   return `${agentBase()}/docs?file=${encodeURIComponent(name)}`;
 }
 
-/** Ảnh live viewport TCS trên agent — thêm ?t= để bypass cache khi poll. */
-export function tcsAgentLiveScreenshotUrl(cacheBust = Date.now()): string {
-  return `${agentBase()}/session/screenshot?t=${cacheBust}`;
-}
-
-export function tcsAgentPdfUrl(pdfNameOrPath: string): string {
+function tcsAgentPdfUrl(pdfNameOrPath: string): string {
   return tcsAgentDocUrl(pdfNameOrPath);
 }
 

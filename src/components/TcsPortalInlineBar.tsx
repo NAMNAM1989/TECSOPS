@@ -1,6 +1,5 @@
 import { EsidRegistrantSettingsButton } from "./EsidRegistrantSettingsButton";
 import { EsidAgentSettingsButton } from "./EsidAgentSettingsButton";
-import { TcsLiveViewPanel } from "./TcsLiveViewPanel";
 import type { TcsPortalActions } from "../hooks/useTcsPortalActions";
 import {
   clearTcsAgentBaseUrl,
@@ -87,7 +86,7 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           className={btnGhost}
           disabled={tcs.busy}
           onClick={() => void tcs.login()}
-          title="Login TCS trên Chrome agent (xem qua TCS desktop / live)"
+          title="Login TCS trên Chrome agent (xem/thao tác qua TCS desktop)"
         >
           Login
         </button>
@@ -104,15 +103,6 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
           title="Mở desktop Chrome agent (noVNC) — click/gõ thật trên TCS"
         >
           TCS desktop
-        </button>
-        <button
-          type="button"
-          className={btnGhost}
-          disabled={tcs.busy && !tcs.liveViewOpen}
-          onClick={() => tcs.setLiveViewOpen(!tcs.liveViewOpen)}
-          title="Xem ảnh live (không thao tác được) — dùng TCS desktop để click/gõ"
-        >
-          {tcs.liveViewOpen ? "Ẩn ảnh" : "Xem ảnh"}
         </button>
         <button
           type="button"
@@ -184,14 +174,7 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
         </div>
       )}
 
-      <TcsLiveViewPanel
-        active={tcs.liveViewOpen}
-        busy={tcs.busy}
-        compact={compact}
-        onClose={() => tcs.setLiveViewOpen(false)}
-      />
-
-      {tcs.loginPreviewUrl && !tcs.liveViewOpen ? (
+      {tcs.loginPreviewUrl ? (
         <div className="mx-0.5 flex min-w-0 flex-col gap-1 rounded-xl border border-sky-500/25 bg-sky-50/70 p-2 dark:border-sky-400/20 dark:bg-sky-950/35">
           <div className="flex items-center justify-between gap-1">
             <p className="text-[10px] font-semibold text-sky-900 dark:text-sky-100">
@@ -210,6 +193,9 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
             alt="Preview trang TCS sau Login"
             className="mx-auto max-h-44 w-auto max-w-full object-contain rounded-lg border border-sky-500/20 bg-white"
           />
+          <p className="text-[9px] text-slate-500">
+            Thao tác thật: nút <strong>TCS desktop</strong>
+          </p>
         </div>
       ) : null}
 

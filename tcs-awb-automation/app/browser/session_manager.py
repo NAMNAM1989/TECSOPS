@@ -12,8 +12,6 @@ from app.browser.session import AGENT_HOME, BrowserSession
 from app.config import Settings
 
 ESID_HOME = "https://www.tcs.com.vn/Esid/Export"
-# Ảnh live cố định — Ops poll GET /session/screenshot
-LIVE_VIEW_NAME = "TCS_LIVE_VIEW.png"
 
 
 @dataclass
@@ -174,9 +172,8 @@ class SessionManager:
                     st.preview_url = shot["preview_url"]
                 st.visible_ok = False
                 tip = (
-                    "Railway/headless: không hiện cửa sổ Chrome. "
-                    "Xem ảnh trang TCS trên Ops. "
-                    "Muốn cửa sổ thật: máy kho npm run tcs:agent:real (TCS_HEADLESS=0), mở Ops qua IP máy kho."
+                    "Railway: dùng nút TCS desktop (noVNC) để xem/thao tác Chrome agent. "
+                    "Máy kho: npm run tcs:agent:real (TCS_HEADLESS=0)."
                 )
                 if headed_err:
                     tip += f" (headed lỗi: {headed_err[:120]})"
@@ -185,72 +182,25 @@ class SessionManager:
                 )
         return st
 
-    def live_view_path(self) -> Path:
+    def _capture_login_preview(self) -> dict[str, Any]:
+        """Screenshot một lần sau Login (headless) — không poll live."""
+        if not self._has_live_session() or self.session is None or self.session.page is None:
+            return {}
         docs = self.settings.output_dir / "docs"
         docs.mkdir(parents=True, exist_ok=True)
-        return docs / LIVE_VIEW_NAME
-
-    def capture_live_screenshot(self) -> dict[str, Any]:
-        """
-        Chụp viewport trang TCS hiện tại → TCS_LIVE_VIEW.png.
-        Dùng cho Ops xem live khi agent headless (Railway).
-        """
-        path = self.live_view_path()
-        if not self._has_live_session() or self.session is None or self.session.page is None:
-            if path.is_file() and path.stat().st_size > 100:
-                return {
-                    "ok": True,
-                    "cached": True,
-                    "preview_file": LIVE_VIEW_NAME,
-                    "preview_url": f"/docs?file={LIVE_VIEW_NAME}",
-                    "bytes": path.stat().st_size,
-                }
-            return {"ok": False, "error": "NO_BROWSER", "message": "Chrome chưa mở"}
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        name = f"TCS_LOGIN_PREVIEW_{stamp}.png"
+        path = docs / name
         try:
             self.session.page.screenshot(path=str(path), full_page=False, type="png")
             if not path.is_file() or path.stat().st_size < 100:
-                return {"ok": False, "error": "EMPTY", "message": "Screenshot rỗng"}
+                return {}
             return {
-                "ok": True,
-                "cached": False,
-                "preview_file": LIVE_VIEW_NAME,
-                "preview_url": f"/docs?file={LIVE_VIEW_NAME}",
-                "bytes": path.stat().st_size,
-                "url": getattr(self.session.page, "url", "") or "",
-                "headless": bool(getattr(self.session, "headless_mode", True)),
+                "preview_file": name,
+                "preview_url": f"/docs?file={name}",
             }
-        except Exception as e:
-            return {"ok": False, "error": "SHOT_FAILED", "message": str(e)[:200]}
-
-    def read_live_screenshot_bytes(self) -> bytes | None:
-        path = self.live_view_path()
-        if path.is_file() and path.stat().st_size > 100:
-            return path.read_bytes()
-        return None
-
-    def _capture_login_preview(self) -> dict[str, Any]:
-        """Screenshot sau Login + cập nhật live view."""
-        live = self.capture_live_screenshot()
-        if live.get("ok") and live.get("preview_file"):
-            # Giữ thêm bản timestamp để đối chiếu
-            docs = self.settings.output_dir / "docs"
-            stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-            name = f"TCS_LOGIN_PREVIEW_{stamp}.png"
-            src = self.live_view_path()
-            try:
-                dest = docs / name
-                dest.write_bytes(src.read_bytes())
-                return {
-                    "preview_file": name,
-                    "preview_url": f"/docs?file={name}",
-                    "live_file": LIVE_VIEW_NAME,
-                }
-            except Exception:
-                return {
-                    "preview_file": live.get("preview_file"),
-                    "preview_url": live.get("preview_url"),
-                }
-        return {}
+        except Exception:
+            return {}
 
     def _show_tcs_portal(self, *, logged_in: bool) -> None:
         """Tự mở trang TCS nhìn thấy được ngay sau Login."""

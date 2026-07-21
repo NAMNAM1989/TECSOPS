@@ -616,7 +616,7 @@ function buildEstimatedLinesForTarget(
   const unitKgOf = (line: DimPieceLine): number =>
     lineDimKg({ ...line, pcs: 1 }, divisor, dimCtx) ?? 0;
 
-  let pcs = allocatePcsAcrossLines(remainingPcs, lineCount, rng, maxPerLine);
+  const pcs = allocatePcsAcrossLines(remainingPcs, lineCount, rng, maxPerLine);
   let lines = sizeLines.map((s, i) => ({ ...s, pcs: pcs[i]! }));
 
   const scoreLines = (trial: DimPieceLine[]): number => {
@@ -980,7 +980,7 @@ function tuneGeneratedToTarget(
   dimCtx: ScscDimRoundContext,
   rng: () => number
 ): DimPieceLine[] {
-  let lines = generated.map((l) => ({ ...l }));
+  const lines = generated.map((l) => ({ ...l }));
   const totalPcsBudget = lines.reduce((s, l) => s + l.pcs, 0);
 
   const unitKgOf = (line: DimPieceLine): number =>
@@ -1126,7 +1126,7 @@ function generateRandomDimFillLegacy(
 
   for (let i = 0; i < input.remainingPcs; i++) {
     const order = templateOrder.slice().sort(() => rng() - 0.5);
-    let placed = order.some(tryPlace) || templateOrder.some(tryPlace);
+    const placed = order.some(tryPlace) || templateOrder.some(tryPlace);
     if (!placed) {
       return { ok: false, error: `Không sinh được kiện ${i + 1}/${input.remainingPcs} (legacy cap).` };
     }

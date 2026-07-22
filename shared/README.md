@@ -4,7 +4,11 @@ Nguồn sự thật cho logic dùng chung giữa Node (`server/`) và Vite (`src
 
 - `awbFormat.mjs` — format / digits AWB
 - `airlineLabelDefaults.mjs` — map prefix → tên hãng
+<<<<<<< HEAD
 - `airlineLabelOverridesNormalize.mjs` — chuẩn hoá override tên hãng (AWB/chuyến)
+=======
+- `thermalLabelPresets.mjs` — preset khổ tem 100×80 / 100×50 (mm)
+>>>>>>> origin/cursor/cleanup-wave3-dead-thermal-locators-976b
 - `shipmentWorkflowStatus.mjs` — derive / migrate / patch trạng thái lô
 - `customerProfileLimits.mjs` — giới hạn độ dài danh bạ khách (server validate + client clamp)
 

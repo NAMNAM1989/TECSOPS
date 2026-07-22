@@ -12,8 +12,6 @@ import {
 } from "./esidDeclareFields";
 import { awbForFilename, downloadXlsxBuffer } from "./downloadXlsx";
 
-export { flightDateToYmd } from "./esidDeclareFields";
-
 type EsidAgentForExcel = EsidDeclareAgentFields;
 
 /** Cột sheet ESID_DECLARE — khớp Python esid_declare_excel.py */

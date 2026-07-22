@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "TECSOPS — Điền ESID TCS",
-  "version": "1.1.0",
-  "description": "Điền form KHAI BÁO ESID trên tab tcs.com.vn đã login (không bấm HOÀN TẤT). v1.1: chống treo overlay / inject idempotent.",
+  "version": "1.1.3",
+  "description": "Điền form KHAI BÁO ESID trên tab tcs.com.vn đã login (không bấm HOÀN TẤT). v1.1.3: load locators.json + other_request dual-try.",
   "permissions": ["tabs", "scripting", "storage"],
   "host_permissions": [
     "https://www.tcs.com.vn/*",

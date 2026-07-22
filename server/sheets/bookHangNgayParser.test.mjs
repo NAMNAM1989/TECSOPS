@@ -239,19 +239,42 @@ describe("parseBookHangNgayGrid", () => {
     expect(rows[0].customer).toBe("CITYLINK");
   });
 
-  it("ngày bay có khoảng trắng «14 JUL»", () => {
+  it("giữ colMap khi có dòng tiêu đề giữa khối TCS và SCSC", () => {
+    const header = [
+      "",
+      "AWB/BOOKING",
+      "CHUYẾN BAY/NGÀY BAY",
+      "CUTOFF / NOTE",
+      "DEST",
+      "KHO HÀNG",
+      "KIỆN / KG",
+      "KHÁCH HÀNG",
+      "CNNE",
+    ];
     const grid = [
+      { rowIndex: 0, cells: header },
       {
-        rowIndex: 0,
-        cells: ["", "AWB/BOOKING", "CHUYẾN BAY/NGÀY BAY", "", "DEST", "KHO HÀNG", "", "KHÁCH HÀNG", ""],
+        rowIndex: BOOK_DATA_START_ROW_INDEX,
+        cells: ["1", "738-0725 3886", "VN0306/23JUL", "", "NRT", "TECS-TCS", "6 / 82", "PCS", ""],
+      },
+      { rowIndex: BOOK_DATA_START_ROW_INDEX + 1, cells: ["VLC-TECS", "", "", "", "", "", "", "", ""] },
+      {
+        rowIndex: BOOK_DATA_START_ROW_INDEX + 2,
+        cells: ["2", "618-5552 6354", "SQ185/22JUL", "", "SIN", "TECS-SCSC", "36 / 680", "VICTORY", ""],
       },
       {
-        rowIndex: 19,
-        cells: ["1", "695-5630 0484", "BR382/14 JUL", "", "TPE", "TECS-TCS", "50 / 1119", "ĐỨC THẮNG", ""],
+        rowIndex: BOOK_DATA_START_ROW_INDEX + 3,
+        cells: ["CẬP NHẬT DANH SÁCH HÀNG LÊN SÂN BAY 22-JUL", "", "", "", "", "", "", "", ""],
+      },
+      {
+        rowIndex: BOOK_DATA_START_ROW_INDEX + 4,
+        cells: ["3", "978-2391 3934", "VJ081/23JUL", "", "MEL", "TECS-SCSC", "104 / 1579", "VAU", ""],
       },
     ];
-    const rows = parseBookHangNgayGrid(grid, "2026-07-13");
-    expect(rows[0].flight).toBe("BR382");
-    expect(rows[0].flightDate).toBe("14JUL");
+    const rows = parseBookHangNgayGrid(grid, "2026-07-22");
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r.warehouse)).toEqual(["TECS-TCS", "TECS-SCSC", "TECS-SCSC"]);
+    expect(rows[1].awb).toBe("618-5552 6354");
+    expect(rows[2].customer).toBe("VAU");
   });
 });

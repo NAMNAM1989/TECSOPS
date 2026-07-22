@@ -55,6 +55,8 @@ export type SheetBookApplyResult = {
   skippedCount: number;
   errorCount: number;
   errors: { awb: string; error: string }[];
+  applied?: { awb: string; warehouse: string }[];
+  updated?: { awb: string; warehouse: string; fromWarehouse?: string }[];
   /** State sau khi nhập — dùng cập nhật UI ngay (không chỉ dựa Socket). */
   state?: unknown;
 };

@@ -219,12 +219,14 @@ export function parseBookHangNgayGrid(gridRows, sessionDate) {
   for (const { rowIndex, cells } of gridRows) {
     const titleKind = isTitleRow(cells);
     if (titleKind) {
+      // Chỉ đổi blockDefault / tiêu đề khối — KHÔNG xóa colMap.
+      // Sheet thật thường không lặp header sau dòng tiêu đề giữa TCS↔SCSC;
+      // xóa colMap sẽ làm mất toàn bộ dòng SCSC phía sau.
       blockDefault = titleKind;
       blockTitle =
         cells.find((c) => normHeader(c).includes("cap nhat danh sach"))?.trim() ||
         cells[0]?.trim() ||
         blockDefault;
-      colMap = null;
       continue;
     }
 

@@ -87,13 +87,17 @@ DEFAULT_LOCATORS: dict[str, Any] = {
         "consignee_name": {"by": "id", "value": "consigneeId"},
         "consignee_address": {"by": "id", "value": "addressCne"},
         "nature_of_goods": {"by": "id", "value": "natureOfGoods"},
+        "other_request": {"by": "id", "value": "shcOthReq"},
         "agree": {"by": "id", "value": "agreeConfirm"},
         "registrant_name": {"by": "id", "value": "shpRegNam"},
         "registrant_tel": {"by": "id", "value": "shpRegTel"},
         "registrant_id": {"by": "id", "value": "shpRegIdx"},
         "choose_flight": {"by": "role", "role": "button", "name": "CHỌN CHUYẾN BAY"},
         "submit": {"by": "role", "role": "button", "name": "HOÀN TẤT"},
-        "notes": "Dry-fill only; không submit. Combobox shipper/agent/cnee cần chọn master TCS.",
+        "notes": (
+            "Dry-fill only; không submit. Combobox shipper/agent/cnee cần chọn master TCS. "
+            "other_request: fill/excel dùng shcOthReq; chrome-extension thử otherRequest rồi shcOthReq."
+        ),
     },
 }
 

@@ -1,3 +1,4 @@
+import { num, str } from "../../shared/primitiveNormalize.mjs";
 import type { PrinterProfile, ThermalLabelPrinterProfile } from "./printTypes";
 import { withThermalLabelFormat } from "./thermalLabelFormat";
 
@@ -12,23 +13,6 @@ export const EMPTY_PRINTER_PROFILES_CATALOG: PrinterProfilesCatalog = {
   profiles: [],
   updatedAt: new Date(0).toISOString(),
 };
-
-function clamp(n: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, n));
-}
-
-function str(v: unknown, max = 120): string {
-  return String(v ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max);
-}
-
-function num(v: unknown, fallback: number, min: number, max: number): number {
-  const n = typeof v === "number" ? v : Number(v);
-  if (!Number.isFinite(n)) return fallback;
-  return clamp(n, min, max);
-}
 
 function normalizeThermal(raw: Record<string, unknown>, id: string, name: string): ThermalLabelPrinterProfile {
   const base: ThermalLabelPrinterProfile = {

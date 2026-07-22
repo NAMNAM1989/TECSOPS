@@ -1,7 +1,13 @@
 /**
  * Hồ sơ người khai ESID (CCCD / họ tên / SĐT).
  * Store dùng chung factory với Agent.
+ * Normalize: `shared/esidProfilesNormalize.mjs`.
  */
+import {
+  emptyEsidRegistrantStore,
+  esidRegistrantStoreHasUserData as sharedRegistrantStoreHasUserData,
+  normalizeEsidRegistrantStoreLoose,
+} from "../../shared/esidProfilesNormalize.mjs";
 import { createEsidProfileStoreApi } from "./esidProfileStoreFactory";
 
 export type EsidRegistrantProfile = {
@@ -53,6 +59,9 @@ const api = createEsidProfileStoreApi<EsidRegistrantProfile, EsidRegistrantPatch
     cccd:
       patch.cccd !== undefined ? String(patch.cccd).replace(/\s+/g, "").trim() : current.cccd,
   }),
+  emptyStore: () => emptyEsidRegistrantStore() as EsidRegistrantStoreV1,
+  normalizeStore: (raw) => normalizeEsidRegistrantStoreLoose(raw) as EsidRegistrantStoreV1,
+  storeHasUserData: (store) => sharedRegistrantStoreHasUserData(store),
 });
 
 export const createEmptyRegistrant = api.createEmpty;

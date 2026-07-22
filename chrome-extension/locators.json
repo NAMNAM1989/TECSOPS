@@ -34,6 +34,6 @@
     },
     "choose_flight_button": "CHỌN CHUYẾN BAY",
     "submit_button": "HOÀN TẤT",
-    "notes": "Điền không HOÀN TẤT. Thứ tự: AWB→chuyến bay→dest→party master (click option, không +Thêm mới)→địa chỉ. Đóng overlay giữa các bước để tránh treo."
+    "notes": "Điền không HOÀN TẤT. Thứ tự: AWB→chuyến bay→dest→party master (click option, không +Thêm mới)→địa chỉ. Đóng overlay giữa các bước để tránh treo. other_request: JSON ghi otherRequest; content-tcs cũng thử shcOthReq (Python fill/excel)."
   }
 }

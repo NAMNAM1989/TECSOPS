@@ -75,7 +75,9 @@ export function isValidNationalId(raw: string): boolean {
 
 export function isValidLicensePlate(raw: string): boolean {
   const plate = formatVehicleLicensePlate(raw);
-  return plate.length >= VEHICLE_PLATE_MIN;
+  // `;` là separator hợp lệ — chỉ đếm chữ/số cho độ dài tối thiểu.
+  const alnum = (plate.match(/[A-Z0-9]/g) || []).length;
+  return alnum >= VEHICLE_PLATE_MIN;
 }
 
 export function isSavedShipperEmpty(s: CustomerSavedShipper): boolean {

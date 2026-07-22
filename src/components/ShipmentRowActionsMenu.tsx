@@ -21,8 +21,6 @@ type Props = {
   onPrint: (s: Shipment) => void;
   onDelete: (id: string) => void;
   onUpdate?: (id: string, patch: Partial<Shipment>) => void;
-  /** @deprecated dùng Tải PDF ESID trong menu */
-  onOpenTcsPortal?: (s: Shipment) => void;
   compact?: boolean;
 };
 
@@ -107,7 +105,6 @@ export function ShipmentRowActionsMenu({
   customerDirectory,
   onPrint,
   onDelete,
-  onOpenTcsPortal: _onOpenTcsPortal,
   compact = false,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);

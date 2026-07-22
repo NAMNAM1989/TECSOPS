@@ -1,5 +1,5 @@
 import type { DimPieceLine } from "./volumetricDim";
-import { resolveScscAirlineDimRule, type ScscAirlineDimRule } from "./scscChargeableWeight";
+import { resolveScscAirlineDimRule } from "./scscChargeableWeight";
 
 export type ScscDimLimitWarning = {
   kind: "dims" | "note";
@@ -58,7 +58,3 @@ export function collectScscDimLimitWarnings(
   return out;
 }
 
-export function scscRuleLabel(rule: ScscAirlineDimRule | null): string {
-  if (!rule) return "";
-  return `${rule.codes.join("/")} · ${rule.chargeableNote}`;
-}

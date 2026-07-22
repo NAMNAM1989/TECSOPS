@@ -65,7 +65,6 @@ const MobileShipmentCard = memo(
     onOpenEdit,
     onUpdate,
     onDelete,
-    onOpenTcsPortal,
   }: {
     row: Shipment;
     selected: boolean;
@@ -74,7 +73,6 @@ const MobileShipmentCard = memo(
     onOpenEdit: (row: Shipment) => void;
     onUpdate: (id: string, patch: Partial<Shipment>) => void;
     onDelete: (id: string) => void;
-    onOpenTcsPortal?: (s: Shipment) => void;
   }) {
     const rowAccent = statusRowAccent[row.status];
     const rowSurface = selected ? statusRowSelected : statusRowBg[row.status];
@@ -126,7 +124,6 @@ const MobileShipmentCard = memo(
                 onPrint={() => {}}
                 onDelete={onDelete}
                 onUpdate={onUpdate}
-                onOpenTcsPortal={onOpenTcsPortal}
               />
             </div>
           </div>
@@ -185,7 +182,6 @@ interface MobileShipmentCardsProps {
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onQuickEdit?: (row: Shipment) => void;
-  onOpenTcsPortal?: (s: Shipment) => void;
   customerDirectory?: readonly CustomerDirectoryEntry[];
   activeWarehouse?: Warehouse;
   searchActive?: boolean;
@@ -202,7 +198,6 @@ export function MobileShipmentCards({
   onUpdate,
   onDelete,
   onQuickEdit,
-  onOpenTcsPortal,
   customerDirectory = [],
   activeWarehouse = "TECS-TCS",
   searchActive = false,
@@ -265,7 +260,6 @@ export function MobileShipmentCards({
                         onOpenEdit={handleOpenEdit}
                         onUpdate={onUpdate}
                         onDelete={onDelete}
-                        onOpenTcsPortal={onOpenTcsPortal}
                       />
                     ))
                   : null}
@@ -282,7 +276,6 @@ export function MobileShipmentCards({
               onOpenEdit={handleOpenEdit}
               onUpdate={onUpdate}
               onDelete={onDelete}
-              onOpenTcsPortal={onOpenTcsPortal}
             />
           ))}
     </div>

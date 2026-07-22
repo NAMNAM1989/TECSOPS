@@ -208,21 +208,3 @@ export function saveRows(rows: Shipment[]): void {
   }
 }
 
-export function loadWorkDate(): Date | null {
-  try {
-    const raw = localStorage.getItem(WORK_DATE_KEY);
-    if (raw === null) return null;
-    const d = new Date(raw);
-    return Number.isNaN(d.getTime()) ? null : d;
-  } catch {
-    return null;
-  }
-}
-
-export function saveWorkDate(d: Date): void {
-  try {
-    localStorage.setItem(WORK_DATE_KEY, d.toISOString());
-  } catch {
-    /* ignore */
-  }
-}

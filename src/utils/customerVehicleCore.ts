@@ -7,8 +7,8 @@ import {
 } from "./customerDirectoryProfile";
 import { findCustomerEntry } from "./customerBookingResolve";
 import {
-  normalizeVehiclePlateInput as normalizeEcargoVehicleInput,
-  VEHICLE_PLATE_MIN as ECARGO_VEHICLE_MIN,
+  normalizeVehiclePlateInput,
+  VEHICLE_PLATE_MIN,
 } from "./vehiclePlateNormalize";
 
 function norm(s: string): string {
@@ -55,7 +55,7 @@ export function isCustomerVehicleDefault(
 
 /** Chuẩn hóa biển số cho ô eCargo (uppercase, bỏ ký tự lạ). */
 export function formatVehicleLicensePlate(raw: string): string {
-  return normalizeEcargoVehicleInput(raw);
+  return normalizeVehiclePlateInput(raw);
 }
 
 /** Giá trị `vehicleInput` lưu trên lô / gửi eCargo. */
@@ -204,7 +204,7 @@ export function computeEcargoSeedFromCustomer(
   const savedDriverName = existing?.driverName?.trim() ?? "";
 
   const shouldSeedVehicle =
-    !savedVehicle && prefill.vehicleInput.length >= ECARGO_VEHICLE_MIN;
+    !savedVehicle && prefill.vehicleInput.length >= VEHICLE_PLATE_MIN;
   const shouldSeedDriver =
     Boolean(prefill.driverName.trim() || prefill.driverId.trim()) &&
     (!savedDriverName || shouldSeedVehicle);

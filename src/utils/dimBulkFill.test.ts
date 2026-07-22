@@ -12,7 +12,6 @@ import {
   DIM_TARGET_MATCH_TOLERANCE_KG,
   DIM_TOTAL_BAND_BELOW_RATIO,
   DIM_TOTAL_CEILING_RATIO,
-  DIM_RANDOM_FILL_CAP_RATIO,
   dimRandomSeed,
   enforceMaxOneEdgeBelowMin,
   generateRandomDimFill,
@@ -349,24 +348,6 @@ describe("generateRandomDimFill — tổng DIM trong vùng ~5% dưới kg lô", 
       expect(est.reduce((m, l) => Math.max(m, l.pcs), 0)).toBeLessThanOrEqual(
         DIM_MAX_PCS_PER_ESTIMATED_LINE
       );
-    }
-  });
-
-  it("legacy capRatio 90% tổng (tương thích cũ)", () => {
-    // 90 kiện light + TR DIM có thể không nhét dưới 90% — dùng khối lượng vừa đủ chứng minh cap
-    const r = generateRandomDimFill({
-      manualLines: manual,
-      remainingPcs: 40,
-      declaredKg: 2000,
-      capRatio: DIM_RANDOM_FILL_CAP_RATIO,
-      poolId: "light",
-      divisor: 6000,
-      dimCtx: TR_CTX,
-      seed: dimRandomSeed("lot-2", 50, 2000),
-    });
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.totalDim).toBeLessThanOrEqual(2000 * DIM_RANDOM_FILL_CAP_RATIO + 1e-6);
     }
   });
 });

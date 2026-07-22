@@ -6,7 +6,6 @@ import {
   SCSC_KNOWN_FLIGHT_CODES,
   SCSC_RULE_BY_AWB_PREFIX,
   SCSC_RULE_BY_FLIGHT_CODE,
-  scscRoundKindsFromLegacyPolicy,
   type ScscAirlineDimRule,
   type ScscChargeableRoundKind,
   type ScscLineDimRoundKind,
@@ -102,25 +101,7 @@ export function applyScscTotalDimRounding(
   }
 }
 
-/** @deprecated Dùng applyScscLineDimRounding / applyScscTotalDimRounding. */
-export function applyScscChargeableRounding(
-  rawKg: number,
-  kind: ScscChargeableRoundKind
-): number {
-  const { lineRound } = scscRoundKindsFromLegacyPolicy(kind);
-  if (kind === "STANDARD_IATA_2DP") return roundToDecimals(rawKg, 2);
-  return applyScscLineDimRounding(rawKg, lineRound);
-}
 
-/** @deprecated Dùng applyScscTotalDimRounding. */
-export function applyScscTotalRounding(
-  sumKg: number,
-  kind: ScscChargeableRoundKind
-): number {
-  if (kind === "STANDARD_IATA_2DP") return roundToDecimals(sumKg, 2);
-  const { totalRound } = scscRoundKindsFromLegacyPolicy(kind);
-  return applyScscTotalDimRounding(sumKg, totalRound);
-}
 
 export function formatScscLineDimKg(kg: number, kind: ScscLineDimRoundKind): string {
   if (!Number.isFinite(kg)) return "—";
@@ -152,12 +133,6 @@ export function formatScscTotalDimKg(kg: number, kind: ScscTotalDimRoundKind): s
   }
 }
 
-/** @deprecated Dùng formatScscTotalDimKg. */
-export function formatScscChargeableKg(kg: number, kind: ScscChargeableRoundKind): string {
-  if (kind === "STANDARD_IATA_2DP") return String(roundToDecimals(kg, 2));
-  const { totalRound } = scscRoundKindsFromLegacyPolicy(kind);
-  return formatScscTotalDimKg(kg, totalRound);
-}
 
 export function resolveScscAirlineDimRule(
   flight: string,
@@ -184,7 +159,3 @@ export function scscChargeableKindFromShipment(
   return "STANDARD_IATA_2DP";
 }
 
-export function scscRuleLabel(rule: ScscAirlineDimRule | null): string {
-  if (!rule) return "";
-  return `${rule.codes.join("/")} · ${rule.chargeableNote}`;
-}

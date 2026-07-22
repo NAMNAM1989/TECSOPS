@@ -89,21 +89,6 @@ export function AirCargoTracking({
   );
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
-  /** Menu dòng: giới hạn thao tác TCS cho 1 AWB (không mở modal) */
-  const [tcsFocusShipment, setTcsFocusShipment] = useState<Shipment | null>(null);
-
-  const focusTcsShipment = useCallback((single?: Shipment) => {
-    if (single) {
-      setActiveWarehouse(single.warehouse);
-      setTcsFocusShipment(single);
-      return;
-    }
-    setTcsFocusShipment(null);
-  }, []);
-
-  useEffect(() => {
-    if (!isTcsWarehouse(activeWarehouse)) setTcsFocusShipment(null);
-  }, [activeWarehouse]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
 
@@ -263,7 +248,6 @@ export function AirCargoTracking({
     sessionYmd: selectedYmd,
     rows: viewRows,
     customerDirectory: state?.customers ?? [],
-    focusShipment: tcsFocusShipment,
     onMarkReceptionCompleted,
     onReceptionScanDone,
     active: isTcsWarehouse(activeWarehouse),
@@ -439,7 +423,6 @@ export function AirCargoTracking({
               <TcsPortalInlineBar
                 compact
                 tcs={tcsPortal}
-                onClearFocus={() => setTcsFocusShipment(null)}
               />
             ) : null
           }
@@ -579,7 +562,6 @@ export function AirCargoTracking({
               {isTcsWarehouse(activeWarehouse) ? (
                 <TcsPortalInlineBar
                   tcs={tcsPortal}
-                  onClearFocus={() => setTcsFocusShipment(null)}
                 />
               ) : null}
             </div>
@@ -626,7 +608,6 @@ export function AirCargoTracking({
         onUpdate={onUpdate}
         onDelete={onDelete}
         onPrint={requestPrintLabel}
-        onOpenTcsPortal={(s) => focusTcsShipment(s)}
         viewSessionYmd={selectedYmd}
       />
 
@@ -644,7 +625,6 @@ export function AirCargoTracking({
         viewSessionYmd={selectedYmd}
         onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
         onQuickEdit={(row) => openMobileEdit(row)}
-        onOpenTcsPortal={(s) => focusTcsShipment(s)}
       />
 
       <StickyMobileActions

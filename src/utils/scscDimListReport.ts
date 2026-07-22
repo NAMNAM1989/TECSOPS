@@ -112,10 +112,3 @@ export function dimKgExcelLineNumFmt(lineRound: ScscLineDimRoundKind | null | un
   }
 }
 
-/** @deprecated Dùng dimKgExcelLineNumFmt(rule.lineRound). */
-export function dimKgExcelNumFmt(ctx: ScscDimRoundContext): string {
-  if (typeof ctx === "object" && "lineRound" in ctx) {
-    return dimKgExcelLineNumFmt(ctx.lineRound);
-  }
-  return "0.000";
-}

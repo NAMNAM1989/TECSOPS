@@ -33,7 +33,6 @@ interface Props {
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
-  onOpenTcsPortal?: (s: Shipment) => void;
   viewSessionYmd: string;
   searchHighlightWarehouses?: readonly Warehouse[];
   highlightedShipmentId?: string | null;
@@ -72,7 +71,6 @@ export function DesktopShipmentTable({
   onUpdate,
   onDelete,
   onPrint,
-  onOpenTcsPortal,
   viewSessionYmd,
 }: Props) {
   const isMobile = useIsMobile();
@@ -165,7 +163,6 @@ export function DesktopShipmentTable({
                       onUpdate={onUpdate}
                       onDelete={onDelete}
                       onPrint={onPrint}
-                      onOpenTcsPortal={onOpenTcsPortal}
                       onOpenDimModal={setDimModalRow}
                     />
                   ))
@@ -203,7 +200,6 @@ function ShipmentTableRowImpl({
   onUpdate,
   onDelete,
   onPrint,
-  onOpenTcsPortal,
   onOpenDimModal,
 }: {
   row: Shipment;
@@ -218,7 +214,6 @@ function ShipmentTableRowImpl({
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
-  onOpenTcsPortal?: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
 }) {
   const bg = statusRowBg[row.status];
@@ -462,7 +457,6 @@ function ShipmentTableRowImpl({
           onPrint={onPrint}
           onDelete={onDelete}
           onUpdate={onUpdate}
-          onOpenTcsPortal={onOpenTcsPortal}
         />
       </td>
     </tr>

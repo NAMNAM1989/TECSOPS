@@ -82,10 +82,30 @@ DEFAULT_LOCATORS: dict[str, Any] = {
         "flight_date": {"by": "id", "value": "datFltOri"},
         "dest_code": {"by": "id", "value": "codFds"},
         "pcs": {"by": "id", "value": "qtyPcs"},
+        "gross_weight": {"by": "id", "value": "wgtGrs"},
         "shipper_name": {"by": "id", "value": "shipperId"},
         "shipper_address": {"by": "id", "value": "addressShp"},
+        "shipper_tel": {"by": "id", "value": "telShp"},
+        "shipper_email": {"by": "id", "value": "emailShp"},
+        "shipper_fax": {"by": "id", "value": "faxShp"},
+        "agent_name": {"by": "id", "value": "agentId"},
+        "agent_address": {"by": "id", "value": "addressAgt"},
+        "agent_tel": {"by": "id", "value": "telAgt"},
+        "agent_email": {"by": "id", "value": "emailAgt"},
+        "agent_fax": {"by": "id", "value": "faxAgt"},
+        "agent_vat": {"by": "id", "value": "vatAgt"},
         "consignee_name": {"by": "id", "value": "consigneeId"},
         "consignee_address": {"by": "id", "value": "addressCne"},
+        "consignee_tel": {"by": "id", "value": "telCne"},
+        "consignee_email": {"by": "id", "value": "emailCne"},
+        "consignee_fax": {"by": "id", "value": "faxCne"},
+        "consignee_vat": {"by": "id", "value": "vatCne"},
+        "notify_name": {"by": "id", "value": "notifyId"},
+        "notify_address": {"by": "id", "value": "addressNtf"},
+        "notify_tel": {"by": "id", "value": "telNtf"},
+        "notify_email": {"by": "id", "value": "emailNtf"},
+        "notify_fax": {"by": "id", "value": "faxNtf"},
+        "notify_remark": {"by": "id", "value": "desRmk001"},
         "nature_of_goods": {"by": "id", "value": "natureOfGoods"},
         "other_request": {"by": "id", "value": "shcOthReq"},
         "agree": {"by": "id", "value": "agreeConfirm"},
@@ -96,7 +116,8 @@ DEFAULT_LOCATORS: dict[str, Any] = {
         "submit": {"by": "role", "role": "button", "name": "HOÀN TẤT"},
         "notes": (
             "Dry-fill only; không submit. Combobox shipper/agent/cnee cần chọn master TCS. "
-            "other_request: fill/excel dùng shcOthReq; chrome-extension thử otherRequest rồi shcOthReq."
+            "Field ids resolve qua EsidDeclarePage._field_id (DEFAULT + discovery). "
+            "other_request: primary shcOthReq, fill cũng thử otherRequest."
         ),
     },
 }

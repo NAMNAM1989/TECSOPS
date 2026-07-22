@@ -40,11 +40,7 @@ Content script chỉ inject trên origin đã khai trong `manifest.json`. Nếu 
 
 ## Đồng bộ locator
 
-<<<<<<< HEAD
-`content-tcs.js` load `locators.json` lúc điền (fallback cứng nếu fetch lỗi). File JSON nên khớp `tcs-awb-automation/app/browser/locators.py` → `esid_declare`. Khi TCS đổi DOM, cập nhật JSON (+ fallback trong content script nếu đổi field id).
-=======
-`content-tcs.js` load `locators.json` lúc điền (fallback cứng nếu fetch lỗi). `other_request` thử `otherRequest` rồi `shcOthReq`. JSON nên khớp `tcs-awb-automation/app/browser/locators.py` → `esid_declare`.
->>>>>>> origin/cursor/cleanup-wave4-esid-plate-primitives-976b
+`content-tcs.js` load `locators.json` lúc điền (fallback cứng nếu fetch lỗi). `other_request` thử `otherRequest` rồi `shcOthReq`. JSON nên khớp `tcs-awb-automation/app/browser/locators.py` → `esid_declare`. Khi TCS đổi DOM, cập nhật JSON (+ fallback trong content script nếu đổi field id).
 
 ## Phạm vi MVP
 

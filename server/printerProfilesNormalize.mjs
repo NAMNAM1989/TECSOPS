@@ -1,17 +1,13 @@
 /**
  * Đồng bộ với `src/printing/printerProfilesCore.ts` — normalize cơ bản.
-<<<<<<< HEAD
  * Preset mm: `shared/thermalLabelPresets.mjs` (server giữ custom mm nếu có; client force preset).
+ * Helpers: `shared/primitiveNormalize.mjs`.
  */
+import { num, str } from "../shared/primitiveNormalize.mjs";
 import {
   normalizeLabelSheetFormat,
   thermalPresetForFormat,
 } from "../shared/thermalLabelPresets.mjs";
-=======
- * Helpers: `shared/primitiveNormalize.mjs` (giữ khác biệt force vs fallback mm).
- */
-import { num, str } from "../shared/primitiveNormalize.mjs";
->>>>>>> origin/cursor/cleanup-wave4-esid-plate-primitives-976b
 
 export function emptyPrinterProfilesCatalog() {
   return { version: 1, profiles: [], updatedAt: new Date(0).toISOString() };

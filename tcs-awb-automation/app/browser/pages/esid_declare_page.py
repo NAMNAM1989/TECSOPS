@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -227,8 +228,147 @@ class EsidDeclarePage:
         except Exception:
             return False
 
+    @staticmethod
+    def _fold_text(s: str) -> str:
+        """Bỏ dấu tiếng Việt + chuẩn hóa khoảng trắng (so khớp master TCS)."""
+        t = unicodedata.normalize("NFD", s or "")
+        t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+        return re.sub(r"\s+", " ", t).strip().upper()
+
+    @classmethod
+    def _combobox_search_queries(cls, text: str) -> list[str]:
+        """
+        Chuỗi tìm từ ngắn → dài. Gõ cả tên pháp lý dài thường làm remote filter TCS
+        trả rỗng hoặc lệch dấu; token cuối (vd PCS) thường khớp master tốt hơn.
+        """
+        raw = (text or "").strip()
+        if not raw:
+            return []
+        fold = cls._fold_text(raw)
+        words = [w for w in re.split(r"[\s,/|.-]+", fold) if w]
+        stop = {
+            "CONG",
+            "TY",
+            "CO",
+            "PHAN",
+            "VA",
+            "DICH",
+            "VU",
+            "CHI",
+            "NHANH",
+            "SO",
+            "CTY",
+            "CTCP",
+            "TNHH",
+            "LTD",
+            "CO",
+            "COMPANY",
+        }
+        queries: list[str] = []
+        if words and 2 <= len(words[-1]) <= 10:
+            queries.append(words[-1])
+        if len(words) >= 2:
+            queries.append(" ".join(words[-2:]))
+        if len(words) >= 3:
+            queries.append(" ".join(words[-3:]))
+        if len(words) >= 3:
+            queries.append(" ".join(words[:3]))
+        for w in words:
+            if len(w) >= 4 and w not in stop:
+                queries.append(w)
+        for n in (10, 16, 24, 36):
+            if len(raw) > n:
+                queries.append(raw[:n].rstrip())
+        queries.append(raw if len(raw) <= 48 else raw[:48].rstrip())
+        seen: set[str] = set()
+        out: list[str] = []
+        for q in queries:
+            qn = cls._fold_text(q)
+            if not qn or qn in seen:
+                continue
+            seen.add(qn)
+            out.append(q.strip())
+        return out[:10]
+
+    def _visible_select_options(self):
+        return self.page.locator(
+            ".ant-select-dropdown:not(.ant-select-dropdown-hidden) "
+            ".ant-select-item-option:not(.ant-select-item-option-disabled)"
+        )
+
+    def _pick_combobox_option(self, full_text: str) -> bool:
+        """Chọn option ant-select khớp nhất (không phân biệt dấu)."""
+        fold_full = self._fold_text(full_text)
+        if not fold_full:
+            return False
+        opts = self._visible_select_options()
+        try:
+            n = opts.count()
+        except Exception:
+            return False
+        if n <= 0:
+            return False
+
+        full_words = set(fold_full.split())
+        best_i = -1
+        best_score = 0
+        for i in range(min(n, 24)):
+            try:
+                label = opts.nth(i).inner_text(timeout=600)
+            except Exception:
+                continue
+            fold_opt = self._fold_text(label)
+            if not fold_opt:
+                continue
+            score = 0
+            if fold_opt == fold_full:
+                score = 100
+            elif fold_full in fold_opt or fold_opt in fold_full:
+                score = 82
+            else:
+                opt_words = set(fold_opt.split())
+                common = full_words & opt_words
+                if common:
+                    score = int(55 * len(common) / max(len(full_words), 1))
+                    # Ưu tiên mã ngắn cuối tên (PCS, HST…)
+                    if fold_full.split()[-1:] == fold_opt.split()[-1:]:
+                        score += 20
+                    # Token dài đặc trưng
+                    for w in common:
+                        if len(w) >= 5:
+                            score += 3
+            if score > best_score:
+                best_score = score
+                best_i = i
+
+        # Một option duy nhất sau khi filter remote → chấp nhận nếu có chút liên quan
+        min_score = 25 if n == 1 else 40
+        if best_i >= 0 and best_score >= min_score:
+            try:
+                opts.nth(best_i).click(timeout=2000)
+                return True
+            except Exception:
+                return False
+        return False
+
+    def _type_combobox_search(self, eid: str, target, query: str) -> None:
+        try:
+            search = self.page.locator(
+                f"#{eid}.ant-select-selection-search-input, "
+                f".ant-select-focused #{eid}, "
+                f"input#{eid}"
+            ).first
+            if search.count() > 0:
+                search.fill("")
+                search.fill(query)
+            else:
+                target.fill("")
+                target.fill(query)
+        except Exception:
+            self.page.keyboard.type(query, delay=6)
+
     def _fill_combobox(self, eid: str, value: str) -> bool:
-        """Ant Select search: gõ → chọn option khớp (substring OK)."""
+        """Ant Select search: gõ token ngắn → chọn option khớp (bỏ dấu OK)."""
         text = (value or "").strip()
         if not text:
             return False
@@ -261,51 +401,19 @@ class EsidDeclarePage:
                     target.click(timeout=2000, force=True)
                 except Exception:
                     pass
-            self.page.wait_for_timeout(60)
-            try:
-                search = self.page.locator(
-                    f"#{eid}.ant-select-selection-search-input, "
-                    f".ant-select-focused #{eid}, "
-                    f"input#{eid}"
-                ).first
-                if search.count() > 0:
-                    search.fill("")
-                    search.fill(text)
-                else:
-                    target.fill("")
-                    target.fill(text)
-            except Exception:
-                self.page.keyboard.type(text, delay=8)
-            try:
-                self.page.locator(
-                    ".ant-select-dropdown:not(.ant-select-dropdown-hidden) "
-                    ".ant-select-item-option"
-                ).first.wait_for(state="visible", timeout=1800)
-            except Exception:
-                self.page.wait_for_timeout(180)
-            opt = self.page.locator(
-                ".ant-select-dropdown:not(.ant-select-dropdown-hidden) "
-                ".ant-select-item-option:not(.ant-select-item-option-disabled)"
-            ).filter(has_text=re.compile(re.escape(text[:20]), re.I))
-            if opt.count() == 0:
-                token = text.split("/")[0].strip()
-                if token and token != text:
-                    opt = self.page.locator(
-                        ".ant-select-dropdown:not(.ant-select-dropdown-hidden) "
-                        ".ant-select-item-option:not(.ant-select-item-option-disabled)"
-                    ).filter(has_text=re.compile(re.escape(token[:16]), re.I))
-            if opt.count() > 0:
-                opt.first.click(timeout=2000)
-                return True
-            any_opt = self.page.locator(
-                ".ant-select-dropdown:not(.ant-select-dropdown-hidden) "
-                ".ant-select-item-option:not(.ant-select-item-option-disabled)"
-            )
-            if any_opt.count() > 0 and len(text) <= 4:
-                hit = any_opt.filter(has_text=re.compile(rf"\b{re.escape(text)}\b", re.I))
-                if hit.count() > 0:
-                    hit.first.click(timeout=1500)
+            self.page.wait_for_timeout(80)
+
+            for query in self._combobox_search_queries(text):
+                self._type_combobox_search(eid, target, query)
+                try:
+                    self._visible_select_options().first.wait_for(
+                        state="visible", timeout=2200
+                    )
+                except Exception:
+                    self.page.wait_for_timeout(220)
+                if self._pick_combobox_option(text):
                     return True
+
             try:
                 self.page.keyboard.press("Escape")
             except Exception:

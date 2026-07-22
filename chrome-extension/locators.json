@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "sync_with": "tcs-awb-automation/app/browser/locators.py → esid_declare",
+  "esid_declare": {
+    "home_url": "https://www.tcs.com.vn/Esid/Export",
+    "tab_text": "KHAI BÁO ESID",
+    "fields": {
+      "awb_prefix": "codAwbPfx",
+      "awb_number": "codAwbNum",
+      "flight_no": "flightNo",
+      "flight_date": "datFltOri",
+      "dest_code": "codFds",
+      "pcs": "qtyPcs",
+      "gross_weight": "wgtGrs",
+      "shipper_name": "shipperId",
+      "shipper_address": "addressShp",
+      "shipper_tel": "telShp",
+      "shipper_email": "emailShp",
+      "agent_name": "agentId",
+      "agent_address": "addressAgt",
+      "agent_tel": "telAgt",
+      "agent_email": "emailAgt",
+      "consignee_name": "consigneeId",
+      "consignee_address": "addressCne",
+      "consignee_tel": "telCne",
+      "consignee_email": "emailCne",
+      "notify_name": "notifyId",
+      "nature_of_goods": "natureOfGoods",
+      "other_request": "otherRequest",
+      "registrant_name": "shpRegNam",
+      "registrant_tel": "shpRegTel",
+      "registrant_id": "shpRegIdx",
+      "agree": "agreeConfirm"
+    },
+    "choose_flight_button": "CHỌN CHUYẾN BAY",
+    "submit_button": "HOÀN TẤT",
+    "notes": "Điền không HOÀN TẤT. Thứ tự: AWB→chuyến bay→dest→party master (click option, không +Thêm mới)→địa chỉ. Đóng overlay giữa các bước để tránh treo."
+  }
+}

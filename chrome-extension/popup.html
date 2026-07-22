@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TECSOPS · Điền ESID</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        padding: 12px 14px;
+        width: 280px;
+        color: #0f172a;
+        background: #f8fafc;
+      }
+      h1 {
+        font-size: 13px;
+        margin: 0 0 8px;
+      }
+      p {
+        font-size: 11px;
+        line-height: 1.45;
+        margin: 0 0 8px;
+        color: #334155;
+      }
+      .ok {
+        color: #047857;
+        font-weight: 700;
+        font-size: 11px;
+      }
+      .warn {
+        color: #b45309;
+        font-weight: 700;
+        font-size: 11px;
+      }
+      code {
+        font-size: 10px;
+        background: #e2e8f0;
+        padding: 1px 4px;
+        border-radius: 4px;
+      }
+      ol {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 11px;
+        color: #334155;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>TECSOPS — Điền ESID</h1>
+    <p id="status" class="warn">Đang kiểm tra…</p>
+    <p>
+      Điền form trên tab <code>tcs.com.vn</code> đã login của bạn. Ops chỉ gửi dữ liệu — bạn tự
+      bấm <strong>HOÀN TẤT</strong> trên TCS.
+    </p>
+    <ol>
+      <li>Login TCS trên Chrome này</li>
+      <li>Mở Ops (localhost hoặc Railway)</li>
+      <li>Menu ⋮ lô → <strong>Điền</strong></li>
+      <li>Kiểm tra form → HOÀN TẤT trên TCS</li>
+    </ol>
+    <script src="popup.js"></script>
+  </body>
+</html>

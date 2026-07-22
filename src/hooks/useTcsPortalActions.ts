@@ -20,7 +20,6 @@ import {
   scanTcsEsidReception,
   declareFillTcsEsid,
   declareSubmitTcsEsid,
-  tcsAgentDocUrl,
   submitTcsPortalJob,
   type TcsAgentHealth,
   type TcsAgentJobResultRow,
@@ -34,6 +33,11 @@ import {
   registrantIsComplete,
 } from "../utils/esidRegistrantProfile";
 import { agentIsComplete, getActiveEsidAgent } from "../utils/esidAgentProfile";
+import {
+  fillEsidViaExtension,
+  isTcsExtensionAvailable,
+  TCS_EXT_INSTALL_HINT,
+} from "../utils/tcsChromeExtension";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 
 /** Giữ hot-path lâu hơn — bấm Tải PDF gần tức thời nếu đã mở menu ⋮ */
@@ -42,11 +46,10 @@ const PREPARED_TTL_MS = 180_000;
 export type EsidDeclarePreviewState = {
   awb: string;
   shipmentId: string;
-  previewFile: string;
-  /** Absolute/same-origin URL qua /tcs-agent/docs */
-  previewUrl: string;
   warnings: string[];
   valuesSummary: string;
+  /** true = extension trên Chrome user; false = Playwright (fallback) */
+  viaExtension: boolean;
 };
 
 export type TcsPortalActionsOpts = {
@@ -90,11 +93,9 @@ export function useTcsPortalActions({
   const [opsStatusUpdated, setOpsStatusUpdated] = useState(0);
   const [results, setResults] = useState<TcsAgentJobResultRow[]>([]);
   const [downloadedCount, setDownloadedCount] = useState(0);
-  /** Sau Điền: ảnh form trên agent + nút HOÀN TẤT từ Ops */
+  /** Sau Điền: trạng thái + nút HOÀN TẤT (không ảnh chụp — xem Chrome thật) */
   const [lastDeclarePreview, setLastDeclarePreview] =
     useState<EsidDeclarePreviewState | null>(null);
-  /** Sau Login headless (Railway): ảnh trang TCS một lần (không poll) */
-  const [loginPreviewUrl, setLoginPreviewUrl] = useState("");
   /** AWB đã pre-warm (menu ⋮) — hot-path Tải PDF ~1–3s */
   const [preparedAwb, setPreparedAwb] = useState("");
   const preparedAtRef = useRef(0);
@@ -201,25 +202,19 @@ export function useTcsPortalActions({
         return;
       }
       setSession(res);
-      const previewName = (res.preview_file || "").replace(/^.*[/\\]/, "");
-      if (previewName) {
-        setLoginPreviewUrl(tcsAgentDocUrl(previewName));
-      } else {
-        setLoginPreviewUrl("");
-      }
       await refreshHealth();
       const sec = ((performance.now() - t0) / 1000).toFixed(1);
       if (res.visible_ok || res.headless === false) {
         setMessage(
           res.logged_in
-            ? `Đã mở Chrome TCS · ${sec}s — sẵn sàng Quét/Điền`
-            : `Đã mở trang đăng nhập TCS · ${sec}s — nhập CAPTCHA trên Chrome máy kho nếu cần`
+            ? `Đã mở Chrome TCS trên máy kho · ${sec}s — sẵn sàng Quét/Điền`
+            : `Đã mở trang đăng nhập TCS trên Chrome máy kho · ${sec}s — nhập CAPTCHA nếu cần`
         );
       } else {
         setMessage(
           res.logged_in
-            ? `Đã login · ${sec}s — tiếp tục Quét → Điền → preview → HOÀN TẤT`
-            : `Đã mở session · ${sec}s — nếu cần CAPTCHA: máy kho headed hoặc TCS_VNC=1`
+            ? `Đã login (headless) · ${sec}s — Điền nên dùng Chrome extension trên máy bạn`
+            : `Đã mở session headless · ${sec}s — CAPTCHA: máy kho headed, hoặc Điền bằng extension`
         );
       }
     } finally {
@@ -446,9 +441,9 @@ export function useTcsPortalActions({
   );
 
   /**
-   * Quy trình Điền ESID:
-   * nhảy thẳng KHAI BÁO (không tìm AWB trên danh sách) → party từ hồ sơ khách → số liệu Ops.
-   * Không bấm HOÀN TẤT.
+   * Điền ESID — 1 nút:
+   * 1) Chrome extension (tab TCS máy bạn) nếu có
+   * 2) Fallback Playwright (máy kho / cloud) nếu không có extension
    */
   const fillEsidDeclareFor = useCallback(
     async (shipment: Shipment) => {
@@ -483,7 +478,6 @@ export function useTcsPortalActions({
         return;
       }
 
-      // Hủy pre-warm PDF (tìm AWB trên list) — không để tranh browser với Điền
       if (prepareTimerRef.current != null) {
         window.clearTimeout(prepareTimerRef.current);
         prepareTimerRef.current = null;
@@ -495,49 +489,28 @@ export function useTcsPortalActions({
       const custNote = resolved.customerLabel
         ? ` · khách ${resolved.customerLabel}`
         : "";
+      const partyBits = [
+        resolved.shipperFromProfile ? "Shipper✓" : null,
+        resolved.consigneeFromProfile ? "CNEE✓" : null,
+        agent.name ? "Agent✓" : null,
+        resolved.goodsFromProfile ? "Hàng✓" : null,
+      ].filter(Boolean);
+      const partyNote = partyBits.length ? ` · ${partyBits.join(" ")}` : "";
+
       setBusy(true);
-      setBusyLabel(`Điền ESID …${digits.slice(-8)}${custNote}…`);
       const t0 = performance.now();
       try {
-        if (!(await ensureSessionReady())) return;
-
-        // Nếu agent còn bận prepare PDF → chờ rồi điền (không tự tìm AWB)
-        let res = await declareFillTcsEsid(payload);
-        for (let i = 0; i < 40 && res.error === "BUSY"; i++) {
-          setBusyLabel(`Điền ESID …${digits.slice(-8)} — chờ agent…`);
-          await new Promise((r) => window.setTimeout(r, 250));
-          res = await declareFillTcsEsid(payload);
-        }
-
-        const sec = ((performance.now() - t0) / 1000).toFixed(1);
-        if (!res.ok) {
-          setError(res.message || res.error || "Điền ESID thất bại");
-          return;
-        }
-        const warn = [
-          ...resolved.warnings,
-          ...(res.warnings || []),
-        ].filter(Boolean);
-        const partyBits = [
-          resolved.shipperFromProfile ? "Shipper✓" : null,
-          resolved.consigneeFromProfile ? "CNEE✓" : null,
-          agent.name ? "Agent✓" : null,
-          resolved.goodsFromProfile ? "Hàng✓" : null,
-        ].filter(Boolean);
-        const partyNote = partyBits.length ? ` · ${partyBits.join(" ")}` : "";
-        const warnNote = warn.length ? ` · ${warn[0]}` : "";
-        const tm = res.timings;
-        const breakDown =
-          tm && (tm.flight_ms != null || tm.selects_ms != null)
-            ? ` · flight ${((tm.flight_ms || 0) / 1000).toFixed(1)}s` +
-              (tm.selects_ms != null ? `/pay ${((tm.selects_ms || 0) / 1000).toFixed(1)}s` : "") +
-              (res.fills?.choose_flight_skipped ? " · skip modal" : "")
-            : "";
-        const previewFile = (res.preview_file || "").replace(/^.*[/\\]/, "");
-        const headed =
-          res.headless === false ||
-          (res.headless == null && health?.headless === false);
-        if (previewFile || headed) {
+        const extOk = await isTcsExtensionAvailable();
+        if (extOk) {
+          setBusyLabel(`Điền ESID (Chrome) …${digits.slice(-8)}${custNote}…`);
+          const res = await fillEsidViaExtension(payload);
+          const sec = ((performance.now() - t0) / 1000).toFixed(1);
+          if (!res.ok) {
+            setError(res.message || res.error || "Điền ESID (extension) thất bại");
+            return;
+          }
+          const warn = [...resolved.warnings, ...(res.warnings || [])].filter(Boolean);
+          const warnNote = warn.length ? ` · ${warn[0]}` : "";
           const v = res.values || {};
           const bits = [
             v.flightNo ? `CB ${String(v.flightNo)}` : null,
@@ -546,23 +519,62 @@ export function useTcsPortalActions({
           ].filter(Boolean);
           setLastDeclarePreview({
             awb: digits,
-            shipmentId: String(shipment.id || res.shipment_id || ""),
-            previewFile: previewFile || "",
-            previewUrl: previewFile ? tcsAgentDocUrl(previewFile) : "",
+            shipmentId: String(shipment.id || payload.shipment.shipment_id || ""),
             warnings: warn,
             valuesSummary: bits.join(" · "),
+            viaExtension: true,
           });
+          const ver = res.scriptVersion ? ` v${res.scriptVersion}` : "";
           setMessage(
-            headed
-              ? `Đã điền — xem cửa sổ Chrome trên máy kho, kiểm tra rồi HOÀN TẤT trên Chrome hoặc Ops.${partyNote} · ${sec}s${breakDown}${warnNote}`
-              : `Đã điền trên agent — xem ảnh bên dưới, bấm HOÀN TẤT trên Ops để gửi TCS.${partyNote} · ${sec}s${breakDown}${warnNote}`
+            `Đã điền trên tab TCS (extension${ver}) …${digits.slice(-8)}${custNote}${partyNote} · ${sec}s — sang Chrome → HOÀN TẤT.${warnNote}`
           );
-        } else {
-          setLastDeclarePreview(null);
-          setMessage(
-            `Đã điền ESID …${digits.slice(-8)}${custNote}${partyNote} · ${sec}s (chưa HOÀN TẤT)${breakDown}${warnNote}`
-          );
+          return;
         }
+
+        // Fallback: Playwright khi không có extension (Cursor browser / máy chưa cài Ext)
+        setBusyLabel(`Điền ESID (Playwright) …${digits.slice(-8)}${custNote}…`);
+        setMessage("Không thấy extension — đang điền qua Playwright…");
+        if (!(await ensureSessionReady())) {
+          setError(
+            `${TCS_EXT_INSTALL_HINT} Hoặc bật agent Playwright (Login) rồi Điền lại.`
+          );
+          return;
+        }
+
+        let res = await declareFillTcsEsid(payload);
+        for (let i = 0; i < 40 && res.error === "BUSY"; i++) {
+          setBusyLabel(`Điền ESID (Playwright) …${digits.slice(-8)} — chờ…`);
+          await new Promise((r) => window.setTimeout(r, 250));
+          res = await declareFillTcsEsid(payload);
+        }
+        const sec = ((performance.now() - t0) / 1000).toFixed(1);
+        if (!res.ok) {
+          setError(res.message || res.error || "Điền ESID (Playwright) thất bại");
+          return;
+        }
+        const warn = [...resolved.warnings, ...(res.warnings || [])].filter(Boolean);
+        const warnNote = warn.length ? ` · ${warn[0]}` : "";
+        const headed =
+          res.headless === false ||
+          (res.headless == null && health?.headless === false);
+        const v = res.values || {};
+        const bits = [
+          v.flightNo ? `CB ${String(v.flightNo)}` : null,
+          v.codFds ? `→ ${String(v.codFds)}` : null,
+          v.qtyPcs != null && String(v.qtyPcs) !== "" ? `${String(v.qtyPcs)} pcs` : null,
+        ].filter(Boolean);
+        setLastDeclarePreview({
+          awb: digits,
+          shipmentId: String(shipment.id || res.shipment_id || ""),
+          warnings: warn,
+          valuesSummary: bits.join(" · "),
+          viaExtension: false,
+        });
+        setMessage(
+          headed
+            ? `Đã điền (Playwright) …${digits.slice(-8)}${custNote}${partyNote} · ${sec}s — xem Chrome máy kho → HOÀN TẤT.${warnNote}`
+            : `Đã điền (Playwright) …${digits.slice(-8)}${custNote}${partyNote} · ${sec}s — bấm HOÀN TẤT trên Ops.${warnNote}`
+        );
         void refreshHealth();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Lỗi điền ESID");
@@ -578,15 +590,16 @@ export function useTcsPortalActions({
     setLastDeclarePreview(null);
   }, []);
 
-  /**
-   * HOÀN TẤT form đang mở trên Chrome agent (sau khi xem preview).
-   * Không điền lại — bắt buộc confirm ở UI trước khi gọi.
-   */
+  /** HOÀN TẤT trên session Playwright (sau Điền fallback). */
   const submitEsidDeclare = useCallback(
     async (preview?: EsidDeclarePreviewState | null) => {
       const target = preview ?? lastDeclarePreview;
       if (!target?.awb || target.awb.length !== 11) {
         setError("Không có form đã điền để HOÀN TẤT — hãy Điền lại trước.");
+        return;
+      }
+      if (target.viaExtension) {
+        setError("Đã điền bằng extension — bấm HOÀN TẤT trên tab TCS (Chrome).");
         return;
       }
       setError("");
@@ -602,7 +615,7 @@ export function useTcsPortalActions({
           confirm_submit: true,
         });
         for (let i = 0; i < 40 && res.error === "BUSY"; i++) {
-          setBusyLabel(`HOÀN TẤT ESID …${target.awb.slice(-8)} — chờ agent…`);
+          setBusyLabel(`HOÀN TẤT ESID …${target.awb.slice(-8)} — chờ…`);
           await new Promise((r) => window.setTimeout(r, 250));
           res = await declareSubmitTcsEsid({
             awb: target.awb,
@@ -611,26 +624,12 @@ export function useTcsPortalActions({
           });
         }
         const sec = ((performance.now() - t0) / 1000).toFixed(1);
-        const warn = (res.warnings || []).filter(Boolean);
-        const warnNote = warn.length ? ` · ${warn[0]}` : "";
-        const nextFile = (res.preview_file || "").replace(/^.*[/\\]/, "");
-        if (nextFile) {
-          setLastDeclarePreview((prev) =>
-            prev && prev.awb === target.awb
-              ? {
-                  ...prev,
-                  previewFile: nextFile,
-                  previewUrl: tcsAgentDocUrl(nextFile),
-                  warnings: warn,
-                }
-              : prev
-          );
-        }
+        const warnNote = (res.warnings || [])[0] ? ` · ${res.warnings![0]}` : "";
         if (!res.ok || !res.submitted) {
           setError(res.message || res.error || "HOÀN TẤT ESID thất bại");
           return;
         }
-        setMessage(`Đã HOÀN TẤT ESID …${target.awb.slice(-8)} trên TCS · ${sec}s${warnNote}`);
+        setMessage(`Đã HOÀN TẤT ESID …${target.awb.slice(-8)} · ${sec}s${warnNote}`);
         setLastDeclarePreview(null);
         void refreshHealth();
       } catch (e) {
@@ -680,8 +679,6 @@ export function useTcsPortalActions({
     submitEsidDeclare,
     lastDeclarePreview,
     clearDeclarePreview,
-    loginPreviewUrl,
-    clearLoginPreview: () => setLoginPreviewUrl(""),
     /** false = Chrome thật trên máy kho */
     agentHeadless: health?.headless ?? session?.headless,
     prepareEsidFor,

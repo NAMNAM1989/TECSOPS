@@ -27,7 +27,6 @@ export type EsidDeclarePartyResolveResult = {
   shipperFromProfile: boolean;
   consigneeFromProfile: boolean;
   goodsFromProfile: boolean;
-  agentFromOps: boolean;
   warnings: string[];
 };
 
@@ -85,14 +84,7 @@ export function resolveShipmentForEsidDeclare(
     warnings.push("Thiếu CNEE (hồ sơ + lô)");
   }
 
-  const agentFromOps = Boolean(
-    (merged.agentNamePrint || "").trim() ||
-      (merged.agentAddressPrint || "").trim() ||
-      (merged.globalAgentId || "").trim()
-  );
-  if (!agentFromOps) {
-    warnings.push("Chưa có Agent trên lô — form ESID sẽ để trống Agent nếu TCS yêu cầu");
-  }
+  // Agent ESID: hồ sơ cố định (nút «Agent» thanh TCS) — không lấy / không cảnh báo theo lô.
 
   return {
     shipment: merged,
@@ -101,7 +93,6 @@ export function resolveShipmentForEsidDeclare(
     shipperFromProfile: Boolean(shipper),
     consigneeFromProfile: Boolean(consignee),
     goodsFromProfile: Boolean(goods),
-    agentFromOps,
     warnings,
   };
 }

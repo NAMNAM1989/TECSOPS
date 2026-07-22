@@ -117,4 +117,9 @@ describe("resolveShipmentForEsidDeclare", () => {
     expect(r.shipment.shipperNamePrint).toBe("SNAP SHIPPER");
     expect(r.warnings.some((w) => /Không khớp danh bạ/i.test(w))).toBe(true);
   });
+
+  it("không cảnh báo Agent theo lô (Agent ESID cố định ngoài resolve)", () => {
+    const r = resolveShipmentForEsidDeclare(shipment({ agentNamePrint: "" }), [customerPcs()]);
+    expect(r.warnings.some((w) => /Agent trên lô/i.test(w))).toBe(false);
+  });
 });

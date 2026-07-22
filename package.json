@@ -12,6 +12,7 @@
     "tcs:agent": "node scripts/tcs-agent.mjs",
     "tcs:agent:real": "node scripts/tcs-agent.mjs --real",
     "qa:smoke": "node scripts/qa-smoke-e2e.mjs",
+    "ext:verify": "node chrome-extension/scripts/cdp-load-and-verify.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "eslint src",

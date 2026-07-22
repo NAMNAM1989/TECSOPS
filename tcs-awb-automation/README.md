@@ -7,10 +7,12 @@ Tự động hóa cổng `https://www.tcs.com.vn/AwbLogin` cho **kho TECS-TCS**.
 - **Quét ESID** (toolbar): lọc theo ngày phiên → cập nhật status Ops «Hoàn thành tiếp nhận». **Không** chặn Tải PDF.
 - **Tải PDF ESID** (menu ⋮, **1 AWB**): tìm chỉ bằng ô **AWB# 8 số** → mở phiếu → IN → tải file PDF. Tự chạy hết, không xác nhận tay. (Đã bỏ «In ESID» — dùng PDF rồi in từ file.)
 
-Ops (React) chọn lô → gửi job tới agent Playwright. Có 2 cách chạy:
+**Điền ESID (đường chính):** Chrome extension trên tab TCS đã login của người nhập liệu — xem [`chrome-extension/README.md`](../chrome-extension/README.md). Ops gửi payload; user tự HOÀN TẤT trên TCS.
 
-- **Máy kho (khuyến nghị)**: Chrome **headed** (`TCS_HEADLESS=0`, mặc định khi `npm run dev` / `tcs:agent:real`) — sau **Điền** ESID, cửa sổ Chrome trên máy kho giữ form để kiểm tra tay, rồi HOÀN TẤT trên Chrome hoặc nút Ops. Ops LAN gọi qua proxy `/tcs-agent`.
-- **Railway all-in-one (API-first)**: Node + agent **headless** — nhập liệu từ Ops: Login → Quét → Điền → preview → HOÀN TẤT. noVNC tùy chọn (`TCS_VNC=1`) khi cần sửa tay (chậm hơn).
+Agent Playwright vẫn dùng cho **Quét / PDF** (không còn Điền qua Playwright):
+
+- **Máy kho**: Chrome **headed** (`TCS_HEADLESS=0`) — Quét/PDF. Ops LAN qua proxy `/tcs-agent`.
+- **Railway all-in-one**: agent **headless** cho Quét/PDF/Login. noVNC tùy chọn (`TCS_VNC=1`, chậm).
 
 ### Railway all-in-one (Playwright headless + noVNC tùy chọn)
 
@@ -27,7 +29,7 @@ Deploy:
    - `TCS_BROWSER_PROFILE=/app/tcs-awb-automation/browser_profile` — giữ cookie.
    - `TCS_OUTPUT_DIR=/app/tcs-awb-automation/output` — giữ PDF.
 
-**Nhập liệu:** Ops → Login → Quét → Điền → kiểm tra preview → HOÀN TẤT. Không mở tab `tcs.com.vn` trên máy bạn. Nút **Sửa tay** chỉ khi đã bật `TCS_VNC=1`.
+**Nhập liệu Điền:** cài extension → Login TCS trên Chrome máy bạn → Ops **Điền** → HOÀN TẤT trên TCS. Quét/PDF vẫn qua agent. Nút **Sửa tay** chỉ khi `TCS_VNC=1`.
 
 ⚠️ **Rủi ro**: CAPTCHA/IP Railway; session mất nếu không mount volume; `TCS_VNC=1` tốn RAM và chậm hơn.
 
@@ -36,7 +38,7 @@ Deploy:
 1. Máy kho: `npm run dev` — **tự chạy** API + Vite + agent REAL **headed** (`:8765`). Tắt auto: `TCS_AGENT_AUTO=0`. Ép headless: `TCS_HEADLESS=1`.
 2. Máy khác: mở Ops bằng **IP máy kho** (vd. `http://192.168.1.50:5173`), không dùng `127.0.0.1`.
 3. Browser gọi same-origin `/tcs-agent` → Vite/Express proxy tới `127.0.0.1:8765` trên máy kho.
-4. Sau **Điền**: nhìn **Chrome trên máy kho** (nút Ops «Hiện Chrome»), không mở tcs.com.vn trên máy bạn.
+4. Sau **Điền** (extension): form trên tab TCS của máy nhập liệu → HOÀN TẤT trên TCS.
 5. Nút **URL** trên thanh Cổng TCS: để trống = proxy; chỉ điền nếu dùng tunnel HTTPS.
 6. Agent riêng (không qua `dev`): `npm run tcs:agent:real`.
 

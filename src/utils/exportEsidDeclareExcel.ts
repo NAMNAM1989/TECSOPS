@@ -3,8 +3,14 @@ import { isTcsWarehouse } from "../constants/warehouses";
 import { parseFlightDateDisplayToYmd } from "./bookingDateParse";
 import { awbDigitsKey } from "./awbFormat";
 import { getActiveEsidRegistrant } from "./esidRegistrantProfile";
+import { getActiveEsidAgent, type EsidAgentProfile } from "./esidAgentProfile";
 import { resolveShipmentForEsidDeclare } from "./resolveShipmentForEsidDeclare";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+
+type EsidAgentForExcel = Pick<
+  EsidAgentProfile,
+  "name" | "address" | "tel" | "email" | "vat" | "fax"
+>;
 
 /** Cột sheet ESID_DECLARE — khớp Python esid_declare_excel.py */
 export const ESID_DECLARE_HEADERS = [
@@ -112,11 +118,14 @@ export function canExportEsidDeclare(s: Shipment): boolean {
 
 export function shipmentToEsidDeclareRow(
   s: Shipment,
-  registrant?: Pick<{ name: string; tel: string; cccd: string }, "name" | "tel" | "cccd">
+  registrant?: Pick<{ name: string; tel: string; cccd: string }, "name" | "tel" | "cccd">,
+  /** Agent ESID cố định — không lấy agent*Print trên lô */
+  agent?: EsidAgentForExcel
 ): EsidDeclareRow {
   const digits = awbDigitsKey(s.awb) || "";
   const ymd = flightDateToYmd(s.flightDate || "", s.sessionDate || "");
   const empty = Object.fromEntries(ESID_DECLARE_HEADERS.map((h) => [h, ""])) as EsidDeclareRow;
+  const a = agent ?? getActiveEsidAgent();
   return {
     ...empty,
     AWB: digits.length === 11 ? digits : (s.awb || "").trim(),
@@ -135,12 +144,12 @@ export function shipmentToEsidDeclareRow(
     SHIPPER_TEL: (s.shipperPhonePrint || "").trim(),
     SHIPPER_EMAIL: (s.shipperEmailPrint || "").trim(),
     SHIPPER_FAX: "",
-    AGENT_NAME: (s.agentNamePrint || "").trim(),
-    AGENT_ADDRESS: (s.agentAddressPrint || "").trim(),
-    AGENT_TEL: (s.agentPhonePrint || "").trim(),
-    AGENT_EMAIL: (s.agentEmailPrint || "").trim(),
-    AGENT_FAX: "",
-    AGENT_VAT: (s.agentTaxCodePrint || "").trim(),
+    AGENT_NAME: (a.name || "").trim(),
+    AGENT_ADDRESS: (a.address || "").trim(),
+    AGENT_TEL: (a.tel || "").trim(),
+    AGENT_EMAIL: (a.email || "").trim(),
+    AGENT_FAX: (a.fax || "").trim(),
+    AGENT_VAT: (a.vat || "").trim(),
     CONSIGNEE_NAME: (s.consigneeNamePrint || "").trim(),
     CONSIGNEE_ADDRESS: (s.consigneeAddressPrint || "").trim(),
     CONSIGNEE_TEL: (s.consigneePhonePrint || "").trim(),
@@ -209,7 +218,8 @@ async function buildWorkbook(rows: EsidDeclareRow[]) {
     "",
     "Cột cam đậm = bắt buộc dry-fill. REGISTRANT_* = nhập tay trước khi SUBMIT=1.",
     "SUBMIT mặc định 0 (không bấm HOÀN TẤT).",
-    "Combobox Shipper/Agent/CNEE trên TCS cần khớp master — agent sẽ gõ + chọn.",
+    "AGENT_* lấy từ hồ sơ Agent ESID cố định (nút Agent trên Ops), không theo từng lô.",
+    "Combobox Shipper/Agent/CNEE trên TCS cần khớp master — Playwright/extension sẽ gõ + chọn.",
   ];
   guideLines.forEach((line, i) => {
     guide.getCell(i + 1, 1).value = line;
@@ -292,9 +302,10 @@ export async function downloadEsidDeclareExcel(
     return { count: 0, readiness: [] };
   }
   const registrant = getActiveEsidRegistrant();
+  const agent = getActiveEsidAgent();
   const rows = list.map((s) => {
     const resolved = resolveShipmentForEsidDeclare(s, directory);
-    return shipmentToEsidDeclareRow(resolved.shipment, registrant);
+    return shipmentToEsidDeclareRow(resolved.shipment, registrant, agent);
   });
   const readiness = rows.map(analyzeEsidDeclareRow);
   try {

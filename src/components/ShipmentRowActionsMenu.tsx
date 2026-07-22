@@ -188,11 +188,18 @@ export function ShipmentRowActionsMenu({
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
-  const menuItem = (label: string, onClick: () => void, tone?: "danger", testId?: string) => (
+  const menuItem = (
+    label: string,
+    onClick: () => void,
+    tone?: "danger",
+    testId?: string,
+    title?: string
+  ) => (
     <button
       type="button"
       role="menuitem"
       data-testid={testId}
+      title={title}
       onClick={(e) => {
         e.stopPropagation();
         closeMenu();
@@ -225,7 +232,8 @@ export function ShipmentRowActionsMenu({
                 void tcs?.fillEsidDeclareFor(row);
               },
               undefined,
-              `row-fill-esid-${row.id}`
+              `row-fill-esid-${row.id}`,
+              "Điền ESID trên tab Chrome TCS đã login (extension). Agent ESID = nút Agent thanh TCS."
             )
           : null}
         {showTcsEsid

@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "TECSOPS — Điền ESID TCS",
+  "version": "1.1.0",
+  "description": "Điền form KHAI BÁO ESID trên tab tcs.com.vn đã login (không bấm HOÀN TẤT). v1.1: chống treo overlay / inject idempotent.",
+  "permissions": ["tabs", "scripting", "storage"],
+  "host_permissions": [
+    "https://www.tcs.com.vn/*",
+    "https://tcs.com.vn/*",
+    "http://localhost:5173/*",
+    "http://127.0.0.1:5173/*",
+    "https://ops-production-b405.up.railway.app/*",
+    "https://*.up.railway.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "TECSOPS · Điền ESID",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*",
+        "http://localhost:4173/*",
+        "http://127.0.0.1:4173/*",
+        "https://ops-production-b405.up.railway.app/*",
+        "https://*.up.railway.app/*"
+      ],
+      "js": ["content-ops.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.tcs.com.vn/*", "https://tcs.com.vn/*"],
+      "js": ["content-tcs.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["locators.json"],
+      "matches": ["https://www.tcs.com.vn/*", "https://tcs.com.vn/*"]
+    }
+  ]
+}

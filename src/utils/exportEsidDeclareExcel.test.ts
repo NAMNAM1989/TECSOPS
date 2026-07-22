@@ -45,7 +45,14 @@ describe("exportEsidDeclareExcel", () => {
   });
 
   it("maps Ops shipment → Excel row", () => {
-    const row = shipmentToEsidDeclareRow(base());
+    const row = shipmentToEsidDeclareRow(base(), undefined, {
+      name: "TECS AGENT FIXED",
+      address: "ADDR",
+      tel: "090",
+      email: "a@t.com",
+      vat: "VAT1",
+      fax: "",
+    });
     expect(row.AWB).toBe("73807183061");
     expect(row.FLIGHT_NO).toBe("VN0773");
     expect(row.FLIGHT_DATE).toBe("2026-07-21");
@@ -54,8 +61,19 @@ describe("exportEsidDeclareExcel", () => {
     expect(row.GROSS_WEIGHT).toBe(45.5);
     expect(row.SHIPPER_NAME).toBe("CONG TY A");
     expect(row.CONSIGNEE_NAME).toBe("BUYER B");
+    expect(row.AGENT_NAME).toBe("TECS AGENT FIXED");
+    expect(row.AGENT_VAT).toBe("VAT1");
     expect(row.SUBMIT).toBe(0);
     expect(row.TECS_WAREHOUSE).toBe(1);
+  });
+
+  it("Agent Excel lấy hồ sơ cố định — bỏ qua agentNamePrint trên lô", () => {
+    const row = shipmentToEsidDeclareRow(
+      base({ agentNamePrint: "FROM_SHIPMENT" }),
+      undefined,
+      { name: "FIXED", address: "", tel: "", email: "", vat: "", fax: "" }
+    );
+    expect(row.AGENT_NAME).toBe("FIXED");
   });
 
   it("readiness flags missing party fields", () => {

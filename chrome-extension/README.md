@@ -40,7 +40,7 @@ Content script chỉ inject trên origin đã khai trong `manifest.json`. Nếu 
 
 ## Đồng bộ locator
 
-`locators.json` đồng bộ với `tcs-awb-automation/app/browser/locators.py` → `esid_declare`. Khi TCS đổi DOM, cập nhật cả hai.
+`content-tcs.js` load `locators.json` lúc điền (fallback cứng nếu fetch lỗi). `other_request` thử `otherRequest` rồi `shcOthReq`. JSON nên khớp `tcs-awb-automation/app/browser/locators.py` → `esid_declare`.
 
 ## Phạm vi MVP
 

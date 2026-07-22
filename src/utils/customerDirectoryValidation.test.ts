@@ -75,6 +75,13 @@ describe("customerDirectoryValidation", () => {
     expect(r.valid).toBe(true);
   });
 
+  it("license plate: giữ ; nhưng không chấp nhận chỉ separator", () => {
+    expect(isValidLicensePlate("50H17480;51G99999")).toBe(true);
+    expect(isValidLicensePlate(";;;;")).toBe(false);
+    expect(isValidLicensePlate(";AB;")).toBe(false);
+    expect(isValidLicensePlate("50H1")).toBe(true);
+  });
+
   it("strips empty rows on normalize", () => {
     const row = scaffoldNewCustomer("c1");
     row.code = "ABC";

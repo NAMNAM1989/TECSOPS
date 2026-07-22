@@ -1,6 +1,7 @@
 import type { Shipment } from "../types/shipment";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { awbForFilename, downloadXlsxBuffer } from "./downloadXlsx";
+import { escapeHtml, printHtmlViaHiddenIframe } from "./printHtmlViaHiddenIframe";
 
 /** Giống mẫu `ATTACHED_LIST_DIMS.xlsx`: 4 cột kích thước + cột trống. */
 const HEADER_ROW: (string | number)[] = [
@@ -78,9 +79,6 @@ export function printTcsAttachedDimsList(s: Shipment): void {
     return;
   }
 
-  const esc = (t: string) =>
-    t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
   const f2 = (n: number) => round2(n).toFixed(2);
   const rows = s.dimLines
     .map(
@@ -90,7 +88,7 @@ export function printTcsAttachedDimsList(s: Shipment): void {
     .join("");
 
   const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/>
-<title>${esc(s.awb)}</title>
+<title>${escapeHtml(s.awb)}</title>
 <style>
 body{font-family:Arial,sans-serif;padding:16px;font-size:11pt;}
 h1{font-size:12pt;margin:0 0 8px;}
@@ -102,50 +100,12 @@ td.n{text-align:right;font-variant-numeric:tabular-nums;}
 @media print{@page{margin:12mm;}body{padding:0;}}
 </style></head><body>
 <h1>LIST DIM — kho TCS</h1>
-<p class="meta"><b>MAWB/BL:</b> ${esc(s.awb)} &nbsp;|&nbsp; <b>Chuyến:</b> ${esc(s.flight)}/${esc(s.flightDate)} &nbsp;|&nbsp; <b>DEST:</b> ${esc(s.dest)}</p>
+<p class="meta"><b>MAWB/BL:</b> ${escapeHtml(s.awb)} &nbsp;|&nbsp; <b>Chuyến:</b> ${escapeHtml(s.flight)}/${escapeHtml(s.flightDate)} &nbsp;|&nbsp; <b>DEST:</b> ${escapeHtml(s.dest)}</p>
 <table>
 <thead><tr><th>Chiều dài</th><th>Chiều rộng</th><th>Chiều cao</th><th>Số kiện</th></tr></thead>
 <tbody>${rows}</tbody>
 </table>
 </body></html>`;
 
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  Object.assign(iframe.style, {
-    position: "fixed",
-    right: "0",
-    bottom: "0",
-    width: "0",
-    height: "0",
-    border: "none",
-    opacity: "0",
-    pointerEvents: "none",
-  });
-  document.body.appendChild(iframe);
-  const doc = iframe.contentDocument;
-  if (!doc) {
-    iframe.remove();
-    return;
-  }
-  doc.open();
-  doc.write(html);
-  doc.close();
-  const win = iframe.contentWindow;
-  if (!win) {
-    iframe.remove();
-    return;
-  }
-  const cleanup = () => {
-    try {
-      iframe.remove();
-    } catch {
-      /* ignore */
-    }
-  };
-  win.addEventListener("afterprint", cleanup);
-  setTimeout(() => {
-    win.focus();
-    win.print();
-  }, 150);
-  setTimeout(cleanup, 120000);
+  printHtmlViaHiddenIframe(html, { delayMs: 150 });
 }

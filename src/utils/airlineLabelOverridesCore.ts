@@ -2,6 +2,10 @@ import {
   DEFAULT_AIRLINE_BY_AWB_PREFIX,
   DEFAULT_AIRLINE_BY_FLIGHT_PREFIX,
 } from "../constants/airlineLabelDefaults";
+import {
+  emptyAirlineLabelOverrides,
+  normalizeAirlineLabelOverridesLoose,
+} from "../../shared/airlineLabelOverridesNormalize.mjs";
 
 export type AirlineLabelOverrides = {
   /** 3 chữ số đầu AWB (vd "978") → tên hiển thị */
@@ -10,54 +14,15 @@ export type AirlineLabelOverrides = {
   byFlightPrefix: Record<string, string>;
 };
 
-export const EMPTY_AIRLINE_LABEL_OVERRIDES: AirlineLabelOverrides = {
-  byAwbPrefix: {},
-  byFlightPrefix: {},
-};
+export const EMPTY_AIRLINE_LABEL_OVERRIDES: AirlineLabelOverrides = emptyAirlineLabelOverrides();
 
-const MAX_NAME_LEN = 80;
-const MAX_MAP_ENTRIES = 120;
-
-function trimName(s: string): string {
-  return s.replace(/\s+/g, " ").trim().slice(0, MAX_NAME_LEN);
+/** Chuẩn hoá payload từ app / localStorage / API — nguồn: `shared/airlineLabelOverridesNormalize.mjs`. */
+export function clampAirlineLabelOverrides(raw: unknown): AirlineLabelOverrides {
+  return normalizeAirlineLabelOverridesLoose(raw);
 }
 
-/** Chuẩn hoá payload từ app / localStorage / API */
-export function clampAirlineLabelOverrides(raw: unknown): AirlineLabelOverrides {
-  const out: AirlineLabelOverrides = { byAwbPrefix: {}, byFlightPrefix: {} };
-  if (!raw || typeof raw !== "object") return out;
-  const o = raw as Record<string, unknown>;
-
-  const awb = o.byAwbPrefix;
-  if (awb && typeof awb === "object") {
-    let n = 0;
-    for (const [k, v] of Object.entries(awb)) {
-      if (n >= MAX_MAP_ENTRIES) break;
-      const digits = String(k).replace(/\D/g, "");
-      if (digits.length === 0) continue;
-      const key = digits.slice(0, 3).padStart(3, "0");
-      const name = trimName(String(v ?? ""));
-      if (!name) continue;
-      out.byAwbPrefix[key] = name;
-      n += 1;
-    }
-  }
-
-  const fp = o.byFlightPrefix;
-  if (fp && typeof fp === "object") {
-    let n = 0;
-    for (const [k, v] of Object.entries(fp)) {
-      if (n >= MAX_MAP_ENTRIES) break;
-      const key = String(k).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
-      if (key.length < 2) continue;
-      const name = trimName(String(v ?? ""));
-      if (!name) continue;
-      out.byFlightPrefix[key] = name;
-      n += 1;
-    }
-  }
-
-  return out;
+function trimName(s: string): string {
+  return s.replace(/\s+/g, " ").trim().slice(0, 80);
 }
 
 export function mergeAirlineLookupMaps(overrides: AirlineLabelOverrides | undefined | null): {

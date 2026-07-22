@@ -1,7 +1,13 @@
 /**
  * Hồ sơ Agent ESID — store dùng chung factory với Người khai.
  * Điền form TCS từ hồ sơ này — không lấy agent theo từng lô.
+ * Normalize: `shared/esidProfilesNormalize.mjs`.
  */
+import {
+  emptyEsidAgentStore,
+  esidAgentStoreHasUserData as sharedAgentStoreHasUserData,
+  normalizeEsidAgentStoreLoose,
+} from "../../shared/esidProfilesNormalize.mjs";
 import { createEsidProfileStoreApi } from "./esidProfileStoreFactory";
 
 export type EsidAgentProfile = {
@@ -66,6 +72,9 @@ const api = createEsidProfileStoreApi<EsidAgentProfile, EsidAgentPatch>({
     vat: patch.vat !== undefined ? String(patch.vat).trim() : current.vat,
     fax: patch.fax !== undefined ? String(patch.fax).trim() : current.fax,
   }),
+  emptyStore: () => emptyEsidAgentStore() as EsidAgentStoreV1,
+  normalizeStore: (raw) => normalizeEsidAgentStoreLoose(raw) as EsidAgentStoreV1,
+  storeHasUserData: (store) => sharedAgentStoreHasUserData(store),
 });
 
 export const createEmptyAgent = api.createEmpty;

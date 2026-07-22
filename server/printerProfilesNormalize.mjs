@@ -1,24 +1,11 @@
-/** Đồng bộ với `src/printing/printerProfilesCore.ts` — normalize cơ bản (không phụ thuộc labelTemplate). */
+/**
+ * Đồng bộ với `src/printing/printerProfilesCore.ts` — normalize cơ bản.
+ * Helpers: `shared/primitiveNormalize.mjs` (giữ khác biệt force vs fallback mm).
+ */
+import { num, str } from "../shared/primitiveNormalize.mjs";
 
 export function emptyPrinterProfilesCatalog() {
   return { version: 1, profiles: [], updatedAt: new Date(0).toISOString() };
-}
-
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
-}
-
-function str(v, max = 120) {
-  return String(v ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max);
-}
-
-function num(v, fallback, min, max) {
-  const n = typeof v === "number" ? v : Number(v);
-  if (!Number.isFinite(n)) return fallback;
-  return clamp(n, min, max);
 }
 
 function normalizeThermal(raw, id, name) {

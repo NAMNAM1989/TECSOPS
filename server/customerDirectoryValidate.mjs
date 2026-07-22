@@ -1,4 +1,5 @@
 import { CUSTOMER_PROFILE_LIMITS as L } from "../shared/customerProfileLimits.mjs";
+import { normalizeVehiclePlate } from "../shared/vehiclePlateNormalize.mjs";
 
 function sliceStr(v, max) {
   const s = typeof v === "string" ? v : "";
@@ -171,13 +172,6 @@ function parseSavedGoodsLoose(item) {
   return out.slice(0, L.savedGoodsCount);
 }
 
-function normalizeVehiclePlate(raw) {
-  return sliceStr(raw, L.savedVehicleLicensePlate)
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9;]/g, "");
-}
-
 function parseSavedVehiclesLoose(item) {
   if (!Array.isArray(item.savedVehicles)) return [];
   const out = [];
@@ -185,7 +179,7 @@ function parseSavedVehiclesLoose(item) {
     if (!x || typeof x !== "object") continue;
     const sid = typeof x.id === "string" ? x.id.trim() : "";
     if (!sid) continue;
-    const licensePlate = normalizeVehiclePlate(x.licensePlate);
+    const licensePlate = sliceStr(normalizeVehiclePlate(x.licensePlate), L.savedVehicleLicensePlate);
     const driverName = sliceStr(x.driverName, L.savedVehicleDriverName).trim();
     const driverId = sliceStr(x.driverId, L.savedVehicleDriverId)
       .trim()

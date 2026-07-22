@@ -1,14 +1,7 @@
 import type { Shipment } from "../types/shipment";
 import { isScscWarehouse } from "../constants/warehouses";
 import { buildScscDimListModel, formatLineDimKgLabel } from "./scscDimListReport";
-
-function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+import { escapeHtml, printHtmlViaHiddenIframe } from "./printHtmlViaHiddenIframe";
 
 export function canPrintDimReport(s: Shipment): boolean {
   return (s.dimLines?.length ?? 0) > 0;
@@ -41,9 +34,9 @@ export function printDimReport(s: Shipment): void {
     return;
   }
 
-  const flightLine = `${esc(s.flight.trim())} / ${esc(s.flightDate.trim())}`;
+  const flightLine = `${escapeHtml(s.flight.trim())} / ${escapeHtml(s.flightDate.trim())}`;
   const title = `DIM ${s.awb}`;
-  const dimKgStripEsc = esc(model.dimKgStrip);
+  const dimKgStripEsc = escapeHtml(model.dimKgStrip);
 
   const bodyRows = model.rows
     .map(
@@ -54,7 +47,7 @@ export function printDimReport(s: Shipment): void {
         <td class="num">${line.wCm.toFixed(2)}</td>
         <td class="num">${line.hCm.toFixed(2)}</td>
         <td class="num">${line.pcs}</td>
-        <td class="num dim">${esc(formatLineDimKgLabel(line.dimKg, model.dimCtx))}</td>
+        <td class="num dim">${escapeHtml(formatLineDimKgLabel(line.dimKg, model.dimCtx))}</td>
       </tr>`
     )
     .join("\n");
@@ -64,7 +57,7 @@ export function printDimReport(s: Shipment): void {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${esc(title)}</title>
+  <title>${escapeHtml(title)}</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -133,9 +126,9 @@ export function printDimReport(s: Shipment): void {
 <body>
   <h1>BẢNG KÊ DIM / DIMENSIONAL WEIGHT</h1>
   <table class="meta-tbl">
-    <tr><td class="meta-k">MAWB/BL</td><td class="meta-v">${esc(s.awb)}</td></tr>
+    <tr><td class="meta-k">MAWB/BL</td><td class="meta-v">${escapeHtml(s.awb)}</td></tr>
     <tr><td class="meta-k">FLIGHT / DATE</td><td class="meta-v">${flightLine}</td></tr>
-    <tr><td class="meta-k">DESTINATION</td><td class="meta-v">${esc(s.dest)}</td></tr>
+    <tr><td class="meta-k">DESTINATION</td><td class="meta-v">${escapeHtml(s.dest)}</td></tr>
     <tr><td class="meta-k">Tổng kiện</td><td class="meta-v">${model.totalPcs}</td></tr>
     <tr><td class="meta-k">DIM (kg)</td><td class="meta-v">${dimKgStripEsc}</td></tr>
   </table>
@@ -157,64 +150,5 @@ export function printDimReport(s: Shipment): void {
 </body>
 </html>`;
 
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  Object.assign(iframe.style, {
-    position: "fixed",
-    right: "0",
-    bottom: "0",
-    width: "0",
-    height: "0",
-    border: "none",
-    opacity: "0",
-    pointerEvents: "none",
-  });
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentDocument;
-  if (!doc) {
-    iframe.remove();
-    window.alert("Không tạo được khung in.");
-    return;
-  }
-
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  const win = iframe.contentWindow;
-  if (!win) {
-    iframe.remove();
-    return;
-  }
-
-  const cleanup = () => {
-    try {
-      iframe.remove();
-    } catch {
-      /* ignore */
-    }
-  };
-
-  win.addEventListener("afterprint", cleanup);
-
-  const runPrint = () => {
-    try {
-      win.focus();
-      win.print();
-    } catch {
-      window.alert("Không gọi được lệnh in.");
-      cleanup();
-    }
-  };
-
-  setTimeout(() => {
-    if (iframe.contentDocument?.readyState === "complete") {
-      runPrint();
-    } else {
-      win.addEventListener("load", runPrint, { once: true });
-    }
-  }, 100);
-
-  setTimeout(cleanup, 120000);
+  printHtmlViaHiddenIframe(html, { failAlert: "Không tạo được khung in." });
 }

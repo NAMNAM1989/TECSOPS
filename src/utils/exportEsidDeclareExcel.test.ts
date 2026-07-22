@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Shipment } from "../types/shipment";
+import { flightDateToYmd } from "./esidDeclareFields";
 import {
   analyzeShipmentForEsidDeclare,
-  flightDateToYmd,
   shipmentToEsidDeclareRow,
   ymdToDmy,
 } from "./exportEsidDeclareExcel";

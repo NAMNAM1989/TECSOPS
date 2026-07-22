@@ -3,9 +3,10 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "1.1.0";
+  const SCRIPT_VERSION = "1.1.1";
 
-  const LOCATORS = {
+  /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
+  const DEFAULT_LOCATORS = {
     home_url: "https://www.tcs.com.vn/Esid/Export",
     tab_text: "KHAI BÁO ESID",
     fields: {
@@ -34,9 +35,35 @@
       registrant_name: "shpRegNam",
       registrant_tel: "shpRegTel",
       registrant_id: "shpRegIdx",
+      agree: "agreeConfirm",
     },
     choose_flight_button: "CHỌN CHUYẾN BAY",
+    submit_button: "HOÀN TẤT",
   };
+
+  let LOCATORS = DEFAULT_LOCATORS;
+  let locatorsLoadPromise = null;
+
+  function ensureLocators() {
+    if (locatorsLoadPromise) return locatorsLoadPromise;
+    locatorsLoadPromise = (async () => {
+      try {
+        if (typeof chrome === "undefined" || !chrome.runtime?.getURL) return;
+        const res = await fetch(chrome.runtime.getURL("locators.json"));
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.esid_declare?.fields) {
+          LOCATORS = data.esid_declare;
+        }
+      } catch {
+        /* giữ DEFAULT_LOCATORS */
+      }
+    })();
+    return locatorsLoadPromise;
+  }
+
+  // Prefetch sớm; runFill vẫn await để chắc chắn.
+  void ensureLocators();
 
   /** @type {{ version: string, busy: boolean, runFill: Function }} */
   const api = (window.__TECSOPS_TCS__ = window.__TECSOPS_TCS__ || {
@@ -61,6 +88,7 @@
     const warnings = [];
     const fills = {};
     try {
+      await ensureLocators();
       if (needsLogin()) {
         return {
           ok: false,

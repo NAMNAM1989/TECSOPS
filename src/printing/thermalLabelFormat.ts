@@ -1,14 +1,12 @@
 import type { LabelSheetFormat } from "../utils/labelSheetFormat";
 import type { ThermalLabelPrinterProfile } from "./printTypes";
+import {
+  THERMAL_LABEL_FORMAT_PRESETS,
+  normalizeLabelSheetFormat,
+} from "../../shared/thermalLabelPresets.mjs";
 
-/** Kích thước tem + khổ trang theo từng loại tem (XP-470B: trang = tem, không xoay). */
-export const THERMAL_LABEL_FORMAT_PRESETS: Record<
-  LabelSheetFormat,
-  Pick<ThermalLabelPrinterProfile, "labelWidthMm" | "labelHeightMm" | "pageWidthMm" | "pageHeightMm">
-> = {
-  "100x80": { labelWidthMm: 100, labelHeightMm: 80, pageWidthMm: 100, pageHeightMm: 80 },
-  "100x50": { labelWidthMm: 100, labelHeightMm: 50, pageWidthMm: 100, pageHeightMm: 50 },
-};
+/** Re-export — nguồn sự thật: `shared/thermalLabelPresets.mjs`. */
+export { THERMAL_LABEL_FORMAT_PRESETS };
 
 export function labelSheetFormatLabel(f: LabelSheetFormat): string {
   return f === "100x50" ? "100×50 mm" : "100×80 mm";
@@ -28,10 +26,11 @@ export function withThermalLabelFormat(
   format?: LabelSheetFormat
 ): ThermalLabelPrinterProfile {
   const labelSheetFormat = format ?? resolveThermalProfileLabelFormat(profile);
+  const key = normalizeLabelSheetFormat(labelSheetFormat);
   return {
     ...profile,
-    labelSheetFormat,
-    ...THERMAL_LABEL_FORMAT_PRESETS[labelSheetFormat],
+    labelSheetFormat: key,
+    ...THERMAL_LABEL_FORMAT_PRESETS[key],
   };
 }
 

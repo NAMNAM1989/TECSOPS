@@ -1,4 +1,11 @@
-/** Đồng bộ với `src/printing/printerProfilesCore.ts` — normalize cơ bản (không phụ thuộc labelTemplate). */
+/**
+ * Đồng bộ với `src/printing/printerProfilesCore.ts` — normalize cơ bản.
+ * Preset mm: `shared/thermalLabelPresets.mjs` (server giữ custom mm nếu có; client force preset).
+ */
+import {
+  normalizeLabelSheetFormat,
+  thermalPresetForFormat,
+} from "../shared/thermalLabelPresets.mjs";
 
 export function emptyPrinterProfilesCatalog() {
   return { version: 1, profiles: [], updatedAt: new Date(0).toISOString() };
@@ -22,11 +29,8 @@ function num(v, fallback, min, max) {
 }
 
 function normalizeThermal(raw, id, name) {
-  const labelSheetFormat = raw.labelSheetFormat === "100x50" ? "100x50" : "100x80";
-  const preset =
-    labelSheetFormat === "100x50"
-      ? { labelWidthMm: 100, labelHeightMm: 50, pageWidthMm: 100, pageHeightMm: 50 }
-      : { labelWidthMm: 100, labelHeightMm: 80, pageWidthMm: 100, pageHeightMm: 80 };
+  const labelSheetFormat = normalizeLabelSheetFormat(raw.labelSheetFormat);
+  const preset = thermalPresetForFormat(labelSheetFormat);
   return {
     id,
     name,

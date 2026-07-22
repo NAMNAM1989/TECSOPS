@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyQrOneDecimalRule,
   applyScscLineDimRounding,
   applyScscTotalDimRounding,
   resolveScscAirlineDimRule,
@@ -171,12 +170,3 @@ describe("resolveShipmentDimWeightKg", () => {
 function ctx() {
   return { flight: "VJ081", awb: "978-1111 2222" };
 }
-
-describe("applyQrOneDecimalRule", () => {
-  it("QR one-decimal rule", () => {
-    expect(applyQrOneDecimalRule(10.0)).toBe(10);
-    expect(applyQrOneDecimalRule(10.14)).toBe(10.5);
-    expect(applyQrOneDecimalRule(10.49)).toBe(10.5);
-    expect(applyQrOneDecimalRule(10.5)).toBe(11);
-  });
-});

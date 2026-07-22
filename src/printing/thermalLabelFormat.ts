@@ -5,9 +5,6 @@ import {
   normalizeLabelSheetFormat,
 } from "../../shared/thermalLabelPresets.mjs";
 
-/** Re-export — nguồn sự thật: `shared/thermalLabelPresets.mjs`. */
-export { THERMAL_LABEL_FORMAT_PRESETS };
-
 export function labelSheetFormatLabel(f: LabelSheetFormat): string {
   return f === "100x50" ? "100×50 mm" : "100×80 mm";
 }
@@ -32,11 +29,4 @@ export function withThermalLabelFormat(
     labelSheetFormat: key,
     ...THERMAL_LABEL_FORMAT_PRESETS[key],
   };
-}
-
-export function labelFormatMismatch(
-  profile: ThermalLabelPrinterProfile,
-  currentFormat: LabelSheetFormat
-): boolean {
-  return resolveThermalProfileLabelFormat(profile) !== currentFormat;
 }

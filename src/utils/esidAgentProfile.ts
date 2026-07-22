@@ -77,7 +77,6 @@ const api = createEsidProfileStoreApi<EsidAgentProfile, EsidAgentPatch>({
   storeHasUserData: (store) => sharedAgentStoreHasUserData(store),
 });
 
-export const createEmptyAgent = api.createEmpty;
 export const emptyAgentStore = api.emptyStore;
 export const normalizeEsidAgentStore = api.normalizeStore;
 export const esidAgentStoreHasUserData = api.storeHasUserData;

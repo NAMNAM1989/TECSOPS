@@ -13,8 +13,7 @@ import {
   normalizeCustomerShortCode,
   normalizeCustomerSyncCode,
 } from "./customerCodeOps";
-import { formatVehicleLicensePlate } from "./customerVehicleCore";
-import { VEHICLE_PLATE_MIN } from "./vehiclePlateNormalize";
+import { normalizeVehiclePlateInput, VEHICLE_PLATE_MIN } from "./vehiclePlateNormalize";
 
 export type CustomerProfileSection =
   | "identity"
@@ -74,7 +73,7 @@ export function isValidNationalId(raw: string): boolean {
 }
 
 export function isValidLicensePlate(raw: string): boolean {
-  const plate = formatVehicleLicensePlate(raw);
+  const plate = normalizeVehiclePlateInput(raw);
   // `;` là separator hợp lệ — chỉ đếm chữ/số cho độ dài tối thiểu.
   const alnum = (plate.match(/[A-Z0-9]/g) || []).length;
   return alnum >= VEHICLE_PLATE_MIN;
@@ -267,7 +266,7 @@ function validateVehicles(entry: CustomerDirectoryEntry): CustomerFieldError[] {
       continue;
     }
 
-    const plate = formatVehicleLicensePlate(v.licensePlate);
+    const plate = normalizeVehiclePlateInput(v.licensePlate);
     if (!isValidLicensePlate(v.licensePlate)) {
       errors.push({
         section: "vehicle",

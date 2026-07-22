@@ -1,7 +1,7 @@
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment, Warehouse } from "../types/shipment";
 import { rawAwbDigits } from "./awbFormat";
-import { findCustomerByShipment } from "./customerVehicleCore";
+import { findCustomerEntry } from "./customerBookingResolve";
 
 export type ShipmentSearchContext = {
   customers: readonly CustomerDirectoryEntry[];
@@ -26,7 +26,7 @@ function getCustomerVehiclesForShipment(
   shipment: Shipment,
   customers: readonly CustomerDirectoryEntry[]
 ) {
-  const entry = findCustomerByShipment(shipment, customers);
+  const entry = findCustomerEntry(shipment, customers);
   return entry?.savedVehicles ?? [];
 }
 

@@ -206,20 +206,6 @@ export function buildShipmentCneeCopyBlock(
   return parts.join("\n");
 }
 
-/** Chi tiết CNEE (địa chỉ, SĐT, email…) — hiển thị trong tooltip, không chiếm ô lưới. */
-export function buildShipmentCneeTooltipLines(
-  shipment: Shipment,
-  directory: readonly CustomerDirectoryEntry[] = [],
-  opts?: { sessionYmdFallback?: string }
-): string[] {
-  const body = buildShipmentCneeBodyLines(shipment, directory);
-  if (body.length) return body;
-  return buildShipmentCneeMetaLines(shipment, {
-    sessionYmdFallback: opts?.sessionYmdFallback,
-    customerDirectory: directory,
-  });
-}
-
 /** Một dòng ngắn trên lưới — ưu tiên mã viết tắt; tên pháp lý xem trong pop-up. */
 export function formatShipmentCneeReadonlySummary(
   shipment: Shipment,
@@ -232,18 +218,4 @@ export function formatShipmentCneeReadonlySummary(
   const name = compactSpace(shipment.consigneeNamePrint?.trim() || saved?.consigneeName?.trim() || "");
   if (!name) return "";
   return name.length > 28 ? `${name.slice(0, 26)}…` : name;
-}
-
-export async function copyShipmentCneeBlockToClipboard(
-  shipment: Shipment,
-  directory: readonly CustomerDirectoryEntry[] = [],
-  opts?: { sessionYmdFallback?: string }
-): Promise<boolean> {
-  const text = buildShipmentCneeCopyBlock(shipment, directory, opts);
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
 }

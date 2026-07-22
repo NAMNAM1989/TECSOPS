@@ -210,14 +210,6 @@ export function dimRoundingPolicyFromFlight(flight: string, awb = ""): DimRoundi
 
 
 
-export function resolveScscDimRuleFromFlight(flight: string, awb = ""): ScscAirlineDimRule | null {
-
-  return resolveScscAirlineDimRule(flight, awb);
-
-}
-
-
-
 /** Hiển thị kg DIM dòng theo quy tắc SCSC. */
 
 export function formatLineDimKgDisplay(

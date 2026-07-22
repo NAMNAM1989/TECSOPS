@@ -1,7 +1,8 @@
 import type { Shipment } from "../types/shipment";
 import { isScscWarehouse } from "../constants/warehouses";
-import { buildScscDimListModel, formatLineDimKgLabel } from "./scscDimListReport";
+import { buildScscDimListModel } from "./scscDimListReport";
 import { escapeHtml, printHtmlViaHiddenIframe } from "./printHtmlViaHiddenIframe";
+import { formatLineDimKgDisplay } from "./volumetricDim";
 
 export function canPrintDimReport(s: Shipment): boolean {
   return (s.dimLines?.length ?? 0) > 0;
@@ -47,7 +48,7 @@ export function printDimReport(s: Shipment): void {
         <td class="num">${line.wCm.toFixed(2)}</td>
         <td class="num">${line.hCm.toFixed(2)}</td>
         <td class="num">${line.pcs}</td>
-        <td class="num dim">${escapeHtml(formatLineDimKgLabel(line.dimKg, model.dimCtx))}</td>
+        <td class="num dim">${escapeHtml(line.dimKg == null ? "—" : formatLineDimKgDisplay(line.dimKg, model.dimCtx))}</td>
       </tr>`
     )
     .join("\n");

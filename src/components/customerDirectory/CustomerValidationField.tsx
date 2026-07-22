@@ -1,5 +1,5 @@
 import type { CustomerFieldError, CustomerProfileSection } from "../../utils/customerDirectoryValidation";
-import { CD, cdInput, cdInputInvalid } from "./customerDirectoryStyles";
+import { OPS, opsInput } from "../../styles/opsModalStyles";
 
 export function CustomerValidationBanner({ errors }: { errors: readonly CustomerFieldError[] }) {
   const sectionErrors = errors.filter((e) => e.field === "_section");
@@ -17,7 +17,7 @@ export function CustomerValidationBanner({ errors }: { errors: readonly Customer
 }
 
 export function fieldInputClass(invalid: boolean): string {
-  return `w-full text-xs ${cdInput}${invalid ? ` ${cdInputInvalid}` : ""}`;
+  return `w-full text-xs ${opsInput}${invalid ? ` ${OPS.inputInvalid}` : ""}`;
 }
 
 export function FieldErrorText({ message }: { message?: string }) {
@@ -35,7 +35,7 @@ export function SectionErrorHint({
   const count = errors.filter((e) => e.section === section && e.field !== "_section").length;
   if (!count) return null;
   return (
-    <span className={`text-[10px] font-semibold ${CD.muted} text-red-600 dark:text-red-300`}>
+    <span className={`text-[10px] font-semibold ${OPS.muted} text-red-600 dark:text-red-300`}>
       {count} lỗi
     </span>
   );

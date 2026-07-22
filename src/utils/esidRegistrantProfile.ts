@@ -64,7 +64,6 @@ const api = createEsidProfileStoreApi<EsidRegistrantProfile, EsidRegistrantPatch
   storeHasUserData: (store) => sharedRegistrantStoreHasUserData(store),
 });
 
-export const createEmptyRegistrant = api.createEmpty;
 export const emptyRegistrantStore = api.emptyStore;
 export const normalizeEsidRegistrantStore = api.normalizeStore;
 export const esidRegistrantStoreHasUserData = api.storeHasUserData;

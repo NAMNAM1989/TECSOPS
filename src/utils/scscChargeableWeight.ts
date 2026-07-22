@@ -33,32 +33,10 @@ export function truncatePositiveKg(n: number, decimalPlaces: number): number {
   return Math.floor(n * f + 1e-9) / f;
 }
 
-/** Làm tròn bậc `step` (0.5 / 1), khử nhiễu float. */
-export function roundToStep(n: number, step: number): number {
-  if (!Number.isFinite(n) || step <= 0) return n;
-  const rounded = Math.round(n / step) * step;
-  return roundToDecimals(rounded, 3);
-}
-
 /** Làm tròn lên bậc step — ví dụ tổng 100,104 → 100,5 (file SCSC). */
 export function ceilToStep(n: number, step: number): number {
   if (!Number.isFinite(n) || step <= 0) return n;
   return roundToDecimals(Math.ceil(n / step - 1e-12) * step, 3);
-}
-
-/**
- * QR — 1 số lẻ: digit thập phân 0 giữ; 1–4 → +0.5; ≥5 → lên số nguyên tiếp.
- */
-export function applyQrOneDecimalRule(kg: number): number {
-  if (!Number.isFinite(kg)) return kg;
-  const sign = kg < 0 ? -1 : 1;
-  const x = Math.abs(kg);
-  const whole = Math.floor(x + 1e-12);
-  const frac = x - whole;
-  const digit = Math.floor(frac * 10 + 1e-9);
-  if (digit === 0) return sign * whole;
-  if (digit >= 1 && digit <= 4) return sign * (whole + 0.5);
-  return sign * (whole + 1);
 }
 
 /** DIM kg một dòng sau (D×R×C÷6000)×kiện — cột «Dim CỦA MỖI DÒNG». */

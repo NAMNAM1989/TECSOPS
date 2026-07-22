@@ -12,10 +12,10 @@ import {
   parseCustomerProfileOcrJson,
   patchShipperFromOcr,
 } from "../../utils/customerProfileInputFormat";
-import { formatVehicleLicensePlate } from "../../utils/customerVehicleCore";
+import { normalizeVehiclePlateInput } from "../../utils/vehiclePlateNormalize";
 import { suggestSavedItemLabel } from "../../utils/customerDirectoryScaffold";
 import { normalizePrintAddressMultiline } from "../../utils/printAddressMultiline";
-import { CD, cdInput } from "./customerDirectoryStyles";
+import { OPS, opsInput } from "../../styles/opsModalStyles";
 import {
   CustomerValidationBanner,
   FieldErrorText,
@@ -25,7 +25,7 @@ import {
 import type { CustomerFieldError } from "../../utils/customerDirectoryValidation";
 import { getFieldValidationError } from "../../utils/customerDirectoryValidation";
 
-const inputCls = `w-full text-xs ${cdInput}`;
+const inputCls = `w-full text-xs ${opsInput}`;
 
 type ProfileTab = "shipper" | "consignee" | "goods" | "vehicle";
 
@@ -69,7 +69,7 @@ function DefaultStar({
       title={title}
       onClick={onClick}
       className={`rounded px-1 text-sm leading-none ${
-        active ? "text-amber-500" : `${CD.muted} hover:text-amber-500`
+        active ? "text-amber-500" : `${OPS.muted} hover:text-amber-500`
       }`}
       aria-label={title}
       aria-pressed={active}
@@ -93,10 +93,10 @@ function ItemCard({
   children: ReactNode;
 }) {
   return (
-    <div className={`mb-1.5 rounded-lg border p-2 ${CD.panelSoft}`}>
+    <div className={`mb-1.5 rounded-lg border p-2 ${OPS.panelSoft}`}>
       <div className="mb-1.5 flex items-center gap-1.5">
         {defaultStar}
-        <span className={`min-w-0 flex-1 truncate text-[11px] font-semibold ${CD.secondary}`}>{title}</span>
+        <span className={`min-w-0 flex-1 truncate text-[11px] font-semibold ${OPS.secondary}`}>{title}</span>
         {canRemove ? (
           <button
             type="button"
@@ -113,7 +113,7 @@ function ItemCard({
 }
 
 function FieldLabel({ children }: { children: ReactNode }) {
-  return <span className={`mb-0.5 block text-[10px] font-medium ${CD.muted}`}>{children}</span>;
+  return <span className={`mb-0.5 block text-[10px] font-medium ${OPS.muted}`}>{children}</span>;
 }
 
 export function CustomerSavedProfilesEditor({
@@ -196,8 +196,8 @@ export function CustomerSavedProfilesEditor({
 
   return (
     <section className="space-y-2.5">
-      <div className={`rounded-lg border p-2 ${CD.card}`}>
-        <span className={`mb-1.5 block text-[10px] font-bold uppercase ${CD.muted}`}>
+      <div className={`rounded-lg border p-2 ${OPS.card}`}>
+        <span className={`mb-1.5 block text-[10px] font-bold uppercase ${OPS.muted}`}>
           Ghi chú in phiếu cân
         </span>
         <textarea
@@ -209,15 +209,15 @@ export function CustomerSavedProfilesEditor({
         />
       </div>
 
-      <div className={`rounded-lg border ${CD.card}`}>
-        <div className={`flex flex-wrap items-center gap-1 border-b px-1.5 py-1 ${CD.border}`}>
+      <div className={`rounded-lg border ${OPS.card}`}>
+        <div className={`flex flex-wrap items-center gap-1 border-b px-1.5 py-1 ${OPS.border}`}>
           {TAB_LABELS.map(({ id, label }) => (
             <button
               key={id}
               type="button"
               onClick={() => setTab(id)}
               className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
-                tab === id ? CD.navActive : CD.navIdle
+                tab === id ? OPS.navActive : OPS.navIdle
               }`}
             >
               {label}
@@ -226,7 +226,7 @@ export function CustomerSavedProfilesEditor({
           ))}
           <div className="ml-auto flex items-center gap-1">
             <SectionErrorHint errors={errors} section={tab} />
-            <button type="button" onClick={tabAdd[tab]} className={CD.btnSmallAccent}>
+            <button type="button" onClick={tabAdd[tab]} className={OPS.btnSmallAccent}>
               + Thêm
             </button>
           </div>
@@ -236,7 +236,7 @@ export function CustomerSavedProfilesEditor({
           <CustomerValidationBanner errors={errors.filter((e) => e.section === tab)} />
           {tab === "shipper" ? (
             shippers.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${CD.muted}`}>Chưa có người gửi.</p>
+              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>Chưa có người gửi.</p>
             ) : (
               shippers.map((s, idx) => (
                 <ItemCard
@@ -291,7 +291,7 @@ export function CustomerSavedProfilesEditor({
                     </label>
                   </div>
                   <details className="mt-1">
-                    <summary className={`cursor-pointer text-[10px] ${CD.muted}`}>Thêm (MST, email, OCR…)</summary>
+                    <summary className={`cursor-pointer text-[10px] ${OPS.muted}`}>Thêm (MST, email, OCR…)</summary>
                     <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                       <label>
                         <FieldLabel>Mã</FieldLabel>
@@ -319,10 +319,10 @@ export function CustomerSavedProfilesEditor({
                         />
                       </label>
                       <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-                        <button type="button" onClick={() => void applyOcrPaste(idx)} className={CD.btnSmallAccent}>
+                        <button type="button" onClick={() => void applyOcrPaste(idx)} className={OPS.btnSmallAccent}>
                           Dán OCR
                         </button>
-                        {ocrHint ? <span className={`text-[10px] ${CD.secondary}`}>{ocrHint}</span> : null}
+                        {ocrHint ? <span className={`text-[10px] ${OPS.secondary}`}>{ocrHint}</span> : null}
                       </div>
                     </div>
                   </details>
@@ -333,7 +333,7 @@ export function CustomerSavedProfilesEditor({
 
           {tab === "consignee" ? (
             consignees.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${CD.muted}`}>Chưa có CNEE — có thể bỏ qua.</p>
+              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>Chưa có CNEE — có thể bỏ qua.</p>
             ) : (
               consignees.map((c, idx) => (
                 <ItemCard
@@ -394,7 +394,7 @@ export function CustomerSavedProfilesEditor({
 
           {tab === "goods" ? (
             goods.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${CD.muted}`}>Chưa có mẫu tên hàng.</p>
+              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>Chưa có mẫu tên hàng.</p>
             ) : (
               goods.map((g, idx) => (
                 <ItemCard
@@ -428,7 +428,7 @@ export function CustomerSavedProfilesEditor({
 
           {tab === "vehicle" ? (
             vehicles.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${CD.muted}`}>Chưa có xe — thêm biển số / tài xế nếu cần.</p>
+              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>Chưa có xe — thêm biển số / tài xế nếu cần.</p>
             ) : (
               vehicles.map((v, idx) => (
                 <ItemCard
@@ -452,7 +452,7 @@ export function CustomerSavedProfilesEditor({
                         value={v.licensePlate}
                         onChange={(e) => onPatchVehicle(idx, { licensePlate: e.target.value })}
                         onBlur={(e) =>
-                          onPatchVehicle(idx, { licensePlate: formatVehicleLicensePlate(e.target.value) })
+                          onPatchVehicle(idx, { licensePlate: normalizeVehiclePlateInput(e.target.value) })
                         }
                       />
                       <FieldErrorText message={fe("vehicle", "licensePlate", v.id)} />

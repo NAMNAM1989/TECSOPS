@@ -301,7 +301,7 @@ export type TcsEsidPrepareResponse = {
   message?: string;
 };
 
-/** Pre-warm trang chi tiết ESID (nút IN) — gọi khi mở menu ⋮ */
+/** Pre-warm trang chi tiết ESID (nút IN) — gọi khi Tải PDF cold-path */
 export async function prepareTcsEsid(
   awb: string,
   sessionDate?: string

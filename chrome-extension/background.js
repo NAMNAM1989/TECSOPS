@@ -6,7 +6,7 @@
 const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const EXT_VERSION = chrome.runtime.getManifest().version;
 /** Khớp SCRIPT_VERSION trong content-tcs.js — lệch thì reload tab để xóa listener cũ */
-const EXPECTED_SCRIPT_VERSION = "1.1.0";
+const EXPECTED_SCRIPT_VERSION = "1.1.4";
 
 chrome.runtime.onInstalled.addListener(() => {
   console.info("[tecsops-ext] installed", EXT_VERSION);

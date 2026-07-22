@@ -91,33 +91,35 @@ export function GoogleSheetImportModal({
     []
   );
 
-  const runSync = useCallback(async (refresh = false, filterOverride?: WarehouseFilter) => {
-    setLoading(true);
-    setError(null);
-    const filter = filterOverride ?? warehouseFilter;
-    try {
-      let result: SheetBookSyncResult;
-      if (!refresh) {
-        const prefetched = sheetSyncPrefetchRef?.current;
-        if (prefetched?.sessionYmd === sessionYmd) {
-          if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
-          result = await prefetched.promise;
+  const fetchAndSelect = useCallback(
+    async (refresh: boolean, filter: WarehouseFilter) => {
+      setLoading(true);
+      setError(null);
+      try {
+        let result: SheetBookSyncResult;
+        if (!refresh) {
+          const prefetched = sheetSyncPrefetchRef?.current;
+          if (prefetched?.sessionYmd === sessionYmd) {
+            if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
+            result = await prefetched.promise;
+          } else {
+            result = await syncBookGoogleSheet(sessionYmd);
+          }
         } else {
-          result = await syncBookGoogleSheet(sessionYmd);
+          if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
+          result = await syncBookGoogleSheet(sessionYmd, { refresh });
         }
-      } else {
-        if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
-        result = await syncBookGoogleSheet(sessionYmd, { refresh });
+        setSync(result);
+        setSelected(selectDefaultRows(result, filter));
+      } catch (e) {
+        setSync(null);
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
       }
-      setSync(result);
-      setSelected(selectDefaultRows(result, filter));
-    } catch (e) {
-      setSync(null);
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionYmd, sheetSyncPrefetchRef, selectDefaultRows, warehouseFilter]);
+    },
+    [sessionYmd, sheetSyncPrefetchRef, selectDefaultRows]
+  );
 
   useEffect(() => {
     if (!open) {
@@ -128,14 +130,13 @@ export function GoogleSheetImportModal({
       return;
     }
     setWarehouseFilter(activeWarehouse);
-    void runSync(false, activeWarehouse);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mở modal / đổi ngày / kho OPS
-  }, [open, sessionYmd, activeWarehouse]);
+    void fetchAndSelect(false, activeWarehouse);
+  }, [open, sessionYmd, activeWarehouse, fetchAndSelect]);
 
-  useEffect(() => {
-    if (!open || !sync) return;
-    setSelected(selectDefaultRows(sync, warehouseFilter));
-  }, [warehouseFilter]); // eslint-disable-line react-hooks/exhaustive-deps -- chỉ khi user đổi chip kho
+  const applyWarehouseFilter = (next: WarehouseFilter) => {
+    setWarehouseFilter(next);
+    if (sync) setSelected(selectDefaultRows(sync, next));
+  };
 
 
   const toggle = (index: number) => {
@@ -248,7 +249,7 @@ export function GoogleSheetImportModal({
           <button
             type="button"
             disabled={loading}
-            onClick={() => void runSync(true)}
+            onClick={() => void fetchAndSelect(true, warehouseFilter)}
             className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             {loading ? "Đang kéo Sheet…" : "Kéo Sheet lại"}
@@ -275,7 +276,7 @@ export function GoogleSheetImportModal({
                   type="button"
                   role="tab"
                   aria-selected={active}
-                  onClick={() => setWarehouseFilter(id)}
+                  onClick={() => applyWarehouseFilter(id)}
                   className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${
                     active
                       ? "bg-dashboard-primary text-white dark:bg-white/15 dark:text-dashboard-primary-dark"

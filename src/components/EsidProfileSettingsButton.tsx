@@ -116,12 +116,22 @@ export function EsidProfileSettingsButton<P extends EsidProfileBase>({
     syncFromProfile(getActive());
   }, [open, getActive, fields]);
 
-  const draft = { name, ...fieldValues } as Partial<P> & Pick<P, "name">;
-  const complete = isComplete(draft);
+  /** Badge / title nút luôn theo hồ sơ đã lưu — không theo draft chưa Lưu. */
+  const savedComplete = active
+    ? isComplete(active as Partial<P> & Pick<P, "name">)
+    : false;
 
   const label = active?.name?.trim()
     ? `${buttonLabelPrefix} · ${active.name.trim().slice(0, buttonNameMax)}`
     : buttonLabelPrefix;
+
+  const closeWithoutSave = () => {
+    setOpen(false);
+    const next = loadStore();
+    setStore(next);
+    const a = next.profiles.find((p) => p.id === next.activeId) || next.profiles[0];
+    if (a) syncFromProfile(a);
+  };
 
   const saveCurrent = () => {
     updateActive({ name, ...fieldValues } as Partial<P>);
@@ -152,11 +162,14 @@ export function EsidProfileSettingsButton<P extends EsidProfileBase>({
         type="button"
         className={BTN}
         disabled={disabled}
-        title={complete && active ? completeTitle(active) : incompleteTitle}
-        onClick={() => setOpen((v) => !v)}
+        title={savedComplete && active ? completeTitle(active) : incompleteTitle}
+        onClick={() => {
+          if (open) closeWithoutSave();
+          else setOpen(true);
+        }}
       >
         {compact ? compactLabel : label}
-        {!complete ? <span className="text-amber-600">!</span> : null}
+        {!savedComplete ? <span className="text-amber-600">!</span> : null}
       </button>
       {open ? (
         <div
@@ -244,7 +257,7 @@ export function EsidProfileSettingsButton<P extends EsidProfileBase>({
             <button
               type="button"
               className="rounded-full px-2.5 py-1 text-[10px] font-semibold text-slate-500"
-              onClick={() => setOpen(false)}
+              onClick={closeWithoutSave}
             >
               Đóng
             </button>

@@ -2,8 +2,7 @@ import type { Borders, Cell, Font } from "exceljs";
 import type { Shipment } from "../types/shipment";
 import { canPrintDimScscReport } from "./printDimReport";
 import { buildScscDimListModel, dimKgExcelLineNumFmt, type ScscDimListModel } from "./scscDimListReport";
-
-const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+import { awbForFilename, downloadXlsxBuffer } from "./downloadXlsx";
 
 const LAST_COL = 6;
 const BLACK = "FF000000";
@@ -40,10 +39,6 @@ const BODY_FONT: Partial<Font> = {
   name: "Calibri",
   color: { argb: BLACK },
 };
-
-function awbForFilename(awb: string): string {
-  return awb.replace(/[^\dA-Za-z-]+/g, "_").slice(0, 40) || "AWB";
-}
 
 function setThinBorder(cell: Cell) {
   cell.border = THIN as Borders;
@@ -229,17 +224,8 @@ export async function downloadScscDimDayExcel(
     await fillListScscSheet(sheet, s, model);
   }
 
-  const buf = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buf], { type: MIME_XLSX });
-  const objectUrl = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = `LIST_SCSC_DIM_${sessionYmd}.xlsx`;
-    a.click();
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
+  const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+  downloadXlsxBuffer(buf, `LIST_SCSC_DIM_${sessionYmd}.xlsx`);
   return ready.length;
 }
 
@@ -256,23 +242,15 @@ export function downloadScscDimListExcel(s: Shipment): void {
   }
 
   void (async () => {
-    let objectUrl: string | null = null;
     try {
       const wb = await buildListScscWorkbook(s, model);
-      const buf = await wb.xlsx.writeBuffer();
-      const blob = new Blob([buf], { type: MIME_XLSX });
-      objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = `LIST_SCSC_${awbForFilename(s.awb)}.xlsx`;
-      a.click();
+      const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+      downloadXlsxBuffer(buf, `LIST_SCSC_${awbForFilename(s.awb)}.xlsx`);
     } catch (e) {
       console.error("[downloadScscDimListExcel]", e);
       window.alert(
         e instanceof Error ? e.message : "Không tạo được file Excel. Thử lại hoặc kiểm tra bộ nhớ trình duyệt."
       );
-    } finally {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     }
   })();
 }

@@ -26,8 +26,12 @@ import {
 import {
   ensureCustomerEditScaffold,
   scaffoldNewCustomer,
-  withNewDefault,
 } from "../utils/customerDirectoryScaffold";
+import {
+  addCustomerSavedListItem,
+  patchCustomerSavedListItem,
+  removeCustomerSavedListItem,
+} from "../utils/customerSavedListOps";
 import { formatVnPhoneDisplay, normalizeAgentCode } from "../utils/customerProfileInputFormat";
 import { normalizeCustomerNameInput, customerNameWhileTyping } from "../utils/customerShipmentPatch";
 import { normalizeCustomerShortCode, shortCodeWhileTyping } from "../utils/customerCodeOps";
@@ -341,152 +345,89 @@ export function CustomersPage({
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
 
-  // —— profile patch helpers ——
+  // —— profile patch helpers (generic CRUD + shipper sync account) ——
   function patchSavedShipper(customerId: string, index: number, patch: Partial<CustomerSavedShipper>) {
     setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const list = [...(row.savedShippers ?? [])];
-        const cur = list[index];
-        if (!cur) return row;
-        list[index] = { ...cur, ...patch };
-        let next: CustomerDirectoryEntry = { ...row, savedShippers: list };
-        // Nếu sửa shipper mặc định → phản chiếu lên account contact
-        const isDefault = (row.defaultShipperId ?? list[0]?.id) === list[index]?.id;
-        if (isDefault) {
-          next = {
-            ...next,
-            ...(patch.shipperPhone != null ? { phone: patch.shipperPhone } : {}),
-            ...(patch.shipperEmail != null ? { email: patch.shipperEmail } : {}),
-            ...(patch.shipperAddress != null ? { address: patch.shipperAddress } : {}),
-            ...(patch.taxCode != null ? { taxCode: patch.taxCode } : {}),
-          };
-        }
-        return next;
+      patchCustomerSavedListItem(rows, customerId, "savedShippers", index, patch, (next, list, i) => {
+        const isDefault = (next.defaultShipperId ?? list[0]?.id) === list[i]?.id;
+        if (!isDefault) return next;
+        return {
+          ...next,
+          ...(patch.shipperPhone != null ? { phone: patch.shipperPhone } : {}),
+          ...(patch.shipperEmail != null ? { email: patch.shipperEmail } : {}),
+          ...(patch.shipperAddress != null ? { address: patch.shipperAddress } : {}),
+          ...(patch.taxCode != null ? { taxCode: patch.taxCode } : {}),
+        };
       })
     );
   }
   function removeSavedShipper(customerId: string, index: number) {
     setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const list = (row.savedShippers ?? []).filter((_, i) => i !== index);
-        const removed = row.savedShippers?.[index];
-        const defaultShipperId =
-          removed && row.defaultShipperId === removed.id ? undefined : row.defaultShipperId;
-        return { ...row, savedShippers: list, defaultShipperId };
-      })
+      removeCustomerSavedListItem(rows, customerId, "savedShippers", "defaultShipperId", index)
     );
   }
   function addSavedShipper(customerId: string) {
     setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const shipper = emptyCustomerSavedShipper();
-        const { list, defaultId } = withNewDefault(row.savedShippers ?? [], shipper, row.defaultShipperId);
-        return { ...row, savedShippers: list, defaultShipperId: defaultId };
-      })
+      addCustomerSavedListItem(
+        rows,
+        customerId,
+        "savedShippers",
+        "defaultShipperId",
+        emptyCustomerSavedShipper
+      )
     );
   }
   function patchSavedConsignee(customerId: string, index: number, patch: Partial<CustomerSavedConsignee>) {
     setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const list = [...(row.savedConsignees ?? [])];
-        const cur = list[index];
-        if (!cur) return row;
-        list[index] = { ...cur, ...patch };
-        return { ...row, savedConsignees: list };
-      })
+      patchCustomerSavedListItem(rows, customerId, "savedConsignees", index, patch)
     );
   }
   function removeSavedConsignee(customerId: string, index: number) {
     setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const list = (row.savedConsignees ?? []).filter((_, i) => i !== index);
-        const removed = row.savedConsignees?.[index];
-        const defaultConsigneeId =
-          removed && row.defaultConsigneeId === removed.id ? undefined : row.defaultConsigneeId;
-        return { ...row, savedConsignees: list, defaultConsigneeId };
-      })
+      removeCustomerSavedListItem(rows, customerId, "savedConsignees", "defaultConsigneeId", index)
     );
   }
   function addSavedConsignee(customerId: string) {
     setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const item = emptyCustomerSavedConsignee();
-        const { list, defaultId } = withNewDefault(row.savedConsignees ?? [], item, row.defaultConsigneeId);
-        return { ...row, savedConsignees: list, defaultConsigneeId: defaultId };
-      })
+      addCustomerSavedListItem(
+        rows,
+        customerId,
+        "savedConsignees",
+        "defaultConsigneeId",
+        emptyCustomerSavedConsignee
+      )
     );
   }
   function patchSavedGoods(customerId: string, index: number, patch: Partial<CustomerSavedGoods>) {
-    setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const list = [...(row.savedGoods ?? [])];
-        const cur = list[index];
-        if (!cur) return row;
-        list[index] = { ...cur, ...patch };
-        return { ...row, savedGoods: list };
-      })
-    );
+    setDraft((rows) => patchCustomerSavedListItem(rows, customerId, "savedGoods", index, patch));
   }
   function removeSavedGoods(customerId: string, index: number) {
     setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const list = (row.savedGoods ?? []).filter((_, i) => i !== index);
-        const removed = row.savedGoods?.[index];
-        const defaultGoodsId = removed && row.defaultGoodsId === removed.id ? undefined : row.defaultGoodsId;
-        return { ...row, savedGoods: list, defaultGoodsId };
-      })
+      removeCustomerSavedListItem(rows, customerId, "savedGoods", "defaultGoodsId", index)
     );
   }
   function addSavedGoods(customerId: string) {
     setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const item = emptyCustomerSavedGoods();
-        const { list, defaultId } = withNewDefault(row.savedGoods ?? [], item, row.defaultGoodsId);
-        return { ...row, savedGoods: list, defaultGoodsId: defaultId };
-      })
+      addCustomerSavedListItem(rows, customerId, "savedGoods", "defaultGoodsId", emptyCustomerSavedGoods)
     );
   }
   function patchSavedVehicle(customerId: string, index: number, patch: Partial<CustomerSavedVehicle>) {
-    setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const list = [...(row.savedVehicles ?? [])];
-        const cur = list[index];
-        if (!cur) return row;
-        list[index] = { ...cur, ...patch };
-        return { ...row, savedVehicles: list };
-      })
-    );
+    setDraft((rows) => patchCustomerSavedListItem(rows, customerId, "savedVehicles", index, patch));
   }
   function removeSavedVehicle(customerId: string, index: number) {
     setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const list = (row.savedVehicles ?? []).filter((_, i) => i !== index);
-        const removed = row.savedVehicles?.[index];
-        const defaultVehicleId =
-          removed && row.defaultVehicleId === removed.id ? undefined : row.defaultVehicleId;
-        return { ...row, savedVehicles: list, defaultVehicleId };
-      })
+      removeCustomerSavedListItem(rows, customerId, "savedVehicles", "defaultVehicleId", index)
     );
   }
   function addSavedVehicle(customerId: string) {
     setDraft((rows) =>
-      rows.map((row) => {
-        if (row.id !== customerId) return row;
-        const item = emptyCustomerSavedVehicle();
-        const { list, defaultId } = withNewDefault(row.savedVehicles ?? [], item, row.defaultVehicleId);
-        return { ...row, savedVehicles: list, defaultVehicleId: defaultId };
-      })
+      addCustomerSavedListItem(
+        rows,
+        customerId,
+        "savedVehicles",
+        "defaultVehicleId",
+        emptyCustomerSavedVehicle
+      )
     );
   }
 

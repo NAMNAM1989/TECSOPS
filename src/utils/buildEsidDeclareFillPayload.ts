@@ -1,8 +1,10 @@
 import type { Shipment } from "../types/shipment";
 import { awbDigitsKey } from "./awbFormat";
-import { flightDateToYmd } from "./exportEsidDeclareExcel";
-import type { EsidRegistrantProfile } from "./esidRegistrantProfile";
-import type { EsidAgentProfile } from "./esidAgentProfile";
+import {
+  buildEsidDeclareCoreFields,
+  type EsidDeclareAgentFields,
+  type EsidDeclareRegistrantFields,
+} from "./esidDeclareFields";
 
 /** Payload gửi agent POST /esid/declare-fill */
 export type EsidDeclareFillPayload = {
@@ -51,50 +53,50 @@ export type EsidDeclareFillPayload = {
 
 export function buildEsidDeclareFillPayload(
   s: Shipment,
-  registrant: Pick<EsidRegistrantProfile, "name" | "tel" | "cccd">,
-  agent: Pick<EsidAgentProfile, "name" | "address" | "tel" | "email" | "vat" | "fax">
+  registrant: EsidDeclareRegistrantFields,
+  agent: EsidDeclareAgentFields
 ): EsidDeclareFillPayload | null {
   const awb = awbDigitsKey(s.awb);
   if (awb.length !== 11) return null;
+  const core = buildEsidDeclareCoreFields(s, registrant, agent);
   return {
     warehouse: "TECS-TCS",
     submit: false,
     confirm_submit: false,
     choose_flight: true,
     registrant: {
-      name: (registrant.name || "").trim(),
-      tel: (registrant.tel || "").trim(),
-      cccd: (registrant.cccd || "").replace(/\s+/g, "").trim(),
+      name: core.registrant_name,
+      tel: core.registrant_tel,
+      cccd: core.registrant_cccd,
     },
     shipment: {
-      shipment_id: s.id,
+      shipment_id: core.shipment_id,
       awb,
-      flight_no: (s.flight || "").trim(),
-      flight_date: flightDateToYmd(s.flightDate || "", s.sessionDate || ""),
-      dest: (s.dest || "").trim().toUpperCase(),
-      pcs: s.pcs == null || Number.isNaN(Number(s.pcs)) ? 0 : Number(s.pcs),
-      gross_weight: s.kg,
-      shipper_name: (s.shipperNamePrint || s.customer || "").trim(),
-      shipper_address: (s.shipperAddressPrint || "").trim(),
-      shipper_tel: (s.shipperPhonePrint || "").trim(),
-      shipper_email: (s.shipperEmailPrint || "").trim(),
-      // Agent cố định (ưu tiên hồ sơ máy — không dùng agent*Print trên lô)
-      agent_name: (agent.name || "").trim(),
-      agent_address: (agent.address || "").trim(),
-      agent_tel: (agent.tel || "").trim(),
-      agent_email: (agent.email || "").trim(),
-      agent_vat: (agent.vat || "").trim(),
-      agent_fax: (agent.fax || "").trim(),
-      consignee_name: (s.consigneeNamePrint || "").trim(),
-      consignee_address: (s.consigneeAddressPrint || "").trim(),
-      consignee_tel: (s.consigneePhonePrint || "").trim(),
-      consignee_email: (s.consigneeEmailPrint || "").trim(),
-      consignee_vat: (s.taxCodePrint || "").trim(),
-      notify_name: (s.notifyNamePrint || "").trim(),
-      nature_of_goods: (s.goodsDescriptionPrint || "").trim(),
-      other_request: (s.otherRequirementsPrint || "").trim(),
-      payment_mode: "Chuyển khoản/Bank transfer",
-      total_hawbs: 0,
+      flight_no: core.flight_no,
+      flight_date: core.flight_date,
+      dest: core.dest,
+      pcs: core.pcs == null ? 0 : core.pcs,
+      gross_weight: core.gross_weight,
+      shipper_name: core.shipper_name,
+      shipper_address: core.shipper_address,
+      shipper_tel: core.shipper_tel,
+      shipper_email: core.shipper_email,
+      agent_name: core.agent_name,
+      agent_address: core.agent_address,
+      agent_tel: core.agent_tel,
+      agent_email: core.agent_email,
+      agent_vat: core.agent_vat,
+      agent_fax: core.agent_fax,
+      consignee_name: core.consignee_name,
+      consignee_address: core.consignee_address,
+      consignee_tel: core.consignee_tel,
+      consignee_email: core.consignee_email,
+      consignee_vat: core.consignee_vat,
+      notify_name: core.notify_name,
+      nature_of_goods: core.nature_of_goods,
+      other_request: core.other_request,
+      payment_mode: core.payment_mode,
+      total_hawbs: core.total_hawbs,
       tecs_warehouse: true,
       consol: false,
     },

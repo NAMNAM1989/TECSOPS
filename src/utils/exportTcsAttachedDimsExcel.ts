@@ -1,5 +1,6 @@
 import type { Shipment } from "../types/shipment";
 import { isTcsWarehouse } from "../constants/warehouses";
+import { awbForFilename, downloadXlsxBuffer } from "./downloadXlsx";
 
 /** Giống mẫu `ATTACHED_LIST_DIMS.xlsx`: 4 cột kích thước + cột trống. */
 const HEADER_ROW: (string | number)[] = [
@@ -13,12 +14,6 @@ const HEADER_ROW: (string | number)[] = [
   "",
   "",
 ];
-
-const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-
-function awbForFilename(awb: string): string {
-  return awb.replace(/[^\dA-Za-z-]+/g, "_").slice(0, 40) || "AWB";
-}
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -35,7 +30,6 @@ export async function downloadTcsAttachedDimsExcel(s: Shipment): Promise<void> {
     return;
   }
 
-  let objectUrl: string | null = null;
   try {
     const ExcelJS = await import("exceljs");
     const wb = new ExcelJS.Workbook();
@@ -69,18 +63,11 @@ export async function downloadTcsAttachedDimsExcel(s: Shipment): Promise<void> {
       { width: 4 },
     ];
 
-    const buf = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buf], { type: MIME_XLSX });
-    objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = `ATTACHED_LIST_DIMS_${awbForFilename(s.awb)}.xlsx`;
-    a.click();
+    const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+    downloadXlsxBuffer(buf, `ATTACHED_LIST_DIMS_${awbForFilename(s.awb)}.xlsx`);
   } catch (e) {
     console.error("[downloadTcsAttachedDimsExcel]", e);
     window.alert(e instanceof Error ? e.message : "Không tạo được file Excel.");
-  } finally {
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
   }
 }
 

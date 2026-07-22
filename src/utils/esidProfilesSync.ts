@@ -22,22 +22,75 @@ import type { AppState } from "./shipmentMutations";
  * Server là nguồn sự thật khi đã có dữ liệu; máy mới không phải nhập lại.
  */
 
-export function applyServerEsidRegistrantStore(serverRaw: unknown): EsidRegistrantStoreV1 {
-  const server = normalizeEsidRegistrantStore(serverRaw);
-  if (esidRegistrantStoreHasUserData(server)) {
-    saveEsidRegistrantStore(server);
+type StoreKind = "registrant" | "agent";
+
+function applyServerStore<T>(
+  serverRaw: unknown,
+  normalize: (raw: unknown) => T,
+  hasUserData: (s: T) => boolean,
+  save: (s: T) => void,
+  loadLocal: () => T
+): T {
+  const server = normalize(serverRaw);
+  if (hasUserData(server)) {
+    save(server);
     return server;
   }
-  return loadEsidRegistrantStore();
+  return loadLocal();
+}
+
+async function pushStore<T>(opts: {
+  kind: StoreKind;
+  action: "SET_ESID_REGISTRANT_STORE" | "SET_ESID_AGENT_STORE";
+  store: T;
+  normalize: (raw: unknown) => T;
+  saveLocal: (s: T) => void;
+  applyFromState: (parsed: AppState) => void;
+  stateKey: "esidRegistrantStore" | "esidAgentStore";
+}): Promise<boolean> {
+  const next = opts.normalize(opts.store);
+  opts.saveLocal(next);
+  try {
+    const res = await fetch("/api/mutation", {
+      ...credFetch,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: opts.action, store: next }),
+    });
+    if (!res.ok) {
+      debugWarn("esid-profiles", `push ${opts.kind} failed`, res.status);
+      return false;
+    }
+    const body: unknown = await res.json().catch(() => null);
+    const parsed = parseAppState(body);
+    if (parsed?.[opts.stateKey]) {
+      opts.applyFromState(parsed);
+    }
+    return true;
+  } catch (e) {
+    debugWarn("esid-profiles", `push ${opts.kind} error`, e);
+    return false;
+  }
+}
+
+export function applyServerEsidRegistrantStore(serverRaw: unknown): EsidRegistrantStoreV1 {
+  return applyServerStore(
+    serverRaw,
+    normalizeEsidRegistrantStore,
+    esidRegistrantStoreHasUserData,
+    saveEsidRegistrantStore,
+    loadEsidRegistrantStore
+  );
 }
 
 export function applyServerEsidAgentStore(serverRaw: unknown): EsidAgentStoreV1 {
-  const server = normalizeEsidAgentStore(serverRaw);
-  if (esidAgentStoreHasUserData(server)) {
-    saveEsidAgentStore(server);
-    return server;
-  }
-  return loadEsidAgentStore();
+  return applyServerStore(
+    serverRaw,
+    normalizeEsidAgentStore,
+    esidAgentStoreHasUserData,
+    saveEsidAgentStore,
+    loadEsidAgentStore
+  );
 }
 
 /** Gọi khi nhận /api/state hoặc socket sync — hydrate local + đẩy local lên nếu server trống. */
@@ -62,53 +115,29 @@ export function hydrateEsidProfilesFromAppState(state: AppState | null | undefin
 }
 
 export async function pushEsidRegistrantStore(store?: EsidRegistrantStoreV1): Promise<boolean> {
-  const next = normalizeEsidRegistrantStore(store ?? loadEsidRegistrantStore());
-  saveEsidRegistrantStore(next);
-  try {
-    const res = await fetch("/api/mutation", {
-      ...credFetch,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "SET_ESID_REGISTRANT_STORE", store: next }),
-    });
-    if (!res.ok) {
-      debugWarn("esid-profiles", "push registrant failed", res.status);
-      return false;
-    }
-    const body: unknown = await res.json().catch(() => null);
-    const parsed = parseAppState(body);
-    if (parsed?.esidRegistrantStore) {
-      applyServerEsidRegistrantStore(parsed.esidRegistrantStore);
-    }
-    return true;
-  } catch (e) {
-    debugWarn("esid-profiles", "push registrant error", e);
-    return false;
-  }
+  return pushStore({
+    kind: "registrant",
+    action: "SET_ESID_REGISTRANT_STORE",
+    store: store ?? loadEsidRegistrantStore(),
+    normalize: normalizeEsidRegistrantStore,
+    saveLocal: saveEsidRegistrantStore,
+    stateKey: "esidRegistrantStore",
+    applyFromState: (parsed) => {
+      if (parsed.esidRegistrantStore) applyServerEsidRegistrantStore(parsed.esidRegistrantStore);
+    },
+  });
 }
 
 export async function pushEsidAgentStore(store?: EsidAgentStoreV1): Promise<boolean> {
-  const next = normalizeEsidAgentStore(store ?? loadEsidAgentStore());
-  saveEsidAgentStore(next);
-  try {
-    const res = await fetch("/api/mutation", {
-      ...credFetch,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "SET_ESID_AGENT_STORE", store: next }),
-    });
-    if (!res.ok) {
-      debugWarn("esid-profiles", "push agent failed", res.status);
-      return false;
-    }
-    const body: unknown = await res.json().catch(() => null);
-    const parsed = parseAppState(body);
-    if (parsed?.esidAgentStore) {
-      applyServerEsidAgentStore(parsed.esidAgentStore);
-    }
-    return true;
-  } catch (e) {
-    debugWarn("esid-profiles", "push agent error", e);
-    return false;
-  }
+  return pushStore({
+    kind: "agent",
+    action: "SET_ESID_AGENT_STORE",
+    store: store ?? loadEsidAgentStore(),
+    normalize: normalizeEsidAgentStore,
+    saveLocal: saveEsidAgentStore,
+    stateKey: "esidAgentStore",
+    applyFromState: (parsed) => {
+      if (parsed.esidAgentStore) applyServerEsidAgentStore(parsed.esidAgentStore);
+    },
+  });
 }

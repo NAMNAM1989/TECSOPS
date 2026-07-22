@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
-  buildRepeatedLabelPagesHtml,
+  extractSingleLabelPageHtml,
   resolveThermalLabelPrintHost,
   stripAtPageRules,
   thermalPageMm,
@@ -34,23 +34,23 @@ describe("resolveThermalLabelPrintHost", () => {
   });
 });
 
-describe("buildRepeatedLabelPagesHtml", () => {
-  it("nhân bản 1 trang mẫu N lần", () => {
+describe("extractSingleLabelPageHtml", () => {
+  it("lấy đúng 1 trang tem", () => {
     const host = document.createElement("div");
     host.className = "print-label-host";
     host.innerHTML =
       '<div class="print-label-page"><div class="print-label-spin"><div class="label print-label-sheet lbl-sheet">A</div></div></div>';
-    const html = buildRepeatedLabelPagesHtml(host, 3);
-    expect(html.split("print-label-page").length - 1).toBe(3);
+    const html = extractSingleLabelPageHtml(host);
+    expect(html.split("print-label-page").length - 1).toBe(1);
     expect(html).toContain("lbl-sheet");
   });
 
-  it("copies=1 chỉ 1 trang", () => {
+  it("bọc lbl-sheet thành 1 trang nếu thiếu print-label-page", () => {
     const host = document.createElement("div");
-    host.innerHTML =
-      '<div class="print-label-page"><div class="lbl-sheet">x</div></div>';
-    const html = buildRepeatedLabelPagesHtml(host, 1);
-    expect(html.split("print-label-page").length - 1).toBe(1);
+    host.innerHTML = '<div class="label print-label-sheet lbl-sheet">x</div>';
+    const html = extractSingleLabelPageHtml(host);
+    expect(html).toContain("print-label-page");
+    expect(html).toContain("lbl-sheet");
   });
 });
 

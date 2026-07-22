@@ -148,7 +148,10 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
   const [printMsg, setPrintMsg] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const printHostRef = useRef<HTMLDivElement>(null);
-  const pcs = useMemo(() => Math.max(1, shipment.pcs ?? 1), [shipment.pcs]);
+  const pcsHint = useMemo(() => {
+    const n = shipment.pcs;
+    return n != null && n > 0 ? n : null;
+  }, [shipment.pcs]);
   const pageMm = useMemo(() => thermalPageMm(format), [format]);
 
   const handlePrint = async () => {
@@ -172,16 +175,9 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
       const res = await printThermalLabelsFromIframe({
         format,
         host: printHostRef.current,
-        copies: pcs,
         printWindow,
       });
-      if (!res.ok) {
-        setPrintMsg(res.error);
-      } else if (res.printerCopiesHint) {
-        setPrintMsg(
-          `Lô ${res.printerCopiesHint} tem: trong hộp thoại in hãy đặt Số bản = ${res.printerCopiesHint} (tránh treo máy).`
-        );
-      }
+      if (!res.ok) setPrintMsg(res.error);
     } finally {
       setPrinting(false);
     }
@@ -199,7 +195,8 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
             <div>
               <h2 className={`text-lg font-semibold ${OPS.title}`}>In nhãn vận chuyển</h2>
               <p className={`text-xs ${OPS.secondary}`}>
-                {shipment.awb || "Chưa có AWB"} · {pcs} tem · XP-470B
+                {shipment.awb || "Chưa có AWB"} · XP-470B
+                {pcsHint != null ? ` · lô ${pcsHint} kiện` : ""}
               </p>
             </div>
             <button type="button" onClick={onClose} className={`rounded-full p-2 ${OPS.secondary}`} aria-label="Đóng">
@@ -240,11 +237,12 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                 })}
               </div>
               <p className={`mt-2 text-center text-[11px] ${OPS.secondary}`}>
-                Khổ trang in:{" "}
+                Khổ trang:{" "}
                 <span className="font-semibold tabular-nums">
                   {pageMm.wMm}×{pageMm.hMm} mm
-                </span>{" "}
-                (đúng tem, không xoay)
+                </span>
+                {" · "}
+                trong hộp thoại in hãy đặt <span className="font-semibold">Số bản</span> cần in
               </p>
             </div>
 
@@ -278,7 +276,6 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
       {typeof document !== "undefined"
         ? createPortal(
             <div ref={printHostRef} className="print-label-host" aria-hidden>
-              {/* Chỉ 1 tem mẫu — iframe nhân bản theo số kiện khi in (tránh treo UI). */}
               <div className="print-label-page">
                 <div className="print-label-spin">
                   <LabelContent

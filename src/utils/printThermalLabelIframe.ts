@@ -3,6 +3,7 @@
  * Tránh Tailwind / #root / min-h-screen của app làm Chrome gộp nhiều @page thành một cuộn dọc.
  *
  * XP-470B: trang = khổ tem 100×80 / 100×50, không xoay.
+ * Luôn in đúng 1 trang tem — số bản do user đặt trong hộp thoại in hệ thống.
  */
 import labelSheetCss from "../styles/print-label.css?raw";
 import type { LabelSheetFormat } from "./labelSheetFormat";
@@ -98,11 +99,6 @@ body {
   box-sizing: border-box !important;
   break-inside: avoid !important;
   page-break-inside: avoid !important;
-  break-after: page !important;
-  page-break-after: always !important;
-}
-
-.print-label-page:last-child {
   break-after: auto !important;
   page-break-after: auto !important;
 }
@@ -142,40 +138,23 @@ export type PrintThermalLabelsOptions = {
   /** Host cụ thể (tránh lấy nhầm .print-label-host khác trên trang). */
   host?: HTMLElement | null;
   /**
-   * Số tem cần in. Host chỉ cần 1 trang mẫu — iframe sẽ nhân bản.
-   * Tránh React mount hàng trăm LabelContent (treo UI).
-   */
-  copies?: number;
-  /**
    * Cửa sổ about:blank đã mở đồng bộ trong click handler
    * (tránh popup bị chặn sau await — cần để @page PDF đúng khổ).
    */
   printWindow?: Window | null;
 };
 
-export type ThermalLabelPrintResult =
-  | { ok: true; printerCopiesHint?: number }
-  | { ok: false; error: string };
+export type ThermalLabelPrintResult = { ok: true } | { ok: false; error: string };
 
-const MAX_PRINT_COPIES = 500;
-/** Chrome dễ treo khi preview quá nhiều trang @page nhỏ — trên ngưỡng này chỉ in 1 trang + nhắc đặt Copies. */
-const BROWSER_SAFE_PAGE_COPIES = 30;
-
-/** Lấy 1 trang tem từ host rồi nhân bản `copies` lần (HTML thuần, không React). */
-export function buildRepeatedLabelPagesHtml(host: HTMLElement, copies: number): string {
-  const n = Math.max(1, Math.min(MAX_PRINT_COPIES, Math.floor(copies) || 1));
+/** Lấy đúng 1 trang tem từ host (HTML thuần). */
+export function extractSingleLabelPageHtml(host: HTMLElement): string {
   const page =
     host.querySelector<HTMLElement>(".print-label-page") ??
     (host.innerHTML.includes("lbl-sheet") ? host : null);
   if (!page) return "";
 
-  const pageHtml =
-    page.classList?.contains("print-label-page")
-      ? page.outerHTML
-      : `<div class="print-label-page"><div class="print-label-spin">${page.innerHTML}</div></div>`;
-
-  if (n === 1) return pageHtml;
-  return pageHtml.repeat(n);
+  if (page.classList?.contains("print-label-page")) return page.outerHTML;
+  return `<div class="print-label-page"><div class="print-label-spin">${page.innerHTML}</div></div>`;
 }
 
 /** Chọn host có nội dung nhãn (ưu tiên host truyền vào, rồi phần tử cuối có lbl-sheet). */
@@ -206,7 +185,6 @@ export async function printThermalLabelsFromIframe(
   opts?: PrintThermalLabelsOptions
 ): Promise<ThermalLabelPrintResult> {
   const format = opts?.format ?? "100x80";
-  const copiesRaw = opts?.copies;
   const { w: pageW, h: pageH, wMm, hMm } = thermalPageMm(format);
 
   /**
@@ -252,21 +230,7 @@ export async function printThermalLabelsFromIframe(
     return { ok: false, error: "Nội dung nhãn trống." };
   }
 
-  const pageCount = host.querySelectorAll(".print-label-page").length;
-  const copiesWanted =
-    copiesRaw != null
-      ? Math.max(1, Math.min(MAX_PRINT_COPIES, Math.floor(copiesRaw) || 1))
-      : Math.max(1, pageCount || 1);
-
-  /** Tránh treo: lô lớn → 1 trang + Copies trên hộp thoại in. */
-  const usePrinterCopies = copiesWanted > BROWSER_SAFE_PAGE_COPIES;
-  const copies = usePrinterCopies ? 1 : copiesWanted;
-
-  const inner =
-    pageCount > 1 && copiesRaw == null && !usePrinterCopies
-      ? host.innerHTML
-      : buildRepeatedLabelPagesHtml(host, copies);
-
+  const inner = extractSingleLabelPageHtml(host);
   if (!inner.trim()) {
     try {
       popup?.close();
@@ -402,9 +366,7 @@ export async function printThermalLabelsFromIframe(
     win.focus();
     win.print();
     setTimeout(cleanup, 120_000);
-    return usePrinterCopies
-      ? { ok: true, printerCopiesHint: copiesWanted }
-      : { ok: true };
+    return { ok: true };
   } catch {
     cleanup();
     return { ok: false, error: "Trình duyệt chặn hộp thoại in." };

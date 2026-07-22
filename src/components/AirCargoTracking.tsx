@@ -19,7 +19,7 @@ import { SmartSearchBar } from "./SmartSearchBar";
 import { TcsPortalInlineBar } from "./TcsPortalInlineBar";
 import { TcsPortalActionsProvider } from "./TcsPortalActionsContext";
 import { useTcsPortalActions } from "../hooks/useTcsPortalActions";
-import { WAREHOUSE_ORDER, isScscWarehouse, isTcsWarehouse } from "../constants/warehouses";
+import { WAREHOUSE_ORDER, isScscWarehouse, isTcsWarehouse, warehouseLabel } from "../constants/warehouses";
 import { NewBookingButton } from "./NewBookingButton";
 import { DashboardToolbarButton } from "./DashboardToolbarButton";
 import { OpsDatePicker } from "./OpsDatePicker";
@@ -158,6 +158,9 @@ export function AirCargoTracking({
     setActiveWarehouse((prev) => {
       const hasInActive = filteredViewRows.some((r) => r.warehouse === prev);
       if (hasInActive) return prev;
+      // Giữ kho đang chọn khi ngày/lọc trống (vd. SCSC chưa có lô) —
+      // không ép về TCS, để vẫn bấm Sheet / Booking trên đúng trang kho.
+      if (filteredViewRows.length === 0) return prev;
       return firstWarehouseWithLots(filteredViewRows);
     });
   }, [filteredViewRows]);
@@ -666,16 +669,25 @@ export function AirCargoTracking({
           <GoogleSheetImportModal
             open={sheetImportOpen}
             sessionYmd={selectedYmd}
+            activeWarehouse={activeWarehouse}
             sheetSyncPrefetchRef={sheetSyncPrefetchRef}
             onClose={() => setSheetImportOpen(false)}
-            onApplied={(count, serverState) => {
+            onApplied={(count, serverState, meta) => {
               if (serverState) {
                 if (!applyRemoteState(serverState, { force: true })) void refreshState();
               } else if (count > 0) {
                 void refreshState();
               }
+              if (meta?.preferredWarehouse) {
+                setActiveWarehouse(meta.preferredWarehouse);
+              }
               if (count > 0) {
-                window.alert(`Đã nhập ${count} lô từ Google Sheet.`);
+                const parts = WAREHOUSE_ORDER.map((wh) => {
+                  const n = meta?.appliedByWarehouse?.[wh] ?? 0;
+                  return n > 0 ? `${warehouseLabel[wh]} ${n}` : null;
+                }).filter(Boolean);
+                const detail = parts.length ? ` (${parts.join(" · ")})` : "";
+                window.alert(`Đã nhập ${count} lô từ Google Sheet${detail}.`);
               }
               setSheetImportOpen(false);
             }}

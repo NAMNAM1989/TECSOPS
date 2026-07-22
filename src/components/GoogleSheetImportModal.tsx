@@ -1,22 +1,65 @@
 import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from "react";
 import { isSheetRowSelectable, type SheetBookSyncResult, type SheetBookSyncRow } from "../types/googleSheetBook";
 import { applyBookGoogleSheetRows, syncBookGoogleSheet } from "../utils/googleSheetBookApi";
-import { warehouseLabel } from "../constants/warehouses";
+import { normalizeWarehouse, warehouseLabel, WAREHOUSE_ORDER } from "../constants/warehouses";
 import type { Warehouse } from "../types/shipment";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { MOBILE } from "../styles/mobileOpsStyles";
 
+export type SheetImportAppliedMeta = {
+  appliedByWarehouse: Partial<Record<Warehouse, number>>;
+  preferredWarehouse: Warehouse | null;
+};
+
 type Props = {
   sessionYmd: string;
   open: boolean;
+  /** Kho đang xem trên OPS — ưu tiên chọn / lọc dòng Sheet cùng kho. */
+  activeWarehouse?: Warehouse;
   sheetSyncPrefetchRef?: MutableRefObject<{ sessionYmd: string; promise: Promise<SheetBookSyncResult> } | null>;
   onClose: () => void;
-  onApplied: (appliedCount: number, serverState?: unknown) => void;
+  onApplied: (appliedCount: number, serverState?: unknown, meta?: SheetImportAppliedMeta) => void;
 };
+
+type WarehouseFilter = Warehouse | "ALL";
+
+function rowWarehouse(row: SheetBookSyncRow): Warehouse {
+  return normalizeWarehouse(row.warehouse);
+}
+
+function countByWarehouse(
+  rows: { warehouse?: string }[]
+): Partial<Record<Warehouse, number>> {
+  const out: Partial<Record<Warehouse, number>> = {};
+  for (const r of rows) {
+    const wh = normalizeWarehouse(r.warehouse);
+    out[wh] = (out[wh] ?? 0) + 1;
+  }
+  return out;
+}
+
+function preferredWarehouseFromCounts(
+  counts: Partial<Record<Warehouse, number>>,
+  active: Warehouse
+): Warehouse | null {
+  const activeCount = counts[active] ?? 0;
+  if (activeCount > 0) return active;
+  let best: Warehouse | null = null;
+  let bestN = 0;
+  for (const wh of WAREHOUSE_ORDER) {
+    const n = counts[wh] ?? 0;
+    if (n > bestN) {
+      best = wh;
+      bestN = n;
+    }
+  }
+  return best;
+}
 
 export function GoogleSheetImportModal({
   sessionYmd,
   open,
+  activeWarehouse = "TECS-TCS",
   sheetSyncPrefetchRef,
   onClose,
   onApplied,
@@ -27,37 +70,56 @@ export function GoogleSheetImportModal({
   const [sync, setSync] = useState<SheetBookSyncResult | null>(null);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
+  const [warehouseFilter, setWarehouseFilter] = useState<WarehouseFilter>(activeWarehouse);
 
-  const runSync = useCallback(async (refresh = false) => {
-    setLoading(true);
-    setError(null);
-    try {
-      let result: SheetBookSyncResult;
-      if (!refresh) {
-        const prefetched = sheetSyncPrefetchRef?.current;
-        if (prefetched?.sessionYmd === sessionYmd) {
-          if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
-          result = await prefetched.promise;
-        } else {
-          result = await syncBookGoogleSheet(sessionYmd);
-        }
-      } else {
-        if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
-        result = await syncBookGoogleSheet(sessionYmd, { refresh });
-      }
-      setSync(result);
+  const selectDefaultRows = useCallback(
+    (result: SheetBookSyncResult, filter: WarehouseFilter) => {
       const next = new Set<number>();
       for (const row of result.rows) {
-        if (isSheetRowSelectable(row)) next.add(row.index);
+        if (!isSheetRowSelectable(row)) continue;
+        if (filter !== "ALL" && rowWarehouse(row) !== filter) continue;
+        next.add(row.index);
       }
-      setSelected(next);
-    } catch (e) {
-      setSync(null);
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionYmd, sheetSyncPrefetchRef]);
+      // Nếu lọc theo kho đang xem mà không còn dòng chọn được — chọn mọi kho.
+      if (next.size === 0 && filter !== "ALL") {
+        for (const row of result.rows) {
+          if (isSheetRowSelectable(row)) next.add(row.index);
+        }
+      }
+      return next;
+    },
+    []
+  );
+
+  const fetchAndSelect = useCallback(
+    async (refresh: boolean, filter: WarehouseFilter) => {
+      setLoading(true);
+      setError(null);
+      try {
+        let result: SheetBookSyncResult;
+        if (!refresh) {
+          const prefetched = sheetSyncPrefetchRef?.current;
+          if (prefetched?.sessionYmd === sessionYmd) {
+            if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
+            result = await prefetched.promise;
+          } else {
+            result = await syncBookGoogleSheet(sessionYmd);
+          }
+        } else {
+          if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
+          result = await syncBookGoogleSheet(sessionYmd, { refresh });
+        }
+        setSync(result);
+        setSelected(selectDefaultRows(result, filter));
+      } catch (e) {
+        setSync(null);
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [sessionYmd, sheetSyncPrefetchRef, selectDefaultRows]
+  );
 
   useEffect(() => {
     if (!open) {
@@ -67,8 +129,15 @@ export function GoogleSheetImportModal({
       setSelected(new Set());
       return;
     }
-    void runSync();
-  }, [open, runSync]);
+    setWarehouseFilter(activeWarehouse);
+    void fetchAndSelect(false, activeWarehouse);
+  }, [open, sessionYmd, activeWarehouse, fetchAndSelect]);
+
+  const applyWarehouseFilter = (next: WarehouseFilter) => {
+    setWarehouseFilter(next);
+    if (sync) setSelected(selectDefaultRows(sync, next));
+  };
+
 
   const toggle = (index: number) => {
     setSelected((prev) => {
@@ -79,10 +148,28 @@ export function GoogleSheetImportModal({
     });
   };
 
-  const selectableRows = useMemo(
-    () => (sync?.rows ?? []).filter(isSheetRowSelectable),
-    [sync]
+  const visibleRows = useMemo(() => {
+    const rows = sync?.rows ?? [];
+    if (warehouseFilter === "ALL") return rows;
+    return rows.filter((r) => rowWarehouse(r) === warehouseFilter);
+  }, [sync, warehouseFilter]);
+
+  const selectableVisible = useMemo(
+    () => visibleRows.filter(isSheetRowSelectable),
+    [visibleRows]
   );
+
+  const warehouseCounts = useMemo(() => {
+    const rows = sync?.rows ?? [];
+    const total: Record<Warehouse, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
+    const selectable: Record<Warehouse, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
+    for (const r of rows) {
+      const wh = rowWarehouse(r);
+      total[wh] += 1;
+      if (isSheetRowSelectable(r)) selectable[wh] += 1;
+    }
+    return { total, selectable };
+  }, [sync]);
 
   const onApply = async () => {
     if (!sync || selected.size === 0) return;
@@ -95,7 +182,15 @@ export function GoogleSheetImportModal({
         sync.sheetTab,
         sync.spreadsheetId
       );
-      onApplied(result.appliedCount + (result.updatedCount ?? 0), result.state);
+      const touched = [...(result.applied ?? []), ...(result.updated ?? [])];
+      const appliedByWarehouse = countByWarehouse(touched);
+      const preferred =
+        preferredWarehouseFromCounts(appliedByWarehouse, activeWarehouse) ??
+        (warehouseFilter === "ALL" ? activeWarehouse : warehouseFilter);
+      onApplied(result.appliedCount + (result.updatedCount ?? 0), result.state, {
+        appliedByWarehouse,
+        preferredWarehouse: preferred,
+      });
       if (result.errorCount > 0) {
         setError(
           `Đã nhập ${result.appliedCount} · cập nhật ${result.updatedCount ?? 0} lô. ${result.errorCount} lỗi: ${result.errors.map((x) => x.awb).join(", ")}`
@@ -154,11 +249,48 @@ export function GoogleSheetImportModal({
           <button
             type="button"
             disabled={loading}
-            onClick={() => void runSync(true)}
+            onClick={() => void fetchAndSelect(true, warehouseFilter)}
             className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             {loading ? "Đang kéo Sheet…" : "Kéo Sheet lại"}
           </button>
+          <div className="flex flex-wrap gap-1" role="tablist" aria-label="Lọc kho Sheet">
+            {(
+              [
+                ["ALL", "Tất cả"],
+                ...WAREHOUSE_ORDER.map((wh) => [wh, warehouseLabel[wh]] as const),
+              ] as const
+            ).map(([id, label]) => {
+              const active = warehouseFilter === id;
+              const count =
+                id === "ALL"
+                  ? sync?.total ?? 0
+                  : warehouseCounts.total[id as Warehouse] ?? 0;
+              const canPick =
+                id === "ALL"
+                  ? (sync?.importable ?? 0)
+                  : warehouseCounts.selectable[id as Warehouse] ?? 0;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => applyWarehouseFilter(id)}
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${
+                    active
+                      ? "bg-dashboard-primary text-white dark:bg-white/15 dark:text-dashboard-primary-dark"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300"
+                  }`}
+                >
+                  {label} · {count}
+                  {canPick > 0 && !active ? (
+                    <span className="ml-1 text-emerald-700 dark:text-emerald-400">+{canPick}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
           {sync && (
             <span className="text-xs leading-snug text-zinc-500">
               {sync.total} lô · {sync.newCount ?? 0} mới
@@ -185,12 +317,16 @@ export function GoogleSheetImportModal({
           {!sync && !loading && !error && (
             <p className="p-4 text-sm text-zinc-500">Chưa có dữ liệu — bấm «Kéo Sheet lại».</p>
           )}
-          {sync && sync.rows.length === 0 && (
-            <p className="p-4 text-sm text-zinc-500">Tab Sheet không có lô AWB hợp lệ cho ngày này.</p>
+          {sync && visibleRows.length === 0 && (
+            <p className="p-4 text-sm text-zinc-500">
+              {warehouseFilter === "ALL"
+                ? "Tab Sheet không có lô AWB hợp lệ cho ngày này."
+                : `Không có lô ${warehouseLabel[warehouseFilter]} trên Sheet ngày này.`}
+            </p>
           )}
-          {sync && sync.rows.length > 0 && isMobile ? (
+          {sync && visibleRows.length > 0 && isMobile ? (
             <ul className="space-y-2 px-1 pb-2">
-              {sync.rows.map((row) => (
+              {visibleRows.map((row) => (
                 <SheetRowCard
                   key={`${row.index}-${row.awb}`}
                   row={row}
@@ -200,7 +336,7 @@ export function GoogleSheetImportModal({
               ))}
             </ul>
           ) : null}
-          {sync && sync.rows.length > 0 && !isMobile ? (
+          {sync && visibleRows.length > 0 && !isMobile ? (
             <table className="w-full min-w-[640px] border-collapse text-left text-[11px]">
               <thead>
                 <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-700">
@@ -215,7 +351,7 @@ export function GoogleSheetImportModal({
                 </tr>
               </thead>
               <tbody>
-                {sync.rows.map((row) => (
+                {visibleRows.map((row) => (
                   <SheetRowTable
                     key={`${row.index}-${row.awb}`}
                     row={row}
@@ -231,10 +367,11 @@ export function GoogleSheetImportModal({
         <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-zinc-700">
           <button
             type="button"
-            onClick={() => setSelected(new Set(selectableRows.map((r) => r.index)))}
+            onClick={() => setSelected(new Set(selectableVisible.map((r) => r.index)))}
             className="rounded-lg px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             Chọn tất cả mới
+            {warehouseFilter !== "ALL" ? ` · ${warehouseLabel[warehouseFilter]}` : ""}
           </button>
           <button
             type="button"
@@ -281,7 +418,7 @@ function SheetRowCard({
   checked: boolean;
   onToggle: (index: number) => void;
 }) {
-  const wh = row.warehouse as Warehouse;
+  const wh = rowWarehouse(row);
   const whLabel = warehouseLabel[wh] ?? row.warehouse;
   const disabled = !isSheetRowSelectable(row);
   const status = syncStatusLabel(row);
@@ -354,7 +491,7 @@ function SheetRowTable({
   checked: boolean;
   onToggle: (index: number) => void;
 }) {
-  const wh = row.warehouse as Warehouse;
+  const wh = rowWarehouse(row);
   const whLabel = warehouseLabel[wh] ?? row.warehouse;
   const disabled = !isSheetRowSelectable(row);
   const blockHint = rowBlockHint(row);

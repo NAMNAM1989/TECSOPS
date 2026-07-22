@@ -16,7 +16,7 @@ import {
   SCSC_GOODS_DESCRIPTION_PRINT_MAX,
   SCSC_OTHER_REQUIREMENTS_PRINT_MAX,
 } from "../utils/scscPrintContent";
-import { isScscWarehouse, warehouseLabel } from "../constants/warehouses";
+import { isScscWarehouse, normalizeWarehouse, warehouseLabel } from "../constants/warehouses";
 import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
 import { findCustomerEntry } from "../utils/customerBookingResolve";
 import { buildShipmentPatchForSavedConsignee } from "../utils/customerConsigneeShipmentPatch";
@@ -76,7 +76,7 @@ export function DesktopShipmentTable({
   const isMobile = useIsMobile();
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const group = useMemo(
-    () => rows.filter((r) => r.warehouse === activeWarehouse),
+    () => rows.filter((r) => normalizeWarehouse(r.warehouse) === activeWarehouse),
     [rows, activeWarehouse]
   );
   const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);

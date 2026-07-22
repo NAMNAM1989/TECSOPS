@@ -298,11 +298,6 @@ export function useTcsPortalActions({
     sourceRows,
   ]);
 
-  /** Batch toolbar đã bỏ — Tải PDF chỉ từ menu dòng (1 AWB). Giữ stub để tương thích. */
-  const downloadReady = useCallback(() => {
-    setError("Tải PDF ESID chỉ chạy 1 AWB — dùng menu ⋮ trên dòng.");
-  }, []);
-
   const isPreparedHot = useCallback(
     (digits: string) => {
       if (!digits || digits !== preparedAwb) return false;
@@ -673,7 +668,6 @@ export function useTcsPortalActions({
     focusShipment,
     login,
     scan,
-    downloadReady,
     downloadEsidFor,
     fillEsidDeclareFor,
     submitEsidDeclare,

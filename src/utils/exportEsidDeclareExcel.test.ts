@@ -63,8 +63,22 @@ describe("exportEsidDeclareExcel", () => {
     expect(row.CONSIGNEE_NAME).toBe("BUYER B");
     expect(row.AGENT_NAME).toBe("TECS AGENT FIXED");
     expect(row.AGENT_VAT).toBe("VAT1");
+    expect(row.PAYMENT_MODE).toMatch(/Chuyển khoản/i);
+    expect(row.TOTAL_HAWBS).toBe("");
     expect(row.SUBMIT).toBe(0);
     expect(row.TECS_WAREHOUSE).toBe(1);
+  });
+
+  it("TOTAL_HAWBS = 1 khi có HAWB (khớp declare-fill)", () => {
+    const row = shipmentToEsidDeclareRow(base({ hawb: "H123" }), undefined, {
+      name: "A",
+      address: "",
+      tel: "",
+      email: "",
+      vat: "",
+      fax: "",
+    });
+    expect(row.TOTAL_HAWBS).toBe(1);
   });
 
   it("Agent Excel lấy hồ sơ cố định — bỏ qua agentNamePrint trên lô", () => {

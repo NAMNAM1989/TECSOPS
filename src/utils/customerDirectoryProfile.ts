@@ -11,41 +11,10 @@ import { normalizeCustomerType, parseDefaultRate } from "./customerAccountFields
 import { normalizePrintAddressMultiline } from "./printAddressMultiline";
 import { normalizeCustomerShortCode } from "./customerCodeOps";
 
-/** Giới hạn độ dài — đồng bộ client / server. */
-export const CUSTOMER_PROFILE_LIMITS = {
-  code: 40,
-  name: 200,
-  shortCode: 10,
-  shipperName: 120,
-  shipperAddress: 300,
-  shipperPhone: 40,
-  shipperEmail: 120,
-  taxCode: 40,
-  consigneeName: 120,
-  consigneeAddress: 300,
-  consigneePhone: 40,
-  consigneeEmail: 120,
-  notifyName: 160,
-  partyLabel: 80,
-  partyContent: 8000,
-  partyCount: 60,
-  savedConsigneeLabel: 80,
-  savedConsigneeCount: 40,
-  savedGoodsLabel: 80,
-  savedGoodsDescription: 120,
-  savedGoodsCount: 40,
-  savedShipperLabel: 80,
-  savedShipperCount: 40,
-  savedVehicleLabel: 80,
-  savedVehicleLicensePlate: 20,
-  savedVehicleDriverName: 120,
-  savedVehicleDriverId: 20,
-  savedVehicleCount: 30,
-  otherRequirementsPrint: 200,
-  address: 300,
-  email: 120,
-  phone: 40,
-} as const;
+import { CUSTOMER_PROFILE_LIMITS } from "../../shared/customerProfileLimits.mjs";
+
+/** Re-export — nguồn sự thật: `shared/customerProfileLimits.mjs`. */
+export { CUSTOMER_PROFILE_LIMITS };
 
 function clip(s: unknown, max: number): string {
   return String(s ?? "").slice(0, max);

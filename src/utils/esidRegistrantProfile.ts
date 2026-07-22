@@ -1,8 +1,9 @@
 /**
  * Hồ sơ người khai ESID (CCCD / họ tên / SĐT).
- * Lưu localStorage + đồng bộ Postgres (app_state) — dùng chung mọi máy Ops.
- * Đổi người khai = chọn hoặc thêm hồ sơ tên khác (không gắn theo từng lô).
+ * Store dùng chung factory với Agent.
  */
+import { createEsidProfileStoreApi } from "./esidProfileStoreFactory";
+
 export type EsidRegistrantProfile = {
   id: string;
   /** Họ tên đầy đủ người gửi hàng / Shipper Fullname trên form TCS */
@@ -18,137 +19,55 @@ export type EsidRegistrantStoreV1 = {
   profiles: EsidRegistrantProfile[];
 };
 
+export type EsidRegistrantPatch = Partial<Pick<EsidRegistrantProfile, "name" | "tel" | "cccd">>;
+
 const STORAGE_KEY = "tecsops-esid-registrant-v1";
 export const ESID_REGISTRANT_CHANGED_EVENT = "tecsops-esid-registrant-changed";
 
-function notifyChanged(): void {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(ESID_REGISTRANT_CHANGED_EVENT));
-}
-
-function newId(): string {
-  return `reg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-export function createEmptyRegistrant(name = ""): EsidRegistrantProfile {
-  return {
+const api = createEsidProfileStoreApi<EsidRegistrantProfile, EsidRegistrantPatch>({
+  storageKey: STORAGE_KEY,
+  changedEvent: ESID_REGISTRANT_CHANGED_EVENT,
+  idPrefix: "reg",
+  createEmpty: (name, newId) => ({
     id: newId(),
     name: name.trim(),
     tel: "",
     cccd: "",
     updatedAt: new Date().toISOString(),
-  };
-}
-
-export function emptyRegistrantStore(): EsidRegistrantStoreV1 {
-  const p = createEmptyRegistrant("");
-  return { version: 1, activeId: p.id, profiles: [p] };
-}
-
-export function normalizeEsidRegistrantStore(raw: unknown): EsidRegistrantStoreV1 {
-  if (!raw || typeof raw !== "object") return emptyRegistrantStore();
-  const o = raw as EsidRegistrantStoreV1;
-  if (o.version !== 1 || !Array.isArray(o.profiles)) return emptyRegistrantStore();
-  const profiles = o.profiles
-    .filter((p) => p && typeof p === "object")
-    .map((p) => ({
+  }),
+  normalizeProfile: (raw, newId) => {
+    const p = raw as Partial<EsidRegistrantProfile>;
+    return {
       id: String(p.id || newId()),
       name: String(p.name || "").trim(),
       tel: String(p.tel || "").trim(),
       cccd: String(p.cccd || "").replace(/\s+/g, "").trim(),
       updatedAt: String(p.updatedAt || new Date().toISOString()),
-    }));
-  if (!profiles.length) return emptyRegistrantStore();
-  const activeId = profiles.some((p) => p.id === o.activeId) ? o.activeId : profiles[0].id;
-  return { version: 1, activeId, profiles };
-}
+    };
+  },
+  profileHasUserData: (p) => Boolean(p.name.trim() || p.tel.trim() || p.cccd.trim()),
+  mergePatch: (current, patch) => ({
+    ...current,
+    name: patch.name !== undefined ? String(patch.name).trim() : current.name,
+    tel: patch.tel !== undefined ? String(patch.tel).trim() : current.tel,
+    cccd:
+      patch.cccd !== undefined ? String(patch.cccd).replace(/\s+/g, "").trim() : current.cccd,
+  }),
+});
 
-export function esidRegistrantStoreHasUserData(store: EsidRegistrantStoreV1): boolean {
-  return store.profiles.some((p) => p.name.trim() || p.tel.trim() || p.cccd.trim());
-}
+export const createEmptyRegistrant = api.createEmpty;
+export const emptyRegistrantStore = api.emptyStore;
+export const normalizeEsidRegistrantStore = api.normalizeStore;
+export const esidRegistrantStoreHasUserData = api.storeHasUserData;
+export const loadEsidRegistrantStore = api.loadStore;
+export const saveEsidRegistrantStore = api.saveStore;
+export const getActiveEsidRegistrant = api.getActive;
+export const updateActiveEsidRegistrant = api.updateActive;
+export const switchOrCreateEsidRegistrant = api.switchOrCreate;
+export const setActiveEsidRegistrantId = api.setActiveId;
 
-export function loadEsidRegistrantStore(): EsidRegistrantStoreV1 {
-  try {
-    const parsed = normalizeEsidRegistrantStore(
-      JSON.parse(localStorage.getItem(STORAGE_KEY) || "null")
-    );
-    if (esidRegistrantStoreHasUserData(parsed) || localStorage.getItem(STORAGE_KEY)) {
-      return parsed;
-    }
-  } catch {
-    /* ignore */
-  }
-  const created = emptyRegistrantStore();
-  saveEsidRegistrantStore(created);
-  return created;
-}
-
-export function saveEsidRegistrantStore(store: EsidRegistrantStoreV1): void {
-  const next = normalizeEsidRegistrantStore(store);
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    notifyChanged();
-  } catch {
-    /* ignore */
-  }
-}
-
-export function getActiveEsidRegistrant(): EsidRegistrantProfile {
-  const store = loadEsidRegistrantStore();
-  return store.profiles.find((p) => p.id === store.activeId) || store.profiles[0];
-}
-
-/** Cập nhật hồ sơ đang active (cùng CCCD/tên hiện tại). */
-export function updateActiveEsidRegistrant(
-  patch: Partial<Pick<EsidRegistrantProfile, "name" | "tel" | "cccd">>
-): EsidRegistrantProfile {
-  const store = loadEsidRegistrantStore();
-  const profiles = store.profiles.map((p) =>
-    p.id === store.activeId
-      ? {
-          ...p,
-          name: patch.name !== undefined ? String(patch.name).trim() : p.name,
-          tel: patch.tel !== undefined ? String(patch.tel).trim() : p.tel,
-          cccd:
-            patch.cccd !== undefined
-              ? String(patch.cccd).replace(/\s+/g, "").trim()
-              : p.cccd,
-          updatedAt: new Date().toISOString(),
-        }
-      : p
-  );
-  saveEsidRegistrantStore({ ...store, profiles });
-  return profiles.find((p) => p.id === store.activeId)!;
-}
-
-/**
- * Đổi người khai: tạo hồ sơ tên mới (hoặc kích hoạt nếu tên trùng, không phân biệt hoa thường).
- */
-export function switchOrCreateEsidRegistrant(name: string): EsidRegistrantProfile {
-  const label = name.trim();
-  if (!label) return getActiveEsidRegistrant();
-  const store = loadEsidRegistrantStore();
-  const existing = store.profiles.find((p) => p.name.toLowerCase() === label.toLowerCase());
-  if (existing) {
-    saveEsidRegistrantStore({ ...store, activeId: existing.id });
-    return existing;
-  }
-  const created = createEmptyRegistrant(label);
-  saveEsidRegistrantStore({
-    version: 1,
-    activeId: created.id,
-    profiles: [...store.profiles, created],
-  });
-  return created;
-}
-
-export function setActiveEsidRegistrantId(id: string): EsidRegistrantProfile {
-  const store = loadEsidRegistrantStore();
-  if (!store.profiles.some((p) => p.id === id)) return getActiveEsidRegistrant();
-  saveEsidRegistrantStore({ ...store, activeId: id });
-  return store.profiles.find((p) => p.id === id)!;
-}
-
-export function registrantIsComplete(p: Pick<EsidRegistrantProfile, "name" | "tel" | "cccd">): boolean {
+export function registrantIsComplete(
+  p: Pick<EsidRegistrantProfile, "name" | "tel" | "cccd">
+): boolean {
   return Boolean(p.name.trim() && p.tel.trim() && p.cccd.trim());
 }

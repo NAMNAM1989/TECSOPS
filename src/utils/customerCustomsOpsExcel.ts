@@ -13,6 +13,7 @@ import {
 import { scaffoldNewCustomer } from "./customerDirectoryScaffold";
 import { normalizeAgentCode } from "./customerProfileInputFormat";
 import { normalizeCustomerNameInput } from "./customerShipmentPatch";
+import { downloadXlsxBuffer } from "./downloadXlsx";
 
 /** Cột đúng mẫu Import Customers (9 cột). */
 export const CUSTOMS_OPS_HEADERS = [
@@ -407,14 +408,6 @@ export async function buildCustomsOpsWorkbook(customers: readonly CustomerDirect
 
 export async function downloadCustomsOpsExport(customers: readonly CustomerDirectoryEntry[]) {
   const wb = await buildCustomsOpsWorkbook(customers);
-  const buf = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buf], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `customs-ops-customers-${new Date().toISOString().slice(0, 10)}.xlsx`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+  downloadXlsxBuffer(buf, `customs-ops-customers-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }

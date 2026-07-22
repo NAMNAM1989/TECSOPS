@@ -11,6 +11,7 @@ import {
   normalizeCustomerShortCode,
 } from "./customerCodeOps";
 import { normalizeAgentCode } from "./customerProfileInputFormat";
+import { downloadXlsxBuffer } from "./downloadXlsx";
 
 /** Excel giới hạn 31 ký tự / tên sheet. */
 const EXCEL_MAX_SHEET_NAME_LENGTH = 31;
@@ -22,9 +23,6 @@ const HEADER_FONT_SIZE = 10;
 
 /** Cột 1-based: MAWB (font monospace). */
 const COL_MAWB = 4;
-
-const MIME_XLSX =
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 /** Đúng mẫu Import Shipments (shipment-import-template.xlsx). */
 export const SHIPMENT_EXPORT_HEADERS = [
@@ -305,20 +303,12 @@ export async function downloadDayReportExcel(
   sessionDateYmd: string,
   customerDirectory: readonly CustomerDirectoryEntry[] = []
 ): Promise<void> {
-  let objectUrl: string | null = null;
   try {
     const wb = await buildDayReportWorkbook(rows, sessionDateYmd, customerDirectory);
-    const buf = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buf], { type: MIME_XLSX });
-    objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = defaultDayReportFileName(sessionDateYmd);
-    a.click();
+    const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+    downloadXlsxBuffer(buf, defaultDayReportFileName(sessionDateYmd));
   } catch (e) {
     console.error("[downloadDayReportExcel]", e);
     window.alert(e instanceof Error ? e.message : "Không tạo được file Excel. Thử lại hoặc kiểm tra bộ nhớ trình duyệt.");
-  } finally {
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
   }
 }

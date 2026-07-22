@@ -64,7 +64,7 @@ export default defineConfig({
           if (id.includes("/src/pages/CustomersPage") || id.includes("/src/components/customerDirectory/")) {
             return "page-customers";
           }
-          if (id.includes("/src/components/PrintShippingLabel") || id.includes("/src/printing/")) {
+          if (id.includes("/src/components/PrintShippingLabel")) {
             return "page-print";
           }
         },

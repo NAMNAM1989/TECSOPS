@@ -120,50 +120,6 @@ describe("applyShipmentMutation SET_ESID profiles", () => {
   });
 });
 
-describe("applyShipmentMutation SET_PRINTER_PROFILES", () => {
-  it("lưu catalog profile máy in", () => {
-    const state: AppState = {
-      version: 1,
-      rows: [],
-      customers: [],
-      printerProfiles: { version: 1, profiles: [], updatedAt: "" },
-    };
-    const next = applyShipmentMutation(state, {
-      action: "SET_PRINTER_PROFILES",
-      catalog: {
-        version: 1,
-        updatedAt: "2026-05-15T00:00:00.000Z",
-        profiles: [
-          {
-            id: "thermal-1",
-            name: "Quầy 1",
-            type: "thermal-tspl",
-            connection: "tcp",
-            host: "10.0.0.5",
-            port: 9100,
-            dpi: 203,
-            labelWidthMm: 100,
-            labelHeightMm: 80,
-            pageWidthMm: 100,
-            pageHeightMm: 80,
-            gapMm: 2,
-            rotation: 0,
-            offsetXmm: 0,
-            offsetYmm: 0,
-            speed: 4,
-            density: 8,
-            copiesDefault: 1,
-            labelSheetFormat: "100x80",
-          },
-        ],
-      },
-    });
-    expect(next.version).toBe(2);
-    expect(next.printerProfiles?.profiles).toHaveLength(1);
-    expect(next.printerProfiles?.profiles[0]?.name).toBe("Quầy 1");
-  });
-});
-
 describe("applyShipmentMutation SET_CUSTOMERS", () => {
   it("cập nhật danh bạ và tăng version, giữ rows", () => {
     const state: AppState = {

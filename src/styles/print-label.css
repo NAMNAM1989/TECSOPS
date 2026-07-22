@@ -5,18 +5,8 @@
  * Nguyên tắc:
  * 1. AWB là tín hiệu nhận diện từ xa — lớn nhất, luôn hiện đủ số.
  * 2. Chỉ đen trên trắng (không tô nền) — giấy nhiệt B&W.
- * 3. Tem căn giữa trang in.
+ * 3. Tem căn giữa trang in; trang = đúng khổ tem (không xoay).
  */
-
-.label.print-label-sheet.lbl-sheet.lbl-sheet--calibrated,
-.label.print-label-sheet.lbl-sheet.lbl-sheet--scsc-designer {
-  display: block;
-}
-
-.lbl-sheet.lbl-sheet--scsc-designer {
-  width: 210mm;
-  height: 297mm;
-}
 
 .label.print-label-sheet.lbl-sheet {
   box-sizing: border-box;
@@ -188,18 +178,6 @@
   text-align: center;
 }
 
-.lbl-special {
-  flex-shrink: 0;
-  padding: 0.55mm 1.2mm;
-  border-top: 0.5mm solid #000;
-  text-align: center;
-  font-weight: 900;
-  letter-spacing: 0.3mm;
-  line-height: 1.1;
-  background: #fff;
-  color: #000;
-}
-
 /* -------------------------------------------------------------------------- */
 /* 100×50 — cùng ngôn ngữ thị giác, thu gọn                                   */
 /* -------------------------------------------------------------------------- */
@@ -244,16 +222,12 @@
   padding: 0.4mm 1.5mm 0.8mm;
 }
 
-.lbl-sheet--compact .lbl-special {
-  padding: 0.3mm 0.8mm;
-}
-
 .print-label-host {
   display: none;
 }
 
 /* -------------------------------------------------------------------------- */
-/* @media print — XP-470B mặc định (100×H thẳng)                              */
+/* @media print — XP-470B (100×H thẳng, không xoay)                           */
 /* -------------------------------------------------------------------------- */
 
 @media print {
@@ -368,53 +342,5 @@
   .print-label-page:has(.lbl-sheet--compact) .print-label-spin {
     height: 50mm;
     max-height: 50mm;
-  }
-
-  body.tecsops-label-print-narrow80 {
-    width: 80mm !important;
-    max-width: 80mm !important;
-  }
-
-  body.tecsops-label-print-narrow80 .print-label-host {
-    width: 80mm !important;
-    max-width: 80mm !important;
-  }
-
-  body.tecsops-label-print-narrow80 .print-label-page {
-    width: 80mm;
-    max-width: 80mm;
-    height: 100mm;
-    max-height: 100mm;
-  }
-
-  body.tecsops-label-print-narrow80 .print-label-page .print-label-spin {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform-origin: center center;
-    transform: translate(-50%, -50%) rotate(90deg);
-  }
-
-  body.tecsops-label-print-narrow80
-    .print-label-page
-    .print-label-spin.print-label-spin--ccw {
-    transform: translate(-50%, -50%) rotate(-90deg);
-  }
-
-  body.tecsops-label-print-narrow80:has(.lbl-sheet--compact) {
-    width: 50mm !important;
-    max-width: 50mm !important;
-  }
-
-  body.tecsops-label-print-narrow80:has(.lbl-sheet--compact) .print-label-host {
-    width: 50mm !important;
-    max-width: 50mm !important;
-  }
-
-  body.tecsops-label-print-narrow80 .print-label-page:has(.lbl-sheet--compact) {
-    width: 50mm;
-    max-width: 50mm;
-    height: 100mm;
-    max-height: 100mm;
   }
 }

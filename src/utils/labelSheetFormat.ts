@@ -1,7 +1,11 @@
 const KEY_FORMAT = "tecsops-label-sheet-format";
 
-/** Tem đọc chữ đứng: ngang × cao (mm). */
+/** Tem đọc chữ đứng: ngang × cao (mm). XP-470B: trang = tem, không xoay. */
 export type LabelSheetFormat = "100x80" | "100x50";
+
+export function labelSheetFormatLabel(f: LabelSheetFormat): string {
+  return f === "100x50" ? "100×50 mm" : "100×80 mm";
+}
 
 export function loadLabelSheetFormat(): LabelSheetFormat {
   try {

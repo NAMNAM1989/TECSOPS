@@ -1,6 +1,5 @@
 import pg from "pg";
 import { normalizeAirlineLabelOverridesLoose } from "./airlineLabelOverridesNormalize.mjs";
-import { normalizePrinterProfilesCatalogLoose } from "./printerProfilesNormalize.mjs";
 import {
   normalizeEsidAgentStoreLoose,
   normalizeEsidRegistrantStoreLoose,
@@ -55,6 +54,7 @@ function stripLegacyStateKeys(state) {
   delete next.scscWeighPrintSettings;
   delete next.ecargoKhoScsc;
   delete next.invoiceCatalog;
+  delete next.printerProfiles;
   return next;
 }
 
@@ -488,9 +488,6 @@ async function loadRelationalSnapshot(client, key) {
     blob && typeof blob === "object" ? blob.airlineLabelOverrides : undefined;
   await migrateAirlineOverridesFromBlob(client, blobOverrides);
   const airlineLabelOverrides = await loadAirlineDisplayOverrides(client);
-  const printerProfiles = normalizePrinterProfilesCatalogLoose(
-    blob && typeof blob === "object" ? blob.printerProfiles : undefined
-  );
   const esidRegistrantStore = normalizeEsidRegistrantStoreLoose(
     blob && typeof blob === "object" ? blob.esidRegistrantStore : undefined
   );
@@ -548,7 +545,6 @@ async function loadRelationalSnapshot(client, key) {
       return mergeCustomerBlobProfile(base, blobCustomersById.get(cid));
     }),
     airlineLabelOverrides,
-    printerProfiles,
     esidRegistrantStore,
     esidAgentStore,
   };

@@ -8,10 +8,6 @@ import {
   normalizeAirlineLabelOverridesLoose,
 } from "./airlineLabelOverridesNormalize.mjs";
 import {
-  emptyPrinterProfilesCatalog,
-  normalizePrinterProfilesCatalogLoose,
-} from "./printerProfilesNormalize.mjs";
-import {
   emptyEsidAgentStore,
   emptyEsidRegistrantStore,
   normalizeEsidAgentStoreLoose,
@@ -42,7 +38,6 @@ function emptyInitialState() {
     rows: [],
     customers: [],
     airlineLabelOverrides: emptyAirlineLabelOverrides(),
-    printerProfiles: emptyPrinterProfilesCatalog(),
     esidRegistrantStore: emptyEsidRegistrantStore(),
     esidAgentStore: emptyEsidAgentStore(),
   };
@@ -159,7 +154,6 @@ function finishState(state, rows, extras = {}) {
     customers: extras.customers ?? state.customers ?? [],
     airlineLabelOverrides:
       extras.airlineLabelOverrides ?? normalizeAirlineLabelOverridesLoose(state.airlineLabelOverrides),
-    printerProfiles: extras.printerProfiles ?? normalizePrinterProfilesCatalogLoose(state.printerProfiles),
     esidRegistrantStore:
       extras.esidRegistrantStore ?? normalizeEsidRegistrantStoreLoose(state.esidRegistrantStore),
     esidAgentStore: extras.esidAgentStore ?? normalizeEsidAgentStoreLoose(state.esidAgentStore),
@@ -183,7 +177,6 @@ function normalizeState(raw) {
     rows: renumberSttForAll(merged),
     customers,
     airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(raw.airlineLabelOverrides),
-    printerProfiles: normalizePrinterProfilesCatalogLoose(raw.printerProfiles),
     esidRegistrantStore: normalizeEsidRegistrantStoreLoose(raw.esidRegistrantStore),
     esidAgentStore: normalizeEsidAgentStoreLoose(raw.esidAgentStore),
   };
@@ -238,17 +231,12 @@ export function applyMutation(state, mutation) {
       return finishState(state, rows, { customers: list });
     }
     case "RESET_TRIAL_DATA": {
-      /** Xóa lô + danh bạ thử nghiệm; giữ tên hãng / profile máy in. */
+      /** Xóa lô + danh bạ thử nghiệm; giữ tên hãng / hồ sơ ESID. */
       return finishState(state, [], { customers: [] });
     }
     case "SET_AIRLINE_LABEL_OVERRIDES": {
       return finishState(state, rows, {
         airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(mutation?.overrides),
-      });
-    }
-    case "SET_PRINTER_PROFILES": {
-      return finishState(state, rows, {
-        printerProfiles: normalizePrinterProfilesCatalogLoose(mutation?.catalog),
       });
     }
     case "SET_ESID_REGISTRANT_STORE": {
@@ -292,7 +280,7 @@ export function applyMutation(state, mutation) {
     }
     default:
       throw new Error(
-        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: RESET_TRIAL_DATA, SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, SET_ESID_REGISTRANT_STORE, SET_ESID_AGENT_STORE, UPDATE, DELETE, ADD.`
+        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: RESET_TRIAL_DATA, SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_ESID_REGISTRANT_STORE, SET_ESID_AGENT_STORE, UPDATE, DELETE, ADD.`
       );
   }
 

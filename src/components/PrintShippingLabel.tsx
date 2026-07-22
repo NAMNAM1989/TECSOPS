@@ -2,58 +2,40 @@ import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Shipment } from "../types/shipment";
 import {
+  labelSheetFormatLabel,
   loadLabelSheetFormat,
   saveLabelSheetFormat,
   type LabelSheetFormat,
 } from "../utils/labelSheetFormat";
-import {
-  loadLabelPrintMode,
-  saveLabelPrintMode,
-  type LabelPrintMode,
-} from "../utils/labelPrintMode";
 import { mapShipmentToAirCargoLabelData } from "../utils/mapShipmentToAirCargoLabelData";
 import { fitAwbFontMm } from "../utils/fitAwbFontMm";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { OPS } from "../styles/opsModalStyles";
 import { printThermalLabelsFromIframe, thermalPageMm } from "../utils/printThermalLabelIframe";
-import { labelSheetFormatLabel } from "../printing/thermalLabelFormat";
 
 export type LabelSheetVariant = "standard" | "compact";
 
 type LabelContentProps = {
   s: Shipment;
-  fontScale: number;
-  mawbRelScale?: number;
-  hawbRelScale?: number;
   airlineLabelOverrides?: AirlineLabelOverrides | null;
   sheetVariant?: LabelSheetVariant;
-  showHawbOnCompact?: boolean;
 };
 
 export function LabelContent({
   s,
-  fontScale,
-  mawbRelScale = 1,
-  hawbRelScale: _hawbRelScale = 1,
   airlineLabelOverrides,
   sheetVariant = "standard",
-  showHawbOnCompact: _showHawbOnCompact = false,
 }: LabelContentProps) {
-  void _hawbRelScale;
-  void _showHawbOnCompact;
   const d = mapShipmentToAirCargoLabelData(s, airlineLabelOverrides);
-  const mm = (base: number) => `${Math.round(base * fontScale * 100) / 100}mm`;
   const compact = sheetVariant === "compact";
   const hasAirline = Boolean(d.airline);
 
-  /* Thiết kế TECSOPS XP-470B: AWB hero → pieces → airport → airline */
   const airlineMm = compact ? 2.6 : 3.4;
-  const mawbMm = fitAwbFontMm(d.mawb, { compact, relScale: mawbRelScale });
+  const mawbMm = fitAwbFontMm(d.mawb, { compact });
   const routeLabMm = compact ? 1.35 : 1.7;
   const routeValMm = compact ? 5.5 : 7.8;
   const piecesLabMm = compact ? 1.5 : 2;
   const piecesValMm = compact ? 11.5 : 16.5;
-  const specialMm = compact ? 1.5 : 1.9;
 
   const sheetClass = [
     "label",
@@ -68,31 +50,31 @@ export function LabelContent({
   return (
     <div className={sheetClass}>
       {hasAirline ? (
-        <div className="lbl-airline" style={{ fontSize: mm(airlineMm) }}>
+        <div className="lbl-airline" style={{ fontSize: `${airlineMm}mm` }}>
           {d.airline}
         </div>
       ) : null}
 
       <div className="lbl-mawb">
-        <div className="lbl-mawb-val" style={{ fontSize: mm(mawbMm) }}>
+        <div className="lbl-mawb-val" style={{ fontSize: `${mawbMm}mm` }}>
           {d.mawb || <span className="lbl-placeholder">Nhập MAWB...</span>}
         </div>
       </div>
 
       <div className="lbl-route">
         <div className="lbl-route-cell">
-          <div className="route-label" style={{ fontSize: mm(routeLabMm) }}>
+          <div className="route-label" style={{ fontSize: `${routeLabMm}mm` }}>
             Origin
           </div>
-          <div className="route-val" style={{ fontSize: mm(routeValMm) }}>
+          <div className="route-val" style={{ fontSize: `${routeValMm}mm` }}>
             {d.origin}
           </div>
         </div>
         <div className="lbl-route-cell">
-          <div className="route-label" style={{ fontSize: mm(routeLabMm) }}>
+          <div className="route-label" style={{ fontSize: `${routeLabMm}mm` }}>
             Destination
           </div>
-          <div className="route-val" style={{ fontSize: mm(routeValMm) }}>
+          <div className="route-val" style={{ fontSize: `${routeValMm}mm` }}>
             {d.dest || <span className="lbl-placeholder">-</span>}
           </div>
         </div>
@@ -100,22 +82,13 @@ export function LabelContent({
 
       <div className="lbl-bottom">
         <div className="lbl-pieces-cell">
-          <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
+          <div className="pieces-label" style={{ fontSize: `${piecesLabMm}mm` }}>
             Total pieces
           </div>
-          <div className="pieces-val" style={{ fontSize: mm(piecesValMm) }}>
+          <div className="pieces-val" style={{ fontSize: `${piecesValMm}mm` }}>
             {d.pieces}
           </div>
         </div>
-        {d.special === "cold" ? (
-          <div className="lbl-special cold" style={{ fontSize: mm(specialMm) }}>
-            PLS KEEP AT 2-8C - PERISHABLE
-          </div>
-        ) : d.special === "danger" ? (
-          <div className="lbl-special danger" style={{ fontSize: mm(specialMm) }}>
-            DANGEROUS GOODS
-          </div>
-        ) : null}
       </div>
     </div>
   );
@@ -155,7 +128,6 @@ function LabelPreviewSimple({
         >
           <LabelContent
             s={shipment}
-            fontScale={1}
             airlineLabelOverrides={airlineLabelOverrides}
             sheetVariant={compact ? "compact" : "standard"}
           />
@@ -173,12 +145,14 @@ interface PrintShippingLabelProps {
 
 export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }: PrintShippingLabelProps) {
   const [format, setFormat] = useState<LabelSheetFormat>(() => loadLabelSheetFormat());
-  const [printMode, setPrintMode] = useState<LabelPrintMode>(() => loadLabelPrintMode());
   const [printMsg, setPrintMsg] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const printHostRef = useRef<HTMLDivElement>(null);
-  const pcs = useMemo(() => Math.max(1, shipment.pcs ?? 1), [shipment.pcs]);
-  const pageMm = useMemo(() => thermalPageMm(format, printMode), [format, printMode]);
+  const pcsHint = useMemo(() => {
+    const n = shipment.pcs;
+    return n != null && n > 0 ? n : null;
+  }, [shipment.pcs]);
+  const pageMm = useMemo(() => thermalPageMm(format), [format]);
 
   const handlePrint = async () => {
     if (printing) return;
@@ -201,17 +175,9 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
       const res = await printThermalLabelsFromIframe({
         format,
         host: printHostRef.current,
-        mode: printMode,
-        copies: pcs,
         printWindow,
       });
-      if (!res.ok) {
-        setPrintMsg(res.error);
-      } else if (res.printerCopiesHint) {
-        setPrintMsg(
-          `Lô ${res.printerCopiesHint} tem: trong hộp thoại in hãy đặt Số bản = ${res.printerCopiesHint} (tránh treo máy).`
-        );
-      }
+      if (!res.ok) setPrintMsg(res.error);
     } finally {
       setPrinting(false);
     }
@@ -229,7 +195,8 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
             <div>
               <h2 className={`text-lg font-semibold ${OPS.title}`}>In nhãn vận chuyển</h2>
               <p className={`text-xs ${OPS.secondary}`}>
-                {shipment.awb || "Chưa có AWB"} · {pcs} tem · in trình duyệt
+                {shipment.awb || "Chưa có AWB"} · XP-470B
+                {pcsHint != null ? ` · lô ${pcsHint} kiện` : ""}
               </p>
             </div>
             <button type="button" onClick={onClose} className={`rounded-full p-2 ${OPS.secondary}`} aria-label="Đóng">
@@ -269,53 +236,13 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                   );
                 })}
               </div>
-            </div>
-
-            <div className="mt-3">
-              <p className={`mb-2 text-center text-xs font-semibold ${OPS.secondary}`}>Máy in</p>
-              <div className="flex gap-2">
-                {(
-                  [
-                    {
-                      id: "xp470b" as const,
-                      label: "XP-470B",
-                      hint: "4″ · 100×80 thẳng",
-                    },
-                    {
-                      id: "narrow80" as const,
-                      label: "Cuộn hẹp 80mm",
-                      hint: "xoay 90°",
-                    },
-                  ] as const
-                ).map((opt) => {
-                  const selected = printMode === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => {
-                        setPrintMode(opt.id);
-                        saveLabelPrintMode(opt.id);
-                        setPrintMsg(null);
-                      }}
-                      className={`flex-1 rounded-2xl border-2 px-2 py-2.5 text-center transition-all active:scale-[0.98] ${
-                        selected ? OPS.formatBtnOn : OPS.formatBtnOff
-                      }`}
-                    >
-                      <span className="block text-[13px] font-bold leading-tight">{opt.label}</span>
-                      <span className={`mt-0.5 block text-[10px] ${selected ? "opacity-90" : OPS.secondary}`}>
-                        {opt.hint}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
               <p className={`mt-2 text-center text-[11px] ${OPS.secondary}`}>
-                PDF / khổ trang in:{" "}
+                Khổ trang:{" "}
                 <span className="font-semibold tabular-nums">
                   {pageMm.wMm}×{pageMm.hMm} mm
                 </span>
-                {printMode === "xp470b" ? " (đúng tem, không xoay)" : " (trang xoay cho cuộn hẹp)"}
+                {" · "}
+                trong hộp thoại in hãy đặt <span className="font-semibold">Số bản</span> cần in
               </p>
             </div>
 
@@ -349,12 +276,10 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
       {typeof document !== "undefined"
         ? createPortal(
             <div ref={printHostRef} className="print-label-host" aria-hidden>
-              {/* Chỉ 1 tem mẫu — iframe nhân bản theo số kiện khi in (tránh treo UI). */}
               <div className="print-label-page">
                 <div className="print-label-spin">
                   <LabelContent
                     s={shipment}
-                    fontScale={1}
                     airlineLabelOverrides={airlineLabelOverrides}
                     sheetVariant={format === "100x50" ? "compact" : "standard"}
                   />

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ThermalLabelPrinterProfile } from "./printTypes";
 import {
-  labelFormatMismatch,
   resolveThermalProfileLabelFormat,
   withThermalLabelFormat,
 } from "./thermalLabelFormat";
@@ -45,11 +44,5 @@ describe("thermalLabelFormat", () => {
       labelHeightMm: 50,
     });
     expect(resolveThermalProfileLabelFormat(legacy)).toBe("100x50");
-  });
-
-  it("phát hiện lệch khổ profile vs UI", () => {
-    const p = baseThermal();
-    expect(labelFormatMismatch(p, "100x50")).toBe(true);
-    expect(labelFormatMismatch(p, "100x80")).toBe(false);
   });
 });

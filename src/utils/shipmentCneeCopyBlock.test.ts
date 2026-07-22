@@ -6,7 +6,6 @@ import {
   buildShipmentCneeCopyBlock,
   buildShipmentCneeDisplayLines,
   buildShipmentCneeMetaLines,
-  buildShipmentCneeTooltipLines,
   formatFlightDateDdMmYyyy,
   formatSessionYmdForCneeCopy,
 } from "./shipmentCneeCopyBlock";
@@ -54,22 +53,6 @@ describe("buildShipmentCneeMetaLines", () => {
       "Chuyến bay: VJ081",
       "Dest: MEL",
     ]);
-  });
-});
-
-describe("buildShipmentCneeTooltipLines", () => {
-  it("ưu tiên body CNEE (địa chỉ, SĐT) cho tooltip", () => {
-    const lines = buildShipmentCneeTooltipLines(
-      baseShipment({
-        consigneeNamePrint: "ACME PTY LTD",
-        consigneeAddressPrint: "1 MAIN ST",
-        consigneePhonePrint: "0399998888",
-      })
-    );
-    expect(lines).toContain("ACME PTY LTD");
-    expect(lines).toContain("1 MAIN ST");
-    expect(lines).toContain("TEL: 0399998888");
-    expect(lines.some((l) => l.startsWith("AWB:"))).toBe(false);
   });
 });
 

@@ -526,16 +526,6 @@ export function getTcsAgentBaseUrl(): string {
   return agentBase();
 }
 
-/** URL file trong output/docs (PDF hoặc ảnh preview) qua proxy /tcs-agent. */
-export function tcsAgentDocUrl(nameOrPath: string): string {
-  const name = nameOrPath.replace(/^.*[/\\]/, "");
-  return `${agentBase()}/docs?file=${encodeURIComponent(name)}`;
-}
-
-function tcsAgentPdfUrl(pdfNameOrPath: string): string {
-  return tcsAgentDocUrl(pdfNameOrPath);
-}
-
 /**
  * Tải PDF ESID về máy (Downloads) — không mở tab xem/in.
  * Fetch blob rồi gắn download (ổn định hơn mở URL trực tiếp).
@@ -544,7 +534,7 @@ export async function downloadPdfFromAgent(pdfNameOrPath: string): Promise<boole
   const name = pdfNameOrPath.replace(/^.*[/\\]/, "");
   if (!name.toLowerCase().endsWith(".pdf")) return false;
   try {
-    const res = await fetch(tcsAgentPdfUrl(name));
+    const res = await fetch(`${agentBase()}/docs?file=${encodeURIComponent(name)}`);
     if (!res.ok) return false;
     const blob = await res.blob();
     if (blob.size < 100) return false;

@@ -152,10 +152,6 @@ function nextNewId(rows) {
   return `new-${Math.max(100, maxNew) + 1}`;
 }
 
-export function createInitialState() {
-  return emptyInitialState();
-}
-
 function finishState(state, rows, extras = {}) {
   return {
     version: state.version + 1,

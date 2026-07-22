@@ -75,7 +75,7 @@ const MobileShipmentCard = memo(
     onDelete: (id: string) => void;
   }) {
     const rowAccent = statusRowAccent[row.status];
-    const rowSurface = selected ? statusRowSelected : statusRowBg[row.status];
+    const rowSurface = selected ? statusRowSelected : statusRowBg;
     const awbTrim = (row.awb ?? "").trim();
     const hawbTrim = (row.hawb ?? "").trim();
     const noteTrim = (row.note ?? "").trim();

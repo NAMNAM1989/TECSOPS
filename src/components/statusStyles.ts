@@ -13,17 +13,7 @@ export const statusLabel: Record<ShipmentStatus, string> = {
 };
 
 /** Card hàng — nền trắng/surface, viền trái màu trạng thái. */
-export const statusRowBg: Record<ShipmentStatus, string> = {
-  PENDING: "bg-white dark:bg-dashboard-surface-dark",
-  RECEIVED: "bg-white dark:bg-dashboard-surface-dark",
-  VOLUME_DONE: "bg-white dark:bg-dashboard-surface-dark",
-  CUSTOMS: "bg-white dark:bg-dashboard-surface-dark",
-  SECURITY: "bg-white dark:bg-dashboard-surface-dark",
-  OLA_PULL: "bg-white dark:bg-dashboard-surface-dark",
-  RECEPTION_COMPLETED: "bg-white dark:bg-dashboard-surface-dark",
-  WEIGH_SLIP: "bg-white dark:bg-dashboard-surface-dark",
-  COMPLETED: "bg-white dark:bg-dashboard-surface-dark",
-};
+export const statusRowBg = "bg-white dark:bg-dashboard-surface-dark";
 
 export const statusRowAccent: Record<ShipmentStatus, string> = {
   PENDING: "border-l-2 border-l-blue-400/80 dark:border-l-blue-400/60",

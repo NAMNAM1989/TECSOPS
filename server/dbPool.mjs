@@ -39,10 +39,3 @@ export async function withDbClient(fn) {
     client.release();
   }
 }
-
-export async function closeDbPool() {
-  if (pool) {
-    await pool.end();
-    pool = null;
-  }
-}

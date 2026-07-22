@@ -5,8 +5,6 @@ import {
   buildScscDimListModel,
   dimKgExcelLineNumFmt,
   scscDimDivisor,
-  scscDimLineNoteLabel,
-  scscDimListHasEstimatedRows,
 } from "./scscDimListReport";
 
 function sample(over: Partial<Shipment> = {}): Shipment {
@@ -83,7 +81,7 @@ describe("buildScscDimListModel", () => {
     expect(m!.dimKgStrip).not.toContain("999");
   });
 
-  it("estimated → ghi chú ƯT tách khỏi số DIM", () => {
+  it("giữ cờ estimated trên dòng model", () => {
     const m = buildScscDimListModel(
       sample({
         dimLines: [
@@ -93,9 +91,7 @@ describe("buildScscDimListModel", () => {
       })
     );
     expect(m).not.toBeNull();
-    const rows = m!.rows;
-    expect(scscDimListHasEstimatedRows(rows)).toBe(true);
-    expect(scscDimLineNoteLabel(rows[1]!)).toBe("ƯT");
-    expect(scscDimLineNoteLabel(rows[0]!)).toBe("");
+    expect(m!.rows[0]!.estimated).toBeFalsy();
+    expect(m!.rows[1]!.estimated).toBe(true);
   });
 });

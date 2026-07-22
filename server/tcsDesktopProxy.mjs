@@ -3,7 +3,6 @@
  * Bắt buộc WebSocket upgrade để thao tác chuột/phím trên Chrome agent (Xvfb).
  * Mặc định tắt (TCS_VNC=0) — API-first; luôn expose GET /api/tcs-desktop.
  */
-import http from "node:http";
 import httpProxy from "http-proxy";
 
 function novncTarget() {
@@ -93,24 +92,5 @@ export function registerTcsDesktopProxy(app, httpServer) {
     if (!url.startsWith("/tcs-desktop")) return;
     req.url = url.replace(/^\/tcs-desktop/, "") || "/";
     proxy.ws(req, socket, head, { target });
-  });
-}
-
-/** Smoke: noVNC có lắng nghe không (dùng khi debug). */
-export function probeNovnc(timeoutMs = 800) {
-  return new Promise((resolve) => {
-    const port = Number(process.env.TCS_NOVNC_PORT || 6080);
-    const req = http.get(
-      { hostname: "127.0.0.1", port, path: "/", timeout: timeoutMs },
-      (res) => {
-        res.resume();
-        resolve(res.statusCode != null && res.statusCode < 500);
-      }
-    );
-    req.on("error", () => resolve(false));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(false);
-    });
   });
 }

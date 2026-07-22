@@ -115,10 +115,3 @@ export const OPS = {
   printStepperInput:
     "w-14 rounded border border-black/[0.08] bg-white px-1 py-0.5 text-center text-[10px] tabular-nums dark:border-white/12 dark:bg-ops-elevated dark:text-slate-100",
 } as const;
-
-/** @deprecated Dùng OPS — giữ alias cho modal Khách hàng. */
-export const CD = OPS;
-
-export const opsInput = OPS.input;
-export const cdInput = OPS.input;
-export const cdInputInvalid = OPS.inputInvalid;

@@ -1,11 +1,15 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
-import { buildShipmentPatchForCustomerSelection, customerNameWhileTyping, normalizeCustomerNameInput } from "../utils/customerShipmentPatch";
+import {
+  buildShipmentPatchForCustomerSelection,
+  customerNameWhileTyping,
+  filterCustomerDirectoryEntries,
+  normalizeCustomerNameInput,
+} from "../utils/customerShipmentPatch";
 import {
   CUSTOMER_SUGGEST_LIMIT,
   CustomerSuggestDropdown,
-  filterCustomerDirectoryEntries,
   useCustomerSuggestAnchor,
   useCustomerSuggestKeyboard,
 } from "./CustomerSuggestDropdown";

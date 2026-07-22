@@ -1,13 +1,11 @@
 import type { Shipment } from "../types/shipment";
 import { isScscWarehouse } from "../constants/warehouses";
 import type { ScscAirlineDimRule, ScscLineDimRoundKind } from "../constants/scscAirlineChargeableRules";
+import { resolveScscAirlineDimRule } from "./scscChargeableWeight";
 import {
   dimDivisorFromFlight,
-  formatDimKgDisplay,
-  formatLineDimKgDisplay,
   formatShipmentDimWeightKg,
   lineDimKg,
-  resolveScscDimRuleFromFlight,
   totalDimKgFromLines,
   type DimDivisor,
   type ScscDimRoundContext,
@@ -48,7 +46,7 @@ export function buildScscDimListModel(s: Shipment): ScscDimListModel | null {
 
   const divisor = scscDimDivisor(s);
   const dimCtx: ScscDimRoundContext = { flight: s.flight, awb: s.awb };
-  const rule = resolveScscDimRuleFromFlight(s.flight, s.awb);
+  const rule = resolveScscAirlineDimRule(s.flight, s.awb);
   let totalPcs = 0;
   const rows: ScscDimListRow[] = lines.map((line, i) => {
     totalPcs += line.pcs;
@@ -70,30 +68,6 @@ export function buildScscDimListModel(s: Shipment): ScscDimListModel | null {
     totalKg != null ? `${formatShipmentDimWeightKg(s.flight, totalKg, s.awb)} kg` : "—";
 
   return { rule, dimCtx, divisor, rows, totalPcs, dimKgStrip };
-}
-
-export function formatLineDimKgLabel(
-  kg: number | null,
-  ctx: ScscDimRoundContext
-): string {
-  if (kg == null) return "—";
-  return formatLineDimKgDisplay(kg, ctx);
-}
-
-export function formatTotalDimKgLabel(
-  kg: number | null,
-  ctx: ScscDimRoundContext
-): string {
-  if (kg == null) return "—";
-  return formatDimKgDisplay(kg, ctx);
-}
-
-export function scscDimListHasEstimatedRows(rows: readonly ScscDimListRow[]): boolean {
-  return rows.some((r) => r.estimated);
-}
-
-export function scscDimLineNoteLabel(row: ScscDimListRow): string {
-  return row.estimated ? "ƯT" : "";
 }
 
 /** Định dạng số DIM (kg) từng dòng trên Excel — theo cột «Dim CỦA MỖI DÒNG». */

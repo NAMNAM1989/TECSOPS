@@ -84,21 +84,3 @@ export function clampPrinterProfilesCatalog(raw: unknown): PrinterProfilesCatalo
     typeof o.updatedAt === "string" && o.updatedAt.trim() ? o.updatedAt.trim() : new Date().toISOString();
   return { version: 1, profiles, updatedAt };
 }
-
-export type MergePrinterProfileCatalogsOpts = {
-  localCatalogUpdatedAt?: string;
-};
-
-/** Gộp catalog server vào local. */
-export function mergePrinterProfileCatalogs(
-  localProfiles: readonly PrinterProfile[],
-  serverCatalog: PrinterProfilesCatalog,
-  _opts?: MergePrinterProfileCatalogsOpts
-): PrinterProfile[] {
-  const byId = new Map<string, PrinterProfile>();
-  for (const p of localProfiles) byId.set(p.id, p);
-  for (const serverP of serverCatalog.profiles) {
-    byId.set(serverP.id, serverP);
-  }
-  return [...byId.values()];
-}

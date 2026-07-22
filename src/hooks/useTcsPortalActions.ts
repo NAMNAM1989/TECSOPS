@@ -57,8 +57,6 @@ export type TcsPortalActionsOpts = {
   rows: readonly Shipment[];
   /** Danh bạ khách — resolve Shipper/CNEE khi Điền ESID */
   customerDirectory?: readonly CustomerDirectoryEntry[];
-  /** Chỉ thao tác 1 lô (từ menu dòng) */
-  focusShipment?: Shipment | null;
   onMarkReceptionCompleted?: (shipmentIds: string[]) => void | Promise<void>;
   /** Sau quét: báo số lô ready / đã cập nhật Ops (để đổi lọc bảng) */
   onReceptionScanDone?: (info: {
@@ -74,7 +72,6 @@ export function useTcsPortalActions({
   sessionYmd,
   rows,
   customerDirectory = [],
-  focusShipment = null,
   onMarkReceptionCompleted,
   onReceptionScanDone,
   active = true,
@@ -102,10 +99,7 @@ export function useTcsPortalActions({
   const prepareTimerRef = useRef<number | null>(null);
   const prepareInFlightRef = useRef("");
 
-  const sourceRows = useMemo(() => {
-    if (focusShipment) return [focusShipment];
-    return rows;
-  }, [rows, focusShipment]);
+  const sourceRows = rows;
 
   const eligible = useMemo(
     () => shipmentsEligibleForTcsPortal(sourceRows, sessionYmd),
@@ -665,7 +659,6 @@ export function useTcsPortalActions({
     sessionLabel,
     results,
     downloadedCount,
-    focusShipment,
     login,
     scan,
     downloadEsidFor,
@@ -679,9 +672,6 @@ export function useTcsPortalActions({
     preparedAwb,
     downloadPdf,
     refreshHealth,
-    clearFocusHint: focusShipment
-      ? `Chỉ AWB ${awbDigitsKey(focusShipment.awb) || focusShipment.awb}`
-      : "",
   };
 }
 

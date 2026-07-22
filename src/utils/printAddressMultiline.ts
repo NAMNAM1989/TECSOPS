@@ -38,16 +38,3 @@ export function resolvePrintAddressForShipment(opts: {
 
   return normalizePrintAddressMultiline(raw, maxLines).slice(0, 300);
 }
-
-/** In 2 ô địa chỉ: dòng 1 + dòng 2 theo Enter (tối đa 2 dòng). */
-export function splitScscAddressTwoLines(address: string): { line1: string; line2: string } {
-  const normalized = normalizePrintAddressMultiline(address, 2);
-  const lines = normalized ? normalized.split("\n") : [];
-  return {
-    line1: lines[0] ?? "",
-    line2: lines[1] ?? "",
-  };
-}
-
-/** @deprecated dùng splitScscAddressTwoLines */
-export const splitScscShipperAddressLines = splitScscAddressTwoLines;

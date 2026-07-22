@@ -28,12 +28,6 @@ export const DIM_LOT_LINE_COUNT_MAX = 17;
 /** Lô từ ngưỡng này trở lên → mục tiêu 13–17 dòng. */
 export const DIM_LOT_LINE_COUNT_PCS_THRESHOLD = 40;
 
-/** @deprecated Hành vi cũ 90% tổng — chỉ test legacy. */
-export const DIM_RANDOM_FILL_CAP_RATIO = 0.9;
-
-/** @deprecated Alias cũ — dùng DIM_TOTAL_BAND_BELOW_RATIO. */
-export const DIM_ESTIMATED_BUDGET_RATIO = DIM_TOTAL_BAND_BELOW_RATIO;
-
 export type DimRandomPoolId = "light" | "medium" | "heavy" | "mix" | "smart";
 
 type SizeTemplate = { lCm: number; wCm: number; hCm: number };
@@ -436,9 +430,6 @@ export type RandomDimFillInput = {
   declaredKg: number;
   bandBelowRatio?: number;
   ceilingRatio?: number;
-  /** @deprecated capRatio=0.9 — hành vi cũ. */
-  capRatio?: number;
-  estimatedBudgetRatio?: never;
   poolId: DimRandomPoolId;
   divisor: DimDivisor;
   dimCtx: ScscDimRoundContext;
@@ -1087,73 +1078,11 @@ function tuneGeneratedToTarget(
   return lines.filter((l) => l.pcs > 0);
 }
 
-/** Legacy: tổng DIM ≤ capRatio × kg lô. */
-function generateRandomDimFillLegacy(
-  input: RandomDimFillInput & { capRatio: number }
-): RandomDimFillResult {
-  const capKg = input.declaredKg * input.capRatio;
-  const manualNorm = input.manualLines
-    .filter((l) => !l.estimated)
-    .map((l) => normalizeDimLineEdges({ ...l, estimated: false }));
-  const manualTotal = totalDimKgFromLines(manualNorm, input.divisor, input.dimCtx) ?? 0;
-  if (manualTotal > capKg) {
-    return {
-      ok: false,
-      error: `DIM đo thật (${manualTotal.toFixed(1)} kg) đã vượt trần ${Math.round(input.capRatio * 100)}% kg lô.`,
-    };
-  }
-
-  const templates = buildSmartDimTemplates(manualNorm, input.poolId);
-  const unitKgs = templates.map((t) => lineDimKg(t, input.divisor, input.dimCtx));
-  if (unitKgs.some((k) => k == null)) {
-    return { ok: false, error: "Mẫu kích thước không hợp lệ." };
-  }
-
-  const rng = mulberry32(input.seed);
-  let generated: DimPieceLine[] = [];
-  const templateOrder = templates.map((_, i) => i).sort((a, b) => unitKgs[a]! - unitKgs[b]!);
-
-  const tryPlace = (ti: number): boolean => {
-    const candidate = { ...templates[ti]!, pcs: 1, estimated: true as const };
-    const next = consolidateDimPieceLines([...generated, candidate]);
-    const trial = mergedTotalDim(manualNorm, next, input.divisor, input.dimCtx);
-    if (trial != null && trial <= capKg + 1e-9) {
-      generated = next;
-      return true;
-    }
-    return false;
-  };
-
-  for (let i = 0; i < input.remainingPcs; i++) {
-    const order = templateOrder.slice().sort(() => rng() - 0.5);
-    const placed = order.some(tryPlace) || templateOrder.some(tryPlace);
-    if (!placed) {
-      return { ok: false, error: `Không sinh được kiện ${i + 1}/${input.remainingPcs} (legacy cap).` };
-    }
-  }
-
-  const totalDim = mergedTotalDim(manualNorm, generated, input.divisor, input.dimCtx)!;
-  return {
-    ok: true,
-    lines: consolidateDimPieceLines([...manualNorm, ...generated]),
-    totalDim,
-    estimatedDim: estimatedDimTotal(generated, input.divisor, input.dimCtx),
-    targetKg: capKg,
-    floorKg: 0,
-    ceilingKg: capKg,
-    estimatedPcs: input.remainingPcs,
-  };
-}
-
 /**
  * Sinh kiện ước tính — **tổng DIM** (đo + ước tính) nằm trong vùng
  * [95% kg lô, 99.9% kg lô) — ví dụ lô 1000 kg → ~950–999 kg.
  */
 export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillResult {
-  if (input.capRatio != null) {
-    return generateRandomDimFillLegacy({ ...input, capRatio: input.capRatio });
-  }
-
   const declaredKg = input.declaredKg;
   if (!Number.isFinite(declaredKg) || declaredKg <= 0) {
     return { ok: false, error: "Cần kg lô (> 0) trên lô hàng để sinh DIM ngẫu nhiên." };

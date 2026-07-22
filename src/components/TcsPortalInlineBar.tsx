@@ -12,7 +12,6 @@ import { pingTcsExtension, TCS_EXT_INSTALL_HINT } from "../utils/tcsChromeExtens
 
 type Props = {
   tcs: TcsPortalActions;
-  onClearFocus?: () => void;
   /** Gọn cho mobile */
   compact?: boolean;
 };
@@ -22,7 +21,7 @@ type TcsDesktopInfo = {
   hint?: string;
 };
 
-export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props) {
+export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
   const btn =
     "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-45 active:scale-[0.98]";
   const btnGhost =
@@ -227,17 +226,8 @@ export function TcsPortalInlineBar({ tcs, onClearFocus, compact = false }: Props
         {desktop.enabled ? " «Sửa tay» = noVNC (chậm)." : ""}
       </p>
 
-      {(tcs.message || tcs.error || tcs.clearFocusHint) && (
+      {(tcs.message || tcs.error) && (
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-1">
-          {tcs.clearFocusHint ? (
-            <button
-              type="button"
-              onClick={onClearFocus}
-              className="text-[10px] font-semibold text-sky-700 underline dark:text-sky-300"
-            >
-              {tcs.clearFocusHint} · bỏ chọn
-            </button>
-          ) : null}
           {tcs.error ? (
             <p className="min-w-0 text-[10px] font-medium text-red-600">{tcs.error}</p>
           ) : tcs.message ? (

@@ -14,7 +14,7 @@ import {
   normalizeCustomerSyncCode,
 } from "./customerCodeOps";
 import { formatVehicleLicensePlate } from "./customerVehicleCore";
-import { VEHICLE_PLATE_MIN as ECARGO_VEHICLE_MIN } from "./vehiclePlateNormalize";
+import { VEHICLE_PLATE_MIN } from "./vehiclePlateNormalize";
 
 export type CustomerProfileSection =
   | "identity"
@@ -75,7 +75,7 @@ export function isValidNationalId(raw: string): boolean {
 
 export function isValidLicensePlate(raw: string): boolean {
   const plate = formatVehicleLicensePlate(raw);
-  return plate.length >= ECARGO_VEHICLE_MIN;
+  return plate.length >= VEHICLE_PLATE_MIN;
 }
 
 export function isSavedShipperEmpty(s: CustomerSavedShipper): boolean {
@@ -271,7 +271,7 @@ function validateVehicles(entry: CustomerDirectoryEntry): CustomerFieldError[] {
         section: "vehicle",
         itemId: v.id,
         field: "licensePlate",
-        message: `Biển số cần ít nhất ${ECARGO_VEHICLE_MIN} ký tự hợp lệ.`,
+        message: `Biển số cần ít nhất ${VEHICLE_PLATE_MIN} ký tự hợp lệ.`,
       });
     } else if (plate) {
       const prev = plates.get(plate);

@@ -15,8 +15,6 @@ const KEY_FLIP = "tecsops-label-print-flip-ccw";
  */
 export type LabelPrintMode = "xp470b" | "narrow80";
 
-/** @deprecated Dùng LabelPrintMode */
-export type LegacyLabelPrintMode = "thermal" | "direct";
 
 function normalizeMode(raw: string | null): LabelPrintMode | null {
   if (raw === "xp470b" || raw === "direct") return "xp470b";
@@ -32,7 +30,7 @@ export function loadLabelPrintMode(): LabelPrintMode {
   }
 }
 
-export function saveLabelPrintMode(m: LabelPrintMode | LegacyLabelPrintMode): void {
+export function saveLabelPrintMode(m: LabelPrintMode): void {
   const mode = normalizeMode(m) ?? "xp470b";
   try {
     localStorage.setItem(KEY_MODE, mode);

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { OPS, opsInput } from "../../styles/opsModalStyles";
+import { OPS } from "../../styles/opsModalStyles";
 
 type Props = {
   open: boolean;
@@ -44,7 +44,7 @@ export function CustomerDeleteConfirmModal({
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             autoFocus
-            className={`mt-1.5 w-full font-mono text-sm uppercase border-red-200 bg-red-50/50 focus:border-red-400 focus:ring-red-200 dark:border-red-500/40 dark:bg-red-500/10 dark:text-slate-100 ${opsInput}`}
+            className={`mt-1.5 w-full font-mono text-sm uppercase border-red-200 bg-red-50/50 focus:border-red-400 focus:ring-red-200 dark:border-red-500/40 dark:bg-red-500/10 dark:text-slate-100 ${OPS.input}`}
             placeholder={codeNeedle || "MÃ KH"}
           />
         </label>

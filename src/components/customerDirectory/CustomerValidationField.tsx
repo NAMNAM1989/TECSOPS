@@ -1,5 +1,5 @@
 import type { CustomerFieldError, CustomerProfileSection } from "../../utils/customerDirectoryValidation";
-import { OPS, opsInput } from "../../styles/opsModalStyles";
+import { OPS } from "../../styles/opsModalStyles";
 
 export function CustomerValidationBanner({ errors }: { errors: readonly CustomerFieldError[] }) {
   const sectionErrors = errors.filter((e) => e.field === "_section");
@@ -17,7 +17,7 @@ export function CustomerValidationBanner({ errors }: { errors: readonly Customer
 }
 
 export function fieldInputClass(invalid: boolean): string {
-  return `w-full text-xs ${opsInput}${invalid ? ` ${OPS.inputInvalid}` : ""}`;
+  return `w-full text-xs ${OPS.input}${invalid ? ` ${OPS.inputInvalid}` : ""}`;
 }
 
 export function FieldErrorText({ message }: { message?: string }) {

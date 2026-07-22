@@ -10,10 +10,6 @@ import {
 
   resolveScscAirlineDimRule,
 
-  scscChargeableKindFromShipment,
-
-  truncatePositiveKg,
-
   type ScscAirlineDimRule,
 
   type ScscChargeableRoundKind,
@@ -79,26 +75,6 @@ export function dimDivisorFromFlight(flight: string): DimDivisor {
 
 
 export type DimRoundingPolicyId = ScscChargeableRoundKind | "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND";
-
-
-
-export const DIM_ROUNDING_POLICY_IDS = [
-
-  "DP3_ROUND_0_5",
-
-  "DP3_ROUND_1",
-
-  "DP2_ROUND_0_5",
-
-  "ROUND_INTEGER",
-
-  "QR_SPECIAL",
-
-  "STANDARD_IATA_2DP",
-
-  "VJ_TRUNC3_LINE_SUM_NO_TOTAL_ROUND",
-
-] as const;
 
 
 
@@ -195,16 +171,6 @@ function resolveDimRoundContext(ctx: ScscDimRoundContext): {
   const kinds = scscRoundKindsFromLegacyPolicy(legacy);
 
   return { ...kinds, legacyPolicy: legacy };
-
-}
-
-
-
-/** Suy ra chính sách legacy (total) từ mã chuyến (+ AWB). */
-
-export function dimRoundingPolicyFromFlight(flight: string, awb = ""): DimRoundingPolicyId {
-
-  return scscChargeableKindFromShipment(flight, awb);
 
 }
 
@@ -319,10 +285,6 @@ export function normalizeDimEdgeCm(n: number): number {
   return Math.max(1, Math.round(n));
 }
 
-export function parsePositiveNumbersFromText(s: string): number[] {
-  return extractNumbersFromDimText(s);
-}
-
 /** Trích số từ text DIM — hỗ trợ dán Excel, khoảng trắng, x/X/*, dấu gạch, tab. */
 export function extractNumbersFromDimText(s: string): number[] {
   const normalized = s
@@ -344,58 +306,6 @@ export function extractNumbersFromDimText(s: string): number[] {
   return m
     .map((x) => Number(x))
     .filter((n) => Number.isFinite(n) && n > 0);
-}
-
-
-
-export function volumetricKgFromCm(
-
-  lengthCm: number,
-
-  widthCm: number,
-
-  heightCm: number,
-
-  divisor: DimDivisor,
-
-  ctx: ScscDimRoundContext = "STANDARD_IATA_2DP"
-
-): number | null {
-
-  if (!Number.isFinite(lengthCm) || !Number.isFinite(widthCm) || !Number.isFinite(heightCm)) return null;
-
-  if (lengthCm <= 0 || widthCm <= 0 || heightCm <= 0) return null;
-
-  const v = (lengthCm * widthCm * heightCm) / divisor;
-
-  if (!Number.isFinite(v) || v <= 0) return null;
-
-  const { lineRound, legacyPolicy } = resolveDimRoundContext(ctx);
-
-  if (legacyPolicy === "STANDARD_IATA_2DP") {
-
-    return Math.round(v * 100) / 100;
-
-  }
-
-  return applyScscLineDimRounding(v, lineRound);
-
-}
-
-
-
-export function parseKgInput(t: string): number | null {
-
-  const s = t.trim();
-
-  if (s === "") return null;
-
-  const n = Number(s.replace(",", "."));
-
-  if (Number.isNaN(n) || n < 0) return null;
-
-  return Math.round(n * 100) / 100;
-
 }
 
 
@@ -479,66 +389,6 @@ export function totalDimKgFromLines(
   }
 
   return applyScscTotalDimRounding(sum, totalRound);
-
-}
-
-
-
-export { truncatePositiveKg };
-
-
-
-export function parseDimLineQuadsFromNumbers(nums: number[]): DimPieceLine[] {
-
-  const out: DimPieceLine[] = [];
-
-  let i = 0;
-
-  while (i < nums.length) {
-
-    const rest = nums.length - i;
-
-    if (rest >= 4) {
-
-      out.push({
-
-        lCm: normalizeDimEdgeCm(nums[i]),
-
-        wCm: normalizeDimEdgeCm(nums[i + 1]),
-
-        hCm: normalizeDimEdgeCm(nums[i + 2]),
-
-        pcs: normalizePieceCount(nums[i + 3]),
-
-      });
-
-      i += 4;
-
-    } else if (rest === 3) {
-
-      out.push({
-
-        lCm: normalizeDimEdgeCm(nums[i]),
-
-        wCm: normalizeDimEdgeCm(nums[i + 1]),
-
-        hCm: normalizeDimEdgeCm(nums[i + 2]),
-
-        pcs: 1,
-
-      });
-
-      i += 3;
-
-    } else {
-
-      break;
-
-    }
-
-  }
-
-  return out;
 
 }
 

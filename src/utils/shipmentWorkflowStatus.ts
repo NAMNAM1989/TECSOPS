@@ -6,10 +6,6 @@ import * as core from "../../shared/shipmentWorkflowStatus.mjs";
 
 export const SHIPMENT_STATUS_ORDER = core.SHIPMENT_STATUS_ORDER as ShipmentStatus[];
 
-export function isAutoWorkflowStatus(s: ShipmentStatus): boolean {
-  return core.isAutoWorkflowStatus(s);
-}
-
 export function deriveAutoWorkflowStatus(
   row: Pick<Shipment, "awb" | "pcs" | "dimWeightKg" | "dimLines">
 ): ShipmentStatus {

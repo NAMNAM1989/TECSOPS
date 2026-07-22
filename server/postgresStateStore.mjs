@@ -841,5 +841,3 @@ export function createPostgresStateStore(databaseUrl) {
     },
   };
 }
-
-export { hqFieldsFromBlobRow, mergeShipmentHqFields, shipmentHqFromRow };

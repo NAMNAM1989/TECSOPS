@@ -6,7 +6,7 @@ import {
   overridesFromEffectiveMaps,
 } from "../utils/airlineLabelOverridesCore";
 import { DEFAULT_AIRLINE_BY_FLIGHT_PREFIX } from "../constants/airlineLabelDefaults";
-import { OPS, opsInput } from "../styles/opsModalStyles";
+import { OPS } from "../styles/opsModalStyles";
 
 type Props = {
   open: boolean;
@@ -148,7 +148,7 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
                       const k = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
                       setFlightRows((rows) => rows.map((x, i) => (i === idx ? { ...x, key: k } : x)));
                     }}
-                    className={`w-16 text-center font-mono text-sm font-semibold uppercase ${opsInput}`}
+                    className={`w-16 text-center font-mono text-sm font-semibold uppercase ${OPS.input}`}
                     title="Prefix lấy từ cột chuyến (2–3 ký tự đầu)"
                   />
                   <input

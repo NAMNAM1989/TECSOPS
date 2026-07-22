@@ -216,7 +216,7 @@ function ShipmentTableRowImpl({
   onPrint: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
 }) {
-  const bg = statusRowBg[row.status];
+  const bg = statusRowBg;
   const accent = statusRowAccent[row.status];
   const cell = (part: "first" | "mid" | "last", extra = "") => {
     const round = part === "first" ? "rounded-l-2xl" : part === "last" ? "rounded-r-2xl" : "";

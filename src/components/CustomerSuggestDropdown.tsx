@@ -170,5 +170,3 @@ export function useCustomerSuggestKeyboard({
     [activeIdx, onClose, onPickActive, onTabPick, open, setActiveIdx, suggestionCount]
   );
 }
-
-export { filterCustomerDirectoryEntries };

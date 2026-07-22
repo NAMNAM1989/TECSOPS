@@ -4,10 +4,10 @@ import {
   applyScscTotalDimRounding,
   resolveScscAirlineDimRule,
   scscChargeableKindFromShipment,
+  truncatePositiveKg,
 } from "./scscChargeableWeight";
 import {
   dimDivisorFromFlight,
-  dimRoundingPolicyFromFlight,
   formatDimKgDisplay,
   formatLineDimKgDisplay,
   formatShipmentDimWeightKg,
@@ -16,7 +16,6 @@ import {
   lineDimKg,
   parseDimLineQuadsFromNumbersStrict,
   totalDimKgFromLines,
-  truncatePositiveKg,
   tryParseDimPieceLinesFromComboText,
 } from "./volumetricDim";
 
@@ -75,34 +74,34 @@ describe("dimDivisorFromFlight", () => {
 
 describe("SCSC Required airline — resolve", () => {
   it("VJ → truncate 3dp / tổng 0.5", () => {
-    expect(dimRoundingPolicyFromFlight("VJ123")).toBe("DP3_ROUND_0_5");
+    expect(scscChargeableKindFromShipment("VJ123")).toBe("DP3_ROUND_0_5");
     expect(resolveScscAirlineDimRule("VJ081")?.lineRound).toBe("TRUNCATE_3DP");
   });
 
   it("SQ / TR → tổng làm tròn 1", () => {
-    expect(dimRoundingPolicyFromFlight("SQ177")).toBe("DP3_ROUND_1");
-    expect(dimRoundingPolicyFromFlight("TR305")).toBe("DP3_ROUND_1");
+    expect(scscChargeableKindFromShipment("SQ177")).toBe("DP3_ROUND_1");
+    expect(scscChargeableKindFromShipment("TR305")).toBe("DP3_ROUND_1");
     expect(resolveScscAirlineDimRule("SQ177")?.codes).toEqual(["SQ"]);
     expect(resolveScscAirlineDimRule("TR305")?.codes).toEqual(["TR"]);
     expect(scscChargeableKindFromShipment("", "618-1234 5678")).toBe("DP3_ROUND_1");
   });
 
   it("CX/LD → cắt 2dp / tổng 0.5", () => {
-    expect(dimRoundingPolicyFromFlight("CX766")).toBe("DP2_ROUND_0_5");
+    expect(scscChargeableKindFromShipment("CX766")).toBe("DP2_ROUND_0_5");
     expect(resolveScscAirlineDimRule("LD562")?.lineRound).toBe("TRUNCATE_2DP");
   });
 
   it("TG / 6E → làm tròn số", () => {
-    expect(dimRoundingPolicyFromFlight("TG610")).toBe("ROUND_INTEGER");
-    expect(dimRoundingPolicyFromFlight("6E123")).toBe("ROUND_INTEGER");
+    expect(scscChargeableKindFromShipment("TG610")).toBe("ROUND_INTEGER");
+    expect(scscChargeableKindFromShipment("6E123")).toBe("ROUND_INTEGER");
   });
 
   it("QR → QR line + total", () => {
-    expect(dimRoundingPolicyFromFlight("QR846")).toBe("QR_SPECIAL");
+    expect(scscChargeableKindFromShipment("QR846")).toBe("QR_SPECIAL");
   });
 
   it("hãng lạ → STANDARD_IATA_2DP", () => {
-    expect(dimRoundingPolicyFromFlight("VN601")).toBe("STANDARD_IATA_2DP");
+    expect(scscChargeableKindFromShipment("VN601")).toBe("STANDARD_IATA_2DP");
   });
 });
 

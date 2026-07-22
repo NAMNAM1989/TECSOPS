@@ -15,7 +15,7 @@ import {
 import { normalizeVehiclePlateInput } from "../../utils/vehiclePlateNormalize";
 import { suggestSavedItemLabel } from "../../utils/customerDirectoryScaffold";
 import { normalizePrintAddressMultiline } from "../../utils/printAddressMultiline";
-import { OPS, opsInput } from "../../styles/opsModalStyles";
+import { OPS } from "../../styles/opsModalStyles";
 import {
   CustomerValidationBanner,
   FieldErrorText,
@@ -25,7 +25,7 @@ import {
 import type { CustomerFieldError } from "../../utils/customerDirectoryValidation";
 import { getFieldValidationError } from "../../utils/customerDirectoryValidation";
 
-const inputCls = `w-full text-xs ${opsInput}`;
+const inputCls = `w-full text-xs ${OPS.input}`;
 
 type ProfileTab = "shipper" | "consignee" | "goods" | "vehicle";
 

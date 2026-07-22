@@ -3,11 +3,14 @@ import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import {
   CUSTOMER_SUGGEST_LIMIT,
   CustomerSuggestDropdown,
-  filterCustomerDirectoryEntries,
   useCustomerSuggestAnchor,
   useCustomerSuggestKeyboard,
 } from "./CustomerSuggestDropdown";
-import { customerNameWhileTyping, normalizeCustomerNameInput } from "../utils/customerShipmentPatch";
+import {
+  customerNameWhileTyping,
+  filterCustomerDirectoryEntries,
+  normalizeCustomerNameInput,
+} from "../utils/customerShipmentPatch";
 
 interface CustomerPickerFieldProps {
   value: string;

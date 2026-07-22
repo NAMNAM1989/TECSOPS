@@ -102,12 +102,3 @@ export function setCachedSyncResult(cacheKey, payload) {
     expires: Date.now() + SYNC_RESULT_TTL_MS,
   });
 }
-
-/** Test helper */
-export function clearSheetFetchCaches() {
-  tabListBySpreadsheet.clear();
-  sessionTabByKey.clear();
-  gridBySyncKey.clear();
-  gridBySessionKey.clear();
-  syncResultByKey.clear();
-}

@@ -70,56 +70,57 @@ export function GoogleSheetImportModal({
   const [sync, setSync] = useState<SheetBookSyncResult | null>(null);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
-  const [warehouseFilter, setWarehouseFilter] = useState<WarehouseFilter>(activeWarehouse);
+  const [warehouseFilter, setWarehouseFilter] = useState<WarehouseFilter>("ALL");
 
-  const selectDefaultRows = useCallback(
+  /** Luôn chọn mọi dòng nhập được (cả TCS + SCSC) — không giới hạn theo chip lọc xem. */
+  const selectAllImportable = useCallback((result: SheetBookSyncResult) => {
+    const next = new Set<number>();
+    for (const row of result.rows) {
+      if (isSheetRowSelectable(row)) next.add(row.index);
+    }
+    return next;
+  }, []);
+
+  const selectImportableInFilter = useCallback(
     (result: SheetBookSyncResult, filter: WarehouseFilter) => {
+      if (filter === "ALL") return selectAllImportable(result);
       const next = new Set<number>();
       for (const row of result.rows) {
         if (!isSheetRowSelectable(row)) continue;
-        if (filter !== "ALL" && rowWarehouse(row) !== filter) continue;
+        if (rowWarehouse(row) !== filter) continue;
         next.add(row.index);
-      }
-      // Nếu lọc theo kho đang xem mà không còn dòng chọn được — chọn mọi kho.
-      if (next.size === 0 && filter !== "ALL") {
-        for (const row of result.rows) {
-          if (isSheetRowSelectable(row)) next.add(row.index);
-        }
       }
       return next;
     },
-    []
+    [selectAllImportable]
   );
 
-  const fetchAndSelect = useCallback(
-    async (refresh: boolean, filter: WarehouseFilter) => {
-      setLoading(true);
-      setError(null);
-      try {
-        let result: SheetBookSyncResult;
-        if (!refresh) {
-          const prefetched = sheetSyncPrefetchRef?.current;
-          if (prefetched?.sessionYmd === sessionYmd) {
-            if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
-            result = await prefetched.promise;
-          } else {
-            result = await syncBookGoogleSheet(sessionYmd);
-          }
-        } else {
+  const fetchAndSelect = useCallback(async (refresh: boolean) => {
+    setLoading(true);
+    setError(null);
+    try {
+      let result: SheetBookSyncResult;
+      if (!refresh) {
+        const prefetched = sheetSyncPrefetchRef?.current;
+        if (prefetched?.sessionYmd === sessionYmd) {
           if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
-          result = await syncBookGoogleSheet(sessionYmd, { refresh });
+          result = await prefetched.promise;
+        } else {
+          result = await syncBookGoogleSheet(sessionYmd);
         }
-        setSync(result);
-        setSelected(selectDefaultRows(result, filter));
-      } catch (e) {
-        setSync(null);
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setLoading(false);
+      } else {
+        if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
+        result = await syncBookGoogleSheet(sessionYmd, { refresh });
       }
-    },
-    [sessionYmd, sheetSyncPrefetchRef, selectDefaultRows]
-  );
+      setSync(result);
+      setSelected(selectAllImportable(result));
+    } catch (e) {
+      setSync(null);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionYmd, sheetSyncPrefetchRef, selectAllImportable]);
 
   useEffect(() => {
     if (!open) {
@@ -129,13 +130,14 @@ export function GoogleSheetImportModal({
       setSelected(new Set());
       return;
     }
-    setWarehouseFilter(activeWarehouse);
-    void fetchAndSelect(false, activeWarehouse);
-  }, [open, sessionYmd, activeWarehouse, fetchAndSelect]);
+    // Mở modal: xem tất cả kho + chọn sẵn mọi lô nhập được (TCS và SCSC).
+    setWarehouseFilter("ALL");
+    void fetchAndSelect(false);
+  }, [open, sessionYmd, fetchAndSelect]);
 
   const applyWarehouseFilter = (next: WarehouseFilter) => {
     setWarehouseFilter(next);
-    if (sync) setSelected(selectDefaultRows(sync, next));
+    // Chỉ lọc danh sách xem — giữ nguyên selection (tránh bỏ sót SCSC khi đang xem TCS).
   };
 
 
@@ -154,11 +156,6 @@ export function GoogleSheetImportModal({
     return rows.filter((r) => rowWarehouse(r) === warehouseFilter);
   }, [sync, warehouseFilter]);
 
-  const selectableVisible = useMemo(
-    () => visibleRows.filter(isSheetRowSelectable),
-    [visibleRows]
-  );
-
   const warehouseCounts = useMemo(() => {
     const rows = sync?.rows ?? [];
     const total: Record<Warehouse, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
@@ -170,6 +167,20 @@ export function GoogleSheetImportModal({
     }
     return { total, selectable };
   }, [sync]);
+
+  const selectedBreakdown = useMemo(() => {
+    const out: Record<Warehouse, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
+    if (!sync) return out;
+    for (const row of sync.rows) {
+      if (!selected.has(row.index)) continue;
+      out[rowWarehouse(row)] += 1;
+    }
+    return out;
+  }, [sync, selected]);
+
+  const selectedOutsideFilter =
+    warehouseFilter !== "ALL" &&
+    WAREHOUSE_ORDER.some((wh) => wh !== warehouseFilter && selectedBreakdown[wh] > 0);
 
   const onApply = async () => {
     if (!sync || selected.size === 0) return;
@@ -185,8 +196,7 @@ export function GoogleSheetImportModal({
       const touched = [...(result.applied ?? []), ...(result.updated ?? [])];
       const appliedByWarehouse = countByWarehouse(touched);
       const preferred =
-        preferredWarehouseFromCounts(appliedByWarehouse, activeWarehouse) ??
-        (warehouseFilter === "ALL" ? activeWarehouse : warehouseFilter);
+        preferredWarehouseFromCounts(appliedByWarehouse, activeWarehouse) ?? activeWarehouse;
       onApplied(result.appliedCount + (result.updatedCount ?? 0), result.state, {
         appliedByWarehouse,
         preferredWarehouse: preferred,
@@ -204,6 +214,7 @@ export function GoogleSheetImportModal({
       setApplying(false);
     }
   };
+
 
   if (!open) return null;
 
@@ -249,7 +260,7 @@ export function GoogleSheetImportModal({
           <button
             type="button"
             disabled={loading}
-            onClick={() => void fetchAndSelect(true, warehouseFilter)}
+            onClick={() => void fetchAndSelect(true)}
             className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             {loading ? "Đang kéo Sheet…" : "Kéo Sheet lại"}
@@ -365,9 +376,21 @@ export function GoogleSheetImportModal({
         </div>
 
         <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-zinc-700">
+          {selected.size > 0 ? (
+            <span className="mr-auto text-[10px] text-zinc-500">
+              Chọn {selected.size} lô
+              {WAREHOUSE_ORDER.filter((wh) => selectedBreakdown[wh] > 0)
+                .map((wh) => ` · ${warehouseLabel[wh]} ${selectedBreakdown[wh]}`)
+                .join("")}
+              {selectedOutsideFilter ? " (có lô kho khác đang ẩn)" : ""}
+            </span>
+          ) : null}
           <button
             type="button"
-            onClick={() => setSelected(new Set(selectableVisible.map((r) => r.index)))}
+            onClick={() => {
+              if (!sync) return;
+              setSelected(selectImportableInFilter(sync, warehouseFilter));
+            }}
             className="rounded-lg px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             Chọn tất cả mới

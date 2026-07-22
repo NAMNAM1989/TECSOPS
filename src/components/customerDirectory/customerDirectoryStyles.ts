@@ -1,1 +1,1 @@
-export { CD, cdInput, cdInputInvalid, OPS, opsInput } from "../../styles/opsModalStyles";
+export { CD, cdInput, cdInputInvalid } from "../../styles/opsModalStyles";

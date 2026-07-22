@@ -23,6 +23,10 @@ export type EsidProfileStoreConfig<P extends EsidProfileBase, Patch = Partial<P>
   profileHasUserData: (p: P) => boolean;
   /** Merge patch vào hồ sơ active (trim / normalize field). */
   mergePatch: (current: P, patch: Patch) => P;
+  /** Override — dùng shared normalize (Agent/Registrant). */
+  emptyStore?: () => EsidProfileStoreV1<P>;
+  normalizeStore?: (raw: unknown) => EsidProfileStoreV1<P>;
+  storeHasUserData?: (store: EsidProfileStoreV1<P>) => boolean;
 };
 
 function makeNewId(prefix: string): () => string {
@@ -44,11 +48,13 @@ export function createEsidProfileStoreApi<P extends EsidProfileBase, Patch = Par
   }
 
   function emptyStore(): EsidProfileStoreV1<P> {
+    if (config.emptyStore) return config.emptyStore();
     const p = createEmpty("");
     return { version: 1, activeId: p.id, profiles: [p] };
   }
 
   function normalizeStore(raw: unknown): EsidProfileStoreV1<P> {
+    if (config.normalizeStore) return config.normalizeStore(raw);
     if (!raw || typeof raw !== "object") return emptyStore();
     const o = raw as EsidProfileStoreV1<P>;
     if (o.version !== 1 || !Array.isArray(o.profiles)) return emptyStore();
@@ -61,6 +67,7 @@ export function createEsidProfileStoreApi<P extends EsidProfileBase, Patch = Par
   }
 
   function storeHasUserData(store: EsidProfileStoreV1<P>): boolean {
+    if (config.storeHasUserData) return config.storeHasUserData(store);
     return store.profiles.some((p) => config.profileHasUserData(p));
   }
 

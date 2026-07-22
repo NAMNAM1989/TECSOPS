@@ -27,6 +27,17 @@ class EsidDeclarePage:
     def _cfg(self) -> dict[str, Any]:
         return self.locators.data.get("esid_declare") or {}
 
+    def _field_id(self, key: str, fallback: str) -> str:
+        """DOM id từ locators.esid_declare[key] (by=id), fallback hardcode cũ."""
+        raw = self._cfg().get(key)
+        if isinstance(raw, dict) and str(raw.get("by") or "") == "id":
+            val = str(raw.get("value") or "").strip()
+            if val:
+                return val
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+        return fallback
+
     def goto_declare_tab(self) -> None:
         """
         Nhảy thẳng tab KHAI BÁO ESID — không đụng ô tìm AWB trên DANH SÁCH.
@@ -1146,6 +1157,7 @@ class EsidDeclarePage:
         timings["selects_ms"] = int((time.perf_counter() - t0) * 1000)
 
         # 4) Party (combobox chậm — sau flight/payment)
+        # DOM ids: DEFAULT_LOCATORS / discovery qua _field_id; fallback = cột hardcode cũ.
         t0 = time.perf_counter()
         party_map = [
             ("shipper_name", "shipperId", True),
@@ -1173,15 +1185,31 @@ class EsidDeclarePage:
             ("notify_remark", "desRmk001", False),
             ("other_request", "shcOthReq", False),
         ]
-        for key, eid, is_combo in party_map:
+        for key, fallback_eid, is_combo in party_map:
             val = str(data.get(key) or "").strip()
             if not val:
                 continue
+            eid = self._field_id(key, fallback_eid)
             if is_combo:
                 ok = self._fill_combobox(eid, val)
                 fills[eid] = ok
                 if not ok:
                     warnings.append(f"Combobox #{eid} chưa chọn master cho {val!r}")
+            elif key == "other_request":
+                # Chrome ext dùng otherRequest; Python/excel historically shcOthReq — thử cả hai.
+                alt_ids = [eid, "shcOthReq", "otherRequest"]
+                seen: set[str] = set()
+                ok = False
+                used = eid
+                for cand in alt_ids:
+                    if not cand or cand in seen:
+                        continue
+                    seen.add(cand)
+                    if self._set_id(cand, val):
+                        ok = True
+                        used = cand
+                        break
+                fills[used] = ok
             else:
                 fills[eid] = self._set_id(eid, val)
         timings["party_ms"] = int((time.perf_counter() - t0) * 1000)

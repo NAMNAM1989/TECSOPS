@@ -12,6 +12,7 @@ import { normalizePrintAddressMultiline } from "./printAddressMultiline";
 import { normalizeCustomerShortCode } from "./customerCodeOps";
 
 import { CUSTOMER_PROFILE_LIMITS } from "../../shared/customerProfileLimits.mjs";
+import { normalizeVehiclePlateInput } from "./vehiclePlateNormalize";
 
 /** Re-export — nguồn sự thật: `shared/customerProfileLimits.mjs`. */
 export { CUSTOMER_PROFILE_LIMITS };
@@ -134,10 +135,10 @@ export function clampCustomerSavedVehicle(v: CustomerSavedVehicle): CustomerSave
   const L = CUSTOMER_PROFILE_LIMITS;
   return {
     id: clip(v.id, 80).trim() || newSavedVehicleId(),
-    licensePlate: clip(v.licensePlate, L.savedVehicleLicensePlate)
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-Z0-9;]/g, ""),
+    licensePlate: clip(
+      normalizeVehiclePlateInput(v.licensePlate),
+      L.savedVehicleLicensePlate
+    ),
     driverName: clip(v.driverName, L.savedVehicleDriverName).trim(),
     driverId: clip(v.driverId, L.savedVehicleDriverId)
       .trim()

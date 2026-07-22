@@ -1,32 +1,21 @@
-/** Đồng bộ với `src/printing/printerProfilesCore.ts` — normalize cơ bản (không phụ thuộc labelTemplate). */
+/**
+ * Đồng bộ với `src/printing/printerProfilesCore.ts` — normalize cơ bản.
+ * Preset mm: `shared/thermalLabelPresets.mjs` (server giữ custom mm nếu có; client force preset).
+ * Helpers: `shared/primitiveNormalize.mjs`.
+ */
+import { num, str } from "../shared/primitiveNormalize.mjs";
+import {
+  normalizeLabelSheetFormat,
+  thermalPresetForFormat,
+} from "../shared/thermalLabelPresets.mjs";
 
 export function emptyPrinterProfilesCatalog() {
   return { version: 1, profiles: [], updatedAt: new Date(0).toISOString() };
 }
 
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
-}
-
-function str(v, max = 120) {
-  return String(v ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max);
-}
-
-function num(v, fallback, min, max) {
-  const n = typeof v === "number" ? v : Number(v);
-  if (!Number.isFinite(n)) return fallback;
-  return clamp(n, min, max);
-}
-
 function normalizeThermal(raw, id, name) {
-  const labelSheetFormat = raw.labelSheetFormat === "100x50" ? "100x50" : "100x80";
-  const preset =
-    labelSheetFormat === "100x50"
-      ? { labelWidthMm: 100, labelHeightMm: 50, pageWidthMm: 100, pageHeightMm: 50 }
-      : { labelWidthMm: 100, labelHeightMm: 80, pageWidthMm: 100, pageHeightMm: 80 };
+  const labelSheetFormat = normalizeLabelSheetFormat(raw.labelSheetFormat);
+  const preset = thermalPresetForFormat(labelSheetFormat);
   return {
     id,
     name,

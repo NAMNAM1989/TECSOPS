@@ -1,7 +1,12 @@
 from pathlib import Path
 
-from app.browser.locators import LocatorsConfig, suggest_awb_locators_from_elements
+from app.browser.locators import (
+    DEFAULT_LOCATORS,
+    LocatorsConfig,
+    suggest_awb_locators_from_elements,
+)
 from app.browser.pages.awb_page import AwbPortalPage, NeedsLoginError
+from app.browser.pages.esid_declare_page import EsidDeclarePage
 from app.services.tcs_client import TcsClient
 
 
@@ -53,6 +58,19 @@ class FakePage:
 
     def evaluate(self, *_a, **_k):
         return "Trạng thái: Hoàn thành"
+
+
+def test_esid_declare_field_id_from_cfg():
+    cfg = LocatorsConfig(
+        path=Path("/tmp/locators-test.json"),
+        data={"esid_declare": DEFAULT_LOCATORS["esid_declare"]},
+    )
+    page = EsidDeclarePage(FakePage(), cfg)
+    assert page._field_id("other_request", "X") == "shcOthReq"
+    assert page._field_id("shipper_tel", "telShp") == "telShp"
+    assert page._field_id("missing_key", "fallback") == "fallback"
+    cfg.data["esid_declare"]["other_request"] = {"by": "id", "value": "otherRequest"}
+    assert page._field_id("other_request", "shcOthReq") == "otherRequest"
 
 
 def test_suggest_awb_locators():

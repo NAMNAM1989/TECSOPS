@@ -2,7 +2,6 @@ import type { Shipment } from "../types/shipment";
 import type { AppState } from "./shipmentMutations";
 import { parseCustomerDirectoryLoose } from "./customerDirectoryCore";
 import { clampAirlineLabelOverrides } from "./airlineLabelOverridesCore";
-import { clampPrinterProfilesCatalog } from "../printing/printerProfilesCore";
 import { normalizeEsidRegistrantStore } from "./esidRegistrantProfile";
 import { normalizeEsidAgentStore } from "./esidAgentProfile";
 
@@ -14,9 +13,6 @@ export function parseAppState(raw: unknown): AppState | null {
   const customers = parseCustomerDirectoryLoose(customersUnknown);
   const airlineLabelOverrides = clampAirlineLabelOverrides(
     "airlineLabelOverrides" in o ? o.airlineLabelOverrides : undefined
-  );
-  const printerProfiles = clampPrinterProfilesCatalog(
-    "printerProfiles" in o ? o.printerProfiles : undefined
   );
   const esidRegistrantStore = normalizeEsidRegistrantStore(
     "esidRegistrantStore" in o ? o.esidRegistrantStore : undefined
@@ -30,7 +26,6 @@ export function parseAppState(raw: unknown): AppState | null {
     rows: o.rows as Shipment[],
     customers,
     airlineLabelOverrides,
-    printerProfiles,
     esidRegistrantStore,
     esidAgentStore,
   };

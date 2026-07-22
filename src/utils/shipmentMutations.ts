@@ -8,8 +8,6 @@ import { assertCustomerDirectoryValid } from "./customerDirectoryCore";
 import { clampCustomerDirectoryEntry } from "./customerDirectoryProfile";
 import type { AirlineLabelOverrides } from "./airlineLabelOverridesCore";
 import { clampAirlineLabelOverrides, EMPTY_AIRLINE_LABEL_OVERRIDES } from "./airlineLabelOverridesCore";
-import type { PrinterProfilesCatalog } from "../printing/printerProfilesCore";
-import { clampPrinterProfilesCatalog, EMPTY_PRINTER_PROFILES_CATALOG } from "../printing/printerProfilesCore";
 import type { EsidRegistrantStoreV1 } from "./esidRegistrantProfile";
 import {
   emptyRegistrantStore,
@@ -25,8 +23,6 @@ export type AppState = {
   customers: CustomerDirectoryEntry[];
   /** Ghi đè tên hãng trên tem (ưu tiên hơn bản mặc định trong code) */
   airlineLabelOverrides?: AirlineLabelOverrides;
-  /** Danh mục profile máy in (dùng chung trên server; active id vẫn lưu local từng máy). */
-  printerProfiles?: PrinterProfilesCatalog;
   /** Hồ sơ Người khai ESID — dùng chung mọi máy */
   esidRegistrantStore?: EsidRegistrantStoreV1;
   /** Hồ sơ Agent ESID — dùng chung mọi máy */
@@ -40,7 +36,6 @@ export type ShipmentMutation =
   | { action: "SET_CUSTOMERS"; customers: CustomerDirectoryEntry[] }
   | { action: "RESET_TRIAL_DATA" }
   | { action: "SET_AIRLINE_LABEL_OVERRIDES"; overrides: AirlineLabelOverrides }
-  | { action: "SET_PRINTER_PROFILES"; catalog: PrinterProfilesCatalog }
   | { action: "SET_ESID_REGISTRANT_STORE"; store: EsidRegistrantStoreV1 }
   | { action: "SET_ESID_AGENT_STORE"; store: EsidAgentStoreV1 };
 
@@ -91,10 +86,6 @@ function resolvedAirlineOverrides(s: AppState): AirlineLabelOverrides {
   return clampAirlineLabelOverrides(s.airlineLabelOverrides ?? EMPTY_AIRLINE_LABEL_OVERRIDES);
 }
 
-function resolvedPrinterCatalog(s: AppState): PrinterProfilesCatalog {
-  return clampPrinterProfilesCatalog(s.printerProfiles ?? EMPTY_PRINTER_PROFILES_CATALOG);
-}
-
 function resolvedEsidRegistrant(s: AppState): EsidRegistrantStoreV1 {
   return normalizeEsidRegistrantStore(s.esidRegistrantStore ?? emptyRegistrantStore());
 }
@@ -113,7 +104,6 @@ function nextState(
     rows: renumberSttForAll(rows),
     customers: extras.customers ?? state.customers,
     airlineLabelOverrides: extras.airlineLabelOverrides ?? resolvedAirlineOverrides(state),
-    printerProfiles: extras.printerProfiles ?? resolvedPrinterCatalog(state),
     esidRegistrantStore: extras.esidRegistrantStore ?? resolvedEsidRegistrant(state),
     esidAgentStore: extras.esidAgentStore ?? resolvedEsidAgent(state),
   };
@@ -135,11 +125,6 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
     case "SET_AIRLINE_LABEL_OVERRIDES": {
       return nextState(state, rows, {
         airlineLabelOverrides: clampAirlineLabelOverrides(mutation.overrides),
-      });
-    }
-    case "SET_PRINTER_PROFILES": {
-      return nextState(state, rows, {
-        printerProfiles: clampPrinterProfilesCatalog(mutation.catalog),
       });
     }
     case "SET_ESID_REGISTRANT_STORE": {

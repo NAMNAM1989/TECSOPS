@@ -63,9 +63,9 @@ describe("stripAtPageRules", () => {
   });
 });
 
-describe("thermalPageMm — XP-470B vs cuộn hẹp", () => {
-  it("xp470b 100x80 = trang đúng khổ tem (SIZE 100×80)", () => {
-    expect(thermalPageMm("100x80", "xp470b")).toMatchObject({
+describe("thermalPageMm — XP-470B (trang = tem, không xoay)", () => {
+  it("100x80 = trang đúng khổ tem (SIZE 100×80)", () => {
+    expect(thermalPageMm("100x80")).toMatchObject({
       w: "100mm",
       h: "80mm",
       labelH: 80,
@@ -74,33 +74,13 @@ describe("thermalPageMm — XP-470B vs cuộn hẹp", () => {
     });
   });
 
-  it("xp470b 100x50 = trang đúng khổ tem", () => {
-    expect(thermalPageMm("100x50", "xp470b")).toMatchObject({
+  it("100x50 = trang đúng khổ tem", () => {
+    expect(thermalPageMm("100x50")).toMatchObject({
       w: "100mm",
       h: "50mm",
       labelH: 50,
       wMm: 100,
       hMm: 50,
-    });
-  });
-
-  it("narrow80 100x80 = trang 80×100 (xoay)", () => {
-    expect(thermalPageMm("100x80", "narrow80")).toMatchObject({
-      w: "80mm",
-      h: "100mm",
-      labelH: 80,
-      wMm: 80,
-      hMm: 100,
-    });
-  });
-
-  it("narrow80 100x50 = trang 50×100 (xoay)", () => {
-    expect(thermalPageMm("100x50", "narrow80")).toMatchObject({
-      w: "50mm",
-      h: "100mm",
-      labelH: 50,
-      wMm: 50,
-      hMm: 100,
     });
   });
 });

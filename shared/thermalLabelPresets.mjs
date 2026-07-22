@@ -1,7 +1,5 @@
 /**
- * Preset khổ tem thermal — nguồn sự thật cho client + server normalize.
- * Client vẫn có thể force ghi đè mm qua withThermalLabelFormat;
- * server dùng làm fallback khi thiếu field.
+ * Preset khổ tem thermal — nguồn sự thật mm cho client (XP-470B, trang = tem).
  */
 
 export const THERMAL_LABEL_FORMAT_PRESETS = {

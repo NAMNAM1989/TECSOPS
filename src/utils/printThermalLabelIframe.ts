@@ -2,25 +2,21 @@
  * In nhãn nhiệt qua iframe tài liệu tối giản (chỉ CSS nhãn + markup).
  * Tránh Tailwind / #root / min-h-screen của app làm Chrome gộp nhiều @page thành một cuộn dọc.
  *
- * XP-470B (mặc định): trang = khổ tem 100×80 / 100×50, không xoay.
- * Máy cuộn hẹp 80mm: trang 80×100 + xoay 90°.
+ * XP-470B: trang = khổ tem 100×80 / 100×50, không xoay.
  */
 import labelSheetCss from "../styles/print-label.css?raw";
 import type { LabelSheetFormat } from "./labelSheetFormat";
-import { loadLabelPrintFlipCcw, loadLabelPrintMode, type LabelPrintMode } from "./labelPrintMode";
 
-/** Trang in theo chế độ máy. */
-export function thermalPageMm(
-  format: LabelSheetFormat,
-  mode: LabelPrintMode = "xp470b"
-): { w: string; h: string; labelH: number; wMm: number; hMm: number } {
+/** Trang in = đúng khổ tem (XP-470B, không xoay). */
+export function thermalPageMm(format: LabelSheetFormat): {
+  w: string;
+  h: string;
+  labelH: number;
+  wMm: number;
+  hMm: number;
+} {
   const labelH = format === "100x50" ? 50 : 80;
-  if (mode === "xp470b") {
-    /* XP-470B 4″: SIZE width×length = 100×H — in thẳng */
-    return { w: "100mm", h: `${labelH}mm`, labelH, wMm: 100, hMm: labelH };
-  }
-  /* Máy print-head ~80mm: tem xoay 90° */
-  return { w: `${labelH}mm`, h: "100mm", labelH, wMm: labelH, hMm: 100 };
+  return { w: "100mm", h: `${labelH}mm`, labelH, wMm: 100, hMm: labelH };
 }
 
 /** Bỏ mọi @page trong CSS gốc — chỉ dùng @page động theo khổ đã chọn (PDF/Save as PDF). */
@@ -28,52 +24,9 @@ export function stripAtPageRules(css: string): string {
   return css.replace(/@page\b[^{]*\{[^{}]*\}/g, "/* @page stripped — set by print overrides */");
 }
 
-function buildThermalPrintOverrides(
-  format: LabelSheetFormat,
-  mode: LabelPrintMode,
-  flipCcw: boolean
-): string {
-  const { w: THERMAL_PAGE_WIDTH, h: THERMAL_PAGE_HEIGHT, labelH, wMm, hMm } = thermalPageMm(
-    format,
-    mode
-  );
+function buildThermalPrintOverrides(format: LabelSheetFormat): string {
+  const { w: THERMAL_PAGE_WIDTH, h: THERMAL_PAGE_HEIGHT, labelH, wMm, hMm } = thermalPageMm(format);
   const LABEL_HEIGHT_MM = `${labelH}mm`;
-  const upright = mode === "xp470b";
-
-  const rotate = upright
-    ? "transform: none !important;"
-    : flipCcw
-      ? "transform: translate(-50%, -50%) rotate(-90deg) !important;"
-      : "transform: translate(-50%, -50%) rotate(90deg) !important;";
-
-  const spinLayout = upright
-    ? `
-.print-label-spin {
-  position: relative !important;
-  flex: 0 0 auto !important;
-  left: auto !important;
-  top: auto !important;
-  width: 100mm !important;
-  height: ${LABEL_HEIGHT_MM} !important;
-  margin: 0 auto !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
-  transform: none !important;
-}
-`
-    : `
-.print-label-spin {
-  position: absolute !important;
-  left: 50% !important;
-  top: 50% !important;
-  width: 100mm !important;
-  height: ${LABEL_HEIGHT_MM} !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
-  transform-origin: center center !important;
-  ${rotate}
-}
-`;
 
   return `
   /* Khổ trang PDF/in = đúng tem đã chọn (${wMm}×${hMm} mm) */
@@ -154,7 +107,18 @@ body {
   page-break-after: auto !important;
 }
 
-${spinLayout}
+.print-label-spin {
+  position: relative !important;
+  flex: 0 0 auto !important;
+  left: auto !important;
+  top: auto !important;
+  width: 100mm !important;
+  height: ${LABEL_HEIGHT_MM} !important;
+  margin: 0 auto !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  transform: none !important;
+}
 
 .label.print-label-sheet.lbl-sheet {
   width: 100mm !important;
@@ -177,8 +141,6 @@ export type PrintThermalLabelsOptions = {
   format?: LabelSheetFormat;
   /** Host cụ thể (tránh lấy nhầm .print-label-host khác trên trang). */
   host?: HTMLElement | null;
-  /** Mặc định XP-470B (đọc localStorage). */
-  mode?: LabelPrintMode;
   /**
    * Số tem cần in. Host chỉ cần 1 trang mẫu — iframe sẽ nhân bản.
    * Tránh React mount hàng trăm LabelContent (treo UI).
@@ -244,10 +206,8 @@ export async function printThermalLabelsFromIframe(
   opts?: PrintThermalLabelsOptions
 ): Promise<ThermalLabelPrintResult> {
   const format = opts?.format ?? "100x80";
-  const mode = opts?.mode ?? loadLabelPrintMode();
-  const flipCcw = loadLabelPrintFlipCcw();
   const copiesRaw = opts?.copies;
-  const { w: pageW, h: pageH, wMm, hMm } = thermalPageMm(format, mode);
+  const { w: pageW, h: pageH, wMm, hMm } = thermalPageMm(format);
 
   /**
    * Ưu tiên cửa sổ mở sẵn từ click; không thì thử mở ngay (có thể bị chặn sau await).
@@ -316,11 +276,6 @@ export async function printThermalLabelsFromIframe(
     return { ok: false, error: "Không tạo được nội dung tem để in." };
   }
 
-  const bodyClass =
-    mode === "xp470b"
-      ? "tecsops-label-print-open tecsops-label-print-xp470b"
-      : "tecsops-label-print-open tecsops-label-print-narrow80";
-
   const sheetCss = stripAtPageRules(labelSheetCss);
   const pageTitle = `Tem ${wMm}x${hMm}mm`;
   const docHtml = `<!DOCTYPE html>
@@ -331,10 +286,10 @@ export async function printThermalLabelsFromIframe(
   <title>${pageTitle}</title>
   <style>${sheetCss}</style>
   <style>
-    ${buildThermalPrintOverrides(format, mode, flipCcw)}
+    ${buildThermalPrintOverrides(format)}
   </style>
 </head>
-<body class="${bodyClass}" data-label-page-mm="${wMm}x${hMm}">
+<body class="tecsops-label-print-open tecsops-label-print-xp470b" data-label-page-mm="${wMm}x${hMm}">
   <div class="print-label-host">${inner}</div>
 </body>
 </html>`;

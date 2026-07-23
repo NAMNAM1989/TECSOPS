@@ -92,6 +92,40 @@
   color: #000;
 }
 
+.lbl-hawb {
+  display: flex;
+  width: calc(100% + 4mm);
+  max-width: 98mm;
+  margin: 1.4mm -2mm -2mm;
+  padding: 1.2mm 2mm 1.4mm;
+  align-items: center;
+  justify-content: center;
+  gap: 2mm;
+  border-top: 0.5mm solid #000;
+  overflow: hidden;
+  color: #000;
+  font-family: "Courier New", Courier, "Liberation Mono", monospace;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.lbl-hawb-label {
+  flex: 0 0 auto;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 1.7mm;
+  font-weight: 900;
+  letter-spacing: 0.45mm;
+}
+
+.lbl-hawb-val {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 900;
+  letter-spacing: 0.1mm;
+  text-overflow: ellipsis;
+}
+
 .lbl-placeholder {
   color: #666;
   font-size: 3.8mm;
@@ -225,6 +259,18 @@
   padding: 0.6mm 1.5mm 0.8mm;
 }
 
+.lbl-sheet--compact .lbl-hawb {
+  width: calc(100% + 3mm);
+  margin: 0.45mm -1.5mm -0.8mm;
+  padding: 0.6mm 1.5mm 0.7mm;
+  gap: 1.2mm;
+}
+
+.lbl-sheet--compact .lbl-hawb-label {
+  font-size: 1.25mm;
+  letter-spacing: 0.25mm;
+}
+
 .lbl-sheet--compact .lbl-mawb-val {
   letter-spacing: -0.5mm;
   max-width: 96mm;
@@ -319,8 +365,6 @@
     box-sizing: border-box;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    page-break-after: always !important;
-    break-after: page !important;
     isolation: isolate;
   }
 
@@ -332,11 +376,6 @@
   .print-label-page:not(:last-child) {
     page-break-after: always !important;
     break-after: page !important;
-  }
-
-  .print-label-page + .print-label-page {
-    page-break-before: always !important;
-    break-before: page !important;
   }
 
   .print-label-page .print-label-spin {

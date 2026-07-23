@@ -1,10 +1,51 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
+  buildThermalPrintDocumentHtml,
+  buildThermalPrintOverrides,
   buildRepeatedLabelPagesHtml,
   resolveThermalLabelPrintHost,
   stripAtPageRules,
   thermalPageMm,
 } from "./printThermalLabelIframe";
+
+describe("thermal print document", () => {
+  it("khóa một tem đúng một trang và không tạo page break sau trang cuối", () => {
+    const css = buildThermalPrintOverrides("100x80", "xp470b", false, true);
+
+    expect(css).toContain("size: 100mm 80mm");
+    expect(css).toContain("margin: 0 !important");
+    expect(css).toContain("height: 80mm !important");
+    expect(css).toContain("max-height: 80mm !important");
+    expect(css).toContain("overflow: hidden !important");
+    expect(css).toContain(".print-label-page:not(:last-child)");
+    expect(css).toMatch(/\.print-label-page:last-child\s*\{[\s\S]*?break-after: auto !important/);
+    const pageRule = css.match(/\.print-label-page \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    expect(pageRule).not.toContain("page-break-after: always");
+  });
+
+  it("tạo tài liệu in tối giản, không đưa tiêu đề tem vào browser header", () => {
+    const html = buildThermalPrintDocumentHtml({
+      format: "100x50",
+      mode: "xp470b",
+      flipCcw: false,
+      inner: '<div class="print-label-page">LABEL</div>',
+      singlePage: true,
+    });
+
+    expect(html).toContain("<title>&#8203;</title>");
+    expect(html).not.toContain("<title>Tem ");
+    expect(html).toContain('data-label-page-mm="100x50"');
+    expect(html).toContain("size: 100mm 50mm");
+  });
+
+  it("cho phép nhiều trang nhưng chỉ ngắt giữa các tem", () => {
+    const css = buildThermalPrintOverrides("100x50", "xp470b", false, false);
+
+    expect(css).toContain("height: auto !important");
+    expect(css).toContain(".print-label-page:not(:last-child)");
+    expect(css).toContain("page-break-before: auto !important");
+  });
+});
 
 describe("resolveThermalLabelPrintHost", () => {
   beforeEach(() => {

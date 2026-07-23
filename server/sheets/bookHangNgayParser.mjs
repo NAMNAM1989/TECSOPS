@@ -3,12 +3,6 @@ import { formatAwb, awbDigitsKey } from "./awbFormat.mjs";
 const WAREHOUSES = new Set(["TECS-TCS", "TECS-SCSC"]);
 
 /**
- * Dòng Excel đầu tiên sau header AWB (thường là row 19 trên BOOK HẰNG NGÀY).
- * Index 0-based: Excel 19 → 18.
- */
-export const BOOK_DATA_START_ROW_INDEX = 18;
-
-/**
  * @typedef {Object} ParsedBookRow
  * @property {string} awb
  * @property {string} flight
@@ -236,8 +230,9 @@ export function parseBookHangNgayGrid(gridRows, sessionDate) {
       continue;
     }
 
+    // Chỉ cần dòng nằm sau header AWB đã nhận diện. Không khóa theo số dòng Excel:
+    // layout BOOK HẰNG NGÀY có thể dịch lên/xuống giữa các tab.
     if (!colMap || isSkippableRow(cells)) continue;
-    if (rowIndex < BOOK_DATA_START_ROW_INDEX) continue;
 
     const awb = awbFromCells(cells, colMap.awb);
     if (!awb) continue;

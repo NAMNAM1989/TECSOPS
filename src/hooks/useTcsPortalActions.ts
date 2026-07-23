@@ -40,8 +40,10 @@ import {
 } from "../utils/tcsChromeExtension";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 
-/** Giữ hot-path lâu hơn — bấm Tải PDF gần tức thời nếu đã mở menu ⋮ */
-const PREPARED_TTL_MS = 180_000;
+/** Giữ hot-path khớp agent PREPARED_TTL_S=120 — tránh Ops nghĩ còn hot khi cache agent đã hết */
+const PREPARED_TTL_MS = 120_000;
+/** Poll /health thất bại liên tiếp trước khi chuyển Offline (tránh nhấp nháy 1 lần) */
+const HEALTH_MISS_BEFORE_OFFLINE = 2;
 
 export type EsidDeclarePreviewState = {
   awb: string;
@@ -85,6 +87,8 @@ export function useTcsPortalActions({
   /** Tránh poll /health ghi đè Offline khi đang chờ job dài trên agent */
   const busyRef = useRef(false);
   busyRef.current = busy;
+  /** Ping fail liên tiếp — chỉ đánh offline sau HEALTH_MISS_BEFORE_OFFLINE */
+  const healthMissRef = useRef(0);
   const [readyItems, setReadyItems] = useState<TcsEsidScanItem[]>([]);
   const [scanTotal, setScanTotal] = useState(0);
   const [opsStatusUpdated, setOpsStatusUpdated] = useState(0);
@@ -93,7 +97,7 @@ export function useTcsPortalActions({
   /** Sau Điền: trạng thái + nút HOÀN TẤT (không ảnh chụp — xem Chrome thật) */
   const [lastDeclarePreview, setLastDeclarePreview] =
     useState<EsidDeclarePreviewState | null>(null);
-  /** AWB đã pre-warm (menu ⋮) — hot-path Tải PDF ~1–3s */
+  /** AWB đã pre-warm khi Tải PDF — hot-path ~1–3s trong TTL agent */
   const [preparedAwb, setPreparedAwb] = useState("");
   const preparedAtRef = useRef(0);
   const prepareTimerRef = useRef<number | null>(null);
@@ -125,14 +129,25 @@ export function useTcsPortalActions({
     const h = await pingTcsAgent();
     if (busyRef.current) return;
     if (!h?.ok) {
-      // Giữ session cũ nếu chỉ mất 1 lần ping (tránh nhấp nháy Offline)
-      setHealth((prev) => (prev?.ok ? prev : h));
+      healthMissRef.current += 1;
+      if (healthMissRef.current >= HEALTH_MISS_BEFORE_OFFLINE) {
+        setHealth(h);
+      }
       return;
     }
+    healthMissRef.current = 0;
     setHealth(h);
     if (h.session) setSession(h.session);
     else setSession(await fetchTcsSessionStatus());
   }, []);
+
+  const notifyBusy = useCallback(() => {
+    setError(
+      busyLabel
+        ? `Cổng TCS đang bận (${busyLabel}) — đợi xong rồi thử lại.`
+        : "Cổng TCS đang bận — đợi xong rồi thử lại."
+    );
+  }, [busyLabel]);
 
   useEffect(() => {
     if (!active) return;
@@ -147,6 +162,7 @@ export function useTcsPortalActions({
       return true;
     }
     const online = await pingTcsAgent();
+    healthMissRef.current = online?.ok ? 0 : healthMissRef.current + 1;
     setHealth(online);
     if (!online?.ok) {
       setError(agentOfflineHint(getTcsAgentBaseUrl()));
@@ -672,6 +688,7 @@ export function useTcsPortalActions({
     preparedAwb,
     downloadPdf,
     refreshHealth,
+    notifyBusy,
   };
 }
 

@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "1.1.3";
+  const SCRIPT_VERSION = "1.1.4";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -25,13 +25,20 @@
       agent_address: "addressAgt",
       agent_tel: "telAgt",
       agent_email: "emailAgt",
+      agent_fax: "faxAgt",
+      agent_vat: "vatAgt",
       consignee_name: "consigneeId",
       consignee_address: "addressCne",
       consignee_tel: "telCne",
       consignee_email: "emailCne",
+      consignee_vat: "vatCne",
       notify_name: "notifyId",
       nature_of_goods: "natureOfGoods",
       other_request: "otherRequest",
+      payment_mode: "codPayMod",
+      total_hawbs: "totalOfHawbs",
+      tecs_warehouse: "shcCod002",
+      consol: "shcConsol",
       registrant_name: "shpRegNam",
       registrant_tel: "shpRegTel",
       registrant_id: "shpRegIdx",
@@ -117,14 +124,31 @@
         };
       }
 
-      // 1) Text nhanh
+      // 1) Text nhanh — bắt buộc; không điền được AWB thì fail (không báo xanh giả)
       fills.codAwbPfx = setById(LOCATORS.fields.awb_prefix, awb.slice(0, 3));
       fills.codAwbNum = setById(LOCATORS.fields.awb_number, awb.slice(3));
       if (!fills.codAwbPfx || !fills.codAwbNum) {
-        warnings.push("Không điền được AWB");
+        return {
+          ok: false,
+          error: "FILL_AWB",
+          message: "Không điền được AWB trên form TCS — kiểm tra tab KHAI BÁO ESID đã mở.",
+          warnings,
+          fills,
+          scriptVersion: SCRIPT_VERSION,
+        };
       }
       if (ship.pcs != null && String(ship.pcs) !== "") {
         fills.qtyPcs = setById(LOCATORS.fields.pcs, String(ship.pcs));
+      }
+      {
+        let hawbs = ship.total_hawbs;
+        if (hawbs == null || String(hawbs).trim() === "") hawbs = 0;
+        try {
+          hawbs = String(parseInt(String(hawbs), 10) || 0);
+        } catch {
+          hawbs = "0";
+        }
+        fills.totalOfHawbs = setById(LOCATORS.fields.total_hawbs || "totalOfHawbs", hawbs);
       }
       if (ship.nature_of_goods) {
         fills.natureOfGoods = setById(
@@ -148,7 +172,7 @@
       }
       await hardResetUi();
 
-      // 3) Dest
+      // 3) Dest + payment (khớp Playwright)
       if (ship.dest) {
         fills.codFds = await fillMasterField(LOCATORS.fields.dest_code, String(ship.dest), {
           maxQueries: 2,
@@ -156,7 +180,27 @@
         if (!fills.codFds) {
           fills.codFds = setById(LOCATORS.fields.dest_code, String(ship.dest));
         }
+        if (!fills.codFds) warnings.push(`Dest ${String(ship.dest)} chưa chọn được`);
         await hardResetUi();
+      }
+      {
+        const pay = String(ship.payment_mode || "Chuyển khoản/Bank transfer").trim();
+        if (pay) {
+          const payId = LOCATORS.fields.payment_mode || "codPayMod";
+          const cur = getVal(payId);
+          const wantBank = /chuyen khoan|bank transfer/i.test(normalizeText(pay));
+          const curBank = /chuyen khoan|bank transfer/i.test(normalizeText(cur));
+          if (cur && (curBank === wantBank || normalizeText(cur).includes(normalizeText(pay).slice(0, 10)))) {
+            fills.codPayMod = true;
+          } else {
+            fills.codPayMod = await fillMasterField(payId, pay, { maxQueries: 2 });
+            if (!fills.codPayMod) {
+              fills.codPayMod = await fillMasterField(payId, "Chuyển khoản", { maxQueries: 2 });
+            }
+            if (!fills.codPayMod) warnings.push(`Thanh toán ${pay} chưa chọn được`);
+          }
+          await hardResetUi();
+        }
       }
 
       // 4) Party — từng ô, reset UI trước/sau
@@ -176,7 +220,7 @@
         await hardResetUi();
       }
 
-      // 5) Địa chỉ / liên hệ
+      // 5) Địa chỉ / liên hệ / VAT / fax
       const textMap = [
         [LOCATORS.fields.shipper_address, ship.shipper_address, "addressShp"],
         [LOCATORS.fields.shipper_tel, ship.shipper_tel, "telShp"],
@@ -184,9 +228,12 @@
         [LOCATORS.fields.agent_address, ship.agent_address, "addressAgt"],
         [LOCATORS.fields.agent_tel, ship.agent_tel, "telAgt"],
         [LOCATORS.fields.agent_email, ship.agent_email, "emailAgt"],
+        [LOCATORS.fields.agent_fax || "faxAgt", ship.agent_fax, "faxAgt"],
+        [LOCATORS.fields.agent_vat || "vatAgt", ship.agent_vat, "vatAgt"],
         [LOCATORS.fields.consignee_address, ship.consignee_address, "addressCne"],
         [LOCATORS.fields.consignee_tel, ship.consignee_tel, "telCne"],
         [LOCATORS.fields.consignee_email, ship.consignee_email, "emailCne"],
+        [LOCATORS.fields.consignee_vat || "vatCne", ship.consignee_vat, "vatCne"],
       ];
       for (const [id, value, key] of textMap) {
         if (value == null || String(value).trim() === "") continue;
@@ -212,9 +259,18 @@
         fills[othKey] = othOk;
       }
 
+      if (ship.tecs_warehouse !== false) {
+        fills.shcCod002 = setCheckbox(LOCATORS.fields.tecs_warehouse || "shcCod002", true);
+      }
+      if (ship.consol) {
+        fills.shcConsol = setCheckbox(LOCATORS.fields.consol || "shcConsol", true);
+      }
+
       fills.shpRegNam = setById(LOCATORS.fields.registrant_name, reg.name || "");
       fills.shpRegTel = setById(LOCATORS.fields.registrant_tel, reg.tel || "");
       fills.shpRegIdx = setById(LOCATORS.fields.registrant_id, reg.cccd || "");
+      // An toàn: không tick đồng ý — user tự HOÀN TẤT trên TCS
+      setCheckbox(LOCATORS.fields.agree || "agreeConfirm", false);
 
       await hardResetUi();
 
@@ -230,6 +286,7 @@
           datFltOri: getVal(LOCATORS.fields.flight_date),
           codFds: getVal(LOCATORS.fields.dest_code),
           qtyPcs: getVal(LOCATORS.fields.pcs),
+          codPayMod: getVal(LOCATORS.fields.payment_mode || "codPayMod"),
           awb: `${getVal(LOCATORS.fields.awb_prefix) || ""}${getVal(LOCATORS.fields.awb_number) || ""}`,
         },
       };
@@ -698,6 +755,20 @@
     const el = document.getElementById(id);
     if (!el) return false;
     return setNativeValue(el, value == null ? "" : String(value));
+  }
+
+  /** Tick/untick checkbox Ant/HTML — trả true nếu trạng thái khớp. */
+  function setCheckbox(id, checked) {
+    const el = document.getElementById(id);
+    if (!el) return false;
+    const want = Boolean(checked);
+    if (Boolean(el.checked) === want) return true;
+    try {
+      el.click();
+    } catch {
+      return false;
+    }
+    return Boolean(el.checked) === want;
   }
 
   function setNativeValue(el, value) {

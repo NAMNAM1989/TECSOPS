@@ -2,7 +2,7 @@
  * Spawn sidecar TCS AWB agent (Playwright) trên :8765.
  * Dùng chung bởi `tcs-agent.mjs` và `dev.mjs` (auto-start).
  */
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -11,6 +11,15 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const agentDir = path.join(root, "tcs-awb-automation");
 export const AGENT_PORT = Number(process.env.TCS_AGENT_PORT || 8765);
+
+function hasCommand(cmd) {
+  try {
+    execSync(process.platform === "win32" ? `where ${cmd}` : `which ${cmd}`, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function resolveAgentPython() {
   const win = process.platform === "win32";
@@ -22,7 +31,10 @@ export function resolveAgentPython() {
     "python3",
   ].filter(Boolean);
   for (const c of candidates) {
-    if (c === "python" || c === "python3") return c;
+    if (c === "python" || c === "python3") {
+      if (hasCommand(c)) return c;
+      continue;
+    }
     if (fs.existsSync(c)) return c;
   }
   return win ? "python" : "python3";

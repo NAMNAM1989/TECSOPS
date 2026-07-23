@@ -8,7 +8,7 @@
 2. Bật **Developer mode** (góc trên bên phải)
 3. **Load unpacked** → chọn đúng thư mục `chrome-extension` (có `manifest.json` bên trong), ví dụ `D:\TECSOPS\chrome-extension`
 4. Thấy extension **TECSOPS — Điền ESID TCS** · bật (toggle xanh)
-5. Bấm icon extension trên thanh Chrome → popup hiện «Sẵn sàng · v1.0.0…»
+5. Bấm icon extension trên thanh Chrome → popup hiện «Sẵn sàng · v1.1.4…»
 
 Mỗi máy nhập liệu cần cài extension. Railway không stream tab TCS của bạn.
 
@@ -40,7 +40,7 @@ Content script chỉ inject trên origin đã khai trong `manifest.json`. Nếu 
 
 ## Đồng bộ locator
 
-`content-tcs.js` load `locators.json` lúc điền (fallback cứng nếu fetch lỗi). `other_request` thử `otherRequest` rồi `shcOthReq`. JSON nên khớp `tcs-awb-automation/app/browser/locators.py` → `esid_declare`. Khi TCS đổi DOM, cập nhật JSON (+ fallback trong content script nếu đổi field id).
+`content-tcs.js` load `locators.json` lúc điền (fallback cứng nếu fetch lỗi). `other_request` thử `otherRequest` rồi `shcOthReq`. v1.1.4: fail nếu không điền được AWB; thêm payment / HAWB / TECS checkbox / VAT·fax (parity Playwright). JSON nên khớp `tcs-awb-automation/app/browser/locators.py` → `esid_declare`. Khi TCS đổi DOM, cập nhật JSON (+ fallback trong content script nếu đổi field id).
 
 ## Phạm vi MVP
 

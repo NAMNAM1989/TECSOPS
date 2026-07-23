@@ -226,7 +226,10 @@ export function ShipmentRowActionsMenu({
           ? menuItem(
               "Điền",
               () => {
-                if (tcs?.busy) return;
+                if (tcs?.busy) {
+                  tcs.notifyBusy();
+                  return;
+                }
                 void tcs?.fillEsidDeclareFor(row);
               },
               undefined,
@@ -238,7 +241,10 @@ export function ShipmentRowActionsMenu({
           ? menuItem(
               "Tải PDF ESID",
               () => {
-                if (tcs?.busy) return;
+                if (tcs?.busy) {
+                  tcs.notifyBusy();
+                  return;
+                }
                 void tcs?.downloadEsidFor(row);
               },
               undefined,

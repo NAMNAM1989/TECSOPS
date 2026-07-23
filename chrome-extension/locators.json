@@ -27,6 +27,13 @@
       "notify_name": "notifyId",
       "nature_of_goods": "natureOfGoods",
       "other_request": "otherRequest",
+      "payment_mode": "codPayMod",
+      "total_hawbs": "totalOfHawbs",
+      "tecs_warehouse": "shcCod002",
+      "consol": "shcConsol",
+      "agent_fax": "faxAgt",
+      "agent_vat": "vatAgt",
+      "consignee_vat": "vatCne",
       "registrant_name": "shpRegNam",
       "registrant_tel": "shpRegTel",
       "registrant_id": "shpRegIdx",
@@ -34,6 +41,6 @@
     },
     "choose_flight_button": "CHỌN CHUYẾN BAY",
     "submit_button": "HOÀN TẤT",
-    "notes": "Điền không HOÀN TẤT. Thứ tự: AWB→chuyến bay→dest→party master (click option, không +Thêm mới)→địa chỉ. Đóng overlay giữa các bước để tránh treo. other_request: JSON ghi otherRequest; content-tcs cũng thử shcOthReq (Python fill/excel)."
+    "notes": "Điền không HOÀN TẤT. Thứ tự: AWB→chuyến bay→dest+payment→party master (click option, không +Thêm mới)→địa chỉ/HAWB/TECS checkbox. Đóng overlay giữa các bước để tránh treo. other_request: JSON ghi otherRequest; content-tcs cũng thử shcOthReq (Python fill/excel)."
   }
 }

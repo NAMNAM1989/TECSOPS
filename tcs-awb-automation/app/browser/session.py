@@ -53,6 +53,15 @@ class BrowserSession:
         except Exception:
             return False
 
+    def new_page(self, url: str | None = None):
+        """Tạo page cùng persistent context để dùng chung cookie/session TCS."""
+        if self._context is None or not self.is_alive():
+            raise RuntimeError("NO_BROWSER")
+        page = self._context.new_page()
+        if url:
+            self._goto_fast(page, url)
+        return page
+
     @staticmethod
     def _goto_fast(page, url: str) -> None:
         """

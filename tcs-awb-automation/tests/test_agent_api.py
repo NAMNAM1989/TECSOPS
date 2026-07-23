@@ -6,11 +6,11 @@ import time
 from pathlib import Path
 
 import httpx
+import pytest
 
 from app.config import Settings, ensure_runtime_dirs
-from app.services.agent_api import AgentState, make_handler
-from app.services.tcs_client import TcsClient
-from http.server import ThreadingHTTPServer
+from app.services.agent_api import AgentHttpServer, AgentState, make_handler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 def _settings(tmp: Path, *, agent_port: int = 18765) -> Settings:
@@ -31,6 +31,16 @@ def _settings(tmp: Path, *, agent_port: int = 18765) -> Settings:
     )
     ensure_runtime_dirs(s)
     return s
+
+
+def test_agent_server_rejects_second_listener_on_same_port():
+    first = AgentHttpServer(("127.0.0.1", 0), BaseHTTPRequestHandler)
+    host, port = first.server_address
+    try:
+        with pytest.raises(OSError):
+            AgentHttpServer((host, port), BaseHTTPRequestHandler)
+    finally:
+        first.server_close()
 
 
 def test_agent_health_and_job(tmp_path: Path):
@@ -79,81 +89,6 @@ def test_agent_health_and_job(tmp_path: Path):
         httpd.shutdown()
 
 
-def test_esid_prepare_cache_then_job_hot_path(tmp_path: Path, monkeypatch):
-    """POST /esid/prepare gắn cache; /jobs cùng AWB nhận prepared_awb (hot-path)."""
-    settings = _settings(tmp_path, agent_port=18767)
-    state = AgentState(settings)
-
-    def fake_prepare(self, awb_digits, *, session_date=None):
-        return {
-            "ok": True,
-            "awb": awb_digits,
-            "has_in_button": True,
-            "message": "PREPARE_FAKE",
-            "hot_path": True,
-        }
-
-    monkeypatch.setattr(TcsClient, "prepare_esid", fake_prepare)
-
-    seen: dict = {}
-
-    original_run = state.batch.run
-
-    def capture_run(job, on_progress=None, *, portal=None, prepared_awb=None):
-        seen["prepared_awb"] = prepared_awb
-        return original_run(job, on_progress, portal=portal, prepared_awb=None)
-
-    monkeypatch.setattr(state.batch, "run", capture_run)
-
-    httpd = ThreadingHTTPServer((settings.agent_host, settings.agent_port), make_handler(state))
-    t = threading.Thread(target=httpd.serve_forever, daemon=True)
-    t.start()
-    time.sleep(0.2)
-    base = f"http://{settings.agent_host}:{settings.agent_port}"
-    try:
-        # Mock session open/logged_in for prepare path — bypass by setting snapshot + monkeypatch status
-        from app.browser.session_manager import SessionStatus
-
-        def fake_status():
-            return SessionStatus(
-                open=True,
-                logged_in=True,
-                url="https://www.tcs.com.vn/Esid/Export",
-                awb_locators_confirmed=True,
-                message="ok",
-            )
-
-        monkeypatch.setattr(state.sessions, "status", fake_status)
-        monkeypatch.setattr(state.sessions, "portal", lambda: object())
-
-        prep = httpx.post(
-            f"{base}/esid/prepare",
-            json={"awb": "12312345670", "session_date": "2026-07-17"},
-            timeout=10,
-        )
-        assert prep.status_code == 200, prep.text
-        assert prep.json()["prepared"] is True
-        assert state.prepared_hot_awb() == "12312345670"
-
-        job = httpx.post(
-            f"{base}/jobs",
-            json={
-                "warehouse": "TECS-TCS",
-                "mock": True,
-                "dry_run": True,
-                "rows": [{"awb": "12312345670", "action": "DOWNLOAD", "shipment_id": "h1"}],
-            },
-            timeout=30,
-        )
-        assert job.status_code == 200
-        assert seen.get("prepared_awb") == "12312345670"
-        assert job.json().get("hot_path") is True
-        # Cache cleared after job
-        assert state.prepared_hot_awb() is None
-    finally:
-        httpd.shutdown()
-
-
 def test_health_stays_responsive_during_long_job(tmp_path: Path):
     """ThreadingHTTPServer + worker: /health không bị treo khi worker đang bận."""
     settings = _settings(tmp_path, agent_port=18766)
@@ -184,5 +119,107 @@ def test_health_stays_responsive_during_long_job(tmp_path: Path):
         assert body["running"] is True
         assert elapsed < 1.0, f"health bị block {elapsed:.2f}s"
         blocker.join(timeout=5)
+    finally:
+        httpd.shutdown()
+
+
+def test_workspace_bootstrap_route(tmp_path: Path, monkeypatch):
+    settings = _settings(tmp_path, agent_port=18768)
+    state = AgentState(settings)
+    seen: dict = {}
+
+    def fake_bootstrap(*, session_date, raw_awbs, visible):
+        seen.update(
+            session_date=session_date,
+            raw_awbs=raw_awbs,
+            visible=visible,
+        )
+        return {
+            "ok": True,
+            "open": True,
+            "logged_in": True,
+            "ready": [],
+            "items": [],
+            "total": 0,
+            "workspace": {
+                "phase": "READY",
+                "session_date": session_date,
+                "cache_count": 0,
+            },
+        }
+
+    monkeypatch.setattr(state.workspace, "bootstrap", fake_bootstrap)
+    httpd = ThreadingHTTPServer((settings.agent_host, settings.agent_port), make_handler(state))
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    time.sleep(0.2)
+    base = f"http://{settings.agent_host}:{settings.agent_port}"
+    try:
+        res = httpx.post(
+            f"{base}/workspace/bootstrap",
+            json={
+                "session_date": "2026-07-23",
+                "awbs": ["12312345670"],
+                "visible": False,
+            },
+            timeout=10,
+        )
+        assert res.status_code == 200, res.text
+        assert res.json()["workspace"]["phase"] == "READY"
+        assert seen == {
+            "session_date": "2026-07-23",
+            "raw_awbs": ["12312345670"],
+            "visible": False,
+        }
+    finally:
+        httpd.shutdown()
+
+
+def test_captcha_solve_route(tmp_path: Path, monkeypatch):
+    from app.browser.captcha_ocr import CaptchaOcrResult
+
+    settings = _settings(tmp_path, agent_port=18769)
+    state = AgentState(settings)
+    monkeypatch.setattr(
+        "app.services.agent_api.ocr_image_bytes_detailed",
+        lambda image, **kwargs: CaptchaOcrResult(
+            text="AB123",
+            confidence=1.0,
+            candidates=(("AB123", 6),),
+            samples=6,
+            accepted=True,
+        ),
+    )
+    httpd = ThreadingHTTPServer((settings.agent_host, settings.agent_port), make_handler(state))
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    time.sleep(0.2)
+    base = f"http://{settings.agent_host}:{settings.agent_port}"
+    try:
+        import base64
+
+        encoded = base64.b64encode(b"captcha-bytes").decode("ascii")
+        res = httpx.post(
+            f"{base}/captcha/solve",
+            json={"image": f"data:image/png;base64,{encoded}"},
+            timeout=10,
+        )
+        assert res.status_code == 200
+        assert res.json() == {
+            "ok": True,
+            "text": "AB123",
+            "confidence": 1.0,
+            "candidates": [{"text": "AB123", "votes": 6}],
+            "samples": 6,
+            "error": "",
+        }
+
+        bad = httpx.post(
+            f"{base}/captcha/solve",
+            json={"image": "not-base64"},
+            timeout=10,
+        )
+        assert bad.status_code == 400
+        assert bad.json()["error"] == "INVALID_IMAGE"
     finally:
         httpd.shutdown()

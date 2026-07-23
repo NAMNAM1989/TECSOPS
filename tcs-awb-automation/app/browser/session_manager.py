@@ -61,6 +61,9 @@ class SessionManager:
         self.settings = settings
         self.session: BrowserSession | None = None
         self.locators = LocatorsConfig.load(locators_path(settings.discovery_dir))
+        # Hai page cố định dùng chung persistent browser context/cookie:
+        # list = Quét/PDF, declare = KHAI BÁO ESID.
+        self._workspace_pages: dict[str, Any] = {}
 
     def reload_locators(self) -> None:
         self.locators = LocatorsConfig.load(locators_path(self.settings.discovery_dir))
@@ -71,6 +74,40 @@ class SessionManager:
     @property
     def page(self):
         return self.session.page if self._has_live_session() else None
+
+    @staticmethod
+    def _page_alive(page: Any) -> bool:
+        if page is None:
+            return False
+        try:
+            return not page.is_closed()
+        except Exception:
+            return False
+
+    def workspace_page(self, role: str = "list", *, url: str | None = None):
+        """Lấy/tạo page theo vai trò nhưng vẫn dùng chung session đăng nhập."""
+        if not self._has_live_session() or self.session is None:
+            if self.session is not None:
+                self.close()
+            raise RuntimeError("NO_BROWSER")
+        pages = getattr(self, "_workspace_pages", None)
+        if pages is None:
+            pages = {}
+            self._workspace_pages = pages
+        if role == "list":
+            page = self.session.page
+            pages["list"] = page
+        else:
+            page = pages.get(role)
+            if not self._page_alive(page):
+                page = self.session.new_page(url)
+                pages[role] = page
+                url = None
+        if url and page is not None:
+            current = str(getattr(page, "url", "") or "")
+            if url.lower() not in current.lower():
+                BrowserSession._goto_fast(page, url)
+        return page
 
     def open(
         self,
@@ -105,7 +142,11 @@ class SessionManager:
 
         if want_headed:
             headless = False
-            if self._has_live_session():
+            # Reuse Chrome headed đang sống; chỉ reopen khi phiên hiện tại là
+            # headless nhưng caller thực sự cần cửa sổ nhìn thấy được.
+            if self._has_live_session() and bool(
+                getattr(self.session, "headless_mode", True)
+            ):
                 self.close()
         elif visible and self.settings.headless:
             # Ops gửi visible nhưng cloud headless → mở nhanh, không thử headed
@@ -141,6 +182,8 @@ class SessionManager:
                         ) from e2
                 else:
                     raise
+
+        self._workspace_pages["list"] = self.session.page
 
         filled = False
         login_msg = ""
@@ -268,6 +311,7 @@ class SessionManager:
             return False
 
     def close(self) -> None:
+        self._workspace_pages = {}
         if self.session:
             try:
                 self.session.close()
@@ -367,11 +411,28 @@ class SessionManager:
             return {"ok": False, "headless": True, "message": "headless"}
         return self.focus_window()
 
-    def portal(self) -> AwbPortalPage:
+    def focus_workspace_page(self, role: str) -> dict[str, Any]:
+        """Đưa đúng page workspace lên trước; không đổi page danh sách mặc định."""
+        try:
+            page = self.workspace_page(role)
+            page.bring_to_front()
+        except Exception as e:
+            return {"ok": False, "message": str(e)}
+        if self.session is None or getattr(self.session, "headless_mode", True):
+            return {"ok": True, "headless": True, "message": f"Đã chọn page {role}"}
+        result = self.session.focus_window()
+        # focus_window giữ cửa sổ OS nổi nhưng mặc định biết page danh sách;
+        # chọn lại page đích để Điền không bị trả về Danh sách.
+        try:
+            page.bring_to_front()
+        except Exception:
+            pass
+        return result
+
+    def portal(self, role: str = "list") -> AwbPortalPage:
         self.reload_locators()
         if not self._has_live_session():
             if self.session is not None:
                 self.close()
             raise RuntimeError("NO_BROWSER")
-        assert self.session is not None
-        return AwbPortalPage(self.session.page, self.locators)
+        return AwbPortalPage(self.workspace_page(role), self.locators)

@@ -11,6 +11,7 @@ from typing import Any
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+from app.services.esid_defaults import ESID_DEFAULT_PAYMENT_MODE
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -285,7 +286,7 @@ def _sample_row() -> list[Any]:
             "PCS": 2,
             "GROSS_WEIGHT": 45.5,
             "NATURE_OF_GOODS": "GENERAL CARGO",
-            "PAYMENT_MODE": "Chuyển khoản/Bank transfer",
+            "PAYMENT_MODE": ESID_DEFAULT_PAYMENT_MODE,
             "TOTAL_HAWBS": 0,
             "CONSOL": 0,
             "TECS_WAREHOUSE": 1,

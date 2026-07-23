@@ -1,4 +1,5 @@
 import type { Shipment } from "../types/shipment";
+import { ESID_DEFAULT_PAYMENT_MODE, esidTotalHawbs } from "./esidDeclareDefaults";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { awbDigitsKey } from "./awbFormat";
 import { getActiveEsidRegistrant } from "./esidRegistrantProfile";
@@ -208,7 +209,7 @@ async function buildWorkbook(rows: EsidDeclareRow[]) {
     "Cột cam đậm = bắt buộc dry-fill. REGISTRANT_* = nhập tay trước khi SUBMIT=1.",
     "SUBMIT mặc định 0 (không bấm HOÀN TẤT).",
     "AGENT_* lấy từ hồ sơ Agent ESID cố định (nút Agent trên Ops), không theo từng lô.",
-    "Combobox Shipper/Agent/CNEE trên TCS cần khớp master — Playwright/extension sẽ gõ + chọn.",
+    "Combobox Shipper/Agent/CNEE trên TCS cần khớp master — workspace Playwright sẽ gõ + chọn.",
   ];
   guideLines.forEach((line, i) => {
     guide.getCell(i + 1, 1).value = line;
@@ -287,7 +288,14 @@ export async function downloadEsidDeclareExcel(
   try {
     const wb = await buildWorkbook(rows);
     const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
+    // Dùng replaceAll từng ký tự để Tailwind không hiểu nhầm regex tạo
+    // timestamp là một arbitrary utility trong production CSS.
+    const stamp = new Date()
+      .toISOString()
+      .slice(0, 19)
+      .replaceAll("-", "")
+      .replaceAll(":", "")
+      .replace("T", "");
     const name =
       list.length === 1
         ? `ESID_DECLARE_${awbForFilename(list[0].awb)}_${stamp}.xlsx`

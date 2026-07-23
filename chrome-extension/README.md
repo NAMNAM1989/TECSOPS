@@ -1,5 +1,8 @@
 # TECSOPS — Chrome extension Điền ESID
 
+> Extension mode v2: Chrome giữ một tab TCS được ghim để Login, Quét và Điền trực quan.
+> Playwright workspace vẫn được giữ làm fallback và xử lý PDF trong giai đoạn chuyển tiếp.
+
 Điền form **KHAI BÁO ESID** trên tab `tcs.com.vn` đã login của bạn. Ops chỉ gửi payload — **không** bấm HOÀN TẤT (bạn tự làm trên TCS).
 
 ## Cài (unpacked)
@@ -8,7 +11,7 @@
 2. Bật **Developer mode** (góc trên bên phải)
 3. **Load unpacked** → chọn đúng thư mục `chrome-extension` (có `manifest.json` bên trong), ví dụ `D:\TECSOPS\chrome-extension`
 4. Thấy extension **TECSOPS — Điền ESID TCS** · bật (toggle xanh)
-5. Bấm icon extension trên thanh Chrome → popup hiện «Sẵn sàng · v1.0.0…»
+5. Bấm icon extension trên thanh Chrome → popup hiện «Sẵn sàng · v2.0.6…»
 
 Mỗi máy nhập liệu cần cài extension. Railway không stream tab TCS của bạn.
 
@@ -22,11 +25,15 @@ Script mở Chrome test profile, `Extensions.loadUnpacked`, PING background, và
 
 ## Dùng
 
-1. Login TCS trên Chrome (tab `https://www.tcs.com.vn/...`)
-2. Mở Ops (localhost Vite hoặc URL Railway đã khai trong `manifest.json`)
-3. Thanh TCS hiện badge **Ext OK**
-4. Menu ⋮ lô TECS-TCS → **Điền**
-5. Kiểm tra form trên tab TCS → bấm **HOÀN TẤT** trên TCS
+1. Mở Ops (localhost Vite hoặc URL Railway đã khai trong `manifest.json`)
+2. Thanh TCS hiện badge **Ext OK**
+3. Bấm **Đồng bộ TCS**, nhập user/password TCS một lần
+4. Extension ghim tab TCS, OCR CAPTCHA qua Agent localhost và quét theo ngày
+   - CAPTCHA PNG nền trong suốt được ghép lên nền trắng trước khi OCR
+   - OCR đọc 6 biến thể ảnh; chỉ submit mã 5 ký tự khi số phiếu đạt ngưỡng
+   - Kết quả yếu chỉ làm mới CAPTCHA, không tính là một lần thử đăng nhập
+5. Menu ⋮ lô TECS-TCS → **Điền**
+6. Kiểm tra form trên tab TCS → bấm **HOÀN TẤT** trên TCS
 
 ## Ops qua IP LAN
 

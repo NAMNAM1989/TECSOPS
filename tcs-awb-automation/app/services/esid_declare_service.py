@@ -8,6 +8,7 @@ from app.browser.pages.awb_page import AwbPortalPage, NeedsLoginError, SiteChang
 from app.browser.pages.esid_declare_page import EsidDeclarePage
 from app.browser.session_manager import SessionManager
 from app.config import Settings
+from app.services.esid_defaults import ESID_DEFAULT_PAYMENT_MODE
 from app.utils.awb import digits_only
 
 
@@ -90,7 +91,7 @@ def fill_esid_declare(
         "other_request": shipment.get("other_request") or shipment.get("otherRequirementsPrint") or "",
         "consol": bool(shipment.get("consol", False)),
         "tecs_warehouse": shipment.get("tecs_warehouse", True),
-        "payment_mode": shipment.get("payment_mode") or "Chuyển khoản/Bank transfer",
+        "payment_mode": shipment.get("payment_mode") or ESID_DEFAULT_PAYMENT_MODE,
         "total_hawbs": (
             shipment.get("total_hawbs")
             if shipment.get("total_hawbs") is not None
@@ -113,11 +114,12 @@ def fill_esid_declare(
         return gate
 
     # Đưa Chrome lên trước khi điền (headed / noVNC)
-    sessions.focus_if_headed()
+    sessions.focus_workspace_page("declare")
 
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
-    portal = AwbPortalPage(sessions.page, loc)
-    declare = EsidDeclarePage(sessions.page, loc)
+    declare_page = sessions.workspace_page("declare", url="https://www.tcs.com.vn/Esid/Export")
+    portal = AwbPortalPage(declare_page, loc)
+    declare = EsidDeclarePage(declare_page, loc)
     docs_dir = settings.output_dir / "docs"
     t0 = time_ms()
     try:
@@ -196,11 +198,12 @@ def submit_esid_declare(
         gate["submitted"] = False
         return gate
 
-    sessions.focus_if_headed()
+    sessions.focus_workspace_page("declare")
 
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
-    portal = AwbPortalPage(sessions.page, loc)
-    declare = EsidDeclarePage(sessions.page, loc)
+    declare_page = sessions.workspace_page("declare", url="https://www.tcs.com.vn/Esid/Export")
+    portal = AwbPortalPage(declare_page, loc)
+    declare = EsidDeclarePage(declare_page, loc)
     docs_dir = settings.output_dir / "docs"
     t0 = time_ms()
     try:

@@ -85,7 +85,7 @@ class BatchService:
             locators_file=loc_file,
             portal=portal,
         )
-        # Hot-path: AWB đã /esid/prepare — bỏ search lại nếu nút IN còn
+        # Hot-path: workspace đã mở đúng AWB từ cache ngày — bỏ search lại nếu nút IN còn.
         client._prepared_awb = (prepared_awb or "").strip() or None  # type: ignore[attr-defined]
         results: list[AwbJobResult] = []
         checkpoint = self.repo.get_checkpoint(job.job_id)

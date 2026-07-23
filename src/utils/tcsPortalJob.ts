@@ -2,7 +2,8 @@ import type { Shipment, ShipmentStatus } from "../types/shipment";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { awbDigitsKey, formatAwb } from "./awbFormat";
 
-export type TcsPortalAction = "LOOKUP" | "REGISTER" | "DOWNLOAD" | "PRINT";
+/** UI mới chỉ còn job PDF; Quét/Điền/Submit có endpoint workspace riêng. */
+export type TcsPortalAction = "DOWNLOAD";
 
 /**
  * Lọc tùy chọn theo status Ops khi tick «chỉ lô hoàn thành» trên Cổng TCS.

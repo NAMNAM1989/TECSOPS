@@ -4,15 +4,18 @@ Tự động hóa cổng `https://www.tcs.com.vn/AwbLogin` cho **kho TECS-TCS**.
 
 ### Quy trình ESID (Ops)
 
-- **Quét ESID** (toolbar): lọc theo ngày phiên → cập nhật status Ops «Hoàn thành tiếp nhận». **Không** chặn Tải PDF.
-- **Tải PDF ESID** (menu ⋮, **1 AWB**): tìm chỉ bằng ô **AWB# 8 số** → mở phiếu → IN → tải file PDF. Tự chạy hết, không xác nhận tay. (Đã bỏ «In ESID» — dùng PDF rồi in từ file.)
+- **Đồng bộ TCS** (toolbar): mở/reuse persistent session → chỉ login khi cần → quét lại ngày phiên → cache AWB/trang → cập nhật status Ops «Hoàn thành tiếp nhận».
+- Workspace giữ hai page cùng cookie: **Danh sách** cho Quét/PDF và **Khai báo** cho Điền/HOÀN TẤT.
+- **Tải PDF ESID** (menu ⋮, **1 AWB**): ưu tiên mở thẳng dòng từ cache ngày; cache stale mới fallback tìm **AWB# 8 số** → IN → tải PDF.
 
-**Điền ESID (đường chính):** Chrome extension trên tab TCS đã login của người nhập liệu — xem [`chrome-extension/README.md`](../chrome-extension/README.md). Ops gửi payload; user tự HOÀN TẤT trên TCS.
+**Điền ESID (đường ưu tiên trên máy người dùng):** Chrome extension v2 giữ tab TCS được ghim,
+Đồng bộ TCS và Điền trực quan. Nếu extension không sẵn sàng, Ops fallback về page Khai báo
+trong Playwright workspace. PDF hiện vẫn dùng cache của Playwright trong giai đoạn chuyển tiếp.
 
-Agent Playwright vẫn dùng cho **Quét / PDF** (không còn Điền qua Playwright):
+Agent Playwright dùng chung cho **Login / Quét / Điền / HOÀN TẤT / PDF**:
 
-- **Máy kho**: Chrome **headed** (`TCS_HEADLESS=0`) — Quét/PDF. Ops LAN qua proxy `/tcs-agent`.
-- **Railway all-in-one**: agent **headless** cho Quét/PDF/Login. noVNC tùy chọn (`TCS_VNC=1`, chậm).
+- **Máy kho**: Chrome **headed** (`TCS_HEADLESS=0`) — toàn bộ workspace. Ops LAN qua proxy `/tcs-agent`.
+- **Railway all-in-one**: agent **headless** cho toàn bộ workspace. noVNC tùy chọn (`TCS_VNC=1`, chậm).
 
 ### Railway all-in-one (Playwright headless + noVNC tùy chọn)
 
@@ -29,7 +32,7 @@ Deploy:
    - `TCS_BROWSER_PROFILE=/app/tcs-awb-automation/browser_profile` — giữ cookie.
    - `TCS_OUTPUT_DIR=/app/tcs-awb-automation/output` — giữ PDF.
 
-**Nhập liệu Điền:** cài extension → Login TCS trên Chrome máy bạn → Ops **Điền** → HOÀN TẤT trên TCS. Quét/PDF vẫn qua agent. Nút **Sửa tay** chỉ khi `TCS_VNC=1`.
+**Nhập liệu Điền:** Ops **Đồng bộ TCS** → **Điền** → kiểm tra → **HOÀN TẤT**. Tất cả dùng cùng agent session. Nút **Sửa tay** chỉ khi `TCS_VNC=1`.
 
 ⚠️ **Rủi ro**: CAPTCHA/IP Railway; session mất nếu không mount volume; `TCS_VNC=1` tốn RAM và chậm hơn.
 
@@ -38,7 +41,7 @@ Deploy:
 1. Máy kho: `npm run dev` — **tự chạy** API + Vite + agent REAL **headed** (`:8765`). Tắt auto: `TCS_AGENT_AUTO=0`. Ép headless: `TCS_HEADLESS=1`.
 2. Máy khác: mở Ops bằng **IP máy kho** (vd. `http://192.168.1.50:5173`), không dùng `127.0.0.1`.
 3. Browser gọi same-origin `/tcs-agent` → Vite/Express proxy tới `127.0.0.1:8765` trên máy kho.
-4. Sau **Điền** (extension): form trên tab TCS của máy nhập liệu → HOÀN TẤT trên TCS.
+4. Sau **Điền**: form nằm trên page Khai báo cùng workspace → HOÀN TẤT trên Ops hoặc Chrome máy kho.
 5. Nút **URL** trên thanh Cổng TCS: để trống = proxy; chỉ điền nếu dùng tunnel HTTPS.
 6. Agent riêng (không qua `dev`): `npm run tcs:agent:real`.
 
@@ -76,7 +79,7 @@ Ops: nút **Cổng TCS** (toolbar khi đang xem TECS-TCS) → Gửi agent (`http
 2. `pip install -r requirements.txt` (có `ddddocr`).
 3. Khi mở Chrome:
    - **Cách 1** (`TCS_PREFER_SESSION=1`): vào `/Awb/Agent` với profile cũ — còn cookie thì **không cần CAPTCHA**.
-   - **Cách 2** (`TCS_CAPTCHA_OCR=1`): hết phiên → chụp ảnh CAPTCHA → OCR local → điền + Đăng nhập (thử lại tối đa `TCS_CAPTCHA_OCR_ATTEMPTS`).
+   - **Cách 2** (`TCS_CAPTCHA_OCR=1`): hết phiên → lấy ảnh CAPTCHA gốc → ghép nền trong suốt lên nền trắng → OCR nhiều biến thể → chỉ điền + Đăng nhập khi kết quả 5 ký tự đạt đồng thuận (thử submit tối đa `TCS_CAPTCHA_OCR_ATTEMPTS`).
    - OCR sai → fallback nhập tay trên Chrome.
 
 ## An toàn

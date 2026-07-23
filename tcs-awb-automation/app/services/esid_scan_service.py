@@ -61,7 +61,7 @@ def scan_esid_by_date(
         return gate
     sessions.focus_if_headed()
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
-    portal = sessions.portal()
+    portal = sessions.portal("list")
     esid = EsidListPage(portal.page, loc)
     try:
         result = esid.scan_by_flight_date(session_date, ops_awbs or [])
@@ -94,6 +94,7 @@ def scan_esid_by_date(
         "items": items,
         "ready": ready,
         "reception_all": result.get("reception_all") or [],
+        "index_rows": result.get("index_rows") or [],
         "total": len(items) if items else int(result.get("list_total") or 0),
         "ready_count": len(ready),
         "list_total": result.get("list_total"),
@@ -124,7 +125,7 @@ def scan_esid_reception(
         return gate
     sessions.focus_if_headed()
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
-    portal = sessions.portal()
+    portal = sessions.portal("list")
     esid = EsidListPage(portal.page, loc)
     try:
         items = esid.scan_awbs(awbs)

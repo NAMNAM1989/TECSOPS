@@ -28,10 +28,11 @@ export function stripAtPageRules(css: string): string {
   return css.replace(/@page\b[^{]*\{[^{}]*\}/g, "/* @page stripped — set by print overrides */");
 }
 
-function buildThermalPrintOverrides(
+export function buildThermalPrintOverrides(
   format: LabelSheetFormat,
   mode: LabelPrintMode,
-  flipCcw: boolean
+  flipCcw: boolean,
+  singlePage = true
 ): string {
   const { w: THERMAL_PAGE_WIDTH, h: THERMAL_PAGE_HEIGHT, labelH, wMm, hMm } = thermalPageMm(
     format,
@@ -79,7 +80,8 @@ function buildThermalPrintOverrides(
   /* Khổ trang PDF/in = đúng tem đã chọn (${wMm}×${hMm} mm) */
 @page {
   size: ${THERMAL_PAGE_WIDTH} ${THERMAL_PAGE_HEIGHT};
-  margin: 0;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 html {
@@ -88,8 +90,10 @@ html {
   width: ${THERMAL_PAGE_WIDTH} !important;
   min-width: ${THERMAL_PAGE_WIDTH} !important;
   max-width: ${THERMAL_PAGE_WIDTH} !important;
-  height: auto !important;
+  height: ${singlePage ? THERMAL_PAGE_HEIGHT : "auto"} !important;
   min-height: 0 !important;
+  max-height: ${singlePage ? THERMAL_PAGE_HEIGHT : "none"} !important;
+  overflow: ${singlePage ? "hidden" : "visible"} !important;
   background: #fff !important;
 }
 
@@ -99,30 +103,29 @@ body {
   width: ${THERMAL_PAGE_WIDTH} !important;
   min-width: ${THERMAL_PAGE_WIDTH} !important;
   max-width: ${THERMAL_PAGE_WIDTH} !important;
-  height: auto !important;
-  min-height: ${THERMAL_PAGE_HEIGHT} !important;
-  overflow: visible !important;
+  height: ${singlePage ? THERMAL_PAGE_HEIGHT : "auto"} !important;
+  min-height: 0 !important;
+  max-height: ${singlePage ? THERMAL_PAGE_HEIGHT : "none"} !important;
+  overflow: ${singlePage ? "hidden" : "visible"} !important;
   background: #fff !important;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
+  display: block !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
 }
 
 .print-label-host {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
+  display: block !important;
   margin: 0 !important;
   padding: 0 !important;
   width: ${THERMAL_PAGE_WIDTH} !important;
   min-width: ${THERMAL_PAGE_WIDTH} !important;
   max-width: ${THERMAL_PAGE_WIDTH} !important;
-  height: auto !important;
-  overflow: visible !important;
+  height: ${singlePage ? THERMAL_PAGE_HEIGHT : "auto"} !important;
+  min-height: 0 !important;
+  max-height: ${singlePage ? THERMAL_PAGE_HEIGHT : "none"} !important;
+  overflow: ${singlePage ? "hidden" : "visible"} !important;
   background: #fff !important;
   font-size: 0;
   line-height: 0;
@@ -145,6 +148,11 @@ body {
   box-sizing: border-box !important;
   break-inside: avoid !important;
   page-break-inside: avoid !important;
+  break-before: auto !important;
+  page-break-before: auto !important;
+}
+
+.print-label-page:not(:last-child) {
   break-after: page !important;
   page-break-after: always !important;
 }
@@ -167,10 +175,49 @@ ${spinLayout}
 @media print {
   @page {
     size: ${THERMAL_PAGE_WIDTH} ${THERMAL_PAGE_HEIGHT};
-    margin: 0;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 }
 `;
+}
+
+export function buildThermalPrintDocumentHtml({
+  format,
+  mode,
+  flipCcw,
+  inner,
+  singlePage,
+}: {
+  format: LabelSheetFormat;
+  mode: LabelPrintMode;
+  flipCcw: boolean;
+  inner: string;
+  singlePage: boolean;
+}): string {
+  const { wMm, hMm } = thermalPageMm(format, mode);
+  const bodyClass =
+    mode === "xp470b"
+      ? "tecsops-label-print-open tecsops-label-print-xp470b"
+      : "tecsops-label-print-open tecsops-label-print-narrow80";
+  const sheetCss = stripAtPageRules(labelSheetCss);
+
+  return `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=${wMm}, initial-scale=1" />
+  <meta name="color-scheme" content="light only" />
+  <title>&#8203;</title>
+  <style>${sheetCss}</style>
+  <style>
+    ${buildThermalPrintOverrides(format, mode, flipCcw, singlePage)}
+  </style>
+</head>
+<body class="${bodyClass}" data-label-page-mm="${wMm}x${hMm}">
+  <div class="print-label-host">${inner}</div>
+</body>
+</html>`;
 }
 
 export type PrintThermalLabelsOptions = {
@@ -316,28 +363,13 @@ export async function printThermalLabelsFromIframe(
     return { ok: false, error: "Không tạo được nội dung tem để in." };
   }
 
-  const bodyClass =
-    mode === "xp470b"
-      ? "tecsops-label-print-open tecsops-label-print-xp470b"
-      : "tecsops-label-print-open tecsops-label-print-narrow80";
-
-  const sheetCss = stripAtPageRules(labelSheetCss);
-  const pageTitle = `Tem ${wMm}x${hMm}mm`;
-  const docHtml = `<!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=${wMm}, initial-scale=1" />
-  <title>${pageTitle}</title>
-  <style>${sheetCss}</style>
-  <style>
-    ${buildThermalPrintOverrides(format, mode, flipCcw)}
-  </style>
-</head>
-<body class="${bodyClass}" data-label-page-mm="${wMm}x${hMm}">
-  <div class="print-label-host">${inner}</div>
-</body>
-</html>`;
+  const docHtml = buildThermalPrintDocumentHtml({
+    format,
+    mode,
+    flipCcw,
+    inner,
+    singlePage: copies === 1,
+  });
 
   type PrintTarget = { win: Window; cleanup: () => void };
 
@@ -422,6 +454,7 @@ export async function printThermalLabelsFromIframe(
 
   try {
     const doc = win.document;
+    doc.title = "\u200B";
     if (doc?.fonts?.ready) await withTimeout(doc.fonts.ready, 1500);
   } catch {
     /* ignore */

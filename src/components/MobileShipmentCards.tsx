@@ -65,6 +65,7 @@ const MobileShipmentCard = memo(
     onOpenEdit,
     onUpdate,
     onDelete,
+    onPrint,
     onOpenTcsPortal,
   }: {
     row: Shipment;
@@ -74,6 +75,7 @@ const MobileShipmentCard = memo(
     onOpenEdit: (row: Shipment) => void;
     onUpdate: (id: string, patch: Partial<Shipment>) => void;
     onDelete: (id: string) => void;
+    onPrint: (s: Shipment) => void;
     onOpenTcsPortal?: (s: Shipment) => void;
   }) {
     const rowAccent = statusRowAccent[row.status];
@@ -123,7 +125,7 @@ const MobileShipmentCard = memo(
                 compact
                 row={row}
                 customerDirectory={customerDirectory}
-                onPrint={() => {}}
+                onPrint={onPrint}
                 onDelete={onDelete}
                 onUpdate={onUpdate}
                 onOpenTcsPortal={onOpenTcsPortal}
@@ -184,6 +186,7 @@ interface MobileShipmentCardsProps {
   onSelect: (id: string | null) => void;
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
+  onPrint: (s: Shipment) => void;
   onQuickEdit?: (row: Shipment) => void;
   onOpenTcsPortal?: (s: Shipment) => void;
   customerDirectory?: readonly CustomerDirectoryEntry[];
@@ -201,6 +204,7 @@ export function MobileShipmentCards({
   onSelect,
   onUpdate,
   onDelete,
+  onPrint,
   onQuickEdit,
   onOpenTcsPortal,
   customerDirectory = [],
@@ -265,6 +269,7 @@ export function MobileShipmentCards({
                         onOpenEdit={handleOpenEdit}
                         onUpdate={onUpdate}
                         onDelete={onDelete}
+                        onPrint={onPrint}
                         onOpenTcsPortal={onOpenTcsPortal}
                       />
                     ))
@@ -282,6 +287,7 @@ export function MobileShipmentCards({
               onOpenEdit={handleOpenEdit}
               onUpdate={onUpdate}
               onDelete={onDelete}
+              onPrint={onPrint}
               onOpenTcsPortal={onOpenTcsPortal}
             />
           ))}

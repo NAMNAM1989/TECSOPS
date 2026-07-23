@@ -221,6 +221,7 @@ export function ShipmentRowActionsMenu({
         style={menuStyle}
         className={OPS.dropdown}
       >
+        {compact ? menuItem("In nhãn", () => onPrint(row)) : null}
         {showDim ? menuItem("Excel DIM", () => downloadScscDimListExcel(row)) : null}
         {showTcsDim ? menuItem("In DIM TCS", () => printTcsAttachedDimsList(row)) : null}
         {showTcsDim ? menuItem("Excel TCS", () => void downloadTcsAttachedDimsExcel(row)) : null}

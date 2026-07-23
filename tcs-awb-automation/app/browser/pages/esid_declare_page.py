@@ -27,17 +27,6 @@ class EsidDeclarePage:
     def _cfg(self) -> dict[str, Any]:
         return self.locators.data.get("esid_declare") or {}
 
-    def _field_id(self, key: str, fallback: str) -> str:
-        """DOM id từ locators.esid_declare[key] (by=id), fallback hardcode cũ."""
-        raw = self._cfg().get(key)
-        if isinstance(raw, dict) and str(raw.get("by") or "") == "id":
-            val = str(raw.get("value") or "").strip()
-            if val:
-                return val
-        if isinstance(raw, str) and raw.strip():
-            return raw.strip()
-        return fallback
-
     def goto_declare_tab(self) -> None:
         """
         Nhảy thẳng tab KHAI BÁO ESID — không đụng ô tìm AWB trên DANH SÁCH.
@@ -231,11 +220,27 @@ class EsidDeclarePage:
             now = loc.first.is_checked()
             if bool(now) == bool(checked):
                 return True
-            if checked:
-                loc.first.check(force=True)
-            else:
-                loc.first.uncheck(force=True)
-            return True
+            try:
+                if checked:
+                    loc.first.check(force=True, timeout=1200)
+                else:
+                    loc.first.uncheck(force=True, timeout=1200)
+            except Exception:
+                # Một số checkbox TCS dùng input ẩn; click label/wrapper để React nhận.
+                self.page.evaluate(
+                    """({eid, checked}) => {
+                      const el = document.getElementById(eid);
+                      if (!el) return false;
+                      if (!!el.checked === !!checked) return true;
+                      const label = document.querySelector(`label[for="${eid}"]`)
+                        || el.closest('label')
+                        || el.parentElement;
+                      (label || el).click();
+                      return !!el.checked === !!checked;
+                    }""",
+                    {"eid": eid, "checked": bool(checked)},
+                )
+            return bool(loc.first.is_checked(timeout=500)) == bool(checked)
         except Exception:
             return False
 
@@ -244,13 +249,14 @@ class EsidDeclarePage:
         """Bỏ dấu tiếng Việt + chuẩn hóa khoảng trắng (so khớp master TCS)."""
         t = unicodedata.normalize("NFD", s or "")
         t = "".join(c for c in t if unicodedata.category(c) != "Mn")
+        t = t.replace("đ", "d").replace("Đ", "D")
         return re.sub(r"\s+", " ", t).strip().upper()
 
     @classmethod
     def _combobox_search_queries(cls, text: str) -> list[str]:
         """
-        Chuỗi tìm từ ngắn → dài. Gõ cả tên pháp lý dài thường làm remote filter TCS
-        trả rỗng hoặc lệch dấu; token cuối (vd PCS) thường khớp master tốt hơn.
+        Tạo tối đa 4 truy vấn đặc trưng. Không thử tuần tự 10 token chung chung
+        (LTD/TNHH/COMPANY...) vì mỗi lần remote search của TCS có thể tốn vài giây.
         """
         raw = (text or "").strip()
         if not raw:
@@ -275,22 +281,15 @@ class EsidDeclarePage:
             "CO",
             "COMPANY",
         }
+        distinctive = [w for w in words if len(w) >= 3 and w not in stop]
         queries: list[str] = []
-        if words and 2 <= len(words[-1]) <= 10:
-            queries.append(words[-1])
-        if len(words) >= 2:
-            queries.append(" ".join(words[-2:]))
-        if len(words) >= 3:
-            queries.append(" ".join(words[-3:]))
-        if len(words) >= 3:
-            queries.append(" ".join(words[:3]))
-        for w in words:
-            if len(w) >= 4 and w not in stop:
-                queries.append(w)
-        for n in (10, 16, 24, 36):
-            if len(raw) > n:
-                queries.append(raw[:n].rstrip())
-        queries.append(raw if len(raw) <= 48 else raw[:48].rstrip())
+        if distinctive:
+            # Mã/tên riêng ở cuối (PCS, HST...) thường khớp master chính xác nhất.
+            queries.append(distinctive[-1])
+            queries.append(max(distinctive, key=len))
+        if len(distinctive) >= 2:
+            queries.append(" ".join(distinctive[-2:]))
+        queries.append(raw if len(raw) <= 36 else raw[:36].rstrip())
         seen: set[str] = set()
         out: list[str] = []
         for q in queries:
@@ -299,7 +298,7 @@ class EsidDeclarePage:
                 continue
             seen.add(qn)
             out.append(q.strip())
-        return out[:10]
+        return out[:4]
 
     def _visible_select_options(self):
         return self.page.locator(
@@ -321,13 +320,19 @@ class EsidDeclarePage:
             return False
 
         full_words = set(fold_full.split())
+        try:
+            labels = opts.evaluate_all(
+                """els => els.slice(0, 24).map(el =>
+                  (el.getAttribute('title')
+                    || el.querySelector('.ant-select-item-option-content')?.textContent
+                    || el.textContent || '').replace(/\\s+/g, ' ').trim()
+                )"""
+            )
+        except Exception:
+            labels = []
         best_i = -1
         best_score = 0
-        for i in range(min(n, 24)):
-            try:
-                label = opts.nth(i).inner_text(timeout=600)
-            except Exception:
-                continue
+        for i, label in enumerate(labels):
             fold_opt = self._fold_text(label)
             if not fold_opt:
                 continue
@@ -370,19 +375,30 @@ class EsidDeclarePage:
                 f"input#{eid}"
             ).first
             if search.count() > 0:
-                search.fill("")
-                search.fill(query)
+                search.fill("", timeout=600)
+                search.fill(query, timeout=600)
             else:
-                target.fill("")
-                target.fill(query)
+                target.fill("", timeout=600)
+                target.fill(query, timeout=600)
         except Exception:
-            self.page.keyboard.type(query, delay=6)
+            try:
+                self.page.keyboard.type(query, delay=6)
+            except Exception:
+                pass
 
-    def _fill_combobox(self, eid: str, value: str) -> bool:
-        """Ant Select search: gõ token ngắn → chọn option khớp (bỏ dấu OK)."""
+    def _fill_combobox(
+        self,
+        eid: str,
+        value: str,
+        *,
+        max_queries: int = 3,
+        budget_ms: int = 6500,
+    ) -> bool:
+        """Ant Select có ngân sách thời gian cứng; không để một master treo cả job."""
         text = (value or "").strip()
         if not text:
             return False
+        deadline = time.monotonic() + max(1000, budget_ms) / 1000
         try:
             # Ô ant-select: input#id hoặc #id trong .ant-select
             loc = self._active_pane().locator(f"#{eid}")
@@ -414,14 +430,20 @@ class EsidDeclarePage:
                     pass
             self.page.wait_for_timeout(80)
 
-            for query in self._combobox_search_queries(text):
+            for query in self._combobox_search_queries(text)[:max_queries]:
+                if time.monotonic() >= deadline:
+                    break
                 self._type_combobox_search(eid, target, query)
                 try:
                     self._visible_select_options().first.wait_for(
-                        state="visible", timeout=2200
+                        state="visible",
+                        timeout=max(
+                            250,
+                            min(1100, int((deadline - time.monotonic()) * 1000)),
+                        ),
                     )
                 except Exception:
-                    self.page.wait_for_timeout(220)
+                    self.page.wait_for_timeout(100)
                 if self._pick_combobox_option(text):
                     return True
 
@@ -469,10 +491,18 @@ class EsidDeclarePage:
             if not fills["natureOfGoods"]:
                 warnings.append("Không điền được loại hàng (natureOfGoods)")
 
-    def _fill_ops_selects(self, data: dict[str, Any], fills: dict, warnings: list) -> None:
-        """Dest + payment — gọi 1 lần sau chọn chuyến."""
+    def _fill_ops_selects(
+        self,
+        data: dict[str, Any],
+        fills: dict,
+        warnings: list,
+        *,
+        include_destination: bool = True,
+        include_payment: bool = True,
+    ) -> None:
+        """Chọn destination/payment có kiểm soát để không chọn lặp."""
         dest = str(data.get("dest") or "").strip().upper()
-        if dest:
+        if include_destination and dest:
             try:
                 cur = self.page.evaluate(
                     """() => {
@@ -485,31 +515,37 @@ class EsidDeclarePage:
                 if cur and dest.upper() in str(cur).upper():
                     fills["codFds"] = True
                 else:
-                    ok_dest = self._fill_combobox("codFds", dest) or self._set_id("codFds", dest)
+                    ok_dest = self._fill_combobox(
+                        "codFds",
+                        dest,
+                        max_queries=2,
+                        budget_ms=3000,
+                    ) or self._set_id("codFds", dest)
                     fills["codFds"] = ok_dest
                     if not ok_dest:
                         warnings.append(f"Dest {dest!r} chưa chọn được")
             except Exception:
-                fills["codFds"] = self._fill_combobox("codFds", dest)
+                fills["codFds"] = self._fill_combobox(
+                    "codFds",
+                    dest,
+                    max_queries=2,
+                    budget_ms=3000,
+                )
 
         pay = str(data.get("payment_mode") or _PAYMENT_LABEL_CACHE).strip()
-        if pay:
-            fills["codPayMod"] = self._fill_payment(pay)
+        if include_payment and pay:
+            payment_ok = self._fill_payment(pay)
+            # Ant Select đôi lúc cập nhật label sau timeout click; xác minh
+            # trạng thái cuối để tránh cảnh báo giả dù form đã là Chuyển khoản.
+            if not payment_ok:
+                current_payment = self._fold_text(self._read_payment_label())
+                payment_ok = any(
+                    token in current_payment
+                    for token in ("CHUYEN KHOAN", "BANK TRANSFER")
+                )
+            fills["codPayMod"] = payment_ok
             if not fills["codPayMod"]:
                 warnings.append(f"Thanh toán {pay!r} chưa chọn được")
-
-    def _fill_ops_block(
-        self,
-        data: dict[str, Any],
-        awb: str,
-        fills: dict,
-        warnings: list,
-        *,
-        lite: bool = False,
-    ) -> None:
-        self._fill_ops_text(data, awb, fills, warnings)
-        if not lite:
-            self._fill_ops_selects(data, fills, warnings)
 
     def _read_payment_label(self) -> str:
         try:
@@ -549,29 +585,53 @@ class EsidDeclarePage:
                 if p and p not in tokens:
                     tokens.append(p)
         try:
-            wrap = self.page.locator(".ant-select:has(#codPayMod)").first
-            if wrap.count() == 0:
-                wrap = self.page.locator("#codPayMod").first
-            wrap.click(timeout=1200, force=True)
+            # Ant Select cần một click Playwright "trusted". HTMLElement.click()
+            # không ổn định vì đôi lúc React không mở dropdown sau khi modal
+            # chuyến bay vừa đóng.
+            pay_input = self.page.locator("#codPayMod:visible")
+            if pay_input.count() == 0:
+                pay_input = self.page.locator("#codPayMod")
+            if pay_input.count() == 0:
+                return False
+            pay_input.last.click(timeout=1800, force=True)
             self.page.locator(
                 ".ant-select-dropdown:not(.ant-select-dropdown-hidden) "
                 ".ant-select-item-option"
             ).first.wait_for(state="visible", timeout=2000)
-            for tok in tokens:
-                opt = self.page.locator(
-                    ".ant-select-dropdown:not(.ant-select-dropdown-hidden) "
-                    ".ant-select-item-option:not(.ant-select-item-option-disabled)"
-                ).filter(has_text=re.compile(re.escape(tok[:24]), re.I))
-                if opt.count() > 0:
-                    opt.first.click(timeout=1200)
+            opts = self.page.locator(
+                ".ant-select-dropdown:not(.ant-select-dropdown-hidden) "
+                ".ant-select-item-option:not(.ant-select-item-option-disabled)"
+            )
+            labels = opts.evaluate_all(
+                """els => els.map(el =>
+                  (el.getAttribute('title') || el.textContent || '')
+                    .replace(/\\s+/g, ' ').trim()
+                )"""
+            )
+            folded_tokens = [self._fold_text(t) for t in tokens]
+            for idx, label in enumerate(labels):
+                folded_label = self._fold_text(label)
+                if any(
+                    token and (token in folded_label or folded_label in token)
+                    for token in folded_tokens
+                ):
+                    opts.nth(idx).click(timeout=1200)
+                    self.page.wait_for_timeout(120)
                     got = self._read_payment_label()
-                    if got:
+                    got_folded = self._fold_text(got)
+                    if got and any(
+                        key in got_folded
+                        for key in ("chuyen khoan", "bank transfer")
+                    ):
                         _PAYMENT_LABEL_CACHE = got
-                    return True
+                        return True
         except Exception:
             pass
-        if self._fill_combobox("codPayMod", text) or self._fill_combobox(
-            "codPayMod", "Chuyển khoản"
+        if self._fill_combobox(
+            "codPayMod",
+            text,
+            max_queries=1,
+            budget_ms=2600,
         ):
             got = self._read_payment_label()
             if got:
@@ -591,14 +651,14 @@ class EsidDeclarePage:
 
     @staticmethod
     def _ymd_to_mdy(ymd: str) -> str:
-        """Modal CHỌN CHUYẾN BAY dùng #flightDate dạng MM-DD-YYYY."""
+        """#flightDate trong modal TCS hiển thị MM-DD-YYYY."""
         s = (ymd or "").strip()
-        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", s)
-        if m:
-            return f"{m.group(2)}-{m.group(3)}-{m.group(1)}"
-        m = re.match(r"^(\d{2})-(\d{2})-(\d{4})$", s)
-        if m:
-            return f"{m.group(2)}-{m.group(1)}-{m.group(3)}"
+        match = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", s)
+        if match:
+            return f"{match.group(2)}-{match.group(3)}-{match.group(1)}"
+        match = re.match(r"^(\d{2})[-/.](\d{2})[-/.](\d{4})$", s)
+        if match:
+            return f"{match.group(2)}-{match.group(1)}-{match.group(3)}"
         return s
 
     @staticmethod
@@ -627,7 +687,20 @@ class EsidDeclarePage:
 
     @staticmethod
     def _norm_flight(s: str) -> str:
-        return re.sub(r"[^A-Z0-9]", "", (s or "").upper())
+        compact = re.sub(r"[^A-Z0-9]", "", (s or "").upper())
+        match = re.match(r"^([A-Z]{2,3})0*(\d+)$", compact)
+        if match:
+            return f"{match.group(1)}{int(match.group(2))}"
+        return compact
+
+    @staticmethod
+    def _flight_search_query(s: str) -> str:
+        """Ô tìm kiếm TCS dùng mã đủ 4 số: AK523 → AK0523."""
+        compact = re.sub(r"[^A-Z0-9]", "", (s or "").upper())
+        match = re.match(r"^([A-Z]{2,3})0*(\d+)$", compact)
+        if not match:
+            return compact
+        return f"{match.group(1)}{match.group(2).zfill(4)}"
 
     @staticmethod
     def _date_tokens(ymd_or_dmy: str) -> set[str]:
@@ -667,7 +740,9 @@ class EsidDeclarePage:
             return self.page.evaluate(
                 """() => {
                   const g = id => {
-                    const el = document.getElementById(id);
+                    const el = [...document.querySelectorAll('#' + id)].find(
+                      node => !node.closest('.ant-modal, [role=dialog]')
+                    );
                     return el ? String(el.value || '').trim() : '';
                   };
                   return { flightNo: g('flightNo'), datFltOri: g('datFltOri') };
@@ -675,6 +750,86 @@ class EsidDeclarePage:
             ) or {}
         except Exception:
             return {}
+
+    def _close_open_flight_modals(self) -> None:
+        """Đóng modal chuyến bay cũ để tránh duplicate id và thao tác nhầm."""
+        for _ in range(3):
+            current = self.page.locator(
+                ".ant-modal:visible, [role=dialog]:visible"
+            ).filter(has_text=re.compile(r"Danh\s*sách\s*chuyến\s*bay|flight", re.I))
+            if current.count() == 0:
+                return
+            try:
+                close = current.last.locator(
+                    ".ant-modal-close, .ant-modal-footer button"
+                ).filter(has_text=re.compile(r"Cancel|Hủy|Đóng", re.I))
+                if close.count() > 0:
+                    close.first.evaluate("el => el.click()")
+                else:
+                    self.page.keyboard.press("Escape")
+                self.page.wait_for_timeout(120)
+            except Exception:
+                try:
+                    self.page.keyboard.press("Escape")
+                except Exception:
+                    return
+
+    def _select_modal_flight_date(self, modal, ymd: str) -> bool:
+        """Chọn ngày bằng Ant DatePicker; không gán text vào input readonly."""
+        target_text = (ymd or "").strip()
+        try:
+            target = datetime.strptime(target_text, "%Y-%m-%d")
+        except ValueError:
+            return False
+        date_input = modal.locator("#flightDate").first
+        if date_input.count() == 0:
+            return False
+        try:
+            current_value = date_input.input_value(timeout=500)
+        except Exception:
+            current_value = ""
+        try:
+            current = datetime.strptime(current_value, "%m-%d-%Y")
+        except ValueError:
+            current = datetime.now()
+
+        try:
+            date_input.click(timeout=1200, force=True)
+            popup = self.page.locator(
+                ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden):visible"
+            ).last
+            popup.wait_for(state="visible", timeout=1800)
+
+            month_delta = (
+                (target.year - current.year) * 12
+                + target.month
+                - current.month
+            )
+            if abs(month_delta) > 24:
+                return False
+            selector = (
+                ".ant-picker-header-next-btn"
+                if month_delta > 0
+                else ".ant-picker-header-prev-btn"
+            )
+            for _ in range(abs(month_delta)):
+                nav = popup.locator(selector).first
+                if nav.count() == 0:
+                    return False
+                nav.evaluate("el => el.click()")
+                self.page.wait_for_timeout(80)
+
+            cell = popup.locator(
+                f"td[title='{target_text}']:not(.ant-picker-cell-disabled)"
+            ).last
+            if cell.count() == 0:
+                return False
+            cell.evaluate("el => el.click()")
+            self.page.wait_for_timeout(140)
+            got = date_input.input_value(timeout=500)
+            return got == self._ymd_to_mdy(target_text)
+        except Exception:
+            return False
 
     def _flight_fields_match(self, flight_no: str, flight_date: str) -> bool:
         """True khi form đã có đúng flight + ngày (bỏ qua modal)."""
@@ -698,7 +853,13 @@ class EsidDeclarePage:
             for tok in date_toks
         )
 
-    def choose_flight(self, flight_no: str, flight_date: str) -> dict[str, Any]:
+    def choose_flight(
+        self,
+        flight_no: str,
+        flight_date: str,
+        *,
+        _empty_retry: bool = False,
+    ) -> dict[str, Any]:
         """
         Bắt buộc điền ngày/số hiệu qua nút CHỌN CHUYẾN BAY (không gõ tay datFltOri).
         Hot-path: nếu form đã đúng flight+ngày → bỏ modal.
@@ -707,8 +868,9 @@ class EsidDeclarePage:
         flight = (flight_no or "").strip()
         fdate = (flight_date or "").strip()
         want_flight = self._norm_flight(flight)
-        date_toks = self._date_tokens(fdate)
+        flight_query = self._flight_search_query(flight)
         mdy = self._ymd_to_mdy(fdate)
+        date_toks = self._date_tokens(fdate)
         ddmon = self._ymd_to_ddmonyyyy(fdate)
 
         if self._flight_fields_match(flight, fdate):
@@ -725,6 +887,8 @@ class EsidDeclarePage:
                 "values": vals,
                 "pick": {"skipped": True},
             }
+
+        self._close_open_flight_modals()
 
         clicked = False
         try:
@@ -764,12 +928,12 @@ class EsidDeclarePage:
 
         self.page.wait_for_timeout(200)
         modal = self.page.locator(
-            ".ant-modal-wrap:not(.ant-modal-wrap-hidden) .ant-modal, "
-            ".ant-modal-root .ant-modal:visible, "
-            "[role=dialog]"
-        ).first
+            ".ant-modal:visible, [role=dialog]:visible"
+        ).filter(
+            has_text=re.compile(r"Danh\s*sách\s*chuyến\s*bay|flight", re.I)
+        ).last
         try:
-            modal.wait_for(state="visible", timeout=8000)
+            modal.wait_for(state="visible", timeout=4000)
         except Exception:
             return {
                 "ok": False,
@@ -778,47 +942,109 @@ class EsidDeclarePage:
                 "warnings": ["Modal CHỌN CHUYẾN BAY không hiện"],
             }
 
-        # Lọc trong modal: #flightDate (MM-DD-YYYY) + #flightNo
+        # Đúng quy trình TCS: ngày OPS → chuyến bay → nút search icon.
+        filter_diag: dict[str, Any] = {}
         try:
-            modal_flight = modal.locator("#flightNo")
             modal_date = modal.locator("#flightDate")
-            if mdy and modal_date.count() > 0:
-                EsidListPage._set_react_input(modal_date, mdy)
+            modal_flight = modal.locator("#flightNo")
+            date_selected = self._select_modal_flight_date(modal, fdate)
+            if not date_selected:
                 try:
-                    modal_date.first.press("Enter")
+                    self.page.keyboard.press("Escape")
                 except Exception:
                     pass
-            if flight and modal_flight.count() > 0:
-                EsidListPage._set_react_input(modal_flight, flight)
-                try:
-                    modal_flight.first.press("Enter")
-                except Exception:
-                    pass
-            find_btn = modal.get_by_role(
-                "button", name=re.compile(r"TÌM|SEARCH|TRA\s*CỨU", re.I)
-            )
-            if find_btn.count() > 0 and find_btn.first.is_visible(timeout=200):
-                find_btn.first.click(timeout=1500)
-            # Chờ bảng có dòng (thay sleep cố định)
-            try:
-                modal.locator(".ant-table-tbody tr").first.wait_for(
-                    state="visible", timeout=4000
-                )
-            except Exception:
-                self.page.wait_for_timeout(300)
-        except Exception as e:
-            warnings.append(f"Lọc modal: {e}")
+                return {
+                    "ok": False,
+                    "flight_ok": False,
+                    "date_ok": False,
+                    "warnings": [
+                        f"Không chọn được ngày bay {fdate!r} bằng lịch TCS"
+                    ],
+                    "pick": {
+                        "requested": {"flight": flight_query, "date": mdy},
+                        "reason": "date_picker_failed",
+                    },
+                }
+            if flight_query and modal_flight.count() > 0:
+                # Ô flight không readonly: dùng thao tác fill thật để Ant Input
+                # cập nhật state; native setter có thể bị React trả về giá trị cũ.
+                modal_flight.first.click(timeout=1000)
+                modal_flight.first.fill(flight_query, timeout=1200)
+                self.page.wait_for_timeout(80)
 
-        pick = self.page.evaluate(
-            """({ wantFlight, dateToks, ddmon }) => {
-              const wrap = [...document.querySelectorAll(
-                '.ant-modal-wrap:not(.ant-modal-wrap-hidden) .ant-modal, [role=dialog]'
-              )].find(el => {
-                const r = el.getBoundingClientRect();
-                return r.width > 80 && r.height > 80;
-              });
-              if (!wrap) return { ok: false, reason: 'no_modal' };
+            search_clicked = False
+            search_btn = modal.locator(
+                "button.ant-input-search-button, "
+                ".ant-input-search-button"
+            ).first
+            if search_btn.count() > 0:
+                search_btn.evaluate("el => el.click()")
+                search_clicked = True
+            if not search_clicked:
+                search_btn = modal.get_by_role(
+                    "button", name=re.compile(r"search|tìm", re.I)
+                ).first
+                if search_btn.count() > 0:
+                    search_btn.click(timeout=1200, force=True)
+                    search_clicked = True
+            if not search_clicked:
+                warnings.append("Không thấy nút search chuyến bay (.ant-input-search-button)")
+
+            # Ant dựng một row tạm rồi thay toàn bộ tbody khi request hoàn tất;
+            # wait_for(first row) có thể bắt đúng row tạm. Poll ngay trên modal
+            # đang dùng cho tới khi có row dữ liệu ổn định.
+            stable_rows = 0
+            last_count = 0
+            for _ in range(28):
+                last_count = int(
+                    modal.evaluate(
+                        """el => [...el.querySelectorAll(
+                          '.ant-table-tbody tr, table tbody tr'
+                        )].filter(tr => {
+                          const t = (tr.innerText || '').trim();
+                          return t.length >= 4
+                            && !/ant-table-measure|ant-table-placeholder/i.test(
+                              tr.className || ''
+                            );
+                        }).length"""
+                    )
+                    or 0
+                )
+                stable_rows = stable_rows + 1 if last_count > 0 else 0
+                if stable_rows >= 2:
+                    break
+                self.page.wait_for_timeout(150)
+            filter_diag = modal.evaluate(
+                """modal => {
+                  return {
+                    inputs: [...modal.querySelectorAll('input')].map(el => ({
+                      id: el.id || '', name: el.name || '', type: el.type || '',
+                      value: String(el.value || ''), placeholder: el.placeholder || ''
+                    })),
+                    buttons: [...modal.querySelectorAll('button')].map(
+                      el => (el.innerText || '').trim()
+                    ).filter(Boolean),
+                    pagination: (
+                      modal.querySelector('.ant-pagination')?.innerText || ''
+                    ).replace(/\\s+/g, ' ').trim(),
+                    paginationHtml: String(
+                      modal.querySelector('.ant-pagination')?.outerHTML || ''
+                    ).slice(0, 1200)
+                  };
+                }"""
+            ) or {}
+            filter_diag["stable_row_count"] = last_count
+            filter_diag["search_clicked"] = search_clicked
+            filter_diag["requested_date"] = mdy
+            filter_diag["requested_flight"] = flight_query
+        except Exception as e:
+            warnings.append(f"Chờ danh sách chuyến bay: {e}")
+
+        pick = modal.evaluate(
+            """(wrap, { wantFlight, dateToks, ddmon }) => {
               const norm = s => String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+              const normFlightsInText = s =>
+                norm(s).replace(/([A-Z]{2,3})0+(\\d{2,4})/g, '$1$2');
               const rows = [...wrap.querySelectorAll(
                 '.ant-table-tbody tr, table tbody tr'
               )].filter(tr => {
@@ -828,18 +1054,28 @@ class EsidDeclarePage:
                 return true;
               });
               const scored = [];
+              const previewRows = [];
               for (let i = 0; i < rows.length; i++) {
                 const text = (rows[i].innerText || '').replace(/\\s+/g, ' ').trim();
-                const nf = norm(text);
+                if (previewRows.length < 12) previewRows.push(text.slice(0, 140));
+                const nf = normFlightsInText(text);
+                const flightMatched = !wantFlight || nf.includes(wantFlight);
+                if (!flightMatched) continue;
                 let score = 0;
-                if (wantFlight && nf.includes(wantFlight)) score += 12;
+                if (wantFlight) score += 12;
+                let dateMatched = !(ddmon || (dateToks || []).length);
                 for (const tok of (dateToks || [])) {
                   if (tok && (text.includes(tok) || nf.includes(norm(tok)))) {
                     score += 10;
+                    dateMatched = true;
                     break;
                   }
                 }
-                if (ddmon && nf.includes(norm(ddmon))) score += 6;
+                if (ddmon && nf.includes(norm(ddmon))) {
+                  score += 6;
+                  dateMatched = true;
+                }
+                if (!dateMatched) continue;
                 scored.push({ i, score, text: text.slice(0, 140) });
               }
               scored.sort((a,b) => b.score - a.score);
@@ -848,7 +1084,7 @@ class EsidDeclarePage:
                 return {
                   ok: false,
                   reason: 'no_match',
-                  rows: scored.slice(0, 12),
+                  rows: previewRows,
                   count: rows.length
                 };
               }
@@ -866,8 +1102,185 @@ class EsidDeclarePage:
                 "ddmon": ddmon,
             },
         )
+        if isinstance(pick, dict):
+            pick["requested"] = {
+                "flight": flight_query,
+                "date": mdy,
+            }
+        # Một số phiên bản TCS chỉ lưu text filter nhưng không lọc bảng. Khi đó
+        # duyệt pagination (20 dòng/trang) và chỉ nhận đúng flight + ngày.
         if not pick or not pick.get("ok"):
+            page_previews: list[str] = list((pick or {}).get("rows") or [])
+            pagination_trace: list[dict[str, Any]] = []
+            pagination_state = modal.evaluate(
+                """el => ({
+                  active: Number(
+                    (el.querySelector('.ant-pagination-item-active')?.textContent || '0').trim()
+                  ),
+                  pages: [...el.querySelectorAll('.ant-pagination-item')]
+                    .map(x => Number((x.textContent || '').trim()))
+                    .filter(Number.isFinite)
+                    .slice(0, 12)
+                })"""
+            ) or {}
+            active_page = int(pagination_state.get("active") or 0)
+            page_numbers = [
+                int(n)
+                for n in (pagination_state.get("pages") or [])
+                if int(n) != active_page
+            ]
+            for page_number in page_numbers:
+                try:
+                    click_diag = self.page.evaluate(
+                            """pageNo => {
+                              const visible = el => {
+                                const r = el.getBoundingClientRect();
+                                const s = getComputedStyle(el);
+                                return r.width > 80 && r.height > 80
+                                  && s.display !== 'none'
+                                  && s.visibility !== 'hidden';
+                              };
+                              const dialogs = [...document.querySelectorAll(
+                                '.ant-modal, [role=dialog]'
+                              )].filter(visible);
+                              const current = dialogs[dialogs.length - 1];
+                              if (!current) return {clicked:false, reason:'no_modal'};
+                              const items = [...current.querySelectorAll(
+                                '.ant-pagination-item'
+                              )];
+                              const item = items.find(el =>
+                                String(el.getAttribute('title') || '').trim() === String(pageNo)
+                                || String(el.textContent || '').trim() === String(pageNo)
+                              );
+                              const labels = items.map(el => ({
+                                title: el.getAttribute('title') || '',
+                                text: String(el.textContent || '').trim(),
+                                cls: String(el.className || '')
+                              }));
+                              if (!item) return {
+                                clicked:false, reason:'no_page_item', labels
+                              };
+                              (item.querySelector('button, a') || item).click();
+                              return {clicked:true, labels};
+                            }""",
+                            page_number,
+                        ) or {}
+                    if not click_diag.get("clicked"):
+                        pagination_trace.append(
+                            {"page": page_number, **click_diag}
+                        )
+                        break
+                    try:
+                        self.page.wait_for_function(
+                            """pageNo => {
+                              const visible = el => {
+                                const r = el.getBoundingClientRect();
+                                const s = getComputedStyle(el);
+                                return r.width > 80 && r.height > 80
+                                  && s.display !== 'none'
+                                  && s.visibility !== 'hidden';
+                              };
+                              const dialogs = [...document.querySelectorAll(
+                                '.ant-modal, [role=dialog]'
+                              )].filter(visible);
+                              const modal = dialogs[dialogs.length - 1];
+                              const active = modal?.querySelector(
+                                '.ant-pagination-item-active'
+                              );
+                              return Number((active?.textContent || '').trim()) === pageNo;
+                            }""",
+                            page_number,
+                            timeout=800,
+                        )
+                    except Exception:
+                        self.page.wait_for_timeout(100)
+                    page_pick = self.page.evaluate(
+                        """({wantFlight, ddmon}) => {
+                          const visible = el => {
+                            const r = el.getBoundingClientRect();
+                            const s = getComputedStyle(el);
+                            return r.width > 80 && r.height > 80
+                              && s.display !== 'none'
+                              && s.visibility !== 'hidden';
+                          };
+                          const dialogs = [...document.querySelectorAll(
+                            '.ant-modal, [role=dialog]'
+                          )].filter(visible);
+                          const modal = dialogs[dialogs.length - 1];
+                          if (!modal) return {
+                            ok:false, reason:'no_modal', count:0, preview:[], active:''
+                          };
+                          const norm = s => String(s||'').toUpperCase()
+                            .replace(/[^A-Z0-9]/g,'')
+                            .replace(/([A-Z]{2,3})0+(\\d{2,4})/g, '$1$2');
+                          const rows = [...modal.querySelectorAll(
+                            '.ant-table-tbody tr, table tbody tr'
+                          )].filter(tr => {
+                            const t = (tr.innerText||'').trim();
+                            return t.length >= 4
+                              && !/ant-table-measure|ant-table-placeholder/i.test(
+                                tr.className||''
+                              );
+                          });
+                          const preview = rows.slice(0, 4).map(
+                            tr => (tr.innerText||'').replace(/\\s+/g,' ').trim().slice(0,140)
+                          );
+                          const active = String(
+                            modal.querySelector('.ant-pagination-item-active')?.textContent || ''
+                          ).trim();
+                          for (let i=0; i<rows.length; i++) {
+                            const text = (rows[i].innerText||'').replace(/\\s+/g,' ').trim();
+                            const folded = norm(text);
+                            if (wantFlight && !folded.includes(wantFlight)) continue;
+                            if (ddmon && !folded.includes(norm(ddmon))) continue;
+                            return {
+                              ok:true, index:i, count:rows.length, score:30,
+                              text:text.slice(0,140), preview, active
+                            };
+                          }
+                          return {
+                            ok:false, reason:'no_match', count:rows.length, preview, active
+                          };
+                        }""",
+                        {"wantFlight": want_flight, "ddmon": ddmon},
+                    ) or {}
+                    page_previews.extend(page_pick.get("preview") or [])
+                    pagination_trace.append(
+                        {
+                            "page": page_number,
+                            "clicked": True,
+                            "active": page_pick.get("active"),
+                            "count": page_pick.get("count"),
+                            "preview": (page_pick.get("preview") or [])[:2],
+                        }
+                    )
+                    if page_pick.get("ok"):
+                        pick = page_pick
+                        pick["pagination_page"] = page_number
+                        pick["pagination_trace"] = pagination_trace
+                        break
+                except Exception as e:
+                    warnings.append(f"Duyệt trang chuyến bay {page_number}: {e}")
+                    break
+            if isinstance(pick, dict) and not pick.get("ok"):
+                pick["pagination_preview"] = page_previews[:24]
+                pick["pagination_trace"] = pagination_trace
+        if not pick or not pick.get("ok"):
+            if isinstance(pick, dict):
+                pick["filter_diag"] = filter_diag
             reason = (pick or {}).get("reason") or "unknown"
+            row_count = int((pick or {}).get("count") or 0)
+            if row_count == 0 and not _empty_retry:
+                try:
+                    self.page.keyboard.press("Escape")
+                    self.page.wait_for_timeout(250)
+                except Exception:
+                    pass
+                return self.choose_flight(
+                    flight_no,
+                    flight_date,
+                    _empty_retry=True,
+                )
             warnings.append(
                 f"Không khớp chuyến bay trong modal ({reason}, rows={(pick or {}).get('count')})"
             )
@@ -884,6 +1297,11 @@ class EsidDeclarePage:
             }
 
         # Click wrapper Ant Design để React nhận onChange (không check() native)
+        if pick.get("pagination_page"):
+            modal = self.page.locator(
+                ".ant-modal-wrap:not(.ant-modal-wrap-hidden) .ant-modal:visible, "
+                "[role=dialog]:visible"
+            ).last
         row_idx = int(pick.get("index") or 0)
         radio_ok = False
         try:
@@ -907,12 +1325,8 @@ class EsidDeclarePage:
                 target.click(timeout=2000)
                 radio_ok = True
             self.page.wait_for_timeout(120)
-            pick["radio_state"] = self.page.evaluate(
-                """(idx) => {
-                  const wrap = [...document.querySelectorAll(
-                    '.ant-modal-wrap:not(.ant-modal-wrap-hidden) .ant-modal'
-                  )][0];
-                  if (!wrap) return {};
+            pick["radio_state"] = modal.evaluate(
+                """(wrap, idx) => {
                   const rows = [...wrap.querySelectorAll('.ant-table-tbody tr')].filter(tr =>
                     !/ant-table-measure|ant-table-placeholder/i.test(tr.className||'')
                   );
@@ -957,12 +1371,8 @@ class EsidDeclarePage:
 
         self.page.wait_for_timeout(200)
         # Footer Cancel / Ok — dump trạng thái trước khi bấm
-        pick["ok_btn"] = self.page.evaluate(
-            """() => {
-              const wrap = [...document.querySelectorAll(
-                '.ant-modal-wrap:not(.ant-modal-wrap-hidden) .ant-modal'
-              )][0];
-              if (!wrap) return null;
+        pick["ok_btn"] = modal.evaluate(
+            """wrap => {
               const btns = [...wrap.querySelectorAll('.ant-modal-footer button')];
               return btns.map(b => ({
                 text: (b.innerText||'').trim(),
@@ -974,7 +1384,28 @@ class EsidDeclarePage:
         )
         confirmed = False
         modal_closed = False
+        native_confirm = {
+            "seen": False,
+            "accepted": False,
+            "message": "",
+            "error": "",
+        }
+
+        def _accept_flight_dialog(dialog) -> None:
+            """Accept window.confirm do nút Ok của modal chuyến bay phát sinh."""
+            native_confirm["seen"] = True
+            try:
+                native_confirm["message"] = str(dialog.message or "")
+                dialog.accept()
+                native_confirm["accepted"] = True
+            except Exception as exc:
+                native_confirm["error"] = str(exc)[:240]
+
         try:
+            # Playwright sẽ tự dismiss native window.confirm nếu không có
+            # handler. Phải đăng ký trước khi bấm Ok, nếu không modal danh
+            # sách đóng nhưng TCS không ghi chuyến bay vào form.
+            self.page.once("dialog", _accept_flight_dialog)
             try:
                 self.page.keyboard.press("Tab")
             except Exception:
@@ -997,50 +1428,68 @@ class EsidDeclarePage:
         except Exception as e:
             warnings.append(f"Không bấm Ok modal: {e}")
 
-        # Popup «Thông báo»: Bạn có đồng ý chọn chuyến bay này? → Đồng ý
-        agree_clicked = False
-        try:
-            agree = self.page.get_by_role(
-                "button", name=re.compile(r"^Đồng\s*ý$", re.I)
-            )
-            if agree.count() == 0:
-                agree = self.page.locator(
-                    ".ant-modal-confirm .ant-btn-primary, "
-                    ".ant-modal-wrap:not(.ant-modal-wrap-hidden) button"
-                ).filter(has_text=re.compile(r"^Đồng\s*ý$", re.I))
-            if agree.count() > 0:
-                agree.last.wait_for(state="visible", timeout=3500)
-                agree.last.click(timeout=2500)
-                agree_clicked = True
-                self.page.wait_for_timeout(350)
-            else:
-                self.page.wait_for_timeout(350)
-                agree = self.page.get_by_role(
-                    "button", name=re.compile(r"Đồng\s*ý", re.I)
+        # Popup «Thông báo»: Bạn có đồng ý chọn chuyến bay này? → Đồng ý.
+        # Popup được render bất đồng bộ, vì vậy phải đợi nó xuất hiện thay vì
+        # kiểm tra một lần ngay sau khi bấm Ok.
+        agree_clicked = bool(native_confirm["accepted"])
+        agree_modal_closed = bool(native_confirm["accepted"])
+        pick["native_confirm"] = native_confirm
+        if not agree_clicked:
+            try:
+                confirm_modal = self.page.locator(
+                    ".ant-modal-confirm:visible, "
+                    ".ant-modal-wrap:not(.ant-modal-wrap-hidden) .ant-modal:visible"
+                ).filter(
+                    has_text=re.compile(
+                        r"(Bạn\s+có\s+đồng\s+ý.*chuyến\s+bay|"
+                        r"đồng\s+ý\s+chọn\s+chuyến\s+bay|Thông\s+báo)",
+                        re.I,
+                    )
                 )
-                if agree.count() > 0:
-                    agree.last.click(timeout=2500)
+                confirm_modal.last.wait_for(state="visible", timeout=4200)
+                dialog = confirm_modal.last
+                agree = dialog.get_by_role(
+                    "button", name=re.compile(r"^Đồng\s*ý$", re.I)
+                )
+                if agree.count() == 0:
+                    agree = dialog.locator(
+                        ".ant-modal-confirm-btns button.ant-btn-primary, "
+                        ".ant-modal-footer button.ant-btn-primary"
+                    )
+                if agree.count() == 0:
+                    agree = dialog.locator("button").filter(
+                        has_text=re.compile(r"Đồng\s*ý", re.I)
+                    )
+                if agree.count() == 0:
+                    warnings.append(
+                        "Không thấy đúng nút Đồng ý trong hộp xác nhận chuyến bay"
+                    )
+                else:
+                    agree.last.click(timeout=2500, force=True)
                     agree_clicked = True
-                    self.page.wait_for_timeout(350)
-        except Exception as e:
-            warnings.append(f"Popup Đồng ý: {e}")
+                    try:
+                        dialog.wait_for(state="hidden", timeout=3600)
+                        agree_modal_closed = True
+                    except Exception:
+                        warnings.append(
+                            "Đã bấm Đồng ý nhưng hộp xác nhận chuyến bay chưa đóng"
+                        )
+            except Exception as e:
+                warnings.append(f"Không xử lý được popup Đồng ý chuyến bay: {e}")
 
         pick["agree_clicked"] = agree_clicked
-        if not confirmed and not agree_clicked:
-            warnings.append("Không bấm được Ok / Đồng ý trên modal chuyến bay")
+        pick["agree_modal_closed"] = agree_modal_closed
+        if not agree_clicked:
+            warnings.append("TCS chưa xác nhận Đồng ý chọn chuyến bay")
 
         try:
-            self.page.locator(
-                ".ant-modal-wrap:not(.ant-modal-wrap-hidden) .ant-modal"
-            ).first.wait_for(state="hidden", timeout=8000)
-            modal_closed = True
+            if agree_modal_closed:
+                modal.wait_for(state="hidden", timeout=2800)
+                modal_closed = True
         except Exception:
-            # Đóng confirm nếu còn
-            try:
-                self.page.keyboard.press("Escape")
-                self.page.wait_for_timeout(300)
-            except Exception:
-                pass
+            # Không dùng Escape ở đây: nó có thể hủy chính popup Đồng ý và làm
+            # quy trình trông như thành công dù TCS chưa ghi nhận chuyến bay.
+            modal_closed = False
 
         pick["modal_closed"] = modal_closed
 
@@ -1086,11 +1535,18 @@ class EsidDeclarePage:
             )
 
         return {
-            "ok": bool(flight_ok and date_ok and (confirmed or agree_clicked)),
+            "ok": bool(
+                flight_ok
+                and date_ok
+                and confirmed
+                and agree_clicked
+                and agree_modal_closed
+            ),
             "flight_ok": flight_ok,
             "date_ok": date_ok,
             "confirmed": confirmed,
             "agree_clicked": agree_clicked,
+            "agree_modal_closed": agree_modal_closed,
             "modal_closed": modal_closed,
             "warnings": warnings,
             "values": vals,
@@ -1102,14 +1558,14 @@ class EsidDeclarePage:
         Điền form từ payload Ops. Mặc định submit=False: không tick đồng ý, không HOÀN TẤT.
 
         Thứ tự tối ưu:
-        1) Text ops (AWB/pcs/HAWB/goods)
-        2) CHỌN CHUYẾN BAY (hot-path nếu đã đúng)
-        3) Dest + payment (1 lần)
-        4) Party (Shipper/Agent/CNEE)
+        1) CHỌN CHUYẾN BAY trước — TCS có thể dựng/reset phần còn lại của form
+        2) Party master (Shipper/Agent/CNEE) — giữ dữ liệu TCS tự điền
+        3) Chuyển khoản + Kho hàng TECS
+        4) AWB/destination/pcs/goods và các text không thuộc master
         5) Người khai
         """
         t_all = time.perf_counter()
-        timings: dict[str, int] = {}
+        timings: dict[str, Any] = {}
 
         self.goto_declare_tab()
         if not self._on_declare_form():
@@ -1117,31 +1573,26 @@ class EsidDeclarePage:
 
         fills: dict[str, Any] = {}
         warnings: list[str] = []
+        diagnostics: dict[str, Any] = {}
 
         awb = "".join(c for c in str(data.get("awb") or "") if c.isdigit())[:11]
         if len(awb) != 11:
             raise SiteChangedError("AWB phải đủ 11 số")
 
-        # 1) Text ops nhanh
-        t0 = time.perf_counter()
-        self._fill_ops_text(data, awb, fills, warnings)
-        timings["ops_text_ms"] = int((time.perf_counter() - t0) * 1000)
-
-        # 2) Chuyến bay trước dest/payment (tránh chọn payment 2 lần)
+        # 1) Chuyến bay luôn trước mọi dữ liệu khác.
         flight = str(data.get("flight_no") or data.get("flight") or "").strip()
         fdate_ymd = str(data.get("flight_date") or "").strip()
         choose_flight = bool(data.get("choose_flight", True))
         t0 = time.perf_counter()
         if choose_flight and (flight or fdate_ymd):
             cf = self.choose_flight(flight, fdate_ymd)
+            diagnostics["flight"] = cf
             fills["choose_flight"] = cf.get("ok", False)
             fills["choose_flight_skipped"] = bool(cf.get("skipped"))
             fills["flightNo"] = cf.get("flight_ok", False)
             fills["datFltOri"] = cf.get("date_ok", False)
             for w in cf.get("warnings") or []:
                 warnings.append(w)
-            # Modal có thể xóa text — điền lại AWB/pcs
-            self._fill_ops_text(data, awb, fills, warnings)
         else:
             fills["flightNo"] = self._set_id("flightNo", flight)
             fdate = self._ymd_to_dmy(fdate_ymd)
@@ -1150,74 +1601,100 @@ class EsidDeclarePage:
                 if not fills["datFltOri"]:
                     warnings.append("Không điền được ngày bay")
         timings["flight_ms"] = int((time.perf_counter() - t0) * 1000)
+        if (
+            choose_flight
+            and (flight or fdate_ymd)
+            and not fills.get("choose_flight")
+        ):
+            timings["total_ms"] = int((time.perf_counter() - t_all) * 1000)
+            return {
+                "ok": False,
+                "awb": awb,
+                "submitted": False,
+                "fills": fills,
+                "values": (diagnostics.get("flight") or {}).get("values") or {},
+                "warnings": warnings,
+                "timings": timings,
+                "diagnostics": diagnostics,
+                "message": (
+                    "TCS chưa xác nhận và lưu chuyến bay — dừng trước khi điền "
+                    "các trường còn lại"
+                ),
+            }
 
-        # 3) Dest + payment một lần
+        # 2) Chỉ chọn master party. TCS tự điền địa chỉ/liên hệ chuẩn từ danh mục.
         t0 = time.perf_counter()
-        self._fill_ops_selects(data, fills, warnings)
-        timings["selects_ms"] = int((time.perf_counter() - t0) * 1000)
-
-        # 4) Party (combobox chậm — sau flight/payment)
-        # DOM ids: DEFAULT_LOCATORS / discovery qua _field_id; fallback = cột hardcode cũ.
-        t0 = time.perf_counter()
-        party_map = [
-            ("shipper_name", "shipperId", True),
-            ("shipper_address", "addressShp", False),
-            ("shipper_tel", "telShp", False),
-            ("shipper_email", "emailShp", False),
-            ("shipper_fax", "faxShp", False),
-            ("agent_name", "agentId", True),
-            ("agent_address", "addressAgt", False),
-            ("agent_tel", "telAgt", False),
-            ("agent_email", "emailAgt", False),
-            ("agent_fax", "faxAgt", False),
-            ("agent_vat", "vatAgt", False),
-            ("consignee_name", "consigneeId", True),
-            ("consignee_address", "addressCne", False),
-            ("consignee_tel", "telCne", False),
-            ("consignee_email", "emailCne", False),
-            ("consignee_fax", "faxCne", False),
-            ("consignee_vat", "vatCne", False),
-            ("notify_name", "notifyId", True),
-            ("notify_address", "addressNtf", False),
-            ("notify_tel", "telNtf", False),
-            ("notify_email", "emailNtf", False),
-            ("notify_fax", "faxNtf", False),
-            ("notify_remark", "desRmk001", False),
-            ("other_request", "shcOthReq", False),
+        party_master = [
+            ("shipper_name", "shipperId"),
+            ("agent_name", "agentId"),
+            ("consignee_name", "consigneeId"),
         ]
-        for key, fallback_eid, is_combo in party_map:
+        party_timings: dict[str, int] = {}
+        for key, eid in party_master:
             val = str(data.get(key) or "").strip()
             if not val:
                 continue
-            eid = self._field_id(key, fallback_eid)
-            if is_combo:
-                ok = self._fill_combobox(eid, val)
-                fills[eid] = ok
-                if not ok:
-                    warnings.append(f"Combobox #{eid} chưa chọn master cho {val!r}")
-            elif key == "other_request":
-                # Chrome ext dùng otherRequest; Python/excel historically shcOthReq — thử cả hai.
-                alt_ids = [eid, "shcOthReq", "otherRequest"]
-                seen: set[str] = set()
-                ok = False
-                used = eid
-                for cand in alt_ids:
-                    if not cand or cand in seen:
-                        continue
-                    seen.add(cand)
-                    if self._set_id(cand, val):
-                        ok = True
-                        used = cand
-                        break
-                fills[used] = ok
+            party_started = time.perf_counter()
+            ok = self._fill_combobox(
+                eid,
+                val,
+                max_queries=2,
+                budget_ms=3500,
+            )
+            fills[eid] = ok
+            party_timings[eid] = int((time.perf_counter() - party_started) * 1000)
+            if not ok:
+                warnings.append(
+                    f"Không chọn được master #{eid} trong 3.5s — để trống, không ghi đè text"
+                )
             else:
-                fills[eid] = self._set_id(eid, val)
+                self.page.wait_for_timeout(120)
         timings["party_ms"] = int((time.perf_counter() - t0) * 1000)
+        timings["party_fields_ms"] = party_timings
 
+        # 3) Mặc định nghiệp vụ: chuyển khoản và Kho hàng TECS.
+        t0 = time.perf_counter()
+        # Master combobox có thể để lại dropdown/lớp phủ trong lúc React cập nhật;
+        # đóng trước khi mở payment để click không bị chặn.
+        try:
+            self.page.keyboard.press("Escape")
+            self.page.wait_for_timeout(60)
+        except Exception:
+            pass
+        self._fill_ops_selects(
+            data,
+            fills,
+            warnings,
+            include_destination=False,
+            include_payment=True,
+        )
         if data.get("tecs_warehouse", True):
             fills["shcCod002"] = self._set_checkbox("shcCod002", True)
+            if not fills["shcCod002"]:
+                warnings.append("Chưa chọn được Kho hàng TECS (#shcCod002)")
         if data.get("consol"):
             fills["shcConsol"] = self._set_checkbox("shcConsol", True)
+        timings["defaults_ms"] = int((time.perf_counter() - t0) * 1000)
+
+        # 4) Text nhanh + destination. Không ghi đè dữ liệu party nếu master đã chọn.
+        t0 = time.perf_counter()
+        self._fill_ops_text(data, awb, fills, warnings)
+        self._fill_ops_selects(
+            data,
+            fills,
+            warnings,
+            include_destination=True,
+            include_payment=False,
+        )
+        passthrough_text = [
+            ("notify_remark", "desRmk001"),
+            ("other_request", "shcOthReq"),
+        ]
+        for key, eid in passthrough_text:
+            val = str(data.get(key) or "").strip()
+            if val:
+                fills[eid] = self._set_id(eid, val)
+        timings["ops_text_ms"] = int((time.perf_counter() - t0) * 1000)
 
         # 5) Người khai
         reg_name = str(data.get("registrant_name") or "").strip()
@@ -1249,8 +1726,9 @@ class EsidDeclarePage:
         values = self.page.evaluate(
             """() => {
               const ids = ['codAwbPfx','codAwbNum','flightNo','datFltOri','codFds','qtyPcs',
-                'totalOfHawbs','natureOfGoods','codPayMod',
-                'addressShp','addressAgt','shpRegNam','shpRegTel','shpRegIdx','agreeConfirm'];
+                'totalOfHawbs','natureOfGoods','codPayMod','shipperId','agentId','consigneeId',
+                'addressShp','addressAgt','addressCne','shcCod002',
+                'shpRegNam','shpRegTel','shpRegIdx','agreeConfirm'];
               const out = {};
               for (const id of ids) {
                 const nodes = [...document.querySelectorAll('#' + id)];
@@ -1283,9 +1761,11 @@ class EsidDeclarePage:
 
         ok_core = bool(fills.get("codAwbPfx") and fills.get("codAwbNum"))
         if choose_flight and (flight or fdate_ymd):
-            if not fills.get("datFltOri"):
+            if not fills.get("flightNo") or not fills.get("datFltOri"):
                 ok_core = False
-                warnings.append("Ngày bay bắt buộc qua CHỌN CHUYẾN BAY — chưa chọn được")
+                warnings.append(
+                    "Chuyến bay và ngày bay bắt buộc qua CHỌN CHUYẾN BAY — chưa chọn đúng"
+                )
         return {
             "ok": ok_core,
             "awb": awb,
@@ -1294,6 +1774,7 @@ class EsidDeclarePage:
             "values": values,
             "warnings": warnings,
             "timings": timings,
+            "diagnostics": diagnostics,
             "message": (
                 "Đã điền form KHAI BÁO ESID (chưa HOÀN TẤT)"
                 if not submitted

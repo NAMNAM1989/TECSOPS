@@ -88,7 +88,7 @@ def test_mock_ops_received_reception_downloads_pdf(tmp_path: Path):
     assert results[0].downloaded_file
 
 
-def test_print_dedupe(tmp_path: Path):
+def test_print_action_is_removed(tmp_path: Path):
     settings = _settings(tmp_path)
     repo = Repository(settings.db_path)
     batch = BatchService(settings, repo)
@@ -105,11 +105,8 @@ def test_print_dedupe(tmp_path: Path):
     assert rows[1].validation_error
     job = batch.create_job_from_rows([rows[0]], source="test", dry_run=True, mock=True)
     results, _ = batch.run(job)
-    assert results[0].normalized_status == "PRINTED"
-    # same content printed again -> skip
-    job2 = batch.create_job_from_rows([rows[0]], source="test", dry_run=True, mock=True)
-    results2, _ = batch.run(job2)
-    assert results2[0].normalized_status in {"PRINTED", "SKIPPED_DUPLICATE"}
+    assert results[0].normalized_status == "FAILED"
+    assert results[0].error_code == "PRINT_REMOVED"
 
 
 def test_excel_template_roundtrip(tmp_path: Path):

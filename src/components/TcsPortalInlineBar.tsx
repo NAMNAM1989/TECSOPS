@@ -8,7 +8,6 @@ import {
   getTcsAgentBaseUrl,
   setTcsAgentBaseUrl,
 } from "../utils/tcsPortalAgentApi";
-import { pingTcsExtension, TCS_EXT_INSTALL_HINT } from "../utils/tcsChromeExtension";
 
 type Props = {
   tcs: TcsPortalActions;
@@ -32,8 +31,10 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
   const headed = tcs.agentHeadless === false;
   const headless = tcs.agentHeadless === true;
   const [desktop, setDesktop] = useState<TcsDesktopInfo>({ enabled: false });
-  const [extOk, setExtOk] = useState<boolean | null>(null);
-  const [extVersion, setExtVersion] = useState("");
+  const [showExtLogin, setShowExtLogin] = useState(false);
+  const [tcsUsername, setTcsUsername] = useState("");
+  const [tcsPassword, setTcsPassword] = useState("");
+  const [rememberTcs, setRememberTcs] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,23 +54,6 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const check = () => {
-      void pingTcsExtension(1800).then((res) => {
-        if (cancelled) return;
-        setExtOk(Boolean(res.ok));
-        setExtVersion(res.ok && res.version ? String(res.version) : "");
-      });
-    };
-    check();
-    const t = window.setInterval(check, 20_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(t);
-    };
-  }, []);
-
   const configureAgentUrl = () => {
     const current = getTcsAgentBaseUrl();
     const next = window.prompt(
@@ -84,20 +68,9 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
     void tcs.refreshHealth();
   };
 
-  const copyExtHint = () => {
-    const hint =
-      "Cài Ext (Chrome thật, không dùng trình duyệt trong Cursor):\n" +
-      "1) chrome://extensions → Developer mode → Load unpacked\n" +
-      "2) Chọn thư mục chrome-extension trong repo TECSOPS\n" +
-      "3) Login TCS trên Chrome đó → mở lại Ops → badge Ext OK → menu ⋮ Điền\n" +
-      "Không có Ext: nút Điền sẽ fallback Playwright (cần Login agent).";
-    void navigator.clipboard?.writeText(hint);
-    window.alert(hint);
-  };
-
   const confirmSubmit = () => {
     const p = tcs.lastDeclarePreview;
-    if (!p || p.viaExtension) return;
+    if (!p) return;
     const ok = window.confirm(
       `Gửi HOÀN TẤT lên TCS cho AWB ${p.awb}?\n\n` +
         (headed
@@ -110,6 +83,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
   };
 
   const preview = tcs.lastDeclarePreview;
+  const workspace = tcs.workspace;
 
   return (
     <div className={`flex min-w-0 flex-col ${compact ? "gap-0.5" : "gap-1"}`}>
@@ -136,43 +110,59 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
           {headed ? " · Chrome" : headless ? " · cloud" : ""}
         </span>
 
+        {workspace?.phase ? (
+          <span
+            className="shrink-0 rounded-full bg-sky-500/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-800 dark:text-sky-200"
+            title={`Ngày ${workspace.session_date || "?"} · cache ${workspace.cache_count || 0} AWB · ${workspace.cache_age_seconds ?? "?"}s`}
+          >
+            {workspace.phase}
+            {workspace.cache_count ? ` · ${workspace.cache_count}` : ""}
+          </span>
+        ) : null}
+
         <span
           className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
-            extOk === true
+            tcs.extension?.ok
               ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200"
-              : extOk === false
-                ? "bg-rose-500/15 text-rose-800 dark:text-rose-200"
-                : "bg-slate-500/15 text-slate-600 dark:text-slate-300"
+              : "bg-slate-500/15 text-slate-600 dark:text-slate-300"
           }`}
           title={
-            extOk === true
-              ? `Chrome extension TECSOPS OK${extVersion ? ` · v${extVersion}` : ""} — Điền trên tab TCS`
-              : extOk === false
-                ? TCS_EXT_INSTALL_HINT
-                : "Đang kiểm tra Chrome extension…"
+            tcs.extension?.ok
+              ? `Chrome extension v${tcs.extension.version || "?"}`
+              : "Chrome extension chưa kết nối"
           }
         >
-          Ext {extOk === true ? "OK" : extOk === false ? "thiếu" : "…"}
+          Ext {tcs.extension?.ok ? "OK" : "—"}
         </span>
-        {extOk === false ? (
-          <button
-            type="button"
-            className={btnGhost}
-            onClick={copyExtHint}
-            title={TCS_EXT_INSTALL_HINT}
-          >
-            Cài Ext
-          </button>
-        ) : null}
 
         <button
           type="button"
           className={btnGhost}
           disabled={tcs.busy}
-          onClick={() => void tcs.login()}
-          title="Login TCS trên agent — rồi Quét → Điền → HOÀN TẤT"
+          onClick={() => {
+            if (!tcs.extension?.ok) {
+              void tcs.login();
+              return;
+            }
+            void tcs
+              .loginWithExtension({
+                username: "",
+                password: "",
+                remember: true,
+              })
+              .then((result) => {
+                if (result?.error === "CREDENTIALS_REQUIRED") {
+                  setShowExtLogin(true);
+                }
+              });
+          }}
+          title={
+            tcs.extension?.ok
+              ? "Đồng bộ bằng tài khoản extension đã lưu; nếu chưa có sẽ yêu cầu nhập"
+              : "Không có extension: dùng Playwright để Login nếu cần và quét lại ngày"
+          }
         >
-          Login
+          Đồng bộ TCS
         </button>
         <button
           type="button"
@@ -195,15 +185,6 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
         </button>
         <button
           type="button"
-          className={btnScan}
-          disabled={tcs.busy || tcs.eligibleCount === 0}
-          onClick={() => void tcs.scan()}
-          title="Quét ESID: lọc theo ngày phiên → cập nhật status Ops. Tải PDF: menu ⋮ từng dòng."
-        >
-          Quét
-        </button>
-        <button
-          type="button"
           className={btnGhost}
           disabled={tcs.busy}
           onClick={configureAgentUrl}
@@ -221,8 +202,58 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
         ) : null}
       </div>
 
+      {showExtLogin ? (
+        <form
+          className="mx-0.5 grid gap-1.5 rounded-xl border border-sky-500/25 bg-sky-50/80 p-2 dark:border-sky-400/20 dark:bg-sky-950/35 sm:grid-cols-[1fr_1fr_auto]"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!tcsUsername.trim() || !tcsPassword) return;
+            setShowExtLogin(false);
+            void tcs.loginWithExtension({
+              username: tcsUsername.trim(),
+              password: tcsPassword,
+              remember: rememberTcs,
+            });
+            setTcsPassword("");
+          }}
+        >
+          <input
+            value={tcsUsername}
+            onChange={(event) => setTcsUsername(event.target.value)}
+            placeholder="Tài khoản TCS"
+            autoComplete="username"
+            className="min-w-0 rounded-lg border border-sky-500/25 bg-white px-2 py-1 text-[11px] text-slate-900 outline-none focus:border-sky-500 dark:bg-slate-900 dark:text-white"
+          />
+          <input
+            value={tcsPassword}
+            onChange={(event) => setTcsPassword(event.target.value)}
+            placeholder="Mật khẩu TCS"
+            type="password"
+            autoComplete="current-password"
+            className="min-w-0 rounded-lg border border-sky-500/25 bg-white px-2 py-1 text-[11px] text-slate-900 outline-none focus:border-sky-500 dark:bg-slate-900 dark:text-white"
+          />
+          <button
+            type="submit"
+            className={btnScan}
+            disabled={!tcsUsername.trim() || !tcsPassword || tcs.busy}
+          >
+            Đồng bộ TCS
+          </button>
+          <label className="flex items-center gap-1 text-[10px] text-slate-600 dark:text-slate-300 sm:col-span-3">
+            <input
+              type="checkbox"
+              checked={rememberTcs}
+              onChange={(event) => setRememberTcs(event.target.checked)}
+            />
+            Ghi nhớ tài khoản trên Chrome này
+          </label>
+        </form>
+      ) : null}
+
       <p className="px-1 text-[9px] leading-snug text-slate-500 dark:text-slate-400">
-        Điền: ưu tiên Chrome extension · không có Ext thì Playwright. Quét/PDF qua Playwright.
+        {tcs.extension?.ok
+          ? "Đồng bộ TCS tự Login khi cần rồi quét lại ngày; Điền dùng tab extension được ghim."
+          : "Đồng bộ TCS tự Login khi cần rồi quét lại ngày bằng Playwright workspace."}
         {desktop.enabled ? " «Sửa tay» = noVNC (chậm)." : ""}
       </p>
 
@@ -264,7 +295,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
             <p className="min-w-0 text-[10px] font-semibold text-emerald-900 dark:text-emerald-100">
               Form đã điền · AWB {preview.awb}
               {preview.valuesSummary ? ` · ${preview.valuesSummary}` : ""}
-              {preview.viaExtension ? " · extension" : " · Playwright"}
+              {` · ${preview.executor === "extension" ? "extension" : "workspace"}`}
             </p>
             <button
               type="button"
@@ -276,18 +307,13 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
             </button>
           </div>
 
-          {preview.viaExtension ? (
-            <p className="text-[10px] font-medium leading-snug text-emerald-900 dark:text-emerald-100">
-              Sang tab <strong>tcs.com.vn</strong> trên Chrome → kiểm tra → <strong>HOÀN TẤT</strong>{" "}
-              trên TCS.
-            </p>
-          ) : (
-            <p className="text-[10px] font-medium leading-snug text-emerald-900 dark:text-emerald-100">
-              {headed
-                ? "Form trên Chrome máy kho — kiểm tra rồi HOÀN TẤT trên Chrome hoặc nút bên dưới."
-                : "Playwright headless — bấm HOÀN TẤT trên Ops (hoặc cài Ext để điền trên Chrome bạn)."}
-            </p>
-          )}
+          <p className="text-[10px] font-medium leading-snug text-emerald-900 dark:text-emerald-100">
+            {preview.executor === "extension"
+              ? "Form nằm trên tab Chrome do extension ghim — kiểm tra và HOÀN TẤT trực tiếp trên TCS."
+              : headed
+              ? "Form trên page Khai báo của Chrome máy kho — kiểm tra rồi HOÀN TẤT."
+              : "Workspace headless — kiểm tra cảnh báo rồi bấm HOÀN TẤT trên Ops."}
+          </p>
 
           {preview.warnings[0] ? (
             <p className="text-[10px] font-medium text-amber-800 dark:text-amber-200">
@@ -295,17 +321,19 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
             </p>
           ) : null}
 
-          {!preview.viaExtension ? (
-            <button
-              type="button"
-              className={btnSubmit}
-              disabled={tcs.busy}
-              onClick={confirmSubmit}
-              title="Playwright bấm HOÀN TẤT trên form đã điền"
-            >
-              HOÀN TẤT trên TCS
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className={btnSubmit}
+            disabled={tcs.busy}
+            onClick={confirmSubmit}
+            title={
+              preview.executor === "extension"
+                ? "Mở tab TCS để kiểm tra và HOÀN TẤT trực tiếp"
+                : "Workspace bấm HOÀN TẤT trên form đã điền"
+            }
+          >
+            {preview.executor === "extension" ? "Mở tab TCS để HOÀN TẤT" : "HOÀN TẤT trên TCS"}
+          </button>
         </div>
       ) : null}
     </div>

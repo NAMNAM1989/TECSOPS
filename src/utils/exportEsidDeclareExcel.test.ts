@@ -67,6 +67,9 @@ describe("exportEsidDeclareExcel", () => {
     expect(row.TOTAL_HAWBS).toBe("");
     expect(row.SUBMIT).toBe(0);
     expect(row.TECS_WAREHOUSE).toBe(1);
+    expect(row.PAYMENT_MODE).toBe("Chuyển khoản/Bank transfer");
+    expect(row.TOTAL_HAWBS).toBe(0);
+    expect(shipmentToEsidDeclareRow(base({ hawb: "H001" })).TOTAL_HAWBS).toBe(1);
   });
 
   it("TOTAL_HAWBS = 1 khi có HAWB (khớp declare-fill)", () => {

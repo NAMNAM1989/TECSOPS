@@ -44,8 +44,22 @@ export type TcsAgentHealth = {
   running?: boolean;
   docs_dir?: string;
   session?: TcsAgentSession;
+  workspace?: TcsWorkspaceStatus;
   prepared_awb?: string | null;
   preparing_awb?: string | null;
+};
+
+export type TcsWorkspaceStatus = {
+  phase: "IDLE" | "OPENING" | "NEEDS_LOGIN" | "SCANNING" | "READY" | "ERROR" | string;
+  session_date?: string;
+  awb_count?: number;
+  cache_count?: number;
+  ready_count?: number;
+  scan_total?: number;
+  scanned_at?: number | null;
+  cache_age_seconds?: number | null;
+  cache_fresh?: boolean;
+  error?: string;
 };
 
 export type TcsAgentJobResultRow = {
@@ -130,6 +144,54 @@ export function agentOfflineHint(base = agentBase()): string {
   return `Agent Offline (${base}). Kiểm tra agent đang chạy và URL/firewall.`;
 }
 
+type AgentJsonEnvelope = {
+  ok: boolean;
+  error?: string;
+  message?: string;
+};
+
+/** Một đường xử lý chung cho mọi POST agent: offline, bad JSON và HTTP error. */
+async function postAgentJson<T extends AgentJsonEnvelope>(
+  path: string,
+  body: unknown,
+  fallbackMessage: string
+): Promise<T> {
+  const base = agentBase();
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return {
+      ok: false,
+      error: "AGENT_OFFLINE",
+      message: agentOfflineHint(base),
+    } as T;
+  }
+  let parsed: T;
+  try {
+    parsed = (await res.json()) as T;
+  } catch {
+    return {
+      ok: false,
+      error: "BAD_RESPONSE",
+      message: `Agent trả về phản hồi không hợp lệ (HTTP ${res.status})`,
+    } as T;
+  }
+  if (!res.ok || parsed.ok === false) {
+    return {
+      ...parsed,
+      ok: false,
+      error: parsed.error || `HTTP_${res.status}`,
+      message: parsed.message || fallbackMessage,
+    };
+  }
+  return parsed;
+}
+
 export async function pingTcsAgent(timeoutMs = 3500): Promise<TcsAgentHealth | null> {
   const ctrl = new AbortController();
   const t = window.setTimeout(() => ctrl.abort(), timeoutMs);
@@ -158,51 +220,6 @@ export async function fetchTcsSessionStatus(): Promise<TcsAgentSession | null> {
   }
 }
 
-/**
- * Mở session Chrome agent.
- * visible=true: máy kho headed. visible=false: cloud headless (API-first).
- */
-export async function openTcsAgentSession(
-  opts: { visible?: boolean } = {}
-): Promise<{ ok: boolean; message?: string; error?: string } & TcsAgentSession> {
-  const visible = opts.visible === true;
-  try {
-    const res = await fetch(`${agentBase()}/session/open`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ visible, headed: visible, show_browser: visible }),
-    });
-    const body = (await res.json()) as {
-      ok?: boolean;
-      message?: string;
-      error?: string;
-    } & TcsAgentSession;
-    if (!res.ok || body.ok === false || body.open === false) {
-      return {
-        ...body,
-        ok: false,
-        message: body.message || "Không mở được Chrome",
-        open: body.open ?? false,
-        logged_in: body.logged_in ?? false,
-        headless: body.headless,
-        visible_ok: body.visible_ok,
-        preview_file: body.preview_file,
-      };
-    }
-    return { ...body, ok: true };
-  } catch {
-    return {
-      ok: false,
-      message: agentOfflineHint(),
-      open: false,
-      logged_in: false,
-      url: "",
-      awb_locators_confirmed: false,
-      needs_login: false,
-    };
-  }
-}
-
 export type TcsEsidScanItem = {
   awb: string;
   awb_last8?: string;
@@ -224,7 +241,35 @@ export type TcsEsidScanResponse = {
   ready_count?: number;
   error?: string;
   message?: string;
+  workspace?: TcsWorkspaceStatus;
 };
+
+export type TcsWorkspaceBootstrapResponse = TcsEsidScanResponse &
+  TcsAgentSession & {
+    ok: boolean;
+    scan_ok?: boolean;
+    scan_error?: string;
+    workspace?: TcsWorkspaceStatus;
+    warnings?: string[];
+  };
+
+/** Login một lần → quét sẵn theo ngày → warm page KHAI BÁO cùng session. */
+export async function bootstrapTcsWorkspace(
+  sessionDate: string,
+  awbs: string[],
+  opts: { visible?: boolean } = {}
+): Promise<TcsWorkspaceBootstrapResponse> {
+  return postAgentJson<TcsWorkspaceBootstrapResponse>(
+    "/workspace/bootstrap",
+    {
+      warehouse: "TECS-TCS",
+      session_date: sessionDate,
+      awbs,
+      visible: opts.visible === true,
+    },
+    "Không khởi tạo được workspace TCS"
+  );
+}
 
 /**
  * Chỉ lấy AWB agent xác nhận ready + RECEPTION_COMPLETED.
@@ -240,111 +285,6 @@ export function pickEsidScanReadyItems(
     if (d.length === 11) map.set(d, { ...r, awb: d, ready: true });
   }
   return [...map.values()];
-}
-
-export async function scanTcsEsidReception(
-  awbs: string[],
-  sessionDate?: string
-): Promise<TcsEsidScanResponse> {
-  const base = agentBase();
-  let res: Response;
-  try {
-    res = await fetch(`${base}/esid/scan`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        warehouse: "TECS-TCS",
-        session_date: sessionDate || undefined,
-        awbs,
-      }),
-    });
-  } catch {
-    return {
-      ok: false,
-      error: "AGENT_OFFLINE",
-      message: agentOfflineHint(base),
-    };
-  }
-  let body: TcsEsidScanResponse;
-  try {
-    body = (await res.json()) as TcsEsidScanResponse;
-  } catch {
-    return {
-      ok: false,
-      error: "BAD_RESPONSE",
-      message: `Agent trả về phản hồi không hợp lệ (HTTP ${res.status})`,
-    };
-  }
-  if (!res.ok) {
-    return {
-      ok: false,
-      error: body.error || `HTTP_${res.status}`,
-      message: body.message || "Quét ESID thất bại",
-      items: body.items,
-      ready: body.ready,
-      total: body.total,
-      ready_count: body.ready_count,
-    };
-  }
-  return body;
-}
-
-export type TcsEsidPrepareResponse = {
-  ok: boolean;
-  prepared?: boolean;
-  awb?: string;
-  has_in_button?: boolean;
-  elapsed_ms?: number;
-  cached?: boolean;
-  hot_path?: boolean;
-  error?: string;
-  message?: string;
-};
-
-/** Pre-warm trang chi tiết ESID (nút IN) — gọi khi mở menu ⋮ */
-export async function prepareTcsEsid(
-  awb: string,
-  sessionDate?: string
-): Promise<TcsEsidPrepareResponse> {
-  const base = agentBase();
-  let res: Response;
-  try {
-    res = await fetch(`${base}/esid/prepare`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        warehouse: "TECS-TCS",
-        awb,
-        session_date: sessionDate || undefined,
-      }),
-    });
-  } catch {
-    return {
-      ok: false,
-      error: "AGENT_OFFLINE",
-      message: agentOfflineHint(base),
-    };
-  }
-  let body: TcsEsidPrepareResponse;
-  try {
-    body = (await res.json()) as TcsEsidPrepareResponse;
-  } catch {
-    return {
-      ok: false,
-      error: "BAD_RESPONSE",
-      message: `Agent trả về phản hồi không hợp lệ (HTTP ${res.status})`,
-    };
-  }
-  if (!res.ok) {
-    return {
-      ok: false,
-      error: body.error || `HTTP_${res.status}`,
-      message: body.message || "Prepare ESID thất bại",
-      awb: body.awb,
-      elapsed_ms: body.elapsed_ms,
-    };
-  }
-  return body;
 }
 
 export type TcsEsidDeclareFillResponse = {
@@ -392,44 +332,11 @@ export type TcsEsidDeclareSubmitResponse = {
 export async function declareFillTcsEsid(
   payload: import("./buildEsidDeclareFillPayload").EsidDeclareFillPayload
 ): Promise<TcsEsidDeclareFillResponse> {
-  const base = agentBase();
-  let res: Response;
-  try {
-    res = await fetch(`${base}/esid/declare-fill`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    return {
-      ok: false,
-      error: "AGENT_OFFLINE",
-      message: agentOfflineHint(base),
-    };
-  }
-  let body: TcsEsidDeclareFillResponse;
-  try {
-    body = (await res.json()) as TcsEsidDeclareFillResponse;
-  } catch {
-    return {
-      ok: false,
-      error: "BAD_RESPONSE",
-      message: `Agent trả về phản hồi không hợp lệ (HTTP ${res.status})`,
-    };
-  }
-  if (!res.ok) {
-    return {
-      ok: false,
-      error: body.error || `HTTP_${res.status}`,
-      message: body.message || "Điền ESID thất bại",
-      awb: body.awb,
-      warnings: body.warnings,
-      elapsed_ms: body.elapsed_ms,
-      preview_file: body.preview_file,
-      preview_url: body.preview_url,
-    };
-  }
-  return body;
+  return postAgentJson<TcsEsidDeclareFillResponse>(
+    "/esid/declare-fill",
+    payload,
+    "Điền ESID thất bại"
+  );
 }
 
 /** HOÀN TẤT form KHAI BÁO đang mở trên agent — bắt buộc confirm_submit. */
@@ -438,92 +345,30 @@ export async function declareSubmitTcsEsid(opts: {
   shipment_id?: string;
   confirm_submit: true;
 }): Promise<TcsEsidDeclareSubmitResponse> {
-  const base = agentBase();
-  let res: Response;
-  try {
-    res = await fetch(`${base}/esid/declare-submit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        warehouse: "TECS-TCS",
-        awb: opts.awb,
-        shipment_id: opts.shipment_id || undefined,
-        confirm_submit: true,
-      }),
-    });
-  } catch {
-    return {
-      ok: false,
-      error: "AGENT_OFFLINE",
-      message: agentOfflineHint(base),
-      submitted: false,
-    };
-  }
-  let body: TcsEsidDeclareSubmitResponse;
-  try {
-    body = (await res.json()) as TcsEsidDeclareSubmitResponse;
-  } catch {
-    return {
-      ok: false,
-      error: "BAD_RESPONSE",
-      message: `Agent trả về phản hồi không hợp lệ (HTTP ${res.status})`,
-      submitted: false,
-    };
-  }
-  if (!res.ok) {
-    return {
-      ok: false,
-      error: body.error || `HTTP_${res.status}`,
-      message: body.message || "HOÀN TẤT ESID thất bại",
-      awb: body.awb,
-      form_awb: body.form_awb,
-      warnings: body.warnings,
-      submitted: body.submitted ?? false,
-      preview_file: body.preview_file,
-      elapsed_ms: body.elapsed_ms,
-    };
-  }
-  return body;
+  return postAgentJson<TcsEsidDeclareSubmitResponse>(
+    "/esid/declare-submit",
+    {
+      warehouse: "TECS-TCS",
+      awb: opts.awb,
+      shipment_id: opts.shipment_id || undefined,
+      confirm_submit: true,
+    },
+    "HOÀN TẤT ESID thất bại"
+  );
 }
 
 export async function submitTcsPortalJob(payload: TcsPortalJobPayload): Promise<TcsAgentJobResponse> {
-  const base = agentBase();
-  let res: Response;
-  try {
-    res = await fetch(`${base}/jobs`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    return {
-      ok: false,
-      error: "AGENT_OFFLINE",
-      message: agentOfflineHint(base),
-    };
-  }
-  let body: TcsAgentJobResponse;
-  try {
-    body = (await res.json()) as TcsAgentJobResponse;
-  } catch {
-    return {
-      ok: false,
-      error: "BAD_RESPONSE",
-      message: `Agent trả về phản hồi không hợp lệ (HTTP ${res.status})`,
-    };
-  }
-  if (!res.ok) {
-    return {
-      ok: false,
-      error: body.error || `HTTP_${res.status}`,
-      message: body.message || "Agent từ chối job",
-    };
-  }
-  return body;
+  return postAgentJson<TcsAgentJobResponse>("/jobs", payload, "Agent từ chối job");
 }
 
 export function getTcsAgentBaseUrl(): string {
   return agentBase();
+}
+
+/** URL file trong output/docs (PDF hoặc ảnh preview) qua proxy /tcs-agent. */
+export function tcsAgentDocUrl(nameOrPath: string): string {
+  const name = nameOrPath.replace(/^.*[/\\]/, "");
+  return `${agentBase()}/docs?file=${encodeURIComponent(name)}`;
 }
 
 /**
@@ -534,7 +379,7 @@ export async function downloadPdfFromAgent(pdfNameOrPath: string): Promise<boole
   const name = pdfNameOrPath.replace(/^.*[/\\]/, "");
   if (!name.toLowerCase().endsWith(".pdf")) return false;
   try {
-    const res = await fetch(`${agentBase()}/docs?file=${encodeURIComponent(name)}`);
+    const res = await fetch(tcsAgentDocUrl(name));
     if (!res.ok) return false;
     const blob = await res.blob();
     if (blob.size < 100) return false;

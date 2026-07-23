@@ -7,6 +7,9 @@ chrome.runtime.sendMessage({ type: "PING" }, (res) => {
     el.className = "warn";
     return;
   }
-  el.textContent = `Sẵn sàng · v${res.version || "?"} · chờ lệnh Điền từ Ops`;
+  const ws = res.workspace || {};
+  el.textContent = `Sẵn sàng · v${res.version || "?"} · ${
+    ws.logged_in ? "đã login" : "chờ Đồng bộ TCS từ Ops"
+  }`;
   el.className = "ok";
 });

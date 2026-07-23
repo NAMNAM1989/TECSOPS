@@ -1,18 +1,17 @@
 import type { Shipment } from "../types/shipment";
+import { ESID_DEFAULT_PAYMENT_MODE, esidTotalHawbs } from "./esidDeclareDefaults";
 import { isTcsWarehouse } from "../constants/warehouses";
+import { parseFlightDateDisplayToYmd } from "./bookingDateParse";
 import { awbDigitsKey } from "./awbFormat";
 import { getActiveEsidRegistrant } from "./esidRegistrantProfile";
-import { getActiveEsidAgent } from "./esidAgentProfile";
+import { getActiveEsidAgent, type EsidAgentProfile } from "./esidAgentProfile";
 import { resolveShipmentForEsidDeclare } from "./resolveShipmentForEsidDeclare";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import {
-  buildEsidDeclareCoreFields,
-  type EsidDeclareAgentFields,
-  type EsidDeclareRegistrantFields,
-} from "./esidDeclareFields";
-import { awbForFilename, downloadXlsxBuffer } from "./downloadXlsx";
 
-type EsidAgentForExcel = EsidDeclareAgentFields;
+type EsidAgentForExcel = Pick<
+  EsidAgentProfile,
+  "name" | "address" | "tel" | "email" | "vat" | "fax"
+>;
 
 /** Cột sheet ESID_DECLARE — khớp Python esid_declare_excel.py */
 export const ESID_DECLARE_HEADERS = [
@@ -94,6 +93,19 @@ const MANUAL_BEFORE_SUBMIT: EsidDeclareColumn[] = [
   "REGISTRANT_CCCD",
 ];
 
+const MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+function awbForFilename(awb: string): string {
+  return awb.replace(/[^\dA-Za-z-]+/g, "_").slice(0, 40) || "AWB";
+}
+
+/** "05APR" + session YYYY-MM-DD → YYYY-MM-DD */
+export function flightDateToYmd(flightDate: string, sessionDate: string): string {
+  const year = Number((sessionDate || "").slice(0, 4));
+  if (!year || !flightDate.trim()) return "";
+  return parseFlightDateDisplayToYmd(flightDate, year);
+}
+
 /** YYYY-MM-DD → DD-MM-YYYY (Ant picker TCS). */
 export function ymdToDmy(ymd: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
@@ -107,45 +119,45 @@ export function canExportEsidDeclare(s: Shipment): boolean {
 
 export function shipmentToEsidDeclareRow(
   s: Shipment,
-  registrant?: EsidDeclareRegistrantFields,
+  registrant?: Pick<{ name: string; tel: string; cccd: string }, "name" | "tel" | "cccd">,
   /** Agent ESID cố định — không lấy agent*Print trên lô */
   agent?: EsidAgentForExcel
 ): EsidDeclareRow {
+  const digits = awbDigitsKey(s.awb) || "";
+  const ymd = flightDateToYmd(s.flightDate || "", s.sessionDate || "");
   const empty = Object.fromEntries(ESID_DECLARE_HEADERS.map((h) => [h, ""])) as EsidDeclareRow;
   const a = agent ?? getActiveEsidAgent();
-  const reg: EsidDeclareRegistrantFields = registrant ?? { name: "", tel: "", cccd: "" };
-  const core = buildEsidDeclareCoreFields(s, reg, a);
   return {
     ...empty,
-    AWB: core.awb,
-    FLIGHT_NO: core.flight_no,
-    FLIGHT_DATE: core.flight_date,
-    DEST: core.dest,
-    PCS: core.pcs ?? "",
-    GROSS_WEIGHT: core.gross_weight ?? "",
-    TOTAL_HAWBS: core.total_hawbs || "",
-    NATURE_OF_GOODS: core.nature_of_goods,
-    PAYMENT_MODE: core.payment_mode,
+    AWB: digits.length === 11 ? digits : (s.awb || "").trim(),
+    FLIGHT_NO: (s.flight || "").trim(),
+    FLIGHT_DATE: ymd,
+    DEST: (s.dest || "").trim().toUpperCase(),
+    PCS: s.pcs ?? "",
+    GROSS_WEIGHT: s.kg ?? "",
+    TOTAL_HAWBS: esidTotalHawbs(s),
+    NATURE_OF_GOODS: (s.goodsDescriptionPrint || "").trim(),
+    PAYMENT_MODE: ESID_DEFAULT_PAYMENT_MODE,
     CONSOL: 0,
     TECS_WAREHOUSE: 1,
-    SHIPPER_NAME: core.shipper_name,
-    SHIPPER_ADDRESS: core.shipper_address,
-    SHIPPER_TEL: core.shipper_tel,
-    SHIPPER_EMAIL: core.shipper_email,
+    SHIPPER_NAME: (s.shipperNamePrint || s.customer || "").trim(),
+    SHIPPER_ADDRESS: (s.shipperAddressPrint || "").trim(),
+    SHIPPER_TEL: (s.shipperPhonePrint || "").trim(),
+    SHIPPER_EMAIL: (s.shipperEmailPrint || "").trim(),
     SHIPPER_FAX: "",
-    AGENT_NAME: core.agent_name,
-    AGENT_ADDRESS: core.agent_address,
-    AGENT_TEL: core.agent_tel,
-    AGENT_EMAIL: core.agent_email,
-    AGENT_FAX: core.agent_fax,
-    AGENT_VAT: core.agent_vat,
-    CONSIGNEE_NAME: core.consignee_name,
-    CONSIGNEE_ADDRESS: core.consignee_address,
-    CONSIGNEE_TEL: core.consignee_tel,
-    CONSIGNEE_EMAIL: core.consignee_email,
+    AGENT_NAME: (a.name || "").trim(),
+    AGENT_ADDRESS: (a.address || "").trim(),
+    AGENT_TEL: (a.tel || "").trim(),
+    AGENT_EMAIL: (a.email || "").trim(),
+    AGENT_FAX: (a.fax || "").trim(),
+    AGENT_VAT: (a.vat || "").trim(),
+    CONSIGNEE_NAME: (s.consigneeNamePrint || "").trim(),
+    CONSIGNEE_ADDRESS: (s.consigneeAddressPrint || "").trim(),
+    CONSIGNEE_TEL: (s.consigneePhonePrint || "").trim(),
+    CONSIGNEE_EMAIL: (s.consigneeEmailPrint || "").trim(),
     CONSIGNEE_FAX: "",
-    CONSIGNEE_VAT: core.consignee_vat,
-    NOTIFY_NAME: core.notify_name,
+    CONSIGNEE_VAT: (s.taxCodePrint || "").trim(),
+    NOTIFY_NAME: (s.notifyNamePrint || "").trim(),
     NOTIFY_ADDRESS: "",
     NOTIFY_TEL: "",
     NOTIFY_EMAIL: "",
@@ -157,13 +169,13 @@ export function shipmentToEsidDeclareRow(
     SHC_AVI: 0,
     SHC_DGR: 0,
     SHC_BUP: 0,
-    OTHER_REQUEST: core.other_request,
-    REGISTRANT_NAME: core.registrant_name,
-    REGISTRANT_TEL: core.registrant_tel,
-    REGISTRANT_CCCD: core.registrant_cccd,
+    OTHER_REQUEST: (s.otherRequirementsPrint || "").trim(),
+    REGISTRANT_NAME: (registrant?.name || "").trim(),
+    REGISTRANT_TEL: (registrant?.tel || "").trim(),
+    REGISTRANT_CCCD: (registrant?.cccd || "").replace(/\s+/g, "").trim(),
     SUBMIT: 0,
-    SHIPMENT_ID: core.shipment_id,
-    NOTE: core.note,
+    SHIPMENT_ID: s.id,
+    NOTE: (s.note || "").trim(),
   };
 }
 
@@ -208,7 +220,7 @@ async function buildWorkbook(rows: EsidDeclareRow[]) {
     "Cột cam đậm = bắt buộc dry-fill. REGISTRANT_* = nhập tay trước khi SUBMIT=1.",
     "SUBMIT mặc định 0 (không bấm HOÀN TẤT).",
     "AGENT_* lấy từ hồ sơ Agent ESID cố định (nút Agent trên Ops), không theo từng lô.",
-    "Combobox Shipper/Agent/CNEE trên TCS cần khớp master — Playwright/extension sẽ gõ + chọn.",
+    "Combobox Shipper/Agent/CNEE trên TCS cần khớp master — workspace Playwright sẽ gõ + chọn.",
   ];
   guideLines.forEach((line, i) => {
     guide.getCell(i + 1, 1).value = line;
@@ -264,6 +276,19 @@ async function buildWorkbook(rows: EsidDeclareRow[]) {
   return wb;
 }
 
+function triggerDownload(buf: ArrayBuffer, filename: string): void {
+  const blob = new Blob([buf], { type: MIME_XLSX });
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    a.click();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 /** Xuất 1 hoặc nhiều lô TCS → Excel khai báo ESID. */
 export async function downloadEsidDeclareExcel(
   shipments: Shipment | Shipment[],
@@ -287,12 +312,19 @@ export async function downloadEsidDeclareExcel(
   try {
     const wb = await buildWorkbook(rows);
     const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
+    // Dùng replaceAll từng ký tự để Tailwind không hiểu nhầm regex tạo
+    // timestamp là một arbitrary utility trong production CSS.
+    const stamp = new Date()
+      .toISOString()
+      .slice(0, 19)
+      .replaceAll("-", "")
+      .replaceAll(":", "")
+      .replace("T", "");
     const name =
       list.length === 1
         ? `ESID_DECLARE_${awbForFilename(list[0].awb)}_${stamp}.xlsx`
         : `ESID_DECLARE_${list.length}AWB_${stamp}.xlsx`;
-    downloadXlsxBuffer(buf, name);
+    triggerDownload(buf, name);
     return { count: list.length, readiness };
   } catch (e) {
     console.error("[downloadEsidDeclareExcel]", e);

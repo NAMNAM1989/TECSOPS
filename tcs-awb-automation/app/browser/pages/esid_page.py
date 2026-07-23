@@ -545,6 +545,9 @@ class EsidListPage:
             "reception_all": reception,
             "ready": ready,
             "items": items,
+            # Dùng nội bộ cho workspace PDF cache-first. Không giữ element handle
+            # vì DOM Ant Table có thể render lại sau mỗi lần chuyển trang.
+            "index_rows": rows,
             "list_total": len(rows),
             "reception_total": len(reception),
         }
@@ -728,18 +731,63 @@ class EsidListPage:
         except Exception:
             return False
 
+    def _pagination_current(self) -> int:
+        try:
+            active = self.page.locator(".ant-pagination-item-active")
+            if active.count() > 0:
+                raw = (
+                    active.first.get_attribute("title")
+                    or active.first.inner_text(timeout=400)
+                    or ""
+                )
+                return max(1, int(str(raw).strip()))
+        except Exception:
+            pass
+        return 1
+
+    def _goto_page_number(self, target_page: int) -> bool:
+        """Đi tới page bảng đã cache; fallback trả False để caller tìm AWB."""
+        target = max(1, int(target_page or 1))
+        current = self._pagination_current()
+        if current == target:
+            return True
+        direction = (
+            ".ant-pagination-next:not(.ant-pagination-disabled)"
+            if target > current
+            else ".ant-pagination-prev:not(.ant-pagination-disabled)"
+        )
+        for _ in range(min(40, abs(target - current) + 2)):
+            current = self._pagination_current()
+            if current == target:
+                return True
+            control = self.page.locator(direction)
+            if control.count() == 0:
+                break
+            before = current
+            try:
+                control.first.click(timeout=1200)
+            except Exception:
+                break
+            for _ in range(25):
+                self.page.wait_for_timeout(60)
+                current = self._pagination_current()
+                if current != before:
+                    break
+        return self._pagination_current() == target
+
     def list_all_row_statuses(self, *, max_pages: int = 40) -> list[dict[str, str]]:
         """Đọc mọi trang kết quả ESID (sau khi đã lọc ngày)."""
         all_rows: list[dict[str, str]] = []
         seen_keys: set[str] = set()
         for page_i in range(max(1, max_pages)):
             rows = self.list_row_statuses()
+            current_page = self._pagination_current()
             for r in rows:
                 key = f"{r.get('awb')}|{r.get('esid')}|{r.get('flight_date')}|{r.get('status')}"
                 if key in seen_keys:
                     continue
                 seen_keys.add(key)
-                all_rows.append(r)
+                all_rows.append({**r, "page_number": current_page})
             if page_i + 1 >= max_pages:
                 break
             if not self._pagination_next():
@@ -1178,6 +1226,35 @@ class EsidListPage:
         if not self._in_button_visible():
             raise SiteChangedError("Đã mở dòng nhưng không thấy nút IN")
         self._detail_awb = awb_digits
+
+    def prepare_esid_detail_cached(
+        self,
+        awb_digits: str,
+        *,
+        page_number: int,
+    ) -> bool:
+        """
+        Mở chi tiết từ index của lần quét ngày. Trả False khi cache/DOM stale;
+        caller sẽ fallback sang prepare_esid_detail (tìm AWB#).
+        """
+        if len(awb_digits) != 11:
+            return False
+        try:
+            if self._detail_ready_for(awb_digits):
+                return True
+            if self._in_button_visible():
+                self._click_list_tab()
+                self._detail_awb = None
+            self.goto_list(force=False)
+            if not self._goto_page_number(page_number):
+                return False
+            matched = self._match_rows_for_awb(awb_digits, self.list_row_statuses())
+            if not matched:
+                return False
+            self.open_detail_row(awb_digits, require_reception=False)
+            return self._in_button_visible()
+        except Exception:
+            return False
 
     def _set_document_title(self, target, title: str) -> None:
         if not title:

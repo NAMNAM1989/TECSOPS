@@ -3,10 +3,34 @@ from __future__ import annotations
 
 import base64
 import re
+import threading
+from collections import Counter
+from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 _OCR = None
+_OCR_LOCK = threading.Lock()
+
+
+@dataclass(frozen=True)
+class CaptchaOcrResult:
+    """Kết quả OCR đã qua kiểm tra để tránh submit CAPTCHA đoán mò."""
+
+    text: str
+    confidence: float
+    candidates: tuple[tuple[str, int], ...]
+    samples: int
+    accepted: bool
+
+    @property
+    def error(self) -> str:
+        if self.accepted:
+            return ""
+        if not self.candidates:
+            return "OCR_EMPTY"
+        return "OCR_LOW_CONFIDENCE"
 
 
 def _get_ocr():
@@ -19,33 +43,96 @@ def _get_ocr():
 
 
 def normalize_captcha_text(raw: str) -> str:
-    """Giữ chữ/số; TCS CAPTCHA phân biệt hoa/thường — chuẩn hóa UPPER."""
+    """Giữ chữ/số và chuẩn hóa theo bộ ký tự CAPTCHA TCS (A-Z, 0-9)."""
     s = (raw or "").strip()
     s = re.sub(r"\s+", "", s)
     s = re.sub(r"[^A-Za-z0-9]", "", s)
     return s.upper()
 
 
-def ocr_image_bytes(data: bytes) -> str:
+def _encode_png(image: Any) -> bytes:
+    buf = BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _captcha_variants(data: bytes) -> list[bytes]:
+    """
+    TCS trả PNG RGBA nền trong suốt, chữ đen. ``convert("RGB")`` trực tiếp sẽ
+    biến cả nền lẫn chữ thành đen và làm mất CAPTCHA. Luôn ghép lên nền trắng
+    trước, sau đó tạo vài biến thể ít phá nét để bỏ phiếu OCR.
+    """
+    from PIL import Image, ImageOps
+
+    source = Image.open(BytesIO(data))
+    if source.mode in {"RGBA", "LA"} or "transparency" in source.info:
+        rgba = source.convert("RGBA")
+        canvas = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+        canvas.alpha_composite(rgba)
+        rgb = canvas.convert("RGB")
+    else:
+        rgb = source.convert("RGB")
+
+    gray = ImageOps.autocontrast(ImageOps.grayscale(rgb))
+    variants = [rgb, gray]
+    for scale in (2, 3):
+        size = (rgb.width * scale, rgb.height * scale)
+        variants.append(rgb.resize(size, Image.Resampling.LANCZOS))
+        variants.append(gray.resize(size, Image.Resampling.LANCZOS))
+    return [_encode_png(image) for image in variants]
+
+
+def ocr_image_bytes_detailed(
+    data: bytes,
+    *,
+    expected_length: int = 5,
+    min_confidence: float = 0.60,
+) -> CaptchaOcrResult:
+    """OCR nhiều biến thể và chỉ chấp nhận kết quả có đồng thuận đủ mạnh."""
     if not data:
-        return ""
-    # Phóng to ảnh nhỏ (100x27) giúp OCR ổn định hơn
+        return CaptchaOcrResult("", 0.0, (), 0, False)
+
     try:
-        from io import BytesIO
-
-        from PIL import Image
-
-        img = Image.open(BytesIO(data)).convert("RGB")
-        w, h = img.size
-        if w < 200 or h < 50:
-            img = img.resize((max(w * 3, 300), max(h * 3, 80)), Image.Resampling.LANCZOS)
-        buf = BytesIO()
-        img.save(buf, format="PNG")
-        data = buf.getvalue()
+        variants = _captcha_variants(data)
     except Exception:
-        pass
-    text = _get_ocr().classification(data)
-    return normalize_captcha_text(str(text or ""))
+        # Fallback cho định dạng ảnh lạ; vẫn không bỏ qua bước bỏ phiếu/độ dài.
+        variants = [data]
+
+    readings: list[str] = []
+    ocr = _get_ocr()
+    # DdddOcr dùng chung trong HTTP server đa luồng, nên serialize inference.
+    with _OCR_LOCK:
+        for variant in variants:
+            try:
+                text = normalize_captcha_text(str(ocr.classification(variant) or ""))
+            except Exception:
+                text = ""
+            if text:
+                readings.append(text)
+
+    counts = Counter(readings)
+    ranked = tuple(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+    if not ranked:
+        return CaptchaOcrResult("", 0.0, (), len(variants), False)
+
+    best_text, best_votes = ranked[0]
+    confidence = best_votes / max(1, len(readings))
+    accepted = (
+        (expected_length <= 0 or len(best_text) == expected_length)
+        and confidence >= min_confidence
+    )
+    return CaptchaOcrResult(
+        best_text if accepted else "",
+        round(confidence, 4),
+        ranked,
+        len(variants),
+        accepted,
+    )
+
+
+def ocr_image_bytes(data: bytes) -> str:
+    """API tương thích cũ: chỉ trả text khi kết quả đã đủ tin cậy."""
+    return ocr_image_bytes_detailed(data).text
 
 
 def find_captcha_image_locator(page: Any):
@@ -147,7 +234,12 @@ def refresh_captcha_via_reload_icon(page: Any) -> bool:
         root = page.locator(".ant-form-item:has(#basic_captchaCode)")
         for sel in (
             "span[aria-label='reload']",
+            "span[aria-label='sync']",
+            "span[aria-label='redo']",
             ".anticon-reload",
+            ".anticon-sync",
+            "svg[data-icon='reload']",
+            "svg[data-icon='sync']",
             "span.anticon",
             "button",
         ):
@@ -171,7 +263,7 @@ def refresh_captcha_via_reload_icon(page: Any) -> bool:
 
 
 def solve_captcha_from_page(page: Any, *, debug_dir: Path | None = None) -> str:
-    """Đọc CAPTCHA từ DOM → OCR → text UPPER."""
+    """Đọc CAPTCHA từ DOM → OCR đồng thuận → text đã kiểm tra."""
     save = None
     if debug_dir is not None:
         debug_dir.mkdir(parents=True, exist_ok=True)

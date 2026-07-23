@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import concurrent.futures
+import base64
 import json
 import mimetypes
 import queue
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,7 +14,7 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, unquote, urlparse
 
 from app import __version__
-from app.browser.pages.awb_page import NeedsLoginError, SiteChangedError
+from app.browser.captcha_ocr import ocr_image_bytes_detailed
 from app.browser.session_manager import SessionManager
 from app.browser.locators import ensure_default_locators, locators_path
 from app.config import Settings, ensure_runtime_dirs, load_settings
@@ -20,30 +22,39 @@ from app.data.repository import Repository
 from app.services.awb_service import validate_ops_payload
 from app.services.batch_service import BatchService
 from app.services.download_service import resolve_docs_file
-from app.services.esid_scan_service import scan_esid_reception
 from app.services.esid_declare_service import fill_esid_declare, submit_esid_declare
-from app.services.tcs_client import TcsClient
+from app.services.tcs_workspace_service import TcsWorkspaceService
 from app.utils.awb import digits_only
 
 
-class AgentState:
-    # Cache prepare còn hiệu lực (giây) — FE cũng debounce tương tự
-    PREPARED_TTL_S = 120
+class AgentHttpServer(ThreadingHTTPServer):
+    """Một cổng chỉ thuộc một Agent, tránh request rơi vào tiến trình code cũ."""
 
+    allow_reuse_address = False
+
+    def server_bind(self) -> None:
+        # Windows cho phép hai listener cùng địa chỉ trong một số cấu hình
+        # SO_REUSEADDR. SO_EXCLUSIVEADDRUSE buộc Agent thứ hai fail ngay.
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(
+                socket.SOL_SOCKET,
+                socket.SO_EXCLUSIVEADDRUSE,
+                1,
+            )
+        super().server_bind()
+
+
+class AgentState:
     def __init__(self, settings: Settings) -> None:
         ensure_runtime_dirs(settings)
         self.settings = settings
         self.repo = Repository(settings.db_path)
         self.batch = BatchService(settings, self.repo)
         self.sessions = SessionManager(settings)
+        self.workspace = TcsWorkspaceService(self.sessions, settings)
         self.lock = threading.Lock()
         self.last_job: dict[str, Any] | None = None
         self.running = False
-        # Pre-warm ESID (menu ⋮): {awb, ready_at, has_in_button}
-        self.prepared: dict[str, Any] | None = None
-        self.preparing_awb: str | None = None
-        self.prepare_done = threading.Event()
-        self.prepare_done.set()
         # Cache session cho /health khi đang bận Playwright (tránh treo health)
         self.session_snapshot: dict[str, Any] = self.sessions.status().to_dict()
         # Playwright + session phải chạy đúng 1 thread; HTTP dùng ThreadingHTTPServer
@@ -56,21 +67,6 @@ class AgentState:
             target=self._worker_loop, name="tcs-playwright-worker", daemon=True
         )
         self._worker.start()
-
-    def clear_prepared(self) -> None:
-        self.prepared = None
-
-    def prepared_hot_awb(self) -> str | None:
-        p = self.prepared
-        if not p or not p.get("has_in_button"):
-            return None
-        awb = str(p.get("awb") or "")
-        if len(awb) != 11:
-            return None
-        ready_at = float(p.get("ready_at") or 0)
-        if ready_at and (time.time() - ready_at) > self.PREPARED_TTL_S:
-            return None
-        return awb
 
     def refresh_session_snapshot(self) -> dict[str, Any]:
         try:
@@ -161,7 +157,6 @@ def make_handler(state: AgentState):
                     except Exception:
                         sess = dict(state.session_snapshot)
                 docs = state.settings.output_dir / "docs"
-                hot = state.prepared_hot_awb()
                 self._json(
                     200,
                     {
@@ -175,8 +170,7 @@ def make_handler(state: AgentState):
                         "running": state.running,
                         "docs_dir": str(docs),
                         "session": {**sess, "headless": bool(state.settings.headless)},
-                        "prepared_awb": hot,
-                        "preparing_awb": state.preparing_awb,
+                        "workspace": state.workspace.snapshot(),
                     },
                 )
                 return
@@ -283,9 +277,68 @@ def make_handler(state: AgentState):
                     with state.lock:
                         state.running = False
                 return
+            if path == "/workspace/bootstrap":
+                self._handle_workspace_bootstrap(payload)
+                return
+            if path == "/captcha/solve":
+                raw_image = str(payload.get("image") or payload.get("data_url") or "")
+                if "," in raw_image:
+                    raw_image = raw_image.split(",", 1)[1]
+                try:
+                    image = base64.b64decode(raw_image, validate=True)
+                except Exception:
+                    self._json(
+                        400,
+                        {
+                            "ok": False,
+                            "error": "INVALID_IMAGE",
+                            "message": "Ảnh CAPTCHA không phải base64 hợp lệ",
+                        },
+                    )
+                    return
+                if not image or len(image) > 2_000_000:
+                    self._json(
+                        400,
+                        {
+                            "ok": False,
+                            "error": "INVALID_IMAGE",
+                            "message": "Ảnh CAPTCHA trống hoặc quá lớn",
+                        },
+                    )
+                    return
+                try:
+                    expected_length = int(payload.get("expected_length") or 5)
+                    min_confidence = float(payload.get("min_confidence") or 0.60)
+                    result = ocr_image_bytes_detailed(
+                        image,
+                        expected_length=max(1, min(expected_length, 12)),
+                        min_confidence=max(0.0, min(min_confidence, 1.0)),
+                    )
+                except Exception as e:
+                    self._json(
+                        500,
+                        {"ok": False, "error": "OCR_FAILED", "message": str(e)[:240]},
+                    )
+                    return
+                self._json(
+                    200 if result.accepted else 422,
+                    {
+                        "ok": result.accepted,
+                        "text": result.text,
+                        "confidence": result.confidence,
+                        "candidates": [
+                            {"text": text, "votes": votes}
+                            for text, votes in result.candidates[:5]
+                        ],
+                        "samples": result.samples,
+                        "error": result.error,
+                    },
+                )
+                return
             if path == "/session/close":
                 def _close() -> dict[str, Any]:
                     state.sessions.close()
+                    state.workspace.reset()
                     state.session_snapshot = state.sessions.status().to_dict()
                     return state.session_snapshot
 
@@ -321,12 +374,6 @@ def make_handler(state: AgentState):
             if path == "/jobs":
                 self._handle_job(payload)
                 return
-            if path == "/esid/prepare":
-                self._handle_esid_prepare(payload)
-                return
-            if path == "/esid/scan":
-                self._handle_esid_scan(payload)
-                return
             if path == "/esid/declare-fill":
                 self._handle_esid_declare_fill(payload)
                 return
@@ -347,171 +394,63 @@ def make_handler(state: AgentState):
                 return
             self._json(404, {"ok": False, "error": "NOT_FOUND"})
 
-        def _handle_esid_prepare(self, payload: dict[str, Any]) -> None:
-            """Pre-warm trang chi tiết ESID (nút IN) — gọi khi mở menu ⋮."""
-            awb = digits_only(str(payload.get("awb") or payload.get("awb_digits") or ""))
-            session_date = str(payload.get("session_date") or payload.get("sessionDate") or "").strip()
-            if len(awb) != 11:
-                self._json(400, {"ok": False, "error": "VALIDATION", "message": "AWB phải đủ 11 số"})
-                return
-
-            # Đã prepare cùng AWB còn TTL → trả ngay
-            hot = state.prepared_hot_awb()
-            if hot == awb:
+        def _handle_workspace_bootstrap(self, payload: dict[str, Any]) -> None:
+            session_date = str(
+                payload.get("session_date") or payload.get("sessionDate") or ""
+            ).strip()
+            raw_awbs = payload.get("awbs") or []
+            if not session_date:
                 self._json(
-                    200,
+                    400,
                     {
-                        "ok": True,
-                        "prepared": True,
-                        "awb": awb,
-                        "has_in_button": True,
-                        "elapsed_ms": 0,
-                        "cached": True,
-                        "message": "Đã sẵn sàng (cache)",
+                        "ok": False,
+                        "error": "VALIDATION",
+                        "message": "Thiếu session_date để Login và quét sẵn ESID",
                     },
                 )
                 return
-
-            # Đang prepare cùng AWB → chờ xong
+            if not isinstance(raw_awbs, list):
+                self._json(
+                    400,
+                    {"ok": False, "error": "VALIDATION", "message": "awbs phải là mảng"},
+                )
+                return
             with state.lock:
-                if state.preparing_awb == awb and not state.prepare_done.is_set():
-                    wait_same = True
-                else:
-                    wait_same = False
-            if wait_same:
-                if not state.prepare_done.wait(timeout=120):
-                    self._json(504, {"ok": False, "error": "PREPARE_TIMEOUT", "message": "Chờ prepare quá lâu"})
-                    return
-                if state.prepared_hot_awb() == awb:
+                if state.running:
                     self._json(
-                        200,
-                        {
-                            "ok": True,
-                            "prepared": True,
-                            "awb": awb,
-                            "has_in_button": True,
-                            "elapsed_ms": 0,
-                            "cached": True,
-                            "message": "Đã sẵn sàng (đợi prepare)",
-                        },
+                        409,
+                        {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"},
                     )
                     return
-
-            with state.lock:
-                if state.running:
-                    self._json(409, {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"})
-                    return
                 state.running = True
-                state.preparing_awb = awb
-                state.prepare_done.clear()
-
-            t0 = time.perf_counter()
-
-            def _prepare() -> dict[str, Any]:
-                st = state.sessions.status()
-                state.session_snapshot = st.to_dict()
-                if not st.open:
-                    return {
-                        "ok": False,
-                        "error": "NO_BROWSER",
-                        "message": "Chưa mở Chrome — POST /session/open",
-                    }
-                if not st.logged_in:
-                    return {
-                        "ok": False,
-                        "error": "NEEDS_LOGIN",
-                        "message": "Cần login TCS trước khi prepare ESID",
-                    }
-                state.sessions.focus_if_headed()
-                loc_file = state.settings.discovery_dir / "locators.json"
-                client = TcsClient(
-                    mock=False,
-                    discovery_report=state.settings.discovery_dir.parent / "discovery_report.md",
-                    locators_file=loc_file,
-                    portal=state.sessions.portal(),
-                )
-                info = client.prepare_esid(awb, session_date=session_date or None)
-                state.prepared = {
-                    "awb": awb,
-                    "ready_at": time.time(),
-                    "has_in_button": bool(info.get("has_in_button")),
-                }
-                state.refresh_session_snapshot()
-                return {
-                    "ok": True,
-                    "prepared": True,
-                    "awb": awb,
-                    "has_in_button": True,
-                    "message": info.get("message") or "ESID sẵn sàng",
-                }
-
+            want_visible = bool(
+                payload.get("visible", False)
+                or payload.get("headed", False)
+                or payload.get("show_browser", False)
+            )
             try:
-                body = state.call_on_worker(_prepare)
-                elapsed_ms = int((time.perf_counter() - t0) * 1000)
-                if not body.get("ok"):
-                    state.clear_prepared()
-                    code = 400 if body.get("error") in {"NO_BROWSER", "NEEDS_LOGIN"} else 500
-                    self._json(code, {**body, "elapsed_ms": elapsed_ms})
-                    return
-                self._json(200, {**body, "elapsed_ms": elapsed_ms, "cached": False})
-            except NeedsLoginError as e:
-                state.clear_prepared()
-                self._json(400, {"ok": False, "error": "NEEDS_LOGIN", "message": str(e)})
-            except SiteChangedError as e:
-                state.clear_prepared()
-                self._json(400, {"ok": False, "error": "SITE_CHANGED", "message": str(e)})
-            except Exception as e:
-                state.clear_prepared()
-                self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
-            finally:
-                with state.lock:
-                    state.running = False
-                    state.preparing_awb = None
-                    state.prepare_done.set()
-
-        def _handle_esid_scan(self, payload: dict[str, Any]) -> None:
-            with state.lock:
-                if state.running:
-                    self._json(409, {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"})
-                    return
-                state.running = True
-                try:
-                    state.session_snapshot = dict(state.session_snapshot)
-                except Exception:
-                    pass
-
-            def _scan() -> tuple[int, dict[str, Any]]:
-                warehouse = str(payload.get("warehouse") or "TECS-TCS")
-                if warehouse.upper() not in {"TECS-TCS", "KHO-TCS"}:
-                    return 400, {"ok": False, "error": "WAREHOUSE_SCOPE", "message": "Chỉ TECS-TCS"}
-                session_date = str(payload.get("session_date") or payload.get("sessionDate") or "").strip()
-                raw_awbs = payload.get("awbs") or []
-                if not isinstance(raw_awbs, list):
-                    return 400, {"ok": False, "error": "VALIDATION", "message": "awbs phải là mảng"}
-                awbs = [str(a) for a in raw_awbs]
-                if not session_date and not awbs:
-                    return 400, {
-                        "ok": False,
-                        "error": "VALIDATION",
-                        "message": "Cần session_date (YYYY-MM-DD) hoặc awbs[]",
-                    }
-                result = scan_esid_reception(
-                    state.sessions,
-                    state.settings,
-                    awbs,
-                    session_date=session_date or None,
+                result = state.call_on_worker(
+                    state.workspace.bootstrap,
+                    session_date=session_date,
+                    raw_awbs=raw_awbs,
+                    visible=want_visible,
                 )
+                state.call_on_worker(state.refresh_session_snapshot)
                 code = 200 if result.get("ok") else 400
-                if result.get("error") in {"NEEDS_LOGIN", "NO_BROWSER"}:
+                if result.get("error") in {"NO_BROWSER", "NEEDS_LOGIN"}:
                     code = 400
-                state.refresh_session_snapshot()
-                return code, result
-
-            try:
-                code, result = state.call_on_worker(_scan)
                 self._json(code, result)
             except Exception as e:
-                self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
+                state.workspace.phase = "ERROR"
+                state.workspace.error = str(e)[:300]
+                try:
+                    state.call_on_worker(state.refresh_session_snapshot)
+                except Exception:
+                    pass
+                self._json(
+                    500,
+                    {"ok": False, "error": "INTERNAL", "message": str(e)[:300]},
+                )
             finally:
                 with state.lock:
                     state.running = False
@@ -567,22 +506,6 @@ def make_handler(state: AgentState):
                     state.running = False
 
         def _handle_job(self, payload: dict[str, Any]) -> None:
-            # Nếu đang prepare đúng AWB của job → chờ prepare xong rồi chạy hot-path
-            try:
-                peek_rows = payload.get("rows") or []
-                peek_awb = ""
-                if isinstance(peek_rows, list) and peek_rows:
-                    peek_awb = digits_only(str(peek_rows[0].get("awb") or ""))
-            except Exception:
-                peek_awb = ""
-
-            with state.lock:
-                preparing = state.preparing_awb
-                is_running = state.running
-            if is_running and preparing and peek_awb and preparing == peek_awb:
-                if not state.prepare_done.wait(timeout=120):
-                    self._json(504, {"ok": False, "error": "PREPARE_TIMEOUT", "message": "Chờ prepare quá lâu"})
-                    return
             with state.lock:
                 if state.running:
                     self._json(409, {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"})
@@ -626,16 +549,24 @@ def make_handler(state: AgentState):
                         }
                     state.sessions.focus_if_headed()
                     try:
-                        portal = state.sessions.portal()
+                        portal = state.sessions.portal("list")
                     except Exception as e:
                         return 500, {"ok": False, "error": "PORTAL", "message": str(e)}
 
-                prepared_awb = state.prepared_hot_awb()
+                prepared_awb = None
+                # Sau Login/Quét: dùng index AWB→page để mở thẳng dòng, tránh
+                # xóa filter và tìm AWB# lại. Cache stale sẽ tự fallback cold-path.
+                if not mock and not prepared_awb and len(rows) == 1:
+                    row0 = rows[0]
+                    if row0.action.value == "DOWNLOAD":
+                        try:
+                            if state.workspace.prepare_pdf_from_cache(row0.awb_digits):
+                                prepared_awb = row0.awb_digits
+                        except Exception:
+                            prepared_awb = None
                 results, report = state.batch.run(
                     job, portal=portal, prepared_awb=prepared_awb
                 )
-                # Sau IN: cache không còn hợp lệ
-                state.clear_prepared()
                 enriched = []
                 for r in results:
                     d = r.to_dict()
@@ -748,17 +679,19 @@ def serve_agent(settings: Settings | None = None) -> None:
         _auto_open_session(state)
     # ThreadingHTTPServer: /health trả lời khi job đang chạy trên worker.
     # Playwright vẫn chỉ chạy trên 1 worker thread (call_on_worker).
-    httpd = ThreadingHTTPServer((host, port), make_handler(state))
+    httpd = AgentHttpServer((host, port), make_handler(state))
     mode = "MOCK" if settings.mock else "REAL"
     print(f"TCS AWB Agent [{mode}] http://{host}:{port} scope={settings.warehouse_scope}")
     print("GET  /health  /session/status  /docs?file=")
     print(
         f"mode={'HEADLESS' if settings.headless else 'HEADED'} · "
-        "POST /session/open|/close|/focus  /jobs  /esid/prepare|/scan|/declare-fill|/declare-submit"
+        "POST /workspace/bootstrap  /session/open|/close|/focus  /jobs  "
+        "/esid/declare-fill|/declare-submit"
     )
     if not settings.mock:
         print(
-            "REAL mode: POST /session/open → login → POST /esid/prepare|declare-fill|declare-submit → /jobs DOWNLOAD"
+            "REAL mode: POST /workspace/bootstrap → Login + Quét → "
+            "/esid/declare-fill|declare-submit → /jobs DOWNLOAD"
         )
     try:
         httpd.serve_forever()

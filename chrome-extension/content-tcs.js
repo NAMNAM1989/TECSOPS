@@ -3,67 +3,21 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "1.1.3";
+  const SCRIPT_VERSION = "2.0.6";
 
-  /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
-  const DEFAULT_LOCATORS = {
-    home_url: "https://www.tcs.com.vn/Esid/Export",
-    tab_text: "KHAI BÁO ESID",
-    fields: {
-      awb_prefix: "codAwbPfx",
-      awb_number: "codAwbNum",
-      flight_no: "flightNo",
-      flight_date: "datFltOri",
-      dest_code: "codFds",
-      pcs: "qtyPcs",
-      gross_weight: "wgtGrs",
-      shipper_name: "shipperId",
-      shipper_address: "addressShp",
-      shipper_tel: "telShp",
-      shipper_email: "emailShp",
-      agent_name: "agentId",
-      agent_address: "addressAgt",
-      agent_tel: "telAgt",
-      agent_email: "emailAgt",
-      consignee_name: "consigneeId",
-      consignee_address: "addressCne",
-      consignee_tel: "telCne",
-      consignee_email: "emailCne",
-      notify_name: "notifyId",
-      nature_of_goods: "natureOfGoods",
-      other_request: "otherRequest",
-      registrant_name: "shpRegNam",
-      registrant_tel: "shpRegTel",
-      registrant_id: "shpRegIdx",
-      agree: "agreeConfirm",
-    },
-    choose_flight_button: "CHỌN CHUYẾN BAY",
-    submit_button: "HOÀN TẤT",
-  };
-
-  let LOCATORS = DEFAULT_LOCATORS;
-  let locatorsLoadPromise = null;
-
-  function ensureLocators() {
-    if (locatorsLoadPromise) return locatorsLoadPromise;
-    locatorsLoadPromise = (async () => {
-      try {
-        if (typeof chrome === "undefined" || !chrome.runtime?.getURL) return;
-        const res = await fetch(chrome.runtime.getURL("locators.json"));
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data?.esid_declare?.fields) {
-          LOCATORS = data.esid_declare;
-        }
-      } catch {
-        /* giữ DEFAULT_LOCATORS */
+  let LOCATORS = null;
+  const locatorsReady = fetch(chrome.runtime.getURL("locators.json"))
+    .then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    })
+    .then((config) => {
+      if (!config?.esid_declare?.fields) {
+        throw new Error("locators.json thiếu esid_declare.fields");
       }
-    })();
-    return locatorsLoadPromise;
-  }
-
-  // Prefetch sớm; runFill vẫn await để chắc chắn.
-  void ensureLocators();
+      LOCATORS = config.esid_declare;
+      return LOCATORS;
+    });
 
   /** @type {{ version: string, busy: boolean, runFill: Function }} */
   const api = (window.__TECSOPS_TCS__ = window.__TECSOPS_TCS__ || {
@@ -85,10 +39,11 @@
       };
     }
     api.busy = true;
+    showWorkspaceOverlay("FILLING", "Chuẩn bị form khai báo…", 0, 7);
     const warnings = [];
     const fills = {};
     try {
-      await ensureLocators();
+      await locatorsReady;
       if (needsLogin()) {
         return {
           ok: false,
@@ -117,14 +72,88 @@
         };
       }
 
-      // 1) Text nhanh
+      // 1) Chuyến bay trước: modal TCS có thể dựng/reset các phần còn lại.
+      const flightNo = String(ship.flight_no || "").trim();
+      const flightDate = String(ship.flight_date || "").trim();
+      if (payload.choose_flight !== false && (flightNo || flightDate)) {
+        updateWorkspaceOverlay("FILLING", "Đang chọn chuyến bay trước", 1, 7);
+        const fr = await tryChooseFlight(flightNo, flightDate);
+        Object.assign(fills, fr.fills);
+        warnings.push(...fr.warnings);
+        if (!fills.choose_flight) {
+          updateWorkspaceOverlay(
+            "ERROR",
+            "Chưa xác nhận được chuyến bay — dừng để kiểm tra popup Đồng ý",
+            1,
+            7
+          );
+          return {
+            ok: false,
+            error: "FLIGHT_SELECTION_FAILED",
+            source: "chrome-extension",
+            scriptVersion: SCRIPT_VERSION,
+            message:
+              "TCS chưa lưu chuyến bay. Kiểm tra và bấm Đồng ý trên popup đang mở rồi thử lại.",
+            warnings,
+            fills,
+            values: {
+              flightNo: getVal(LOCATORS.fields.flight_no),
+              datFltOri: getVal(LOCATORS.fields.flight_date),
+            },
+          };
+        }
+      } else if (flightNo) {
+        fills.flightNo = setById(LOCATORS.fields.flight_no, flightNo);
+      }
+      await hardResetUi();
+
+      // 2) Party master: chọn danh mục TCS và giữ nguyên dữ liệu tự điền.
+      const partyMap = [
+        [LOCATORS.fields.shipper_name, ship.shipper_name, "shipperId"],
+        [LOCATORS.fields.agent_name, ship.agent_name, "agentId"],
+        [LOCATORS.fields.consignee_name, ship.consignee_name, "consigneeId"],
+        [LOCATORS.fields.notify_name, ship.notify_name, "notifyId"],
+      ];
+      for (const [id, value, key] of partyMap) {
+        if (value == null || String(value).trim() === "") continue;
+        updateWorkspaceOverlay("FILLING", `Đang chọn ${key} từ danh mục TCS`, 2, 7);
+        await hardResetUi();
+        fills[key] = await fillMasterField(id, String(value), {
+          maxQueries: 2,
+          budgetMs: 4_000,
+        });
+        if (!fills[key]) {
+          warnings.push(`#${id} chưa chọn được master trong 4 giây — để trống, không ghi đè text`);
+        }
+        await hardResetUi();
+      }
+
+      // 3) Mặc định nghiệp vụ.
+      updateWorkspaceOverlay("FILLING", "Đang chọn Chuyển khoản và Kho hàng TECS", 3, 7);
+      fills.codPayMod = await selectPaymentMode(
+        String(ship.payment_mode || "Chuyển khoản/Bank transfer")
+      );
+      if (!fills.codPayMod) warnings.push("Chưa chọn được Chuyển khoản");
+      fills.shcCod002 = setCheckboxById(
+        LOCATORS.fields.tecs_warehouse || "shcCod002",
+        ship.tecs_warehouse !== false
+      );
+      if (!fills.shcCod002) warnings.push("Chưa chọn được Kho hàng TECS");
+      await hardResetUi();
+
+      // 4) Các trường còn lại sau khi flight/master đã ổn định.
+      updateWorkspaceOverlay("FILLING", "Đang điền AWB và thông tin lô", 4, 7);
       fills.codAwbPfx = setById(LOCATORS.fields.awb_prefix, awb.slice(0, 3));
       fills.codAwbNum = setById(LOCATORS.fields.awb_number, awb.slice(3));
-      if (!fills.codAwbPfx || !fills.codAwbNum) {
-        warnings.push("Không điền được AWB");
-      }
+      if (!fills.codAwbPfx || !fills.codAwbNum) warnings.push("Không điền được AWB");
       if (ship.pcs != null && String(ship.pcs) !== "") {
         fills.qtyPcs = setById(LOCATORS.fields.pcs, String(ship.pcs));
+      }
+      if (ship.total_hawbs != null && String(ship.total_hawbs) !== "") {
+        fills.totalOfHawbs = setById(
+          LOCATORS.fields.total_hawbs || "totalOfHawbs",
+          String(ship.total_hawbs)
+        );
       }
       if (ship.nature_of_goods) {
         fills.natureOfGoods = setById(
@@ -135,81 +164,18 @@
       if (ship.gross_weight != null && String(ship.gross_weight) !== "") {
         fills.wgtGrs = setById(LOCATORS.fields.gross_weight, String(ship.gross_weight));
       }
-
-      // 2) Chuyến bay — xong phải đóng modal
-      const flightNo = String(ship.flight_no || "").trim();
-      const flightDate = String(ship.flight_date || "").trim();
-      if (payload.choose_flight !== false && (flightNo || flightDate)) {
-        const fr = await tryChooseFlight(flightNo, flightDate);
-        Object.assign(fills, fr.fills);
-        warnings.push(...fr.warnings);
-      } else if (flightNo) {
-        fills.flightNo = setById(LOCATORS.fields.flight_no, flightNo);
-      }
-      await hardResetUi();
-
-      // 3) Dest
       if (ship.dest) {
         fills.codFds = await fillMasterField(LOCATORS.fields.dest_code, String(ship.dest), {
           maxQueries: 2,
+          budgetMs: 3_000,
         });
-        if (!fills.codFds) {
-          fills.codFds = setById(LOCATORS.fields.dest_code, String(ship.dest));
-        }
-        await hardResetUi();
+        if (!fills.codFds) fills.codFds = setById(LOCATORS.fields.dest_code, String(ship.dest));
       }
-
-      // 4) Party — từng ô, reset UI trước/sau
-      const partyMap = [
-        [LOCATORS.fields.shipper_name, ship.shipper_name, "shipperId"],
-        [LOCATORS.fields.agent_name, ship.agent_name, "agentId"],
-        [LOCATORS.fields.consignee_name, ship.consignee_name, "consigneeId"],
-        [LOCATORS.fields.notify_name, ship.notify_name, "notifyId"],
-      ];
-      for (const [id, value, key] of partyMap) {
-        if (value == null || String(value).trim() === "") continue;
-        await hardResetUi();
-        fills[key] = await fillMasterField(id, String(value), { maxQueries: 3 });
-        if (!fills[key]) {
-          warnings.push(`#${id} chưa chọn master`);
-        }
-        await hardResetUi();
-      }
-
-      // 5) Địa chỉ / liên hệ
-      const textMap = [
-        [LOCATORS.fields.shipper_address, ship.shipper_address, "addressShp"],
-        [LOCATORS.fields.shipper_tel, ship.shipper_tel, "telShp"],
-        [LOCATORS.fields.shipper_email, ship.shipper_email, "emailShp"],
-        [LOCATORS.fields.agent_address, ship.agent_address, "addressAgt"],
-        [LOCATORS.fields.agent_tel, ship.agent_tel, "telAgt"],
-        [LOCATORS.fields.agent_email, ship.agent_email, "emailAgt"],
-        [LOCATORS.fields.consignee_address, ship.consignee_address, "addressCne"],
-        [LOCATORS.fields.consignee_tel, ship.consignee_tel, "telCne"],
-        [LOCATORS.fields.consignee_email, ship.consignee_email, "emailCne"],
-      ];
-      for (const [id, value, key] of textMap) {
-        if (value == null || String(value).trim() === "") continue;
-        fills[key] = setById(id, String(value));
-      }
-      // other_request: TCS có thể là otherRequest (ext) hoặc shcOthReq (Python) — thử cả hai.
-      if (ship.other_request != null && String(ship.other_request).trim() !== "") {
-        const othVal = String(ship.other_request);
-        const othIds = [
+      if (ship.other_request) {
+        fills.otherRequest = setById(
           LOCATORS.fields.other_request,
-          "otherRequest",
-          "shcOthReq",
-        ].filter((id, i, arr) => id && arr.indexOf(id) === i);
-        let othOk = false;
-        let othKey = "otherRequest";
-        for (const id of othIds) {
-          if (setById(id, othVal)) {
-            othOk = true;
-            othKey = id;
-            break;
-          }
-        }
-        fills[othKey] = othOk;
+          String(ship.other_request)
+        );
       }
 
       fills.shpRegNam = setById(LOCATORS.fields.registrant_name, reg.name || "");
@@ -217,6 +183,7 @@
       fills.shpRegIdx = setById(LOCATORS.fields.registrant_id, reg.cccd || "");
 
       await hardResetUi();
+      updateWorkspaceOverlay("READY", "Đã điền xong — kiểm tra rồi HOÀN TẤT", 7, 7);
 
       return {
         ok: true,
@@ -228,18 +195,20 @@
         values: {
           flightNo: getVal(LOCATORS.fields.flight_no),
           datFltOri: getVal(LOCATORS.fields.flight_date),
-          codFds: getVal(LOCATORS.fields.dest_code),
+          codFds: getControlValue(LOCATORS.fields.dest_code),
+          codPayMod: getControlValue(LOCATORS.fields.payment_mode || "codPayMod"),
+          shcCod002: isCheckboxChecked(LOCATORS.fields.tecs_warehouse || "shcCod002"),
+          shipperId: getControlValue(LOCATORS.fields.shipper_name),
+          agentId: getControlValue(LOCATORS.fields.agent_name),
+          consigneeId: getControlValue(LOCATORS.fields.consignee_name),
           qtyPcs: getVal(LOCATORS.fields.pcs),
           awb: `${getVal(LOCATORS.fields.awb_prefix) || ""}${getVal(LOCATORS.fields.awb_number) || ""}`,
         },
       };
     } finally {
       api.busy = false;
-      try {
-        await hardResetUi();
-      } catch {
-        /* ignore */
-      }
+      // Không đóng modal trong finally: nếu chọn chuyến bay lỗi, giữ nguyên
+      // popup để người dùng nhìn thấy và tránh Escape hủy nút Đồng ý.
     }
   }
 
@@ -255,8 +224,45 @@
           ok: true,
           scriptVersion: window.__TECSOPS_TCS__?.version || SCRIPT_VERSION,
           busy: Boolean(window.__TECSOPS_TCS__?.busy),
+          loggedIn: !needsLogin(),
         });
         return false;
+      }
+
+      if (msg.type === "TCS_GET_CAPTCHA") {
+        void getCaptchaData().then(sendResponse);
+        return true;
+      }
+
+      if (msg.type === "TCS_LOGIN_STATUS") {
+        void getLoginStatus().then(sendResponse);
+        return true;
+      }
+
+      if (msg.type === "TCS_REFRESH_CAPTCHA") {
+        const refreshed = refreshCaptcha();
+        sendResponse({ ok: refreshed });
+        return false;
+      }
+
+      if (msg.type === "TCS_LOGIN") {
+        const result = fillAndSubmitLogin(msg.payload || {});
+        sendResponse(result);
+        return false;
+      }
+
+      if (msg.type === "TCS_SCAN_DATE") {
+        void scanByDate(msg.payload || {})
+          .then(sendResponse)
+          .catch((err) => {
+            updateWorkspaceOverlay("ERROR", err instanceof Error ? err.message : String(err), 0, 1);
+            sendResponse({
+              ok: false,
+              error: "SCAN_FAILED",
+              message: err instanceof Error ? err.message : String(err),
+            });
+          });
+        return true;
       }
 
       if (msg.type === "FILL_ESID") {
@@ -285,6 +291,412 @@
       }
       return false;
     });
+  }
+
+  function ensureWorkspaceOverlay() {
+    let root = document.getElementById("tecsops-tcs-workspace");
+    if (root) return root;
+    root = document.createElement("aside");
+    root.id = "tecsops-tcs-workspace";
+    root.innerHTML = `
+      <div class="tecsops-head">
+        <strong>TECSOPS · TCS</strong>
+        <button type="button" data-close aria-label="Ẩn">×</button>
+      </div>
+      <div class="tecsops-phase" data-phase>IDLE</div>
+      <div class="tecsops-message" data-message>Sẵn sàng</div>
+      <div class="tecsops-track"><span data-progress></span></div>
+      <div class="tecsops-count" data-count></div>
+    `;
+    const style = document.createElement("style");
+    style.id = "tecsops-tcs-workspace-style";
+    style.textContent = `
+      #tecsops-tcs-workspace {
+        position: fixed; z-index: 2147483647; top: 72px; right: 18px; width: 290px;
+        padding: 12px; border: 1px solid rgba(14,165,233,.45); border-radius: 14px;
+        background: rgba(15,23,42,.95); color: #f8fafc; box-shadow: 0 18px 45px rgba(15,23,42,.32);
+        font: 12px/1.45 system-ui, sans-serif; backdrop-filter: blur(10px);
+      }
+      #tecsops-tcs-workspace .tecsops-head { display:flex; align-items:center; justify-content:space-between; }
+      #tecsops-tcs-workspace .tecsops-head strong { color:#7dd3fc; letter-spacing:.04em; }
+      #tecsops-tcs-workspace button { border:0; background:transparent; color:#cbd5e1; font-size:18px; cursor:pointer; }
+      #tecsops-tcs-workspace .tecsops-phase { margin-top:8px; color:#34d399; font-weight:800; }
+      #tecsops-tcs-workspace .tecsops-message { margin-top:3px; min-height:34px; }
+      #tecsops-tcs-workspace .tecsops-track { height:6px; margin-top:8px; overflow:hidden; border-radius:999px; background:#334155; }
+      #tecsops-tcs-workspace .tecsops-track span { display:block; width:0; height:100%; background:#38bdf8; transition:width .2s ease; }
+      #tecsops-tcs-workspace .tecsops-count { margin-top:5px; color:#94a3b8; font-size:10px; }
+      .tecsops-active-field { outline:3px solid #fb923c !important; outline-offset:2px !important; }
+      .tecsops-done-field { outline:2px solid #34d399 !important; outline-offset:1px !important; }
+    `;
+    if (!document.getElementById(style.id)) document.documentElement.appendChild(style);
+    document.documentElement.appendChild(root);
+    root.querySelector("[data-close]")?.addEventListener("click", () => root.remove());
+    return root;
+  }
+
+  function showWorkspaceOverlay(phase, message, current = 0, total = 1) {
+    const root = ensureWorkspaceOverlay();
+    root.style.display = "block";
+    updateWorkspaceOverlay(phase, message, current, total);
+  }
+
+  function updateWorkspaceOverlay(phase, message, current = 0, total = 1) {
+    const root = ensureWorkspaceOverlay();
+    const ratio = total > 0 ? Math.max(0, Math.min(1, current / total)) : 0;
+    const phaseEl = root.querySelector("[data-phase]");
+    const messageEl = root.querySelector("[data-message]");
+    const progressEl = root.querySelector("[data-progress]");
+    const countEl = root.querySelector("[data-count]");
+    if (phaseEl) {
+      phaseEl.textContent = phase || "IDLE";
+      phaseEl.style.color = phase === "ERROR" ? "#f87171" : phase === "READY" ? "#34d399" : "#fbbf24";
+    }
+    if (messageEl) messageEl.textContent = message || "";
+    if (progressEl) progressEl.style.width = `${Math.round(ratio * 100)}%`;
+    if (countEl) countEl.textContent = total > 1 ? `${current}/${total}` : "";
+  }
+
+  async function getCaptchaData() {
+    const input = document.getElementById("basic_captchaCode");
+    const root = input?.closest(".ant-form-item") || input?.parentElement || document;
+    const images = [
+      ...root.querySelectorAll("img"),
+      ...document.querySelectorAll(
+        ".ant-form-item:has(#basic_captchaCode) img, #basic_captchaCode ~ img, img[src^='data:image'], img[src*='captcha' i]"
+      ),
+    ];
+    const image =
+      images.find((item) => String(item.getAttribute("src") || "").startsWith("data:image")) ||
+      images.find((item) => /captcha/i.test(String(item.getAttribute("src") || ""))) ||
+      images[0];
+    let dataUrl = "";
+    if (image) {
+      const src = String(image.getAttribute("src") || "");
+      if (src.startsWith("data:image")) {
+        dataUrl = src;
+      } else {
+        try {
+          const response = await fetch(image.src, { credentials: "include" });
+          const blob = await response.blob();
+          dataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => resolve("");
+            reader.readAsDataURL(blob);
+          });
+        } catch {
+          dataUrl = "";
+        }
+      }
+    }
+    if (!dataUrl) {
+      const canvas =
+        root.querySelector("canvas") ||
+        document.querySelector(".ant-form-item:has(#basic_captchaCode) canvas");
+      try {
+        dataUrl = canvas?.toDataURL("image/png") || "";
+      } catch {
+        dataUrl = "";
+      }
+    }
+    return {
+      ok: true,
+      dataUrl,
+      diag: {
+        url: location.href,
+        hasInput: Boolean(input),
+        imageCount: images.length,
+        imageSources: images.slice(0, 5).map((item) =>
+          String(item.getAttribute("src") || "").slice(0, 120)
+        ),
+      },
+    };
+  }
+
+  async function getLoginStatus() {
+    const loggedIn = !needsLogin();
+    if (loggedIn) {
+      return { ok: true, loggedIn: true, captchaDataUrl: "", message: "" };
+    }
+    const captcha = await getCaptchaData();
+    const errorElement =
+      document.querySelector(".ant-message-error") ||
+      document.querySelector(".ant-alert-error") ||
+      document.querySelector("[role='alert']") ||
+      document.querySelector(".ant-form-item-has-error .ant-form-item-explain");
+    return {
+      ok: true,
+      loggedIn: false,
+      captchaDataUrl: String(captcha?.dataUrl || ""),
+      message: String(errorElement?.textContent || "").trim(),
+    };
+  }
+
+  function fillAndSubmitLogin(payload) {
+    const username = String(payload.username || "").trim();
+    const password = String(payload.password || "");
+    const captcha = String(payload.captcha || "").trim();
+    if (!username || !password) {
+      return { ok: false, error: "CREDENTIALS_REQUIRED", message: "Thiếu user/password TCS" };
+    }
+    showWorkspaceOverlay("LOGIN", "Đang điền tài khoản TCS…", 1, 3);
+    const userOk = setById("basic_username", username);
+    const passOk = setById("basic_password", password);
+    const captchaInput = document.getElementById("basic_captchaCode");
+    if (captcha) setById("basic_captchaCode", captcha);
+    if (!userOk || !passOk) {
+      return {
+        ok: false,
+        error: "LOGIN_FORM_NOT_FOUND",
+        message: "Không thấy form đăng nhập TCS",
+      };
+    }
+    if (captchaInput && !captcha) {
+      updateWorkspaceOverlay("NEEDS_CAPTCHA", "Đã điền user/password — cần CAPTCHA", 2, 3);
+      captchaInput.focus();
+      return {
+        ok: true,
+        clicked: false,
+        needsCaptcha: true,
+        message: "Đã điền user/password, chờ CAPTCHA",
+      };
+    }
+    const submit =
+      [...document.querySelectorAll("button")].find((button) => {
+        const text = normalizeText(button.textContent || "");
+        return text.includes("DANG NHAP") || text.includes("LOGIN");
+      }) ||
+      document.querySelector("button[type='submit']");
+    if (!submit) {
+      return { ok: false, error: "LOGIN_BUTTON_NOT_FOUND", message: "Không thấy nút Đăng nhập" };
+    }
+    updateWorkspaceOverlay("LOGIN", "Đang gửi đăng nhập…", 3, 3);
+    window.setTimeout(() => simulateClick(submit), 80);
+    return { ok: true, clicked: true, needsCaptcha: false };
+  }
+
+  function refreshCaptcha() {
+    const input = document.getElementById("basic_captchaCode");
+    const root = input?.closest(".ant-form-item") || input?.parentElement || document;
+    const reload =
+      root.querySelector(
+        "[aria-label='reload'], [aria-label='sync'], [aria-label='redo'], " +
+          ".anticon-reload, .anticon-sync, svg[data-icon='reload'], svg[data-icon='sync']"
+      ) ||
+      [...root.querySelectorAll("button, span, img")].find((item) =>
+        /reload|captcha|refresh|sync|redo/i.test(
+          `${item.getAttribute?.("aria-label") || ""} ${item.getAttribute?.("data-icon") || ""} ${
+            item.getAttribute?.("src") || ""
+          }`
+        )
+      );
+    if (reload) {
+      simulateClick(reload.closest?.("button, span") || reload);
+      return true;
+    }
+    return false;
+  }
+
+  async function scanByDate(payload) {
+    const sessionDate = String(payload.session_date || payload.sessionDate || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) {
+      return { ok: false, error: "DATE_REQUIRED", message: "Ngày quét phải có dạng YYYY-MM-DD" };
+    }
+    if (needsLogin()) {
+      return { ok: false, error: "NEED_LOGIN", message: "Session TCS chưa đăng nhập" };
+    }
+    showWorkspaceOverlay("SCANNING", `Đang lọc ngày ${sessionDate}`, 0, 1);
+    clickTabByText("DANH SÁCH ESID") || clickTabByText("DANH SACH ESID");
+    await sleep(350);
+
+    const [year, month, day] = sessionDate.split("-");
+    const dmy = `${day}-${month}-${year}`;
+    const start = document.querySelector("#search-form_dateSearch");
+    const end =
+      document.querySelector("input[placeholder='Ngày kết thúc']") ||
+      [...document.querySelectorAll("input")].find((item) =>
+        normalizeText(item.getAttribute("placeholder") || "").includes("NGAY KET THUC")
+      );
+    if (!start || !end) {
+      return {
+        ok: false,
+        error: "DATE_FILTER_NOT_FOUND",
+        message: "Không thấy bộ lọc ngày trên danh sách ESID",
+      };
+    }
+    setNativeValue(start, dmy);
+    dispatchEnter(start);
+    setNativeValue(end, dmy);
+    dispatchEnter(end);
+    pressKey("Escape");
+    const search = [...document.querySelectorAll("button")].find((button) =>
+      normalizeText(button.textContent || "").includes("TIM KIEM")
+    );
+    if (!search) {
+      return { ok: false, error: "SEARCH_NOT_FOUND", message: "Không thấy nút TÌM KIẾM" };
+    }
+    simulateClick(search);
+    await waitForTableRows();
+
+    const allRows = [];
+    const seen = new Set();
+    for (let pageIndex = 0; pageIndex < 40; pageIndex += 1) {
+      const pageNumber = currentPageNumber();
+      const rows = readEsidRows(pageNumber);
+      for (const row of rows) {
+        const key = `${row.awb}|${row.esid}|${row.flight_date}|${row.status}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        allRows.push(row);
+      }
+      updateWorkspaceOverlay(
+        "SCANNING",
+        `Đã đọc ${allRows.length} dòng · trang ${pageNumber}`,
+        pageIndex + 1,
+        Math.max(pageIndex + 2, 2)
+      );
+      const next = document.querySelector(
+        ".ant-pagination-next:not(.ant-pagination-disabled)"
+      );
+      if (!next || !isVisible(next)) break;
+      const before = rows[0]?.awb || "";
+      simulateClick(next);
+      await waitForTableChange(before);
+    }
+
+    const opsAwbs = (Array.isArray(payload.awbs) ? payload.awbs : [])
+      .map((awb) => String(awb || "").replace(/\D/g, "").slice(0, 11))
+      .filter((awb) => awb.length === 11);
+    const readyRows = allRows.filter((row) => isReceptionComplete(row.status, row.text));
+    const ready = [];
+    const readySet = new Set();
+    for (const row of readyRows) {
+      const digits = String(row.awb || "").replace(/\D/g, "");
+      let match = digits.length >= 11 && opsAwbs.includes(digits.slice(0, 11))
+        ? digits.slice(0, 11)
+        : "";
+      if (!match && digits.length >= 8) {
+        const candidates = opsAwbs.filter((awb) => awb.slice(3) === digits.slice(-8));
+        if (candidates.length === 1) match = candidates[0];
+      }
+      if (!match || readySet.has(match)) continue;
+      readySet.add(match);
+      ready.push({
+        awb: match,
+        awb_last8: match.slice(3),
+        ready: true,
+        normalized_status: "RECEPTION_COMPLETED",
+        tcs_status: "Hoàn thành tiếp nhận",
+        flight: row.flight,
+        flight_date: row.flight_date,
+        esid_code: row.esid,
+        raw: row.text,
+        page_number: row.page_number,
+      });
+    }
+    const items = opsAwbs.map((awb) => {
+      const hit = ready.find((item) => item.awb === awb);
+      return (
+        hit || {
+          awb,
+          awb_last8: awb.slice(3),
+          ready: false,
+          normalized_status: "NOT_COMPLETED",
+          tcs_status: "",
+          error: "NOT_IN_RECEPTION_LIST",
+          raw: "Không thấy trạng thái tiếp nhận xong trên TCS",
+        }
+      );
+    });
+    updateWorkspaceOverlay(
+      "READY",
+      `Đã quét ${allRows.length} dòng · ${ready.length} AWB sẵn sàng`,
+      1,
+      1
+    );
+    return {
+      ok: true,
+      source: "chrome-extension",
+      session_date: sessionDate,
+      ready,
+      items,
+      total: opsAwbs.length,
+      list_total: allRows.length,
+      reception_total: readyRows.length,
+      cache_count: allRows.length,
+      index_rows: allRows,
+    };
+  }
+
+  function dispatchEnter(element) {
+    for (const type of ["keydown", "keypress", "keyup"]) {
+      element.dispatchEvent(
+        new KeyboardEvent(type, {
+          key: "Enter",
+          code: "Enter",
+          keyCode: 13,
+          which: 13,
+          bubbles: true,
+        })
+      );
+    }
+  }
+
+  async function waitForTableRows(timeoutMs = 8000) {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      if (readEsidRows(currentPageNumber()).length > 0) return;
+      await sleep(150);
+    }
+  }
+
+  async function waitForTableChange(before, timeoutMs = 5000) {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const first = readEsidRows(currentPageNumber())[0]?.awb || "";
+      if (first && first !== before) return;
+      await sleep(120);
+    }
+  }
+
+  function currentPageNumber() {
+    const active = document.querySelector(".ant-pagination-item-active");
+    const raw = active?.getAttribute("title") || active?.textContent || "1";
+    const value = Number.parseInt(String(raw).trim(), 10);
+    return Number.isFinite(value) && value > 0 ? value : 1;
+  }
+
+  function readEsidRows(pageNumber) {
+    return [...document.querySelectorAll(".ant-table-tbody tr, table tbody tr")]
+      .filter((row) => row.querySelectorAll("td").length >= 3)
+      .map((row) => {
+        const cells = [...row.querySelectorAll("td")].map((cell) =>
+          String(cell.innerText || "").trim().replace(/\s+/g, " ")
+        );
+        const text = String(row.innerText || "").trim().replace(/\s+/g, " ");
+        let status = cells.find((cell) => isReceptionComplete(cell, "")) || "";
+        if (!status) {
+          status =
+            [...cells]
+              .reverse()
+              .find((cell) => cell.length >= 4 && /[A-Za-zÀ-ỹ]/.test(cell)) || "";
+        }
+        return {
+          awb: cells[0] || "",
+          flight: cells[1] || "",
+          flight_date: cells[2] || "",
+          esid: cells[3] || "",
+          status,
+          text: text.slice(0, 240),
+          page_number: pageNumber,
+        };
+      })
+      .filter((row) => row.text && !/^\d+$/.test(row.text.replace(/\s/g, "").slice(0, 20)));
+  }
+
+  function isReceptionComplete(status, text) {
+    const normalized = normalizeText(`${status || ""} ${text || ""}`);
+    return normalized.includes("HOAN THANH TIEP NHAN");
   }
 
   function needsLogin() {
@@ -339,12 +751,8 @@
       pressKey("Escape");
       await sleep(40);
     }
-    // Ẩn dropdown còn sót
-    for (const d of document.querySelectorAll(".ant-select-dropdown")) {
-      d.classList.add("ant-select-dropdown-hidden");
-      d.style.pointerEvents = "none";
-      d.style.display = "none";
-    }
+    // Không sửa class/style dropdown. Ant Design tái sử dụng node dropdown;
+    // ép display:none tại đây làm các combobox sau không thể mở lại.
     // Đóng mọi modal visible (Cancel / close icon)
     for (const wrap of document.querySelectorAll(
       ".ant-modal-wrap:not(.ant-modal-wrap-hidden), .ant-modal-root .ant-modal"
@@ -427,30 +835,98 @@
       return { fills, warnings };
     }
 
-    const mdy = ymdToMdy(flightDateYmd);
-    const modalFlight = modal.querySelector("#flightNo");
+    // Đúng quy trình TCS: ngày OPS → chuyến bay → nút search icon.
     const modalDate = modal.querySelector("#flightDate");
-    if (mdy && modalDate) setNativeValue(modalDate, mdy);
-    if (flightNo && modalFlight) setNativeValue(modalFlight, flightNo);
-
-    const findBtn =
-      findButtonIn(modal, "TIM") ||
+    const modalFlight = modal.querySelector("#flightNo");
+    if (modalDate && flightDateYmd) {
+      const dateSelected = await selectFlightDateFromPicker(modalDate, flightDateYmd);
+      if (!dateSelected) {
+        warnings.push(`Không chọn được ngày bay ${flightDateYmd} bằng lịch TCS`);
+        await hardResetUi();
+        return { fills, warnings };
+      }
+    }
+    if (modalFlight && flightNo) {
+      setNativeValue(modalFlight, flightSearchQuery(flightNo));
+      await sleep(80);
+    }
+    const searchButton =
+      modal.querySelector("button.ant-input-search-button") ||
+      modal.querySelector(".ant-input-search-button") ||
       findButtonIn(modal, "SEARCH") ||
-      findButtonIn(modal, "TRA CUU");
-    if (findBtn) findBtn.click();
-    await sleep(550);
+      findButtonIn(modal, "TIM");
+    if (searchButton) {
+      simulateClick(searchButton);
+      await sleep(150);
+    } else {
+      warnings.push("Không thấy nút search chuyến bay");
+    }
 
-    const wantF = normalizeText(flightNo);
+    // Ant dựng row tạm rồi thay tbody khi remote request hoàn tất.
+    for (let wait = 0; wait < 28; wait += 1) {
+      const rows = modal.querySelectorAll(
+        ".ant-table-tbody tr, tbody tr, .ant-table-row"
+      );
+      if (
+        [...rows].some((row) => {
+          const t = String(row.textContent || "").trim();
+          return t.length >= 4 && !/ant-table-measure|ant-table-placeholder/i.test(
+            String(row.className || "")
+          );
+        })
+      ) {
+        break;
+      }
+      await sleep(150);
+    }
+
+    const wantF = normalizeFlight(flightNo);
+    const wantDate = ymdToDdMon(flightDateYmd);
     let picked = false;
-    for (const row of modal.querySelectorAll(".ant-table-tbody tr, tbody tr, .ant-table-row")) {
-      const t = normalizeText(row.textContent || "");
-      if (!t || t.includes("NO DATA") || t.includes("KHONG CO")) continue;
-      if (wantF && !t.includes(wantF)) continue;
-      const cell = row.querySelector("td") || row;
+    const pickCurrentPage = (root) => {
+      for (const row of root.querySelectorAll(
+        ".ant-table-tbody tr, tbody tr, .ant-table-row"
+      )) {
+        const raw = String(row.textContent || "");
+        const text = normalizeText(raw);
+        if (!text || text.includes("NO DATA") || text.includes("KHONG CO")) continue;
+        if (wantF && !normalizeFlightText(text).includes(wantF)) continue;
+        if (wantDate && !normalizeFlightText(text).includes(wantDate)) continue;
+        return row;
+      }
+      return null;
+    };
+
+    let targetRow = pickCurrentPage(modal);
+    // Modal nhớ trang của lần trước, nên quét mọi số trang trừ trang hiện tại.
+    const activePage = Number(
+      String(modal.querySelector(".ant-pagination-item-active")?.textContent || "0").trim()
+    );
+    const pageNumbers = [...modal.querySelectorAll(".ant-pagination-item")]
+      .map((el) => Number(String(el.textContent || "").trim()))
+      .filter((n) => Number.isFinite(n) && n !== activePage)
+      .slice(0, 12);
+    for (const page of pageNumbers) {
+      if (targetRow) break;
+      const currentModal = visibleFlightModal() || modal;
+      const pageItem = [...currentModal.querySelectorAll(".ant-pagination-item")].find(
+        (el) => Number(String(el.textContent || "").trim()) === page
+      );
+      if (!pageItem) break;
+      simulateClick(pageItem.querySelector("button, a") || pageItem);
+      for (let wait = 0; wait < 10; wait += 1) {
+        await sleep(50);
+        const active = modal.querySelector(".ant-pagination-item-active");
+        if (Number(String(active?.textContent || "").trim()) === page) break;
+      }
+      modal = visibleFlightModal() || currentModal;
+      targetRow = pickCurrentPage(modal);
+    }
+    if (targetRow) {
+      const cell = targetRow.querySelector("td") || targetRow;
       cell.click();
       picked = true;
       await sleep(200);
-      break;
     }
 
     if (picked) {
@@ -458,8 +934,50 @@
         findButtonIn(modal, "OK") ||
         findButtonIn(modal, "CHON") ||
         footerButton(modal, ["ok", "chon"]);
-      if (ok) ok.click();
-      await sleep(300);
+      if (ok) simulateClick(ok);
+
+      // TCS mở modal xác nhận thứ hai: “Bạn có đồng ý chọn chuyến bay này?”.
+      let confirmModal = null;
+      let nativeConfirmAccepted = false;
+      for (let wait = 0; wait < 35; wait += 1) {
+        nativeConfirmAccepted =
+          document.documentElement.dataset.tecsopsFlightConfirmStatus === "accepted";
+        if (nativeConfirmAccepted) break;
+        confirmModal = visibleConfirmationModal();
+        if (confirmModal) break;
+        await sleep(120);
+      }
+      let agreeClicked = nativeConfirmAccepted;
+      let confirmationClosed = nativeConfirmAccepted;
+      if (!nativeConfirmAccepted && confirmModal) {
+        const buttons = [...confirmModal.querySelectorAll("button")].filter(isVisible);
+        const agree =
+          buttons.find((button) => normalizeText(button.textContent || "") === "DONG Y") ||
+          confirmModal.querySelector(
+            ".ant-modal-footer button.ant-btn-primary, " +
+              ".ant-modal-confirm-btns button.ant-btn-primary"
+          ) ||
+          findButtonIn(confirmModal, "DONG Y");
+        if (agree) {
+          simulateClick(agree);
+          agreeClicked = true;
+          for (let wait = 0; wait < 30; wait += 1) {
+            if (!visibleConfirmationModal()) {
+              confirmationClosed = true;
+              break;
+            }
+            await sleep(120);
+          }
+          if (!confirmationClosed) {
+            warnings.push("Đã bấm Đồng ý nhưng hộp xác nhận chuyến bay chưa đóng");
+          }
+        } else {
+          warnings.push("Không thấy đúng nút Đồng ý trong hộp xác nhận chuyến bay");
+        }
+      } else if (!nativeConfirmAccepted) {
+        warnings.push("TCS chưa hiện hộp hỏi Đồng ý chọn chuyến bay");
+      }
+      fills.flight_confirmation_agreed = Boolean(agreeClicked && confirmationClosed);
     } else {
       warnings.push("Không chọn được chuyến — đóng modal, chọn tay nếu cần");
       const cancel =
@@ -470,12 +988,19 @@
       await sleep(200);
     }
 
-    // Bảo đảm modal đã đóng
-    if (visibleFlightModal()) await hardResetUi();
+    // Chỉ dọn cửa sổ danh sách thật; tuyệt đối không đóng nhầm popup Đồng ý.
+    if (visibleFlightModal() && fills.flight_confirmation_agreed) await hardResetUi();
 
-    fills.choose_flight = picked;
+    const flightValue = getVal(LOCATORS.fields.flight_no);
+    const dateValue = getVal(LOCATORS.fields.flight_date);
+    fills.choose_flight = Boolean(
+      picked && fills.flight_confirmation_agreed && flightValue && dateValue
+    );
     fills.flightNo = Boolean(getVal(LOCATORS.fields.flight_no));
     fills.datFltOri = Boolean(getVal(LOCATORS.fields.flight_date));
+    if (!fills.choose_flight) {
+      warnings.push("TCS chưa ghi nhận đủ chuyến bay/ngày bay sau khi chọn");
+    }
     return { fills, warnings };
   }
 
@@ -485,11 +1010,53 @@
     )) {
       if (!isVisible(el)) continue;
       const t = normalizeText(el.textContent || "");
-      if (t.includes("CHUYEN BAY") || t.includes("FLIGHT") || t.includes("DANH SACH")) {
+      if (
+        t.includes("BAN CO DONG Y") ||
+        t.includes("DONG Y CHON CHUYEN BAY") ||
+        t.includes("XAC NHAN CHON CHUYEN BAY")
+      ) {
+        continue;
+      }
+      const hasSearchForm = Boolean(
+        el.querySelector("#flightNo") &&
+          (el.querySelector(".ant-input-search-button") || el.querySelector("table"))
+      );
+      if (
+        hasSearchForm &&
+        (t.includes("CHUYEN BAY") || t.includes("FLIGHT") || t.includes("DANH SACH"))
+      ) {
         return el;
       }
     }
     return null;
+  }
+
+  function visibleConfirmationModal() {
+    const matches = [];
+    for (const el of document.querySelectorAll(
+      ".ant-modal-wrap:not(.ant-modal-wrap-hidden) .ant-modal, [role='dialog']"
+    )) {
+      if (!isVisible(el)) continue;
+      const text = normalizeText(el.textContent || "");
+      const title = normalizeText(
+        el.querySelector(".ant-modal-title")?.textContent || ""
+      );
+      const body = normalizeText(
+        el.querySelector(".ant-modal-body")?.textContent || ""
+      );
+      const hasAgreeButton = [...el.querySelectorAll("button")].some(
+        (button) => normalizeText(button.textContent || "") === "DONG Y"
+      );
+      if (
+        (title === "THONG BAO" && body.includes("CHON CHUYEN BAY") && hasAgreeButton) ||
+        text.includes("DONG Y CHON CHUYEN BAY") ||
+        text.includes("BAN CO DONG Y") ||
+        text.includes("XAC NHAN")
+      ) {
+        matches.push(el);
+      }
+    }
+    return matches.at(-1) || null;
   }
 
   async function fillMasterField(id, value, opts = {}) {
@@ -498,6 +1065,7 @@
     const el = document.getElementById(id);
     if (!el) return false;
     const maxQueries = opts.maxQueries || 3;
+    const deadline = Date.now() + Math.max(1_000, Number(opts.budgetMs || 4_000));
 
     const wrap = el.closest(".ant-select") || el;
     wrap.click();
@@ -510,6 +1078,7 @@
 
     const queries = comboboxSearchQueries(text).slice(0, maxQueries);
     for (const query of queries) {
+      if (Date.now() >= deadline) break;
       if (search) {
         setNativeValue(search, "");
         await sleep(40);
@@ -522,7 +1091,7 @@
       } else {
         setById(id, query);
       }
-      await sleep(480);
+      await sleep(Math.min(480, Math.max(120, deadline - Date.now())));
 
       // Ưu tiên: 1 option → ArrowDown + Enter (ổn định Ant Select)
       const options = collectMasterOptions();
@@ -628,7 +1197,7 @@
 
   function simulateClick(el) {
     if (!el) return;
-    for (const type of ["pointerdown", "mousedown", "mouseup", "click"]) {
+    for (const type of ["pointerdown", "mousedown", "mouseup"]) {
       el.dispatchEvent(
         new MouseEvent(type, { bubbles: true, cancelable: true, view: window, buttons: 1 })
       );
@@ -641,13 +1210,17 @@
     if (!raw) return [];
     const fold = normalizeText(raw);
     const words = fold.split(/[\s,/|.-]+/).filter(Boolean);
+    const stop = new Set([
+      "CONG", "TY", "CO", "PHAN", "VA", "DICH", "VU", "CHI", "NHANH",
+      "SO", "CTY", "CTCP", "TNHH", "LTD", "COMPANY",
+    ]);
+    const distinctive = words.filter((word) => word.length >= 3 && !stop.has(word));
     const queries = [];
-    if (words.length && words[words.length - 1].length >= 2 && words[words.length - 1].length <= 12) {
-      queries.push(words[words.length - 1]);
+    if (distinctive.length) {
+      queries.push(distinctive.at(-1));
+      queries.push([...distinctive].sort((a, b) => b.length - a.length)[0]);
     }
-    if (lenWords(words, 2)) queries.push(words.slice(-2).join(" "));
-    if (lenWords(words, 3)) queries.push(words.slice(-3).join(" "));
-    if (raw.length > 16) queries.push(raw.slice(0, 16).trim());
+    if (distinctive.length >= 2) queries.push(distinctive.slice(-2).join(" "));
     queries.push(raw.length <= 36 ? raw : raw.slice(0, 36));
     const seen = new Set();
     const out = [];
@@ -657,11 +1230,7 @@
       seen.add(k);
       out.push(q.trim());
     }
-    return out;
-
-    function lenWords(w, n) {
-      return w.length >= n;
-    }
+    return out.slice(0, 4);
   }
 
   function scoreSelectOption(fullText, optionText) {
@@ -694,6 +1263,70 @@
     return null;
   }
 
+  async function selectPaymentMode(label) {
+    const id = LOCATORS.fields.payment_mode || "codPayMod";
+    const current = normalizeText(getControlValue(id));
+    if (current.includes("CHUYEN KHOAN") || current.includes("BANK TRANSFER")) {
+      return true;
+    }
+    const el = document.getElementById(id);
+    if (!el) return false;
+    const wrap = el.closest(".ant-select") || el;
+    wrap.click();
+    await sleep(160);
+    const options = collectMasterOptions();
+    const match = options.find((option) => {
+      const text = normalizeText(option.label);
+      return text.includes("CHUYEN KHOAN") || text.includes("BANK TRANSFER");
+    });
+    if (match) {
+      simulateClick(
+        match.el.querySelector(".ant-select-item-option-content") ||
+          match.titleEl ||
+          match.el
+      );
+      await sleep(160);
+      const selected = normalizeText(getControlValue(id));
+      if (selected.includes("CHUYEN KHOAN") || selected.includes("BANK TRANSFER")) {
+        return true;
+      }
+    }
+    return fillMasterField(id, label || "Chuyển khoản", {
+      maxQueries: 2,
+      budgetMs: 2_800,
+    });
+  }
+
+  function setCheckboxById(id, checked) {
+    const el = document.getElementById(id);
+    if (!el || String(el.type || "").toLowerCase() !== "checkbox") return false;
+    if (Boolean(el.checked) === Boolean(checked)) return true;
+    const label =
+      document.querySelector(`label[for="${CSS.escape(id)}"]`) ||
+      el.closest("label") ||
+      el.parentElement;
+    simulateClick(label || el);
+    return Boolean(el.checked) === Boolean(checked);
+  }
+
+  function isCheckboxChecked(id) {
+    const el = document.getElementById(id);
+    return Boolean(el && el.checked);
+  }
+
+  function getControlValue(id) {
+    const el = document.getElementById(id);
+    if (!el) return "";
+    const wrap = el.closest(".ant-select");
+    const selected = wrap?.querySelector(".ant-select-selection-item");
+    return String(
+      selected?.getAttribute("title") ||
+        selected?.textContent ||
+        el.value ||
+        ""
+    ).trim();
+  }
+
   function setById(id, value) {
     const el = document.getElementById(id);
     if (!el) return false;
@@ -702,6 +1335,13 @@
 
   function setNativeValue(el, value) {
     if (!el) return false;
+    try {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.remove("tecsops-done-field");
+      el.classList.add("tecsops-active-field");
+    } catch {
+      /* visual aid only */
+    }
     const v = String(value ?? "");
     const tag = (el.tagName || "").toLowerCase();
     if (tag !== "input" && tag !== "textarea") return false;
@@ -713,11 +1353,22 @@
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
     el.dispatchEvent(new InputEvent("input", { bubbles: true, data: v }));
+    window.setTimeout(() => {
+      try {
+        el.classList.remove("tecsops-active-field");
+        el.classList.add("tecsops-done-field");
+      } catch {
+        /* visual aid only */
+      }
+    }, 260);
     return true;
   }
 
   function getVal(id) {
-    const el = document.getElementById(id);
+    const nodes = [...document.querySelectorAll(`#${CSS.escape(id)}`)];
+    const el =
+      nodes.find((node) => !node.closest(".ant-modal, [role='dialog']")) ||
+      nodes[0];
     if (!el) return "";
     const wrap = el.closest?.(".ant-select");
     if (wrap) {
@@ -736,18 +1387,96 @@
     return st.display !== "none" && st.visibility !== "hidden" && st.opacity !== "0";
   }
 
+  function ymdToDdMon(ymd) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || "").trim());
+    if (!match) return "";
+    const months = [
+      "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+      "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+    ];
+    const month = months[Number(match[2]) - 1];
+    return month ? `${match[3]}${month}${match[1]}` : "";
+  }
+
   function ymdToMdy(ymd) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || "").trim());
-    return m ? `${m[2]}-${m[3]}-${m[1]}` : "";
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || "").trim());
+    return match ? `${match[2]}-${match[3]}-${match[1]}` : String(ymd || "");
+  }
+
+  async function selectFlightDateFromPicker(input, ymd) {
+    const target = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || "").trim());
+    if (!input || !target) return false;
+    const current = /^(\d{2})-(\d{2})-(\d{4})$/.exec(
+      String(input.value || "").trim()
+    );
+    const currentYear = current ? Number(current[3]) : Number(target[1]);
+    const currentMonth = current ? Number(current[1]) : Number(target[2]);
+    const targetYear = Number(target[1]);
+    const targetMonth = Number(target[2]);
+    const monthDelta =
+      (targetYear - currentYear) * 12 + targetMonth - currentMonth;
+    if (Math.abs(monthDelta) > 24) return false;
+
+    simulateClick(input);
+    await sleep(140);
+    let popup = [
+      ...document.querySelectorAll(
+        ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
+      ),
+    ].filter(isVisible).at(-1);
+    if (!popup) return false;
+
+    const navSelector =
+      monthDelta > 0
+        ? ".ant-picker-header-next-btn"
+        : ".ant-picker-header-prev-btn";
+    for (let i = 0; i < Math.abs(monthDelta); i += 1) {
+      const nav = popup.querySelector(navSelector);
+      if (!nav) return false;
+      simulateClick(nav);
+      await sleep(80);
+      popup = [
+        ...document.querySelectorAll(
+          ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
+        ),
+      ].filter(isVisible).at(-1) || popup;
+    }
+
+    const cell = popup.querySelector(
+      `td[title="${ymd}"]:not(.ant-picker-cell-disabled)`
+    );
+    if (!cell) return false;
+    simulateClick(cell);
+    await sleep(140);
+    return String(input.value || "").trim() === ymdToMdy(ymd);
   }
 
   function normalizeText(s) {
     return String(s || "")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/gi, "d")
       .replace(/\s+/g, " ")
       .trim()
       .toUpperCase();
+  }
+
+  function normalizeFlight(s) {
+    const compact = normalizeText(s).replace(/[^A-Z0-9]/g, "");
+    const match = /^([A-Z]{2,3})0*(\d+)$/.exec(compact);
+    return match ? `${match[1]}${Number(match[2])}` : compact;
+  }
+
+  function flightSearchQuery(s) {
+    const compact = normalizeText(s).replace(/[^A-Z0-9]/g, "");
+    const match = /^([A-Z]{2,3})0*(\d+)$/.exec(compact);
+    return match ? `${match[1]}${match[2].padStart(4, "0")}` : compact;
+  }
+
+  function normalizeFlightText(s) {
+    return normalizeText(s)
+      .replace(/[^A-Z0-9]/g, "")
+      .replace(/([A-Z]{2,3})0+(\d{2,4})/g, "$1$2");
   }
 
   function sleep(ms) {

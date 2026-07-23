@@ -218,3 +218,5 @@ This is a starting point. Add your own conventions, style, and rules as you figu
 ## Related
 
 - [Default AGENTS.md](/reference/AGENTS.default)
+
+## Imported Claude Cowork project instructions

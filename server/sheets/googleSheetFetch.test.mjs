@@ -3,9 +3,14 @@ import {
   sessionYmdToBookSheetTab,
   bookSheetTabCandidates,
   fetchBookHangNgayGridForSession,
+  BOOK_SHEET_GVIZ_RANGE,
 } from "./googleSheetFetch.mjs";
 
 describe("book sheet tab names", () => {
+  it("không cắt dữ liệu ở một số dòng cố định", () => {
+    expect(BOOK_SHEET_GVIZ_RANGE).toBe("A:L");
+  });
+
   it("NGÀY D MMM", () => {
     expect(sessionYmdToBookSheetTab("2026-07-13")).toBe("NGÀY 13 JUL");
   });

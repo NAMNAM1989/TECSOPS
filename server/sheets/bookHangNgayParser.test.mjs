@@ -3,7 +3,6 @@ import {
   parseBookHangNgayGrid,
   mapSheetWarehouse,
   parsePcsKg,
-  BOOK_DATA_START_ROW_INDEX,
 } from "./bookHangNgayParser.mjs";
 import { sessionYmdToBookSheetTab, bookSheetTabCandidates } from "./googleSheetFetch.mjs";
 
@@ -73,7 +72,7 @@ describe("parseBookHangNgayGrid", () => {
         ],
       },
       {
-        rowIndex: BOOK_DATA_START_ROW_INDEX,
+        rowIndex: 18,
         cells: [
           "1",
           "232-1826 9160",
@@ -100,24 +99,21 @@ describe("parseBookHangNgayGrid", () => {
     expect(rows[0].customer).toBe("CITYLINK");
   });
 
-  it("bỏ dòng Excel trước khối dữ liệu (index < 18) dù có AWB", () => {
+  it("nhận lô ngay sau header dù dữ liệu bắt đầu ở dòng Excel 18", () => {
     const grid = [
       {
-        rowIndex: 0,
+        rowIndex: 16,
         cells: ["", "AWB/BOOKING", "", "", "", "KHO HÀNG", "KIỆN / KG", "KHÁCH HÀNG", ""],
       },
       {
         rowIndex: 17,
-        cells: ["0", "232-1826 9159", "", "", "KUL", "TECS-TCS", "1 / 10", "EARLY", ""],
-      },
-      {
-        rowIndex: 18,
-        cells: ["1", "232-1826 9160", "", "", "KUL", "TECS-TCS", "2 / 20", "OK", ""],
+        cells: ["1", "232-1826 9159", "", "", "KUL", "TECS-TCS", "1 / 10", "FIRST", ""],
       },
     ];
     const rows = parseBookHangNgayGrid(grid, "2026-07-13");
     expect(rows).toHaveLength(1);
-    expect(rows[0].customer).toBe("OK");
+    expect(rows[0].customer).toBe("FIRST");
+    expect(rows[0].sheetRowIndex).toBe(17);
   });
 
   it("chỉ lấy MAWB, bỏ HAWB; pcs/kg/dim; ghi chú cột L", () => {

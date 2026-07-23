@@ -68,8 +68,8 @@ function parseGvizPayload(text, sheetLabel) {
   });
 }
 
-/** Chỉ cột A–L + đủ hàng booking — nhỏ hơn payload gviz full sheet. */
-export const BOOK_SHEET_GVIZ_RANGE = "A1:L280";
+/** Chỉ cột A–L nhưng không giới hạn số dòng booking. */
+export const BOOK_SHEET_GVIZ_RANGE = "A:L";
 
 function normGridText(s) {
   return String(s ?? "")

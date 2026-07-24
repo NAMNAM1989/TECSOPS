@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.6";
+  const SCRIPT_VERSION = "2.0.9";
 
   let LOCATORS = null;
   const locatorsReady = fetch(chrome.runtime.getURL("locators.json"))
@@ -115,7 +115,10 @@
         [LOCATORS.fields.notify_name, ship.notify_name, "notifyId"],
       ];
       for (const [id, value, key] of partyMap) {
-        if (value == null || String(value).trim() === "") continue;
+        if (value == null || String(value).trim() === "") {
+          fills[key] = clearMasterField(id);
+          continue;
+        }
         updateWorkspaceOverlay("FILLING", `Đang chọn ${key} từ danh mục TCS`, 2, 7);
         await hardResetUi();
         fills[key] = await fillMasterField(id, String(value), {
@@ -146,37 +149,35 @@
       fills.codAwbPfx = setById(LOCATORS.fields.awb_prefix, awb.slice(0, 3));
       fills.codAwbNum = setById(LOCATORS.fields.awb_number, awb.slice(3));
       if (!fills.codAwbPfx || !fills.codAwbNum) warnings.push("Không điền được AWB");
-      if (ship.pcs != null && String(ship.pcs) !== "") {
-        fills.qtyPcs = setById(LOCATORS.fields.pcs, String(ship.pcs));
-      }
-      if (ship.total_hawbs != null && String(ship.total_hawbs) !== "") {
-        fills.totalOfHawbs = setById(
-          LOCATORS.fields.total_hawbs || "totalOfHawbs",
-          String(ship.total_hawbs)
-        );
-      }
-      if (ship.nature_of_goods) {
-        fills.natureOfGoods = setById(
-          LOCATORS.fields.nature_of_goods,
-          String(ship.nature_of_goods)
-        );
-      }
-      if (ship.gross_weight != null && String(ship.gross_weight) !== "") {
-        fills.wgtGrs = setById(LOCATORS.fields.gross_weight, String(ship.gross_weight));
-      }
+      fills.qtyPcs = setById(
+        LOCATORS.fields.pcs,
+        ship.pcs != null ? String(ship.pcs) : ""
+      );
+      fills.totalOfHawbs = setById(
+        LOCATORS.fields.total_hawbs || "totalOfHawbs",
+        ship.total_hawbs != null ? String(ship.total_hawbs) : ""
+      );
+      fills.natureOfGoods = setById(
+        LOCATORS.fields.nature_of_goods,
+        ship.nature_of_goods != null ? String(ship.nature_of_goods) : ""
+      );
+      fills.wgtGrs = setById(
+        LOCATORS.fields.gross_weight,
+        ship.gross_weight != null ? String(ship.gross_weight) : ""
+      );
       if (ship.dest) {
         fills.codFds = await fillMasterField(LOCATORS.fields.dest_code, String(ship.dest), {
           maxQueries: 2,
           budgetMs: 3_000,
         });
         if (!fills.codFds) fills.codFds = setById(LOCATORS.fields.dest_code, String(ship.dest));
+      } else {
+        fills.codFds = clearMasterField(LOCATORS.fields.dest_code);
       }
-      if (ship.other_request) {
-        fills.otherRequest = setById(
-          LOCATORS.fields.other_request,
-          String(ship.other_request)
-        );
-      }
+      fills.otherRequest = setById(
+        LOCATORS.fields.other_request,
+        ship.other_request != null ? String(ship.other_request) : ""
+      );
 
       fills.shpRegNam = setById(LOCATORS.fields.registrant_name, reg.name || "");
       fills.shpRegTel = setById(LOCATORS.fields.registrant_tel, reg.tel || "");
@@ -202,6 +203,10 @@
           agentId: getControlValue(LOCATORS.fields.agent_name),
           consigneeId: getControlValue(LOCATORS.fields.consignee_name),
           qtyPcs: getVal(LOCATORS.fields.pcs),
+          totalOfHawbs: getVal(LOCATORS.fields.total_hawbs || "totalOfHawbs"),
+          grossWeight: getVal(LOCATORS.fields.gross_weight),
+          natureOfGoods: getVal(LOCATORS.fields.nature_of_goods),
+          otherRequest: getVal(LOCATORS.fields.other_request),
           awb: `${getVal(LOCATORS.fields.awb_prefix) || ""}${getVal(LOCATORS.fields.awb_number) || ""}`,
         },
       };
@@ -435,7 +440,7 @@
   function fillAndSubmitLogin(payload) {
     const username = String(payload.username || "").trim();
     const password = String(payload.password || "");
-    const captcha = String(payload.captcha || "").trim();
+    const captcha = String(payload.captcha || "").trim().toUpperCase();
     if (!username || !password) {
       return { ok: false, error: "CREDENTIALS_REQUIRED", message: "Thiếu user/password TCS" };
     }
@@ -443,7 +448,7 @@
     const userOk = setById("basic_username", username);
     const passOk = setById("basic_password", password);
     const captchaInput = document.getElementById("basic_captchaCode");
-    if (captcha) setById("basic_captchaCode", captcha);
+    const captchaSet = captcha ? setById("basic_captchaCode", captcha) : false;
     if (!userOk || !passOk) {
       return {
         ok: false,
@@ -461,6 +466,43 @@
         message: "Đã điền user/password, chờ CAPTCHA",
       };
     }
+    const captchaValue = String(captchaInput?.value || "").trim().toUpperCase();
+    const captchaFilled =
+      !captchaInput || (captchaSet && captchaValue === captcha && captcha.length === 5);
+    if (captcha && !captchaFilled) {
+      updateWorkspaceOverlay(
+        "ERROR",
+        `Không ghi được CAPTCHA vào form TCS (${captchaValue.length}/5 ký tự)`,
+        2,
+        3
+      );
+      captchaInput?.focus();
+      return {
+        ok: false,
+        error: "CAPTCHA_FILL_FAILED",
+        message: "OCR đã đọc được CAPTCHA nhưng form TCS không nhận giá trị.",
+        captchaFilled: false,
+        captchaLength: captchaValue.length,
+      };
+    }
+    if (captchaInput && captcha) {
+      // Ant Design/React xác nhận trường sau chuỗi focus → input → change → blur.
+      captchaInput.focus();
+      captchaInput.dispatchEvent(new Event("input", { bubbles: true }));
+      captchaInput.dispatchEvent(new Event("change", { bubbles: true }));
+      captchaInput.blur();
+    }
+    if (payload.submit === false) {
+      updateWorkspaceOverlay("LOGIN", "Đã kiểm tra: CAPTCHA đã điền đủ 5 ký tự", 2, 3);
+      return {
+        ok: true,
+        clicked: false,
+        fillOnly: true,
+        needsCaptcha: false,
+        captchaFilled,
+        captchaLength: captchaValue.length,
+      };
+    }
     const submit =
       [...document.querySelectorAll("button")].find((button) => {
         const text = normalizeText(button.textContent || "");
@@ -471,8 +513,14 @@
       return { ok: false, error: "LOGIN_BUTTON_NOT_FOUND", message: "Không thấy nút Đăng nhập" };
     }
     updateWorkspaceOverlay("LOGIN", "Đang gửi đăng nhập…", 3, 3);
-    window.setTimeout(() => simulateClick(submit), 80);
-    return { ok: true, clicked: true, needsCaptcha: false };
+    window.setTimeout(() => simulateClick(submit), 180);
+    return {
+      ok: true,
+      clicked: true,
+      needsCaptcha: false,
+      captchaFilled,
+      captchaLength: captchaValue.length,
+    };
   }
 
   function refreshCaptcha() {
@@ -890,8 +938,30 @@
         const raw = String(row.textContent || "");
         const text = normalizeText(raw);
         if (!text || text.includes("NO DATA") || text.includes("KHONG CO")) continue;
-        if (wantF && !normalizeFlightText(text).includes(wantF)) continue;
-        if (wantDate && !normalizeFlightText(text).includes(wantDate)) continue;
+        const cells = [...row.querySelectorAll("td")].map((cell) =>
+          String(cell.textContent || "").trim()
+        );
+        // Bảng TCS thật tách hãng bay và số chuyến thành hai cột (AK | 0523).
+        // Ghép theo cột trước để tránh số ngày bay dính vào số chuyến khi normalize.
+        const flightFromColumns =
+          cells.length >= 3 ? normalizeFlight(`${cells[1] || ""}${cells[2] || ""}`) : "";
+        const dateFromColumns =
+          cells.length >= 4 ? normalizeText(cells[3]).replace(/[^A-Z0-9]/g, "") : "";
+        const compactRow = normalizeFlightText(text);
+        if (
+          wantF &&
+          flightFromColumns !== wantF &&
+          !compactRow.includes(wantF)
+        ) {
+          continue;
+        }
+        if (
+          wantDate &&
+          dateFromColumns !== wantDate &&
+          !compactRow.includes(wantDate)
+        ) {
+          continue;
+        }
         return row;
       }
       return null;
@@ -923,10 +993,7 @@
       targetRow = pickCurrentPage(modal);
     }
     if (targetRow) {
-      const cell = targetRow.querySelector("td") || targetRow;
-      cell.click();
-      picked = true;
-      await sleep(200);
+      picked = await selectFlightResultRow(targetRow);
     }
 
     if (picked) {
@@ -993,15 +1060,53 @@
 
     const flightValue = getVal(LOCATORS.fields.flight_no);
     const dateValue = getVal(LOCATORS.fields.flight_date);
+    const savedFlightMatches =
+      !wantF || normalizeFlight(flightValue) === wantF;
+    const savedDateMatches =
+      !flightDateYmd || dateValueMatchesYmd(dateValue, flightDateYmd);
     fills.choose_flight = Boolean(
-      picked && fills.flight_confirmation_agreed && flightValue && dateValue
+      picked &&
+        fills.flight_confirmation_agreed &&
+        flightValue &&
+        dateValue &&
+        savedFlightMatches &&
+        savedDateMatches
     );
     fills.flightNo = Boolean(getVal(LOCATORS.fields.flight_no));
     fills.datFltOri = Boolean(getVal(LOCATORS.fields.flight_date));
     if (!fills.choose_flight) {
-      warnings.push("TCS chưa ghi nhận đủ chuyến bay/ngày bay sau khi chọn");
+      warnings.push(
+        `TCS chưa lưu đúng chuyến bay hiện tại (cần ${flightNo || "—"} / ${
+          flightDateYmd || "—"
+        }, đang có ${flightValue || "trống"} / ${dateValue || "trống"})`
+      );
     }
     return { fills, warnings };
+  }
+
+  async function selectFlightResultRow(row) {
+    if (!row) return false;
+    const radio = row.querySelector("input[type='radio']");
+    const radioWrapper =
+      radio?.closest("label.ant-radio-wrapper") ||
+      radio?.closest("label") ||
+      row.querySelector("label.ant-radio-wrapper, .ant-radio-wrapper");
+    const clickTargets = [...new Set([radioWrapper, radio, row].filter(Boolean))];
+
+    for (const target of clickTargets) {
+      simulateClick(target);
+      for (let wait = 0; wait < 8; wait += 1) {
+        await sleep(80);
+        const selected =
+          Boolean(radio?.checked) ||
+          Boolean(radioWrapper?.classList?.contains("ant-radio-wrapper-checked")) ||
+          row.getAttribute("aria-selected") === "true" ||
+          row.classList.contains("ant-table-row-selected");
+        // Một số bản TCS mở popup xác nhận ngay và tháo radio khỏi DOM.
+        if (selected || visibleConfirmationModal()) return true;
+      }
+    }
+    return false;
   }
 
   function visibleFlightModal() {
@@ -1057,6 +1162,23 @@
       }
     }
     return matches.at(-1) || null;
+  }
+
+  function clearMasterField(id) {
+    if (!id) return false;
+    const el = document.getElementById(id);
+    if (!el) return false;
+    const wrap = el.closest(".ant-select") || el;
+    const clear =
+      wrap.querySelector(".ant-select-clear") ||
+      wrap.querySelector("[aria-label='close'], [aria-label='clear']");
+    if (clear && isVisible(clear)) {
+      simulateClick(clear);
+    }
+    if (el.matches("input, textarea")) {
+      setNativeValue(el, "");
+    }
+    return getControlValue(id) === "";
   }
 
   async function fillMasterField(id, value, opts = {}) {
@@ -1401,6 +1523,23 @@
   function ymdToMdy(ymd) {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || "").trim());
     return match ? `${match[2]}-${match[3]}-${match[1]}` : String(ymd || "");
+  }
+
+  function dateValueMatchesYmd(value, ymd) {
+    const target = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || "").trim());
+    if (!target) return false;
+    const normalized = normalizeText(value).replace(/\s+/g, "");
+    const year = target[1];
+    const month = target[2];
+    const day = target[3];
+    const ddMon = ymdToDdMon(ymd);
+    return [
+      `${day}/${month}/${year}`,
+      `${day}-${month}-${year}`,
+      `${month}-${day}-${year}`,
+      `${year}-${month}-${day}`,
+      ddMon,
+    ].some((candidate) => normalized.includes(normalizeText(candidate).replace(/\s+/g, "")));
   }
 
   async function selectFlightDateFromPicker(input, ymd) {

@@ -81,7 +81,7 @@ function cdpSession(wsUrl) {
           pending.delete(id);
           reject(new Error(`timeout ${method}`));
         }
-      }, 20000);
+      }, 120000);
     });
   }
 
@@ -272,6 +272,74 @@ async function main() {
     });
     tcsPageSmoke = pageSmoke.result?.value;
     console.log("tcs_page_smoke=", JSON.stringify(tcsPageSmoke));
+    if (process.env.TCS_OCR_PROBE === "1" && tcsPageSmoke?.tabId) {
+      const captchaProbe = await page.send("Runtime.evaluate", {
+        expression: `new Promise((resolve) => {
+          chrome.tabs.sendMessage(
+            ${Number(tcsPageSmoke.tabId)},
+            { type: 'TCS_GET_CAPTCHA' },
+            async (captcha) => {
+              const runtimeError = chrome.runtime.lastError?.message || null;
+              if (runtimeError || !captcha?.dataUrl) {
+                resolve({ ok:false, error:runtimeError || 'CAPTCHA_IMAGE_EMPTY' });
+                return;
+              }
+              try {
+                const response = await fetch('http://127.0.0.1:8765/captcha/solve', {
+                  method:'POST',
+                  headers:{'Content-Type':'application/json'},
+                  body:JSON.stringify({
+                    image:captcha.dataUrl,
+                    expected_length:5,
+                    min_confidence:0.6
+                  })
+                });
+                const body = await response.json();
+                if (!response.ok || body?.ok !== true || !body?.text) {
+                  resolve({
+                    ok:false,
+                    status:response.status,
+                    text:body?.text || '',
+                    confidence:body?.confidence || 0,
+                    candidates:body?.candidates || [],
+                    samples:body?.samples || 0,
+                    error:body?.error || 'OCR_FAILED'
+                  });
+                  return;
+                }
+                chrome.tabs.sendMessage(
+                  ${Number(tcsPageSmoke.tabId)},
+                  {
+                    type:'TCS_LOGIN',
+                    payload:{
+                      username:'OCR_PROBE',
+                      password:'OCR_PROBE',
+                      captcha:body.text,
+                      submit:false
+                    }
+                  },
+                  (fill) => resolve({
+                    ok:fill?.ok === true && fill?.captchaFilled === true,
+                    status:response.status,
+                    text:body.text,
+                    confidence:body?.confidence || 0,
+                    candidates:body?.candidates || [],
+                    samples:body?.samples || 0,
+                    fill,
+                    error:chrome.runtime.lastError?.message || fill?.error || ''
+                  })
+                );
+              } catch (error) {
+                resolve({ok:false,error:String(error?.message || error)});
+              }
+            }
+          );
+        })`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      console.log("captcha_ocr_probe=", JSON.stringify(captchaProbe.result?.value));
+    }
     if (tcsPageSmoke?.tabId) {
       const scanProbe = await page.send("Runtime.evaluate", {
         expression: `new Promise(async (resolve) => {
@@ -357,12 +425,15 @@ async function main() {
             func: () => {
               const fieldIds = [
                 'codAwbPfx','codAwbNum','qtyPcs','wgtGrs','natureOfGoods',
+                'totalOfHawbs','otherRequest',
                 'shpRegNam','shpRegTel','shpRegIdx','datFltOri'
               ];
               document.body.innerHTML =
                 '<button id="declare-tab">KHAI BÁO ESID</button>' +
                 '<input id="flightNo">' +
                 fieldIds.map(id => '<input id="' + id + '">').join('') +
+                '<input id="codPayMod" value="Chuyển khoản">' +
+                '<label for="shcCod002"><input id="shcCod002" type="checkbox"> Kho hàng TECS</label>' +
                 '<button id="choose-flight">CHỌN CHUYẾN BAY</button>';
 
               document.getElementById('choose-flight').addEventListener('click', () => {
@@ -379,22 +450,33 @@ async function main() {
                           <label class="ant-radio-wrapper"><span class="ant-radio">
                             <input type="radio">
                           </span></label>
-                        </td><td>VN 0570 24JUL2026 SGN 24JUL2026 16:30</td></tr>
+                        </td><td>AK</td><td>0523</td><td>25JUL2026</td><td>SGN</td>
+                        <td>25JUL2026 16:10</td></tr>
                       </tbody></table>
-                    </div>
-                    <div class="ant-modal-footer">
-                      <button>Cancel</button><button id="flight-ok">Ok</button>
                     </div>
                   </div>\`;
                 document.body.appendChild(wrap);
-                const radio = wrap.querySelector('input[type=radio]');
-                wrap.querySelector('tr').addEventListener('click', () => {
-                  radio.checked = true;
-                  radio.closest('.ant-radio-wrapper').classList.add('ant-radio-wrapper-checked');
+                const dateInput = wrap.querySelector('#flightDate');
+                dateInput.addEventListener('click', () => {
+                  if (document.querySelector('.ant-picker-dropdown')) return;
+                  const picker = document.createElement('div');
+                  picker.className = 'ant-picker-dropdown';
+                  picker.innerHTML =
+                    '<table><tbody><tr><td title="2026-07-25">25</td></tr></tbody></table>';
+                  document.body.appendChild(picker);
+                  picker.querySelector('td').addEventListener('click', () => {
+                    dateInput.value = '07-25-2026';
+                    picker.remove();
+                  });
                 });
-                wrap.querySelector('#flight-ok').addEventListener('click', () => {
-                  if (!radio.checked) return;
-                  wrap.remove();
+                const radio = wrap.querySelector('input[type=radio]');
+                const radioLabel = radio.closest('.ant-radio-wrapper');
+                let confirmationOpened = false;
+                radioLabel.addEventListener('click', () => {
+                  if (confirmationOpened) return;
+                  confirmationOpened = true;
+                  radio.checked = true;
+                  radioLabel.classList.add('ant-radio-wrapper-checked');
                   setTimeout(() => {
                     const confirmWrap = document.createElement('div');
                     confirmWrap.className = 'ant-modal-wrap';
@@ -403,7 +485,7 @@ async function main() {
                         <div class="ant-modal-title">Thông báo</div>
                         <div class="ant-modal-body">
                           Bạn có đồng ý chọn chuyến bay này?<br>
-                          Chuyến bay: VN0570<br>Ngày bay: 24JUL2026 16:30
+                          Chuyến bay: AK0523<br>Ngày bay: 25JUL2026 16:10
                         </div>
                         <div class="ant-modal-footer">
                           <button>Không</button>
@@ -412,30 +494,91 @@ async function main() {
                       </div>\`;
                     document.body.appendChild(confirmWrap);
                     confirmWrap.querySelector('#agree-flight').addEventListener('click', () => {
-                      document.querySelector('body > #flightNo').value = 'VN0570';
-                      document.getElementById('datFltOri').value = '24/07/2026 16:30';
+                      document.querySelector('body > #flightNo').value = 'AK0523';
+                      document.getElementById('datFltOri').value = '25/07/2026 16:10';
                       confirmWrap.remove();
+                      wrap.remove();
                     });
-                  }, 300);
+                  }, 180);
                 });
               });
             }
           });
-          chrome.tabs.sendMessage(tabId, {
-            type: 'FILL_ESID',
-            payload: {
-              choose_flight:true,
-              shipment:{awb:'12312345670',flight_no:'VN0570'}
-            }
-          }, (result) => resolve({
-            error: chrome.runtime.lastError?.message || null,
-            ok: result?.ok === true,
-            chooseFlight: result?.fills?.choose_flight === true,
-            confirmationAgreed: result?.fills?.flight_confirmation_agreed === true,
-            flight: result?.values?.flightNo || '',
-            date: result?.values?.datFltOri || '',
-            warnings: result?.warnings || [],
-          }));
+          const sendFill = (shipment) => new Promise((done) => {
+            chrome.tabs.sendMessage(tabId, {
+              type:'FILL_ESID',
+              payload:{choose_flight:true,shipment}
+            }, (result) => done({
+              runtimeError:chrome.runtime.lastError?.message || null,
+              result
+            }));
+          });
+          const first = await sendFill({
+            awb:'12312345670',
+            flight_no:'AK0523',
+            flight_date:'2026-07-25',
+            pcs:9,
+            total_hawbs:3,
+            gross_weight:101.5,
+            nature_of_goods:'FIRST LOT',
+            other_request:'KEEP OUT'
+          });
+          const second = await sendFill({
+            awb:'12312345671',
+            flight_no:'AK0523',
+            flight_date:'2026-07-25',
+            pcs:2
+          });
+          const third = await sendFill({
+            awb:'12312345672',
+            flight_no:'AK0523',
+            flight_date:'2026-07-25',
+            pcs:4,
+            gross_weight:22.5,
+            nature_of_goods:'THIRD LOT'
+          });
+          const rounds = [first,second,third];
+          for (let index = 3; index < 10; index += 1) {
+            rounds.push(await sendFill({
+              awb:String(12312345670 + index),
+              flight_no:'AK0523',
+              flight_date:'2026-07-25',
+              pcs:index + 1,
+              ...(index % 2 === 1 ? {
+                gross_weight:20.5 + index,
+                nature_of_goods:'LOT ' + (index + 1)
+              } : {})
+            }));
+          }
+          const result = rounds.at(-1).result;
+          const modalProbe = await chrome.scripting.executeScript({
+            target:{tabId},
+            func:() => document.querySelectorAll(
+              '.ant-modal-wrap:not(.ant-modal-wrap-hidden)'
+            ).length
+          });
+          resolve({
+            error:rounds.find(item => item.runtimeError)?.runtimeError || null,
+            ok:rounds.every(item => item.result?.ok === true),
+            rounds:rounds.length,
+            chooseFlight:result?.fills?.choose_flight === true,
+            confirmationAgreed:result?.fills?.flight_confirmation_agreed === true,
+            flight:result?.values?.flightNo || '',
+            date:result?.values?.datFltOri || '',
+            awb:result?.values?.awb || '',
+            pcs:result?.values?.qtyPcs || '',
+            grossWeight:result?.values?.grossWeight || '',
+            natureOfGoods:result?.values?.natureOfGoods || '',
+            secondCleared:
+              second.result?.values?.grossWeight === '' &&
+              second.result?.values?.natureOfGoods === '' &&
+              second.result?.values?.totalOfHawbs === '' &&
+              second.result?.values?.otherRequest === '',
+            paymentMode:result?.values?.codPayMod || '',
+            tecsWarehouse:result?.values?.shcCod002 === true,
+            openModals:Number(modalProbe?.[0]?.result || 0),
+            warnings:result?.warnings || [],
+          });
         })`,
         awaitPromise: true,
         returnByValue: true,
@@ -501,7 +644,7 @@ async function main() {
     bootstrapValidation?.r?.error === "CREDENTIALS_REQUIRED";
   const tcsPageOk =
     tcsPageSmoke?.ok === true &&
-    tcsPageSmoke?.scriptVersion === "2.0.6";
+    tcsPageSmoke?.scriptVersion === "2.0.9";
   const scanFixtureOk =
     scanFixture?.ok === true &&
     scanFixture?.ready === 1 &&
@@ -512,10 +655,21 @@ async function main() {
     String(fillFixture?.pcs) === "2";
   const flightConfirmFixtureOk =
     flightConfirmFixture?.ok === true &&
+    flightConfirmFixture?.rounds === 10 &&
     flightConfirmFixture?.chooseFlight === true &&
     flightConfirmFixture?.confirmationAgreed === true &&
-    flightConfirmFixture?.flight === "VN0570" &&
-    String(flightConfirmFixture?.date).includes("24/07/2026");
+    flightConfirmFixture?.flight === "AK0523" &&
+    String(flightConfirmFixture?.date).includes("25/07/2026") &&
+    flightConfirmFixture?.awb === "12312345679" &&
+    String(flightConfirmFixture?.pcs) === "10" &&
+    String(flightConfirmFixture?.grossWeight) === "29.5" &&
+    flightConfirmFixture?.natureOfGoods === "LOT 10" &&
+    flightConfirmFixture?.secondCleared === true &&
+    String(flightConfirmFixture?.paymentMode).includes("Chuyển khoản") &&
+    flightConfirmFixture?.tecsWarehouse === true &&
+    Array.isArray(flightConfirmFixture?.warnings) &&
+    flightConfirmFixture.warnings.length === 0 &&
+    flightConfirmFixture?.openModals === 0;
   const bridgePass = bridgeOk?.ok === true;
   const nameOk =
     !manVal?.name ||

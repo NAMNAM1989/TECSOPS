@@ -11,7 +11,7 @@
 2. Bật **Developer mode** (góc trên bên phải)
 3. **Load unpacked** → chọn đúng thư mục `chrome-extension` (có `manifest.json` bên trong), ví dụ `D:\TECSOPS\chrome-extension`
 4. Thấy extension **TECSOPS — Điền ESID TCS** · bật (toggle xanh)
-5. Bấm icon extension trên thanh Chrome → popup hiện «Sẵn sàng · v2.0.6…»
+5. Bấm icon extension trên thanh Chrome → popup hiện «Sẵn sàng · v2.0.9…»
 
 Mỗi máy nhập liệu cần cài extension. Railway không stream tab TCS của bạn.
 

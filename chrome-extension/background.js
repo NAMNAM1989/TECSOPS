@@ -8,7 +8,7 @@
 const LOGIN_URL = "https://www.tcs.com.vn/AwbLogin";
 const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const EXT_VERSION = chrome.runtime.getManifest().version;
-const EXPECTED_SCRIPT_VERSION = "2.0.6";
+const EXPECTED_SCRIPT_VERSION = "2.0.9";
 const SESSION_KEY = "tecsopsTcsSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
 const WORKSPACE_KEY = "tecsopsTcsWorkspace";
@@ -391,6 +391,12 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
       continue;
     }
 
+    setWorkspace({
+      phase: "LOGIN",
+      message: `Đã đọc CAPTCHA ${solved.text} (${Math.round(
+        Number(solved.confidence || 0) * 100
+      )}%) — đang điền…`,
+    });
     submittedAttempts += 1;
     const clicked = await sendToTcsContent(tabId, {
       type: "TCS_LOGIN",
@@ -401,6 +407,13 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
       },
     });
     if (!clicked?.ok) return clicked;
+    if (!clicked?.captchaFilled || Number(clicked?.captchaLength || 0) !== 5) {
+      return {
+        ok: false,
+        error: "CAPTCHA_FILL_FAILED",
+        message: "OCR đã đọc CAPTCHA nhưng ô CAPTCHA trên TCS chưa nhận đủ 5 ký tự.",
+      };
+    }
 
     const outcome = await waitForLoginOutcome(tabId, dataUrl);
     if (outcome.loggedIn) {

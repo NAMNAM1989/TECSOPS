@@ -176,6 +176,7 @@ export function DesktopShipmentTable({
         <MobileDimKgModal
           key={dimModalRow.id}
           row={dimModalRow}
+          customerDirectory={customerDirectory}
           onClose={() => setDimModalRow(null)}
           onSave={(payload) => {
             onUpdate(dimModalRow.id, payload);

@@ -9,6 +9,7 @@ import {
   DIM_LOT_LINE_COUNT_MIN,
   DIM_MAX_LONG_EDGE_CM,
   DIM_MAX_PCS_PER_ESTIMATED_LINE,
+  DIM_PRESET_SIZES,
   DIM_TARGET_MATCH_TOLERANCE_KG,
   DIM_TOTAL_BAND_BELOW_RATIO,
   DIM_TOTAL_CEILING_RATIO,
@@ -21,6 +22,7 @@ import {
   satisfiesMaxOneEdgeBelowMin,
 } from "./dimBulkFill";
 import { lineDimKg, totalDimKgFromLines } from "./volumetricDim";
+
 
 const TR_CTX = { flight: "TR517", awb: "618-1111 2222" } as const;
 
@@ -350,6 +352,22 @@ describe("generateRandomDimFill — tổng DIM trong vùng ~5% dưới kg lô", 
       );
     }
   });
+  it("sinh theo targetRatioPercent 95% tổng", () => {
+    const r = generateRandomDimFill({
+      manualLines: [{ lCm: 45, wCm: 35, hCm: 30, pcs: 5 }],
+      remainingPcs: 45,
+      declaredKg: 1200,
+      targetRatioPercent: 95.0,
+      poolId: "smart",
+      divisor: 6000,
+      dimCtx: TR_CTX,
+      seed: dimRandomSeed("lot-2", 50, 1200),
+    });
+    expect(r.ok, !r.ok ? r.error : undefined).toBe(true);
+    if (r.ok) {
+      expect(r.totalDim).toBeLessThanOrEqual(1200 * 0.95 + 1e-6);
+    }
+  });
 });
 
 describe("applySmartDimAutoFill", () => {
@@ -381,3 +399,37 @@ describe("previewSmartDimFill", () => {
     );
   });
 });
+
+describe("DIM_PRESET_SIZES & targetRatioPercent", () => {
+  it("chứa các mẫu size chuẩn", () => {
+    expect(DIM_PRESET_SIZES.length).toBeGreaterThanOrEqual(5);
+    const garment = DIM_PRESET_SIZES.find((p) => p.id === "garment_l");
+    expect(garment).toEqual({
+      id: "garment_l",
+      label: "Garment L",
+      lCm: 60,
+      wCm: 40,
+      hCm: 40,
+      description: "60×40×40 cm",
+    });
+  });
+
+  it("sinh DIM ngẫu nhiên theo targetRatioPercent 96%", () => {
+    const r = generateRandomDimFill({
+      manualLines: [{ lCm: 40, wCm: 50, hCm: 30, pcs: 10 }],
+      remainingPcs: 40,
+      declaredKg: 1000,
+      targetRatioPercent: 96.0,
+      poolId: "smart",
+      divisor: 6000,
+      dimCtx: TR_CTX,
+      seed: dimRandomSeed("lot-slider-1", 50, 1000),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.totalDim).toBeLessThanOrEqual(1000);
+      expect(r.totalDim).toBeGreaterThanOrEqual(950);
+    }
+  });
+});
+

@@ -17,6 +17,7 @@ function cust(
     savedConsignees: [],
     savedGoods: [],
     savedVehicles: [],
+    savedDimTemplates: [],
     parties: [],
     ...extra,
   };

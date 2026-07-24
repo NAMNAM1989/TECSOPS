@@ -3,6 +3,7 @@ import { validateCustomerDirectory } from "./customerDirectoryValidation";
 import {
   clampCustomerDirectoryEntry,
   clampCustomerSavedConsignee,
+  clampCustomerSavedDimTemplate,
   clampCustomerSavedGoods,
   clampCustomerSavedShipper,
   clampCustomerSavedVehicle,
@@ -153,6 +154,32 @@ function parseSavedVehiclesLoose(raw: unknown): CustomerDirectoryEntry["savedVeh
   return out;
 }
 
+function parseSavedDimTemplatesLoose(raw: unknown): CustomerDirectoryEntry["savedDimTemplates"] {
+  if (!Array.isArray(raw)) return [];
+  const out: NonNullable<CustomerDirectoryEntry["savedDimTemplates"]> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const id = trimStr(o.id);
+    const lCm = Number(o.lCm);
+    const wCm = Number(o.wCm);
+    const hCm = Number(o.hCm);
+    if (!id || !Number.isFinite(lCm) || lCm <= 0 || !Number.isFinite(wCm) || wCm <= 0 || !Number.isFinite(hCm) || hCm <= 0) continue;
+    out.push(
+      clampCustomerSavedDimTemplate({
+        id,
+        label: trimStr(o.label),
+        lCm,
+        wCm,
+        hCm,
+        stdPcsKg: Number.isFinite(o.stdPcsKg) && Number(o.stdPcsKg) > 0 ? Number(o.stdPcsKg) : undefined,
+        isDefault: Boolean(o.isDefault),
+      })
+    );
+  }
+  return out;
+}
+
 /** Parse mảng JSON an toàn — bỏ phần tử không hợp lệ; chuẩn hóa độ dài trường. */
 export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntry[] {
   if (!Array.isArray(raw)) return [];
@@ -184,10 +211,12 @@ export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntr
         savedConsignees: parseSavedConsigneesLoose(o.savedConsignees),
         savedGoods: parseSavedGoodsLoose(o.savedGoods),
         savedVehicles: parseSavedVehiclesLoose(o.savedVehicles),
+        savedDimTemplates: parseSavedDimTemplatesLoose(o.savedDimTemplates),
         defaultShipperId: trimStr(o.defaultShipperId),
         defaultConsigneeId: trimStr(o.defaultConsigneeId),
         defaultGoodsId: trimStr(o.defaultGoodsId),
         defaultVehicleId: trimStr(o.defaultVehicleId),
+        defaultDimTemplateId: trimStr(o.defaultDimTemplateId),
         parties: parsePartiesLoose(o),
         consigneeName: trimStr(o.consigneeName),
         consigneeAddress: trimStr(o.consigneeAddress),

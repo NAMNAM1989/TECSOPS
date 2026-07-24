@@ -16,6 +16,9 @@ const ROOT = path.resolve(__dirname, "../..");
 const USER_DATA = path.join(ROOT, ".tmp-chrome-ext-test");
 const PORT = 9223;
 const BRIDGE_PORT = 5173;
+const OCR_PROBE_BASE = String(
+  process.env.TCS_OCR_BASE || "http://127.0.0.1:8765"
+).replace(/\/+$/, "");
 const CHROME =
   process.env.CHROME_PATH ||
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
@@ -285,7 +288,9 @@ async function main() {
                 return;
               }
               try {
-                const response = await fetch('http://127.0.0.1:8765/captcha/solve', {
+                const response = await fetch(${JSON.stringify(
+                  `${OCR_PROBE_BASE}/captcha/solve`
+                )}, {
                   method:'POST',
                   headers:{'Content-Type':'application/json'},
                   body:JSON.stringify({
@@ -436,7 +441,10 @@ async function main() {
                 '<label for="shcCod002"><input id="shcCod002" type="checkbox"> Kho hàng TECS</label>' +
                 '<button id="choose-flight">CHỌN CHUYẾN BAY</button>';
 
+              let flightDialogRound = 0;
               document.getElementById('choose-flight').addEventListener('click', () => {
+                const confirmationDelay = flightDialogRound === 0 ? 5200 : 180;
+                flightDialogRound += 1;
                 const wrap = document.createElement('div');
                 wrap.className = 'ant-modal-wrap';
                 wrap.innerHTML = \`
@@ -453,6 +461,9 @@ async function main() {
                         </td><td>AK</td><td>0523</td><td>25JUL2026</td><td>SGN</td>
                         <td>25JUL2026 16:10</td></tr>
                       </tbody></table>
+                    </div>
+                    <div class="ant-modal-footer">
+                      <button>Cancel</button><button>Ok</button>
                     </div>
                   </div>\`;
                 document.body.appendChild(wrap);
@@ -499,7 +510,7 @@ async function main() {
                       confirmWrap.remove();
                       wrap.remove();
                     });
-                  }, 180);
+                  }, confirmationDelay);
                 });
               });
             }
@@ -644,7 +655,7 @@ async function main() {
     bootstrapValidation?.r?.error === "CREDENTIALS_REQUIRED";
   const tcsPageOk =
     tcsPageSmoke?.ok === true &&
-    tcsPageSmoke?.scriptVersion === "2.0.9";
+    tcsPageSmoke?.scriptVersion === "2.0.10";
   const scanFixtureOk =
     scanFixture?.ok === true &&
     scanFixture?.ready === 1 &&

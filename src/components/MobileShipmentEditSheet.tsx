@@ -487,6 +487,7 @@ export function MobileShipmentEditSheet({
       {dimOpen ? (
         <MobileDimKgModal
           row={{ ...shipment, dimWeightKg, dimLines }}
+          customerDirectory={customerDirectory}
           onClose={() => setDimOpen(false)}
           onSave={onDimSave}
         />

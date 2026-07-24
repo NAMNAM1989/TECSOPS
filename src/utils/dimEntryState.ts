@@ -184,6 +184,8 @@ export type DimRandomFillParams = {
   targetEstimatedLineCount?: number;
   /** Tổng DIM mục tiêu kg (đo + ước tính). */
   targetTotalDimKg?: number;
+  /** Mục tiêu phần trăm kg lô (% Gross Weight). */
+  targetRatioPercent?: number;
 };
 
 export function dimEntryRandomFill(
@@ -210,16 +212,22 @@ export function dimEntryRandomFill(
     regenerationNonce: params.regenerationNonce,
     targetEstimatedLineCount: params.targetEstimatedLineCount,
     targetTotalDimKg: params.targetTotalDimKg,
+    targetRatioPercent: params.targetRatioPercent,
   });
 
   if (error) return { ok: false, error };
   const totalDim = totalDimKgFromLines(next, params.divisor, params.dimCtx);
   const note =
-    params.targetTotalDimKg != null && totalDim != null
-      ? `Tổng DIM ${totalDim.toFixed(1)} kg (mục tiêu ${params.targetTotalDimKg} kg).`
+    totalDim != null
+      ? params.targetTotalDimKg != null
+        ? `Tổng DIM ${totalDim.toFixed(1)} kg (mục tiêu ${params.targetTotalDimKg} kg).`
+        : params.targetRatioPercent != null
+          ? `Tổng DIM ${totalDim.toFixed(1)} kg (mục tiêu ${params.targetRatioPercent}% kg lô).`
+          : undefined
       : undefined;
   return { ok: true, lines: next, note };
 }
+
 
 export function dimEntryMergeLines(lines: DimPieceLine[]): DimEntryMutation {
   if (lines.length < 2) {

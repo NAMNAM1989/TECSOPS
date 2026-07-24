@@ -80,7 +80,6 @@ export function applyScscTotalDimRounding(
 }
 
 
-
 export function formatScscLineDimKg(kg: number, kind: ScscLineDimRoundKind): string {
   if (!Number.isFinite(kg)) return "—";
   switch (kind) {

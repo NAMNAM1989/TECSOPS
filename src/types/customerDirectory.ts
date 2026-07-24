@@ -39,6 +39,19 @@ export type CustomerSavedShipper = {
   taxCode: string;
 };
 
+/** Mẫu kích thước DIM lưu sẵn theo khách hàng. */
+export type CustomerSavedDimTemplate = {
+  id: string;
+  /** Nhãn phân biệt (VD: Thùng Garment A, Pallet B). */
+  label: string;
+  lCm: number;
+  wCm: number;
+  hCm: number;
+  /** Trọng lượng tiêu chuẩn 1 kiện kg (tùy chọn). */
+  stdPcsKg?: number;
+  isDefault?: boolean;
+};
+
 /** Xe / tài xế lưu sẵn theo khách. */
 export type CustomerSavedVehicle = {
   id: string;
@@ -48,6 +61,7 @@ export type CustomerSavedVehicle = {
   /** CCCD / CMND tài xế. */
   driverId: string;
 };
+
 
 /** Tên hàng lưu sẵn theo khách — chọn khi booking / in phiếu cân. */
 
@@ -141,6 +155,8 @@ export type CustomerDirectoryEntry = {
   defaultGoodsId?: string;
   /** Xe mặc định khi có nhiều `savedVehicles`. */
   defaultVehicleId?: string;
+  /** Mẫu DIM mặc định khi có nhiều `savedDimTemplates`. */
+  defaultDimTemplateId?: string;
 
   /** Shipper lưu sẵn (ưu tiên khi có `customerShipperId` trên booking). */
   savedShippers?: CustomerSavedShipper[];
@@ -153,6 +169,10 @@ export type CustomerDirectoryEntry = {
 
   /** Xe / tài xế lưu sẵn theo mã khách. */
   savedVehicles?: CustomerSavedVehicle[];
+
+  /** Mẫu kích thước DIM lưu sẵn theo mã khách. */
+  savedDimTemplates?: CustomerSavedDimTemplate[];
+
 
   /** Yêu cầu khác in trên phiếu cân SCSC (theo từng khách). */
   otherRequirementsPrint?: string;

@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+import { findCustomerEntry } from "../utils/customerBookingResolve";
 import {
   type DimDivisor,
   type DimPieceLine,
@@ -12,7 +14,13 @@ import {
 } from "../utils/volumetricDim";
 import { collectScscDimLimitWarnings } from "../utils/scscAirlineLimitsCheck";
 import { resolveScscAirlineDimRule } from "../utils/scscChargeableWeight";
-import { consolidateDimPieceLines, DIM_TOTAL_BAND_BELOW_RATIO } from "../utils/dimBulkFill";
+import {
+  consolidateDimPieceLines,
+  convertCustomerSavedDimTemplatesToPresets,
+  DIM_PRESET_SIZES,
+  DIM_TOTAL_BAND_BELOW_RATIO,
+} from "../utils/dimBulkFill";
+import { loadCustomDimPresets, saveCustomDimPreset, removeCustomDimPreset } from "../utils/dimCustomPresetsStorage";
 import {
   appendDimComboNumber,
   dimEntryAddMeasuredFromCombo,
@@ -37,6 +45,7 @@ export type MobileDimSavePayload = {
 
 interface MobileDimKgModalProps {
   row: Shipment;
+  customerDirectory?: readonly CustomerDirectoryEntry[];
   onClose: () => void;
   onSave: (payload: MobileDimSavePayload) => void;
 }
@@ -158,7 +167,17 @@ function DimLineSection({
   );
 }
 
-export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps) {
+export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: MobileDimKgModalProps) {
+  const customerEntry = useMemo(
+    () => findCustomerEntry(row, customerDirectory ?? []),
+    [row, customerDirectory]
+  );
+
+  const customerPresets = useMemo(
+    () => convertCustomerSavedDimTemplatesToPresets(customerEntry?.savedDimTemplates),
+    [customerEntry]
+  );
+
   const [combo, setCombo] = useState("");
   const [lines, setLines] = useState<DimPieceLine[]>(() =>
     consolidateDimPieceLines(cloneLines(row.dimLines))
@@ -168,8 +187,42 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   const [autoRandomAfterAdd, setAutoRandomAfterAdd] = useState(false);
   const [actionNote, setActionNote] = useState<string | null>(null);
   const [randomNonce, setRandomNonce] = useState(0);
+  const [targetRatioPercent, setTargetRatioPercent] = useState(95.0);
   const [randomLineCountInput, setRandomLineCountInput] = useState("");
   const [randomTargetKgInput, setRandomTargetKgInput] = useState("");
+
+  const [customPresets, setCustomPresets] = useState(() => loadCustomDimPresets());
+  const [showAddPresetForm, setShowAddPresetForm] = useState(false);
+  const [presetLabelInput, setPresetLabelInput] = useState("");
+  const [presetLCmInput, setPresetLCmInput] = useState("");
+  const [presetWCmInput, setPresetWCmInput] = useState("");
+  const [presetHCmInput, setPresetHCmInput] = useState("");
+
+  const handleCreateCustomPreset = useCallback(() => {
+    const l = Number(presetLCmInput);
+    const w = Number(presetWCmInput);
+    const h = Number(presetHCmInput);
+    if (!Number.isFinite(l) || l <= 0 || !Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) {
+      setActionNote("❌ Kích thước dài/rộng/cao phải là số dương.");
+      return;
+    }
+    const label = presetLabelInput.trim() || `${l}×${w}×${h}`;
+    const nextList = saveCustomDimPreset({ label, lCm: l, wCm: w, hCm: h });
+    setCustomPresets(nextList);
+    setShowAddPresetForm(false);
+    setPresetLabelInput("");
+    setPresetLCmInput("");
+    setPresetWCmInput("");
+    setPresetHCmInput("");
+    setActionNote(`✅ Đã lưu mẫu size tùy chỉnh "${label}" (${l}×${w}×${h} cm).`);
+  }, [presetLabelInput, presetLCmInput, presetWCmInput, presetHCmInput]);
+
+  const handleDeleteCustomPreset = useCallback((id: string, label: string) => {
+    const nextList = removeCustomDimPreset(id);
+    setCustomPresets(nextList);
+    setActionNote(`Đã xóa mẫu size "${label}".`);
+  }, []);
+
 
   const lot = useMemo(
     () => ({
@@ -226,42 +279,44 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   const handleAddRows = useCallback(() => {
     const r = dimEntryAddMeasuredFromCombo(lines, combo, lot, {
       thenRandomFill: autoRandomAfterAdd,
-      randomFillParams: randomParams ?? undefined,
+      randomFillParams: randomParams ? { ...randomParams, targetRatioPercent } : undefined,
     });
     if (!r.ok) {
-      window.alert(r.error);
+      setActionNote(`❌ ${r.error}`);
       return;
     }
     applyMutation(r.lines, r.note ?? null);
     setCombo("");
     textareaRef.current?.focus();
-  }, [lines, combo, lot, autoRandomAfterAdd, randomParams, applyMutation]);
+  }, [lines, combo, lot, autoRandomAfterAdd, randomParams, targetRatioPercent, applyMutation]);
 
   const handleMerge = () => {
     const r = dimEntryMergeLines(lines);
     if (!r.ok) {
-      window.alert(r.error);
+      setActionNote(`❌ ${r.error}`);
       return;
     }
     applyMutation(r.lines, "Đã gộp các dòng cùng kích thước.");
   };
 
-  const handleRandom = () => {
+  const handleRandom = (overrideRatio?: number) => {
     if (!randomParams) {
-      window.alert("Cần kiện lô và kg lô trên lô hàng.");
+      setActionNote("❌ Cần kiện lô và kg lô trên lô hàng.");
       return;
     }
     const targetEstimatedLineCount = parseRandomLineCountInput(randomLineCountInput);
     const targetTotalDimKg = parseTargetDimKgInput(randomTargetKgInput);
+    const ratio = overrideRatio ?? (randomTargetKgInput ? undefined : targetRatioPercent);
+
     const r = dimEntryRandomFill(lines, lot, {
       ...randomParams,
       regenerationNonce: randomNonce,
       targetEstimatedLineCount,
       targetTotalDimKg,
+      targetRatioPercent: ratio,
     });
     if (!r.ok) {
-      window.alert(r.error);
-      setActionNote(r.error);
+      setActionNote(`❌ ${r.error}`);
       return;
     }
     setRandomNonce((n) => n + 1);
@@ -271,7 +326,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   const handleSave = () => {
     const r = dimEntryValidateSave(lines, lot, divisor, dimCtx);
     if (!r.ok) {
-      window.alert(r.error);
+      setActionNote(`❌ ${r.error}`);
       return;
     }
     onSave({
@@ -282,6 +337,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   };
 
   const workflowHint = WORKFLOW_STEPS.find((s) => s.step === snap.workflowStep)?.hint ?? "";
+
 
   return (
     <div
@@ -417,6 +473,157 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   className="mt-1.5 max-h-48 min-h-[5.5rem] w-full resize-y rounded-2xl border border-black/[0.07] bg-slate-50/40 px-3 py-2.5 font-mono text-sm focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/18"
                 />
 
+                <div className="mt-2 space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] font-semibold text-apple-secondary uppercase tracking-wider">
+                    <span>Mẫu size chọn nhanh</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPresetForm((v) => !v)}
+                      className="text-[10px] font-bold text-violet-700 hover:underline"
+                    >
+                      {showAddPresetForm ? "Hủy" : "+ ➕ Thêm Mẫu Mới"}
+                    </button>
+                  </div>
+
+                  {showAddPresetForm ? (
+                    <div className="space-y-1.5 rounded-xl border border-violet-200 bg-violet-50/90 p-2 text-xs">
+                      <p className="text-[10px] font-bold text-violet-950">Lưu Mẫu Size Tùy Chỉnh Mới</p>
+                      <div className="grid grid-cols-4 gap-1">
+                        <input
+                          type="text"
+                          placeholder="Tên nhãn (Thùng A)"
+                          value={presetLabelInput}
+                          onChange={(e) => setPresetLabelInput(e.target.value)}
+                          className="col-span-4 rounded-lg border border-black/10 px-2 py-1 text-xs"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Dài"
+                          value={presetLCmInput}
+                          onChange={(e) => setPresetLCmInput(e.target.value)}
+                          className="rounded-lg border border-black/10 px-2 py-1 text-xs tabular-nums"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Rộng"
+                          value={presetWCmInput}
+                          onChange={(e) => setPresetWCmInput(e.target.value)}
+                          className="rounded-lg border border-black/10 px-2 py-1 text-xs tabular-nums"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Cao"
+                          value={presetHCmInput}
+                          onChange={(e) => setPresetHCmInput(e.target.value)}
+                          className="rounded-lg border border-black/10 px-2 py-1 text-xs tabular-nums"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCreateCustomPreset}
+                          className="rounded-lg bg-violet-600 font-bold text-white text-xs py-1"
+                        >
+                          Lưu
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {customerPresets.length > 0 ? (
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] font-bold text-emerald-800 uppercase flex items-center gap-1">
+                        <span>⭐ Mẫu Khách Hàng ({customerEntry?.shortCode || customerEntry?.code || row.customerCode || "Khách Hàng"})</span>
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {customerPresets.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setCombo((c) => {
+                                const text = c.trim();
+                                const line = `${preset.lCm}×${preset.wCm}×${preset.hCm}×`;
+                                if (!text) return line;
+                                return text.endsWith("\n") ? `${text}${line}` : `${text}\n${line}`;
+                              });
+                              textareaRef.current?.focus();
+                            }}
+                            title={preset.description}
+                            className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-950 shadow-sm transition-colors hover:bg-emerald-100"
+                          >
+                            ⭐ {preset.label} <span className="font-mono text-[9px] text-emerald-800">({preset.lCm}×{preset.wCm}×{preset.hCm})</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+
+                  {customPresets.length > 0 ? (
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] font-medium text-apple-tertiary uppercase">Tùy chỉnh cá nhân</p>
+                      <div className="flex flex-wrap gap-1">
+                        {customPresets.map((preset) => (
+                          <span
+                            key={preset.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-950"
+                          >
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setCombo((c) => {
+                                  const text = c.trim();
+                                  const line = `${preset.lCm}×${preset.wCm}×${preset.hCm}×`;
+                                  if (!text) return line;
+                                  return text.endsWith("\n") ? `${text}${line}` : `${text}\n${line}`;
+                                });
+                                textareaRef.current?.focus();
+                              }}
+                              title={preset.description}
+                              className="hover:underline"
+                            >
+                              🛠️ {preset.label} <span className="font-mono text-[9px] text-amber-800">({preset.lCm}×{preset.wCm}×{preset.hCm})</span>
+                            </button>
+                            <button
+                              type="button"
+                              title="Xóa mẫu này"
+                              onClick={() => handleDeleteCustomPreset(preset.id, preset.label)}
+                              className="ml-0.5 text-amber-600 hover:text-red-600 text-[10px] font-bold"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap gap-1">
+                    {DIM_PRESET_SIZES.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setCombo((c) => {
+                            const text = c.trim();
+                            const line = `${preset.lCm}×${preset.wCm}×${preset.hCm}×`;
+                            if (!text) return line;
+                            return text.endsWith("\n") ? `${text}${line}` : `${text}\n${line}`;
+                          });
+                          textareaRef.current?.focus();
+                        }}
+                        title={preset.description}
+                        className="rounded-lg border border-violet-200/80 bg-violet-50/70 px-2 py-1 text-[11px] font-medium text-violet-900 transition-colors hover:bg-violet-100"
+                      >
+                        + {preset.label} <span className="text-[9px] text-violet-700 font-mono">({preset.lCm}×{preset.wCm}×{preset.hCm})</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+
                 <div className="mt-2 flex gap-1 overflow-x-auto pb-0.5">
                   {DIM_QUICK_NUMS.map((n) => (
                     <button
@@ -455,8 +662,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   {snap.canRandomFill ? (
                     <button
                       type="button"
-                      onClick={handleRandom}
-                      className="col-span-2 rounded-xl bg-violet-600 py-2.5 text-xs font-semibold text-white sm:col-span-1 sm:text-sm"
+                      onClick={() => handleRandom()}
+                      className="col-span-2 rounded-xl bg-violet-600 py-2.5 text-xs font-semibold text-white sm:col-span-1 sm:text-sm hover:bg-violet-700"
                     >
                       Ngẫu nhiên
                     </button>
@@ -464,12 +671,51 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 </div>
 
                 {snap.canRandomFill ? (
-                  <div className="mt-2 space-y-2 rounded-xl border border-violet-100 bg-violet-50/30 p-2.5">
-                    <p className="text-[10px] font-semibold text-violet-900">Tùy chọn Ngẫu nhiên</p>
+                  <div className="mt-2.5 space-y-2 rounded-2xl border border-violet-200/80 bg-violet-50/40 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-violet-950">Tùy chọn Sinh Ngẫu Nhiên % DIM</span>
+                      {lot.declaredKg != null && lot.declaredKg > 0 ? (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            targetRatioPercent >= 98
+                              ? "bg-amber-100 text-amber-900"
+                              : targetRatioPercent >= 95
+                                ? "bg-emerald-100 text-emerald-900"
+                                : "bg-blue-100 text-blue-900"
+                          }`}
+                        >
+                          {targetRatioPercent.toFixed(1)}% ({Math.round(lot.declaredKg * (targetRatioPercent / 100))} kg)
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {lot.declaredKg != null && lot.declaredKg > 0 ? (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[9px] font-semibold text-apple-secondary">
+                          <span>85% (Tiết kiệm cước)</span>
+                          <span>95% (Khuyên dùng)</span>
+                          <span>99.9% (Sát trần)</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={85}
+                          max={99.9}
+                          step={0.5}
+                          value={targetRatioPercent}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setTargetRatioPercent(val);
+                            setRandomTargetKgInput("");
+                          }}
+                          className="h-2 w-full cursor-pointer rounded-lg bg-violet-200 accent-violet-600"
+                        />
+                      </div>
+                    ) : null}
+
                     <div className="grid gap-2 sm:grid-cols-2">
                       <label>
                         <span className="text-[10px] font-medium text-apple-secondary">
-                          Tổng DIM mục tiêu (kg)
+                          Hoặc kg DIM cố định
                         </span>
                         <input
                           type="number"
@@ -480,10 +726,10 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                           onChange={(e) => setRandomTargetKgInput(e.target.value)}
                           placeholder={
                             lot.declaredKg != null
-                              ? `~${Math.round(lot.declaredKg * (1 - DIM_TOTAL_BAND_BELOW_RATIO))} (tự)`
+                              ? `~${Math.round(lot.declaredKg * (targetRatioPercent / 100))} kg`
                               : "950"
                           }
-                          className="mt-0.5 w-full rounded-lg border border-violet-200 bg-white px-2.5 py-1.5 text-sm font-semibold tabular-nums focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                          className="mt-0.5 w-full rounded-xl border border-violet-200 bg-white px-2.5 py-1.5 text-xs font-semibold tabular-nums focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
                         />
                       </label>
                       <label>
@@ -499,19 +745,16 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                           onChange={(e) => setRandomLineCountInput(e.target.value)}
                           placeholder={
                             snap.targetLineCount
-                              ? `${snap.targetLineCount.min}–${snap.targetLineCount.max} (tự)`
+                              ? `${snap.targetLineCount.min}–${snap.targetLineCount.max} dòng`
                               : String(Math.min(snap.remainingPcs, 10))
                           }
-                          className="mt-0.5 w-full rounded-lg border border-violet-200 bg-white px-2.5 py-1.5 text-sm font-semibold tabular-nums focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                          className="mt-0.5 w-full rounded-xl border border-violet-200 bg-white px-2.5 py-1.5 text-xs font-semibold tabular-nums focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
                         />
                       </label>
                     </div>
-                    <p className="text-[10px] leading-snug text-apple-tertiary">
-                      Nhập kg tổng (vd. lô 1000 kg → <strong>950</strong>) — hệ thống tự cân bằng
-                      khớp ±1 kg. Để trống = tự chọn ~95–99.9% kg lô.
-                    </p>
                   </div>
                 ) : null}
+
 
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
                   {snap.canRandomFill ? (

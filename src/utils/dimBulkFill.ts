@@ -28,7 +28,38 @@ export const DIM_LOT_LINE_COUNT_MAX = 17;
 /** Lô từ ngưỡng này trở lên → mục tiêu 13–17 dòng. */
 export const DIM_LOT_LINE_COUNT_PCS_THRESHOLD = 40;
 
+export type DimPresetSize = {
+  id: string;
+  label: string;
+  lCm: number;
+  wCm: number;
+  hCm: number;
+  description: string;
+};
+
+export const DIM_PRESET_SIZES: readonly DimPresetSize[] = [
+  { id: "carton_s", label: "Carton S", lCm: 30, wCm: 20, hCm: 20, description: "30×20×20 cm" },
+  { id: "carton_m", label: "Carton M", lCm: 40, wCm: 30, hCm: 25, description: "40×30×25 cm" },
+  { id: "garment_l", label: "Garment L", lCm: 60, wCm: 40, hCm: 40, description: "60×40×40 cm" },
+  { id: "electronics_xl", label: "Electronics XL", lCm: 80, wCm: 60, hCm: 50, description: "80×60×50 cm" },
+  { id: "pallet_std", label: "Pallet Std", lCm: 120, wCm: 100, hCm: 140, description: "120×100×140 cm" },
+] as const;
+
+export function convertCustomerSavedDimTemplatesToPresets(
+  templates?: { id: string; label: string; lCm: number; wCm: number; hCm: number }[] | null
+): DimPresetSize[] {
+  if (!templates?.length) return [];
+  return templates.map((t) => ({
+    id: `cst-${t.id}`,
+    label: t.label || `${t.lCm}×${t.wCm}×${t.hCm}`,
+    lCm: t.lCm,
+    wCm: t.wCm,
+    hCm: t.hCm,
+    description: `⭐ [Mẫu Khách] ${t.label || ""} (${t.lCm}×${t.wCm}×${t.hCm} cm)`.trim(),
+  }));
+}
 export type DimRandomPoolId = "light" | "medium" | "heavy" | "mix" | "smart";
+
 
 type SizeTemplate = { lCm: number; wCm: number; hCm: number };
 
@@ -438,8 +469,10 @@ export type RandomDimFillInput = {
   regenerationNonce?: number;
   /** Số dòng ước tính do người dùng chọn (vd. 20 dòng / 100 kiện). */
   targetEstimatedLineCount?: number;
-  /** Tổng DIM mục tiêu (đo + ước tính) — hệ thống tự cân bằng khớp. */
+  /** Tổng DIM mục tiêu kg (đo + ước tính). */
   targetTotalDimKg?: number;
+  /** Mục tiêu theo phần trăm kg lô (vd. 95.5 = 95.5% Gross Weight). */
+  targetRatioPercent?: number;
 };
 
 export type RandomDimFillResult =
@@ -1102,14 +1135,22 @@ export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillR
       ? (totalDimKgFromLines(manualNormEarly, input.divisor, input.dimCtx) ?? 0)
       : 0;
 
+  const effectiveTargetKg =
+    input.targetTotalDimKg != null && Number.isFinite(input.targetTotalDimKg) && input.targetTotalDimKg > 0
+      ? input.targetTotalDimKg
+      : input.targetRatioPercent != null && Number.isFinite(input.targetRatioPercent) && input.targetRatioPercent > 0
+        ? Math.round(declaredKg * (input.targetRatioPercent / 100) * 10) / 10
+        : undefined;
+
   const targets = resolveRandomFillDimTargets(
     declaredKg,
     manualTotalEarly,
     runSeed,
-    input.targetTotalDimKg,
+    effectiveTargetKg,
     bandBelow,
     ceilingRatio
   );
+
   if (!targets.ok) return { ok: false, error: targets.error };
   const { floorKg, ceilingKg, targetKg, userSpecified } = targets;
 
@@ -1393,6 +1434,7 @@ export function applySmartDimAutoFill(
     regenerationNonce?: number;
     targetEstimatedLineCount?: number;
     targetTotalDimKg?: number;
+    targetRatioPercent?: number;
   }
 ): { lines: DimPieceLine[]; autoFilled: boolean; error?: string } {
   const consolidated = consolidateDimPieceLines(lines);
@@ -1417,7 +1459,9 @@ export function applySmartDimAutoFill(
     regenerationNonce: opts.regenerationNonce,
     targetEstimatedLineCount: opts.targetEstimatedLineCount,
     targetTotalDimKg: opts.targetTotalDimKg,
+    targetRatioPercent: opts.targetRatioPercent,
   });
+
 
   if (!result.ok) {
     return { lines: consolidated, autoFilled: false, error: result.error };

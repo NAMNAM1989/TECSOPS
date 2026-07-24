@@ -3,6 +3,7 @@ import type {
   CustomerParty,
   CustomerPartyType,
   CustomerSavedConsignee,
+  CustomerSavedDimTemplate,
   CustomerSavedGoods,
   CustomerSavedShipper,
   CustomerSavedVehicle,
@@ -155,6 +156,44 @@ export function emptyCustomerSavedVehicle(): CustomerSavedVehicle {
   });
 }
 
+function newSavedDimTemplateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `dimtmpl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function clampCustomerSavedDimTemplate(t: CustomerSavedDimTemplate): CustomerSavedDimTemplate {
+  const L = CUSTOMER_PROFILE_LIMITS;
+  const lCm = Number.isFinite(t.lCm) && t.lCm > 0 ? Math.round(t.lCm) : 30;
+  const wCm = Number.isFinite(t.wCm) && t.wCm > 0 ? Math.round(t.wCm) : 20;
+  const hCm = Number.isFinite(t.hCm) && t.hCm > 0 ? Math.round(t.hCm) : 20;
+  const stdPcsKg =
+    t.stdPcsKg != null && Number.isFinite(t.stdPcsKg) && t.stdPcsKg > 0
+      ? Math.round(t.stdPcsKg * 100) / 100
+      : undefined;
+  return {
+    id: clip(t.id, 80).trim() || newSavedDimTemplateId(),
+    label: clip(t.label, L.savedDimTemplateLabel).trim() || `${lCm}×${wCm}×${hCm}`,
+    lCm,
+    wCm,
+    hCm,
+    ...(stdPcsKg != null ? { stdPcsKg } : {}),
+    ...(t.isDefault ? { isDefault: true } : {}),
+  };
+}
+
+export function emptyCustomerSavedDimTemplate(): CustomerSavedDimTemplate {
+  return clampCustomerSavedDimTemplate({
+    id: newSavedDimTemplateId(),
+    label: "",
+    lCm: 40,
+    wCm: 30,
+    hCm: 25,
+  });
+}
+
+
 type LegacyCustomerRow = CustomerDirectoryEntry & {
   consigneeName?: string;
   consigneeAddress?: string;
@@ -258,22 +297,32 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
         .map((x) => clampCustomerSavedVehicle(x as CustomerSavedVehicle))
         .filter((x) => x.licensePlate || x.driverName || x.driverId)
     : [];
+  const savedDimTemplates = Array.isArray(migrated.savedDimTemplates)
+    ? migrated.savedDimTemplates
+        .slice(0, L.savedDimTemplateCount)
+        .map((x) => clampCustomerSavedDimTemplate(x as CustomerSavedDimTemplate))
+        .filter((x) => x.label && x.lCm > 0 && x.wCm > 0 && x.hCm > 0)
+    : [];
   const shipperIds = new Set(savedShippers.map((x) => x.id));
   const cneeIds = new Set(savedConsignees.map((x) => x.id));
   const goodsIds = new Set(savedGoods.map((x) => x.id));
   const vehicleIds = new Set(savedVehicles.map((x) => x.id));
+  const dimTmplIds = new Set(savedDimTemplates.map((x) => x.id));
   let defaultShipperId = clip(migrated.defaultShipperId, 80).trim();
   let defaultConsigneeId = clip(migrated.defaultConsigneeId, 80).trim();
   let defaultGoodsId = clip(migrated.defaultGoodsId, 80).trim();
   let defaultVehicleId = clip(migrated.defaultVehicleId, 80).trim();
+  let defaultDimTemplateId = clip(migrated.defaultDimTemplateId, 80).trim();
   if (defaultShipperId && !shipperIds.has(defaultShipperId)) defaultShipperId = "";
   if (defaultConsigneeId && !cneeIds.has(defaultConsigneeId)) defaultConsigneeId = "";
   if (defaultGoodsId && !goodsIds.has(defaultGoodsId)) defaultGoodsId = "";
   if (defaultVehicleId && !vehicleIds.has(defaultVehicleId)) defaultVehicleId = "";
+  if (defaultDimTemplateId && !dimTmplIds.has(defaultDimTemplateId)) defaultDimTemplateId = "";
   if (savedShippers.length === 1) defaultShipperId = savedShippers[0]!.id;
   if (savedConsignees.length === 1) defaultConsigneeId = savedConsignees[0]!.id;
   if (savedGoods.length === 1) defaultGoodsId = savedGoods[0]!.id;
   if (savedVehicles.length === 1) defaultVehicleId = savedVehicles[0]!.id;
+  if (savedDimTemplates.length === 1) defaultDimTemplateId = savedDimTemplates[0]!.id;
   const code = clip(migrated.code, L.code).trim();
   const shortCode = normalizeCustomerShortCode(clip(migrated.shortCode, L.shortCode)) || undefined;
   const taxCode = clip(migrated.taxCode, L.taxCode).trim() || undefined;
@@ -298,13 +347,16 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
     defaultConsigneeId: defaultConsigneeId || undefined,
     defaultGoodsId: defaultGoodsId || undefined,
     defaultVehicleId: defaultVehicleId || undefined,
+    defaultDimTemplateId: defaultDimTemplateId || undefined,
     savedShippers,
     savedConsignees,
     savedGoods,
     savedVehicles,
+    savedDimTemplates,
     otherRequirementsPrint: clip(migrated.otherRequirementsPrint, L.otherRequirementsPrint).trim() || undefined,
     parties,
   };
+
 }
 
 /** Một dòng trống cho form thêm mới. */
@@ -318,6 +370,7 @@ export function emptyCustomerProfileRow(id: string): CustomerDirectoryEntry {
     savedConsignees: [],
     savedGoods: [],
     savedVehicles: [],
+    savedDimTemplates: [],
     parties: [],
   };
 }

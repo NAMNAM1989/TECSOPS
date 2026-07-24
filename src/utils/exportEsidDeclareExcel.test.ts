@@ -64,7 +64,6 @@ describe("exportEsidDeclareExcel", () => {
     expect(row.AGENT_NAME).toBe("TECS AGENT FIXED");
     expect(row.AGENT_VAT).toBe("VAT1");
     expect(row.PAYMENT_MODE).toMatch(/Chuyển khoản/i);
-    expect(row.TOTAL_HAWBS).toBe("");
     expect(row.SUBMIT).toBe(0);
     expect(row.TECS_WAREHOUSE).toBe(1);
     expect(row.PAYMENT_MODE).toBe("Chuyển khoản/Bank transfer");

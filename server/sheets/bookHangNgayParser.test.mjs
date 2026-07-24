@@ -236,6 +236,7 @@ describe("parseBookHangNgayGrid", () => {
   });
 
   it("giữ colMap khi có dòng tiêu đề giữa khối TCS và SCSC", () => {
+    const dataStartRow = 19;
     const header = [
       "",
       "AWB/BOOKING",
@@ -250,20 +251,20 @@ describe("parseBookHangNgayGrid", () => {
     const grid = [
       { rowIndex: 0, cells: header },
       {
-        rowIndex: BOOK_DATA_START_ROW_INDEX,
+        rowIndex: dataStartRow,
         cells: ["1", "738-0725 3886", "VN0306/23JUL", "", "NRT", "TECS-TCS", "6 / 82", "PCS", ""],
       },
-      { rowIndex: BOOK_DATA_START_ROW_INDEX + 1, cells: ["VLC-TECS", "", "", "", "", "", "", "", ""] },
+      { rowIndex: dataStartRow + 1, cells: ["VLC-TECS", "", "", "", "", "", "", "", ""] },
       {
-        rowIndex: BOOK_DATA_START_ROW_INDEX + 2,
+        rowIndex: dataStartRow + 2,
         cells: ["2", "618-5552 6354", "SQ185/22JUL", "", "SIN", "TECS-SCSC", "36 / 680", "VICTORY", ""],
       },
       {
-        rowIndex: BOOK_DATA_START_ROW_INDEX + 3,
+        rowIndex: dataStartRow + 3,
         cells: ["CẬP NHẬT DANH SÁCH HÀNG LÊN SÂN BAY 22-JUL", "", "", "", "", "", "", "", ""],
       },
       {
-        rowIndex: BOOK_DATA_START_ROW_INDEX + 4,
+        rowIndex: dataStartRow + 4,
         cells: ["3", "978-2391 3934", "VJ081/23JUL", "", "MEL", "TECS-SCSC", "104 / 1579", "VAU", ""],
       },
     ];

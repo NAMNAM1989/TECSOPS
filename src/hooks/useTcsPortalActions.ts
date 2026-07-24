@@ -558,11 +558,7 @@ export function useTcsPortalActions({
     results,
     downloadedCount,
     login,
-<<<<<<< HEAD
-    scan,
-=======
     loginWithExtension,
->>>>>>> 149a797 (Update project implementation and documentation)
     downloadEsidFor,
     fillEsidDeclareFor,
     submitEsidDeclare,

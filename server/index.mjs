@@ -1,5 +1,6 @@
 import "./loadEnv.mjs";
 import express from "express";
+import compression from "compression";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +23,7 @@ const isProduction = process.env.NODE_ENV === "production";
 
 const app = express();
 app.set("trust proxy", 1);
+app.use(compression());
 const httpServer = createServer(app);
 
 /**
@@ -132,7 +134,19 @@ if (isDatabaseConfigured()) {
 }
 
 const distDir = path.join(__dirname, "..", "dist");
-app.use(express.static(distDir));
+app.use(
+  express.static(distDir, {
+    maxAge: "1y",
+    immutable: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html") || path.basename(filePath) === "index.html") {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      } else {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  })
+);
 
 app.get("*", (req, res, next) => {
   if (
@@ -187,8 +201,13 @@ async function start() {
 
 io.on("connection", async (socket) => {
   try {
+    const clientVersion = parseInt(socket.handshake.query?.v || "0", 10);
     const initial = await loadState();
-    socket.emit("sync", initial);
+    if (initial.version > clientVersion) {
+      socket.emit("sync", initial);
+    } else {
+      console.info(`[socket] client already has latest version ${clientVersion}. Sync bypassed.`);
+    }
   } catch (e) {
     console.error("[socket] initial sync", e);
   }

@@ -1,5 +1,4 @@
 import type { Shipment } from "../types/shipment";
-import { ESID_DEFAULT_PAYMENT_MODE, esidTotalHawbs } from "./esidDeclareDefaults";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { awbDigitsKey } from "./awbFormat";
 import { getActiveEsidRegistrant } from "./esidRegistrantProfile";

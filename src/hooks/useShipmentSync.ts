@@ -57,10 +57,11 @@ export function useShipmentSync(fallback: Fallback) {
     let cancelled = false;
 
     (async () => {
+      let parsed: any = null;
       try {
         const res = await fetch("/api/state", { ...credFetch, cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
-        const parsed = parseAppState(await res.json());
+        parsed = parseAppState(await res.json());
         if (!parsed) throw new Error("Invalid state");
         if (cancelled) return;
         apiOkRef.current = true;
@@ -83,6 +84,7 @@ export function useShipmentSync(fallback: Fallback) {
 
       const socket = io({
         path: SOCKET_IO_PATH,
+        query: { v: parsed ? parsed.version.toString() : "0" },
         transports: ["websocket", "polling"],
         withCredentials: true,
         reconnectionAttempts: Infinity,

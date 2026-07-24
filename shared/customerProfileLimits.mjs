@@ -40,4 +40,6 @@ export const CUSTOMER_PROFILE_LIMITS = {
   address: 300,
   email: 120,
   phone: 40,
+  savedDimTemplateLabel: 80,
+  savedDimTemplateCount: 20,
 };

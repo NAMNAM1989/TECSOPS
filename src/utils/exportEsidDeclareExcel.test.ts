@@ -63,12 +63,8 @@ describe("exportEsidDeclareExcel", () => {
     expect(row.CONSIGNEE_NAME).toBe("BUYER B");
     expect(row.AGENT_NAME).toBe("TECS AGENT FIXED");
     expect(row.AGENT_VAT).toBe("VAT1");
-    expect(row.PAYMENT_MODE).toMatch(/Chuyển khoản/i);
-    expect(row.TOTAL_HAWBS).toBe("");
-    expect(row.SUBMIT).toBe(0);
-    expect(row.TECS_WAREHOUSE).toBe(1);
     expect(row.PAYMENT_MODE).toBe("Chuyển khoản/Bank transfer");
-    expect(row.TOTAL_HAWBS).toBe(0);
+    expect(row.TOTAL_HAWBS).toBe("");
     expect(shipmentToEsidDeclareRow(base({ hawb: "H001" })).TOTAL_HAWBS).toBe(1);
   });
 

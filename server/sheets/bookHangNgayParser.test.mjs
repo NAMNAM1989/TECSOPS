@@ -6,6 +6,8 @@ import {
 } from "./bookHangNgayParser.mjs";
 import { sessionYmdToBookSheetTab, bookSheetTabCandidates } from "./googleSheetFetch.mjs";
 
+const BOOK_DATA_START_ROW_INDEX = 1;
+
 describe("sessionYmdToBookSheetTab", () => {
   it("map ngày sang tên tab «NGÀY D MMM»", () => {
     expect(sessionYmdToBookSheetTab("2026-07-13")).toBe("NGÀY 13 JUL");

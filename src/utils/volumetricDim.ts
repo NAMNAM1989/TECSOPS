@@ -276,6 +276,8 @@ export type DimPieceLine = {
 
   estimated?: boolean;
 
+  locked?: boolean;
+
 };
 
 

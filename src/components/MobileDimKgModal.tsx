@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { findCustomerEntry } from "../utils/customerBookingResolve";
@@ -22,20 +22,20 @@ import {
 } from "../utils/dimBulkFill";
 import { loadCustomDimPresets, saveCustomDimPreset, removeCustomDimPreset } from "../utils/dimCustomPresetsStorage";
 import {
-  appendDimComboNumber,
-  dimEntryAddMeasuredFromCombo,
   dimEntryClearEstimated,
   dimEntryMergeLines,
   dimEntryRandomFill,
   dimEntryRemoveLine,
   dimEntrySeed,
   dimEntryValidateSave,
-  normalizeDimComboInput,
   parseRandomLineCountInput,
   parseTargetDimKgInput,
   snapshotDimEntry,
+  parseSpeechToDimLines,
   type DimEntryWorkflowStep,
 } from "../utils/dimEntryState";
+import { loadCustomerDimHistory, saveCustomerDimHistory } from "../utils/dimHistoryStorage";
+import { CustomDimNumPad } from "./CustomDimNumPad";
 
 export type MobileDimSavePayload = {
   dimWeightKg: number | null;
@@ -49,8 +49,6 @@ interface MobileDimKgModalProps {
   onClose: () => void;
   onSave: (payload: MobileDimSavePayload) => void;
 }
-
-const DIM_QUICK_NUMS = ["120", "100", "80", "60", "50", "40", "30", "25", "20"] as const;
 
 const WORKFLOW_STEPS: { step: DimEntryWorkflowStep; label: string; hint: string }[] = [
   { step: 1, label: "Đo mẫu", hint: "Nhập hoặc dán size đo thật (D×R×C×kiện)" },
@@ -102,6 +100,7 @@ function DimLineSection({
   divisor,
   dimCtx,
   onRemove,
+  onToggleLock,
   emptyHint,
 }: {
   title: string;
@@ -111,6 +110,7 @@ function DimLineSection({
   divisor: DimDivisor;
   dimCtx: ScscDimRoundContext;
   onRemove: (index: number) => void;
+  onToggleLock?: (index: number) => void;
   emptyHint?: string;
 }) {
   const border =
@@ -139,7 +139,7 @@ function DimLineSection({
             const sub = lineDimKg(line, divisor, dimCtx);
             return (
               <li
-                key={`${idx}-${line.lCm}-${line.wCm}-${line.hCm}-${line.pcs}`}
+                key={`${idx}-${line.lCm}-${line.wCm}-${line.hCm}-${line.pcs}-${line.locked ? "L" : "U"}`}
                 className="flex items-center justify-between gap-2 rounded-lg border border-black/[0.06] bg-white px-2.5 py-2"
               >
                 <div className="min-w-0 flex-1">
@@ -151,13 +151,30 @@ function DimLineSection({
                     {sub != null ? `${formatLineDimKgDisplay(sub, dimCtx)} kg` : "—"}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onRemove(idx)}
-                  className="shrink-0 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-600"
-                >
-                  Xóa
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Nút Khóa dòng (chỉ cho kiện ước tính, đo thật luôn cố định) */}
+                  {tone === "estimated" && onToggleLock && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleLock(idx)}
+                      className={`rounded-md px-2 py-1 text-[10px] font-semibold border transition-colors ${
+                        line.locked
+                          ? "bg-amber-100 border-amber-300 text-amber-900"
+                          : "bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200"
+                      }`}
+                      title={line.locked ? "Mở khóa dòng" : "Khóa cố định dòng này"}
+                    >
+                      {line.locked ? "🔒 Khóa" : "🔓 Khóa"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onRemove(idx)}
+                    className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-600"
+                  >
+                    Xóa
+                  </button>
+                </div>
               </li>
             );
           })}
@@ -178,12 +195,22 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
     [customerEntry]
   );
 
-  const [combo, setCombo] = useState("");
   const [lines, setLines] = useState<DimPieceLine[]>(() =>
     consolidateDimPieceLines(cloneLines(row.dimLines))
   );
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [isInputFocused, setIsInputFocused] = useState(false);
+
+  // States nhập liệu 4 ô riêng biệt
+  const [inputL, setInputL] = useState("");
+  const [inputW, setInputW] = useState("");
+  const [inputH, setInputH] = useState("");
+  const [inputPcs, setInputPcs] = useState("");
+  const [activeField, setActiveField] = useState<"l" | "w" | "h" | "pcs">("l");
+
+  const refL = useRef<HTMLInputElement>(null);
+  const refW = useRef<HTMLInputElement>(null);
+  const refH = useRef<HTMLInputElement>(null);
+  const refPcs = useRef<HTMLInputElement>(null);
+
   const [autoRandomAfterAdd, setAutoRandomAfterAdd] = useState(false);
   const [actionNote, setActionNote] = useState<string | null>(null);
   const [randomNonce, setRandomNonce] = useState(0);
@@ -197,6 +224,18 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
   const [presetLCmInput, setPresetLCmInput] = useState("");
   const [presetWCmInput, setPresetWCmInput] = useState("");
   const [presetHCmInput, setPresetHCmInput] = useState("");
+
+  // Speech-to-Text State
+  const [isListening, setIsListening] = useState(false);
+
+  // Customer DIM History State
+  const [customerHistory, setCustomerHistory] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (row.customerCode) {
+      setCustomerHistory(loadCustomerDimHistory(row.customerCode));
+    }
+  }, [row.customerCode]);
 
   const handleCreateCustomPreset = useCallback(() => {
     const l = Number(presetLCmInput);
@@ -223,14 +262,14 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
     setActionNote(`Đã xóa mẫu size "${label}".`);
   }, []);
 
-
   const lot = useMemo(
     () => ({
       shipmentId: row.id,
       declaredPcs: row.pcs,
       declaredKg: row.kg,
+      customerCode: row.customerCode,
     }),
-    [row.id, row.pcs, row.kg]
+    [row.id, row.pcs, row.kg, row.customerCode]
   );
 
   const dimCtx: ScscDimRoundContext = useMemo(
@@ -276,19 +315,49 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
     setActionNote(note ?? null);
   }, []);
 
-  const handleAddRows = useCallback(() => {
-    const r = dimEntryAddMeasuredFromCombo(lines, combo, lot, {
-      thenRandomFill: autoRandomAfterAdd,
-      randomFillParams: randomParams ? { ...randomParams, targetRatioPercent } : undefined,
-    });
-    if (!r.ok) {
-      setActionNote(`❌ ${r.error}`);
+  // Hàm thêm dòng từ lưới input 4 ô
+  const handleAddRowFromInputs = () => {
+    const l = Number(inputL);
+    const w = Number(inputW);
+    const h = Number(inputH);
+    const p = Number(inputPcs) || 1;
+
+    if (!l || l <= 0 || !w || w <= 0 || !h || h <= 0) {
+      setActionNote("❌ Dài, Rộng, Cao phải là số dương.");
       return;
     }
-    applyMutation(r.lines, r.note ?? null);
-    setCombo("");
-    textareaRef.current?.focus();
-  }, [lines, combo, lot, autoRandomAfterAdd, randomParams, targetRatioPercent, applyMutation]);
+
+    const currentTotalPcs = lines.reduce((s, x) => s + x.pcs, 0);
+    if (lot.declaredPcs != null && currentTotalPcs + p > lot.declaredPcs) {
+      setActionNote(`❌ Tổng kiện (${currentTotalPcs + p}) vượt quá số kiện của lô hàng (${lot.declaredPcs}).`);
+      return;
+    }
+
+    const newLine: DimPieceLine = { lCm: l, wCm: w, hCm: h, pcs: p, estimated: false };
+    const nextLines = [...lines, newLine];
+
+    if (autoRandomAfterAdd && randomParams) {
+      const fill = dimEntryRandomFill(nextLines, lot, {
+        ...randomParams,
+        targetRatioPercent,
+      });
+      if (fill.ok) {
+        applyMutation(fill.lines, fill.note ?? "Đã thêm dòng và tự động sinh ngẫu nhiên.");
+      } else {
+        applyMutation(nextLines, `Đã thêm dòng. Tự sinh ngẫu nhiên lỗi: ${fill.error}`);
+      }
+    } else {
+      applyMutation(nextLines, "Đã thêm dòng đo mới.");
+    }
+
+    // Reset inputs
+    setInputL("");
+    setInputW("");
+    setInputH("");
+    setInputPcs("");
+    setActiveField("l");
+    refL.current?.focus();
+  };
 
   const handleMerge = () => {
     const r = dimEntryMergeLines(lines);
@@ -323,12 +392,28 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
     applyMutation(r.lines, r.note ?? null);
   };
 
+  const handleToggleLock = (idx: number) => {
+    const next = lines.map((l, i) => {
+      if (i === idx) {
+        return { ...l, locked: !l.locked };
+      }
+      return l;
+    });
+    applyMutation(next, next[idx]?.locked ? "🔒 Đã khóa dòng kiện ước tính." : "🔓 Đã mở khóa dòng kiện.");
+  };
+
   const handleSave = () => {
     const r = dimEntryValidateSave(lines, lot, divisor, dimCtx);
     if (!r.ok) {
       setActionNote(`❌ ${r.error}`);
       return;
     }
+    
+    // Lưu lịch sử kích thước đo thật thành công cho khách hàng
+    if (row.customerCode) {
+      saveCustomerDimHistory(row.customerCode, r.lines.filter(l => !l.estimated));
+    }
+
     onSave({
       dimWeightKg: totalDimKgFromLines(r.lines, divisor, dimCtx),
       dimLines: r.lines,
@@ -338,10 +423,126 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
 
   const workflowHint = WORKFLOW_STEPS.find((s) => s.step === snap.workflowStep)?.hint ?? "";
 
+  // Bàn phím ảo CustomNumPad handlers
+  const handleNumKeyPress = (num: string) => {
+    setActionNote(null);
+    if (activeField === "l") {
+      setInputL((v) => {
+        const next = v + num;
+        if (next.length >= 3) {
+          setTimeout(() => {
+            setActiveField("w");
+            refW.current?.focus();
+          }, 80);
+        }
+        return next;
+      });
+    } else if (activeField === "w") {
+      setInputW((v) => {
+        const next = v + num;
+        if (next.length >= 3) {
+          setTimeout(() => {
+            setActiveField("h");
+            refH.current?.focus();
+          }, 80);
+        }
+        return next;
+      });
+    } else if (activeField === "h") {
+      setInputH((v) => {
+        const next = v + num;
+        if (next.length >= 3) {
+          setTimeout(() => {
+            setActiveField("pcs");
+            refPcs.current?.focus();
+          }, 80);
+        }
+        return next;
+      });
+    } else if (activeField === "pcs") {
+      setInputPcs((v) => v + num);
+    }
+  };
+
+  const handleNumDelete = () => {
+    if (activeField === "l") {
+      setInputL((v) => v.slice(0, -1));
+    } else if (activeField === "w") {
+      setInputW((v) => v.slice(0, -1));
+    } else if (activeField === "h") {
+      setInputH((v) => v.slice(0, -1));
+    } else if (activeField === "pcs") {
+      setInputPcs((v) => v.slice(0, -1));
+    }
+  };
+
+  const handleNumClear = () => {
+    if (activeField === "l") setInputL("");
+    else if (activeField === "w") setInputW("");
+    else if (activeField === "h") setInputH("");
+    else if (activeField === "pcs") setInputPcs("");
+  };
+
+  const handleNumAction = () => {
+    if (activeField === "l") {
+      setActiveField("w");
+      refW.current?.focus();
+    } else if (activeField === "w") {
+      setActiveField("h");
+      refH.current?.focus();
+    } else if (activeField === "h") {
+      setActiveField("pcs");
+      refPcs.current?.focus();
+    } else if (activeField === "pcs") {
+      handleAddRowFromInputs();
+    }
+  };
+
+  // Trình nhận diện giọng nói Speech-to-Text
+  const startSpeechRecognition = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setActionNote("❌ Trình duyệt không hỗ trợ nhận diện giọng nói.");
+      return;
+    }
+    const rec = new SpeechRecognition();
+    rec.lang = "vi-VN";
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onstart = () => {
+      setIsListening(true);
+      setActionNote("🎙️ Đang lắng nghe... Hãy đọc kích thước.");
+    };
+    rec.onresult = (event: any) => {
+      const text = event.results[0][0].transcript;
+      setActionNote(`🎙️ Nhận diện: "${text}"`);
+      const r = parseSpeechToDimLines(text);
+      if (r.ok) {
+        // Kiểm tra tổng kiện sau khi thêm
+        const addPcs = r.lines.reduce((s, l) => s + l.pcs, 0);
+        const currentPcs = lines.reduce((s, l) => s + l.pcs, 0);
+        if (lot.declaredPcs != null && currentPcs + addPcs > lot.declaredPcs) {
+          setActionNote(`❌ Tổng kiện sau khi nhận diện (${currentPcs + addPcs}) vượt số kiện của lô hàng (${lot.declaredPcs}).`);
+          return;
+        }
+        applyMutation([...lines, ...r.lines], `Đã thêm ${r.lines.length} dòng đo từ giọng nói.`);
+      } else {
+        setActionNote(`❌ Lỗi bóc tách: ${r.error}`);
+      }
+    };
+    rec.onerror = (e: any) => {
+      setActionNote(`❌ Lỗi nhận diện giọng nói: ${e.error}`);
+      setIsListening(false);
+    };
+    rec.onend = () => {
+      setIsListening(false);
+    };
+    rec.start();
+  };
 
   return (
     <div
-      className="no-print fixed inset-0 z-[480] flex items-end justify-center bg-black/30 p-2 sm:items-center sm:p-4 md:p-6"
+      className="no-print fixed inset-0 z-[480] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4 md:p-6 transition-all duration-300"
       role="dialog"
       aria-modal="true"
       aria-labelledby="dim-modal-title"
@@ -349,464 +550,523 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
         if (e.target === e.currentTarget) onClose();
       }}
     >
+      {/* Container dạng Bottom Sheet trên di động, Modal trên desktop */}
       <div
-        className="flex max-h-[min(94dvh,760px)] w-full max-w-[min(100%,26rem)] flex-col overflow-hidden rounded-[1.35rem] border border-black/[0.06] bg-white shadow-2xl shadow-black/10 sm:max-h-[min(92dvh,860px)] sm:max-w-xl md:max-h-[min(92dvh,920px)] md:max-w-3xl lg:max-w-4xl"
+        className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[1.6rem] border border-black/[0.08] bg-white shadow-2xl transition-all sm:max-h-[min(90dvh,860px)] sm:max-w-xl sm:rounded-[1.6rem] md:max-h-[min(90dvh,920px)] md:max-w-3xl lg:max-w-4xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header + ngữ cảnh lô */}
-        <div className="shrink-0 border-b border-black/[0.06] bg-gradient-to-b from-slate-50/90 to-white px-4 pb-3 pt-4 sm:px-5 md:px-6">
+        <div className="shrink-0 border-b border-black/[0.06] bg-gradient-to-b from-slate-50 to-white px-4 pb-3 pt-4 sm:px-5 md:px-6">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h2 id="dim-modal-title" className="text-[1.05rem] font-semibold tracking-tight text-apple-label">
+              <h2 id="dim-modal-title" className="text-[1.1rem] font-bold tracking-tight text-slate-800">
                 Nhập DIM
               </h2>
-              <p className="mt-0.5 text-[11px] text-apple-tertiary">
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-500">
                 {row.awb} · {row.flight}
                 {airlineRule ? ` · ${airlineRule.codes.join("/")}` : ""}
               </p>
             </div>
             {airlineRule ? (
-              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold">
+              <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-900 shadow-sm border border-amber-200">
                 SCSC · {airlineRule.chargeableNote.slice(0, 24)}
               </span>
             ) : null}
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div className="rounded-xl bg-black/[0.03] px-2.5 py-2">
-              <p className="text-[9px] font-medium uppercase text-apple-tertiary">Kiện lô</p>
-              <p className="text-sm font-bold tabular-nums">{lot.declaredPcs ?? "—"}</p>
+          <div className="mt-3 grid grid-cols-4 gap-1.5">
+            <div className="rounded-xl bg-slate-100 p-2 text-center border border-black/[0.03]">
+              <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">Kiện lô</p>
+              <p className="text-xs font-bold tabular-nums text-slate-800">{lot.declaredPcs ?? "—"}</p>
             </div>
-            <div className="rounded-xl bg-black/[0.03] px-2.5 py-2">
-              <p className="text-[9px] font-medium uppercase text-apple-tertiary">Kg lô</p>
-              <p className="text-sm font-bold tabular-nums">{lot.declaredKg ?? "—"}</p>
+            <div className="rounded-xl bg-slate-100 p-2 text-center border border-black/[0.03]">
+              <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">Kg lô</p>
+              <p className="text-xs font-bold tabular-nums text-slate-800">{lot.declaredKg ?? "—"}</p>
             </div>
-            <div className="rounded-xl bg-violet-50 px-2.5 py-2">
-              <p className="text-[9px] font-medium uppercase text-violet-700/80">Tổng DIM</p>
-              <p className="text-sm font-bold tabular-nums text-violet-900">{totalDimLabel}</p>
+            <div className="rounded-xl bg-violet-50 p-2 text-center border border-violet-100">
+              <p className="text-[8px] font-bold uppercase tracking-wider text-violet-700">Tổng DIM</p>
+              <p className="text-xs font-bold tabular-nums text-violet-900">{totalDimLabel}</p>
             </div>
             <div
-              className={`rounded-xl px-2.5 py-2 ${
+              className={`rounded-xl p-2 text-center border ${
                 snap.pcsExcess
-                  ? "bg-red-50"
+                  ? "bg-red-50 border-red-200 text-red-900"
                   : snap.pcsMatch
-                    ? "bg-emerald-50"
-                    : "bg-amber-50"
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                    : "bg-amber-50 border-amber-200 text-amber-900"
               }`}
             >
-              <p className="text-[9px] font-medium uppercase text-apple-tertiary">Kiện DIM</p>
-              <p className="text-sm font-bold tabular-nums">
+              <p className="text-[8px] font-bold uppercase tracking-wider text-apple-secondary">Kiện DIM</p>
+              <p className="text-xs font-bold tabular-nums">
                 {snap.sumDimPcs}
                 {lot.declaredPcs != null ? (
-                  <span className="text-xs font-medium text-apple-secondary"> / {lot.declaredPcs}</span>
+                  <span className="text-[10px] font-semibold text-slate-500"> / {lot.declaredPcs}</span>
                 ) : null}
               </p>
             </div>
           </div>
 
           {lot.declaredKg != null && snap.totalDim != null ? (
-            <p className="mt-2 text-[10px] font-medium text-emerald-900">
+            <p className="mt-2 text-[10px] font-bold text-slate-600">
               {snap.dimBelowGross
-                ? `DIM ${snap.totalDim.toFixed(1)} kg < cân ${lot.declaredKg} kg — chargeable theo cân thực.`
-                : `DIM ${snap.totalDim.toFixed(1)} kg ≥ cân ${lot.declaredKg} kg — chargeable theo DIM (hàng cồng kềnh).`}
+                ? `DIM ${snap.totalDim.toFixed(1)} kg < Gross ${lot.declaredKg} kg — chargeable theo cân thực.`
+                : `DIM ${snap.totalDim.toFixed(1)} kg ≥ Gross ${lot.declaredKg} kg — chargeable theo DIM (hàng cồng kềnh).`}
               {snap.remainingPcs > 0 && lot.declaredKg > 0 && snap.dimBelowGross !== false ? (
-                <span className="text-apple-secondary">
+                <span className="text-violet-700 font-semibold">
                   {" "}
                   Gợi ý Ngẫu nhiên ~{snap.floorKg.toFixed(0)}–{Math.floor(snap.ceilingKg)} kg (
-                  {Math.round(DIM_TOTAL_BAND_BELOW_RATIO * 100)}% dưới cân).
+                  {Math.round(DIM_TOTAL_BAND_BELOW_RATIO * 100)}% dưới Gross).
                 </span>
               ) : null}
             </p>
           ) : null}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 md:px-6">
-          <div className="space-y-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-5 md:space-y-0">
-            {/* Cột trái — nhập & thao tác */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 md:px-6 bg-slate-50/30">
+          <div className="space-y-3.5 md:grid md:grid-cols-[1.1fr_0.9fr] md:gap-5 md:space-y-0">
+            {/* Cột trái — Nhập & thao tác */}
             <div className="space-y-3">
               <DimWorkflowSteps active={snap.workflowStep} />
-              <p className="text-[10px] leading-snug text-apple-secondary">{workflowHint}</p>
+              <p className="text-[10px] leading-snug font-semibold text-slate-500">{workflowHint}</p>
 
               {limitWarnings.length > 0 ? (
-                <div className="space-y-1 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950">
+                <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950 font-medium">
                   {limitWarnings.map((w, i) => (
                     <p key={i}>{w.kind === "dims" ? "⚠ " : "ℹ "}{w.message}</p>
                   ))}
                 </div>
               ) : null}
 
-              <div>
-                <label htmlFor="dim-combo" className="text-xs font-semibold text-apple-label">
-                  Bước 1 — Nhập mẫu đo (D×R×C×kiện)
-                </label>
-                <textarea
-                  ref={textareaRef}
-                  id="dim-combo"
-                  rows={isInputFocused ? 3 : 4}
-                  value={combo}
-                  onFocus={() => setIsInputFocused(true)}
-                  onBlur={() => setIsInputFocused(false)}
-                  onChange={(e) => {
-                    const el = e.target;
-                    const start = el.selectionStart;
-                    const end = el.selectionEnd;
-                    setCombo(normalizeDimComboInput(el.value));
-                    requestAnimationFrame(() => el.setSelectionRange(start, end));
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
-                      const multiLine = combo.includes("\n");
-                      if (e.ctrlKey || e.metaKey || (!multiLine && !e.shiftKey)) {
-                        e.preventDefault();
-                        handleAddRows();
-                      }
-                    }
-                    if (e.key === "," || e.key === "\u060C") {
-                      e.preventDefault();
-                      const el = e.currentTarget;
-                      const pos = el.selectionStart ?? combo.length;
-                      const end = el.selectionEnd ?? combo.length;
-                      setCombo(combo.slice(0, pos) + "×" + combo.slice(end));
-                    }
-                  }}
-                  placeholder={"40×50×30×10\n40 50 30 10\nDán từ Excel cũng được"}
-                  className="mt-1.5 max-h-48 min-h-[5.5rem] w-full resize-y rounded-2xl border border-black/[0.07] bg-slate-50/40 px-3 py-2.5 font-mono text-sm focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/18"
-                />
+              {/* Lưới nhập liệu 4 ô thay cho Textarea */}
+              <div className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-slate-700">
+                    Bước 1 — Nhập đo mẫu (L × W × H × Pcs)
+                  </label>
+                  {/* Nhập liệu giọng nói (Microphone) */}
+                  <button
+                    type="button"
+                    onClick={startSpeechRecognition}
+                    className={`inline-flex items-center justify-center rounded-full p-2 transition-all ${
+                      isListening
+                        ? "bg-red-500 text-white animate-pulse"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-600 active:scale-95"
+                    }`}
+                    title="Nhấn để đọc kích thước giọng nói"
+                  >
+                    🎙️
+                  </button>
+                </div>
 
-                <div className="mt-2 space-y-1.5">
-                  <div className="flex items-center justify-between text-[10px] font-semibold text-apple-secondary uppercase tracking-wider">
-                    <span>Mẫu size chọn nhanh</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddPresetForm((v) => !v)}
-                      className="text-[10px] font-bold text-violet-700 hover:underline"
-                    >
-                      {showAddPresetForm ? "Hủy" : "+ ➕ Thêm Mẫu Mới"}
-                    </button>
+                <div className="grid grid-cols-4 gap-2">
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Dài (L)</span>
+                    <input
+                      ref={refL}
+                      type="number"
+                      inputMode="none" // Chặn bàn phím OS để hiện CustomNumPad
+                      value={inputL}
+                      onFocus={() => setActiveField("l")}
+                      onChange={(e) => setInputL(e.target.value)}
+                      placeholder="cm"
+                      className={`w-full rounded-xl border px-3 py-2 text-center text-sm font-bold tabular-nums focus:outline-none focus:ring-2 ${
+                        activeField === "l"
+                          ? "border-apple-blue ring-apple-blue/20 bg-white"
+                          : "border-slate-200 bg-slate-50"
+                      }`}
+                    />
                   </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Rộng (W)</span>
+                    <input
+                      ref={refW}
+                      type="number"
+                      inputMode="none"
+                      value={inputW}
+                      onFocus={() => setActiveField("w")}
+                      onChange={(e) => setInputW(e.target.value)}
+                      placeholder="cm"
+                      className={`w-full rounded-xl border px-3 py-2 text-center text-sm font-bold tabular-nums focus:outline-none focus:ring-2 ${
+                        activeField === "w"
+                          ? "border-apple-blue ring-apple-blue/20 bg-white"
+                          : "border-slate-200 bg-slate-50"
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Cao (H)</span>
+                    <input
+                      ref={refH}
+                      type="number"
+                      inputMode="none"
+                      value={inputH}
+                      onFocus={() => setActiveField("h")}
+                      onChange={(e) => setInputH(e.target.value)}
+                      placeholder="cm"
+                      className={`w-full rounded-xl border px-3 py-2 text-center text-sm font-bold tabular-nums focus:outline-none focus:ring-2 ${
+                        activeField === "h"
+                          ? "border-apple-blue ring-apple-blue/20 bg-white"
+                          : "border-slate-200 bg-slate-50"
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Kiện (Pcs)</span>
+                    <input
+                      ref={refPcs}
+                      type="number"
+                      inputMode="none"
+                      value={inputPcs}
+                      onFocus={() => setActiveField("pcs")}
+                      onChange={(e) => setInputPcs(e.target.value)}
+                      placeholder="kiện"
+                      className={`w-full rounded-xl border px-3 py-2 text-center text-sm font-bold tabular-nums focus:outline-none focus:ring-2 ${
+                        activeField === "pcs"
+                          ? "border-apple-blue ring-apple-blue/20 bg-white"
+                          : "border-slate-200 bg-slate-50"
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
 
-                  {showAddPresetForm ? (
-                    <div className="space-y-1.5 rounded-xl border border-violet-200 bg-violet-50/90 p-2 text-xs">
-                      <p className="text-[10px] font-bold text-violet-950">Lưu Mẫu Size Tùy Chỉnh Mới</p>
-                      <div className="grid grid-cols-4 gap-1">
-                        <input
-                          type="text"
-                          placeholder="Tên nhãn (Thùng A)"
-                          value={presetLabelInput}
-                          onChange={(e) => setPresetLabelInput(e.target.value)}
-                          className="col-span-4 rounded-lg border border-black/10 px-2 py-1 text-xs"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Dài"
-                          value={presetLCmInput}
-                          onChange={(e) => setPresetLCmInput(e.target.value)}
-                          className="rounded-lg border border-black/10 px-2 py-1 text-xs tabular-nums"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Rộng"
-                          value={presetWCmInput}
-                          onChange={(e) => setPresetWCmInput(e.target.value)}
-                          className="rounded-lg border border-black/10 px-2 py-1 text-xs tabular-nums"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Cao"
-                          value={presetHCmInput}
-                          onChange={(e) => setPresetHCmInput(e.target.value)}
-                          className="rounded-lg border border-black/10 px-2 py-1 text-xs tabular-nums"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleCreateCustomPreset}
-                          className="rounded-lg bg-violet-600 font-bold text-white text-xs py-1"
-                        >
-                          Lưu
-                        </button>
-                      </div>
+              {/* Presets & Custom Presets */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  <span>Mẫu size chọn nhanh</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddPresetForm((v) => !v)}
+                    className="text-[10px] font-bold text-violet-700 hover:underline"
+                  >
+                    {showAddPresetForm ? "Hủy" : "+ ➕ Thêm Mới"}
+                  </button>
+                </div>
+
+                {showAddPresetForm && (
+                  <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/90 p-3 text-xs shadow-sm">
+                    <p className="text-[10px] font-bold text-violet-950">Lưu Mẫu Size Tùy Chỉnh Mới</p>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Tên nhãn (Thùng A)"
+                        value={presetLabelInput}
+                        onChange={(e) => setPresetLabelInput(e.target.value)}
+                        className="col-span-4 rounded-lg border border-black/10 px-2 py-1 text-xs"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Dài"
+                        value={presetLCmInput}
+                        onChange={(e) => setPresetLCmInput(e.target.value)}
+                        className="rounded-lg border border-black/10 px-2 py-1 text-xs tabular-nums text-center"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Rộng"
+                        value={presetWCmInput}
+                        onChange={(e) => setPresetWCmInput(e.target.value)}
+                        className="rounded-lg border border-black/10 px-2 py-1 text-xs tabular-nums text-center"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Cao"
+                        value={presetHCmInput}
+                        onChange={(e) => setPresetHCmInput(e.target.value)}
+                        className="rounded-lg border border-black/10 px-2 py-1 text-xs tabular-nums text-center"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCreateCustomPreset}
+                        className="rounded-lg bg-violet-600 font-bold text-white text-xs py-1 hover:bg-violet-700"
+                      >
+                        Lưu
+                      </button>
                     </div>
-                  ) : null}
+                  </div>
+                )}
 
-                  {customerPresets.length > 0 ? (
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] font-bold text-emerald-800 uppercase flex items-center gap-1">
-                        <span>⭐ Mẫu Khách Hàng ({customerEntry?.shortCode || customerEntry?.code || row.customerCode || "Khách Hàng"})</span>
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {customerPresets.map((preset) => (
+                {/*⭐ Lịch sử kích thước của khách hàng */}
+                {customerHistory.length > 0 && (
+                  <div className="space-y-0.5">
+                    <p className="text-[9px] font-bold text-emerald-800 uppercase flex items-center gap-1">
+                      <span>⭐ Lịch sử của {customerEntry?.shortCode || customerEntry?.code || row.customerCode || "Khách"}</span>
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {customerHistory.map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setInputL(String(preset.lCm));
+                            setInputW(String(preset.wCm));
+                            setInputH(String(preset.hCm));
+                            setInputPcs("");
+                            setActiveField("pcs");
+                            refPcs.current?.focus();
+                          }}
+                          title={preset.description}
+                          className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-950 shadow-sm transition-colors hover:bg-emerald-100"
+                        >
+                          🕒 {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {customerPresets.length > 0 && (
+                  <div className="space-y-0.5">
+                    <p className="text-[9px] font-bold text-emerald-800 uppercase">⭐ Mẫu Khách Hàng</p>
+                    <div className="flex flex-wrap gap-1">
+                      {customerPresets.map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setInputL(String(preset.lCm));
+                            setInputW(String(preset.wCm));
+                            setInputH(String(preset.hCm));
+                            setInputPcs("");
+                            setActiveField("pcs");
+                            refPcs.current?.focus();
+                          }}
+                          title={preset.description}
+                          className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-950 shadow-sm transition-colors hover:bg-emerald-100"
+                        >
+                          ⭐ {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {customPresets.length > 0 && (
+                  <div className="space-y-0.5">
+                    <p className="text-[9px] font-bold text-slate-500 uppercase">Tùy chỉnh cá nhân</p>
+                    <div className="flex flex-wrap gap-1">
+                      {customPresets.map((preset) => (
+                        <span
+                          key={preset.id}
+                          className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm"
+                        >
                           <button
-                            key={preset.id}
                             type="button"
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
-                              setCombo((c) => {
-                                const text = c.trim();
-                                const line = `${preset.lCm}×${preset.wCm}×${preset.hCm}×`;
-                                if (!text) return line;
-                                return text.endsWith("\n") ? `${text}${line}` : `${text}\n${line}`;
-                              });
-                              textareaRef.current?.focus();
+                              setInputL(String(preset.lCm));
+                              setInputW(String(preset.wCm));
+                              setInputH(String(preset.hCm));
+                              setInputPcs("");
+                              setActiveField("pcs");
+                              refPcs.current?.focus();
                             }}
-                            title={preset.description}
-                            className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-950 shadow-sm transition-colors hover:bg-emerald-100"
+                            className="hover:underline"
                           >
-                            ⭐ {preset.label} <span className="font-mono text-[9px] text-emerald-800">({preset.lCm}×{preset.wCm}×{preset.hCm})</span>
+                            🛠️ {preset.label}
                           </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-
-                  {customPresets.length > 0 ? (
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] font-medium text-apple-tertiary uppercase">Tùy chỉnh cá nhân</p>
-                      <div className="flex flex-wrap gap-1">
-                        {customPresets.map((preset) => (
-                          <span
-                            key={preset.id}
-                            className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-950"
+                          <button
+                            type="button"
+                            title="Xóa mẫu này"
+                            onClick={() => handleDeleteCustomPreset(preset.id, preset.label)}
+                            className="ml-0.5 text-amber-600 hover:text-red-600 text-[10px] font-bold"
                           >
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => {
-                                setCombo((c) => {
-                                  const text = c.trim();
-                                  const line = `${preset.lCm}×${preset.wCm}×${preset.hCm}×`;
-                                  if (!text) return line;
-                                  return text.endsWith("\n") ? `${text}${line}` : `${text}\n${line}`;
-                                });
-                                textareaRef.current?.focus();
-                              }}
-                              title={preset.description}
-                              className="hover:underline"
-                            >
-                              🛠️ {preset.label} <span className="font-mono text-[9px] text-amber-800">({preset.lCm}×{preset.wCm}×{preset.hCm})</span>
-                            </button>
-                            <button
-                              type="button"
-                              title="Xóa mẫu này"
-                              onClick={() => handleDeleteCustomPreset(preset.id, preset.label)}
-                              className="ml-0.5 text-amber-600 hover:text-red-600 text-[10px] font-bold"
-                            >
-                              ✕
-                            </button>
-                          </span>
-                        ))}
-                      </div>
+                            ✕
+                          </button>
+                        </span>
+                      ))}
                     </div>
-                  ) : null}
-
-                  <div className="flex flex-wrap gap-1">
-                    {DIM_PRESET_SIZES.map((preset) => (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => {
-                          setCombo((c) => {
-                            const text = c.trim();
-                            const line = `${preset.lCm}×${preset.wCm}×${preset.hCm}×`;
-                            if (!text) return line;
-                            return text.endsWith("\n") ? `${text}${line}` : `${text}\n${line}`;
-                          });
-                          textareaRef.current?.focus();
-                        }}
-                        title={preset.description}
-                        className="rounded-lg border border-violet-200/80 bg-violet-50/70 px-2 py-1 text-[11px] font-medium text-violet-900 transition-colors hover:bg-violet-100"
-                      >
-                        + {preset.label} <span className="text-[9px] text-violet-700 font-mono">({preset.lCm}×{preset.wCm}×{preset.hCm})</span>
-                      </button>
-                    ))}
                   </div>
-                </div>
+                )}
 
-
-                <div className="mt-2 flex gap-1 overflow-x-auto pb-0.5">
-                  {DIM_QUICK_NUMS.map((n) => (
+                <div className="flex flex-wrap gap-1">
+                  {DIM_PRESET_SIZES.map((preset) => (
                     <button
-                      key={n}
+                      key={preset.id}
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
-                        setCombo((c) => appendDimComboNumber(c, n));
-                        textareaRef.current?.focus();
+                        setInputL(String(preset.lCm));
+                        setInputW(String(preset.wCm));
+                        setInputH(String(preset.hCm));
+                        setInputPcs("");
+                        setActiveField("pcs");
+                        refPcs.current?.focus();
                       }}
-                      className="shrink-0 min-h-[32px] min-w-[2.5rem] rounded-lg border border-black/[0.08] bg-white px-2 text-xs font-bold tabular-nums"
+                      title={preset.description}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
                     >
-                      {n}
+                      + {preset.label} <span className="text-[9px] text-slate-400 font-mono">({preset.lCm}×{preset.wCm}×{preset.hCm})</span>
                     </button>
                   ))}
                 </div>
+              </div>
 
-                <div
-                  className={`mt-2 grid gap-2 ${snap.canRandomFill ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"}`}
+              {/* Bàn phím ảo chuyên dụng */}
+              <div className="mt-2">
+                <CustomDimNumPad
+                  onKeyPress={handleNumKeyPress}
+                  onDelete={handleNumDelete}
+                  onClear={handleNumClear}
+                  onAction={handleNumAction}
+                  actionLabel={activeField === "pcs" ? "Thêm" : "Tiếp"}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={handleMerge}
+                  disabled={lines.length < 2}
+                  className="rounded-xl border border-slate-200 bg-white py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 shadow-sm"
                 >
-                  <button
-                    type="button"
-                    onClick={handleAddRows}
-                    className="rounded-xl bg-apple-blue py-2.5 text-xs font-semibold text-white sm:text-sm"
-                  >
-                    Thêm dòng
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleMerge}
-                    disabled={lines.length < 2}
-                    className="rounded-xl border border-black/[0.12] bg-white py-2.5 text-xs font-semibold disabled:opacity-40 sm:text-sm"
-                  >
-                    Gộp mẫu
-                  </button>
-                  {snap.canRandomFill ? (
-                    <button
-                      type="button"
-                      onClick={() => handleRandom()}
-                      className="col-span-2 rounded-xl bg-violet-600 py-2.5 text-xs font-semibold text-white sm:col-span-1 sm:text-sm hover:bg-violet-700"
-                    >
-                      Ngẫu nhiên
-                    </button>
-                  ) : null}
-                </div>
-
+                  Gộp trùng kích thước
+                </button>
                 {snap.canRandomFill ? (
-                  <div className="mt-2.5 space-y-2 rounded-2xl border border-violet-200/80 bg-violet-50/40 p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-violet-950">Tùy chọn Sinh Ngẫu Nhiên % DIM</span>
-                      {lot.declaredKg != null && lot.declaredKg > 0 ? (
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                            targetRatioPercent >= 98
-                              ? "bg-amber-100 text-amber-900"
-                              : targetRatioPercent >= 95
-                                ? "bg-emerald-100 text-emerald-900"
-                                : "bg-blue-100 text-blue-900"
-                          }`}
-                        >
-                          {targetRatioPercent.toFixed(1)}% ({Math.round(lot.declaredKg * (targetRatioPercent / 100))} kg)
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {lot.declaredKg != null && lot.declaredKg > 0 ? (
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[9px] font-semibold text-apple-secondary">
-                          <span>85% (Tiết kiệm cước)</span>
-                          <span>95% (Khuyên dùng)</span>
-                          <span>99.9% (Sát trần)</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={85}
-                          max={99.9}
-                          step={0.5}
-                          value={targetRatioPercent}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            setTargetRatioPercent(val);
-                            setRandomTargetKgInput("");
-                          }}
-                          className="h-2 w-full cursor-pointer rounded-lg bg-violet-200 accent-violet-600"
-                        />
-                      </div>
-                    ) : null}
-
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <label>
-                        <span className="text-[10px] font-medium text-apple-secondary">
-                          Hoặc kg DIM cố định
-                        </span>
-                        <input
-                          type="number"
-                          min={1}
-                          step={0.1}
-                          inputMode="decimal"
-                          value={randomTargetKgInput}
-                          onChange={(e) => setRandomTargetKgInput(e.target.value)}
-                          placeholder={
-                            lot.declaredKg != null
-                              ? `~${Math.round(lot.declaredKg * (targetRatioPercent / 100))} kg`
-                              : "950"
-                          }
-                          className="mt-0.5 w-full rounded-xl border border-violet-200 bg-white px-2.5 py-1.5 text-xs font-semibold tabular-nums focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
-                        />
-                      </label>
-                      <label>
-                        <span className="text-[10px] font-medium text-apple-secondary">
-                          Số dòng ước tính
-                        </span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={snap.remainingPcs}
-                          inputMode="numeric"
-                          value={randomLineCountInput}
-                          onChange={(e) => setRandomLineCountInput(e.target.value)}
-                          placeholder={
-                            snap.targetLineCount
-                              ? `${snap.targetLineCount.min}–${snap.targetLineCount.max} dòng`
-                              : String(Math.min(snap.remainingPcs, 10))
-                          }
-                          className="mt-0.5 w-full rounded-xl border border-violet-200 bg-white px-2.5 py-1.5 text-xs font-semibold tabular-nums focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
-                        />
-                      </label>
-                    </div>
-                  </div>
-                ) : null}
-
-
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-                  {snap.canRandomFill ? (
-                    <label className="flex cursor-pointer items-center gap-1.5 text-apple-secondary">
-                      <input
-                        type="checkbox"
-                        checked={autoRandomAfterAdd}
-                        onChange={(e) => setAutoRandomAfterAdd(e.target.checked)}
-                        className="rounded"
-                      />
-                      Tự sinh ngẫu nhiên sau Thêm dòng
-                    </label>
-                  ) : null}
-                  {snap.sumEstimatedPcs > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => applyMutation(dimEntryClearEstimated(lines), "Đã xóa kiện ước tính.")}
-                      className="font-semibold text-apple-secondary underline-offset-2 hover:underline"
-                    >
-                      Xóa ước tính
-                    </button>
-                  ) : null}
-                </div>
-
-                {actionNote ? (
-                  <p className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1 text-[10px] text-amber-900">
-                    {actionNote}
-                  </p>
-                ) : null}
-
-                {snap.canRandomFill && snap.remainingPcs > 0 && snap.measured.length > 0 ? (
-                  <p className="mt-2 text-[10px] text-emerald-900">
-                    Còn <strong>{snap.remainingPcs}</strong> kiện — có thể bấm{" "}
-                    <strong>Ngẫu nhiên</strong> hoặc nhập thêm đo thật.
-                  </p>
-                ) : snap.pcsMatch && snap.measured.length > 0 ? (
-                  <p className="mt-2 text-[10px] text-emerald-900">
-                    Đủ kiện — không cần Ngẫu nhiên. Kiểm tra DIM rồi lưu.
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleRandom()}
+                    className="rounded-xl bg-violet-600 py-2 text-xs font-bold text-white hover:bg-violet-700 shadow-md transition-all active:scale-[0.98]"
+                  >
+                    Sinh Ngẫu nhiên
+                  </button>
                 ) : null}
               </div>
+
+              {/* Tùy chỉnh sinh ngẫu nhiên */}
+              {snap.canRandomFill && (
+                <div className="mt-2.5 space-y-2 rounded-2xl border border-violet-200 bg-violet-50/40 p-3 shadow-inner">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-violet-950">Sinh Ngẫu Nhiên % DIM</span>
+                    {lot.declaredKg != null && lot.declaredKg > 0 ? (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          targetRatioPercent >= 98
+                            ? "bg-amber-100 text-amber-900 border border-amber-200"
+                            : targetRatioPercent >= 95
+                              ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
+                              : "bg-blue-100 text-blue-900 border border-blue-200"
+                        }`}
+                      >
+                        {targetRatioPercent.toFixed(1)}% ({Math.round(lot.declaredKg * (targetRatioPercent / 100))} kg)
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {lot.declaredKg != null && lot.declaredKg > 0 ? (
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[9px] font-bold text-slate-500">
+                        <span>85% (Tiết kiệm cước)</span>
+                        <span>95% (Khuyên dùng)</span>
+                        <span>99.9% (Sát trần)</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={85}
+                        max={99.9}
+                        step={0.5}
+                        value={targetRatioPercent}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setTargetRatioPercent(val);
+                          setRandomTargetKgInput("");
+                        }}
+                        className="h-2 w-full cursor-pointer rounded-lg bg-violet-200 accent-violet-600"
+                      />
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-2 grid-cols-2">
+                    <label>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">
+                        Hoặc kg DIM cố định
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        step={0.1}
+                        inputMode="decimal"
+                        value={randomTargetKgInput}
+                        onChange={(e) => setRandomTargetKgInput(e.target.value)}
+                        placeholder={
+                          lot.declaredKg != null
+                            ? `~${Math.round(lot.declaredKg * (targetRatioPercent / 100))} kg`
+                            : "950"
+                        }
+                        className="mt-0.5 w-full rounded-xl border border-violet-200 bg-white px-2.5 py-1.5 text-xs font-semibold tabular-nums text-center focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">
+                        Số dòng ước tính
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={snap.remainingPcs}
+                        inputMode="numeric"
+                        value={randomLineCountInput}
+                        onChange={(e) => setRandomLineCountInput(e.target.value)}
+                        placeholder={
+                          snap.targetLineCount
+                            ? `${snap.targetLineCount.min}–${snap.targetLineCount.max} dòng`
+                            : String(Math.min(snap.remainingPcs, 10))
+                        }
+                        className="mt-0.5 w-full rounded-xl border border-violet-200 bg-white px-2.5 py-1.5 text-xs font-semibold tabular-nums text-center focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-1 flex flex-wrap items-center justify-between text-[11px]">
+                {snap.canRandomFill ? (
+                  <label className="flex cursor-pointer items-center gap-1.5 text-slate-500 font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={autoRandomAfterAdd}
+                      onChange={(e) => setAutoRandomAfterAdd(e.target.checked)}
+                      className="rounded text-violet-600 focus:ring-violet-500"
+                    />
+                    Tự ngẫu nhiên sau khi Thêm
+                  </label>
+                ) : null}
+                {snap.sumEstimatedPcs > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => applyMutation(dimEntryClearEstimated(lines), "Đã xóa kiện ước tính chưa khóa.")}
+                    className="font-bold text-slate-500 underline underline-offset-2 hover:text-slate-800"
+                  >
+                    Xóa ước tính chưa khóa
+                  </button>
+                ) : null}
+              </div>
+
+              {actionNote ? (
+                <p className="mt-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-[11px] font-semibold text-amber-900 shadow-sm">
+                  {actionNote}
+                </p>
+              ) : null}
+
+              {snap.canRandomFill && snap.remainingPcs > 0 && snap.measured.length > 0 ? (
+                <p className="mt-2 text-[10px] text-emerald-800 font-bold">
+                  Còn <strong>{snap.remainingPcs}</strong> kiện — có thể bấm{" "}
+                  <strong>Sinh Ngẫu nhiên</strong> hoặc nhập thêm đo thật.
+                </p>
+              ) : snap.pcsMatch && snap.measured.length > 0 ? (
+                <p className="mt-2 text-[10px] text-emerald-800 font-bold">
+                  Đủ kiện — không cần Ngẫu nhiên. Kiểm tra tổng DIM rồi bấm Lưu.
+                </p>
+              ) : null}
             </div>
 
-            {/* Cột phải — danh sách tách đo / ước tính */}
-            <div
-              className={`space-y-2 md:max-h-[min(58dvh,520px)] md:overflow-y-auto md:rounded-2xl md:border md:border-black/[0.06] md:bg-slate-50/30 md:p-3 ${
-                isInputFocused ? "hidden md:block" : ""
-              }`}
-            >
+            {/* Cột phải — Danh sách tách đo thật / ước tính */}
+            <div className="space-y-2.5 md:max-h-[580px] md:overflow-y-auto md:rounded-2xl md:border md:border-black/[0.06] md:bg-slate-50/30 md:p-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-apple-label">Danh sách DIM</span>
-                <span className="text-[10px] text-apple-tertiary">
+                <span className="text-xs font-bold text-slate-700">Danh sách DIM</span>
+                <span className="text-[10px] font-bold text-slate-400">
                   {snap.lineCount} dòng
                   {snap.targetLineCount
                     ? ` · mục tiêu ${snap.targetLineCount.min}–${snap.targetLineCount.max}`
@@ -822,8 +1082,9 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                 divisor={divisor}
                 dimCtx={dimCtx}
                 onRemove={(idx) => applyMutation(dimEntryRemoveLine(lines, idx))}
-                emptyHint="Nhập mẫu đo bên trái"
+                emptyHint="Nhập kích thước ở bên trái"
               />
+
               <DimLineSection
                 title="Ước tính"
                 tone="estimated"
@@ -832,9 +1093,10 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                 divisor={divisor}
                 dimCtx={dimCtx}
                 onRemove={(idx) => applyMutation(dimEntryRemoveLine(lines, idx))}
+                onToggleLock={handleToggleLock}
                 emptyHint={
                   snap.canRandomFill
-                    ? "Bấm Ngẫu nhiên sau khi có mẫu đo"
+                    ? "Bấm Sinh Ngẫu nhiên để điền kiện ước tính"
                     : "Không cần ước tính — nhập đủ kiện đo thật"
                 }
               />
@@ -842,27 +1104,28 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-black/[0.06] p-4 sm:px-5 md:px-6">
-          <div className="flex flex-wrap gap-2">
+        {/* Footer actions */}
+        <div className="shrink-0 border-t border-black/[0.06] p-4 bg-slate-50/50">
+          <div className="flex gap-2">
             <button
               type="button"
               disabled={snap.pcsExcess}
               onClick={handleSave}
-              className="min-w-0 flex-1 rounded-full bg-apple-blue py-2.5 text-sm font-semibold text-white disabled:bg-apple-tertiary"
+              className="flex-1 rounded-full bg-apple-blue hover:bg-blue-600 py-3 text-sm font-bold text-white shadow-md transition-all active:scale-[0.98] disabled:bg-slate-300 disabled:shadow-none"
             >
               Lưu DIM
             </button>
             <button
               type="button"
               onClick={() => onSave({ dimWeightKg: null, dimLines: null, dimDivisor: null })}
-              className="rounded-full border border-black/[0.12] px-3 py-2.5 text-sm font-semibold"
+              className="rounded-full border border-slate-200 bg-white hover:bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 shadow-sm"
             >
               Xóa DIM
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-black/[0.12] px-3 py-2.5 text-sm font-semibold text-apple-secondary"
+              className="rounded-full border border-slate-200 bg-white hover:bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500 shadow-sm"
             >
               Hủy
             </button>

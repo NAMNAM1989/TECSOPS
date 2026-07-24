@@ -1,5 +1,6 @@
 import type { DimDivisor, DimPieceLine, ScscDimRoundContext } from "./volumetricDim";
 import { lineDimKg, totalDimKgFromLines } from "./volumetricDim";
+import { loadCustomerDimHistory } from "./dimHistoryStorage";
 
 /**
  * Tổng DIM mục tiêu: **dưới kg lô** và trong vùng ~5% phía dưới.
@@ -105,6 +106,13 @@ export const DIM_RANDOM_POOLS: Record<
 function roundCm(n: number): number {
   if (!Number.isFinite(n) || n <= 0) return 1;
   return Math.max(1, Math.round(n));
+}
+
+function roundEstimatedCm(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 5;
+  const r = Math.round(n);
+  const m5 = Math.round(r / 5) * 5;
+  return Math.max(5, m5);
 }
 
 /** Đếm số cạnh dưới ngưỡng (mặc định 25 cm). */
@@ -246,8 +254,9 @@ export function computeMaxAchievableDimTotal(
 }
 
 export function normalizeDimLineEdges(line: DimPieceLine): DimPieceLine {
+  const roundFn = line.estimated ? roundEstimatedCm : roundCm;
   const [lCm, wCm, hCm] = [line.lCm, line.wCm, line.hCm]
-    .map(roundCm)
+    .map(roundFn)
     .sort((a, b) => b - a);
   return {
     lCm,
@@ -255,6 +264,7 @@ export function normalizeDimLineEdges(line: DimPieceLine): DimPieceLine {
     hCm,
     pcs: line.pcs,
     ...(line.estimated ? { estimated: true } : {}),
+    ...(line.locked ? { locked: true } : {}),
   };
 }
 
@@ -465,6 +475,7 @@ export type RandomDimFillInput = {
   divisor: DimDivisor;
   dimCtx: ScscDimRoundContext;
   seed: number;
+  customerCode?: string;
   /** Mỗi lần bấm Sinh lại — đổi phân bổ kiện (xor vào seed). */
   regenerationNonce?: number;
   /** Số dòng ước tính do người dùng chọn (vd. 20 dòng / 100 kiện). */
@@ -521,7 +532,8 @@ export function previewSmartDimFill(
 
 export function buildSmartDimTemplates(
   manualLines: DimPieceLine[],
-  poolId: DimRandomPoolId
+  poolId: DimRandomPoolId,
+  customerCode?: string
 ): DimPieceLine[] {
   const seen = new Set<string>();
   const out: DimPieceLine[] = [];
@@ -556,6 +568,13 @@ export function buildSmartDimTemplates(
     push({ ...scaleLongestEdgeToMax(base), pcs: 1, estimated: true });
     for (const expanded of buildVolumeExpansionVariants(base)) {
       push({ ...expanded, pcs: 1, estimated: true });
+    }
+  }
+
+  if (customerCode) {
+    const history = loadCustomerDimHistory(customerCode);
+    for (const h of history) {
+      push({ ...h, pcs: 1, estimated: true as const });
     }
   }
 
@@ -1128,8 +1147,7 @@ export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillR
   const ceilingRatio = input.ceilingRatio ?? DIM_TOTAL_CEILING_RATIO;
   const runSeed = effectiveRandomSeed(input.seed, input.regenerationNonce);
   const manualNormEarly = input.manualLines
-    .filter((l) => !l.estimated)
-    .map((l) => normalizeDimLineEdges({ ...l, estimated: false }));
+    .map((l) => normalizeDimLineEdges({ ...l }));
   const manualTotalEarly =
     manualNormEarly.length > 0
       ? (totalDimKgFromLines(manualNormEarly, input.divisor, input.dimCtx) ?? 0)
@@ -1169,7 +1187,7 @@ export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillR
   }
 
   const templates = expandTemplateVariants(
-    buildSmartDimTemplates(manualNorm, input.poolId),
+    buildSmartDimTemplates(manualNorm, input.poolId, input.customerCode),
     runSeed
   );
   const unitKgs = templates.map((t) => lineDimKg(t, input.divisor, input.dimCtx));
@@ -1435,6 +1453,7 @@ export function applySmartDimAutoFill(
     targetEstimatedLineCount?: number;
     targetTotalDimKg?: number;
     targetRatioPercent?: number;
+    customerCode?: string;
   }
 ): { lines: DimPieceLine[]; autoFilled: boolean; error?: string } {
   const consolidated = consolidateDimPieceLines(lines);
@@ -1442,20 +1461,24 @@ export function applySmartDimAutoFill(
     return { lines: consolidated, autoFilled: false };
   }
 
-  const preview = previewSmartDimFill(consolidated, opts.declaredPcs, opts.declaredKg);
-  if (!preview.canAutoFill) {
-    const manualOnly = consolidateDimPieceLines(splitMeasuredAndEstimated(consolidated).measured);
-    return { lines: manualOnly, autoFilled: false };
+  // Tách các dòng cố định (đo thật hoặc đã khóa)
+  const fixed = consolidated.filter((l) => !l.estimated || l.locked);
+  const fixedPcs = fixed.reduce((s, l) => s + l.pcs, 0);
+  const remainingPcs = Math.max(0, opts.declaredPcs - fixedPcs);
+
+  if (remainingPcs <= 0) {
+    return { lines: fixed, autoFilled: false };
   }
 
   const result = generateRandomDimFill({
-    manualLines: splitMeasuredAndEstimated(consolidated).measured,
-    remainingPcs: preview.remainingPcs,
+    manualLines: fixed,
+    remainingPcs: remainingPcs,
     declaredKg: opts.declaredKg,
     poolId: opts.poolId ?? "smart",
     divisor: opts.divisor,
     dimCtx: opts.dimCtx,
     seed: opts.seed,
+    customerCode: opts.customerCode,
     regenerationNonce: opts.regenerationNonce,
     targetEstimatedLineCount: opts.targetEstimatedLineCount,
     targetTotalDimKg: opts.targetTotalDimKg,

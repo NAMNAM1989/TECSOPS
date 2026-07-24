@@ -13,6 +13,7 @@ import type { DimDivisor, DimPieceLine, ScscDimRoundContext } from "./volumetric
 import {
   totalDimKgFromLines,
   tryParseDimPieceLinesFromComboText,
+  extractNumbersFromDimText,
 } from "./volumetricDim";
 
 /** Ngữ cảnh lô hàng khi nhập DIM. */
@@ -20,6 +21,7 @@ export type DimEntryLotContext = {
   shipmentId: string;
   declaredPcs: number | null;
   declaredKg: number | null;
+  customerCode?: string | null;
 };
 
 export type DimEntryWorkflowStep = 1 | 2 | 3;
@@ -152,7 +154,7 @@ export function dimEntryAddMeasuredFromCombo(
   }
 
   const measuredOnly = [
-    ...splitMeasuredAndEstimated(lines).measured,
+    ...lines.filter((l) => !l.estimated || l.locked),
     ...parsed,
   ];
 
@@ -166,8 +168,8 @@ export function dimEntryAddMeasuredFromCombo(
     ok: true,
     lines: measuredOnly,
     note:
-      splitMeasuredAndEstimated(lines).estimated.length > 0
-        ? "Đã xóa kiện ước tính cũ — bấm Ngẫu nhiên để sinh lại."
+      lines.filter((l) => l.estimated && !l.locked).length > 0
+        ? "Đã xóa kiện ước tính chưa khóa cũ — bấm Ngẫu nhiên để sinh lại."
         : undefined,
   };
 }
@@ -196,7 +198,8 @@ export function dimEntryRandomFill(
   if (lot.declaredPcs == null || lot.declaredKg == null || lot.declaredKg <= 0) {
     return { ok: false, error: "Cần kiện lô và kg lô trên lô hàng." };
   }
-  const measured = consolidateDimPieceLines(splitMeasuredAndEstimated(lines).measured);
+  const fixed = lines.filter((l) => !l.estimated || l.locked);
+  const measured = consolidateDimPieceLines(fixed);
   if (measured.length === 0) {
     return { ok: false, error: "Cần ít nhất một mẫu kiện đo trước khi sinh ngẫu nhiên." };
   }
@@ -213,6 +216,7 @@ export function dimEntryRandomFill(
     targetEstimatedLineCount: params.targetEstimatedLineCount,
     targetTotalDimKg: params.targetTotalDimKg,
     targetRatioPercent: params.targetRatioPercent,
+    customerCode: lot.customerCode || undefined,
   });
 
   if (error) return { ok: false, error };
@@ -237,7 +241,7 @@ export function dimEntryMergeLines(lines: DimPieceLine[]): DimEntryMutation {
 }
 
 export function dimEntryClearEstimated(lines: DimPieceLine[]): DimPieceLine[] {
-  return consolidateDimPieceLines(splitMeasuredAndEstimated(lines).measured);
+  return consolidateDimPieceLines(lines.filter((l) => !l.estimated || l.locked));
 }
 
 export function dimEntryRemoveLine(lines: DimPieceLine[], index: number): DimPieceLine[] {
@@ -299,4 +303,135 @@ export function appendDimComboNumber(combo: string, num: string): string {
   if (last === "×") return c + num;
   if (/\d/.test(last)) return `${c}×${num}`;
   return `${c}${num}`;
+}
+
+export function preprocessSpeechText(text: string): string {
+  let s = text.toLowerCase();
+  const replacements: [RegExp, string][] = [
+    // Hàng chục lẻ
+    [/\bhai mươi mốt\b/g, "21"],
+    [/\bhai mươi lăm\b/g, "25"],
+    [/\bhai mươi nhăm\b/g, "25"],
+    [/\bba mươi mốt\b/g, "31"],
+    [/\bba mươi lăm\b/g, "35"],
+    [/\bba mươi nhăm\b/g, "35"],
+    [/\bbốn mươi mốt\b/g, "41"],
+    [/\bbốn mươi lăm\b/g, "45"],
+    [/\bbốn mươi nhăm\b/g, "45"],
+    [/\bnăm mươi mốt\b/g, "51"],
+    [/\bnăm mươi lăm\b/g, "55"],
+    [/\bnăm mươi nhăm\b/g, "55"],
+    [/\bsáu mươi mốt\b/g, "61"],
+    [/\bsáu mươi lăm\b/g, "65"],
+    [/\bsáu mươi nhăm\b/g, "65"],
+    [/\bbảy mươi mốt\b/g, "71"],
+    [/\bbảy mươi lăm\b/g, "75"],
+    [/\bbảy mươi nhăm\b/g, "75"],
+    [/\btám mươi mốt\b/g, "81"],
+    [/\btám mươi lăm\b/g, "85"],
+    [/\btám mươi nhăm\b/g, "85"],
+    [/\bchín mươi mốt\b/g, "91"],
+    [/\bchín mươi lăm\b/g, "95"],
+    [/\bchín mươi nhăm\b/g, "95"],
+
+    // Có dạng số + mươi + số
+    [/\bhai mươi (\d)\b/g, "2$1"],
+    [/\bba mươi (\d)\b/g, "3$1"],
+    [/\bbốn mươi (\d)\b/g, "4$1"],
+    [/\bnăm mươi (\d)\b/g, "5$1"],
+    [/\bsáu mươi (\d)\b/g, "6$1"],
+    [/\bbảy mươi (\d)\b/g, "7$1"],
+    [/\btám mươi (\d)\b/g, "8$1"],
+    [/\bchín mươi (\d)\b/g, "9$1"],
+
+    // Hàng chục tròn
+    [/\bhai mươi\b/g, "20"],
+    [/\bba mươi\b/g, "30"],
+    [/\bbốn mươi\b/g, "40"],
+    [/\bnăm mươi\b/g, "50"],
+    [/\bsáu mươi\b/g, "60"],
+    [/\bbảy mươi\b/g, "70"],
+    [/\btám mươi\b/g, "80"],
+    [/\bchín mươi\b/g, "90"],
+
+    // Mười lẻ
+    [/\bmười một\b/g, "11"],
+    [/\bmười hai\b/g, "12"],
+    [/\bmười ba\b/g, "13"],
+    [/\bmười bốn\b/g, "14"],
+    [/\bmười lăm\b/g, "15"],
+    [/\bmười nhăm\b/g, "15"],
+    [/\bmười sáu\b/g, "16"],
+    [/\bmười bảy\b/g, "17"],
+    [/\bmười tám\b/g, "18"],
+    [/\bmười chín\b/g, "19"],
+
+    // Số hàng chục khác
+    [/\bhăm lăm\b/g, "25"],
+    [/\bhăm nhăm\b/g, "25"],
+    [/\bhăm mốt\b/g, "21"],
+    [/\bhăm (\d)\b/g, "2$1"],
+
+    // Số đơn lẻ và mười
+    [/\bmười\b/g, "10"],
+    [/\bkhông\b/g, "0"],
+    [/\bmột\b/g, "1"],
+    [/\bhai\b/g, "2"],
+    [/\bba\b/g, "3"],
+    [/\bbốn\b/g, "4"],
+    [/\btư\b/g, "4"],
+    [/\bnăm\b/g, "5"],
+    [/\bsáu\b/g, "6"],
+    [/\bbảy\b/g, "7"],
+    [/\btám\b/g, "8"],
+    [/\bchín\b/g, "9"],
+    [/\blăm\b/g, "5"],
+    [/\bnhăm\b/g, "5"],
+    [/\bmốt\b/g, "1"],
+    [/\bx\b/g, "×"],
+    [/\bnhân\b/g, "×"],
+  ];
+  for (const [regex, replacement] of replacements) {
+    s = s.replace(regex, replacement);
+  }
+  return s;
+}
+
+export function parseSpeechToDimLines(speechText: string): { ok: boolean; lines: DimPieceLine[]; error?: string } {
+  const preprocessed = preprocessSpeechText(speechText);
+  const nums = extractNumbersFromDimText(preprocessed);
+  if (nums.length === 0) {
+    return { ok: false, lines: [], error: "Không tìm thấy số kích thước nào trong giọng nói." };
+  }
+  
+  const lines: DimPieceLine[] = [];
+  let i = 0;
+  while (i < nums.length) {
+    const left = nums.length - i;
+    if (left >= 4) {
+      lines.push({
+        lCm: nums[i]!,
+        wCm: nums[i + 1]!,
+        hCm: nums[i + 2]!,
+        pcs: Math.round(nums[i + 3]!),
+      });
+      i += 4;
+    } else if (left === 3) {
+      lines.push({
+        lCm: nums[i]!,
+        wCm: nums[i + 1]!,
+        hCm: nums[i + 2]!,
+        pcs: 1,
+      });
+      i += 3;
+    } else {
+      break;
+    }
+  }
+  
+  if (lines.length === 0) {
+    return { ok: false, lines: [], error: "Thiếu kích thước (cần ít nhất 3 số Dài, Rộng, Cao)." };
+  }
+  
+  return { ok: true, lines };
 }

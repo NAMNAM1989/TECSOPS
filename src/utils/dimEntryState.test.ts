@@ -6,6 +6,7 @@ import {
   dimEntrySeed,
   dimEntryValidateSave,
   snapshotDimEntry,
+  parseSpeechToDimLines,
 } from "./dimEntryState";
 import { dimRandomSeed } from "./dimBulkFill";
 
@@ -103,5 +104,69 @@ describe("dimEntryMergeLines", () => {
 describe("dimEntrySeed", () => {
   it("ổn định theo lô", () => {
     expect(dimEntrySeed(LOT)).toBe(dimRandomSeed("s1", 96, 1150));
+  });
+});
+
+describe("parseSpeechToDimLines", () => {
+  it("parse tiếng Việt và các số thành các nhóm kích thước và kiện", () => {
+    const r1 = parseSpeechToDimLines("bốn mươi năm mươi ba mươi mười kiện ba mươi ba mươi bốn mươi năm kiện");
+    expect(r1.ok).toBe(true);
+    if (r1.ok) {
+      expect(r1.lines).toHaveLength(2);
+      expect(r1.lines[0]).toEqual({ lCm: 40, wCm: 50, hCm: 30, pcs: 10 });
+      expect(r1.lines[1]).toEqual({ lCm: 30, wCm: 30, hCm: 40, pcs: 5 });
+    }
+
+    const r2 = parseSpeechToDimLines("40 50 30 10 và 30 30 40");
+    expect(r2.ok).toBe(true);
+    if (r2.ok) {
+      expect(r2.lines).toHaveLength(2);
+      expect(r2.lines[0]).toEqual({ lCm: 40, wCm: 50, hCm: 30, pcs: 10 });
+      expect(r2.lines[1]).toEqual({ lCm: 30, wCm: 30, hCm: 40, pcs: 1 }); // Dư 3 số cuối mặc định pcs = 1
+    }
+  });
+});
+
+describe("kiểm tra khóa dòng kiện", () => {
+  it("giữ nguyên dòng ước tính đã khóa khi sinh ngẫu nhiên lại hoặc thêm đo thật mới", () => {
+    const prev = [
+      { lCm: 50, wCm: 40, hCm: 30, pcs: 10 },
+      { lCm: 40, wCm: 30, hCm: 20, pcs: 5, estimated: true, locked: true }, // dòng ước tính bị khóa
+      { lCm: 30, wCm: 30, hCm: 30, pcs: 8, estimated: true }, // dòng ước tính không khóa
+    ];
+
+    // Thêm đo thật mới qua combo, dòng ước tính không khóa bị xóa, dòng ước tính đã khóa phải được giữ nguyên
+    const rAdd = dimEntryAddMeasuredFromCombo(prev, "60×40×40×2", LOT);
+    expect(rAdd.ok).toBe(true);
+    if (rAdd.ok) {
+      // Dòng 1: 50x40x30 x 10 (đo thật cũ)
+      // Dòng 2: 40x30x20 x 5 (ước tính đã khóa) -> được giữ lại!
+      // Dòng 3: 60x40x40 x 2 (đo thật mới thêm)
+      // Dòng ước tính không khóa 30x30x30 x 8 bị xóa.
+      expect(rAdd.lines).toHaveLength(3);
+      expect(rAdd.lines.some(l => l.lCm === 40 && l.wCm === 30 && l.pcs === 5 && l.locked)).toBe(true);
+      expect(rAdd.lines.some(l => l.lCm === 30 && l.wCm === 30)).toBe(false);
+    }
+
+    // Sinh ngẫu nhiên lại: dòng ước tính đã khóa được giữ nguyên
+    const seed = dimRandomSeed("lot-lock", 96, 1150);
+    const rFill = dimEntryRandomFill(
+      [
+        { lCm: 50, wCm: 40, hCm: 30, pcs: 10 },
+        { lCm: 40, wCm: 30, hCm: 20, pcs: 5, estimated: true, locked: true },
+      ],
+      { shipmentId: "lot-lock", declaredPcs: 96, declaredKg: 1150 },
+      { declaredPcs: 96, declaredKg: 1150, divisor: 6000, dimCtx: TR_CTX, seed }
+    );
+    expect(rFill.ok).toBe(true);
+    if (rFill.ok) {
+      expect(rFill.lines.reduce((s, l) => s + l.pcs, 0)).toBe(96);
+      // Dòng khóa 40x30x20 x 5 vẫn phải còn nguyên vẹn trong danh sách sinh ra
+      const lockedLine = rFill.lines.find(l => l.lCm === 40 && l.wCm === 30 && l.hCm === 20);
+      expect(lockedLine).toBeDefined();
+      expect(lockedLine?.pcs).toBe(5);
+      expect(lockedLine?.locked).toBe(true);
+      expect(lockedLine?.estimated).toBe(true);
+    }
   });
 });

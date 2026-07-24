@@ -75,10 +75,11 @@ def _captcha_variants(data: bytes) -> list[bytes]:
 
     gray = ImageOps.autocontrast(ImageOps.grayscale(rgb))
     variants = [rgb, gray]
+    resampling = getattr(Image, "Resampling", Image)
     for scale in (2, 3):
         size = (rgb.width * scale, rgb.height * scale)
-        variants.append(rgb.resize(size, Image.Resampling.LANCZOS))
-        variants.append(gray.resize(size, Image.Resampling.LANCZOS))
+        variants.append(rgb.resize(size, resampling.LANCZOS))
+        variants.append(gray.resize(size, resampling.LANCZOS))
     return [_encode_png(image) for image in variants]
 
 

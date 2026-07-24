@@ -44,3 +44,4 @@ tcs-awb-automation/browser_profile_chromium/
 tcs-awb-automation/discovery_artifacts/
 tcs-awb-automation/**/__pycache__/
 tcs-awb-automation/.pytest_cache/
+public/downloads/*.zip

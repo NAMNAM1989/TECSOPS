@@ -3,6 +3,7 @@ import express from "express";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import fs from "node:fs";
 import { Server } from "socket.io";
 import {
   loadState,
@@ -67,6 +68,31 @@ app.get("/api/health", async (_req, res) => {
       service: "tecsops",
       storage: { postgres: false },
     });
+  }
+});
+
+app.get("/api/tcs-extension", (_req, res) => {
+  try {
+    const manifest = JSON.parse(
+      fs.readFileSync(
+        path.join(__dirname, "..", "chrome-extension", "manifest.json"),
+        "utf8"
+      )
+    );
+    res.json({
+      ok: true,
+      version: String(manifest.version || ""),
+      download_url: "/downloads/tecsops-chrome-extension.zip",
+      install: [
+        "Giải nén ZIP vào một thư mục cố định",
+        "Mở chrome://extensions và bật Chế độ dành cho nhà phát triển",
+        "Chọn Tải tiện ích đã giải nén rồi chọn thư mục vừa giải nén",
+        "F5 trang Ops và tab TCS",
+      ],
+    });
+  } catch (error) {
+    console.error("[api/tcs-extension]", error);
+    res.status(500).json({ ok: false, error: "Extension package unavailable" });
   }
 });
 

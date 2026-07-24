@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TECSOPS — Điền ESID TCS",
-  "version": "2.0.9",
+  "version": "2.0.10",
   "description": "TCS workspace trực quan: Login, quét theo ngày và điền ESID trên một tab Chrome được ghim.",
   "permissions": ["tabs", "scripting", "storage"],
   "host_permissions": [

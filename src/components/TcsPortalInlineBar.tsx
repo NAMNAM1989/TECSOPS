@@ -192,6 +192,14 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
         >
           URL
         </button>
+        <a
+          className={btnGhost}
+          href="/downloads/tecsops-chrome-extension.zip"
+          download
+          title="Tải extension mới nhất cho máy khác; giải nén rồi Load unpacked tại chrome://extensions"
+        >
+          Tải Ext
+        </a>
         <EsidRegistrantSettingsButton disabled={tcs.busy} compact={compact} />
         <EsidAgentSettingsButton disabled={tcs.busy} compact={compact} />
 

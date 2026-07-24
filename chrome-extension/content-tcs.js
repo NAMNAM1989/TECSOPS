@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.9";
+  const SCRIPT_VERSION = "2.0.10";
 
   let LOCATORS = null;
   const locatorsReady = fetch(chrome.runtime.getURL("locators.json"))
@@ -1004,47 +1004,13 @@
       if (ok) simulateClick(ok);
 
       // TCS mở modal xác nhận thứ hai: “Bạn có đồng ý chọn chuyến bay này?”.
-      let confirmModal = null;
-      let nativeConfirmAccepted = false;
-      for (let wait = 0; wait < 35; wait += 1) {
-        nativeConfirmAccepted =
-          document.documentElement.dataset.tecsopsFlightConfirmStatus === "accepted";
-        if (nativeConfirmAccepted) break;
-        confirmModal = visibleConfirmationModal();
-        if (confirmModal) break;
-        await sleep(120);
+      // Máy/đường truyền chậm có thể cần hơn 4 giây; chờ đủ 20 giây và tìm nút
+      // trên toàn bộ modal visible để không bị nhầm footer Ok của modal danh sách.
+      const confirmation = await acceptFlightConfirmation(20_000);
+      fills.flight_confirmation_agreed = confirmation.accepted;
+      if (!confirmation.accepted) {
+        warnings.push(confirmation.message);
       }
-      let agreeClicked = nativeConfirmAccepted;
-      let confirmationClosed = nativeConfirmAccepted;
-      if (!nativeConfirmAccepted && confirmModal) {
-        const buttons = [...confirmModal.querySelectorAll("button")].filter(isVisible);
-        const agree =
-          buttons.find((button) => normalizeText(button.textContent || "") === "DONG Y") ||
-          confirmModal.querySelector(
-            ".ant-modal-footer button.ant-btn-primary, " +
-              ".ant-modal-confirm-btns button.ant-btn-primary"
-          ) ||
-          findButtonIn(confirmModal, "DONG Y");
-        if (agree) {
-          simulateClick(agree);
-          agreeClicked = true;
-          for (let wait = 0; wait < 30; wait += 1) {
-            if (!visibleConfirmationModal()) {
-              confirmationClosed = true;
-              break;
-            }
-            await sleep(120);
-          }
-          if (!confirmationClosed) {
-            warnings.push("Đã bấm Đồng ý nhưng hộp xác nhận chuyến bay chưa đóng");
-          }
-        } else {
-          warnings.push("Không thấy đúng nút Đồng ý trong hộp xác nhận chuyến bay");
-        }
-      } else if (!nativeConfirmAccepted) {
-        warnings.push("TCS chưa hiện hộp hỏi Đồng ý chọn chuyến bay");
-      }
-      fills.flight_confirmation_agreed = Boolean(agreeClicked && confirmationClosed);
     } else {
       warnings.push("Không chọn được chuyến — đóng modal, chọn tay nếu cần");
       const cancel =
@@ -1082,6 +1048,76 @@
       );
     }
     return { fills, warnings };
+  }
+
+  async function acceptFlightConfirmation(timeoutMs) {
+    const started = Date.now();
+    let sawConfirmation = false;
+    let clickAttempts = 0;
+    let lastClickAt = 0;
+
+    while (Date.now() - started < timeoutMs) {
+      const nativeAccepted =
+        document.documentElement.dataset.tecsopsFlightConfirmStatus === "accepted";
+      if (nativeAccepted) {
+        return { accepted: true, message: "" };
+      }
+
+      const confirmModal = visibleConfirmationModal();
+      const agree = findFlightAgreementButton();
+      if (confirmModal || agree) sawConfirmation = true;
+
+      if (agree && clickAttempts < 3 && Date.now() - lastClickAt >= 700) {
+        simulateClick(agree);
+        clickAttempts += 1;
+        lastClickAt = Date.now();
+      }
+
+      if (
+        clickAttempts > 0 &&
+        !findFlightAgreementButton() &&
+        !visibleConfirmationModal()
+      ) {
+        return { accepted: true, message: "" };
+      }
+      await sleep(120);
+    }
+
+    if (clickAttempts > 0) {
+      return {
+        accepted: false,
+        message: "Đã bấm Đồng ý nhưng hộp xác nhận chuyến bay chưa đóng sau 20 giây",
+      };
+    }
+    return {
+      accepted: false,
+      message: sawConfirmation
+        ? "Đã thấy hộp xác nhận nhưng không tìm được đúng nút Đồng ý"
+        : "TCS chưa hiện hộp hỏi Đồng ý chọn chuyến bay sau 20 giây",
+    };
+  }
+
+  function findFlightAgreementButton() {
+    const buttons = [...document.querySelectorAll("button")]
+      .filter(isVisible)
+      .reverse();
+    for (const button of buttons) {
+      const label = normalizeText(button.textContent || "");
+      if (label !== "DONG Y" && !label.includes("DONG Y")) continue;
+      const modal =
+        button.closest(".ant-modal") ||
+        button.closest("[role='dialog']") ||
+        button.closest(".ant-modal-wrap");
+      const context = normalizeText(modal?.textContent || "");
+      if (
+        context.includes("CHON CHUYEN BAY") ||
+        context.includes("BAN CO DONG Y") ||
+        (context.includes("CHUYEN BAY") && context.includes("THONG BAO"))
+      ) {
+        return button;
+      }
+    }
+    return null;
   }
 
   async function selectFlightResultRow(row) {
@@ -1319,7 +1355,12 @@
 
   function simulateClick(el) {
     if (!el) return;
-    for (const type of ["pointerdown", "mousedown", "mouseup"]) {
+    try {
+      el.focus({ preventScroll: true });
+    } catch {
+      /* ignore */
+    }
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup"]) {
       el.dispatchEvent(
         new MouseEvent(type, { bubbles: true, cancelable: true, view: window, buttons: 1 })
       );

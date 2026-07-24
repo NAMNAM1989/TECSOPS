@@ -42,10 +42,12 @@ import {
 } from "../utils/customerAccountFields";
 import {
   applyCustomsOpsImport,
+  applyFullProfileImport,
   CUSTOMS_OPS_TEMPLATE_URL,
   downloadCustomsOpsExport,
   parseCustomsOpsWorkbook,
 } from "../utils/customerCustomsOpsExcel";
+import { parseCustomerFullProfileWorkbook } from "../utils/customerFullProfileExcel";
 import type { SyncStatus } from "../hooks/useShipmentSync";
 
 type Props = {
@@ -259,6 +261,29 @@ export function CustomersPage({
     setImporting(true);
     try {
       const buf = await file.arrayBuffer();
+
+      // Thử đọc theo mẫu Hồ Sơ KH (22 cột)
+      try {
+        const fullResult = await parseCustomerFullProfileWorkbook(buf);
+        if (fullResult.customerCount > 0) {
+          const result = applyFullProfileImport(draft, fullResult.customers);
+          setDraft(result.customers.map((e) => clampCustomerDirectoryEntry(e)));
+          window.alert(
+            `Import Hồ Sơ KH (22 cột) thành công!\n` +
+            `- Tạo mới: ${result.created} khách hàng\n` +
+            `- Cập nhật: ${result.updated} khách hàng\n` +
+            `- Thêm mới: ${result.consigneesAdded} CNEE lưu sẵn\n` +
+            `- Thêm mới: ${result.goodsAdded} Loại hàng lưu sẵn\n` +
+            `Nhớ bấm Lưu.`
+          );
+          const last = result.customers[result.customers.length - 1];
+          if (last) setSelectedId(last.id);
+          return;
+        }
+      } catch {
+        // Fallback về mẫu 9 cột phẳng tiêu chuẩn nếu không phải mẫu 22 cột
+      }
+
       const rows = await parseCustomsOpsWorkbook(buf);
       const result = applyCustomsOpsImport(draft, rows);
       setDraft(result.customers.map((e) => clampCustomerDirectoryEntry(e)));
@@ -270,7 +295,7 @@ export function CustomersPage({
               .join("\n")}${result.errors.length > 5 ? `\n… +${result.errors.length - 5} lỗi` : ""}`
           : "";
       window.alert(
-        `Import: tạo ${result.created}, cập nhật ${result.updated}, bỏ ${result.skipped}.${errHint}\nNhớ bấm Lưu.`
+        `Import 9 cột: tạo ${result.created}, cập nhật ${result.updated}, bỏ ${result.skipped}.${errHint}\nNhớ bấm Lưu.`
       );
       const last = result.customers[result.customers.length - 1];
       if (last) setSelectedId(last.id);

@@ -22,16 +22,17 @@ import {
 } from "../utils/dimBulkFill";
 import { loadCustomDimPresets, saveCustomDimPreset, removeCustomDimPreset } from "../utils/dimCustomPresetsStorage";
 import {
+  dimEntryAddMeasuredFromCombo,
   dimEntryClearEstimated,
   dimEntryMergeLines,
   dimEntryRandomFill,
   dimEntryRemoveLine,
   dimEntrySeed,
   dimEntryValidateSave,
+  normalizeDimComboInput,
   parseRandomLineCountInput,
   parseTargetDimKgInput,
   snapshotDimEntry,
-  parseSpeechToDimLines,
   type DimEntryWorkflowStep,
 } from "../utils/dimEntryState";
 import { loadCustomerDimHistory, saveCustomerDimHistory } from "../utils/dimHistoryStorage";
@@ -51,7 +52,7 @@ interface MobileDimKgModalProps {
 }
 
 const WORKFLOW_STEPS: { step: DimEntryWorkflowStep; label: string; hint: string }[] = [
-  { step: 1, label: "Đo mẫu", hint: "Nhập hoặc dán size đo thật (D×R×C×kiện)" },
+  { step: 1, label: "Đo mẫu", hint: "Dán chuỗi số liệu hoặc chọn size mẫu đo thật" },
   { step: 2, label: "Sinh ước tính", hint: "Chỉ khi còn kiện thiếu — Ngẫu nhiên phần còn lại" },
   { step: 3, label: "Kiểm & lưu", hint: "Khớp kiện lô — chargeable = max(cân, DIM)" },
 ];
@@ -126,12 +127,12 @@ function DimLineSection({
         <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${badge}`}>
           {title}
         </span>
-        <span className="text-[10px] tabular-nums text-apple-secondary">
+        <span className="text-[10px] tabular-nums text-apple-secondary font-semibold">
           {lines.length} dòng · {lines.reduce((s, l) => s + l.pcs, 0)} kiện
         </span>
       </div>
       {lines.length === 0 ? (
-        <p className="py-4 text-center text-[11px] text-apple-tertiary">{emptyHint ?? "Chưa có"}</p>
+        <p className="py-3 text-center text-[11px] text-apple-tertiary">{emptyHint ?? "Chưa có"}</p>
       ) : (
         <ul className="space-y-1.5">
           {lines.map((line, i) => {
@@ -140,27 +141,27 @@ function DimLineSection({
             return (
               <li
                 key={`${idx}-${line.lCm}-${line.wCm}-${line.hCm}-${line.pcs}-${line.locked ? "L" : "U"}`}
-                className="flex items-center justify-between gap-2 rounded-lg border border-black/[0.06] bg-white px-2.5 py-2"
+                className="flex items-center justify-between gap-2 rounded-lg border border-black/[0.06] bg-white px-2.5 py-2 shadow-xs"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-mono text-xs font-semibold text-apple-label">
+                  <p className="font-mono text-xs font-bold text-apple-label">
                     {line.lCm}×{line.wCm}×{line.hCm}{" "}
-                    <span className="text-apple-secondary">×{line.pcs}</span>
+                    <span className="text-violet-700 font-semibold">×{line.pcs}</span>
                   </p>
-                  <p className="mt-0.5 text-[10px] tabular-nums text-apple-secondary">
+                  <p className="mt-0.5 text-[10px] tabular-nums text-apple-secondary font-medium">
                     {sub != null ? `${formatLineDimKgDisplay(sub, dimCtx)} kg` : "—"}
                   </p>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Nút Khóa dòng (chỉ cho kiện ước tính, đo thật luôn cố định) */}
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* Nút Khóa dòng cho kiện ước tính */}
                   {tone === "estimated" && onToggleLock && (
                     <button
                       type="button"
                       onClick={() => onToggleLock(idx)}
-                      className={`rounded-md px-2 py-1 text-[10px] font-semibold border transition-colors ${
+                      className={`rounded-md px-2 py-1 text-[10px] font-bold border transition-colors ${
                         line.locked
                           ? "bg-amber-100 border-amber-300 text-amber-900"
-                          : "bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200"
+                          : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200"
                       }`}
                       title={line.locked ? "Mở khóa dòng" : "Khóa cố định dòng này"}
                     >
@@ -170,7 +171,7 @@ function DimLineSection({
                   <button
                     type="button"
                     onClick={() => onRemove(idx)}
-                    className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-600"
+                    className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 active:bg-red-100"
                   >
                     Xóa
                   </button>
@@ -199,7 +200,10 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
     consolidateDimPieceLines(cloneLines(row.dimLines))
   );
 
-  // States nhập liệu 4 ô riêng biệt
+  // Ô nhập dán số liệu (Copy & Paste Combo Textarea)
+  const [comboInput, setComboInput] = useState("");
+
+  // States nhập liệu 4 ô lẻ
   const [inputL, setInputL] = useState("");
   const [inputW, setInputW] = useState("");
   const [inputH, setInputH] = useState("");
@@ -224,9 +228,6 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
   const [presetLCmInput, setPresetLCmInput] = useState("");
   const [presetWCmInput, setPresetWCmInput] = useState("");
   const [presetHCmInput, setPresetHCmInput] = useState("");
-
-  // Speech-to-Text State
-  const [isListening, setIsListening] = useState(false);
 
   // Customer DIM History State
   const [customerHistory, setCustomerHistory] = useState<any[]>([]);
@@ -315,7 +316,22 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
     setActionNote(note ?? null);
   }, []);
 
-  // Hàm thêm dòng từ lưới input 4 ô
+  // Xử lý thêm dòng từ ô dán Copy & Paste
+  const handleAddComboRows = () => {
+    if (!comboInput.trim()) return;
+    const r = dimEntryAddMeasuredFromCombo(lines, comboInput, lot, {
+      thenRandomFill: autoRandomAfterAdd,
+      randomFillParams: randomParams ? { ...randomParams, targetRatioPercent } : undefined,
+    });
+    if (!r.ok) {
+      setActionNote(`❌ ${r.error}`);
+      return;
+    }
+    applyMutation(r.lines, r.note ?? "Đã bóc tách và thêm dòng từ chuỗi dán.");
+    setComboInput("");
+  };
+
+  // Hàm thêm dòng từ 4 ô input lẻ
   const handleAddRowFromInputs = () => {
     const l = Number(inputL);
     const w = Number(inputW);
@@ -465,15 +481,10 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
   };
 
   const handleNumDelete = () => {
-    if (activeField === "l") {
-      setInputL((v) => v.slice(0, -1));
-    } else if (activeField === "w") {
-      setInputW((v) => v.slice(0, -1));
-    } else if (activeField === "h") {
-      setInputH((v) => v.slice(0, -1));
-    } else if (activeField === "pcs") {
-      setInputPcs((v) => v.slice(0, -1));
-    }
+    if (activeField === "l") setInputL((v) => v.slice(0, -1));
+    else if (activeField === "w") setInputW((v) => v.slice(0, -1));
+    else if (activeField === "h") setInputH((v) => v.slice(0, -1));
+    else if (activeField === "pcs") setInputPcs((v) => v.slice(0, -1));
   };
 
   const handleNumClear = () => {
@@ -498,48 +509,6 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
     }
   };
 
-  // Trình nhận diện giọng nói Speech-to-Text
-  const startSpeechRecognition = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setActionNote("❌ Trình duyệt không hỗ trợ nhận diện giọng nói.");
-      return;
-    }
-    const rec = new SpeechRecognition();
-    rec.lang = "vi-VN";
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.onstart = () => {
-      setIsListening(true);
-      setActionNote("🎙️ Đang lắng nghe... Hãy đọc kích thước.");
-    };
-    rec.onresult = (event: any) => {
-      const text = event.results[0][0].transcript;
-      setActionNote(`🎙️ Nhận diện: "${text}"`);
-      const r = parseSpeechToDimLines(text);
-      if (r.ok) {
-        // Kiểm tra tổng kiện sau khi thêm
-        const addPcs = r.lines.reduce((s, l) => s + l.pcs, 0);
-        const currentPcs = lines.reduce((s, l) => s + l.pcs, 0);
-        if (lot.declaredPcs != null && currentPcs + addPcs > lot.declaredPcs) {
-          setActionNote(`❌ Tổng kiện sau khi nhận diện (${currentPcs + addPcs}) vượt số kiện của lô hàng (${lot.declaredPcs}).`);
-          return;
-        }
-        applyMutation([...lines, ...r.lines], `Đã thêm ${r.lines.length} dòng đo từ giọng nói.`);
-      } else {
-        setActionNote(`❌ Lỗi bóc tách: ${r.error}`);
-      }
-    };
-    rec.onerror = (e: any) => {
-      setActionNote(`❌ Lỗi nhận diện giọng nói: ${e.error}`);
-      setIsListening(false);
-    };
-    rec.onend = () => {
-      setIsListening(false);
-    };
-    rec.start();
-  };
-
   return (
     <div
       className="no-print fixed inset-0 z-[480] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4 md:p-6 transition-all duration-300"
@@ -550,13 +519,13 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Container dạng Bottom Sheet trên di động, Modal trên desktop */}
+      {/* Container Bottom Sheet trên di động, Modal trên desktop */}
       <div
-        className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[1.6rem] border border-black/[0.08] bg-white shadow-2xl transition-all sm:max-h-[min(90dvh,860px)] sm:max-w-xl sm:rounded-[1.6rem] md:max-h-[min(90dvh,920px)] md:max-w-3xl lg:max-w-4xl"
+        className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[1.6rem] border border-black/[0.08] bg-white shadow-2xl transition-all sm:max-h-[min(90dvh,860px)] sm:max-w-xl sm:rounded-[1.6rem] md:max-h-[min(90dvh,920px)] md:max-w-3xl lg:max-w-4xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header + ngữ cảnh lô */}
-        <div className="shrink-0 border-b border-black/[0.06] bg-gradient-to-b from-slate-50 to-white px-4 pb-3 pt-4 sm:px-5 md:px-6">
+        <div className="shrink-0 border-b border-black/[0.06] bg-gradient-to-b from-slate-50 to-white px-4 pb-3 pt-3.5 sm:px-5 md:px-6">
           <div className="flex items-start justify-between gap-2">
             <div>
               <h2 id="dim-modal-title" className="text-[1.1rem] font-bold tracking-tight text-slate-800">
@@ -568,27 +537,27 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
               </p>
             </div>
             {airlineRule ? (
-              <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-900 shadow-sm border border-amber-200">
+              <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-200">
                 SCSC · {airlineRule.chargeableNote.slice(0, 24)}
               </span>
             ) : null}
           </div>
 
-          <div className="mt-3 grid grid-cols-4 gap-1.5">
-            <div className="rounded-xl bg-slate-100 p-2 text-center border border-black/[0.03]">
+          <div className="mt-2.5 grid grid-cols-4 gap-1.5">
+            <div className="rounded-xl bg-slate-100 p-1.5 text-center border border-black/[0.03]">
               <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">Kiện lô</p>
               <p className="text-xs font-bold tabular-nums text-slate-800">{lot.declaredPcs ?? "—"}</p>
             </div>
-            <div className="rounded-xl bg-slate-100 p-2 text-center border border-black/[0.03]">
+            <div className="rounded-xl bg-slate-100 p-1.5 text-center border border-black/[0.03]">
               <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">Kg lô</p>
               <p className="text-xs font-bold tabular-nums text-slate-800">{lot.declaredKg ?? "—"}</p>
             </div>
-            <div className="rounded-xl bg-violet-50 p-2 text-center border border-violet-100">
+            <div className="rounded-xl bg-violet-50 p-1.5 text-center border border-violet-100">
               <p className="text-[8px] font-bold uppercase tracking-wider text-violet-700">Tổng DIM</p>
               <p className="text-xs font-bold tabular-nums text-violet-900">{totalDimLabel}</p>
             </div>
             <div
-              className={`rounded-xl p-2 text-center border ${
+              className={`rounded-xl p-1.5 text-center border ${
                 snap.pcsExcess
                   ? "bg-red-50 border-red-200 text-red-900"
                   : snap.pcsMatch
@@ -607,10 +576,10 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
           </div>
 
           {lot.declaredKg != null && snap.totalDim != null ? (
-            <p className="mt-2 text-[10px] font-bold text-slate-600">
+            <p className="mt-1.5 text-[10px] font-bold text-slate-600">
               {snap.dimBelowGross
                 ? `DIM ${snap.totalDim.toFixed(1)} kg < Gross ${lot.declaredKg} kg — chargeable theo cân thực.`
-                : `DIM ${snap.totalDim.toFixed(1)} kg ≥ Gross ${lot.declaredKg} kg — chargeable theo DIM (hàng cồng kềnh).`}
+                : `DIM ${snap.totalDim.toFixed(1)} kg ≥ Gross ${lot.declaredKg} kg — chargeable theo DIM.`}
               {snap.remainingPcs > 0 && lot.declaredKg > 0 && snap.dimBelowGross !== false ? (
                 <span className="text-violet-700 font-semibold">
                   {" "}
@@ -623,9 +592,9 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 md:px-6 bg-slate-50/30">
-          <div className="space-y-3.5 md:grid md:grid-cols-[1.1fr_0.9fr] md:gap-5 md:space-y-0">
-            {/* Cột trái — Nhập & thao tác */}
-            <div className="space-y-3">
+          <div className="space-y-3 md:grid md:grid-cols-[1.1fr_0.9fr] md:gap-5 md:space-y-0">
+            {/* Cột trái — Nhập & Thao tác */}
+            <div className="space-y-2.5">
               <DimWorkflowSteps active={snap.workflowStep} />
               <p className="text-[10px] leading-snug font-semibold text-slate-500">{workflowHint}</p>
 
@@ -637,26 +606,44 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                 </div>
               ) : null}
 
-              {/* Lưới nhập liệu 4 ô thay cho Textarea */}
-              <div className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-slate-700">
-                    Bước 1 — Nhập đo mẫu (L × W × H × Pcs)
+              {/* Ô DÁN COPY & PASTE SỐ LIỆU TỪ EXCEL/ZALO/NHẮN TIN */}
+              <div className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="dim-combo-input" className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                    <span>📋 Dán chuỗi số liệu (Copy & Paste)</span>
                   </label>
-                  {/* Nhập liệu giọng nói (Microphone) */}
-                  <button
-                    type="button"
-                    onClick={startSpeechRecognition}
-                    className={`inline-flex items-center justify-center rounded-full p-2 transition-all ${
-                      isListening
-                        ? "bg-red-500 text-white animate-pulse"
-                        : "bg-slate-100 hover:bg-slate-200 text-slate-600 active:scale-95"
-                    }`}
-                    title="Nhấn để đọc kích thước giọng nói"
-                  >
-                    🎙️
-                  </button>
+                  {comboInput.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleAddComboRows}
+                      className="rounded-lg bg-apple-blue hover:bg-blue-600 px-3 py-1 text-xs font-bold text-white shadow-xs active:scale-95 transition-all"
+                    >
+                      Phân tích & Thêm
+                    </button>
+                  )}
                 </div>
+
+                <textarea
+                  id="dim-combo-input"
+                  rows={2}
+                  value={comboInput}
+                  onChange={(e) => setComboInput(normalizeDimComboInput(e.target.value))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey || !comboInput.includes("\n"))) {
+                      e.preventDefault();
+                      handleAddComboRows();
+                    }
+                  }}
+                  placeholder={"Dán từ Excel / Zalo: 40×50×30×10 hoặc 40 50 30 10\n(Bấm Ctrl+Enter hoặc nhấn 'Phân tích & Thêm')"}
+                  className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50/60 p-2 font-mono text-xs font-semibold focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/15"
+                />
+              </div>
+
+              {/* Lưới nhập liệu 4 ô lẻ (Dài × Rộng × Cao × Kiện) */}
+              <div className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-xs space-y-1.5">
+                <span className="text-[11px] font-bold text-slate-700 block">
+                  Hoặc nhập số liệu lẻ (L × W × H × Pcs)
+                </span>
 
                 <div className="grid grid-cols-4 gap-2">
                   <div>
@@ -669,7 +656,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                       onFocus={() => setActiveField("l")}
                       onChange={(e) => setInputL(e.target.value)}
                       placeholder="cm"
-                      className={`w-full rounded-xl border px-3 py-2 text-center text-sm font-bold tabular-nums focus:outline-none focus:ring-2 ${
+                      className={`w-full rounded-xl border px-2 py-1.5 text-center text-xs font-bold tabular-nums focus:outline-none focus:ring-2 ${
                         activeField === "l"
                           ? "border-apple-blue ring-apple-blue/20 bg-white"
                           : "border-slate-200 bg-slate-50"
@@ -686,7 +673,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                       onFocus={() => setActiveField("w")}
                       onChange={(e) => setInputW(e.target.value)}
                       placeholder="cm"
-                      className={`w-full rounded-xl border px-3 py-2 text-center text-sm font-bold tabular-nums focus:outline-none focus:ring-2 ${
+                      className={`w-full rounded-xl border px-2 py-1.5 text-center text-xs font-bold tabular-nums focus:outline-none focus:ring-2 ${
                         activeField === "w"
                           ? "border-apple-blue ring-apple-blue/20 bg-white"
                           : "border-slate-200 bg-slate-50"
@@ -703,7 +690,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                       onFocus={() => setActiveField("h")}
                       onChange={(e) => setInputH(e.target.value)}
                       placeholder="cm"
-                      className={`w-full rounded-xl border px-3 py-2 text-center text-sm font-bold tabular-nums focus:outline-none focus:ring-2 ${
+                      className={`w-full rounded-xl border px-2 py-1.5 text-center text-xs font-bold tabular-nums focus:outline-none focus:ring-2 ${
                         activeField === "h"
                           ? "border-apple-blue ring-apple-blue/20 bg-white"
                           : "border-slate-200 bg-slate-50"
@@ -720,7 +707,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                       onFocus={() => setActiveField("pcs")}
                       onChange={(e) => setInputPcs(e.target.value)}
                       placeholder="kiện"
-                      className={`w-full rounded-xl border px-3 py-2 text-center text-sm font-bold tabular-nums focus:outline-none focus:ring-2 ${
+                      className={`w-full rounded-xl border px-2 py-1.5 text-center text-xs font-bold tabular-nums focus:outline-none focus:ring-2 ${
                         activeField === "pcs"
                           ? "border-apple-blue ring-apple-blue/20 bg-white"
                           : "border-slate-200 bg-slate-50"
@@ -744,7 +731,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                 </div>
 
                 {showAddPresetForm && (
-                  <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/90 p-3 text-xs shadow-sm">
+                  <div className="space-y-2 rounded-xl border border-violet-200 bg-violet-50/90 p-2.5 text-xs shadow-xs">
                     <p className="text-[10px] font-bold text-violet-950">Lưu Mẫu Size Tùy Chỉnh Mới</p>
                     <div className="grid grid-cols-4 gap-1.5">
                       <input
@@ -807,7 +794,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                             refPcs.current?.focus();
                           }}
                           title={preset.description}
-                          className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-950 shadow-sm transition-colors hover:bg-emerald-100"
+                          className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-950 shadow-xs hover:bg-emerald-100"
                         >
                           🕒 {preset.label}
                         </button>
@@ -834,7 +821,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                             refPcs.current?.focus();
                           }}
                           title={preset.description}
-                          className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-950 shadow-sm transition-colors hover:bg-emerald-100"
+                          className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-950 shadow-xs hover:bg-emerald-100"
                         >
                           ⭐ {preset.label}
                         </button>
@@ -850,7 +837,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                       {customPresets.map((preset) => (
                         <span
                           key={preset.id}
-                          className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-950 shadow-sm"
+                          className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-950 shadow-xs"
                         >
                           <button
                             type="button"
@@ -896,7 +883,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                         refPcs.current?.focus();
                       }}
                       title={preset.description}
-                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
                     >
                       + {preset.label} <span className="text-[9px] text-slate-400 font-mono">({preset.lCm}×{preset.wCm}×{preset.hCm})</span>
                     </button>
@@ -905,7 +892,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
               </div>
 
               {/* Bàn phím ảo chuyên dụng */}
-              <div className="mt-2">
+              <div className="mt-1">
                 <CustomDimNumPad
                   onKeyPress={handleNumKeyPress}
                   onDelete={handleNumDelete}
@@ -920,7 +907,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                   type="button"
                   onClick={handleMerge}
                   disabled={lines.length < 2}
-                  className="rounded-xl border border-slate-200 bg-white py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 shadow-sm"
+                  className="rounded-xl border border-slate-200 bg-white py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 shadow-xs"
                 >
                   Gộp trùng kích thước
                 </button>
@@ -1045,7 +1032,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
               </div>
 
               {actionNote ? (
-                <p className="mt-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-[11px] font-semibold text-amber-900 shadow-sm">
+                <p className="mt-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-[11px] font-semibold text-amber-900 shadow-xs">
                   {actionNote}
                 </p>
               ) : null}
@@ -1082,7 +1069,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
                 divisor={divisor}
                 dimCtx={dimCtx}
                 onRemove={(idx) => applyMutation(dimEntryRemoveLine(lines, idx))}
-                emptyHint="Nhập kích thước ở bên trái"
+                emptyHint="Dán hoặc nhập kích thước ở bên trái"
               />
 
               <DimLineSection
@@ -1105,7 +1092,7 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
         </div>
 
         {/* Footer actions */}
-        <div className="shrink-0 border-t border-black/[0.06] p-4 bg-slate-50/50">
+        <div className="shrink-0 border-t border-black/[0.06] p-3.5 bg-slate-50/50">
           <div className="flex gap-2">
             <button
               type="button"
@@ -1118,14 +1105,14 @@ export function MobileDimKgModal({ row, customerDirectory, onClose, onSave }: Mo
             <button
               type="button"
               onClick={() => onSave({ dimWeightKg: null, dimLines: null, dimDivisor: null })}
-              className="rounded-full border border-slate-200 bg-white hover:bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 shadow-sm"
+              className="rounded-full border border-slate-200 bg-white hover:bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 shadow-xs"
             >
               Xóa DIM
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-slate-200 bg-white hover:bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500 shadow-sm"
+              className="rounded-full border border-slate-200 bg-white hover:bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500 shadow-xs"
             >
               Hủy
             </button>

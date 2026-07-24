@@ -349,6 +349,87 @@ export function applyCustomsOpsImport(
   return { customers, created, updated, skipped, errors };
 }
 
+/**
+ * Hợp nhất dữ liệu import từ file Hồ sơ KH 22 cột vào danh bạ hiện có.
+ */
+export function applyFullProfileImport(
+  existing: readonly CustomerDirectoryEntry[],
+  imported: readonly CustomerDirectoryEntry[]
+): {
+  customers: CustomerDirectoryEntry[];
+  created: number;
+  updated: number;
+  consigneesAdded: number;
+  goodsAdded: number;
+} {
+  const customers = existing.map((e) => ({ ...e }));
+  const byCode = new Map(customers.map((e) => [e.code.trim().toLowerCase(), e]));
+  let created = 0;
+  let updated = 0;
+  let consigneesAdded = 0;
+  let goodsAdded = 0;
+
+  for (const imp of imported) {
+    const code = normalizeAgentCode(imp.code);
+    if (!code) continue;
+
+    const hit = findExistingByImportCode(customers, byCode, code);
+    if (hit) {
+      // Cập nhật thông tin account nếu trống
+      if (!hit.name || hit.name.startsWith("Khách hàng ")) hit.name = imp.name;
+      if (!hit.address && imp.address) hit.address = imp.address;
+      if (!hit.email && imp.email) hit.email = imp.email;
+      if (!hit.phone && imp.phone) hit.phone = imp.phone;
+
+      // Hợp nhất savedConsignees
+      const existingCnees = [...(hit.savedConsignees ?? [])];
+      for (const cnee of imp.savedConsignees ?? []) {
+        const isDup = existingCnees.some(
+          (x) =>
+            x.consigneeName.toLowerCase() === cnee.consigneeName.toLowerCase() &&
+            x.consigneeAddress.toLowerCase() === cnee.consigneeAddress.toLowerCase()
+        );
+        if (!isDup) {
+          existingCnees.push(cnee);
+          consigneesAdded++;
+        }
+      }
+      hit.savedConsignees = existingCnees;
+      if (!hit.defaultConsigneeId && existingCnees.length > 0) {
+        hit.defaultConsigneeId = existingCnees[0]!.id;
+      }
+
+      // Hợp nhất savedGoods
+      const existingGoods = [...(hit.savedGoods ?? [])];
+      for (const g of imp.savedGoods ?? []) {
+        const isDup = existingGoods.some(
+          (x) => x.goodsDescription.toLowerCase() === g.goodsDescription.toLowerCase()
+        );
+        if (!isDup) {
+          existingGoods.push(g);
+          goodsAdded++;
+        }
+      }
+      hit.savedGoods = existingGoods;
+      if (!hit.defaultGoodsId && existingGoods.length > 0) {
+        hit.defaultGoodsId = existingGoods[0]!.id;
+      }
+
+      updated++;
+    } else {
+      // Thêm mới hoàn toàn
+      customers.push(imp);
+      byCode.set(code.toLowerCase(), imp);
+      created++;
+      consigneesAdded += imp.savedConsignees?.length ?? 0;
+      goodsAdded += imp.savedGoods?.length ?? 0;
+    }
+  }
+
+  return { customers, created, updated, consigneesAdded, goodsAdded };
+}
+
+
 /** Xuất danh bạ đúng 9 cột mẫu Import Customers. */
 export async function buildCustomsOpsWorkbook(customers: readonly CustomerDirectoryEntry[]) {
   const ExcelJS = (await import("exceljs")).default;

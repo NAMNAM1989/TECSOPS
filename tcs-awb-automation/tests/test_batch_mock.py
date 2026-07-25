@@ -88,7 +88,7 @@ def test_mock_ops_received_reception_downloads_pdf(tmp_path: Path):
     assert results[0].downloaded_file
 
 
-def test_print_dedupe(tmp_path: Path):
+def test_download_duplicate(tmp_path: Path):
     settings = _settings(tmp_path)
     repo = Repository(settings.db_path)
     batch = BatchService(settings, repo)
@@ -96,20 +96,17 @@ def test_print_dedupe(tmp_path: Path):
         {
             "warehouse": "TECS-TCS",
             "rows": [
-                {"awb": "12312345670", "action": "PRINT"},
-                {"awb": "12312345670", "action": "PRINT"},
+                {"awb": "12312345670", "action": "DOWNLOAD"},
+                {"awb": "12312345670", "action": "DOWNLOAD"},
             ],
         }
     )
     # second row will be validation duplicate AWB+ACTION
     assert rows[1].validation_error
-    job = batch.create_job_from_rows([rows[0]], source="test", dry_run=True, mock=True)
+    job = batch.create_job_from_rows(rows, source="test", dry_run=True, mock=True)
     results, _ = batch.run(job)
-    assert results[0].normalized_status == "PRINTED"
-    # same content printed again -> skip
-    job2 = batch.create_job_from_rows([rows[0]], source="test", dry_run=True, mock=True)
-    results2, _ = batch.run(job2)
-    assert results2[0].normalized_status in {"PRINTED", "SKIPPED_DUPLICATE"}
+    assert results[0].normalized_status == "DOWNLOADED"
+    assert results[1].normalized_status == "SKIPPED_DUPLICATE"
 
 
 def test_excel_template_roundtrip(tmp_path: Path):

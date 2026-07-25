@@ -395,9 +395,7 @@ export function useTcsPortalActions({
       const t0 = performance.now();
       try {
         if (!(await ensureSessionReady())) return;
-        // Pre-warm chỉ khi bấm Tải PDF (không khi Điền / mở menu)
-        if (!hot) prepareEsidFor(shipment);
-        // Đợi pre-warm cùng AWB xong (agent cũng chờ) — tránh cold-path đụng prepare
+        // Đợi pre-warm cùng AWB xong (nếu có) — tránh cold-path đụng prepare
         if (wasPreparing || prepareInFlightRef.current === digits) {
           setBusyLabel(`Tải PDF …${digits.slice(-8)} — đang mở phiếu…`);
           const waitUntil = Date.now() + 90_000;

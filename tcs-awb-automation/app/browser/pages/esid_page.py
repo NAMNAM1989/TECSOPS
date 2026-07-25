@@ -200,55 +200,44 @@ class EsidListPage:
 
     def _clear_date_filters_fast(self) -> None:
         """
-        Xóa lọc ngày bay trước khi tìm AWB#.
-        Ant Design RangePicker ẩn nút X tới khi hover — gán value='' không đủ.
+        Xóa lọc ngày bay trước khi tìm AWB# (tối ưu hóa tốc độ bằng JS).
         """
         try:
-            # Hover từng picker để hiện .ant-picker-clear rồi bấm
-            pickers = self.page.locator(".ant-picker")
-            for i in range(min(pickers.count(), 4)):
-                try:
-                    pk = pickers.nth(i)
-                    if not pk.is_visible(timeout=200):
-                        continue
-                    pk.hover(timeout=800)
-                    clr = pk.locator(".ant-picker-clear")
-                    if clr.count() > 0:
-                        clr.first.click(timeout=800, force=True)
-                except Exception:
-                    pass
-            # Ctrl+A + Delete trên ô ngày
-            for sel in ("#search-form_dateSearch",):
-                try:
-                    loc = self.page.locator(sel)
-                    if loc.count() == 0 or not loc.first.is_visible(timeout=200):
-                        continue
-                    loc.first.click(timeout=500)
-                    loc.first.press("Control+A")
-                    loc.first.press("Backspace")
-                    loc.first.fill("")
-                except Exception:
-                    pass
-            try:
-                end = self.page.get_by_placeholder(re.compile(r"k[eế]t\s*th[uú]c", re.I))
-                if end.count() > 0 and end.first.is_visible(timeout=200):
-                    end.first.click(timeout=500)
-                    end.first.press("Control+A")
-                    end.first.press("Backspace")
-                    end.first.fill("")
-            except Exception:
-                pass
+            self.page.evaluate(
+                """() => {
+                  // 1) Click tất cả nút clear của Ant Design
+                  for (const c of document.querySelectorAll('.ant-picker-clear')) {
+                    try { c.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (e) {}
+                  }
+                  // 2) Xóa trực tiếp giá trị input và kích hoạt React state update
+                  const selectors = [
+                    '#search-form_dateSearch',
+                    'input[placeholder*="kết thúc"]',
+                    'input[placeholder*="ket thuc"]',
+                    'input[placeholder*="ngày"]',
+                    'input[placeholder*="ngay"]'
+                  ];
+                  for (const sel of selectors) {
+                    for (const input of document.querySelectorAll(sel)) {
+                      try {
+                        input.focus();
+                        const proto = window.HTMLInputElement.prototype;
+                        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+                        if (setter) setter.call(input, '');
+                        else input.value = '';
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                        input.blur();
+                      } catch (e) {}
+                    }
+                  }
+                }"""
+            )
+            # Nhấn Escape để đóng bất kỳ dropdown/overlay nào của picker đang mở
             try:
                 self.page.keyboard.press("Escape")
             except Exception:
                 pass
-            self.page.evaluate(
-                """() => {
-                  for (const c of document.querySelectorAll('.ant-picker-clear')) {
-                    try { c.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (e) {}
-                  }
-                }"""
-            )
         except Exception:
             pass
         self._list_date_ymd = None
@@ -1371,7 +1360,7 @@ class EsidListPage:
                 pass
             tmp.set_content(html, wait_until="load")
             try:
-                tmp.wait_for_load_state("networkidle", timeout=8000)
+                tmp.wait_for_load_state("networkidle", timeout=800)
             except Exception:
                 pass
             try:

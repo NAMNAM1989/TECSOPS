@@ -1,6 +1,7 @@
 """Quét Danh sách ESID lấy lô Hoàn thành tiếp nhận."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.browser.locators import LocatorsConfig, locators_path
@@ -8,6 +9,8 @@ from app.browser.pages.awb_page import NeedsLoginError
 from app.browser.pages.esid_page import EsidListPage
 from app.browser.session_manager import SessionManager
 from app.config import Settings
+
+SESSION_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _session_gate(sessions: SessionManager, settings: Settings) -> dict[str, Any] | None:
@@ -56,6 +59,16 @@ def scan_esid_by_date(
     Lọc ESID theo ngày bay (= ngày phiên Ops), đọc các dòng Hoàn thành tiếp nhận,
     khớp với AWB trên Ops (không gõ từng AWB).
     """
+    if not SESSION_DATE_RE.match(str(session_date or "").strip()):
+        return {
+            "ok": False,
+            "error": "DATE_REQUIRED",
+            "message": "Ngày quét phải có dạng YYYY-MM-DD (ngày phiên Ops)",
+            "items": [],
+            "ready": [],
+            "total": 0,
+            "ready_count": 0,
+        }
     gate = _session_gate(sessions, settings)
     if gate:
         return gate
@@ -115,37 +128,22 @@ def scan_esid_reception(
     session_date: str | None = None,
 ) -> dict[str, Any]:
     """
-    Ưu tiên quét theo ngày (nhanh). Fallback từng AWB nếu không có session_date.
+    Chỉ quét theo ngày phiên Ops (YYYY-MM-DD). Không fallback quét từng AWB —
+    tránh quét «mọi ngày» khi thiếu session_date.
     """
-    if session_date and len(session_date) >= 8:
-        return scan_esid_by_date(sessions, settings, session_date, awbs)
+    session = str(session_date or "").strip()
+    if SESSION_DATE_RE.match(session):
+        return scan_esid_by_date(sessions, settings, session, awbs)
 
     gate = _session_gate(sessions, settings)
     if gate:
         return gate
-    sessions.focus_if_headed()
-    loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
-    portal = sessions.portal("list")
-    esid = EsidListPage(portal.page, loc)
-    try:
-        items = esid.scan_awbs(awbs)
-    except NeedsLoginError as e:
-        return {
-            "ok": False,
-            "error": "NEEDS_LOGIN",
-            "message": str(e),
-            "items": [],
-            "ready": [],
-            "total": 0,
-            "ready_count": 0,
-        }
-    ready = [i for i in items if i.get("ready")]
     return {
-        "ok": True,
-        "mode": "by_awb",
-        "items": items,
-        "ready": ready,
-        "total": len(items),
-        "ready_count": len(ready),
-        "message": f"Đã quét {len(items)} AWB — {len(ready)} lô Hoàn thành tiếp nhận",
+        "ok": False,
+        "error": "DATE_REQUIRED",
+        "message": "Thiếu session_date (YYYY-MM-DD) — chỉ quét đúng ngày phiên Ops",
+        "items": [],
+        "ready": [],
+        "total": 0,
+        "ready_count": 0,
     }

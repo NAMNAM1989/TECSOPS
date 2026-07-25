@@ -302,6 +302,32 @@ class EsidListPage:
         return info
 
     @staticmethod
+    def _normalize_flight_date_to_ymd(raw: str) -> str | None:
+        """Chuẩn hóa cột ngày bay TCS (DD-MM-YYYY / DD/MM/YYYY / YYYY-MM-DD) → YYYY-MM-DD."""
+        s = (raw or "").strip()
+        if not s:
+            return None
+        m = re.match(r"^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$", s)
+        if m:
+            day, month, year = m.groups()
+            return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        m = re.match(r"^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$", s)
+        if m:
+            year, month, day = m.groups()
+            return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        return None
+
+    @classmethod
+    def _row_matches_session_date(cls, row: dict[str, str], ymd: str) -> bool:
+        """True khi cột ngày bay khớp ngày phiên Ops (bỏ qua nếu ô trống)."""
+        if not ymd:
+            return True
+        normalized = cls._normalize_flight_date_to_ymd(str(row.get("flight_date") or ""))
+        if not normalized:
+            return True
+        return normalized == ymd
+
+    @staticmethod
     def _ymd_to_dmy(ymd: str) -> str:
         parts = ymd.strip().split("-")
         if len(parts) != 3:
@@ -310,6 +336,7 @@ class EsidListPage:
 
     def set_flight_date_range(self, ymd_from: str, ymd_to: str | None = None) -> None:
         """Ant Design range: #search-form_dateSearch + placeholder Ngày kết thúc (DD-MM-YYYY)."""
+        self._clear_date_filters_fast()
         dmy_from = self._ymd_to_dmy(ymd_from)
         dmy_to = self._ymd_to_dmy(ymd_to or ymd_from)
         start = self.page.locator("#search-form_dateSearch")
@@ -317,21 +344,46 @@ class EsidListPage:
             start.first.wait_for(state="visible", timeout=10000)
         except Exception as e:
             raise SiteChangedError(f"Không thấy ô Ngày bắt đầu: {e}") from e
-        start.first.click()
-        start.first.fill("")
-        start.first.fill(dmy_from)
-        self.page.keyboard.press("Enter")
+        self._set_react_input(start, dmy_from)
         self.page.wait_for_timeout(40)
         end = self.page.get_by_placeholder("Ngày kết thúc")
-        end.first.click()
-        end.first.fill("")
-        end.first.fill(dmy_to)
-        self.page.keyboard.press("Enter")
+        self._set_react_input(end, dmy_to)
         self.page.wait_for_timeout(40)
         try:
             self.page.keyboard.press("Escape")
         except Exception:
             pass
+
+    def _read_date_filter_values(self) -> tuple[str, str]:
+        try:
+            vals = self.page.evaluate(
+                """() => {
+                  const startEl = document.querySelector('#search-form_dateSearch');
+                  const endEl = [...document.querySelectorAll('input')].find((input) =>
+                    /kết thúc|ket thuc/i.test(input.getAttribute('placeholder') || '')
+                  );
+                  return {
+                    start: startEl ? String(startEl.value || '').trim() : '',
+                    end: endEl ? String(endEl.value || '').trim() : '',
+                  };
+                }"""
+            )
+            return str(vals.get("start") or ""), str(vals.get("end") or "")
+        except Exception:
+            return "", ""
+
+    def _assert_date_filter_applied(self, ymd: str) -> None:
+        """Đảm bảo form đã giữ đúng ngày trước khi lật trang (tránh quét mọi ngày)."""
+        dmy = self._ymd_to_dmy(ymd)
+        start_val, end_val = self._read_date_filter_values()
+        if start_val and dmy not in start_val.replace("/", "-"):
+            raise SiteChangedError(
+                f"Bộ lọc ngày bắt đầu không khớp {dmy!r} (đang {start_val!r})"
+            )
+        if end_val and dmy not in end_val.replace("/", "-"):
+            raise SiteChangedError(
+                f"Bộ lọc ngày kết thúc không khớp {dmy!r} (đang {end_val!r})"
+            )
 
     def clear_awb_filters(self) -> None:
         for ph in ("AWB#", "Prefix"):
@@ -387,6 +439,7 @@ class EsidListPage:
         except Exception as e:
             raise SiteChangedError(f"Không bấm TÌM KIẾM: {e}") from e
         self._wait_search_results("", timeout_ms=6000)
+        self._assert_date_filter_applied(ymd)
         self._list_date_ymd = ymd
 
     def ensure_date_filtered_list(self, ymd: str) -> None:
@@ -515,10 +568,10 @@ class EsidListPage:
         return ready, items
 
     def scan_by_flight_date(self, ymd: str, ops_awbs: list[str]) -> dict[str, Any]:
-        """Một lần lọc ngày → đọc mọi trang bảng → khớp Ops (chỉ dòng đủ chữ tiếp nhận)."""
+        """Một lần lọc ngày → đọc các trang (chỉ dòng đúng ngày) → khớp Ops."""
         self.search_by_flight_date(ymd)
         self._prefer_large_page_size()
-        rows = self.list_all_row_statuses(max_pages=40)
+        rows = self.list_all_row_statuses(max_pages=40, session_ymd=ymd)
         reception: list[dict[str, Any]] = []
         for r in rows:
             if not self._blob_is_reception(r.get("status") or "", r.get("text") or ""):
@@ -775,19 +828,28 @@ class EsidListPage:
                     break
         return self._pagination_current() == target
 
-    def list_all_row_statuses(self, *, max_pages: int = 40) -> list[dict[str, str]]:
-        """Đọc mọi trang kết quả ESID (sau khi đã lọc ngày)."""
+    def list_all_row_statuses(
+        self, *, max_pages: int = 40, session_ymd: str | None = None
+    ) -> list[dict[str, str]]:
+        """Đọc các trang kết quả ESID sau khi đã lọc ngày — chỉ giữ dòng đúng ngày phiên."""
         all_rows: list[dict[str, str]] = []
         seen_keys: set[str] = set()
         for page_i in range(max(1, max_pages)):
             rows = self.list_row_statuses()
             current_page = self._pagination_current()
+            kept_on_page = 0
             for r in rows:
+                if session_ymd and not self._row_matches_session_date(r, session_ymd):
+                    continue
                 key = f"{r.get('awb')}|{r.get('esid')}|{r.get('flight_date')}|{r.get('status')}"
                 if key in seen_keys:
                     continue
                 seen_keys.add(key)
                 all_rows.append({**r, "page_number": current_page})
+                kept_on_page += 1
+            # Trang có dữ liệu nhưng không dòng nào đúng ngày → dừng (tránh lật cả kho)
+            if session_ymd and rows and kept_on_page == 0:
+                break
             if page_i + 1 >= max_pages:
                 break
             if not self._pagination_next():

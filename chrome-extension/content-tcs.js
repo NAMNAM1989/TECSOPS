@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.10";
+  const SCRIPT_VERSION = "2.0.11";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -603,6 +603,8 @@
     clickTabByText("DANH SÁCH ESID") || clickTabByText("DANH SACH ESID");
     await sleep(350);
 
+    clearDateFiltersBeforeScan();
+
     const [year, month, day] = sessionDate.split("-");
     const dmy = `${day}-${month}-${year}`;
     const start = document.querySelector("#search-form_dateSearch");
@@ -620,9 +622,25 @@
     }
     setNativeValue(start, dmy);
     dispatchEnter(start);
+    await sleep(80);
     setNativeValue(end, dmy);
     dispatchEnter(end);
     pressKey("Escape");
+    await sleep(80);
+
+    const startGot = String(start.value || "").trim();
+    const endGot = String(end.value || "").trim();
+    if (
+      (startGot && !startGot.includes(dmy) && !startGot.includes(`${day}/${month}/${year}`)) ||
+      (endGot && !endGot.includes(dmy) && !endGot.includes(`${day}/${month}/${year}`))
+    ) {
+      return {
+        ok: false,
+        error: "DATE_FILTER_MISMATCH",
+        message: `Bộ lọc ngày chưa khớp ${dmy} (start=${startGot || "—"}, end=${endGot || "—"})`,
+      };
+    }
+
     const search = [...document.querySelectorAll("button")].find((button) =>
       normalizeText(button.textContent || "").includes("TIM KIEM")
     );
@@ -637,18 +655,22 @@
     for (let pageIndex = 0; pageIndex < 40; pageIndex += 1) {
       const pageNumber = currentPageNumber();
       const rows = readEsidRows(pageNumber);
+      let keptOnPage = 0;
       for (const row of rows) {
+        if (!rowMatchesSessionDate(row, sessionDate)) continue;
         const key = `${row.awb}|${row.esid}|${row.flight_date}|${row.status}`;
         if (seen.has(key)) continue;
         seen.add(key);
         allRows.push(row);
+        keptOnPage += 1;
       }
       updateWorkspaceOverlay(
         "SCANNING",
-        `Đã đọc ${allRows.length} dòng · trang ${pageNumber}`,
+        `Ngày ${sessionDate} · ${allRows.length} dòng · trang ${pageNumber}`,
         pageIndex + 1,
         Math.max(pageIndex + 2, 2)
       );
+      if (rows.length > 0 && keptOnPage === 0) break;
       const next = document.querySelector(
         ".ant-pagination-next:not(.ant-pagination-disabled)"
       );
@@ -704,7 +726,7 @@
     });
     updateWorkspaceOverlay(
       "READY",
-      `Đã quét ${allRows.length} dòng · ${ready.length} AWB sẵn sàng`,
+      `Ngày ${sessionDate} · ${allRows.length} dòng · ${ready.length} AWB sẵn sàng`,
       1,
       1
     );
@@ -720,6 +742,52 @@
       cache_count: allRows.length,
       index_rows: allRows,
     };
+  }
+
+  function clearDateFiltersBeforeScan() {
+    try {
+      for (const button of document.querySelectorAll(".ant-picker-clear")) {
+        try {
+          button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        } catch {
+          /* ignore */
+        }
+      }
+      for (const sel of [
+        "#search-form_dateSearch",
+        "input[placeholder*='kết thúc']",
+        "input[placeholder*='ket thuc']",
+      ]) {
+        for (const input of document.querySelectorAll(sel)) {
+          setNativeValue(input, "");
+        }
+      }
+      pressKey("Escape");
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function flightDateToYmd(raw) {
+    const s = String(raw || "").trim();
+    if (!s) return "";
+    let m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if (m) {
+      const [, day, month, year] = m;
+      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    }
+    m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+    if (m) {
+      const [, year, month, day] = m;
+      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    }
+    return "";
+  }
+
+  function rowMatchesSessionDate(row, sessionDate) {
+    const normalized = flightDateToYmd(row?.flight_date || "");
+    if (!normalized) return true;
+    return normalized === sessionDate;
   }
 
   function dispatchEnter(element) {

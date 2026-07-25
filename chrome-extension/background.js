@@ -8,7 +8,7 @@
 const LOGIN_URL = "https://www.tcs.com.vn/AwbLogin";
 const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const EXT_VERSION = chrome.runtime.getManifest().version;
-const EXPECTED_SCRIPT_VERSION = "2.0.10";
+const EXPECTED_SCRIPT_VERSION = "2.0.11";
 const SESSION_KEY = "tecsopsTcsSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
 const WORKSPACE_KEY = "tecsopsTcsWorkspace";
@@ -500,7 +500,7 @@ async function bootstrapWorkspace(payload) {
     logged_in: true,
     cache_count: Number(scan.cache_count || scan.list_total || 0),
     ready_count: Number((scan.ready || []).length),
-    message: `Đã quét ${scan.list_total || 0} dòng`,
+    message: `Đã quét ngày ${sessionDate}: ${scan.list_total || 0} dòng`,
     error: "",
   });
   return {

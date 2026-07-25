@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import {
@@ -20,7 +20,6 @@ import {
 import {
   dimEntryAddMeasuredFromCombo,
   dimEntryClearEstimated,
-  dimEntryMergeLines,
   dimEntryRandomFill,
   dimEntryRemoveLine,
   dimEntrySeed,
@@ -405,15 +404,6 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   );
 
   const [comboInput, setComboInput] = useState("");
-  const [inputL, setInputL] = useState("");
-  const [inputW, setInputW] = useState("");
-  const [inputH, setInputH] = useState("");
-  const [inputPcs, setInputPcs] = useState("");
-
-  const refL = useRef<HTMLInputElement>(null);
-  const refW = useRef<HTMLInputElement>(null);
-  const refH = useRef<HTMLInputElement>(null);
-  const refPcs = useRef<HTMLInputElement>(null);
 
   const [autoRandomAfterAdd, setAutoRandomAfterAdd] = useState(false);
   const [actionNote, setActionNote] = useState<string | null>(null);
@@ -422,7 +412,6 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   const [randomLineCountInput, setRandomLineCountInput] = useState("");
   const [randomTargetKgInput, setRandomTargetKgInput] = useState("");
 
-  const [showManualSection, setShowManualSection] = useState(false);
   // Mobile/md only — estimation config collapsible
   const [showEstimationConfigMobile, setShowEstimationConfigMobile] = useState(false);
 
@@ -500,55 +489,6 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     setComboInput("");
   };
 
-  const handleAddRowFromInputs = () => {
-    const l = Number(inputL);
-    const w = Number(inputW);
-    const h = Number(inputH);
-    const p = Number(inputPcs) || 1;
-
-    if (!l || l <= 0 || !w || w <= 0 || !h || h <= 0) {
-      setActionNote("❌ Dài, Rộng, Cao phải là số dương.");
-      return;
-    }
-
-    const currentTotalPcs = lines.reduce((s, x) => s + x.pcs, 0);
-    if (lot.declaredPcs != null && currentTotalPcs + p > lot.declaredPcs) {
-      setActionNote(`❌ Tổng kiện (${currentTotalPcs + p}) vượt quá số kiện của lô hàng (${lot.declaredPcs}).`);
-      return;
-    }
-
-    const newLine: DimPieceLine = { lCm: l, wCm: w, hCm: h, pcs: p, estimated: false };
-    const nextLines = [...lines, newLine];
-
-    if (autoRandomAfterAdd && randomParams) {
-      const fill = dimEntryRandomFill(nextLines, lot, {
-        ...randomParams,
-        targetRatioPercent,
-      });
-      if (fill.ok) {
-        applyMutation(fill.lines, fill.note ?? "Đã thêm dòng và tự động sinh ngẫu nhiên.");
-      } else {
-        applyMutation(nextLines, `Đã thêm dòng. Tự sinh ngẫu nhiên lỗi: ${fill.error}`);
-      }
-    } else {
-      applyMutation(nextLines, "Đã thêm dòng đo mới.");
-    }
-
-    setInputL("");
-    setInputW("");
-    setInputH("");
-    setInputPcs("");
-    refL.current?.focus();
-  };
-
-  const handleMerge = () => {
-    const r = dimEntryMergeLines(lines);
-    if (!r.ok) {
-      setActionNote(`❌ ${r.error}`);
-      return;
-    }
-    applyMutation(r.lines, "Đã gộp các dòng cùng kích thước.");
-  };
 
   const handleRandom = (overrideRatio?: number) => {
     if (!randomParams) {
@@ -620,10 +560,6 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     const original = consolidateDimPieceLines(cloneLines(row.dimLines));
     setLines(original);
     setComboInput("");
-    setInputL("");
-    setInputW("");
-    setInputH("");
-    setInputPcs("");
     setActionNote("↺ Đã làm lại từ đầu — quay về dữ liệu ban đầu.");
   };
 
@@ -812,7 +748,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
                 <textarea
                   id="dim-combo-input"
-                  rows={2}
+                  rows={5}
                   value={comboInput}
                   onChange={(e) => setComboInput(normalizeDimComboInput(e.target.value))}
                   onKeyDown={(e) => {
@@ -821,8 +757,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                       handleAddComboRows();
                     }
                   }}
-                  placeholder={"Dán từ Excel / Zalo\nVí dụ: 40x50x30x10 hoặc 40 50 30 10"}
-                  className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 font-mono text-xs font-semibold focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/15"
+                  placeholder={"Dán từ Excel / Zalo\nVí dụ: 40x50x30x10 hoặc 40 50 30 10\nHỗ trợ nhiều dòng cùng lúc"}
+                  className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 font-mono text-xs font-semibold focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/15 min-h-[6rem]"
                 />
 
                 {comboInput.trim() && parsedPreview ? (
@@ -854,63 +790,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 ) : null}
               </div>
 
-              {/* Manual 4-field input — collapsible */}
-              <div className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-xs space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setShowManualSection((v) => !v)}
-                  className="flex w-full items-center justify-between text-xs font-bold text-slate-600 hover:text-slate-800 transition-colors"
-                >
-                  <span>⚙️ Nhập thủ công 4 ô (L × W × H × Pcs)</span>
-                  <span className="text-[10px] text-slate-400">{showManualSection ? "▲ Thu" : "▼ Mở"}</span>
-                </button>
 
-                {showManualSection && (
-                  <div className="space-y-2 pt-1.5 border-t border-slate-100">
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {(["Dài", "Rộng", "Cao", "Kiện"] as const).map((label) => {
-                        const ref = label === "Dài" ? refL : label === "Rộng" ? refW : label === "Cao" ? refH : refPcs;
-                        const value = label === "Dài" ? inputL : label === "Rộng" ? inputW : label === "Cao" ? inputH : inputPcs;
-                        const setter = label === "Dài" ? setInputL : label === "Rộng" ? setInputW : label === "Cao" ? setInputH : setInputPcs;
-                        return (
-                          <div key={label}>
-                            <span className="text-[9px] font-bold text-slate-500 uppercase block mb-1">{label}</span>
-                            <input
-                              ref={ref}
-                              type="number"
-                              min={1}
-                              value={value}
-                              onChange={(e) => setter(e.target.value)}
-                              onKeyDown={label === "Kiện" ? (e) => { if (e.key === "Enter") { e.preventDefault(); handleAddRowFromInputs(); } } : undefined}
-                              placeholder={label === "Kiện" ? "pcs" : "cm"}
-                              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-xs font-bold tabular-nums focus:border-apple-blue focus:bg-white focus:outline-none"
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="flex gap-1.5">
-                      <button
-                        type="button"
-                        onClick={handleAddRowFromInputs}
-                        className="flex-1 rounded-xl bg-slate-100 hover:bg-slate-200 py-1.5 text-xs font-bold text-slate-700 transition-colors border border-slate-200"
-                      >
-                        + Thêm dòng lẻ
-                      </button>
-                      {lines.length >= 2 && (
-                        <button
-                          type="button"
-                          onClick={handleMerge}
-                          className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-500 transition-colors"
-                          title="Gộp các dòng cùng kích thước lại"
-                        >
-                          Gộp trùng
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
 
               {/* Mobile-only estimation config (hidden on lg+ where Col C takes over) */}
               <div className="lg:hidden rounded-2xl border border-violet-200 bg-white p-3.5 shadow-xs space-y-2">

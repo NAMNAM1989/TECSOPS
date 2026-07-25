@@ -29,6 +29,12 @@ import {
   parseTargetDimKgInput,
   snapshotDimEntry,
 } from "../utils/dimEntryState";
+import {
+  loadDimTemplates,
+  saveDimTemplate,
+  deleteDimTemplate,
+  type DimTemplate,
+} from "../utils/dimTemplateStorage";
 
 export type MobileDimSavePayload = {
   dimWeightKg: number | null;
@@ -415,6 +421,11 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   // Mobile/md only — estimation config collapsible
   const [showEstimationConfigMobile, setShowEstimationConfigMobile] = useState(false);
 
+  // Mẫu DIM đã lưu
+  const [dimTemplates, setDimTemplates] = useState<DimTemplate[]>(() => loadDimTemplates());
+  const [showSaveTemplateForm, setShowSaveTemplateForm] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState("");
+
   const lot = useMemo(
     () => ({
       shipmentId: row.id,
@@ -472,6 +483,56 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     if (!comboInput.trim()) return null;
     return tryParseDimPieceLinesFromComboText(comboInput);
   }, [comboInput]);
+
+  // ── Handlers Mẫu DIM ──────────────────────────────────────
+
+  const handleApplyTemplate = (t: DimTemplate) => {
+    const templatePieceLines: DimPieceLine[] = t.lines.map((l) => ({
+      lCm: l.lCm,
+      wCm: l.wCm,
+      hCm: l.hCm,
+      pcs: l.pcs,
+      estimated: false,
+    }));
+
+    if (autoRandomAfterAdd && randomParams) {
+      const fill = dimEntryRandomFill(templatePieceLines, lot, {
+        ...randomParams,
+        targetRatioPercent,
+      });
+      if (fill.ok) {
+        applyMutation(fill.lines, `✨ Đã áp dụng mẫu "${t.name}" và tự động điền đủ kiện!`);
+      } else {
+        applyMutation(templatePieceLines, `✨ Đã áp dụng mẫu "${t.name}" (${t.totalPcs} kiện).`);
+      }
+    } else {
+      applyMutation(templatePieceLines, `✨ Đã áp dụng mẫu "${t.name}" (${t.totalPcs} kiện).`);
+    }
+  };
+
+  const handleSaveCurrentTemplate = () => {
+    const nameToSave = newTemplateName.trim() || `Mẫu ${row.customerCode || "DIM"} (${snap.sumDimPcs}k)`;
+    try {
+      const nextList = saveDimTemplate({
+        name: nameToSave,
+        lines,
+        customerCode: row.customerCode,
+      });
+      setDimTemplates(nextList);
+      setNewTemplateName("");
+      setShowSaveTemplateForm(false);
+      setActionNote(`💾 Đã lưu thành công mẫu "${nameToSave}"!`);
+    } catch (err: any) {
+      setActionNote(`❌ Lỗi lưu mẫu: ${err?.message || err}`);
+    }
+  };
+
+  const handleDeleteTemplate = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextList = deleteDimTemplate(id);
+    setDimTemplates(nextList);
+    setActionNote("🗑️ Đã xóa mẫu DIM.");
+  };
 
   // ── Handlers ──────────────────────────────────────────────
 
@@ -731,6 +792,99 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   ))}
                 </div>
               )}
+
+              {/* 💾 MẪU DIM ĐÃ LƯU & LƯU MẪU MỚI */}
+              <div className="rounded-2xl border border-indigo-100 bg-gradient-to-b from-indigo-50/50 to-white p-3 shadow-xs space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                    <span>📁</span>
+                    <span>Mẫu DIM đã lưu ({dimTemplates.length})</span>
+                  </span>
+                  {lines.length > 0 && !showSaveTemplateForm && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewTemplateName(`Mẫu ${row.customerCode || "DIM"} (${snap.sumDimPcs}k)`);
+                        setShowSaveTemplateForm(true);
+                      }}
+                      className="rounded-lg bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-xs active:scale-95 transition-all"
+                    >
+                      + Lưu Mẫu
+                    </button>
+                  )}
+                </div>
+
+                {/* Form tạo mẫu mới */}
+                {showSaveTemplateForm && (
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-2.5 space-y-2">
+                    <p className="text-[11px] font-bold text-indigo-900">
+                      💾 Đặt tên mẫu ({snap.sumDimPcs} kiện · {lines.length} dòng):
+                    </p>
+                    <input
+                      type="text"
+                      value={newTemplateName}
+                      onChange={(e) => setNewTemplateName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleSaveCurrentTemplate();
+                        }
+                      }}
+                      placeholder="VD: Thùng Áo 60x40, Linh Kiện S..."
+                      className="w-full rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs font-semibold focus:border-indigo-500 focus:outline-none"
+                      autoFocus
+                    />
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowSaveTemplateForm(false)}
+                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:bg-slate-50"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveCurrentTemplate}
+                        className="rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 py-1 text-[11px] font-bold text-white shadow-xs"
+                      >
+                        Lưu Mẫu
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Danh sách chip mẫu đã lưu */}
+                {dimTemplates.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 font-medium py-1">
+                    Chưa có mẫu nào. Nhập DIM và bấm <strong className="text-indigo-700">+ Lưu Mẫu</strong> để lưu cho lần sau.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
+                    {dimTemplates.map((tmpl) => (
+                      <div
+                        key={tmpl.id}
+                        onClick={() => handleApplyTemplate(tmpl)}
+                        className="group inline-flex items-center gap-1.5 rounded-xl border border-indigo-200/80 bg-white hover:bg-indigo-50/80 hover:border-indigo-300 px-2.5 py-1.5 text-xs font-bold text-indigo-950 shadow-xs cursor-pointer active:scale-95 transition-all"
+                        title={`Áp dụng mẫu ${tmpl.name} (${tmpl.totalPcs} kiện, ${tmpl.lines.length} dòng)`}
+                      >
+                        <span className="text-indigo-600">🏷️</span>
+                        <span>{tmpl.name}</span>
+                        <span className="rounded-full bg-indigo-100 text-indigo-800 px-1.5 py-0.2 text-[10px] tabular-nums">
+                          {tmpl.totalPcs}k
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteTemplate(tmpl.id, e)}
+                          className="ml-0.5 text-slate-300 hover:text-red-600 font-black text-xs px-0.5"
+                          title="Xóa mẫu này"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Smart paste input */}
               <div className="rounded-2xl border border-black/[0.08] bg-white p-3.5 shadow-xs space-y-2">

@@ -85,6 +85,7 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
     else if (txt.includes("thông báo cho") || txt.includes("notify")) colNotifyName = colIdx;
     else if (txt.includes("loại hàng") || txt.includes("nature of goods")) colNatureOfGoods = colIdx;
   });
+  void colConsigneeTax;
 
   // Gom các dòng theo Mã Khách Hàng
   const groupedRows = new Map<string, any[]>();

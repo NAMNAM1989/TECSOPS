@@ -523,7 +523,6 @@ export function previewSmartDimFill(
     declaredKg != null && declaredKg > 0 ? declaredKg * DIM_TOTAL_CEILING_RATIO : 0;
   const canAutoFill =
     remainingPcs > 0 &&
-    measured.length > 0 &&
     declaredPcs != null &&
     declaredKg != null &&
     declaredKg > 0;
@@ -1130,6 +1129,65 @@ function tuneGeneratedToTarget(
   return lines.filter((l) => l.pcs > 0);
 }
 
+function ensureExactEstimatedLineCount(
+  generated: DimPieceLine[],
+  targetEstimatedLines: number,
+  manualNorm: DimPieceLine[],
+  templates: DimPieceLine[],
+  _divisor: DimDivisor,
+  _dimCtx: ScscDimRoundContext,
+  rng: () => number
+): DimPieceLine[] {
+  let lines = consolidateDimPieceLines(generated).map((l) => ({ ...l, estimated: true as const }));
+  const totalPcs = lines.reduce((s, l) => s + l.pcs, 0);
+  const desiredCount = Math.min(totalPcs, targetEstimatedLines);
+
+  let guard = 0;
+  while (consolidateDimPieceLines(lines).length < desiredCount && guard++ < 100) {
+    lines = consolidateDimPieceLines(lines).map((l) => ({ ...l, estimated: true as const }));
+    const currentCount = lines.length;
+    if (currentCount >= desiredCount) break;
+
+    const splitIdx = lines.findIndex((l) => l.pcs >= 2);
+    if (splitIdx < 0) break;
+
+    const sourceLine = lines[splitIdx]!;
+    const usedKeys = new Set<string>([
+      ...manualNorm.map(lineKey),
+      ...lines.map(lineKey),
+    ]);
+
+    let candidate = templates.find((t) => {
+      const k = lineKey(t);
+      return !usedKeys.has(k) && longestEdgeCm(t) <= DIM_MAX_LONG_EDGE_CM + 1e-6;
+    });
+
+    if (!candidate) {
+      for (let step = 1; step <= 10; step++) {
+        const trial = nudgeEstimatedLineDim(sourceLine, step % 2 === 0 ? "up" : "down", rng);
+        if (trial && !usedKeys.has(lineKey(trial))) {
+          candidate = trial;
+          break;
+        }
+      }
+    }
+
+    if (candidate) {
+      const takePcs = Math.floor(sourceLine.pcs / 2);
+      sourceLine.pcs -= takePcs;
+      lines.push({
+        ...candidate,
+        pcs: takePcs,
+        estimated: true as const,
+      });
+    } else {
+      break;
+    }
+  }
+
+  return consolidateDimPieceLines(lines).map((l) => ({ ...l, estimated: true as const }));
+}
+
 /**
  * Sinh kiện ước tính — **tổng DIM** (đo + ước tính) nằm trong vùng
  * [95% kg lô, 99.9% kg lô) — ví dụ lô 1000 kg → ~950–999 kg.
@@ -1174,9 +1232,6 @@ export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillR
 
   const manualNorm = manualNormEarly;
 
-  if (manualNorm.length === 0) {
-    return { ok: false, error: "Cần ít nhất một dòng đo thật trước khi sinh kiện ước tính." };
-  }
 
   const manualTotal = totalDimKgFromLines(manualNorm, input.divisor, input.dimCtx) ?? 0;
   if (manualTotal >= ceilingKg - 1e-6 && !userSpecified) {
@@ -1425,6 +1480,24 @@ export function generateRandomDimFill(input: RandomDimFillInput): RandomDimFillR
       ok: false,
       error: `Phân bổ kiện không hợp lý (tối đa ${maxPerLine} kiện/dòng ước tính).`,
     };
+  }
+
+  if (input.targetEstimatedLineCount != null && input.targetEstimatedLineCount > 0) {
+    const desiredEstLines = Math.min(input.remainingPcs, Math.floor(input.targetEstimatedLineCount));
+    generated = ensureExactEstimatedLineCount(
+      generated,
+      desiredEstLines,
+      manualNorm,
+      templates,
+      input.divisor,
+      input.dimCtx,
+      rng
+    );
+    totalDim = totalDimKgFromLines(
+      composeMeasuredAndEstimatedLines(manualNorm, generated),
+      input.divisor,
+      input.dimCtx
+    ) ?? totalDim;
   }
 
   return {

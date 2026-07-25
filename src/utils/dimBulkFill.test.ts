@@ -323,6 +323,25 @@ describe("generateRandomDimFill — tổng DIM trong vùng ~5% dưới kg lô", 
     }
   });
 
+  it("targetEstimatedLineCount: 12 → sinh chính xác 12 dòng ước tính sau khi gộp trùng", () => {
+    const r = generateRandomDimFill({
+      manualLines: [],
+      remainingPcs: 100,
+      declaredKg: 1000,
+      poolId: "smart",
+      divisor: 6000,
+      dimCtx: TR_CTX,
+      seed: dimRandomSeed("lot-12lines", 100, 1000),
+      targetEstimatedLineCount: 12,
+    });
+    if (!r.ok) console.log("TEST FAIL REASON:", r.error);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const consolidatedEst = consolidateDimPieceLines(r.lines.filter((l) => l.estimated));
+      expect(consolidatedEst.length).toBe(12);
+    }
+  });
+
   it("mẫu đo 120 cm → ước tính cạnh dài ≤ 65 cm", () => {
     // TR rounding làm phân bổ 90 kiện dễ vượt max/dòng — dùng seed + nonce ổn định
     let r: ReturnType<typeof generateRandomDimFill> | null = null;

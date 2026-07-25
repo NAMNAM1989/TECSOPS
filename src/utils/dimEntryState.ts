@@ -118,7 +118,6 @@ export function snapshotDimEntry(
       preview.canAutoFill &&
       lot.declaredKg != null &&
       lot.declaredKg > 0 &&
-      measured.length > 0 &&
       remainingPcs > 0,
     pcsExcess,
     pcsShort,

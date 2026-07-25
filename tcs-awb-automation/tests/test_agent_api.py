@@ -154,6 +154,64 @@ def test_esid_prepare_cache_then_job_hot_path(tmp_path: Path, monkeypatch):
         httpd.shutdown()
 
 
+def test_esid_download_fast_path(tmp_path: Path, monkeypatch):
+    """POST /esid/download — nhanh hơn /jobs cho 1 AWB."""
+    settings = _settings(tmp_path, agent_port=18768)
+    state = AgentState(settings)
+
+    def fake_download(self, awb_digits, dest, *, session_date=None, skip_prepare=False):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"%PDF-1.4 fake\n")
+        from app.data.models import NormalizedStatus
+
+        return type(
+            "Outcome",
+            (),
+            {
+                "normalized": NormalizedStatus.DOWNLOADED,
+                "error_code": "",
+                "error_message": "",
+                "downloaded_path": str(dest),
+            },
+        )()
+
+    monkeypatch.setattr(TcsClient, "download_pdf", fake_download)
+
+    httpd = ThreadingHTTPServer((settings.agent_host, settings.agent_port), make_handler(state))
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    time.sleep(0.2)
+    base = f"http://{settings.agent_host}:{settings.agent_port}"
+    try:
+        from app.browser.session_manager import SessionStatus
+
+        def fake_status():
+            return SessionStatus(
+                open=True,
+                logged_in=True,
+                url="https://www.tcs.com.vn/Esid/Export",
+                awb_locators_confirmed=True,
+                message="ok",
+            )
+
+        monkeypatch.setattr(state.sessions, "status", fake_status)
+        monkeypatch.setattr(state.sessions, "portal", lambda: object())
+
+        dl = httpx.post(
+            f"{base}/esid/download",
+            json={"awb": "12312345670"},
+            timeout=10,
+        )
+        assert dl.status_code == 200, dl.text
+        body = dl.json()
+        assert body["ok"] is True
+        assert body["normalized_status"] == "DOWNLOADED"
+        assert body["pdf_name"].endswith(".pdf")
+        assert body.get("elapsed_ms") is not None
+    finally:
+        httpd.shutdown()
+
+
 def test_health_stays_responsive_during_long_job(tmp_path: Path):
     """ThreadingHTTPServer + worker: /health không bị treo khi worker đang bận."""
     settings = _settings(tmp_path, agent_port=18766)

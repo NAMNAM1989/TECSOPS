@@ -910,10 +910,10 @@ class EsidListPage:
             target.click(no_wait_after=True)
         try:
             self.page.get_by_role("button", name=re.compile(r"^IN$", re.I)).first.wait_for(
-                state="visible", timeout=5000
+                state="visible", timeout=3500
             )
         except Exception:
-            self.page.wait_for_timeout(150)
+            self.page.wait_for_timeout(80)
         self._detail_awb = awb_digits
 
     def _find_print_button(self):
@@ -1154,16 +1154,16 @@ class EsidListPage:
             )
         self.open_detail_row(awb_digits, require_reception=False)
         # Chi tiết/drawer TCS đôi khi render nút IN chậm hơn click dòng
-        for _ in range(25):
+        for _ in range(30):
             if self._in_button_visible():
                 break
-            self.page.wait_for_timeout(80)
+            self.page.wait_for_timeout(50)
         if not self._in_button_visible():
             try:
                 self.page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
             except Exception:
                 pass
-            self.page.wait_for_timeout(200)
+            self.page.wait_for_timeout(120)
         if not self._in_button_visible():
             raise SiteChangedError("Đã mở dòng nhưng không thấy nút IN")
         self._detail_awb = awb_digits
@@ -1193,7 +1193,6 @@ class EsidListPage:
         self._install_print_hooks()
         self._set_document_title(self.page, title)
         self._click_in_button()
-        self.page.wait_for_timeout(350)
 
         bill = None
         deadline = time.time() + 8.0
@@ -1224,7 +1223,7 @@ class EsidListPage:
                         return
                     except Exception:
                         pass
-            self.page.wait_for_timeout(80)
+            self.page.wait_for_timeout(45)
 
         if bill is None:
             # Hiếm: phiếu render thẳng vào trang (không iframe)
@@ -1358,16 +1357,19 @@ class EsidListPage:
                 tmp.set_viewport_size({"width": 794, "height": 1123})
             except Exception:
                 pass
-            tmp.set_content(html, wait_until="load")
+            # CSS đã inline trong _serialize_bill_html — domcontentloaded đủ, không cần networkidle dài
+            tmp.set_content(html, wait_until="domcontentloaded")
             try:
-                tmp.wait_for_load_state("networkidle", timeout=800)
+                tmp.wait_for_load_state("networkidle", timeout=350)
             except Exception:
                 pass
             try:
-                tmp.evaluate("() => (document.fonts && document.fonts.ready) || Promise.resolve()")
+                tmp.evaluate(
+                    "() => (document.fonts && document.fonts.ready) || Promise.resolve()"
+                )
             except Exception:
                 pass
-            tmp.wait_for_timeout(200)
+            tmp.wait_for_timeout(60)
             if title:
                 self._set_document_title(tmp, title)
             sample = ""
@@ -1463,11 +1465,9 @@ class EsidListPage:
         pages_before = list(context.pages)
 
         self._click_in_button()
-        # Cho TCS kịp ghi phiếu vào iframe about:blank trước khi đọc
-        self.page.wait_for_timeout(350)
 
         popup = None
-        deadline = time.time() + max(8.0, timeout_ms / 1000)
+        deadline = time.time() + max(6.0, timeout_ms / 1000)
         while time.time() < deadline:
             rich = self._richest_print_frame()
             if rich is not None:
@@ -1488,7 +1488,7 @@ class EsidListPage:
                     break
                 # Popup chưa có phiếu — tiếp tục chờ / tìm iframe
                 popup = None
-            self.page.wait_for_timeout(80)
+            self.page.wait_for_timeout(45)
 
         if popup is not None:
             try:
@@ -1504,7 +1504,7 @@ class EsidListPage:
                         break
                 except Exception:
                     sample = ""
-                self.page.wait_for_timeout(80)
+                self.page.wait_for_timeout(45)
             try:
                 sample = popup.evaluate(
                     "() => (document.body && document.body.innerText || '').trim()"

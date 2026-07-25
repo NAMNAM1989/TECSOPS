@@ -19,9 +19,10 @@ from app.config import Settings, ensure_runtime_dirs, load_settings
 from app.data.repository import Repository
 from app.services.awb_service import validate_ops_payload
 from app.services.batch_service import BatchService
-from app.services.download_service import resolve_docs_file
+from app.services.download_service import build_document_filename, resolve_docs_file, verify_download
 from app.services.esid_scan_service import scan_esid_reception
 from app.services.esid_declare_service import fill_esid_declare, submit_esid_declare
+from app.data.models import NormalizedStatus
 from app.services.tcs_client import TcsClient
 from app.utils.awb import digits_only
 
@@ -324,6 +325,9 @@ def make_handler(state: AgentState):
             if path == "/esid/prepare":
                 self._handle_esid_prepare(payload)
                 return
+            if path == "/esid/download":
+                self._handle_esid_download(payload)
+                return
             if path == "/esid/scan":
                 self._handle_esid_scan(payload)
                 return
@@ -469,6 +473,135 @@ def make_handler(state: AgentState):
                     state.preparing_awb = None
                     state.prepare_done.set()
 
+        def _wait_prepare_for_awb(self, awb: str) -> bool:
+            """Chờ prepare cùng AWB (nếu đang chạy) — trả False nếu timeout."""
+            with state.lock:
+                preparing = state.preparing_awb
+                is_running = state.running
+            if is_running and preparing == awb and not state.prepare_done.is_set():
+                return state.prepare_done.wait(timeout=120)
+            return True
+
+        def _handle_esid_download(self, payload: dict[str, Any]) -> None:
+            """Tải PDF ESID 1 AWB — bỏ qua batch job (ít overhead hơn POST /jobs)."""
+            awb = digits_only(str(payload.get("awb") or payload.get("awb_digits") or ""))
+            if len(awb) != 11:
+                self._json(400, {"ok": False, "error": "VALIDATION", "message": "AWB phải đủ 11 số"})
+                return
+
+            warehouse = str(payload.get("warehouse") or "TECS-TCS")
+            if warehouse.upper() not in {"TECS-TCS", "KHO-TCS"}:
+                self._json(400, {"ok": False, "error": "WAREHOUSE_SCOPE", "message": "Chỉ TECS-TCS"})
+                return
+
+            if not self._wait_prepare_for_awb(awb):
+                self._json(504, {"ok": False, "error": "PREPARE_TIMEOUT", "message": "Chờ prepare quá lâu"})
+                return
+
+            with state.lock:
+                if state.running:
+                    self._json(409, {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"})
+                    return
+                state.running = True
+
+            t0 = time.perf_counter()
+            prepared_awb = state.prepared_hot_awb()
+            hot = bool(prepared_awb) and prepared_awb == awb
+
+            def _download() -> tuple[int, dict[str, Any]]:
+                mock = bool(payload.get("mock", state.settings.mock))
+                if mock:
+                    fname = build_document_filename(awb, "ESID")
+                    fpath = state.settings.output_dir / "docs" / fname
+                    fpath.parent.mkdir(parents=True, exist_ok=True)
+                    fpath.write_bytes(b"%PDF-1.4 mock esid\n")
+                    return 200, {
+                        "ok": True,
+                        "awb": awb,
+                        "normalized_status": NormalizedStatus.DOWNLOADED.value,
+                        "pdf_name": fname,
+                        "download_url": f"/docs?file={fname}",
+                        "hot_path": hot,
+                    }
+
+                st = state.sessions.status()
+                state.session_snapshot = st.to_dict()
+                if not st.open:
+                    return 400, {
+                        "ok": False,
+                        "error": "NO_BROWSER",
+                        "message": "Chưa mở Chrome — POST /session/open",
+                    }
+                if not st.logged_in:
+                    return 400, {
+                        "ok": False,
+                        "error": "NEEDS_LOGIN",
+                        "message": "Cần login TCS trước khi tải PDF ESID",
+                    }
+                state.sessions.focus_if_headed()
+                loc_file = state.settings.discovery_dir / "locators.json"
+                client = TcsClient(
+                    mock=False,
+                    discovery_report=state.settings.discovery_dir.parent / "discovery_report.md",
+                    locators_file=loc_file,
+                    portal=state.sessions.portal(),
+                )
+                fname = build_document_filename(awb, "ESID")
+                fpath = state.settings.output_dir / "docs" / fname
+                pr = client.download_pdf(
+                    awb,
+                    fpath,
+                    session_date=None,
+                    skip_prepare=hot,
+                )
+                state.clear_prepared()
+                if pr.normalized != NormalizedStatus.DOWNLOADED:
+                    return 400, {
+                        "ok": False,
+                        "awb": awb,
+                        "normalized_status": pr.normalized.value,
+                        "error": pr.error_code or "DOWNLOAD_FAILED",
+                        "message": pr.error_message or "Tải PDF ESID thất bại",
+                        "hot_path": hot,
+                    }
+                out = Path(pr.downloaded_path) if pr.downloaded_path else fpath
+                if not verify_download(out):
+                    return 500, {
+                        "ok": False,
+                        "awb": awb,
+                        "error": "DOWNLOAD_EMPTY",
+                        "message": "PDF rỗng hoặc không hợp lệ",
+                        "hot_path": hot,
+                    }
+                state.refresh_session_snapshot()
+                name = out.name
+                return 200, {
+                    "ok": True,
+                    "awb": awb,
+                    "normalized_status": NormalizedStatus.DOWNLOADED.value,
+                    "pdf_name": name,
+                    "download_url": f"/docs?file={name}",
+                    "hot_path": hot,
+                    "message": f"Đã tải PDF ESID ({name})",
+                }
+
+            try:
+                code, body = state.call_on_worker(_download)
+                elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                self._json(code, {**body, "elapsed_ms": elapsed_ms})
+            except NeedsLoginError as e:
+                state.clear_prepared()
+                self._json(400, {"ok": False, "error": "NEEDS_LOGIN", "message": str(e)})
+            except SiteChangedError as e:
+                state.clear_prepared()
+                self._json(400, {"ok": False, "error": "SITE_CHANGED", "message": str(e)})
+            except Exception as e:
+                state.clear_prepared()
+                self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
+            finally:
+                with state.lock:
+                    state.running = False
+
         def _handle_esid_scan(self, payload: dict[str, Any]) -> None:
             with state.lock:
                 if state.running:
@@ -579,8 +712,8 @@ def make_handler(state: AgentState):
             with state.lock:
                 preparing = state.preparing_awb
                 is_running = state.running
-            if is_running and preparing and peek_awb and preparing == peek_awb:
-                if not state.prepare_done.wait(timeout=120):
+            if peek_awb and is_running and preparing == peek_awb:
+                if not self._wait_prepare_for_awb(peek_awb):
                     self._json(504, {"ok": False, "error": "PREPARE_TIMEOUT", "message": "Chờ prepare quá lâu"})
                     return
             with state.lock:

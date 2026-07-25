@@ -301,7 +301,61 @@ export type TcsEsidPrepareResponse = {
   message?: string;
 };
 
-/** Pre-warm trang chi tiết ESID (nút IN) — gọi khi Tải PDF cold-path */
+export type TcsEsidDownloadResponse = {
+  ok: boolean;
+  awb?: string;
+  normalized_status?: string;
+  pdf_name?: string;
+  download_url?: string;
+  hot_path?: boolean;
+  elapsed_ms?: number;
+  error?: string;
+  message?: string;
+};
+
+/** Tải PDF ESID 1 AWB — nhanh hơn POST /jobs (ít overhead). */
+export async function downloadTcsEsidPdf(awb: string): Promise<TcsEsidDownloadResponse> {
+  const base = agentBase();
+  let res: Response;
+  try {
+    res = await fetch(`${base}/esid/download`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        warehouse: "TECS-TCS",
+        awb,
+      }),
+    });
+  } catch {
+    return {
+      ok: false,
+      error: "AGENT_OFFLINE",
+      message: agentOfflineHint(base),
+    };
+  }
+  let body: TcsEsidDownloadResponse;
+  try {
+    body = (await res.json()) as TcsEsidDownloadResponse;
+  } catch {
+    return {
+      ok: false,
+      error: "BAD_RESPONSE",
+      message: `Agent trả về phản hồi không hợp lệ (HTTP ${res.status})`,
+    };
+  }
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: body.error || `HTTP_${res.status}`,
+      message: body.message || "Tải PDF ESID thất bại",
+      awb: body.awb,
+      elapsed_ms: body.elapsed_ms,
+    };
+  }
+  return body;
+}
+
+/** Pre-warm trang chi tiết ESID (nút IN) — gọi khi hover «Tải PDF ESID» */
 export async function prepareTcsEsid(
   awb: string,
   sessionDate?: string
@@ -527,31 +581,43 @@ export function getTcsAgentBaseUrl(): string {
 }
 
 /**
- * Tải PDF ESID về máy (Downloads) — không mở tab xem/in.
- * Fetch blob rồi gắn download (ổn định hơn mở URL trực tiếp).
+ * Tải PDF ESID về máy (Downloads).
+ * Ưu tiên anchor download trực tiếp (streaming) — fallback blob nếu cần.
  */
 export async function downloadPdfFromAgent(pdfNameOrPath: string): Promise<boolean> {
   const name = pdfNameOrPath.replace(/^.*[/\\]/, "");
   if (!name.toLowerCase().endsWith(".pdf")) return false;
+  const url = `${agentBase()}/docs?file=${encodeURIComponent(name)}`;
   try {
-    const res = await fetch(`${agentBase()}/docs?file=${encodeURIComponent(name)}`);
-    if (!res.ok) return false;
-    const blob = await res.blob();
-    if (blob.size < 100) return false;
-    const url = URL.createObjectURL(blob);
-    try {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = name;
-      a.rel = "noopener";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } finally {
-      window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
-    }
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
     return true;
   } catch {
-    return false;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return false;
+      const blob = await res.blob();
+      if (blob.size < 100) return false;
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = name;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } finally {
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 2_000);
+      }
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

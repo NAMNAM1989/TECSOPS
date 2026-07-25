@@ -190,13 +190,16 @@ export function ShipmentRowActionsMenu({
     onClick: () => void,
     tone?: "danger",
     testId?: string,
-    title?: string
+    title?: string,
+    onWarm?: () => void
   ) => (
     <button
       type="button"
       role="menuitem"
       data-testid={testId}
       title={title}
+      onPointerEnter={onWarm}
+      onFocus={onWarm}
       onClick={(e) => {
         e.stopPropagation();
         closeMenu();
@@ -247,7 +250,12 @@ export function ShipmentRowActionsMenu({
                 void tcs?.downloadEsidFor(row);
               },
               undefined,
-              `row-pdf-esid-${row.id}`
+              `row-pdf-esid-${row.id}`,
+              undefined,
+              () => {
+                if (tcs?.busy) return;
+                tcs?.prepareEsidFor(row);
+              }
             )
           : null}
         {showEsidExcel

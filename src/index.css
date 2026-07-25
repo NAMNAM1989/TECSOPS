@@ -19,6 +19,16 @@
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border: 1px solid rgba(15, 23, 42, 0.06);
+    /* Tối ưu hóa render cho GPU Mali (Vivo X200) và tránh giật lag khi cuộn */
+    will-change: transform, opacity;
+    transform: translateZ(0);
+  }
+
+  /* Fallback mờ đục cho các trình duyệt hoặc WebView không hỗ trợ backdrop-filter tốt (OriginOS WebView) */
+  @supports not (backdrop-filter: blur(14px)) {
+    .glass-panel {
+      background: #f8fafc !important;
+    }
   }
 
   .dark .glass-panel {
@@ -26,6 +36,15 @@
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border: 1px solid rgba(255, 255, 255, 0.06);
+    /* Tối ưu hóa render cho GPU Mali (Vivo X200) và tránh giật lag khi cuộn */
+    will-change: transform, opacity;
+    transform: translateZ(0);
+  }
+
+  @supports not (backdrop-filter: blur(14px)) {
+    .dark .glass-panel {
+      background: #0f172a !important;
+    }
   }
 
   .dark .text-apple-label {

@@ -2,8 +2,8 @@
 import { OPS } from "./opsModalStyles";
 
 export const MOBILE = {
-  sheet: `glass-panel flex max-h-[92vh] flex-col rounded-t-[32px] border shadow-[0_-12px_48px_rgba(0,0,0,0.12)] animate-cnee-slide-up`,
-  sheetBackdrop: "fixed inset-0 z-[470] flex flex-col justify-end bg-black/40 backdrop-blur-md md:hidden animate-cnee-magnify-backdrop",
+  sheet: `glass-panel flex max-h-[92vh] flex-col rounded-t-[32px] border shadow-[0_-12px_48px_rgba(0,0,0,0.12)] animate-cnee-slide-up [transform:translate3d(0,0,0)] [will-change:transform]`,
+  sheetBackdrop: "fixed inset-0 z-[470] flex flex-col justify-end bg-black/40 backdrop-blur-md md:hidden animate-cnee-magnify-backdrop [transform:translate3d(0,0,0)] [will-change:opacity]",
   card: "relative overflow-hidden rounded-[14px] border border-black/[0.04] bg-white dark:bg-dashboard-surface-dark shadow-sm transition-all duration-200 dark:border-white/[0.05]",
   cardInner: "relative z-10 bg-transparent px-2 py-1 transition-transform duration-200 ease-out",
   cardMeta: "truncate text-[9px] font-medium leading-tight text-apple-secondary dark:text-slate-400",

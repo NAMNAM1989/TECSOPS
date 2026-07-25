@@ -19,6 +19,7 @@ import { SmartSearchBar } from "./SmartSearchBar";
 import { TcsPortalInlineBar } from "./TcsPortalInlineBar";
 import { TcsPortalActionsProvider } from "./TcsPortalActionsContext";
 import { useTcsPortalActions } from "../hooks/useTcsPortalActions";
+import { safeScrollIntoView } from "../utils/safeScrollIntoView";
 import { WAREHOUSE_ORDER, isScscWarehouse, isTcsWarehouse, warehouseLabel } from "../constants/warehouses";
 import { NewBookingButton } from "./NewBookingButton";
 import { DashboardToolbarButton } from "./DashboardToolbarButton";
@@ -185,14 +186,14 @@ export function AirCargoTracking({
     setHighlightedShipmentId(shipment.id);
     setSelectedId(shipment.id);
     window.setTimeout(() => {
-      document.getElementById(`warehouse-section-${shipment.warehouse}`)?.scrollIntoView({
+      safeScrollIntoView(document.getElementById(`warehouse-section-${shipment.warehouse}`), {
         behavior: "smooth",
         block: "start",
       });
       const rowEl =
         document.getElementById(`shipment-row-${shipment.id}`) ??
         document.getElementById(`mobile-shipment-${shipment.id}`);
-      rowEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+      safeScrollIntoView(rowEl, { behavior: "smooth", block: "center" });
     }, 60);
     window.setTimeout(() => setHighlightedShipmentId(null), 2400);
   }, []);
@@ -281,7 +282,7 @@ export function AirCargoTracking({
           setMobileEditFocus("awb");
           setMobileEditShipment(added);
           window.setTimeout(() => {
-            document.getElementById(`mobile-shipment-${added.id}`)?.scrollIntoView({
+            safeScrollIntoView(document.getElementById(`mobile-shipment-${added.id}`), {
               behavior: "smooth",
               block: "center",
             });

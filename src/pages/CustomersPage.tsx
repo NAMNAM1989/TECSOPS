@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { safeScrollIntoView } from "../utils/safeScrollIntoView";
 import type { CustomerDirectoryEntry, CustomerType } from "../types/customerDirectory";
 import { CUSTOMER_TYPES } from "../types/customerDirectory";
 import { assertCustomerDirectoryValid } from "../utils/customerDirectoryCore";
@@ -248,9 +249,10 @@ export function CustomersPage({
     setTypeFilter("ALL");
     queueMicrotask(() => {
       nameInputRef.current?.focus();
-      document
-        .querySelector<HTMLElement>(`[data-customer-id="${row.id}"]`)
-        ?.scrollIntoView({ block: "nearest" });
+      safeScrollIntoView(
+        document.querySelector<HTMLElement>(`[data-customer-id="${row.id}"]`),
+        { block: "nearest" }
+      );
     });
   }
 

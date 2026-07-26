@@ -47,9 +47,9 @@ async function main() {
     }
 
     // Thanh TCS
-    const tcsLogin = page.getByRole("button", { name: "Login" });
-    if (await tcsLogin.count()) ok("TCS-01", "Thanh Cổng TCS hiện (Login)");
-    else fail("TCS-01", "Không thấy nút Login TCS");
+    const tcsSync = page.getByRole("button", { name: "Đồng bộ TCS" });
+    if (await tcsSync.count()) ok("TCS-01", "Thanh Cổng TCS hiện (Đồng bộ TCS)");
+    else fail("TCS-01", "Không thấy nút Đồng bộ TCS");
 
     const pdfBar = page.getByRole("button", { name: /^PDF ESID/ });
     if ((await pdfBar.count()) === 0) ok("TCS-02", "Toolbar không còn PDF ESID hàng loạt (đúng)");
@@ -125,6 +125,18 @@ async function main() {
     const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 8);
     if (!mobileOverflow) ok("RESP-01", "Mobile 375: không tràn ngang nghiêm trọng");
     else fail("RESP-01", "Mobile 375: có tràn ngang");
+
+    const mobileKhach = page.getByRole("button", { name: /Danh bạ khách|Khách hàng/i });
+    if (await mobileKhach.count()) {
+      await mobileKhach.first().click();
+      await page.waitForTimeout(500);
+      const url = page.url();
+      if (/customer/i.test(url) || (await page.getByText(/Khách hàng/i).count())) {
+        ok("CUST-MOB-01", `Mobile vào trang Khách: ${url}`);
+      } else fail("CUST-MOB-01", `Mobile không vào được trang Khách (${url})`);
+    } else {
+      fail("CUST-MOB-01", "Mobile không thấy nút Danh bạ khách");
+    }
 
     await page.screenshot({ path: path.join(OUT, "mobile-375.png"), fullPage: false });
 

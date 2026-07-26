@@ -13,6 +13,31 @@ import { isTcsVncEnabled, startTcsDesktop } from "./start-tcs-desktop.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const agentDir = path.join(root, "tcs-awb-automation");
 
+/** Poll agent /health trước khi web nhận traffic — tránh 502 AGENT_OFFLINE sau deploy. */
+async function waitForAgentHealth(host, port, timeoutMs = 90000) {
+  const url = `http://${host}:${port}/health`;
+  const deadline = Date.now() + timeoutMs;
+  let attempt = 0;
+  while (Date.now() < deadline) {
+    attempt += 1;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      if (res.ok) {
+        const body = await res.json();
+        if (body?.ok) {
+          console.info(`[start] ✓ agent ready sau ${attempt} lần thử (${url})`);
+          return true;
+        }
+      }
+    } catch {
+      // agent chưa lên — thử lại
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  console.warn(`[start] ⚠ agent chưa sẵn sàng sau ${timeoutMs}ms — vẫn khởi động web`);
+  return false;
+}
+
 // Safety gate (giống start:railway) — chặn deploy có pattern phá DB.
 const check = spawnSync(process.execPath, ["scripts/check-deploy-safe.mjs"], {
   cwd: root,
@@ -108,6 +133,10 @@ async function main() {
     cwd: agentDir,
     env: agentEnv,
   });
+
+  const agentHost = agentEnv.TCS_AGENT_HOST || "127.0.0.1";
+  const agentPort = Number(agentEnv.TCS_AGENT_PORT || "8765");
+  await waitForAgentHealth(agentHost, agentPort);
 
   run("web", process.execPath, ["server/index.mjs"], { cwd: root });
 }

@@ -4,7 +4,7 @@ import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipme
 import { statusLabel } from "./statusStyles";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { NewBookingButton } from "./NewBookingButton";
-import { OpsMobileSheetButton } from "./OpsMobileToolbarMenu";
+import { OpsMobileSheetButton, OpsMobileMoreMenu } from "./OpsMobileToolbarMenu";
 import { OpsMobileWarehouseChips } from "./OpsMobileWarehouseChips";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
@@ -23,6 +23,14 @@ interface Props {
   onAddBooking: (wh: Warehouse) => void;
   onOpenSheetImport: () => void;
   onPrefetchSheetImport?: () => void;
+  onNavigateCustomers: () => void;
+  onPrefetchCustomers?: () => void;
+  onDownloadDayExcel: () => void;
+  excelExporting: boolean;
+  onOpenAirlineSettings: () => void;
+  onDownloadScscDimDay?: () => void;
+  scscDimExporting?: boolean;
+  showScscDim?: boolean;
   /** Thanh Cổng TCS dưới ô tìm kiếm (TECS-TCS) */
   tcsPortalBar?: ReactNode;
   filteredViewRows: readonly Shipment[];
@@ -99,6 +107,14 @@ export function OpsMobileStickyHeader({
   onAddBooking,
   onOpenSheetImport,
   onPrefetchSheetImport,
+  onNavigateCustomers,
+  onPrefetchCustomers,
+  onDownloadDayExcel,
+  excelExporting,
+  onOpenAirlineSettings,
+  onDownloadScscDimDay,
+  scscDimExporting,
+  showScscDim,
   tcsPortalBar,
   filteredViewRows,
   viewRows,
@@ -161,6 +177,16 @@ export function OpsMobileStickyHeader({
         <OpsMobileSheetButton
           onOpenSheetImport={onOpenSheetImport}
           onPrefetchSheetImport={onPrefetchSheetImport}
+        />
+        <OpsMobileMoreMenu
+          onNavigateCustomers={onNavigateCustomers}
+          onPrefetchCustomers={onPrefetchCustomers}
+          onDownloadDayExcel={onDownloadDayExcel}
+          excelExporting={excelExporting}
+          onOpenAirlineSettings={onOpenAirlineSettings}
+          onDownloadScscDimDay={onDownloadScscDimDay}
+          scscDimExporting={scscDimExporting}
+          showScscDim={showScscDim}
         />
       </div>
 

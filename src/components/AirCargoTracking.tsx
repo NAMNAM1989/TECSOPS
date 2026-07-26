@@ -421,6 +421,14 @@ export function AirCargoTracking({
           onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
           onOpenSheetImport={() => setSheetImportOpen(true)}
           onPrefetchSheetImport={prefetchSheetImport}
+          onNavigateCustomers={onNavigateCustomers}
+          onPrefetchCustomers={onPrefetchCustomers}
+          onDownloadDayExcel={() => void onDownloadDayExcel()}
+          excelExporting={excelExporting}
+          onOpenAirlineSettings={() => setAirlineLabelSettingsOpen(true)}
+          onDownloadScscDimDay={() => void onDownloadScscDimDay()}
+          scscDimExporting={scscDimExporting}
+          showScscDim={isScscWarehouse(activeWarehouse)}
           tcsPortalBar={
             isTcsWarehouse(activeWarehouse) ? (
               <TcsPortalInlineBar

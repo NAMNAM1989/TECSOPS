@@ -19,7 +19,7 @@ export function canPrintDimScscReport(s: Shipment): boolean {
  */
 export function printDimReport(s: Shipment): void {
   if (!canPrintDimReport(s)) {
-    window.alert("Chưa có chi tiết DIM (D×R×C×kiện). Hãy nhập DIM trên điện thoại trước.");
+    window.alert("Chưa có chi tiết DIM (D×R×C×kiện). Hãy nhập DIM trước khi in.");
     return;
   }
   if (!isScscWarehouse(s.warehouse)) {

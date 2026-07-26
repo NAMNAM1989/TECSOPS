@@ -17,6 +17,7 @@ import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
 import { registerTcsAgentProxy } from "./tcsAgentProxy.mjs";
 import { registerTcsDesktopProxy } from "./tcsDesktopProxy.mjs";
+import { assertMutationAllowed } from "./mutationGuards.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
@@ -114,6 +115,16 @@ app.post("/api/mutation", async (req, res) => {
     const body = req.body;
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       res.status(400).json({ error: "Invalid JSON body" });
+      return;
+    }
+    try {
+      assertMutationAllowed(body);
+    } catch (guardErr) {
+      const msg =
+        guardErr && typeof guardErr === "object" && "message" in guardErr
+          ? String(guardErr.message)
+          : String(guardErr);
+      res.status(403).json({ error: msg });
       return;
     }
     const next = await runMutation(body);

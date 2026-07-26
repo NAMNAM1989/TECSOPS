@@ -71,6 +71,16 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
   const confirmSubmit = () => {
     const p = tcs.lastDeclarePreview;
     if (!p) return;
+    if (p.executor === "extension") {
+      const ok = window.confirm(
+        `Mở tab TCS cho AWB ${p.awb}?\n\n` +
+          "Extension đã điền form — bạn cần kiểm tra và bấm HOÀN TẤT trực tiếp trên portal TCS.\n" +
+          "Ops không tự gửi form khi dùng extension."
+      );
+      if (!ok) return;
+      void tcs.submitEsidDeclare(p);
+      return;
+    }
     const ok = window.confirm(
       `Gửi HOÀN TẤT lên TCS cho AWB ${p.awb}?\n\n` +
         (headed

@@ -4,10 +4,8 @@ import { formatKgTotal } from "../utils/formatKgTotal";
 import { computeWarehouseMetrics } from "../utils/warehouseMetrics";
 
 const CARD_RING: Record<Warehouse, string> = {
-  "TECS-TCS":
-    "ring-sky-400/50 shadow-[0_0_20px_rgba(56,189,248,0.18)] dark:ring-sky-400/40 dark:shadow-[0_0_24px_rgba(56,189,248,0.12)]",
-  "TECS-SCSC":
-    "ring-violet-400/50 shadow-[0_0_20px_rgba(167,139,250,0.18)] dark:ring-violet-400/40 dark:shadow-[0_0_24px_rgba(167,139,250,0.12)]",
+  "TECS-TCS": "ring-sky-500/60",
+  "TECS-SCSC": "ring-violet-500/60",
 };
 
 interface Props {
@@ -61,9 +59,9 @@ export function WarehouseGridPicker({
               compact ? "p-1.5" : "p-2"
             } ${
               isActive
-                ? `bg-white ring-2 ${CARD_RING[wh]} dark:bg-dashboard-surface-dark`
-                : "bg-white/80 shadow-dashboard-card hover:bg-white hover:shadow-dashboard-card-hover dark:bg-dashboard-surface-dark/80 dark:hover:bg-dashboard-surface-dark"
-            } ${hasSearchHit && !isActive ? "ring-1 ring-apple-blue/30" : ""}`}
+                ? `bg-ui-surface ring-2 ${CARD_RING[wh]}`
+                : "border border-ui-border bg-ui-surface shadow-ui-sm hover:bg-ui-surface-muted"
+            } ${hasSearchHit && !isActive ? "ring-1 ring-ui-primary/35" : ""}`}
           >
             {onAddRow && !hideAddButton ? (
               <button

@@ -5,18 +5,19 @@
 @layer base {
   html {
     @apply scroll-smooth;
+    color-scheme: light;
   }
   body {
-    @apply min-h-screen bg-dashboard-canvas text-dashboard-primary antialiased dark:bg-dashboard-canvas-dark dark:text-dashboard-primary-dark;
+    /* Light mode chính thức — không gắn dark: để tránh lộ theme nửa vời. */
+    @apply min-h-screen bg-ui-background text-ui-text antialiased font-sans;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /** Surface phẳng (thay glass blur dần — Đợt A/B). */
   .glass-panel {
-    background: rgba(255, 255, 255, 0.78);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(15, 23, 42, 0.06);
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.1);
   }
 
   .dark .glass-panel {
@@ -39,8 +40,13 @@
 
 @layer utilities {
   .font-shipment-data {
-    font-family: "Roboto Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas,
       monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tabular-nums-data {
+    font-variant-numeric: tabular-nums;
   }
 
   .ops-grid-cell {
@@ -119,4 +125,3 @@
 .animate-cnee-slide-up {
   animation: cnee-slide-up-in 0.28s cubic-bezier(0.32, 0.94, 0.6, 1) forwards;
 }
-

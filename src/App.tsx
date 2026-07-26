@@ -5,6 +5,7 @@ import { loadRows } from "./utils/shipmentStorage";
 import { useShipmentSync } from "./hooks/useShipmentSync";
 import { useHashRoute } from "./hooks/useHashRoute";
 import type { AirlineLabelOverrides } from "./utils/airlineLabelOverridesCore";
+import { PageSkeleton } from "./ui";
 
 const loadCustomersPage = () =>
   import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage }));
@@ -21,14 +22,6 @@ type PrintJob = { shipment: Shipment; airlineLabelOverrides?: AirlineLabelOverri
 
 const EMPTY_CUSTOMERS: CustomerDirectoryEntry[] = [];
 
-function PageLoading() {
-  return (
-    <div className="mx-auto max-w-[1600px] px-4 py-16 text-center text-apple-secondary">
-      <p className="font-semibold text-apple-label">Đang tải…</p>
-    </div>
-  );
-}
-
 export default function App() {
   const fallback = useMemo(() => ({ rows: loadRows() ?? [] }), []);
   const sync = useShipmentSync(fallback);
@@ -41,8 +34,8 @@ export default function App() {
 
   return (
     <>
-      <div className="no-print min-h-screen">
-        <Suspense fallback={<PageLoading />}>
+      <div className="no-print min-h-screen bg-ui-background">
+        <Suspense fallback={<PageSkeleton variant={route === "customers" ? "customers" : "ops"} />}>
           {route === "customers" ? (
             <CustomersPage
               initial={sync.state?.customers ?? EMPTY_CUSTOMERS}

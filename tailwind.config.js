@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  /** Light mode chính thức (Đợt A). Giữ `class` để token cũ `dark:` không kích hoạt nếu không gắn `.dark` lên html. */
   darkMode: "class",
   theme: {
     extend: {
@@ -17,6 +18,7 @@ export default {
           "sans-serif",
         ],
         mono: [
+          '"IBM Plex Mono"',
           "ui-monospace",
           "SFMono-Regular",
           '"SF Mono"',
@@ -26,6 +28,23 @@ export default {
         ],
       },
       colors: {
+        /** Semantic tokens — Operational Signal (Đợt A). Legacy dashboard/apple/ops giữ để tương thích. */
+        ui: {
+          background: "#E8EEF4",
+          surface: "#FFFFFF",
+          "surface-muted": "#F1F5F9",
+          text: "#0F172A",
+          "text-muted": "#64748B",
+          border: "rgba(15,23,42,0.10)",
+          primary: "#0D9488",
+          "primary-hover": "#0F766E",
+          focus: "rgba(13,148,136,0.35)",
+          success: "#059669",
+          warning: "#D97706",
+          danger: "#DC2626",
+          info: "#0284C7",
+          navy: "#0F172A",
+        },
         dashboard: {
           canvas: "#E8EEF4",
           "canvas-dark": "#070B14",
@@ -66,15 +85,27 @@ export default {
         "apple-md": "0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)",
         "dashboard-card": "0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.04)",
         "dashboard-card-hover": "0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.05)",
+        "ui-sm": "0 1px 2px rgba(15,23,42,0.05)",
       },
       keyframes: {
         "tecsops-actions-strip": {
           "0%": { opacity: "0", transform: "translateY(-6px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "ui-toast-in": {
+          "0%": { opacity: "0", transform: "translateY(8px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "ui-skeleton": {
+          "0%": { opacity: "0.45" },
+          "50%": { opacity: "0.9" },
+          "100%": { opacity: "0.45" },
+        },
       },
       animation: {
         "tecsops-actions-strip": "tecsops-actions-strip 0.2s ease-out forwards",
+        "ui-toast-in": "ui-toast-in 0.2s ease-out forwards",
+        "ui-skeleton": "ui-skeleton 1.2s ease-in-out infinite",
       },
     },
   },

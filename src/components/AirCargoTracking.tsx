@@ -21,9 +21,9 @@ import { TcsPortalActionsProvider } from "./TcsPortalActionsContext";
 import { useTcsPortalActions } from "../hooks/useTcsPortalActions";
 import { WAREHOUSE_ORDER, isScscWarehouse, isTcsWarehouse, warehouseLabel } from "../constants/warehouses";
 import { NewBookingButton } from "./NewBookingButton";
-import { DashboardToolbarButton } from "./DashboardToolbarButton";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { OpsMobileStickyHeader } from "./OpsMobileStickyHeader";
+import { OpsToolsMenu } from "./OpsToolsMenu";
 import { firstWarehouseWithLots } from "../utils/warehouseMetrics";
 import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
@@ -31,6 +31,16 @@ import { debugError } from "../utils/debugLog";
 import { formatKgTotal } from "../utils/formatKgTotal";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { useIsMobile } from "../hooks/useIsMobile";
+import {
+  AppShell,
+  Banner,
+  EmptyState,
+  KpiStat,
+  PageSkeleton,
+  SyncStatusPill,
+  useToast,
+  Wordmark,
+} from "../ui";
 import {
   countShipmentsByWarehouse,
   shipmentMatchesSearchQuery,
@@ -72,6 +82,7 @@ export function AirCargoTracking({
   onRequestPrint,
 }: AirCargoTrackingProps) {
   const { status, state, mutate, socketConnected, refreshState, applyRemoteState } = sync;
+  const toast = useToast();
 
   const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -214,11 +225,11 @@ export function AirCargoTracking({
         return await mutate(cmd);
       } catch (e) {
         debugError("ui:mutate", e);
-        window.alert(e instanceof Error ? e.message : "Không gửi được thay đổi lên máy chủ.");
+        toast.error(e instanceof Error ? e.message : "Không gửi được thay đổi lên máy chủ.", "Đồng bộ thất bại");
         return null;
       }
     },
-    [mutate]
+    [mutate, toast]
   );
 
   const onUpdate = useCallback(
@@ -356,11 +367,11 @@ export function AirCargoTracking({
       await downloadDayReportExcel(rowsForExport, selectedYmd, customersForExport);
     } catch (e) {
       debugError("ui:excel-day", e);
-      window.alert(e instanceof Error ? e.message : "Không tạo được file Excel.");
+      toast.error(e instanceof Error ? e.message : "Không tạo được file Excel.", "Xuất Excel");
     } finally {
       setExcelExporting(false);
     }
-  }, [allRows, selectedYmd, state]);
+  }, [allRows, selectedYmd, state, toast]);
 
   const onDownloadScscDimDay = useCallback(async () => {
     setScscDimExporting(true);
@@ -377,11 +388,11 @@ export function AirCargoTracking({
       await downloadScscDimDayExcel(rows, selectedYmd);
     } catch (e) {
       debugError("ui:excel-scsc-dim-day", e);
-      window.alert(e instanceof Error ? e.message : "Không tạo được file DIM SCSC.");
+      toast.error(e instanceof Error ? e.message : "Không tạo được file DIM SCSC.", "Xuất DIM SCSC");
     } finally {
       setScscDimExporting(false);
     }
-  }, [allRows, selectedYmd]);
+  }, [allRows, selectedYmd, toast]);
 
   const openMobileEdit = useCallback(
     (s: Shipment, opts?: { tab?: "lot" | "notify" | "dim"; focus?: MobileEditFocus }) => {
@@ -397,161 +408,108 @@ export function AirCargoTracking({
   const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
 
   if (status === "loading" || !state) {
-    return (
-      <div className="mx-auto max-w-[1600px] px-4 py-16 text-center text-apple-secondary">
-        <p className="font-semibold text-apple-label">Đang tải dữ liệu…</p>
-      </div>
-    );
+    return <PageSkeleton variant="ops" />;
   }
 
-  return (
-    <TcsPortalActionsProvider value={tcsPortal}>
-    <div className="mx-auto max-w-[1600px] px-3 py-2 sm:px-4 sm:py-3 lg:px-6">
-      <div className="sticky top-0 z-40 -mx-3 mb-1.5 border-b border-slate-200/70 bg-[#E8EEF4]/85 px-3 pb-1 pt-1 backdrop-blur-xl dark:border-white/[0.06] dark:bg-[#070B14]/85 sm:-mx-4 sm:mb-3 sm:px-4 sm:pb-2.5 sm:pt-2.5 lg:-mx-6 lg:px-6">
-      {isMobile ? (
-        <OpsMobileStickyHeader
-          selectedYmd={selectedYmd}
-          onDateChange={(v) => setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)))}
-          onPrevDay={goPrevDay}
-          onNextDay={goNextDay}
-          onToday={goToday}
-          isViewingToday={isViewingToday}
-          syncStatus={status}
-          socketConnected={socketConnected}
-          activeWarehouse={activeWarehouse}
-          onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
-          onOpenSheetImport={() => setSheetImportOpen(true)}
-          onPrefetchSheetImport={prefetchSheetImport}
-          tcsPortalBar={
-            isTcsWarehouse(activeWarehouse) ? (
-              <TcsPortalInlineBar
-                compact
-                tcs={tcsPortal}
-              />
-            ) : null
-          }
-          filteredViewRows={filteredViewRows}
-          viewRows={viewRows}
-          onWarehouseChange={handleActiveWarehouseChange}
-          searchHighlightWarehouses={searchHighlightWarehouses}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          statusFilteredRows={statusFilteredRows}
-          searchContext={searchContext}
-          searchInputRef={searchInputRef}
-          onSelectSearchMatch={scrollToShipmentMatch}
-          statusFilter={statusFilter}
-          onStatusFilterChange={setStatusFilter}
-          onClearFilters={clearViewFilters}
-        />
-      ) : (
-        <>
-      <header className="mb-2 space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-            <h1 className="text-xl font-extrabold tracking-tight text-dashboard-primary dark:text-dashboard-primary-dark sm:text-2xl">
-              TECS<span className="text-teal-600 dark:text-teal-400">OPS</span>
-            </h1>
-            <span className="hidden text-[11px] font-medium text-dashboard-muted dark:text-dashboard-muted-dark sm:inline">
-              Air cargo handling
-            </span>
-            <span className="text-[11px] text-dashboard-muted dark:text-dashboard-muted-dark">
-              <span className="font-bold text-dashboard-primary dark:text-dashboard-primary-dark">{workDateLabel}</span>
-              {daysWithData > 0 && (
-                <span className="text-apple-tertiary">
-                  {" "}
-                  · {allRows.length} lô / {daysWithData} ngày
-                </span>
-              )}
-            </span>
-            {!isViewingToday && (
-              <span
-                className="rounded-md bg-amber-100/90 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-950"
-                title="Vẫn sửa / thêm lô được"
-              >
-                Ngày khác
+  const toolsProps = {
+    showDimScsc: isScscWarehouse(activeWarehouse),
+    excelExporting,
+    scscDimExporting,
+    onNavigateCustomers,
+    onPrefetchCustomers,
+    onOpenAirlineLabels: () => setAirlineLabelSettingsOpen(true),
+    onOpenSheetImport: () => setSheetImportOpen(true),
+    onPrefetchSheetImport: prefetchSheetImport,
+    onDownloadDayExcel: () => void onDownloadDayExcel(),
+    onDownloadScscDim: () => void onDownloadScscDimDay(),
+  };
+
+  const chrome = isMobile ? (
+    <OpsMobileStickyHeader
+      selectedYmd={selectedYmd}
+      onDateChange={(v) => setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)))}
+      onPrevDay={goPrevDay}
+      onNextDay={goNextDay}
+      onToday={goToday}
+      isViewingToday={isViewingToday}
+      syncStatus={status}
+      socketConnected={socketConnected}
+      activeWarehouse={activeWarehouse}
+      onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
+      {...toolsProps}
+      tcsPortalBar={
+        isTcsWarehouse(activeWarehouse) ? <TcsPortalInlineBar compact tcs={tcsPortal} /> : null
+      }
+      filteredViewRows={filteredViewRows}
+      viewRows={viewRows}
+      onWarehouseChange={handleActiveWarehouseChange}
+      searchHighlightWarehouses={searchHighlightWarehouses}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      statusFilteredRows={statusFilteredRows}
+      searchContext={searchContext}
+      searchInputRef={searchInputRef}
+      onSelectSearchMatch={scrollToShipmentMatch}
+      statusFilter={statusFilter}
+      onStatusFilterChange={setStatusFilter}
+      onClearFilters={clearViewFilters}
+    />
+  ) : (
+    <header className="space-y-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+          <h1 className="m-0 leading-none">
+            <Wordmark size="md" />
+          </h1>
+          <span className="rounded-md bg-ui-surface px-2 py-0.5 text-[11px] font-semibold text-ui-text-muted ring-1 ring-ui-border">
+            OPS
+          </span>
+          <span className="text-[11px] text-ui-text-muted">
+            <span className="font-bold text-ui-text">{workDateLabel}</span>
+            {daysWithData > 0 ? (
+              <span>
+                {" "}
+                · {allRows.length} lô / {daysWithData} ngày
               </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-            <SyncBadge status={status} socketConnected={socketConnected} />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-            <NewBookingButton
-              activeWarehouse={activeWarehouse}
-              onAdd={(wh) => void addBlankRowForWarehouse(wh)}
-            />
-            <DashboardToolbarButton
-              onClick={onNavigateCustomers}
-              onMouseEnter={onPrefetchCustomers}
-              onFocus={onPrefetchCustomers}
-              title="Danh bạ khách, hồ sơ in"
-            >
-              Khách
-            </DashboardToolbarButton>
-            <DashboardToolbarButton onClick={() => setAirlineLabelSettingsOpen(true)} title="Tên hãng in trên tem nhãn">
-              Tên hãng
-            </DashboardToolbarButton>
-            <DashboardToolbarButton
-              onPointerDown={prefetchSheetImport}
-              onMouseEnter={prefetchSheetImport}
-              onFocus={prefetchSheetImport}
-              onClick={() => setSheetImportOpen(true)}
-              title="Nhập lô từ Google Sheet BOOK HẰNG NGÀY"
-            >
-              <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 7.5h9M12 3v9" />
-              </svg>
-              Sheet
-            </DashboardToolbarButton>
-            <DashboardToolbarButton
-              disabled={excelExporting}
-              onClick={() => void onDownloadDayExcel()}
-              title="Xuất Excel ngày (mẫu Import Shipments)"
-            >
-              <svg className="h-3.5 w-3.5 text-apple-blue" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-              </svg>
-              Excel
-            </DashboardToolbarButton>
-            {isScscWarehouse(activeWarehouse) ? (
-              <DashboardToolbarButton
-                disabled={scscDimExporting}
-                onClick={() => void onDownloadScscDimDay()}
-                title="Xuất LIST DIM SCSC (mọi lô đã nhập chi tiết DIM trong ngày)"
-              >
-                <svg className="h-3.5 w-3.5 text-violet-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h10M8 7v10" />
-                </svg>
-                {scscDimExporting ? "DIM…" : "DIM SCSC"}
-              </DashboardToolbarButton>
             ) : null}
-          </div>
-          <div className="flex min-w-0 flex-1 items-center gap-2 md:flex-none">
-            <div className="min-w-0 flex-1">
-              <OpsDatePicker
-                value={selectedYmd}
-                onChange={(v) => setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)))}
-                onPrev={goPrevDay}
-                onNext={goNextDay}
-                onToday={goToday}
-                isViewingToday={isViewingToday}
-              />
-            </div>
-          </div>
+          </span>
+          {!isViewingToday ? (
+            <span
+              className="rounded-md bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-950"
+              title="Vẫn sửa / thêm lô được"
+            >
+              Ngày khác
+            </span>
+          ) : null}
         </div>
-      </header>
+        <SyncStatusPill status={status} socketConnected={socketConnected} />
+      </div>
 
-      {viewRows.length > 0 && (
-        <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <NewBookingButton
+          activeWarehouse={activeWarehouse}
+          onAdd={(wh) => void addBlankRowForWarehouse(wh)}
+        />
+        <OpsToolsMenu {...toolsProps} />
+        <div className="min-w-0 flex-1 md:max-w-sm md:flex-none">
+          <OpsDatePicker
+            value={selectedYmd}
+            onChange={(v) => setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)))}
+            onPrev={goPrevDay}
+            onNext={goNextDay}
+            onToday={goToday}
+            isViewingToday={isViewingToday}
+          />
+        </div>
+      </div>
+
+      {viewRows.length > 0 ? (
+        <div className="space-y-2">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
-            <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:pt-1.5">
-              <StatInline label="Lô" value={filteredViewRows.length} />
-              <StatInline label="Kiện" value={totalPcs} />
-              <StatInline label="Kg" value={formatKgTotal(totalKg)} />
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:pt-0.5">
+              <KpiStat label="Lô" value={filteredViewRows.length} />
+              <KpiStat label="Kiện" value={totalPcs} />
+              <KpiStat label="Kg" value={formatKgTotal(totalKg)} />
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <SmartSearchBar
@@ -563,39 +521,56 @@ export function AirCargoTracking({
                 inputRef={searchInputRef}
                 onSelectMatch={scrollToShipmentMatch}
               />
-              {isTcsWarehouse(activeWarehouse) ? (
-                <TcsPortalInlineBar
-                  tcs={tcsPortal}
-                />
-              ) : null}
+              {isTcsWarehouse(activeWarehouse) ? <TcsPortalInlineBar tcs={tcsPortal} /> : null}
             </div>
           </div>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
             <StatusFilterBar compact dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
-            {(statusFilter !== "ALL" || searchQuery.trim()) && (
+            {statusFilter !== "ALL" || searchQuery.trim() ? (
               <button
                 type="button"
                 onClick={clearViewFilters}
-                className="shrink-0 self-start rounded-full px-3 py-1 text-[10px] font-semibold text-apple-blue hover:bg-apple-blue/10 lg:ml-auto lg:self-center"
+                className="shrink-0 self-start rounded-full px-3 py-1 text-[10px] font-semibold text-ui-primary hover:bg-ui-primary/10 lg:ml-auto lg:self-center"
               >
                 Xóa lọc
               </button>
-            )}
+            ) : null}
           </div>
         </div>
-      )}
-        </>
-      )}
-      </div>
+      ) : null}
+    </header>
+  );
 
-      {viewRows.length > 0 && filteredViewRows.length === 0 && (
-        <p className="mb-2 text-center text-xs text-apple-secondary">
+  return (
+    <TcsPortalActionsProvider value={tcsPortal}>
+    <AppShell chrome={chrome}>
+      {status === "offline" ? (
+        <div className="mb-2">
+          <Banner tone="warning" title="Chỉ máy này">
+            Không kết nối máy chủ. Thay đổi vẫn lưu trên trình duyệt; sẽ đồng bộ khi có mạng lại.
+          </Banner>
+        </div>
+      ) : null}
+
+      {viewRows.length === 0 ? (
+        <div className="mb-3">
+          <EmptyState
+            title="Chưa có lô trong ngày này"
+            description="Tạo booking mới hoặc nhập từ Google Sheet trong menu Công cụ."
+            actionLabel="+ Booking"
+            onAction={() => void addBlankRowForWarehouse(activeWarehouse)}
+          />
+        </div>
+      ) : null}
+
+      {viewRows.length > 0 && filteredViewRows.length === 0 ? (
+        <p className="mb-2 text-center text-xs text-ui-text-muted">
           Không có lô khớp bộ lọc.{" "}
-          <button type="button" onClick={clearViewFilters} className="font-semibold text-apple-blue hover:underline">
+          <button type="button" onClick={clearViewFilters} className="font-semibold text-ui-primary hover:underline">
             Xóa lọc
           </button>
         </p>
-      )}
+      ) : null}
 
       <DesktopShipmentTable
         rows={filteredViewRows}
@@ -689,64 +664,14 @@ export function AirCargoTracking({
                   return n > 0 ? `${warehouseLabel[wh]} ${n}` : null;
                 }).filter(Boolean);
                 const detail = parts.length ? ` (${parts.join(" · ")})` : "";
-                window.alert(`Đã nhập ${count} lô từ Google Sheet${detail}.`);
+                toast.success(`Đã nhập ${count} lô từ Google Sheet${detail}.`, "Nhập Sheet");
               }
               setSheetImportOpen(false);
             }}
           />
         ) : null}
       </Suspense>
-    </div>
+    </AppShell>
     </TcsPortalActionsProvider>
-  );
-}
-
-function SyncBadge({
-  status,
-  socketConnected,
-}: {
-  status: "live" | "degraded" | "offline";
-  socketConnected: boolean;
-}) {
-  if (status === "offline") {
-    return (
-      <span
-        className="rounded-full bg-black/[0.06] px-2 py-0.5 text-[10px] font-semibold text-apple-secondary"
-        title="Không kết nối máy chủ — dữ liệu chỉ lưu trên trình duyệt này"
-      >
-        Chỉ máy này
-      </span>
-    );
-  }
-  if (status === "degraded" || !socketConnected) {
-    return (
-      <span
-        className="rounded-full bg-amber-100/90 px-2 py-0.5 text-[10px] font-semibold text-amber-950 ring-1 ring-amber-200/80"
-        title="Máy chủ OK nhưng kênh realtime đang ngắt — thay đổi vẫn gửi được; F5 nếu không thấy cập nhật từ người khác"
-      >
-        Đồng bộ hạn chế
-      </span>
-    );
-  }
-  return (
-    <span
-      className="rounded-full bg-emerald-100/90 px-2 py-0.5 text-[10px] font-semibold text-emerald-900 ring-1 ring-emerald-200/80"
-      title="Đang nhận cập nhật tức thì từ các máy khác"
-    >
-      Realtime
-    </span>
-  );
-}
-
-function StatInline({ label, value }: { label: string; value: string | number }) {
-  return (
-    <span className="inline-flex min-w-[3.5rem] flex-col items-center rounded-xl border border-black/[0.06] bg-white/95 px-2.5 py-1 shadow-dashboard-card dark:border-white/[0.08] dark:bg-dashboard-surface-dark/95">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark">
-        {label}
-      </span>
-      <span className="text-sm font-bold tabular-nums leading-tight text-dashboard-primary dark:text-dashboard-primary-dark">
-        {value}
-      </span>
-    </span>
   );
 }

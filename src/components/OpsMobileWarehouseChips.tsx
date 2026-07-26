@@ -1,5 +1,6 @@
 import type { Shipment, Warehouse } from "../types/shipment";
 import { warehouseLabel, WAREHOUSE_ORDER } from "../constants/warehouses";
+import { formatKgTotal } from "../utils/formatKgTotal";
 import { computeWarehouseMetrics } from "../utils/warehouseMetrics";
 
 const CHIP_RING: Record<Warehouse, string> = {
@@ -12,11 +13,6 @@ interface Props {
   active: Warehouse;
   onSelect: (wh: Warehouse) => void;
   highlightWarehouses?: readonly Warehouse[];
-}
-
-function compactKg(kg: number): string {
-  if (kg >= 10000) return `${(kg / 1000).toFixed(1).replace(/\.0$/, "")}k`;
-  return kg.toLocaleString();
 }
 
 /** Chọn kho 1 dòng — thay thẻ metric lớn trên mobile. */
@@ -56,7 +52,7 @@ export function OpsMobileWarehouseChips({
               <span className="mx-0.5 font-normal text-dashboard-muted dark:text-dashboard-muted-dark">·</span>
               {m.pcs}
               <span className="mx-0.5 font-normal text-dashboard-muted dark:text-dashboard-muted-dark">·</span>
-              {compactKg(m.kg)}
+              {formatKgTotal(m.kg)}
               <span className="ml-0.5 text-[8px] font-semibold uppercase text-dashboard-muted dark:text-dashboard-muted-dark">
                 kg
               </span>

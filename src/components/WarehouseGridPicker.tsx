@@ -1,5 +1,6 @@
 import type { Shipment, Warehouse } from "../types/shipment";
 import { warehouseLabel, WAREHOUSE_ORDER } from "../constants/warehouses";
+import { formatKgTotal } from "../utils/formatKgTotal";
 import { computeWarehouseMetrics } from "../utils/warehouseMetrics";
 
 const CARD_RING: Record<Warehouse, string> = {
@@ -88,7 +89,7 @@ export function WarehouseGridPicker({
               <div className={`grid grid-cols-3 ${compact ? "mt-1 gap-0.5" : "mt-1 gap-1"}`}>
                 <Metric label="Lô" value={m.lots} large={isActive} compact={compact} />
                 <Metric label="Kiện" value={m.pcs} large={isActive} compact={compact} />
-                <Metric label="Kg" value={m.kg.toLocaleString()} large={isActive} compact={compact} />
+                <Metric label="Kg" value={formatKgTotal(m.kg)} large={isActive} compact={compact} />
               </div>
             </button>
           </div>

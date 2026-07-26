@@ -28,6 +28,7 @@ import { firstWarehouseWithLots } from "../utils/warehouseMetrics";
 import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { debugError } from "../utils/debugLog";
+import { formatKgTotal } from "../utils/formatKgTotal";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { useIsMobile } from "../hooks/useIsMobile";
 import {
@@ -550,7 +551,7 @@ export function AirCargoTracking({
             <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:pt-1.5">
               <StatInline label="Lô" value={filteredViewRows.length} />
               <StatInline label="Kiện" value={totalPcs} />
-              <StatInline label="Kg" value={totalKg.toLocaleString()} />
+              <StatInline label="Kg" value={formatKgTotal(totalKg)} />
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <SmartSearchBar

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
+import { formatKgTotal } from "../utils/formatKgTotal";
 import { statusLabel } from "./statusStyles";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { NewBookingButton } from "./NewBookingButton";
@@ -63,23 +64,19 @@ function SyncDot({
   return <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${cls}`} title={title} aria-label={title} />;
 }
 
-function formatCompactKg(kg: number): string {
-  if (kg >= 10000) return `${(kg / 1000).toFixed(1).replace(/\.0$/, "")}k`;
-  return kg.toLocaleString();
-}
-
 function MobileHeaderTotals({ lotCount, totalKg, title }: { lotCount: number; totalKg: number; title: string }) {
+  const kgLabel = formatKgTotal(totalKg);
   return (
     <div
       className="flex shrink-0 flex-col items-end justify-center px-0.5 leading-none"
       title={title}
-      aria-label={`${lotCount} lô, ${totalKg.toLocaleString()} kg`}
+      aria-label={`${lotCount} lô, ${kgLabel} kg`}
     >
       <span className="text-[10px] font-extrabold tabular-nums text-dashboard-primary dark:text-dashboard-primary-dark">
         {lotCount} lô
       </span>
       <span className="text-[9px] font-bold tabular-nums text-teal-700 dark:text-teal-400">
-        {formatCompactKg(totalKg)} kg
+        {kgLabel} kg
       </span>
     </div>
   );

@@ -380,6 +380,24 @@ export function applyFullProfileImport(
       if (!hit.address && imp.address) hit.address = imp.address;
       if (!hit.email && imp.email) hit.email = imp.email;
       if (!hit.phone && imp.phone) hit.phone = imp.phone;
+      if (!hit.taxCode && imp.taxCode) hit.taxCode = imp.taxCode;
+
+      // Hợp nhất savedShippers
+      const existingShippers = [...(hit.savedShippers ?? [])];
+      for (const shp of imp.savedShippers ?? []) {
+        const isDup = existingShippers.some(
+          (x) =>
+            x.shipperName.toLowerCase() === shp.shipperName.toLowerCase() &&
+            x.shipperAddress.toLowerCase() === shp.shipperAddress.toLowerCase()
+        );
+        if (!isDup) {
+          existingShippers.push(shp);
+        }
+      }
+      hit.savedShippers = existingShippers;
+      if (!hit.defaultShipperId && existingShippers.length > 0) {
+        hit.defaultShipperId = existingShippers[0]!.id;
+      }
 
       // Hợp nhất savedConsignees
       const existingCnees = [...(hit.savedConsignees ?? [])];
@@ -413,6 +431,23 @@ export function applyFullProfileImport(
       hit.savedGoods = existingGoods;
       if (!hit.defaultGoodsId && existingGoods.length > 0) {
         hit.defaultGoodsId = existingGoods[0]!.id;
+      }
+
+      // Hợp nhất savedVehicles
+      const existingVehicles = [...(hit.savedVehicles ?? [])];
+      for (const v of imp.savedVehicles ?? []) {
+        const isDup = existingVehicles.some(
+          (x) =>
+            (v.licensePlate && x.licensePlate.toLowerCase() === v.licensePlate.toLowerCase()) ||
+            (v.driverName && x.driverName.toLowerCase() === v.driverName.toLowerCase())
+        );
+        if (!isDup) {
+          existingVehicles.push(v);
+        }
+      }
+      hit.savedVehicles = existingVehicles;
+      if (!hit.defaultVehicleId && existingVehicles.length > 0) {
+        hit.defaultVehicleId = existingVehicles[0]!.id;
       }
 
       updated++;

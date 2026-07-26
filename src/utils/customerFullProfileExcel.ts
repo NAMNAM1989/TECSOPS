@@ -1,4 +1,10 @@
-import type { CustomerDirectoryEntry, CustomerSavedConsignee, CustomerSavedGoods, CustomerSavedShipper } from "../types/customerDirectory";
+import type {
+  CustomerDirectoryEntry,
+  CustomerSavedConsignee,
+  CustomerSavedGoods,
+  CustomerSavedShipper,
+  CustomerSavedVehicle,
+} from "../types/customerDirectory";
 import { normalizeAgentCode } from "./customerProfileInputFormat";
 import { scaffoldNewCustomer } from "./customerDirectoryScaffold";
 
@@ -58,6 +64,7 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
   let colShipperAddress = 5; // E: Shipper Address
   let colShipperEmail = 6;   // F: Shipper Email
   let colShipperPhone = 7;   // G: Shipper Phone
+  let colShipperTax = 8;     // H: Shipper MST
   let colConsigneeName = 9;   // I: Consignee Name
   let colConsigneeAddress = 10; // J: Consignee Address
   let colConsigneeEmail = 11;   // K: Consignee Email
@@ -65,6 +72,9 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
   let colConsigneeTax = 14;     // N: Consignee MST
   let colNotifyName = 15;       // O: Notify
   let colNatureOfGoods = 21;    // U: Nature of Goods
+  let colPlate = -1;
+  let colDriverName = -1;
+  let colDriverId = -1;
 
   // Thử dò lại vị trí cột từ header nếu có
   const row1 = ws.getRow(1);
@@ -77,6 +87,7 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
     else if (txt.includes("người gửi") && txt.includes("địa chỉ")) colShipperAddress = colIdx;
     else if (txt.includes("người gửi") && txt.includes("email")) colShipperEmail = colIdx;
     else if (txt.includes("người gửi") && txt.includes("đt")) colShipperPhone = colIdx;
+    else if (txt.includes("người gửi") && txt.includes("mst")) colShipperTax = colIdx;
     else if (txt.includes("người nhận") && txt.includes("họ tên")) colConsigneeName = colIdx;
     else if (txt.includes("người nhận") && txt.includes("địa chỉ")) colConsigneeAddress = colIdx;
     else if (txt.includes("người nhận") && txt.includes("email")) colConsigneeEmail = colIdx;
@@ -84,6 +95,9 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
     else if (txt.includes("người nhận") && txt.includes("mst")) colConsigneeTax = colIdx;
     else if (txt.includes("thông báo cho") || txt.includes("notify")) colNotifyName = colIdx;
     else if (txt.includes("loại hàng") || txt.includes("nature of goods")) colNatureOfGoods = colIdx;
+    else if (txt.includes("biển số") || txt.includes("xe")) colPlate = colIdx;
+    else if (txt.includes("tài xế") || txt.includes("lái xe")) colDriverName = colIdx;
+    else if (txt.includes("cccd tài xế") || txt.includes("cmnd tài xế")) colDriverId = colIdx;
   });
   void colConsigneeTax;
 
@@ -105,6 +119,7 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
 
   let totalConsigneeCount = 0;
   let totalGoodsCount = 0;
+  let totalVehicleCount = 0;
   const customers: CustomerDirectoryEntry[] = [];
 
   for (const [code, rows] of groupedRows.entries()) {
@@ -113,6 +128,7 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
     const shipperAddr = cellText(firstRow.getCell(colShipperAddress));
     const shipperEmail = cellText(firstRow.getCell(colShipperEmail));
     const shipperPhone = cellText(firstRow.getCell(colShipperPhone));
+    const shipperTax = colShipperTax > 0 ? cellText(firstRow.getCell(colShipperTax)) : "";
 
     const name = shipperNameRaw || `Khách hàng ${code}`;
 
@@ -124,6 +140,7 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
     entry.address = shipperAddr || undefined;
     entry.email = shipperEmail || undefined;
     entry.phone = shipperPhone || undefined;
+    entry.taxCode = shipperTax || undefined;
 
     // Tạo Shipper mặc định
     const defaultShipperItem: CustomerSavedShipper = {
@@ -133,13 +150,14 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
       shipperAddress: shipperAddr,
       shipperPhone: shipperPhone,
       shipperEmail: shipperEmail,
-      taxCode: "",
+      taxCode: shipperTax,
     };
     entry.savedShippers = [defaultShipperItem];
     entry.defaultShipperId = defaultShipperItem.id;
 
     const savedConsignees: CustomerSavedConsignee[] = [];
     const savedGoods: CustomerSavedGoods[] = [];
+    const savedVehicles: CustomerSavedVehicle[] = [];
 
     for (const r of rows) {
       const dest = cellText(r.getCell(colDest)).toUpperCase();
@@ -149,6 +167,10 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
       const cneePhone = cellText(r.getCell(colConsigneePhone));
       const notifyName = cellText(r.getCell(colNotifyName));
       const goodsDesc = cellText(r.getCell(colNatureOfGoods));
+
+      const plate = colPlate > 0 ? cellText(r.getCell(colPlate)) : "";
+      const driverName = colDriverName > 0 ? cellText(r.getCell(colDriverName)) : "";
+      const driverId = colDriverId > 0 ? cellText(r.getCell(colDriverId)) : "";
 
       // Thêm Consignee nếu có
       if (cneeName) {
@@ -190,6 +212,26 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
           totalGoodsCount++;
         }
       }
+
+      // Thêm Xe / TX nếu có
+      if (plate || driverName) {
+        const isDuplicate = savedVehicles.some(
+          (v) =>
+            (plate && v.licensePlate.toLowerCase() === plate.toLowerCase()) ||
+            (driverName && v.driverName.toLowerCase() === driverName.toLowerCase())
+        );
+
+        if (!isDuplicate) {
+          const vehicleItem: CustomerSavedVehicle = {
+            id: newId("veh"),
+            licensePlate: plate,
+            driverName: driverName,
+            driverId: driverId,
+          };
+          savedVehicles.push(vehicleItem);
+          totalVehicleCount++;
+        }
+      }
     }
 
     entry.savedConsignees = savedConsignees;
@@ -202,6 +244,11 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
       entry.defaultGoodsId = savedGoods[0]!.id;
     }
 
+    entry.savedVehicles = savedVehicles;
+    if (savedVehicles.length > 0) {
+      entry.defaultVehicleId = savedVehicles[0]!.id;
+    }
+
     customers.push(entry);
   }
 
@@ -211,4 +258,121 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
     consigneeCount: totalConsigneeCount,
     goodsCount: totalGoodsCount,
   };
+}
+
+export async function buildCustomerFullProfileTemplateWorkbook() {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("HỒ SƠ KH");
+
+  ws.addRow([
+    "STT",
+    "Mã KH",
+    "DEST",
+    "Người gửi - Họ tên",
+    "Người gửi - Địa chỉ",
+    "Người gửi - Email",
+    "Người gửi - ĐT",
+    "Người gửi - MST",
+    "Người nhận - Họ tên",
+    "Người nhận - Địa chỉ",
+    "Người nhận - Email",
+    "Người nhận - ĐT",
+    "Người nhận - MST",
+    "Notify Party",
+    "Loại hàng",
+    "Biển số xe",
+    "Tên tài xế",
+    "CCCD tài xế",
+  ]);
+
+  ws.addRow([
+    1,
+    "CITYLINK",
+    "KUL",
+    "CÔNG TY TNHH PHÁT TRIỂN CITYLINK",
+    "123 Nguyễn Văn Trỗi, Phường 11, Q. Phú Nhuận, TP.HCM",
+    "ops@citylink.vn",
+    "0901234567",
+    "0312345678",
+    "GLOBAL LOGISTICS PTE LTD",
+    "10 CHANGI SOUTH STREET 2, SINGAPORE",
+    "import@globallog.sg",
+    "+65 6789 0123",
+    "",
+    "NOTIFY GLOBAL LOGISTICS",
+    "GARMENTS",
+    "50H-174.80",
+    "NGUYỄN VĂN A",
+    "079123456789",
+  ]);
+
+  ws.addRow([
+    2,
+    "ORIENT",
+    "CAN",
+    "ORIENT CARGO LOGISTICS CO., LTD",
+    "456 Lê Văn Sỹ, Phường 14, Q.3, TP.HCM",
+    "contact@orientcargo.com",
+    "0908765432",
+    "0387654321",
+    "GUANGZHOU TRADING CO., LTD",
+    "BUILDING B, TIANHE DISTRICT, GUANGZHOU, CHINA",
+    "cnee@gztrade.cn",
+    "+86 20 1234 5678",
+    "",
+    "",
+    "ELECTRONICS",
+    "51D-999.88",
+    "TRẦN VĂN B",
+    "079987654321",
+  ]);
+
+  ws.getRow(1).font = { bold: true };
+  ws.columns = [
+    { width: 6 },
+    { width: 14 },
+    { width: 10 },
+    { width: 35 },
+    { width: 45 },
+    { width: 24 },
+    { width: 16 },
+    { width: 16 },
+    { width: 35 },
+    { width: 45 },
+    { width: 24 },
+    { width: 16 },
+    { width: 16 },
+    { width: 28 },
+    { width: 20 },
+    { width: 16 },
+    { width: 20 },
+    { width: 18 },
+  ];
+
+  const guide = wb.addWorksheet("Hướng dẫn");
+  [
+    "HƯỚNG DẪN NHẬP DỮ LIỆU MẪU HỒ SƠ KHÁCH HÀNG (4 TAB: NGƯỜI GỬI, CNEE, TÊN HÀNG, XE/TX)",
+    "",
+    "1. Sheet 'HỒ SƠ KH': Giữ nguyên tiêu đề các cột.",
+    "2. Mã KH (Customer Code): Khóa chính nhận diện khách hàng (VD: CITYLINK, ORIENT). Cần 2-5 chữ cái A-Z.",
+    "3. Một khách hàng có thể có nhiều dòng trong file tương ứng với nhiều CNEE / DEST / Loại hàng / Xe khác nhau.",
+    "4. Các cột Người gửi: Điền thông tin Người gửi (Shipper) mặc định của khách hàng.",
+    "5. Các cột Người nhận: Điền thông tin CNEE (Tên, Địa chỉ, SĐT, Email, Notify) nhận hàng tại nước ngoài.",
+    "6. Cột Loại hàng (Nature of Goods): Điền mô tả tên hàng hoá khai báo eSID / in phiếu cân.",
+    "7. Cột Biển số xe, Tên tài xế, CCCD: Điền phương tiện & tài xế giao nhận.",
+    "8. Sau khi nhập file xong, vào màn hình Khách hàng bấm nút 'Import' để tải file lên.",
+  ].forEach((line, i) => {
+    guide.getRow(i + 1).getCell(1).value = line;
+  });
+  guide.getColumn(1).width = 100;
+
+  return wb;
+}
+
+export async function downloadCustomerFullProfileTemplate(): Promise<void> {
+  const { downloadXlsxBuffer } = await import("./downloadXlsx");
+  const wb = await buildCustomerFullProfileTemplateWorkbook();
+  const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+  downloadXlsxBuffer(buf, "mau-ho-so-khach-hang-day-du-4-tab.xlsx");
 }

@@ -7,13 +7,13 @@ import type {
   CustomerSavedVehicle,
 } from "../../types/customerDirectory";
 import {
-  formatVnPhoneDisplay,
   normalizeAgentCode,
   parseCustomerProfileOcrJson,
   patchShipperFromOcr,
 } from "../../utils/customerProfileInputFormat";
 import { normalizeVehiclePlateInput } from "../../utils/vehiclePlateNormalize";
 import { suggestSavedItemLabel } from "../../utils/customerDirectoryScaffold";
+import { emptyCustomerSavedConsignee } from "../../utils/customerDirectoryProfile";
 import { normalizePrintAddressMultiline } from "../../utils/printAddressMultiline";
 import { OPS } from "../../styles/opsModalStyles";
 import {
@@ -52,6 +52,7 @@ type Props = {
   onAddVehicle: () => void;
 };
 
+/** Nhãn tab khớp mẫu Excel Hồ sơ KH / điền OPS. */
 const TAB_LABELS: { id: ProfileTab; label: string }[] = [
   { id: "shipper", label: "Người gửi" },
   { id: "consignee", label: "CNEE" },
@@ -129,7 +130,19 @@ function FieldLabel({ children }: { children: ReactNode }) {
   );
 }
 
-/** Tab « Dữ liệu mặc định » — giữ model saved* cho booking / ESID / Excel. */
+function resolveDefaultConsigneeIndex(
+  entry: CustomerDirectoryEntry,
+  consignees: CustomerSavedConsignee[],
+): number {
+  if (!consignees.length) return -1;
+  const byId = consignees.findIndex((c) => c.id === entry.defaultConsigneeId);
+  return byId >= 0 ? byId : 0;
+}
+
+/**
+ * Tab « Dữ liệu mặc định » — field theo mẫu Excel Hồ sơ KH
+ * (Người gửi / CNEE+Notify / Loại hàng / Xe·TX) để đồng bộ điền OPS.
+ */
 export function CustomerDefaultDataEditor({
   entry,
   errors,
@@ -159,6 +172,10 @@ export function CustomerDefaultDataEditor({
   const consignees = entry.savedConsignees ?? [];
   const goods = entry.savedGoods ?? [];
   const vehicles = entry.savedVehicles ?? [];
+
+  const defaultCneeIdx = resolveDefaultConsigneeIndex(entry, consignees);
+  const defaultNotify =
+    defaultCneeIdx >= 0 ? (consignees[defaultCneeIdx]?.notifyName ?? "") : "";
 
   const counts: Record<ProfileTab, number> = {
     shipper: shippers.length,
@@ -198,6 +215,18 @@ export function CustomerDefaultDataEditor({
     if (label) patch(idx, { label });
   };
 
+  const patchDefaultNotify = (value: string) => {
+    if (defaultCneeIdx >= 0) {
+      onPatchConsignee(defaultCneeIdx, { notifyName: value });
+      return;
+    }
+    const created = emptyCustomerSavedConsignee();
+    onPatch({
+      savedConsignees: [{ ...created, notifyName: value }],
+      defaultConsigneeId: created.id,
+    });
+  };
+
   const tabAdd: Record<ProfileTab, () => void> = {
     shipper: onAddShipper,
     consignee: onAddConsignee,
@@ -211,19 +240,23 @@ export function CustomerDefaultDataEditor({
   return (
     <section className="space-y-2.5">
       <p className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
-        Dữ liệu mặc định
+        Dữ liệu mặc định · mẫu Excel Hồ sơ KH
       </p>
+
       <div className="rounded-lg border border-ui-border bg-ui-surface p-2">
         <span className="mb-1.5 block text-[10px] font-bold uppercase text-ui-text-muted">
-          Ghi chú in phiếu cân
+          Notify party
         </span>
         <textarea
-          value={entry.otherRequirementsPrint ?? ""}
-          onChange={(e) => onPatch({ otherRequirementsPrint: e.target.value })}
+          value={defaultNotify}
+          onChange={(e) => patchDefaultNotify(e.target.value)}
           rows={2}
           className={`${inputCls} min-h-[2.5rem] resize-y`}
-          placeholder="VD: GIỮ KHÔ, KHÔNG XẾP CHỒNG…"
+          placeholder="VD: NOTIFY GLOBAL LOGISTICS…"
         />
+        <p className={`mt-1 text-[10px] ${OPS.muted}`}>
+          Đồng bộ với CNEE mặc định · điền OPS / eSID (`notify_name`).
+        </p>
       </div>
 
       <div className="rounded-lg border border-ui-border bg-ui-surface">
@@ -283,7 +316,7 @@ export function CustomerDefaultDataEditor({
                 >
                   <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                     <label className="sm:col-span-2">
-                      <FieldLabel>Tên in phiếu</FieldLabel>
+                      <FieldLabel>Tên</FieldLabel>
                       <input
                         className={fieldInputClass(
                           Boolean(fe("shipper", "shipperName", s.id)),
@@ -303,24 +336,6 @@ export function CustomerDefaultDataEditor({
                       />
                       <FieldErrorText
                         message={fe("shipper", "shipperName", s.id)}
-                      />
-                    </label>
-                    <label>
-                      <FieldLabel>SĐT</FieldLabel>
-                      <input
-                        className={`${fieldInputClass(Boolean(fe("shipper", "shipperPhone", s.id)))} tabular-nums`}
-                        value={s.shipperPhone}
-                        onChange={(e) =>
-                          onPatchShipper(idx, { shipperPhone: e.target.value })
-                        }
-                        onBlur={(e) =>
-                          onPatchShipper(idx, {
-                            shipperPhone: formatVnPhoneDisplay(e.target.value),
-                          })
-                        }
-                      />
-                      <FieldErrorText
-                        message={fe("shipper", "shipperPhone", s.id)}
                       />
                     </label>
                     <label className="sm:col-span-2">
@@ -344,67 +359,76 @@ export function CustomerDefaultDataEditor({
                         }
                       />
                     </label>
-                  </div>
-                  <details className="mt-1">
-                    <summary
-                      className={`cursor-pointer text-[10px] ${OPS.muted}`}
-                    >
-                      Thêm (MST, email, OCR…)
-                    </summary>
-                    <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                      <label>
-                        <FieldLabel>Mã</FieldLabel>
-                        <input
-                          className={`${inputCls} font-mono uppercase`}
-                          value={s.label}
-                          onChange={(e) =>
-                            onPatchShipper(idx, { label: e.target.value })
-                          }
-                          onBlur={(e) =>
-                            onPatchShipper(idx, {
-                              label: normalizeAgentCode(e.target.value),
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        <FieldLabel>MST</FieldLabel>
-                        <input
-                          className={inputCls}
-                          value={s.taxCode}
-                          onChange={(e) =>
-                            onPatchShipper(idx, { taxCode: e.target.value })
-                          }
-                        />
-                      </label>
-                      <label className="sm:col-span-2">
-                        <FieldLabel>Email (tùy chọn)</FieldLabel>
-                        <input
-                          className={inputCls}
-                          value={s.shipperEmail}
-                          onChange={(e) =>
-                            onPatchShipper(idx, {
-                              shipperEmail: e.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                      <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-                        <button
-                          type="button"
-                          onClick={() => void applyOcrPaste(idx)}
-                          className={OPS.btnSmallAccent}
-                        >
-                          Dán OCR
-                        </button>
-                        {ocrHint ? (
-                          <span className={`text-[10px] ${OPS.secondary}`}>
-                            {ocrHint}
-                          </span>
-                        ) : null}
-                      </div>
+                    <label>
+                      <FieldLabel>Email</FieldLabel>
+                      <input
+                        className={inputCls}
+                        value={s.shipperEmail}
+                        onChange={(e) =>
+                          onPatchShipper(idx, {
+                            shipperEmail: e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      <FieldLabel>ĐT</FieldLabel>
+                      <input
+                        className={`${fieldInputClass(Boolean(fe("shipper", "shipperPhone", s.id)))} tabular-nums`}
+                        value={s.shipperPhone}
+                        onChange={(e) =>
+                          onPatchShipper(idx, { shipperPhone: e.target.value })
+                        }
+                        onBlur={(e) =>
+                          onPatchShipper(idx, {
+                            shipperPhone: e.target.value.trim(),
+                          })
+                        }
+                      />
+                      <FieldErrorText
+                        message={fe("shipper", "shipperPhone", s.id)}
+                      />
+                    </label>
+                    <label>
+                      <FieldLabel>MST</FieldLabel>
+                      <input
+                        className={`${inputCls} font-mono`}
+                        value={s.taxCode}
+                        onChange={(e) =>
+                          onPatchShipper(idx, { taxCode: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      <FieldLabel>Mã / nhãn</FieldLabel>
+                      <input
+                        className={`${inputCls} font-mono uppercase`}
+                        value={s.label}
+                        onChange={(e) =>
+                          onPatchShipper(idx, { label: e.target.value })
+                        }
+                        onBlur={(e) =>
+                          onPatchShipper(idx, {
+                            label: normalizeAgentCode(e.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+                      <button
+                        type="button"
+                        onClick={() => void applyOcrPaste(idx)}
+                        className={OPS.btnSmallAccent}
+                      >
+                        Dán OCR
+                      </button>
+                      {ocrHint ? (
+                        <span className={`text-[10px] ${OPS.secondary}`}>
+                          {ocrHint}
+                        </span>
+                      ) : null}
                     </div>
-                  </details>
+                  </div>
                 </ItemCard>
               ))
             )
@@ -413,7 +437,7 @@ export function CustomerDefaultDataEditor({
           {tab === "consignee" ? (
             consignees.length === 0 ? (
               <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
-                Chưa có CNEE — có thể bỏ qua.
+                Chưa có CNEE — có thể bỏ qua hoặc nhập Notify party phía trên.
               </p>
             ) : (
               consignees.map((c, idx) => (
@@ -458,28 +482,6 @@ export function CustomerDefaultDataEditor({
                         message={fe("consignee", "consigneeName", c.id)}
                       />
                     </label>
-                    <label>
-                      <FieldLabel>SĐT</FieldLabel>
-                      <input
-                        className={`${fieldInputClass(Boolean(fe("consignee", "consigneePhone", c.id)))} tabular-nums`}
-                        value={c.consigneePhone}
-                        onChange={(e) =>
-                          onPatchConsignee(idx, {
-                            consigneePhone: e.target.value,
-                          })
-                        }
-                        onBlur={(e) =>
-                          onPatchConsignee(idx, {
-                            consigneePhone: formatVnPhoneDisplay(
-                              e.target.value,
-                            ),
-                          })
-                        }
-                      />
-                      <FieldErrorText
-                        message={fe("consignee", "consigneePhone", c.id)}
-                      />
-                    </label>
                     <label className="sm:col-span-2">
                       <FieldLabel>Địa chỉ</FieldLabel>
                       <textarea
@@ -501,6 +503,62 @@ export function CustomerDefaultDataEditor({
                         }
                       />
                     </label>
+                    <label>
+                      <FieldLabel>Email</FieldLabel>
+                      <input
+                        className={inputCls}
+                        value={c.consigneeEmail}
+                        onChange={(e) =>
+                          onPatchConsignee(idx, {
+                            consigneeEmail: e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      <FieldLabel>ĐT</FieldLabel>
+                      <input
+                        className={`${fieldInputClass(Boolean(fe("consignee", "consigneePhone", c.id)))} tabular-nums`}
+                        value={c.consigneePhone}
+                        onChange={(e) =>
+                          onPatchConsignee(idx, {
+                            consigneePhone: e.target.value,
+                          })
+                        }
+                        onBlur={(e) =>
+                          onPatchConsignee(idx, {
+                            consigneePhone: e.target.value.trim(),
+                          })
+                        }
+                      />
+                      <FieldErrorText
+                        message={fe("consignee", "consigneePhone", c.id)}
+                      />
+                    </label>
+                    <label className="sm:col-span-2">
+                      <FieldLabel>Notify party</FieldLabel>
+                      <textarea
+                        className={`${inputCls} min-h-[2.25rem] resize-y`}
+                        rows={2}
+                        value={c.notifyName}
+                        onChange={(e) =>
+                          onPatchConsignee(idx, {
+                            notifyName: e.target.value,
+                          })
+                        }
+                        placeholder="NOTIFY…"
+                      />
+                    </label>
+                    <label>
+                      <FieldLabel>Mã / nhãn (DEST…)</FieldLabel>
+                      <input
+                        className={`${inputCls} font-mono uppercase`}
+                        value={c.label}
+                        onChange={(e) =>
+                          onPatchConsignee(idx, { label: e.target.value })
+                        }
+                      />
+                    </label>
                   </div>
                 </ItemCard>
               ))
@@ -510,7 +568,7 @@ export function CustomerDefaultDataEditor({
           {tab === "goods" ? (
             goods.length === 0 ? (
               <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
-                Chưa có mẫu tên hàng.
+                Chưa có loại hàng (Nature of Goods).
               </p>
             ) : (
               goods.map((g, idx) => (
@@ -530,7 +588,7 @@ export function CustomerDefaultDataEditor({
                   }
                 >
                   <label>
-                    <FieldLabel>Mô tả in phiếu</FieldLabel>
+                    <FieldLabel>Loại hàng</FieldLabel>
                     <input
                       className={fieldInputClass(
                         Boolean(fe("goods", "goodsDescription", g.id)),
@@ -584,7 +642,7 @@ export function CustomerDefaultDataEditor({
                 >
                   <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                     <label>
-                      <FieldLabel>Biển số</FieldLabel>
+                      <FieldLabel>Biển số xe</FieldLabel>
                       <input
                         className={`${fieldInputClass(Boolean(fe("vehicle", "licensePlate", v.id)))} font-mono uppercase`}
                         value={v.licensePlate}
@@ -604,7 +662,7 @@ export function CustomerDefaultDataEditor({
                       />
                     </label>
                     <label>
-                      <FieldLabel>Tài xế</FieldLabel>
+                      <FieldLabel>Tên tài xế</FieldLabel>
                       <input
                         className={fieldInputClass(
                           Boolean(fe("vehicle", "driverName", v.id)),
@@ -619,7 +677,7 @@ export function CustomerDefaultDataEditor({
                       />
                     </label>
                     <label>
-                      <FieldLabel>CCCD</FieldLabel>
+                      <FieldLabel>CCCD tài xế</FieldLabel>
                       <input
                         className={`${fieldInputClass(Boolean(fe("vehicle", "driverId", v.id)))} font-mono`}
                         inputMode="numeric"

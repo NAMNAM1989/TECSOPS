@@ -28,8 +28,6 @@ export const CUSTOMS_OPS_HEADERS = [
   "Customer Type",
 ] as const;
 
-export const CUSTOMS_OPS_TEMPLATE_URL = "/templates/customer/customs_ops.xlsx";
-
 export type CustomsOpsImportRow = {
   rowNumber: number;
   /** Mã đồng bộ 2–5 chữ A–Z (hoặc mã đầy đủ từ file cũ). */
@@ -349,123 +347,10 @@ export function applyCustomsOpsImport(
   return { customers, created, updated, skipped, errors };
 }
 
-/**
- * Hợp nhất dữ liệu import từ file Hồ sơ KH 22 cột vào danh bạ hiện có.
- */
-export function applyFullProfileImport(
-  existing: readonly CustomerDirectoryEntry[],
-  imported: readonly CustomerDirectoryEntry[]
-): {
-  customers: CustomerDirectoryEntry[];
-  created: number;
-  updated: number;
-  consigneesAdded: number;
-  goodsAdded: number;
-} {
-  const customers = existing.map((e) => ({ ...e }));
-  const byCode = new Map(customers.map((e) => [e.code.trim().toLowerCase(), e]));
-  let created = 0;
-  let updated = 0;
-  let consigneesAdded = 0;
-  let goodsAdded = 0;
+/** @deprecated Dùng `applyFullProfileImport` từ `customerFullProfileExcel`. */
+export { applyFullProfileImport } from "./customerFullProfileExcel";
 
-  for (const imp of imported) {
-    const code = normalizeAgentCode(imp.code);
-    if (!code) continue;
-
-    const hit = findExistingByImportCode(customers, byCode, code);
-    if (hit) {
-      // Cập nhật thông tin account nếu trống
-      if (!hit.name || hit.name.startsWith("Khách hàng ")) hit.name = imp.name;
-      if (!hit.address && imp.address) hit.address = imp.address;
-      if (!hit.email && imp.email) hit.email = imp.email;
-      if (!hit.phone && imp.phone) hit.phone = imp.phone;
-      if (!hit.taxCode && imp.taxCode) hit.taxCode = imp.taxCode;
-
-      // Hợp nhất savedShippers
-      const existingShippers = [...(hit.savedShippers ?? [])];
-      for (const shp of imp.savedShippers ?? []) {
-        const isDup = existingShippers.some(
-          (x) =>
-            x.shipperName.toLowerCase() === shp.shipperName.toLowerCase() &&
-            x.shipperAddress.toLowerCase() === shp.shipperAddress.toLowerCase()
-        );
-        if (!isDup) {
-          existingShippers.push(shp);
-        }
-      }
-      hit.savedShippers = existingShippers;
-      if (!hit.defaultShipperId && existingShippers.length > 0) {
-        hit.defaultShipperId = existingShippers[0]!.id;
-      }
-
-      // Hợp nhất savedConsignees
-      const existingCnees = [...(hit.savedConsignees ?? [])];
-      for (const cnee of imp.savedConsignees ?? []) {
-        const isDup = existingCnees.some(
-          (x) =>
-            x.consigneeName.toLowerCase() === cnee.consigneeName.toLowerCase() &&
-            x.consigneeAddress.toLowerCase() === cnee.consigneeAddress.toLowerCase()
-        );
-        if (!isDup) {
-          existingCnees.push(cnee);
-          consigneesAdded++;
-        }
-      }
-      hit.savedConsignees = existingCnees;
-      if (!hit.defaultConsigneeId && existingCnees.length > 0) {
-        hit.defaultConsigneeId = existingCnees[0]!.id;
-      }
-
-      // Hợp nhất savedGoods
-      const existingGoods = [...(hit.savedGoods ?? [])];
-      for (const g of imp.savedGoods ?? []) {
-        const isDup = existingGoods.some(
-          (x) => x.goodsDescription.toLowerCase() === g.goodsDescription.toLowerCase()
-        );
-        if (!isDup) {
-          existingGoods.push(g);
-          goodsAdded++;
-        }
-      }
-      hit.savedGoods = existingGoods;
-      if (!hit.defaultGoodsId && existingGoods.length > 0) {
-        hit.defaultGoodsId = existingGoods[0]!.id;
-      }
-
-      // Hợp nhất savedVehicles
-      const existingVehicles = [...(hit.savedVehicles ?? [])];
-      for (const v of imp.savedVehicles ?? []) {
-        const isDup = existingVehicles.some(
-          (x) =>
-            (v.licensePlate && x.licensePlate.toLowerCase() === v.licensePlate.toLowerCase()) ||
-            (v.driverName && x.driverName.toLowerCase() === v.driverName.toLowerCase())
-        );
-        if (!isDup) {
-          existingVehicles.push(v);
-        }
-      }
-      hit.savedVehicles = existingVehicles;
-      if (!hit.defaultVehicleId && existingVehicles.length > 0) {
-        hit.defaultVehicleId = existingVehicles[0]!.id;
-      }
-
-      updated++;
-    } else {
-      // Thêm mới hoàn toàn
-      customers.push(imp);
-      byCode.set(code.toLowerCase(), imp);
-      created++;
-      consigneesAdded += imp.savedConsignees?.length ?? 0;
-      goodsAdded += imp.savedGoods?.length ?? 0;
-    }
-  }
-
-  return { customers, created, updated, consigneesAdded, goodsAdded };
-}
-
-
-/** Xuất danh bạ đúng 9 cột mẫu Import Customers. */
+/** Xuất danh bạ đúng 9 cột mẫu Import Customers (legacy — UI không còn dùng). */
 export async function buildCustomsOpsWorkbook(customers: readonly CustomerDirectoryEntry[]) {
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
@@ -522,6 +407,7 @@ export async function buildCustomsOpsWorkbook(customers: readonly CustomerDirect
   return wb;
 }
 
+/** @deprecated UI dùng `downloadCustomerFullProfileExport`. Giữ cho test/legacy. */
 export async function downloadCustomsOpsExport(customers: readonly CustomerDirectoryEntry[]) {
   const wb = await buildCustomsOpsWorkbook(customers);
   const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;

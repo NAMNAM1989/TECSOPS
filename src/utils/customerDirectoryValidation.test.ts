@@ -41,6 +41,34 @@ describe("customerDirectoryValidation", () => {
     expect(r.valid).toBe(true);
   });
 
+  it("cho phép SĐT quốc tế và CNEE thiếu tên (suy từ notify)", () => {
+    const row = scaffoldNewCustomer("c1");
+    row.code = "ABC";
+    row.name = "TEST CO";
+    row.savedShippers = [
+      {
+        ...emptyCustomerSavedShipper(),
+        shipperName: "ACME",
+        shipperPhone: "+86 20 1234 5678",
+      },
+    ];
+    row.savedConsignees = [
+      {
+        id: "cnee-1",
+        label: "SIN",
+        consigneeName: "",
+        consigneeAddress: "10 CHANGI",
+        consigneePhone: "+65 6789 0123",
+        consigneeEmail: "",
+        notifyName: "NOTIFY GLOBAL",
+      },
+    ];
+    const r = validateCustomerDirectory([row]);
+    expect(r.valid).toBe(true);
+    const saved = normalizeCustomerEntryForSave(row);
+    expect(saved.savedConsignees?.[0]?.consigneeName).toBe("SIN");
+  });
+
   it("requires vehicle plate and paired driver fields", () => {
     const row = scaffoldNewCustomer("c1");
     row.code = "ABC";

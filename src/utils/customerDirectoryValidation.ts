@@ -59,10 +59,14 @@ export function isValidAgentCode(raw: string): boolean {
   return code.length >= 1 && code.length <= 40 && AGENT_CODE_RE.test(code);
 }
 
+/**
+ * SĐT hồ sơ KH / Excel quốc tế — không ép định dạng VN (9–11 số).
+ * Chỉ chặn chuỗi quá dài sau khi bỏ ký tự không phải số.
+ */
 export function isValidVnPhone(raw: string): boolean {
   const d = phoneDigits(raw);
   if (!d) return true;
-  return d.length >= 9 && d.length <= 11;
+  return d.length <= 20;
 }
 
 /** CCCD 12 so hoac CMND 9 so. */
@@ -195,7 +199,7 @@ function validateShippers(entry: CustomerDirectoryEntry): CustomerFieldError[] {
         section: "shipper",
         itemId: s.id,
         field: "shipperPhone",
-        message: "Số điện thoại không hợp lệ (9–11 số).",
+        message: "Số điện thoại quá dài (tối đa 20 chữ số).",
       });
     }
   }
@@ -203,24 +207,25 @@ function validateShippers(entry: CustomerDirectoryEntry): CustomerFieldError[] {
   return errors;
 }
 
+function consigneeDisplayName(c: CustomerSavedConsignee): string {
+  const name = c.consigneeName.trim();
+  if (name) return name;
+  const label = c.label.trim().replace(/^[A-Z]{3}\s*[-–—]\s*/i, "").trim();
+  if (label) return label;
+  return c.notifyName.trim();
+}
+
 function validateConsignees(entry: CustomerDirectoryEntry): CustomerFieldError[] {
   const errors: CustomerFieldError[] = [];
   for (const c of entry.savedConsignees ?? []) {
     if (isSavedConsigneeEmpty(c)) continue;
-    if (!c.consigneeName.trim()) {
-      errors.push({
-        section: "consignee",
-        itemId: c.id,
-        field: "consigneeName",
-        message: "Tên người nhận bắt buộc.",
-      });
-    }
+    // Tên / SĐT không bắt buộc định dạng cố định — dữ liệu Excel quốc tế + Notify.
     if (!isValidVnPhone(c.consigneePhone)) {
       errors.push({
         section: "consignee",
         itemId: c.id,
         field: "consigneePhone",
-        message: "Số điện thoại không hợp lệ (9–11 số).",
+        message: "Số điện thoại quá dài (tối đa 20 chữ số).",
       });
     }
   }
@@ -447,12 +452,20 @@ export function normalizeCustomerEntryForSave(
   const shortCode =
     normalizeCustomerShortCode(entry.shortCode ?? "") ||
     (isValidCustomerSyncCode(code) ? normalizeCustomerSyncCode(code) : "");
+  const savedConsignees = (entry.savedConsignees ?? [])
+    .filter((c) => !isSavedConsigneeEmpty(c))
+    .map((c) => {
+      const inferred = consigneeDisplayName(c);
+      if (c.consigneeName.trim() || !inferred) return c;
+      return { ...c, consigneeName: inferred };
+    });
+
   return clampCustomerDirectoryEntry({
     ...entry,
     code,
     shortCode,
     savedShippers: (entry.savedShippers ?? []).filter((s) => !isSavedShipperEmpty(s)),
-    savedConsignees: (entry.savedConsignees ?? []).filter((c) => !isSavedConsigneeEmpty(c)),
+    savedConsignees,
     savedGoods: (entry.savedGoods ?? []).filter((g) => !isSavedGoodsEmpty(g)),
     savedVehicles: (entry.savedVehicles ?? []).filter((v) => !isSavedVehicleEmpty(v)),
   });

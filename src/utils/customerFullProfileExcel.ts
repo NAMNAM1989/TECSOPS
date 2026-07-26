@@ -5,8 +5,53 @@ import type {
   CustomerSavedShipper,
   CustomerSavedVehicle,
 } from "../types/customerDirectory";
+import {
+  inferLetterKeyFromCustomerCode,
+  isValidCustomerSyncCode,
+  normalizeCustomerSyncCode,
+} from "./customerCodeOps";
 import { normalizeAgentCode } from "./customerProfileInputFormat";
 import { scaffoldNewCustomer } from "./customerDirectoryScaffold";
+import { downloadXlsxBuffer } from "./downloadXlsx";
+
+/** Một mẫu cố định — Tải mẫu / Import / Export dùng chung. */
+export const CUSTOMER_FULL_PROFILE_HEADERS = [
+  "STT",
+  "Mã KH",
+  "DEST",
+  "Người gửi - Họ tên",
+  "Người gửi - Địa chỉ",
+  "Người gửi - Email",
+  "Người gửi - ĐT",
+  "Người gửi - MST",
+  "Người nhận - Họ tên",
+  "Người nhận - Địa chỉ",
+  "Người nhận - Email",
+  "Người nhận - ĐT",
+  "Người nhận - MST",
+  "Notify Party",
+  "Loại hàng",
+  "Biển số xe",
+  "Tên tài xế",
+  "CCCD tài xế",
+] as const;
+
+const FULL_PROFILE_COLUMN_WIDTHS = [
+  6, 14, 10, 35, 45, 24, 16, 16, 35, 45, 24, 16, 16, 28, 20, 16, 20, 18,
+];
+
+const FULL_PROFILE_GUIDE_LINES = [
+  "HƯỚNG DẪN — MẪU HỒ SƠ KHÁCH HÀNG (duy nhất)",
+  "",
+  "1. Sheet 'HỒ SƠ KH': giữ nguyên tiêu đề cột. Mẫu / Import / Export dùng cùng format này.",
+  "2. Mã KH: khóa đồng bộ (2–5 chữ A–Z, VD: CITYLINK). Mã đã có → hợp nhất; chưa có → tạo mới.",
+  "3. Một khách có thể nhiều dòng (nhiều CNEE / DEST / loại hàng / xe).",
+  "4. Người gửi: Họ tên, Địa chỉ, Email, ĐT, MST — đồng bộ tab Người gửi & điền OPS.",
+  "5. Người nhận + Notify Party — đồng bộ tab CNEE & notify_name khi điền eSID.",
+  "6. Loại hàng — tab Tên hàng / Nature of Goods.",
+  "7. Biển số xe, Tên tài xế, CCCD — tab Xe / TX.",
+  "8. Tải mẫu → điền → Import. Export xuất đúng cùng cột để chỉnh rồi Import lại.",
+];
 
 function cellText(v: unknown): string {
   if (v == null) return "";
@@ -260,31 +305,98 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
   };
 }
 
-export async function buildCustomerFullProfileTemplateWorkbook() {
+async function createFullProfileWorkbookShell(): Promise<{
+  wb: import("exceljs").Workbook;
+  ws: import("exceljs").Worksheet;
+}> {
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("HỒ SƠ KH");
+  ws.addRow([...CUSTOMER_FULL_PROFILE_HEADERS]);
+  ws.getRow(1).font = { bold: true };
+  ws.columns = FULL_PROFILE_COLUMN_WIDTHS.map((width) => ({ width }));
 
-  ws.addRow([
-    "STT",
-    "Mã KH",
-    "DEST",
-    "Người gửi - Họ tên",
-    "Người gửi - Địa chỉ",
-    "Người gửi - Email",
-    "Người gửi - ĐT",
-    "Người gửi - MST",
-    "Người nhận - Họ tên",
-    "Người nhận - Địa chỉ",
-    "Người nhận - Email",
-    "Người nhận - ĐT",
-    "Người nhận - MST",
-    "Notify Party",
-    "Loại hàng",
-    "Biển số xe",
-    "Tên tài xế",
-    "CCCD tài xế",
-  ]);
+  const guide = wb.addWorksheet("Hướng dẫn");
+  FULL_PROFILE_GUIDE_LINES.forEach((line, i) => {
+    guide.getRow(i + 1).getCell(1).value = line;
+  });
+  guide.getColumn(1).width = 100;
+
+  return { wb, ws };
+}
+
+function destFromConsigneeLabel(label: string): string {
+  const m = label.trim().match(/^([A-Z]{3})\s*[-–—]/i);
+  return m?.[1]?.toUpperCase() ?? "";
+}
+
+function defaultShipperOf(
+  entry: CustomerDirectoryEntry,
+): CustomerSavedShipper | undefined {
+  const list = entry.savedShippers ?? [];
+  if (!list.length) return undefined;
+  return list.find((s) => s.id === entry.defaultShipperId) ?? list[0];
+}
+
+/** Xuất danh bạ đúng mẫu Hồ sơ KH (cùng cột Tải mẫu / Import). */
+export async function buildCustomerFullProfileExportWorkbook(
+  customers: readonly CustomerDirectoryEntry[],
+) {
+  const { wb, ws } = await createFullProfileWorkbookShell();
+  let stt = 1;
+
+  for (const entry of customers) {
+    const code = normalizeAgentCode(entry.code);
+    if (!code) continue;
+
+    const shipper = defaultShipperOf(entry);
+    const shipperName = shipper?.shipperName?.trim() || entry.name.trim();
+    const shipperAddress =
+      shipper?.shipperAddress?.trim() || (entry.address ?? "").trim();
+    const shipperEmail =
+      shipper?.shipperEmail?.trim() || (entry.email ?? "").trim();
+    const shipperPhone =
+      shipper?.shipperPhone?.trim() || (entry.phone ?? "").trim();
+    const shipperTax =
+      shipper?.taxCode?.trim() || (entry.taxCode ?? "").trim();
+
+    const cnees = entry.savedConsignees ?? [];
+    const goods = entry.savedGoods ?? [];
+    const vehicles = entry.savedVehicles ?? [];
+    const rowCount = Math.max(cnees.length, goods.length, vehicles.length, 1);
+
+    for (let i = 0; i < rowCount; i++) {
+      const cnee = cnees[i];
+      const g = goods[i];
+      const v = vehicles[i];
+      ws.addRow([
+        stt++,
+        code,
+        cnee ? destFromConsigneeLabel(cnee.label) : "",
+        shipperName,
+        shipperAddress,
+        shipperEmail,
+        shipperPhone,
+        shipperTax,
+        cnee?.consigneeName ?? "",
+        cnee?.consigneeAddress ?? "",
+        cnee?.consigneeEmail ?? "",
+        cnee?.consigneePhone ?? "",
+        "",
+        cnee?.notifyName ?? "",
+        g?.goodsDescription ?? "",
+        v?.licensePlate ?? "",
+        v?.driverName ?? "",
+        v?.driverId ?? "",
+      ]);
+    }
+  }
+
+  return wb;
+}
+
+export async function buildCustomerFullProfileTemplateWorkbook() {
+  const { wb, ws } = await createFullProfileWorkbookShell();
 
   ws.addRow([
     1,
@@ -328,51 +440,152 @@ export async function buildCustomerFullProfileTemplateWorkbook() {
     "079987654321",
   ]);
 
-  ws.getRow(1).font = { bold: true };
-  ws.columns = [
-    { width: 6 },
-    { width: 14 },
-    { width: 10 },
-    { width: 35 },
-    { width: 45 },
-    { width: 24 },
-    { width: 16 },
-    { width: 16 },
-    { width: 35 },
-    { width: 45 },
-    { width: 24 },
-    { width: 16 },
-    { width: 16 },
-    { width: 28 },
-    { width: 20 },
-    { width: 16 },
-    { width: 20 },
-    { width: 18 },
-  ];
-
-  const guide = wb.addWorksheet("Hướng dẫn");
-  [
-    "HƯỚNG DẪN NHẬP DỮ LIỆU MẪU HỒ SƠ KHÁCH HÀNG (4 TAB: NGƯỜI GỬI, CNEE, TÊN HÀNG, XE/TX)",
-    "",
-    "1. Sheet 'HỒ SƠ KH': Giữ nguyên tiêu đề các cột.",
-    "2. Mã KH (Customer Code): Khóa chính nhận diện khách hàng (VD: CITYLINK, ORIENT). Cần 2-5 chữ cái A-Z.",
-    "3. Một khách hàng có thể có nhiều dòng trong file tương ứng với nhiều CNEE / DEST / Loại hàng / Xe khác nhau.",
-    "4. Các cột Người gửi: Điền thông tin Người gửi (Shipper) mặc định của khách hàng.",
-    "5. Các cột Người nhận: Điền thông tin CNEE (Tên, Địa chỉ, SĐT, Email, Notify) nhận hàng tại nước ngoài.",
-    "6. Cột Loại hàng (Nature of Goods): Điền mô tả tên hàng hoá khai báo eSID / in phiếu cân.",
-    "7. Cột Biển số xe, Tên tài xế, CCCD: Điền phương tiện & tài xế giao nhận.",
-    "8. Sau khi nhập file xong, vào màn hình Khách hàng bấm nút 'Import' để tải file lên.",
-  ].forEach((line, i) => {
-    guide.getRow(i + 1).getCell(1).value = line;
-  });
-  guide.getColumn(1).width = 100;
-
   return wb;
 }
 
 export async function downloadCustomerFullProfileTemplate(): Promise<void> {
-  const { downloadXlsxBuffer } = await import("./downloadXlsx");
   const wb = await buildCustomerFullProfileTemplateWorkbook();
   const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
-  downloadXlsxBuffer(buf, "mau-ho-so-khach-hang-day-du-4-tab.xlsx");
+  downloadXlsxBuffer(buf, "mau-ho-so-khach-hang.xlsx");
+}
+
+export async function downloadCustomerFullProfileExport(
+  customers: readonly CustomerDirectoryEntry[],
+): Promise<void> {
+  const wb = await buildCustomerFullProfileExportWorkbook(customers);
+  const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+  downloadXlsxBuffer(
+    buf,
+    `ho-so-khach-hang-${new Date().toISOString().slice(0, 10)}.xlsx`,
+  );
+}
+
+function findExistingByImportCode(
+  customers: CustomerDirectoryEntry[],
+  byCode: Map<string, CustomerDirectoryEntry>,
+  importCode: string,
+): CustomerDirectoryEntry | null {
+  const exact = byCode.get(importCode.toLowerCase());
+  if (exact) return exact;
+
+  if (!isValidCustomerSyncCode(importCode)) return null;
+  const key = normalizeCustomerSyncCode(importCode);
+  return (
+    customers.find((c) => {
+      const code = normalizeAgentCode(c.code);
+      if (code === key) return true;
+      const letterKey = inferLetterKeyFromCustomerCode(code);
+      return letterKey === key && (code === key || code.startsWith(key));
+    }) ?? null
+  );
+}
+
+/** Hợp nhất import mẫu Hồ sơ KH vào danh bạ hiện có. */
+export function applyFullProfileImport(
+  existing: readonly CustomerDirectoryEntry[],
+  imported: readonly CustomerDirectoryEntry[],
+): {
+  customers: CustomerDirectoryEntry[];
+  created: number;
+  updated: number;
+  consigneesAdded: number;
+  goodsAdded: number;
+} {
+  const customers = existing.map((e) => ({ ...e }));
+  const byCode = new Map(
+    customers.map((e) => [e.code.trim().toLowerCase(), e]),
+  );
+  let created = 0;
+  let updated = 0;
+  let consigneesAdded = 0;
+  let goodsAdded = 0;
+
+  for (const imp of imported) {
+    const code = normalizeAgentCode(imp.code);
+    if (!code) continue;
+
+    const hit = findExistingByImportCode(customers, byCode, code);
+    if (hit) {
+      if (!hit.name || hit.name.startsWith("Khách hàng ")) hit.name = imp.name;
+      if (!hit.address && imp.address) hit.address = imp.address;
+      if (!hit.email && imp.email) hit.email = imp.email;
+      if (!hit.phone && imp.phone) hit.phone = imp.phone;
+      if (!hit.taxCode && imp.taxCode) hit.taxCode = imp.taxCode;
+
+      const existingShippers = [...(hit.savedShippers ?? [])];
+      for (const shp of imp.savedShippers ?? []) {
+        const isDup = existingShippers.some(
+          (x) =>
+            x.shipperName.toLowerCase() === shp.shipperName.toLowerCase() &&
+            x.shipperAddress.toLowerCase() === shp.shipperAddress.toLowerCase(),
+        );
+        if (!isDup) existingShippers.push(shp);
+      }
+      hit.savedShippers = existingShippers;
+      if (!hit.defaultShipperId && existingShippers.length > 0) {
+        hit.defaultShipperId = existingShippers[0]!.id;
+      }
+
+      const existingCnees = [...(hit.savedConsignees ?? [])];
+      for (const cnee of imp.savedConsignees ?? []) {
+        const isDup = existingCnees.some(
+          (x) =>
+            x.consigneeName.toLowerCase() === cnee.consigneeName.toLowerCase() &&
+            x.consigneeAddress.toLowerCase() ===
+              cnee.consigneeAddress.toLowerCase(),
+        );
+        if (!isDup) {
+          existingCnees.push(cnee);
+          consigneesAdded++;
+        }
+      }
+      hit.savedConsignees = existingCnees;
+      if (!hit.defaultConsigneeId && existingCnees.length > 0) {
+        hit.defaultConsigneeId = existingCnees[0]!.id;
+      }
+
+      const existingGoods = [...(hit.savedGoods ?? [])];
+      for (const g of imp.savedGoods ?? []) {
+        const isDup = existingGoods.some(
+          (x) =>
+            x.goodsDescription.toLowerCase() ===
+            g.goodsDescription.toLowerCase(),
+        );
+        if (!isDup) {
+          existingGoods.push(g);
+          goodsAdded++;
+        }
+      }
+      hit.savedGoods = existingGoods;
+      if (!hit.defaultGoodsId && existingGoods.length > 0) {
+        hit.defaultGoodsId = existingGoods[0]!.id;
+      }
+
+      const existingVehicles = [...(hit.savedVehicles ?? [])];
+      for (const v of imp.savedVehicles ?? []) {
+        const isDup = existingVehicles.some(
+          (x) =>
+            (v.licensePlate &&
+              x.licensePlate.toLowerCase() === v.licensePlate.toLowerCase()) ||
+            (v.driverName &&
+              x.driverName.toLowerCase() === v.driverName.toLowerCase()),
+        );
+        if (!isDup) existingVehicles.push(v);
+      }
+      hit.savedVehicles = existingVehicles;
+      if (!hit.defaultVehicleId && existingVehicles.length > 0) {
+        hit.defaultVehicleId = existingVehicles[0]!.id;
+      }
+
+      updated++;
+    } else {
+      customers.push(imp);
+      byCode.set(code.toLowerCase(), imp);
+      created++;
+      consigneesAdded += imp.savedConsignees?.length ?? 0;
+      goodsAdded += imp.savedGoods?.length ?? 0;
+    }
+  }
+
+  return { customers, created, updated, consigneesAdded, goodsAdded };
 }

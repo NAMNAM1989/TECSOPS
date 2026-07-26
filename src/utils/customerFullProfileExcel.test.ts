@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
-import { parseCustomerFullProfileWorkbook } from "./customerFullProfileExcel";
-import { applyFullProfileImport } from "./customerCustomsOpsExcel";
+import {
+  applyFullProfileImport,
+  parseCustomerFullProfileWorkbook,
+} from "./customerFullProfileExcel";
 
 describe("parseCustomerFullProfileWorkbook", () => {
   it("đọc và bóc tách thành công file Excel 22 cột thực tế", async () => {

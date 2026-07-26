@@ -23,7 +23,6 @@ import {
   Banner,
   Button,
   EmptyState,
-  OverflowMenu,
   PageSkeleton,
   SyncStatusPill,
   useToast,
@@ -46,10 +45,7 @@ import {
   patchCustomerSavedListItem,
   removeCustomerSavedListItem,
 } from "../utils/customerSavedListOps";
-import {
-  formatVnPhoneDisplay,
-  normalizeAgentCode,
-} from "../utils/customerProfileInputFormat";
+import { normalizeAgentCode } from "../utils/customerProfileInputFormat";
 import {
   normalizeCustomerNameInput,
   customerNameWhileTyping,
@@ -64,14 +60,10 @@ import {
   parseDefaultRate,
 } from "../utils/customerAccountFields";
 import {
-  applyCustomsOpsImport,
   applyFullProfileImport,
-  downloadCustomsOpsExport,
-  parseCustomsOpsWorkbook,
-} from "../utils/customerCustomsOpsExcel";
-import {
-  parseCustomerFullProfileWorkbook,
+  downloadCustomerFullProfileExport,
   downloadCustomerFullProfileTemplate,
+  parseCustomerFullProfileWorkbook,
 } from "../utils/customerFullProfileExcel";
 import type { SyncStatus } from "../hooks/useShipmentSync";
 
@@ -85,7 +77,7 @@ type Props = {
 };
 
 type TypeFilter = "ALL" | CustomerType;
-type ProfileTab = "info" | "contact" | "defaults";
+type ProfileTab = "info" | "defaults";
 type MobilePane = "list" | "detail";
 type SaveStatus = "idle" | "saved" | "error";
 
@@ -378,38 +370,17 @@ export function CustomersPage({
     setImporting(true);
     try {
       const buf = await file.arrayBuffer();
-
-      // Thử đọc theo mẫu Hồ Sơ KH (22 cột)
-      try {
-        const fullResult = await parseCustomerFullProfileWorkbook(buf);
-        if (fullResult.customerCount > 0) {
-          const result = applyFullProfileImport(draft, fullResult.customers);
-          setDraft(result.customers.map((e) => clampCustomerDirectoryEntry(e)));
-          toast.success(
-            `Tạo ${result.created}, cập nhật ${result.updated}. Nhớ bấm Lưu.`,
-            "Import Hồ Sơ KH",
-          );
-          const last = result.customers[result.customers.length - 1];
-          if (last) {
-            setSelectedId(last.id);
-            if (isMobile) setMobilePane("detail");
-          }
-          return;
-        }
-      } catch {
-        // Fallback về mẫu 9 cột phẳng tiêu chuẩn nếu không phải mẫu 22 cột
+      const fullResult = await parseCustomerFullProfileWorkbook(buf);
+      if (fullResult.customerCount <= 0) {
+        throw new Error(
+          "Không có dòng dữ liệu hợp lệ. Dùng đúng mẫu Hồ sơ KH (nút Mẫu).",
+        );
       }
-
-      const rows = await parseCustomsOpsWorkbook(buf);
-      const result = applyCustomsOpsImport(draft, rows);
+      const result = applyFullProfileImport(draft, fullResult.customers);
       setDraft(result.customers.map((e) => clampCustomerDirectoryEntry(e)));
-      const errHint =
-        result.errors.length > 0
-          ? ` · ${result.errors.length} lỗi dòng`
-          : "";
       toast.success(
-        `Tạo ${result.created}, cập nhật ${result.updated}, bỏ ${result.skipped}${errHint}. Nhớ bấm Lưu.`,
-        "Import Excel",
+        `Tạo ${result.created}, cập nhật ${result.updated}. Nhớ bấm Lưu.`,
+        "Import Hồ sơ KH",
       );
       const last = result.customers[result.customers.length - 1];
       if (last) {
@@ -418,7 +389,9 @@ export function CustomersPage({
       }
     } catch (e) {
       toast.error(
-        e instanceof Error ? e.message : "Không đọc được file Excel.",
+        e instanceof Error
+          ? e.message
+          : "File không đúng mẫu Hồ sơ KH. Hãy tải Mẫu rồi nhập lại.",
         "Import thất bại",
       );
     } finally {
@@ -691,30 +664,6 @@ export function CustomersPage({
     return <PageSkeleton variant="customers" />;
   }
 
-  const contact = selected ? contactOf(selected) : null;
-
-  const toolsItems = [
-    {
-      id: "template",
-      label: "Tải mẫu Excel",
-      description: "Hồ sơ đầy đủ 22 cột",
-      onSelect: () => void downloadCustomerFullProfileTemplate(),
-    },
-    {
-      id: "import",
-      label: importing ? "Đang import…" : "Import Excel",
-      description: "Mẫu 22 cột hoặc 9 cột",
-      disabled: importing,
-      onSelect: () => importInputRef.current?.click(),
-    },
-    {
-      id: "export",
-      label: "Export Excel",
-      description: "Mẫu 9 cột hiện tại",
-      onSelect: () => void downloadCustomsOpsExport(draft),
-    },
-  ];
-
   return (
     <div className="flex min-h-screen flex-col bg-ui-background text-ui-text">
       <header className="sticky top-0 z-30 border-b border-ui-border bg-ui-surface pt-[env(safe-area-inset-top)]">
@@ -754,7 +703,33 @@ export function CustomersPage({
               ) : null}
             </p>
           </div>
-          <OverflowMenu label="Công cụ" items={toolsItems} compact={isMobile} />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              title="Tải mẫu Hồ sơ KH cố định"
+              onClick={() => void downloadCustomerFullProfileTemplate()}
+            >
+              Mẫu
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={importing}
+              title="Import đúng mẫu Hồ sơ KH"
+              onClick={() => importInputRef.current?.click()}
+            >
+              {importing ? "…" : "Import"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              title="Export đúng mẫu Hồ sơ KH"
+              onClick={() => void downloadCustomerFullProfileExport(draft)}
+            >
+              Export
+            </Button>
+          </div>
           <div className="hidden items-center gap-1.5 sm:flex">
             <Button
               variant="secondary"
@@ -890,7 +865,6 @@ export function CustomersPage({
                       {(
                         [
                           ["info", "Thông tin"],
-                          ["contact", "Liên hệ"],
                           ["defaults", "Dữ liệu mặc định"],
                         ] as const
                       ).map(([id, label]) => (
@@ -1003,7 +977,7 @@ export function CustomersPage({
                               ))}
                             </select>
                           </label>
-                          <label className="col-span-2 block sm:col-span-3">
+                          <label className="col-span-2 block sm:col-span-2">
                             <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
                               Tên khách
                             </span>
@@ -1031,6 +1005,21 @@ export function CustomersPage({
                               }
                             />
                           </label>
+                          <label className="block">
+                            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                              Đơn giá (VND/kg)
+                            </span>
+                            <input
+                              value={formatDefaultRate(selected.defaultRate)}
+                              onChange={(e) =>
+                                updateCustomer(selected.id, {
+                                  defaultRate: parseDefaultRate(e.target.value),
+                                })
+                              }
+                              className={`${FIELD} font-mono`}
+                              inputMode="decimal"
+                            />
+                          </label>
                         </div>
 
                         <div className="mt-4 rounded-lg border border-red-200 bg-red-50/80 p-3">
@@ -1048,91 +1037,6 @@ export function CustomersPage({
                           >
                             Xóa khách
                           </Button>
-                        </div>
-                      </section>
-                    ) : null}
-
-                    {profileTab === "contact" ? (
-                      <section className="rounded-xl border border-ui-border bg-ui-surface p-3 shadow-sm">
-                        <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
-                          Liên hệ (đồng bộ người gửi mặc định)
-                        </p>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                          <label className="block">
-                            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
-                              SĐT
-                            </span>
-                            <input
-                              value={contact?.phone ?? ""}
-                              onChange={(e) =>
-                                updateCustomer(selected.id, { phone: e.target.value })
-                              }
-                              onBlur={(e) =>
-                                updateCustomer(selected.id, {
-                                  phone: formatVnPhoneDisplay(e.target.value),
-                                })
-                              }
-                              className={`${FIELD} tabular-nums`}
-                            />
-                          </label>
-                          <label className="block">
-                            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
-                              Email
-                            </span>
-                            <input
-                              value={contact?.email ?? ""}
-                              onChange={(e) =>
-                                updateCustomer(selected.id, {
-                                  email: e.target.value.trim(),
-                                })
-                              }
-                              className={FIELD}
-                            />
-                          </label>
-                          <label className="block">
-                            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
-                              MST
-                            </span>
-                            <input
-                              value={contact?.taxCode ?? ""}
-                              onChange={(e) =>
-                                updateCustomer(selected.id, {
-                                  taxCode: e.target.value.trim(),
-                                })
-                              }
-                              className={`${FIELD} font-mono`}
-                            />
-                          </label>
-                          <label className="block">
-                            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
-                              Đơn giá (VND/kg)
-                            </span>
-                            <input
-                              value={formatDefaultRate(selected.defaultRate)}
-                              onChange={(e) =>
-                                updateCustomer(selected.id, {
-                                  defaultRate: parseDefaultRate(e.target.value),
-                                })
-                              }
-                              className={`${FIELD} font-mono`}
-                              inputMode="decimal"
-                            />
-                          </label>
-                          <label className="block sm:col-span-2">
-                            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
-                              Địa chỉ
-                            </span>
-                            <textarea
-                              value={contact?.address ?? ""}
-                              onChange={(e) =>
-                                updateCustomer(selected.id, {
-                                  address: e.target.value,
-                                })
-                              }
-                              rows={2}
-                              className={`${FIELD} resize-y`}
-                            />
-                          </label>
                         </div>
                       </section>
                     ) : null}

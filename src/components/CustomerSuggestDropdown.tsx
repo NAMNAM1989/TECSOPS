@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { filterCustomerDirectoryEntries } from "../utils/customerShipmentPatch";
@@ -31,15 +38,27 @@ export function CustomerSuggestDropdown({
   listRef,
 }: CustomerSuggestDropdownProps) {
   const suggestions = useMemo(
-    () => filterCustomerDirectoryEntries(directory, query, CUSTOMER_SUGGEST_LIMIT, selectedId),
-    [directory, query, selectedId]
+    () =>
+      filterCustomerDirectoryEntries(
+        directory,
+        query,
+        CUSTOMER_SUGGEST_LIMIT,
+        selectedId,
+      ),
+    [directory, query, selectedId],
   );
 
   useEffect(() => {
     if (activeIdx >= suggestions.length) onActiveIdxChange(0);
   }, [activeIdx, onActiveIdxChange, suggestions.length]);
 
-  if (!open || !anchor || suggestions.length === 0 || typeof document === "undefined") return null;
+  if (
+    !open ||
+    !anchor ||
+    suggestions.length === 0 ||
+    typeof document === "undefined"
+  )
+    return null;
 
   return createPortal(
     <div
@@ -52,9 +71,9 @@ export function CustomerSuggestDropdown({
         width: Math.max(anchor.width, 240),
         zIndex: 520,
       }}
-      className="max-h-56 overflow-auto rounded-xl border border-black/[0.08] bg-white py-1 shadow-apple-md dark:border-white/10 dark:bg-ops-elevated"
+      className="max-h-56 overflow-auto rounded-xl border border-black/[0.08] bg-white py-1 shadow-apple-md"
     >
-      <p className="border-b border-black/[0.06] px-3 py-1 text-[9px] font-semibold uppercase tracking-wide text-apple-tertiary dark:border-white/[0.06] dark:text-ops-tertiary">
+      <p className="border-b border-black/[0.06] px-3 py-1 text-[9px] font-semibold uppercase tracking-wide text-apple-tertiary">
         Tab chọn · ↑↓ lọc
       </p>
       {suggestions.map((entry, idx) => (
@@ -68,23 +87,28 @@ export function CustomerSuggestDropdown({
           onClick={() => onPick(entry)}
           className={`block w-full px-3 py-2 text-left transition-colors ${
             idx === activeIdx
-              ? "bg-apple-blue/10 ring-1 ring-inset ring-apple-blue/25 dark:bg-apple-blue/15"
-              : "hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+              ? "bg-apple-blue/10 ring-1 ring-inset ring-apple-blue/25"
+              : "hover:bg-black/[0.03]"
           } ${selectedId === entry.id ? "font-bold" : ""}`}
         >
-          <span className="font-mono text-[10px] font-semibold text-apple-secondary dark:text-ops-secondary">
+          <span className="font-mono text-[10px] font-semibold text-apple-secondary">
             {entry.code}
           </span>
           <span className="mx-1.5 text-apple-tertiary">·</span>
-          <span className="text-[12px] font-semibold text-apple-label dark:text-ops-label">{entry.name}</span>
+          <span className="text-[12px] font-semibold text-apple-label">
+            {entry.name}
+          </span>
         </button>
       ))}
     </div>,
-    document.body
+    document.body,
   );
 }
 
-export function useCustomerSuggestAnchor(inputRef: RefObject<HTMLInputElement>, open: boolean) {
+export function useCustomerSuggestAnchor(
+  inputRef: RefObject<HTMLInputElement>,
+  open: boolean,
+) {
   const [anchor, setAnchor] = useState<SuggestAnchor | null>(null);
 
   const updateAnchor = useCallback(() => {
@@ -167,6 +191,14 @@ export function useCustomerSuggestKeyboard({
       }
       return false;
     },
-    [activeIdx, onClose, onPickActive, onTabPick, open, setActiveIdx, suggestionCount]
+    [
+      activeIdx,
+      onClose,
+      onPickActive,
+      onTabPick,
+      open,
+      setActiveIdx,
+      suggestionCount,
+    ],
   );
 }

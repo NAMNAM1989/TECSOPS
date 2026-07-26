@@ -76,7 +76,6 @@ function StatusBanner({
   if (snap.pcsExcess) {
     return (
       <div className="flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-xs font-bold text-red-900">
-        <span className="shrink-0 text-base">🔴</span>
         <span>
           DƯ KIỆN — Tổng DIM (<strong>{snap.sumDimPcs}</strong>) vượt quá kiện lô (<strong>{declaredPcs}</strong>). Hãy bấm <strong>Xóa</strong> bớt dòng ước tính.
         </span>
@@ -86,7 +85,6 @@ function StatusBanner({
   if (actionNote?.startsWith("❌")) {
     return (
       <div className="flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-xs font-bold text-red-900">
-        <span className="shrink-0 text-base">❌</span>
         <span>{actionNote.slice(2)}</span>
       </div>
     );
@@ -94,11 +92,10 @@ function StatusBanner({
   if (snap.pcsMatch) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-xs font-extrabold text-emerald-900">
-        <span className="shrink-0 text-base">🎉</span>
         <span>
           ĐÃ ĐỦ 100% — {declaredPcs}/{declaredPcs} kiện.{" "}
-          <span className="hidden lg:inline">Bấm nút 🟢 LƯU DIM bên phải.</span>
-          <span className="lg:hidden">Bấm nút 🟢 LƯU DIM bên dưới.</span>
+          <span className="hidden lg:inline">Bấm LƯU DIM bên phải.</span>
+          <span className="lg:hidden">Bấm LƯU DIM bên dưới.</span>
         </span>
       </div>
     );
@@ -106,7 +103,7 @@ function StatusBanner({
   if (snap.remainingPcs > 0) {
     return (
       <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs font-bold text-amber-900">
-        <span className="shrink-0 text-base">⚠️</span>
+        <span className="sr-only">Cảnh báo</span>
         <span>
           Đang thiếu <strong>{snap.remainingPcs} kiện</strong> — Bấm nút{" "}
           <strong className="text-violet-800">⚡ TỰ ĐỘNG TẠO ĐỦ DIM</strong>{" "}
@@ -780,7 +777,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                     </p>
                   </div>
                 </div>
-                <span className="shrink-0 rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider backdrop-blur-sm">
+                <span className="shrink-0 rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider">
                   1-CLICK ➔
                 </span>
               </button>
@@ -1085,7 +1082,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
         </div>
 
         {/* ── FOOTER — mobile/md only (lg+ uses Col C save button) ── */}
-        <div className="shrink-0 border-t border-black/[0.06] p-3.5 bg-white/80 backdrop-blur-sm lg:hidden">
+        <div className="shrink-0 border-t border-ui-border bg-ui-surface p-3.5 lg:hidden">
           <div className="flex gap-2">
             <button
               type="button"

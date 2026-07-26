@@ -4,8 +4,8 @@ import { formatKgTotal } from "../utils/formatKgTotal";
 import { computeWarehouseMetrics } from "../utils/warehouseMetrics";
 
 const CHIP_RING: Record<Warehouse, string> = {
-  "TECS-TCS": "ring-sky-400/55 dark:ring-sky-400/40",
-  "TECS-SCSC": "ring-violet-400/55 dark:ring-violet-400/40",
+  "TECS-TCS": "ring-sky-400/55",
+  "TECS-SCSC": "ring-violet-400/55",
 };
 
 interface Props {
@@ -25,7 +25,11 @@ export function OpsMobileWarehouseChips({
   const metrics = computeWarehouseMetrics(rows);
 
   return (
-    <div className="grid grid-cols-2 gap-1" role="tablist" aria-label="Chọn kho">
+    <div
+      className="grid grid-cols-2 gap-1"
+      role="tablist"
+      aria-label="Chọn kho"
+    >
       {WAREHOUSE_ORDER.map((wh) => {
         const m = metrics[wh];
         const isActive = active === wh;
@@ -40,20 +44,20 @@ export function OpsMobileWarehouseChips({
             onClick={() => onSelect(wh)}
             className={`rounded-lg border px-1.5 py-1 text-left transition active:scale-[0.99] ${
               isActive
-                ? `border-transparent bg-white ring-1 ${CHIP_RING[wh]} dark:bg-dashboard-surface-dark`
-                : "border-black/[0.05] bg-white/70 dark:border-white/[0.06] dark:bg-dashboard-surface-dark/70"
+                ? `border-transparent bg-white ring-1 ${CHIP_RING[wh]}`
+                : "border-black/[0.05] bg-white/70"
             } ${hasSearchHit && !isActive ? "ring-1 ring-apple-blue/35" : ""}`}
           >
-            <p className="truncate text-[8px] font-bold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark">
+            <p className="truncate text-[8px] font-bold uppercase tracking-wide text-dashboard-muted">
               {warehouseLabel[wh]}
             </p>
-            <p className="mt-px truncate text-[10px] font-bold tabular-nums leading-none text-dashboard-primary dark:text-dashboard-primary-dark">
+            <p className="mt-px truncate text-[10px] font-bold tabular-nums leading-none text-dashboard-primary">
               {m.lots}
-              <span className="mx-0.5 font-normal text-dashboard-muted dark:text-dashboard-muted-dark">·</span>
+              <span className="mx-0.5 font-normal text-dashboard-muted">·</span>
               {m.pcs}
-              <span className="mx-0.5 font-normal text-dashboard-muted dark:text-dashboard-muted-dark">·</span>
+              <span className="mx-0.5 font-normal text-dashboard-muted">·</span>
               {formatKgTotal(m.kg)}
-              <span className="ml-0.5 text-[8px] font-semibold uppercase text-dashboard-muted dark:text-dashboard-muted-dark">
+              <span className="ml-0.5 text-[8px] font-semibold uppercase text-dashboard-muted">
                 kg
               </span>
             </p>

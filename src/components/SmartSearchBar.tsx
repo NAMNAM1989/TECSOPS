@@ -10,8 +10,8 @@ import {
 } from "../utils/shipmentSearch";
 
 const WAREHOUSE_CHIP_CLASS: Record<Warehouse, string> = {
-  "TECS-TCS": "bg-sky-100 text-sky-900 ring-sky-200/80 dark:bg-sky-950/60 dark:text-sky-200 dark:ring-sky-800/60",
-  "TECS-SCSC": "bg-violet-100 text-violet-900 ring-violet-200/80 dark:bg-violet-950/60 dark:text-violet-200 dark:ring-violet-800/60",
+  "TECS-TCS": "bg-sky-100 text-sky-900 ring-sky-200/80",
+  "TECS-SCSC": "bg-violet-100 text-violet-900 ring-violet-200/80",
 };
 
 interface SmartSearchBarProps {
@@ -47,10 +47,13 @@ export function SmartSearchBar({
   const trimmed = value.trim();
   const suggestions = useMemo(
     () => buildShipmentSearchMatches(searchableRows, trimmed, searchContext, 8),
-    [searchableRows, trimmed, searchContext]
+    [searchableRows, trimmed, searchContext],
   );
 
-  const warehouseCounts = useMemo(() => countShipmentsByWarehouse(matchedRows), [matchedRows]);
+  const warehouseCounts = useMemo(
+    () => countShipmentsByWarehouse(matchedRows),
+    [matchedRows],
+  );
 
   useEffect(() => {
     setActiveIdx(0);
@@ -91,7 +94,7 @@ export function SmartSearchBar({
     <div ref={rootRef} className="relative min-w-0 w-full flex-1">
       <div className="relative">
         <svg
-          className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-apple-tertiary dark:text-ops-tertiary ${
+          className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-apple-tertiary ${
             compact ? "left-2.5 h-3.5 w-3.5" : "left-3 h-4 w-4"
           }`}
           fill="none"
@@ -116,11 +119,17 @@ export function SmartSearchBar({
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder={compact ? "MAWB / xe / tài xế…" : "MAWB / HAWB · Số xe · Tên tài xế… (/ hoặc F)"}
+          placeholder={
+            compact
+              ? "MAWB / xe / tài xế…"
+              : "MAWB / HAWB · Số xe · Tên tài xế… (/ hoặc F)"
+          }
           autoComplete="off"
           spellCheck={false}
-          className={`w-full rounded-full border border-black/[0.06] bg-white font-medium text-dashboard-primary shadow-dashboard-card placeholder:font-normal placeholder:text-dashboard-muted focus:border-apple-blue/40 focus:outline-none focus:ring-2 focus:ring-apple-blue/15 dark:border-white/10 dark:bg-dashboard-surface-dark dark:text-dashboard-primary-dark dark:placeholder:text-dashboard-muted-dark ${
-            compact ? "h-7 py-0.5 pl-8 pr-7 text-[11px]" : "h-10 py-2 pl-10 pr-10 text-[13px]"
+          className={`w-full rounded-full border border-black/[0.06] bg-white font-medium text-dashboard-primary shadow-dashboard-card placeholder:font-normal placeholder:text-dashboard-muted focus:border-apple-blue/40 focus:outline-none focus:ring-2 focus:ring-apple-blue/15 ${
+            compact
+              ? "h-7 py-0.5 pl-8 pr-7 text-[11px]"
+              : "h-10 py-2 pl-10 pr-10 text-[13px]"
           }`}
           aria-label="Tìm kiếm thông minh MAWB, HAWB, số xe, tài xế"
           aria-expanded={open && suggestions.length > 0}
@@ -135,14 +144,14 @@ export function SmartSearchBar({
               setOpen(false);
               mergedRef.current?.focus();
             }}
-            className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-apple-tertiary hover:bg-black/[0.05] hover:text-apple-label dark:hover:bg-white/[0.06] dark:hover:text-ops-label"
+            className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-apple-tertiary hover:bg-black/[0.05] hover:text-apple-label"
             aria-label="Xóa tìm kiếm"
           >
             ×
           </button>
         ) : (
           <kbd
-            className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-black/[0.1] bg-black/[0.03] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-apple-tertiary sm:inline-block dark:border-white/10 dark:bg-white/[0.06] dark:text-ops-tertiary"
+            className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-black/[0.1] bg-black/[0.03] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-apple-tertiary sm:inline-block"
             title="Nhấn / hoặc F để tìm nhanh"
           >
             /
@@ -152,7 +161,7 @@ export function SmartSearchBar({
 
       {trimmed && matchedRows.length > 0 && !compact ? (
         <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
-          <span className="text-[10px] font-semibold text-apple-secondary dark:text-ops-secondary">
+          <span className="text-[10px] font-semibold text-apple-secondary">
             {matchedRows.length} lô
           </span>
           {WAREHOUSE_ORDER.filter((wh) => warehouseCounts[wh] > 0).map((wh) => (
@@ -170,18 +179,22 @@ export function SmartSearchBar({
         <ul
           id="smart-search-listbox"
           role="listbox"
-          className="absolute left-0 right-0 z-50 mt-1.5 max-h-72 overflow-auto rounded-2xl border border-black/[0.06] bg-white py-1 shadow-dashboard-card-hover dark:border-white/10 dark:bg-dashboard-surface-dark"
+          className="absolute left-0 right-0 z-50 mt-1.5 max-h-72 overflow-auto rounded-2xl border border-black/[0.06] bg-white py-1 shadow-dashboard-card-hover"
         >
           {suggestions.map((match, idx) => (
-            <li key={match.shipment.id} role="option" aria-selected={idx === activeIdx}>
+            <li
+              key={match.shipment.id}
+              role="option"
+              aria-selected={idx === activeIdx}
+            >
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pickMatch(match)}
                 className={`flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${
                   idx === activeIdx
-                    ? "bg-apple-blue/10 dark:bg-apple-blue/15"
-                    : "hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+                    ? "bg-apple-blue/10"
+                    : "hover:bg-black/[0.03]"
                 }`}
               >
                 <span
@@ -191,15 +204,15 @@ export function SmartSearchBar({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span className="font-mono text-[12px] font-bold text-dashboard-primary dark:text-dashboard-primary-dark">
+                    <span className="font-mono text-[12px] font-bold text-dashboard-primary">
                       {match.label}
                     </span>
-                    <span className="rounded bg-black/[0.05] px-1.5 py-0.5 text-[9px] font-semibold uppercase text-apple-secondary dark:bg-white/[0.06] dark:text-ops-secondary">
+                    <span className="rounded bg-black/[0.05] px-1.5 py-0.5 text-[9px] font-semibold uppercase text-apple-secondary">
                       {matchKindLabel(match.kind)}
                     </span>
                   </span>
                   {match.sublabel && (
-                    <span className="mt-0.5 block truncate text-[11px] text-apple-secondary dark:text-ops-secondary">
+                    <span className="mt-0.5 block truncate text-[11px] text-apple-secondary">
                       {match.sublabel}
                     </span>
                   )}
@@ -211,7 +224,7 @@ export function SmartSearchBar({
       )}
 
       {trimmed && suggestions.length === 0 && (
-        <p className="mt-1 text-center text-[10px] text-apple-tertiary dark:text-ops-tertiary">
+        <p className="mt-1 text-center text-[10px] text-apple-tertiary">
           Không tìm thấy lô khớp MAWB/HAWB, số xe hoặc tài xế.
         </p>
       )}

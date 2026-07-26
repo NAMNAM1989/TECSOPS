@@ -3,10 +3,10 @@ import type { SheetBookApplyResult, SheetBookSyncResult } from "../types/googleS
 
 export async function syncBookGoogleSheet(
   sessionDate: string,
-  opts?: { refresh?: boolean }
+  opts: { spreadsheetId: string; refresh?: boolean }
 ): Promise<SheetBookSyncResult> {
-  const q = new URLSearchParams({ sessionDate });
-  if (opts?.refresh) q.set("refresh", "1");
+  const q = new URLSearchParams({ sessionDate, spreadsheetId: opts.spreadsheetId });
+  if (opts.refresh) q.set("refresh", "1");
   const res = await fetch(`/api/sheets/book/sync?${q}`, { ...credFetch });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

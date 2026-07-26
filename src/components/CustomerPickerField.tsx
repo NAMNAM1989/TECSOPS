@@ -133,7 +133,10 @@ export function CustomerPickerField({
             commitTyped();
           }
         }}
-        className={inputClassName}
+        className={
+          inputClassName ||
+          "w-full min-h-11 rounded-xl border border-ui-border bg-ui-surface px-3 py-2 text-[13px] font-semibold text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-focus"
+        }
         aria-autocomplete="list"
         aria-expanded={showList}
       />

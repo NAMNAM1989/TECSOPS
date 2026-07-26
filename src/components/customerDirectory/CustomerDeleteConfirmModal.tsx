@@ -19,7 +19,8 @@ export function CustomerDeleteConfirmModal({
 }: Props) {
   const [typed, setTyped] = useState("");
   const codeNeedle = (customerCode || customerName).trim().toUpperCase();
-  const canDelete = codeNeedle.length > 0 && typed.trim().toUpperCase() === codeNeedle;
+  const canDelete =
+    codeNeedle.length > 0 && typed.trim().toUpperCase() === codeNeedle;
 
   if (!open) return null;
 
@@ -30,21 +31,31 @@ export function CustomerDeleteConfirmModal({
       aria-modal="true"
       aria-labelledby="delete-customer-title"
     >
-      <div className={`w-full max-w-md rounded-2xl border border-red-200 p-5 shadow-2xl dark:border-red-500/40 ${OPS.modal}`}>
-        <h3 id="delete-customer-title" className="text-lg font-semibold text-red-800 dark:text-red-300">
+      <div
+        className={`w-full max-w-md rounded-2xl border border-red-200 p-5 shadow-2xl ${OPS.modal}`}
+      >
+        <h3
+          id="delete-customer-title"
+          className="text-lg font-semibold text-red-800"
+        >
           Xóa khách hàng?
         </h3>
         <p className={`mt-2 text-sm ${OPS.secondary}`}>
-          Hành động này xóa toàn bộ Shipper, CNEE và tên hàng của{" "}
-          <strong className={OPS.title}>{customerName || "khách chưa đặt tên"}</strong>. Không thể hoàn tác.
+          Hành động này xóa toàn bộ Shipper, CNEE và tên hàng của{""}
+          <strong className={OPS.title}>
+            {customerName || "khách chưa đặt tên"}
+          </strong>
+          . Không thể hoàn tác.
         </p>
         <label className={`mt-4 block text-xs font-semibold ${OPS.title}`}>
-          Gõ mã khách <span className="font-mono text-red-700">{codeNeedle || "—"}</span> để xác nhận
+          Gõ mã khách{" "}
+          <span className="font-mono text-red-700">{codeNeedle || "—"}</span> để
+          xác nhận
           <input
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             autoFocus
-            className={`mt-1.5 w-full font-mono text-sm uppercase border-red-200 bg-red-50/50 focus:border-red-400 focus:ring-red-200 dark:border-red-500/40 dark:bg-red-500/10 dark:text-slate-100 ${OPS.input}`}
+            className={`mt-1.5 w-full font-mono text-sm uppercase border-red-200 bg-red-50/50 focus:border-red-400 focus:ring-red-200 ${OPS.input}`}
             placeholder={codeNeedle || "MÃ KH"}
           />
         </label>

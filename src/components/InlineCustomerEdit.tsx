@@ -54,8 +54,14 @@ export function InlineCustomerEdit({
   const skipBlurCommitRef = useRef(false);
 
   const suggestions = useMemo(
-    () => filterCustomerDirectoryEntries(customerDirectory, draft, CUSTOMER_SUGGEST_LIMIT, customerId),
-    [customerDirectory, customerId, draft]
+    () =>
+      filterCustomerDirectoryEntries(
+        customerDirectory,
+        draft,
+        CUSTOMER_SUGGEST_LIMIT,
+        customerId,
+      ),
+    [customerDirectory, customerId, draft],
   );
   const hasSuggestions = customerDirectory.length > 0 && suggestions.length > 0;
   const showList = listOpen && hasSuggestions;
@@ -89,8 +95,8 @@ export function InlineCustomerEdit({
         customerDirectory,
         entry.name,
         entry,
-        profileSelection
-      )
+        profileSelection,
+      ),
     );
     queueMicrotask(() => {
       skipBlurCommitRef.current = false;
@@ -109,8 +115,8 @@ export function InlineCustomerEdit({
           customerDirectory,
           trimmed,
           undefined,
-          profileSelection
-        )
+          profileSelection,
+        ),
       );
     }
     queueMicrotask(() => {
@@ -156,7 +162,7 @@ export function InlineCustomerEdit({
           e.stopPropagation();
           setEditing(true);
         }}
-        className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 dark:hover:bg-white/[0.08] ${className} ${
+        className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 ${className} ${
           displayValue === "" ? "ops-grid-placeholder" : ""
         }`}
       >
@@ -187,7 +193,10 @@ export function InlineCustomerEdit({
         }}
         onKeyDown={(e) => {
           if (handleSuggestKeyDown(e)) return;
-          if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
+          if (
+            e.key === "Enter" &&
+            !(e.nativeEvent as KeyboardEvent).isComposing
+          ) {
             e.preventDefault();
             commitDraft(onEnterNavigateDown);
           }
@@ -198,7 +207,7 @@ export function InlineCustomerEdit({
           }
         }}
         onClick={(e) => e.stopPropagation()}
-        className={`w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20 dark:bg-ops-elevated dark:text-zinc-100 ${className}`}
+        className={`w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20 ${className}`}
         aria-label="Khách hàng"
         aria-autocomplete="list"
         aria-expanded={showList}

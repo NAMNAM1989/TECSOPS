@@ -67,7 +67,7 @@ export function InlineTextEdit({
           e.stopPropagation();
           setEditing(true);
         }}
-        className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 dark:hover:bg-white/[0.08] ${className} ${
+        className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 ${className} ${
           value === "" ? "ops-grid-placeholder" : ""
         }`}
       >
@@ -83,10 +83,15 @@ export function InlineTextEdit({
       {...gridProps}
       value={draft}
       maxLength={maxLength}
-      onChange={(e) => setDraft(uppercase ? e.target.value.toUpperCase() : e.target.value)}
+      onChange={(e) =>
+        setDraft(uppercase ? e.target.value.toUpperCase() : e.target.value)
+      }
       onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
+        if (
+          e.key === "Enter" &&
+          !(e.nativeEvent as KeyboardEvent).isComposing
+        ) {
           e.preventDefault();
           commit();
           queueMicrotask(() => onEnterNavigateDown?.());
@@ -97,7 +102,7 @@ export function InlineTextEdit({
         }
       }}
       onClick={(e) => e.stopPropagation()}
-      className={`w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20 dark:bg-ops-elevated dark:text-zinc-100 ${className}`}
+      className={`w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20 ${className}`}
     />
   );
 }

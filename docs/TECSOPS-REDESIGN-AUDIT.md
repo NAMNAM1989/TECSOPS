@@ -482,3 +482,62 @@ Còn lại đợt sau: wire Button toàn app; gỡ hết `dark:`; header phẳng
 | Chọn kho thống nhất | Mobile dùng `WarehouseGridPicker` compact (thay chips riêng) |
 | Empty / offline | EmptyState ngày trống; Banner offline |
 | Customers header | Phẳng, bỏ backdrop-blur |
+
+---
+
+## 15. Đợt C — đã triển khai (2026-07-26)
+
+| Hạng mục | Ghi chú |
+|---|---|
+| Desktop table | Font ≥13px, mono AWB/DST/số, sticky header + cột AWB, surface phẳng |
+| Inline edit | Focus ring `ui-focus`; AWB danger color semantic |
+| Mobile cards | AWB lớn, khách, kho chip, kiện/kg rõ, chạm mở sheet |
+| Edit sheet | Sheet phẳng, tabs Booking/Thông báo/DIM, nút ≥44px |
+| Sticky actions | Bar đặc, CTA Sửa / + Booking |
+| Row actions | Icon 32px, toolbar token mới |
+| Customer picker | Default input focus ring khi không truyền class |
+
+---
+
+## 16. Đợt D — đã triển khai (2026-07-26)
+
+Quyết định mapping (§9.1): **ẩn** `CUSTOMS` / `SECURITY` / `COMPLETED` khỏi filter; SCSC không hiện `RECEPTION_COMPLETED`. Enum DB giữ nguyên; lô lịch sử vẫn hiển thị trong select nếu đang mang mã ngoài luồng.
+
+| Hạng mục | Ghi chú |
+|---|---|
+| Workflow theo kho | `WORKFLOW_BY_WAREHOUSE` trong `shared/shipmentWorkflowStatus.mjs` |
+| StatusSelect | Option theo `warehouse` của lô |
+| StatusFilterBar | Chip theo `activeWarehouse`; icon + text; phẳng không blur |
+| Label | Spec §5.6; `OLA_PULL` → **Kéo OLA** |
+| Gỡ magnify | Xóa `HoverMagnifyText` + position util; thay `CneeDetailPopover` + copy popover |
+| Gỡ speech | Xóa `parseSpeechToDimLines` / CSS voice + magnify animation |
+| Gỡ dark:/blur | Strip `dark:` utilities; overlay/footer dùng nền đặc |
+
+---
+
+## 17. Đợt E — đã triển khai (2026-07-26)
+
+| Hạng mục | Ghi chú |
+|---|---|
+| Master–detail | Desktop list trái + detail phải; mobile list → detail + « ← Danh sách » |
+| Tabs hồ sơ | Thông tin · Liên hệ · Dữ liệu mặc định |
+| Dirty / save | Confirm khi đổi khách; sticky Lưu/Hủy mobile; toast + banner lỗi |
+| Công cụ | `OverflowMenu` — mẫu / import / export Excel |
+| Danger zone | Xóa khách trong tab Thông tin + `CustomerDeleteConfirmModal` |
+| Dữ liệu mặc định | `CustomerDefaultDataEditor` (alias cũ `CustomerSavedProfilesEditor`); **giữ schema saved*** |
+| ESID trên trang KH | Giữ nút « Điền eSID TCS »; gom settings agent/registrant → Đợt F |
+
+---
+
+## 18. Đợt F — đã triển khai (2026-07-26)
+
+| Hạng mục | Ghi chú |
+|---|---|
+| Sheet URL | Ô URL bắt buộc; `spreadsheetId` gửi sync; không auto-prefetch |
+| Sheet kết quả | Banner + «Xem lỗi»; toast success / partial |
+| Excel range | `DayExcelExportDialog` + `filterShipmentsBySessionYmdRange` (client) |
+| Filename Excel | `OPS_shipments_{from}_{to}_{time}.xlsx` khi khoảng |
+| TCS bar | Gọn: trạng thái + Đồng bộ + Cài đặt ESID + Nâng cao |
+| ESID settings | `EsidSettingsMenu` gom Người khai + Agent |
+| DIM labels | LIST DIM SCSC / ATTACHED DIM / In LIST DIM… |
+| Print overlay | Shell phẳng; không đổi mm / `@page` / iframe |

@@ -1,14 +1,35 @@
-import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from "react";
-import { isSheetRowSelectable, type SheetBookSyncResult, type SheetBookSyncRow } from "../types/googleSheetBook";
-import { applyBookGoogleSheetRows, syncBookGoogleSheet } from "../utils/googleSheetBookApi";
-import { normalizeWarehouse, warehouseLabel, WAREHOUSE_ORDER } from "../constants/warehouses";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MutableRefObject,
+} from "react";
+import {
+  isSheetRowSelectable,
+  type SheetBookSyncResult,
+  type SheetBookSyncRow,
+} from "../types/googleSheetBook";
+import {
+  applyBookGoogleSheetRows,
+  syncBookGoogleSheet,
+} from "../utils/googleSheetBookApi";
+import { parseGoogleSpreadsheetId } from "../utils/googleSheetUrl";
+import {
+  normalizeWarehouse,
+  warehouseLabel,
+  WAREHOUSE_ORDER,
+} from "../constants/warehouses";
 import type { Warehouse } from "../types/shipment";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { MOBILE } from "../styles/mobileOpsStyles";
+import { Banner, Button } from "../ui";
 
 export type SheetImportAppliedMeta = {
   appliedByWarehouse: Partial<Record<Warehouse, number>>;
   preferredWarehouse: Warehouse | null;
+  errorCount?: number;
+  errors?: { awb: string; error: string }[];
 };
 
 type Props = {
@@ -16,10 +37,20 @@ type Props = {
   open: boolean;
   /** Kho đang xem trên OPS — ưu tiên chọn / lọc dòng Sheet cùng kho. */
   activeWarehouse?: Warehouse;
-  sheetSyncPrefetchRef?: MutableRefObject<{ sessionYmd: string; promise: Promise<SheetBookSyncResult> } | null>;
+  /** @deprecated Prefetch không còn dùng — bắt buộc URL mỗi lần. */
+  sheetSyncPrefetchRef?: MutableRefObject<{
+    sessionYmd: string;
+    promise: Promise<SheetBookSyncResult>;
+  } | null>;
   onClose: () => void;
-  onApplied: (appliedCount: number, serverState?: unknown, meta?: SheetImportAppliedMeta) => void;
+  onApplied: (
+    appliedCount: number,
+    serverState?: unknown,
+    meta?: SheetImportAppliedMeta,
+  ) => void;
 };
+
+const SHEET_URL_STORAGE_KEY = "tecsops.sheetBookUrl";
 
 type WarehouseFilter = Warehouse | "ALL";
 
@@ -28,7 +59,7 @@ function rowWarehouse(row: SheetBookSyncRow): Warehouse {
 }
 
 function countByWarehouse(
-  rows: { warehouse?: string }[]
+  rows: { warehouse?: string }[],
 ): Partial<Record<Warehouse, number>> {
   const out: Partial<Record<Warehouse, number>> = {};
   for (const r of rows) {
@@ -40,7 +71,7 @@ function countByWarehouse(
 
 function preferredWarehouseFromCounts(
   counts: Partial<Record<Warehouse, number>>,
-  active: Warehouse
+  active: Warehouse,
 ): Warehouse | null {
   const activeCount = counts[active] ?? 0;
   if (activeCount > 0) return active;
@@ -65,12 +96,24 @@ export function GoogleSheetImportModal({
   onApplied,
 }: Props) {
   const isMobile = useIsMobile();
-  const [loading, setLoading] = useState(true);
+  const [sheetUrl, setSheetUrl] = useState(() => {
+    try {
+      return localStorage.getItem(SHEET_URL_STORAGE_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [sync, setSync] = useState<SheetBookSyncResult | null>(null);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
-  const [warehouseFilter, setWarehouseFilter] = useState<WarehouseFilter>("ALL");
+  const [applyErrors, setApplyErrors] = useState<
+    { awb: string; error: string }[]
+  >([]);
+  const [showErrors, setShowErrors] = useState(false);
+  const [warehouseFilter, setWarehouseFilter] =
+    useState<WarehouseFilter>("ALL");
 
   /** Luôn chọn mọi dòng nhập được (cả TCS + SCSC) — không giới hạn theo chip lọc xem. */
   const selectAllImportable = useCallback((result: SheetBookSyncResult) => {
@@ -92,54 +135,63 @@ export function GoogleSheetImportModal({
       }
       return next;
     },
-    [selectAllImportable]
+    [selectAllImportable],
   );
 
-  const fetchAndSelect = useCallback(async (refresh: boolean) => {
-    setLoading(true);
-    setError(null);
-    try {
-      let result: SheetBookSyncResult;
-      if (!refresh) {
-        const prefetched = sheetSyncPrefetchRef?.current;
-        if (prefetched?.sessionYmd === sessionYmd) {
-          if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
-          result = await prefetched.promise;
-        } else {
-          result = await syncBookGoogleSheet(sessionYmd);
-        }
-      } else {
-        if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
-        result = await syncBookGoogleSheet(sessionYmd, { refresh });
+  const fetchAndSelect = useCallback(
+    async (refresh: boolean) => {
+      if (loading || applying) return;
+      const parsed = parseGoogleSpreadsheetId(sheetUrl);
+      if (!parsed.ok) {
+        setError(parsed.error);
+        setSync(null);
+        return;
       }
-      setSync(result);
-      setSelected(selectAllImportable(result));
-    } catch (e) {
-      setSync(null);
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionYmd, sheetSyncPrefetchRef, selectAllImportable]);
+      try {
+        localStorage.setItem(SHEET_URL_STORAGE_KEY, sheetUrl.trim());
+      } catch {
+        /* ignore */
+      }
+      if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
+      setLoading(true);
+      setError(null);
+      setApplyErrors([]);
+      setShowErrors(false);
+      try {
+        const result = await syncBookGoogleSheet(sessionYmd, {
+          spreadsheetId: parsed.spreadsheetId,
+          refresh,
+        });
+        setSync(result);
+        setSelected(selectAllImportable(result));
+      } catch (e) {
+        setSync(null);
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [sessionYmd, sheetUrl, sheetSyncPrefetchRef, selectAllImportable, loading, applying],
+  );
 
   useEffect(() => {
     if (!open) {
       setLoading(false);
       setSync(null);
       setError(null);
+      setApplyErrors([]);
+      setShowErrors(false);
       setSelected(new Set());
       return;
     }
-    // Mở modal: xem tất cả kho + chọn sẵn mọi lô nhập được (TCS và SCSC).
     setWarehouseFilter("ALL");
-    void fetchAndSelect(false);
-  }, [open, sessionYmd, fetchAndSelect]);
+    // Không auto-sync — bắt buộc URL + bấm «Tải dòng».
+  }, [open, sessionYmd]);
 
   const applyWarehouseFilter = (next: WarehouseFilter) => {
     setWarehouseFilter(next);
     // Chỉ lọc danh sách xem — giữ nguyên selection (tránh bỏ sót SCSC khi đang xem TCS).
   };
-
 
   const toggle = (index: number) => {
     setSelected((prev) => {
@@ -159,7 +211,10 @@ export function GoogleSheetImportModal({
   const warehouseCounts = useMemo(() => {
     const rows = sync?.rows ?? [];
     const total: Record<Warehouse, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
-    const selectable: Record<Warehouse, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
+    const selectable: Record<Warehouse, number> = {
+      "TECS-TCS": 0,
+      "TECS-SCSC": 0,
+    };
     for (const r of rows) {
       const wh = rowWarehouse(r);
       total[wh] += 1;
@@ -180,30 +235,43 @@ export function GoogleSheetImportModal({
 
   const selectedOutsideFilter =
     warehouseFilter !== "ALL" &&
-    WAREHOUSE_ORDER.some((wh) => wh !== warehouseFilter && selectedBreakdown[wh] > 0);
+    WAREHOUSE_ORDER.some(
+      (wh) => wh !== warehouseFilter && selectedBreakdown[wh] > 0,
+    );
 
   const onApply = async () => {
-    if (!sync || selected.size === 0) return;
+    if (!sync || selected.size === 0 || applying || loading) return;
     setApplying(true);
     setError(null);
+    setApplyErrors([]);
     try {
       const result = await applyBookGoogleSheetRows(
         sync.sessionDate,
         [...selected],
         sync.sheetTab,
-        sync.spreadsheetId
+        sync.spreadsheetId,
       );
       const touched = [...(result.applied ?? []), ...(result.updated ?? [])];
       const appliedByWarehouse = countByWarehouse(touched);
       const preferred =
-        preferredWarehouseFromCounts(appliedByWarehouse, activeWarehouse) ?? activeWarehouse;
-      onApplied(result.appliedCount + (result.updatedCount ?? 0), result.state, {
-        appliedByWarehouse,
-        preferredWarehouse: preferred,
-      });
+        preferredWarehouseFromCounts(appliedByWarehouse, activeWarehouse) ??
+        activeWarehouse;
+      const errs = result.errors ?? [];
+      onApplied(
+        result.appliedCount + (result.updatedCount ?? 0),
+        result.state,
+        {
+          appliedByWarehouse,
+          preferredWarehouse: preferred,
+          errorCount: result.errorCount,
+          errors: errs,
+        },
+      );
       if (result.errorCount > 0) {
+        setApplyErrors(errs);
+        setShowErrors(true);
         setError(
-          `Đã nhập ${result.appliedCount} · cập nhật ${result.updatedCount ?? 0} lô. ${result.errorCount} lỗi: ${result.errors.map((x) => x.awb).join(", ")}`
+          `Nhập một phần: ${result.appliedCount} mới · ${result.updatedCount ?? 0} cập nhật · ${result.errorCount} lỗi.`,
         );
       } else {
         onClose();
@@ -215,12 +283,11 @@ export function GoogleSheetImportModal({
     }
   };
 
-
   if (!open) return null;
 
   const shellClass = isMobile
-    ? `${MOBILE.sheet} flex max-h-[92vh] w-full flex-col overflow-hidden border-t bg-white shadow-[0_-12px_48px_rgba(0,0,0,0.2)] dark:border-white/10 dark:bg-ops-surface`
-    : "flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-zinc-900";
+    ? `${MOBILE.sheet} flex max-h-[92vh] w-full flex-col overflow-hidden border-t bg-white shadow-[0_-12px_48px_rgba(0,0,0,0.2)]`
+    : "flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl";
 
   return (
     <div
@@ -233,16 +300,21 @@ export function GoogleSheetImportModal({
         aria-labelledby="sheet-import-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-start justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
+        <header className="flex items-start justify-between gap-3 border-b border-zinc-200 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <h2 id="sheet-import-title" className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+            <h2
+              id="sheet-import-title"
+              className="text-base font-semibold text-zinc-900"
+            >
               Nhập từ Google Sheet
             </h2>
             <p className="mt-0.5 text-xs text-zinc-500">
-              BOOK HẰNG NGÀY · tab{" "}
-              <span className="font-mono text-zinc-700 dark:text-zinc-300">{sync?.sheetTab ?? "…"}</span> ·
-              chỉ lô ngày{" "}
-              <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+              BOOK HẰNG NGÀY · tab{""}
+              <span className="font-mono text-zinc-700">
+                {sync?.sheetTab ?? "…"}
+              </span>{" "}
+              · chỉ lô ngày{""}
+              <span className="font-semibold text-zinc-700">
                 {sync?.sessionFlightDate ?? "…"}
               </span>
             </p>
@@ -250,37 +322,58 @@ export function GoogleSheetImportModal({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-lg px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="shrink-0 rounded-lg px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100"
           >
             Đóng
           </button>
         </header>
 
-        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-4 py-2 dark:border-zinc-800">
-          <button
+        <div className="space-y-2 border-b border-ui-border px-4 py-2">
+          <label className="block">
+            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+              URL Google Sheet (bắt buộc mỗi lần)
+            </span>
+            <input
+              type="url"
+              value={sheetUrl}
+              onChange={(e) => setSheetUrl(e.target.value)}
+              placeholder="https://docs.google.com/spreadsheets/d/…"
+              disabled={loading || applying}
+              className="w-full rounded-lg border border-ui-border bg-ui-surface px-2.5 py-2 text-xs outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus disabled:opacity-50"
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+          <Button
             type="button"
-            disabled={loading}
-            onClick={() => void fetchAndSelect(true)}
-            className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            variant="primary"
+            size="sm"
+            disabled={loading || applying || !sheetUrl.trim()}
+            onClick={() => void fetchAndSelect(Boolean(sync))}
           >
-            {loading ? "Đang kéo Sheet…" : "Kéo Sheet lại"}
-          </button>
-          <div className="flex flex-wrap gap-1" role="tablist" aria-label="Lọc kho Sheet">
+            {loading ? "Đang kéo Sheet…" : sync ? "Kéo Sheet lại" : "Tải dòng"}
+          </Button>
+          <div
+            className="flex flex-wrap gap-1"
+            role="tablist"
+            aria-label="Lọc kho Sheet"
+          >
             {(
               [
                 ["ALL", "Tất cả"],
-                ...WAREHOUSE_ORDER.map((wh) => [wh, warehouseLabel[wh]] as const),
+                ...WAREHOUSE_ORDER.map(
+                  (wh) => [wh, warehouseLabel[wh]] as const,
+                ),
               ] as const
             ).map(([id, label]) => {
               const active = warehouseFilter === id;
               const count =
                 id === "ALL"
-                  ? sync?.total ?? 0
-                  : warehouseCounts.total[id as Warehouse] ?? 0;
+                  ? (sync?.total ?? 0)
+                  : (warehouseCounts.total[id as Warehouse] ?? 0);
               const canPick =
                 id === "ALL"
                   ? (sync?.importable ?? 0)
-                  : warehouseCounts.selectable[id as Warehouse] ?? 0;
+                  : (warehouseCounts.selectable[id as Warehouse] ?? 0);
               return (
                 <button
                   key={id}
@@ -290,13 +383,13 @@ export function GoogleSheetImportModal({
                   onClick={() => applyWarehouseFilter(id)}
                   className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${
                     active
-                      ? "bg-dashboard-primary text-white dark:bg-white/15 dark:text-dashboard-primary-dark"
-                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300"
+                      ? "bg-dashboard-primary text-white"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
                   }`}
                 >
                   {label} · {count}
                   {canPick > 0 && !active ? (
-                    <span className="ml-1 text-emerald-700 dark:text-emerald-400">+{canPick}</span>
+                    <span className="ml-1 text-emerald-700">+{canPick}</span>
                   ) : null}
                 </button>
               );
@@ -305,28 +398,66 @@ export function GoogleSheetImportModal({
           {sync && (
             <span className="text-xs leading-snug text-zinc-500">
               {sync.total} lô · {sync.newCount ?? 0} mới
-              {(sync.updateCount ?? 0) > 0 ? ` · ${sync.updateCount} cập nhật` : ""}
+              {(sync.updateCount ?? 0) > 0
+                ? ` · ${sync.updateCount} cập nhật`
+                : ""}
               {(sync.sheetDuplicateCount ?? 0) > 0
                 ? ` · ${sync.sheetDuplicateCount} trùng Sheet`
                 : ""}
-              {(sync.awbTakenCount ?? 0) > 0 ? ` · ${sync.awbTakenCount} AWB đã có` : ""}
-              {sync.skippedByDate > 0 ? ` · bỏ ${sync.skippedByDate} ngày khác` : ""}
+              {(sync.awbTakenCount ?? 0) > 0
+                ? ` · ${sync.awbTakenCount} AWB đã có`
+                : ""}
+              {sync.skippedByDate > 0
+                ? ` · bỏ ${sync.skippedByDate} ngày khác`
+                : ""}
             </span>
           )}
+          </div>
         </div>
 
-        {error && (
-          <p className="mx-4 mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
-            {error}
-          </p>
-        )}
+        {error ? (
+          <div className="mx-4 mt-3">
+            <Banner
+              tone={applyErrors.length > 0 ? "warning" : "danger"}
+              title={applyErrors.length > 0 ? "Nhập một phần" : "Lỗi"}
+              action={
+                applyErrors.length > 0 ? (
+                  <button
+                    type="button"
+                    className="text-[11px] font-semibold underline"
+                    onClick={() => setShowErrors((v) => !v)}
+                  >
+                    {showErrors ? "Ẩn lỗi" : "Xem lỗi"}
+                  </button>
+                ) : undefined
+              }
+            >
+              {error}
+            </Banner>
+            {showErrors && applyErrors.length > 0 ? (
+              <ul className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-ui-border bg-ui-surface px-2 py-1.5 text-[11px] text-ui-text">
+                {applyErrors.map((e, i) => (
+                  <li key={`${e.awb}-${i}`} className="py-0.5">
+                    <span className="font-mono font-semibold">{e.awb}</span>
+                    {" — "}
+                    {e.error}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-auto px-2 py-2 sm:px-2">
           {loading && !sync ? (
-            <p className="p-4 text-sm text-zinc-500">Đang kéo dữ liệu từ Google Sheet…</p>
+            <p className="p-4 text-sm text-zinc-500">
+              Đang kéo dữ liệu từ Google Sheet…
+            </p>
           ) : null}
           {!sync && !loading && !error && (
-            <p className="p-4 text-sm text-zinc-500">Chưa có dữ liệu — bấm «Kéo Sheet lại».</p>
+            <p className="p-4 text-sm text-zinc-500">
+              Dán URL Sheet rồi bấm «Tải dòng».
+            </p>
           )}
           {sync && visibleRows.length === 0 && (
             <p className="p-4 text-sm text-zinc-500">
@@ -350,7 +481,7 @@ export function GoogleSheetImportModal({
           {sync && visibleRows.length > 0 && !isMobile ? (
             <table className="w-full min-w-[640px] border-collapse text-left text-[11px]">
               <thead>
-                <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-700">
+                <tr className="border-b border-zinc-200 text-zinc-500">
                   <th className="w-8 p-2" />
                   <th className="p-2">AWB</th>
                   <th className="p-2">Chuyến</th>
@@ -375,12 +506,14 @@ export function GoogleSheetImportModal({
           ) : null}
         </div>
 
-        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-zinc-700">
+        <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {selected.size > 0 ? (
             <span className="mr-auto text-[10px] text-zinc-500">
               Chọn {selected.size} lô
               {WAREHOUSE_ORDER.filter((wh) => selectedBreakdown[wh] > 0)
-                .map((wh) => ` · ${warehouseLabel[wh]} ${selectedBreakdown[wh]}`)
+                .map(
+                  (wh) => ` · ${warehouseLabel[wh]} ${selectedBreakdown[wh]}`,
+                )
                 .join("")}
               {selectedOutsideFilter ? " (có lô kho khác đang ẩn)" : ""}
             </span>
@@ -391,10 +524,12 @@ export function GoogleSheetImportModal({
               if (!sync) return;
               setSelected(selectImportableInFilter(sync, warehouseFilter));
             }}
-            className="rounded-lg px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            className="rounded-lg px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100"
           >
             Chọn tất cả mới
-            {warehouseFilter !== "ALL" ? ` · ${warehouseLabel[warehouseFilter]}` : ""}
+            {warehouseFilter !== "ALL"
+              ? ` · ${warehouseLabel[warehouseFilter]}`
+              : ""}
           </button>
           <button
             type="button"
@@ -411,19 +546,24 @@ export function GoogleSheetImportModal({
 }
 
 function syncStatusLabel(row: SheetBookSyncRow) {
-  if (row.syncStatus === "duplicate") return { text: "Đã khớp", cls: "text-zinc-500" };
+  if (row.syncStatus === "duplicate")
+    return { text: "Đã khớp", cls: "text-zinc-500" };
   if (row.syncStatus === "sheet_duplicate") {
-    return { text: "Trùng Sheet", cls: "text-red-700 dark:text-red-300" };
+    return { text: "Trùng Sheet", cls: "text-red-700" };
   }
   if (row.syncStatus === "awb_taken") {
-    return { text: "AWB đã có", cls: "text-red-700 dark:text-red-300" };
+    return { text: "AWB đã có", cls: "text-red-700" };
   }
-  if (row.syncStatus === "update") return { text: "Cập nhật", cls: "text-amber-700 dark:text-amber-300" };
-  return { text: "Mới", cls: "text-emerald-700 dark:text-emerald-300" };
+  if (row.syncStatus === "update")
+    return { text: "Cập nhật", cls: "text-amber-700" };
+  return { text: "Mới", cls: "text-emerald-700" };
 }
 
 function rowBlockHint(row: SheetBookSyncRow): string | null {
-  if (row.syncStatus === "sheet_duplicate" && row.sheetDuplicateOfIndex != null) {
+  if (
+    row.syncStatus === "sheet_duplicate" &&
+    row.sheetDuplicateOfIndex != null
+  ) {
     return `AWB trùng dòng Sheet #${row.sheetDuplicateOfIndex + 1} — chỉ giữ dòng đầu`;
   }
   if (row.syncStatus === "awb_taken") {
@@ -455,10 +595,10 @@ function SheetRowCard({
         onClick={() => !disabled && onToggle(row.index)}
         className={`w-full rounded-2xl border px-3 py-3 text-left transition active:scale-[0.99] ${
           disabled
-            ? "border-zinc-200/80 bg-zinc-50 opacity-60 dark:border-zinc-700 dark:bg-zinc-900/50"
+            ? "border-zinc-200/80 bg-zinc-50 opacity-60"
             : checked
-              ? "border-emerald-400/60 bg-emerald-50/90 ring-1 ring-emerald-400/30 dark:border-emerald-500/40 dark:bg-emerald-500/10"
-              : "border-black/[0.08] bg-white dark:border-white/10 dark:bg-ops-elevated"
+              ? "border-emerald-400/60 bg-emerald-50/90 ring-1 ring-emerald-400/30"
+              : "border-black/[0.08] bg-white"
         }`}
       >
         <div className="flex items-start gap-3">
@@ -466,7 +606,7 @@ function SheetRowCard({
             className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
               checked && !disabled
                 ? "border-emerald-600 bg-emerald-600 text-white"
-                : "border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-800"
+                : "border-zinc-300 bg-white"
             }`}
             aria-hidden
           >
@@ -474,15 +614,24 @@ function SheetRowCard({
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-              <span className="font-mono text-sm font-bold text-zinc-900 dark:text-zinc-100">{row.awb}</span>
-              <span className={`text-[10px] font-semibold uppercase ${status.cls}`}>{status.text}</span>
+              <span className="font-mono text-sm font-bold text-zinc-900">
+                {row.awb}
+              </span>
+              <span
+                className={`text-[10px] font-semibold uppercase ${status.cls}`}
+              >
+                {status.text}
+              </span>
             </div>
-            <p className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+            <p className="mt-1 text-[11px] text-zinc-600">
               {row.flight}
-              {row.flightDate ? ` / ${row.flightDate}` : ""} · {row.dest} · {whLabel}
+              {row.flightDate ? ` / ${row.flightDate}` : ""} · {row.dest} ·{" "}
+              {whLabel}
             </p>
             <p className="mt-0.5 truncate text-[11px] text-zinc-500">
-              {row.pcs != null || row.kg != null ? `${row.pcs ?? "—"} kiện / ${row.kg ?? "—"} kg` : "— kiện/kg"}
+              {row.pcs != null || row.kg != null
+                ? `${row.pcs ?? "—"} kiện / ${row.kg ?? "—"} kg`
+                : "— kiện/kg"}
               {row.customer ? ` · ${row.customer}` : ""}
               {!row.customerKnown && row.customer ? (
                 <span className="ml-1 text-amber-600" title="Chưa khớp danh bạ">
@@ -490,13 +639,15 @@ function SheetRowCard({
                 </span>
               ) : null}
             </p>
-            {row.needsUpdate && row.existingWarehouse && row.existingWarehouse !== row.warehouse ? (
-              <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-300">
+            {row.needsUpdate &&
+            row.existingWarehouse &&
+            row.existingWarehouse !== row.warehouse ? (
+              <p className="mt-1 text-[10px] text-amber-700">
                 Web đang {row.existingWarehouse} → Sheet {whLabel}
               </p>
             ) : null}
             {blockHint ? (
-              <p className="mt-1 text-[10px] text-red-700 dark:text-red-300">{blockHint}</p>
+              <p className="mt-1 text-[10px] text-red-700">{blockHint}</p>
             ) : null}
           </div>
         </div>
@@ -519,9 +670,7 @@ function SheetRowTable({
   const disabled = !isSheetRowSelectable(row);
   const blockHint = rowBlockHint(row);
   return (
-    <tr
-      className={`border-b border-zinc-100 dark:border-zinc-800 ${disabled ? "opacity-50" : ""}`}
-    >
+    <tr className={`border-b border-zinc-100 ${disabled ? "opacity-50" : ""}`}>
       <td className="p-2 text-center">
         <input
           type="checkbox"
@@ -539,14 +688,21 @@ function SheetRowTable({
       <td className="p-2">{row.dest}</td>
       <td className="p-2">
         {whLabel}
-        {row.needsUpdate && row.existingWarehouse && row.existingWarehouse !== row.warehouse ? (
-          <span className="ml-1 text-amber-700" title={`Trên web: ${row.existingWarehouse}`}>
+        {row.needsUpdate &&
+        row.existingWarehouse &&
+        row.existingWarehouse !== row.warehouse ? (
+          <span
+            className="ml-1 text-amber-700"
+            title={`Trên web: ${row.existingWarehouse}`}
+          >
             ← {row.existingWarehouse}
           </span>
         ) : null}
       </td>
       <td className="p-2">
-        {row.pcs != null || row.kg != null ? `${row.pcs ?? "—"} / ${row.kg ?? "—"}` : "—"}
+        {row.pcs != null || row.kg != null
+          ? `${row.pcs ?? "—"} / ${row.kg ?? "—"}`
+          : "—"}
       </td>
       <td className="p-2 max-w-[120px] truncate" title={row.customer}>
         {row.customer}

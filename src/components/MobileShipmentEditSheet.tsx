@@ -3,15 +3,27 @@ import type { Shipment, ShipmentStatus } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { DESTINATIONS } from "../data/customers";
 import { findCustomerEntry } from "../utils/customerBookingResolve";
-import { buildShipmentPatchForCustomerSelection, normalizeCustomerNameInput } from "../utils/customerShipmentPatch";
+import {
+  buildShipmentPatchForCustomerSelection,
+  normalizeCustomerNameInput,
+} from "../utils/customerShipmentPatch";
 import {
   buildShipmentPatchForSavedConsignee,
   formatSavedConsigneeOptionLabel,
 } from "../utils/customerConsigneeShipmentPatch";
-import { parseBookingDateLoose, formatYmdToFlightDateDdMon } from "../utils/bookingDateParse";
+import {
+  parseBookingDateLoose,
+  formatYmdToFlightDateDdMon,
+} from "../utils/bookingDateParse";
 import { StatusSelect } from "./StatusBadge";
-import { MobileDimKgModal, type MobileDimSavePayload } from "./MobileDimKgModal";
-import { formatShipmentDimWeightDisplay, resolveShipmentDimWeightKg } from "../utils/volumetricDim";
+import {
+  MobileDimKgModal,
+  type MobileDimSavePayload,
+} from "./MobileDimKgModal";
+import {
+  formatShipmentDimWeightDisplay,
+  resolveShipmentDimWeightKg,
+} from "../utils/volumetricDim";
 import { isScscWarehouse } from "../constants/warehouses";
 import {
   clipScscGoodsDescriptionPrint,
@@ -65,7 +77,10 @@ export function MobileShipmentEditSheet({
   const hawbRef = useRef<HTMLInputElement>(null);
 
   const sessionYear = useMemo(() => {
-    const y = parseInt((sessionDateYmd || shipment?.sessionDate || "").slice(0, 4), 10);
+    const y = parseInt(
+      (sessionDateYmd || shipment?.sessionDate || "").slice(0, 4),
+      10,
+    );
     return Number.isFinite(y) ? y : new Date().getFullYear();
   }, [sessionDateYmd, shipment?.sessionDate]);
 
@@ -86,7 +101,10 @@ export function MobileShipmentEditSheet({
   const [dimWeightKg, setDimWeightKg] = useState<number | null>(null);
   const [dimLines, setDimLines] = useState<Shipment["dimLines"]>(null);
 
-  const applyCustomerFromDirectory = (name: string, entry?: CustomerDirectoryEntry) => {
+  const applyCustomerFromDirectory = (
+    name: string,
+    entry?: CustomerDirectoryEntry,
+  ) => {
     const patch = buildShipmentPatchForCustomerSelection(
       customerDirectory,
       name,
@@ -95,7 +113,7 @@ export function MobileShipmentEditSheet({
         customerShipperId: shipment?.customerShipperId,
         customerConsigneeId,
         customerGoodsId: shipment?.customerGoodsId,
-      }
+      },
     );
     setCustomer(normalizeCustomerNameInput(patch.customer ?? name));
     setCustomerId((patch.customerId ?? "").trim());
@@ -151,9 +169,15 @@ export function MobileShipmentEditSheet({
     return buildShipmentCneeDisplayLines(
       { ...shipment, customer, customerConsigneeId, ...consigneePatch },
       customerDirectory,
-      { sessionYmdFallback: sessionDateYmd }
+      { sessionYmdFallback: sessionDateYmd },
     ).join("\n");
-  }, [shipment, customer, customerConsigneeId, customerDirectory, sessionDateYmd]);
+  }, [
+    shipment,
+    customer,
+    customerConsigneeId,
+    customerDirectory,
+    sessionDateYmd,
+  ]);
 
   if (!open || !shipment) return null;
 
@@ -163,7 +187,9 @@ export function MobileShipmentEditSheet({
 
   const handleSave = () => {
     const ymd = parseBookingDateLoose(flightDateText.trim(), sessionYear);
-    const flightDate = ymd ? formatYmdToFlightDateDdMon(ymd) : flightDateText.trim();
+    const flightDate = ymd
+      ? formatYmdToFlightDateDdMon(ymd)
+      : flightDateText.trim();
     const customerPatch = buildShipmentPatchForCustomerSelection(
       customerDirectory,
       customer,
@@ -172,10 +198,12 @@ export function MobileShipmentEditSheet({
         customerShipperId: shipment.customerShipperId,
         customerConsigneeId,
         customerGoodsId: shipment.customerGoodsId,
-      }
+      },
     );
     const consigneePatch = customerConsigneeId
-      ? buildShipmentPatchForSavedConsignee(savedConsignees.find((x) => x.id === customerConsigneeId))
+      ? buildShipmentPatchForSavedConsignee(
+          savedConsignees.find((x) => x.id === customerConsigneeId),
+        )
       : {};
     const patch: Partial<Shipment> = {
       awb: awb.trim(),
@@ -188,8 +216,12 @@ export function MobileShipmentEditSheet({
       note: note.trim(),
       ...(showScscPrintFields
         ? {
-            goodsDescriptionPrint: clipScscGoodsDescriptionPrint(goodsDescriptionPrint),
-            otherRequirementsPrint: clipScscOtherRequirementsPrint(otherRequirementsPrint),
+            goodsDescriptionPrint: clipScscGoodsDescriptionPrint(
+              goodsDescriptionPrint,
+            ),
+            otherRequirementsPrint: clipScscOtherRequirementsPrint(
+              otherRequirementsPrint,
+            ),
           }
         : {}),
       pcs,
@@ -227,35 +259,33 @@ export function MobileShipmentEditSheet({
           if (e.target === e.currentTarget) onClose();
         }}
       >
-        <div className={`${MOBILE.sheet} ${OPS.border}`}>
-          <div className={`flex items-center justify-between border-b px-4 py-3 ${OPS.border}`}>
+        <div className={MOBILE.sheet}>
+          <div className="flex items-center justify-between border-b border-ui-border px-4 py-3">
             <div className="min-w-0">
-              <h2 className="text-[16px] font-semibold text-apple-label dark:text-slate-100">
+              <h2 className="text-[16px] font-bold text-ui-text">
                 {awb.trim() ? "Sửa lô" : "Booking mới"}
               </h2>
-              <p className="truncate text-[11px] text-apple-secondary dark:text-slate-400">
+              <p className="truncate font-shipment-data text-[11px] text-ui-text-muted">
                 {shipment.warehouse} · {sessionDateYmd}
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-2 text-apple-tertiary hover:bg-black/[0.05] dark:hover:bg-white/[0.06]"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-ui-text-muted hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
               aria-label="Đóng"
             >
               ✕
             </button>
           </div>
 
-          <div className="mx-3 my-2 flex gap-1 rounded-full bg-black/[0.04] dark:bg-white/[0.06] p-1">
+          <div className="mx-3 my-2 flex gap-1 rounded-xl bg-ui-surface-muted p-1">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`flex-1 rounded-full py-2 text-[12px] font-semibold transition-all duration-200 ${
-                  tab === t.id ? MOBILE.tabActive : MOBILE.tabIdle
-                }`}
+                className={tab === t.id ? MOBILE.tabActive : MOBILE.tabIdle}
               >
                 {t.label}
               </button>
@@ -280,7 +310,9 @@ export function MobileShipmentEditSheet({
                   <input
                     ref={hawbRef}
                     value={hawb}
-                    onChange={(e) => setHawb(e.target.value.toUpperCase().slice(0, 32))}
+                    onChange={(e) =>
+                      setHawb(e.target.value.toUpperCase().slice(0, 32))
+                    }
                     className={MOBILE.input}
                     placeholder="House AWB"
                     autoComplete="off"
@@ -298,7 +330,9 @@ export function MobileShipmentEditSheet({
                   <Field label="Ngày bay">
                     <input
                       value={flightDateText}
-                      onChange={(e) => setFlightDateText(e.target.value.toUpperCase())}
+                      onChange={(e) =>
+                        setFlightDateText(e.target.value.toUpperCase())
+                      }
                       className={MOBILE.input}
                       placeholder="11MAY"
                     />
@@ -323,7 +357,9 @@ export function MobileShipmentEditSheet({
                     value={customer}
                     customerId={customerId}
                     directory={customerDirectory}
-                    onChange={(name, entry) => applyCustomerFromDirectory(name, entry)}
+                    onChange={(name, entry) =>
+                      applyCustomerFromDirectory(name, entry)
+                    }
                     placeholder="Mã hoặc tên khách…"
                     inputClassName={MOBILE.input}
                   />
@@ -346,7 +382,9 @@ export function MobileShipmentEditSheet({
                       <textarea
                         value={goodsDescriptionPrint}
                         onChange={(e) =>
-                          setGoodsDescriptionPrint(clipScscGoodsDescriptionPrint(e.target.value))
+                          setGoodsDescriptionPrint(
+                            clipScscGoodsDescriptionPrint(e.target.value),
+                          )
                         }
                         rows={2}
                         className={`${MOBILE.input} resize-none`}
@@ -360,7 +398,9 @@ export function MobileShipmentEditSheet({
                       <textarea
                         value={otherRequirementsPrint}
                         onChange={(e) =>
-                          setOtherRequirementsPrint(clipScscOtherRequirementsPrint(e.target.value))
+                          setOtherRequirementsPrint(
+                            clipScscOtherRequirementsPrint(e.target.value),
+                          )
                         }
                         rows={2}
                         className={`${MOBILE.input} resize-none`}
@@ -391,15 +431,15 @@ export function MobileShipmentEditSheet({
                   </Field>
                 ) : null}
                 <div className={`rounded-2xl border p-4 ${OPS.panelSoft}`}>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-apple-secondary dark:text-slate-400">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-apple-secondary">
                     Nội dung thông báo
                   </p>
                   {notifyPreview.trim() ? (
-                    <pre className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed text-apple-label dark:text-slate-200">
+                    <pre className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed text-apple-label">
                       {notifyPreview}
                     </pre>
                   ) : (
-                    <p className="mt-2 text-[12px] text-apple-tertiary dark:text-slate-500">
+                    <p className="mt-2 text-[12px] text-apple-tertiary">
                       Chọn khách và CNEE để xem nội dung sao chép.
                     </p>
                   )}
@@ -414,7 +454,7 @@ export function MobileShipmentEditSheet({
                     {copyOk ? "Đã sao chép" : "Sao chép thông báo"}
                   </button>
                 </div>
-                <p className="text-[11px] leading-relaxed text-apple-tertiary dark:text-slate-500">
+                <p className="text-[11px] leading-relaxed text-apple-tertiary">
                   Hồ sơ khách và CNEE chi tiết được quản lý trong Danh bạ.
                 </p>
               </div>
@@ -423,7 +463,11 @@ export function MobileShipmentEditSheet({
             {tab === "dim" ? (
               <div className="space-y-4">
                 <Field label="Trạng thái">
-                  <StatusSelect value={status} onChange={setStatus} />
+                  <StatusSelect
+                    value={status}
+                    warehouse={shipment.warehouse}
+                    onChange={setStatus}
+                  />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Kiện">
@@ -431,7 +475,11 @@ export function MobileShipmentEditSheet({
                       type="number"
                       inputMode="numeric"
                       value={pcs ?? ""}
-                      onChange={(e) => setPcs(e.target.value === "" ? null : Number(e.target.value))}
+                      onChange={(e) =>
+                        setPcs(
+                          e.target.value === "" ? null : Number(e.target.value),
+                        )
+                      }
                       className={MOBILE.input}
                     />
                   </Field>
@@ -440,24 +488,39 @@ export function MobileShipmentEditSheet({
                       type="number"
                       inputMode="decimal"
                       value={kg ?? ""}
-                      onChange={(e) => setKg(e.target.value === "" ? null : Number(e.target.value))}
+                      onChange={(e) =>
+                        setKg(
+                          e.target.value === "" ? null : Number(e.target.value),
+                        )
+                      }
                       className={MOBILE.input}
                     />
                   </Field>
                 </div>
                 <div className={`rounded-2xl border p-4 ${OPS.panelSoft}`}>
-                  {resolveShipmentDimWeightKg({ ...shipment, dimWeightKg, dimLines }) != null ? (
-                    <p className="text-[13px] font-semibold text-apple-label dark:text-slate-100">
-                      DIM {formatShipmentDimWeightDisplay({ ...shipment, dimWeightKg, dimLines })} kg
+                  {resolveShipmentDimWeightKg({
+                    ...shipment,
+                    dimWeightKg,
+                    dimLines,
+                  }) != null ? (
+                    <p className="text-[13px] font-semibold text-apple-label">
+                      DIM{" "}
+                      {formatShipmentDimWeightDisplay({
+                        ...shipment,
+                        dimWeightKg,
+                        dimLines,
+                      })}{" "}
+                      kg
                       {(dimLines?.length ?? 0) > 0 ? (
-                        <span className="font-normal text-apple-secondary dark:text-slate-400">
-                          {" "}
-                          · {dimLines!.length} nhóm
+                        <span className="font-normal text-apple-secondary">
+                          {""}· {dimLines!.length} nhóm
                         </span>
                       ) : null}
                     </p>
                   ) : (
-                    <p className="text-[13px] text-apple-tertiary dark:text-slate-500">Chưa có DIM</p>
+                    <p className="text-[13px] text-apple-tertiary">
+                      Chưa có DIM
+                    </p>
                   )}
                   <button
                     type="button"
@@ -471,12 +534,20 @@ export function MobileShipmentEditSheet({
             ) : null}
           </div>
 
-          <div className={`border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${OPS.border}`}>
+          <div className="border-t border-ui-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <div className="flex gap-2">
-              <button type="button" onClick={onClose} className={`flex-1 ${MOBILE.secondaryBtn}`}>
+              <button
+                type="button"
+                onClick={onClose}
+                className={`flex-1 ${MOBILE.secondaryBtn}`}
+              >
                 Hủy
               </button>
-              <button type="button" onClick={handleSave} className={`flex-1 ${MOBILE.primaryBtn}`}>
+              <button
+                type="button"
+                onClick={handleSave}
+                className={`flex-1 ${MOBILE.primaryBtn}`}
+              >
                 Lưu
               </button>
             </div>
@@ -496,11 +567,21 @@ export function MobileShipmentEditSheet({
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
   return (
     <div>
       <label className={MOBILE.fieldLabel}>{label}</label>
-      {hint ? <p className="-mt-1 mb-1.5 text-[10px] text-apple-tertiary dark:text-slate-500">{hint}</p> : null}
+      {hint ? (
+        <p className="-mt-1 mb-1.5 text-[10px] text-ui-text-muted">{hint}</p>
+      ) : null}
       {children}
     </div>
   );

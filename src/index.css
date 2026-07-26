@@ -8,40 +8,24 @@
     color-scheme: light;
   }
   body {
-    /* Light mode chính thức — không gắn dark: để tránh lộ theme nửa vời. */
+    /* Light mode chính thức — không gắn class dark. */
     @apply min-h-screen bg-ui-background text-ui-text antialiased font-sans;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /** Surface phẳng (thay glass blur dần — Đợt A/B). */
+  /** Surface phẳng (thay glass blur). */
   .glass-panel {
     background: #ffffff;
     border: 1px solid rgba(15, 23, 42, 0.1);
-  }
-
-  .dark .glass-panel {
-    background: rgba(15, 23, 42, 0.72);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .dark .text-apple-label {
-    color: #f0f2f5;
-  }
-  .dark .text-apple-secondary {
-    color: #cbd5e1;
-  }
-  .dark .text-apple-tertiary {
-    color: #94a3b8;
   }
 }
 
 @layer utilities {
   .font-shipment-data {
-    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas,
-      monospace;
+    font-family:
+      "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
+      Consolas, monospace;
     font-variant-numeric: tabular-nums;
   }
 
@@ -50,67 +34,25 @@
   }
 
   .ops-grid-cell {
-    @apply text-apple-label dark:text-zinc-100;
+    @apply text-apple-label;
   }
 
   .ops-grid-cell-muted {
-    @apply text-apple-secondary dark:text-zinc-300;
+    @apply text-apple-secondary;
   }
 
   .ops-grid-placeholder {
-    @apply italic text-apple-tertiary dark:text-zinc-400;
+    @apply italic text-apple-tertiary;
   }
 
   /** Ghi chú lô — đỏ đậm để ops nhận nhanh trên lưới. */
   .ops-grid-note {
-    @apply font-semibold text-red-800 dark:text-red-400;
+    @apply font-semibold text-red-800;
   }
 
   .ops-grid-note.ops-grid-placeholder {
-    @apply italic font-semibold text-red-800/85 dark:text-red-400/85;
+    @apply italic font-semibold text-red-800/85;
   }
-}
-
-@keyframes dim-voice-bar {
-  0%,
-  100% {
-    transform: scaleY(0.35);
-    opacity: 0.5;
-  }
-  50% {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-}
-
-@keyframes cnee-magnify-backdrop-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes cnee-magnify-panel-in {
-  from {
-    opacity: 0;
-    transform: scale(0.88) translateY(8px);
-    filter: blur(4px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-    filter: blur(0);
-  }
-}
-
-.animate-cnee-magnify-backdrop {
-  animation: cnee-magnify-backdrop-in 0.2s ease-out forwards;
-}
-
-.animate-cnee-magnify-panel {
-  animation: cnee-magnify-panel-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @keyframes cnee-slide-up-in {

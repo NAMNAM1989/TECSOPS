@@ -37,11 +37,15 @@ export function InlineConsigneeSelect({
       onClick={(e) => e.stopPropagation()}
       title={selectTitle}
       aria-label="Chọn CNEE lưu trong danh bạ khách"
-      className={`min-w-0 max-w-full flex-1 cursor-pointer truncate rounded border border-black/[0.08] bg-white px-1 py-0.5 text-[10px] font-bold leading-tight tracking-tight text-apple-label focus:outline-none focus:ring-1 focus:ring-apple-blue/40 disabled:cursor-default disabled:opacity-60 dark:border-white/15 dark:bg-ops-bg dark:text-zinc-100 dark:focus:ring-sky-400/40 ${className}`}
+      className={`min-w-0 max-w-full flex-1 cursor-pointer truncate rounded border border-black/[0.08] bg-white px-1 py-0.5 text-[10px] font-bold leading-tight tracking-tight text-apple-label focus:outline-none focus:ring-1 focus:ring-apple-blue/40 disabled:cursor-default disabled:opacity-60 ${className}`}
     >
       <option value="">CNEE</option>
       {options.map((sc) => (
-        <option key={sc.id} value={sc.id} title={formatSavedConsigneeDetailTitle(sc)}>
+        <option
+          key={sc.id}
+          value={sc.id}
+          title={formatSavedConsigneeDetailTitle(sc)}
+        >
           {formatSavedConsigneeShortLabel(sc)}
         </option>
       ))}

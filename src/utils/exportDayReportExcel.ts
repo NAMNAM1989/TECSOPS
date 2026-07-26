@@ -1,7 +1,10 @@
 import type { Borders, Cell, Fill, Font, Workbook } from "exceljs";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import { filterShipmentsBySessionYmd } from "./filterShipmentsBySessionYmd";
+import {
+  filterShipmentsBySessionYmd,
+  filterShipmentsBySessionYmdRange,
+} from "./filterShipmentsBySessionYmd";
 import { lookupCustomerEntryByName } from "./customerDirectoryCore";
 import { findCustomerEntry } from "./customerBookingResolve";
 import { formatDefaultRate } from "./customerAccountFields";
@@ -233,14 +236,35 @@ function styleBodyCell(cell: Cell, colNumber: number, rowIndexZeroBased: number)
 }
 
 /** Tên file mặc định khi tải từ trình duyệt. */
-export function defaultDayReportFileName(sessionDateYmd: string, now = new Date()): string {
-  return `OPS_shipments_${compactYmd(sessionDateYmd)}_${fileTimeStamp(now)}.xlsx`;
+export function defaultDayReportFileName(
+  fromYmd: string,
+  toYmdOrNow?: string | Date,
+  now = new Date()
+): string {
+  let toYmd: string | undefined;
+  let when = now;
+  if (toYmdOrNow instanceof Date) {
+    when = toYmdOrNow;
+  } else if (typeof toYmdOrNow === "string") {
+    toYmd = toYmdOrNow;
+  }
+  const a = compactYmd(fromYmd);
+  const b = toYmd && toYmd.trim() !== fromYmd.trim() ? `_${compactYmd(toYmd)}` : "";
+  return `OPS_shipments_${a}${b}_${fileTimeStamp(when)}.xlsx`;
 }
 
 /**
  * Lọc đúng ngày phiên (trim), **giữ thứ tự** các phần tử trong `rows`.
+ * `toYmd` — khoảng ngày inclusive (client-side từ rows đã sync).
  */
-export function prepareDayReportRows(rows: Shipment[], sessionDateYmd: string): Shipment[] {
+export function prepareDayReportRows(
+  rows: Shipment[],
+  sessionDateYmd: string,
+  toYmd?: string
+): Shipment[] {
+  if (toYmd && toYmd.trim() !== sessionDateYmd.trim()) {
+    return filterShipmentsBySessionYmdRange(rows, sessionDateYmd, toYmd);
+  }
   return filterShipmentsBySessionYmd(rows, sessionDateYmd);
 }
 
@@ -250,11 +274,12 @@ export function prepareDayReportRows(rows: Shipment[], sessionDateYmd: string): 
 export async function buildDayReportWorkbook(
   rows: Shipment[],
   sessionDateYmd: string,
-  customerDirectory: readonly CustomerDirectoryEntry[] = []
+  customerDirectory: readonly CustomerDirectoryEntry[] = [],
+  toYmd?: string
 ): Promise<Workbook> {
   const ExcelJS = (await import("exceljs")).default;
 
-  const dayRows = prepareDayReportRows(rows, sessionDateYmd);
+  const dayRows = prepareDayReportRows(rows, sessionDateYmd, toYmd);
   const sheetName = sheetTitleForDayReport(sessionDateYmd);
 
   const wb = new ExcelJS.Workbook();
@@ -296,19 +321,21 @@ export async function buildDayReportWorkbook(
 }
 
 /**
- * Tải file .xlsx: toàn bộ lô **mọi kho** đúng `sessionDate`, mẫu Import Shipments.
+ * Tải file .xlsx: toàn bộ lô **mọi kho** trong ngày / khoảng ngày, mẫu Import Shipments.
+ * Lỗi → throw (caller dùng toast).
  */
 export async function downloadDayReportExcel(
   rows: Shipment[],
   sessionDateYmd: string,
-  customerDirectory: readonly CustomerDirectoryEntry[] = []
-): Promise<void> {
-  try {
-    const wb = await buildDayReportWorkbook(rows, sessionDateYmd, customerDirectory);
-    const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
-    downloadXlsxBuffer(buf, defaultDayReportFileName(sessionDateYmd));
-  } catch (e) {
-    console.error("[downloadDayReportExcel]", e);
-    window.alert(e instanceof Error ? e.message : "Không tạo được file Excel. Thử lại hoặc kiểm tra bộ nhớ trình duyệt.");
+  customerDirectory: readonly CustomerDirectoryEntry[] = [],
+  toYmd?: string
+): Promise<number> {
+  const wb = await buildDayReportWorkbook(rows, sessionDateYmd, customerDirectory, toYmd);
+  const dayRows = prepareDayReportRows(rows, sessionDateYmd, toYmd);
+  if (dayRows.length === 0) {
+    throw new Error("Không có lô trong khoảng ngày đã chọn.");
   }
+  const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+  downloadXlsxBuffer(buf, defaultDayReportFileName(sessionDateYmd, toYmd));
+  return dayRows.length;
 }

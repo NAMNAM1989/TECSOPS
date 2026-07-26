@@ -25,6 +25,7 @@ import { OpsDatePicker } from "./OpsDatePicker";
 import { OpsMobileStickyHeader } from "./OpsMobileStickyHeader";
 import { OpsToolsMenu } from "./OpsToolsMenu";
 import { firstWarehouseWithLots } from "../utils/warehouseMetrics";
+import { statusOrderForFilter } from "../utils/shipmentWorkflowStatus";
 import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { debugError } from "../utils/debugLog";
@@ -47,8 +48,8 @@ import {
   type ShipmentSearchContext,
   type ShipmentSearchMatch,
 } from "../utils/shipmentSearch";
-import { syncBookGoogleSheet } from "../utils/googleSheetBookApi";
-import type { SheetBookSyncResult } from "../types/googleSheetBook";
+import { filterShipmentsBySessionYmdRange } from "../utils/filterShipmentsBySessionYmd";
+import { DayExcelExportDialog } from "./DayExcelExportDialog";
 
 const GoogleSheetImportModal = lazy(() =>
   import("./GoogleSheetImportModal").then((m) => ({ default: m.GoogleSheetImportModal }))
@@ -96,34 +97,15 @@ export function AirCargoTracking({
   const [excelExporting, setExcelExporting] = useState(false);
   const [scscDimExporting, setScscDimExporting] = useState(false);
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
-  const sheetSyncPrefetchRef = useRef<{ sessionYmd: string; promise: Promise<SheetBookSyncResult> } | null>(
-    null
-  );
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
+  const [excelRangeOpen, setExcelRangeOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
 
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
   const isViewingToday = selectedYmd === todayYmd;
-
-  const prefetchSheetImport = useCallback(() => {
-    if (sheetSyncPrefetchRef.current?.sessionYmd === selectedYmd) return;
-    sheetSyncPrefetchRef.current = {
-      sessionYmd: selectedYmd,
-      promise: syncBookGoogleSheet(selectedYmd).catch((e) => {
-        if (sheetSyncPrefetchRef.current?.sessionYmd === selectedYmd) {
-          sheetSyncPrefetchRef.current = null;
-        }
-        throw e;
-      }),
-    };
-  }, [selectedYmd]);
-
-  useEffect(() => {
-    sheetSyncPrefetchRef.current = null;
-  }, [selectedYmd]);
 
   const allRows = state?.rows ?? [];
   const viewRows = useMemo(
@@ -180,6 +162,11 @@ export function AirCargoTracking({
   const handleActiveWarehouseChange = useCallback(
     (wh: Warehouse) => {
       setActiveWarehouse(wh);
+      setStatusFilter((prev) => {
+        if (prev === "ALL") return prev;
+        const allowed = statusOrderForFilter(wh);
+        return allowed.includes(prev as ShipmentStatus) ? prev : "ALL";
+      });
       void refreshState();
     },
     [refreshState]
@@ -354,24 +341,42 @@ export function AirCargoTracking({
   const goNextDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, 1)));
   const goToday = () => setSelectedViewDate(startOfLocalDay(new Date()));
 
-  const onDownloadDayExcel = useCallback(async () => {
-    setExcelExporting(true);
-    try {
-      let rowsForExport = filterShipmentsBySessionYmd(allRows, selectedYmd);
-      let customersForExport = state?.customers ?? [];
-      const snap = await fetchAppStateSnapshot();
-      if (snap) {
-        rowsForExport = filterShipmentsBySessionYmd(snap.rows, selectedYmd);
-        customersForExport = snap.customers;
+  const onDownloadDayExcelRange = useCallback(
+    async (fromYmd: string, toYmd: string) => {
+      setExcelExporting(true);
+      try {
+        let sourceRows = allRows;
+        let customersForExport = state?.customers ?? [];
+        const snap = await fetchAppStateSnapshot();
+        if (snap) {
+          sourceRows = snap.rows;
+          customersForExport = snap.customers;
+        }
+        const rowsForExport = filterShipmentsBySessionYmdRange(
+          sourceRows,
+          fromYmd,
+          toYmd
+        );
+        const n = await downloadDayReportExcel(
+          rowsForExport,
+          fromYmd,
+          customersForExport,
+          toYmd
+        );
+        toast.success(`Đã xuất ${n} lô.`, "Xuất Excel");
+        setExcelRangeOpen(false);
+      } catch (e) {
+        debugError("ui:excel-day", e);
+        toast.error(
+          e instanceof Error ? e.message : "Không tạo được file Excel.",
+          "Xuất Excel"
+        );
+      } finally {
+        setExcelExporting(false);
       }
-      await downloadDayReportExcel(rowsForExport, selectedYmd, customersForExport);
-    } catch (e) {
-      debugError("ui:excel-day", e);
-      toast.error(e instanceof Error ? e.message : "Không tạo được file Excel.", "Xuất Excel");
-    } finally {
-      setExcelExporting(false);
-    }
-  }, [allRows, selectedYmd, state, toast]);
+    },
+    [allRows, state, toast]
+  );
 
   const onDownloadScscDimDay = useCallback(async () => {
     setScscDimExporting(true);
@@ -419,8 +424,7 @@ export function AirCargoTracking({
     onPrefetchCustomers,
     onOpenAirlineLabels: () => setAirlineLabelSettingsOpen(true),
     onOpenSheetImport: () => setSheetImportOpen(true),
-    onPrefetchSheetImport: prefetchSheetImport,
-    onDownloadDayExcel: () => void onDownloadDayExcel(),
+    onDownloadDayExcel: () => setExcelRangeOpen(true),
     onDownloadScscDim: () => void onDownloadScscDimDay(),
   };
 
@@ -525,7 +529,13 @@ export function AirCargoTracking({
             </div>
           </div>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-            <StatusFilterBar compact dayRows={viewRows} value={statusFilter} onChange={setStatusFilter} />
+            <StatusFilterBar
+              compact
+              warehouse={activeWarehouse}
+              dayRows={viewRows}
+              value={statusFilter}
+              onChange={setStatusFilter}
+            />
             {statusFilter !== "ALL" || searchQuery.trim() ? (
               <button
                 type="button"
@@ -647,7 +657,6 @@ export function AirCargoTracking({
             open={sheetImportOpen}
             sessionYmd={selectedYmd}
             activeWarehouse={activeWarehouse}
-            sheetSyncPrefetchRef={sheetSyncPrefetchRef}
             onClose={() => setSheetImportOpen(false)}
             onApplied={(count, serverState, meta) => {
               if (serverState) {
@@ -658,19 +667,33 @@ export function AirCargoTracking({
               if (meta?.preferredWarehouse) {
                 setActiveWarehouse(meta.preferredWarehouse);
               }
-              if (count > 0) {
+              const errN = meta?.errorCount ?? 0;
+              if (count > 0 && errN === 0) {
                 const parts = WAREHOUSE_ORDER.map((wh) => {
                   const n = meta?.appliedByWarehouse?.[wh] ?? 0;
                   return n > 0 ? `${warehouseLabel[wh]} ${n}` : null;
                 }).filter(Boolean);
                 const detail = parts.length ? ` (${parts.join(" · ")})` : "";
                 toast.success(`Đã nhập ${count} lô từ Google Sheet${detail}.`, "Nhập Sheet");
+                setSheetImportOpen(false);
+              } else if (count > 0 && errN > 0) {
+                toast.warning(
+                  `Nhập ${count} lô · ${errN} lỗi. Xem chi tiết trong modal.`,
+                  "Nhập một phần"
+                );
               }
-              setSheetImportOpen(false);
             }}
           />
         ) : null}
       </Suspense>
+
+      <DayExcelExportDialog
+        open={excelRangeOpen}
+        defaultYmd={selectedYmd}
+        exporting={excelExporting}
+        onClose={() => setExcelRangeOpen(false)}
+        onExport={(from, to) => void onDownloadDayExcelRange(from, to)}
+      />
     </AppShell>
     </TcsPortalActionsProvider>
   );

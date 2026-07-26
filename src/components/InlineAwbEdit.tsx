@@ -81,10 +81,10 @@ export function InlineAwbEdit({
           e.stopPropagation();
           setEditing(true);
         }}
-        className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 dark:hover:bg-white/[0.08] ${className} ${
+        className={`${btnBase} hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
           !value || rawAwbDigits(value).length === 0
             ? "ops-grid-placeholder"
-            : "text-red-600 dark:text-red-400"
+            : "text-ui-danger"
         }`}
       >
         {value && rawAwbDigits(value).length > 0 ? value : "Nhập AWB"}
@@ -126,7 +126,7 @@ export function InlineAwbEdit({
         }
       }}
       onClick={(e) => e.stopPropagation()}
-      className={`w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 font-mono text-sm font-semibold tabular-nums tracking-tight text-red-600 antialiased focus:outline-none focus:ring-2 focus:ring-apple-blue/20 dark:bg-ops-elevated dark:text-red-400 ${className}`}
+      className={`w-full rounded-xl border-2 border-ui-primary bg-ui-surface px-1.5 py-0.5 font-shipment-data text-sm font-semibold tabular-nums tracking-tight text-ui-danger antialiased focus:outline-none focus:ring-2 focus:ring-ui-focus ${className}`}
     />
   );
 }

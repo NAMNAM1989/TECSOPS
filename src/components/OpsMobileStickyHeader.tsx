@@ -203,6 +203,7 @@ export function OpsMobileStickyHeader({
                 compact
                 dense
                 hideEmpty
+                warehouse={activeWarehouse}
                 dayRows={viewRows}
                 value={statusFilter}
                 onChange={onStatusFilterChange}

@@ -27,7 +27,7 @@ type Props<P extends EsidProfileBase> = {
   compact?: boolean;
   /** Nhãn nút khi compact / chưa có tên */
   compactLabel: string;
-  /** Prefix nhãn nút khi có tên active (vd. "Agent · …") */
+  /** Prefix nhãn nút khi có tên active (vd."Agent · …") */
   buttonLabelPrefix: string;
   buttonNameMax?: number;
   dialogTitle: string;
@@ -53,14 +53,14 @@ type Props<P extends EsidProfileBase> = {
 };
 
 const BTN =
-  "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-45 active:scale-[0.98] border border-sky-500/25 bg-sky-50/90 text-sky-900 hover:bg-sky-100 dark:border-sky-400/30 dark:bg-sky-950/50 dark:text-sky-100 dark:hover:bg-sky-900/50";
+  "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-45 active:scale-[0.98] border border-sky-500/25 bg-sky-50/90 text-sky-900 hover:bg-sky-100";
 
 const INPUT =
-  "mt-0.5 w-full rounded border border-slate-200 px-2 py-1 text-[11px] dark:border-slate-600 dark:bg-slate-800";
+  "mt-0.5 w-full rounded border border-slate-200 px-2 py-1 text-[11px]";
 
 /**
  * UI cấu hình hồ sơ ESID dùng chung (Agent / Người khai).
- * Domain field khác nhau — truyền qua `fields` + store API.
+ * Domain field khác nhau — truyền qua`fields` + store API.
  */
 export function EsidProfileSettingsButton<P extends EsidProfileBase>({
   disabled,
@@ -89,22 +89,28 @@ export function EsidProfileSettingsButton<P extends EsidProfileBase>({
 }: Props<P>) {
   const [open, setOpen] = useState(false);
   const [store, setStore] = useState(() => loadStore());
-  const active = store.profiles.find((p) => p.id === store.activeId) || store.profiles[0];
+  const active =
+    store.profiles.find((p) => p.id === store.activeId) || store.profiles[0];
   const [name, setName] = useState(active?.name || "");
   const [fieldValues, setFieldValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(fields.map((f) => [f.key, String(active?.[f.key] ?? "")]))
+    Object.fromEntries(
+      fields.map((f) => [f.key, String(active?.[f.key] ?? "")]),
+    ),
   );
 
   const syncFromProfile = (p: P) => {
     setName(p.name || "");
-    setFieldValues(Object.fromEntries(fields.map((f) => [f.key, String(p[f.key] ?? "")])));
+    setFieldValues(
+      Object.fromEntries(fields.map((f) => [f.key, String(p[f.key] ?? "")])),
+    );
   };
 
   useEffect(() => {
     const sync = () => {
       const next = loadStore();
       setStore(next);
-      const a = next.profiles.find((p) => p.id === next.activeId) || next.profiles[0];
+      const a =
+        next.profiles.find((p) => p.id === next.activeId) || next.profiles[0];
       if (a) syncFromProfile(a);
     };
     window.addEventListener(changedEvent, sync);
@@ -129,7 +135,8 @@ export function EsidProfileSettingsButton<P extends EsidProfileBase>({
     setOpen(false);
     const next = loadStore();
     setStore(next);
-    const a = next.profiles.find((p) => p.id === next.activeId) || next.profiles[0];
+    const a =
+      next.profiles.find((p) => p.id === next.activeId) || next.profiles[0];
     if (a) syncFromProfile(a);
   };
 
@@ -162,7 +169,9 @@ export function EsidProfileSettingsButton<P extends EsidProfileBase>({
         type="button"
         className={BTN}
         disabled={disabled}
-        title={savedComplete && active ? completeTitle(active) : incompleteTitle}
+        title={
+          savedComplete && active ? completeTitle(active) : incompleteTitle
+        }
         onClick={() => {
           if (open) closeWithoutSave();
           else setOpen(true);
@@ -173,18 +182,18 @@ export function EsidProfileSettingsButton<P extends EsidProfileBase>({
       </button>
       {open ? (
         <div
-          className={`absolute left-0 top-full z-50 mt-1 ${panelMaxWidthClass} rounded-lg border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-600 dark:bg-slate-900`}
+          className={`absolute left-0 top-full z-50 mt-1 ${panelMaxWidthClass} rounded-lg border border-slate-200 bg-white p-3 shadow-lg`}
           role="dialog"
           aria-label={dialogAriaLabel}
         >
-          <p className="mb-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+          <p className="mb-2 text-[11px] font-semibold text-slate-700">
             {dialogTitle}
           </p>
           {store.profiles.filter((p) => p.name.trim()).length > 1 ? (
             <label className="mb-2 block text-[10px] text-slate-500">
               Hồ sơ
               <select
-                className={`${INPUT} bg-white dark:bg-slate-800`}
+                className={`${INPUT} bg-white`}
                 value={store.activeId}
                 onChange={(e) => {
                   const p = store.profiles.find((x) => x.id === e.target.value);
@@ -220,7 +229,9 @@ export function EsidProfileSettingsButton<P extends EsidProfileBase>({
                   rows={2}
                   value={fieldValues[f.key] ?? ""}
                   onChange={(e) => {
-                    const v = f.transform ? f.transform(e.target.value) : e.target.value;
+                    const v = f.transform
+                      ? f.transform(e.target.value)
+                      : e.target.value;
                     setFieldValues((prev) => ({ ...prev, [f.key]: v }));
                   }}
                 />
@@ -229,7 +240,9 @@ export function EsidProfileSettingsButton<P extends EsidProfileBase>({
                   className={INPUT}
                   value={fieldValues[f.key] ?? ""}
                   onChange={(e) => {
-                    const v = f.transform ? f.transform(e.target.value) : e.target.value;
+                    const v = f.transform
+                      ? f.transform(e.target.value)
+                      : e.target.value;
                     setFieldValues((prev) => ({ ...prev, [f.key]: v }));
                   }}
                   inputMode={f.inputMode}
@@ -248,7 +261,7 @@ export function EsidProfileSettingsButton<P extends EsidProfileBase>({
             </button>
             <button
               type="button"
-              className="rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200"
+              className="rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-bold text-slate-700"
               onClick={switchName}
               title={switchPrompt}
             >

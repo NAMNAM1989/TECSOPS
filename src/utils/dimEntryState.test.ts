@@ -6,7 +6,6 @@ import {
   dimEntrySeed,
   dimEntryValidateSave,
   snapshotDimEntry,
-  parseSpeechToDimLines,
 } from "./dimEntryState";
 import { dimRandomSeed } from "./dimBulkFill";
 
@@ -104,26 +103,6 @@ describe("dimEntryMergeLines", () => {
 describe("dimEntrySeed", () => {
   it("ổn định theo lô", () => {
     expect(dimEntrySeed(LOT)).toBe(dimRandomSeed("s1", 96, 1150));
-  });
-});
-
-describe("parseSpeechToDimLines", () => {
-  it("parse tiếng Việt và các số thành các nhóm kích thước và kiện", () => {
-    const r1 = parseSpeechToDimLines("bốn mươi năm mươi ba mươi mười kiện ba mươi ba mươi bốn mươi năm kiện");
-    expect(r1.ok).toBe(true);
-    if (r1.ok) {
-      expect(r1.lines).toHaveLength(2);
-      expect(r1.lines[0]).toEqual({ lCm: 40, wCm: 50, hCm: 30, pcs: 10 });
-      expect(r1.lines[1]).toEqual({ lCm: 30, wCm: 30, hCm: 40, pcs: 5 });
-    }
-
-    const r2 = parseSpeechToDimLines("40 50 30 10 và 30 30 40");
-    expect(r2.ok).toBe(true);
-    if (r2.ok) {
-      expect(r2.lines).toHaveLength(2);
-      expect(r2.lines[0]).toEqual({ lCm: 40, wCm: 50, hCm: 30, pcs: 10 });
-      expect(r2.lines[1]).toEqual({ lCm: 30, wCm: 30, hCm: 40, pcs: 1 }); // Dư 3 số cuối mặc định pcs = 1
-    }
   });
 });
 

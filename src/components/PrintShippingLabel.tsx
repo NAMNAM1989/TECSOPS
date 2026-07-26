@@ -10,7 +10,10 @@ import { mapShipmentToAirCargoLabelData } from "../utils/mapShipmentToAirCargoLa
 import { fitAwbFontMm } from "../utils/fitAwbFontMm";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { OPS } from "../styles/opsModalStyles";
-import { printThermalLabelsFromIframe, thermalPageMm } from "../utils/printThermalLabelIframe";
+import {
+  printThermalLabelsFromIframe,
+  thermalPageMm,
+} from "../utils/printThermalLabelIframe";
 import { labelSheetFormatLabel } from "../printing/thermalLabelFormat";
 
 export type LabelSheetVariant = "standard" | "compact";
@@ -72,7 +75,7 @@ export function LabelContent({
     hasHawb ? "lbl-sheet--house" : "",
   ]
     .filter(Boolean)
-    .join(" ");
+    .join("");
 
   return (
     <div className={sheetClass}>
@@ -125,7 +128,10 @@ export function LabelContent({
           </div>
         </div>
         {showHandling && handling ? (
-          <div className={`lbl-special ${d.special}`} style={{ fontSize: mm(specialMm) }}>
+          <div
+            className={`lbl-special ${d.special}`}
+            style={{ fontSize: mm(specialMm) }}
+          >
             {handling}
           </div>
         ) : null}
@@ -157,7 +163,9 @@ function LabelPreviewSimple({
   const scale = compact ? 1.08 : 1;
 
   return (
-    <div className={`flex min-h-[280px] w-full items-center justify-center overflow-auto rounded-2xl p-5 ${OPS.printPreviewFrame}`}>
+    <div
+      className={`flex min-h-[280px] w-full items-center justify-center overflow-auto rounded-2xl p-5 ${OPS.printPreviewFrame}`}
+    >
       <div
         className="shrink-0 overflow-hidden rounded-lg bg-white shadow-apple ring-1 ring-black/[0.1]"
         style={{
@@ -214,8 +222,12 @@ function SettingToggle({
       } ${OPS.border}`}
     >
       <span className="min-w-0">
-        <span className={`block text-sm font-semibold ${OPS.title}`}>{label}</span>
-        {hint ? <span className={`block text-[11px] ${OPS.muted}`}>{hint}</span> : null}
+        <span className={`block text-sm font-semibold ${OPS.title}`}>
+          {label}
+        </span>
+        {hint ? (
+          <span className={`block text-[11px] ${OPS.muted}`}>{hint}</span>
+        ) : null}
       </span>
       <input
         type="checkbox"
@@ -234,8 +246,14 @@ interface PrintShippingLabelProps {
   onClose: () => void;
 }
 
-export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }: PrintShippingLabelProps) {
-  const [format, setFormat] = useState<LabelSheetFormat>(() => loadLabelSheetFormat());
+export function PrintShippingLabel({
+  shipment,
+  airlineLabelOverrides,
+  onClose,
+}: PrintShippingLabelProps) {
+  const [format, setFormat] = useState<LabelSheetFormat>(() =>
+    loadLabelSheetFormat(),
+  );
   const [printMsg, setPrintMsg] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const printHostRef = useRef<HTMLDivElement>(null);
@@ -247,16 +265,18 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
   const pageMm = useMemo(() => thermalPageMm(format, "xp470b"), [format]);
   const labelData = useMemo(
     () => mapShipmentToAirCargoLabelData(shipment, airlineLabelOverrides),
-    [shipment, airlineLabelOverrides]
+    [shipment, airlineLabelOverrides],
   );
   const copies = Number(copiesInput);
-  const hasValidCopies = Number.isInteger(copies) && copies >= 1 && copies <= 999;
+  const hasValidCopies =
+    Number.isInteger(copies) && copies >= 1 && copies <= 999;
   const warnings = useMemo(() => {
     const next: string[] = [];
     if (labelData.mawbDigits.length !== 11) next.push("MAWB chưa đủ 11 số");
     if (!labelData.dest) next.push("chưa có Destination");
     if (!shipment.pcs || shipment.pcs < 1) next.push("chưa có số kiện");
-    if (showAirline && !labelData.airline) next.push("chưa nhận diện được hãng");
+    if (showAirline && !labelData.airline)
+      next.push("chưa nhận diện được hãng");
     return next;
   }, [labelData, shipment.pcs, showAirline]);
 
@@ -277,13 +297,15 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
       printWindow = window.open(
         "about:blank",
         "tecsops-label-print",
-        `width=${Math.max(320, Math.round(wMm * 3.8))},height=${Math.max(280, Math.round(hMm * 3.8 + 48))}`
+        `width=${Math.max(320, Math.round(wMm * 3.8))},height=${Math.max(280, Math.round(hMm * 3.8 + 48))}`,
       );
     } catch {
       printWindow = null;
     }
     try {
-      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      await new Promise<void>((r) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => r())),
+      );
       const res = await printThermalLabelsFromIframe({
         format,
         host: printHostRef.current,
@@ -295,7 +317,7 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
         setPrintMsg(res.error);
       } else if (res.printerCopiesHint) {
         setPrintMsg(
-          `Lô ${res.printerCopiesHint} tem: trong hộp thoại in hãy đặt Số bản = ${res.printerCopiesHint} (tránh treo máy).`
+          `Lô ${res.printerCopiesHint} tem: trong hộp thoại in hãy đặt Số bản = ${res.printerCopiesHint} (tránh treo máy).`,
         );
       }
     } finally {
@@ -306,18 +328,23 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
   return (
     <>
       <div
-        className="no-print fixed inset-0 z-[100] flex items-end justify-center bg-black/30 p-2 backdrop-blur-xl sm:items-center sm:p-4"
+        className="no-print fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-2 sm:items-center sm:p-4"
         role="dialog"
         aria-modal="true"
       >
         <div
-          className={`flex max-h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border shadow-apple-md sm:max-h-[calc(100dvh-2rem)] ${OPS.modal}`}
+          className={`flex max-h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-ui-border shadow-md sm:max-h-[calc(100dvh-2rem)] ${OPS.modal}`}
         >
-          <div className={`flex shrink-0 items-center justify-between border-b px-5 py-4 sm:px-6 ${OPS.border}`}>
+          <div
+            className={`flex shrink-0 items-center justify-between border-b px-5 py-4 sm:px-6 ${OPS.border}`}
+          >
             <div className="min-w-0">
-              <h2 className={`truncate text-lg font-semibold ${OPS.title}`}>Xưởng in nhãn vận chuyển</h2>
+              <h2 className={`truncate text-lg font-semibold ${OPS.title}`}>
+                Xưởng in nhãn vận chuyển
+              </h2>
               <p className={`text-xs ${OPS.secondary}`}>
-                {shipment.awb || "Chưa có AWB"} · {labelSheetFormatLabel(format)} ·{" "}
+                {shipment.awb || "Chưa có AWB"} ·{" "}
+                {labelSheetFormatLabel(format)} ·{""}
                 {hasValidCopies ? `${copies} tem` : "chưa nhập số tem"}
               </p>
             </div>
@@ -336,7 +363,9 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
               <section className="min-w-0">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h3 className={`text-sm font-bold ${OPS.title}`}>Xem trước đúng tỷ lệ</h3>
+                    <h3 className={`text-sm font-bold ${OPS.title}`}>
+                      Xem trước đúng tỷ lệ
+                    </h3>
                     <p className={`text-[11px] ${OPS.muted}`}>
                       Nội dung bên dưới chính là nội dung gửi sang cửa sổ in.
                     </p>
@@ -344,11 +373,13 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                   <span
                     className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
                       warnings.length
-                        ? "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"
-                        : "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-200"
+                        ? "bg-amber-100 text-amber-900"
+                        : "bg-emerald-100 text-emerald-900"
                     }`}
                   >
-                    {warnings.length ? `${warnings.length} cảnh báo` : "Sẵn sàng in"}
+                    {warnings.length
+                      ? `${warnings.length} cảnh báo`
+                      : "Sẵn sàng in"}
                   </span>
                 </div>
 
@@ -364,31 +395,48 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
 
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
                   <div className={OPS.printSummaryCard}>
-                    <span className={`block text-[10px] uppercase ${OPS.muted}`}>Trang in</span>
-                    <strong className={`text-sm ${OPS.title}`}>{pageMm.wMm}×{pageMm.hMm} mm</strong>
+                    <span
+                      className={`block text-[10px] uppercase ${OPS.muted}`}
+                    >
+                      Trang in
+                    </span>
+                    <strong className={`text-sm ${OPS.title}`}>
+                      {pageMm.wMm}×{pageMm.hMm} mm
+                    </strong>
                   </div>
                   <div className={OPS.printSummaryCard}>
-                    <span className={`block text-[10px] uppercase ${OPS.muted}`}>Số lượng</span>
+                    <span
+                      className={`block text-[10px] uppercase ${OPS.muted}`}
+                    >
+                      Số lượng
+                    </span>
                     <strong className={`text-sm ${OPS.title}`}>
                       {hasValidCopies ? `${copies} tem` : "Chưa nhập"}
                     </strong>
                   </div>
                   <div className={OPS.printSummaryCard}>
-                    <span className={`block text-[10px] uppercase ${OPS.muted}`}>Thiết bị</span>
+                    <span
+                      className={`block text-[10px] uppercase ${OPS.muted}`}
+                    >
+                      Thiết bị
+                    </span>
                     <strong className={`text-sm ${OPS.title}`}>XP-470B</strong>
                   </div>
                 </div>
 
                 {warnings.length ? (
-                  <div className="mt-3 rounded-xl border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
-                    <strong>Kiểm tra trước khi in:</strong> {warnings.join(" · ")}.
+                  <div className="mt-3 rounded-xl border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                    <strong>Kiểm tra trước khi in:</strong>{" "}
+                    {warnings.join(" ·")}.
                   </div>
                 ) : null}
               </section>
 
               <aside className="space-y-4">
                 <section className={`${OPS.card} p-3`}>
-                  <h3 className={`mb-2 text-xs font-bold uppercase tracking-wide ${OPS.secondary}`}>
+                  <h3
+                    className={`mb-2 text-xs font-bold uppercase tracking-wide ${OPS.secondary}`}
+                  >
                     Khổ tem
                   </h3>
                   <div className="grid grid-cols-2 gap-2">
@@ -407,7 +455,9 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                             selected ? OPS.formatBtnOn : OPS.formatBtnOff
                           }`}
                         >
-                          <span className="block text-sm font-bold">{labelSheetFormatLabel(fmt)}</span>
+                          <span className="block text-sm font-bold">
+                            {labelSheetFormatLabel(fmt)}
+                          </span>
                         </button>
                       );
                     })}
@@ -420,7 +470,11 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                 <section className={`${OPS.card} p-3`}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className={`text-xs font-bold uppercase tracking-wide ${OPS.secondary}`}>Số tem</h3>
+                      <h3
+                        className={`text-xs font-bold uppercase tracking-wide ${OPS.secondary}`}
+                      >
+                        Số tem
+                      </h3>
                       <p className={`text-[10px] ${OPS.muted}`}>
                         Nhập tay để xác nhận đúng số lượng trước khi in.
                       </p>
@@ -432,16 +486,24 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                         max={999}
                         inputMode="numeric"
                         value={copiesInput}
-                        onChange={(e) => setCopiesInput(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                        onChange={(e) =>
+                          setCopiesInput(
+                            e.target.value.replace(/\D/g, "").slice(0, 3),
+                          )
+                        }
                         placeholder="Nhập"
                         className={`${OPS.printStepperInput} !w-20 !py-1.5 !text-sm`}
                         aria-label="Số lượng tem"
                       />
-                      <span className={`text-xs font-semibold ${OPS.secondary}`}>tem</span>
+                      <span
+                        className={`text-xs font-semibold ${OPS.secondary}`}
+                      >
+                        tem
+                      </span>
                     </div>
                   </div>
                   {!hasValidCopies && copiesInput ? (
-                    <p className="mt-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                    <p className="mt-2 text-[11px] font-medium text-amber-700">
                       Số tem phải từ 1 đến 999.
                     </p>
                   ) : null}
@@ -450,10 +512,18 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                 <section className={`${OPS.card} p-3`}>
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <div>
-                      <h3 className={`text-xs font-bold uppercase tracking-wide ${OPS.secondary}`}>Nội dung tem</h3>
-                      <p className={`text-[10px] ${OPS.muted}`}>Thay đổi chỉ áp dụng cho lần in này.</p>
+                      <h3
+                        className={`text-xs font-bold uppercase tracking-wide ${OPS.secondary}`}
+                      >
+                        Nội dung tem
+                      </h3>
+                      <p className={`text-[10px] ${OPS.muted}`}>
+                        Thay đổi chỉ áp dụng cho lần in này.
+                      </p>
                     </div>
-                    <span className={`text-xs font-semibold tabular-nums ${OPS.secondary}`}>
+                    <span
+                      className={`text-xs font-semibold tabular-nums ${OPS.secondary}`}
+                    >
                       {Math.round(fontScale * 100)}%
                     </span>
                   </div>
@@ -475,9 +545,13 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                       hint={labelData.airline || "Chưa nhận diện được hãng"}
                     />
                     {labelData.hasHawb ? (
-                      <div className="rounded-xl border border-emerald-300/70 bg-emerald-50 px-3 py-2.5 dark:border-emerald-400/30 dark:bg-emerald-500/10">
-                        <span className={`block text-sm font-semibold ${OPS.title}`}>Tem House · HAWB</span>
-                        <span className="block truncate font-mono text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
+                      <div className="rounded-xl border border-emerald-300/70 bg-emerald-50 px-3 py-2.5">
+                        <span
+                          className={`block text-sm font-semibold ${OPS.title}`}
+                        >
+                          Tem House · HAWB
+                        </span>
+                        <span className="block truncate font-mono text-[11px] font-bold text-emerald-800">
                           {labelData.hawbNo}
                         </span>
                         <span className={`block text-[10px] ${OPS.muted}`}>
@@ -493,11 +567,17 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                     />
                   </div>
                   <div className="mt-3">
-                    <label className={`text-[11px] font-semibold ${OPS.secondary}`}>
+                    <label
+                      className={`text-[11px] font-semibold ${OPS.secondary}`}
+                    >
                       Dòng cảnh báo tùy chỉnh
                       <input
                         value={handlingText}
-                        onChange={(e) => setHandlingText(e.target.value.slice(0, 48).toUpperCase())}
+                        onChange={(e) =>
+                          setHandlingText(
+                            e.target.value.slice(0, 48).toUpperCase(),
+                          )
+                        }
                         disabled={!showHandling}
                         placeholder="Để trống = tự nhận từ ghi chú"
                         className={`mt-1 w-full ${OPS.inputLg}`}
@@ -510,13 +590,18 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
             </div>
           </div>
 
-          <div className={`flex shrink-0 flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:items-center sm:px-6 ${OPS.footer}`}>
+          <div
+            className={`flex shrink-0 flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:items-center sm:px-6 ${OPS.footer}`}
+          >
             <div className="min-w-0 flex-1">
               {printMsg ? (
-                <p className="text-[11px] font-medium text-amber-800 dark:text-amber-200">{printMsg}</p>
+                <p className="text-[11px] font-medium text-amber-800">
+                  {printMsg}
+                </p>
               ) : (
                 <p className={`text-[11px] ${OPS.muted}`}>
-                  Trình duyệt sẽ mở hộp thoại in; đặt Scale 100% và Margins = None.
+                  Trình duyệt sẽ mở hộp thoại in; đặt Scale 100% và Margins =
+                  None.
                 </p>
               )}
             </div>
@@ -542,7 +627,11 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                 disabled={printing || !hasValidCopies}
                 className="rounded-full bg-apple-blue px-6 py-2.5 text-sm font-semibold text-white hover:bg-apple-blue-hover disabled:opacity-60"
               >
-                {printing ? "Đang chuẩn bị…" : hasValidCopies ? `In ${copies} tem` : "Nhập số tem để in"}
+                {printing
+                  ? "Đang chuẩn bị…"
+                  : hasValidCopies
+                    ? `In ${copies} tem`
+                    : "Nhập số tem để in"}
               </button>
             </div>
           </div>
@@ -568,7 +657,7 @@ export function PrintShippingLabel({ shipment, airlineLabelOverrides, onClose }:
                 </div>
               </div>
             </div>,
-            document.body
+            document.body,
           )
         : null}
     </>

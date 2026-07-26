@@ -1,10 +1,14 @@
 /**
  * Quy tắc trạng thái lô — nguồn sự thật server + client.
  * Không nhân bản logic ở src/utils hay server/.
+ *
+ * Enum lưu DB giữ nguyên (kể cả CUSTOMS/SECURITY/COMPLETED lịch sử).
+ * Luồng chọn/filter theo kho — xem WORKFLOW_BY_WAREHOUSE.
  */
 
 import { awbDigitsKey } from "./awbFormat.mjs";
 
+/** Toàn bộ mã từng tồn tại — dùng migrate / validate storage. */
 export const SHIPMENT_STATUS_ORDER = [
   "PENDING",
   "RECEIVED",
@@ -16,6 +20,19 @@ export const SHIPMENT_STATUS_ORDER = [
   "WEIGH_SLIP",
   "COMPLETED",
 ];
+
+/**
+ * Workflow theo kho (spec §5.6).
+ * TCS: Booking → Nhận hàng → Đã đo Volume → Kéo OLA → Hoàn thành tiếp nhận → Nộp tờ cân
+ * SCSC: Booking → Nhận hàng → Đã đo Volume → Kéo OLA → Nộp tờ cân
+ */
+export const WORKFLOW_BY_WAREHOUSE = {
+  "TECS-TCS": ["PENDING", "RECEIVED", "VOLUME_DONE", "OLA_PULL", "RECEPTION_COMPLETED", "WEIGH_SLIP"],
+  "TECS-SCSC": ["PENDING", "RECEIVED", "VOLUME_DONE", "OLA_PULL", "WEIGH_SLIP"],
+};
+
+/** Ẩn khỏi filter (lịch sử / ngoài luồng hiện tại). */
+export const FILTER_HIDDEN_STATUSES = new Set(["CUSTOMS", "SECURITY", "COMPLETED"]);
 
 const MANUAL = new Set([
   "CUSTOMS",
@@ -38,6 +55,31 @@ const DATA_FIELDS = ["awb", "pcs", "dimWeightKg", "dimLines", "dimDivisor"];
 
 export function isAutoWorkflowStatus(s) {
   return s === "PENDING" || s === "RECEIVED" || s === "VOLUME_DONE";
+}
+
+export function statusOrderForWarehouse(warehouse) {
+  return WORKFLOW_BY_WAREHOUSE[warehouse] || WORKFLOW_BY_WAREHOUSE["TECS-TCS"];
+}
+
+/** Chip filter: theo kho đang xem; ALL = union (thứ tự TCS — bao gồm Hoàn thành tiếp nhận). */
+export function statusOrderForFilter(warehouse) {
+  if (warehouse === "TECS-TCS" || warehouse === "TECS-SCSC") {
+    return statusOrderForWarehouse(warehouse);
+  }
+  return WORKFLOW_BY_WAREHOUSE["TECS-TCS"];
+}
+
+/** Option StatusSelect: luồng kho + giữ mã lịch sử nếu đang gắn trên lô. */
+export function selectableStatusesForShipment(warehouse, currentStatus) {
+  const order = statusOrderForWarehouse(warehouse);
+  if (currentStatus && !order.includes(currentStatus)) {
+    return [currentStatus, ...order];
+  }
+  return order;
+}
+
+export function isStatusInWarehouseWorkflow(status, warehouse) {
+  return statusOrderForWarehouse(warehouse).includes(status);
 }
 
 export function deriveAutoWorkflowStatus(row) {

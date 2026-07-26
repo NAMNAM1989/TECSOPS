@@ -32,11 +32,16 @@ type ProfileTab = "shipper" | "consignee" | "goods" | "vehicle";
 type Props = {
   entry: CustomerDirectoryEntry;
   errors: CustomerFieldError[];
-  onPatch: (patch: Partial<Omit<CustomerDirectoryEntry, "id" | "parties">>) => void;
+  onPatch: (
+    patch: Partial<Omit<CustomerDirectoryEntry, "id" | "parties">>,
+  ) => void;
   onPatchShipper: (index: number, patch: Partial<CustomerSavedShipper>) => void;
   onRemoveShipper: (index: number) => void;
   onAddShipper: () => void;
-  onPatchConsignee: (index: number, patch: Partial<CustomerSavedConsignee>) => void;
+  onPatchConsignee: (
+    index: number,
+    patch: Partial<CustomerSavedConsignee>,
+  ) => void;
   onRemoveConsignee: (index: number) => void;
   onAddConsignee: () => void;
   onPatchGoods: (index: number, patch: Partial<CustomerSavedGoods>) => void;
@@ -96,12 +101,16 @@ function ItemCard({
     <div className={`mb-1.5 rounded-lg border p-2 ${OPS.panelSoft}`}>
       <div className="mb-1.5 flex items-center gap-1.5">
         {defaultStar}
-        <span className={`min-w-0 flex-1 truncate text-[11px] font-semibold ${OPS.secondary}`}>{title}</span>
+        <span
+          className={`min-w-0 flex-1 truncate text-[11px] font-semibold ${OPS.secondary}`}
+        >
+          {title}
+        </span>
         {canRemove ? (
           <button
             type="button"
             onClick={onRemove}
-            className="text-[10px] font-semibold text-red-600 hover:underline dark:text-red-300"
+            className="text-[10px] font-semibold text-red-600 hover:underline"
           >
             Xóa
           </button>
@@ -113,10 +122,15 @@ function ItemCard({
 }
 
 function FieldLabel({ children }: { children: ReactNode }) {
-  return <span className={`mb-0.5 block text-[10px] font-medium ${OPS.muted}`}>{children}</span>;
+  return (
+    <span className={`mb-0.5 block text-[10px] font-medium ${OPS.muted}`}>
+      {children}
+    </span>
+  );
 }
 
-export function CustomerSavedProfilesEditor({
+/** Tab « Dữ liệu mặc định » — giữ model saved* cho booking / ESID / Excel. */
+export function CustomerDefaultDataEditor({
   entry,
   errors,
   onPatch,
@@ -177,7 +191,7 @@ export function CustomerSavedProfilesEditor({
     idx: number,
     primary: string,
     patch: (i: number, p: { label: string }) => void,
-    currentLabel: string
+    currentLabel: string,
   ) => {
     if (currentLabel.trim()) return;
     const label = suggestSavedItemLabel(primary, entry.code);
@@ -196,8 +210,11 @@ export function CustomerSavedProfilesEditor({
 
   return (
     <section className="space-y-2.5">
-      <div className={`rounded-lg border p-2 ${OPS.card}`}>
-        <span className={`mb-1.5 block text-[10px] font-bold uppercase ${OPS.muted}`}>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
+        Dữ liệu mặc định
+      </p>
+      <div className="rounded-lg border border-ui-border bg-ui-surface p-2">
+        <span className="mb-1.5 block text-[10px] font-bold uppercase text-ui-text-muted">
           Ghi chú in phiếu cân
         </span>
         <textarea
@@ -209,15 +226,17 @@ export function CustomerSavedProfilesEditor({
         />
       </div>
 
-      <div className={`rounded-lg border ${OPS.card}`}>
-        <div className={`flex flex-wrap items-center gap-1 border-b px-1.5 py-1 ${OPS.border}`}>
+      <div className="rounded-lg border border-ui-border bg-ui-surface">
+        <div className="flex flex-wrap items-center gap-1 border-b border-ui-border px-1.5 py-1">
           {TAB_LABELS.map(({ id, label }) => (
             <button
               key={id}
               type="button"
               onClick={() => setTab(id)}
               className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
-                tab === id ? OPS.navActive : OPS.navIdle
+                tab === id
+                  ? "bg-ui-surface shadow-sm ring-1 ring-ui-primary/30"
+                  : "text-ui-text-muted hover:bg-ui-surface-muted"
               }`}
             >
               {label}
@@ -226,22 +245,32 @@ export function CustomerSavedProfilesEditor({
           ))}
           <div className="ml-auto flex items-center gap-1">
             <SectionErrorHint errors={errors} section={tab} />
-            <button type="button" onClick={tabAdd[tab]} className={OPS.btnSmallAccent}>
+            <button
+              type="button"
+              onClick={tabAdd[tab]}
+              className="rounded-full border border-ui-border px-2.5 py-1 text-[10px] font-semibold text-ui-primary hover:bg-ui-primary/10"
+            >
               + Thêm
             </button>
           </div>
         </div>
 
         <div className="p-2">
-          <CustomerValidationBanner errors={errors.filter((e) => e.section === tab)} />
+          <CustomerValidationBanner
+            errors={errors.filter((e) => e.section === tab)}
+          />
           {tab === "shipper" ? (
             shippers.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>Chưa có người gửi.</p>
+              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
+                Chưa có người gửi.
+              </p>
             ) : (
               shippers.map((s, idx) => (
                 <ItemCard
                   key={s.id}
-                  title={s.shipperName.trim() || s.label.trim() || `#${idx + 1}`}
+                  title={
+                    s.shipperName.trim() || s.label.trim() || `#${idx + 1}`
+                  }
                   canRemove={shippers.length > 1}
                   onRemove={() => onRemoveShipper(idx)}
                   defaultStar={
@@ -256,24 +285,43 @@ export function CustomerSavedProfilesEditor({
                     <label className="sm:col-span-2">
                       <FieldLabel>Tên in phiếu</FieldLabel>
                       <input
-                        className={fieldInputClass(Boolean(fe("shipper", "shipperName", s.id)))}
+                        className={fieldInputClass(
+                          Boolean(fe("shipper", "shipperName", s.id)),
+                        )}
                         value={s.shipperName}
-                        onChange={(e) => onPatchShipper(idx, { shipperName: e.target.value })}
-                        onBlur={() => fillLabelIfEmpty(idx, s.shipperName, onPatchShipper, s.label)}
+                        onChange={(e) =>
+                          onPatchShipper(idx, { shipperName: e.target.value })
+                        }
+                        onBlur={() =>
+                          fillLabelIfEmpty(
+                            idx,
+                            s.shipperName,
+                            onPatchShipper,
+                            s.label,
+                          )
+                        }
                       />
-                      <FieldErrorText message={fe("shipper", "shipperName", s.id)} />
+                      <FieldErrorText
+                        message={fe("shipper", "shipperName", s.id)}
+                      />
                     </label>
                     <label>
                       <FieldLabel>SĐT</FieldLabel>
                       <input
                         className={`${fieldInputClass(Boolean(fe("shipper", "shipperPhone", s.id)))} tabular-nums`}
                         value={s.shipperPhone}
-                        onChange={(e) => onPatchShipper(idx, { shipperPhone: e.target.value })}
+                        onChange={(e) =>
+                          onPatchShipper(idx, { shipperPhone: e.target.value })
+                        }
                         onBlur={(e) =>
-                          onPatchShipper(idx, { shipperPhone: formatVnPhoneDisplay(e.target.value) })
+                          onPatchShipper(idx, {
+                            shipperPhone: formatVnPhoneDisplay(e.target.value),
+                          })
                         }
                       />
-                      <FieldErrorText message={fe("shipper", "shipperPhone", s.id)} />
+                      <FieldErrorText
+                        message={fe("shipper", "shipperPhone", s.id)}
+                      />
                     </label>
                     <label className="sm:col-span-2">
                       <FieldLabel>Địa chỉ</FieldLabel>
@@ -281,25 +329,42 @@ export function CustomerSavedProfilesEditor({
                         className={`${fieldInputClass(false)} resize-y whitespace-pre-wrap break-words leading-relaxed`}
                         rows={2}
                         value={s.shipperAddress}
-                        onChange={(e) => onPatchShipper(idx, { shipperAddress: e.target.value })}
+                        onChange={(e) =>
+                          onPatchShipper(idx, {
+                            shipperAddress: e.target.value,
+                          })
+                        }
                         onBlur={(e) =>
                           onPatchShipper(idx, {
-                            shipperAddress: normalizePrintAddressMultiline(e.target.value, 6),
+                            shipperAddress: normalizePrintAddressMultiline(
+                              e.target.value,
+                              6,
+                            ),
                           })
                         }
                       />
                     </label>
                   </div>
                   <details className="mt-1">
-                    <summary className={`cursor-pointer text-[10px] ${OPS.muted}`}>Thêm (MST, email, OCR…)</summary>
+                    <summary
+                      className={`cursor-pointer text-[10px] ${OPS.muted}`}
+                    >
+                      Thêm (MST, email, OCR…)
+                    </summary>
                     <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                       <label>
                         <FieldLabel>Mã</FieldLabel>
                         <input
                           className={`${inputCls} font-mono uppercase`}
                           value={s.label}
-                          onChange={(e) => onPatchShipper(idx, { label: e.target.value })}
-                          onBlur={(e) => onPatchShipper(idx, { label: normalizeAgentCode(e.target.value) })}
+                          onChange={(e) =>
+                            onPatchShipper(idx, { label: e.target.value })
+                          }
+                          onBlur={(e) =>
+                            onPatchShipper(idx, {
+                              label: normalizeAgentCode(e.target.value),
+                            })
+                          }
                         />
                       </label>
                       <label>
@@ -307,7 +372,9 @@ export function CustomerSavedProfilesEditor({
                         <input
                           className={inputCls}
                           value={s.taxCode}
-                          onChange={(e) => onPatchShipper(idx, { taxCode: e.target.value })}
+                          onChange={(e) =>
+                            onPatchShipper(idx, { taxCode: e.target.value })
+                          }
                         />
                       </label>
                       <label className="sm:col-span-2">
@@ -315,14 +382,26 @@ export function CustomerSavedProfilesEditor({
                         <input
                           className={inputCls}
                           value={s.shipperEmail}
-                          onChange={(e) => onPatchShipper(idx, { shipperEmail: e.target.value })}
+                          onChange={(e) =>
+                            onPatchShipper(idx, {
+                              shipperEmail: e.target.value,
+                            })
+                          }
                         />
                       </label>
                       <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-                        <button type="button" onClick={() => void applyOcrPaste(idx)} className={OPS.btnSmallAccent}>
+                        <button
+                          type="button"
+                          onClick={() => void applyOcrPaste(idx)}
+                          className={OPS.btnSmallAccent}
+                        >
                           Dán OCR
                         </button>
-                        {ocrHint ? <span className={`text-[10px] ${OPS.secondary}`}>{ocrHint}</span> : null}
+                        {ocrHint ? (
+                          <span className={`text-[10px] ${OPS.secondary}`}>
+                            {ocrHint}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   </details>
@@ -333,12 +412,16 @@ export function CustomerSavedProfilesEditor({
 
           {tab === "consignee" ? (
             consignees.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>Chưa có CNEE — có thể bỏ qua.</p>
+              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
+                Chưa có CNEE — có thể bỏ qua.
+              </p>
             ) : (
               consignees.map((c, idx) => (
                 <ItemCard
                   key={c.id}
-                  title={c.consigneeName.trim() || c.label.trim() || `#${idx + 1}`}
+                  title={
+                    c.consigneeName.trim() || c.label.trim() || `#${idx + 1}`
+                  }
                   canRemove
                   onRemove={() => onRemoveConsignee(idx)}
                   defaultStar={
@@ -353,24 +436,49 @@ export function CustomerSavedProfilesEditor({
                     <label className="sm:col-span-2">
                       <FieldLabel>Tên</FieldLabel>
                       <input
-                        className={fieldInputClass(Boolean(fe("consignee", "consigneeName", c.id)))}
+                        className={fieldInputClass(
+                          Boolean(fe("consignee", "consigneeName", c.id)),
+                        )}
                         value={c.consigneeName}
-                        onChange={(e) => onPatchConsignee(idx, { consigneeName: e.target.value })}
-                        onBlur={() => fillLabelIfEmpty(idx, c.consigneeName, onPatchConsignee, c.label)}
+                        onChange={(e) =>
+                          onPatchConsignee(idx, {
+                            consigneeName: e.target.value,
+                          })
+                        }
+                        onBlur={() =>
+                          fillLabelIfEmpty(
+                            idx,
+                            c.consigneeName,
+                            onPatchConsignee,
+                            c.label,
+                          )
+                        }
                       />
-                      <FieldErrorText message={fe("consignee", "consigneeName", c.id)} />
+                      <FieldErrorText
+                        message={fe("consignee", "consigneeName", c.id)}
+                      />
                     </label>
                     <label>
                       <FieldLabel>SĐT</FieldLabel>
                       <input
                         className={`${fieldInputClass(Boolean(fe("consignee", "consigneePhone", c.id)))} tabular-nums`}
                         value={c.consigneePhone}
-                        onChange={(e) => onPatchConsignee(idx, { consigneePhone: e.target.value })}
+                        onChange={(e) =>
+                          onPatchConsignee(idx, {
+                            consigneePhone: e.target.value,
+                          })
+                        }
                         onBlur={(e) =>
-                          onPatchConsignee(idx, { consigneePhone: formatVnPhoneDisplay(e.target.value) })
+                          onPatchConsignee(idx, {
+                            consigneePhone: formatVnPhoneDisplay(
+                              e.target.value,
+                            ),
+                          })
                         }
                       />
-                      <FieldErrorText message={fe("consignee", "consigneePhone", c.id)} />
+                      <FieldErrorText
+                        message={fe("consignee", "consigneePhone", c.id)}
+                      />
                     </label>
                     <label className="sm:col-span-2">
                       <FieldLabel>Địa chỉ</FieldLabel>
@@ -378,10 +486,17 @@ export function CustomerSavedProfilesEditor({
                         className={`${fieldInputClass(false)} resize-y whitespace-pre-wrap break-words leading-relaxed`}
                         rows={2}
                         value={c.consigneeAddress}
-                        onChange={(e) => onPatchConsignee(idx, { consigneeAddress: e.target.value })}
+                        onChange={(e) =>
+                          onPatchConsignee(idx, {
+                            consigneeAddress: e.target.value,
+                          })
+                        }
                         onBlur={(e) =>
                           onPatchConsignee(idx, {
-                            consigneeAddress: normalizePrintAddressMultiline(e.target.value, 6),
+                            consigneeAddress: normalizePrintAddressMultiline(
+                              e.target.value,
+                              6,
+                            ),
                           })
                         }
                       />
@@ -394,12 +509,16 @@ export function CustomerSavedProfilesEditor({
 
           {tab === "goods" ? (
             goods.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>Chưa có mẫu tên hàng.</p>
+              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
+                Chưa có mẫu tên hàng.
+              </p>
             ) : (
               goods.map((g, idx) => (
                 <ItemCard
                   key={g.id}
-                  title={g.goodsDescription.trim() || g.label.trim() || `#${idx + 1}`}
+                  title={
+                    g.goodsDescription.trim() || g.label.trim() || `#${idx + 1}`
+                  }
                   canRemove
                   onRemove={() => onRemoveGoods(idx)}
                   defaultStar={
@@ -413,13 +532,26 @@ export function CustomerSavedProfilesEditor({
                   <label>
                     <FieldLabel>Mô tả in phiếu</FieldLabel>
                     <input
-                      className={fieldInputClass(Boolean(fe("goods", "goodsDescription", g.id)))}
+                      className={fieldInputClass(
+                        Boolean(fe("goods", "goodsDescription", g.id)),
+                      )}
                       placeholder="GARMENT, SEAFOOD…"
                       value={g.goodsDescription}
-                      onChange={(e) => onPatchGoods(idx, { goodsDescription: e.target.value })}
-                      onBlur={() => fillLabelIfEmpty(idx, g.goodsDescription, onPatchGoods, g.label)}
+                      onChange={(e) =>
+                        onPatchGoods(idx, { goodsDescription: e.target.value })
+                      }
+                      onBlur={() =>
+                        fillLabelIfEmpty(
+                          idx,
+                          g.goodsDescription,
+                          onPatchGoods,
+                          g.label,
+                        )
+                      }
                     />
-                    <FieldErrorText message={fe("goods", "goodsDescription", g.id)} />
+                    <FieldErrorText
+                      message={fe("goods", "goodsDescription", g.id)}
+                    />
                   </label>
                 </ItemCard>
               ))
@@ -428,12 +560,18 @@ export function CustomerSavedProfilesEditor({
 
           {tab === "vehicle" ? (
             vehicles.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>Chưa có xe — thêm biển số / tài xế nếu cần.</p>
+              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
+                Chưa có xe — thêm biển số / tài xế nếu cần.
+              </p>
             ) : (
               vehicles.map((v, idx) => (
                 <ItemCard
                   key={v.id}
-                  title={v.licensePlate.trim() || v.driverName.trim() || `#${idx + 1}`}
+                  title={
+                    v.licensePlate.trim() ||
+                    v.driverName.trim() ||
+                    `#${idx + 1}`
+                  }
                   canRemove
                   onRemove={() => onRemoveVehicle(idx)}
                   defaultStar={
@@ -450,21 +588,35 @@ export function CustomerSavedProfilesEditor({
                       <input
                         className={`${fieldInputClass(Boolean(fe("vehicle", "licensePlate", v.id)))} font-mono uppercase`}
                         value={v.licensePlate}
-                        onChange={(e) => onPatchVehicle(idx, { licensePlate: e.target.value })}
+                        onChange={(e) =>
+                          onPatchVehicle(idx, { licensePlate: e.target.value })
+                        }
                         onBlur={(e) =>
-                          onPatchVehicle(idx, { licensePlate: normalizeVehiclePlateInput(e.target.value) })
+                          onPatchVehicle(idx, {
+                            licensePlate: normalizeVehiclePlateInput(
+                              e.target.value,
+                            ),
+                          })
                         }
                       />
-                      <FieldErrorText message={fe("vehicle", "licensePlate", v.id)} />
+                      <FieldErrorText
+                        message={fe("vehicle", "licensePlate", v.id)}
+                      />
                     </label>
                     <label>
                       <FieldLabel>Tài xế</FieldLabel>
                       <input
-                        className={fieldInputClass(Boolean(fe("vehicle", "driverName", v.id)))}
+                        className={fieldInputClass(
+                          Boolean(fe("vehicle", "driverName", v.id)),
+                        )}
                         value={v.driverName}
-                        onChange={(e) => onPatchVehicle(idx, { driverName: e.target.value })}
+                        onChange={(e) =>
+                          onPatchVehicle(idx, { driverName: e.target.value })
+                        }
                       />
-                      <FieldErrorText message={fe("vehicle", "driverName", v.id)} />
+                      <FieldErrorText
+                        message={fe("vehicle", "driverName", v.id)}
+                      />
                     </label>
                     <label>
                       <FieldLabel>CCCD</FieldLabel>
@@ -472,9 +624,15 @@ export function CustomerSavedProfilesEditor({
                         className={`${fieldInputClass(Boolean(fe("vehicle", "driverId", v.id)))} font-mono`}
                         inputMode="numeric"
                         value={v.driverId}
-                        onChange={(e) => onPatchVehicle(idx, { driverId: e.target.value.replace(/\D/g, "") })}
+                        onChange={(e) =>
+                          onPatchVehicle(idx, {
+                            driverId: e.target.value.replace(/\D/g, ""),
+                          })
+                        }
                       />
-                      <FieldErrorText message={fe("vehicle", "driverId", v.id)} />
+                      <FieldErrorText
+                        message={fe("vehicle", "driverId", v.id)}
+                      />
                     </label>
                   </div>
                 </ItemCard>
@@ -486,3 +644,6 @@ export function CustomerSavedProfilesEditor({
     </section>
   );
 }
+
+/** @deprecated Dùng `CustomerDefaultDataEditor` (tab Dữ liệu mặc định). */
+export const CustomerSavedProfilesEditor = CustomerDefaultDataEditor;

@@ -69,7 +69,7 @@ export function WarehouseGridPicker({
                 title={`Thêm lô ${warehouseLabel[wh]}`}
                 aria-label={`Thêm lô ${warehouseLabel[wh]}`}
                 onClick={() => onAddRow(wh)}
-                className="absolute right-1.5 top-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border border-apple-blue/40 bg-apple-blue text-[13px] font-bold leading-none text-white shadow-sm transition hover:bg-apple-blue-hover active:scale-95 dark:border-sky-400/40"
+                className="absolute right-1.5 top-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border border-apple-blue/40 bg-apple-blue text-[13px] font-bold leading-none text-white shadow-sm transition hover:bg-apple-blue-hover active:scale-95"
               >
                 +
               </button>
@@ -79,15 +79,34 @@ export function WarehouseGridPicker({
               onClick={() => onSelect(wh)}
               className="block w-full rounded-xl text-left active:scale-[0.99]"
             >
-              <p className={`font-bold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark ${
-                compact ? "pr-5 text-[9px]" : "pr-7 text-[10px]"
-              }`}>
+              <p
+                className={`font-bold uppercase tracking-wide text-dashboard-muted ${
+                  compact ? "pr-5 text-[9px]" : "pr-7 text-[10px]"
+                }`}
+              >
                 {warehouseLabel[wh]}
               </p>
-              <div className={`grid grid-cols-3 ${compact ? "mt-1 gap-0.5" : "mt-1 gap-1"}`}>
-                <Metric label="Lô" value={m.lots} large={isActive} compact={compact} />
-                <Metric label="Kiện" value={m.pcs} large={isActive} compact={compact} />
-                <Metric label="Kg" value={formatKgTotal(m.kg)} large={isActive} compact={compact} />
+              <div
+                className={`grid grid-cols-3 ${compact ? "mt-1 gap-0.5" : "mt-1 gap-1"}`}
+              >
+                <Metric
+                  label="Lô"
+                  value={m.lots}
+                  large={isActive}
+                  compact={compact}
+                />
+                <Metric
+                  label="Kiện"
+                  value={m.pcs}
+                  large={isActive}
+                  compact={compact}
+                />
+                <Metric
+                  label="Kg"
+                  value={formatKgTotal(m.kg)}
+                  large={isActive}
+                  compact={compact}
+                />
               </div>
             </button>
           </div>
@@ -110,12 +129,18 @@ function Metric({
 }) {
   return (
     <div>
-      <p className="text-[8px] font-semibold uppercase tracking-wide text-dashboard-muted dark:text-dashboard-muted-dark">
+      <p className="text-[8px] font-semibold uppercase tracking-wide text-dashboard-muted">
         {label}
       </p>
       <p
-        className={`font-semibold tabular-nums leading-tight text-dashboard-primary dark:text-dashboard-primary-dark ${
-          large ? (compact ? "text-sm" : "text-sm") : compact ? "text-[11px]" : "text-xs"
+        className={`font-semibold tabular-nums leading-tight text-dashboard-primary ${
+          large
+            ? compact
+              ? "text-sm"
+              : "text-sm"
+            : compact
+              ? "text-[11px]"
+              : "text-xs"
         }`}
       >
         {value}

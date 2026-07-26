@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   deriveAutoWorkflowStatus,
   migrateShipmentStatus,
+  selectableStatusesForShipment,
+  statusOrderForFilter,
+  statusOrderForWarehouse,
   workflowStatusPatchFromDataEdit,
 } from "./shipmentWorkflowStatus";
 import type { Shipment } from "../types/shipment";
@@ -99,5 +102,34 @@ describe("migrateShipmentStatus", () => {
         dimLines: null,
       })
     ).toBe("RECEPTION_COMPLETED");
+  });
+});
+
+describe("workflow theo kho", () => {
+  it("TCS có Hoàn thành tiếp nhận; SCSC không", () => {
+    expect(statusOrderForWarehouse("TECS-TCS")).toEqual([
+      "PENDING",
+      "RECEIVED",
+      "VOLUME_DONE",
+      "OLA_PULL",
+      "RECEPTION_COMPLETED",
+      "WEIGH_SLIP",
+    ]);
+    expect(statusOrderForWarehouse("TECS-SCSC")).toEqual([
+      "PENDING",
+      "RECEIVED",
+      "VOLUME_DONE",
+      "OLA_PULL",
+      "WEIGH_SLIP",
+    ]);
+    expect(statusOrderForFilter("TECS-SCSC")).not.toContain("RECEPTION_COMPLETED");
+    expect(statusOrderForFilter("TECS-SCSC")).not.toContain("CUSTOMS");
+    expect(statusOrderForFilter("TECS-SCSC")).not.toContain("SECURITY");
+  });
+
+  it("giữ mã lịch sử trong select nếu lô đang mang status ngoài luồng", () => {
+    expect(selectableStatusesForShipment("TECS-SCSC", "CUSTOMS")[0]).toBe("CUSTOMS");
+    expect(selectableStatusesForShipment("TECS-SCSC", "CUSTOMS")).toContain("WEIGH_SLIP");
+    expect(selectableStatusesForShipment("TECS-TCS", "VOLUME_DONE")).not.toContain("CUSTOMS");
   });
 });

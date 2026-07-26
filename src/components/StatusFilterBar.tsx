@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import type { Shipment, ShipmentStatus } from "../types/shipment";
-import { SHIPMENT_STATUS_ORDER } from "../utils/shipmentWorkflowStatus";
-import { statusLabel } from "./statusStyles";
+import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
+import { statusOrderForFilter } from "../utils/shipmentWorkflowStatus";
+import { statusIcon, statusLabel } from "./statusStyles";
 
 export type StatusFilterValue = ShipmentStatus | "ALL";
 
@@ -10,6 +10,8 @@ interface StatusFilterBarProps {
   dayRows: readonly Shipment[];
   value: StatusFilterValue;
   onChange: (v: StatusFilterValue) => void;
+  /** Kho đang xem — chip theo workflow kho; ALL = union TCS. */
+  warehouse?: Warehouse | "ALL";
   /** Gọn — không khung lớn, không tiêu đề/ghi chú */
   compact?: boolean;
   /** Ẩn tab trạng thái count=0 — mobile */
@@ -18,19 +20,32 @@ interface StatusFilterBarProps {
   dense?: boolean;
 }
 
-export function StatusFilterBar({ dayRows, value, onChange, compact, hideEmpty, dense }: StatusFilterBarProps) {
+export function StatusFilterBar({
+  dayRows,
+  value,
+  onChange,
+  warehouse = "ALL",
+  compact,
+  hideEmpty,
+  dense,
+}: StatusFilterBarProps) {
+  const statusOrder = useMemo(() => statusOrderForFilter(warehouse), [warehouse]);
+
   const counts = useMemo(() => {
     const m = new Map<ShipmentStatus, number>();
-    for (const st of SHIPMENT_STATUS_ORDER) m.set(st, 0);
-    for (const r of dayRows) m.set(r.status, (m.get(r.status) ?? 0) + 1);
+    for (const st of statusOrder) m.set(st, 0);
+    for (const r of dayRows) {
+      if (!m.has(r.status)) continue;
+      m.set(r.status, (m.get(r.status) ?? 0) + 1);
+    }
     return m;
-  }, [dayRows]);
+  }, [dayRows, statusOrder]);
 
   if (dayRows.length === 0) return null;
 
   const segments = (
     <div
-      className={`inline-flex min-w-0 items-center rounded-full border border-black/[0.05] bg-white/70 p-0.5 shadow-dashboard-card backdrop-blur-md dark:border-white/[0.08] dark:bg-dashboard-surface-dark/70 ${
+      className={`inline-flex min-w-0 items-center rounded-lg border border-ui-border bg-ui-surface p-0.5 shadow-sm ${
         compact ? "gap-0.5" : "gap-1 p-1"
       }`}
       role="tablist"
@@ -42,9 +57,10 @@ export function StatusFilterBar({ dayRows, value, onChange, compact, hideEmpty, 
         active={value === "ALL"}
         onClick={() => onChange("ALL")}
         label="Tất cả"
+        icon="☰"
         count={dayRows.length}
       />
-      {SHIPMENT_STATUS_ORDER.map((st) => {
+      {statusOrder.map((st) => {
         const count = counts.get(st) ?? 0;
         if (hideEmpty && count === 0 && value !== st) return null;
         return (
@@ -55,6 +71,7 @@ export function StatusFilterBar({ dayRows, value, onChange, compact, hideEmpty, 
             active={value === st}
             onClick={() => onChange(st)}
             label={statusLabel[st]}
+            icon={statusIcon[st]}
             count={count}
           />
         );
@@ -72,7 +89,7 @@ export function StatusFilterBar({ dayRows, value, onChange, compact, hideEmpty, 
           <button
             type="button"
             onClick={() => onChange("ALL")}
-            className="shrink-0 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold text-apple-secondary hover:bg-black/[0.04] hover:text-apple-label dark:hover:bg-white/[0.06] dark:hover:text-ops-label"
+            className="shrink-0 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
             title="Xóa lọc trạng thái"
           >
             ×
@@ -83,16 +100,16 @@ export function StatusFilterBar({ dayRows, value, onChange, compact, hideEmpty, 
   }
 
   return (
-    <div className="mb-6 min-w-0 rounded-2xl border border-black/[0.06] bg-white/50 p-3 shadow-sm backdrop-blur-md dark:border-white/[0.08] dark:bg-ops-surface/40 sm:p-4">
+    <div className="mb-6 min-w-0 rounded-xl border border-ui-border bg-ui-surface p-3 shadow-sm sm:p-4">
       <div className="mb-2.5 flex min-w-0 items-center justify-between gap-2">
-        <p className="min-w-0 text-xs font-bold uppercase tracking-wide text-apple-secondary dark:text-ops-secondary">
+        <p className="min-w-0 text-xs font-bold uppercase tracking-wide text-ui-text-muted">
           Lọc trạng thái
         </p>
         {value !== "ALL" && (
           <button
             type="button"
             onClick={() => onChange("ALL")}
-            className="shrink-0 rounded-full border border-black/[0.08] bg-white/60 px-2.5 py-1 text-[10px] font-semibold text-apple-label backdrop-blur-sm hover:bg-white/80 dark:border-white/10 dark:bg-white/[0.08] dark:text-ops-label"
+            className="shrink-0 rounded-full border border-ui-border bg-ui-surface px-2.5 py-1 text-[10px] font-semibold text-ui-text hover:bg-ui-surface-muted"
           >
             Xóa lọc
           </button>
@@ -109,6 +126,7 @@ function FilterSegment({
   active,
   onClick,
   label,
+  icon,
   count,
   compact,
   dense,
@@ -116,6 +134,7 @@ function FilterSegment({
   active: boolean;
   onClick: () => void;
   label: string;
+  icon: string;
   count: number;
   compact?: boolean;
   dense?: boolean;
@@ -128,22 +147,19 @@ function FilterSegment({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`relative shrink-0 whitespace-nowrap rounded-full font-semibold leading-tight transition-all duration-200 active:scale-[0.98] ${
+      className={`relative shrink-0 whitespace-nowrap rounded-md font-semibold leading-tight transition-colors ${
         dense ? "px-2 py-0.5 text-[9px]" : compact ? "px-2.5 py-1 text-[10px]" : "px-3 py-1.5 text-[11px] sm:text-xs"
-      } ${
-        isEmpty && !active ? "opacity-40" : "opacity-100"
-      } ${
+      } ${isEmpty && !active ? "opacity-40" : "opacity-100"} ${
         active
-          ? "bg-dashboard-primary text-white shadow-[0_2px_10px_rgba(15,23,42,0.18)] dark:bg-white/15 dark:text-dashboard-primary-dark dark:shadow-[0_2px_12px_rgba(96,165,250,0.22)]"
-          : "text-dashboard-muted hover:bg-black/[0.04] hover:text-dashboard-primary dark:text-dashboard-muted-dark dark:hover:bg-white/[0.08] dark:hover:text-dashboard-primary-dark"
+          ? "bg-ui-primary text-white"
+          : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
       }`}
     >
+      <span className="mr-0.5 opacity-80" aria-hidden>
+        {icon}
+      </span>
       <span>{label}</span>
-      <span
-        className={`ml-1 tabular-nums ${
-          active ? "text-white/80 dark:text-dashboard-primary-dark/80" : "text-dashboard-muted/80 dark:text-dashboard-muted-dark/80"
-        }`}
-      >
+      <span className={`ml-1 tabular-nums ${active ? "text-white/85" : "text-ui-text-muted"}`}>
         {count}
       </span>
     </button>

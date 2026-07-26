@@ -79,8 +79,8 @@ export function InlineNumberEdit({
           e.stopPropagation();
           setEditing(true);
         }}
-        className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 dark:hover:bg-white/[0.08] ${className} ${
-          value === null ? "ops-grid-placeholder" : "dark:text-zinc-100"
+        className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 ${className} ${
+          value === null ? "ops-grid-placeholder" : ""
         }`}
       >
         {value !== null ? value.toLocaleString() : emptyLabel}
@@ -90,10 +90,10 @@ export function InlineNumberEdit({
 
   const inputCls =
     variant === "grid"
-      ? "w-full min-w-[2.5rem] rounded border border-black/[0.12] bg-white px-1 py-0 text-right text-[11px] font-bold tabular-nums focus:outline-none focus:ring-1 focus:ring-apple-blue/35 dark:border-white/15 dark:bg-ops-elevated dark:text-zinc-100"
+      ? "w-full min-w-[2.5rem] rounded border border-black/[0.12] bg-white px-1 py-0 text-right text-[11px] font-bold tabular-nums focus:outline-none focus:ring-1 focus:ring-apple-blue/35"
       : compact
-        ? "inline-block w-14 rounded-lg border border-apple-blue bg-white px-1 py-0.5 text-right text-[11px] font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/25 dark:bg-ops-elevated dark:text-zinc-100"
-        : "w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 text-right text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20 dark:bg-ops-elevated dark:text-zinc-100";
+        ? "inline-block w-14 rounded-lg border border-apple-blue bg-white px-1 py-0.5 text-right text-[11px] font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/25"
+        : "w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 text-right text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20";
 
   return (
     <input
@@ -105,7 +105,10 @@ export function InlineNumberEdit({
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
-        if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
+        if (
+          e.key === "Enter" &&
+          !(e.nativeEvent as KeyboardEvent).isComposing
+        ) {
           e.preventDefault();
           commit();
           queueMicrotask(() => onEnterNavigateDown?.());

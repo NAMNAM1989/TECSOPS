@@ -1,26 +1,32 @@
-import type { ShipmentStatus } from "../types/shipment";
-import { SHIPMENT_STATUS_ORDER } from "../utils/shipmentWorkflowStatus";
-import { statusLabel, statusSelectSurface } from "./statusStyles";
+import type { ShipmentStatus, Warehouse } from "../types/shipment";
+import { selectableStatusesForShipment } from "../utils/shipmentWorkflowStatus";
+import { statusIcon, statusLabel, statusSelectSurface } from "./statusStyles";
 
 interface StatusSelectProps {
   value: ShipmentStatus;
   onChange: (s: ShipmentStatus) => void;
+  /** Kho của lô — quyết định option hợp lệ. */
+  warehouse: Warehouse;
   compact?: boolean;
 }
 
-export function StatusSelect({ value, onChange, compact }: StatusSelectProps) {
+export function StatusSelect({ value, onChange, warehouse, compact }: StatusSelectProps) {
+  const options = selectableStatusesForShipment(warehouse, value);
+
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as ShipmentStatus)}
       onClick={(e) => e.stopPropagation()}
-      className={`cursor-pointer rounded-md border font-semibold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-apple-blue/25 ${statusSelectSurface[value]} ${
-        compact ? "max-w-[6.75rem] px-1.5 py-0.5 text-[8px] leading-tight" : "px-2.5 py-1 text-xs"
+      aria-label={`Trạng thái · ${statusLabel[value]}`}
+      title={`${statusIcon[value]} ${statusLabel[value]}`}
+      className={`cursor-pointer rounded-md border font-semibold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ui-focus ${statusSelectSurface[value]} ${
+        compact ? "max-w-[7.5rem] px-1.5 py-0.5 text-[8px] leading-tight" : "px-2.5 py-1 text-xs"
       }`}
     >
-      {SHIPMENT_STATUS_ORDER.map((st) => (
+      {options.map((st) => (
         <option key={st} value={st}>
-          {statusLabel[st]}
+          {statusIcon[st]} {statusLabel[st]}
         </option>
       ))}
     </select>

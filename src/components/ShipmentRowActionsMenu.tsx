@@ -219,9 +219,11 @@ export function ShipmentRowActionsMenu({
         className={OPS.dropdown}
       >
         {compact ? menuItem("In nhãn", () => onPrint(row)) : null}
-        {showDim ? menuItem("Excel DIM", () => downloadScscDimListExcel(row)) : null}
-        {showTcsDim ? menuItem("In DIM TCS", () => printTcsAttachedDimsList(row)) : null}
-        {showTcsDim ? menuItem("Excel TCS", () => void downloadTcsAttachedDimsExcel(row)) : null}
+        {showDim ? menuItem("Excel LIST DIM", () => downloadScscDimListExcel(row)) : null}
+        {showTcsDim ? menuItem("In LIST DIM TCS", () => printTcsAttachedDimsList(row)) : null}
+        {showTcsDim
+          ? menuItem("Excel ATTACHED DIM", () => void downloadTcsAttachedDimsExcel(row))
+          : null}
         {showFillEsid
           ? menuItem(
               "Điền",
@@ -268,7 +270,7 @@ export function ShipmentRowActionsMenu({
             <IconPrintLabel />
           </ActionIconBtn>
           {showDim ? (
-            <ActionIconBtn label="In DIM SCSC" onClick={() => printDimReport(row)}>
+            <ActionIconBtn label="In LIST DIM SCSC" onClick={() => printDimReport(row)}>
               <IconDimReport />
             </ActionIconBtn>
           ) : null}

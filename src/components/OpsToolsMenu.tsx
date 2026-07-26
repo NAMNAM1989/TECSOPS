@@ -15,6 +15,8 @@ type Props = {
   onDownloadScscDim?: () => void;
 };
 
+// onPrefetchSheetImport giữ optional (không prefetch khi bắt buộc URL)
+
 /** Gom action thứ cấp Ops — không gồm CTA + Booking. */
 export function OpsToolsMenu({
   compact = false,
@@ -47,14 +49,14 @@ export function OpsToolsMenu({
       {
         id: "sheet",
         label: "Nhập Sheet",
-        description: "Google Sheet BOOK HẰNG NGÀY",
+        description: "Dán URL Google Sheet mỗi lần",
         onSelect: onOpenSheetImport,
         onPrefetch: onPrefetchSheetImport,
       },
       {
         id: "excel",
-        label: excelExporting ? "Đang xuất Excel…" : "Xuất Excel ngày",
-        description: "Mẫu Import Shipments",
+        label: excelExporting ? "Đang xuất Excel…" : "Xuất Excel…",
+        description: "Ngày hoặc khoảng ngày · Import Shipments",
         onSelect: onDownloadDayExcel,
         disabled: excelExporting,
       },
@@ -62,8 +64,8 @@ export function OpsToolsMenu({
     if (showDimScsc && onDownloadScscDim) {
       list.push({
         id: "dim-scsc",
-        label: scscDimExporting ? "Đang xuất DIM…" : "Xuất DIM SCSC",
-        description: "LIST DIM ngày phiên",
+        label: scscDimExporting ? "Đang xuất DIM…" : "Xuất LIST DIM SCSC (ngày)",
+        description: "Excel LIST DIM theo ngày phiên",
         onSelect: onDownloadScscDim,
         disabled: scscDimExporting,
       });

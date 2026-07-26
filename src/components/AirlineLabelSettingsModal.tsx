@@ -19,7 +19,9 @@ type Props = {
 type EditableRow = { id: string; key: string; name: string };
 
 function newId(): string {
-  return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : String(Date.now());
 }
 
 function recordToFlightRows(rec: Record<string, string>): EditableRow[] {
@@ -31,16 +33,25 @@ function recordToFlightRows(rec: Record<string, string>): EditableRow[] {
 function rowsToEffectiveFlight(rows: EditableRow[]): Record<string, string> {
   const o: Record<string, string> = {};
   for (const r of rows) {
-    const k = r.key.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
+    const k = r.key
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 3);
     if (k.length < 2) continue;
-    const n = r.name.replace(/\s+/g, " ").trim();
+    const n = r.name.replace(/\s+/g, "").trim();
     if (!n) continue;
     o[k] = n.slice(0, 80);
   }
   return o;
 }
 
-export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave }: Props) {
+export function AirlineLabelSettingsModal({
+  open,
+  onClose,
+  value,
+  saving,
+  onSave,
+}: Props) {
   const [flightRows, setFlightRows] = useState<EditableRow[]>([]);
   const wasOpen = useRef(false);
   /** Giữ ghi đè AWB cũ (không còn chỉnh trên UI) để không mất khi Lưu. */
@@ -61,7 +72,10 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
   if (!open) return null;
 
   const buildPayload = (): AirlineLabelOverrides => {
-    const fromFlightUi = overridesFromEffectiveMaps({}, rowsToEffectiveFlight(flightRows));
+    const fromFlightUi = overridesFromEffectiveMaps(
+      {},
+      rowsToEffectiveFlight(flightRows),
+    );
     return clampAirlineLabelOverrides({
       byAwbPrefix: preservedAwbRef.current,
       byFlightPrefix: fromFlightUi.byFlightPrefix,
@@ -79,7 +93,7 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/30 p-3 backdrop-blur-md sm:items-center sm:p-6"
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="airline-label-settings-title"
@@ -87,7 +101,9 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
       <div
         className={`max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-[28px] border shadow-apple-md ${OPS.modal} ${OPS.border}`}
       >
-        <div className={`flex items-start justify-between border-b px-5 py-4 ${OPS.border}`}>
+        <div
+          className={`flex items-start justify-between border-b px-5 py-4 ${OPS.border}`}
+        >
           <div>
             <h2
               id="airline-label-settings-title"
@@ -96,20 +112,36 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
               Tên hãng trên tem
             </h2>
             <p className={`mt-1 text-xs leading-relaxed ${OPS.secondary}`}>
-              Danh sách theo <span className={`font-semibold ${OPS.title}`}>prefix cột chuyến bay</span>{" "}
-              (vd. VN773 → VN → VIETNAM AIRLINES). Tem nhãn lấy tên từ đây trước;{" "}
-              {defaultFltCount} prefix mặc định + mọi dòng bạn thêm.{" "}
-              <span className={`font-semibold ${OPS.title}`}>Lưu</span> chỉ ghi tên khác bảng gốc.
+              Danh sách theo{" "}
+              <span className={`font-semibold ${OPS.title}`}>
+                prefix cột chuyến bay
+              </span>
+              {""}
+              (vd. VN773 → VN → VIETNAM AIRLINES). Tem nhãn lấy tên từ đây
+              trước;{""}
+              {defaultFltCount} prefix mặc định + mọi dòng bạn thêm.{""}
+              <span className={`font-semibold ${OPS.title}`}>Lưu</span> chỉ ghi
+              tên khác bảng gốc.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className={`rounded-full p-2 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] ${OPS.muted}`}
+            className={`rounded-full p-2 hover:bg-black/[0.05] ${OPS.muted}`}
             aria-label="Đóng"
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -117,12 +149,19 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
         <div className="max-h-[min(70vh,560px)] space-y-4 overflow-y-auto px-5 py-4">
           <section>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h3 className={`text-[11px] font-bold uppercase tracking-wide ${OPS.secondary}`}>
+              <h3
+                className={`text-[11px] font-bold uppercase tracking-wide ${OPS.secondary}`}
+              >
                 Theo prefix chuyến ({flightRows.length} dòng)
               </h3>
               <button
                 type="button"
-                onClick={() => setFlightRows((r) => [...r, { id: `new:${newId()}`, key: "", name: "" }])}
+                onClick={() =>
+                  setFlightRows((r) => [
+                    ...r,
+                    { id: `new:${newId()}`, key: "", name: "" },
+                  ])
+                }
                 className={OPS.btnSmallAccent}
               >
                 + Thêm prefix
@@ -145,8 +184,13 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
                     maxLength={3}
                     value={row.key}
                     onChange={(e) => {
-                      const k = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
-                      setFlightRows((rows) => rows.map((x, i) => (i === idx ? { ...x, key: k } : x)));
+                      const k = e.target.value
+                        .toUpperCase()
+                        .replace(/[^A-Z0-9]/g, "")
+                        .slice(0, 3);
+                      setFlightRows((rows) =>
+                        rows.map((x, i) => (i === idx ? { ...x, key: k } : x)),
+                      );
                     }}
                     className={`w-16 text-center font-mono text-sm font-semibold uppercase ${OPS.input}`}
                     title="Prefix lấy từ cột chuyến (2–3 ký tự đầu)"
@@ -158,14 +202,18 @@ export function AirlineLabelSettingsModal({ open, onClose, value, saving, onSave
                     value={row.name}
                     onChange={(e) => {
                       const t = e.target.value;
-                      setFlightRows((rows) => rows.map((x, i) => (i === idx ? { ...x, name: t } : x)));
+                      setFlightRows((rows) =>
+                        rows.map((x, i) => (i === idx ? { ...x, name: t } : x)),
+                      );
                     }}
                     className={`min-w-[12rem] flex-1 text-sm font-semibold ${OPS.inputLg}`}
                   />
                   <button
                     type="button"
-                    onClick={() => setFlightRows((rows) => rows.filter((_, i) => i !== idx))}
-                    className="rounded-full px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/15"
+                    onClick={() =>
+                      setFlightRows((rows) => rows.filter((_, i) => i !== idx))
+                    }
+                    className="rounded-full px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
                   >
                     Xóa
                   </button>

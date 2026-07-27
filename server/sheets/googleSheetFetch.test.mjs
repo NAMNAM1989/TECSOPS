@@ -55,4 +55,28 @@ describe("fetchBookHangNgayGridForSession", () => {
     expect(result.gid).toBe("2");
     expect(result.grid).toBe(fakeGrid);
   });
+
+  it("parse spreadsheetId từ URL trong fetch", async () => {
+    const fakeGrid = [
+      {
+        rowIndex: 0,
+        cells: ["", "AWB BOOKING", "", "", "", "", "", "", "", "", "", ""],
+      },
+      {
+        rowIndex: 1,
+        cells: ["VLC-TECS", "555-1234 5678", "VN001", "25JUL", "", "SIN", "", "1", "10", "", "", "TEST"],
+      },
+    ];
+    await expect(
+      fetchBookHangNgayGridForSession(
+        "https://docs.google.com/spreadsheets/d/spreadsheet-id/edit",
+        "2026-07-13",
+        "",
+        {
+          listTabs: async () => tabs,
+          fetchByGid: async () => fakeGrid,
+        }
+      )
+    ).resolves.toMatchObject({ sheetTab: "NGÀY 13 JUL" });
+  });
 });

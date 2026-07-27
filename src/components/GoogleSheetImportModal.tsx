@@ -12,6 +12,7 @@ import {
 } from "../types/googleSheetBook";
 import {
   applyBookGoogleSheetRows,
+  fetchBookSheetConfig,
   syncBookGoogleSheet,
 } from "../utils/googleSheetBookApi";
 import { parseGoogleSpreadsheetId } from "../utils/googleSheetUrl";
@@ -185,8 +186,18 @@ export function GoogleSheetImportModal({
       return;
     }
     setWarehouseFilter("ALL");
-    // Không auto-sync — bắt buộc URL + bấm «Tải dòng».
   }, [open, sessionYmd]);
+
+  useEffect(() => {
+    if (!open || sheetUrl.trim()) return;
+    void fetchBookSheetConfig()
+      .then((cfg) => {
+        setSheetUrl((prev) => prev.trim() || cfg.shareUrl || "");
+      })
+      .catch(() => {
+        /* user tự dán URL */
+      });
+  }, [open, sheetUrl]);
 
   const applyWarehouseFilter = (next: WarehouseFilter) => {
     setWarehouseFilter(next);
@@ -341,6 +352,10 @@ export function GoogleSheetImportModal({
               disabled={loading || applying}
               className="w-full rounded-lg border border-ui-border bg-ui-surface px-2.5 py-2 text-xs outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus disabled:opacity-50"
             />
+            <p className="mt-1 text-[10px] leading-snug text-ui-text-muted">
+              Sheet phải share «Anyone with the link can view». Tab trùng ngày phiên Ops (vd. «NGÀY 25 JUL»).
+              Dán link rồi bấm «Tải dòng».
+            </p>
           </label>
           <div className="flex flex-wrap items-center gap-2">
           <Button

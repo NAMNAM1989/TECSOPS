@@ -1,8 +1,10 @@
 import {
   fetchBookHangNgayGridForSession,
   getBookSpreadsheetId,
+  getBookSpreadsheetShareUrl,
   sessionYmdToBookSheetTab,
 } from "./googleSheetFetch.mjs";
+import { parseSpreadsheetIdFromInput } from "./spreadsheetIdParse.mjs";
 import { getCachedGrid, getCachedGridForSession, getCachedSyncResult, setCachedGrid, setCachedSyncResult, syncResultCacheKey } from "./sheetFetchCache.mjs";
 import { parseBookHangNgayGrid } from "./bookHangNgayParser.mjs";
 import { sessionYmdToFlightDateToken } from "./bookDateMatch.mjs";
@@ -160,11 +162,24 @@ function mapSyncRow(
  * @param {import('express').Express} app
  * @param {{ io?: import('socket.io').Server }} deps
  */
+function resolveSpreadsheetIdFromRequest(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return getBookSpreadsheetId();
+  return parseSpreadsheetIdFromInput(s);
+}
+
 export function registerSheetsRoutes(app, deps) {
   app.get("/api/sheets/book/config", (_req, res) => {
+    const spreadsheetId = getBookSpreadsheetId();
     res.json({
-      spreadsheetId: getBookSpreadsheetId(),
+      spreadsheetId,
+      shareUrl: getBookSpreadsheetShareUrl(spreadsheetId),
       sheetTabExample: sessionYmdToBookSheetTab("2026-07-13"),
+      hints: [
+        "Sheet phải bật share: Anyone with the link can view",
+        "Tab theo ngày phiên Ops: «NGÀY 13 JUL» cho 2026-07-13",
+        "Dán URL rồi bấm «Tải dòng»",
+      ],
     });
   });
 
@@ -178,7 +193,13 @@ export function registerSheetsRoutes(app, deps) {
 
       const preferredTab = String(req.query.sheetTab ?? "").trim();
       const forceRefresh = req.query.refresh === "1" || req.query.refresh === "true";
-      const spreadsheetId = String(req.query.spreadsheetId ?? "").trim() || getBookSpreadsheetId();
+      let spreadsheetId;
+      try {
+        spreadsheetId = resolveSpreadsheetIdFromRequest(req.query.spreadsheetId);
+      } catch (e) {
+        res.status(400).json({ error: String(e?.message ?? e) });
+        return;
+      }
 
       if (!forceRefresh) {
         try {
@@ -263,7 +284,13 @@ export function registerSheetsRoutes(app, deps) {
         return;
       }
 
-      const spreadsheetId = String(body?.spreadsheetId ?? "").trim() || getBookSpreadsheetId();
+      let spreadsheetId;
+      try {
+        spreadsheetId = resolveSpreadsheetIdFromRequest(body?.spreadsheetId);
+      } catch (e) {
+        res.status(400).json({ error: String(e?.message ?? e) });
+        return;
+      }
       const { grid } = await loadBookGridForSession(
         spreadsheetId,
         sessionDate,

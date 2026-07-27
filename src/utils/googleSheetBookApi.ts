@@ -1,6 +1,22 @@
 import { credFetch } from "../apiFetch";
 import type { SheetBookApplyResult, SheetBookSyncResult } from "../types/googleSheetBook";
 
+export type SheetBookConfig = {
+  spreadsheetId: string;
+  shareUrl: string;
+  sheetTabExample: string;
+  hints: string[];
+};
+
+export async function fetchBookSheetConfig(): Promise<SheetBookConfig> {
+  const res = await fetch("/api/sheets/book/config", { ...credFetch });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(typeof data?.error === "string" ? data.error : "Không đọc được cấu hình Sheet.");
+  }
+  return data as SheetBookConfig;
+}
+
 export async function syncBookGoogleSheet(
   sessionDate: string,
   opts: { spreadsheetId: string; refresh?: boolean }

@@ -8,6 +8,7 @@ import {
   setCachedSessionTab,
   setCachedTabList,
 } from "./sheetFetchCache.mjs";
+import { parseSpreadsheetIdFromInput } from "./spreadsheetIdParse.mjs";
 
 const MONTHS3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const MONTHS_FULL = [
@@ -302,13 +303,17 @@ export async function fetchBookHangNgayGridForSession(
   preferredTab = "",
   deps = {}
 ) {
-  const id = String(spreadsheetId ?? "").trim();
+  let id = String(spreadsheetId ?? "").trim();
   if (!id) throw new Error("Thiếu spreadsheetId.");
+  try {
+    id = parseSpreadsheetIdFromInput(id) || id;
+  } catch (e) {
+    throw new Error(e?.message || "Link Google Sheet không hợp lệ.");
+  }
 
   const listTabs = deps.listTabs ?? listPublicBookSheetTabs;
   const fetchByGid = deps.fetchByGid ?? fetchGoogleSheetGridByGid;
   const fetchByName = deps.fetchByName ?? fetchGoogleSheetGrid;
-  const useProductionFastPath = listTabs === listPublicBookSheetTabs;
 
   const sessionCandidates = bookSheetTabCandidates(sessionYmd);
   if (!sessionCandidates.length) throw new Error("sessionDate phải dạng YYYY-MM-DD.");
@@ -330,28 +335,6 @@ export async function fetchBookHangNgayGridForSession(
     const grid = await fetchResolvedBookGrid(id, resolved, fetchByGid, fetchByName);
     if (isLikelyBookHangNgayGrid(grid)) {
       return { grid, sheetTab: resolved.title, gid: resolved.gid };
-    }
-  }
-
-  if (useProductionFastPath) {
-    const tabsPromise = loadTabList(id, listTabs);
-    let directGrid = null;
-    try {
-      directGrid = await fetchByName(id, primary);
-    } catch {
-      directGrid = null;
-    }
-    if (directGrid && isLikelyBookHangNgayGrid(directGrid)) {
-      void tabsPromise
-        .then((tabs) => {
-          const hit = resolveTabFromList(tabs, candidates, sessionYmd);
-          if (hit) cacheResolvedSessionTab(id, sessionYmd, hit);
-          else cacheResolvedSessionTab(id, sessionYmd, { title: primary, gid: "" });
-        })
-        .catch(() => {
-          cacheResolvedSessionTab(id, sessionYmd, { title: primary, gid: "" });
-        });
-      return { grid: directGrid, sheetTab: primary, gid: "" };
     }
   }
 
@@ -381,13 +364,25 @@ export async function fetchBookHangNgayGridForSession(
   }
 
   throw new Error(
-    `Không đọc được danh sách tab Sheet và không tìm thấy «${primary}» cho ngày ${sessionYmd}. Kiểm tra link share công khai.`
+    `Không đọc được danh sách tab Sheet và không tìm thấy «${primary}» cho ngày ${sessionYmd}. ` +
+      "Kiểm tra: (1) Sheet share «Anyone with the link can view», (2) có tab đúng ngày trên OPS."
   );
 }
 
+const DEFAULT_BOOK_SPREADSHEET_ID = "15EHqZuuYznL2_VkCnpENHgc_mmBTSJGgrNG3iv5ZvA4";
+
 export function getBookSpreadsheetId() {
-  return (
-    process.env.GOOGLE_SHEETS_BOOK_SPREADSHEET_ID?.trim() ||
-    "15EHqZuuYznL2_VkCnpENHgc_mmBTSJGgrNG3iv5ZvA4"
-  );
+  const raw = process.env.GOOGLE_SHEETS_BOOK_SPREADSHEET_ID?.trim();
+  if (!raw) return DEFAULT_BOOK_SPREADSHEET_ID;
+  try {
+    return parseSpreadsheetIdFromInput(raw) || DEFAULT_BOOK_SPREADSHEET_ID;
+  } catch (e) {
+    console.warn("[sheets] GOOGLE_SHEETS_BOOK_SPREADSHEET_ID không hợp lệ:", e?.message ?? e);
+    return DEFAULT_BOOK_SPREADSHEET_ID;
+  }
+}
+
+export function getBookSpreadsheetShareUrl(spreadsheetId = getBookSpreadsheetId()) {
+  const id = parseSpreadsheetIdFromInput(spreadsheetId) || spreadsheetId;
+  return `https://docs.google.com/spreadsheets/d/${id}/edit?usp=sharing`;
 }

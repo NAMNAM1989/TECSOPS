@@ -14,7 +14,7 @@ export function Wordmark({
         : "text-xl sm:text-2xl";
   return (
     <span
-      className={`inline-flex font-extrabold tracking-tight text-ui-navy ${cls} ${className}`}
+      className={`inline-flex font-extrabold tracking-normal text-ui-navy ${cls} ${className}`}
       aria-label="TECSOPS"
     >
       TECS<span className="text-ui-primary">OPS</span>

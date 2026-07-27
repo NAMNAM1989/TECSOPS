@@ -56,15 +56,20 @@ export function LabelContent({
         : "";
   const handling = handlingText.trim() || autoHandling;
 
-  /* Thiết kế TECSOPS XP-470B: AWB hero → pieces → airport → airline */
-  const airlineMm = compact ? 2.6 : 3.4;
-  const mawbMm = fitAwbFontMm(d.mawb, { compact, relScale: mawbRelScale });
-  const routeLabMm = compact ? 1.35 : 1.7;
-  const routeValMm = compact ? 5.5 : 7.8;
-  const piecesLabMm = compact ? 1.5 : 2;
-  const piecesValMm = compact ? 11.5 : 16.5;
-  const specialMm = compact ? 1.5 : 1.9;
-  const hawbMm = (compact ? 3.2 : 4.2) * _hawbRelScale;
+  /* Mẫu mới: Airline xám | AWB caption | O/D đều | TOTAL PIECES lớn (pcs từ lô) */
+  const airlineMm = compact ? 3.9 : 5;
+  const mawbMm = Math.min(
+    fitAwbFontMm(d.mawb, { compact, relScale: mawbRelScale }),
+    compact ? 7.8 : 10.05
+  );
+  const routeLabMm = compact ? 2.1 : 2.5;
+  const originValMm = compact ? 4.2 : 5.6;
+  const destValMm = compact ? 4.2 : 5.6;
+  const piecesLabMm = compact ? 2.1 : 2.5;
+  /* 34pt ≈ 12mm · 58pt ≈ 20.5mm */
+  const piecesValMm = compact ? 12 : 20.5;
+  const specialMm = compact ? 1.25 : 1.5;
+  const hawbMm = (compact ? 2.4 : 3.2) * _hawbRelScale;
 
   const sheetClass = [
     "label",
@@ -79,62 +84,73 @@ export function LabelContent({
 
   return (
     <div className={sheetClass}>
-      {hasAirline ? (
-        <div className="lbl-airline" style={{ fontSize: mm(airlineMm) }}>
-          {d.airline}
+      <div className="lbl-sheet-inner">
+        {/* Khung 4 hướng — thanh nền đen (in nhiệt ổn định hơn CSS border) */}
+        <div className="lbl-frame" aria-hidden="true">
+          <span className="lbl-frame-edge lbl-frame-edge--t" />
+          <span className="lbl-frame-edge lbl-frame-edge--r" />
+          <span className="lbl-frame-edge lbl-frame-edge--b" />
+          <span className="lbl-frame-edge lbl-frame-edge--l" />
         </div>
-      ) : null}
 
-      <div className="lbl-mawb">
-        <div className="lbl-mawb-val" style={{ fontSize: mm(mawbMm) }}>
-          {d.mawb || <span className="lbl-placeholder">Nhập MAWB...</span>}
-        </div>
-        {hasHawb ? (
-          <div className="lbl-hawb">
-            <span className="lbl-hawb-label">HAWB</span>
-            <strong className="lbl-hawb-val" style={{ fontSize: mm(hawbMm) }}>
-              {d.hawbNo}
-            </strong>
+        {hasAirline ? (
+          <div className="lbl-airline" style={{ fontSize: mm(airlineMm) }}>
+            {d.airline}
           </div>
         ) : null}
-      </div>
 
-      <div className="lbl-route">
-        <div className="lbl-route-cell">
-          <div className="route-label" style={{ fontSize: mm(routeLabMm) }}>
-            Origin
+        <div className="lbl-mawb">
+          <div className="lbl-mawb-caption">AIR WAYBILL NO.</div>
+          <div className="lbl-mawb-val" style={{ fontSize: mm(mawbMm) }}>
+            {d.mawb || <span className="lbl-placeholder">Nhập MAWB...</span>}
           </div>
-          <div className="route-val" style={{ fontSize: mm(routeValMm) }}>
-            {d.origin}
-          </div>
+          {hasHawb ? (
+            <div className="lbl-hawb">
+              <span className="lbl-hawb-label">HAWB</span>
+              <strong className="lbl-hawb-val" style={{ fontSize: mm(hawbMm) }}>
+                {d.hawbNo}
+              </strong>
+            </div>
+          ) : null}
         </div>
-        <div className="lbl-route-cell">
-          <div className="route-label" style={{ fontSize: mm(routeLabMm) }}>
-            Destination
-          </div>
-          <div className="route-val" style={{ fontSize: mm(routeValMm) }}>
-            {d.dest || <span className="lbl-placeholder">-</span>}
-          </div>
-        </div>
-      </div>
 
-      <div className="lbl-bottom">
-        <div className="lbl-pieces-cell">
-          <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
-            Total pieces
+        <div className="lbl-route">
+          <div className="lbl-route-cell lbl-route-cell--origin">
+            <div className="route-label" style={{ fontSize: mm(routeLabMm) }}>
+              ORIGIN:
+            </div>
+            <div className="route-val" style={{ fontSize: mm(originValMm) }}>
+              {d.origin}
+            </div>
           </div>
-          <div className="pieces-val" style={{ fontSize: mm(piecesValMm) }}>
-            {d.pieces}
+          <div className="lbl-route-cell lbl-route-cell--dest">
+            <div className="route-label" style={{ fontSize: mm(routeLabMm) }}>
+              DESTINATION:
+            </div>
+            <div className="route-val" style={{ fontSize: mm(destValMm) }}>
+              {d.dest || <span className="lbl-placeholder">-</span>}
+            </div>
           </div>
         </div>
-        {showHandling && handling ? (
-          <div
-            className={`lbl-special ${d.special}`}
-            style={{ fontSize: mm(specialMm) }}
-          >
-            {handling}
+
+        <div className="lbl-bottom">
+          <div className="lbl-pieces-cell">
+            <div className="pieces-label" style={{ fontSize: mm(piecesLabMm) }}>
+              TOTAL PIECES
+            </div>
+            <div className="pieces-val" style={{ fontSize: mm(piecesValMm) }}>
+              {d.pieces || <span className="lbl-placeholder">—</span>}
+            </div>
           </div>
-        ) : null}
+          {showHandling && handling ? (
+            <div
+              className={`lbl-special ${d.special}`}
+              style={{ fontSize: mm(specialMm) }}
+            >
+              {handling}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

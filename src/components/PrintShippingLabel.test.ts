@@ -41,9 +41,42 @@ describe("LabelContent print options", () => {
     );
 
     expect(html).toContain("lbl-sheet--house");
+    expect(html).toContain("lbl-sheet-inner");
+    expect(html).toContain("lbl-frame");
+    expect(html).toContain("AIR WAYBILL NO.");
+    expect(html).toContain("ORIGIN:");
+    expect(html).toContain("DESTINATION:");
+    expect(html).toContain("TOTAL PIECES");
     expect(html).toContain("HAWB");
     expect(html).toContain("HCM-001");
     expect(html).toContain("SGN");
+  });
+
+  it("renders a 4-sided frame around the label", () => {
+    const html = renderToStaticMarkup(
+      createElement(LabelContent, {
+        s: shipment(),
+        fontScale: 1,
+      })
+    );
+
+    expect(html).toContain("lbl-frame-edge--t");
+    expect(html).toContain("lbl-frame-edge--r");
+    expect(html).toContain("lbl-frame-edge--b");
+    expect(html).toContain("lbl-frame-edge--l");
+  });
+
+  it("maps shipment.pcs to TOTAL PIECES on the label", () => {
+    const html = renderToStaticMarkup(
+      createElement(LabelContent, {
+        s: shipment({ pcs: 15 }),
+        fontScale: 1,
+      })
+    );
+
+    expect(html).toContain("TOTAL PIECES");
+    expect(html).toContain("pieces-val");
+    expect(html).toMatch(/pieces-val[^>]*>15</);
   });
 
   it("uses custom handling text and can hide it", () => {

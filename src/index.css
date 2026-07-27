@@ -12,6 +12,14 @@
     @apply min-h-screen bg-ui-background text-ui-text antialiased font-sans;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Plus Jakarta Sans hơi chặt — nới nhẹ để chữ bớt dính. */
+    letter-spacing: 0.015em;
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: 0.01em;
   }
 
   /** Surface phẳng (thay glass blur). */
@@ -27,6 +35,7 @@
       "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
       Consolas, monospace;
     font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
   }
 
   .tabular-nums-data {

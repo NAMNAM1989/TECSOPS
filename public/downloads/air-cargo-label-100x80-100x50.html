@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Air Cargo Label — 100×80mm / 100×50mm (no barcode)</title>
+  <style>
+    /* —— Print pages —— */
+    @page label-80 {
+      size: 100mm 80mm;
+      margin: 0;
+    }
+    @page label-50 {
+      size: 100mm 50mm;
+      margin: 0;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: #e8e8e8;
+      color: #000;
+      font-family: Arial, Helvetica, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* Screen preview: show both labels stacked */
+    .preview-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 24px;
+    }
+
+    .preview-caption {
+      width: 100mm;
+      margin: 0 0 4px;
+      font-size: 12px;
+      color: #444;
+      font-family: system-ui, sans-serif;
+    }
+
+    /* —— Shared label shell —— */
+    .label {
+      width: 100mm;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .label-inner {
+      width: 100%;
+      height: 100%;
+      border: 2px solid #000;
+      display: table;
+      table-layout: fixed;
+      border-collapse: collapse;
+    }
+
+    .row {
+      display: table-row;
+    }
+
+    .cell {
+      display: table-cell;
+      vertical-align: middle;
+      text-align: center;
+      border: 2px solid #000;
+      padding: 1mm 1.5mm;
+    }
+
+    /* Hàng 1 — Airline */
+    .cell-airline {
+      background: #f2f2f2;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      line-height: 1.1;
+    }
+
+    /* Hàng 2 — AWB */
+    .cell-awb {
+      padding-top: 1.2mm;
+      padding-bottom: 1.2mm;
+    }
+
+    .awb-caption {
+      display: block;
+      font-size: 7pt;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      line-height: 1.15;
+      margin-bottom: 0.6mm;
+    }
+
+    .awb-number {
+      display: block;
+      font-family: "Courier New", Courier, monospace;
+      font-weight: 700;
+      line-height: 1.05;
+      white-space: nowrap;
+      overflow: hidden;
+      max-width: 100%;
+    }
+
+    /* Hàng 3 — Origin / Dest */
+    .row-route .cell {
+      width: 50%;
+    }
+
+    .route-label {
+      display: block;
+      font-size: 7pt;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      line-height: 1.15;
+      margin-bottom: 0.4mm;
+    }
+
+    .route-code {
+      display: block;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      line-height: 1.05;
+      text-transform: uppercase;
+    }
+
+    /* Hàng 4 — Total pieces (flexes to fill remaining height) */
+    .cell-pieces {
+      height: 100%;
+    }
+
+    .pieces-caption {
+      display: block;
+      font-size: 7pt;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      line-height: 1.1;
+      margin-bottom: 0.5mm;
+    }
+
+    .pieces-value {
+      display: block;
+      font-weight: 800;
+      line-height: 0.95;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    /* —— 100×80mm —— */
+    .label-100x80 {
+      height: 80mm;
+      padding: 2.5mm;
+    }
+
+    .label-100x80 .label-inner {
+      height: calc(80mm - 5mm);
+    }
+
+    .label-100x80 .cell-airline {
+      font-size: 14pt;
+      height: 9mm;
+    }
+
+    .label-100x80 .cell-awb {
+      height: 16mm;
+    }
+
+    .label-100x80 .awb-number {
+      font-size: 28.5pt;
+    }
+
+    .label-100x80 .row-route .cell {
+      height: 12mm;
+    }
+
+    .label-100x80 .route-code {
+      font-size: 16pt;
+    }
+
+    .label-100x80 .cell-pieces {
+      /* chiếm phần còn lại của bảng */
+      height: auto;
+    }
+
+    .label-100x80 .pieces-value {
+      font-size: 58pt;
+    }
+
+    /* —— 100×50mm —— */
+    .label-100x50 {
+      height: 50mm;
+      padding: 2mm;
+    }
+
+    .label-100x50 .label-inner {
+      height: calc(50mm - 4mm);
+    }
+
+    .label-100x50 .cell-airline {
+      font-size: 11pt;
+      height: 6.5mm;
+    }
+
+    .label-100x50 .cell-awb {
+      height: 11mm;
+    }
+
+    .label-100x50 .awb-caption,
+    .label-100x50 .route-label,
+    .label-100x50 .pieces-caption {
+      font-size: 6pt;
+      margin-bottom: 0.3mm;
+    }
+
+    .label-100x50 .awb-number {
+      font-size: 22pt;
+    }
+
+    .label-100x50 .row-route .cell {
+      height: 8.5mm;
+    }
+
+    .label-100x50 .route-code {
+      font-size: 12pt;
+    }
+
+    .label-100x50 .pieces-value {
+      font-size: 34pt;
+    }
+
+    /* —— Print —— */
+    @media print {
+      html,
+      body {
+        background: #fff;
+      }
+
+      .preview-wrap {
+        display: block;
+        padding: 0;
+        gap: 0;
+      }
+
+      .preview-caption,
+      .no-print {
+        display: none !important;
+      }
+
+      .label {
+        box-shadow: none;
+        page-break-after: always;
+        break-after: page;
+      }
+
+      .label:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+
+      .label-100x80 {
+        page: label-80;
+        width: 100mm;
+        height: 80mm;
+        padding: 2.5mm;
+      }
+
+      .label-100x50 {
+        page: label-50;
+        width: 100mm;
+        height: 50mm;
+        padding: 2mm;
+      }
+    }
+  </style>
+</head>
+<body>
+  <p class="no-print" style="text-align:center;font:14px/1.4 system-ui,sans-serif;padding:12px 16px 0;color:#333;">
+    Air Cargo Label (no barcode) — mở Print Preview để xem đúng khổ 100×80mm và 100×50mm.
+  </p>
+
+  <div class="preview-wrap">
+    <div>
+      <p class="preview-caption">Khổ 100 × 80 mm · padding 2.5 mm</p>
+      <article class="label label-100x80" aria-label="Air cargo label 100x80mm">
+        <div class="label-inner">
+          <div class="row">
+            <div class="cell cell-airline">EVA AIR</div>
+          </div>
+          <div class="row">
+            <div class="cell cell-awb">
+              <span class="awb-caption">AIR WAYBILL NO.</span>
+              <span class="awb-number">695 - 5630 1132</span>
+            </div>
+          </div>
+          <div class="row row-route">
+            <div class="cell">
+              <span class="route-label">ORIGIN:</span>
+              <span class="route-code">SGN</span>
+            </div>
+            <div class="cell">
+              <span class="route-label">DESTINATION:</span>
+              <span class="route-code">TPE</span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="cell cell-pieces">
+              <span class="pieces-caption">TOTAL PIECES</span>
+              <span class="pieces-value">1 / 15</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <div>
+      <p class="preview-caption">Khổ 100 × 50 mm · padding 2 mm</p>
+      <article class="label label-100x50" aria-label="Air cargo label 100x50mm">
+        <div class="label-inner">
+          <div class="row">
+            <div class="cell cell-airline">EVA AIR</div>
+          </div>
+          <div class="row">
+            <div class="cell cell-awb">
+              <span class="awb-caption">AIR WAYBILL NO.</span>
+              <span class="awb-number">695 - 5630 1132</span>
+            </div>
+          </div>
+          <div class="row row-route">
+            <div class="cell">
+              <span class="route-label">ORIGIN:</span>
+              <span class="route-code">SGN</span>
+            </div>
+            <div class="cell">
+              <span class="route-label">DESTINATION:</span>
+              <span class="route-code">TPE</span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="cell cell-pieces">
+              <span class="pieces-caption">TOTAL PIECES</span>
+              <span class="pieces-value">1 / 15</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</body>
+</html>

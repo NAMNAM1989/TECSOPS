@@ -1,5 +1,5 @@
 import type { Shipment } from "../types/shipment";
-import { formatAwb, rawAwbDigits } from "./awbFormat";
+import { formatAwbLabel, rawAwbDigits } from "./awbFormat";
 import type { AirlineLabelOverrides } from "./airlineLabelOverridesCore";
 import { mergeAirlineLookupMaps } from "./airlineLabelOverridesCore";
 
@@ -84,7 +84,7 @@ export function mapShipmentToAirCargoLabelData(
   const hasHawb = hawbNo.length > 0;
   return {
     airline: airlineNameFromShipment(s, maps),
-    mawb: formatAwb(s.awb),
+    mawb: formatAwbLabel(s.awb),
     mawbDigits: rawAwbDigits(s.awb),
     origin: "SGN",
     dest: compact(s.dest).toUpperCase(),

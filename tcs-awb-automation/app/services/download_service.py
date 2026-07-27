@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +12,55 @@ def build_document_filename(awb: str, document_type: str, when: datetime | None 
     ts = (when or datetime.now()).strftime("%Y%m%d_%H%M%S")
     doc = "".join(ch for ch in (document_type or "AWB").upper() if ch.isalnum() or ch in "-_") or "AWB"
     return f"{safe_filename_awb(awb)}_{doc}_{ts}.pdf"
+
+
+def pdf_cache_ttl_s() -> float:
+    """TTL tái dùng PDF ESID đã in (giây). Mặc định 8h trong ca; 0 = tắt cache."""
+    raw = os.getenv("TCS_PDF_CACHE_TTL_S", "28800").strip()
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return 28800.0
+
+
+def find_recent_esid_pdf(
+    docs_dir: Path,
+    awb: str,
+    *,
+    max_age_s: float | None = None,
+    document_type: str = "ESID",
+) -> Path | None:
+    """
+    Tìm PDF ESID mới nhất cùng AWB trong docs/ (tránh bấm IN + print lại).
+    Tên file: {safe_awb}_{DOC}_{YYYYMMDD_HHMMSS}.pdf
+    """
+    ttl = pdf_cache_ttl_s() if max_age_s is None else max(0.0, float(max_age_s))
+    if ttl <= 0:
+        return None
+    docs = Path(docs_dir)
+    if not docs.is_dir():
+        return None
+    prefix = f"{safe_filename_awb(awb)}_"
+    doc = "".join(ch for ch in (document_type or "ESID").upper() if ch.isalnum() or ch in "-_") or "ESID"
+    now = time.time()
+    best: Path | None = None
+    best_mtime = 0.0
+    for path in docs.glob(f"{prefix}*.pdf"):
+        name = path.name
+        if f"_{doc}_" not in name:
+            continue
+        try:
+            st = path.stat()
+        except OSError:
+            continue
+        if st.st_size < 100:
+            continue
+        if (now - st.st_mtime) > ttl:
+            continue
+        if st.st_mtime >= best_mtime:
+            best_mtime = st.st_mtime
+            best = path
+    return best
 
 
 def _pdf_escape(text: str) -> str:

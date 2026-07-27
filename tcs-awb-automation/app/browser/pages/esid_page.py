@@ -51,6 +51,7 @@ class EsidListPage:
         # AWB đang mở chi tiết (nút IN) — hot-path PDF/In gần tức thời
         self._detail_awb: str | None = None
         self._print_hooks_installed: bool = False
+        self._print_scratch = None  # tab tái dùng khi in PDF từ iframe
 
     def _cfg(self) -> dict[str, Any]:
         return self.locators.data.get("esid_list") or {}
@@ -335,24 +336,92 @@ class EsidListPage:
         return f"{parts[2]}-{parts[1]}-{parts[0]}"
 
     def set_flight_date_range(self, ymd_from: str, ymd_to: str | None = None) -> None:
-        """Ant Design range: #search-form_dateSearch + placeholder Ngày kết thúc (DD-MM-YYYY)."""
-        self._clear_date_filters_fast()
-        dmy_from = self._ymd_to_dmy(ymd_from)
-        dmy_to = self._ymd_to_dmy(ymd_to or ymd_from)
-        start = self.page.locator("#search-form_dateSearch")
+        """
+        Ant Design RangePicker: luôn lọc đúng 1 ngày Ops (from = to).
+        Không để RangePicker tự rộng thành đầu tháng → cuối tháng.
+        """
+        # Đồng bộ Ops chỉ quét đúng ngày phiên — bỏ khoảng nhiều ngày nếu caller gửi lệch.
+        ymd = str(ymd_from or "").strip()
+        ymd_to_s = str(ymd_to or ymd).strip() or ymd
+        if ymd_to_s != ymd:
+            ymd_to_s = ymd
+        dmy = self._ymd_to_dmy(ymd)
+
+        last_start, last_end = "", ""
+        for _attempt in range(3):
+            self._clear_date_filters_fast()
+            if self._pick_single_day_range(ymd):
+                last_start, last_end = self._read_date_filter_values()
+                if self._date_vals_match_dmy(last_start, last_end, dmy):
+                    return
+            # Fallback gõ text — ép cả 2 ô cùng ngày
+            start = self.page.locator("#search-form_dateSearch")
+            try:
+                start.first.wait_for(state="visible", timeout=10000)
+            except Exception as e:
+                raise SiteChangedError(f"Không thấy ô Ngày bắt đầu: {e}") from e
+            self._set_react_input(start, dmy)
+            self.page.wait_for_timeout(50)
+            end = self.page.get_by_placeholder("Ngày kết thúc")
+            self._set_react_input(end, dmy)
+            self.page.wait_for_timeout(40)
+            self._set_react_input(end, dmy)
+            try:
+                self.page.keyboard.press("Escape")
+            except Exception:
+                pass
+            self.page.wait_for_timeout(60)
+            last_start, last_end = self._read_date_filter_values()
+            if self._date_vals_match_dmy(last_start, last_end, dmy):
+                return
+
+        raise SiteChangedError(
+            f"Bộ lọc ngày chưa khớp {dmy!r} (start={last_start!r}, end={last_end!r}) "
+            "— chỉ quét đúng 1 ngày phiên Ops"
+        )
+
+    @staticmethod
+    def _date_vals_match_dmy(start_val: str, end_val: str, dmy: str) -> bool:
+        s = (start_val or "").replace("/", "-")
+        e = (end_val or "").replace("/", "-")
+        return bool(s and e and dmy in s and dmy in e)
+
+    def _pick_single_day_range(self, ymd: str) -> bool:
+        """Click cùng 1 ô ngày 2 lần trên RangePicker (from = to)."""
         try:
-            start.first.wait_for(state="visible", timeout=10000)
-        except Exception as e:
-            raise SiteChangedError(f"Không thấy ô Ngày bắt đầu: {e}") from e
-        self._set_react_input(start, dmy_from)
-        self.page.wait_for_timeout(40)
-        end = self.page.get_by_placeholder("Ngày kết thúc")
-        self._set_react_input(end, dmy_to)
-        self.page.wait_for_timeout(40)
-        try:
-            self.page.keyboard.press("Escape")
+            start = self.page.locator("#search-form_dateSearch")
+            if start.count() == 0:
+                return False
+            start.first.click(timeout=2000)
+            popup = self.page.locator(
+                ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
+            ).last
+            popup.wait_for(state="visible", timeout=2500)
+            cell = popup.locator(
+                f"td[title='{ymd}']:not(.ant-picker-cell-disabled)"
+            ).last
+            if cell.count() == 0:
+                # Thử chuyển tháng gần đúng bằng gõ rồi mở lại
+                return False
+            cell.evaluate("el => el.click()")
+            self.page.wait_for_timeout(120)
+            popup = self.page.locator(
+                ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
+            ).last
+            cell2 = popup.locator(
+                f"td[title='{ymd}']:not(.ant-picker-cell-disabled)"
+            ).last
+            if cell2.count() == 0:
+                return False
+            cell2.evaluate("el => el.click()")
+            self.page.wait_for_timeout(140)
+            try:
+                self.page.keyboard.press("Escape")
+            except Exception:
+                pass
+            return True
         except Exception:
-            pass
+            return False
 
     def _read_date_filter_values(self) -> tuple[str, str]:
         try:
@@ -373,16 +442,13 @@ class EsidListPage:
             return "", ""
 
     def _assert_date_filter_applied(self, ymd: str) -> None:
-        """Đảm bảo form đã giữ đúng ngày trước khi lật trang (tránh quét mọi ngày)."""
+        """Đảm bảo form đã giữ đúng 1 ngày (from=to) trước khi lật trang."""
         dmy = self._ymd_to_dmy(ymd)
         start_val, end_val = self._read_date_filter_values()
-        if start_val and dmy not in start_val.replace("/", "-"):
+        if not self._date_vals_match_dmy(start_val, end_val, dmy):
             raise SiteChangedError(
-                f"Bộ lọc ngày bắt đầu không khớp {dmy!r} (đang {start_val!r})"
-            )
-        if end_val and dmy not in end_val.replace("/", "-"):
-            raise SiteChangedError(
-                f"Bộ lọc ngày kết thúc không khớp {dmy!r} (đang {end_val!r})"
+                f"Bộ lọc ngày chưa khớp {dmy!r} (start={start_val!r}, end={end_val!r}) "
+                "— chỉ quét đúng 1 ngày phiên Ops"
             )
 
     def clear_awb_filters(self) -> None:
@@ -652,7 +718,7 @@ class EsidListPage:
             # Chờ hết loading từ lần tìm trước (nút primary có ant-btn-loading)
             try:
                 self.page.locator("button.ant-btn-loading").first.wait_for(
-                    state="detached", timeout=8000
+                    state="detached", timeout=4000
                 )
             except Exception:
                 pass
@@ -675,7 +741,7 @@ class EsidListPage:
             _click_search()
         except Exception as e:
             raise SiteChangedError(f"Không bấm TÌM KIẾM: {e}") from e
-        ok = self._wait_search_results(last8, timeout_ms=12000)
+        ok = self._wait_search_results(last8, timeout_ms=7000)
         if not ok:
             # React form chưa nhận giá trị — set lại + bấm tìm lần 2
             try:
@@ -684,12 +750,12 @@ class EsidListPage:
                     last8,
                 )
                 _click_search()
-                ok = self._wait_search_results(last8, timeout_ms=12000)
+                ok = self._wait_search_results(last8, timeout_ms=7000)
             except Exception:
                 ok = False
         if not ok:
             # Vẫn không thấy last8 trong bảng → để prepare đọc rows + diag
-            self.page.wait_for_timeout(300)
+            self.page.wait_for_timeout(150)
 
     def list_row_statuses(self) -> list[dict[str, str]]:
         """Đọc các dòng bảng ESID (awb/esid, status) — trang hiện tại."""
@@ -1068,17 +1134,18 @@ class EsidListPage:
         except Exception:
             pass
 
-    def _pdf_from_page(self, page, dest_path: Path) -> Path:
+    def _pdf_from_page(self, page, dest_path: Path, *, dismiss_escape: bool = True) -> Path:
         """
         Lưu PDF khớp Chrome «Save as PDF»:
         - tôn trọng @page { size: A4 } (preferCSSPageSize)
         - không dùng Letter mặc định của page.pdf
         """
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            page.keyboard.press("Escape")
-        except Exception:
-            pass
+        if dismiss_escape:
+            try:
+                page.keyboard.press("Escape")
+            except Exception:
+                pass
         try:
             page.emulate_media(media="print")
         except Exception:
@@ -1140,6 +1207,60 @@ class EsidListPage:
                 f"PDF rỗng sau khi lưu{f' ({last_err})' if last_err else ''}"
             )
         return dest_path
+
+    def _bill_html_fast(self, frame) -> str:
+        """HTML phiếu nhanh: canvas→img + content(); bỏ walk cssRules (chậm)."""
+        try:
+            frame.evaluate(
+                """() => {
+                  for (const c of [...document.querySelectorAll('canvas')]) {
+                    try {
+                      const img = document.createElement('img');
+                      img.src = c.toDataURL('image/png');
+                      img.setAttribute('style', c.getAttribute('style') || '');
+                      if (c.width) img.width = c.width;
+                      if (c.height) img.height = c.height;
+                      c.replaceWith(img);
+                    } catch (e) {}
+                  }
+                  if (!document.querySelector('base')) {
+                    const b = document.createElement('base');
+                    b.href = 'https://www.tcs.com.vn/';
+                    (document.head || document.documentElement).prepend(b);
+                  }
+                  if (!document.querySelector('style[data-tcs-page]')) {
+                    const st = document.createElement('style');
+                    st.setAttribute('data-tcs-page', '1');
+                    st.textContent = '@media print { @page { size: A4 portrait; margin: 0; } html, body { margin: 0; } }';
+                    (document.head || document.documentElement).appendChild(st);
+                  }
+                }"""
+            )
+        except Exception:
+            pass
+        try:
+            html = frame.content()
+        except Exception as e:
+            raise SiteChangedError(f"Không đọc được HTML frame in: {e}") from e
+        if not html or len(str(html)) < 120:
+            raise SiteChangedError("Frame in rỗng")
+        return str(html)
+
+    def _ensure_print_scratch_page(self):
+        """Tái dùng 1 tab in — tránh new_page mỗi lần (~100–300ms)."""
+        page = getattr(self, "_print_scratch", None)
+        try:
+            if page is not None and not page.is_closed():
+                return page
+        except Exception:
+            pass
+        page = self.page.context.new_page()
+        try:
+            page.set_viewport_size({"width": 794, "height": 1123})
+        except Exception:
+            pass
+        self._print_scratch = page
+        return page
 
     def _serialize_bill_html(self, frame) -> str:
         """
@@ -1343,10 +1464,10 @@ class EsidListPage:
         self._install_print_hooks()
         self._set_document_title(self.page, title)
         self._click_in_button()
-        self.page.wait_for_timeout(350)
+        self.page.wait_for_timeout(40)
 
         bill = None
-        deadline = time.time() + 8.0
+        deadline = time.time() + 5.0
         while time.time() < deadline:
             bill = self._richest_print_frame()
             if bill is not None:
@@ -1460,7 +1581,54 @@ class EsidListPage:
             return ""
 
     def _richest_print_frame(self):
-        """Chỉ trả iframe/popup ĐÃ là phiếu ESID — không trả shell UI."""
+        """Chỉ trả iframe/popup ĐÃ là phiếu ESID — một evaluate thay vì N round-trip."""
+        try:
+            info = self.page.evaluate(
+                """() => {
+                  const markers = [
+                    'shipper', 'consignee', 'air waybill', 'instruction',
+                    'nguoi gui', 'người gửi', 'nguoi nhan', 'người nhận',
+                    'san bay', 'sân bay', 'khong van don', 'không vận đơn'
+                  ];
+                  const chrome = ['giới thiệu', 'danh sách esid', 'hotline', 'tìm kiếm', 'đăng xuất'];
+                  let best = null;
+                  let bestScore = 0;
+                  const frames = window.frames;
+                  for (let i = 0; i < frames.length; i++) {
+                    try {
+                      const doc = frames[i].document;
+                      if (!doc || !doc.body) continue;
+                      const text = (doc.body.innerText || '').trim();
+                      if (text.length < 120) continue;
+                      const low = text.toLowerCase();
+                      const chromeHits = chrome.filter((m) => low.includes(m)).length;
+                      if (chromeHits >= 2) continue;
+                      const hits = markers.filter((m) => low.includes(m)).length;
+                      if (hits < 1 && text.length < 280) continue;
+                      const score = text.length + hits * 1000;
+                      if (score > bestScore) {
+                        bestScore = score;
+                        best = i;
+                      }
+                    } catch (e) {}
+                  }
+                  return best;
+                }"""
+            )
+            if info is None:
+                return None
+            frames = [fr for fr in self.page.frames if fr != self.page.main_frame]
+            # Playwright frame order may not match window.frames index exactly —
+            # fallback: score by text as before but only candidates with content
+            if isinstance(info, int) and 0 <= info < len(self.page.frames):
+                # window.frames[i] corresponds roughly to child frames
+                child = [fr for fr in self.page.frames if fr != self.page.main_frame]
+                if info < len(child):
+                    fr = child[info]
+                    if self._text_looks_like_esid_doc(self._frame_inner_text(fr)):
+                        return fr
+        except Exception:
+            pass
         best = None
         best_score = 0
         for fr in self.page.frames:
@@ -1475,10 +1643,105 @@ class EsidListPage:
                 best = fr
         return best
 
+    def _pdf_from_frame_isolate(self, frame, dest_path: Path, *, title: str | None = None) -> Path | None:
+        """
+        In thẳng iframe trên trang cha (ẩn UI khác) — bỏ serialize + new_page.
+        Trả None nếu không đủ tin cậy → caller fallback HTML.
+        """
+        try:
+            frame.evaluate(
+                """() => {
+                  for (const c of [...document.querySelectorAll('canvas')]) {
+                    try {
+                      const img = document.createElement('img');
+                      img.src = c.toDataURL('image/png');
+                      img.setAttribute('style', c.getAttribute('style') || '');
+                      if (c.width) img.width = c.width;
+                      if (c.height) img.height = c.height;
+                      c.replaceWith(img);
+                    } catch (e) {}
+                  }
+                }"""
+            )
+        except Exception:
+            pass
+        try:
+            handle = frame.frame_element()
+        except Exception:
+            return None
+        token = None
+        try:
+            token = self.page.evaluate(
+                """(iframe) => {
+                  const key = '__tcsPdfIso';
+                  if (window[key]) return null;
+                  const marks = [];
+                  const remember = (el) => {
+                    if (!el || el.nodeType !== 1) return;
+                    marks.push({
+                      el,
+                      css: el.getAttribute('style'),
+                      display: el.style.display,
+                    });
+                  };
+                  const hide = (el) => {
+                    remember(el);
+                    el.style.setProperty('display', 'none', 'important');
+                  };
+                  for (const child of [...document.body.children]) {
+                    if (child === iframe || child.contains(iframe)) continue;
+                    hide(child);
+                  }
+                  remember(iframe);
+                  iframe.style.cssText =
+                    'position:fixed!important;inset:0!important;width:100vw!important;' +
+                    'height:100vh!important;border:0!important;z-index:2147483647!important;' +
+                    'display:block!important;background:#fff!important';
+                  window[key] = marks;
+                  return marks.length;
+                }""",
+                handle,
+            )
+            if not token:
+                return None
+            if title:
+                self._set_document_title(self.page, title)
+            # Kiểm tra nhanh text trên frame trước khi in
+            sample = self._frame_inner_text(frame)
+            if not self._text_looks_like_esid_doc(sample or ""):
+                return None
+            return self._pdf_from_page(self.page, dest_path, dismiss_escape=False)
+        except Exception:
+            return None
+        finally:
+            try:
+                self.page.evaluate(
+                    """() => {
+                      const key = '__tcsPdfIso';
+                      const marks = window[key];
+                      if (!marks) return;
+                      for (const m of marks) {
+                        try {
+                          if (m.css == null) m.el.removeAttribute('style');
+                          else m.el.setAttribute('style', m.css);
+                        } catch (e) {}
+                      }
+                      delete window[key];
+                    }"""
+                )
+            except Exception:
+                pass
+
     def _pdf_from_frame_html(
         self, frame, dest_path: Path, *, title: str | None = None
     ) -> Path:
-        """In PDF từ HTML iframe phiếu — A4 + CSS đầy đủ (khớp Chrome Save as PDF)."""
+        """In PDF từ iframe phiếu — serialize HTML đầy đủ + scratch page tái dùng."""
+        import os
+
+        t0 = time.perf_counter()
+        timing = os.environ.get("TCS_PDF_TIMING", "").strip() in {"1", "true", "yes"}
+        # Luôn full serialize (CSS + canvas→img) — fast HTML dễ mất layout / giống ảnh
+        mode = "full"
         try:
             html = self._serialize_bill_html(frame)
         except SiteChangedError:
@@ -1487,8 +1750,6 @@ class EsidListPage:
             raise SiteChangedError(f"Không đọc được HTML frame in: {e}") from e
         if not html or len(html) < 120:
             raise SiteChangedError("Frame in rỗng")
-        # Debug: TCS_DIAG_PDF=1 → ghi HTML/text phiếu cạnh PDF để đối chiếu
-        import os
 
         if os.environ.get("TCS_DIAG_PDF", "").strip() in {"1", "true", "yes"}:
             try:
@@ -1500,24 +1761,21 @@ class EsidListPage:
                 )
             except Exception:
                 pass
-        ctx = self.page.context
-        tmp = ctx.new_page()
+
+        t_html = time.perf_counter()
+        tmp = self._ensure_print_scratch_page()
         try:
-            # viewport gần khổ in A4 (px @ 96dpi) — giảm lệch layout
+            # commit = nhanh hơn domcontentloaded; phiếu tĩnh sau IN
+            tmp.set_content(html, wait_until="commit")
             try:
-                tmp.set_viewport_size({"width": 794, "height": 1123})
+                tmp.evaluate(
+                    """() => Promise.race([
+                      (document.fonts && document.fonts.ready) || Promise.resolve(),
+                      new Promise((r) => setTimeout(r, 120)),
+                    ])"""
+                )
             except Exception:
                 pass
-            tmp.set_content(html, wait_until="load")
-            try:
-                tmp.wait_for_load_state("networkidle", timeout=8000)
-            except Exception:
-                pass
-            try:
-                tmp.evaluate("() => (document.fonts && document.fonts.ready) || Promise.resolve()")
-            except Exception:
-                pass
-            tmp.wait_for_timeout(200)
             if title:
                 self._set_document_title(tmp, title)
             sample = ""
@@ -1531,12 +1789,24 @@ class EsidListPage:
                 raise SiteChangedError(
                     "Frame sau IN không phải phiếu ESID (có vẻ là giao diện web). Không lưu PDF."
                 )
-            return self._pdf_from_page(tmp, dest_path)
-        finally:
+            path = self._pdf_from_page(tmp, dest_path, dismiss_escape=False)
+            if timing:
+                t1 = time.perf_counter()
+                print(
+                    f"[pdf-timing] mode={mode} html_ms={(t_html - t0) * 1000:.0f} "
+                    f"print_ms={(t1 - t_html) * 1000:.0f} total_ms={(t1 - t0) * 1000:.0f} "
+                    f"bytes={path.stat().st_size if path.exists() else 0}"
+                )
+            return path
+        except Exception:
+            # Scratch page có thể lỗi — đóng để tạo lại lần sau
             try:
-                tmp.close()
+                if getattr(self, "_print_scratch", None) is not None:
+                    self._print_scratch.close()
             except Exception:
                 pass
+            self._print_scratch = None
+            raise
 
     def _install_print_hooks(self) -> None:
         """Chặn OS print; giữ window.open để bắt cửa sổ/iframe phiếu."""
@@ -1604,6 +1874,8 @@ class EsidListPage:
         Bấm IN → chỉ lưu PDF khi bắt được phiếu ESID thật (iframe/popup).
         KHÔNG bao giờ page.pdf trang shell TCS.
         """
+        import os
+
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         title = (pdf_title or dest_path.stem or "ESID").strip()
         self._set_document_title(self.page, title)
@@ -1613,14 +1885,16 @@ class EsidListPage:
         pages_before = list(context.pages)
 
         self._click_in_button()
-        # Cho TCS kịp ghi phiếu vào iframe about:blank trước khi đọc
-        self.page.wait_for_timeout(350)
+        # Cho TCS kịp ghi phiếu vào iframe — ngắn, rồi poll nhanh
+        self.page.wait_for_timeout(40)
 
         popup = None
-        deadline = time.time() + max(8.0, timeout_ms / 1000)
+        deadline = time.time() + max(5.0, timeout_ms / 1000)
         while time.time() < deadline:
             rich = self._richest_print_frame()
             if rich is not None:
+                # Không dùng isolate (printToPDF trang cha) — dễ ra PDF «ảnh»
+                # (raster iframe). Luôn serialize HTML phiếu → scratch page.
                 return self._pdf_from_frame_html(rich, dest_path, title=title)
             if popup is None:
                 for p in context.pages:
@@ -1638,7 +1912,7 @@ class EsidListPage:
                     break
                 # Popup chưa có phiếu — tiếp tục chờ / tìm iframe
                 popup = None
-            self.page.wait_for_timeout(80)
+            self.page.wait_for_timeout(25)
 
         if popup is not None:
             try:
@@ -1712,25 +1986,34 @@ class EsidListPage:
         """
         PDF ESID = mở phiếu (AWB# 8 số) → bấm IN → lưu file phiếu (đặt tên theo AWB).
         """
+        import os
+
         from app.utils.awb import safe_filename_awb
 
         _ = session_date
+        timing = os.environ.get("TCS_PDF_TIMING", "").strip() in {"1", "true", "yes"}
+        t0 = time.perf_counter()
         hot = skip_prepare or self._detail_ready_for(awb_digits)
         if hot and self._in_button_visible():
             pass
         else:
             self.prepare_esid_detail(awb_digits, session_date=None)
+        t_prep = time.perf_counter()
         title = f"{safe_filename_awb(awb_digits)}_ESID"
         path = self.click_print_download(
-            dest_path, timeout_ms=10000, pdf_title=title
+            dest_path, timeout_ms=8000, pdf_title=title
         )
-        try:
-            self.page.keyboard.press("Escape")
-        except Exception:
-            pass
+        # Sticky detail: không Escape đóng phiếu — lần tải AWB này sau gần tức thì
         try:
             self._dismiss_os_print_dialog()
         except Exception:
             pass
         self._detail_awb = awb_digits
+        if timing:
+            print(
+                f"[pdf-timing] awb=…{awb_digits[-8:]} hot={hot} "
+                f"prepare_ms={(t_prep - t0) * 1000:.0f} "
+                f"print_ms={(time.perf_counter() - t_prep) * 1000:.0f} "
+                f"total_ms={(time.perf_counter() - t0) * 1000:.0f}"
+            )
         return path

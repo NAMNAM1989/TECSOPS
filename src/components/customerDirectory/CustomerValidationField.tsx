@@ -25,7 +25,7 @@ export function CustomerValidationBanner({
 
 export function fieldInputClass(invalid: boolean): string {
   const base =
-    "w-full rounded-lg border border-ui-border bg-ui-surface px-2.5 py-1.5 text-xs text-ui-text outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus";
+    "w-full min-h-11 touch-manipulation rounded-lg border border-ui-border bg-ui-surface px-2.5 py-2 text-base text-ui-text outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus sm:min-h-0 sm:py-1.5 sm:text-xs";
   return invalid
     ? `${base} border-red-500/80 ring-1 ring-red-500/25`
     : base;

@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.11";
+  const SCRIPT_VERSION = "2.0.19";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -168,8 +168,9 @@
         updateWorkspaceOverlay("FILLING", `Đang chọn ${key} từ danh mục TCS`, 2, 7);
         await hardResetUi();
         fills[key] = await fillMasterField(id, String(value), {
-          maxQueries: 2,
-          budgetMs: 4_000,
+          maxQueries: 4,
+          budgetMs: 6_000,
+          minScore: 45,
         });
         if (!fills[key]) {
           warnings.push(`#${id} chưa chọn được master trong 4 giây — để trống, không ghi đè text`);
@@ -213,8 +214,9 @@
       );
       if (ship.dest) {
         fills.codFds = await fillMasterField(LOCATORS.fields.dest_code, String(ship.dest), {
-          maxQueries: 2,
-          budgetMs: 3_000,
+          maxQueries: 3,
+          budgetMs: 4_000,
+          minScore: 40,
         });
         if (!fills.codFds) fills.codFds = setById(LOCATORS.fields.dest_code, String(ship.dest));
       } else {
@@ -268,46 +270,67 @@
   if (!window.__TECSOPS_TCS_LISTENER__) {
     window.__TECSOPS_TCS_LISTENER__ = true;
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-      if (!msg || typeof msg !== "object") return false;
+      const reply = (payload) => {
+        try {
+          sendResponse(payload);
+        } catch {
+          /* port closed */
+        }
+      };
+      if (!msg || typeof msg !== "object") {
+        reply({ ok: false, error: "INVALID_MESSAGE" });
+        return true;
+      }
 
       if (msg.type === "TCS_PING") {
-        sendResponse({
+        reply({
           ok: true,
           scriptVersion: window.__TECSOPS_TCS__?.version || SCRIPT_VERSION,
           busy: Boolean(window.__TECSOPS_TCS__?.busy),
           loggedIn: !needsLogin(),
         });
-        return false;
+        return true;
       }
 
       if (msg.type === "TCS_GET_CAPTCHA") {
-        void getCaptchaData().then(sendResponse);
+        void getCaptchaData().then(reply).catch((err) =>
+          reply({
+            ok: false,
+            error: "CAPTCHA_READ_FAILED",
+            message: err instanceof Error ? err.message : String(err),
+          })
+        );
         return true;
       }
 
       if (msg.type === "TCS_LOGIN_STATUS") {
-        void getLoginStatus().then(sendResponse);
+        void getLoginStatus().then(reply).catch((err) =>
+          reply({
+            ok: false,
+            error: "LOGIN_STATUS_FAILED",
+            message: err instanceof Error ? err.message : String(err),
+          })
+        );
         return true;
       }
 
       if (msg.type === "TCS_REFRESH_CAPTCHA") {
         const refreshed = refreshCaptcha();
-        sendResponse({ ok: refreshed });
-        return false;
+        reply({ ok: refreshed });
+        return true;
       }
 
       if (msg.type === "TCS_LOGIN") {
-        const result = fillAndSubmitLogin(msg.payload || {});
-        sendResponse(result);
-        return false;
+        reply(fillAndSubmitLogin(msg.payload || {}));
+        return true;
       }
 
       if (msg.type === "TCS_SCAN_DATE") {
         void scanByDate(msg.payload || {})
-          .then(sendResponse)
+          .then(reply)
           .catch((err) => {
             updateWorkspaceOverlay("ERROR", err instanceof Error ? err.message : String(err), 0, 1);
-            sendResponse({
+            reply({
               ok: false,
               error: "SCAN_FAILED",
               message: err instanceof Error ? err.message : String(err),
@@ -319,18 +342,18 @@
       if (msg.type === "FILL_ESID") {
         const fn = window.__TECSOPS_TCS__?.runFill;
         if (typeof fn !== "function") {
-          sendResponse({
+          reply({
             ok: false,
             error: "NO_RUNNER",
             message: "Content script chưa sẵn sàng — Reload extension + F5 tab TCS.",
             warnings: [],
           });
-          return false;
+          return true;
         }
         void fn(msg.payload)
-          .then(sendResponse)
+          .then(reply)
           .catch((err) => {
-            sendResponse({
+            reply({
               ok: false,
               error: "FILL_FAILED",
               message: err instanceof Error ? err.message : String(err),
@@ -340,7 +363,12 @@
           });
         return true;
       }
-      return false;
+      reply({
+        ok: false,
+        error: "UNKNOWN_TYPE",
+        message: `Lệnh không hỗ trợ: ${String(msg.type || "")}`,
+      });
+      return true;
     });
   }
 
@@ -603,41 +631,21 @@
     clickTabByText("DANH SÁCH ESID") || clickTabByText("DANH SACH ESID");
     await sleep(350);
 
-    clearDateFiltersBeforeScan();
-
     const [year, month, day] = sessionDate.split("-");
     const dmy = `${day}-${month}-${year}`;
-    const start = document.querySelector("#search-form_dateSearch");
-    const end =
-      document.querySelector("input[placeholder='Ngày kết thúc']") ||
-      [...document.querySelectorAll("input")].find((item) =>
-        normalizeText(item.getAttribute("placeholder") || "").includes("NGAY KET THUC")
-      );
-    if (!start || !end) {
-      return {
-        ok: false,
-        error: "DATE_FILTER_NOT_FOUND",
-        message: "Không thấy bộ lọc ngày trên danh sách ESID",
-      };
-    }
-    setNativeValue(start, dmy);
-    dispatchEnter(start);
-    await sleep(80);
-    setNativeValue(end, dmy);
-    dispatchEnter(end);
-    pressKey("Escape");
-    await sleep(80);
-
-    const startGot = String(start.value || "").trim();
-    const endGot = String(end.value || "").trim();
-    if (
-      (startGot && !startGot.includes(dmy) && !startGot.includes(`${day}/${month}/${year}`)) ||
-      (endGot && !endGot.includes(dmy) && !endGot.includes(`${day}/${month}/${year}`))
-    ) {
+    const applied = await applyFlightDateFilter(sessionDate, dmy);
+    if (!applied.ok) {
+      if (applied.error === "DATE_FILTER_NOT_FOUND") {
+        return {
+          ok: false,
+          error: "DATE_FILTER_NOT_FOUND",
+          message: "Không thấy bộ lọc ngày trên danh sách ESID",
+        };
+      }
       return {
         ok: false,
         error: "DATE_FILTER_MISMATCH",
-        message: `Bộ lọc ngày chưa khớp ${dmy} (start=${startGot || "—"}, end=${endGot || "—"})`,
+        message: `Bộ lọc ngày chưa khớp ${dmy} (start=${applied.start || "—"}, end=${applied.end || "—"}) — chỉ quét đúng 1 ngày phiên Ops`,
       };
     }
 
@@ -688,9 +696,10 @@
     const readySet = new Set();
     for (const row of readyRows) {
       const digits = String(row.awb || "").replace(/\D/g, "");
-      let match = digits.length >= 11 && opsAwbs.includes(digits.slice(0, 11))
-        ? digits.slice(0, 11)
-        : "";
+      let match =
+        digits.length >= 11 && opsAwbs.includes(digits.slice(0, 11))
+          ? digits.slice(0, 11)
+          : "";
       if (!match && digits.length >= 8) {
         const candidates = opsAwbs.filter((awb) => awb.slice(3) === digits.slice(-8));
         if (candidates.length === 1) match = candidates[0];
@@ -744,8 +753,219 @@
     };
   }
 
+  function findDateFilterInputs() {
+    const start = document.querySelector("#search-form_dateSearch");
+    const end =
+      document.querySelector("input[placeholder='Ngày kết thúc']") ||
+      [...document.querySelectorAll("input")].find((item) =>
+        normalizeText(item.getAttribute("placeholder") || "").includes("NGAY KET THUC")
+      ) ||
+      // RangePicker: ô thứ 2 trong cùng .ant-picker
+      start?.closest(".ant-picker")?.querySelectorAll("input")?.[1] ||
+      null;
+    return { start, end };
+  }
+
+  function dateValueMatches(got, dmy) {
+    const raw = String(got || "").trim();
+    if (!raw) return false;
+    const norm = raw.replace(/\//g, "-");
+    const want = String(dmy || "").replace(/\//g, "-");
+    return norm.includes(want);
+  }
+
+  /**
+   * Gán input Ant/React — cần reset _valueTracker (giống Playwright).
+   * RangePicker hay tự điền end = cuối tháng khi chỉ set start + Enter.
+   */
+  function setReactInput(el, value) {
+    if (!el) return false;
+    try {
+      el.focus();
+      el.click();
+    } catch {
+      /* ignore */
+    }
+    const v = String(value ?? "");
+    const last = el.value;
+    const proto = window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    if (setter) setter.call(el, v);
+    else el.value = v;
+    const tracker = el._valueTracker;
+    if (tracker && typeof tracker.setValue === "function") {
+      try {
+        tracker.setValue(last);
+      } catch {
+        /* ignore */
+      }
+    }
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.dispatchEvent(new InputEvent("input", { bubbles: true, data: v }));
+    return dateValueMatches(el.value, v) || String(el.value || "") === v;
+  }
+
+  /**
+   * Chọn đúng 1 ngày trên Ant RangePicker: click ô ngày 2 lần (from = to).
+   * Tránh gõ text — RangePicker hay tự rộng thành 01 → cuối tháng.
+   */
+  async function pickSingleDayRangeOnCalendar(ymd) {
+    const target = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || "").trim());
+    const { start } = findDateFilterInputs();
+    if (!start || !target) return false;
+
+    simulateClick(start);
+    await sleep(160);
+    let popup = [
+      ...document.querySelectorAll(
+        ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
+      ),
+    ]
+      .filter(isVisible)
+      .at(-1);
+    if (!popup) return false;
+
+    const targetYear = Number(target[1]);
+    const targetMonth = Number(target[2]);
+    // Header thường hiện "Jul 2026" / "Tháng 7 2026"
+    const headerText = normalizeText(
+      popup.querySelector(".ant-picker-header-view")?.textContent ||
+        popup.querySelector(".ant-picker-month-btn")?.textContent ||
+        ""
+    );
+    const monthNames = [
+      "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+      "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+    ];
+    let shownMonth = targetMonth;
+    let shownYear = targetYear;
+    for (let i = 0; i < 12; i += 1) {
+      if (headerText.includes(monthNames[i]) || headerText.includes(String(i + 1))) {
+        // Prefer English abbr match
+        if (headerText.includes(monthNames[i])) shownMonth = i + 1;
+      }
+    }
+    const yearHit = headerText.match(/(20\d{2})/);
+    if (yearHit) shownYear = Number(yearHit[1]);
+    const monthDelta = (targetYear - shownYear) * 12 + targetMonth - shownMonth;
+    if (Math.abs(monthDelta) <= 24) {
+      const navSelector =
+        monthDelta > 0
+          ? ".ant-picker-header-next-btn"
+          : ".ant-picker-header-prev-btn";
+      for (let i = 0; i < Math.abs(monthDelta); i += 1) {
+        const nav = popup.querySelector(navSelector);
+        if (!nav) break;
+        simulateClick(nav);
+        await sleep(70);
+        popup = [
+          ...document.querySelectorAll(
+            ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
+          ),
+        ]
+          .filter(isVisible)
+          .at(-1) || popup;
+      }
+    }
+
+    const findCell = () => {
+      const root = [
+        ...document.querySelectorAll(
+          ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
+        ),
+      ]
+        .filter(isVisible)
+        .at(-1) || popup;
+      return (
+        root.querySelector(`td[title="${ymd}"]:not(.ant-picker-cell-disabled)`) ||
+        root.querySelector(
+          `td.ant-picker-cell[title="${ymd}"]:not(.ant-picker-cell-disabled)`
+        )
+      );
+    };
+
+    const cell1 = findCell();
+    if (!cell1) return false;
+    simulateClick(cell1);
+    await sleep(120);
+    // Lần 2 = ngày kết thúc cùng ngày (range 1 ngày)
+    const cell2 = findCell();
+    if (!cell2) return false;
+    simulateClick(cell2);
+    await sleep(140);
+    pressKey("Escape");
+    await sleep(60);
+    return true;
+  }
+
+  async function applyFlightDateFilter(sessionYmd, dmy) {
+    const { start, end } = findDateFilterInputs();
+    if (!start || !end) {
+      return {
+        ok: false,
+        start: "",
+        end: "",
+        error: "DATE_FILTER_NOT_FOUND",
+      };
+    }
+
+    let startGot = "";
+    let endGot = "";
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      clearDateFiltersBeforeScan();
+      await sleep(60);
+
+      // Ưu tiên chọn lịch: from = to = đúng 1 ngày phiên Ops
+      await pickSingleDayRangeOnCalendar(sessionYmd);
+      await sleep(80);
+
+      startGot = String(start.value || "").trim();
+      endGot = String(end.value || "").trim();
+      if (dateValueMatches(startGot, dmy) && dateValueMatches(endGot, dmy)) {
+        return { ok: true, start: startGot, end: endGot };
+      }
+
+      // Fallback text: ép cả 2 ô = cùng ngày (không Enter — tránh auto cuối tháng)
+      setReactInput(start, dmy);
+      await sleep(40);
+      try {
+        start.blur();
+      } catch {
+        /* ignore */
+      }
+      await sleep(40);
+      setReactInput(end, dmy);
+      await sleep(40);
+      setReactInput(end, dmy);
+      try {
+        end.blur();
+      } catch {
+        /* ignore */
+      }
+      pressKey("Escape");
+      await sleep(80);
+
+      startGot = String(start.value || "").trim();
+      endGot = String(end.value || "").trim();
+      if (dateValueMatches(startGot, dmy) && dateValueMatches(endGot, dmy)) {
+        return { ok: true, start: startGot, end: endGot };
+      }
+    }
+    return { ok: false, start: startGot, end: endGot };
+  }
+
   function clearDateFiltersBeforeScan() {
     try {
+      // Hover picker để hiện nút X (Ant ẩn clear tới khi hover)
+      for (const picker of document.querySelectorAll(".ant-picker")) {
+        try {
+          picker.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+          picker.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+        } catch {
+          /* ignore */
+        }
+      }
       for (const button of document.querySelectorAll(".ant-picker-clear")) {
         try {
           button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -753,15 +973,9 @@
           /* ignore */
         }
       }
-      for (const sel of [
-        "#search-form_dateSearch",
-        "input[placeholder*='kết thúc']",
-        "input[placeholder*='ket thuc']",
-      ]) {
-        for (const input of document.querySelectorAll(sel)) {
-          setNativeValue(input, "");
-        }
-      }
+      const { start, end } = findDateFilterInputs();
+      if (start) setReactInput(start, "");
+      if (end) setReactInput(end, "");
       pressKey("Escape");
     } catch {
       /* ignore */
@@ -1332,12 +1546,16 @@
   }
 
   async function fillMasterField(id, value, opts = {}) {
-    const text = String(value || "").trim();
+    const text = String(value || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) || "";
     if (!id || !text) return false;
     const el = document.getElementById(id);
     if (!el) return false;
-    const maxQueries = opts.maxQueries || 3;
-    const deadline = Date.now() + Math.max(1_000, Number(opts.budgetMs || 4_000));
+    const maxQueries = opts.maxQueries || 4;
+    const deadline = Date.now() + Math.max(1_000, Number(opts.budgetMs || 6_000));
+    const minAccept = Number(opts.minScore || 45);
 
     const wrap = el.closest(".ant-select") || el;
     wrap.click();
@@ -1363,18 +1581,16 @@
       } else {
         setById(id, query);
       }
-      await sleep(Math.min(480, Math.max(120, deadline - Date.now())));
+      await sleep(Math.min(520, Math.max(160, deadline - Date.now())));
 
-      // Ưu tiên: 1 option → ArrowDown + Enter (ổn định Ant Select)
       const options = collectMasterOptions();
-      if (options.length === 1 || (options.length > 0 && scoreSelectOption(text, options[0].label) >= 35)) {
-        if (options.length === 1 || options.length <= 3) {
-          pressKey("ArrowDown");
-          await sleep(60);
-          pressKey("Enter");
-          await sleep(180);
-          if (!dropdownStillOpen()) return true;
-        }
+      // 1 option: chỉ Enter khi điểm đủ (tránh chọn nhầm vì query quá chung)
+      if (options.length === 1 && scoreSelectOption(text, options[0].label) >= minAccept) {
+        pressKey("ArrowDown");
+        await sleep(60);
+        pressKey("Enter");
+        await sleep(180);
+        if (!dropdownStillOpen()) return true;
       }
 
       let best = null;
@@ -1386,16 +1602,14 @@
           best = opt;
         }
       }
-      if (best && bestScore >= (options.length === 1 ? 15 : 30)) {
+      if (best && bestScore >= minAccept) {
         const target =
           best.el.querySelector(".ant-select-item-option-content") ||
           best.titleEl ||
           best.el;
-        // Không click nút Thêm mới
         simulateClick(target);
         await sleep(200);
         if (!dropdownStillOpen()) return true;
-        // fallback Enter
         pressKey("Enter");
         await sleep(150);
         if (!dropdownStillOpen()) return true;
@@ -1483,22 +1697,44 @@
   }
 
   function comboboxSearchQueries(text) {
-    const raw = String(text || "").trim();
+    // Chỉ lấy dòng đầu — snapshot in đôi khi dính địa chỉ xuống dòng
+    const raw = String(text || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) || "";
     if (!raw) return [];
     const fold = normalizeText(raw);
     const words = fold.split(/[\s,/|.-]+/).filter(Boolean);
+    // Token pháp lý / ngành nghề quá chung → không dùng làm query đầu (gây chọn nhầm droplist)
     const stop = new Set([
       "CONG", "TY", "CO", "PHAN", "VA", "DICH", "VU", "CHI", "NHANH",
-      "SO", "CTY", "CTCP", "TNHH", "LTD", "COMPANY",
+      "SO", "CTY", "CTCP", "TNHH", "LTD", "COMPANY", "CORP", "CORPORATION",
+      "INC", "LIMITED", "LLC", "PLC",
+      "INTERNATIONAL", "LOGISTICS", "EXPRESS", "SHIPPING", "TRADING",
+      "IMPORT", "EXPORT", "SERVICE", "SERVICES", "GROUP", "HOLDINGS",
+      "GLOBAL", "CARGO", "FREIGHT", "FORWARDING",
     ]);
     const distinctive = words.filter((word) => word.length >= 3 && !stop.has(word));
+    const rareUnique = [...new Set(distinctive)];
     const queries = [];
-    if (distinctive.length) {
-      queries.push(distinctive.at(-1));
-      queries.push([...distinctive].sort((a, b) => b.length - a.length)[0]);
+    // 1) Luôn thử tên đầy đủ trước (tránh "NAM"/"LOGISTICS" chọn nhầm master)
+    queries.push(raw.length <= 48 ? raw : raw.slice(0, 48));
+    // 2) Cụm token riêng theo thứ tự gốc (NAM NAM, NET …)
+    if (distinctive.length >= 2) {
+      queries.push(distinctive.slice(0, Math.min(3, distinctive.length)).join(" "));
     }
-    if (distinctive.length >= 2) queries.push(distinctive.slice(-2).join(" "));
-    queries.push(raw.length <= 36 ? raw : raw.slice(0, 36));
+    if (rareUnique.length >= 2) {
+      queries.push(rareUnique.slice(0, 2).join(" "));
+    }
+    // 3) Token đủ dài (>=4) — bỏ token 3 ký tự đứng một mình (NAM quá chung)
+    const longRare = rareUnique.filter((w) => w.length >= 4);
+    if (longRare.length) {
+      queries.push([...longRare].sort((a, b) => b.length - a.length)[0]);
+      queries.push(longRare[0]);
+    } else if (rareUnique.length === 1 && distinctive.length < 2) {
+      // Chỉ token đơn (NET/PCS) — không thêm NAM khi đã có cụm NAM NAM
+      queries.push(rareUnique[0]);
+    }
     const seen = new Set();
     const out = [];
     for (const q of queries) {
@@ -1507,7 +1743,7 @@
       seen.add(k);
       out.push(q.trim());
     }
-    return out.slice(0, 4);
+    return out.slice(0, 5);
   }
 
   function scoreSelectOption(fullText, optionText) {
@@ -1516,14 +1752,32 @@
     if (!foldFull || !foldOpt) return 0;
     if (foldOpt === foldFull) return 100;
     if (foldFull.includes(foldOpt) || foldOpt.includes(foldFull)) return 82;
+    const generic = new Set([
+      "CONG", "TY", "CO", "PHAN", "VA", "DICH", "VU", "CHI", "NHANH",
+      "SO", "CTY", "CTCP", "TNHH", "LTD", "COMPANY", "CORP", "CORPORATION",
+      "INC", "LIMITED", "LLC",
+      "INTERNATIONAL", "LOGISTICS", "EXPRESS", "SHIPPING", "TRADING",
+      "IMPORT", "EXPORT", "SERVICE", "SERVICES", "GROUP", "HOLDINGS",
+      "GLOBAL", "CARGO", "FREIGHT", "FORWARDING", "AND", "THE",
+    ]);
     const fullArr = foldFull.split(/\s+/).filter(Boolean);
     const optArr = foldOpt.split(/\s+/).filter(Boolean);
-    const optWords = new Set(optArr);
-    let common = 0;
-    for (const w of fullArr) if (optWords.has(w)) common += 1;
-    if (!common) return 0;
-    let score = Math.floor((55 * common) / Math.max(fullArr.length, 1));
-    if (fullArr.at(-1) && fullArr.at(-1) === optArr.at(-1)) score += 25;
+    const fullRare = fullArr.filter((w) => w.length >= 3 && !generic.has(w));
+    const optRare = new Set(optArr.filter((w) => w.length >= 3 && !generic.has(w)));
+    // Bắt buộc cụm token riêng (vd. NAM NAM) có trong option — tránh match 1 từ NAM
+    if (fullRare.length >= 2) {
+      const phrase = fullRare.slice(0, Math.min(3, fullRare.length)).join(" ");
+      if (phrase && !foldOpt.includes(phrase)) return 0;
+    }
+    let rareCommon = 0;
+    const fullRareUnique = [...new Set(fullRare)];
+    for (const w of fullRareUnique) if (optRare.has(w)) rareCommon += 1;
+    if (!rareCommon) return 0;
+    let score = Math.floor((70 * rareCommon) / Math.max(fullRareUnique.length, 1));
+    if (fullRareUnique[0] && optRare.has(fullRareUnique[0])) score += 20;
+    if (fullArr.at(-1) && fullArr.at(-1) === optArr.at(-1) && !generic.has(fullArr.at(-1))) {
+      score += 15;
+    }
     return score;
   }
 
@@ -1622,14 +1876,52 @@
     const v = String(value ?? "");
     const tag = (el.tagName || "").toLowerCase();
     if (tag !== "input" && tag !== "textarea") return false;
+    try {
+      el.focus();
+    } catch {
+      /* ignore */
+    }
     const proto =
       tag === "textarea" ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-    if (setter) setter.call(el, v);
+    const protoSetter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    const reactKey = Object.keys(el).find(
+      (k) =>
+        k.startsWith("__reactProps$") ||
+        k.startsWith("__reactEventHandlers$") ||
+        k.startsWith("_valueTracker")
+    );
+    // React 16/17 value tracker: clear trước khi set để onChange/onInput nhận giá trị mới
+    const tracker = el._valueTracker;
+    if (tracker && typeof tracker.setValue === "function") {
+      try {
+        tracker.setValue("");
+      } catch {
+        /* ignore */
+      }
+    }
+    if (protoSetter) protoSetter.call(el, v);
     else el.value = v;
+    if (tracker && typeof tracker.setValue === "function") {
+      try {
+        tracker.setValue(v);
+      } catch {
+        /* ignore */
+      }
+    }
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
-    el.dispatchEvent(new InputEvent("input", { bubbles: true, data: v }));
+    try {
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, data: v, inputType: "insertText" }));
+    } catch {
+      /* older */
+    }
+    // Ant Design Form đôi khi chỉ commit sau blur
+    try {
+      el.dispatchEvent(new Event("blur", { bubbles: true }));
+    } catch {
+      /* ignore */
+    }
+    void reactKey;
     window.setTimeout(() => {
       try {
         el.classList.remove("tecsops-active-field");
@@ -1638,7 +1930,7 @@
         /* visual aid only */
       }
     }, 260);
-    return true;
+    return String(el.value || "") === v || String(el.value || "").toUpperCase() === v.toUpperCase();
   }
 
   function getVal(id) {

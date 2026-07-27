@@ -72,6 +72,8 @@ export type TcsAgentJobResultRow = {
   download_url?: string;
   pdf_name?: string;
   print_status?: string;
+  cache_hit?: boolean;
+  hot_path?: boolean;
   error_code?: string;
   error_message?: string;
   shipment_id?: string;
@@ -89,6 +91,7 @@ export type TcsAgentJobResponse = {
   docs_dir?: string;
   mock?: boolean;
   hot_path?: boolean;
+  cache_hit?: boolean;
   results?: TcsAgentJobResultRow[];
   error?: string;
   message?: string;
@@ -138,7 +141,7 @@ export function agentOfflineHint(base = agentBase()): string {
   if (isLoopback) {
     return (
       `Agent Offline (${base}). 127.0.0.1 chỉ đúng trên máy đang chạy agent. ` +
-      `Máy khác: xóa URL tùy chỉnh (nút URL → để trống = proxy /tcs-agent) và mở Ops qua IP máy kho.`
+      `Máy khác: mở Ops qua IP máy kho (proxy /tcs-agent), không dùng 127.0.0.1.`
     );
   }
   return `Agent Offline (${base}). Kiểm tra agent đang chạy và URL/firewall.`;
@@ -220,6 +223,22 @@ export async function fetchTcsSessionStatus(): Promise<TcsAgentSession | null> {
   }
 }
 
+/** Mở Chrome agent (Playwright). Ext Đồng bộ ≠ session agent — PDF vẫn cần bước này. */
+export async function openTcsAgentSession(opts: {
+  visible?: boolean;
+} = {}): Promise<TcsAgentSession & { ok: boolean; error?: string; message?: string }> {
+  const visible = opts.visible === true;
+  return postAgentJson(
+    "/session/open",
+    {
+      visible,
+      headed: visible,
+      show_browser: visible,
+    },
+    "Không mở được phiên Chrome agent TCS"
+  );
+}
+
 export type TcsEsidScanItem = {
   awb: string;
   awb_last8?: string;
@@ -269,6 +288,37 @@ export async function bootstrapTcsWorkspace(
     },
     "Không khởi tạo được workspace TCS"
   );
+}
+
+/** In sẵn PDF ESID vào cache agent (sau Đồng bộ Ext hoặc gọi tay). */
+export async function prefetchTcsPdfs(
+  awbs: string[],
+  opts: { limit?: number } = {}
+): Promise<{
+  ok: boolean;
+  prefetched?: number;
+  skipped?: number;
+  failed?: number;
+  error?: string;
+  message?: string;
+}> {
+  try {
+    return await postAgentJson(
+      "/workspace/prefetch-pdfs",
+      {
+        warehouse: "TECS-TCS",
+        awbs,
+        limit: opts.limit ?? 5,
+      },
+      "Prefetch PDF thất bại"
+    );
+  } catch (e) {
+    return {
+      ok: false,
+      error: "PREFETCH_FAILED",
+      message: e instanceof Error ? e.message : "Prefetch PDF thất bại",
+    };
+  }
 }
 
 /**
@@ -372,30 +422,53 @@ export function tcsAgentDocUrl(nameOrPath: string): string {
 }
 /**
  * Tải PDF ESID về máy (Downloads) — không mở tab xem/in.
- * Fetch blob rồi gắn download (ổn định hơn mở URL trực tiếp).
+ *
+ * Job agent thường > vài giây → mất user activation; `<a download>` bị Chrome bỏ qua.
+ * Một lần fetch → blob URL dùng cho cả `<a download>` và iframe fallback (không tải mạng 2 lần).
  */
 export async function downloadPdfFromAgent(pdfNameOrPath: string): Promise<boolean> {
   const name = pdfNameOrPath.replace(/^.*[/\\]/, "");
   if (!name.toLowerCase().endsWith(".pdf")) return false;
+  const docUrl = tcsAgentDocUrl(name);
   try {
-    const res = await fetch(tcsAgentDocUrl(name));
+    const res = await fetch(docUrl, { cache: "no-store" });
     if (!res.ok) return false;
-    const blob = await res.blob();
-    if (blob.size < 100) return false;
-    const url = URL.createObjectURL(blob);
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength < 100) return false;
+
+    const objectUrl = URL.createObjectURL(
+      new Blob([buf], { type: "application/pdf" }),
+    );
     try {
       const a = document.createElement("a");
-      a.href = url;
+      a.href = objectUrl;
       a.download = name;
       a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
       a.remove();
-    } finally {
-      window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
+
+      // Fallback khi mất user activation: iframe cùng blob (không fetch lại)
+      const iframe = document.createElement("iframe");
+      iframe.setAttribute("hidden", "");
+      iframe.setAttribute("aria-hidden", "true");
+      iframe.src = objectUrl;
+      document.body.appendChild(iframe);
+      window.setTimeout(() => {
+        iframe.remove();
+        URL.revokeObjectURL(objectUrl);
+      }, 60_000);
+    } catch {
+      URL.revokeObjectURL(objectUrl);
+      throw new Error("blob download failed");
     }
     return true;
   } catch {
-    return false;
+    try {
+      window.location.assign(docUrl);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

@@ -12,7 +12,7 @@ type Props = {
   onChange: (consigneeId: string) => void;
 };
 
-/** Chọn CNEE — ô đóng chỉ hiện mã viết tắt; hover select = tên pháp lý. */
+/** Chọn CNEE — ô đóng hiện tên CNEE hồ sơ khách; hover = chi tiết đầy đủ. */
 export function InlineConsigneeSelect({
   value,
   options,

@@ -61,7 +61,15 @@ export function registerTcsAgentProxy(app) {
         timeout: 180_000,
       },
       (upRes) => {
-        res.writeHead(upRes.statusCode || 502, upRes.headers);
+        // Bỏ hop-by-hop; chỉ bỏ transfer-encoding khi đã có Content-Length (PDF /docs)
+        const outHeaders = { ...upRes.headers };
+        for (const key of ["connection", "keep-alive", "proxy-connection", "te", "trailer", "upgrade"]) {
+          delete outHeaders[key];
+        }
+        if (outHeaders["content-length"] != null) {
+          delete outHeaders["transfer-encoding"];
+        }
+        res.writeHead(upRes.statusCode || 502, outHeaders);
         upRes.pipe(res);
       }
     );

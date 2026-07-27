@@ -12,9 +12,11 @@ import {
   fetchTcsSessionStatus,
   agentOfflineHint,
   bootstrapTcsWorkspace,
+  openTcsAgentSession,
   getTcsAgentBaseUrl,
   pingTcsAgent,
   pickEsidScanReadyItems,
+  prefetchTcsPdfs,
   declareFillTcsEsid,
   declareSubmitTcsEsid,
   submitTcsPortalJob,
@@ -82,6 +84,8 @@ export function useTcsPortalActions({
   /** Tránh poll /health ghi đè Offline khi đang chờ job dài trên agent */
   const busyRef = useRef(false);
   busyRef.current = busy;
+  /** Warmup agent sau Đồng bộ Ext — tải PDF chờ promise này */
+  const agentWarmupRef = useRef(Promise.resolve());
   const [results, setResults] = useState<TcsAgentJobResultRow[]>([]);
   const [downloadedCount, setDownloadedCount] = useState(0);
   /** Sau Điền: trạng thái + nút HOÀN TẤT trên cùng workspace. */
@@ -138,14 +142,42 @@ export function useTcsPortalActions({
       setError(agentOfflineHint(getTcsAgentBaseUrl()));
       return false;
     }
-    const s = online.session || (await fetchTcsSessionStatus());
+    let s = online.session || (await fetchTcsSessionStatus());
     setSession(s);
+    // Ext Đồng bộ chỉ login tab Chrome user — agent Playwright có thể chưa mở.
+    // Tự mở session khi tải PDF / điền (không bắt user bấm Login riêng).
+    if (!s?.open || !s?.logged_in) {
+      const wantVisible = online.headless === false;
+      setBusyLabel(
+        wantVisible
+          ? "Đang mở Chrome agent TCS (PDF cần Playwright)…"
+          : "Đang khởi tạo phiên agent TCS…"
+      );
+      const opened = await openTcsAgentSession({ visible: wantVisible });
+      if (opened.ok === false && opened.error === "AGENT_OFFLINE") {
+        setError(opened.message || agentOfflineHint(getTcsAgentBaseUrl()));
+        return false;
+      }
+      s = opened;
+      setSession(opened);
+      setHealth((prev) =>
+        prev
+          ? { ...prev, ok: true, session: opened }
+          : { ok: true, session: opened }
+      );
+    }
     if (!s?.open) {
-      setError("Workspace TCS chưa khởi tạo — bấm Login để đăng nhập và quét sẵn theo ngày.");
+      setError(
+        (s?.message && String(s.message).trim()) ||
+          "Không mở được Chrome agent — kiểm tra máy kho / npm run tcs:agent:real."
+      );
       return false;
     }
     if (!s?.logged_in) {
-      setError("Cần login TCS — nhập CAPTCHA trên Chrome rồi thử lại.");
+      setError(
+        "Agent Chrome đang ở trang login — nhập CAPTCHA trên cửa sổ agent rồi bấm Tải PDF lại. " +
+          "(Đồng bộ Ext và agent là hai phiên Chrome khác nhau.)"
+      );
       await refreshHealth();
       return false;
     }
@@ -214,6 +246,37 @@ export function useTcsPortalActions({
           } AWB · ${ready.length} hoàn thành tiếp nhận` +
             (updatedCount ? ` · cập nhật Ops ${updatedCount} lô` : "")
         );
+        // Nền: mở agent Playwright (PDF cần agent) + prefetch — gắn promise để Tải PDF chờ
+        const readyAwbs = ready
+          .map((item) => String(item.awb || "").replace(/\D/g, "").slice(0, 11))
+          .filter((d) => d.length === 11);
+        const warmup = (async () => {
+          const online = await pingTcsAgent(2500);
+          if (!online?.ok) return;
+          setHealth(online);
+          const wantVisible = online.headless === false;
+          const sess = online.session;
+          if (!sess?.open || !sess?.logged_in) {
+            const opened = await openTcsAgentSession({ visible: wantVisible });
+            if (opened.open) {
+              setSession(opened);
+              setHealth((prev) =>
+                prev ? { ...prev, session: opened } : { ok: true, session: opened }
+              );
+            }
+            if (!opened.logged_in) return;
+          }
+          if (!readyAwbs.length) return;
+          const pref = await prefetchTcsPdfs(readyAwbs, { limit: 5 });
+          if (pref.ok && (pref.prefetched || 0) > 0) {
+            setMessage((prev) =>
+              `${prev || ""} · prefetch ${pref.prefetched} PDF`.trim()
+            );
+          }
+        })().catch(() => {
+          /* warmup nền — lỗi không chặn UI Đồng bộ */
+        });
+        agentWarmupRef.current = warmup;
         return result;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Extension đồng bộ TCS thất bại");
@@ -315,11 +378,44 @@ export function useTcsPortalActions({
         return;
       }
       setBusy(true);
-      setBusyLabel(`Tải PDF …${digits.slice(-8)} — dùng cache ngày…`);
+      setBusyLabel(`Tải PDF …${digits.slice(-8)}…`);
       const t0 = performance.now();
       try {
-        if (!(await ensureSessionReady())) return;
-        const res = await submitTcsPortalJob(payload);
+        // Chờ warmup sau Đồng bộ Ext (open/prefetch) — tránh race BUSY
+        setBusyLabel(`Chờ agent sẵn sàng …${digits.slice(-8)}…`);
+        await agentWarmupRef.current.catch(() => undefined);
+        setBusyLabel(`Tải PDF …${digits.slice(-8)}…`);
+        // PDF cache trên agent không cần Chrome đã login — chỉ cần agent online
+        if (health?.ok) {
+          /* keep */
+        } else {
+          const online = await pingTcsAgent();
+          setHealth(online);
+          if (!online?.ok) {
+            setError(agentOfflineHint(getTcsAgentBaseUrl()));
+            return;
+          }
+        }
+        let res = await submitTcsPortalJob(payload);
+        for (let i = 0; i < 40 && res.error === "BUSY"; i++) {
+          setBusyLabel(`Tải PDF …${digits.slice(-8)} — chờ agent…`);
+          await new Promise((r) => window.setTimeout(r, 250));
+          res = await submitTcsPortalJob(payload);
+        }
+        if (
+          !res.ok &&
+          (res.error === "NEEDS_LOGIN" || res.error === "NO_BROWSER")
+        ) {
+          // Ext đã Đồng bộ ≠ agent Playwright sẵn sàng — tự mở/login agent rồi thử lại
+          setBusyLabel(`Mở phiên agent rồi tải PDF …${digits.slice(-8)}…`);
+          if (!(await ensureSessionReady())) return;
+          res = await submitTcsPortalJob(payload);
+          for (let i = 0; i < 40 && res.error === "BUSY"; i++) {
+            setBusyLabel(`Tải PDF …${digits.slice(-8)} — chờ agent…`);
+            await new Promise((r) => window.setTimeout(r, 250));
+            res = await submitTcsPortalJob(payload);
+          }
+        }
         const sec = ((performance.now() - t0) / 1000).toFixed(1);
         if (!res.ok) {
           setError(res.message || res.error || "Agent lỗi");
@@ -332,19 +428,33 @@ export function useTcsPortalActions({
           setError(row0?.error_message || status || "ESID thất bại");
           return;
         }
-        const hotNote = res.hot_path ? " · cache" : " · fallback";
+        const cacheHit = Boolean(res.cache_hit || row0?.cache_hit);
+        const hotNote = cacheHit
+          ? " · tức thì (cache)"
+          : res.hot_path
+            ? " · hot"
+            : " · cold";
         const pdfName = row0?.pdf_name || row0?.downloaded_file || "";
         const saved = pdfName ? await downloadPdfFromAgent(pdfName) : false;
-        setDownloadedCount(saved || pdfName ? 1 : 0);
+        setDownloadedCount(pdfName ? 1 : 0);
         const shortName = pdfName ? String(pdfName).replace(/^.*[/\\]/, "") : "";
+        if (!pdfName) {
+          setError(`Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — agent không trả tên file`);
+          return;
+        }
+        if (!saved) {
+          setError(
+            `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — không tải được về máy. Bấm «Tải PDF» bên dưới hoặc kiểm tra agent.`
+          );
+          setMessage(`File sẵn sàng: ${shortName}`);
+          return;
+        }
         setMessage(
-          saved
-            ? `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — đã tải ${shortName} về máy`
-            : pdfName
-              ? `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — file sẵn sàng, bấm «Tải PDF»`
-              : `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote}`
+          `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — đã tải ${shortName} về máy`
         );
-        void refreshHealth();
+        if (!cacheHit) {
+          void refreshHealth();
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Lỗi job ESID");
       } finally {
@@ -352,7 +462,7 @@ export function useTcsPortalActions({
         setBusyLabel("");
       }
     },
-    [ensureSessionReady, refreshHealth, sessionYmd]
+    [ensureSessionReady, health?.ok, refreshHealth, sessionYmd]
   );
 
   /** Điền ESID trên page KHAI BÁO cố định của workspace Playwright. */
@@ -559,6 +669,7 @@ export function useTcsPortalActions({
     downloadedCount,
     login,
     loginWithExtension,
+    refreshExtension,
     downloadEsidFor,
     fillEsidDeclareFor,
     submitEsidDeclare,
@@ -571,7 +682,6 @@ export function useTcsPortalActions({
         ? (extension?.workspace as TcsExtensionWorkspace | undefined)
         : health?.workspace) ?? null,
     refreshHealth,
-    refreshExtension,
   };
 }
 

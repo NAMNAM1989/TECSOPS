@@ -266,10 +266,11 @@ class EsidDeclarePage:
     @classmethod
     def _combobox_search_queries(cls, text: str) -> list[str]:
         """
-        Tạo tối đa 4 truy vấn đặc trưng. Không thử tuần tự 10 token chung chung
-        (LTD/TNHH/COMPANY...) vì mỗi lần remote search của TCS có thể tốn vài giây.
+        Tạo tối đa 5 truy vấn đặc trưng.
+        Không ưu tiên token ngành nghề chung (LOGISTICS/INTERNATIONAL) — dễ chọn nhầm master.
         """
-        raw = (text or "").strip()
+        raw_lines = (text or "").strip().splitlines()
+        raw = next((ln.strip() for ln in raw_lines if ln.strip()), "")
         if not raw:
             return []
         fold = cls._fold_text(raw)
@@ -289,18 +290,48 @@ class EsidDeclarePage:
             "CTCP",
             "TNHH",
             "LTD",
-            "CO",
             "COMPANY",
+            "CORP",
+            "CORPORATION",
+            "INC",
+            "LIMITED",
+            "LLC",
+            "PLC",
+            "INTERNATIONAL",
+            "LOGISTICS",
+            "EXPRESS",
+            "SHIPPING",
+            "TRADING",
+            "IMPORT",
+            "EXPORT",
+            "SERVICE",
+            "SERVICES",
+            "GROUP",
+            "HOLDINGS",
+            "GLOBAL",
+            "CARGO",
+            "FREIGHT",
+            "FORWARDING",
         }
         distinctive = [w for w in words if len(w) >= 3 and w not in stop]
+        rare_unique: list[str] = []
+        for w in distinctive:
+            if w not in rare_unique:
+                rare_unique.append(w)
         queries: list[str] = []
-        if distinctive:
-            # Mã/tên riêng ở cuối (PCS, HST...) thường khớp master chính xác nhất.
-            queries.append(distinctive[-1])
-            queries.append(max(distinctive, key=len))
+        # Luôn tên đầy đủ trước — tránh query "NAM" chọn nhầm shipper
+        queries.append(raw if len(raw) <= 48 else raw[:48].rstrip())
         if len(distinctive) >= 2:
-            queries.append(" ".join(distinctive[-2:]))
-        queries.append(raw if len(raw) <= 36 else raw[:36].rstrip())
+            queries.append(" ".join(distinctive[: min(3, len(distinctive))]))
+        if len(rare_unique) >= 2:
+            queries.append(" ".join(rare_unique[:2]))
+        long_rare = [w for w in rare_unique if len(w) >= 4]
+        if long_rare:
+            queries.append(max(long_rare, key=len))
+            queries.append(long_rare[0])
+        elif len(rare_unique) == 1 and len(distinctive) < 2:
+            # Chỉ token đơn (NET/PCS) — không thêm NAM khi đã có cụm NAM NAM
+            queries.append(rare_unique[0])
         seen: set[str] = set()
         out: list[str] = []
         for q in queries:
@@ -309,13 +340,84 @@ class EsidDeclarePage:
                 continue
             seen.add(qn)
             out.append(q.strip())
-        return out[:4]
+        return out[:5]
 
     def _visible_select_options(self):
         return self.page.locator(
             ".ant-select-dropdown:not(.ant-select-dropdown-hidden) "
             ".ant-select-item-option:not(.ant-select-item-option-disabled)"
         )
+
+    def _score_select_option(self, full_text: str, option_text: str) -> int:
+        fold_full = self._fold_text(full_text)
+        fold_opt = self._fold_text(option_text)
+        if not fold_full or not fold_opt:
+            return 0
+        if fold_opt == fold_full:
+            return 100
+        if fold_full in fold_opt or fold_opt in fold_full:
+            return 82
+        generic = {
+            "CONG",
+            "TY",
+            "CO",
+            "PHAN",
+            "VA",
+            "DICH",
+            "VU",
+            "CHI",
+            "NHANH",
+            "SO",
+            "CTY",
+            "CTCP",
+            "TNHH",
+            "LTD",
+            "COMPANY",
+            "CORP",
+            "CORPORATION",
+            "INC",
+            "LIMITED",
+            "LLC",
+            "INTERNATIONAL",
+            "LOGISTICS",
+            "EXPRESS",
+            "SHIPPING",
+            "TRADING",
+            "IMPORT",
+            "EXPORT",
+            "SERVICE",
+            "SERVICES",
+            "GROUP",
+            "HOLDINGS",
+            "GLOBAL",
+            "CARGO",
+            "FREIGHT",
+            "FORWARDING",
+            "AND",
+            "THE",
+        }
+        full_arr = [w for w in fold_full.split() if w]
+        opt_arr = [w for w in fold_opt.split() if w]
+        full_rare = [w for w in full_arr if len(w) >= 3 and w not in generic]
+        opt_rare = {w for w in opt_arr if len(w) >= 3 and w not in generic}
+        # Bắt buộc cụm token riêng (vd. NAM NAM) có trong option
+        if len(full_rare) >= 2:
+            phrase = " ".join(full_rare[: min(3, len(full_rare))])
+            if phrase and phrase not in fold_opt:
+                return 0
+        full_rare_unique: list[str] = []
+        for w in full_rare:
+            if w not in full_rare_unique:
+                full_rare_unique.append(w)
+        rare_common = sum(1 for w in full_rare_unique if w in opt_rare)
+        if not rare_common:
+            return 0
+        score = int(70 * rare_common / max(len(full_rare_unique), 1))
+        if full_rare_unique and full_rare_unique[0] in opt_rare:
+            score += 20
+        if full_arr and opt_arr and full_arr[-1] == opt_arr[-1] and full_arr[-1] not in generic:
+            score += 15
+        return score
 
     def _pick_combobox_option(self, full_text: str) -> bool:
         """Chọn option ant-select khớp nhất (không phân biệt dấu)."""
@@ -330,7 +432,6 @@ class EsidDeclarePage:
         if n <= 0:
             return False
 
-        full_words = set(fold_full.split())
         try:
             labels = opts.evaluate_all(
                 """els => els.slice(0, 24).map(el =>
@@ -344,32 +445,12 @@ class EsidDeclarePage:
         best_i = -1
         best_score = 0
         for i, label in enumerate(labels):
-            fold_opt = self._fold_text(label)
-            if not fold_opt:
-                continue
-            score = 0
-            if fold_opt == fold_full:
-                score = 100
-            elif fold_full in fold_opt or fold_opt in fold_full:
-                score = 82
-            else:
-                opt_words = set(fold_opt.split())
-                common = full_words & opt_words
-                if common:
-                    score = int(55 * len(common) / max(len(full_words), 1))
-                    # Ưu tiên mã ngắn cuối tên (PCS, HST…)
-                    if fold_full.split()[-1:] == fold_opt.split()[-1:]:
-                        score += 20
-                    # Token dài đặc trưng
-                    for w in common:
-                        if len(w) >= 5:
-                            score += 3
+            score = self._score_select_option(full_text, label)
             if score > best_score:
                 best_score = score
                 best_i = i
 
-        # Một option duy nhất sau khi filter remote → chấp nhận nếu có chút liên quan
-        min_score = 25 if n == 1 else 40
+        min_score = 45
         if best_i >= 0 and best_score >= min_score:
             try:
                 opts.nth(best_i).click(timeout=2000)
@@ -406,7 +487,10 @@ class EsidDeclarePage:
         budget_ms: int = 6500,
     ) -> bool:
         """Ant Select có ngân sách thời gian cứng; không để một master treo cả job."""
-        text = (value or "").strip()
+        text = next(
+            (ln.strip() for ln in (value or "").strip().splitlines() if ln.strip()),
+            "",
+        )
         if not text:
             return False
         deadline = time.monotonic() + max(1000, budget_ms) / 1000
@@ -441,7 +525,7 @@ class EsidDeclarePage:
                     pass
             self.page.wait_for_timeout(80)
 
-            for query in self._combobox_search_queries(text)[:max_queries]:
+            for query in self._combobox_search_queries(text)[: max(max_queries, 4)]:
                 if time.monotonic() >= deadline:
                     break
                 self._type_combobox_search(eid, target, query)
@@ -1649,14 +1733,14 @@ class EsidDeclarePage:
             ok = self._fill_combobox(
                 eid,
                 val,
-                max_queries=2,
-                budget_ms=3500,
+                max_queries=4,
+                budget_ms=7000,
             )
             fills[eid] = ok
             party_timings[eid] = int((time.perf_counter() - party_started) * 1000)
             if not ok:
                 warnings.append(
-                    f"Không chọn được master #{eid} trong 3.5s — để trống, không ghi đè text"
+                    f"Không chọn được master #{eid} trong 7s — để trống, không ghi đè text"
                 )
             else:
                 self.page.wait_for_timeout(120)

@@ -6,6 +6,7 @@ import { KpiStat, SyncStatusPill, Wordmark } from "../ui";
 import { statusLabel } from "./statusStyles";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { NewBookingButton } from "./NewBookingButton";
+import { OpsSheetImportButton } from "./OpsSheetImportButton";
 import { OpsToolsMenu } from "./OpsToolsMenu";
 import { WarehouseGridPicker } from "./WarehouseGridPicker";
 import { SmartSearchBar } from "./SmartSearchBar";
@@ -131,6 +132,11 @@ export function OpsMobileStickyHeader({
           />
         </div>
         <NewBookingButton iconOnly activeWarehouse={activeWarehouse} onAdd={onAddBooking} />
+        <OpsSheetImportButton
+          compact
+          onOpenSheetImport={onOpenSheetImport}
+          onPrefetchSheetImport={onPrefetchSheetImport}
+        />
         <OpsToolsMenu
           compact
           showDimScsc={showDimScsc}

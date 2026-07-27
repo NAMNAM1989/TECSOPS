@@ -228,7 +228,7 @@ class SessionManager:
                 st.visible_ok = False
                 tip = (
                     "Cloud headless: tiếp tục Quét → Điền → preview → HOÀN TẤT trên Ops. "
-                    "Máy kho: npm run tcs:agent:real. Desktop noVNC chỉ khi TCS_VNC=1."
+                    "Máy kho: npm run tcs:agent:real (headed). Cloud: agent headless + Chrome Ext."
                 )
                 if headed_err:
                     tip += f" (headed lỗi: {headed_err[:120]})"

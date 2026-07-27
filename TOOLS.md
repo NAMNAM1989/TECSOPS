@@ -43,20 +43,20 @@ Add whatever helps you do your job. This is your cheat sheet.
 
 - Thư mục: `chrome-extension/` — xem [chrome-extension/README.md](chrome-extension/README.md).
 - Mỗi máy nhập liệu: Load unpacked → Login TCS trên Chrome → Ops menu ⋮ → **Điền** → tự **HOÀN TẤT** trên TCS.
-- Badge thanh TCS: **Ext OK** / **Ext thiếu**. Không fallback noVNC khi thiếu extension.
-- Menu **Điền**: chỉ Chrome extension trên tab TCS. Hồ sơ **Agent ESID** = nút Agent trên thanh TCS. Quét / PDF vẫn qua Playwright.
+- Badge thanh TCS: **Ext OK** / **Ext thiếu**.
+- Menu **Điền**: Chrome extension trên tab TCS. Hồ sơ **Agent ESID** = nút Agent trên thanh TCS. Quét / PDF vẫn qua Playwright.
 
 ## TCS agent — máy kho (headed)
 
 - Chạy Ops + agent trên máy kho: `npm run dev` hoặc `npm run tcs:agent:real` → mặc định `TCS_HEADLESS=0` (Chrome thật).
-- Nút **Login** Ops → Chrome Playwright cho Quét/PDF (không dùng cho Điền).
-- Máy khác mở Ops qua IP máy kho; Điền chính vẫn dùng extension trên Chrome của người nhập liệu.
+- Đồng bộ / Quét / PDF qua Playwright; **Điền** chính = extension trên Chrome người nhập liệu.
+- Máy khác mở Ops qua IP máy kho.
 
-## TCS trên Railway — API-first (mặc định)
+## TCS trên Railway — API-first
 
-- Image mặc định: `TCS_VNC=0`, `TCS_HEADLESS=1` — Quét/PDF/Login agent từ Ops; **Điền** = extension trên máy user.
-- Desktop noVNC (chậm, dự phòng): Railway Variables `TCS_VNC=1` + `TCS_HEADLESS=0` (+ `DISPLAY=:99`). Nút Ops **Sửa tay**.
-- Volume `TCS_BROWSER_PROFILE` giữ session agent. Health: `GET /api/tcs-desktop` (`enabled` true/false).
+- Image: `TCS_HEADLESS=1` — Quét/PDF/Login agent từ Ops; **Điền** = Chrome Ext trên máy user.
+- Không còn noVNC / `TCS_VNC` / `/tcs-desktop`.
+- Volume `TCS_BROWSER_PROFILE` giữ session agent.
 
 ## Related
 

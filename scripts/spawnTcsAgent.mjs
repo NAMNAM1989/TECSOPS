@@ -2,7 +2,7 @@
  * Spawn sidecar TCS AWB agent (Playwright) trên :8765.
  * Dùng chung bởi `tcs-agent.mjs` và `dev.mjs` (auto-start).
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -11,6 +11,20 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const agentDir = path.join(root, "tcs-awb-automation");
 export const AGENT_PORT = Number(process.env.TCS_AGENT_PORT || 8765);
+
+/** True nếu interpreter import được ddddocr (OCR CAPTCHA cho Ext Đồng bộ). */
+function canImportDdddocr(pyBin) {
+  try {
+    const r = spawnSync(
+      pyBin,
+      ["-c", "import ddddocr; print('ok')"],
+      { encoding: "utf8", timeout: 20_000, windowsHide: true }
+    );
+    return r.status === 0 && String(r.stdout || "").includes("ok");
+  } catch {
+    return false;
+  }
+}
 
 export function resolveAgentPython() {
   const win = process.platform === "win32";
@@ -21,11 +35,25 @@ export function resolveAgentPython() {
     "python",
     "python3",
   ].filter(Boolean);
+
+  /** Ưu tiên interpreter có ddddocr — thiếu OCR = Ext Đồng bộ không tự login. */
+  let fallback = win ? "python" : "python3";
   for (const c of candidates) {
-    if (c === "python" || c === "python3") return c;
-    if (fs.existsSync(c)) return c;
+    const isBare = c === "python" || c === "python3";
+    if (!isBare && !fs.existsSync(c)) continue;
+    if (canImportDdddocr(c)) {
+      if (!isBare) console.info(`[tcs-agent] Python OCR-ready: ${c}`);
+      return c;
+    }
+    if (!isBare) {
+      console.warn(`[tcs-agent] Bỏ qua ${c} — thiếu ddddocr (pip install -r requirements.txt trong .venv)`);
+    }
+    fallback = c;
   }
-  return win ? "python" : "python3";
+  console.warn(
+    `[tcs-agent] CẢNH BÁO: không tìm thấy Python có ddddocr — /captcha/solve sẽ fail. Dùng: ${fallback}`
+  );
+  return fallback;
 }
 
 function canConnectTcp(host, port, timeoutMs = 800) {

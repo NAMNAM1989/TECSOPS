@@ -16,7 +16,6 @@ import { registerLookupRoutes } from "./lookupRoutes.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
 import { registerTcsAgentProxy } from "./tcsAgentProxy.mjs";
-import { registerTcsDesktopProxy } from "./tcsDesktopProxy.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
@@ -47,8 +46,6 @@ const io = new Server(httpServer, {
 
 // Proxy agent TRƯỚC express.json — giữ raw body cho POST /jobs, /esid/*
 registerTcsAgentProxy(app);
-// noVNC desktop (Xvfb) — HTTP + WebSocket upgrade trên cùng PORT
-registerTcsDesktopProxy(app, httpServer);
 
 app.use(express.json({ limit: "2mb" }));
 
@@ -81,12 +78,32 @@ app.get("/api/tcs-extension", (_req, res) => {
         "utf8"
       )
     );
+    const version = String(manifest.version || "").trim();
+    const downloadsDir = path.join(__dirname, "..", "public", "downloads");
+    const versionedName = version
+      ? `tecsops-chrome-extension-v${version}.zip`
+      : "tecsops-chrome-extension.zip";
+    const versionedPath = path.join(downloadsDir, versionedName);
+    const stablePath = path.join(downloadsDir, "tecsops-chrome-extension.zip");
+    const hasVersioned = version && fs.existsSync(versionedPath);
+    const hasStable = fs.existsSync(stablePath);
+    if (!hasVersioned && !hasStable) {
+      res.status(404).json({
+        ok: false,
+        error: "Chưa đóng gói Chrome Ext — chạy npm run prebuild (hoặc npm run build).",
+        version,
+      });
+      return;
+    }
     res.json({
       ok: true,
-      version: String(manifest.version || ""),
-      download_url: "/downloads/tecsops-chrome-extension.zip",
+      version,
+      filename: versionedName,
+      download_url: hasVersioned
+        ? `/downloads/${versionedName}`
+        : "/downloads/tecsops-chrome-extension.zip",
       install: [
-        "Giải nén ZIP vào một thư mục cố định",
+        `Giải nén ZIP (v${version || "?"}) vào một thư mục cố định`,
         "Mở chrome://extensions và bật Chế độ dành cho nhà phát triển",
         "Chọn Tải tiện ích đã giải nén rồi chọn thư mục vừa giải nén",
         "F5 trang Ops và tab TCS",

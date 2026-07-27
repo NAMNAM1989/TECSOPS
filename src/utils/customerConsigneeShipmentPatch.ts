@@ -38,13 +38,15 @@ export function formatSavedConsigneeOptionLabel(sc: CustomerSavedConsignee): str
   return label || name || sc.id;
 }
 
-/** Mã / tên ngắn trên lưới — không ghép label + tên pháp lý. */
+/** Nhãn trên lưới: ưu tiên tên CNEE trong hồ sơ khách; thiếu thì dùng label/mã. */
 export function formatSavedConsigneeShortLabel(sc: CustomerSavedConsignee): string {
+  const name = sc.consigneeName.trim();
+  if (name) {
+    return name.length > 36 ? `${name.slice(0, 34)}…` : name;
+  }
   const label = sc.label.trim();
   if (label) return label;
-  const name = sc.consigneeName.trim();
-  if (!name) return sc.id;
-  return name.length > 24 ? `${name.slice(0, 22)}…` : name;
+  return sc.id;
 }
 
 /** Tooltip / pop-up: tên pháp lý đầy đủ (tránh lặp WOO-HO — WOO-HO …). */

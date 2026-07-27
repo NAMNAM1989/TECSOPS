@@ -175,6 +175,47 @@ def test_workspace_bootstrap_route(tmp_path: Path, monkeypatch):
         httpd.shutdown()
 
 
+def test_job_waits_instead_of_immediate_busy(tmp_path: Path):
+    """Job thứ hai chờ slot thay vì 409 ngay — tránh race prefetch vs tải PDF."""
+    settings = _settings(tmp_path, agent_port=18770)
+    state = AgentState(settings)
+    httpd = ThreadingHTTPServer((settings.agent_host, settings.agent_port), make_handler(state))
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    time.sleep(0.2)
+    base = f"http://{settings.agent_host}:{settings.agent_port}"
+
+    def hold_slot():
+        assert state.acquire_running(timeout_s=1)
+        try:
+            time.sleep(0.6)
+        finally:
+            state.release_running()
+
+    try:
+        holder = threading.Thread(target=hold_slot, daemon=True)
+        holder.start()
+        time.sleep(0.05)
+        t0 = time.perf_counter()
+        ok = httpx.post(
+            f"{base}/jobs",
+            json={
+                "warehouse": "TECS-TCS",
+                "mock": True,
+                "dry_run": True,
+                "rows": [{"awb": "12312345670", "action": "DOWNLOAD", "shipment_id": "s1"}],
+            },
+            timeout=30,
+        )
+        elapsed = time.perf_counter() - t0
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["ok"] is True
+        assert elapsed >= 0.4, f"job không chờ slot ({elapsed:.2f}s)"
+        holder.join(timeout=5)
+    finally:
+        httpd.shutdown()
+
+
 def test_captcha_solve_route(tmp_path: Path, monkeypatch):
     from app.browser.captcha_ocr import CaptchaOcrResult
 

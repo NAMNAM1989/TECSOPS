@@ -113,7 +113,7 @@ def fill_esid_declare(
     if gate:
         return gate
 
-    # Đưa Chrome lên trước khi điền (headed / noVNC)
+    # Đưa Chrome lên trước khi điền (headed máy kho)
     sessions.focus_workspace_page("declare")
 
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
@@ -139,7 +139,7 @@ def fill_esid_declare(
                 result.setdefault("warnings", []).append(
                     f"Preview: {preview['preview_error']}"
                 )
-            # Đưa Chrome lên trước để nhìn form thật trên máy kho / noVNC
+            # Đưa Chrome lên trước để nhìn form thật trên máy kho
             if sessions.session is not None and not getattr(
                 sessions.session, "headless_mode", settings.headless
             ):

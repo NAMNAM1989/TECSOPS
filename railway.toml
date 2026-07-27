@@ -1,14 +1,16 @@
-# Dockerfile: Node + agent Playwright. Mặc định API-first (TCS_VNC=0 headless).
-# Ops → /tcs-agent. Bật noVNC: Variables TCS_VNC=1 (+ TCS_HEADLESS=0).
+# Dockerfile: Node + agent Playwright. API-first (headless).
+# Ops → /tcs-agent. Điền trực quan = Chrome Ext trên máy user.
+# Không còn noVNC / TCS_VNC.
+#
+# Build: Docker build từ Dockerfile (Railway dùng builder dockerfile).
+# startCommand: node scripts/start-fullstack.mjs
+# start-fullstack: agent headless mặc định (TCS_HEADLESS=1).
+# Volume TCS_BROWSER_PROFILE giữ session.
+
 [build]
-builder = "dockerfile"
+builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Postgres (DATABASE_URL) bắt buộc. Socket.IO in-memory — chạy 1 replica.
-# start-fullstack: agent headless mặc định; TCS_VNC=1 → Xvfb/noVNC + headed.
-# Volume TCS_BROWSER_PROFILE giữ session. TCS_VNC_PASSWORD tùy chọn.
-startCommand = "node scripts/start-fullstack.mjs"
 restartPolicyType = "ON_FAILURE"
-healthcheckPath = "/api/health"
-healthcheckTimeout = 180
+restartPolicyMaxRetries = 3

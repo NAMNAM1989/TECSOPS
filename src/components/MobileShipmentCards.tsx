@@ -26,13 +26,17 @@ import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 
 function formatMobileFlightMeta(row: Shipment): string {
   const parts: string[] = [];
-  if ((row.flight ?? "").trim()) parts.push((row.flight ?? "").trim());
+  const flight = (row.flight ?? "").trim();
+  const flightDate = (row.flightDate ?? "").trim().toUpperCase();
+  if (flight && flightDate) parts.push(`${flight}/${flightDate}`);
+  else if (flight) parts.push(flight);
+  else if (flightDate) parts.push(flightDate);
   if ((row.dest ?? "").trim()) parts.push((row.dest ?? "").trim());
   const dimKg = resolveShipmentDimWeightKg(row);
   if (dimKg != null) {
     parts.push(`DIM ${formatShipmentDimWeightDisplay(row)}`);
   }
-  return parts.join(" ·");
+  return parts.join(" · ");
 }
 
 function MobileQuickNumber({

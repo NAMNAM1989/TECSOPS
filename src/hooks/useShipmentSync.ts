@@ -27,6 +27,8 @@ type Fallback = { rows: Shipment[] };
 const SOCKET_IO_PATH = "/socket.io/" as const;
 const SOCKET_RECONNECT_DELAY_MS = 1000;
 const SOCKET_RECONNECT_DELAY_MAX_MS = 10000;
+const STATE_FETCH_ATTEMPTS = 3;
+const STATE_FETCH_RETRY_MS = 400;
 
 function pickNewerState(prev: AppState | null, next: AppState): AppState {
   return !prev || next.version >= prev.version ? next : prev;
@@ -41,6 +43,31 @@ function offlineBootstrapState(rows: Shipment[]): AppState {
   };
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchAppState(): Promise<AppState> {
+  const res = await fetch("/api/state", { ...credFetch, cache: "no-store" });
+  if (!res.ok) throw new Error(String(res.status));
+  const parsed = parseAppState(await res.json());
+  if (!parsed) throw new Error("Invalid state");
+  return parsed;
+}
+
+async function fetchAppStateWithRetry(attempts = STATE_FETCH_ATTEMPTS): Promise<AppState> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetchAppState();
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await sleep(STATE_FETCH_RETRY_MS * (i + 1));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 /**
  * Đồng bộ state lô hàng: fetch `/api/state`, Socket.IO `sync`, mutation POST hoặc chế độ offline + `localStorage`.
  */
@@ -50,88 +77,117 @@ export function useShipmentSync(fallback: Fallback) {
   const [state, setState] = useState<AppState | null>(null);
   const apiOkRef = useRef(false);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
+  const cancelledRef = useRef(false);
   const fallbackRef = useRef(fallback);
   fallbackRef.current = fallback;
 
+  const persistIfApplied = useCallback((prev: AppState | null, next: AppState, force: boolean) => {
+    const picked = force ? next : pickNewerState(prev, next);
+    if (force || picked === next) {
+      saveRows(picked.rows);
+      saveCustomerDirectoryToStorage(picked.customers);
+      hydrateEsidProfilesFromAppState(picked);
+      if (picked.airlineLabelOverrides) {
+        saveAirlineLabelOverridesToStorage(picked.airlineLabelOverrides);
+      }
+    }
+    return picked;
+  }, []);
+
+  const connectSocket = useCallback((version: number) => {
+    if (cancelledRef.current) return;
+    socketRef.current?.close();
+    const socket = io({
+      path: SOCKET_IO_PATH,
+      query: { v: String(version) },
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: SOCKET_RECONNECT_DELAY_MS,
+      reconnectionDelayMax: SOCKET_RECONNECT_DELAY_MAX_MS,
+    });
+    socketRef.current = socket;
+
+    const mergeIfNewer = (next: AppState) => {
+      if (cancelledRef.current) return;
+      setState((prev) => persistIfApplied(prev, next, false));
+    };
+
+    const onSync = (payload: unknown) => {
+      if (cancelledRef.current) return;
+      const next = parseAppState(payload);
+      if (next) mergeIfNewer(next);
+    };
+
+    socket.on("connect", () => {
+      if (cancelledRef.current) return;
+      setSocketConnected(true);
+      setStatus("live");
+    });
+    socket.on("disconnect", () => {
+      if (cancelledRef.current) return;
+      setSocketConnected(false);
+      if (apiOkRef.current) setStatus("degraded");
+    });
+    socket.on("sync", onSync);
+  }, [persistIfApplied]);
+
+  const goLiveFromParsed = useCallback(
+    (parsed: AppState) => {
+      apiOkRef.current = true;
+      setState(parsed);
+      saveRows(parsed.rows);
+      saveCustomerDirectoryToStorage(parsed.customers);
+      hydrateEsidProfilesFromAppState(parsed);
+      if (parsed.airlineLabelOverrides) {
+        saveAirlineLabelOverridesToStorage(parsed.airlineLabelOverrides);
+      }
+      setStatus("degraded");
+      connectSocket(parsed.version);
+    },
+    [connectSocket]
+  );
+
   useEffect(() => {
-    let cancelled = false;
+    cancelledRef.current = false;
 
     (async () => {
-      let parsed: any = null;
       try {
-        const res = await fetch("/api/state", { ...credFetch, cache: "no-store" });
-        if (!res.ok) throw new Error(String(res.status));
-        parsed = parseAppState(await res.json());
-        if (!parsed) throw new Error("Invalid state");
-        if (cancelled) return;
-        apiOkRef.current = true;
-        setState(parsed);
-        saveRows(parsed.rows);
-        saveCustomerDirectoryToStorage(parsed.customers);
-        hydrateEsidProfilesFromAppState(parsed);
-        setStatus("degraded");
+        const parsed = await fetchAppStateWithRetry();
+        if (cancelledRef.current) return;
+        goLiveFromParsed(parsed);
       } catch (e) {
-        if (cancelled) return;
+        if (cancelledRef.current) return;
         debugWarn("sync:/api/state", e);
         apiOkRef.current = false;
         setSocketConnected(false);
         setState(offlineBootstrapState(fallbackRef.current.rows));
         setStatus("offline");
-        return;
       }
-
-      if (cancelled) return;
-
-      const socket = io({
-        path: SOCKET_IO_PATH,
-        query: { v: parsed ? parsed.version.toString() : "0" },
-        transports: ["websocket", "polling"],
-        withCredentials: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: SOCKET_RECONNECT_DELAY_MS,
-        reconnectionDelayMax: SOCKET_RECONNECT_DELAY_MAX_MS,
-      });
-      socketRef.current = socket;
-
-      const mergeIfNewer = (next: AppState) => {
-        if (cancelled) return;
-        setState((prev) => {
-          const picked = pickNewerState(prev, next);
-          if (picked === next || (prev && picked.version !== prev.version)) {
-            saveRows(picked.rows);
-            saveCustomerDirectoryToStorage(picked.customers);
-            hydrateEsidProfilesFromAppState(picked);
-          }
-          return picked;
-        });
-      };
-
-      const onSync = (payload: unknown) => {
-        if (cancelled) return;
-        const next = parseAppState(payload);
-        if (next) mergeIfNewer(next);
-      };
-
-      socket.on("connect", () => {
-        if (cancelled) return;
-        setSocketConnected(true);
-        setStatus("live");
-      });
-      socket.on("disconnect", () => {
-        if (cancelled) return;
-        setSocketConnected(false);
-        if (apiOkRef.current) setStatus("degraded");
-      });
-      socket.on("sync", onSync);
     })();
 
+    const onOnline = () => {
+      if (cancelledRef.current || apiOkRef.current) return;
+      void (async () => {
+        try {
+          const parsed = await fetchAppStateWithRetry();
+          if (cancelledRef.current) return;
+          goLiveFromParsed(parsed);
+        } catch (e) {
+          debugWarn("sync:online-retry", e);
+        }
+      })();
+    };
+    window.addEventListener("online", onOnline);
+
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
+      window.removeEventListener("online", onOnline);
       setSocketConnected(false);
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, []);
+  }, [goLiveFromParsed]);
 
   const mutate = useCallback(async (mutation: ShipmentMutation): Promise<AppState | null> => {
     if (!apiOkRef.current) {
@@ -193,20 +249,29 @@ export function useShipmentSync(fallback: Fallback) {
       if (!next) {
         throw new Error("Phản hồi máy chủ không hợp lệ sau khi lưu.");
       }
-      setState((prev) => pickNewerState(prev, next));
-      saveRows(next.rows);
-      if (mutation.action === "SET_CUSTOMERS" || mutation.action === "RESET_TRIAL_DATA") {
-        saveCustomerDirectoryToStorage(next.customers);
-      }
-      if (
-        mutation.action === "SET_ESID_REGISTRANT_STORE" ||
-        mutation.action === "SET_ESID_AGENT_STORE" ||
-        next.esidRegistrantStore ||
-        next.esidAgentStore
-      ) {
-        hydrateEsidProfilesFromAppState(next);
-      }
-      return next;
+      let applied: AppState = next;
+      setState((prev) => {
+        applied = pickNewerState(prev, next);
+        if (applied === next) {
+          saveRows(next.rows);
+          if (mutation.action === "SET_CUSTOMERS" || mutation.action === "RESET_TRIAL_DATA") {
+            saveCustomerDirectoryToStorage(next.customers);
+          }
+          if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
+            saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
+          }
+          if (
+            mutation.action === "SET_ESID_REGISTRANT_STORE" ||
+            mutation.action === "SET_ESID_AGENT_STORE" ||
+            next.esidRegistrantStore ||
+            next.esidAgentStore
+          ) {
+            hydrateEsidProfilesFromAppState(next);
+          }
+        }
+        return applied;
+      });
+      return applied;
     } catch (e) {
       if (rollbackRef.current) {
         setState(rollbackRef.current);
@@ -219,30 +284,22 @@ export function useShipmentSync(fallback: Fallback) {
   const refreshState = useCallback(async (): Promise<void> => {
     if (!apiOkRef.current) return;
     try {
-      const res = await fetch("/api/state", { ...credFetch, cache: "no-store" });
-      if (!res.ok) throw new Error(String(res.status));
-      const parsed = parseAppState(await res.json());
-      if (parsed) {
-        setState((prev) => pickNewerState(prev, parsed));
-        saveRows(parsed.rows);
-        saveCustomerDirectoryToStorage(parsed.customers);
-      }
+      const parsed = await fetchAppState();
+      setState((prev) => persistIfApplied(prev, parsed, false));
     } catch (e) {
       debugWarn("sync:refresh", e);
     }
-  }, []);
+  }, [persistIfApplied]);
 
-  const applyRemoteState = useCallback((raw: unknown, opts?: { force?: boolean }): boolean => {
-    const parsed = parseAppState(raw);
-    if (!parsed) return false;
-    setState((prev) => {
-      if (opts?.force) return parsed;
-      return pickNewerState(prev, parsed);
-    });
-    saveRows(parsed.rows);
-    saveCustomerDirectoryToStorage(parsed.customers);
-    return true;
-  }, []);
+  const applyRemoteState = useCallback(
+    (raw: unknown, opts?: { force?: boolean }): boolean => {
+      const parsed = parseAppState(raw);
+      if (!parsed) return false;
+      setState((prev) => persistIfApplied(prev, parsed, Boolean(opts?.force)));
+      return true;
+    },
+    [persistIfApplied]
+  );
 
   return { status, state, mutate, socketConnected, refreshState, applyRemoteState };
 }

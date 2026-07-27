@@ -57,4 +57,49 @@ describe("state mutation contract (server)", () => {
       })
     ).toThrow(/Unknown action/);
   });
+
+  it("ADD derive status từ dữ liệu (pcs+awb → RECEIVED), không kẹt PENDING cứng", () => {
+    const state = baseContractState();
+    const addMut = {
+      action: "ADD",
+      shipment: {
+        ...baseContractRow("placeholder"),
+        awb: "978-23804012",
+        flight: "VJ842",
+        pcs: 10,
+        kg: 50,
+        dimWeightKg: null,
+        dimLines: null,
+        status: "PENDING",
+      },
+    };
+    delete addMut.shipment.id;
+    delete addMut.shipment.stt;
+    const afterAdd = applyMutation(structuredClone(state), addMut);
+    const added = afterAdd.rows.find((r) => String(r.awb).includes("978"));
+    expect(added?.status).toBe("RECEIVED");
+  });
+
+  it("RESET_TRIAL_DATA bị chặn khi NODE_ENV=production trừ ALLOW_RESET_TRIAL_DATA=1", () => {
+    const prevNode = process.env.NODE_ENV;
+    const prevAllow = process.env.ALLOW_RESET_TRIAL_DATA;
+    try {
+      process.env.NODE_ENV = "production";
+      delete process.env.ALLOW_RESET_TRIAL_DATA;
+      expect(() =>
+        applyMutation(structuredClone(baseContractState()), { action: "RESET_TRIAL_DATA" })
+      ).toThrow(/RESET_TRIAL_DATA/);
+
+      process.env.ALLOW_RESET_TRIAL_DATA = "1";
+      const wiped = applyMutation(structuredClone(baseContractState()), {
+        action: "RESET_TRIAL_DATA",
+      });
+      expect(wiped.rows).toEqual([]);
+      expect(wiped.customers).toEqual([]);
+    } finally {
+      process.env.NODE_ENV = prevNode;
+      if (prevAllow === undefined) delete process.env.ALLOW_RESET_TRIAL_DATA;
+      else process.env.ALLOW_RESET_TRIAL_DATA = prevAllow;
+    }
+  });
 });

@@ -238,6 +238,15 @@ export function applyMutation(state, mutation) {
       return finishState(state, rows, { customers: list });
     }
     case "RESET_TRIAL_DATA": {
+      /** Production: chặn wipe toàn bộ state qua API mở (không auth). */
+      const allow =
+        process.env.ALLOW_RESET_TRIAL_DATA === "1" ||
+        process.env.NODE_ENV !== "production";
+      if (!allow) {
+        throw new Error(
+          "RESET_TRIAL_DATA bị tắt trên production (đặt ALLOW_RESET_TRIAL_DATA=1 nếu thật sự cần)."
+        );
+      }
       /** Xóa lô + danh bạ thử nghiệm; giữ tên hãng / profile máy in. */
       return finishState(state, [], { customers: [] });
     }
@@ -287,7 +296,8 @@ export function applyMutation(state, mutation) {
       }
       assertAwbUnique(rows, s.awb, null);
       const id = nextNewId(rows);
-      rows.push({ ...s, id });
+      const withId = { ...s, id };
+      rows.push({ ...withId, status: migrateShipmentStatus(withId) });
       break;
     }
     default:

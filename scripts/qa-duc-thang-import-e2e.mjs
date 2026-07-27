@@ -106,6 +106,16 @@ async function clickDefaultsSubTab(page, name) {
   await page.waitForTimeout(300);
 }
 
+async function readShipperFormValues(page) {
+  const main = page.locator("main");
+  const address = await main.locator("textarea").first().inputValue().catch(() => "");
+  const inputs = main.locator('input:not([type="search"]):not([type="file"])');
+  const values = await inputs.evaluateAll((els) =>
+    els.map((el) => el.value),
+  );
+  return { address, inputs: values.join("\n") };
+}
+
 async function selectedCustomerText(page) {
   const row = page.locator("[data-customer-id].ring-ui-primary\\/35").first();
   if (await row.count()) return row.innerText();
@@ -158,16 +168,19 @@ async function main() {
 
     await page.getByRole("tab", { name: "Dữ liệu mặc định" }).click();
     await page.waitForTimeout(400);
-    const afterShipper = await readDefaultsPane(page);
+    const shipperForm = await readShipperFormValues(page);
 
     if (
-      afterShipper.includes(rowData.shipperAddress) ||
-      afterShipper.includes(rowData.phone) ||
-      afterShipper.includes(rowData.email)
+      shipperForm.address.includes(rowData.shipperAddress) ||
+      shipperForm.inputs.includes(rowData.phone) ||
+      shipperForm.inputs.includes(rowData.email)
     ) {
-      ok("DTE-CODE-ADDR", "Thông tin người gửi cập nhật trong Dữ liệu mặc định");
+      ok("DTE-CODE-ADDR", "Thông tin người gửi cập nhật trong form Dữ liệu mặc định");
     } else {
-      fail("DTE-CODE-ADDR", "Không thấy dữ liệu người gửi mới ở tab Người gửi");
+      fail(
+        "DTE-CODE-ADDR",
+        `Không thấy dữ liệu người gửi trong input (addr=${shipperForm.address.slice(0, 40)}…)`,
+      );
     }
 
     await clickDefaultsSubTab(page, /CNEE \(\d+\)/);
@@ -201,6 +214,12 @@ async function main() {
       ok("DTE-SAVE-SERVER", "Sau Lưu: CNEE có trên server");
     } else {
       fail("DTE-SAVE-SERVER", `Sau Lưu server chưa có CNEE: ${JSON.stringify(dte?.savedConsignees)}`);
+    }
+    const shp = dte?.savedShippers?.find((s) => s.id === dte.defaultShipperId);
+    if (shp?.shipperAddress?.includes("999") || shp?.shipperPhone === rowData.phone) {
+      ok("DTE-SAVE-SHIPPER", "Sau Lưu: người gửi có trên server");
+    } else {
+      fail("DTE-SAVE-SHIPPER", `Sau Lưu shipper chưa cập nhật: ${JSON.stringify(shp)}`);
     }
 
     // --- Kịch bản 2: Mã KH «ĐỨC THẮNG» (shortCode) thay vì DTE ---

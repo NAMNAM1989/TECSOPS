@@ -9,7 +9,6 @@ import {
   downloadTcsAttachedDimsExcel,
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
-import { canExportEsidDeclare, downloadEsidDeclareExcel } from "../utils/exportEsidDeclareExcel";
 import { awbDigitsKey } from "../utils/awbFormat";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { OPS } from "../styles/opsModalStyles";
@@ -102,7 +101,7 @@ function menuPositionFromTrigger(btn: HTMLElement): CSSProperties {
 
 export function ShipmentRowActionsMenu({
   row,
-  customerDirectory,
+  customerDirectory: _customerDirectory,
   onPrint,
   onDelete,
   compact = false,
@@ -118,14 +117,12 @@ export function ShipmentRowActionsMenu({
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   const showTcsEsid = isTcsWarehouse(row.warehouse) && Boolean(tcs);
-  const showEsidExcel = canExportEsidDeclare(row);
   const showFillEsid = showTcsEsid && awbDigitsKey(row.awb).length === 11;
   const menuExtras =
     (showDim ? 1 : 0) +
     (showTcsDim ? 2 : 0) +
     (showTcsEsid ? 1 : 0) +
     (showFillEsid ? 1 : 0) +
-    (showEsidExcel ? 1 : 0) +
     1;
 
   const confirmDelete = () => {
@@ -245,16 +242,6 @@ export function ShipmentRowActionsMenu({
               },
               undefined,
               `row-pdf-esid-${row.id}`
-            )
-          : null}
-        {showEsidExcel
-          ? menuItem(
-              "Excel khai báo ESID",
-              () => {
-                void downloadEsidDeclareExcel(row, customerDirectory);
-              },
-              undefined,
-              `row-excel-esid-declare-${row.id}`
             )
           : null}
         {menuExtras > 1 ? <div className={`my-0.5 border-t ${OPS.border}`} aria-hidden /> : null}

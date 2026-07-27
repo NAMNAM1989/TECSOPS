@@ -8,7 +8,7 @@ import {
   setCachedSessionTab,
   setCachedTabList,
 } from "./sheetFetchCache.mjs";
-import { parseSpreadsheetIdFromInput } from "./spreadsheetIdParse.mjs";
+import { parseSpreadsheetIdFromInput, parseSheetGidFromInput } from "./spreadsheetIdParse.mjs";
 
 const MONTHS3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const MONTHS_FULL = [
@@ -314,6 +314,28 @@ export async function fetchBookHangNgayGridForSession(
   const listTabs = deps.listTabs ?? listPublicBookSheetTabs;
   const fetchByGid = deps.fetchByGid ?? fetchGoogleSheetGridByGid;
   const fetchByName = deps.fetchByName ?? fetchGoogleSheetGrid;
+  const preferredGid = String(deps.preferredGid ?? "").trim();
+
+  if (preferredGid) {
+    let tabs = [];
+    try {
+      tabs = await loadTabList(id, listTabs);
+    } catch {
+      tabs = [];
+    }
+    const hit = tabs.find((t) => String(t.gid) === preferredGid);
+    const resolved = hit
+      ? { title: hit.title, gid: hit.gid }
+      : { title: `gid=${preferredGid}`, gid: preferredGid };
+    const grid = await fetchResolvedBookGrid(id, resolved, fetchByGid, fetchByName);
+    if (!isLikelyBookHangNgayGrid(grid)) {
+      throw new Error(
+        `Tab gid=${preferredGid}${hit ? ` («${hit.title}»)` : ""} không giống mẫu BOOK HẰNG NGÀY.`
+      );
+    }
+    cacheResolvedSessionTab(id, sessionYmd, resolved);
+    return { grid, sheetTab: resolved.title, gid: resolved.gid };
+  }
 
   const sessionCandidates = bookSheetTabCandidates(sessionYmd);
   if (!sessionCandidates.length) throw new Error("sessionDate phải dạng YYYY-MM-DD.");

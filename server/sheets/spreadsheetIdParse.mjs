@@ -21,6 +21,29 @@ export function parseSpreadsheetIdFromInput(raw) {
 }
 
 /**
+ * Trích gid tab từ query/hash URL Google Sheets (?gid=… #gid=…).
+ * @param {string} raw
+ * @returns {string}
+ */
+export function parseSheetGidFromInput(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  const hit = s.match(/[?#&]gid=(\d+)/);
+  return hit?.[1] ?? "";
+}
+
+/**
+ * @param {string} raw
+ * @returns {{ spreadsheetId: string, sheetGid: string }}
+ */
+export function parseSheetLinkFromInput(raw) {
+  return {
+    spreadsheetId: parseSpreadsheetIdFromInput(raw),
+    sheetGid: parseSheetGidFromInput(raw),
+  };
+}
+
+/**
  * @param {string} raw
  * @returns {string}
  */

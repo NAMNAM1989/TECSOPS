@@ -43,7 +43,10 @@ describe("fetchBookHangNgayGridForSession", () => {
   });
 
   it("resolve đúng tab 13", async () => {
-    const fakeGrid = [{ rowIndex: 0, cells: ["x"] }];
+    const fakeGrid = [
+      { rowIndex: 0, cells: ["", "AWB BOOKING", "", "", "", "", "", "", "", "", "", ""] },
+      { rowIndex: 1, cells: ["VLC-TECS", "555-1234 5678", "VN001", "13JUL", "", "SIN", "", "1", "10", "", "", "TEST"] },
+    ];
     const result = await fetchBookHangNgayGridForSession("spreadsheet-id", "2026-07-13", "", {
       listTabs: async () => tabs,
       fetchByGid: async (_id, gid) => {
@@ -54,6 +57,28 @@ describe("fetchBookHangNgayGridForSession", () => {
     expect(result.sheetTab).toBe("NGÀY 13 JUL");
     expect(result.gid).toBe("2");
     expect(result.grid).toBe(fakeGrid);
+  });
+
+  it("ưu tiên gid từ link — tab không cần trùng ngày phiên Ops", async () => {
+    const fakeGrid = Array.from({ length: 10 }, (_, i) => ({
+      rowIndex: i,
+      cells:
+        i === 0
+          ? ["", "AWB BOOKING", "", "", "", "", "", "", "", "", "", ""]
+          : i === 1
+            ? ["VLC-TECS", "555-1234 5678", "VN001", "24JUL", "", "SIN", "", "1", "10", "", "", "TEST"]
+            : ["", "", "", "", "", "", "", "", "", "", "", ""],
+    }));
+    const result = await fetchBookHangNgayGridForSession("spreadsheet-gid-test", "2026-07-27", "", {
+      listTabs: async () => [{ gid: "1927213684", title: "NGÀY 24 JUL" }, ...tabs],
+      preferredGid: "1927213684",
+      fetchByGid: async (_id, gid) => {
+        expect(gid).toBe("1927213684");
+        return fakeGrid;
+      },
+    });
+    expect(result.sheetTab).toBe("NGÀY 24 JUL");
+    expect(result.gid).toBe("1927213684");
   });
 
   it("parse spreadsheetId từ URL trong fetch", async () => {

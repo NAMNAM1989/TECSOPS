@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseGoogleSpreadsheetId } from "./googleSheetUrl";
+import { parseGoogleSpreadsheetId, parseGoogleSheetLink } from "./googleSheetUrl";
 
 describe("parseGoogleSpreadsheetId", () => {
   it("lấy id từ URL docs.google.com", () => {
@@ -18,7 +18,18 @@ describe("parseGoogleSpreadsheetId", () => {
   });
 
   it("từ chối rỗng / URL sai", () => {
-    expect(parseGoogleSpreadsheetId("").ok).toBe(false);
-    expect(parseGoogleSpreadsheetId("https://example.com/sheet").ok).toBe(false);
+    expect(parseGoogleSheetLink("").ok).toBe(false);
+    expect(parseGoogleSheetLink("https://example.com/sheet").ok).toBe(false);
+  });
+
+  it("trích gid từ URL", () => {
+    const r = parseGoogleSheetLink(
+      "https://docs.google.com/spreadsheets/d/15EHqZuuYznL2_VkCnpENHgc_mmBTSJGgrNG3iv5ZvA4/edit?gid=1927213684#gid=1927213684"
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.spreadsheetId).toBe("15EHqZuuYznL2_VkCnpENHgc_mmBTSJGgrNG3iv5ZvA4");
+      expect(r.sheetGid).toBe("1927213684");
+    }
   });
 });

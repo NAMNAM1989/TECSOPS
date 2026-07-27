@@ -36,6 +36,9 @@ export type SheetBookSyncResult = {
   sessionDate: string;
   sessionFlightDate: string;
   sheetTab: string;
+  expectedSheetTab?: string;
+  sheetTabMismatch?: boolean;
+  sheetGid?: string;
   spreadsheetId: string;
   syncedAt: string;
   totalInTab: number;

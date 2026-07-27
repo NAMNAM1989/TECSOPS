@@ -4,7 +4,7 @@ import {
   getBookSpreadsheetShareUrl,
   sessionYmdToBookSheetTab,
 } from "./googleSheetFetch.mjs";
-import { parseSpreadsheetIdFromInput } from "./spreadsheetIdParse.mjs";
+import { parseSpreadsheetIdFromInput, parseSheetGidFromInput } from "./spreadsheetIdParse.mjs";
 import { getCachedGrid, getCachedGridForSession, getCachedSyncResult, setCachedGrid, setCachedSyncResult, syncResultCacheKey } from "./sheetFetchCache.mjs";
 import { parseBookHangNgayGrid } from "./bookHangNgayParser.mjs";
 import { sessionYmdToFlightDateToken } from "./bookDateMatch.mjs";
@@ -46,9 +46,16 @@ function findExistingOtherSessionIndexed(indexes, awb) {
   return indexes.otherSession.get(key) ?? null;
 }
 
-async function loadBookGridForSession(spreadsheetId, sessionDate, preferredTab, forceRefresh = false) {
+async function loadBookGridForSession(
+  spreadsheetId,
+  sessionDate,
+  preferredTab,
+  forceRefresh = false,
+  preferredGid = ""
+) {
   const preferred = String(preferredTab ?? "").trim();
-  if (!forceRefresh) {
+  const gid = String(preferredGid ?? "").trim();
+  if (!forceRefresh && !gid) {
     const cachedSession = getCachedGridForSession(spreadsheetId, sessionDate);
     if (cachedSession?.grid?.length) {
       return { grid: cachedSession.grid, sheetTab: cachedSession.sheetTab, gid: "" };
@@ -61,13 +68,14 @@ async function loadBookGridForSession(spreadsheetId, sessionDate, preferredTab, 
     }
   }
 
-  const { grid, sheetTab, gid } = await fetchBookHangNgayGridForSession(
+  const { grid, sheetTab, gid: resolvedGid } = await fetchBookHangNgayGridForSession(
     spreadsheetId,
     sessionDate,
-    preferredTab
+    preferredTab,
+    { preferredGid: gid }
   );
   setCachedGrid(spreadsheetId, sessionDate, sheetTab, grid);
-  return { grid, sheetTab, gid };
+  return { grid, sheetTab, gid: resolvedGid };
 }
 
 function parsedRowToShipment(row, sessionDate, customers) {
@@ -162,10 +170,16 @@ function mapSyncRow(
  * @param {import('express').Express} app
  * @param {{ io?: import('socket.io').Server }} deps
  */
-function resolveSpreadsheetIdFromRequest(raw) {
+function resolveSheetLinkFromRequest(raw, explicitGid = "") {
   const s = String(raw ?? "").trim();
-  if (!s) return getBookSpreadsheetId();
-  return parseSpreadsheetIdFromInput(s);
+  const gid = String(explicitGid ?? "").trim();
+  if (!s) {
+    return { spreadsheetId: getBookSpreadsheetId(), sheetGid: gid };
+  }
+  return {
+    spreadsheetId: parseSpreadsheetIdFromInput(s),
+    sheetGid: gid || parseSheetGidFromInput(s),
+  };
 }
 
 export function registerSheetsRoutes(app, deps) {
@@ -194,14 +208,18 @@ export function registerSheetsRoutes(app, deps) {
       const preferredTab = String(req.query.sheetTab ?? "").trim();
       const forceRefresh = req.query.refresh === "1" || req.query.refresh === "true";
       let spreadsheetId;
+      let sheetGid;
       try {
-        spreadsheetId = resolveSpreadsheetIdFromRequest(req.query.spreadsheetId);
+        ({ spreadsheetId, sheetGid } = resolveSheetLinkFromRequest(
+          req.query.spreadsheetId,
+          req.query.gid ?? req.query.sheetGid
+        ));
       } catch (e) {
         res.status(400).json({ error: String(e?.message ?? e) });
         return;
       }
 
-      if (!forceRefresh) {
+      if (!forceRefresh && !sheetGid) {
         try {
           const stateVersion = await peekStateVersion();
           const syncKey = syncResultCacheKey(spreadsheetId, sessionDate, stateVersion);
@@ -219,11 +237,19 @@ export function registerSheetsRoutes(app, deps) {
         spreadsheetId,
         sessionDate,
         preferredTab,
-        forceRefresh
+        forceRefresh,
+        sheetGid
       );
       // Ngày phiên = ngày tab đã resolve — giữ mọi dòng trên tab (không lọc cutoff).
       const parsed = parseBookHangNgayGrid(grid, sessionDate);
       const sessionFlightDate = sessionYmdToFlightDateToken(sessionDate);
+      let expectedSheetTab = "";
+      try {
+        expectedSheetTab = sessionYmdToBookSheetTab(sessionDate);
+      } catch {
+        expectedSheetTab = "";
+      }
+      const sheetTabMismatch = Boolean(expectedSheetTab && sheetTab !== expectedSheetTab);
       const state = await loadState();
       const customers = Array.isArray(state.customers) ? state.customers : [];
       const customerLookups = buildCustomerLookups(customers);
@@ -247,6 +273,9 @@ export function registerSheetsRoutes(app, deps) {
         sessionDate,
         sessionFlightDate,
         sheetTab,
+        expectedSheetTab: expectedSheetTab || undefined,
+        sheetTabMismatch,
+        sheetGid: sheetGid || undefined,
         spreadsheetId,
         syncedAt: new Date().toISOString(),
         totalInTab: parsed.length,
@@ -285,8 +314,12 @@ export function registerSheetsRoutes(app, deps) {
       }
 
       let spreadsheetId;
+      let sheetGid;
       try {
-        spreadsheetId = resolveSpreadsheetIdFromRequest(body?.spreadsheetId);
+        ({ spreadsheetId, sheetGid } = resolveSheetLinkFromRequest(
+          body?.spreadsheetId,
+          body?.gid ?? body?.sheetGid
+        ));
       } catch (e) {
         res.status(400).json({ error: String(e?.message ?? e) });
         return;
@@ -294,7 +327,9 @@ export function registerSheetsRoutes(app, deps) {
       const { grid } = await loadBookGridForSession(
         spreadsheetId,
         sessionDate,
-        preferredTab
+        preferredTab,
+        false,
+        sheetGid
       );
       const parsed = parseBookHangNgayGrid(grid, sessionDate);
       const pickSet = new Set(indices.filter((n) => Number.isInteger(n) && n >= 0));

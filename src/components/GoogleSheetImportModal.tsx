@@ -15,7 +15,7 @@ import {
   fetchBookSheetConfig,
   syncBookGoogleSheet,
 } from "../utils/googleSheetBookApi";
-import { parseGoogleSpreadsheetId } from "../utils/googleSheetUrl";
+import { parseGoogleSheetLink } from "../utils/googleSheetUrl";
 import {
   normalizeWarehouse,
   warehouseLabel,
@@ -142,7 +142,7 @@ export function GoogleSheetImportModal({
   const fetchAndSelect = useCallback(
     async (refresh: boolean) => {
       if (loading || applying) return;
-      const parsed = parseGoogleSpreadsheetId(sheetUrl);
+      const parsed = parseGoogleSheetLink(sheetUrl);
       if (!parsed.ok) {
         setError(parsed.error);
         setSync(null);
@@ -161,6 +161,7 @@ export function GoogleSheetImportModal({
       try {
         const result = await syncBookGoogleSheet(sessionYmd, {
           spreadsheetId: parsed.spreadsheetId,
+          sheetGid: parsed.sheetGid,
           refresh,
         });
         setSync(result);
@@ -261,6 +262,7 @@ export function GoogleSheetImportModal({
         [...selected],
         sync.sheetTab,
         sync.spreadsheetId,
+        sync.sheetGid
       );
       const touched = [...(result.applied ?? []), ...(result.updated ?? [])];
       const appliedByWarehouse = countByWarehouse(touched);
@@ -353,8 +355,8 @@ export function GoogleSheetImportModal({
               className="w-full rounded-lg border border-ui-border bg-ui-surface px-2.5 py-2 text-xs outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus disabled:opacity-50"
             />
             <p className="mt-1 text-[10px] leading-snug text-ui-text-muted">
-              Sheet phải share «Anyone with the link can view». Tab trùng ngày phiên Ops (vd. «NGÀY 25 JUL»).
-              Dán link rồi bấm «Tải dòng».
+              Dán link tab đang mở trên Google (có gid) hoặc link file. Share «Anyone with the link
+              can view». Bấm «Tải dòng» sau khi dán.
             </p>
           </label>
           <div className="flex flex-wrap items-center gap-2">
@@ -427,6 +429,13 @@ export function GoogleSheetImportModal({
                 : ""}
             </span>
           )}
+          {sync?.sheetTabMismatch ? (
+            <p className="w-full text-[10px] font-medium text-amber-800">
+              Tab Sheet «{sync.sheetTab}» khác ngày phiên Ops
+              {sync.expectedSheetTab ? ` (kỳ vọng «${sync.expectedSheetTab}»)` : ""}. Lô vẫn nhập vào
+              phiên {sync.sessionDate}.
+            </p>
+          ) : null}
           </div>
         </div>
 

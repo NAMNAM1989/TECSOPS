@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSpreadsheetIdFromInput, resolveSpreadsheetId } from "./spreadsheetIdParse.mjs";
+import { parseSpreadsheetIdFromInput, parseSheetGidFromInput, resolveSpreadsheetId } from "./spreadsheetIdParse.mjs";
 
 describe("parseSpreadsheetIdFromInput", () => {
   it("nhận ID thuần", () => {
@@ -37,5 +37,13 @@ describe("parseSpreadsheetIdFromInput", () => {
 
   it("resolveSpreadsheetId bắt buộc có ID", () => {
     expect(() => resolveSpreadsheetId("")).toThrow(/Thiếu ID/);
+  });
+
+  it("trích gid từ hash/query", () => {
+    expect(
+      parseSheetGidFromInput(
+        "https://docs.google.com/spreadsheets/d/abc/edit?gid=1927213684#gid=1927213684"
+      )
+    ).toBe("1927213684");
   });
 });

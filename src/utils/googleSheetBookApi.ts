@@ -19,9 +19,10 @@ export async function fetchBookSheetConfig(): Promise<SheetBookConfig> {
 
 export async function syncBookGoogleSheet(
   sessionDate: string,
-  opts: { spreadsheetId: string; refresh?: boolean }
+  opts: { spreadsheetId: string; sheetGid?: string; refresh?: boolean }
 ): Promise<SheetBookSyncResult> {
   const q = new URLSearchParams({ sessionDate, spreadsheetId: opts.spreadsheetId });
+  if (opts.sheetGid) q.set("gid", opts.sheetGid);
   if (opts.refresh) q.set("refresh", "1");
   const res = await fetch(`/api/sheets/book/sync?${q}`, { ...credFetch });
   const data = await res.json().catch(() => ({}));
@@ -35,13 +36,20 @@ export async function applyBookGoogleSheetRows(
   sessionDate: string,
   indices: number[],
   sheetTab: string,
-  spreadsheetId: string
+  spreadsheetId: string,
+  sheetGid?: string
 ): Promise<SheetBookApplyResult> {
   const res = await fetch("/api/sheets/book/apply", {
     ...credFetch,
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionDate, indices, sheetTab, spreadsheetId }),
+    body: JSON.stringify({
+      sessionDate,
+      indices,
+      sheetTab,
+      spreadsheetId,
+      ...(sheetGid ? { gid: sheetGid } : {}),
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

@@ -8,6 +8,7 @@ import type {
 import {
   inferLetterKeyFromCustomerCode,
   isValidCustomerSyncCode,
+  normalizeCustomerShortCode,
   normalizeCustomerSyncCode,
 } from "./customerCodeOps";
 import { normalizeAgentCode } from "./customerProfileInputFormat";
@@ -490,6 +491,10 @@ export async function downloadCustomerFullProfileExport(
   );
 }
 
+function shortCodeCompact(raw: string): string {
+  return normalizeCustomerShortCode(raw).replace(/\s+/g, "");
+}
+
 function findExistingByImportCode(
   customers: CustomerDirectoryEntry[],
   byCode: Map<string, CustomerDirectoryEntry>,
@@ -497,6 +502,19 @@ function findExistingByImportCode(
 ): CustomerDirectoryEntry | null {
   const exact = byCode.get(importCode.toLowerCase());
   if (exact) return exact;
+
+  const shortKey = normalizeCustomerShortCode(importCode);
+  const compactImport = shortCodeCompact(importCode);
+  if (shortKey || compactImport) {
+    const byShort = customers.find((c) => {
+      const sc = normalizeCustomerShortCode(c.shortCode ?? "");
+      return (
+        (shortKey && sc === shortKey) ||
+        (compactImport && shortCodeCompact(sc) === compactImport)
+      );
+    });
+    if (byShort) return byShort;
+  }
 
   if (!isValidCustomerSyncCode(importCode)) return null;
   const key = normalizeCustomerSyncCode(importCode);
@@ -508,6 +526,19 @@ function findExistingByImportCode(
       return letterKey === key && (code === key || code.startsWith(key));
     }) ?? null
   );
+}
+
+/** Tìm khách trong danh bạ khớp mã cột «Mã KH» khi import (code / shortCode / GLO→GLO000001). */
+export function findCustomerByImportCode(
+  customers: readonly CustomerDirectoryEntry[],
+  importCodeRaw: string,
+): CustomerDirectoryEntry | null {
+  const raw = String(importCodeRaw ?? "").trim();
+  if (!raw) return null;
+  const byCode = new Map(
+    customers.map((e) => [normalizeAgentCode(e.code).toLowerCase(), e]),
+  );
+  return findExistingByImportCode([...customers], byCode, normalizeAgentCode(raw));
 }
 
 /** Hợp nhất import mẫu Hồ sơ KH vào danh bạ hiện có. */
@@ -557,7 +588,7 @@ export function applyFullProfileImport(
     const code = normalizeAgentCode(imp.code);
     if (!code) continue;
 
-    const hit = findExistingByImportCode(customers, byCode, code);
+    const hit = findCustomerByImportCode(customers, imp.code);
     if (hit) {
       assignIfNonEmpty(hit, imp);
 

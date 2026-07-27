@@ -63,6 +63,7 @@ import {
   applyFullProfileImport,
   downloadCustomerFullProfileExport,
   downloadCustomerFullProfileTemplate,
+  findCustomerByImportCode,
   parseCustomerFullProfileWorkbook,
 } from "../utils/customerFullProfileExcel";
 import type { SyncStatus } from "../hooks/useShipmentSync";
@@ -210,6 +211,7 @@ export function CustomersPage({
   const [quickFillCustomer, setQuickFillCustomer] =
     useState<CustomerDirectoryEntry | null>(null);
   const [importing, setImporting] = useState(false);
+  const [pendingImportSave, setPendingImportSave] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -232,8 +234,8 @@ export function CustomersPage({
   );
 
   const dirty = useMemo(
-    () => JSON.stringify(draft) !== baseline,
-    [draft, baseline],
+    () => pendingImportSave || JSON.stringify(draft) !== baseline,
+    [draft, baseline, pendingImportSave],
   );
 
   useEffect(() => {
@@ -306,29 +308,14 @@ export function CustomersPage({
       if (isMobile) setMobilePane("detail");
       return;
     }
-    if (
-      dirty &&
-      !window.confirm("Có thay đổi chưa lưu. Đổi khách sẽ hủy thay đổi?")
-    ) {
-      return;
-    }
     setSelectedId(id);
     setValidationErrors([]);
-    setSaveStatus("idle");
-    setProfileTab("info");
     if (isMobile) setMobilePane("detail");
-    setDraft((rows) => {
-      const source = dirty
-        ? initial.map((e) =>
-            clampCustomerDirectoryEntry(liftContactFromDefaultShipper(e)),
-          )
-        : rows;
-      const next = source.map((row) =>
+    setDraft((rows) =>
+      rows.map((row) =>
         row.id === id ? ensureCustomerEditScaffold(row) : row,
-      );
-      queueMicrotask(() => setBaseline(JSON.stringify(next)));
-      return next;
-    });
+      ),
+    );
   }
 
   function addCustomer() {
@@ -377,14 +364,41 @@ export function CustomersPage({
         );
       }
       const result = applyFullProfileImport(draft, fullResult.customers);
-      setDraft(result.customers.map((e) => clampCustomerDirectoryEntry(e)));
-      toast.success(
-        `Tạo ${result.created}, cập nhật ${result.updated}. Bấm Lưu để ghi lên server.`,
-        "Import Hồ sơ KH",
+      const nextDraft = result.customers.map((e) =>
+        clampCustomerDirectoryEntry(e),
       );
-      const last = result.customers[result.customers.length - 1];
-      if (last) {
-        setSelectedId(last.id);
+      const hasDraftChanges = JSON.stringify(nextDraft) !== baseline;
+      setDraft(nextDraft);
+      setValidationErrors([]);
+      setSaveStatus("idle");
+      if (
+        result.created > 0 ||
+        result.updated > 0 ||
+        result.consigneesAdded > 0 ||
+        result.goodsAdded > 0 ||
+        hasDraftChanges
+      ) {
+        setPendingImportSave(true);
+        toast.success(
+          `Tạo ${result.created}, cập nhật ${result.updated}. Bấm Lưu để ghi lên server.`,
+          "Import Hồ sơ KH",
+        );
+      } else {
+        toast.success(
+          `Tạo ${result.created}, cập nhật ${result.updated}. Không có thay đổi cần lưu.`,
+          "Import Hồ sơ KH",
+        );
+      }
+      const importedHits = fullResult.customers
+        .map((imp) => findCustomerByImportCode(result.customers, imp.code))
+        .filter((h): h is NonNullable<typeof h> => h != null);
+      const focus =
+        importedHits.find((h) => h.id === selectedId) ??
+        importedHits[importedHits.length - 1] ??
+        null;
+      if (focus) {
+        setSelectedId(focus.id);
+        setProfileTab("defaults");
         if (isMobile) setMobilePane("detail");
       }
     } catch (e) {
@@ -430,6 +444,7 @@ export function CustomersPage({
       await onSave(normalized);
       setDraft(normalized);
       setBaseline(JSON.stringify(normalized));
+      setPendingImportSave(false);
       setValidationErrors([]);
       setSaveStatus("saved");
       toast.success("Đã lưu danh bạ khách.", "Lưu thành công");
@@ -455,6 +470,7 @@ export function CustomersPage({
   const handleDiscard = useCallback(() => {
     if (!dirty) return;
     if (!window.confirm("Hủy mọi thay đổi chưa lưu?")) return;
+    setPendingImportSave(false);
     syncFromInitial(initial);
   }, [dirty, initial, syncFromInitial]);
 
@@ -730,24 +746,28 @@ export function CustomersPage({
               Export
             </Button>
           </div>
-          <div className="hidden items-center gap-1.5 sm:flex">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!dirty || saving}
-              onClick={handleDiscard}
-            >
-              Hủy
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={!dirty || saving}
-              onClick={() => void persistDraft()}
-            >
-              {saving ? "Đang lưu…" : "Lưu"}
-            </Button>
-          </div>
+          {dirty ? (
+            <div className="flex w-full items-center gap-1.5 sm:w-auto">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1 sm:flex-none"
+                disabled={saving}
+                onClick={handleDiscard}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="flex-1 sm:flex-none"
+                disabled={saving}
+                onClick={() => void persistDraft()}
+              >
+                {saving ? "Đang lưu…" : "Lưu"}
+              </Button>
+            </div>
+          ) : null}
           <input
             ref={importInputRef}
             type="file"
@@ -1079,30 +1099,6 @@ export function CustomersPage({
                   </div>
                 </div>
 
-                {dirty ? (
-                  <div className="sticky bottom-0 z-20 border-t border-ui-border bg-ui-surface px-3 py-2.5 pb-[max(0.65rem,env(safe-area-inset-bottom))] sm:hidden">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="secondary"
-                        size="md"
-                        className="flex-1"
-                        disabled={saving}
-                        onClick={handleDiscard}
-                      >
-                        Hủy
-                      </Button>
-                      <Button
-                        variant="primary"
-                        size="md"
-                        className="flex-1"
-                        disabled={saving}
-                        onClick={() => void persistDraft()}
-                      >
-                        {saving ? "Đang lưu…" : "Lưu"}
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
               </>
             ) : (
               <div className="flex flex-1 items-center justify-center p-6">

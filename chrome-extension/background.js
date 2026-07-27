@@ -8,7 +8,7 @@
 const LOGIN_URL = "https://www.tcs.com.vn/AwbLogin";
 const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const EXT_VERSION = chrome.runtime.getManifest().version;
-const EXPECTED_SCRIPT_VERSION = "2.0.14";
+const EXPECTED_SCRIPT_VERSION = "2.0.19";
 const SESSION_KEY = "tecsopsTcsSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
 const WORKSPACE_KEY = "tecsopsTcsWorkspace";
@@ -40,47 +40,88 @@ chrome.runtime.onInstalled.addListener(() => {
   console.info("[tecsops-ext] installed", EXT_VERSION);
 });
 
+/** Gọi sendResponse đúng 1 lần; nuốt lỗi kênh đã đóng (tránh spam Errors trên chrome://extensions). */
+function replyOnce(sendResponse) {
+  let done = false;
+  return (payload) => {
+    if (done) return;
+    done = true;
+    try {
+      sendResponse(payload);
+    } catch {
+      /* port đã đóng */
+    }
+  };
+}
+
+/** Giữ service worker sống trong lúc bootstrap/login dài (MV3 dễ kill SW → sendMessage lỗi). */
+function withServiceWorkerKeepAlive(promise) {
+  const tick = () => {
+    try {
+      void chrome.storage.session.get(WORKSPACE_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
+  tick();
+  const timer = setInterval(tick, 15_000);
+  return Promise.resolve(promise).finally(() => clearInterval(timer));
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (!msg || typeof msg !== "object") return false;
+  const reply = replyOnce(sendResponse);
+  if (!msg || typeof msg !== "object") {
+    reply({ ok: false, error: "INVALID_MESSAGE", message: "Payload không hợp lệ", version: EXT_VERSION });
+    return true;
+  }
 
   if (msg.type === "PING") {
-    void workspaceReady.then(() =>
-      sendResponse({
-        ok: true,
-        type: "PONG",
-        version: EXT_VERSION,
-        extensionId: chrome.runtime.id,
-        workspace,
-      })
-    );
+    void workspaceReady
+      .then(() =>
+        reply({
+          ok: true,
+          type: "PONG",
+          version: EXT_VERSION,
+          extensionId: chrome.runtime.id,
+          workspace,
+        })
+      )
+      .catch((err) => reply(errorResult("PING_FAILED", err)));
     return true;
   }
 
   if (msg.type === "TCS_OPEN") {
-    void findOrOpenTcsTab({ active: true, pinned: true })
-      .then((tabId) => sendResponse({ ok: true, tabId, workspace }))
-      .catch((err) => sendResponse(errorResult("OPEN_FAILED", err)));
+    void withServiceWorkerKeepAlive(findOrOpenTcsTab({ active: true, pinned: true }))
+      .then((tabId) => reply({ ok: true, tabId, workspace }))
+      .catch((err) => reply(errorResult("OPEN_FAILED", err)));
     return true;
   }
 
   if (msg.type === "TCS_BOOTSTRAP") {
-    void bootstrapWorkspace(msg.payload || {})
-      .then(sendResponse)
+    void withServiceWorkerKeepAlive(bootstrapWorkspace(msg.payload || {}))
+      .then(reply)
       .catch((err) => {
         setWorkspace({ phase: "ERROR", error: errorMessage(err) });
-        sendResponse(errorResult("BOOTSTRAP_FAILED", err));
+        reply(errorResult("BOOTSTRAP_FAILED", err));
       });
     return true;
   }
 
   if (msg.type === "FILL_ESID") {
-    void fillEsidOnTcsTab(msg.payload)
-      .then(sendResponse)
-      .catch((err) => sendResponse(errorResult("FILL_FAILED", err)));
+    void withServiceWorkerKeepAlive(fillEsidOnTcsTab(msg.payload))
+      .then(reply)
+      .catch((err) => reply(errorResult("FILL_FAILED", err)));
     return true;
   }
 
-  return false;
+  reply({
+    ok: false,
+    error: "UNKNOWN_TYPE",
+    message: `Lệnh không hỗ trợ: ${String(msg.type || "")}`,
+    version: EXT_VERSION,
+    workspace,
+  });
+  return true;
 });
 
 function errorMessage(err) {
@@ -181,6 +222,15 @@ async function navigate(tabId, url) {
 }
 
 async function injectTcsContent(tabId) {
+  // Tránh inject lại nếu content đã đúng version (giảm lỗi listener/port)
+  try {
+    const ping = await chrome.tabs.sendMessage(tabId, { type: "TCS_PING" });
+    if (ping?.ok && String(ping.scriptVersion || "") === EXPECTED_SCRIPT_VERSION) {
+      return;
+    }
+  } catch {
+    /* chưa có content — inject */
+  }
   await chrome.scripting.executeScript({
     target: { tabId },
     files: ["content-tcs.js"],
@@ -247,14 +297,21 @@ async function sendToTcsContent(tabId, message, attempts = 8) {
   throw lastErr || new Error("Không gửi được lệnh tới tab TCS");
 }
 
-async function solveCaptcha(dataUrl, agentBaseUrl) {
+async function solveCaptcha(dataUrl, agentBaseUrl, opts = {}) {
   if (!dataUrl) {
     return { ok: false, error: "CAPTCHA_IMAGE_EMPTY", text: "", confidence: 0 };
   }
-  const candidates = [];
+  const minConfidence = Number(opts.minConfidence ?? 0.55);
+  // Luôn ưu tiên agent local (OCR ddddocr trên máy kho). Ops/Railway URL sau —
+  // tránh proxy xa che lỗi OCR hoặc chậm khiến Đồng bộ fail lần 1.
+  const candidates = ["http://127.0.0.1:8765", "http://localhost:8765"];
   const explicit = String(agentBaseUrl || "").trim().replace(/\/+$/, "");
-  if (explicit) candidates.push(explicit);
-  candidates.push("http://127.0.0.1:8765", "http://localhost:8765");
+  if (explicit && !/127\.0\.0\.1|localhost/i.test(explicit)) {
+    candidates.push(explicit);
+  } else if (explicit) {
+    candidates.unshift(explicit);
+  }
+  let lastHardError = null;
   for (const base of [...new Set(candidates)]) {
     try {
       const response = await fetch(`${base}/captcha/solve`, {
@@ -263,16 +320,17 @@ async function solveCaptcha(dataUrl, agentBaseUrl) {
         body: JSON.stringify({
           image: dataUrl,
           expected_length: 5,
-          min_confidence: 0.6,
+          min_confidence: minConfidence,
         }),
       });
-      const body = await response.json();
+      const body = await response.json().catch(() => ({}));
       if (response.ok && body?.ok && body.text) {
         return {
           ok: true,
           text: String(body.text),
           confidence: Number(body.confidence || 0),
           candidates: Array.isArray(body.candidates) ? body.candidates : [],
+          agentBase: base,
         };
       }
       if (response.status === 422) {
@@ -282,12 +340,27 @@ async function solveCaptcha(dataUrl, agentBaseUrl) {
           text: "",
           confidence: Number(body?.confidence || 0),
           candidates: Array.isArray(body?.candidates) ? body.candidates : [],
+          agentBase: base,
         };
+      }
+      // Agent trả lời nhưng OCR hỏng (thiếu ddddocr, v.v.) — không giả là "offline"
+      if (body?.error === "OCR_FAILED" || response.status >= 500) {
+        lastHardError = {
+          ok: false,
+          error: "OCR_FAILED",
+          text: "",
+          confidence: 0,
+          message: String(body?.message || body?.error || `HTTP ${response.status}`),
+          agentBase: base,
+        };
+        // Thử candidate kế tiếp (vd. local fail → remote)
+        continue;
       }
     } catch {
       // Thử endpoint kế tiếp.
     }
   }
+  if (lastHardError) return lastHardError;
   return { ok: false, error: "OCR_AGENT_UNAVAILABLE", text: "", confidence: 0 };
 }
 
@@ -375,16 +448,27 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
   let submittedAttempts = 0;
   let sampledCaptchas = 0;
   let lastMessage = "";
-  while (submittedAttempts < 3 && sampledCaptchas < 7) {
+  while (submittedAttempts < 5 && sampledCaptchas < 10) {
     const captcha = await sendToTcsContent(tabId, { type: "TCS_GET_CAPTCHA" });
     const dataUrl = captcha?.dataUrl || "";
-    const solved = await solveCaptcha(dataUrl, agentBaseUrl);
+    // Hạ ngưỡng dần: lần đầu chặt, sau đó nới để vẫn login được CAPTCHA khó đọc
+    const minConfidence = sampledCaptchas < 3 ? 0.55 : sampledCaptchas < 6 ? 0.45 : 0.38;
+    const solved = await solveCaptcha(dataUrl, agentBaseUrl, { minConfidence });
     sampledCaptchas += 1;
 
     if (!solved.ok) {
+      if (solved.error === "OCR_FAILED") {
+        return {
+          ok: false,
+          error: "OCR_FAILED",
+          message:
+            solved.message ||
+            "Agent OCR lỗi (thường thiếu ddddocr). Chạy: npm run tcs:agent:real (dùng .venv).",
+        };
+      }
       lastMessage =
         solved.error === "OCR_AGENT_UNAVAILABLE"
-          ? "Không kết nối được OCR Agent"
+          ? "Không kết nối được OCR Agent (cổng 8765)"
           : "OCR chưa đủ tin cậy, đang đổi CAPTCHA";
       if (solved.error === "OCR_AGENT_UNAVAILABLE") {
         const manual = await sendToTcsContent(tabId, {
@@ -395,7 +479,8 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
           ...manual,
           ok: false,
           error: "CAPTCHA_REQUIRED",
-          message: "Đã điền user/password. OCR Agent chưa sẵn sàng; hãy nhập CAPTCHA trên tab TCS.",
+          message:
+            "Đã điền user/password. Không kết nối OCR Agent (:8765); hãy nhập CAPTCHA trên tab TCS hoặc chạy npm run tcs:agent:real.",
         };
       }
       await refreshCaptchaAndWait(tabId, dataUrl);

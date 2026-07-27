@@ -14,7 +14,7 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, unquote, urlparse
 
 from app import __version__
-from app.browser.captcha_ocr import ocr_image_bytes_detailed
+from app.browser.captcha_ocr import ddddocr_ready, ocr_image_bytes_detailed
 from app.browser.session_manager import SessionManager
 from app.browser.locators import ensure_default_locators, locators_path
 from app.config import Settings, ensure_runtime_dirs, load_settings
@@ -69,6 +69,22 @@ class AgentState:
         )
         self._worker.start()
 
+    def acquire_running(self, timeout_s: float = 120.0, poll_s: float = 0.12) -> bool:
+        """Chờ lấy exclusive slot — xếp hàng thay vì 409 BUSY ngay (prefetch vs tải PDF)."""
+        deadline = time.monotonic() + max(0.0, float(timeout_s))
+        while True:
+            with self.lock:
+                if not self.running:
+                    self.running = True
+                    return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(max(0.05, float(poll_s)))
+
+    def release_running(self) -> None:
+        with self.lock:
+            self.running = False
+
     def refresh_session_snapshot(self) -> dict[str, Any]:
         try:
             self.session_snapshot = self.sessions.status().to_dict()
@@ -106,6 +122,23 @@ def make_handler(state: AgentState):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+        def _try_begin_job(self, timeout_s: float = 120.0) -> bool:
+            """Chờ exclusive slot. False → đã gửi 409 BUSY (hết thời gian chờ)."""
+            if state.acquire_running(timeout_s=timeout_s):
+                return True
+            self._json(
+                409,
+                {
+                    "ok": False,
+                    "error": "BUSY",
+                    "message": (
+                        "Agent đang chạy job khác — đã chờ hết thời gian. "
+                        "Thử lại sau vài giây."
+                    ),
+                },
+            )
+            return False
 
         def _json(self, code: int, payload: dict[str, Any]) -> None:
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -158,6 +191,7 @@ def make_handler(state: AgentState):
                     except Exception:
                         sess = dict(state.session_snapshot)
                 docs = state.settings.output_dir / "docs"
+                ocr_ok = ddddocr_ready()
                 self._json(
                     200,
                     {
@@ -169,9 +203,21 @@ def make_handler(state: AgentState):
                         "dry_run": state.settings.dry_run,
                         "headless": bool(state.settings.headless),
                         "running": state.running,
+                        "captcha_ocr": ocr_ok,
                         "docs_dir": str(docs),
                         "session": {**sess, "headless": bool(state.settings.headless)},
                         "workspace": state.workspace.snapshot(),
+                        **(
+                            {}
+                            if ocr_ok
+                            else {
+                                "message": (
+                                    "Agent thiếu ddddocr — Ext Đồng bộ không OCR được CAPTCHA. "
+                                    "Chạy: cd tcs-awb-automation && .venv\\Scripts\\pip install -r requirements.txt "
+                                    "rồi npm run tcs:agent:real"
+                                )
+                            }
+                        ),
                     },
                 )
                 return
@@ -220,14 +266,8 @@ def make_handler(state: AgentState):
                 return
 
             if path == "/session/open":
-                with state.lock:
-                    if state.running:
-                        self._json(
-                            409,
-                            {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"},
-                        )
-                        return
-                    state.running = True
+                if not self._try_begin_job():
+                    return
                 # Ops Login: visible=true → headed (máy kho). Cloud gửi visible=false.
                 want_visible = bool(
                     payload.get("visible", False)
@@ -275,8 +315,7 @@ def make_handler(state: AgentState):
                         },
                     )
                 finally:
-                    with state.lock:
-                        state.running = False
+                    state.release_running()
                 return
             if path == "/workspace/bootstrap":
                 self._handle_workspace_bootstrap(payload)
@@ -354,14 +393,8 @@ def make_handler(state: AgentState):
                 return
             if path == "/session/focus":
                 # Đưa cửa sổ Chrome lên trước (headed máy kho) — không đụng form
-                with state.lock:
-                    if state.running:
-                        self._json(
-                            409,
-                            {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"},
-                        )
-                        return
-                    state.running = True
+                if not self._try_begin_job(timeout_s=60.0):
+                    return
                 try:
                     def _focus() -> dict[str, Any]:
                         return state.sessions.focus_window()
@@ -372,8 +405,7 @@ def make_handler(state: AgentState):
                 except Exception as e:
                     self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
                 finally:
-                    with state.lock:
-                        state.running = False
+                    state.release_running()
                 return
             if path == "/jobs":
                 self._handle_job(payload)
@@ -419,14 +451,8 @@ def make_handler(state: AgentState):
                     {"ok": False, "error": "VALIDATION", "message": "awbs phải là mảng"},
                 )
                 return
-            with state.lock:
-                if state.running:
-                    self._json(
-                        409,
-                        {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"},
-                    )
-                    return
-                state.running = True
+            if not self._try_begin_job():
+                return
             want_visible = bool(
                 payload.get("visible", False)
                 or payload.get("headed", False)
@@ -456,19 +482,12 @@ def make_handler(state: AgentState):
                     {"ok": False, "error": "INTERNAL", "message": str(e)[:300]},
                 )
             finally:
-                with state.lock:
-                    state.running = False
+                state.release_running()
 
         def _handle_prefetch_pdfs(self, payload: dict[str, Any]) -> None:
             """In sẵn PDF cho AWB ready — dùng sau Đồng bộ (Ext hoặc Agent)."""
-            with state.lock:
-                if state.running:
-                    self._json(
-                        409,
-                        {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"},
-                    )
-                    return
-                state.running = True
+            if not self._try_begin_job():
+                return
 
             def _run() -> tuple[int, dict[str, Any]]:
                 st = state.sessions.status()
@@ -497,16 +516,12 @@ def make_handler(state: AgentState):
             except Exception as e:
                 self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)[:300]})
             finally:
-                with state.lock:
-                    state.running = False
+                state.release_running()
 
         def _handle_esid_declare_fill(self, payload: dict[str, Any]) -> None:
             """Điền form KHAI BÁO ESID từ Ops — mặc định không HOÀN TẤT."""
-            with state.lock:
-                if state.running:
-                    self._json(409, {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"})
-                    return
-                state.running = True
+            if not self._try_begin_job():
+                return
 
             def _fill() -> tuple[int, dict[str, Any]]:
                 result = fill_esid_declare(state.sessions, state.settings, payload)
@@ -522,16 +537,12 @@ def make_handler(state: AgentState):
             except Exception as e:
                 self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
             finally:
-                with state.lock:
-                    state.running = False
+                state.release_running()
 
         def _handle_esid_declare_submit(self, payload: dict[str, Any]) -> None:
             """HOÀN TẤT form KHAI BÁO đang mở — bắt buộc confirm_submit."""
-            with state.lock:
-                if state.running:
-                    self._json(409, {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"})
-                    return
-                state.running = True
+            if not self._try_begin_job():
+                return
 
             def _submit() -> tuple[int, dict[str, Any]]:
                 result = submit_esid_declare(state.sessions, state.settings, payload)
@@ -547,8 +558,7 @@ def make_handler(state: AgentState):
             except Exception as e:
                 self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
             finally:
-                with state.lock:
-                    state.running = False
+                state.release_running()
 
         def _handle_job(self, payload: dict[str, Any]) -> None:
                 # PDF cache: trả ngay, không chiếm Playwright worker / không cần login
@@ -624,11 +634,8 @@ def make_handler(state: AgentState):
             except Exception:
                 pass
 
-            with state.lock:
-                if state.running:
-                    self._json(409, {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"})
-                    return
-                state.running = True
+            if not self._try_begin_job():
+                return
 
             def _job() -> tuple[int, dict[str, Any]]:
                 warehouse = str(payload.get("warehouse") or "TECS-TCS")
@@ -759,8 +766,7 @@ def make_handler(state: AgentState):
             except Exception as e:
                 self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)})
             finally:
-                with state.lock:
-                    state.running = False
+                state.release_running()
 
     return Handler
 

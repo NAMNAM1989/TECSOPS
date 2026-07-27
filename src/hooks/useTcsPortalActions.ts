@@ -12,6 +12,7 @@ import {
   fetchTcsSessionStatus,
   agentOfflineHint,
   bootstrapTcsWorkspace,
+  openTcsAgentSession,
   getTcsAgentBaseUrl,
   pingTcsAgent,
   pickEsidScanReadyItems,
@@ -83,6 +84,8 @@ export function useTcsPortalActions({
   /** Tránh poll /health ghi đè Offline khi đang chờ job dài trên agent */
   const busyRef = useRef(false);
   busyRef.current = busy;
+  /** Warmup agent sau Đồng bộ Ext — tải PDF chờ promise này */
+  const agentWarmupRef = useRef(Promise.resolve());
   const [results, setResults] = useState<TcsAgentJobResultRow[]>([]);
   const [downloadedCount, setDownloadedCount] = useState(0);
   /** Sau Điền: trạng thái + nút HOÀN TẤT trên cùng workspace. */
@@ -139,14 +142,42 @@ export function useTcsPortalActions({
       setError(agentOfflineHint(getTcsAgentBaseUrl()));
       return false;
     }
-    const s = online.session || (await fetchTcsSessionStatus());
+    let s = online.session || (await fetchTcsSessionStatus());
     setSession(s);
+    // Ext Đồng bộ chỉ login tab Chrome user — agent Playwright có thể chưa mở.
+    // Tự mở session khi tải PDF / điền (không bắt user bấm Login riêng).
+    if (!s?.open || !s?.logged_in) {
+      const wantVisible = online.headless === false;
+      setBusyLabel(
+        wantVisible
+          ? "Đang mở Chrome agent TCS (PDF cần Playwright)…"
+          : "Đang khởi tạo phiên agent TCS…"
+      );
+      const opened = await openTcsAgentSession({ visible: wantVisible });
+      if (opened.ok === false && opened.error === "AGENT_OFFLINE") {
+        setError(opened.message || agentOfflineHint(getTcsAgentBaseUrl()));
+        return false;
+      }
+      s = opened;
+      setSession(opened);
+      setHealth((prev) =>
+        prev
+          ? { ...prev, ok: true, session: opened }
+          : { ok: true, session: opened }
+      );
+    }
     if (!s?.open) {
-      setError("Workspace TCS chưa khởi tạo — bấm Login để đăng nhập và quét sẵn theo ngày.");
+      setError(
+        (s?.message && String(s.message).trim()) ||
+          "Không mở được Chrome agent — kiểm tra máy kho / npm run tcs:agent:real."
+      );
       return false;
     }
     if (!s?.logged_in) {
-      setError("Cần login TCS — nhập CAPTCHA trên Chrome rồi thử lại.");
+      setError(
+        "Agent Chrome đang ở trang login — nhập CAPTCHA trên cửa sổ agent rồi bấm Tải PDF lại. " +
+          "(Đồng bộ Ext và agent là hai phiên Chrome khác nhau.)"
+      );
       await refreshHealth();
       return false;
     }
@@ -215,21 +246,37 @@ export function useTcsPortalActions({
           } AWB · ${ready.length} hoàn thành tiếp nhận` +
             (updatedCount ? ` · cập nhật Ops ${updatedCount} lô` : "")
         );
-        // Nền: prefetch PDF qua agent (nếu online) → mobile/desktop bấm tải ≈ tức thì
-        const readyAwbs = ready.map((item) => String(item.awb || "").replace(/\D/g, "").slice(0, 11)).filter((d) => d.length === 11);
-        if (readyAwbs.length) {
-          void (async () => {
-            const online = await pingTcsAgent(2000);
-            if (!online?.ok) return;
-            const pref = await prefetchTcsPdfs(readyAwbs, { limit: 5 });
-            if (pref.ok && (pref.prefetched || 0) > 0) {
-              setMessage(
-                (prev) =>
-                  `${prev || ""} · prefetch ${pref.prefetched} PDF`.trim()
+        // Nền: mở agent Playwright (PDF cần agent) + prefetch — gắn promise để Tải PDF chờ
+        const readyAwbs = ready
+          .map((item) => String(item.awb || "").replace(/\D/g, "").slice(0, 11))
+          .filter((d) => d.length === 11);
+        const warmup = (async () => {
+          const online = await pingTcsAgent(2500);
+          if (!online?.ok) return;
+          setHealth(online);
+          const wantVisible = online.headless === false;
+          const sess = online.session;
+          if (!sess?.open || !sess?.logged_in) {
+            const opened = await openTcsAgentSession({ visible: wantVisible });
+            if (opened.open) {
+              setSession(opened);
+              setHealth((prev) =>
+                prev ? { ...prev, session: opened } : { ok: true, session: opened }
               );
             }
-          })();
-        }
+            if (!opened.logged_in) return;
+          }
+          if (!readyAwbs.length) return;
+          const pref = await prefetchTcsPdfs(readyAwbs, { limit: 5 });
+          if (pref.ok && (pref.prefetched || 0) > 0) {
+            setMessage((prev) =>
+              `${prev || ""} · prefetch ${pref.prefetched} PDF`.trim()
+            );
+          }
+        })().catch(() => {
+          /* warmup nền — lỗi không chặn UI Đồng bộ */
+        });
+        agentWarmupRef.current = warmup;
         return result;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Extension đồng bộ TCS thất bại");
@@ -334,6 +381,10 @@ export function useTcsPortalActions({
       setBusyLabel(`Tải PDF …${digits.slice(-8)}…`);
       const t0 = performance.now();
       try {
+        // Chờ warmup sau Đồng bộ Ext (open/prefetch) — tránh race BUSY
+        setBusyLabel(`Chờ agent sẵn sàng …${digits.slice(-8)}…`);
+        await agentWarmupRef.current.catch(() => undefined);
+        setBusyLabel(`Tải PDF …${digits.slice(-8)}…`);
         // PDF cache trên agent không cần Chrome đã login — chỉ cần agent online
         if (health?.ok) {
           /* keep */
@@ -346,12 +397,24 @@ export function useTcsPortalActions({
           }
         }
         let res = await submitTcsPortalJob(payload);
+        for (let i = 0; i < 40 && res.error === "BUSY"; i++) {
+          setBusyLabel(`Tải PDF …${digits.slice(-8)} — chờ agent…`);
+          await new Promise((r) => window.setTimeout(r, 250));
+          res = await submitTcsPortalJob(payload);
+        }
         if (
           !res.ok &&
           (res.error === "NEEDS_LOGIN" || res.error === "NO_BROWSER")
         ) {
+          // Ext đã Đồng bộ ≠ agent Playwright sẵn sàng — tự mở/login agent rồi thử lại
+          setBusyLabel(`Mở phiên agent rồi tải PDF …${digits.slice(-8)}…`);
           if (!(await ensureSessionReady())) return;
           res = await submitTcsPortalJob(payload);
+          for (let i = 0; i < 40 && res.error === "BUSY"; i++) {
+            setBusyLabel(`Tải PDF …${digits.slice(-8)} — chờ agent…`);
+            await new Promise((r) => window.setTimeout(r, 250));
+            res = await submitTcsPortalJob(payload);
+          }
         }
         const sec = ((performance.now() - t0) / 1000).toFixed(1);
         if (!res.ok) {

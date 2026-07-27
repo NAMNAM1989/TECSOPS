@@ -215,6 +215,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
           </button>
           <p className="text-[10px] text-slate-600 sm:col-span-3">
             Lần đầu: nhập TK/MK rồi bấm Đồng bộ. Lần sau chỉ cần bấm Đồng bộ một lần (Ext đã nhớ).
+            Tải PDF ESID dùng Chrome agent (Playwright) — hệ thống tự mở khi cần.
           </p>
           <label className="flex items-center gap-1 text-[10px] text-slate-600 sm:col-span-3">
             <input

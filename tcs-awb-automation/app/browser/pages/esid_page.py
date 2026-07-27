@@ -1735,23 +1735,19 @@ class EsidListPage:
     def _pdf_from_frame_html(
         self, frame, dest_path: Path, *, title: str | None = None
     ) -> Path:
-        """In PDF từ iframe phiếu — ưu tiên HTML nhanh + scratch page tái dùng."""
+        """In PDF từ iframe phiếu — serialize HTML đầy đủ + scratch page tái dùng."""
         import os
 
         t0 = time.perf_counter()
         timing = os.environ.get("TCS_PDF_TIMING", "").strip() in {"1", "true", "yes"}
-        html = ""
-        mode = "fast"
+        # Luôn full serialize (CSS + canvas→img) — fast HTML dễ mất layout / giống ảnh
+        mode = "full"
         try:
-            html = self._bill_html_fast(frame)
-        except Exception:
-            mode = "full"
-            try:
-                html = self._serialize_bill_html(frame)
-            except SiteChangedError:
-                raise
-            except Exception as e:
-                raise SiteChangedError(f"Không đọc được HTML frame in: {e}") from e
+            html = self._serialize_bill_html(frame)
+        except SiteChangedError:
+            raise
+        except Exception as e:
+            raise SiteChangedError(f"Không đọc được HTML frame in: {e}") from e
         if not html or len(html) < 120:
             raise SiteChangedError("Frame in rỗng")
 
@@ -1790,23 +1786,9 @@ class EsidListPage:
             except Exception:
                 pass
             if not self._text_looks_like_esid_doc(sample or ""):
-                # Fast HTML thiếu CSS → thử full serialize 1 lần
-                if mode == "fast":
-                    html = self._serialize_bill_html(frame)
-                    mode = "full-retry"
-                    tmp.set_content(html, wait_until="commit")
-                    if title:
-                        self._set_document_title(tmp, title)
-                    try:
-                        sample = tmp.evaluate(
-                            "() => (document.body && document.body.innerText || '').trim()"
-                        )
-                    except Exception:
-                        sample = ""
-                if not self._text_looks_like_esid_doc(sample or ""):
-                    raise SiteChangedError(
-                        "Frame sau IN không phải phiếu ESID (có vẻ là giao diện web). Không lưu PDF."
-                    )
+                raise SiteChangedError(
+                    "Frame sau IN không phải phiếu ESID (có vẻ là giao diện web). Không lưu PDF."
+                )
             path = self._pdf_from_page(tmp, dest_path, dismiss_escape=False)
             if timing:
                 t1 = time.perf_counter()
@@ -1911,15 +1893,8 @@ class EsidListPage:
         while time.time() < deadline:
             rich = self._richest_print_frame()
             if rich is not None:
-                t_iso = time.perf_counter()
-                iso = self._pdf_from_frame_isolate(rich, dest_path, title=title)
-                if iso is not None and iso.exists() and iso.stat().st_size >= 100:
-                    if os.environ.get("TCS_PDF_TIMING", "").strip() in {"1", "true", "yes"}:
-                        print(
-                            f"[pdf-timing] isolate_ms={(time.perf_counter() - t_iso) * 1000:.0f} "
-                            f"bytes={iso.stat().st_size}"
-                        )
-                    return iso
+                # Không dùng isolate (printToPDF trang cha) — dễ ra PDF «ảnh»
+                # (raster iframe). Luôn serialize HTML phiếu → scratch page.
                 return self._pdf_from_frame_html(rich, dest_path, title=title)
             if popup is None:
                 for p in context.pages:
@@ -1985,9 +1960,6 @@ class EsidListPage:
 
         rich = self._richest_print_frame()
         if rich is not None:
-            iso = self._pdf_from_frame_isolate(rich, dest_path, title=title)
-            if iso is not None and iso.exists() and iso.stat().st_size >= 100:
-                return iso
             return self._pdf_from_frame_html(rich, dest_path, title=title)
 
         try:

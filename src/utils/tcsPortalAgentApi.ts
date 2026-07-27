@@ -223,6 +223,22 @@ export async function fetchTcsSessionStatus(): Promise<TcsAgentSession | null> {
   }
 }
 
+/** Mở Chrome agent (Playwright). Ext Đồng bộ ≠ session agent — PDF vẫn cần bước này. */
+export async function openTcsAgentSession(opts: {
+  visible?: boolean;
+} = {}): Promise<TcsAgentSession & { ok: boolean; error?: string; message?: string }> {
+  const visible = opts.visible === true;
+  return postAgentJson(
+    "/session/open",
+    {
+      visible,
+      headed: visible,
+      show_browser: visible,
+    },
+    "Không mở được phiên Chrome agent TCS"
+  );
+}
+
 export type TcsEsidScanItem = {
   awb: string;
   awb_last8?: string;

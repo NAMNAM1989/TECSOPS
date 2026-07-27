@@ -33,6 +33,15 @@ class CaptchaOcrResult:
         return "OCR_LOW_CONFIDENCE"
 
 
+def ddddocr_ready() -> bool:
+    """True nếu ddddocr import + khởi tạo được (dùng cho /health)."""
+    try:
+        _get_ocr()
+        return True
+    except Exception:
+        return False
+
+
 def _get_ocr():
     global _OCR
     if _OCR is None:

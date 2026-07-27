@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildShipmentPatchForSavedConsignee } from "./customerConsigneeShipmentPatch";
+import {
+  buildShipmentPatchForSavedConsignee,
+  formatSavedConsigneeShortLabel,
+} from "./customerConsigneeShipmentPatch";
 
 describe("buildShipmentPatchForSavedConsignee", () => {
   it("gán snapshot in khi chọn CNEE", () => {
@@ -20,5 +23,21 @@ describe("buildShipmentPatchForSavedConsignee", () => {
   it("xóa khi bỏ chọn", () => {
     expect(buildShipmentPatchForSavedConsignee(undefined).customerConsigneeId).toBe("");
     expect(buildShipmentPatchForSavedConsignee(undefined).consigneeNamePrint).toBe("");
+  });
+});
+
+describe("formatSavedConsigneeShortLabel", () => {
+  it("ưu tiên tên CNEE hồ sơ, không hiện mã label", () => {
+    expect(
+      formatSavedConsigneeShortLabel({
+        id: "64623bfe",
+        label: "DTE",
+        consigneeName: "NET International Logistics CO LTD",
+        consigneeAddress: "",
+        consigneePhone: "",
+        consigneeEmail: "",
+        notifyName: "",
+      })
+    ).toBe("NET International Logistics CO LTD");
   });
 });

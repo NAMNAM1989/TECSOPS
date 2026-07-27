@@ -330,7 +330,7 @@ export function AirCargoTracking({
     (s: Shipment) => {
       onRequestPrint(s, state?.airlineLabelOverrides);
     },
-    [onRequestPrint, state?.airlineLabelOverrides]
+    [onRequestPrint]
   );
 
   const saveAirlineLabelOverrides = async (next: AirlineLabelOverrides) => {
@@ -653,117 +653,67 @@ export function AirCargoTracking({
 
       <DesktopShipmentTable
         rows={filteredViewRows}
-        allRows={allRows}
-        customerDirectory={state.customers}
         activeWarehouse={activeWarehouse}
-        onActiveWarehouseChange={handleActiveWarehouseChange}
-        metricRows={filteredViewRows}
-        searchHighlightWarehouses={searchHighlightWarehouses}
-        highlightedShipmentId={highlightedShipmentId}
-        selectedRowId={selectedId}
-        onSelectRow={setSelectedId}
-        onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
-        onUpdate={onUpdate}
-        onDelete={onDelete}
-        onPrint={requestPrintLabel}
-        viewSessionYmd={selectedYmd}
-      />
-
-      <MobileShipmentCards
-        rows={filteredViewRows}
+        onWarehouseChange={handleActiveWarehouseChange}
+        highlightedId={highlightedShipmentId}
         selectedId={selectedId}
-        onSelect={setSelectedId}
+        onSelectId={setSelectedId}
         onUpdate={onUpdate}
         onDelete={onDelete}
+        onOpenMobileEdit={openMobileEdit}
         onPrint={requestPrintLabel}
-        customerDirectory={state.customers}
-        activeWarehouse={activeWarehouse}
-        searchActive={searchActive}
-        pinnedOpenWarehouses={searchHighlightWarehouses}
-        highlightedShipmentId={highlightedShipmentId}
-        viewSessionYmd={selectedYmd}
-        onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
-        onQuickEdit={(row) => openMobileEdit(row)}
+        status={status}
       />
 
-      <StickyMobileActions
-        selected={selected}
-        activeWarehouse={activeWarehouse}
-        onDelete={() => selected && onDelete(selected.id)}
-        onAdd={() => void addBlankRowForWarehouse(activeWarehouse)}
-        onQuickEdit={() => selected && openMobileEdit(selected)}
-      />
-
-      <MobileShipmentEditSheet
-        open={mobileEditShipment != null}
-        shipment={mobileEditShipment}
-        initialTab={mobileEditInitialTab}
-        focusField={mobileEditFocus}
-        sessionDateYmd={selectedYmd}
-        customerDirectory={state.customers}
-        onClose={() => {
-          setMobileEditShipment(null);
-          setMobileEditFocus(null);
-        }}
-        onSave={(patch) => {
-          if (mobileEditShipment) onUpdate(mobileEditShipment.id, patch);
-          setMobileEditShipment(null);
-        }}
-      />
+      {isMobile && filteredViewRows.length > 0 ? (
+        <>
+          <MobileShipmentCards
+            rows={filteredViewRows}
+            activeWarehouse={activeWarehouse}
+            onWarehouseChange={handleActiveWarehouseChange}
+            highlightedId={highlightedShipmentId}
+            selectedId={selectedId}
+            onSelectId={setSelectedId}
+            onOpenEdit={openMobileEdit}
+            onPrint={requestPrintLabel}
+            status={status}
+          />
+          <StickyMobileActions
+            selectedId={selectedId}
+            shipment={selected}
+            onOpenEdit={openMobileEdit}
+            onDelete={onDelete}
+            onUpdate={onUpdate}
+            onPrint={requestPrintLabel}
+          />
+        </>
+      ) : null}
 
       <Suspense fallback={null}>
-        {airlineLabelSettingsOpen ? (
-          <AirlineLabelSettingsModal
-            open={airlineLabelSettingsOpen}
-            onClose={() => setAirlineLabelSettingsOpen(false)}
-            value={state.airlineLabelOverrides}
-            saving={airlineLabelSaving}
-            onSave={saveAirlineLabelOverrides}
-          />
-        ) : null}
-        {sheetImportOpen ? (
-          <GoogleSheetImportModal
-            open={sheetImportOpen}
-            sessionYmd={selectedYmd}
-            activeWarehouse={activeWarehouse}
-            onClose={() => setSheetImportOpen(false)}
-            onApplied={(count, serverState, meta) => {
-              if (serverState) {
-                if (!applyRemoteState(serverState, { force: true })) void refreshState();
-              } else if (count > 0) {
-                void refreshState();
-              }
-              if (meta?.preferredWarehouse) {
-                setActiveWarehouse(meta.preferredWarehouse);
-              }
-              const errN = meta?.errorCount ?? 0;
-              if (count > 0 && errN === 0) {
-                const parts = WAREHOUSE_ORDER.map((wh) => {
-                  const n = meta?.appliedByWarehouse?.[wh] ?? 0;
-                  return n > 0 ? `${warehouseLabel[wh]} ${n}` : null;
-                }).filter(Boolean);
-                const detail = parts.length ? ` (${parts.join(" · ")})` : "";
-                toast.success(`Đã nhập ${count} lô từ Google Sheet${detail}.`, "Nhập Sheet");
-                setSheetImportOpen(false);
-              } else if (count > 0 && errN > 0) {
-                toast.warning(
-                  `Nhập ${count} lô · ${errN} lỗi. Xem chi tiết trong modal.`,
-                  "Nhập một phần"
-                );
-              }
-            }}
-          />
-        ) : null}
+        <GoogleSheetImportModal
+          open={sheetImportOpen}
+          onClose={() => setSheetImportOpen(false)}
+          onImported={() => {
+            setSheetImportOpen(false);
+            void refreshState();
+          }}
+        />
+        <AirlineLabelSettingsModal
+          open={airlineLabelSettingsOpen}
+          onClose={() => setAirlineLabelSettingsOpen(false)}
+          initialValue={state?.airlineLabelOverrides}
+          loading={airlineLabelSaving}
+          onSave={saveAirlineLabelOverrides}
+        />
+        <DayExcelExportDialog
+          open={excelRangeOpen}
+          onClose={() => setExcelRangeOpen(false)}
+          onExport={onDownloadDayExcelRange}
+          disabled={excelExporting}
+        />
       </Suspense>
-
-      <DayExcelExportDialog
-        open={excelRangeOpen}
-        defaultYmd={selectedYmd}
-        exporting={excelExporting}
-        onClose={() => setExcelRangeOpen(false)}
-        onExport={(from, to) => void onDownloadDayExcelRange(from, to)}
-      />
     </AppShell>
     </TcsPortalActionsProvider>
   );
 }
+

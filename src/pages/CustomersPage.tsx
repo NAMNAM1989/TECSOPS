@@ -23,6 +23,7 @@ import {
   Banner,
   Button,
   EmptyState,
+  OverflowMenu,
   PageSkeleton,
   SyncStatusPill,
   useToast,
@@ -82,7 +83,7 @@ type MobilePane = "list" | "detail";
 type SaveStatus = "idle" | "saved" | "error";
 
 const FIELD =
-  "w-full rounded-lg border border-ui-border bg-ui-surface px-2 py-1.5 text-xs text-ui-text outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus";
+  "w-full min-h-11 touch-manipulation rounded-lg border border-ui-border bg-ui-surface px-2.5 py-2 text-base text-ui-text outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs";
 
 function newId(prefix: string): string {
   if (
@@ -664,20 +665,49 @@ export function CustomersPage({
     return <PageSkeleton variant="customers" />;
   }
 
+  /** Cùng một mẫu Hồ sơ KH — mobile gói menu, desktop hiện nút. */
+  const excelToolItems = [
+    {
+      id: "template",
+      label: "Tải mẫu",
+      description: "Mẫu Hồ sơ KH cố định",
+      onSelect: () => void downloadCustomerFullProfileTemplate(),
+    },
+    {
+      id: "import",
+      label: importing ? "Đang import…" : "Import",
+      description: "Nhập đúng mẫu Hồ sơ KH",
+      disabled: importing,
+      onSelect: () => importInputRef.current?.click(),
+    },
+    {
+      id: "export",
+      label: "Export",
+      description: "Xuất đúng mẫu Hồ sơ KH",
+      onSelect: () => void downloadCustomerFullProfileExport(draft),
+    },
+  ];
+
   return (
     <div className="flex min-h-screen flex-col bg-ui-background text-ui-text">
       <header className="sticky top-0 z-30 border-b border-ui-border bg-ui-surface pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
+        <div className="mx-auto flex max-w-[1400px] items-center gap-2 px-3 py-2.5 sm:px-4">
           {isMobile && mobilePane === "detail" ? (
             <Button
               variant="secondary"
               size="sm"
+              className="shrink-0"
               onClick={() => setMobilePane("list")}
             >
-              ← Danh sách
+              ← DS
             </Button>
           ) : (
-            <Button variant="secondary" size="sm" onClick={handleBack}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="shrink-0"
+              onClick={handleBack}
+            >
               ← Ops
             </Button>
           )}
@@ -703,50 +733,60 @@ export function CustomersPage({
               ) : null}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Button
-              variant="secondary"
-              size="sm"
-              title="Tải mẫu Hồ sơ KH cố định"
-              onClick={() => void downloadCustomerFullProfileTemplate()}
-            >
-              Mẫu
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={importing}
-              title="Import đúng mẫu Hồ sơ KH"
-              onClick={() => importInputRef.current?.click()}
-            >
-              {importing ? "…" : "Import"}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              title="Export đúng mẫu Hồ sơ KH"
-              onClick={() => void downloadCustomerFullProfileExport(draft)}
-            >
-              Export
-            </Button>
-          </div>
-          <div className="hidden items-center gap-1.5 sm:flex">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!dirty || saving}
-              onClick={handleDiscard}
-            >
-              Hủy
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={!dirty || saving}
-              onClick={() => void persistDraft()}
-            >
-              {saving ? "Đang lưu…" : "Lưu"}
-            </Button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {isMobile ? (
+              <OverflowMenu
+                label="Excel"
+                items={excelToolItems}
+                compact
+              />
+            ) : (
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  title="Tải mẫu Hồ sơ KH cố định"
+                  onClick={() => void downloadCustomerFullProfileTemplate()}
+                >
+                  Mẫu
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={importing}
+                  title="Import đúng mẫu Hồ sơ KH"
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  {importing ? "…" : "Import"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  title="Export đúng mẫu Hồ sơ KH"
+                  onClick={() => void downloadCustomerFullProfileExport(draft)}
+                >
+                  Export
+                </Button>
+              </>
+            )}
+            <div className="hidden items-center gap-1.5 sm:flex">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!dirty || saving}
+                onClick={handleDiscard}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!dirty || saving}
+                onClick={() => void persistDraft()}
+              >
+                {saving ? "Đang lưu…" : "Lưu"}
+              </Button>
+            </div>
           </div>
           <input
             ref={importInputRef}
@@ -809,7 +849,7 @@ export function CustomersPage({
                     type="button"
                     data-customer-id={c.id}
                     onClick={() => selectCustomer(c.id)}
-                    className={`mb-0.5 w-full rounded-lg px-2.5 py-2 text-left transition ${
+                    className={`mb-0.5 w-full touch-manipulation rounded-lg px-2.5 py-2.5 text-left transition sm:py-2 ${
                       active
                         ? "bg-ui-primary/10 ring-1 ring-ui-primary/35"
                         : "hover:bg-ui-surface-muted"
@@ -865,7 +905,7 @@ export function CustomersPage({
                       {(
                         [
                           ["info", "Thông tin"],
-                          ["defaults", "Dữ liệu mặc định"],
+                          ["defaults", "Hồ sơ mặc định"],
                         ] as const
                       ).map(([id, label]) => (
                         <button
@@ -874,7 +914,7 @@ export function CustomersPage({
                           role="tab"
                           aria-selected={profileTab === id}
                           onClick={() => setProfileTab(id)}
-                          className={`min-h-9 flex-1 rounded-md px-2 text-[11px] font-semibold transition ${
+                          className={`min-h-10 flex-1 touch-manipulation rounded-md px-2 text-[12px] font-semibold transition sm:min-h-9 sm:text-[11px] ${
                             profileTab === id
                               ? "bg-ui-primary text-white"
                               : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
@@ -906,7 +946,7 @@ export function CustomersPage({
                           </Button>
                         </div>
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                          <label className="block">
+                          <label className="col-span-1 block">
                             <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
                               Customer Code
                             </span>
@@ -957,7 +997,7 @@ export function CustomersPage({
                               placeholder="VD: CÔNG CHÚA"
                             />
                           </label>
-                          <label className="block">
+                          <label className="col-span-2 block sm:col-span-1">
                             <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
                               Loại
                             </span>
@@ -977,7 +1017,7 @@ export function CustomersPage({
                               ))}
                             </select>
                           </label>
-                          <label className="col-span-2 block sm:col-span-2">
+                          <label className="col-span-2 block">
                             <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
                               Tên khách
                             </span>
@@ -994,7 +1034,7 @@ export function CustomersPage({
                                   name: normalizeCustomerNameInput(selected.name),
                                 })
                               }
-                              className={`${FIELD} py-2 text-sm font-semibold uppercase`}
+                              className={`${FIELD} text-sm font-semibold uppercase`}
                               placeholder="Tên công ty / đại lý"
                               data-customer-invalid={
                                 validationErrors.some(
@@ -1005,7 +1045,7 @@ export function CustomersPage({
                               }
                             />
                           </label>
-                          <label className="block">
+                          <label className="col-span-2 block sm:col-span-1">
                             <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
                               Đơn giá (VND/kg)
                             </span>
@@ -1079,30 +1119,28 @@ export function CustomersPage({
                   </div>
                 </div>
 
-                {dirty ? (
-                  <div className="sticky bottom-0 z-20 border-t border-ui-border bg-ui-surface px-3 py-2.5 pb-[max(0.65rem,env(safe-area-inset-bottom))] sm:hidden">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="secondary"
-                        size="md"
-                        className="flex-1"
-                        disabled={saving}
-                        onClick={handleDiscard}
-                      >
-                        Hủy
-                      </Button>
-                      <Button
-                        variant="primary"
-                        size="md"
-                        className="flex-1"
-                        disabled={saving}
-                        onClick={() => void persistDraft()}
-                      >
-                        {saving ? "Đang lưu…" : "Lưu"}
-                      </Button>
-                    </div>
+                <div className="sticky bottom-0 z-20 border-t border-ui-border bg-ui-surface px-3 py-2.5 pb-[max(0.65rem,env(safe-area-inset-bottom))] sm:hidden">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      className="min-h-11 flex-1 touch-manipulation"
+                      disabled={!dirty || saving}
+                      onClick={handleDiscard}
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="md"
+                      className="min-h-11 flex-1 touch-manipulation"
+                      disabled={!dirty || saving}
+                      onClick={() => void persistDraft()}
+                    >
+                      {saving ? "Đang lưu…" : "Lưu"}
+                    </Button>
                   </div>
-                ) : null}
+                </div>
               </>
             ) : (
               <div className="flex flex-1 items-center justify-center p-6">

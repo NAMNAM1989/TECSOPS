@@ -130,13 +130,11 @@ function createZip(files) {
 
 fs.mkdirSync(outputDir, { recursive: true });
 const archive = createZip(entries);
+const versionedName = `tecsops-chrome-extension-v${manifest.version}.zip`;
 const stablePath = path.join(outputDir, "tecsops-chrome-extension.zip");
-const versionedPath = path.join(
-  outputDir,
-  `tecsops-chrome-extension-v${manifest.version}.zip`
-);
+const versionedPath = path.join(outputDir, versionedName);
 fs.writeFileSync(stablePath, archive);
 fs.writeFileSync(versionedPath, archive);
 console.info(
-  `[extension:package] v${manifest.version} · ${entries.length} files · ${archive.length} bytes`
+  `[extension:package] v${manifest.version} · ${versionedName} · ${entries.length} files · ${archive.length} bytes`
 );

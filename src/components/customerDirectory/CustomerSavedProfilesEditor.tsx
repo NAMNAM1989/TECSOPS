@@ -25,7 +25,7 @@ import {
 import type { CustomerFieldError } from "../../utils/customerDirectoryValidation";
 import { getFieldValidationError } from "../../utils/customerDirectoryValidation";
 
-const inputCls = `w-full text-xs ${OPS.input}`;
+const inputCls = `w-full min-h-11 text-base sm:min-h-0 sm:text-xs ${OPS.input}`;
 
 type ProfileTab = "shipper" | "consignee" | "goods" | "vehicle";
 
@@ -240,10 +240,13 @@ export function CustomerDefaultDataEditor({
   return (
     <section className="space-y-2.5">
       <p className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
-        Dữ liệu mặc định · mẫu Excel Hồ sơ KH
+        <span className="sm:hidden">Hồ sơ mặc định</span>
+        <span className="hidden sm:inline">
+          Dữ liệu mặc định · mẫu Excel Hồ sơ KH
+        </span>
       </p>
 
-      <div className="rounded-lg border border-ui-border bg-ui-surface p-2">
+      <div className="rounded-lg border border-ui-border bg-ui-surface p-2 sm:p-2.5">
         <span className="mb-1.5 block text-[10px] font-bold uppercase text-ui-text-muted">
           Notify party
         </span>
@@ -251,37 +254,45 @@ export function CustomerDefaultDataEditor({
           value={defaultNotify}
           onChange={(e) => patchDefaultNotify(e.target.value)}
           rows={2}
-          className={`${inputCls} min-h-[2.5rem] resize-y`}
+          className={`${inputCls} min-h-14 resize-y sm:min-h-[2.5rem]`}
           placeholder="VD: NOTIFY GLOBAL LOGISTICS…"
         />
-        <p className={`mt-1 text-[10px] ${OPS.muted}`}>
-          Đồng bộ với CNEE mặc định · điền OPS / eSID (`notify_name`).
+        <p className={`mt-1 text-[10px] leading-snug ${OPS.muted}`}>
+          Đồng bộ CNEE mặc định · điền OPS / eSID
         </p>
       </div>
 
       <div className="rounded-lg border border-ui-border bg-ui-surface">
-        <div className="flex flex-wrap items-center gap-1 border-b border-ui-border px-1.5 py-1">
-          {TAB_LABELS.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
-                tab === id
-                  ? "bg-ui-surface shadow-sm ring-1 ring-ui-primary/30"
-                  : "text-ui-text-muted hover:bg-ui-surface-muted"
-              }`}
-            >
-              {label}
-              {counts[id] > 0 ? ` (${counts[id]})` : ""}
-            </button>
-          ))}
-          <div className="ml-auto flex items-center gap-1">
+        <div className="flex items-center gap-1 border-b border-ui-border px-1 py-1 sm:px-1.5">
+          <div
+            className="-mx-0.5 flex min-w-0 flex-1 gap-0.5 overflow-x-auto px-0.5 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            role="tablist"
+            aria-label="Nhóm hồ sơ mặc định"
+          >
+            {TAB_LABELS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => setTab(id)}
+                className={`shrink-0 touch-manipulation rounded-md px-2.5 py-2 text-[12px] font-semibold transition sm:px-2 sm:py-1.5 sm:text-[11px] ${
+                  tab === id
+                    ? "bg-ui-surface shadow-sm ring-1 ring-ui-primary/30"
+                    : "text-ui-text-muted hover:bg-ui-surface-muted"
+                }`}
+              >
+                {label}
+                {counts[id] > 0 ? ` (${counts[id]})` : ""}
+              </button>
+            ))}
+          </div>
+          <div className="flex shrink-0 items-center gap-1 pl-0.5">
             <SectionErrorHint errors={errors} section={tab} />
             <button
               type="button"
               onClick={tabAdd[tab]}
-              className="rounded-full border border-ui-border px-2.5 py-1 text-[10px] font-semibold text-ui-primary hover:bg-ui-primary/10"
+              className="touch-manipulation rounded-full border border-ui-border px-2.5 py-1.5 text-[11px] font-semibold text-ui-primary hover:bg-ui-primary/10 sm:py-1 sm:text-[10px]"
             >
               + Thêm
             </button>

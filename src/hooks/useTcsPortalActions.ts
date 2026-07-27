@@ -335,14 +335,21 @@ export function useTcsPortalActions({
         const hotNote = res.hot_path ? " · cache" : " · fallback";
         const pdfName = row0?.pdf_name || row0?.downloaded_file || "";
         const saved = pdfName ? await downloadPdfFromAgent(pdfName) : false;
-        setDownloadedCount(saved || pdfName ? 1 : 0);
+        setDownloadedCount(pdfName ? 1 : 0);
         const shortName = pdfName ? String(pdfName).replace(/^.*[/\\]/, "") : "";
+        if (!pdfName) {
+          setError(`Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — agent không trả tên file`);
+          return;
+        }
+        if (!saved) {
+          setError(
+            `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — không tải được về máy. Bấm «Tải PDF» bên dưới hoặc kiểm tra agent.`
+          );
+          setMessage(`File sẵn sàng: ${shortName}`);
+          return;
+        }
         setMessage(
-          saved
-            ? `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — đã tải ${shortName} về máy`
-            : pdfName
-              ? `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — file sẵn sàng, bấm «Tải PDF»`
-              : `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote}`
+          `Tải PDF …${digits.slice(-8)} · ${sec}s${hotNote} — đã tải ${shortName} về máy`
         );
         void refreshHealth();
       } catch (e) {

@@ -23,6 +23,7 @@ import { WAREHOUSE_ORDER, isScscWarehouse, isTcsWarehouse, warehouseLabel } from
 import { NewBookingButton } from "./NewBookingButton";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { OpsMobileStickyHeader } from "./OpsMobileStickyHeader";
+import { OpsSheetImportButton } from "./OpsSheetImportButton";
 import { OpsToolsMenu } from "./OpsToolsMenu";
 import { firstWarehouseWithLots } from "../utils/warehouseMetrics";
 import { statusOrderForFilter } from "../utils/shipmentWorkflowStatus";
@@ -494,6 +495,7 @@ export function AirCargoTracking({
           activeWarehouse={activeWarehouse}
           onAdd={(wh) => void addBlankRowForWarehouse(wh)}
         />
+        <OpsSheetImportButton onOpenSheetImport={() => setSheetImportOpen(true)} />
         <OpsToolsMenu {...toolsProps} />
         <div className="min-w-0 flex-1 md:max-w-sm md:flex-none">
           <OpsDatePicker
@@ -566,7 +568,7 @@ export function AirCargoTracking({
         <div className="mb-3">
           <EmptyState
             title="Chưa có lô trong ngày này"
-            description="Tạo booking mới hoặc nhập từ Google Sheet trong menu Công cụ."
+            description="Tạo booking mới hoặc bấm «Nhập Sheet» để kéo từ Google Sheet."
             actionLabel="+ Booking"
             onAction={() => void addBlankRowForWarehouse(activeWarehouse)}
           />

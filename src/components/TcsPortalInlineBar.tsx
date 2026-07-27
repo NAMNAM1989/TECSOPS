@@ -1,23 +1,13 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { EsidSettingsMenu } from "./EsidSettingsMenu";
 import type { TcsPortalActions } from "../hooks/useTcsPortalActions";
-import {
-  clearTcsAgentBaseUrl,
-  downloadPdfFromAgent,
-  getTcsAgentBaseUrl,
-  setTcsAgentBaseUrl,
-} from "../utils/tcsPortalAgentApi";
+import { downloadPdfFromAgent } from "../utils/tcsPortalAgentApi";
 import { OverflowMenu } from "../ui";
 
 type Props = {
   tcs: TcsPortalActions;
   /** Gọn cho mobile */
   compact?: boolean;
-};
-
-type TcsDesktopInfo = {
-  enabled: boolean;
-  hint?: string;
 };
 
 export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
@@ -27,43 +17,41 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
   const btnSubmit = `${btn} bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm`;
 
   const headed = tcs.agentHeadless === false;
-  const [desktop, setDesktop] = useState<TcsDesktopInfo>({ enabled: false });
   const [showExtLogin, setShowExtLogin] = useState(false);
   const [tcsUsername, setTcsUsername] = useState("");
   const [tcsPassword, setTcsPassword] = useState("");
   const [rememberTcs, setRememberTcs] = useState(true);
+  const [extBusy, setExtBusy] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/tcs-desktop", { cache: "no-store" })
-      .then(async (res) => {
-        if (!res.ok) return { enabled: false as const };
-        return (await res.json()) as TcsDesktopInfo;
-      })
-      .then((info) => {
-        if (!cancelled)
-          setDesktop({ enabled: Boolean(info.enabled), hint: info.hint });
-      })
-      .catch(() => {
-        if (!cancelled) setDesktop({ enabled: false });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const configureAgentUrl = () => {
-    const current = getTcsAgentBaseUrl();
-    const next = window.prompt(
-      "URL agent TCS (để trống = proxy /tcs-agent qua máy đang mở Ops).\n" +
-        "Máy khác trong LAN: giữ trống và mở Ops bằng IP máy kho.\n" +
-        "Tuỳ chọn: http://IP-máy-kho:8765 hoặc HTTPS tunnel.",
-      current.includes("/tcs-agent") ? "" : current,
-    );
-    if (next === null) return;
-    if (!next.trim()) clearTcsAgentBaseUrl();
-    else setTcsAgentBaseUrl(next);
-    void tcs.refreshHealth();
+  const downloadChromeExt = async () => {
+    setExtBusy(true);
+    try {
+      const res = await fetch("/api/tcs-extension", { cache: "no-store" });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        version?: string;
+        download_url?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.ok || !data.download_url) {
+        throw new Error(data.error || "Không lấy được gói Chrome Ext");
+      }
+      const version = String(data.version || "").trim();
+      const a = document.createElement("a");
+      a.href = data.download_url;
+      a.download =
+        version
+          ? `tecsops-chrome-extension-v${version}.zip`
+          : "tecsops-chrome-extension.zip";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Tải Chrome Ext thất bại");
+    } finally {
+      setExtBusy(false);
+    }
   };
 
   const confirmSubmit = () => {
@@ -91,30 +79,12 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
 
   const advancedItems = [
     {
-      id: "vnc",
-      label: "Sửa tay (noVNC)",
-      description: desktop.enabled ? "Mở desktop chậm" : desktop.hint || "Tắt trên môi trường này",
-      disabled: !desktop.enabled,
-      onSelect: () => {
-        const url =
-          "/tcs-desktop/vnc.html?autoconnect=1&resize=scale&path=" +
-          encodeURIComponent("tcs-desktop/websockify");
-        window.open(url, "tcs-desktop", "noopener,noreferrer");
-      },
-    },
-    {
-      id: "url",
-      label: "URL agent",
-      description: "Chỉ máy kho / LAN",
-      disabled: tcs.busy,
-      onSelect: configureAgentUrl,
-    },
-    {
       id: "ext",
-      label: "Tải Chrome Ext",
-      description: "Load unpacked trên máy kho",
+      label: extBusy ? "Đang tải Ext…" : "Tải Chrome Ext",
+      description: "ZIP tên file có số phiên bản · Load unpacked",
+      disabled: extBusy || tcs.busy,
       onSelect: () => {
-        window.location.href = "/downloads/tecsops-chrome-extension.zip";
+        void downloadChromeExt();
       },
     },
   ];
@@ -261,7 +231,13 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
                         tcs.results[0].pdf_name ||
                           tcs.results[0].downloaded_file ||
                           "",
-                      );
+                      ).then((ok) => {
+                        if (!ok) {
+                          window.alert(
+                            "Không tải được PDF. Kiểm tra agent đang chạy rồi thử lại.",
+                          );
+                        }
+                      });
                     }}
                   >
                     Tải PDF

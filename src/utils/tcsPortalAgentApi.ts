@@ -138,7 +138,7 @@ export function agentOfflineHint(base = agentBase()): string {
   if (isLoopback) {
     return (
       `Agent Offline (${base}). 127.0.0.1 chỉ đúng trên máy đang chạy agent. ` +
-      `Máy khác: xóa URL tùy chỉnh (nút URL → để trống = proxy /tcs-agent) và mở Ops qua IP máy kho.`
+      `Máy khác: mở Ops qua IP máy kho (proxy /tcs-agent), không dùng 127.0.0.1.`
     );
   }
   return `Agent Offline (${base}). Kiểm tra agent đang chạy và URL/firewall.`;
@@ -372,30 +372,50 @@ export function tcsAgentDocUrl(nameOrPath: string): string {
 }
 /**
  * Tải PDF ESID về máy (Downloads) — không mở tab xem/in.
- * Fetch blob rồi gắn download (ổn định hơn mở URL trực tiếp).
+ *
+ * Job agent thường > vài giây → mất user activation; `<a download>` bị Chrome bỏ qua.
+ * Cách ổn định: xác nhận file bằng fetch, rồi tải qua iframe + Content-Disposition: attachment.
  */
 export async function downloadPdfFromAgent(pdfNameOrPath: string): Promise<boolean> {
   const name = pdfNameOrPath.replace(/^.*[/\\]/, "");
   if (!name.toLowerCase().endsWith(".pdf")) return false;
+  const docUrl = tcsAgentDocUrl(name);
   try {
-    const res = await fetch(tcsAgentDocUrl(name));
+    const res = await fetch(docUrl, { cache: "no-store" });
     if (!res.ok) return false;
-    const blob = await res.blob();
-    if (blob.size < 100) return false;
-    const url = URL.createObjectURL(blob);
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength < 100) return false;
+
+    // Thử blob (còn user activation — vd. bấm «Tải PDF» lần 2)
+    const objectUrl = URL.createObjectURL(
+      new Blob([buf], { type: "application/pdf" }),
+    );
     try {
       const a = document.createElement("a");
-      a.href = url;
+      a.href = objectUrl;
       a.download = name;
       a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
       a.remove();
     } finally {
-      window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     }
+
+    // Fallback khi mất user activation sau job dài: iframe + attachment
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("hidden", "");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.src = docUrl;
+    document.body.appendChild(iframe);
+    window.setTimeout(() => iframe.remove(), 60_000);
     return true;
   } catch {
-    return false;
+    try {
+      window.location.assign(docUrl);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

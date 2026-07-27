@@ -1,14 +1,13 @@
 /**
- * Railway/Docker: agent Playwright + Node server (+ optional noVNC desktop).
+ * Railway/Docker: agent Playwright + Node server (API-first).
  *
- * TCS_VNC=0 (mặc định): agent headless — nhập liệu API-first từ Ops (nhanh).
- * TCS_VNC=1: Xvfb + x11vnc + noVNC → `/tcs-desktop`; agent headed trên DISPLAY=:99.
+ * Agent: TCS_HEADLESS (mặc định 1 trên cloud). Máy kho local: TCS_HEADLESS=0.
+ * Không còn noVNC / TCS_VNC — điều khiển TCS qua Ext + Playwright API.
  */
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { isTcsVncEnabled, startTcsDesktop } from "./start-tcs-desktop.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const agentDir = path.join(root, "tcs-awb-automation");
@@ -59,31 +58,12 @@ function run(name, cmd, args, opts = {}) {
   return child;
 }
 
-async function main() {
-  const vnc = isTcsVncEnabled();
-  const display = (process.env.DISPLAY || ":99").trim() || ":99";
-  let desktopOk = false;
-
-  if (vnc) {
-    try {
-      const r = await startTcsDesktop(children, { onFatal: (code) => shutdown(code ?? 1) });
-      desktopOk = Boolean(r?.ok);
-    } catch (e) {
-      console.error(`[start] ✖ tcs-desktop: ${e?.message || e}`);
-      console.error("[start] Fallback headless — Ops vẫn chạy, không có cửa sổ noVNC.");
-      desktopOk = false;
-    }
-  } else {
-    console.info("[start] TCS_VNC=0 — bỏ qua noVNC desktop, agent headless");
-  }
-
+function main() {
   const envHeadless = process.env.TCS_HEADLESS;
   const headless =
     envHeadless != null && String(envHeadless).trim() !== ""
-      ? String(envHeadless)
-      : desktopOk
-        ? "0"
-        : "1";
+      ? String(envHeadless).trim()
+      : "1";
 
   const agentEnv = {
     PYTHONIOENCODING: "utf-8",
@@ -95,14 +75,14 @@ async function main() {
     TCS_AGENT_PORT: process.env.TCS_AGENT_PORT || "8765",
   };
   const headed =
-    headless === "0" || headless.toLowerCase() === "false" || headless.toLowerCase() === "off";
-  if (headed) {
-    agentEnv.DISPLAY = display;
+    headless === "0" ||
+    headless.toLowerCase() === "false" ||
+    headless.toLowerCase() === "off";
+  if (headed && process.env.DISPLAY) {
+    agentEnv.DISPLAY = process.env.DISPLAY;
   }
 
-  console.info(
-    `[start] agent ${headed ? `HEADED DISPLAY=${display}` : "HEADLESS"} · VNC desktop=${desktopOk}`
-  );
+  console.info(`[start] agent ${headed ? "HEADED" : "HEADLESS"} · API-first (no VNC)`);
 
   run("tcs-agent", pythonBin, ["-m", "app.main", "agent", "--real"], {
     cwd: agentDir,
@@ -116,7 +96,9 @@ for (const sig of ["SIGINT", "SIGTERM"]) {
   process.on(sig, () => shutdown(0));
 }
 
-main().catch((e) => {
+try {
+  main();
+} catch (e) {
   console.error("[start] fatal:", e);
   shutdown(1);
-});
+}

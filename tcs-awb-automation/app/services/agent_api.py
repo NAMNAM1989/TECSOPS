@@ -21,7 +21,8 @@ from app.config import Settings, ensure_runtime_dirs, load_settings
 from app.data.repository import Repository
 from app.services.awb_service import validate_ops_payload
 from app.services.batch_service import BatchService
-from app.services.download_service import resolve_docs_file
+from app.services.download_service import find_recent_esid_pdf, resolve_docs_file
+from app.data.models import NormalizedStatus
 from app.services.esid_declare_service import fill_esid_declare, submit_esid_declare
 from app.services.tcs_workspace_service import TcsWorkspaceService
 from app.utils.awb import digits_only
@@ -280,6 +281,9 @@ def make_handler(state: AgentState):
             if path == "/workspace/bootstrap":
                 self._handle_workspace_bootstrap(payload)
                 return
+            if path == "/workspace/prefetch-pdfs":
+                self._handle_prefetch_pdfs(payload)
+                return
             if path == "/captcha/solve":
                 raw_image = str(payload.get("image") or payload.get("data_url") or "")
                 if "," in raw_image:
@@ -455,6 +459,47 @@ def make_handler(state: AgentState):
                 with state.lock:
                     state.running = False
 
+        def _handle_prefetch_pdfs(self, payload: dict[str, Any]) -> None:
+            """In sẵn PDF cho AWB ready — dùng sau Đồng bộ (Ext hoặc Agent)."""
+            with state.lock:
+                if state.running:
+                    self._json(
+                        409,
+                        {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"},
+                    )
+                    return
+                state.running = True
+
+            def _run() -> tuple[int, dict[str, Any]]:
+                st = state.sessions.status()
+                state.session_snapshot = st.to_dict()
+                if not st.open or not st.logged_in:
+                    return 400, {
+                        "ok": False,
+                        "error": "NEEDS_LOGIN" if st.open else "NO_BROWSER",
+                        "message": st.message or "Cần login TCS trước khi prefetch PDF",
+                    }
+                raw_awbs = payload.get("awbs") or []
+                limit = payload.get("limit")
+                try:
+                    limit_n = int(limit) if limit is not None else None
+                except (TypeError, ValueError):
+                    limit_n = None
+                result = state.workspace.prefetch_ready_pdfs(
+                    awbs=[str(x) for x in raw_awbs] if isinstance(raw_awbs, list) else None,
+                    limit=limit_n,
+                )
+                return 200, {"ok": True, **result}
+
+            try:
+                code, body = state.call_on_worker(_run)
+                self._json(code, body)
+            except Exception as e:
+                self._json(500, {"ok": False, "error": "INTERNAL", "message": str(e)[:300]})
+            finally:
+                with state.lock:
+                    state.running = False
+
         def _handle_esid_declare_fill(self, payload: dict[str, Any]) -> None:
             """Điền form KHAI BÁO ESID từ Ops — mặc định không HOÀN TẤT."""
             with state.lock:
@@ -506,6 +551,79 @@ def make_handler(state: AgentState):
                     state.running = False
 
         def _handle_job(self, payload: dict[str, Any]) -> None:
+                # PDF cache: trả ngay, không chiếm Playwright worker / không cần login
+            try:
+                warehouse = str(payload.get("warehouse") or "TECS-TCS")
+                force_pdf = bool(
+                    payload.get("force")
+                    or payload.get("force_pdf")
+                    or payload.get("forcePdf")
+                )
+                # FORCE_BYPASS_V1 — bỏ qua cache khi Ops/bench gửi force=true
+                if force_pdf:
+                    pass  # rơi xuống worker in lại
+                elif (
+                    warehouse.upper() in {"TECS-TCS", "KHO-TCS"}
+                    and not bool(payload.get("mock", state.settings.mock))
+                ):
+                    try:
+                        preview_rows = validate_ops_payload(payload)
+                    except Exception:
+                        preview_rows = []
+                    if (
+                        len(preview_rows) == 1
+                        and preview_rows[0].action.value == "DOWNLOAD"
+                    ):
+                        cached = find_recent_esid_pdf(
+                            state.settings.output_dir / "docs",
+                            preview_rows[0].awb_digits,
+                            document_type=preview_rows[0].document_type or "ESID",
+                        )
+                        if (
+                            cached is not None
+                            and cached.is_file()
+                            and cached.stat().st_size >= 100
+                        ):
+                            name = cached.name
+                            self._json(
+                                200,
+                                {
+                                    "ok": True,
+                                    "job_id": "cache",
+                                    "total": 1,
+                                    "ok_count": 1,
+                                    "downloaded_count": 1,
+                                    "reception_completed": 0,
+                                    "not_completed": 0,
+                                    "errors": 0,
+                                    "report_path": "",
+                                    "docs_dir": str(state.settings.output_dir / "docs"),
+                                    "mock": False,
+                                    "hot_path": True,
+                                    "cache_hit": True,
+                                    "results": [
+                                        {
+                                            "stt": preview_rows[0].stt,
+                                            "awb": preview_rows[0].awb_display
+                                            or preview_rows[0].awb_digits,
+                                            "action": "DOWNLOAD",
+                                            "normalized_status": NormalizedStatus.DOWNLOADED.value,
+                                            "downloaded_file": str(cached),
+                                            "download_url": f"/docs?file={name}",
+                                            "pdf_name": name,
+                                            "print_status": "CACHE_HIT",
+                                            "tcs_status_raw": f"PDF cache ({name})",
+                                            "hot_path": True,
+                                            "cache_hit": True,
+                                            "shipment_id": preview_rows[0].shipment_id,
+                                        }
+                                    ],
+                                },
+                            )
+                            return
+            except Exception:
+                pass
+
             with state.lock:
                 if state.running:
                     self._json(409, {"ok": False, "error": "BUSY", "message": "Agent đang chạy job khác"})
@@ -531,6 +649,7 @@ def make_handler(state: AgentState):
                     confirm_register=confirm_register,
                     session_date=session_date,
                 )
+
                 portal = None
                 if not mock:
                     st = state.sessions.status()
@@ -547,7 +666,12 @@ def make_handler(state: AgentState):
                             "error": "NEEDS_LOGIN",
                             "message": "Chrome đang ở trang login — nhập CAPTCHA rồi Đăng nhập, sau đó thử lại",
                         }
-                    state.sessions.focus_if_headed()
+                    # DOWNLOAD đơn: bỏ focus cửa sổ (tiết kiệm thời gian máy kho)
+                    is_single_download = (
+                        len(rows) == 1 and rows[0].action.value == "DOWNLOAD"
+                    )
+                    if not is_single_download:
+                        state.sessions.focus_if_headed()
                     try:
                         portal = state.sessions.portal("list")
                     except Exception as e:
@@ -574,7 +698,10 @@ def make_handler(state: AgentState):
                         name = Path(r.downloaded_file).name
                         d["download_url"] = f"/docs?file={name}"
                         d["pdf_name"] = name
-                    if prepared_awb and digits_only(r.awb) == prepared_awb:
+                    if getattr(r, "print_status", "") == "CACHE_HIT":
+                        d["cache_hit"] = True
+                        d["hot_path"] = True
+                    elif prepared_awb and digits_only(r.awb) == prepared_awb:
                         d["hot_path"] = True
                     enriched.append(d)
                 summary = {
@@ -600,7 +727,8 @@ def make_handler(state: AgentState):
                     "report_path": str(report),
                     "docs_dir": str(state.settings.output_dir / "docs"),
                     "mock": mock,
-                    "hot_path": bool(prepared_awb),
+                    "hot_path": bool(prepared_awb) or any(x.get("cache_hit") for x in enriched),
+                    "cache_hit": any(x.get("cache_hit") for x in enriched),
                     "results": enriched,
                 }
                 state.last_job = summary
@@ -609,11 +737,14 @@ def make_handler(state: AgentState):
                     str(getattr(r, "print_status", "") or "").startswith("USER_")
                     for r in results
                 )
+                is_single_download = (
+                    len(rows) == 1 and rows[0].action.value == "DOWNLOAD"
+                )
                 if opened_dialog:
                     snap = dict(state.session_snapshot or {})
                     snap["message"] = (snap.get("message") or "Đã login") + " · hộp Save/In đang mở"
                     state.session_snapshot = snap
-                else:
+                elif not is_single_download:
                     try:
                         state.refresh_session_snapshot()
                     except Exception:

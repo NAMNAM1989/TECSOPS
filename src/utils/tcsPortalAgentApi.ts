@@ -72,6 +72,8 @@ export type TcsAgentJobResultRow = {
   download_url?: string;
   pdf_name?: string;
   print_status?: string;
+  cache_hit?: boolean;
+  hot_path?: boolean;
   error_code?: string;
   error_message?: string;
   shipment_id?: string;
@@ -89,6 +91,7 @@ export type TcsAgentJobResponse = {
   docs_dir?: string;
   mock?: boolean;
   hot_path?: boolean;
+  cache_hit?: boolean;
   results?: TcsAgentJobResultRow[];
   error?: string;
   message?: string;
@@ -271,6 +274,37 @@ export async function bootstrapTcsWorkspace(
   );
 }
 
+/** In sẵn PDF ESID vào cache agent (sau Đồng bộ Ext hoặc gọi tay). */
+export async function prefetchTcsPdfs(
+  awbs: string[],
+  opts: { limit?: number } = {}
+): Promise<{
+  ok: boolean;
+  prefetched?: number;
+  skipped?: number;
+  failed?: number;
+  error?: string;
+  message?: string;
+}> {
+  try {
+    return await postAgentJson(
+      "/workspace/prefetch-pdfs",
+      {
+        warehouse: "TECS-TCS",
+        awbs,
+        limit: opts.limit ?? 5,
+      },
+      "Prefetch PDF thất bại"
+    );
+  } catch (e) {
+    return {
+      ok: false,
+      error: "PREFETCH_FAILED",
+      message: e instanceof Error ? e.message : "Prefetch PDF thất bại",
+    };
+  }
+}
+
 /**
  * Chỉ lấy AWB agent xác nhận ready + RECEPTION_COMPLETED.
  * Không đọc raw/message (tránh khớp nhầm cụm «Hoàn thành tiếp nhận» trong lỗi).
@@ -374,7 +408,7 @@ export function tcsAgentDocUrl(nameOrPath: string): string {
  * Tải PDF ESID về máy (Downloads) — không mở tab xem/in.
  *
  * Job agent thường > vài giây → mất user activation; `<a download>` bị Chrome bỏ qua.
- * Cách ổn định: xác nhận file bằng fetch, rồi tải qua iframe + Content-Disposition: attachment.
+ * Một lần fetch → blob URL dùng cho cả `<a download>` và iframe fallback (không tải mạng 2 lần).
  */
 export async function downloadPdfFromAgent(pdfNameOrPath: string): Promise<boolean> {
   const name = pdfNameOrPath.replace(/^.*[/\\]/, "");
@@ -386,7 +420,6 @@ export async function downloadPdfFromAgent(pdfNameOrPath: string): Promise<boole
     const buf = await res.arrayBuffer();
     if (buf.byteLength < 100) return false;
 
-    // Thử blob (còn user activation — vd. bấm «Tải PDF» lần 2)
     const objectUrl = URL.createObjectURL(
       new Blob([buf], { type: "application/pdf" }),
     );
@@ -398,17 +431,21 @@ export async function downloadPdfFromAgent(pdfNameOrPath: string): Promise<boole
       document.body.appendChild(a);
       a.click();
       a.remove();
-    } finally {
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-    }
 
-    // Fallback khi mất user activation sau job dài: iframe + attachment
-    const iframe = document.createElement("iframe");
-    iframe.setAttribute("hidden", "");
-    iframe.setAttribute("aria-hidden", "true");
-    iframe.src = docUrl;
-    document.body.appendChild(iframe);
-    window.setTimeout(() => iframe.remove(), 60_000);
+      // Fallback khi mất user activation: iframe cùng blob (không fetch lại)
+      const iframe = document.createElement("iframe");
+      iframe.setAttribute("hidden", "");
+      iframe.setAttribute("aria-hidden", "true");
+      iframe.src = objectUrl;
+      document.body.appendChild(iframe);
+      window.setTimeout(() => {
+        iframe.remove();
+        URL.revokeObjectURL(objectUrl);
+      }, 60_000);
+    } catch {
+      URL.revokeObjectURL(objectUrl);
+      throw new Error("blob download failed");
+    }
     return true;
   } catch {
     try {

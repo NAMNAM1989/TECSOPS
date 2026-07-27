@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TECSOPS — Quy trình tự động hóa kho TECS-TCS</title>
+  <style>
+    @page { size: A4 portrait; margin: 10mm 11mm; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      font-family: "Segoe UI", "Be Vietnam Pro", system-ui, sans-serif;
+      color: #0f172a; background: #fff;
+      font-size: 9.5pt; line-height: 1.35;
+    }
+    .page { width: 100%; max-width: 190mm; margin: 0 auto; padding: 8px; }
+    header {
+      display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+      border-bottom: 2.5px solid #0b3d5c; padding-bottom: 6px; margin-bottom: 8px;
+    }
+    .brand { font-size: 18pt; font-weight: 800; letter-spacing: -0.03em; color: #0b3d5c; line-height: 1; }
+    .brand span { color: #c45c26; }
+    .subtitle { font-size: 9pt; font-weight: 600; color: #475569; text-align: right; }
+    .subtitle strong { color: #0f172a; display: block; font-size: 11pt; }
+    h2 {
+      margin: 8px 0 4px; font-size: 9.5pt; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.04em; color: #0b3d5c; border-left: 3px solid #c45c26; padding-left: 6px;
+    }
+    .flow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin: 4px 0 6px; }
+    .step {
+      border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 4px;
+      background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+      text-align: center; position: relative; min-height: 52px;
+    }
+    .step::after {
+      content: "→"; position: absolute; right: -8px; top: 50%; transform: translateY(-50%);
+      color: #c45c26; font-weight: 800; font-size: 11pt; z-index: 1;
+    }
+    .step:last-child::after { content: none; }
+    .step .n {
+      display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+      background: #0b3d5c; color: #fff; font-size: 7.5pt; font-weight: 800; line-height: 14px; margin-bottom: 2px;
+    }
+    .step .t { display: block; font-weight: 800; font-size: 8pt; color: #0f172a; }
+    .step .d { display: block; font-size: 7pt; color: #64748b; margin-top: 1px; }
+    .arch { display: grid; grid-template-columns: 1.1fr 0.9fr 1.1fr; gap: 6px; margin-bottom: 4px; }
+    .box { border: 1px solid #cbd5e1; border-radius: 7px; padding: 6px 7px; background: #fff; }
+    .box h3 { margin: 0 0 3px; font-size: 8.5pt; font-weight: 800; color: #0b3d5c; }
+    .box ul { margin: 0; padding-left: 14px; }
+    .box li { margin: 1px 0; font-size: 8pt; }
+    .mid {
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      gap: 4px; text-align: center; font-size: 7.5pt; font-weight: 700; color: #475569;
+    }
+    .pill {
+      display: inline-block; border-radius: 999px; padding: 3px 8px;
+      border: 1px solid #94a3b8; background: #f1f5f9; white-space: nowrap;
+    }
+    .pill.ext { background: #ecfdf5; border-color: #6ee7b7; color: #065f46; }
+    .pill.agent { background: #eff6ff; border-color: #93c5fd; color: #1e3a8a; }
+    .pill.tcs { background: #fff7ed; border-color: #fdba74; color: #9a3412; }
+    table { width: 100%; border-collapse: collapse; font-size: 7.8pt; margin-top: 2px; }
+    th, td { border: 1px solid #e2e8f0; padding: 3px 5px; vertical-align: top; text-align: left; }
+    th { background: #0b3d5c; color: #fff; font-weight: 700; font-size: 7.5pt; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .tag {
+      display: inline-block; font-size: 6.5pt; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.03em; padding: 1px 4px; border-radius: 3px; margin-right: 2px;
+    }
+    .auto { background: #d1fae5; color: #065f46; }
+    .hand { background: #ffedd5; color: #9a3412; }
+    .note { margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .note .box { background: #f8fafc; }
+    footer {
+      margin-top: 6px; padding-top: 4px; border-top: 1px solid #cbd5e1;
+      font-size: 7pt; color: #64748b; display: flex; justify-content: space-between;
+    }
+    .legend { margin-top: 4px; font-size: 7.5pt; color: #475569; }
+    .legend strong { color: #0f172a; }
+    .dl {
+      margin: 8px 0; padding: 8px 10px; border-radius: 8px;
+      background: #ecfdf5; border: 1px solid #6ee7b7; font-size: 9pt;
+    }
+    .dl a { color: #065f46; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div>
+        <div class="brand">TECS<span>OPS</span></div>
+        <div style="font-size:8pt;color:#64748b;margin-top:2px;">Hệ thống Quản lý Vận hành Hàng không</div>
+      </div>
+      <div class="subtitle">
+        <strong>Quy trình tự động hóa kho TECS-TCS</strong>
+        Sơ đồ 1 trang · Cổng ESID / Playwright / Chrome Ext
+      </div>
+    </header>
+
+    <div class="dl screen-only">
+      Tải file PDF:
+      <a href="/downloads/TECSOPS-TCS-ESID-Automation-1page.pdf" download="TECSOPS-TCS-ESID-Automation-1page.pdf">
+        TECSOPS-TCS-ESID-Automation-1page.pdf
+      </a>
+    </div>
+
+    <h2>1. Luồng vận hành end-to-end</h2>
+    <div class="flow">
+      <div class="step"><span class="n">1</span><span class="t">Nhập lô</span><span class="d">Sheet / Booking</span></div>
+      <div class="step"><span class="n">2</span><span class="t">Đồng bộ</span><span class="d">Login + Quét</span></div>
+      <div class="step"><span class="n">3</span><span class="t">Điền ESID</span><span class="d">Form KHAI BÁO</span></div>
+      <div class="step"><span class="n">4</span><span class="t">HOÀN TẤT</span><span class="d">Ext tay / Agent</span></div>
+      <div class="step"><span class="n">5</span><span class="t">Tải PDF</span><span class="d">Playwright</span></div>
+      <div class="step"><span class="n">6</span><span class="t">In PDF</span><span class="d">Thủ công</span></div>
+    </div>
+
+    <h2>2. Kiến trúc hệ thống</h2>
+    <div class="arch">
+      <div class="box">
+        <h3>Ops UI (TECS-TCS)</h3>
+        <ul>
+          <li>Thanh Cổng TCS: Đồng bộ, Cài đặt ESID</li>
+          <li>Menu dòng: Điền · Tải PDF ESID</li>
+          <li>Postgres: lô, khách, status</li>
+        </ul>
+      </div>
+      <div class="mid">
+        <span class="pill ext">Chrome Ext (ưu tiên Điền)</span>
+        <span class="pill agent">Agent Playwright · /tcs-agent</span>
+        <span class="pill tcs">→ tcs.com.vn</span>
+      </div>
+      <div class="box">
+        <h3>Agent / Ext / Dữ liệu</h3>
+        <ul>
+          <li>Ext: tab TCS ghim, Điền trực quan</li>
+          <li>Agent: Login, Quét, PDF, HOÀN TẤT API</li>
+          <li>output/docs: file PDF ESID</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>3. Chi tiết từng bước tự động hóa</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:14%">Bước</th>
+          <th style="width:28%">Tự động làm gì</th>
+          <th style="width:22%">Ai thực thi</th>
+          <th style="width:18%">Người cần làm</th>
+          <th>Điều kiện / lưu ý</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1. Nhập lô</strong></td>
+          <td>Lưu booking Postgres (AWB, chuyến, ngày bay, DIM…)</td>
+          <td>Ops UI + API</td>
+          <td><span class="tag hand">Tay</span> Sheet / Booking</td>
+          <td>Kho TECS-TCS · AWB đủ 11 số</td>
+        </tr>
+        <tr>
+          <td><strong>2. Đồng bộ</strong></td>
+          <td>Login TCS + quét «Hoàn thành tiếp nhận» + cập nhật status Ops</td>
+          <td>Ext ưu tiên · Agent fallback</td>
+          <td><span class="tag hand">Tay</span> TK/MK lần đầu · CAPTCHA khó</td>
+          <td>Gộp Login + Quét · không còn nút riêng</td>
+        </tr>
+        <tr>
+          <td><strong>3. Điền ESID</strong></td>
+          <td>Đổ form KHAI BÁO từ Ops + danh bạ + hồ sơ Người khai/Agent</td>
+          <td>Ext nếu đã login · else Playwright</td>
+          <td><span class="tag hand">Tay</span> Kiểm tra form</td>
+          <td><span class="tag auto">Auto</span> Điền · <strong>không</strong> submit</td>
+        </tr>
+        <tr>
+          <td><strong>4. HOÀN TẤT</strong></td>
+          <td>Ext: mở tab · Agent: bấm HOÀN TẤT sau confirm Ops</td>
+          <td>Ext / Playwright</td>
+          <td><span class="tag hand">Tay</span> Ext: bấm trên TCS</td>
+          <td>Playwright cần confirm trên Ops</td>
+        </tr>
+        <tr>
+          <td><strong>5. Tải PDF</strong></td>
+          <td>Tìm phiếu theo AWB → xuất PDF → tải về máy</td>
+          <td>Playwright · GET /docs</td>
+          <td>—</td>
+          <td><span class="tag auto">Auto</span> Độc lập với Quét · In ESID đã gỡ</td>
+        </tr>
+        <tr>
+          <td><strong>6. In PDF</strong></td>
+          <td>—</td>
+          <td>—</td>
+          <td><span class="tag hand">Tay</span> In từ file</td>
+          <td>Dùng PDF vừa tải</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <div class="box">
+        <h3>Ai chạy ở đâu</h3>
+        <ul>
+          <li><strong>Máy kho:</strong> Agent headed · Quét/PDF ổn định</li>
+          <li><strong>Chrome người nhập:</strong> Ext · Điền + HOÀN TẤT tay</li>
+          <li><strong>Railway:</strong> Ops + Postgres + agent headless · API-first</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>Flags quan trọng</h3>
+        <ul>
+          <li><strong>TCS_HEADLESS</strong> — Railway=1 · máy kho=0 (headed)</li>
+          <li>Không còn noVNC / TCS_VNC</li>
+          <li>Workspace: IDLE → OPENING → NEEDS_LOGIN → SCANNING → READY</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="legend">
+      <strong>Ghi nhớ:</strong>
+      Đồng bộ = Login + Quét ·
+      Điền ≠ HOÀN TẤT ·
+      PDF ≠ Quét ·
+      In ESID đã bỏ · dùng «Tải PDF ESID».
+    </p>
+
+    <footer>
+      <span>TECSOPS · Kho TECS-TCS · ESID Automation</span>
+      <span>Tài liệu nội bộ · 1 trang A4</span>
+    </footer>
+  </div>
+  <style>
+    @media print { .screen-only { display: none !important; } }
+  </style>
+</body>
+</html>

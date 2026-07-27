@@ -15,26 +15,25 @@ trong Playwright workspace. PDF hiện vẫn dùng cache của Playwright trong 
 Agent Playwright dùng chung cho **Login / Quét / Điền / HOÀN TẤT / PDF**:
 
 - **Máy kho**: Chrome **headed** (`TCS_HEADLESS=0`) — toàn bộ workspace. Ops LAN qua proxy `/tcs-agent`.
-- **Railway all-in-one**: agent **headless** cho toàn bộ workspace. noVNC tùy chọn (`TCS_VNC=1`, chậm).
+- **Railway all-in-one**: agent **headless** — API-first. Điền trực quan = Chrome Ext trên máy user.
 
-### Railway all-in-one (Playwright headless + noVNC tùy chọn)
+### Railway all-in-one (Playwright headless)
 
-1 container = Node server + agent Python. Ops → `/tcs-agent` (API). Desktop `/tcs-desktop` chỉ khi `TCS_VNC=1`.
+1 container = Node server + agent Python. Ops → `/tcs-agent` (API). Không còn noVNC / `/tcs-desktop`.
 
 Deploy:
 
 1. `railway.toml` dùng `Dockerfile`. Deploy: `npm run railway:up` / `npm run deploy:ship`.
 2. Railway **Variables**:
    - Bắt buộc login: `TCS_USERNAME`, `TCS_PASSWORD`.
-   - Mặc định image: `TCS_VNC=0`, `TCS_HEADLESS=1`, `TCS_AUTO_OPEN=1`, `TCS_CAPTCHA_OCR=1`, `TCS_MOCK=0`.
-   - Bật desktop (dự phòng): `TCS_VNC=1`, `TCS_HEADLESS=0`, `DISPLAY=:99`. `TCS_VNC_PASSWORD` tùy chọn.
+   - Mặc định image: `TCS_HEADLESS=1`, `TCS_AUTO_OPEN=1`, `TCS_CAPTCHA_OCR=1`, `TCS_MOCK=0`.
 3. Mount **Railway Volume**:
    - `TCS_BROWSER_PROFILE=/app/tcs-awb-automation/browser_profile` — giữ cookie.
    - `TCS_OUTPUT_DIR=/app/tcs-awb-automation/output` — giữ PDF.
 
-**Nhập liệu Điền:** Ops **Đồng bộ TCS** → **Điền** → kiểm tra → **HOÀN TẤT**. Tất cả dùng cùng agent session. Nút **Sửa tay** chỉ khi `TCS_VNC=1`.
+**Nhập liệu Điền:** Ưu tiên Chrome Ext trên máy user. Fallback Playwright headless + HOÀN TẤT trên Ops.
 
-⚠️ **Rủi ro**: CAPTCHA/IP Railway; session mất nếu không mount volume; `TCS_VNC=1` tốn RAM và chậm hơn.
+⚠️ **Rủi ro**: CAPTCHA/IP Railway; session mất nếu không mount volume.
 
 ### Máy khác trong LAN
 
@@ -42,7 +41,7 @@ Deploy:
 2. Máy khác: mở Ops bằng **IP máy kho** (vd. `http://192.168.1.50:5173`), không dùng `127.0.0.1`.
 3. Browser gọi same-origin `/tcs-agent` → Vite/Express proxy tới `127.0.0.1:8765` trên máy kho.
 4. Sau **Điền**: form nằm trên page Khai báo cùng workspace → HOÀN TẤT trên Ops hoặc Chrome máy kho.
-5. Nút **URL** trên thanh Cổng TCS: để trống = proxy; chỉ điền nếu dùng tunnel HTTPS.
+5. Proxy mặc định `/tcs-agent` (same-origin). Không cần cấu hình URL agent riêng trên LAN.
 6. Agent riêng (không qua `dev`): `npm run tcs:agent:real`.
 
 ## Cài đặt (máy kho Windows)

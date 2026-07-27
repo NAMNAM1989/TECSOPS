@@ -8,7 +8,7 @@
 const LOGIN_URL = "https://www.tcs.com.vn/AwbLogin";
 const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const EXT_VERSION = chrome.runtime.getManifest().version;
-const EXPECTED_SCRIPT_VERSION = "2.0.11";
+const EXPECTED_SCRIPT_VERSION = "2.0.14";
 const SESSION_KEY = "tecsopsTcsSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
 const WORKSPACE_KEY = "tecsopsTcsWorkspace";
@@ -361,6 +361,17 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
     await navigate(tabId, LOGIN_URL);
   }
 
+  // Chờ form + ảnh CAPTCHA sẵn sàng (tránh lần 1 fail / lần 2 mới login)
+  for (let i = 0; i < 20; i += 1) {
+    try {
+      const captcha = await sendToTcsContent(tabId, { type: "TCS_GET_CAPTCHA" }, 2);
+      if (captcha?.dataUrl || captcha?.diag?.hasInput) break;
+    } catch {
+      /* trang đang hydrate */
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
   let submittedAttempts = 0;
   let sampledCaptchas = 0;
   let lastMessage = "";
@@ -459,7 +470,11 @@ async function bootstrapWorkspace(payload) {
     };
   }
 
-  await saveCredentials(credentials.username, credentials.password, payload.remember === true);
+  // Giữ remember=true nếu payload bật, hoặc đã có bản nhớ local (tránh lần 1 xóa MK đã lưu)
+  const localSaved = await chrome.storage.local.get(LOCAL_KEY);
+  const keepRemember =
+    payload.remember === true || Boolean(localSaved[LOCAL_KEY]?.username);
+  await saveCredentials(credentials.username, credentials.password, keepRemember);
   setWorkspace({
     phase: "OPENING",
     session_date: sessionDate,

@@ -54,6 +54,38 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
     }
   };
 
+  const syncTcs = async () => {
+    if (tcs.busy) return;
+    // Ping Ext mới nhất (retry 1 lần) — tránh lần 1 đi nhầm Playwright vì poll chưa kịp
+    let ext = (await tcs.refreshExtension?.()) || tcs.extension;
+    if (!ext?.ok) {
+      await new Promise((r) => window.setTimeout(r, 350));
+      ext = (await tcs.refreshExtension?.()) || tcs.extension;
+    }
+    const user = tcsUsername.trim();
+    const pass = tcsPassword;
+
+    if (ext?.ok) {
+      const result = await tcs.loginWithExtension({
+        username: user,
+        password: pass,
+        remember: rememberTcs,
+      });
+      if (result?.error === "CREDENTIALS_REQUIRED") {
+        setShowExtLogin(true);
+        return;
+      }
+      if (result?.ok) {
+        setShowExtLogin(false);
+        setTcsPassword("");
+      }
+      return;
+    }
+
+    // Không có Ext → Playwright (1 lần: login + quét)
+    await tcs.login();
+  };
+
   const confirmSubmit = () => {
     const p = tcs.lastDeclarePreview;
     if (!p) return;
@@ -122,26 +154,12 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
           className={btnScan}
           disabled={tcs.busy || (!tcs.health?.ok && !tcs.extension?.ok)}
           onClick={() => {
-            if (!tcs.extension?.ok) {
-              void tcs.login();
-              return;
-            }
-            void tcs
-              .loginWithExtension({
-                username: "",
-                password: "",
-                remember: true,
-              })
-              .then((result) => {
-                if (result?.error === "CREDENTIALS_REQUIRED") {
-                  setShowExtLogin(true);
-                }
-              });
+            void syncTcs();
           }}
           title={
             !tcs.health?.ok && !tcs.extension?.ok
               ? "Offline — mở máy kho / cài Ext nếu cần Đồng bộ"
-              : "Đồng bộ phiên TCS"
+              : "Đồng bộ phiên TCS (1 lần: login + quét đúng ngày Ops)"
           }
         >
           Đồng bộ
@@ -169,13 +187,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
           onSubmit={(event) => {
             event.preventDefault();
             if (!tcsUsername.trim() || !tcsPassword) return;
-            setShowExtLogin(false);
-            void tcs.loginWithExtension({
-              username: tcsUsername.trim(),
-              password: tcsPassword,
-              remember: rememberTcs,
-            });
-            setTcsPassword("");
+            void syncTcs();
           }}
         >
           <input
@@ -183,6 +195,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
             onChange={(event) => setTcsUsername(event.target.value)}
             placeholder="Tài khoản TCS"
             autoComplete="username"
+            autoFocus
             className="min-w-0 rounded-lg border border-sky-500/25 bg-white px-2 py-1 text-[11px] text-slate-900 outline-none focus:border-sky-500"
           />
           <input
@@ -200,6 +213,9 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
           >
             Đồng bộ TCS
           </button>
+          <p className="text-[10px] text-slate-600 sm:col-span-3">
+            Lần đầu: nhập TK/MK rồi bấm Đồng bộ. Lần sau chỉ cần bấm Đồng bộ một lần (Ext đã nhớ).
+          </p>
           <label className="flex items-center gap-1 text-[10px] text-slate-600 sm:col-span-3">
             <input
               type="checkbox"

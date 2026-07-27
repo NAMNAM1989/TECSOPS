@@ -102,7 +102,7 @@ class BrowserSession:
                 "--disable-software-rasterizer",
             ]
         elif on_xvfb:
-            # Cửa sổ cố định trên framebuffer 1366x900 (noVNC)
+            # Cửa sổ cố định 1366x900 khi headed (máy kho)
             chrome_args += ["--window-size=1366,900", "--window-position=0,0"]
         else:
             # Máy kho Windows headed

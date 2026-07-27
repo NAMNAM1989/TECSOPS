@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING, Callable
 from app.config import Settings
 from app.data.models import Action, AwbJobResult, AwbJobRow, BatchJob, NormalizedStatus
 from app.data.repository import Repository
-from app.services.download_service import build_document_filename, verify_download, write_placeholder_pdf
+from app.services.download_service import (
+    build_document_filename,
+    find_recent_esid_pdf,
+    verify_download,
+    write_placeholder_pdf,
+)
 from app.services.excel_service import export_result_excel
 from app.services.tcs_client import TcsClient
 from app.utils.logging_setup import setup_logging
@@ -119,11 +124,15 @@ class BatchService:
             if result.normalized_status == NormalizedStatus.NEEDS_LOGIN.value:
                 self.log.error("NEEDS_LOGIN — dừng để user đăng nhập lại")
                 break
-            self._delay()
+            # Job 1 AWB DOWNLOAD từ Ops: bỏ delay giả lập người dùng
+            if not (len(job.rows) == 1 and row.action == Action.DOWNLOAD):
+                self._delay()
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         out = self.settings.output_dir / f"TCS_AWB_RESULT_{ts}.xlsx"
-        export_result_excel(results, out)
+        # Bỏ ghi Excel cho tải PDF đơn lẻ (Ops)
+        if not (len(job.rows) == 1 and job.rows[0].action == Action.DOWNLOAD and job.source == "ops"):
+            export_result_excel(results, out)
         self.repo.update_job_status(job.job_id, "DONE" if not self._stop else "STOPPED")
         return results, out
 
@@ -244,9 +253,27 @@ class BatchService:
 
         prepared = getattr(client, "_prepared_awb", None) or ""
         skip_prepare = bool(prepared) and prepared == row.awb_digits
+
+        # Tái dùng PDF vừa in (cùng AWB trong TTL) — gần như tức thì
+        docs_dir = self.settings.output_dir / "docs"
+        force_pdf = bool(getattr(job, "force_pdf", False))
+        if not force_pdf:
+            cached = find_recent_esid_pdf(
+                docs_dir, row.awb_digits, document_type=row.document_type or "ESID"
+            )
+            if cached is not None and verify_download(cached):
+                result.normalized_status = NormalizedStatus.DOWNLOADED.value
+                result.downloaded_file = str(cached)
+                result.error_message = ""
+                result.print_status = "CACHE_HIT"
+                result.tcs_status_raw = f"PDF cache ({cached.name})"
+                result.end_time = datetime.now().isoformat(timespec="seconds")
+                result.duration_seconds = round((datetime.now() - started).total_seconds(), 3)
+                return result
+
         result.tcs_status_raw = "ESID IN → PDF (hot)" if skip_prepare else "ESID IN → PDF"
         fname = build_document_filename(row.awb_digits, row.document_type or "ESID")
-        fpath = self.settings.output_dir / "docs" / fname
+        fpath = docs_dir / fname
         pr = client.download_pdf(
             row.awb_digits,
             fpath,

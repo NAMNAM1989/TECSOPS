@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.11";
+  const SCRIPT_VERSION = "2.0.14";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -603,41 +603,21 @@
     clickTabByText("DANH SÁCH ESID") || clickTabByText("DANH SACH ESID");
     await sleep(350);
 
-    clearDateFiltersBeforeScan();
-
     const [year, month, day] = sessionDate.split("-");
     const dmy = `${day}-${month}-${year}`;
-    const start = document.querySelector("#search-form_dateSearch");
-    const end =
-      document.querySelector("input[placeholder='Ngày kết thúc']") ||
-      [...document.querySelectorAll("input")].find((item) =>
-        normalizeText(item.getAttribute("placeholder") || "").includes("NGAY KET THUC")
-      );
-    if (!start || !end) {
-      return {
-        ok: false,
-        error: "DATE_FILTER_NOT_FOUND",
-        message: "Không thấy bộ lọc ngày trên danh sách ESID",
-      };
-    }
-    setNativeValue(start, dmy);
-    dispatchEnter(start);
-    await sleep(80);
-    setNativeValue(end, dmy);
-    dispatchEnter(end);
-    pressKey("Escape");
-    await sleep(80);
-
-    const startGot = String(start.value || "").trim();
-    const endGot = String(end.value || "").trim();
-    if (
-      (startGot && !startGot.includes(dmy) && !startGot.includes(`${day}/${month}/${year}`)) ||
-      (endGot && !endGot.includes(dmy) && !endGot.includes(`${day}/${month}/${year}`))
-    ) {
+    const applied = await applyFlightDateFilter(sessionDate, dmy);
+    if (!applied.ok) {
+      if (applied.error === "DATE_FILTER_NOT_FOUND") {
+        return {
+          ok: false,
+          error: "DATE_FILTER_NOT_FOUND",
+          message: "Không thấy bộ lọc ngày trên danh sách ESID",
+        };
+      }
       return {
         ok: false,
         error: "DATE_FILTER_MISMATCH",
-        message: `Bộ lọc ngày chưa khớp ${dmy} (start=${startGot || "—"}, end=${endGot || "—"})`,
+        message: `Bộ lọc ngày chưa khớp ${dmy} (start=${applied.start || "—"}, end=${applied.end || "—"}) — chỉ quét đúng 1 ngày phiên Ops`,
       };
     }
 
@@ -688,9 +668,10 @@
     const readySet = new Set();
     for (const row of readyRows) {
       const digits = String(row.awb || "").replace(/\D/g, "");
-      let match = digits.length >= 11 && opsAwbs.includes(digits.slice(0, 11))
-        ? digits.slice(0, 11)
-        : "";
+      let match =
+        digits.length >= 11 && opsAwbs.includes(digits.slice(0, 11))
+          ? digits.slice(0, 11)
+          : "";
       if (!match && digits.length >= 8) {
         const candidates = opsAwbs.filter((awb) => awb.slice(3) === digits.slice(-8));
         if (candidates.length === 1) match = candidates[0];
@@ -744,8 +725,219 @@
     };
   }
 
+  function findDateFilterInputs() {
+    const start = document.querySelector("#search-form_dateSearch");
+    const end =
+      document.querySelector("input[placeholder='Ngày kết thúc']") ||
+      [...document.querySelectorAll("input")].find((item) =>
+        normalizeText(item.getAttribute("placeholder") || "").includes("NGAY KET THUC")
+      ) ||
+      // RangePicker: ô thứ 2 trong cùng .ant-picker
+      start?.closest(".ant-picker")?.querySelectorAll("input")?.[1] ||
+      null;
+    return { start, end };
+  }
+
+  function dateValueMatches(got, dmy) {
+    const raw = String(got || "").trim();
+    if (!raw) return false;
+    const norm = raw.replace(/\//g, "-");
+    const want = String(dmy || "").replace(/\//g, "-");
+    return norm.includes(want);
+  }
+
+  /**
+   * Gán input Ant/React — cần reset _valueTracker (giống Playwright).
+   * RangePicker hay tự điền end = cuối tháng khi chỉ set start + Enter.
+   */
+  function setReactInput(el, value) {
+    if (!el) return false;
+    try {
+      el.focus();
+      el.click();
+    } catch {
+      /* ignore */
+    }
+    const v = String(value ?? "");
+    const last = el.value;
+    const proto = window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+    if (setter) setter.call(el, v);
+    else el.value = v;
+    const tracker = el._valueTracker;
+    if (tracker && typeof tracker.setValue === "function") {
+      try {
+        tracker.setValue(last);
+      } catch {
+        /* ignore */
+      }
+    }
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.dispatchEvent(new InputEvent("input", { bubbles: true, data: v }));
+    return dateValueMatches(el.value, v) || String(el.value || "") === v;
+  }
+
+  /**
+   * Chọn đúng 1 ngày trên Ant RangePicker: click ô ngày 2 lần (from = to).
+   * Tránh gõ text — RangePicker hay tự rộng thành 01 → cuối tháng.
+   */
+  async function pickSingleDayRangeOnCalendar(ymd) {
+    const target = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || "").trim());
+    const { start } = findDateFilterInputs();
+    if (!start || !target) return false;
+
+    simulateClick(start);
+    await sleep(160);
+    let popup = [
+      ...document.querySelectorAll(
+        ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
+      ),
+    ]
+      .filter(isVisible)
+      .at(-1);
+    if (!popup) return false;
+
+    const targetYear = Number(target[1]);
+    const targetMonth = Number(target[2]);
+    // Header thường hiện "Jul 2026" / "Tháng 7 2026"
+    const headerText = normalizeText(
+      popup.querySelector(".ant-picker-header-view")?.textContent ||
+        popup.querySelector(".ant-picker-month-btn")?.textContent ||
+        ""
+    );
+    const monthNames = [
+      "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+      "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+    ];
+    let shownMonth = targetMonth;
+    let shownYear = targetYear;
+    for (let i = 0; i < 12; i += 1) {
+      if (headerText.includes(monthNames[i]) || headerText.includes(String(i + 1))) {
+        // Prefer English abbr match
+        if (headerText.includes(monthNames[i])) shownMonth = i + 1;
+      }
+    }
+    const yearHit = headerText.match(/(20\d{2})/);
+    if (yearHit) shownYear = Number(yearHit[1]);
+    const monthDelta = (targetYear - shownYear) * 12 + targetMonth - shownMonth;
+    if (Math.abs(monthDelta) <= 24) {
+      const navSelector =
+        monthDelta > 0
+          ? ".ant-picker-header-next-btn"
+          : ".ant-picker-header-prev-btn";
+      for (let i = 0; i < Math.abs(monthDelta); i += 1) {
+        const nav = popup.querySelector(navSelector);
+        if (!nav) break;
+        simulateClick(nav);
+        await sleep(70);
+        popup = [
+          ...document.querySelectorAll(
+            ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
+          ),
+        ]
+          .filter(isVisible)
+          .at(-1) || popup;
+      }
+    }
+
+    const findCell = () => {
+      const root = [
+        ...document.querySelectorAll(
+          ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
+        ),
+      ]
+        .filter(isVisible)
+        .at(-1) || popup;
+      return (
+        root.querySelector(`td[title="${ymd}"]:not(.ant-picker-cell-disabled)`) ||
+        root.querySelector(
+          `td.ant-picker-cell[title="${ymd}"]:not(.ant-picker-cell-disabled)`
+        )
+      );
+    };
+
+    const cell1 = findCell();
+    if (!cell1) return false;
+    simulateClick(cell1);
+    await sleep(120);
+    // Lần 2 = ngày kết thúc cùng ngày (range 1 ngày)
+    const cell2 = findCell();
+    if (!cell2) return false;
+    simulateClick(cell2);
+    await sleep(140);
+    pressKey("Escape");
+    await sleep(60);
+    return true;
+  }
+
+  async function applyFlightDateFilter(sessionYmd, dmy) {
+    const { start, end } = findDateFilterInputs();
+    if (!start || !end) {
+      return {
+        ok: false,
+        start: "",
+        end: "",
+        error: "DATE_FILTER_NOT_FOUND",
+      };
+    }
+
+    let startGot = "";
+    let endGot = "";
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      clearDateFiltersBeforeScan();
+      await sleep(60);
+
+      // Ưu tiên chọn lịch: from = to = đúng 1 ngày phiên Ops
+      await pickSingleDayRangeOnCalendar(sessionYmd);
+      await sleep(80);
+
+      startGot = String(start.value || "").trim();
+      endGot = String(end.value || "").trim();
+      if (dateValueMatches(startGot, dmy) && dateValueMatches(endGot, dmy)) {
+        return { ok: true, start: startGot, end: endGot };
+      }
+
+      // Fallback text: ép cả 2 ô = cùng ngày (không Enter — tránh auto cuối tháng)
+      setReactInput(start, dmy);
+      await sleep(40);
+      try {
+        start.blur();
+      } catch {
+        /* ignore */
+      }
+      await sleep(40);
+      setReactInput(end, dmy);
+      await sleep(40);
+      setReactInput(end, dmy);
+      try {
+        end.blur();
+      } catch {
+        /* ignore */
+      }
+      pressKey("Escape");
+      await sleep(80);
+
+      startGot = String(start.value || "").trim();
+      endGot = String(end.value || "").trim();
+      if (dateValueMatches(startGot, dmy) && dateValueMatches(endGot, dmy)) {
+        return { ok: true, start: startGot, end: endGot };
+      }
+    }
+    return { ok: false, start: startGot, end: endGot };
+  }
+
   function clearDateFiltersBeforeScan() {
     try {
+      // Hover picker để hiện nút X (Ant ẩn clear tới khi hover)
+      for (const picker of document.querySelectorAll(".ant-picker")) {
+        try {
+          picker.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+          picker.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+        } catch {
+          /* ignore */
+        }
+      }
       for (const button of document.querySelectorAll(".ant-picker-clear")) {
         try {
           button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -753,15 +945,9 @@
           /* ignore */
         }
       }
-      for (const sel of [
-        "#search-form_dateSearch",
-        "input[placeholder*='kết thúc']",
-        "input[placeholder*='ket thuc']",
-      ]) {
-        for (const input of document.querySelectorAll(sel)) {
-          setNativeValue(input, "");
-        }
-      }
+      const { start, end } = findDateFilterInputs();
+      if (start) setReactInput(start, "");
+      if (end) setReactInput(end, "");
       pressKey("Escape");
     } catch {
       /* ignore */

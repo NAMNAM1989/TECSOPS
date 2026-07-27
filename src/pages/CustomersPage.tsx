@@ -393,11 +393,16 @@ export function CustomersPage({
         hasDraftChanges
       ) {
         setPendingImportSave(true);
+        toast.success(
+          `Tạo ${result.created}, cập nhật ${result.updated}. Bấm Lưu để ghi lên server.`,
+          "Import Hồ sơ KH",
+        );
+      } else {
+        toast.success(
+          `Tạo ${result.created}, cập nhật ${result.updated}. Không có thay đổi cần lưu.`,
+          "Import Hồ sơ KH",
+        );
       }
-      toast.success(
-        `Tạo ${result.created}, cập nhật ${result.updated}. Bấm Lưu để ghi lên server.`,
-        "Import Hồ sơ KH",
-      );
       const last = result.customers[result.customers.length - 1];
       if (last) {
         setSelectedId(last.id);

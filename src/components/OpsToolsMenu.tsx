@@ -6,6 +6,7 @@ type Props = {
   showDimScsc?: boolean;
   excelExporting?: boolean;
   scscDimExporting?: boolean;
+  cargoReportCopying?: boolean;
   onNavigateCustomers: () => void;
   onPrefetchCustomers?: () => void;
   onNavigateStats?: () => void;
@@ -15,6 +16,7 @@ type Props = {
   onPrefetchSheetImport?: () => void;
   onDownloadDayExcel: () => void;
   onDownloadScscDim?: () => void;
+  onCopyCargoDayReport?: () => void;
 };
 
 // onPrefetchSheetImport giữ optional (không prefetch khi bắt buộc URL)
@@ -25,6 +27,7 @@ export function OpsToolsMenu({
   showDimScsc = false,
   excelExporting = false,
   scscDimExporting = false,
+  cargoReportCopying = false,
   onNavigateCustomers,
   onPrefetchCustomers,
   onNavigateStats,
@@ -34,9 +37,19 @@ export function OpsToolsMenu({
   onPrefetchSheetImport,
   onDownloadDayExcel,
   onDownloadScscDim,
+  onCopyCargoDayReport,
 }: Props) {
   const items = useMemo(() => {
     const list: OverflowMenuItem[] = [];
+    if (onCopyCargoDayReport) {
+      list.push({
+        id: "cargo-report",
+        label: cargoReportCopying ? "Đang copy ảnh…" : "Coppy Ảnh",
+        description: "Bảng hàng hóa ngày phiên · dán group chat",
+        onSelect: onCopyCargoDayReport,
+        disabled: cargoReportCopying,
+      });
+    }
     if (onNavigateStats) {
       list.push({
         id: "stats",
@@ -86,7 +99,9 @@ export function OpsToolsMenu({
     }
     return list;
   }, [
+    cargoReportCopying,
     excelExporting,
+    onCopyCargoDayReport,
     onDownloadDayExcel,
     onDownloadScscDim,
     onNavigateCustomers,

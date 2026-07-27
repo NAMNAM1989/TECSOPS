@@ -12,6 +12,8 @@ import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards"
 import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentEditSheet";
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { downloadScscDimDayExcel } from "../utils/exportScscDimListExcel";
+import { buildCargoDayReport } from "../utils/cargoDayReport";
+import { copyCargoDayReportImage } from "../utils/cargoDayReportImage";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import {
   filterShipmentsBySessionYmd,
@@ -104,6 +106,7 @@ export function AirCargoTracking({
   const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
   const [excelExporting, setExcelExporting] = useState(false);
   const [scscDimExporting, setScscDimExporting] = useState(false);
+  const [cargoReportCopying, setCargoReportCopying] = useState(false);
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
@@ -424,10 +427,42 @@ export function AirCargoTracking({
     return <PageSkeleton variant="ops" />;
   }
 
+  const onCopyCargoDayReport = useCallback(async () => {
+    setCargoReportCopying(true);
+    try {
+      const model = buildCargoDayReport(viewRows, selectedYmd);
+      const result = await copyCargoDayReportImage(model);
+      if (!result.ok) {
+        toast.error(result.reason, "Báo cáo hàng hóa");
+        return;
+      }
+      if (result.mode === "clipboard") {
+        toast.success(
+          `Đã copy ảnh ${model.totalLots} lô — dán vào group chat.`,
+          "Báo cáo hàng hóa",
+        );
+      } else {
+        toast.success(
+          `Trình duyệt chặn clipboard — đã tải ${result.filename}. Đính kèm vào chat.`,
+          "Báo cáo hàng hóa",
+        );
+      }
+    } catch (e) {
+      debugError("ui:cargo-day-report", e);
+      toast.error(
+        e instanceof Error ? e.message : "Không copy được ảnh báo cáo.",
+        "Báo cáo hàng hóa",
+      );
+    } finally {
+      setCargoReportCopying(false);
+    }
+  }, [selectedYmd, toast, viewRows]);
+
   const toolsProps = {
     showDimScsc: isScscWarehouse(activeWarehouse),
     excelExporting,
     scscDimExporting,
+    cargoReportCopying,
     onNavigateCustomers,
     onPrefetchCustomers,
     onNavigateStats,
@@ -436,6 +471,7 @@ export function AirCargoTracking({
     onOpenSheetImport: () => setSheetImportOpen(true),
     onDownloadDayExcel: () => setExcelRangeOpen(true),
     onDownloadScscDim: () => void onDownloadScscDimDay(),
+    onCopyCargoDayReport: () => void onCopyCargoDayReport(),
   };
 
   const chrome = isMobile ? (
@@ -517,6 +553,16 @@ export function AirCargoTracking({
             Thống kê
           </Button>
         ) : null}
+        <Button
+          variant="primary"
+          size="sm"
+          className="border-transparent bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-400"
+          disabled={cargoReportCopying || viewRows.length === 0}
+          title="Coppy Ảnh bảng hàng hóa ngày phiên (dán group chat)"
+          onClick={() => void onCopyCargoDayReport()}
+        >
+          {cargoReportCopying ? "…" : "Coppy Ảnh"}
+        </Button>
         <OpsToolsMenu {...toolsProps} />
         <div className="min-w-0 flex-1 md:max-w-sm md:flex-none">
           <OpsDatePicker

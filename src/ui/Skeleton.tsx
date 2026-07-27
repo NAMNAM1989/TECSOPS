@@ -10,8 +10,12 @@ export function Skeleton({ className = "", ...rest }: HTMLAttributes<HTMLDivElem
   );
 }
 
-/** Skeleton trang Ops / Customers khi Suspense. */
-export function PageSkeleton({ variant = "ops" }: { variant?: "ops" | "customers" }) {
+/** Skeleton trang Ops / Customers / Stats khi Suspense. */
+export function PageSkeleton({
+  variant = "ops",
+}: {
+  variant?: "ops" | "customers" | "stats";
+}) {
   return (
     <div
       className="mx-auto max-w-[1600px] px-3 py-3 sm:px-4 sm:py-4 lg:px-6"
@@ -39,6 +43,18 @@ export function PageSkeleton({ variant = "ops" }: { variant?: "ops" | "customers
         <div className="grid gap-3 sm:grid-cols-[240px_1fr]">
           <Skeleton className="h-64 w-full" />
           <Skeleton className="h-64 w-full" />
+        </div>
+      ) : variant === "stats" ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-12 w-20" />
+            <Skeleton className="h-12 w-20" />
+            <Skeleton className="h-12 w-24" />
+            <Skeleton className="h-12 w-24" />
+            <Skeleton className="h-12 w-28" />
+            <Skeleton className="h-12 w-28" />
+          </div>
+          <Skeleton className="h-48 w-full" />
         </div>
       ) : (
         <div className="space-y-2">

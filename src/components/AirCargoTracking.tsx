@@ -330,7 +330,9 @@ export function AirCargoTracking({
     (s: Shipment) => {
       onRequestPrint(s, state?.airlineLabelOverrides);
     },
-    [onRequestPrint, state?.airlineLabelOverrides]
+    // Chỉ [onRequestPrint]: state đổi liên tục qua Socket — đưa airlineLabelOverrides vào deps gây loop (#310).
+    // Đọc overrides qua closure tại lúc gọi in.
+    [onRequestPrint]
   );
 
   const saveAirlineLabelOverrides = async (next: AirlineLabelOverrides) => {

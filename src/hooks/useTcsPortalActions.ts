@@ -682,7 +682,6 @@ export function useTcsPortalActions({
         ? (extension?.workspace as TcsExtensionWorkspace | undefined)
         : health?.workspace) ?? null,
     refreshHealth,
-    refreshExtension,
   };
 }
 

@@ -63,6 +63,7 @@ import {
   applyFullProfileImport,
   downloadCustomerFullProfileExport,
   downloadCustomerFullProfileTemplate,
+  findCustomerByImportCode,
   parseCustomerFullProfileWorkbook,
 } from "../utils/customerFullProfileExcel";
 import type { SyncStatus } from "../hooks/useShipmentSync";
@@ -403,10 +404,19 @@ export function CustomersPage({
           "Import Hồ sơ KH",
         );
       }
-      const last = result.customers[result.customers.length - 1];
-      if (last) {
-        setSelectedId(last.id);
-        if (isMobile) setMobilePane("detail");
+      const impFocus = fullResult.customers[fullResult.customers.length - 1];
+      if (impFocus) {
+        const focus =
+          findCustomerByImportCode(result.customers, impFocus.code) ??
+          result.customers.find(
+            (c) =>
+              normalizeAgentCode(c.code) === normalizeAgentCode(impFocus.code),
+          );
+        if (focus) {
+          setSelectedId(focus.id);
+          setProfileTab("defaults");
+          if (isMobile) setMobilePane("detail");
+        }
       }
     } catch (e) {
       toast.error(

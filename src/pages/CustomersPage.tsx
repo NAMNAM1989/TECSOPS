@@ -379,7 +379,7 @@ export function CustomersPage({
       const result = applyFullProfileImport(draft, fullResult.customers);
       setDraft(result.customers.map((e) => clampCustomerDirectoryEntry(e)));
       toast.success(
-        `Tạo ${result.created}, cập nhật ${result.updated}. Nhớ bấm Lưu.`,
+        `Tạo ${result.created}, cập nhật ${result.updated}. Bấm Lưu để ghi lên server.`,
         "Import Hồ sơ KH",
       );
       const last = result.customers[result.customers.length - 1];

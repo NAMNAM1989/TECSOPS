@@ -9,11 +9,14 @@ import { PageSkeleton } from "./ui";
 
 const loadCustomersPage = () =>
   import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage }));
+const loadOpsStatsPage = () =>
+  import("./pages/OpsStatsPage").then((m) => ({ default: m.OpsStatsPage }));
 
 const AirCargoTracking = lazy(() =>
   import("./components/AirCargoTracking").then((m) => ({ default: m.AirCargoTracking }))
 );
 const CustomersPage = lazy(loadCustomersPage);
+const OpsStatsPage = lazy(loadOpsStatsPage);
 const PrintShippingLabel = lazy(() =>
   import("./components/PrintShippingLabel").then((m) => ({ default: m.PrintShippingLabel }))
 );
@@ -32,10 +35,17 @@ export default function App() {
     void loadCustomersPage();
   }, []);
 
+  const prefetchStats = useCallback(() => {
+    void loadOpsStatsPage();
+  }, []);
+
+  const skeletonVariant =
+    route === "customers" ? "customers" : route === "stats" ? "stats" : "ops";
+
   return (
     <>
       <div className="no-print min-h-screen bg-ui-background">
-        <Suspense fallback={<PageSkeleton variant={route === "customers" ? "customers" : "ops"} />}>
+        <Suspense fallback={<PageSkeleton variant={skeletonVariant} />}>
           {route === "customers" ? (
             <CustomersPage
               initial={sync.state?.customers ?? EMPTY_CUSTOMERS}
@@ -47,11 +57,22 @@ export default function App() {
               }}
               onBack={() => navigate("ops")}
             />
+          ) : route === "stats" ? (
+            <OpsStatsPage
+              rows={sync.state?.rows ?? fallback.rows}
+              ready={sync.state != null && sync.status !== "loading"}
+              syncStatus={sync.status}
+              socketConnected={sync.socketConnected}
+              onNavigateOps={() => navigate("ops")}
+              onNavigateCustomers={() => navigate("customers")}
+            />
           ) : (
             <AirCargoTracking
               sync={sync}
               onNavigateCustomers={() => navigate("customers")}
               onPrefetchCustomers={prefetchCustomers}
+              onNavigateStats={() => navigate("stats")}
+              onPrefetchStats={prefetchStats}
               onRequestPrint={(shipment, airlineLabelOverrides) =>
                 setPrintJob({ shipment, airlineLabelOverrides })
               }

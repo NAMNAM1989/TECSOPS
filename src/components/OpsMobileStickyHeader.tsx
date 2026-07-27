@@ -28,6 +28,8 @@ interface Props {
   onPrefetchSheetImport?: () => void;
   onNavigateCustomers: () => void;
   onPrefetchCustomers?: () => void;
+  onNavigateStats?: () => void;
+  onPrefetchStats?: () => void;
   onOpenAirlineLabels: () => void;
   onDownloadDayExcel: () => void;
   onDownloadScscDim?: () => void;
@@ -67,6 +69,8 @@ export function OpsMobileStickyHeader({
   onPrefetchSheetImport,
   onNavigateCustomers,
   onPrefetchCustomers,
+  onNavigateStats,
+  onPrefetchStats,
   onOpenAirlineLabels,
   onDownloadDayExcel,
   onDownloadScscDim,
@@ -144,6 +148,8 @@ export function OpsMobileStickyHeader({
           scscDimExporting={scscDimExporting}
           onNavigateCustomers={onNavigateCustomers}
           onPrefetchCustomers={onPrefetchCustomers}
+          onNavigateStats={onNavigateStats}
+          onPrefetchStats={onPrefetchStats}
           onOpenAirlineLabels={onOpenAirlineLabels}
           onOpenSheetImport={onOpenSheetImport}
           onPrefetchSheetImport={onPrefetchSheetImport}

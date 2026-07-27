@@ -13,7 +13,10 @@ import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentE
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { downloadScscDimDayExcel } from "../utils/exportScscDimListExcel";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
-import { filterShipmentsBySessionYmd } from "../utils/filterShipmentsBySessionYmd";
+import {
+  filterShipmentsBySessionYmd,
+  filterShipmentsBySessionYmdRange,
+} from "../utils/filterShipmentsBySessionYmd";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { TcsPortalInlineBar } from "./TcsPortalInlineBar";
@@ -36,6 +39,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import {
   AppShell,
   Banner,
+  Button,
   EmptyState,
   KpiStat,
   PageSkeleton,
@@ -49,7 +53,6 @@ import {
   type ShipmentSearchContext,
   type ShipmentSearchMatch,
 } from "../utils/shipmentSearch";
-import { filterShipmentsBySessionYmdRange } from "../utils/filterShipmentsBySessionYmd";
 import { DayExcelExportDialog } from "./DayExcelExportDialog";
 
 const GoogleSheetImportModal = lazy(() =>
@@ -65,6 +68,8 @@ interface AirCargoTrackingProps {
   sync: SyncApi;
   onNavigateCustomers: () => void;
   onPrefetchCustomers?: () => void;
+  onNavigateStats?: () => void;
+  onPrefetchStats?: () => void;
   onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
 }
 
@@ -81,6 +86,8 @@ export function AirCargoTracking({
   sync,
   onNavigateCustomers,
   onPrefetchCustomers,
+  onNavigateStats,
+  onPrefetchStats,
   onRequestPrint,
 }: AirCargoTrackingProps) {
   const { status, state, mutate, socketConnected, refreshState, applyRemoteState } = sync;
@@ -423,6 +430,8 @@ export function AirCargoTracking({
     scscDimExporting,
     onNavigateCustomers,
     onPrefetchCustomers,
+    onNavigateStats,
+    onPrefetchStats,
     onOpenAirlineLabels: () => setAirlineLabelSettingsOpen(true),
     onOpenSheetImport: () => setSheetImportOpen(true),
     onDownloadDayExcel: () => setExcelRangeOpen(true),
@@ -496,6 +505,18 @@ export function AirCargoTracking({
           onAdd={(wh) => void addBlankRowForWarehouse(wh)}
         />
         <OpsSheetImportButton onOpenSheetImport={() => setSheetImportOpen(true)} />
+        {onNavigateStats ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            title="Thống kê Lô · Kg · DIM · Chargeable"
+            onClick={onNavigateStats}
+            onMouseEnter={onPrefetchStats}
+            onFocus={onPrefetchStats}
+          >
+            Thống kê
+          </Button>
+        ) : null}
         <OpsToolsMenu {...toolsProps} />
         <div className="min-w-0 flex-1 md:max-w-sm md:flex-none">
           <OpsDatePicker

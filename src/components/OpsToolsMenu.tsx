@@ -8,6 +8,8 @@ type Props = {
   scscDimExporting?: boolean;
   onNavigateCustomers: () => void;
   onPrefetchCustomers?: () => void;
+  onNavigateStats?: () => void;
+  onPrefetchStats?: () => void;
   onOpenAirlineLabels: () => void;
   onOpenSheetImport: () => void;
   onPrefetchSheetImport?: () => void;
@@ -25,6 +27,8 @@ export function OpsToolsMenu({
   scscDimExporting = false,
   onNavigateCustomers,
   onPrefetchCustomers,
+  onNavigateStats,
+  onPrefetchStats,
   onOpenAirlineLabels,
   onOpenSheetImport,
   onPrefetchSheetImport,
@@ -32,7 +36,17 @@ export function OpsToolsMenu({
   onDownloadScscDim,
 }: Props) {
   const items = useMemo(() => {
-    const list: OverflowMenuItem[] = [
+    const list: OverflowMenuItem[] = [];
+    if (onNavigateStats) {
+      list.push({
+        id: "stats",
+        label: "Thống kê",
+        description: "Lô · Kg · DIM · Chargeable theo kỳ",
+        onSelect: onNavigateStats,
+        onPrefetch: onPrefetchStats,
+      });
+    }
+    list.push(
       {
         id: "customers",
         label: "Khách",
@@ -59,8 +73,8 @@ export function OpsToolsMenu({
         description: "Ngày hoặc khoảng ngày · Import Shipments",
         onSelect: onDownloadDayExcel,
         disabled: excelExporting,
-      },
-    ];
+      }
+    );
     if (showDimScsc && onDownloadScscDim) {
       list.push({
         id: "dim-scsc",
@@ -76,10 +90,12 @@ export function OpsToolsMenu({
     onDownloadDayExcel,
     onDownloadScscDim,
     onNavigateCustomers,
+    onNavigateStats,
     onOpenAirlineLabels,
     onOpenSheetImport,
     onPrefetchCustomers,
     onPrefetchSheetImport,
+    onPrefetchStats,
     scscDimExporting,
     showDimScsc,
   ]);

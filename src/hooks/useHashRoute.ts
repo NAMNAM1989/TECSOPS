@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type AppRoute = "ops" | "customers";
+export type AppRoute = "ops" | "customers" | "stats";
 
 function parseHashRoute(): AppRoute {
   const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
   if (raw === "customers" || raw.startsWith("customers/")) return "customers";
+  if (raw === "stats" || raw.startsWith("stats/")) return "stats";
   return "ops";
 }
 
 function hashFor(route: AppRoute): string {
-  return route === "customers" ? "#/customers" : "#/";
+  if (route === "customers") return "#/customers";
+  if (route === "stats") return "#/stats";
+  return "#/";
 }
 
 /** Định tuyến nhẹ bằng hash — không cần React Router. */

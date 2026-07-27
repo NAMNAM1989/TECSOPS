@@ -39,6 +39,13 @@ export default function App() {
     void loadOpsStatsPage();
   }, []);
 
+  const onRequestPrint = useCallback(
+    (shipment: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => {
+      setPrintJob({ shipment, airlineLabelOverrides });
+    },
+    []
+  );
+
   const skeletonVariant =
     route === "customers" ? "customers" : route === "stats" ? "stats" : "ops";
 
@@ -73,9 +80,7 @@ export default function App() {
               onPrefetchCustomers={prefetchCustomers}
               onNavigateStats={() => navigate("stats")}
               onPrefetchStats={prefetchStats}
-              onRequestPrint={(shipment, airlineLabelOverrides) =>
-                setPrintJob({ shipment, airlineLabelOverrides })
-              }
+              onRequestPrint={onRequestPrint}
             />
           )}
         </Suspense>

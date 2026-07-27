@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, startTransition, lazy, Suspense } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import {
   addLocalDays,
   formatLocalSessionDate,
@@ -66,6 +67,9 @@ const AirlineLabelSettingsModal = lazy(() =>
 
 type SyncApi = ReturnType<typeof useShipmentSync>;
 
+const EMPTY_SHIPMENT_ROWS: Shipment[] = [];
+const EMPTY_CUSTOMERS_DIR: CustomerDirectoryEntry[] = [];
+
 interface AirCargoTrackingProps {
   sync: SyncApi;
   onNavigateCustomers: () => void;
@@ -118,7 +122,7 @@ export function AirCargoTracking({
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
   const isViewingToday = selectedYmd === todayYmd;
 
-  const allRows = state?.rows ?? [];
+  const allRows = state?.rows ?? EMPTY_SHIPMENT_ROWS;
   const viewRows = useMemo(
     () => filterShipmentsBySessionYmd(allRows, selectedYmd),
     [allRows, selectedYmd]
@@ -260,7 +264,7 @@ export function AirCargoTracking({
   const tcsPortal = useTcsPortalActions({
     sessionYmd: selectedYmd,
     rows: viewRows,
-    customerDirectory: state?.customers ?? [],
+    customerDirectory: state?.customers ?? EMPTY_CUSTOMERS_DIR,
     onMarkReceptionCompleted,
     onReceptionScanDone,
     active: isTcsWarehouse(activeWarehouse),
@@ -423,12 +427,6 @@ export function AirCargoTracking({
     []
   );
 
-  const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
-
-  if (status === "loading" || !state) {
-    return <PageSkeleton variant="ops" />;
-  }
-
   const onCopyCargoDayReport = useCallback(async () => {
     setCargoReportCopying(true);
     try {
@@ -459,6 +457,12 @@ export function AirCargoTracking({
       setCargoReportCopying(false);
     }
   }, [selectedYmd, toast, viewRows]);
+
+  const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
+
+  if (status === "loading" || !state) {
+    return <PageSkeleton variant="ops" />;
+  }
 
   const toolsProps = {
     showDimScsc: isScscWarehouse(activeWarehouse),

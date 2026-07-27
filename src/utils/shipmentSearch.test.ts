@@ -3,6 +3,8 @@ import type { Shipment } from "../types/shipment";
 import {
   buildShipmentSearchHaystack,
   buildShipmentSearchMatches,
+  listFlightDateFacets,
+  normalizeFlightDateToken,
   shipmentMatchesSearchQuery,
 } from "./shipmentSearch";
 
@@ -78,5 +80,37 @@ describe("shipmentSearch", () => {
     expect(matches).toHaveLength(1);
     expect(matches[0]?.kind).toBe("vehicle");
     expect(matches[0]?.shipment.warehouse).toBe("TECS-SCSC");
+  });
+
+  it("normalizes flight date tokens", () => {
+    expect(normalizeFlightDateToken("28jul")).toBe("28JUL");
+    expect(normalizeFlightDateToken("28 JUL")).toBe("28JUL");
+    expect(normalizeFlightDateToken("28/07")).toBe("28JUL");
+    expect(normalizeFlightDateToken("8JUL")).toBe("08JUL");
+  });
+
+  it("filters by flight date when query is DDMMM", () => {
+    const a = baseRow({ id: "a", flightDate: "28JUL" });
+    const b = baseRow({ id: "b", flightDate: "24MAY", awb: "784-1111 2222" });
+    expect(shipmentMatchesSearchQuery(a, "28jul", ctx)).toBe(true);
+    expect(shipmentMatchesSearchQuery(b, "28JUL", ctx)).toBe(false);
+    expect(shipmentMatchesSearchQuery(a, "28/07", ctx)).toBe(true);
+  });
+
+  it("lists flight date facets with counts", () => {
+    const facets = listFlightDateFacets([
+      baseRow({ id: "1", flightDate: "28JUL" }),
+      baseRow({ id: "2", flightDate: "28jul", awb: "784-1" }),
+      baseRow({ id: "3", flightDate: "24MAY", awb: "784-2" }),
+    ]);
+    expect(facets).toEqual([
+      { date: "24MAY", count: 1 },
+      { date: "28JUL", count: 2 },
+    ]);
+  });
+
+  it("marks flightDate match kind", () => {
+    const matches = buildShipmentSearchMatches([baseRow({ flightDate: "28JUL" })], "28JUL", ctx);
+    expect(matches[0]?.kind).toBe("flightDate");
   });
 });

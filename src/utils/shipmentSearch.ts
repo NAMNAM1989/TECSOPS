@@ -3,17 +3,31 @@ import type { Shipment, Warehouse } from "../types/shipment";
 import { rawAwbDigits } from "./awbFormat";
 import { findCustomerEntry } from "./customerBookingResolve";
 
+const MONTHS3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
+
 export type ShipmentSearchContext = {
   customers: readonly CustomerDirectoryEntry[];
 };
 
-export type ShipmentSearchMatchKind = "mawb" | "hawb" | "vehicle" | "driver" | "other";
+export type ShipmentSearchMatchKind =
+  | "mawb"
+  | "hawb"
+  | "vehicle"
+  | "driver"
+  | "flightDate"
+  | "other";
 
 export type ShipmentSearchMatch = {
   shipment: Shipment;
   kind: ShipmentSearchMatchKind;
   label: string;
   sublabel?: string;
+};
+
+export type FlightDateFacet = {
+  /** Chuẩn DDMMM, vd. 28JUL */
+  date: string;
+  count: number;
 };
 
 function vehicleTokens(raw: string): string[] {
@@ -30,14 +44,64 @@ function getCustomerVehiclesForShipment(
   return entry?.savedVehicles ?? [];
 }
 
+/** Chuẩn hoá ngày bay → DDMMM (28JUL). Hỗ trợ 28jul, 28 JUL, 28/07… */
+export function normalizeFlightDateToken(raw: string): string {
+  const s0 = raw.trim();
+  if (!s0) return "";
+
+  const slash = /^(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?$/.exec(s0);
+  if (slash) {
+    const day = parseInt(slash[1], 10);
+    const mon = parseInt(slash[2], 10);
+    if (day >= 1 && day <= 31 && mon >= 1 && mon <= 12) {
+      return `${String(day).padStart(2, "0")}${MONTHS3[mon - 1]}`;
+    }
+  }
+
+  const compact = s0.replace(/\s+/g, "").toUpperCase();
+  const m = /^(\d{1,2})([A-Z]{3})(?:\d{2,4})?$/.exec(compact);
+  if (!m) return "";
+  const day = parseInt(m[1], 10);
+  const mon = m[2] as (typeof MONTHS3)[number];
+  if (!MONTHS3.includes(mon) || day < 1 || day > 31) return "";
+  return `${String(day).padStart(2, "0")}${mon}`;
+}
+
+export function isFlightDateQuery(raw: string): boolean {
+  return Boolean(normalizeFlightDateToken(raw));
+}
+
+function flightDateSortKey(date: string): number {
+  const m = /^(\d{2})([A-Z]{3})$/.exec(date);
+  if (!m) return 0;
+  const mon = MONTHS3.indexOf(m[2] as (typeof MONTHS3)[number]);
+  return (mon >= 0 ? mon : 0) * 100 + parseInt(m[1], 10);
+}
+
+/** Các ngày bay có trong danh sách lô — để hiện chip lọc nhanh. */
+export function listFlightDateFacets(rows: readonly Shipment[]): FlightDateFacet[] {
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    const date = normalizeFlightDateToken(row.flightDate || "");
+    if (!date) continue;
+    map.set(date, (map.get(date) || 0) + 1);
+  }
+  return [...map.entries()]
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => flightDateSortKey(a.date) - flightDateSortKey(b.date));
+}
+
 /** Haystack đầy đủ cho một lô. */
 export function buildShipmentSearchHaystack(shipment: Shipment, ctx: ShipmentSearchContext): string {
+  const flightDateNorm = normalizeFlightDateToken(shipment.flightDate || "");
   const parts = [
     shipment.awb,
     rawAwbDigits(shipment.awb),
     shipment.hawb ?? "",
     shipment.flight,
     shipment.flightDate,
+    flightDateNorm,
+    flightDateNorm.toLowerCase(),
     shipment.customer,
     shipment.customerCode,
     shipment.dest,
@@ -81,13 +145,24 @@ function vehicleMatch(haystackVehicles: string[], query: string): boolean {
   return false;
 }
 
-function resolveMatchKind(shipment: Shipment, query: string, ctx: ShipmentSearchContext): ShipmentSearchMatchKind {
+function resolveMatchKind(
+  shipment: Shipment,
+  query: string,
+  ctx: ShipmentSearchContext
+): ShipmentSearchMatchKind {
   const q = query.trim();
   const qLower = q.toLowerCase();
+  const flightQ = normalizeFlightDateToken(q);
+
+  if (flightQ && normalizeFlightDateToken(shipment.flightDate || "") === flightQ) {
+    return "flightDate";
+  }
 
   if (awbDigitsMatch(shipment, q)) {
     const hawb = (shipment.hawb ?? "").toLowerCase();
-    if (hawb && (hawb.includes(qLower) || rawAwbDigits(hawb).includes(rawAwbDigits(q)))) return "hawb";
+    if (hawb && (hawb.includes(qLower) || rawAwbDigits(hawb).includes(rawAwbDigits(q)))) {
+      return "hawb";
+    }
     return "mawb";
   }
 
@@ -113,8 +188,20 @@ export function shipmentMatchesSearchQuery(
   if (!q) return true;
 
   const tokens = queryTokens(q);
+  const flightTokens = tokens
+    .map((t) => normalizeFlightDateToken(t))
+    .filter(Boolean);
+  const otherTokens = tokens.filter((t) => !normalizeFlightDateToken(t));
+
+  if (flightTokens.length) {
+    const rowFd = normalizeFlightDateToken(shipment.flightDate || "");
+    if (!flightTokens.every((ft) => rowFd === ft)) return false;
+    if (!otherTokens.length) return true;
+  }
+
   const hay = buildShipmentSearchHaystack(shipment, ctx);
-  if (tokens.every((t) => hay.includes(t))) return true;
+  if (otherTokens.length && otherTokens.every((t) => hay.includes(t))) return true;
+  if (!flightTokens.length && tokens.every((t) => hay.includes(t))) return true;
 
   if (awbDigitsMatch(shipment, q)) return true;
 
@@ -148,14 +235,20 @@ export function buildShipmentSearchMatches(
     const hawbLabel = shipment.hawb?.trim();
     const vehicleLabel = vehicles[0]?.licensePlate?.trim() ?? "";
     const driverLabel = vehicles[0]?.driverName?.trim() ?? "";
+    const flightDate = normalizeFlightDateToken(shipment.flightDate || "") || shipment.flightDate.trim();
 
     let label = awbLabel;
     if (hawbLabel) label += ` / ${hawbLabel}`;
 
     const bits: string[] = [];
-    if (kind === "vehicle" && vehicleLabel) bits.push(vehicleLabel);
+    if (kind === "flightDate" && flightDate) {
+      bits.push(flightDate);
+      if ((shipment.flight ?? "").trim()) bits.unshift((shipment.flight ?? "").trim());
+      if ((shipment.dest ?? "").trim()) bits.push((shipment.dest ?? "").trim());
+    } else if (kind === "vehicle" && vehicleLabel) bits.push(vehicleLabel);
     else if (kind === "driver" && driverLabel) bits.push(driverLabel);
     else {
+      if (flightDate) bits.push(flightDate);
       if (vehicleLabel) bits.push(vehicleLabel);
       if (driverLabel) bits.push(driverLabel);
     }
@@ -194,6 +287,8 @@ export function matchKindLabel(kind: ShipmentSearchMatchKind): string {
       return "Số xe";
     case "driver":
       return "Tài xế";
+    case "flightDate":
+      return "Ngày bay";
     default:
       return "Khác";
   }

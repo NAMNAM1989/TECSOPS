@@ -308,29 +308,14 @@ export function CustomersPage({
       if (isMobile) setMobilePane("detail");
       return;
     }
-    if (
-      dirty &&
-      !window.confirm("Có thay đổi chưa lưu. Đổi khách sẽ hủy thay đổi?")
-    ) {
-      return;
-    }
     setSelectedId(id);
     setValidationErrors([]);
-    setSaveStatus("idle");
-    setProfileTab("info");
     if (isMobile) setMobilePane("detail");
-    setDraft((rows) => {
-      const source = dirty
-        ? initial.map((e) =>
-            clampCustomerDirectoryEntry(liftContactFromDefaultShipper(e)),
-          )
-        : rows;
-      const next = source.map((row) =>
+    setDraft((rows) =>
+      rows.map((row) =>
         row.id === id ? ensureCustomerEditScaffold(row) : row,
-      );
-      queueMicrotask(() => setBaseline(JSON.stringify(next)));
-      return next;
-    });
+      ),
+    );
   }
 
   function addCustomer() {
@@ -404,19 +389,17 @@ export function CustomersPage({
           "Import Hồ sơ KH",
         );
       }
-      const impFocus = fullResult.customers[fullResult.customers.length - 1];
-      if (impFocus) {
-        const focus =
-          findCustomerByImportCode(result.customers, impFocus.code) ??
-          result.customers.find(
-            (c) =>
-              normalizeAgentCode(c.code) === normalizeAgentCode(impFocus.code),
-          );
-        if (focus) {
-          setSelectedId(focus.id);
-          setProfileTab("defaults");
-          if (isMobile) setMobilePane("detail");
-        }
+      const importedHits = fullResult.customers
+        .map((imp) => findCustomerByImportCode(result.customers, imp.code))
+        .filter((h): h is NonNullable<typeof h> => h != null);
+      const focus =
+        importedHits.find((h) => h.id === selectedId) ??
+        importedHits[importedHits.length - 1] ??
+        null;
+      if (focus) {
+        setSelectedId(focus.id);
+        setProfileTab("defaults");
+        if (isMobile) setMobilePane("detail");
       }
     } catch (e) {
       toast.error(

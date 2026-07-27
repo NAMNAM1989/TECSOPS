@@ -11,6 +11,7 @@ import {
   sheetRowIsBlocked,
   sheetRowNeedsUpdate,
   sheetRowSyncStatus,
+  sheetRowToPatch,
 } from "./sheetRowReconcile.mjs";
 
 const customers = [{ id: "c1", name: "TÍN PHÁT", code: "TP" }];
@@ -182,5 +183,58 @@ describe("sheetRowReconcile", () => {
     );
     expect(resolved.syncStatus).toBe("update");
     expect(sheetRowIsBlocked(resolved.syncStatus)).toBe(false);
+  });
+
+  it("sheetRowToPatch không ghi dimWeightKg=null khi Sheet thiếu DIM (giữ volume Ops)", () => {
+    const sheetRow = {
+      awb: "235-4501 1960",
+      warehouse: "TECS-TCS",
+      customer: "TÍN PHÁT",
+      flight: "TK163",
+      flightDate: "14JUN",
+      cutoff: "17:00",
+      cutoffNote: "13JUN",
+      dest: "AMS",
+      pcs: 78,
+      kg: 1258,
+      dimWeightKg: null,
+      note: "",
+      consigneeNamePrint: "VERTEX",
+    };
+    const patch = sheetRowToPatch(sheetRow, "2026-06-13", customers, lookupCode, lookupId);
+    expect(Object.prototype.hasOwnProperty.call(patch, "dimWeightKg")).toBe(false);
+
+    const existing = {
+      ...state.rows[0],
+      dimWeightKg: 1400,
+      customer: "TÍN PHÁT",
+      customerCode: "TP",
+      customerId: "c1",
+      consigneeNamePrint: "VERTEX",
+      note: "",
+    };
+    expect(
+      sheetRowNeedsUpdate(existing, sheetRow, "2026-06-13", customers, lookupCode, lookupId)
+    ).toBe(false);
+  });
+
+  it("sheetRowToPatch ghi dimWeightKg khi Sheet có DIM hợp lệ", () => {
+    const sheetRow = {
+      awb: "235-4501 1960",
+      warehouse: "TECS-TCS",
+      customer: "",
+      flight: "TK163",
+      flightDate: "14JUN",
+      cutoff: "17:00",
+      cutoffNote: "13JUN",
+      dest: "AMS",
+      pcs: 78,
+      kg: 1258,
+      dimWeightKg: 1300,
+      note: "",
+      consigneeNamePrint: "",
+    };
+    const patch = sheetRowToPatch(sheetRow, "2026-06-13", customers, lookupCode, lookupId);
+    expect(patch.dimWeightKg).toBe(1300);
   });
 });

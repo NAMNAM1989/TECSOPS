@@ -110,7 +110,8 @@ export function sheetAwbFirstIndexByKey(rows) {
 export function sheetRowToPatch(row, sessionDate, customers, lookupCustomerCode, lookupCustomerId) {
   const customer = normStr(row.customer);
   const sessionFlightDate = sessionYmdToFlightDateToken(sessionDate);
-  return {
+  /** @type {Record<string, unknown>} */
+  const patch = {
     awb: row.awb,
     flight: row.flight,
     flightDate: row.flightDate || sessionFlightDate,
@@ -121,12 +122,16 @@ export function sheetRowToPatch(row, sessionDate, customers, lookupCustomerCode,
     warehouse: row.warehouse,
     pcs: row.pcs,
     kg: row.kg,
-    dimWeightKg: row.dimWeightKg ?? null,
     customer,
     customerCode: lookupCustomerCode(customers, customer),
     customerId: lookupCustomerId(customers, customer),
     consigneeNamePrint: row.consigneeNamePrint,
   };
+  // Sheet BOOK thường không có DIM — không ghi null để khỏi xóa volume đã đo trên Ops.
+  if (row.dimWeightKg != null && Number.isFinite(Number(row.dimWeightKg))) {
+    patch.dimWeightKg = Number(row.dimWeightKg);
+  }
+  return patch;
 }
 
 /** So sánh lô web với dữ liệu Sheet — khác kho/khách/chuyến/… → cần cập nhật. */
@@ -145,7 +150,12 @@ export function sheetRowNeedsUpdate(existing, row, sessionDate, customers, looku
   if (normStr(existing.dest).toUpperCase() !== normStr(patch.dest).toUpperCase()) return true;
   if (normNum(existing.pcs) !== normNum(patch.pcs)) return true;
   if (normNum(existing.kg) !== normNum(patch.kg)) return true;
-  if (normNum(existing.dimWeightKg) !== normNum(patch.dimWeightKg)) return true;
+  if (
+    Object.prototype.hasOwnProperty.call(patch, "dimWeightKg") &&
+    normNum(existing.dimWeightKg) !== normNum(patch.dimWeightKg)
+  ) {
+    return true;
+  }
   if (normStr(existing.note) !== normStr(patch.note)) return true;
   if (normStr(existing.consigneeNamePrint) !== normStr(patch.consigneeNamePrint)) return true;
   return false;

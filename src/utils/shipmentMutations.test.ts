@@ -215,3 +215,21 @@ describe("applyShipmentMutation RESET_TRIAL_DATA", () => {
     expect(next.customers).toEqual([]);
   });
 });
+
+describe("applyShipmentMutation ADD status", () => {
+  it("derive RECEIVED khi có AWB + pcs (không kẹt PENDING cứng)", () => {
+    const state: AppState = { version: 1, rows: [], customers: [] };
+    const next = applyShipmentMutation(state, {
+      action: "ADD",
+      shipment: {
+        ...emptyRow("x"),
+        awb: "978-23804012",
+        pcs: 5,
+        kg: 20,
+        status: "PENDING",
+      },
+    });
+    expect(next.rows).toHaveLength(1);
+    expect(next.rows[0]?.status).toBe("RECEIVED");
+  });
+});

@@ -17,14 +17,20 @@ function agentTarget() {
   return raw.replace(/\/$/, "") || "http://127.0.0.1:8765";
 }
 
-function isProxyEnabled() {
-  const flag = (process.env.TCS_AGENT_PROXY || "1").trim().toLowerCase();
+/** Export để unit test — production mặc định tắt trừ khi TCS_AGENT_PROXY=1 (Docker set sẵn). */
+export function isTcsAgentProxyEnabled() {
+  const raw = process.env.TCS_AGENT_PROXY;
+  if (raw === undefined || String(raw).trim() === "") {
+    // Production (Railway URL công khai): tắt mặc định — tránh mở agent qua proxy không auth.
+    return process.env.NODE_ENV !== "production";
+  }
+  const flag = String(raw).trim().toLowerCase();
   return flag !== "0" && flag !== "false" && flag !== "off";
 }
 
 export function registerTcsAgentProxy(app) {
-  if (!isProxyEnabled()) {
-    console.info("[tcs-agent-proxy] tắt (TCS_AGENT_PROXY=0)");
+  if (!isTcsAgentProxyEnabled()) {
+    console.info("[tcs-agent-proxy] tắt (production mặc định hoặc TCS_AGENT_PROXY=0)");
     return;
   }
 

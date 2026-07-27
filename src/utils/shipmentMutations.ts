@@ -3,7 +3,7 @@ import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { WAREHOUSE_ORDER, normalizeWarehouse } from "../constants/warehouses";
 import { awbDigitsKey } from "./awbFormat";
 import { awbConflictMessage, findAwbDigitsConflict } from "./awbUnique";
-import { workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus";
+import { migrateShipmentStatus, workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus";
 import { assertCustomerDirectoryValid } from "./customerDirectoryCore";
 import { clampCustomerDirectoryEntry } from "./customerDirectoryProfile";
 import type { AirlineLabelOverrides } from "./airlineLabelOverridesCore";
@@ -177,7 +177,8 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
       }
       assertAwbUnique(rows, s.awb);
       const id = nextNewId(rows);
-      rows.push({ ...s, id } as Shipment);
+      const withId = { ...s, id } as Shipment;
+      rows.push({ ...withId, status: migrateShipmentStatus(withId) });
       break;
     }
     default:

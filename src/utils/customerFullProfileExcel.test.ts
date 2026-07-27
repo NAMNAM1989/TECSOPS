@@ -1,42 +1,58 @@
 import { describe, expect, it } from "vitest";
-import * as fs from "fs";
 import {
   applyFullProfileImport,
+  buildCustomerFullProfileTemplateWorkbook,
   parseCustomerFullProfileWorkbook,
 } from "./customerFullProfileExcel";
+import { scaffoldNewCustomer } from "./customerDirectoryScaffold";
 
 describe("parseCustomerFullProfileWorkbook", () => {
-  it("đọc và bóc tách thành công file Excel 22 cột thực tế", async () => {
-    const fileFilePath = `C:\\Users\\Admin\\Documents\\DANH SACHHKHACH HANG\\Copy of customer-import-template.2.xlsx`;
-    if (!fs.existsSync(fileFilePath)) {
-      console.warn("File không tồn tại trên hệ thống test local, bỏ qua test đọc file đĩa.");
-      return;
-    }
+  it("đọc mẫu 18 cột — không bỏ dòng dữ liệu đầu (row 2)", async () => {
+    const wb = await buildCustomerFullProfileTemplateWorkbook();
+    const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+    const result = await parseCustomerFullProfileWorkbook(buf);
 
-    const buffer = fs.readFileSync(fileFilePath);
-    const result = await parseCustomerFullProfileWorkbook(buffer);
+    expect(result.customerCount).toBe(2);
+    const codes = result.customers.map((c) => c.code).sort();
+    expect(codes).toEqual(["CITYLINK", "ORIENT"]);
 
-    expect(result.customerCount).toBeGreaterThan(0);
-    expect(result.consigneeCount).toBeGreaterThan(0);
+    const city = result.customers.find((c) => c.code === "CITYLINK");
+    expect(city?.savedGoods?.[0]?.goodsDescription).toBe("GARMENTS");
+    expect(city?.savedConsignees?.[0]?.notifyName).toBe("NOTIFY GLOBAL LOGISTICS");
+    expect(city?.savedVehicles?.[0]?.licensePlate).toBe("50H-174.80");
+  });
 
-    // Kiểm tra thông tin mã CCE trong kết quả đọc
-    const cce = result.customers.find((c) => c.code === "CCE");
-    expect(cce).toBeDefined();
-    if (cce) {
-      expect(cce.name).toContain("NAM NAM LOGISTICS");
-      expect(cce.savedConsignees).toBeDefined();
-      expect(cce.savedConsignees!.length).toBeGreaterThan(0);
-      
-      // Kiểm tra có CNEE SYD và TPE
-      const hasSyd = cce.savedConsignees!.some((c) => c.label.includes("SYD"));
-      const hasTpe = cce.savedConsignees!.some((c) => c.label.includes("TPE"));
-      expect(hasSyd).toBe(true);
-      expect(hasTpe).toBe(true);
-    }
+  it("cập nhật khách đã có — ghi đè thông tin account + shipper", async () => {
+    const wb = await buildCustomerFullProfileTemplateWorkbook();
+    const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+    const parsed = await parseCustomerFullProfileWorkbook(buf);
 
-    // Kiểm tra hợp nhất vào danh bạ rỗng
-    const importRes = applyFullProfileImport([], result.customers);
-    expect(importRes.created).toBe(result.customerCount);
-    expect(importRes.consigneesAdded).toBe(result.consigneeCount);
+    const existing = scaffoldNewCustomer("c-old");
+    existing.code = "CITYLINK";
+    existing.name = "Tên cũ";
+    existing.address = "Địa chỉ cũ";
+    existing.phone = "0900000000";
+    existing.savedShippers = [
+      {
+        id: "shp-old",
+        label: "Mặc định",
+        shipperName: "Tên cũ",
+        shipperAddress: "Địa chỉ cũ",
+        shipperPhone: "0900000000",
+        shipperEmail: "",
+        taxCode: "",
+      },
+    ];
+    existing.defaultShipperId = "shp-old";
+
+    const merged = applyFullProfileImport([existing], parsed.customers);
+    expect(merged.updated).toBeGreaterThan(0);
+    expect(merged.created).toBe(1);
+
+    const hit = merged.customers.find((c) => c.code === "CITYLINK");
+    expect(hit?.name).toContain("PHÁT TRIỂN CITYLINK");
+    expect(hit?.address).toContain("Nguyễn Văn Trỗi");
+    expect(hit?.phone).toBe("0901234567");
+    expect(hit?.savedShippers?.[0]?.shipperEmail).toBe("ops@citylink.vn");
   });
 });

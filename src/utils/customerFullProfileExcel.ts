@@ -74,6 +74,29 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function findDataStartRow(
+  ws: import("exceljs").Worksheet,
+  colCode: number,
+): number {
+  const maxScan = Math.min(6, ws.rowCount || 6);
+  for (let rowNumber = 1; rowNumber <= maxScan; rowNumber++) {
+    const raw = cellText(ws.getRow(rowNumber).getCell(colCode));
+    const lower = raw.toLowerCase();
+    if (!raw) continue;
+    if (
+      lower.includes("mã kh") ||
+      lower.includes("ma kh") ||
+      lower.includes("customer code") ||
+      lower === "stt"
+    ) {
+      continue;
+    }
+    const code = normalizeAgentCode(raw);
+    if (code.length >= 2) return rowNumber;
+  }
+  return 2;
+}
+
 export type FullProfileImportResult = {
   customers: CustomerDirectoryEntry[];
   customerCount: number;
@@ -114,19 +137,20 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
   let colConsigneeAddress = 10; // J: Consignee Address
   let colConsigneeEmail = 11;   // K: Consignee Email
   let colConsigneePhone = 12;   // L: Consignee Phone
-  let colConsigneeTax = 14;     // N: Consignee MST
-  let colNotifyName = 15;       // O: Notify
-  let colNatureOfGoods = 21;    // U: Nature of Goods
-  let colPlate = -1;
-  let colDriverName = -1;
-  let colDriverId = -1;
+  let colConsigneeTax = 13; // M: Người nhận - MST
+  let colNotifyName = 14; // N: Notify Party
+  let colNatureOfGoods = 15; // O: Loại hàng
+  let colPlate = 16; // P: Biển số xe
+  let colDriverName = 17; // Q: Tên tài xế
+  let colDriverId = 18; // R: CCCD tài xế
 
   // Thử dò lại vị trí cột từ header nếu có
   const row1 = ws.getRow(1);
   const row2 = ws.getRow(2);
   row1.eachCell({ includeEmpty: true }, (cell, colIdx) => {
     const txt = (cellText(cell.value) + " " + cellText(row2.getCell(colIdx).value)).toLowerCase();
-    if (txt.includes("mã khách") || txt.includes("customer code")) colCode = colIdx;
+    if (txt.includes("mã kh") || txt.includes("mã khách") || txt.includes("customer code"))
+      colCode = colIdx;
     else if (txt.includes("dest")) colDest = colIdx;
     else if (txt.includes("người gửi") && txt.includes("họ tên")) colShipperName = colIdx;
     else if (txt.includes("người gửi") && txt.includes("địa chỉ")) colShipperAddress = colIdx;
@@ -140,17 +164,20 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
     else if (txt.includes("người nhận") && txt.includes("mst")) colConsigneeTax = colIdx;
     else if (txt.includes("thông báo cho") || txt.includes("notify")) colNotifyName = colIdx;
     else if (txt.includes("loại hàng") || txt.includes("nature of goods")) colNatureOfGoods = colIdx;
-    else if (txt.includes("biển số") || txt.includes("xe")) colPlate = colIdx;
+    else if (txt.includes("biển số") || (txt.includes("xe") && !txt.includes("tài xế")))
+      colPlate = colIdx;
     else if (txt.includes("tài xế") || txt.includes("lái xe")) colDriverName = colIdx;
     else if (txt.includes("cccd tài xế") || txt.includes("cmnd tài xế")) colDriverId = colIdx;
   });
   void colConsigneeTax;
 
+  const dataStartRow = findDataStartRow(ws, colCode);
+
   // Gom các dòng theo Mã Khách Hàng
-  const groupedRows = new Map<string, any[]>();
+  const groupedRows = new Map<string, import("exceljs").Row[]>();
 
   ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    if (rowNumber <= 2) return; // Bỏ qua 2 hàng header
+    if (rowNumber < dataStartRow) return;
 
     const codeRaw = cellText(row.getCell(colCode));
     const code = normalizeAgentCode(codeRaw);
@@ -210,12 +237,15 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
       const cneeAddr = cellText(r.getCell(colConsigneeAddress));
       const cneeEmail = cellText(r.getCell(colConsigneeEmail));
       const cneePhone = cellText(r.getCell(colConsigneePhone));
+      const cneeTax =
+        colConsigneeTax > 0 ? cellText(r.getCell(colConsigneeTax)) : "";
+      void cneeTax;
       const notifyName = cellText(r.getCell(colNotifyName));
       const goodsDesc = cellText(r.getCell(colNatureOfGoods));
 
-      const plate = colPlate > 0 ? cellText(r.getCell(colPlate)) : "";
-      const driverName = colDriverName > 0 ? cellText(r.getCell(colDriverName)) : "";
-      const driverId = colDriverId > 0 ? cellText(r.getCell(colDriverId)) : "";
+      const plate = cellText(r.getCell(colPlate));
+      const driverName = cellText(r.getCell(colDriverName));
+      const driverId = cellText(r.getCell(colDriverId));
 
       // Thêm Consignee nếu có
       if (cneeName) {
@@ -493,12 +523,35 @@ export function applyFullProfileImport(
 } {
   const customers = existing.map((e) => ({ ...e }));
   const byCode = new Map(
-    customers.map((e) => [e.code.trim().toLowerCase(), e]),
+    customers.map((e) => [normalizeAgentCode(e.code).toLowerCase(), e]),
   );
   let created = 0;
   let updated = 0;
   let consigneesAdded = 0;
   let goodsAdded = 0;
+
+  const assignIfNonEmpty = (
+    hit: CustomerDirectoryEntry,
+    imp: CustomerDirectoryEntry,
+  ) => {
+    if (imp.name?.trim()) hit.name = imp.name.trim();
+    if (imp.address?.trim()) hit.address = imp.address.trim();
+    if (imp.email?.trim()) hit.email = imp.email.trim();
+    if (imp.phone?.trim()) hit.phone = imp.phone.trim();
+    if (imp.taxCode?.trim()) hit.taxCode = imp.taxCode.trim();
+  };
+
+  const mergeShipper = (
+    target: CustomerSavedShipper,
+    source: CustomerSavedShipper,
+  ): CustomerSavedShipper => ({
+    ...target,
+    shipperName: source.shipperName?.trim() || target.shipperName,
+    shipperAddress: source.shipperAddress?.trim() || target.shipperAddress,
+    shipperEmail: source.shipperEmail?.trim() || target.shipperEmail,
+    shipperPhone: source.shipperPhone?.trim() || target.shipperPhone,
+    taxCode: source.taxCode?.trim() || target.taxCode,
+  });
 
   for (const imp of imported) {
     const code = normalizeAgentCode(imp.code);
@@ -506,20 +559,32 @@ export function applyFullProfileImport(
 
     const hit = findExistingByImportCode(customers, byCode, code);
     if (hit) {
-      if (!hit.name || hit.name.startsWith("Khách hàng ")) hit.name = imp.name;
-      if (!hit.address && imp.address) hit.address = imp.address;
-      if (!hit.email && imp.email) hit.email = imp.email;
-      if (!hit.phone && imp.phone) hit.phone = imp.phone;
-      if (!hit.taxCode && imp.taxCode) hit.taxCode = imp.taxCode;
+      assignIfNonEmpty(hit, imp);
 
       const existingShippers = [...(hit.savedShippers ?? [])];
-      for (const shp of imp.savedShippers ?? []) {
-        const isDup = existingShippers.some(
-          (x) =>
-            x.shipperName.toLowerCase() === shp.shipperName.toLowerCase() &&
-            x.shipperAddress.toLowerCase() === shp.shipperAddress.toLowerCase(),
-        );
-        if (!isDup) existingShippers.push(shp);
+      const impShippers = imp.savedShippers ?? [];
+      if (impShippers.length > 0) {
+        const defIdx = hit.defaultShipperId
+          ? existingShippers.findIndex((s) => s.id === hit.defaultShipperId)
+          : 0;
+        if (defIdx >= 0 && existingShippers[defIdx]) {
+          existingShippers[defIdx] = mergeShipper(
+            existingShippers[defIdx]!,
+            impShippers[0]!,
+          );
+        } else if (existingShippers.length === 0) {
+          existingShippers.push(impShippers[0]!);
+        } else {
+          existingShippers[0] = mergeShipper(existingShippers[0]!, impShippers[0]!);
+        }
+        for (const shp of impShippers) {
+          const isDup = existingShippers.some(
+            (x) =>
+              x.shipperName.toLowerCase() === shp.shipperName.toLowerCase() &&
+              x.shipperAddress.toLowerCase() === shp.shipperAddress.toLowerCase(),
+          );
+          if (!isDup) existingShippers.push(shp);
+        }
       }
       hit.savedShippers = existingShippers;
       if (!hit.defaultShipperId && existingShippers.length > 0) {
@@ -528,13 +593,24 @@ export function applyFullProfileImport(
 
       const existingCnees = [...(hit.savedConsignees ?? [])];
       for (const cnee of imp.savedConsignees ?? []) {
-        const isDup = existingCnees.some(
+        const idx = existingCnees.findIndex(
           (x) =>
             x.consigneeName.toLowerCase() === cnee.consigneeName.toLowerCase() &&
             x.consigneeAddress.toLowerCase() ===
               cnee.consigneeAddress.toLowerCase(),
         );
-        if (!isDup) {
+        if (idx >= 0) {
+          const prev = existingCnees[idx]!;
+          existingCnees[idx] = {
+            ...prev,
+            consigneeName: cnee.consigneeName || prev.consigneeName,
+            consigneeAddress: cnee.consigneeAddress || prev.consigneeAddress,
+            consigneePhone: cnee.consigneePhone || prev.consigneePhone,
+            consigneeEmail: cnee.consigneeEmail || prev.consigneeEmail,
+            notifyName: cnee.notifyName || prev.notifyName,
+            label: cnee.label || prev.label,
+          };
+        } else {
           existingCnees.push(cnee);
           consigneesAdded++;
         }
@@ -546,12 +622,19 @@ export function applyFullProfileImport(
 
       const existingGoods = [...(hit.savedGoods ?? [])];
       for (const g of imp.savedGoods ?? []) {
-        const isDup = existingGoods.some(
+        const idx = existingGoods.findIndex(
           (x) =>
             x.goodsDescription.toLowerCase() ===
             g.goodsDescription.toLowerCase(),
         );
-        if (!isDup) {
+        if (idx >= 0) {
+          existingGoods[idx] = {
+            ...existingGoods[idx]!,
+            goodsDescription:
+              g.goodsDescription || existingGoods[idx]!.goodsDescription,
+            label: g.label || existingGoods[idx]!.label,
+          };
+        } else {
           existingGoods.push(g);
           goodsAdded++;
         }
@@ -563,14 +646,24 @@ export function applyFullProfileImport(
 
       const existingVehicles = [...(hit.savedVehicles ?? [])];
       for (const v of imp.savedVehicles ?? []) {
-        const isDup = existingVehicles.some(
+        const idx = existingVehicles.findIndex(
           (x) =>
             (v.licensePlate &&
               x.licensePlate.toLowerCase() === v.licensePlate.toLowerCase()) ||
             (v.driverName &&
               x.driverName.toLowerCase() === v.driverName.toLowerCase()),
         );
-        if (!isDup) existingVehicles.push(v);
+        if (idx >= 0) {
+          const prev = existingVehicles[idx]!;
+          existingVehicles[idx] = {
+            ...prev,
+            licensePlate: v.licensePlate || prev.licensePlate,
+            driverName: v.driverName || prev.driverName,
+            driverId: v.driverId || prev.driverId,
+          };
+        } else {
+          existingVehicles.push(v);
+        }
       }
       hit.savedVehicles = existingVehicles;
       if (!hit.defaultVehicleId && existingVehicles.length > 0) {

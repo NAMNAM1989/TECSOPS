@@ -11,11 +11,11 @@ export function AppShell({
   maxWidthClass?: string;
 }) {
   return (
-    <div className={`mx-auto ${maxWidthClass} px-2 py-1.5 sm:px-4 sm:py-3 lg:px-6`}>
-      <div className="sticky top-0 z-40 -mx-2 mb-1.5 border-b border-ui-border bg-ui-background px-2 pb-1.5 pt-[max(0.2rem,env(safe-area-inset-top))] sm:-mx-4 sm:mb-3 sm:px-4 sm:pb-2.5 sm:pt-2.5 lg:-mx-6 lg:px-6">
+    <div className={`mx-auto min-w-0 ${maxWidthClass} px-2 py-1.5 sm:px-4 sm:py-3 lg:px-6`}>
+      <div className="sticky top-0 z-40 -mx-2 mb-1.5 min-w-0 border-b border-ui-border bg-ui-background px-2 pb-1.5 pt-[max(0.2rem,env(safe-area-inset-top))] sm:-mx-4 sm:mb-3 sm:px-4 sm:pb-2.5 sm:pt-2.5 lg:-mx-6 lg:px-6">
         {chrome}
       </div>
-      {children}
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }

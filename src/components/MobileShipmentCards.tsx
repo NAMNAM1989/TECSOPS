@@ -101,58 +101,39 @@ const MobileShipmentCard = memo(
         id={`mobile-shipment-${row.id}`}
         style={{
           contentVisibility: "auto",
-          containIntrinsicSize: hasNote ? "0 44px" : "0 36px",
+          containIntrinsicSize:
+            flightMeta || hasNote ? "0 64px" : "0 52px",
         }}
         className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
           selected ? "ring-2 ring-ui-primary/40" : ""
         } ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}
       >
         <div className={MOBILE.cardInner}>
+          {/* Hàng 1: AWB full width còn lại — không chia chỗ với khách/K/Kg */}
           <div className="flex min-w-0 items-center gap-1">
             <button
               type="button"
               className="min-w-0 flex-1 text-left active:opacity-90"
               onClick={() => onOpenEdit(row)}
+              aria-label={awbTrim ? `Sửa lô ${awbTrim}` : "Thêm AWB"}
             >
-              <div className="flex min-w-0 items-baseline gap-1.5">
-                {awbTrim ? (
-                  <span className={`min-w-0 truncate ${MOBILE.awb}`}>
-                    {awbTrim}
-                    {hawbTrim ? (
-                      <span className="ml-0.5 font-shipment-data text-[10px] font-bold text-ui-text-muted">
-                        /{hawbTrim}
-                      </span>
-                    ) : null}
-                  </span>
-                ) : (
-                  <span className={MOBILE.awbEmpty}>+ AWB</span>
-                )}
-                <span className={`min-w-0 flex-1 truncate ${MOBILE.customerName}`} title={row.customer}>
-                  {row.customer?.trim() || "—"}
+              {awbTrim ? (
+                <span className={`block min-w-0 truncate ${MOBILE.awb}`} title={awbTrim}>
+                  {awbTrim}
+                  {hawbTrim ? (
+                    <span className="ml-0.5 font-shipment-data text-[10px] font-bold text-ui-text-muted">
+                      /{hawbTrim}
+                    </span>
+                  ) : null}
                 </span>
-              </div>
-              {flightMeta || hasNote ? (
-                <p className={`mt-0.5 truncate ${MOBILE.cardMeta}`} title={hasNote ? noteTrim : flightMeta}>
-                  {flightMeta}
-                  {flightMeta && hasNote ? " · " : ""}
-                  {hasNote ? noteTrim : ""}
-                </p>
-              ) : null}
+              ) : (
+                <span className={MOBILE.awbEmpty}>+ AWB</span>
+              )}
             </button>
             <div
               className="flex shrink-0 items-center gap-0.5"
               onClick={(e) => e.stopPropagation()}
             >
-              <MobileQuickNumber
-                label="K"
-                value={row.pcs}
-                onCommit={(v) => onUpdate(row.id, { pcs: v })}
-              />
-              <MobileQuickNumber
-                label="Kg"
-                value={row.kg}
-                onCommit={(v) => onUpdate(row.id, { kg: v })}
-              />
               <StatusSelect
                 compact
                 warehouse={row.warehouse}
@@ -169,6 +150,54 @@ const MobileShipmentCard = memo(
               />
             </div>
           </div>
+
+          {/* Hàng 2: khách + K/Kg */}
+          <div className="mt-0.5 flex min-w-0 items-center gap-1">
+            <button
+              type="button"
+              className="min-w-0 flex-1 text-left active:opacity-90"
+              onClick={() => onOpenEdit(row)}
+            >
+              <span
+                className={`block min-w-0 truncate ${MOBILE.customerName}`}
+                title={row.customer}
+              >
+                {row.customer?.trim() || "—"}
+              </span>
+            </button>
+            <div
+              className="flex shrink-0 items-center gap-0.5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MobileQuickNumber
+                label="K"
+                value={row.pcs}
+                onCommit={(v) => onUpdate(row.id, { pcs: v })}
+              />
+              <MobileQuickNumber
+                label="Kg"
+                value={row.kg}
+                onCommit={(v) => onUpdate(row.id, { kg: v })}
+              />
+            </div>
+          </div>
+
+          {flightMeta || hasNote ? (
+            <button
+              type="button"
+              className="mt-0.5 block w-full min-w-0 text-left active:opacity-90"
+              onClick={() => onOpenEdit(row)}
+            >
+              <p
+                className={`truncate ${MOBILE.cardMeta}`}
+                title={hasNote ? noteTrim : flightMeta}
+              >
+                {flightMeta}
+                {flightMeta && hasNote ? " · " : ""}
+                {hasNote ? noteTrim : ""}
+              </p>
+            </button>
+          ) : null}
         </div>
       </Box>
     );

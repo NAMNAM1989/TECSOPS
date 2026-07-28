@@ -21,7 +21,9 @@ export function StatusSelect({ value, onChange, warehouse, compact }: StatusSele
       aria-label={`Trạng thái · ${statusLabel[value]}`}
       title={`${statusIcon[value]} ${statusLabel[value]}`}
       className={`cursor-pointer rounded-md border font-semibold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ui-focus ${statusSelectSurface[value]} ${
-        compact ? "max-w-[7.5rem] px-1.5 py-0.5 text-[8px] leading-tight" : "px-2.5 py-1 text-xs"
+        compact
+          ? "max-w-[5.25rem] truncate px-1 py-0.5 text-[8px] leading-tight"
+          : "px-2.5 py-1 text-xs"
       }`}
     >
       {options.map((st) => (

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
+import type { CargoDayReportImageVariant } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
 import { formatKgTotal } from "../utils/formatKgTotal";
 import { SyncStatusPill, Wordmark } from "../ui";
@@ -33,7 +34,7 @@ interface Props {
   onOpenAirlineLabels: () => void;
   onDownloadDayExcel: () => void;
   onDownloadScscDim?: () => void;
-  onCopyCargoDayReport?: () => void;
+  onCopyCargoDayReport?: (variant?: CargoDayReportImageVariant) => void;
   excelExporting?: boolean;
   scscDimExporting?: boolean;
   cargoReportCopying?: boolean;
@@ -172,7 +173,7 @@ export function OpsMobileStickyHeader({
         />
       </div>
 
-      {/* Hàng 2: KPI + Coppy Ảnh luôn nổi (không chen hàng 1) */}
+      {/* Hàng 2: KPI + Coppy Ảnh (nhóm 1 / nhóm 2 +KH) */}
       <div className="flex items-center gap-1">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
           <MiniKpi label="Lô" value={lotCount} />
@@ -180,22 +181,33 @@ export function OpsMobileStickyHeader({
           <MiniKpi label="Kg" value={formatKgTotal(totalKg)} />
         </div>
         {onCopyCargoDayReport ? (
-          <button
-            type="button"
-            disabled={cargoReportCopying || viewRows.length === 0}
-            title="Copy ảnh bảng hàng hóa ngày phiên — dán group chat"
-            onClick={onCopyCargoDayReport}
-            className="inline-flex h-8 shrink-0 touch-manipulation items-center gap-1 rounded-lg bg-emerald-600 px-2.5 text-[11px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            {cargoReportCopying ? "…" : "Coppy Ảnh"}
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              disabled={cargoReportCopying || viewRows.length === 0}
+              title="Coppy Ảnh nhóm 1 — không Short Code · ngày đỏ = bay cùng phiên"
+              onClick={() => onCopyCargoDayReport("basic")}
+              className="inline-flex h-8 touch-manipulation items-center gap-1 rounded-lg bg-emerald-600 px-2 text-[11px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+              {cargoReportCopying ? "…" : "Ảnh"}
+            </button>
+            <button
+              type="button"
+              disabled={cargoReportCopying || viewRows.length === 0}
+              title="Coppy Ảnh nhóm 2 — có Short Code khách · ngày đỏ = bay cùng phiên"
+              onClick={() => onCopyCargoDayReport("withCustomer")}
+              className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-teal-700 px-2 text-[11px] font-bold text-white shadow-sm hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {cargoReportCopying ? "…" : "+KH"}
+            </button>
+          </div>
         ) : null}
       </div>
 

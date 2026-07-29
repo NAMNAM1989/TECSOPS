@@ -1,17 +1,31 @@
-import type { CargoDayReportModel } from "./cargoDayReport";
+import type { CargoDayReportModel, CargoDayReportRow } from "./cargoDayReport";
+
+export type CargoDayReportImageVariant = "basic" | "withCustomer";
 
 export type CopyCargoDayReportImageResult =
   | { ok: true; mode: "clipboard" | "download"; filename: string }
   | { ok: false; reason: string };
 
+type ColDef = { key: string; title: string; width: number };
+
 /** Cột rộng hơn — AWB / flight / cutoff đọc rõ trên Zalo sau khi nén. */
-const COLS = [
+const COLS_BASIC: readonly ColDef[] = [
   { key: "stt", title: "STT", width: 64 },
   { key: "booking", title: "Booking (AWB)", width: 200 },
   { key: "flightDate", title: "Flight / Date", width: 210 },
   { key: "cutoff", title: "Cutoff", width: 210 },
   { key: "dest", title: "Dest", width: 100 },
-] as const;
+];
+
+/** Nhóm 2: thêm Short Code khách hàng. */
+const COLS_WITH_CUSTOMER: readonly ColDef[] = [
+  { key: "stt", title: "STT", width: 56 },
+  { key: "booking", title: "Booking (AWB)", width: 180 },
+  { key: "customer", title: "Customer", width: 128 },
+  { key: "flightDate", title: "Flight / Date", width: 200 },
+  { key: "cutoff", title: "Cutoff", width: 190 },
+  { key: "dest", title: "Dest", width: 90 },
+];
 
 /** Scale cố định cao — ảnh chat bị nén vẫn còn nét. */
 const RENDER_SCALE = 3;
@@ -19,7 +33,12 @@ const RENDER_SCALE = 3;
 const FONT_STACK = "Segoe UI, ui-sans-serif, system-ui, Arial, sans-serif";
 const MONO_STACK = "Consolas, ui-monospace, Cascadia Mono, monospace";
 
-type ColKey = (typeof COLS)[number]["key"];
+const URGENT_BG = "#fee2e2";
+const URGENT_FG = "#b91c1c";
+
+function colsForVariant(variant: CargoDayReportImageVariant): readonly ColDef[] {
+  return variant === "withCustomer" ? COLS_WITH_CUSTOMER : COLS_BASIC;
+}
 
 function downloadPngBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -88,23 +107,94 @@ function fillTextVCenter(
   ctx.fillText(text, x, cellTop + cellH / 2);
 }
 
+function cellValue(row: CargoDayReportRow, key: string): string {
+  switch (key) {
+    case "stt":
+      return String(row.stt);
+    case "booking":
+      return row.booking;
+    case "customer":
+      return row.customerShortCode;
+    case "flightDate":
+      return row.flightDate;
+    case "cutoff":
+      return row.cutoff;
+    case "dest":
+      return row.dest;
+    default:
+      return "";
+  }
+}
+
+/** Vẽ Flight / Date — tô đỏ phần ngày khi lô gấp (bay cùng phiên). */
+function drawFlightDateCell(
+  ctx: CanvasRenderingContext2D,
+  row: CargoDayReportRow,
+  x: number,
+  y: number,
+  colW: number,
+  rowH: number,
+  cellPadX: number,
+): void {
+  const maxW = colW - cellPadX * 2;
+  const midY = y + rowH / 2;
+
+  if (row.flightDateUrgent) {
+    ctx.fillStyle = URGENT_BG;
+    ctx.fillRect(x + 1, y + 1, colW - 2, rowH - 2);
+  }
+
+  ctx.textBaseline = "middle";
+  ctx.font = `600 16px ${FONT_STACK}`;
+
+  const flight = row.flight;
+  const dateLabel = row.flightDateLabel;
+
+  if (flight && dateLabel) {
+    const sep = " / ";
+    const flightDraw = measureText(ctx, flight, Math.max(24, maxW * 0.55));
+    ctx.fillStyle = "#0f172a";
+    ctx.fillText(flightDraw, x + cellPadX, midY);
+    let cursor = x + cellPadX + ctx.measureText(flightDraw).width;
+
+    ctx.fillStyle = "#0f172a";
+    ctx.fillText(sep, cursor, midY);
+    cursor += ctx.measureText(sep).width;
+
+    const remain = Math.max(8, x + cellPadX + maxW - cursor);
+    ctx.font = `700 16px ${FONT_STACK}`;
+    ctx.fillStyle = row.flightDateUrgent ? URGENT_FG : "#0f172a";
+    const dateDraw = measureText(ctx, dateLabel, remain);
+    ctx.fillText(dateDraw, cursor, midY);
+    return;
+  }
+
+  const text = measureText(ctx, row.flightDate, maxW);
+  ctx.font = `600 16px ${FONT_STACK}`;
+  ctx.fillStyle = row.flightDateUrgent ? URGENT_FG : "#0f172a";
+  fillTextVCenter(ctx, text, x + cellPadX, y, rowH);
+}
+
 /** Vẽ bảng báo cáo hàng hóa ra canvas (độ phân giải cao, dễ đọc trên group chat). */
 export function renderCargoDayReportCanvas(
   model: CargoDayReportModel,
+  variant: CargoDayReportImageVariant = "basic",
 ): HTMLCanvasElement {
+  const cols = colsForVariant(variant);
   const scale = RENDER_SCALE;
   const padX = 36;
   const padY = 32;
   const titleH = 44;
   const subH = 28;
+  const legendH = model.hasUrgentFlightDate ? 26 : 0;
   const sectionGap = 28;
   const sectionHeadH = 44;
   const rowH = 44;
   const headH = 42;
   const cellPadX = 14;
-  const tableW = COLS.reduce((s, c) => s + c.width, 0);
+  const tableW = cols.reduce((s, c) => s + c.width, 0);
 
-  let contentH = padY + titleH + subH + 16;
+  let contentH = padY + titleH + subH + (legendH ? legendH + 4 : 0) + 16;
   for (const sec of model.sections) {
     contentH += sectionHeadH + headH + sec.rows.length * rowH + sectionGap;
   }
@@ -131,7 +221,8 @@ export function renderCargoDayReportCanvas(
   ctx.fillStyle = "#0f172a";
   ctx.font = `700 28px ${FONT_STACK}`;
   ctx.textBaseline = "top";
-  ctx.fillText(`Báo cáo hàng hóa · ${model.titleDate}`, padX, y);
+  const variantTag = variant === "withCustomer" ? " · +KH" : "";
+  ctx.fillText(`Báo cáo hàng hóa · ${model.titleDate}${variantTag}`, padX, y);
   y += titleH;
 
   ctx.fillStyle = "#334155";
@@ -140,7 +231,16 @@ export function renderCargoDayReportCanvas(
     .map((s) => `${s.label} ${s.rows.length}`)
     .join("  ·  ");
   ctx.fillText(`Tổng ${model.totalLots} lô  ·  ${sectionSummary}`, padX, y);
-  y += subH + 16;
+  y += subH;
+
+  if (model.hasUrgentFlightDate) {
+    ctx.fillStyle = URGENT_FG;
+    ctx.font = `600 14px ${FONT_STACK}`;
+    ctx.fillText("Ngày đỏ = bay cùng ngày phiên (lô gấp)", padX, y + 4);
+    y += legendH + 4;
+  } else {
+    y += 16;
+  }
 
   for (const sec of model.sections) {
     ctx.fillStyle = sec.warehouse === "TECS-TCS" ? "#bae6fd" : "#ddd6fe";
@@ -166,11 +266,11 @@ export function renderCargoDayReportCanvas(
     let x = padX;
     ctx.font = `700 15px ${FONT_STACK}`;
     ctx.fillStyle = "#f8fafc";
-    for (const col of COLS) {
+    for (const col of cols) {
       ctx.strokeStyle = "#475569";
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, col.width - 1, headH - 1);
-      if (col.key === "stt") {
+      if (col.key === "stt" || col.key === "dest") {
         const tw = ctx.measureText(col.title).width;
         fillTextVCenter(ctx, col.title, x + (col.width - tw) / 2, y, headH);
       } else {
@@ -185,40 +285,42 @@ export function renderCargoDayReportCanvas(
       ctx.fillStyle = i % 2 === 1 ? "#f1f5f9" : "#ffffff";
       ctx.fillRect(padX, y, tableW, rowH);
 
-      const cells: Record<ColKey, string> = {
-        stt: String(row.stt),
-        booking: row.booking,
-        flightDate: row.flightDate,
-        cutoff: row.cutoff,
-        dest: row.dest,
-      };
-
       x = padX;
-      for (const col of COLS) {
+      for (const col of cols) {
         ctx.strokeStyle = "#94a3b8";
         ctx.lineWidth = 1;
         ctx.strokeRect(x + 0.5, y + 0.5, col.width - 1, rowH - 1);
 
         const maxW = col.width - cellPadX * 2;
-        ctx.fillStyle = "#0f172a";
 
-        if (col.key === "stt") {
+        if (col.key === "flightDate") {
+          drawFlightDateCell(ctx, row, x, y, col.width, rowH, cellPadX);
+        } else if (col.key === "stt") {
+          ctx.fillStyle = "#0f172a";
           ctx.font = `700 16px ${FONT_STACK}`;
-          const text = measureText(ctx, cells.stt, maxW);
+          const text = measureText(ctx, cellValue(row, col.key), maxW);
           const tw = ctx.measureText(text).width;
           fillTextVCenter(ctx, text, x + (col.width - tw) / 2, y, rowH);
         } else if (col.key === "booking") {
+          ctx.fillStyle = "#0f172a";
           ctx.font = `700 17px ${MONO_STACK}`;
-          const text = measureText(ctx, cells.booking, maxW);
+          const text = measureText(ctx, cellValue(row, col.key), maxW);
+          fillTextVCenter(ctx, text, x + cellPadX, y, rowH);
+        } else if (col.key === "customer") {
+          ctx.fillStyle = "#0f172a";
+          ctx.font = `700 15px ${FONT_STACK}`;
+          const text = measureText(ctx, cellValue(row, col.key), maxW);
           fillTextVCenter(ctx, text, x + cellPadX, y, rowH);
         } else if (col.key === "dest") {
+          ctx.fillStyle = "#0f172a";
           ctx.font = `700 16px ${FONT_STACK}`;
-          const text = measureText(ctx, cells.dest, maxW);
+          const text = measureText(ctx, cellValue(row, col.key), maxW);
           const tw = ctx.measureText(text).width;
           fillTextVCenter(ctx, text, x + (col.width - tw) / 2, y, rowH);
         } else {
+          ctx.fillStyle = "#0f172a";
           ctx.font = `600 16px ${FONT_STACK}`;
-          const text = measureText(ctx, cells[col.key], maxW);
+          const text = measureText(ctx, cellValue(row, col.key), maxW);
           fillTextVCenter(ctx, text, x + cellPadX, y, rowH);
         }
         x += col.width;
@@ -234,17 +336,21 @@ export function renderCargoDayReportCanvas(
 
 /**
  * Copy ảnh PNG vào clipboard; nếu trình duyệt chặn thì tải file.
+ * `basic` = nhóm 1; `withCustomer` = nhóm 2 (+ Short Code).
  */
 export async function copyCargoDayReportImage(
   model: CargoDayReportModel,
+  options?: { variant?: CargoDayReportImageVariant },
 ): Promise<CopyCargoDayReportImageResult> {
   if (model.totalLots <= 0 || model.sections.length === 0) {
     return { ok: false, reason: "Không có lô nào trong ngày phiên này." };
   }
 
-  const filename = `bao-cao-hang-hoa-${model.sessionYmd || "ngay"}.png`;
+  const variant = options?.variant ?? "basic";
+  const suffix = variant === "withCustomer" ? "-kh" : "";
+  const filename = `bao-cao-hang-hoa${suffix}-${model.sessionYmd || "ngay"}.png`;
   try {
-    const canvas = renderCargoDayReportCanvas(model);
+    const canvas = renderCargoDayReportCanvas(model, variant);
     const blob = await canvasToPngBlob(canvas);
     const clipped = await tryWriteImageClipboard(blob);
     if (clipped) {

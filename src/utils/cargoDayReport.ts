@@ -1,5 +1,7 @@
 import { WAREHOUSE_ORDER, warehouseLabel } from "../constants/warehouses";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment, Warehouse } from "../types/shipment";
+import { findCustomerEntry } from "./customerBookingResolve";
 import {
   cutoffIsoToDateDdMon,
   cutoffIsoToTimeInputText,
@@ -7,6 +9,13 @@ import {
   splitIsoToLocalDateTime,
   ymdToDdMon,
 } from "./bookingDateParse";
+import {
+  isValidCustomerSyncCode,
+  normalizeCustomerShortCode,
+  normalizeCustomerSyncCode,
+} from "./customerCodeOps";
+import { normalizeAgentCode } from "./customerProfileInputFormat";
+import { flightDateToYmd } from "./esidDeclareFields";
 import { filterShipmentsBySessionYmd } from "./filterShipmentsBySessionYmd";
 import { partitionShipmentsByWarehouse } from "./partitionShipmentsByWarehouse";
 
@@ -14,7 +23,18 @@ export type CargoDayReportRow = {
   stt: number;
   /** AWB — cột Booking */
   booking: string;
+  /** Short Code khách (nhóm 2) */
+  customerShortCode: string;
+  /** Phần số hiệu chuyến — VD: QH201 */
+  flight: string;
+  /** Phần ngày bay hiển thị — VD: 27JUL */
+  flightDateLabel: string;
+  /** Ghép sẵn: `QH201 / 27JUL` */
   flightDate: string;
+  /**
+   * Ngày bay trùng ngày phiên → lô gấp (tô đỏ trên ảnh).
+   */
+  flightDateUrgent: boolean;
   cutoff: string;
   dest: string;
 };
@@ -30,6 +50,8 @@ export type CargoDayReportModel = {
   /** VD: 27JUL2026 */
   titleDate: string;
   totalLots: number;
+  /** Có ít nhất một lô bay cùng ngày phiên */
+  hasUrgentFlightDate: boolean;
   /** Chỉ kho có lô */
   sections: CargoDayReportSection[];
 };
@@ -75,6 +97,46 @@ export function formatCargoReportBooking(s: Pick<Shipment, "awb">): string {
   return awb || "—";
 }
 
+/** Ngày bay (DDMMM) trùng ngày phiên → gấp. */
+export function isCargoReportFlightDateUrgent(
+  flightDate: string,
+  sessionYmd: string,
+): boolean {
+  const session = sessionYmd.trim();
+  if (!session || !flightDate.trim()) return false;
+  return flightDateToYmd(flightDate, session) === session;
+}
+
+/**
+ * Short Code cho ảnh nhóm 2:
+ * 1) shortCode danh bạ → 2) Customer Code 2–5 chữ → 3) code/tên trên lô.
+ */
+export function resolveCargoReportCustomerShortCode(
+  s: Pick<Shipment, "customer" | "customerCode" | "customerId">,
+  customerDirectory: readonly CustomerDirectoryEntry[],
+): string {
+  const entry = findCustomerEntry(s as Shipment, customerDirectory);
+  if (entry) {
+    const short = normalizeCustomerShortCode(entry.shortCode ?? "");
+    if (short) return short;
+    if (isValidCustomerSyncCode(entry.code)) {
+      return normalizeCustomerSyncCode(entry.code);
+    }
+  }
+
+  const onLotCode = normalizeAgentCode(s.customerCode ?? "");
+  if (onLotCode) {
+    if (isValidCustomerSyncCode(onLotCode)) {
+      return normalizeCustomerSyncCode(onLotCode);
+    }
+    const shortLot = normalizeCustomerShortCode(onLotCode);
+    if (shortLot) return shortLot;
+  }
+
+  const name = normalizeCustomerShortCode(s.customer ?? "");
+  return name || "—";
+}
+
 function cutoffSortKey(s: Shipment): number {
   const iso = (s.cutoff ?? "").trim();
   if (!iso) return Number.POSITIVE_INFINITY;
@@ -93,14 +155,26 @@ function sortDayLots(rows: Shipment[]): Shipment[] {
   });
 }
 
-function toReportRows(rows: Shipment[]): CargoDayReportRow[] {
-  return sortDayLots(rows).map((s, i) => ({
-    stt: i + 1,
-    booking: formatCargoReportBooking(s),
-    flightDate: formatCargoReportFlightDate(s),
-    cutoff: formatCargoReportCutoff(s),
-    dest: (s.dest ?? "").trim() || "—",
-  }));
+function toReportRows(
+  rows: Shipment[],
+  sessionYmd: string,
+  customerDirectory: readonly CustomerDirectoryEntry[],
+): CargoDayReportRow[] {
+  return sortDayLots(rows).map((s, i) => {
+    const flight = (s.flight ?? "").trim();
+    const flightDateLabel = (s.flightDate ?? "").trim();
+    return {
+      stt: i + 1,
+      booking: formatCargoReportBooking(s),
+      customerShortCode: resolveCargoReportCustomerShortCode(s, customerDirectory),
+      flight,
+      flightDateLabel,
+      flightDate: formatCargoReportFlightDate(s),
+      flightDateUrgent: isCargoReportFlightDateUrgent(flightDateLabel, sessionYmd),
+      cutoff: formatCargoReportCutoff(s),
+      dest: (s.dest ?? "").trim() || "—",
+    };
+  });
 }
 
 /**
@@ -110,6 +184,7 @@ function toReportRows(rows: Shipment[]): CargoDayReportRow[] {
 export function buildCargoDayReport(
   rows: readonly Shipment[],
   sessionYmd: string,
+  customerDirectory: readonly CustomerDirectoryEntry[] = [],
 ): CargoDayReportModel {
   const dayRows = filterShipmentsBySessionYmd(rows, sessionYmd);
   const buckets = partitionShipmentsByWarehouse(dayRows);
@@ -121,14 +196,19 @@ export function buildCargoDayReport(
     sections.push({
       warehouse: wh,
       label: warehouseLabel[wh],
-      rows: toReportRows(list),
+      rows: toReportRows(list, sessionYmd, customerDirectory),
     });
   }
+
+  const hasUrgentFlightDate = sections.some((sec) =>
+    sec.rows.some((r) => r.flightDateUrgent),
+  );
 
   return {
     sessionYmd: sessionYmd.trim(),
     titleDate: formatCargoReportTitleDate(sessionYmd),
     totalLots: dayRows.length,
+    hasUrgentFlightDate,
     sections,
   };
 }

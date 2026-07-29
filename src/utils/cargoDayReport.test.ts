@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
 import { blankShipmentDraft } from "./blankShipment";
 import {
@@ -7,6 +8,8 @@ import {
   formatCargoReportCutoff,
   formatCargoReportFlightDate,
   formatCargoReportTitleDate,
+  isCargoReportFlightDateUrgent,
+  resolveCargoReportCustomerShortCode,
 } from "./cargoDayReport";
 
 function lot(
@@ -35,6 +38,36 @@ describe("cargoDayReport", () => {
     ).toBe("QH201 / 27JUL");
   });
 
+  it("ngày bay trùng phiên = gấp", () => {
+    expect(isCargoReportFlightDateUrgent("27JUL", "2026-07-27")).toBe(true);
+    expect(isCargoReportFlightDateUrgent("28JUL", "2026-07-27")).toBe(false);
+    expect(isCargoReportFlightDateUrgent("", "2026-07-27")).toBe(false);
+  });
+
+  it("resolve Short Code từ danh bạ", () => {
+    const dir: CustomerDirectoryEntry[] = [
+      {
+        id: "1",
+        code: "LNE",
+        name: "LINO EXPRESS",
+        shortCode: "LINO",
+        parties: [],
+      },
+    ];
+    expect(
+      resolveCargoReportCustomerShortCode(
+        { customer: "LINO EXPRESS", customerCode: "LNE", customerId: "1" },
+        dir,
+      ),
+    ).toBe("LINO");
+    expect(
+      resolveCargoReportCustomerShortCode(
+        { customer: "HTS", customerCode: "", customerId: "" },
+        [],
+      ),
+    ).toBe("HTS");
+  });
+
   it("ẩn kho trống và lấy mọi lô ngày phiên", () => {
     const rows = [
       lot({
@@ -59,6 +92,8 @@ describe("cargoDayReport", () => {
     expect(model.sections).toHaveLength(1);
     expect(model.sections[0]!.warehouse).toBe("TECS-TCS");
     expect(model.sections[0]!.rows[0]!.booking).toBe("17611111111");
+    expect(model.sections[0]!.rows[0]!.flightDateUrgent).toBe(true);
+    expect(model.hasUrgentFlightDate).toBe(true);
     expect(model.sections.some((s) => s.warehouse === "TECS-SCSC")).toBe(false);
   });
 
@@ -73,6 +108,33 @@ describe("cargoDayReport", () => {
       "TECS-TCS",
       "TECS-SCSC",
     ]);
+  });
+
+  it("gắn Short Code khi có danh bạ", () => {
+    const rows = [
+      lot({
+        id: "a",
+        warehouse: "TECS-TCS",
+        awb: "17611111111",
+        customer: "LINO EXPRESS",
+        customerCode: "LNE",
+        customerId: "c1",
+        flightDate: "28JUL",
+      }),
+    ];
+    const dir: CustomerDirectoryEntry[] = [
+      {
+        id: "c1",
+        code: "LNE",
+        name: "LINO EXPRESS",
+        shortCode: "LINO",
+        parties: [],
+      },
+    ];
+    const model = buildCargoDayReport(rows, "2026-07-27", dir);
+    expect(model.sections[0]!.rows[0]!.customerShortCode).toBe("LINO");
+    expect(model.sections[0]!.rows[0]!.flightDateUrgent).toBe(false);
+    expect(model.hasUrgentFlightDate).toBe(false);
   });
 
   it("format cutoff display", () => {

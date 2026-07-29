@@ -14,7 +14,10 @@ import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentE
 import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
 import { downloadScscDimDayExcel } from "../utils/exportScscDimListExcel";
 import { buildCargoDayReport } from "../utils/cargoDayReport";
-import { copyCargoDayReportImage } from "../utils/cargoDayReportImage";
+import {
+  copyCargoDayReportImage,
+  type CargoDayReportImageVariant,
+} from "../utils/cargoDayReportImage";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import {
   filterShipmentsBySessionYmd,
@@ -427,36 +430,44 @@ export function AirCargoTracking({
     []
   );
 
-  const onCopyCargoDayReport = useCallback(async () => {
-    setCargoReportCopying(true);
-    try {
-      const model = buildCargoDayReport(viewRows, selectedYmd);
-      const result = await copyCargoDayReportImage(model);
-      if (!result.ok) {
-        toast.error(result.reason, "Báo cáo hàng hóa");
-        return;
-      }
-      if (result.mode === "clipboard") {
-        toast.success(
-          `Đã copy ảnh ${model.totalLots} lô — dán vào group chat.`,
+  const onCopyCargoDayReport = useCallback(
+    async (variant: CargoDayReportImageVariant = "basic") => {
+      setCargoReportCopying(true);
+      try {
+        const model = buildCargoDayReport(
+          viewRows,
+          selectedYmd,
+          state?.customers ?? EMPTY_CUSTOMERS_DIR,
+        );
+        const result = await copyCargoDayReportImage(model, { variant });
+        if (!result.ok) {
+          toast.error(result.reason, "Báo cáo hàng hóa");
+          return;
+        }
+        const groupLabel = variant === "withCustomer" ? "nhóm 2 (+KH)" : "nhóm 1";
+        if (result.mode === "clipboard") {
+          toast.success(
+            `Đã copy ảnh ${groupLabel} · ${model.totalLots} lô — dán vào group chat.`,
+            "Báo cáo hàng hóa",
+          );
+        } else {
+          toast.success(
+            `Trình duyệt chặn clipboard — đã tải ${result.filename}. Đính kèm vào chat.`,
+            "Báo cáo hàng hóa",
+          );
+        }
+      } catch (e) {
+        debugError("ui:cargo-day-report", e);
+        toast.error(
+          e instanceof Error ? e.message : "Không copy được ảnh báo cáo.",
           "Báo cáo hàng hóa",
         );
-      } else {
-        toast.success(
-          `Trình duyệt chặn clipboard — đã tải ${result.filename}. Đính kèm vào chat.`,
-          "Báo cáo hàng hóa",
-        );
+      } finally {
+        setCargoReportCopying(false);
       }
-    } catch (e) {
-      debugError("ui:cargo-day-report", e);
-      toast.error(
-        e instanceof Error ? e.message : "Không copy được ảnh báo cáo.",
-        "Báo cáo hàng hóa",
-      );
-    } finally {
-      setCargoReportCopying(false);
-    }
-  }, [selectedYmd, toast, viewRows]);
+    },
+    [selectedYmd, state?.customers, toast, viewRows],
+  );
 
   const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
 
@@ -477,7 +488,8 @@ export function AirCargoTracking({
     onOpenSheetImport: () => setSheetImportOpen(true),
     onDownloadDayExcel: () => setExcelRangeOpen(true),
     onDownloadScscDim: () => void onDownloadScscDimDay(),
-    onCopyCargoDayReport: () => void onCopyCargoDayReport(),
+    onCopyCargoDayReport: (variant?: CargoDayReportImageVariant) =>
+      void onCopyCargoDayReport(variant ?? "basic"),
   };
 
   const chrome = isMobile ? (
@@ -564,10 +576,20 @@ export function AirCargoTracking({
           size="sm"
           className="border-transparent bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-400"
           disabled={cargoReportCopying || viewRows.length === 0}
-          title="Coppy Ảnh bảng hàng hóa ngày phiên (dán group chat)"
-          onClick={() => void onCopyCargoDayReport()}
+          title="Coppy Ảnh nhóm 1 — không Short Code · ngày đỏ = bay cùng phiên"
+          onClick={() => void onCopyCargoDayReport("basic")}
         >
           {cargoReportCopying ? "…" : "Coppy Ảnh"}
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          className="border-transparent bg-teal-700 text-white hover:bg-teal-800 focus-visible:ring-teal-400"
+          disabled={cargoReportCopying || viewRows.length === 0}
+          title="Coppy Ảnh nhóm 2 — có Short Code khách · ngày đỏ = bay cùng phiên"
+          onClick={() => void onCopyCargoDayReport("withCustomer")}
+        >
+          {cargoReportCopying ? "…" : "Coppy Ảnh + KH"}
         </Button>
         <OpsToolsMenu {...toolsProps} />
         <div className="min-w-0 flex-1 md:max-w-sm md:flex-none">

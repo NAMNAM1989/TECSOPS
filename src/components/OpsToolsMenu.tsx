@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { CargoDayReportImageVariant } from "../utils/cargoDayReportImage";
 import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
 
 type Props = {
@@ -16,7 +17,7 @@ type Props = {
   onPrefetchSheetImport?: () => void;
   onDownloadDayExcel: () => void;
   onDownloadScscDim?: () => void;
-  onCopyCargoDayReport?: () => void;
+  onCopyCargoDayReport?: (variant?: CargoDayReportImageVariant) => void;
 };
 
 // onPrefetchSheetImport giữ optional (không prefetch khi bắt buộc URL)
@@ -42,13 +43,22 @@ export function OpsToolsMenu({
   const items = useMemo(() => {
     const list: OverflowMenuItem[] = [];
     if (onCopyCargoDayReport) {
-      list.push({
-        id: "cargo-report",
-        label: cargoReportCopying ? "Đang copy ảnh…" : "Coppy Ảnh",
-        description: "Bảng hàng hóa ngày phiên · dán group chat",
-        onSelect: onCopyCargoDayReport,
-        disabled: cargoReportCopying,
-      });
+      list.push(
+        {
+          id: "cargo-report",
+          label: cargoReportCopying ? "Đang copy ảnh…" : "Coppy Ảnh",
+          description: "Nhóm 1 · AWB · Flight · Cutoff · Dest",
+          onSelect: () => onCopyCargoDayReport("basic"),
+          disabled: cargoReportCopying,
+        },
+        {
+          id: "cargo-report-kh",
+          label: cargoReportCopying ? "Đang copy ảnh…" : "Coppy Ảnh + KH",
+          description: "Nhóm 2 · thêm Short Code khách hàng",
+          onSelect: () => onCopyCargoDayReport("withCustomer"),
+          disabled: cargoReportCopying,
+        },
+      );
     }
     if (onNavigateStats) {
       list.push({

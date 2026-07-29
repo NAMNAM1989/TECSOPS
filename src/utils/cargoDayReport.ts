@@ -17,14 +17,17 @@ import {
 import { normalizeAgentCode } from "./customerProfileInputFormat";
 import { flightDateToYmd } from "./esidDeclareFields";
 import { filterShipmentsBySessionYmd } from "./filterShipmentsBySessionYmd";
+import { formatKgTotal } from "./formatKgTotal";
 import { partitionShipmentsByWarehouse } from "./partitionShipmentsByWarehouse";
 
 export type CargoDayReportRow = {
   stt: number;
   /** AWB — cột Booking */
   booking: string;
-  /** Short Code khách (nhóm 2) */
+  /** Short Code khách (mẫu Hiện Trường) */
   customerShortCode: string;
+  /** `kiện/kg` — VD: `12/250.5` */
+  pcsKg: string;
   /** Phần số hiệu chuyến — VD: QH201 */
   flight: string;
   /** Phần ngày bay hiển thị — VD: 27JUL */
@@ -97,6 +100,21 @@ export function formatCargoReportBooking(s: Pick<Shipment, "awb">): string {
   return awb || "—";
 }
 
+/** Cột Kiện/Kg — VD: `12/250.5` (thiếu → —). */
+export function formatCargoReportPcsKg(
+  s: Pick<Shipment, "pcs" | "kg">,
+): string {
+  const pcsRaw = s.pcs;
+  const pcs =
+    pcsRaw == null || Number.isNaN(Number(pcsRaw)) ? "—" : String(Number(pcsRaw));
+  const kgRaw = s.kg;
+  const kg =
+    kgRaw == null || !Number.isFinite(Number(kgRaw))
+      ? "—"
+      : formatKgTotal(Number(kgRaw));
+  return `${pcs}/${kg}`;
+}
+
 /** Ngày bay (DDMMM) trùng ngày phiên → gấp. */
 export function isCargoReportFlightDateUrgent(
   flightDate: string,
@@ -167,6 +185,7 @@ function toReportRows(
       stt: i + 1,
       booking: formatCargoReportBooking(s),
       customerShortCode: resolveCargoReportCustomerShortCode(s, customerDirectory),
+      pcsKg: formatCargoReportPcsKg(s),
       flight,
       flightDateLabel,
       flightDate: formatCargoReportFlightDate(s),

@@ -173,7 +173,7 @@ export function OpsMobileStickyHeader({
         />
       </div>
 
-      {/* Hàng 2: KPI + Coppy Ảnh nhóm 1 / nhóm 2 */}
+      {/* Hàng 2: KPI + Coppy Ảnh / Hiện Trường */}
       <div className="flex items-center gap-1">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
           <MiniKpi label="Lô" value={lotCount} />
@@ -185,7 +185,7 @@ export function OpsMobileStickyHeader({
             <button
               type="button"
               disabled={cargoReportCopying || viewRows.length === 0}
-              title="Coppy Ảnh nhóm 1 — không Short Code · ngày đỏ = bay cùng phiên"
+              title="Coppy Ảnh — AWB · Kiện/Kg · Flight · Cutoff · Dest · ngày đỏ = bay cùng phiên"
               onClick={() => onCopyCargoDayReport("basic")}
               className="inline-flex h-8 touch-manipulation items-center gap-0.5 rounded-lg bg-emerald-600 px-2 text-[10px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
@@ -201,11 +201,11 @@ export function OpsMobileStickyHeader({
             <button
               type="button"
               disabled={cargoReportCopying || viewRows.length === 0}
-              title="Coppy Ảnh nhóm 2 — có Short Code khách · ngày đỏ = bay cùng phiên"
+              title="Hiện Trường — có Short Code khách + Kiện/Kg · ngày đỏ = bay cùng phiên"
               onClick={() => onCopyCargoDayReport("withCustomer")}
               className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-teal-700 px-2 text-[10px] font-bold text-white shadow-sm hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {cargoReportCopying ? "…" : "Coppy+KH"}
+              {cargoReportCopying ? "…" : "Hiện Trường"}
             </button>
           </div>
         ) : null}

@@ -10,21 +10,23 @@ type ColDef = { key: string; title: string; width: number };
 
 /** Cột rộng hơn — AWB / flight / cutoff đọc rõ trên Zalo sau khi nén. */
 const COLS_BASIC: readonly ColDef[] = [
-  { key: "stt", title: "STT", width: 64 },
-  { key: "booking", title: "Booking (AWB)", width: 200 },
-  { key: "flightDate", title: "Flight / Date", width: 210 },
-  { key: "cutoff", title: "Cutoff", width: 210 },
-  { key: "dest", title: "Dest", width: 100 },
-];
-
-/** Nhóm 2: thêm Short Code khách hàng. */
-const COLS_WITH_CUSTOMER: readonly ColDef[] = [
   { key: "stt", title: "STT", width: 56 },
   { key: "booking", title: "Booking (AWB)", width: 180 },
-  { key: "customer", title: "Customer", width: 128 },
-  { key: "flightDate", title: "Flight / Date", width: 200 },
+  { key: "pcsKg", title: "Kiện/Kg", width: 110 },
+  { key: "flightDate", title: "Flight / Date", width: 190 },
   { key: "cutoff", title: "Cutoff", width: 190 },
   { key: "dest", title: "Dest", width: 90 },
+];
+
+/** Hiện Trường: Short Code khách + Kiện/Kg. */
+const COLS_WITH_CUSTOMER: readonly ColDef[] = [
+  { key: "stt", title: "STT", width: 48 },
+  { key: "booking", title: "Booking (AWB)", width: 168 },
+  { key: "customer", title: "Customer", width: 110 },
+  { key: "pcsKg", title: "Kiện/Kg", width: 110 },
+  { key: "flightDate", title: "Flight / Date", width: 180 },
+  { key: "cutoff", title: "Cutoff", width: 170 },
+  { key: "dest", title: "Dest", width: 80 },
 ];
 
 /** Scale cố định cao — ảnh chat bị nén vẫn còn nét. */
@@ -115,6 +117,8 @@ function cellValue(row: CargoDayReportRow, key: string): string {
       return row.booking;
     case "customer":
       return row.customerShortCode;
+    case "pcsKg":
+      return row.pcsKg;
     case "flightDate":
       return row.flightDate;
     case "cutoff":
@@ -221,7 +225,7 @@ export function renderCargoDayReportCanvas(
   ctx.fillStyle = "#0f172a";
   ctx.font = `700 28px ${FONT_STACK}`;
   ctx.textBaseline = "top";
-  const variantTag = variant === "withCustomer" ? " · +KH" : "";
+  const variantTag = variant === "withCustomer" ? " · Hiện Trường" : "";
   ctx.fillText(`Báo cáo hàng hóa · ${model.titleDate}${variantTag}`, padX, y);
   y += titleH;
 
@@ -270,7 +274,7 @@ export function renderCargoDayReportCanvas(
       ctx.strokeStyle = "#475569";
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, col.width - 1, headH - 1);
-      if (col.key === "stt" || col.key === "dest") {
+      if (col.key === "stt" || col.key === "dest" || col.key === "pcsKg") {
         const tw = ctx.measureText(col.title).width;
         fillTextVCenter(ctx, col.title, x + (col.width - tw) / 2, y, headH);
       } else {
@@ -311,6 +315,12 @@ export function renderCargoDayReportCanvas(
           ctx.font = `700 15px ${FONT_STACK}`;
           const text = measureText(ctx, cellValue(row, col.key), maxW);
           fillTextVCenter(ctx, text, x + cellPadX, y, rowH);
+        } else if (col.key === "pcsKg") {
+          ctx.fillStyle = "#0f172a";
+          ctx.font = `700 15px ${MONO_STACK}`;
+          const text = measureText(ctx, cellValue(row, col.key), maxW);
+          const tw = ctx.measureText(text).width;
+          fillTextVCenter(ctx, text, x + (col.width - tw) / 2, y, rowH);
         } else if (col.key === "dest") {
           ctx.fillStyle = "#0f172a";
           ctx.font = `700 16px ${FONT_STACK}`;
@@ -336,7 +346,7 @@ export function renderCargoDayReportCanvas(
 
 /**
  * Copy ảnh PNG vào clipboard; nếu trình duyệt chặn thì tải file.
- * `basic` = nhóm 1; `withCustomer` = nhóm 2 (+ Short Code).
+ * `basic` = Coppy Ảnh; `withCustomer` = Hiện Trường (+ Short Code + Kiện/Kg).
  */
 export async function copyCargoDayReportImage(
   model: CargoDayReportModel,
@@ -347,7 +357,7 @@ export async function copyCargoDayReportImage(
   }
 
   const variant = options?.variant ?? "basic";
-  const suffix = variant === "withCustomer" ? "-kh" : "";
+  const suffix = variant === "withCustomer" ? "-hien-truong" : "";
   const filename = `bao-cao-hang-hoa${suffix}-${model.sessionYmd || "ngay"}.png`;
   try {
     const canvas = renderCargoDayReportCanvas(model, variant);

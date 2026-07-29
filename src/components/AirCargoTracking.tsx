@@ -444,7 +444,8 @@ export function AirCargoTracking({
           toast.error(result.reason, "Báo cáo hàng hóa");
           return;
         }
-        const groupLabel = variant === "withCustomer" ? "nhóm 2 (+KH)" : "nhóm 1";
+        const groupLabel =
+          variant === "withCustomer" ? "Hiện Trường" : "Coppy Ảnh";
         if (result.mode === "clipboard") {
           toast.success(
             `Đã copy ảnh ${groupLabel} · ${model.totalLots} lô — dán vào group chat.`,
@@ -576,7 +577,7 @@ export function AirCargoTracking({
           size="sm"
           className="border-transparent bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-400"
           disabled={cargoReportCopying || viewRows.length === 0}
-          title="Coppy Ảnh nhóm 1 — không Short Code · ngày đỏ = bay cùng phiên"
+          title="Coppy Ảnh — AWB · Kiện/Kg · Flight · Cutoff · Dest · ngày đỏ = bay cùng phiên"
           onClick={() => void onCopyCargoDayReport("basic")}
         >
           {cargoReportCopying ? "…" : "Coppy Ảnh"}
@@ -586,10 +587,10 @@ export function AirCargoTracking({
           size="sm"
           className="border-transparent bg-teal-700 text-white hover:bg-teal-800 focus-visible:ring-teal-400"
           disabled={cargoReportCopying || viewRows.length === 0}
-          title="Coppy Ảnh nhóm 2 — có Short Code khách · ngày đỏ = bay cùng phiên"
+          title="Hiện Trường — có Short Code khách + Kiện/Kg · ngày đỏ = bay cùng phiên"
           onClick={() => void onCopyCargoDayReport("withCustomer")}
         >
-          {cargoReportCopying ? "…" : "Coppy Ảnh + KH"}
+          {cargoReportCopying ? "…" : "Hiện Trường"}
         </Button>
         <OpsToolsMenu {...toolsProps} />
         <div className="min-w-0 flex-1 md:max-w-sm md:flex-none">

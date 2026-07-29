@@ -7,6 +7,7 @@ import {
   formatCargoReportBooking,
   formatCargoReportCutoff,
   formatCargoReportFlightDate,
+  formatCargoReportPcsKg,
   formatCargoReportTitleDate,
   isCargoReportFlightDateUrgent,
   resolveCargoReportCustomerShortCode,
@@ -30,6 +31,12 @@ describe("cargoDayReport", () => {
   it("Booking = AWB", () => {
     expect(formatCargoReportBooking({ awb: "17612345675" })).toBe("17612345675");
     expect(formatCargoReportBooking({ awb: "  " })).toBe("—");
+  });
+
+  it("kiện/kg", () => {
+    expect(formatCargoReportPcsKg({ pcs: 12, kg: 250.5 })).toBe("12/250.5");
+    expect(formatCargoReportPcsKg({ pcs: null, kg: null })).toBe("—/—");
+    expect(formatCargoReportPcsKg({ pcs: 3, kg: null })).toBe("3/—");
   });
 
   it("flight/date gộp", () => {
@@ -133,6 +140,7 @@ describe("cargoDayReport", () => {
     ];
     const model = buildCargoDayReport(rows, "2026-07-27", dir);
     expect(model.sections[0]!.rows[0]!.customerShortCode).toBe("LINO");
+    expect(model.sections[0]!.rows[0]!.pcsKg).toMatch(/\//);
     expect(model.sections[0]!.rows[0]!.flightDateUrgent).toBe(false);
     expect(model.hasUrgentFlightDate).toBe(false);
   });

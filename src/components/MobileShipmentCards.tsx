@@ -13,6 +13,10 @@ import {
   warehouseSectionsForLayout,
   WAREHOUSE_ORDER,
 } from "../constants/warehouses";
+import {
+  isCargoReportFlightDateUrgent,
+  resolveCargoReportCustomerShortCode,
+} from "../utils/cargoDayReport";
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { useWarehouseSectionCollapse } from "../hooks/useWarehouseSectionCollapse";
 import type { Warehouse } from "../types/shipment";
@@ -24,19 +28,46 @@ import { MOBILE, mobileOnlyVisibility } from "../styles/mobileOpsStyles";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 
-function formatMobileFlightMeta(row: Shipment): string {
-  const parts: string[] = [];
+type MobileFlightMeta = {
+  flight: string;
+  flightDate: string;
+  flightDateUrgent: boolean;
+  dest: string;
+  dimLabel: string;
+  /** Chuỗi phẳng cho title / empty check */
+  plain: string;
+};
+
+function buildMobileFlightMeta(
+  row: Shipment,
+  sessionYmd: string,
+): MobileFlightMeta {
   const flight = (row.flight ?? "").trim();
   const flightDate = (row.flightDate ?? "").trim().toUpperCase();
+  const dest = (row.dest ?? "").trim();
+  const dimKg = resolveShipmentDimWeightKg(row);
+  const dimLabel =
+    dimKg != null ? `DIM ${formatShipmentDimWeightDisplay(row)}` : "";
+  const flightDateUrgent = isCargoReportFlightDateUrgent(
+    flightDate,
+    sessionYmd,
+  );
+
+  const parts: string[] = [];
   if (flight && flightDate) parts.push(`${flight}/${flightDate}`);
   else if (flight) parts.push(flight);
   else if (flightDate) parts.push(flightDate);
-  if ((row.dest ?? "").trim()) parts.push((row.dest ?? "").trim());
-  const dimKg = resolveShipmentDimWeightKg(row);
-  if (dimKg != null) {
-    parts.push(`DIM ${formatShipmentDimWeightDisplay(row)}`);
-  }
-  return parts.join(" · ");
+  if (dest) parts.push(dest);
+  if (dimLabel) parts.push(dimLabel);
+
+  return {
+    flight,
+    flightDate,
+    flightDateUrgent,
+    dest,
+    dimLabel,
+    plain: parts.join(" · "),
+  };
 }
 
 function MobileQuickNumber({
@@ -73,6 +104,7 @@ const MobileShipmentCard = memo(
     selected,
     highlighted,
     customerDirectory,
+    sessionYmd,
     onOpenEdit,
     onUpdate,
     onDelete,
@@ -82,6 +114,7 @@ const MobileShipmentCard = memo(
     selected: boolean;
     highlighted: boolean;
     customerDirectory: readonly CustomerDirectoryEntry[];
+    sessionYmd: string;
     onOpenEdit: (row: Shipment) => void;
     onUpdate: (id: string, patch: Partial<Shipment>) => void;
     onDelete: (id: string) => void;
@@ -93,8 +126,19 @@ const MobileShipmentCard = memo(
     const hawbTrim = (row.hawb ?? "").trim();
     const noteTrim = (row.note ?? "").trim();
 
-    const flightMeta = formatMobileFlightMeta(row);
+    const flightMeta = buildMobileFlightMeta(row, sessionYmd);
     const hasNote = noteTrim.length > 0;
+    const shortCode = resolveCargoReportCustomerShortCode(
+      row,
+      customerDirectory,
+    );
+    const customerLabel =
+      shortCode !== "—"
+        ? shortCode
+        : row.customer?.trim() || "—";
+    const customerTitle = [shortCode !== "—" ? shortCode : "", row.customer?.trim()]
+      .filter(Boolean)
+      .join(" · ");
 
     return (
       <Box
@@ -102,11 +146,13 @@ const MobileShipmentCard = memo(
         style={{
           contentVisibility: "auto",
           containIntrinsicSize:
-            flightMeta || hasNote ? "0 64px" : "0 52px",
+            flightMeta.plain || hasNote ? "0 64px" : "0 52px",
         }}
         className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
           selected ? "ring-2 ring-ui-primary/40" : ""
-        } ${highlighted ? "ring-2 ring-amber-400/70" : ""}`}
+        } ${highlighted ? "ring-2 ring-amber-400/70" : ""} ${
+          flightMeta.flightDateUrgent ? "ring-1 ring-red-300/80" : ""
+        }`}
       >
         <div className={MOBILE.cardInner}>
           {/* Hàng 1: AWB full width còn lại — không chia chỗ với khách/K/Kg */}
@@ -151,7 +197,7 @@ const MobileShipmentCard = memo(
             </div>
           </div>
 
-          {/* Hàng 2: khách + K/Kg */}
+          {/* Hàng 2: Short Code khách + K/Kg */}
           <div className="mt-0.5 flex min-w-0 items-center gap-1">
             <button
               type="button"
@@ -160,9 +206,9 @@ const MobileShipmentCard = memo(
             >
               <span
                 className={`block min-w-0 truncate ${MOBILE.customerName}`}
-                title={row.customer}
+                title={customerTitle || undefined}
               >
-                {row.customer?.trim() || "—"}
+                {customerLabel}
               </span>
             </button>
             <div
@@ -182,7 +228,7 @@ const MobileShipmentCard = memo(
             </div>
           </div>
 
-          {flightMeta || hasNote ? (
+          {flightMeta.plain || hasNote ? (
             <button
               type="button"
               className="mt-0.5 block w-full min-w-0 text-left active:opacity-90"
@@ -190,11 +236,57 @@ const MobileShipmentCard = memo(
             >
               <p
                 className={`truncate ${MOBILE.cardMeta}`}
-                title={hasNote ? noteTrim : flightMeta}
+                title={
+                  hasNote
+                    ? noteTrim
+                    : flightMeta.flightDateUrgent
+                      ? `${flightMeta.plain} · gấp (bay cùng phiên)`
+                      : flightMeta.plain
+                }
               >
-                {flightMeta}
-                {flightMeta && hasNote ? " · " : ""}
-                {hasNote ? noteTrim : ""}
+                {flightMeta.flight || flightMeta.flightDate ? (
+                  <>
+                    {flightMeta.flight ? (
+                      <span>{flightMeta.flight}</span>
+                    ) : null}
+                    {flightMeta.flight && flightMeta.flightDate ? (
+                      <span>/</span>
+                    ) : null}
+                    {flightMeta.flightDate ? (
+                      <span
+                        className={
+                          flightMeta.flightDateUrgent
+                            ? "font-extrabold text-red-600"
+                            : undefined
+                        }
+                      >
+                        {flightMeta.flightDate}
+                      </span>
+                    ) : null}
+                  </>
+                ) : null}
+                {flightMeta.dest ? (
+                  <>
+                    {(flightMeta.flight || flightMeta.flightDate) ? " · " : ""}
+                    {flightMeta.dest}
+                  </>
+                ) : null}
+                {flightMeta.dimLabel ? (
+                  <>
+                    {(flightMeta.flight ||
+                      flightMeta.flightDate ||
+                      flightMeta.dest)
+                      ? " · "
+                      : ""}
+                    {flightMeta.dimLabel}
+                  </>
+                ) : null}
+                {hasNote ? (
+                  <>
+                    {flightMeta.plain ? " · " : ""}
+                    {noteTrim}
+                  </>
+                ) : null}
               </p>
             </button>
           ) : null}
@@ -206,7 +298,8 @@ const MobileShipmentCard = memo(
     prev.row === next.row &&
     prev.selected === next.selected &&
     prev.highlighted === next.highlighted &&
-    prev.customerDirectory === next.customerDirectory,
+    prev.customerDirectory === next.customerDirectory &&
+    prev.sessionYmd === next.sessionYmd,
 );
 
 interface MobileShipmentCardsProps {
@@ -237,6 +330,7 @@ export function MobileShipmentCards({
   customerDirectory = [],
   activeWarehouse = "TECS-TCS",
   searchActive = false,
+  viewSessionYmd = "",
   pinnedOpenWarehouses = [],
   highlightedShipmentId = null,
   onAddBlankRow: _onAddBlankRow,
@@ -307,6 +401,7 @@ export function MobileShipmentCards({
                         selected={selectedId === row.id}
                         highlighted={highlightedShipmentId === row.id}
                         customerDirectory={customerDirectory}
+                        sessionYmd={viewSessionYmd}
                         onOpenEdit={handleOpenEdit}
                         onUpdate={onUpdate}
                         onDelete={onDelete}
@@ -324,6 +419,7 @@ export function MobileShipmentCards({
               selected={selectedId === row.id}
               highlighted={highlightedShipmentId === row.id}
               customerDirectory={customerDirectory}
+              sessionYmd={viewSessionYmd}
               onOpenEdit={handleOpenEdit}
               onUpdate={onUpdate}
               onDelete={onDelete}

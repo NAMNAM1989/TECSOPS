@@ -173,7 +173,7 @@ export function OpsMobileStickyHeader({
         />
       </div>
 
-      {/* Hàng 2: KPI + Coppy Ảnh (nhóm 1 / nhóm 2 +KH) */}
+      {/* Hàng 2: KPI + Coppy Ảnh nhóm 1 / nhóm 2 */}
       <div className="flex items-center gap-1">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
           <MiniKpi label="Lô" value={lotCount} />
@@ -187,25 +187,25 @@ export function OpsMobileStickyHeader({
               disabled={cargoReportCopying || viewRows.length === 0}
               title="Coppy Ảnh nhóm 1 — không Short Code · ngày đỏ = bay cùng phiên"
               onClick={() => onCopyCargoDayReport("basic")}
-              className="inline-flex h-8 touch-manipulation items-center gap-1 rounded-lg bg-emerald-600 px-2 text-[11px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex h-8 touch-manipulation items-center gap-0.5 rounded-lg bg-emerald-600 px-2 text-[10px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden>
+              <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden>
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              {cargoReportCopying ? "…" : "Ảnh"}
+              {cargoReportCopying ? "…" : "Coppy"}
             </button>
             <button
               type="button"
               disabled={cargoReportCopying || viewRows.length === 0}
               title="Coppy Ảnh nhóm 2 — có Short Code khách · ngày đỏ = bay cùng phiên"
               onClick={() => onCopyCargoDayReport("withCustomer")}
-              className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-teal-700 px-2 text-[11px] font-bold text-white shadow-sm hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-teal-700 px-2 text-[10px] font-bold text-white shadow-sm hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {cargoReportCopying ? "…" : "+KH"}
+              {cargoReportCopying ? "…" : "Coppy+KH"}
             </button>
           </div>
         ) : null}

@@ -185,7 +185,7 @@ export function OpsMobileStickyHeader({
             <button
               type="button"
               disabled={cargoReportCopying || viewRows.length === 0}
-              title="Coppy Ảnh — AWB · Kiện/Kg · Flight · Cutoff · Dest · ngày đỏ = bay cùng phiên"
+              title="Coppy Ảnh — AWB · Flight · Cutoff · Dest · ngày đỏ = bay cùng phiên"
               onClick={() => onCopyCargoDayReport("basic")}
               className="inline-flex h-8 touch-manipulation items-center gap-0.5 rounded-lg bg-emerald-600 px-2 text-[10px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
@@ -201,7 +201,7 @@ export function OpsMobileStickyHeader({
             <button
               type="button"
               disabled={cargoReportCopying || viewRows.length === 0}
-              title="Hiện Trường — có Short Code khách + Kiện/Kg · ngày đỏ = bay cùng phiên"
+              title="Hiện Trường — Short Code + Kiện/Kg · ngày đỏ = bay cùng phiên"
               onClick={() => onCopyCargoDayReport("withCustomer")}
               className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-teal-700 px-2 text-[10px] font-bold text-white shadow-sm hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-45"
             >

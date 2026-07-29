@@ -577,7 +577,7 @@ export function AirCargoTracking({
           size="sm"
           className="border-transparent bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-400"
           disabled={cargoReportCopying || viewRows.length === 0}
-          title="Coppy Ảnh — AWB · Kiện/Kg · Flight · Cutoff · Dest · ngày đỏ = bay cùng phiên"
+          title="Coppy Ảnh — AWB · Flight · Cutoff · Dest · ngày đỏ = bay cùng phiên"
           onClick={() => void onCopyCargoDayReport("basic")}
         >
           {cargoReportCopying ? "…" : "Coppy Ảnh"}
@@ -587,7 +587,7 @@ export function AirCargoTracking({
           size="sm"
           className="border-transparent bg-teal-700 text-white hover:bg-teal-800 focus-visible:ring-teal-400"
           disabled={cargoReportCopying || viewRows.length === 0}
-          title="Hiện Trường — có Short Code khách + Kiện/Kg · ngày đỏ = bay cùng phiên"
+          title="Hiện Trường — Short Code + Kiện/Kg · ngày đỏ = bay cùng phiên"
           onClick={() => void onCopyCargoDayReport("withCustomer")}
         >
           {cargoReportCopying ? "…" : "Hiện Trường"}

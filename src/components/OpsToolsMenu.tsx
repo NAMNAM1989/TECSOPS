@@ -47,14 +47,14 @@ export function OpsToolsMenu({
         {
           id: "cargo-report",
           label: cargoReportCopying ? "Đang copy ảnh…" : "Coppy Ảnh",
-          description: "AWB · Kiện/Kg · Flight · Cutoff · Dest",
+          description: "AWB · Flight · Cutoff · Dest",
           onSelect: () => onCopyCargoDayReport("basic"),
           disabled: cargoReportCopying,
         },
         {
           id: "cargo-report-kh",
           label: cargoReportCopying ? "Đang copy ảnh…" : "Hiện Trường",
-          description: "Có Short Code khách + Kiện/Kg · dán group chat",
+          description: "Short Code + Kiện/Kg · dán group chat",
           onSelect: () => onCopyCargoDayReport("withCustomer"),
           disabled: cargoReportCopying,
         },

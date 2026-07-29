@@ -10,12 +10,11 @@ type ColDef = { key: string; title: string; width: number };
 
 /** Cột rộng hơn — AWB / flight / cutoff đọc rõ trên Zalo sau khi nén. */
 const COLS_BASIC: readonly ColDef[] = [
-  { key: "stt", title: "STT", width: 56 },
-  { key: "booking", title: "Booking (AWB)", width: 180 },
-  { key: "pcsKg", title: "Kiện/Kg", width: 110 },
-  { key: "flightDate", title: "Flight / Date", width: 190 },
-  { key: "cutoff", title: "Cutoff", width: 190 },
-  { key: "dest", title: "Dest", width: 90 },
+  { key: "stt", title: "STT", width: 64 },
+  { key: "booking", title: "Booking (AWB)", width: 200 },
+  { key: "flightDate", title: "Flight / Date", width: 210 },
+  { key: "cutoff", title: "Cutoff", width: 210 },
+  { key: "dest", title: "Dest", width: 100 },
 ];
 
 /** Hiện Trường: Short Code khách + Kiện/Kg. */

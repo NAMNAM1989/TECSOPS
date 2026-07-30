@@ -17,19 +17,27 @@ const COLS_BASIC: readonly ColDef[] = [
   { key: "dest", title: "Dest", width: 100 },
 ];
 
-/** Hiện Trường: Short Code khách + Kiện/Kg. */
+/**
+ * Hiện Trường: Short Code khách + Kiện/Kg.
+ * Customer + Flight rộng/ chữ lớn hơn — dễ đọc trên Zalo sau khi nén.
+ */
 const COLS_WITH_CUSTOMER: readonly ColDef[] = [
   { key: "stt", title: "STT", width: 48 },
-  { key: "booking", title: "Booking (AWB)", width: 168 },
-  { key: "customer", title: "Customer", width: 110 },
-  { key: "pcsKg", title: "Kiện/Kg", width: 110 },
-  { key: "flightDate", title: "Flight / Date", width: 180 },
-  { key: "cutoff", title: "Cutoff", width: 170 },
-  { key: "dest", title: "Dest", width: 80 },
+  { key: "booking", title: "Booking (AWB)", width: 158 },
+  { key: "customer", title: "Customer", width: 156 },
+  { key: "pcsKg", title: "Kiện/Kg", width: 108 },
+  { key: "flightDate", title: "Flight / Date", width: 236 },
+  { key: "cutoff", title: "Cutoff", width: 158 },
+  { key: "dest", title: "Dest", width: 78 },
 ];
 
 /** Scale cố định cao — ảnh chat bị nén vẫn còn nét. */
 const RENDER_SCALE = 3;
+
+/** Cỡ chữ cell Hiện Trường — Customer / Flight nổi bật hơn các cột phụ. */
+const HIEN_TRUONG_CUSTOMER_PX = 19;
+const HIEN_TRUONG_FLIGHT_PX = 19;
+const BASIC_FLIGHT_PX = 16;
 
 const FONT_STACK = "Segoe UI, ui-sans-serif, system-ui, Arial, sans-serif";
 const MONO_STACK = "Consolas, ui-monospace, Cascadia Mono, monospace";
@@ -39,6 +47,13 @@ const URGENT_FG = "#b91c1c";
 
 function colsForVariant(variant: CargoDayReportImageVariant): readonly ColDef[] {
   return variant === "withCustomer" ? COLS_WITH_CUSTOMER : COLS_BASIC;
+}
+
+/** Layout cột (test / debug) — Hiện Trường ưu tiên rộng Customer + Flight. */
+export function cargoDayReportImageColWidths(
+  variant: CargoDayReportImageVariant,
+): Readonly<Record<string, number>> {
+  return Object.fromEntries(colsForVariant(variant).map((c) => [c.key, c.width]));
 }
 
 function downloadPngBlob(blob: Blob, filename: string): void {
@@ -138,6 +153,7 @@ function drawFlightDateCell(
   colW: number,
   rowH: number,
   cellPadX: number,
+  fontPx: number = BASIC_FLIGHT_PX,
 ): void {
   const maxW = colW - cellPadX * 2;
   const midY = y + rowH / 2;
@@ -148,7 +164,7 @@ function drawFlightDateCell(
   }
 
   ctx.textBaseline = "middle";
-  ctx.font = `600 16px ${FONT_STACK}`;
+  ctx.font = `700 ${fontPx}px ${FONT_STACK}`;
 
   const flight = row.flight;
   const dateLabel = row.flightDateLabel;
@@ -165,7 +181,7 @@ function drawFlightDateCell(
     cursor += ctx.measureText(sep).width;
 
     const remain = Math.max(8, x + cellPadX + maxW - cursor);
-    ctx.font = `700 16px ${FONT_STACK}`;
+    ctx.font = `800 ${fontPx}px ${FONT_STACK}`;
     ctx.fillStyle = row.flightDateUrgent ? URGENT_FG : "#0f172a";
     const dateDraw = measureText(ctx, dateLabel, remain);
     ctx.fillText(dateDraw, cursor, midY);
@@ -173,7 +189,7 @@ function drawFlightDateCell(
   }
 
   const text = measureText(ctx, row.flightDate, maxW);
-  ctx.font = `600 16px ${FONT_STACK}`;
+  ctx.font = `700 ${fontPx}px ${FONT_STACK}`;
   ctx.fillStyle = row.flightDateUrgent ? URGENT_FG : "#0f172a";
   fillTextVCenter(ctx, text, x + cellPadX, y, rowH);
 }
@@ -184,6 +200,7 @@ export function renderCargoDayReportCanvas(
   variant: CargoDayReportImageVariant = "basic",
 ): HTMLCanvasElement {
   const cols = colsForVariant(variant);
+  const isHienTruong = variant === "withCustomer";
   const scale = RENDER_SCALE;
   const padX = 36;
   const padY = 32;
@@ -192,9 +209,11 @@ export function renderCargoDayReportCanvas(
   const legendH = model.hasUrgentFlightDate ? 26 : 0;
   const sectionGap = 28;
   const sectionHeadH = 44;
-  const rowH = 44;
-  const headH = 42;
+  /** Hiện Trường: hàng cao hơn để chữ Customer / Flight 19px không bị chật. */
+  const rowH = isHienTruong ? 50 : 44;
+  const headH = isHienTruong ? 46 : 42;
   const cellPadX = 14;
+  const flightFontPx = isHienTruong ? HIEN_TRUONG_FLIGHT_PX : BASIC_FLIGHT_PX;
   const tableW = cols.reduce((s, c) => s + c.width, 0);
 
   let contentH = padY + titleH + subH + (legendH ? legendH + 4 : 0) + 16;
@@ -224,7 +243,7 @@ export function renderCargoDayReportCanvas(
   ctx.fillStyle = "#0f172a";
   ctx.font = `700 28px ${FONT_STACK}`;
   ctx.textBaseline = "top";
-  const variantTag = variant === "withCustomer" ? " · Hiện Trường" : "";
+  const variantTag = isHienTruong ? " · Hiện Trường" : "";
   ctx.fillText(`Báo cáo hàng hóa · ${model.titleDate}${variantTag}`, padX, y);
   y += titleH;
 
@@ -267,12 +286,16 @@ export function renderCargoDayReportCanvas(
     ctx.fillRect(padX, y, tableW, headH);
 
     let x = padX;
-    ctx.font = `700 15px ${FONT_STACK}`;
     ctx.fillStyle = "#f8fafc";
     for (const col of cols) {
       ctx.strokeStyle = "#475569";
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, col.width - 1, headH - 1);
+      const headerPx =
+        isHienTruong && (col.key === "customer" || col.key === "flightDate")
+          ? 16
+          : 15;
+      ctx.font = `700 ${headerPx}px ${FONT_STACK}`;
       if (col.key === "stt" || col.key === "dest" || col.key === "pcsKg") {
         const tw = ctx.measureText(col.title).width;
         fillTextVCenter(ctx, col.title, x + (col.width - tw) / 2, y, headH);
@@ -297,7 +320,16 @@ export function renderCargoDayReportCanvas(
         const maxW = col.width - cellPadX * 2;
 
         if (col.key === "flightDate") {
-          drawFlightDateCell(ctx, row, x, y, col.width, rowH, cellPadX);
+          drawFlightDateCell(
+            ctx,
+            row,
+            x,
+            y,
+            col.width,
+            rowH,
+            cellPadX,
+            flightFontPx,
+          );
         } else if (col.key === "stt") {
           ctx.fillStyle = "#0f172a";
           ctx.font = `700 16px ${FONT_STACK}`;
@@ -311,7 +343,7 @@ export function renderCargoDayReportCanvas(
           fillTextVCenter(ctx, text, x + cellPadX, y, rowH);
         } else if (col.key === "customer") {
           ctx.fillStyle = "#0f172a";
-          ctx.font = `700 15px ${FONT_STACK}`;
+          ctx.font = `800 ${HIEN_TRUONG_CUSTOMER_PX}px ${FONT_STACK}`;
           const text = measureText(ctx, cellValue(row, col.key), maxW);
           fillTextVCenter(ctx, text, x + cellPadX, y, rowH);
         } else if (col.key === "pcsKg") {

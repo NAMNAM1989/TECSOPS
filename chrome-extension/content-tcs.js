@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.19";
+  const SCRIPT_VERSION = "2.0.20";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -222,10 +222,26 @@
       } else {
         fills.codFds = clearMasterField(LOCATORS.fields.dest_code);
       }
-      fills.otherRequest = setById(
-        LOCATORS.fields.other_request,
-        ship.other_request != null ? String(ship.other_request) : ""
-      );
+      {
+        const otherVal =
+          ship.other_request != null ? String(ship.other_request) : "";
+        const otherIds = [
+          LOCATORS.fields.other_request,
+          "otherRequest",
+          "shcOthReq",
+        ].filter((id, i, arr) => id && arr.indexOf(id) === i);
+        let otherOk = false;
+        for (const id of otherIds) {
+          if (setById(id, otherVal)) {
+            otherOk = true;
+            break;
+          }
+        }
+        fills.otherRequest = otherOk;
+        if (otherVal && !otherOk) {
+          warnings.push("Không điền được Other Request (otherRequest/shcOthReq)");
+        }
+      }
 
       fills.shpRegNam = setById(LOCATORS.fields.registrant_name, reg.name || "");
       fills.shpRegTel = setById(LOCATORS.fields.registrant_tel, reg.tel || "");

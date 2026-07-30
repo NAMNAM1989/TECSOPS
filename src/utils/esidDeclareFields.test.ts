@@ -3,6 +3,7 @@ import type { Shipment } from "../types/shipment";
 import {
   ESID_DEFAULT_PAYMENT_MODE,
   buildEsidDeclareCoreFields,
+  composeEsidOtherRequest,
   esidTotalHawbs,
 } from "./esidDeclareFields";
 import { shipmentToEsidDeclareRow } from "./exportEsidDeclareExcel";
@@ -52,6 +53,51 @@ describe("esidDeclareFields — một nguồn cho Excel + fill", () => {
     expect(esidTotalHawbs({})).toBe(0);
     expect(esidTotalHawbs({ hawb: "  " })).toBe(0);
     expect(esidTotalHawbs({ hawb: "H1" })).toBe(1);
+  });
+
+  it("other_request = Volume Weight + Note + yêu cầu KH", () => {
+    expect(
+      composeEsidOtherRequest({
+        dimWeightKg: 120.5,
+        note: "URGENT",
+        otherRequirementsPrint: "KEEP COOL",
+      }),
+    ).toBe("Volume Weight: 120.5 | URGENT | KEEP COOL");
+    expect(
+      composeEsidOtherRequest({
+        dimWeightKg: null,
+        note: "",
+        otherRequirementsPrint: "KEEP COOL",
+      }),
+    ).toBe("KEEP COOL");
+    expect(
+      composeEsidOtherRequest({
+        dimWeightKg: null,
+        note: "",
+        otherRequirementsPrint: "",
+      }),
+    ).toBe("");
+
+    const core = buildEsidDeclareCoreFields(
+      base({
+        dimWeightKg: 99,
+        note: "NOTE A",
+        otherRequirementsPrint: "REQ B",
+      }),
+      registrant,
+      agent,
+    );
+    expect(core.other_request).toBe("Volume Weight: 99 | NOTE A | REQ B");
+    const fill = buildEsidDeclareFillPayload(
+      base({
+        dimWeightKg: 99,
+        note: "NOTE A",
+        otherRequirementsPrint: "REQ B",
+      }),
+      registrant,
+      agent,
+    );
+    expect(fill?.shipment.other_request).toBe(core.other_request);
   });
 
   it("Excel row và fill payload cùng payment_mode / party / hawbs", () => {

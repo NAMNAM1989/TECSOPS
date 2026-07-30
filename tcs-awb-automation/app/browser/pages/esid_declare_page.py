@@ -1781,14 +1781,28 @@ class EsidDeclarePage:
             include_destination=True,
             include_payment=False,
         )
-        passthrough_text = [
-            ("notify_remark", "desRmk001"),
-            ("other_request", "shcOthReq"),
-        ]
-        for key, eid in passthrough_text:
-            val = str(data.get(key) or "").strip()
-            if val:
-                fills[eid] = self._set_id(eid, val)
+        notify_remark = str(data.get("notify_remark") or "").strip()
+        if notify_remark:
+            fills["desRmk001"] = self._set_id("desRmk001", notify_remark)
+
+        other_request = str(data.get("other_request") or "").strip()
+        if other_request:
+            other_ok = False
+            for eid in (
+                self._field_id("other_request", "shcOthReq"),
+                "shcOthReq",
+                "otherRequest",
+            ):
+                if not eid:
+                    continue
+                if self._set_id(eid, other_request):
+                    fills[eid] = True
+                    other_ok = True
+                    break
+            if not other_ok:
+                warnings.append(
+                    "Không điền được Other Request (shcOthReq/otherRequest)"
+                )
         timings["ops_text_ms"] = int((time.perf_counter() - t0) * 1000)
 
         # 5) Người khai

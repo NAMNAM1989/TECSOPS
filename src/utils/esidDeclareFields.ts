@@ -5,9 +5,13 @@
 import type { Shipment } from "../types/shipment";
 import { awbDigitsKey } from "./awbFormat";
 import { parseFlightDateDisplayToYmd } from "./bookingDateParse";
+import { formatKgTotal } from "./formatKgTotal";
 
 /** Khớp agent TCS / memory esid-declare-optimize — không dùng Tiền mặt. */
 export const ESID_DEFAULT_PAYMENT_MODE = "Chuyển khoản/Bank transfer";
+
+/** Giới hạn ô Other Request trên form TCS khi ghép Volume Weight + Note + yêu cầu KH. */
+export const ESID_OTHER_REQUEST_MAX = 500;
 
 export type EsidDeclareAgentFields = {
   name: string;
@@ -73,12 +77,37 @@ export function esidTotalHawbs(s: Pick<Shipment, "hawb">): number {
   return s.hawb?.trim() ? 1 : 0;
 }
 
+/**
+ * Other Request khi Điền ESID:
+ * Volume Weight (DIM) + Note lô + Yêu cầu riêng KH (`otherRequirementsPrint`).
+ */
+export function composeEsidOtherRequest(
+  s: Pick<Shipment, "dimWeightKg" | "note" | "otherRequirementsPrint">,
+): string {
+  const parts: string[] = [];
+  const dim = s.dimWeightKg;
+  if (dim != null && Number.isFinite(Number(dim))) {
+    parts.push(`Volume Weight: ${formatKgTotal(Number(dim))}`);
+  }
+  const note = (s.note || "").trim();
+  if (note) parts.push(note);
+  const req = (s.otherRequirementsPrint || "").trim();
+  if (req) parts.push(req);
+  const joined = parts.join(" | ");
+  return joined.length > ESID_OTHER_REQUEST_MAX
+    ? joined.slice(0, ESID_OTHER_REQUEST_MAX)
+    : joined;
+}
+
 export function buildEsidDeclareCoreFields(
   s: Shipment,
   registrant: EsidDeclareRegistrantFields,
   agent: EsidDeclareAgentFields
 ): EsidDeclareCoreFields {
   const awb = awbDigitsKey(s.awb);
+  const kgRaw = s.kg;
+  const grossWeight =
+    kgRaw == null || Number.isNaN(Number(kgRaw)) ? null : Number(kgRaw);
   return {
     shipment_id: s.id,
     awb: awb.length === 11 ? awb : (s.awb || "").trim(),
@@ -86,7 +115,7 @@ export function buildEsidDeclareCoreFields(
     flight_date: flightDateToYmd(s.flightDate || "", s.sessionDate || ""),
     dest: (s.dest || "").trim().toUpperCase(),
     pcs: s.pcs == null || Number.isNaN(Number(s.pcs)) ? null : Number(s.pcs),
-    gross_weight: s.kg,
+    gross_weight: grossWeight,
     total_hawbs: esidTotalHawbs(s),
     nature_of_goods: (s.goodsDescriptionPrint || "").trim(),
     payment_mode: ESID_DEFAULT_PAYMENT_MODE,
@@ -108,7 +137,7 @@ export function buildEsidDeclareCoreFields(
     consignee_email: (s.consigneeEmailPrint || "").trim(),
     consignee_vat: (s.taxCodePrint || "").trim(),
     notify_name: (s.notifyNamePrint || "").split(/\r?\n/).map((l) => l.trim()).find(Boolean) || "",
-    other_request: (s.otherRequirementsPrint || "").trim(),
+    other_request: composeEsidOtherRequest(s),
     note: (s.note || "").trim(),
     registrant_name: (registrant.name || "").trim(),
     registrant_tel: (registrant.tel || "").trim(),

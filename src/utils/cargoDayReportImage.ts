@@ -22,16 +22,16 @@ const COLS_BASIC: readonly ColDef[] = [
 
 /**
  * Hiện Trường: Short Code khách + Kiện/Kg.
- * Customer + Flight rộng/ chữ lớn; Cutoff thu hẹp để bảng gọn, chữ hiện rõ.
+ * Booking (AWB) đủ rộng cho `160-1234 5675`; Cutoff hẹp; Customer/Flight nổi bật.
  */
 const COLS_WITH_CUSTOMER: readonly ColDef[] = [
   { key: "stt", title: "STT", width: 48 },
-  { key: "booking", title: "Booking (AWB)", width: 158 },
-  { key: "customer", title: "Customer", width: 168 },
-  { key: "pcsKg", title: "Kiện/Kg", width: 108 },
-  { key: "flightDate", title: "Flight / Date", width: 248 },
-  { key: "cutoff", title: "Cutoff", width: 120 },
-  { key: "dest", title: "Dest", width: 78 },
+  { key: "booking", title: "Booking (AWB)", width: 198 },
+  { key: "customer", title: "Customer", width: 156 },
+  { key: "pcsKg", title: "Kiện/Kg", width: 104 },
+  { key: "flightDate", title: "Flight / Date", width: 236 },
+  { key: "cutoff", title: "Cutoff", width: 112 },
+  { key: "dest", title: "Dest", width: 74 },
 ];
 
 /** Scale cố định cao — ảnh chat bị nén vẫn còn nét. */

@@ -49,7 +49,7 @@ export function normalizeFlightDateToken(raw: string): string {
   const s0 = raw.trim();
   if (!s0) return "";
 
-  const slash = /^(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?$/.exec(s0);
+  const slash = /^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?$/.exec(s0);
   if (slash) {
     const day = parseInt(slash[1], 10);
     const mon = parseInt(slash[2], 10);

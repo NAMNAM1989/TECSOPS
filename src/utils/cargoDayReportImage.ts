@@ -8,26 +8,29 @@ export type CopyCargoDayReportImageResult =
 
 type ColDef = { key: string; title: string; width: number };
 
-/** Cột rộng hơn — AWB / flight / cutoff đọc rõ trên Zalo sau khi nén. */
+/**
+ * Cột rộng hơn — AWB / flight đọc rõ trên Zalo sau khi nén.
+ * Cutoff hẹp lại (vừa `17H - 15APR`) để tổng ảnh không quá rộng → chữ ít bị nén.
+ */
 const COLS_BASIC: readonly ColDef[] = [
   { key: "stt", title: "STT", width: 64 },
   { key: "booking", title: "Booking (AWB)", width: 200 },
   { key: "flightDate", title: "Flight / Date", width: 210 },
-  { key: "cutoff", title: "Cutoff", width: 210 },
+  { key: "cutoff", title: "Cutoff", width: 148 },
   { key: "dest", title: "Dest", width: 100 },
 ];
 
 /**
  * Hiện Trường: Short Code khách + Kiện/Kg.
- * Customer + Flight rộng/ chữ lớn hơn — dễ đọc trên Zalo sau khi nén.
+ * Customer + Flight rộng/ chữ lớn; Cutoff thu hẹp để bảng gọn, chữ hiện rõ.
  */
 const COLS_WITH_CUSTOMER: readonly ColDef[] = [
   { key: "stt", title: "STT", width: 48 },
   { key: "booking", title: "Booking (AWB)", width: 158 },
-  { key: "customer", title: "Customer", width: 156 },
+  { key: "customer", title: "Customer", width: 168 },
   { key: "pcsKg", title: "Kiện/Kg", width: 108 },
-  { key: "flightDate", title: "Flight / Date", width: 236 },
-  { key: "cutoff", title: "Cutoff", width: 158 },
+  { key: "flightDate", title: "Flight / Date", width: 248 },
+  { key: "cutoff", title: "Cutoff", width: 120 },
   { key: "dest", title: "Dest", width: 78 },
 ];
 
@@ -358,6 +361,12 @@ export function renderCargoDayReportCanvas(
           const text = measureText(ctx, cellValue(row, col.key), maxW);
           const tw = ctx.measureText(text).width;
           fillTextVCenter(ctx, text, x + (col.width - tw) / 2, y, rowH);
+        } else if (col.key === "cutoff") {
+          // Cột hẹp — chữ gọn nhưng đậm để vẫn đọc được `17H - 15APR`
+          ctx.fillStyle = "#0f172a";
+          ctx.font = `700 15px ${FONT_STACK}`;
+          const text = measureText(ctx, cellValue(row, col.key), maxW);
+          fillTextVCenter(ctx, text, x + cellPadX, y, rowH);
         } else {
           ctx.fillStyle = "#0f172a";
           ctx.font = `600 16px ${FONT_STACK}`;

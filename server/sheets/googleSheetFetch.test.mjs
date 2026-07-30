@@ -3,6 +3,7 @@ import {
   sessionYmdToBookSheetTab,
   bookSheetTabCandidates,
   fetchBookHangNgayGridForSession,
+  tabTitleMatchesSession,
   BOOK_SHEET_GVIZ_RANGE,
 } from "./googleSheetFetch.mjs";
 
@@ -17,6 +18,12 @@ describe("book sheet tab names", () => {
 
   it("candidates", () => {
     expect(bookSheetTabCandidates("2026-07-14")[0]).toBe("NGÀY 14 JUL");
+  });
+
+  it("tabTitleMatchesSession", () => {
+    expect(tabTitleMatchesSession("NGÀY 30 JUL", "2026-07-30")).toBe(true);
+    expect(tabTitleMatchesSession("NGAY 30 JUL", "2026-07-30")).toBe(true);
+    expect(tabTitleMatchesSession("NGÀY 24 JUL", "2026-07-30")).toBe(false);
   });
 });
 

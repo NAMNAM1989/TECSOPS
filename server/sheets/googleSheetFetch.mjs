@@ -223,6 +223,26 @@ function normalizeTabTitle(s) {
     .toUpperCase();
 }
 
+/** Tab title có khớp ngày phiên Ops không (vd. «NGÀY 30 JUL» ↔ 2026-07-30). */
+export function tabTitleMatchesSession(sheetTab, sessionYmd) {
+  const title = String(sheetTab ?? "").trim();
+  if (!title) return false;
+  const candidates = bookSheetTabCandidates(sessionYmd);
+  if (!candidates.length) return false;
+  const titleNorm = normalizeTabTitle(title);
+  if (candidates.some((c) => normalizeTabTitle(c) === titleNorm)) return true;
+
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(sessionYmd ?? "").trim());
+  if (!m) return false;
+  const day = Number(m[3]);
+  const mmm = MONTHS3[Number(m[2]) - 1];
+  const compact = titleNorm.replace(/\s+/g, "");
+  const dm = compact.match(
+    /(?:^|\D)(\d{1,2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(?:\d{2,4})?(?:\D|$)/
+  );
+  return Boolean(dm && Number(dm[1]) === day && dm[2] === mmm);
+}
+
 /**
  * Tab «NGÀY 13 JUL» từ sessionDate «2026-07-13».
  * @param {string} sessionYmd
@@ -333,7 +353,10 @@ export async function fetchBookHangNgayGridForSession(
         `Tab gid=${preferredGid}${hit ? ` («${hit.title}»)` : ""} không giống mẫu BOOK HẰNG NGÀY.`
       );
     }
-    cacheResolvedSessionTab(id, sessionYmd, resolved);
+    // Chỉ cache theo phiên khi tab đúng ngày — tránh gid tab ngày khác đầu độc lần kéo sau.
+    if (tabTitleMatchesSession(resolved.title, sessionYmd)) {
+      cacheResolvedSessionTab(id, sessionYmd, resolved);
+    }
     return { grid, sheetTab: resolved.title, gid: resolved.gid };
   }
 
@@ -352,7 +375,11 @@ export async function fetchBookHangNgayGridForSession(
   const primary = sessionCandidates[0];
 
   const sessionCached = getCachedSessionTab(id, sessionYmd);
-  if (sessionCached && (sessionCached.gid || sessionCached.title)) {
+  if (
+    sessionCached &&
+    (sessionCached.gid || sessionCached.title) &&
+    tabTitleMatchesSession(sessionCached.title || primary, sessionYmd)
+  ) {
     const resolved = { title: sessionCached.title || primary, gid: sessionCached.gid };
     const grid = await fetchResolvedBookGrid(id, resolved, fetchByGid, fetchByName);
     if (isLikelyBookHangNgayGrid(grid)) {

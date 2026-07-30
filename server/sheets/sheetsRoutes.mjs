@@ -3,6 +3,7 @@ import {
   getBookSpreadsheetId,
   getBookSpreadsheetShareUrl,
   sessionYmdToBookSheetTab,
+  tabTitleMatchesSession,
 } from "./googleSheetFetch.mjs";
 import { parseSpreadsheetIdFromInput, parseSheetGidFromInput } from "./spreadsheetIdParse.mjs";
 import { getCachedGrid, getCachedGridForSession, getCachedSyncResult, setCachedGrid, setCachedSyncResult, syncResultCacheKey } from "./sheetFetchCache.mjs";
@@ -20,6 +21,7 @@ import {
   sheetAwbFirstIndexByKey,
   sheetRowIsBlocked,
   sheetRowToPatch,
+  sheetRowToUpdatePatch,
 } from "./sheetRowReconcile.mjs";
 import { loadState, peekStateVersion, runBatchMutations } from "../stateStore.mjs";
 
@@ -57,7 +59,10 @@ async function loadBookGridForSession(
   const gid = String(preferredGid ?? "").trim();
   if (!forceRefresh && !gid) {
     const cachedSession = getCachedGridForSession(spreadsheetId, sessionDate);
-    if (cachedSession?.grid?.length) {
+    if (
+      cachedSession?.grid?.length &&
+      tabTitleMatchesSession(cachedSession.sheetTab, sessionDate)
+    ) {
       return { grid: cachedSession.grid, sheetTab: cachedSession.sheetTab, gid: "" };
     }
     if (preferred) {
@@ -74,7 +79,9 @@ async function loadBookGridForSession(
     preferredTab,
     { preferredGid: gid }
   );
-  setCachedGrid(spreadsheetId, sessionDate, sheetTab, grid);
+  setCachedGrid(spreadsheetId, sessionDate, sheetTab, grid, {
+    bindSession: tabTitleMatchesSession(sheetTab, sessionDate),
+  });
   return { grid, sheetTab, gid: resolvedGid };
 }
 
@@ -398,13 +405,17 @@ export function registerSheetsRoutes(app, deps) {
 
         try {
           if (syncStatus === "update" && existing) {
-            const patch = sheetRowToPatch(
+            const patch = sheetRowToUpdatePatch(
               row,
               sessionDate,
               [],
               customerLookups.code,
               customerLookups.id
             );
+            if (!Object.keys(patch).length) {
+              skipped.push({ awb: row.awb, reason: "Sheet không có field mới để cập nhật" });
+              continue;
+            }
             pendingMutations.push({ action: "UPDATE", id: existing.id, patch });
             updated.push({
               awb: row.awb,

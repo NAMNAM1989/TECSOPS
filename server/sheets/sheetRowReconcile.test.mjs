@@ -12,6 +12,7 @@ import {
   sheetRowNeedsUpdate,
   sheetRowSyncStatus,
   sheetRowToPatch,
+  sheetRowToUpdatePatch,
 } from "./sheetRowReconcile.mjs";
 
 const customers = [{ id: "c1", name: "TÍN PHÁT", code: "TP" }];
@@ -236,5 +237,82 @@ describe("sheetRowReconcile", () => {
     };
     const patch = sheetRowToPatch(sheetRow, "2026-06-13", customers, lookupCode, lookupId);
     expect(patch.dimWeightKg).toBe(1300);
+  });
+
+  it("UPDATE không wipe chuyến/DEST/khách khi Sheet thiếu ô", () => {
+    const existing = {
+      ...state.rows[0],
+      customer: "TÍN PHÁT",
+      customerCode: "TP",
+      customerId: "c1",
+      dest: "AMS",
+      flight: "TK163",
+      note: "giữ note Ops",
+      consigneeNamePrint: "VERTEX",
+      pcs: 78,
+      kg: 1258,
+    };
+    const sparseSheet = {
+      awb: "235-4501 1960",
+      warehouse: "TECS-TCS",
+      customer: "",
+      flight: "",
+      flightDate: "",
+      cutoff: "",
+      cutoffNote: "",
+      dest: "",
+      pcs: null,
+      kg: null,
+      dimWeightKg: null,
+      note: "",
+      consigneeNamePrint: "",
+    };
+    expect(
+      sheetRowNeedsUpdate(existing, sparseSheet, "2026-06-13", customers, lookupCode, lookupId)
+    ).toBe(false);
+
+    const patch = sheetRowToUpdatePatch(
+      sparseSheet,
+      "2026-06-13",
+      customers,
+      lookupCode,
+      lookupId
+    );
+    expect(patch.flight).toBeUndefined();
+    expect(patch.dest).toBeUndefined();
+    expect(patch.customer).toBeUndefined();
+    expect(patch.pcs).toBeUndefined();
+    expect(patch.note).toBeUndefined();
+    expect(patch.awb).toBe("235-4501 1960");
+    expect(patch.warehouse).toBe("TECS-TCS");
+  });
+
+  it("Short Code và tên khách cùng compact key → không cần update", () => {
+    const existing = {
+      ...state.rows[0],
+      customer: "CONG CHUA",
+      customerCode: "CCE",
+      customerId: "c-cc",
+      warehouse: "TECS-TCS",
+      note: "",
+      consigneeNamePrint: "",
+    };
+    const sheetRow = {
+      awb: "235-4501 1960",
+      warehouse: "TECS-TCS",
+      customer: "CÔNG CHÚA",
+      flight: "TK163",
+      flightDate: "14JUN",
+      cutoff: "17:00",
+      cutoffNote: "13JUN",
+      dest: "AMS",
+      pcs: 78,
+      kg: 1258,
+      note: "",
+      consigneeNamePrint: "",
+    };
+    expect(
+      sheetRowNeedsUpdate(existing, sheetRow, "2026-06-13", customers, lookupCode, lookupId)
+    ).toBe(false);
   });
 });

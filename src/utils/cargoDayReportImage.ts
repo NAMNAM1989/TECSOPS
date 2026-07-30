@@ -22,24 +22,24 @@ const COLS_BASIC: readonly ColDef[] = [
 
 /**
  * Hiện Trường: Short Code khách + Kiện/Kg.
- * Booking (AWB) đủ rộng cho `160-1234 5675`; Cutoff hẹp; Customer/Flight nổi bật.
+ * Booking (AWB) đủ rộng cho `160-1234 5675`; Cutoff hẹp; Customer/Flight phóng to để đọc rõ.
  */
 const COLS_WITH_CUSTOMER: readonly ColDef[] = [
-  { key: "stt", title: "STT", width: 48 },
+  { key: "stt", title: "STT", width: 52 },
   { key: "booking", title: "Booking (AWB)", width: 198 },
-  { key: "customer", title: "Customer", width: 156 },
-  { key: "pcsKg", title: "Kiện/Kg", width: 104 },
-  { key: "flightDate", title: "Flight / Date", width: 236 },
+  { key: "customer", title: "Customer", width: 180 },
+  { key: "pcsKg", title: "Kiện/Kg", width: 118 },
+  { key: "flightDate", title: "Flight / Date", width: 260 },
   { key: "cutoff", title: "Cutoff", width: 112 },
-  { key: "dest", title: "Dest", width: 74 },
+  { key: "dest", title: "Dest", width: 80 },
 ];
 
 /** Scale cố định cao — ảnh chat bị nén vẫn còn nét. */
 const RENDER_SCALE = 3;
 
 /** Cỡ chữ cell Hiện Trường — Customer / Flight nổi bật hơn các cột phụ. */
-const HIEN_TRUONG_CUSTOMER_PX = 19;
-const HIEN_TRUONG_FLIGHT_PX = 19;
+const HIEN_TRUONG_CUSTOMER_PX = 20;
+const HIEN_TRUONG_FLIGHT_PX = 20;
 const BASIC_FLIGHT_PX = 16;
 
 const FONT_STACK = "Segoe UI, ui-sans-serif, system-ui, Arial, sans-serif";
@@ -212,10 +212,10 @@ export function renderCargoDayReportCanvas(
   const legendH = model.hasUrgentFlightDate ? 26 : 0;
   const sectionGap = 28;
   const sectionHeadH = 44;
-  /** Hiện Trường: hàng cao hơn để chữ Customer / Flight 19px không bị chật. */
-  const rowH = isHienTruong ? 50 : 44;
+  /** Hiện Trường: hàng cao hơn để chữ Customer / Flight 20px không bị chật. */
+  const rowH = isHienTruong ? 52 : 44;
   const headH = isHienTruong ? 46 : 42;
-  const cellPadX = 14;
+  const cellPadX = isHienTruong ? 16 : 14;
   const flightFontPx = isHienTruong ? HIEN_TRUONG_FLIGHT_PX : BASIC_FLIGHT_PX;
   const tableW = cols.reduce((s, c) => s + c.width, 0);
 

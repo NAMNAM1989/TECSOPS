@@ -73,15 +73,21 @@ export function getCachedGrid(spreadsheetId, sessionYmd, sheetTab) {
   return hit;
 }
 
-export function setCachedGrid(spreadsheetId, sessionYmd, sheetTab, grid) {
+/**
+ * @param {{ bindSession?: boolean }} [opts] bindSession=false khi tab lệch ngày phiên — tránh đầu độc cache phiên.
+ */
+export function setCachedGrid(spreadsheetId, sessionYmd, sheetTab, grid, opts = {}) {
   const tab = String(sheetTab ?? "").trim();
+  const bindSession = opts.bindSession !== false;
   const entry = {
     grid,
     sheetTab: tab,
     expires: Date.now() + GRID_TTL_MS,
   };
   gridBySyncKey.set(gridCacheKey(spreadsheetId, sessionYmd, sheetTab), entry);
-  gridBySessionKey.set(sessionGridCacheKey(spreadsheetId, sessionYmd), entry);
+  if (bindSession) {
+    gridBySessionKey.set(sessionGridCacheKey(spreadsheetId, sessionYmd), entry);
+  }
 }
 
 export function getCachedGridForSession(spreadsheetId, sessionYmd) {

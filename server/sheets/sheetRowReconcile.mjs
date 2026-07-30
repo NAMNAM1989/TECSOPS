@@ -1,5 +1,6 @@
 import { awbDigitsKey } from "./awbFormat.mjs";
 import { sessionYmdToFlightDateToken } from "./bookDateMatch.mjs";
+import { compactCustomerMatchKey } from "./customerSheetLookup.mjs";
 
 function normStr(v) {
   return String(v ?? "").trim();
@@ -7,6 +8,13 @@ function normStr(v) {
 
 function normCustomer(v) {
   return normStr(v).toLowerCase();
+}
+
+function sameCustomerLabel(a, b) {
+  const ca = compactCustomerMatchKey(a);
+  const cb = compactCustomerMatchKey(b);
+  if (ca && cb && ca === cb) return true;
+  return normCustomer(a) === normCustomer(b);
 }
 
 function normNum(v) {
@@ -106,7 +114,7 @@ export function sheetAwbFirstIndexByKey(rows) {
   return map;
 }
 
-/** @returns {Record<string, unknown>} patch từ Sheet → shipment trên web */
+/** @returns {Record<string, unknown>} patch từ Sheet → shipment trên web (dùng khi ADD) */
 export function sheetRowToPatch(row, sessionDate, customers, lookupCustomerCode, lookupCustomerId) {
   const customer = normStr(row.customer);
   const sessionFlightDate = sessionYmdToFlightDateToken(sessionDate);
@@ -134,30 +142,71 @@ export function sheetRowToPatch(row, sessionDate, customers, lookupCustomerCode,
   return patch;
 }
 
+/**
+ * Patch UPDATE: chỉ ghi field Sheet có giá trị — tránh kéo Sheet trống/lệch cột xóa chuyến·DEST·khách trên Ops.
+ * @returns {Record<string, unknown>}
+ */
+export function sheetRowToUpdatePatch(row, sessionDate, customers, lookupCustomerCode, lookupCustomerId) {
+  void sessionDate;
+  /** @type {Record<string, unknown>} */
+  const patch = {};
+
+  if (isValidAwb(row.awb)) patch.awb = row.awb;
+  if (normStr(row.flight)) patch.flight = row.flight;
+  if (normStr(row.flightDate)) patch.flightDate = row.flightDate;
+  if (normStr(row.cutoff)) patch.cutoff = row.cutoff;
+  if (normStr(row.cutoffNote)) patch.cutoffNote = row.cutoffNote;
+  if (normStr(row.note)) patch.note = row.note;
+  if (normStr(row.dest)) patch.dest = row.dest;
+  if (normStr(row.warehouse)) patch.warehouse = row.warehouse;
+
+  if (row.pcs != null && Number.isFinite(Number(row.pcs))) patch.pcs = Number(row.pcs);
+  if (row.kg != null && Number.isFinite(Number(row.kg))) patch.kg = Number(row.kg);
+
+  const customer = normStr(row.customer);
+  if (customer) {
+    patch.customer = customer;
+    patch.customerCode = lookupCustomerCode(customers, customer);
+    patch.customerId = lookupCustomerId(customers, customer);
+  }
+
+  if (normStr(row.consigneeNamePrint)) patch.consigneeNamePrint = row.consigneeNamePrint;
+
+  if (row.dimWeightKg != null && Number.isFinite(Number(row.dimWeightKg))) {
+    patch.dimWeightKg = Number(row.dimWeightKg);
+  }
+  return patch;
+}
+
+function patchFieldDiffers(existing, patch, key, mode) {
+  if (!Object.prototype.hasOwnProperty.call(patch, key)) return false;
+  if (mode === "customer") return !sameCustomerLabel(existing[key], patch[key]);
+  if (mode === "num") return normNum(existing[key]) !== normNum(patch[key]);
+  if (mode === "upper") {
+    return normStr(existing[key]).toUpperCase() !== normStr(patch[key]).toUpperCase();
+  }
+  return normStr(existing[key]) !== normStr(patch[key]);
+}
+
 /** So sánh lô web với dữ liệu Sheet — khác kho/khách/chuyến/… → cần cập nhật. */
 export function sheetRowNeedsUpdate(existing, row, sessionDate, customers, lookupCustomerCode, lookupCustomerId) {
   if (!existing) return false;
-  const patch = sheetRowToPatch(row, sessionDate, customers, lookupCustomerCode, lookupCustomerId);
+  const patch = sheetRowToUpdatePatch(row, sessionDate, customers, lookupCustomerCode, lookupCustomerId);
 
   if (isValidAwb(patch.awb) && !isValidAwb(existing.awb)) return true;
 
-  if (existing.warehouse !== patch.warehouse) return true;
-  if (normCustomer(existing.customer) !== normCustomer(patch.customer)) return true;
-  if (normStr(existing.flight).toUpperCase() !== normStr(patch.flight).toUpperCase()) return true;
-  if (normStr(existing.flightDate).toUpperCase() !== normStr(patch.flightDate).toUpperCase()) return true;
-  if (normStr(existing.cutoff) !== normStr(patch.cutoff)) return true;
-  if (normStr(existing.cutoffNote).toUpperCase() !== normStr(patch.cutoffNote).toUpperCase()) return true;
-  if (normStr(existing.dest).toUpperCase() !== normStr(patch.dest).toUpperCase()) return true;
-  if (normNum(existing.pcs) !== normNum(patch.pcs)) return true;
-  if (normNum(existing.kg) !== normNum(patch.kg)) return true;
-  if (
-    Object.prototype.hasOwnProperty.call(patch, "dimWeightKg") &&
-    normNum(existing.dimWeightKg) !== normNum(patch.dimWeightKg)
-  ) {
-    return true;
-  }
-  if (normStr(existing.note) !== normStr(patch.note)) return true;
-  if (normStr(existing.consigneeNamePrint) !== normStr(patch.consigneeNamePrint)) return true;
+  if (patchFieldDiffers(existing, patch, "warehouse", "str")) return true;
+  if (patchFieldDiffers(existing, patch, "customer", "customer")) return true;
+  if (patchFieldDiffers(existing, patch, "flight", "upper")) return true;
+  if (patchFieldDiffers(existing, patch, "flightDate", "upper")) return true;
+  if (patchFieldDiffers(existing, patch, "cutoff", "str")) return true;
+  if (patchFieldDiffers(existing, patch, "cutoffNote", "upper")) return true;
+  if (patchFieldDiffers(existing, patch, "dest", "upper")) return true;
+  if (patchFieldDiffers(existing, patch, "pcs", "num")) return true;
+  if (patchFieldDiffers(existing, patch, "kg", "num")) return true;
+  if (patchFieldDiffers(existing, patch, "dimWeightKg", "num")) return true;
+  if (patchFieldDiffers(existing, patch, "note", "str")) return true;
+  if (patchFieldDiffers(existing, patch, "consigneeNamePrint", "str")) return true;
   return false;
 }
 

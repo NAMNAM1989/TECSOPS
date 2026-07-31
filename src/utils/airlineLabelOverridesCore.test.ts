@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  airlineNameLooksGlued,
   buildFlightLabelMapForEditor,
+  clampAirlineLabelOverrides,
   overridesFromEffectiveMaps,
+  repairGluedAirlineDisplayName,
   syntheticAirlineLabelName,
 } from "./airlineLabelOverridesCore";
 import {
@@ -115,5 +118,42 @@ describe("buildFlightLabelMapForEditor + tem TR", () => {
     const map = buildFlightLabelMapForEditor(undefined, ["XY123", "VN773"]);
     expect(map.VN).toBe("VIETNAM AIRLINES");
     expect(map.XY).toBe("XY AIRLINES");
+  });
+});
+
+describe("repairGluedAirlineDisplayName", () => {
+  it("giữ tên đã có khoảng trắng", () => {
+    expect(repairGluedAirlineDisplayName("Singapore airlines")).toBe("Singapore airlines");
+  });
+
+  it("tách Singaporeairlines / SINGAPOREAIRLINES theo từ điển", () => {
+    expect(repairGluedAirlineDisplayName("Singaporeairlines")).toBe("SINGAPORE AIRLINES");
+    expect(repairGluedAirlineDisplayName("SINGAPOREAIRLINES")).toBe("SINGAPORE AIRLINES");
+  });
+
+  it("tách hậu tố AIRLINES khi không có trong từ điển", () => {
+    expect(repairGluedAirlineDisplayName("Fooairlines")).toBe("Foo AIRLINES");
+  });
+
+  it("normalize overrides cũ bị dính khi clamp", () => {
+    const o = clampAirlineLabelOverrides({
+      byAwbPrefix: {},
+      byFlightPrefix: { TR: "Singaporeairlines" },
+    });
+    expect(o.byFlightPrefix.TR).toBe("SINGAPORE AIRLINES");
+  });
+
+  it("tem in dùng tên đã tách từ ghi đè dính", () => {
+    const d = mapShipmentToAirCargoLabelData(baseShipment({ flight: "TR305" }), {
+      byAwbPrefix: {},
+      byFlightPrefix: { TR: "Singaporeairlines" },
+    });
+    expect(d.airline).toBe("SINGAPORE AIRLINES");
+  });
+
+  it("airlineNameLooksGlued", () => {
+    expect(airlineNameLooksGlued("Singaporeairlines")).toBe(true);
+    expect(airlineNameLooksGlued("Singapore airlines")).toBe(false);
+    expect(airlineNameLooksGlued("SCOOT")).toBe(false);
   });
 });

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import {
+  airlineNameLooksGlued,
   buildFlightLabelMapForEditor,
   clampAirlineLabelOverrides,
   overridesFromEffectiveMaps,
+  repairGluedAirlineDisplayName,
 } from "../utils/airlineLabelOverridesCore";
 import { DEFAULT_AIRLINE_BY_FLIGHT_PREFIX } from "../constants/airlineLabelDefaults";
 import { OPS } from "../styles/opsModalStyles";
@@ -40,7 +42,7 @@ function rowsToEffectiveFlight(rows: EditableRow[]): Record<string, string> {
       .replace(/[^A-Z0-9]/g, "")
       .slice(0, 3);
     if (k.length < 2) continue;
-    const n = r.name.replace(/\s+/g, " ").trim();
+    const n = repairGluedAirlineDisplayName(r.name);
     if (!n) continue;
     o[k] = n.slice(0, 80);
   }
@@ -192,19 +194,35 @@ export function AirlineLabelSettingsModal({
                     className={`w-16 text-center font-mono text-sm font-semibold uppercase ${OPS.input}`}
                     title="Prefix lấy từ cột chuyến (2–3 ký tự đầu)"
                   />
-                  <input
-                    type="text"
-                    placeholder="Tên hãng in trên tem"
-                    maxLength={80}
-                    value={row.name}
-                    onChange={(e) => {
-                      const t = e.target.value;
-                      setFlightRows((rows) =>
-                        rows.map((x, i) => (i === idx ? { ...x, name: t } : x)),
-                      );
-                    }}
-                    className={`min-w-[12rem] flex-1 text-sm font-semibold ${OPS.inputLg}`}
-                  />
+                  <div className="min-w-[12rem] flex-1">
+                    <input
+                      type="text"
+                      placeholder="Tên hãng in trên tem"
+                      maxLength={80}
+                      value={row.name}
+                      onChange={(e) => {
+                        const t = e.target.value;
+                        setFlightRows((rows) =>
+                          rows.map((x, i) => (i === idx ? { ...x, name: t } : x)),
+                        );
+                      }}
+                      onBlur={() => {
+                        if (!airlineNameLooksGlued(row.name)) return;
+                        const fixed = repairGluedAirlineDisplayName(row.name);
+                        if (fixed === row.name) return;
+                        setFlightRows((rows) =>
+                          rows.map((x, i) => (i === idx ? { ...x, name: fixed } : x)),
+                        );
+                      }}
+                      className={`w-full text-sm font-semibold ${OPS.inputLg}`}
+                    />
+                    {airlineNameLooksGlued(row.name) ? (
+                      <p className="mt-1 text-[10px] font-medium text-amber-700">
+                        Thiếu khoảng trắng — blur hoặc Lưu sẽ tách (vd. Singaporeairlines →
+                        SINGAPORE AIRLINES)
+                      </p>
+                    ) : null}
+                  </div>
                   <button
                     type="button"
                     onClick={() =>

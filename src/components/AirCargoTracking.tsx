@@ -746,6 +746,7 @@ export function AirCargoTracking({
             open={airlineLabelSettingsOpen}
             onClose={() => setAirlineLabelSettingsOpen(false)}
             value={state.airlineLabelOverrides}
+            flightSamples={allRows.map((r) => r.flight)}
             saving={airlineLabelSaving}
             onSave={saveAirlineLabelOverrides}
           />

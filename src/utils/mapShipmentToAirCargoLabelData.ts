@@ -1,7 +1,7 @@
 import type { Shipment } from "../types/shipment";
 import { formatAwbLabel, rawAwbDigits } from "./awbFormat";
 import type { AirlineLabelOverrides } from "./airlineLabelOverridesCore";
-import { mergeAirlineLookupMaps } from "./airlineLabelOverridesCore";
+import { mergeAirlineLookupMaps, syntheticAirlineLabelName } from "./airlineLabelOverridesCore";
 
 export type AirCargoLabelSpecial = "" | "cold" | "danger";
 
@@ -64,7 +64,7 @@ function airlineNameFromShipment(s: Shipment, maps: ReturnType<typeof mergeAirli
   const awbPrefix = rawAwbDigits(s.awb).slice(0, 3);
   if (awbPrefix.length === 3 && byAwb[awbPrefix]) return byAwb[awbPrefix];
 
-  return flightPrefix ? `${flightPrefix} AIRLINES` : "";
+  return flightPrefix ? syntheticAirlineLabelName(flightPrefix) : "";
 }
 
 function specialFromShipment(s: Shipment): AirCargoLabelSpecial {

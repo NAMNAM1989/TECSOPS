@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import {
+  buildFlightLabelMapForEditor,
   clampAirlineLabelOverrides,
-  mergeAirlineLookupMaps,
   overridesFromEffectiveMaps,
 } from "../utils/airlineLabelOverridesCore";
 import { DEFAULT_AIRLINE_BY_FLIGHT_PREFIX } from "../constants/airlineLabelDefaults";
@@ -12,6 +12,8 @@ type Props = {
   open: boolean;
   onClose: () => void;
   value: AirlineLabelOverrides | undefined;
+  /** Mẫu cột chuyến từ các lô đang có — để prefix như TR hiện trong danh sách và link với tem. */
+  flightSamples?: readonly string[];
   saving?: boolean;
   onSave: (next: AirlineLabelOverrides) => void | Promise<void>;
 };
@@ -38,7 +40,7 @@ function rowsToEffectiveFlight(rows: EditableRow[]): Record<string, string> {
       .replace(/[^A-Z0-9]/g, "")
       .slice(0, 3);
     if (k.length < 2) continue;
-    const n = r.name.replace(/\s+/g, "").trim();
+    const n = r.name.replace(/\s+/g, " ").trim();
     if (!n) continue;
     o[k] = n.slice(0, 80);
   }
@@ -49,6 +51,7 @@ export function AirlineLabelSettingsModal({
   open,
   onClose,
   value,
+  flightSamples = [],
   saving,
   onSave,
 }: Props) {
@@ -62,12 +65,11 @@ export function AirlineLabelSettingsModal({
       if (!wasOpen.current) {
         const clamped = clampAirlineLabelOverrides(value ?? {});
         preservedAwbRef.current = { ...clamped.byAwbPrefix };
-        const { byFlight } = mergeAirlineLookupMaps(value);
-        setFlightRows(recordToFlightRows(byFlight));
+        setFlightRows(recordToFlightRows(buildFlightLabelMapForEditor(value, flightSamples)));
       }
     }
     wasOpen.current = open;
-  }, [open, value]);
+  }, [open, value, flightSamples]);
 
   if (!open) return null;
 
@@ -112,16 +114,11 @@ export function AirlineLabelSettingsModal({
               Tên hãng trên tem
             </h2>
             <p className={`mt-1 text-xs leading-relaxed ${OPS.secondary}`}>
-              Danh sách theo{" "}
-              <span className={`font-semibold ${OPS.title}`}>
-                prefix cột chuyến bay
-              </span>
-              {""}
-              (vd. VN773 → VN → VIETNAM AIRLINES). Tem nhãn lấy tên từ đây
-              trước;{""}
-              {defaultFltCount} prefix mặc định + mọi dòng bạn thêm.{""}
-              <span className={`font-semibold ${OPS.title}`}>Lưu</span> chỉ ghi
-              tên khác bảng gốc.
+              Cùng một bảng với tem in: prefix từ cột chuyến (vd. TR305 → TR).
+              Sửa tên tại đây rồi{" "}
+              <span className={`font-semibold ${OPS.title}`}>Lưu</span> — tem sẽ
+              hiện đúng tên đó. Có {defaultFltCount} prefix mặc định, các prefix
+              đang có trên lô, và dòng bạn thêm.
             </p>
           </div>
           <button

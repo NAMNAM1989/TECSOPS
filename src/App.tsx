@@ -89,7 +89,9 @@ export default function App() {
         <Suspense fallback={null}>
           <PrintShippingLabel
             shipment={printJob.shipment}
-            airlineLabelOverrides={printJob.airlineLabelOverrides}
+            airlineLabelOverrides={
+              sync.state?.airlineLabelOverrides ?? printJob.airlineLabelOverrides
+            }
             onClose={() => setPrintJob(null)}
           />
         </Suspense>

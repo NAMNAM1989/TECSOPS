@@ -102,6 +102,7 @@ export type FullProfileImportResult = {
   customerCount: number;
   consigneeCount: number;
   goodsCount: number;
+  vehicleCount: number;
 };
 
 /**
@@ -332,6 +333,7 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
     customerCount: customers.length,
     consigneeCount: totalConsigneeCount,
     goodsCount: totalGoodsCount,
+    vehicleCount: totalVehicleCount,
   };
 }
 

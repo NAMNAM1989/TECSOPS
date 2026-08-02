@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -62,14 +62,18 @@ function kgTip(value: unknown): string {
 
 /** Xu hướng kg theo ngày phiên. */
 export function OpsStatsDayTrendChart({ rows }: { rows: readonly OpsStatsDayRow[] }) {
-  const data = rows.map((r) => ({
-    day: r.sessionDate.slice(5), // MM-DD
-    full: r.sessionDate,
-    actualKg: Math.round(r.actualKg * 1000) / 1000,
-    dimKg: Math.round(r.dimKg * 1000) / 1000,
-    chargeableKg: Math.round(r.chargeableKg * 1000) / 1000,
-    lots: r.lots,
-  }));
+  const data = useMemo(
+    () =>
+      rows.map((r) => ({
+        day: r.sessionDate.slice(5), // MM-DD
+        full: r.sessionDate,
+        actualKg: Math.round(r.actualKg * 1000) / 1000,
+        dimKg: Math.round(r.dimKg * 1000) / 1000,
+        chargeableKg: Math.round(r.chargeableKg * 1000) / 1000,
+        lots: r.lots,
+      })),
+    [rows]
+  );
 
   if (data.length === 0) {
     return (
@@ -153,16 +157,20 @@ export function OpsStatsWarehouseChart({
   rows: readonly OpsStatsWarehouseRow[];
   onSelect?: (warehouse: string) => void;
 }) {
-  const data = rows
-    .filter((r) => r.lots > 0)
-    .map((r) => ({
-      name: r.label,
-      warehouse: r.warehouse,
-      lots: r.lots,
-      actualKg: Math.round(r.actualKg * 1000) / 1000,
-      chargeableKg: Math.round(r.chargeableKg * 1000) / 1000,
-      deltaKg: Math.round(r.deltaKg * 1000) / 1000,
-    }));
+  const data = useMemo(
+    () =>
+      rows
+        .filter((r) => r.lots > 0)
+        .map((r) => ({
+          name: r.label,
+          warehouse: r.warehouse,
+          lots: r.lots,
+          actualKg: Math.round(r.actualKg * 1000) / 1000,
+          chargeableKg: Math.round(r.chargeableKg * 1000) / 1000,
+          deltaKg: Math.round(r.deltaKg * 1000) / 1000,
+        })),
+    [rows]
+  );
 
   return (
     <ChartCard title="Theo kho hàng" subtitle="Số lô · click để lọc">
@@ -226,13 +234,17 @@ export function OpsStatsDestChart({
   onSelect?: (dest: string) => void;
   topN?: number;
 }) {
-  const data = rows.slice(0, topN).map((r) => ({
-    dest: r.dest,
-    lots: r.lots,
-    actualKg: Math.round(r.actualKg * 1000) / 1000,
-    chargeableKg: Math.round(r.chargeableKg * 1000) / 1000,
-    deltaKg: Math.round(r.deltaKg * 1000) / 1000,
-  }));
+  const data = useMemo(
+    () =>
+      rows.slice(0, topN).map((r) => ({
+        dest: r.dest,
+        lots: r.lots,
+        actualKg: Math.round(r.actualKg * 1000) / 1000,
+        chargeableKg: Math.round(r.chargeableKg * 1000) / 1000,
+        deltaKg: Math.round(r.deltaKg * 1000) / 1000,
+      })),
+    [rows, topN]
+  );
 
   return (
     <ChartCard title="Theo điểm đến (dest)" subtitle={`Top ${topN} theo số lô · click để lọc`}>
@@ -288,12 +300,16 @@ export function OpsStatsDestChart({
 
 /** So sánh kg thực vs chargeable theo kho (cột). */
 export function OpsStatsWarehouseKgChart({ rows }: { rows: readonly OpsStatsWarehouseRow[] }) {
-  const data = rows.map((r) => ({
-    name: r.label.replace("TECS-", ""),
-    actualKg: Math.round(r.actualKg * 1000) / 1000,
-    chargeableKg: Math.round(r.chargeableKg * 1000) / 1000,
-    deltaKg: Math.round(r.deltaKg * 1000) / 1000,
-  }));
+  const data = useMemo(
+    () =>
+      rows.map((r) => ({
+        name: r.label.replace("TECS-", ""),
+        actualKg: Math.round(r.actualKg * 1000) / 1000,
+        chargeableKg: Math.round(r.chargeableKg * 1000) / 1000,
+        deltaKg: Math.round(r.deltaKg * 1000) / 1000,
+      })),
+    [rows]
+  );
 
   return (
     <ChartCard title="Kg theo kho" subtitle="Kg thực vs Chargeable · Δ phí kho">

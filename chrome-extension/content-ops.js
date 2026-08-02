@@ -14,6 +14,9 @@ function extAlive() {
   }
 }
 
+/** Chỉ gửi/nhận trong đúng origin trang Ops — chặn frame lạ đọc hoặc giả lệnh. */
+const OPS_ORIGIN = window.location.origin;
+
 function replyToOps(id, result) {
   window.postMessage(
     {
@@ -22,7 +25,7 @@ function replyToOps(id, result) {
       id,
       ...result,
     },
-    "*"
+    OPS_ORIGIN
   );
 }
 
@@ -37,7 +40,7 @@ function announceReady() {
         ok: true,
         version: chrome.runtime.getManifest().version,
       },
-      "*"
+      OPS_ORIGIN
     );
   } catch {
     /* Extension vừa Reload — cần F5 Ops */
@@ -48,6 +51,7 @@ announceReady();
 
 window.addEventListener("message", (event) => {
   if (event.source !== window) return;
+  if (event.origin !== OPS_ORIGIN) return;
   const data = event.data;
   if (!data || data.channel !== CHANNEL || data.direction !== "to-ext") return;
   if (!data.id || !data.type) return;

@@ -12,6 +12,7 @@ function answerNext(response: Record<string, unknown>) {
       window.dispatchEvent(
         new MessageEvent("message", {
           source: window,
+          origin: window.location.origin,
           data: {
             channel: TCS_EXT_CHANNEL,
             direction: "from-ext",
@@ -59,7 +60,32 @@ describe("tcsChromeExtension bridge", () => {
           session_date: "2026-07-23",
         }),
       }),
-      "*"
+      window.location.origin
     );
+  });
+
+  it("bỏ qua phản hồi từ origin lạ", async () => {
+    vi.spyOn(window, "postMessage").mockImplementation((message) => {
+      const request = message as { id?: string };
+      queueMicrotask(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            source: window,
+            origin: "https://evil.example",
+            data: {
+              channel: TCS_EXT_CHANNEL,
+              direction: "from-ext",
+              id: request.id,
+              ok: true,
+              type: "PONG",
+              version: "9.9.9",
+            },
+          })
+        );
+      });
+    });
+    const result = await pingTcsExtension(50);
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("TIMEOUT");
   });
 });

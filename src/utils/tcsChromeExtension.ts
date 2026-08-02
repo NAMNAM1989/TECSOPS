@@ -71,6 +71,8 @@ function ensureListener() {
   listenerBound = true;
   window.addEventListener("message", (event: MessageEvent) => {
     if (event.source !== window) return;
+    // Chỉ nhận phản hồi phát ra từ chính trang Ops — chặn frame lạ giả mạo kết quả.
+    if (event.origin && event.origin !== window.location.origin) return;
     const data = event.data as TcsExtResult & {
       channel?: string;
       direction?: string;
@@ -127,7 +129,7 @@ function request<T extends TcsExtResult>(
         type,
         payload,
       },
-      "*"
+      window.location.origin
     );
   });
 }

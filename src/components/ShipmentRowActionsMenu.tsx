@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { canPrintDimScscReport, printDimReport } from "../utils/printDimReport";
-import { downloadScscDimListExcel } from "../utils/exportScscDimListExcel";
 import {
   canExportTcsDimTemplate,
   downloadTcsAttachedDimsExcel,
@@ -216,7 +215,13 @@ export function ShipmentRowActionsMenu({
         className={OPS.dropdown}
       >
         {compact ? menuItem("In nhãn", () => onPrint(row)) : null}
-        {showDim ? menuItem("Excel LIST DIM", () => downloadScscDimListExcel(row)) : null}
+        {showDim
+          ? menuItem("Excel LIST DIM", () => {
+              void import("../utils/exportScscDimListExcel").then((m) =>
+                m.downloadScscDimListExcel(row)
+              );
+            })
+          : null}
         {showTcsDim ? menuItem("In LIST DIM TCS", () => printTcsAttachedDimsList(row)) : null}
         {showTcsDim
           ? menuItem("Excel ATTACHED DIM", () => void downloadTcsAttachedDimsExcel(row))

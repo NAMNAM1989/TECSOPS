@@ -55,6 +55,43 @@ describe("HTTP mutation smoke", () => {
     }
   });
 
+  it("POST /api/mutations áp nhiều mutation trong một request", async () => {
+    const { app } = createMutationTestApp(baseContractState());
+    const http = await listen(app);
+    try {
+      const res = await fetch(`${http.baseUrl}/api/mutations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([
+          { action: "UPDATE", id: "c-1", patch: { note: "một" } },
+          { action: "UPDATE", id: "c-1", patch: { dest: "SIN" } },
+        ]),
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.version).toBe(12);
+      expect(body.rows[0]?.note).toBe("một");
+      expect(body.rows[0]?.dest).toBe("SIN");
+    } finally {
+      await http.close();
+    }
+  });
+
+  it("POST /api/mutations lỗi 400 khi body không phải mảng", async () => {
+    const { app } = createMutationTestApp(baseContractState());
+    const http = await listen(app);
+    try {
+      const res = await fetch(`${http.baseUrl}/api/mutations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "UPDATE", id: "c-1", patch: {} }),
+      });
+      expect(res.status).toBe(400);
+    } finally {
+      await http.close();
+    }
+  });
+
   it("POST /api/mutation lỗi 400 khi thiếu shipment", async () => {
     const { app } = createMutationTestApp(baseContractState());
     const http = await listen(app);

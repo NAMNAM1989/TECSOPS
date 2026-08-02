@@ -24,11 +24,20 @@ export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
 type Fallback = { rows: Shipment[] };
 
+/** Mutation đã áp offline, chờ đẩy lên server khi có mạng lại. */
+type QueuedMutation = {
+  mutation: ShipmentMutation;
+  /** ID lô do ADD sinh cục bộ — cần map sang ID server khi replay. */
+  localId?: string;
+};
+
 const SOCKET_IO_PATH = "/socket.io/" as const;
 const SOCKET_RECONNECT_DELAY_MS = 1000;
 const SOCKET_RECONNECT_DELAY_MAX_MS = 10000;
 const STATE_FETCH_ATTEMPTS = 3;
 const STATE_FETCH_RETRY_MS = 400;
+/** Chặn hàng đợi phình vô hạn nếu offline kéo dài. */
+const OFFLINE_QUEUE_MAX = 500;
 
 function pickNewerState(prev: AppState | null, next: AppState): AppState {
   return !prev || next.version >= prev.version ? next : prev;
@@ -68,6 +77,69 @@ async function fetchAppStateWithRetry(attempts = STATE_FETCH_ATTEMPTS): Promise<
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
+async function postMutation(mutation: ShipmentMutation): Promise<AppState> {
+  const res = await fetch("/api/mutation", {
+    ...credFetch,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(mutation),
+  });
+  const body: unknown = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const msg = typeof o.error === "string" ? o.error : res.statusText;
+    debugWarn("sync:mutation", res.status, msg);
+    throw new Error(msg);
+  }
+  const next = parseAppState(body);
+  if (!next) throw new Error("Phản hồi máy chủ không hợp lệ sau khi lưu.");
+  return next;
+}
+
+/** ID lô mới xuất hiện sau khi ADD — dùng map ID cục bộ sang ID server. */
+function addedRowId(before: AppState, after: AppState): string | null {
+  const known = new Set(before.rows.map((r) => r.id));
+  for (const r of after.rows) {
+    if (!known.has(r.id)) return r.id;
+  }
+  return null;
+}
+
+function remapMutationId(mutation: ShipmentMutation, idMap: Map<string, string>): ShipmentMutation {
+  if (mutation.action !== "UPDATE" && mutation.action !== "DELETE") return mutation;
+  const mapped = idMap.get(mutation.id);
+  return mapped ? { ...mutation, id: mapped } : mutation;
+}
+
+/**
+ * Đẩy các mutation đã áp offline lên server theo đúng thứ tự.
+ * Mutation lỗi được giữ lại để thử lại lần kết nối sau — không im lặng bỏ dữ liệu.
+ */
+async function replayOfflineQueue(
+  queue: QueuedMutation[],
+  serverState: AppState
+): Promise<{ state: AppState; pending: QueuedMutation[] }> {
+  const idMap = new Map<string, string>();
+  const pending: QueuedMutation[] = [];
+  let current = serverState;
+
+  for (const entry of queue) {
+    const mutation = remapMutationId(entry.mutation, idMap);
+    try {
+      const next = await postMutation(mutation);
+      if (entry.mutation.action === "ADD" && entry.localId) {
+        const serverId = addedRowId(current, next);
+        if (serverId) idMap.set(entry.localId, serverId);
+      }
+      current = next;
+    } catch (e) {
+      debugWarn("sync:offline-replay", entry.mutation.action, e);
+      pending.push(entry);
+    }
+  }
+  return { state: current, pending };
+}
+
 /**
  * Đồng bộ state lô hàng: fetch `/api/state`, Socket.IO `sync`, mutation POST hoặc chế độ offline + `localStorage`.
  */
@@ -78,6 +150,7 @@ export function useShipmentSync(fallback: Fallback) {
   const apiOkRef = useRef(false);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const cancelledRef = useRef(false);
+  const offlineQueueRef = useRef<QueuedMutation[]>([]);
   const fallbackRef = useRef(fallback);
   fallbackRef.current = fallback;
 
@@ -133,17 +206,29 @@ export function useShipmentSync(fallback: Fallback) {
   }, [persistIfApplied]);
 
   const goLiveFromParsed = useCallback(
-    (parsed: AppState) => {
+    async (parsed: AppState) => {
       apiOkRef.current = true;
-      setState(parsed);
-      saveRows(parsed.rows);
-      saveCustomerDirectoryToStorage(parsed.customers);
-      hydrateEsidProfilesFromAppState(parsed);
-      if (parsed.airlineLabelOverrides) {
-        saveAirlineLabelOverridesToStorage(parsed.airlineLabelOverrides);
+
+      /** Đẩy chỉnh sửa offline lên server trước, tránh bị state server ghi đè mất. */
+      let live = parsed;
+      if (offlineQueueRef.current.length > 0) {
+        const queued = offlineQueueRef.current;
+        offlineQueueRef.current = [];
+        const { state: replayed, pending } = await replayOfflineQueue(queued, parsed);
+        if (cancelledRef.current) return;
+        offlineQueueRef.current = pending;
+        live = replayed;
+      }
+
+      setState(live);
+      saveRows(live.rows);
+      saveCustomerDirectoryToStorage(live.customers);
+      hydrateEsidProfilesFromAppState(live);
+      if (live.airlineLabelOverrides) {
+        saveAirlineLabelOverridesToStorage(live.airlineLabelOverrides);
       }
       setStatus("degraded");
-      connectSocket(parsed.version);
+      connectSocket(live.version);
     },
     [connectSocket]
   );
@@ -155,7 +240,7 @@ export function useShipmentSync(fallback: Fallback) {
       try {
         const parsed = await fetchAppStateWithRetry();
         if (cancelledRef.current) return;
-        goLiveFromParsed(parsed);
+        await goLiveFromParsed(parsed);
       } catch (e) {
         if (cancelledRef.current) return;
         debugWarn("sync:/api/state", e);
@@ -172,7 +257,7 @@ export function useShipmentSync(fallback: Fallback) {
         try {
           const parsed = await fetchAppStateWithRetry();
           if (cancelledRef.current) return;
-          goLiveFromParsed(parsed);
+          await goLiveFromParsed(parsed);
         } catch (e) {
           debugWarn("sync:online-retry", e);
         }
@@ -193,6 +278,7 @@ export function useShipmentSync(fallback: Fallback) {
     if (!apiOkRef.current) {
       let computed: AppState | null = null;
       let offlineErr: Error | null = null;
+      let queued: QueuedMutation | null = null;
       setState((prev) => {
         if (!prev) return prev;
         try {
@@ -204,6 +290,10 @@ export function useShipmentSync(fallback: Fallback) {
           if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
             saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
           }
+          queued = {
+            mutation,
+            localId: mutation.action === "ADD" ? (addedRowId(prev, next) ?? undefined) : undefined,
+          };
           computed = next;
           return next;
         } catch (e) {
@@ -212,6 +302,9 @@ export function useShipmentSync(fallback: Fallback) {
         }
       });
       if (offlineErr) throw offlineErr;
+      if (queued && offlineQueueRef.current.length < OFFLINE_QUEUE_MAX) {
+        offlineQueueRef.current.push(queued);
+      }
       return computed;
     }
 
@@ -232,23 +325,7 @@ export function useShipmentSync(fallback: Fallback) {
     }
 
     try {
-      const res = await fetch("/api/mutation", {
-        ...credFetch,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mutation),
-      });
-      const body: unknown = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
-        const msg = typeof o.error === "string" ? o.error : res.statusText;
-        debugWarn("sync:mutation", res.status, msg);
-        throw new Error(msg);
-      }
-      const next = parseAppState(body);
-      if (!next) {
-        throw new Error("Phản hồi máy chủ không hợp lệ sau khi lưu.");
-      }
+      const next = await postMutation(mutation);
       let applied: AppState = next;
       setState((prev) => {
         applied = pickNewerState(prev, next);
@@ -281,6 +358,43 @@ export function useShipmentSync(fallback: Fallback) {
     }
   }, []);
 
+  /**
+   * Nhiều mutation trong một request — tránh N round-trip + N lần broadcast full state.
+   * Offline thì rơi về áp tuần tự cục bộ qua `mutate`.
+   */
+  const mutateBatch = useCallback(
+    async (mutations: ShipmentMutation[]): Promise<AppState | null> => {
+      if (mutations.length === 0) return null;
+      if (!apiOkRef.current) {
+        let last: AppState | null = null;
+        for (const m of mutations) last = await mutate(m);
+        return last;
+      }
+      const res = await fetch("/api/mutations", {
+        ...credFetch,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mutations),
+      });
+      const body: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+        const msg = typeof o.error === "string" ? o.error : res.statusText;
+        debugWarn("sync:mutations", res.status, msg);
+        throw new Error(msg);
+      }
+      const next = parseAppState(body);
+      if (!next) throw new Error("Phản hồi máy chủ không hợp lệ sau khi lưu.");
+      let applied: AppState = next;
+      setState((prev) => {
+        applied = persistIfApplied(prev, next, false);
+        return applied;
+      });
+      return applied;
+    },
+    [mutate, persistIfApplied]
+  );
+
   const refreshState = useCallback(async (): Promise<void> => {
     if (!apiOkRef.current) return;
     try {
@@ -301,5 +415,13 @@ export function useShipmentSync(fallback: Fallback) {
     [persistIfApplied]
   );
 
-  return { status, state, mutate, socketConnected, refreshState, applyRemoteState };
+  return {
+    status,
+    state,
+    mutate,
+    mutateBatch,
+    socketConnected,
+    refreshState,
+    applyRemoteState,
+  };
 }

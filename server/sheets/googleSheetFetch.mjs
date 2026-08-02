@@ -8,7 +8,7 @@ import {
   setCachedSessionTab,
   setCachedTabList,
 } from "./sheetFetchCache.mjs";
-import { parseSpreadsheetIdFromInput, parseSheetGidFromInput } from "./spreadsheetIdParse.mjs";
+import { parseSpreadsheetIdFromInput } from "./spreadsheetIdParse.mjs";
 
 const MONTHS3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const MONTHS_FULL = [

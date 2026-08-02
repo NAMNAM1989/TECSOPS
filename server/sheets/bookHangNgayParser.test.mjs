@@ -39,6 +39,14 @@ describe("parsePcsKg", () => {
   it("xx/yy/zz → pcs/kg/dim", () => {
     expect(parsePcsKg("3 / 65 / 68")).toEqual({ pcs: 3, kg: 65, dimWeightKg: 68 });
   });
+  it("dấu phẩy nghìn không bị đọc thành số thập phân", () => {
+    expect(parsePcsKg("31 / 1,234")).toEqual({ pcs: 31, kg: 1234, dimWeightKg: null });
+    expect(parsePcsKg("31 / 1.234")).toEqual({ pcs: 31, kg: 1234, dimWeightKg: null });
+  });
+  it("giữ phần thập phân khi nhóm cuối < 3 chữ số", () => {
+    expect(parsePcsKg("3 / 65,5")).toEqual({ pcs: 3, kg: 65.5, dimWeightKg: null });
+    expect(parsePcsKg("3 / 1.234,5 / 1,5")).toEqual({ pcs: 3, kg: 1234.5, dimWeightKg: 1.5 });
+  });
 });
 
 describe("parseBookHangNgayGrid", () => {
@@ -116,6 +124,27 @@ describe("parseBookHangNgayGrid", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].customer).toBe("FIRST");
     expect(rows[0].sheetRowIndex).toBe(17);
+  });
+
+  it("AWB thiếu số (< 11 chữ số) không được nhận — vào luồng booking trống AWB", () => {
+    const grid = [
+      {
+        rowIndex: 16,
+        cells: ["", "AWB/BOOKING", "", "", "", "KHO HÀNG", "KIỆN / KG", "KHÁCH HÀNG", ""],
+      },
+      {
+        rowIndex: 17,
+        cells: ["1", "232-1826 916", "", "", "KUL", "TECS-TCS", "1 / 10", "FIRST", ""],
+      },
+      {
+        rowIndex: 18,
+        cells: ["2", "232-1826 9160", "", "", "KUL", "TECS-TCS", "1 / 10", "SECOND", ""],
+      },
+    ];
+    const rows = parseBookHangNgayGrid(grid, "2026-07-13");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].awb).toBe("");
+    expect(rows[1].awb).toBe("232-1826 9160");
   });
 
   it("chỉ lấy MAWB, bỏ HAWB; pcs/kg/dim; ghi chú cột L", () => {

@@ -119,6 +119,27 @@ function parseCutoff(raw) {
   return { cutoff: "", cutoffNote: t };
 }
 
+/**
+ * Số cân trên Sheet có thể là `1234`, `1,234` (nghìn), `65,5` hoặc `1.234,5` (EU).
+ * Dấu phân tách thập phân là dấu cuối cùng khi nhóm sau nó không đủ 3 chữ số.
+ */
+function parseSheetNumber(raw) {
+  const t = String(raw ?? "").trim();
+  if (!t) return null;
+  const lastSep = Math.max(t.lastIndexOf(","), t.lastIndexOf("."));
+  if (lastSep < 0) {
+    const plain = Number(t);
+    return Number.isFinite(plain) ? plain : null;
+  }
+  const tail = t.slice(lastSep + 1);
+  const isThousandsGroup = /^\d{3}$/.test(tail) && !/^\d{1,2}$/.test(tail);
+  const normalized = isThousandsGroup
+    ? t.replace(/[.,]/g, "")
+    : `${t.slice(0, lastSep).replace(/[.,]/g, "")}.${tail}`;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
 /** `xx/yy` hoặc `xx/yy/zz` → pcs / kg / dim (nếu có). */
 function parsePcsKg(raw) {
   const t = String(raw ?? "").trim();
@@ -126,12 +147,10 @@ function parsePcsKg(raw) {
   const m = t.match(/^(\d+)\s*[/\\]\s*([\d.,]+)(?:\s*[/\\]\s*([\d.,]+))?/);
   if (!m) return { pcs: null, kg: null, dimWeightKg: null };
   const pcs = Number(m[1]);
-  const kg = Number(m[2].replace(",", "."));
-  const dim = m[3] != null && m[3] !== "" ? Number(m[3].replace(",", ".")) : null;
   return {
     pcs: Number.isFinite(pcs) ? pcs : null,
-    kg: Number.isFinite(kg) ? kg : null,
-    dimWeightKg: dim != null && Number.isFinite(dim) ? dim : null,
+    kg: parseSheetNumber(m[2]),
+    dimWeightKg: m[3] != null && m[3] !== "" ? parseSheetNumber(m[3]) : null,
   };
 }
 
@@ -172,11 +191,24 @@ function mawbRawFromCell(raw) {
   return firstLine;
 }
 
+/** Số chữ số tối thiểu để coi ô là "có ý định ghi AWB" (không phải STT / ô rác). */
+const AWB_CELL_MIN_DIGITS = 8;
+
+/**
+ * AWB chỉ hợp lệ khi đủ 11 chữ số (3 prefix + 8 số).
+ *
+ * Ô 8–10 số là AWB ghi thiếu: vẫn nhận dòng để Ops thấy và sửa, nhưng KHÔNG lưu mã què —
+ * assertAwbUnique bỏ qua mã < 11 số nên AWB thiếu sẽ lọt qua kiểm tra trùng,
+ * đồng thời chặn lô lên RECEIVED/VOLUME_DONE và bị eSID/TCS từ chối.
+ *
+ * @returns {{ awb: string, hasAwbCell: boolean }}
+ */
 function awbFromCells(cells, awbIdx) {
   const raw = mawbRawFromCell(cells[awbIdx]);
   const digits = awbDigitsKey(raw);
-  if (digits.length < 8) return "";
-  return formatAwb(digits);
+  if (digits.length < AWB_CELL_MIN_DIGITS) return { awb: "", hasAwbCell: false };
+  if (digits.length < 11) return { awb: "", hasAwbCell: true };
+  return { awb: formatAwb(digits), hasAwbCell: true };
 }
 
 /** Cột H — chỉ lấy dòng đầu nếu ô có xuống dòng. */
@@ -234,8 +266,8 @@ export function parseBookHangNgayGrid(gridRows, sessionDate) {
     // layout BOOK HẰNG NGÀY có thể dịch lên/xuống giữa các tab.
     if (!colMap || isSkippableRow(cells)) continue;
 
-    const awb = awbFromCells(cells, colMap.awb);
-    if (!awb) continue;
+    const { awb, hasAwbCell } = awbFromCells(cells, colMap.awb);
+    if (!hasAwbCell) continue;
 
     const { flight, flightDate } = parseFlightDate(cells[colMap.flightDate ?? -1] ?? "");
     const { cutoff, cutoffNote } = parseCutoff(cells[colMap.cutoff ?? -1] ?? "");

@@ -8,6 +8,7 @@ import fs from "node:fs";
 import { Server } from "socket.io";
 import {
   loadState,
+  runBatchMutations,
   runMutation,
   setPostgresStateStore,
 } from "./stateStore.mjs";
@@ -19,6 +20,7 @@ import { registerTcsAgentProxy } from "./tcsAgentProxy.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
+const MAX_BATCH_MUTATIONS = 500;
 
 const app = express();
 app.set("trust proxy", 1);
@@ -140,6 +142,31 @@ app.post("/api/mutation", async (req, res) => {
     console.error("[api/mutation]", e);
     const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
     res.status(400).json({ error: msg || "Mutation failed" });
+  }
+});
+
+/**
+ * Nhiều mutation trong một request — một lần khóa Postgres, một lần broadcast.
+ * Dùng cho thao tác hàng loạt (quét eSID) thay vì N round-trip.
+ */
+app.post("/api/mutations", async (req, res) => {
+  try {
+    const list = req.body;
+    if (!Array.isArray(list) || list.some((m) => !m || typeof m !== "object")) {
+      res.status(400).json({ error: "Body phải là mảng mutation" });
+      return;
+    }
+    if (list.length > MAX_BATCH_MUTATIONS) {
+      res.status(400).json({ error: `Tối đa ${MAX_BATCH_MUTATIONS} mutation mỗi lần` });
+      return;
+    }
+    const next = await runBatchMutations(list);
+    io.emit("sync", next);
+    res.json(next);
+  } catch (e) {
+    console.error("[api/mutations]", e);
+    const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
+    res.status(400).json({ error: msg || "Batch mutation failed" });
   }
 });
 

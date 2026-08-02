@@ -1,4 +1,7 @@
-import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+import type {
+  CustomerDirectoryEntry,
+  CustomerSavedVehicle,
+} from "../types/customerDirectory";
 import type { Shipment, Warehouse } from "../types/shipment";
 import { rawAwbDigits } from "./awbFormat";
 import { findCustomerEntry } from "./customerBookingResolve";
@@ -36,12 +39,31 @@ function vehicleTokens(raw: string): string[] {
   return [...new Set([lower, compact].filter(Boolean))];
 }
 
+/**
+ * Cache xe theo identity (danh bạ, lô).
+ *
+ * `findCustomerEntry` quét tuyến tính danh bạ tới 9 lần, và mỗi lô gọi hàm này
+ * 3 lần cho mỗi ký tự gõ tìm kiếm. Khóa theo identity nên cache tự hết hiệu lực
+ * khi danh bạ hoặc lô được thay bằng object mới sau mutation.
+ */
+const vehiclesByDirectory = new WeakMap<object, WeakMap<Shipment, readonly CustomerSavedVehicle[]>>();
+
 function getCustomerVehiclesForShipment(
   shipment: Shipment,
   customers: readonly CustomerDirectoryEntry[]
-) {
-  const entry = findCustomerEntry(shipment, customers);
-  return entry?.savedVehicles ?? [];
+): readonly CustomerSavedVehicle[] {
+  const dirKey = customers as unknown as object;
+  let perShipment = vehiclesByDirectory.get(dirKey);
+  if (!perShipment) {
+    perShipment = new WeakMap();
+    vehiclesByDirectory.set(dirKey, perShipment);
+  }
+  const cached = perShipment.get(shipment);
+  if (cached) return cached;
+
+  const resolved = findCustomerEntry(shipment, customers)?.savedVehicles ?? [];
+  perShipment.set(shipment, resolved);
+  return resolved;
 }
 
 /** Chuẩn hoá ngày bay → DDMMM (28JUL). Hỗ trợ 28jul, 28 JUL, 28/07… */
@@ -91,8 +113,25 @@ export function listFlightDateFacets(rows: readonly Shipment[]): FlightDateFacet
     .sort((a, b) => flightDateSortKey(a.date) - flightDateSortKey(b.date));
 }
 
-/** Haystack đầy đủ cho một lô. */
+const haystackByDirectory = new WeakMap<object, WeakMap<Shipment, string>>();
+
+/** Haystack đầy đủ cho một lô — cache theo identity vì mỗi ký tự gõ đều dựng lại cho mọi lô. */
 export function buildShipmentSearchHaystack(shipment: Shipment, ctx: ShipmentSearchContext): string {
+  const dirKey = ctx.customers as unknown as object;
+  let perShipment = haystackByDirectory.get(dirKey);
+  if (!perShipment) {
+    perShipment = new WeakMap();
+    haystackByDirectory.set(dirKey, perShipment);
+  }
+  const cached = perShipment.get(shipment);
+  if (cached !== undefined) return cached;
+
+  const built = computeShipmentSearchHaystack(shipment, ctx);
+  perShipment.set(shipment, built);
+  return built;
+}
+
+function computeShipmentSearchHaystack(shipment: Shipment, ctx: ShipmentSearchContext): string {
   const flightDateNorm = normalizeFlightDateToken(shipment.flightDate || "");
   const parts = [
     shipment.awb,

@@ -11,13 +11,8 @@ import type { useShipmentSync } from "../hooks/useShipmentSync";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentEditSheet";
-import { downloadDayReportExcel } from "../utils/exportDayReportExcel";
-import { downloadScscDimDayExcel } from "../utils/exportScscDimListExcel";
 import { buildCargoDayReport } from "../utils/cargoDayReport";
-import {
-  copyCargoDayReportImage,
-  type CargoDayReportImageVariant,
-} from "../utils/cargoDayReportImage";
+import type { CargoDayReportImageVariant } from "../utils/cargoDayReportImage";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import {
   filterShipmentsBySessionYmd,
@@ -99,7 +94,8 @@ export function AirCargoTracking({
   onPrefetchStats,
   onRequestPrint,
 }: AirCargoTrackingProps) {
-  const { status, state, mutate, socketConnected, refreshState, applyRemoteState } = sync;
+  const { status, state, mutate, mutateBatch, socketConnected, refreshState, applyRemoteState } =
+    sync;
   const toast = useToast();
 
   const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
@@ -185,9 +181,10 @@ export function AirCargoTracking({
         const allowed = statusOrderForFilter(wh);
         return allowed.includes(prev as ShipmentStatus) ? prev : "ALL";
       });
-      void refreshState();
+      // Socket đang live thì state đã realtime — chỉ kéo lại khi mất socket.
+      if (!socketConnected) void refreshState();
     },
-    [refreshState]
+    [refreshState, socketConnected]
   );
 
   const clearViewFilters = useCallback(() => {
@@ -246,11 +243,24 @@ export function AirCargoTracking({
 
   const onMarkReceptionCompleted = useCallback(
     async (shipmentIds: string[]) => {
-      for (const id of shipmentIds) {
-        await runMutate({ action: "UPDATE", id, patch: { status: "RECEPTION_COMPLETED" } });
+      if (shipmentIds.length === 0) return;
+      try {
+        await mutateBatch(
+          shipmentIds.map((id) => ({
+            action: "UPDATE" as const,
+            id,
+            patch: { status: "RECEPTION_COMPLETED" as const },
+          }))
+        );
+      } catch (e) {
+        debugError("ui:mutate-batch", e);
+        toast.error(
+          e instanceof Error ? e.message : "Không gửi được thay đổi lên máy chủ.",
+          "Đồng bộ thất bại"
+        );
       }
     },
-    [runMutate]
+    [mutateBatch, toast]
   );
 
   /** Sau Quét ESID: hiện các lô vừa gán HOÀN THÀNH TIẾP NHẬN trên bảng Ops */
@@ -352,8 +362,15 @@ export function AirCargoTracking({
     }
   };
 
-  const totalPcs = filteredViewRows.reduce((s, r) => s + (r.pcs ?? 0), 0);
-  const totalKg = filteredViewRows.reduce((s, r) => s + (r.kg ?? 0), 0);
+  const { totalPcs, totalKg } = useMemo(() => {
+    let pcs = 0;
+    let kg = 0;
+    for (const r of filteredViewRows) {
+      pcs += r.pcs ?? 0;
+      kg += r.kg ?? 0;
+    }
+    return { totalPcs: pcs, totalKg: kg };
+  }, [filteredViewRows]);
 
   const workDateLabel = useMemo(() => formatWorkDateLabel(selectedViewDate), [selectedViewDate]);
 
@@ -377,6 +394,8 @@ export function AirCargoTracking({
           fromYmd,
           toYmd
         );
+        // Tải theo nhu cầu: ExcelJS + code dựng sheet không cần nằm trong chunk Ops.
+        const { downloadDayReportExcel } = await import("../utils/exportDayReportExcel");
         const n = await downloadDayReportExcel(
           rowsForExport,
           fromYmd,
@@ -410,6 +429,7 @@ export function AirCargoTracking({
           isScscWarehouse(r.warehouse)
         );
       }
+      const { downloadScscDimDayExcel } = await import("../utils/exportScscDimListExcel");
       await downloadScscDimDayExcel(rows, selectedYmd);
     } catch (e) {
       debugError("ui:excel-scsc-dim-day", e);
@@ -439,6 +459,7 @@ export function AirCargoTracking({
           selectedYmd,
           state?.customers ?? EMPTY_CUSTOMERS_DIR,
         );
+        const { copyCargoDayReportImage } = await import("../utils/cargoDayReportImage");
         const result = await copyCargoDayReportImage(model, { variant });
         if (!result.ok) {
           toast.error(result.reason, "Báo cáo hàng hóa");
@@ -680,40 +701,43 @@ export function AirCargoTracking({
         </p>
       ) : null}
 
-      <DesktopShipmentTable
-        rows={filteredViewRows}
-        allRows={allRows}
-        customerDirectory={state.customers}
-        activeWarehouse={activeWarehouse}
-        onActiveWarehouseChange={handleActiveWarehouseChange}
-        metricRows={filteredViewRows}
-        searchHighlightWarehouses={searchHighlightWarehouses}
-        highlightedShipmentId={highlightedShipmentId}
-        selectedRowId={selectedId}
-        onSelectRow={setSelectedId}
-        onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
-        onUpdate={onUpdate}
-        onDelete={onDelete}
-        onPrint={requestPrintLabel}
-        viewSessionYmd={selectedYmd}
-      />
-
-      <MobileShipmentCards
-        rows={filteredViewRows}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        onUpdate={onUpdate}
-        onDelete={onDelete}
-        onPrint={requestPrintLabel}
-        customerDirectory={state.customers}
-        activeWarehouse={activeWarehouse}
-        searchActive={searchActive}
-        pinnedOpenWarehouses={searchHighlightWarehouses}
-        highlightedShipmentId={highlightedShipmentId}
-        viewSessionYmd={selectedYmd}
-        onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
-        onQuickEdit={(row) => openMobileEdit(row)}
-      />
+      {/* Chỉ dựng một cây bảng — trước đây cả hai cùng mount và chỉ ẩn bằng CSS. */}
+      {isMobile ? (
+        <MobileShipmentCards
+          rows={filteredViewRows}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+          onPrint={requestPrintLabel}
+          customerDirectory={state.customers}
+          activeWarehouse={activeWarehouse}
+          searchActive={searchActive}
+          pinnedOpenWarehouses={searchHighlightWarehouses}
+          highlightedShipmentId={highlightedShipmentId}
+          viewSessionYmd={selectedYmd}
+          onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
+          onQuickEdit={(row) => openMobileEdit(row)}
+        />
+      ) : (
+        <DesktopShipmentTable
+          rows={filteredViewRows}
+          allRows={allRows}
+          customerDirectory={state.customers}
+          activeWarehouse={activeWarehouse}
+          onActiveWarehouseChange={handleActiveWarehouseChange}
+          metricRows={filteredViewRows}
+          searchHighlightWarehouses={searchHighlightWarehouses}
+          highlightedShipmentId={highlightedShipmentId}
+          selectedRowId={selectedId}
+          onSelectRow={setSelectedId}
+          onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+          onPrint={requestPrintLabel}
+          viewSessionYmd={selectedYmd}
+        />
+      )}
 
       <StickyMobileActions
         selected={selected}

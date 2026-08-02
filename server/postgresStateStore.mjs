@@ -381,7 +381,9 @@ function mergeCustomerBlobProfile(base, fromBlob) {
     ...(defaultRate !== undefined ? { defaultRate } : {}),
     ...(typeof fromBlob.customerType === "string" ? { customerType: fromBlob.customerType } : {}),
     savedGoods: Array.isArray(fromBlob.savedGoods) ? fromBlob.savedGoods : base.savedGoods ?? [],
-    savedVehicles: Array.isArray(fromBlob.savedVehicles) ? fromBlob.savedVehicles : [],
+    savedVehicles: Array.isArray(fromBlob.savedVehicles)
+      ? fromBlob.savedVehicles
+      : base.savedVehicles ?? [],
     ...(typeof fromBlob.defaultShipperId === "string"
       ? { defaultShipperId: fromBlob.defaultShipperId }
       : {}),

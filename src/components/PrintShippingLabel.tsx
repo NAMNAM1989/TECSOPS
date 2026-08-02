@@ -99,7 +99,7 @@ export function LabelContent({
               TOTAL PIECES
             </div>
             <div className="pieces-val" style={{ fontSize: `${piecesValMm}mm` }}>
-              {d.pieces || <span className="lbl-placeholder">—</span>}
+              {d.pieces || null}
             </div>
           </div>
         </div>

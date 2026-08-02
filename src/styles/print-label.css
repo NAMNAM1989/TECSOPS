@@ -1,25 +1,14 @@
 /**
- * Tem cargo nhiệt — mẫu Ops 100×80 / 100×50 (không barcode).
- * Xprinter XP-470B · padding đều · 4 hàng: Airline | AWB | O/D | TOTAL PIECES.
- * Số kiện lấy từ shipment.pcs (mapShipmentToAirCargoLabelData).
+ * Tem cargo nhiệt — mẫu chuẩn TECSOPS 100×80 / 100×50 (không barcode).
+ * XP-470B · padding đều · 4 hàng: Airline | AWB | Origin/Dest | TOTAL PIECES.
+ * Tham chiếu: docs/air-cargo-label-100x80-100x50.html
  */
-
-.label.print-label-sheet.lbl-sheet.lbl-sheet--calibrated,
-.label.print-label-sheet.lbl-sheet.lbl-sheet--scsc-designer {
-  display: block;
-}
-
-.lbl-sheet.lbl-sheet--scsc-designer {
-  width: 210mm;
-  height: 297mm;
-}
 
 .label.print-label-sheet.lbl-sheet {
   box-sizing: border-box;
   width: 100mm;
   height: 80mm;
   margin: 0;
-  /* Padding đều — khung viền cân giữa tem */
   padding: 2.5mm;
   overflow: hidden;
   display: flex;
@@ -39,56 +28,11 @@
   min-height: 0;
   width: 100%;
   display: grid;
-  /* Airline | AWB | Origin/Dest | Pieces (chiếm phần còn lại) */
+  /* Airline | AWB | Origin/Dest | Pieces */
   grid-template-rows: 9mm 16mm 12mm minmax(0, 1fr);
-  /* Dự phòng nếu trình duyệt/in bỏ qua thanh frame */
-  border: 0.7mm solid #000 !important;
+  border: 0.7mm solid #000;
   background: #fff;
   overflow: hidden;
-}
-
-/* —— Khung bao quanh 4 hướng (thanh nền #000) —— */
-.lbl-frame {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  pointer-events: none;
-}
-
-.lbl-frame-edge {
-  position: absolute;
-  display: block;
-  background: #000 !important;
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
-}
-
-.lbl-frame-edge--t {
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 0.7mm;
-}
-
-.lbl-frame-edge--b {
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 0.7mm;
-}
-
-.lbl-frame-edge--l {
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 0.7mm;
-}
-
-.lbl-frame-edge--r {
-  top: 0;
-  bottom: 0;
-  right: 0;
-  width: 0.7mm;
 }
 
 .label.print-label-sheet.lbl-sheet.lbl-sheet--no-airline .lbl-sheet-inner {
@@ -107,9 +51,8 @@
   padding: 0.5mm 1.5mm;
   background: #f2f2f2;
   color: #000;
-  border-bottom: 0.6mm solid #000 !important;
+  border-bottom: 0.6mm solid #000;
   text-align: center;
-  vertical-align: middle;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -125,11 +68,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5mm;
-  padding: 1mm 1.5mm;
-  border-bottom: 0.6mm solid #000 !important;
+  gap: 0.6mm;
+  padding: 1.2mm 1.5mm;
+  border-bottom: 0.6mm solid #000;
   text-align: center;
-  vertical-align: middle;
   min-width: 0;
   overflow: hidden;
 }
@@ -151,45 +93,13 @@
   max-width: 100%;
   font-family: "Courier New", Courier, "Liberation Mono", monospace;
   font-weight: 700;
-  letter-spacing: -0.15mm;
+  letter-spacing: -0.1mm;
   line-height: 1.05;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: clip;
   text-align: center;
   color: #000;
-}
-
-.lbl-hawb {
-  display: flex;
-  width: 100%;
-  margin-top: 0.4mm;
-  padding-top: 0.4mm;
-  align-items: center;
-  justify-content: center;
-  gap: 1.5mm;
-  border-top: 0.35mm solid #000 !important;
-  overflow: hidden;
-  color: #000;
-  font-family: "Courier New", Courier, "Liberation Mono", monospace;
-  line-height: 1;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.lbl-hawb-label {
-  flex: 0 0 auto;
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 6pt;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-
-.lbl-hawb-val {
-  min-width: 0;
-  overflow: hidden;
-  font-weight: 700;
-  text-overflow: ellipsis;
 }
 
 .lbl-placeholder {
@@ -204,7 +114,7 @@
 .lbl-route {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  border-bottom: 0.6mm solid #000 !important;
+  border-bottom: 0.6mm solid #000;
   min-height: 0;
   overflow: hidden;
 }
@@ -217,13 +127,12 @@
   gap: 0.4mm;
   padding: 0.6mm 1.2mm;
   text-align: center;
-  vertical-align: middle;
   min-width: 0;
   overflow: hidden;
 }
 
 .lbl-route-cell + .lbl-route-cell {
-  border-left: 0.6mm solid #000 !important;
+  border-left: 0.6mm solid #000;
 }
 
 .route-label {
@@ -246,7 +155,7 @@
   max-width: 100%;
 }
 
-/* —— Hàng 4: TOTAL PIECES (pcs từ lô) —— */
+/* —— Hàng 4: TOTAL PIECES —— */
 .lbl-bottom {
   display: flex;
   flex-direction: column;
@@ -266,7 +175,6 @@
   overflow: hidden;
   padding: 1mm 1.5mm;
   text-align: center;
-  vertical-align: middle;
 }
 
 .pieces-label {
@@ -294,20 +202,8 @@
   white-space: nowrap;
 }
 
-.lbl-special {
-  flex-shrink: 0;
-  padding: 0.5mm 1.2mm;
-  border-top: 0.6mm solid #000 !important;
-  text-align: center;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  line-height: 1.1;
-  background: #fff;
-  color: #000;
-}
-
 /* -------------------------------------------------------------------------- */
-/* 100×50 — cùng layout, thu gọn                                              */
+/* 100×50                                                                     */
 /* -------------------------------------------------------------------------- */
 
 .label.print-label-sheet.lbl-sheet.lbl-sheet--compact {
@@ -340,16 +236,6 @@
   font-size: 6pt;
 }
 
-.lbl-sheet--compact .lbl-hawb {
-  margin-top: 0.25mm;
-  padding-top: 0.25mm;
-  gap: 1mm;
-}
-
-.lbl-sheet--compact .lbl-hawb-label {
-  font-size: 5.5pt;
-}
-
 .lbl-sheet--compact .lbl-route-cell {
   gap: 0.25mm;
   padding: 0.3mm 0.8mm;
@@ -360,16 +246,12 @@
   gap: 0.3mm;
 }
 
-.lbl-sheet--compact .lbl-special {
-  padding: 0.3mm 0.8mm;
-}
-
 .print-label-host {
   display: none;
 }
 
 /* -------------------------------------------------------------------------- */
-/* @media print — XP-470B mặc định (100×H thẳng)                              */
+/* @media print — XP-470B (100×H thẳng, không xoay)                           */
 /* -------------------------------------------------------------------------- */
 
 @media print {
@@ -475,53 +357,5 @@
   .print-label-page:has(.lbl-sheet--compact) .print-label-spin {
     height: 50mm;
     max-height: 50mm;
-  }
-
-  body.tecsops-label-print-narrow80 {
-    width: 80mm !important;
-    max-width: 80mm !important;
-  }
-
-  body.tecsops-label-print-narrow80 .print-label-host {
-    width: 80mm !important;
-    max-width: 80mm !important;
-  }
-
-  body.tecsops-label-print-narrow80 .print-label-page {
-    width: 80mm;
-    max-width: 80mm;
-    height: 100mm;
-    max-height: 100mm;
-  }
-
-  body.tecsops-label-print-narrow80 .print-label-page .print-label-spin {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform-origin: center center;
-    transform: translate(-50%, -50%) rotate(90deg);
-  }
-
-  body.tecsops-label-print-narrow80
-    .print-label-page
-    .print-label-spin.print-label-spin--ccw {
-    transform: translate(-50%, -50%) rotate(-90deg);
-  }
-
-  body.tecsops-label-print-narrow80:has(.lbl-sheet--compact) {
-    width: 50mm !important;
-    max-width: 50mm !important;
-  }
-
-  body.tecsops-label-print-narrow80:has(.lbl-sheet--compact) .print-label-host {
-    width: 50mm !important;
-    max-width: 50mm !important;
-  }
-
-  body.tecsops-label-print-narrow80 .print-label-page:has(.lbl-sheet--compact) {
-    width: 50mm;
-    max-width: 50mm;
-    height: 100mm;
-    max-height: 100mm;
   }
 }

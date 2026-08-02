@@ -30,79 +30,56 @@ function shipment(patch: Partial<Shipment> = {}): Shipment {
   };
 }
 
-describe("LabelContent print options", () => {
-  it("automatically highlights HAWB and always uses SGN as origin", () => {
+describe("LabelContent — mẫu 4 hàng", () => {
+  it("in Airline · AWB · Origin/Dest · TOTAL PIECES; origin luôn SGN", () => {
     const html = renderToStaticMarkup(
       createElement(LabelContent, {
         s: shipment(),
-        fontScale: 1,
-        showHawbOnCompact: true,
       })
     );
 
-    expect(html).toContain("lbl-sheet--house");
     expect(html).toContain("lbl-sheet-inner");
-    expect(html).toContain("lbl-frame");
     expect(html).toContain("AIR WAYBILL NO.");
     expect(html).toContain("ORIGIN:");
     expect(html).toContain("DESTINATION:");
     expect(html).toContain("TOTAL PIECES");
-    expect(html).toContain("HAWB");
-    expect(html).toContain("HCM-001");
     expect(html).toContain("SGN");
+    expect(html).toContain("NRT");
+    expect(html).toContain("VIETNAM AIRLINES");
+    expect(html).not.toContain("HAWB");
+    expect(html).not.toContain("lbl-special");
+    expect(html).not.toContain("lbl-frame");
   });
 
-  it("renders a 4-sided frame around the label", () => {
-    const html = renderToStaticMarkup(
-      createElement(LabelContent, {
-        s: shipment(),
-        fontScale: 1,
-      })
-    );
-
-    expect(html).toContain("lbl-frame-edge--t");
-    expect(html).toContain("lbl-frame-edge--r");
-    expect(html).toContain("lbl-frame-edge--b");
-    expect(html).toContain("lbl-frame-edge--l");
-  });
-
-  it("maps shipment.pcs to TOTAL PIECES on the label", () => {
+  it("maps shipment.pcs to TOTAL PIECES", () => {
     const html = renderToStaticMarkup(
       createElement(LabelContent, {
         s: shipment({ pcs: 15 }),
-        fontScale: 1,
       })
     );
 
     expect(html).toContain("TOTAL PIECES");
-    expect(html).toContain("pieces-val");
     expect(html).toMatch(/pieces-val[^>]*>15</);
   });
 
-  it("uses custom handling text and can hide it", () => {
-    const visible = renderToStaticMarkup(
+  it("compact 100×50 dùng class lbl-sheet--compact", () => {
+    const html = renderToStaticMarkup(
       createElement(LabelContent, {
         s: shipment(),
-        fontScale: 1,
-        handlingText: "HANDLE WITH CARE",
+        sheetVariant: "compact",
       })
     );
-    const hidden = renderToStaticMarkup(
-      createElement(LabelContent, {
-        s: shipment(),
-        fontScale: 1,
-        handlingText: "HANDLE WITH CARE",
-        showHandling: false,
-      })
-    );
-
-    expect(visible).toContain("HANDLE WITH CARE");
-    expect(hidden).not.toContain("HANDLE WITH CARE");
+    expect(html).toContain("lbl-sheet--compact");
   });
+});
 
-  it("requires manual copy entry and exposes only the two approved sizes", () => {
+describe("PrintShippingLabel modal", () => {
+  it("chỉ 2 khổ chuẩn; số tem nhập tay; không theo kiện", () => {
     const currentDocument = globalThis.document;
-    Object.defineProperty(globalThis, "document", { configurable: true, value: undefined });
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: undefined,
+    });
     let html = "";
     try {
       html = renderToStaticMarkup(
@@ -112,7 +89,10 @@ describe("LabelContent print options", () => {
         })
       );
     } finally {
-      Object.defineProperty(globalThis, "document", { configurable: true, value: currentDocument });
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: currentDocument,
+      });
     }
 
     expect(html).toContain('aria-label="Số lượng tem"');
@@ -122,6 +102,7 @@ describe("LabelContent print options", () => {
     expect(html).toContain("100×50 mm");
     expect(html).not.toContain("Cuộn 80mm");
     expect(html).not.toContain("Theo kiện");
-    expect(html).not.toContain(">Origin<input");
+    expect(html).not.toContain("Hiện cảnh báo xử lý");
+    expect(html).not.toContain("Tỷ lệ chữ");
   });
 });

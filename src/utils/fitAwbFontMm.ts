@@ -1,7 +1,7 @@
 /**
  * Cỡ chữ AWB vừa khít tem (không cắt "...", không tràn viền).
  * Mục tiêu: standard ~34.5pt (12.2mm), compact ~25.5pt (9mm).
- * Fit theo chiều ngang ô MAWB (Courier mono + letter-spacing âm).
+ * Fit theo IBM Plex Mono + letter-spacing dương nhẹ (không ép âm — tránh nhòe nhiệt).
  */
 export function fitAwbFontMm(mawb: string, opts?: { compact?: boolean; relScale?: number }): number {
   const compact = opts?.compact ?? false;
@@ -9,7 +9,8 @@ export function fitAwbFontMm(mawb: string, opts?: { compact?: boolean; relScale?
   const text = (mawb || "").trim() || "000-00000000";
   /* 100mm − padding tem − viền − padding ô */
   const usableMm = compact ? 90 : 91;
-  const charFactor = 0.58;
+  /* IBM Plex Mono rộng hơn Courier ép tracking âm */
+  const charFactor = 0.62;
   const fitted = usableMm / (Math.max(text.length, 1) * charFactor);
   const maxMm = compact ? 9 : 12.2;
   const minMm = compact ? 6.2 : 8.2;

@@ -1,6 +1,7 @@
 /**
  * Tem cargo nhiệt — mẫu chuẩn TECSOPS 100×80 / 100×50 (không barcode).
  * XP-470B · padding đều · 4 hàng: Airline | AWB | Origin/Dest | TOTAL PIECES.
+ * Font: Plus Jakarta Sans (nhãn) + IBM Plex Mono (AWB) — nét rõ trên nhiệt, tránh Courier nhòe.
  * Tham chiếu: docs/air-cargo-label-100x80-100x50.html
  */
 
@@ -15,7 +16,11 @@
   flex-direction: column;
   background: #fff;
   color: #000;
-  font-family: Arial, Helvetica, "Liberation Sans", "DejaVu Sans", sans-serif;
+  font-family: "Plus Jakarta Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
   border: none;
@@ -93,9 +98,10 @@
   width: 100%;
   max-width: 100%;
   padding: 0 0.4mm;
-  font-family: "Courier New", Courier, "Liberation Mono", monospace;
+  font-family: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-weight: 700;
-  letter-spacing: -0.18mm;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
   line-height: 0.95;
   white-space: nowrap;
   overflow: hidden;
@@ -108,7 +114,7 @@
   color: #666;
   font-size: 3.5mm;
   letter-spacing: 0;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
   font-weight: 700;
 }
 
@@ -203,8 +209,9 @@
   margin: 0;
   padding: 0;
   font-weight: 800;
-  font-family: Arial, Helvetica, "Liberation Sans", sans-serif;
-  letter-spacing: 0.02em;
+  font-family: "Plus Jakarta Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
   line-height: 0.95;
   text-align: center;
   white-space: nowrap;

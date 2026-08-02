@@ -62,6 +62,18 @@ describe("LabelContent — mẫu 4 hàng", () => {
     expect(html).toMatch(/pieces-val[^>]*>15</);
   });
 
+  it("chưa có số kiện → TOTAL PIECES để trống, không hiện dấu -", () => {
+    const html = renderToStaticMarkup(
+      createElement(LabelContent, {
+        s: shipment({ pcs: 0 }),
+      })
+    );
+
+    expect(html).toContain("TOTAL PIECES");
+    expect(html).toMatch(/pieces-val[^>]*><\/div>/);
+    expect(html).not.toMatch(/pieces-val[^>]*>[\s\u2014\-—]+</);
+  });
+
   it("compact 100×50 dùng class lbl-sheet--compact", () => {
     const html = renderToStaticMarkup(
       createElement(LabelContent, {

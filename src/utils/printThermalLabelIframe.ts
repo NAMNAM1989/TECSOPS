@@ -209,6 +209,12 @@ export function buildThermalPrintDocumentHtml({
   <meta name="viewport" content="width=${wMm}, initial-scale=1" />
   <meta name="color-scheme" content="light only" />
   <title>&#8203;</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+    rel="stylesheet"
+  />
   <style>${sheetCss}</style>
   <style>
     ${buildThermalPrintOverrides(format, mode, flipCcw, singlePage)}
@@ -455,7 +461,8 @@ export async function printThermalLabelsFromIframe(
   try {
     const doc = win.document;
     doc.title = "\u200B";
-    if (doc?.fonts?.ready) await withTimeout(doc.fonts.ready, 1500);
+    /* Chờ Plus Jakarta / IBM Plex Mono tải xong trước khi in (tránh fallback Arial/Courier nhòe). */
+    if (doc?.fonts?.ready) await withTimeout(doc.fonts.ready, 3000);
   } catch {
     /* ignore */
   }

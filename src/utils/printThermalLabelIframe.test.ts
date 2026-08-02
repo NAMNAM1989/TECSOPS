@@ -36,6 +36,8 @@ describe("thermal print document", () => {
     expect(html).not.toContain("<title>Tem ");
     expect(html).toContain('data-label-page-mm="100x50"');
     expect(html).toContain("size: 100mm 50mm");
+    expect(html).toContain("Plus+Jakarta+Sans");
+    expect(html).toContain("IBM+Plex+Mono");
   });
 
   it("cho phép nhiều trang nhưng chỉ ngắt giữa các tem", () => {

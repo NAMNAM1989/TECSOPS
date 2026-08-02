@@ -20,19 +20,9 @@ import {
   flightNumberAccent,
 } from "./statusStyles";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
-import {
-  SCSC_GOODS_DESCRIPTION_PRINT_MAX,
-  SCSC_OTHER_REQUIREMENTS_PRINT_MAX,
-} from "../utils/scscPrintContent";
-import {
-  isScscWarehouse,
-  normalizeWarehouse,
-  warehouseLabel,
-} from "../constants/warehouses";
+import { normalizeWarehouse, warehouseLabel } from "../constants/warehouses";
 import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
-import { findCustomerEntry } from "../utils/customerBookingResolve";
-import { buildShipmentPatchForSavedConsignee } from "../utils/customerConsigneeShipmentPatch";
-import { InlineCneeCell } from "./InlineCneeCell";
+import { InlineCustomerInfoCell } from "./InlineCustomerInfoCell";
 import { useIsMobile } from "../hooks/useIsMobile";
 
 interface Props {
@@ -62,8 +52,7 @@ const COL_HEADERS = [
   { key: "kg", label: "KG", w: "w-14 text-right" },
   { key: "dim", label: "DIM", w: "w-16 text-right" },
   { key: "customer", label: "KHÁCH", w: "min-w-[5.5rem] max-w-[8rem]" },
-  { key: "cnee", label: "CNEE", w: "min-w-[5rem] max-w-[9rem]" },
-  { key: "note", label: "TÊN HÀNG", w: "min-w-[5rem] max-w-[8rem]" },
+  { key: "customerInfo", label: "THÔNG TIN KH", w: "min-w-[8.5rem] max-w-[12rem]" },
   { key: "status", label: "TT", w: "min-w-[7.5rem]" },
   { key: "actions", label: "", w: "min-w-[5.5rem]" },
 ] as const;
@@ -257,9 +246,6 @@ function ShipmentTableRowImpl({
     parseInt((viewSessionYmd || row.sessionDate || "").slice(0, 4), 10) ||
     new Date().getFullYear();
 
-  const customerEntry = findCustomerEntry(row, customerDirectory);
-  const savedConsigneeOptions = customerEntry?.savedConsignees ?? [];
-
   const navDownSameField = (field: string) => () => {
     if (!hasNextRow) return;
     focusShipmentGridCell(groupRowIds[rowIdx + 1], field);
@@ -439,52 +425,16 @@ function ShipmentTableRowImpl({
           onEnterNavigateDown={
             hasNextRow ? navDownSameField("customer") : undefined
           }
-          onTabNavigateNext={() =>
-            focusShipmentGridCell(
-              row.id,
-              isScscWarehouse(row.warehouse) ? "goodsDescriptionPrint" : "note",
-            )
-          }
+          onTabNavigateNext={() => focusShipmentGridCell(row.id, "note")}
         />
       </td>
       <td className={cell("mid", "align-middle")}>
-        <InlineCneeCell
+        <InlineCustomerInfoCell
           shipment={row}
           customerDirectory={customerDirectory}
-          value={row.customerConsigneeId?.trim() ?? ""}
-          options={savedConsigneeOptions}
           sessionYmdFallback={viewSessionYmd}
-          onChange={(consigneeId) => {
-            const sc = savedConsigneeOptions.find((x) => x.id === consigneeId);
-            onUpdate(row.id, buildShipmentPatchForSavedConsignee(sc));
-          }}
+          onUpdate={(patch) => onUpdate(row.id, patch)}
         />
-      </td>
-      <td className={cell("mid", "align-top")}>
-        {isScscWarehouse(row.warehouse) ? (
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <InlineTextEdit
-              value={row.goodsDescriptionPrint ?? ""}
-              placeholder="Tên hàng in"
-              className="line-clamp-2 min-w-0 text-left text-[10px] leading-snug text-violet-800"
-              maxLength={SCSC_GOODS_DESCRIPTION_PRINT_MAX}
-              gridNav={{ rowId: row.id, field: "goodsDescriptionPrint" }}
-              onCommit={(v) => onUpdate(row.id, { goodsDescriptionPrint: v })}
-              onEnterNavigateDown={() =>
-                focusShipmentGridCell(row.id, "otherRequirementsPrint")
-              }
-            />
-            <InlineTextEdit
-              value={row.otherRequirementsPrint ?? ""}
-              placeholder="YC khác in"
-              className="line-clamp-2 min-w-0 text-left text-[9px] leading-snug text-violet-700/90"
-              maxLength={SCSC_OTHER_REQUIREMENTS_PRINT_MAX}
-              gridNav={{ rowId: row.id, field: "otherRequirementsPrint" }}
-              onCommit={(v) => onUpdate(row.id, { otherRequirementsPrint: v })}
-              onEnterNavigateDown={() => focusShipmentGridCell(row.id, "note")}
-            />
-          </div>
-        ) : null}
       </td>
       <td className={cell("mid", "py-1 align-top")}>
         <div className="flex min-w-0 flex-col gap-0.5">

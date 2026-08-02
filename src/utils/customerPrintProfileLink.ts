@@ -51,8 +51,38 @@ export function buildShipmentPatchForSavedGoods(
   }
   return {
     customerGoodsId: g.id,
+    // Nguồn sự thật = goodsDescription (tab Tên hàng / cột Loại hàng trong hồ sơ KH).
     goodsDescriptionPrint: clipScscGoodsDescriptionPrint(g.goodsDescription),
   };
+}
+
+/**
+ * Nhãn droplist «Tên hàng»: luôn lấy `goodsDescription` (trường chính trong hồ sơ).
+ * `label` chỉ là alias phụ — không dùng làm giá trị hiển thị chính.
+ */
+export function formatSavedGoodsShortLabel(g: CustomerSavedGoods): string {
+  const desc = g.goodsDescription.trim();
+  if (desc) return desc.length > 36 ? `${desc.slice(0, 34)}…` : desc;
+  const label = g.label.trim();
+  return label || g.id;
+}
+
+/** Tooltip / option đầy đủ — ưu tiên mô tả loại hàng. */
+export function formatSavedGoodsDetailTitle(g: CustomerSavedGoods): string {
+  const desc = g.goodsDescription.trim();
+  const label = g.label.trim();
+  if (desc) {
+    if (label && label.toUpperCase() !== desc.toUpperCase() && !desc.toUpperCase().startsWith(label.toUpperCase())) {
+      return `${desc} (${label})`;
+    }
+    return desc;
+  }
+  return label || g.id;
+}
+
+/** Mục có tên hàng thật để đưa vào droplist. */
+export function isSavedGoodsSelectable(g: CustomerSavedGoods): boolean {
+  return Boolean(g.goodsDescription.trim() || g.label.trim());
 }
 
 /** Gắn hồ sơ in Shipper / CNEE / Tên hàng từ danh bạ lên lô. */

@@ -12,6 +12,13 @@ import {
   formatSavedConsigneeOptionLabel,
 } from "../utils/customerConsigneeShipmentPatch";
 import {
+  buildShipmentPatchForSavedGoods,
+  buildShipmentPatchForSavedShipper,
+  formatSavedGoodsDetailTitle,
+  formatSavedGoodsShortLabel,
+  isSavedGoodsSelectable,
+} from "../utils/customerPrintProfileLink";
+import {
   parseBookingDateLoose,
   formatYmdToFlightDateDdMon,
 } from "../utils/bookingDateParse";
@@ -26,9 +33,7 @@ import {
 } from "../utils/volumetricDim";
 import { isScscWarehouse } from "../constants/warehouses";
 import {
-  clipScscGoodsDescriptionPrint,
   clipScscOtherRequirementsPrint,
-  SCSC_GOODS_DESCRIPTION_PRINT_MAX,
   SCSC_OTHER_REQUIREMENTS_PRINT_MAX,
 } from "../utils/scscPrintContent";
 import { CustomerPickerField } from "./CustomerPickerField";
@@ -92,9 +97,10 @@ export function MobileShipmentEditSheet({
   const [customer, setCustomer] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [note, setNote] = useState("");
-  const [goodsDescriptionPrint, setGoodsDescriptionPrint] = useState("");
   const [otherRequirementsPrint, setOtherRequirementsPrint] = useState("");
+  const [customerShipperId, setCustomerShipperId] = useState("");
   const [customerConsigneeId, setCustomerConsigneeId] = useState("");
+  const [customerGoodsId, setCustomerGoodsId] = useState("");
   const [pcs, setPcs] = useState<number | null>(null);
   const [kg, setKg] = useState<number | null>(null);
   const [status, setStatus] = useState<ShipmentStatus>("PENDING");
@@ -110,18 +116,21 @@ export function MobileShipmentEditSheet({
       name,
       entry,
       {
-        customerShipperId: shipment?.customerShipperId,
+        customerShipperId,
         customerConsigneeId,
-        customerGoodsId: shipment?.customerGoodsId,
+        customerGoodsId,
       },
     );
     setCustomer(normalizeCustomerNameInput(patch.customer ?? name));
     setCustomerId((patch.customerId ?? "").trim());
-    if (patch.customerConsigneeId) {
+    if (patch.customerShipperId != null) {
+      setCustomerShipperId(patch.customerShipperId);
+    }
+    if (patch.customerConsigneeId != null) {
       setCustomerConsigneeId(patch.customerConsigneeId);
     }
-    if (patch.goodsDescriptionPrint != null) {
-      setGoodsDescriptionPrint(patch.goodsDescriptionPrint);
+    if (patch.customerGoodsId != null) {
+      setCustomerGoodsId(patch.customerGoodsId);
     }
     if (patch.otherRequirementsPrint != null) {
       setOtherRequirementsPrint(patch.otherRequirementsPrint);
@@ -141,9 +150,10 @@ export function MobileShipmentEditSheet({
     setCustomer((shipment.customer ?? "").trim());
     setCustomerId((shipment.customerId ?? "").trim());
     setNote((shipment.note ?? "").trim());
-    setGoodsDescriptionPrint((shipment.goodsDescriptionPrint ?? "").trim());
     setOtherRequirementsPrint((shipment.otherRequirementsPrint ?? "").trim());
+    setCustomerShipperId((shipment.customerShipperId ?? "").trim());
     setCustomerConsigneeId((shipment.customerConsigneeId ?? "").trim());
+    setCustomerGoodsId((shipment.customerGoodsId ?? "").trim());
     setPcs(shipment.pcs);
     setKg(shipment.kg);
     setStatus(shipment.status);
@@ -181,8 +191,14 @@ export function MobileShipmentEditSheet({
 
   if (!open || !shipment) return null;
 
-  const entry = findCustomerEntry(shipment, customerDirectory);
+  const entry =
+    findCustomerEntry(
+      { ...shipment, customer, customerId, customerShipperId, customerConsigneeId, customerGoodsId },
+      customerDirectory,
+    ) ?? findCustomerEntry(shipment, customerDirectory);
+  const savedShippers = entry?.savedShippers ?? [];
   const savedConsignees = entry?.savedConsignees ?? [];
+  const savedGoods = (entry?.savedGoods ?? []).filter(isSavedGoodsSelectable);
   const showScscPrintFields = isScscWarehouse(shipment.warehouse);
 
   const handleSave = () => {
@@ -195,16 +211,20 @@ export function MobileShipmentEditSheet({
       customer,
       undefined,
       {
-        customerShipperId: shipment.customerShipperId,
+        customerShipperId,
         customerConsigneeId,
-        customerGoodsId: shipment.customerGoodsId,
+        customerGoodsId,
       },
     );
-    const consigneePatch = customerConsigneeId
-      ? buildShipmentPatchForSavedConsignee(
-          savedConsignees.find((x) => x.id === customerConsigneeId),
-        )
-      : {};
+    const shipperPatch = buildShipmentPatchForSavedShipper(
+      savedShippers.find((x) => x.id === customerShipperId),
+    );
+    const consigneePatch = buildShipmentPatchForSavedConsignee(
+      savedConsignees.find((x) => x.id === customerConsigneeId),
+    );
+    const goodsPatch = buildShipmentPatchForSavedGoods(
+      savedGoods.find((x) => x.id === customerGoodsId),
+    );
     const patch: Partial<Shipment> = {
       awb: awb.trim(),
       hawb: hawb.trim().slice(0, 32),
@@ -212,13 +232,12 @@ export function MobileShipmentEditSheet({
       flightDate,
       dest: dest.trim().toUpperCase(),
       ...customerPatch,
+      ...shipperPatch,
       ...consigneePatch,
+      ...goodsPatch,
       note: note.trim(),
       ...(showScscPrintFields
         ? {
-            goodsDescriptionPrint: clipScscGoodsDescriptionPrint(
-              goodsDescriptionPrint,
-            ),
             otherRequirementsPrint: clipScscOtherRequirementsPrint(
               otherRequirementsPrint,
             ),
@@ -229,7 +248,6 @@ export function MobileShipmentEditSheet({
       status,
       dimWeightKg,
       dimLines,
-      customerConsigneeId: customerConsigneeId.trim(),
     };
     onSave(patch);
     onClose();
@@ -364,6 +382,65 @@ export function MobileShipmentEditSheet({
                     inputClassName={MOBILE.input}
                   />
                 </Field>
+                <div className={`space-y-2 rounded-2xl border p-3 ${OPS.panelSoft}`}>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-apple-secondary">
+                    Thông tin KH
+                  </p>
+                  <Field label="Shipper">
+                    <select
+                      value={customerShipperId}
+                      onChange={(e) => setCustomerShipperId(e.target.value)}
+                      disabled={savedShippers.length === 0}
+                      className={MOBILE.input}
+                    >
+                      <option value="">
+                        {savedShippers.length ? "— Chọn Shipper —" : "— Chưa có Shipper —"}
+                      </option>
+                      {savedShippers.map((sc) => (
+                        <option key={sc.id} value={sc.id}>
+                          {sc.label.trim() || sc.shipperName.trim() || sc.id}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="CNEE">
+                    <select
+                      value={customerConsigneeId}
+                      onChange={(e) => setCustomerConsigneeId(e.target.value)}
+                      disabled={savedConsignees.length === 0}
+                      className={MOBILE.input}
+                    >
+                      <option value="">
+                        {savedConsignees.length ? "— Chọn CNEE —" : "— Chưa có CNEE —"}
+                      </option>
+                      {savedConsignees.map((sc) => (
+                        <option key={sc.id} value={sc.id}>
+                          {formatSavedConsigneeOptionLabel(sc)}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Tên hàng">
+                    <select
+                      value={customerGoodsId}
+                      onChange={(e) => setCustomerGoodsId(e.target.value)}
+                      disabled={savedGoods.length === 0}
+                      className={MOBILE.input}
+                    >
+                      <option value="">
+                        {savedGoods.length ? "— Chọn tên hàng —" : "— Chưa có tên hàng —"}
+                      </option>
+                      {savedGoods.map((g) => (
+                        <option key={g.id} value={g.id} title={formatSavedGoodsDetailTitle(g)}>
+                          {formatSavedGoodsShortLabel(g)}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <p className="text-[11px] leading-relaxed text-apple-tertiary">
+                    Chọn từ hồ sơ đã lưu trong Danh bạ khách.
+                  </p>
+                </div>
                 <Field label="Ghi chú nội bộ">
                   <textarea
                     value={note}
@@ -374,62 +451,28 @@ export function MobileShipmentEditSheet({
                   />
                 </Field>
                 {showScscPrintFields ? (
-                  <>
-                    <Field
-                      label="Tên hàng"
-                      hint={`${goodsDescriptionPrint.length}/${SCSC_GOODS_DESCRIPTION_PRINT_MAX}`}
-                    >
-                      <textarea
-                        value={goodsDescriptionPrint}
-                        onChange={(e) =>
-                          setGoodsDescriptionPrint(
-                            clipScscGoodsDescriptionPrint(e.target.value),
-                          )
-                        }
-                        rows={2}
-                        className={`${MOBILE.input} resize-none`}
-                        placeholder="GENERAL CARGO"
-                      />
-                    </Field>
-                    <Field
-                      label="Yêu cầu xử lý"
-                      hint={`${otherRequirementsPrint.length}/${SCSC_OTHER_REQUIREMENTS_PRINT_MAX}`}
-                    >
-                      <textarea
-                        value={otherRequirementsPrint}
-                        onChange={(e) =>
-                          setOtherRequirementsPrint(
-                            clipScscOtherRequirementsPrint(e.target.value),
-                          )
-                        }
-                        rows={2}
-                        className={`${MOBILE.input} resize-none`}
-                        placeholder="Không xếp chồng…"
-                      />
-                    </Field>
-                  </>
+                  <Field
+                    label="Yêu cầu xử lý"
+                    hint={`${otherRequirementsPrint.length}/${SCSC_OTHER_REQUIREMENTS_PRINT_MAX}`}
+                  >
+                    <textarea
+                      value={otherRequirementsPrint}
+                      onChange={(e) =>
+                        setOtherRequirementsPrint(
+                          clipScscOtherRequirementsPrint(e.target.value),
+                        )
+                      }
+                      rows={2}
+                      className={`${MOBILE.input} resize-none`}
+                      placeholder="Không xếp chồng…"
+                    />
+                  </Field>
                 ) : null}
               </div>
             ) : null}
 
             {tab === "notify" ? (
               <div className="space-y-4">
-                {savedConsignees.length > 0 ? (
-                  <Field label="Chọn CNEE lưu sẵn">
-                    <select
-                      value={customerConsigneeId}
-                      onChange={(e) => setCustomerConsigneeId(e.target.value)}
-                      className={MOBILE.input}
-                    >
-                      <option value="">— Chọn CNEE —</option>
-                      {savedConsignees.map((sc) => (
-                        <option key={sc.id} value={sc.id}>
-                          {formatSavedConsigneeOptionLabel(sc)}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                ) : null}
                 <div className={`rounded-2xl border p-4 ${OPS.panelSoft}`}>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-apple-secondary">
                     Nội dung thông báo
@@ -440,7 +483,7 @@ export function MobileShipmentEditSheet({
                     </pre>
                   ) : (
                     <p className="mt-2 text-[12px] text-apple-tertiary">
-                      Chọn khách và CNEE để xem nội dung sao chép.
+                      Chọn khách và CNEE ở tab Booking để xem nội dung sao chép.
                     </p>
                   )}
                   <button
@@ -455,7 +498,7 @@ export function MobileShipmentEditSheet({
                   </button>
                 </div>
                 <p className="text-[11px] leading-relaxed text-apple-tertiary">
-                  Hồ sơ khách và CNEE chi tiết được quản lý trong Danh bạ.
+                  Hồ sơ Shipper / CNEE / Tên hàng được quản lý trong Danh bạ.
                 </p>
               </div>
             ) : null}

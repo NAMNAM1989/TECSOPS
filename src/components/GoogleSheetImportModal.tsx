@@ -17,6 +17,7 @@ import {
 } from "../utils/googleSheetBookApi";
 import { parseGoogleSheetLink } from "../utils/googleSheetUrl";
 import {
+  emptyWarehouseRecord,
   normalizeWarehouse,
   warehouseLabel,
   WAREHOUSE_ORDER,
@@ -222,11 +223,8 @@ export function GoogleSheetImportModal({
 
   const warehouseCounts = useMemo(() => {
     const rows = sync?.rows ?? [];
-    const total: Record<Warehouse, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
-    const selectable: Record<Warehouse, number> = {
-      "TECS-TCS": 0,
-      "TECS-SCSC": 0,
-    };
+    const total = emptyWarehouseRecord(() => 0);
+    const selectable = emptyWarehouseRecord(() => 0);
     for (const r of rows) {
       const wh = rowWarehouse(r);
       total[wh] += 1;
@@ -236,7 +234,7 @@ export function GoogleSheetImportModal({
   }, [sync]);
 
   const selectedBreakdown = useMemo(() => {
-    const out: Record<Warehouse, number> = { "TECS-TCS": 0, "TECS-SCSC": 0 };
+    const out = emptyWarehouseRecord(() => 0);
     if (!sync) return out;
     for (const row of sync.rows) {
       if (!selected.has(row.index)) continue;

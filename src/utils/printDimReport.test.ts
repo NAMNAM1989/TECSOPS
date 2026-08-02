@@ -64,6 +64,10 @@ describe("canPrintDimScscReport", () => {
   it("true khi KHO SCSC và có dimLines", () => {
     expect(canPrintDimScscReport(sampleShipment({ warehouse: "TECS-SCSC" }))).toBe(true);
   });
+
+  it("true khi kho trực tiếp SCSC và có dimLines", () => {
+    expect(canPrintDimScscReport(sampleShipment({ warehouse: "SCSC" }))).toBe(true);
+  });
 });
 
 describe("printDimReport", () => {

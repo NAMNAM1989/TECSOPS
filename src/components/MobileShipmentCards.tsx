@@ -9,6 +9,7 @@ import {
   statusRowSelected,
 } from "./statusStyles";
 import {
+  emptyWarehouseRecord,
   warehouseLabel,
   warehouseSectionsForLayout,
   WAREHOUSE_ORDER,
@@ -345,10 +346,7 @@ export function MobileShipmentCards({
     return [...WAREHOUSE_ORDER];
   }, [searchActive]);
   const warehouseCounts = useMemo(() => {
-    const counts = {
-      "TECS-TCS": 0,
-      "TECS-SCSC": 0,
-    } as Record<Warehouse, number>;
+    const counts = emptyWarehouseRecord(() => 0);
     for (const wh of warehouseSections) counts[wh] = rowsByWarehouse[wh].length;
     return counts;
   }, [rowsByWarehouse, warehouseSections]);

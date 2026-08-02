@@ -3,6 +3,7 @@ import type {
   CustomerSavedVehicle,
 } from "../types/customerDirectory";
 import type { Shipment, Warehouse } from "../types/shipment";
+import { emptyWarehouseRecord, normalizeWarehouse } from "../constants/warehouses";
 import { rawAwbDigits } from "./awbFormat";
 import { findCustomerEntry } from "./customerBookingResolve";
 
@@ -306,13 +307,11 @@ export function buildShipmentSearchMatches(
 export function countShipmentsByWarehouse(rows: readonly Shipment[]): Record<Warehouse, number> {
   return rows.reduce(
     (acc, row) => {
-      acc[row.warehouse] += 1;
+      const wh = normalizeWarehouse(row.warehouse);
+      acc[wh] += 1;
       return acc;
     },
-    {
-      "TECS-TCS": 0,
-      "TECS-SCSC": 0,
-    } as Record<Warehouse, number>
+    emptyWarehouseRecord(() => 0)
   );
 }
 

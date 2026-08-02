@@ -12,7 +12,8 @@ export type ShipmentStatus =
   | "WEIGH_SLIP" // NỘP TỜ CÂN
   | "COMPLETED"; // HOÀN THÀNH
 
-export type Warehouse = "TECS-TCS" | "TECS-SCSC";
+/** Hub TECS + kho trực tiếp SCSC/TCS (không qua trung gian). */
+export type Warehouse = "TECS-TCS" | "TECS-SCSC" | "TCS" | "SCSC";
 
 export type { DimPieceLine };
 

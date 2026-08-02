@@ -22,6 +22,8 @@ import {
 const WAREHOUSE_CHIP_CLASS: Record<Warehouse, string> = {
   "TECS-TCS": "bg-sky-100 text-sky-900 ring-sky-200/80",
   "TECS-SCSC": "bg-violet-100 text-violet-900 ring-violet-200/80",
+  TCS: "bg-cyan-100 text-cyan-900 ring-cyan-200/80",
+  SCSC: "bg-fuchsia-100 text-fuchsia-900 ring-fuchsia-200/80",
 };
 
 interface SmartSearchBarProps {

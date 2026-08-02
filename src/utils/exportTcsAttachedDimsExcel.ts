@@ -27,7 +27,7 @@ export function canExportTcsDimTemplate(s: Shipment): boolean {
 /** Xuất một sheet đúng mẫu ATTACHED_LIST_DIMS cho một lô TCS — dynamic import exceljs. */
 export async function downloadTcsAttachedDimsExcel(s: Shipment): Promise<void> {
   if (!canExportTcsDimTemplate(s) || !s.dimLines) {
-    window.alert("Chỉ áp dụng cho kho TCS (TECS-TCS hoặc KHO TCS) và lô đã có nhập DIM (chi tiết kiện).");
+    window.alert("Chỉ áp dụng cho family TCS (TECS-TCS hoặc TCS) và lô đã có nhập DIM (chi tiết kiện).");
     return;
   }
 
@@ -75,7 +75,7 @@ export async function downloadTcsAttachedDimsExcel(s: Shipment): Promise<void> {
 /** In nhanh bảng DIM cùng layout (4 cột) trong trình duyệt. */
 export function printTcsAttachedDimsList(s: Shipment): void {
   if (!canExportTcsDimTemplate(s) || !s.dimLines) {
-    window.alert("Chỉ áp dụng cho kho TCS (TECS-TCS hoặc KHO TCS) và lô đã có nhập DIM (chi tiết kiện).");
+    window.alert("Chỉ áp dụng cho family TCS (TECS-TCS hoặc TCS) và lô đã có nhập DIM (chi tiết kiện).");
     return;
   }
 

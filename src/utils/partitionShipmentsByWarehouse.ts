@@ -5,7 +5,7 @@ export type ShipmentsByWarehouse = Readonly<Record<Warehouse, Shipment[]>>;
 
 /**
  * Gom lô theo kho trong **một** lượt duyệt (O(n)).
- * Kho cũ KHO-* được map về TECS-*.
+ * Exact-match 4 kho; legacy KHO-* → hub TECS-*.
  */
 export function partitionShipmentsByWarehouse(rows: Shipment[]): ShipmentsByWarehouse {
   const buckets = Object.fromEntries(WAREHOUSE_ORDER.map((w) => [w, [] as Shipment[]])) as Record<

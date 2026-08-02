@@ -25,8 +25,10 @@ describe("sessionYmdToBookSheetTab", () => {
 describe("mapSheetWarehouse", () => {
   it("map mã kho Sheet sang TECSOPS", () => {
     expect(mapSheetWarehouse("TECS-TCS")).toBe("TECS-TCS");
+    expect(mapSheetWarehouse("TECS-SCSC")).toBe("TECS-SCSC");
+    expect(mapSheetWarehouse("TCS")).toBe("TCS");
+    expect(mapSheetWarehouse("SCSC")).toBe("SCSC");
     expect(mapSheetWarehouse("LX-SCSC")).toBe("TECS-SCSC");
-    expect(mapSheetWarehouse("TCS")).toBe("TECS-TCS");
     expect(mapSheetWarehouse("KHO-SCSC")).toBe("TECS-SCSC");
     expect(mapSheetWarehouse("KHO-TCS")).toBe("TECS-TCS");
   });

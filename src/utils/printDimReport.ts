@@ -24,7 +24,7 @@ export function printDimReport(s: Shipment): void {
   }
   if (!isScscWarehouse(s.warehouse)) {
     window.alert(
-      "Form in DIM SCSC chỉ dùng cho lô kho SCSC (TECS-SCSC hoặc KHO SCSC). Lô kho TCS dùng LIST DIM TCS / IN DIM TCS."
+      "Form in DIM SCSC chỉ dùng cho family SCSC (TECS-SCSC hoặc SCSC). Lô family TCS dùng LIST DIM TCS / IN DIM TCS."
     );
     return;
   }

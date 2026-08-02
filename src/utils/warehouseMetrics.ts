@@ -1,5 +1,5 @@
 import type { Shipment, Warehouse } from "../types/shipment";
-import { WAREHOUSE_ORDER } from "../constants/warehouses";
+import { WAREHOUSE_ORDER, emptyWarehouseRecord, normalizeWarehouse } from "../constants/warehouses";
 
 export type WarehouseMetrics = {
   lots: number;
@@ -10,13 +10,11 @@ export type WarehouseMetrics = {
 export function computeWarehouseMetrics(
   rows: readonly Shipment[]
 ): Record<Warehouse, WarehouseMetrics> {
-  const out = {
-    "TECS-TCS": { lots: 0, pcs: 0, kg: 0 },
-    "TECS-SCSC": { lots: 0, pcs: 0, kg: 0 },
-  } as Record<Warehouse, WarehouseMetrics>;
+  const out = emptyWarehouseRecord(() => ({ lots: 0, pcs: 0, kg: 0 }));
 
   for (const row of rows) {
-    const bucket = out[row.warehouse];
+    const wh = normalizeWarehouse(row.warehouse);
+    const bucket = out[wh];
     if (!bucket) continue;
     bucket.lots += 1;
     bucket.pcs += row.pcs ?? 0;

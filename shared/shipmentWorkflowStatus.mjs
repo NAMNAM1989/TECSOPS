@@ -26,9 +26,14 @@ export const SHIPMENT_STATUS_ORDER = [
  * TCS: Booking → Nhận hàng → Đã đo Volume → Kéo OLA → Hoàn thành tiếp nhận → Nộp tờ cân
  * SCSC: Booking → Nhận hàng → Đã đo Volume → Kéo OLA → Nộp tờ cân
  */
+const WORKFLOW_TCS = ["PENDING", "RECEIVED", "VOLUME_DONE", "OLA_PULL", "RECEPTION_COMPLETED", "WEIGH_SLIP"];
+const WORKFLOW_SCSC = ["PENDING", "RECEIVED", "VOLUME_DONE", "OLA_PULL", "WEIGH_SLIP"];
+
 export const WORKFLOW_BY_WAREHOUSE = {
-  "TECS-TCS": ["PENDING", "RECEIVED", "VOLUME_DONE", "OLA_PULL", "RECEPTION_COMPLETED", "WEIGH_SLIP"],
-  "TECS-SCSC": ["PENDING", "RECEIVED", "VOLUME_DONE", "OLA_PULL", "WEIGH_SLIP"],
+  "TECS-TCS": WORKFLOW_TCS,
+  TCS: WORKFLOW_TCS,
+  "TECS-SCSC": WORKFLOW_SCSC,
+  SCSC: WORKFLOW_SCSC,
 };
 
 /** Ẩn khỏi filter (lịch sử / ngoài luồng hiện tại). */
@@ -63,7 +68,7 @@ export function statusOrderForWarehouse(warehouse) {
 
 /** Chip filter: theo kho đang xem; ALL = union (thứ tự TCS — bao gồm Hoàn thành tiếp nhận). */
 export function statusOrderForFilter(warehouse) {
-  if (warehouse === "TECS-TCS" || warehouse === "TECS-SCSC") {
+  if (warehouse && WORKFLOW_BY_WAREHOUSE[warehouse]) {
     return statusOrderForWarehouse(warehouse);
   }
   return WORKFLOW_BY_WAREHOUSE["TECS-TCS"];

@@ -1,6 +1,6 @@
 import { formatAwb, awbDigitsKey } from "./awbFormat.mjs";
 
-const WAREHOUSES = new Set(["TECS-TCS", "TECS-SCSC"]);
+const WAREHOUSES = new Set(["TECS-TCS", "TECS-SCSC", "TCS", "SCSC"]);
 
 /**
  * @typedef {Object} ParsedBookRow
@@ -161,10 +161,14 @@ export function mapSheetWarehouse(raw, blockDefault = "TECS-TCS") {
     .replace(/\s+/g, "")
     .replace(/_/g, "-");
 
+  // Exact-match 4 kho (TCS/SCSC ≠ TECS-*).
   if (WAREHOUSES.has(u)) return u;
-  if (u.includes("SCSC") || u.includes("SCCS") || u === "KHO-SCSC") return "TECS-SCSC";
-  if (u.includes("TCS") || u === "LX-TCS" || u === "KHO-TCS") return "TECS-TCS";
-  if (u === "SCSC") return "TECS-SCSC";
+  // Legacy alias → hub TECS.
+  if (u === "KHO-SCSC") return "TECS-SCSC";
+  if (u === "KHO-TCS") return "TECS-TCS";
+  // Biến thể Sheet cũ (LX-*, …) → hub; không đụng exact TCS/SCSC (đã return ở trên).
+  if (u.includes("SCSC") || u.includes("SCCS")) return "TECS-SCSC";
+  if (u.includes("TCS")) return "TECS-TCS";
   return blockDefault;
 }
 

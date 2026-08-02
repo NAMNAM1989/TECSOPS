@@ -6,6 +6,8 @@ import { computeWarehouseMetrics } from "../utils/warehouseMetrics";
 const CARD_RING: Record<Warehouse, string> = {
   "TECS-TCS": "ring-sky-500/60",
   "TECS-SCSC": "ring-violet-500/60",
+  TCS: "ring-cyan-500/60",
+  SCSC: "ring-fuchsia-500/60",
 };
 
 interface Props {
@@ -39,8 +41,8 @@ export function WarehouseGridPicker({
     <div
       className={
         compact
-          ? `grid grid-cols-2 gap-1.5 ${className}`
-          : `grid grid-cols-2 gap-1.5 xl:grid-cols-4 xl:gap-2 ${className}`
+          ? `grid grid-cols-2 gap-1.5 sm:grid-cols-4 ${className}`
+          : `grid grid-cols-2 gap-1.5 lg:grid-cols-4 lg:gap-2 ${className}`
       }
       role="tablist"
       aria-label="Chọn kho"

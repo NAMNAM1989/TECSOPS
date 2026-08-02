@@ -1,3 +1,4 @@
+import { isTcsFamily } from "../constants/warehouses";
 import type { CargoDayReportModel, CargoDayReportRow } from "./cargoDayReport";
 
 export type CargoDayReportImageVariant = "basic" | "withCustomer";
@@ -268,9 +269,10 @@ export function renderCargoDayReportCanvas(
   }
 
   for (const sec of model.sections) {
-    ctx.fillStyle = sec.warehouse === "TECS-TCS" ? "#bae6fd" : "#ddd6fe";
+    const tcsFamily = isTcsFamily(sec.warehouse);
+    ctx.fillStyle = tcsFamily ? "#bae6fd" : "#ddd6fe";
     ctx.fillRect(padX, y, tableW, sectionHeadH);
-    ctx.strokeStyle = sec.warehouse === "TECS-TCS" ? "#0284c7" : "#7c3aed";
+    ctx.strokeStyle = tcsFamily ? "#0284c7" : "#7c3aed";
     ctx.lineWidth = 2;
     ctx.strokeRect(padX + 0.5, y + 0.5, tableW - 1, sectionHeadH - 1);
 

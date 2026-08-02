@@ -18,18 +18,19 @@ import {
   normalizeEsidRegistrantStoreLoose,
 } from "./esidProfilesNormalize.mjs";
 
-const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC"];
+const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "TCS", "SCSC"];
+const WAREHOUSE_SET = new Set(WAREHOUSE_ORDER);
 
+/** Exact-match 4 kho; legacy KHO-* → hub TECS. Không substring. */
 function normalizeWarehouse(raw, fallback = "TECS-TCS") {
   const u = String(raw ?? "")
     .trim()
     .toUpperCase()
     .replace(/\s+/g, "")
     .replace(/_/g, "-");
-  if (u === "TECS-SCSC" || u === "KHO-SCSC") return "TECS-SCSC";
-  if (u === "TECS-TCS" || u === "KHO-TCS") return "TECS-TCS";
-  if (u.includes("SCSC") || u.includes("SCCS")) return "TECS-SCSC";
-  if (u.includes("TCS")) return "TECS-TCS";
+  if (WAREHOUSE_SET.has(u)) return u;
+  if (u === "KHO-SCSC") return "TECS-SCSC";
+  if (u === "KHO-TCS") return "TECS-TCS";
   return fallback;
 }
 

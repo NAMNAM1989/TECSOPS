@@ -106,7 +106,7 @@ describe("migrateShipmentStatus", () => {
 });
 
 describe("workflow theo kho", () => {
-  it("TCS có Hoàn thành tiếp nhận; SCSC không", () => {
+  it("TCS có Hoàn thành tiếp nhận; SCSC không — hub và trực tiếp mirror nhau", () => {
     expect(statusOrderForWarehouse("TECS-TCS")).toEqual([
       "PENDING",
       "RECEIVED",
@@ -115,6 +115,7 @@ describe("workflow theo kho", () => {
       "RECEPTION_COMPLETED",
       "WEIGH_SLIP",
     ]);
+    expect(statusOrderForWarehouse("TCS")).toEqual(statusOrderForWarehouse("TECS-TCS"));
     expect(statusOrderForWarehouse("TECS-SCSC")).toEqual([
       "PENDING",
       "RECEIVED",
@@ -122,7 +123,9 @@ describe("workflow theo kho", () => {
       "OLA_PULL",
       "WEIGH_SLIP",
     ]);
+    expect(statusOrderForWarehouse("SCSC")).toEqual(statusOrderForWarehouse("TECS-SCSC"));
     expect(statusOrderForFilter("TECS-SCSC")).not.toContain("RECEPTION_COMPLETED");
+    expect(statusOrderForFilter("SCSC")).not.toContain("RECEPTION_COMPLETED");
     expect(statusOrderForFilter("TECS-SCSC")).not.toContain("CUSTOMS");
     expect(statusOrderForFilter("TECS-SCSC")).not.toContain("SECURITY");
   });

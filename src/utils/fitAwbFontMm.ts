@@ -1,16 +1,38 @@
 /**
- * Cỡ chữ AWB vừa khít tem (không bao giờ cắt "...").
- * Mẫu mới: standard ~28.5pt (10mm), compact ~22pt (7.8mm).
+ * Cỡ chữ AWB vừa khít tem (không cắt "...", không tràn viền).
+ * Mục tiêu: standard ~34.5pt (12.2mm), compact ~25.5pt (9mm).
+ * Fit theo chiều ngang ô MAWB (Courier mono + letter-spacing âm).
  */
 export function fitAwbFontMm(mawb: string, opts?: { compact?: boolean; relScale?: number }): number {
   const compact = opts?.compact ?? false;
   const rel = opts?.relScale ?? 1;
   const text = (mawb || "").trim() || "000-00000000";
-  const usableMm = compact ? 92 : 93;
-  const charFactor = 0.52;
+  /* 100mm − padding tem − viền − padding ô */
+  const usableMm = compact ? 90 : 91;
+  const charFactor = 0.58;
   const fitted = usableMm / (Math.max(text.length, 1) * charFactor);
-  const maxMm = compact ? 7.8 : 10.05;
-  const minMm = compact ? 5.5 : 7;
+  const maxMm = compact ? 9 : 12.2;
+  const minMm = compact ? 6.2 : 8.2;
+  const base = Math.min(maxMm, Math.max(minMm, fitted));
+  return Math.round(base * rel * 100) / 100;
+}
+
+/**
+ * Cỡ chữ ORIGIN/DEST (thường 3 ký tự IATA) — to, rõ, không tràn nửa ô.
+ */
+export function fitRouteCodeFontMm(
+  code: string,
+  opts?: { compact?: boolean; relScale?: number }
+): number {
+  const compact = opts?.compact ?? false;
+  const rel = opts?.relScale ?? 1;
+  const text = (code || "").trim() || "XXX";
+  /* Nửa tem ≈ 46–47mm trừ padding/viền */
+  const usableMm = compact ? 42 : 44;
+  const charFactor = 0.72;
+  const fitted = usableMm / (Math.max(text.length, 1) * charFactor);
+  const maxMm = compact ? 6.2 : 8.2;
+  const minMm = compact ? 4.4 : 5.8;
   const base = Math.min(maxMm, Math.max(minMm, fitted));
   return Math.round(base * rel * 100) / 100;
 }

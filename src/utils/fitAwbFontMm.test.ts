@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { formatAwb, formatAwbLabel } from "./awbFormat";
-import { fitAwbFontMm } from "./fitAwbFontMm";
+import { fitAwbFontMm, fitRouteCodeFontMm } from "./fitAwbFontMm";
 
 describe("fitAwbFontMm", () => {
-  it("AWB tem vừa mức mẫu mới ≤ 10.05mm (~28.5pt)", () => {
+  it("AWB tem to hơn mẫu cũ, vẫn ≤ 12.2mm (~34.5pt)", () => {
     const mm = fitAwbFontMm("738-07053690");
-    expect(mm).toBeGreaterThanOrEqual(7);
-    expect(mm).toBeLessThanOrEqual(10.05);
+    expect(mm).toBeGreaterThanOrEqual(8.2);
+    expect(mm).toBeLessThanOrEqual(12.2);
   });
 
-  it("AWB 12 ký tự tem → chạm max ~10.05mm", () => {
+  it("AWB 12 ký tự tem → chạm gần max ~12.2mm", () => {
     const mm = fitAwbFontMm("695-56301136");
-    expect(mm).toBeGreaterThanOrEqual(9);
-    expect(mm).toBeLessThanOrEqual(10.05);
+    expect(mm).toBeGreaterThanOrEqual(10);
+    expect(mm).toBeLessThanOrEqual(12.2);
   });
 
   it("chuỗi ngắn hơn (bỏ khoảng) → chữ to hơn chuỗi có khoảng", () => {
@@ -31,6 +31,26 @@ describe("fitAwbFontMm", () => {
     expect(fitAwbFontMm("738-07053690", { compact: true })).toBeLessThan(
       fitAwbFontMm("738-07053690"),
     );
+  });
+});
+
+describe("fitRouteCodeFontMm", () => {
+  it("DEST 3 ký tự → gần max standard 8.2mm", () => {
+    const mm = fitRouteCodeFontMm("SIN");
+    expect(mm).toBeGreaterThanOrEqual(7);
+    expect(mm).toBeLessThanOrEqual(8.2);
+  });
+
+  it("compact nhỏ hơn standard", () => {
+    expect(fitRouteCodeFontMm("BKK", { compact: true })).toBeLessThan(
+      fitRouteCodeFontMm("BKK"),
+    );
+  });
+
+  it("mã dài hơn → chữ nhỏ hơn hoặc bằng", () => {
+    const short = fitRouteCodeFontMm("SIN");
+    const long = fitRouteCodeFontMm("SINAPORE");
+    expect(long).toBeLessThanOrEqual(short);
   });
 });
 

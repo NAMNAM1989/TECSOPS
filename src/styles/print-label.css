@@ -28,15 +28,15 @@
   min-height: 0;
   width: 100%;
   display: grid;
-  /* Airline | AWB | Origin/Dest | Pieces */
-  grid-template-rows: 9mm 16mm 12mm minmax(0, 1fr);
+  /* Airline | AWB (to) | Origin/Dest (to) | Pieces */
+  grid-template-rows: 7.5mm 19.5mm 15.5mm minmax(0, 1fr);
   border: 0.7mm solid #000;
   background: #fff;
   overflow: hidden;
 }
 
 .label.print-label-sheet.lbl-sheet.lbl-sheet--no-airline .lbl-sheet-inner {
-  grid-template-rows: 20mm 12mm minmax(0, 1fr);
+  grid-template-rows: 22mm 15.5mm minmax(0, 1fr);
 }
 
 .lbl-sheet * {
@@ -68,8 +68,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.6mm;
-  padding: 1.2mm 1.5mm;
+  gap: 0.5mm;
+  padding: 0.8mm 1.2mm;
   border-bottom: 0.6mm solid #000;
   text-align: center;
   min-width: 0;
@@ -83,18 +83,20 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  line-height: 1.15;
+  line-height: 1.1;
   color: #000;
+  flex-shrink: 0;
 }
 
 .lbl-mawb-val {
   display: block;
   width: 100%;
   max-width: 100%;
+  padding: 0 0.4mm;
   font-family: "Courier New", Courier, "Liberation Mono", monospace;
   font-weight: 700;
-  letter-spacing: -0.1mm;
-  line-height: 1.05;
+  letter-spacing: -0.18mm;
+  line-height: 0.95;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: clip;
@@ -124,8 +126,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.4mm;
-  padding: 0.6mm 1.2mm;
+  gap: 0.35mm;
+  padding: 0.5mm 1mm;
   text-align: center;
   min-width: 0;
   overflow: hidden;
@@ -140,19 +142,25 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  line-height: 1.15;
+  line-height: 1.1;
   font-size: 7pt;
+  flex-shrink: 0;
 }
 
 .route-val {
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  line-height: 1.05;
+  letter-spacing: 0.06em;
+  line-height: 0.95;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: clip;
   max-width: 100%;
+  padding: 0 0.3mm;
+}
+
+.route-val--dest {
+  letter-spacing: 0.08em;
 }
 
 /* —— Hàng 4: TOTAL PIECES —— */
@@ -213,11 +221,11 @@
 }
 
 .label.print-label-sheet.lbl-sheet.lbl-sheet--compact .lbl-sheet-inner {
-  grid-template-rows: 6.5mm 11mm 8.5mm minmax(0, 1fr);
+  grid-template-rows: 5.5mm 13.5mm 10.5mm minmax(0, 1fr);
 }
 
 .label.print-label-sheet.lbl-sheet.lbl-sheet--compact.lbl-sheet--no-airline .lbl-sheet-inner {
-  grid-template-rows: 14mm 8.5mm minmax(0, 1fr);
+  grid-template-rows: 15.5mm 10.5mm minmax(0, 1fr);
 }
 
 .lbl-sheet--compact .lbl-airline {

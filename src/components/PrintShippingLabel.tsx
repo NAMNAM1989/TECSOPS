@@ -7,7 +7,7 @@ import {
   type LabelSheetFormat,
 } from "../utils/labelSheetFormat";
 import { mapShipmentToAirCargoLabelData } from "../utils/mapShipmentToAirCargoLabelData";
-import { fitAwbFontMm } from "../utils/fitAwbFontMm";
+import { fitAwbFontMm, fitRouteCodeFontMm } from "../utils/fitAwbFontMm";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { OPS } from "../styles/opsModalStyles";
 import {
@@ -38,16 +38,15 @@ export function LabelContent({
   const compact = sheetVariant === "compact";
   const hasAirline = Boolean(d.airline);
 
-  const airlineMm = compact ? 3.9 : 5;
-  const mawbMm = Math.min(
-    fitAwbFontMm(d.mawb, { compact }),
-    compact ? 7.8 : 10.05
-  );
-  const routeLabMm = compact ? 2.1 : 2.5;
-  const routeValMm = compact ? 4.2 : 5.6;
-  const piecesLabMm = compact ? 2.1 : 2.5;
-  /* Mock: 34pt ≈ 12mm (50mm) · 58pt ≈ 20.5mm (80mm) */
-  const piecesValMm = compact ? 12 : 20.5;
+  const airlineMm = compact ? 3.6 : 4.6;
+  const mawbMm = fitAwbFontMm(d.mawb, { compact });
+  const routeLabMm = compact ? 1.9 : 2.3;
+  /* DEST ưu tiên to hơn ORIGIN một chút; cả hai vẫn fit nửa ô */
+  const originMm = fitRouteCodeFontMm(d.origin, { compact, relScale: 0.92 });
+  const destMm = fitRouteCodeFontMm(d.dest, { compact });
+  const piecesLabMm = compact ? 1.9 : 2.3;
+  /* Nhường chiều cao cho AWB/DEST — pieces vẫn đủ lớn */
+  const piecesValMm = compact ? 10.5 : 18;
 
   const sheetClass = [
     "label",
@@ -80,7 +79,7 @@ export function LabelContent({
             <div className="route-label" style={{ fontSize: `${routeLabMm}mm` }}>
               ORIGIN:
             </div>
-            <div className="route-val" style={{ fontSize: `${routeValMm}mm` }}>
+            <div className="route-val" style={{ fontSize: `${originMm}mm` }}>
               {d.origin}
             </div>
           </div>
@@ -88,7 +87,7 @@ export function LabelContent({
             <div className="route-label" style={{ fontSize: `${routeLabMm}mm` }}>
               DESTINATION:
             </div>
-            <div className="route-val" style={{ fontSize: `${routeValMm}mm` }}>
+            <div className="route-val route-val--dest" style={{ fontSize: `${destMm}mm` }}>
               {d.dest || <span className="lbl-placeholder">-</span>}
             </div>
           </div>

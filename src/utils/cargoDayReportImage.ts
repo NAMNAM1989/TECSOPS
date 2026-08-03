@@ -1,11 +1,72 @@
 import { isTcsFamily } from "../constants/warehouses";
-import type { CargoDayReportModel, CargoDayReportRow } from "./cargoDayReport";
+import {
+  filterCargoDayReportByWarehouseFamily,
+  type CargoDayReportModel,
+  type CargoDayReportRow,
+} from "./cargoDayReport";
 
 export type CargoDayReportImageVariant = "basic" | "withCustomer";
 
+/** Nút copy ảnh Ops: Vantage / Tecs / kho TCS / kho SCSC. */
+export type CargoDayReportCopyKind = "vantage" | "tecs" | "tcs" | "scsc";
+
 export type CopyCargoDayReportImageResult =
-  | { ok: true; mode: "clipboard" | "download"; filename: string }
+  | {
+      ok: true;
+      mode: "clipboard" | "download";
+      filename: string;
+      label: string;
+      totalLots: number;
+    }
   | { ok: false; reason: string };
+
+export type CargoDayReportCopyResolved = {
+  variant: CargoDayReportImageVariant;
+  family: "TCS" | "SCSC" | null;
+  label: string;
+  titleTag: string;
+  filenameSuffix: string;
+};
+
+export function resolveCargoDayReportCopyKind(
+  kind: CargoDayReportCopyKind,
+): CargoDayReportCopyResolved {
+  switch (kind) {
+    case "tecs":
+      return {
+        variant: "withCustomer",
+        family: null,
+        label: "Tecs",
+        titleTag: " · Tecs",
+        filenameSuffix: "-tecs",
+      };
+    case "tcs":
+      return {
+        variant: "withCustomer",
+        family: "TCS",
+        label: "TCS",
+        titleTag: " · TCS",
+        filenameSuffix: "-tcs",
+      };
+    case "scsc":
+      return {
+        variant: "withCustomer",
+        family: "SCSC",
+        label: "SCSC",
+        titleTag: " · SCSC",
+        filenameSuffix: "-scsc",
+      };
+    case "vantage":
+    default:
+      return {
+        variant: "basic",
+        family: null,
+        label: "Vantage",
+        titleTag: " · Vantage",
+        filenameSuffix: "-vantage",
+      };
+  }
+}
 
 type ColDef = { key: string; title: string; width: number };
 
@@ -22,7 +83,7 @@ const COLS_BASIC: readonly ColDef[] = [
 ];
 
 /**
- * Hiện Trường: Short Code khách + Kiện/Kg.
+ * Tecs / kho: Short Code khách + Kiện/Kg.
  * Booking (AWB) đủ rộng cho `160-1234 5675`; Cutoff hẹp; Customer/Flight phóng to để đọc rõ.
  */
 const COLS_WITH_CUSTOMER: readonly ColDef[] = [
@@ -38,9 +99,9 @@ const COLS_WITH_CUSTOMER: readonly ColDef[] = [
 /** Scale cố định cao — ảnh chat bị nén vẫn còn nét. */
 const RENDER_SCALE = 3;
 
-/** Cỡ chữ cell Hiện Trường — Customer / Flight nổi bật hơn các cột phụ. */
-const HIEN_TRUONG_CUSTOMER_PX = 20;
-const HIEN_TRUONG_FLIGHT_PX = 20;
+/** Cỡ chữ cell Tecs/kho — Customer / Flight nổi bật hơn các cột phụ. */
+const TECS_CUSTOMER_PX = 20;
+const TECS_FLIGHT_PX = 20;
 const BASIC_FLIGHT_PX = 16;
 
 const FONT_STACK = "Segoe UI, ui-sans-serif, system-ui, Arial, sans-serif";
@@ -53,7 +114,7 @@ function colsForVariant(variant: CargoDayReportImageVariant): readonly ColDef[] 
   return variant === "withCustomer" ? COLS_WITH_CUSTOMER : COLS_BASIC;
 }
 
-/** Layout cột (test / debug) — Hiện Trường ưu tiên rộng Customer + Flight. */
+/** Layout cột (test / debug) — Tecs ưu tiên rộng Customer + Flight. */
 export function cargoDayReportImageColWidths(
   variant: CargoDayReportImageVariant,
 ): Readonly<Record<string, number>> {
@@ -202,9 +263,10 @@ function drawFlightDateCell(
 export function renderCargoDayReportCanvas(
   model: CargoDayReportModel,
   variant: CargoDayReportImageVariant = "basic",
+  titleTag = "",
 ): HTMLCanvasElement {
   const cols = colsForVariant(variant);
-  const isHienTruong = variant === "withCustomer";
+  const isTecsLayout = variant === "withCustomer";
   const scale = RENDER_SCALE;
   const padX = 36;
   const padY = 32;
@@ -213,11 +275,11 @@ export function renderCargoDayReportCanvas(
   const legendH = model.hasUrgentFlightDate ? 26 : 0;
   const sectionGap = 28;
   const sectionHeadH = 44;
-  /** Hiện Trường: hàng cao hơn để chữ Customer / Flight 20px không bị chật. */
-  const rowH = isHienTruong ? 52 : 44;
-  const headH = isHienTruong ? 46 : 42;
-  const cellPadX = isHienTruong ? 16 : 14;
-  const flightFontPx = isHienTruong ? HIEN_TRUONG_FLIGHT_PX : BASIC_FLIGHT_PX;
+  /** Tecs/kho: hàng cao hơn để chữ Customer / Flight 20px không bị chật. */
+  const rowH = isTecsLayout ? 52 : 44;
+  const headH = isTecsLayout ? 46 : 42;
+  const cellPadX = isTecsLayout ? 16 : 14;
+  const flightFontPx = isTecsLayout ? TECS_FLIGHT_PX : BASIC_FLIGHT_PX;
   const tableW = cols.reduce((s, c) => s + c.width, 0);
 
   let contentH = padY + titleH + subH + (legendH ? legendH + 4 : 0) + 16;
@@ -247,8 +309,7 @@ export function renderCargoDayReportCanvas(
   ctx.fillStyle = "#0f172a";
   ctx.font = `700 28px ${FONT_STACK}`;
   ctx.textBaseline = "top";
-  const variantTag = isHienTruong ? " · Hiện Trường" : "";
-  ctx.fillText(`Báo cáo hàng hóa · ${model.titleDate}${variantTag}`, padX, y);
+  ctx.fillText(`Báo cáo hàng hóa · ${model.titleDate}${titleTag}`, padX, y);
   y += titleH;
 
   ctx.fillStyle = "#334155";
@@ -297,7 +358,7 @@ export function renderCargoDayReportCanvas(
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, col.width - 1, headH - 1);
       const headerPx =
-        isHienTruong && (col.key === "customer" || col.key === "flightDate")
+        isTecsLayout && (col.key === "customer" || col.key === "flightDate")
           ? 16
           : 15;
       ctx.font = `700 ${headerPx}px ${FONT_STACK}`;
@@ -348,7 +409,7 @@ export function renderCargoDayReportCanvas(
           fillTextVCenter(ctx, text, x + cellPadX, y, rowH);
         } else if (col.key === "customer") {
           ctx.fillStyle = "#0f172a";
-          ctx.font = `800 ${HIEN_TRUONG_CUSTOMER_PX}px ${FONT_STACK}`;
+          ctx.font = `800 ${TECS_CUSTOMER_PX}px ${FONT_STACK}`;
           const text = measureText(ctx, cellValue(row, col.key), maxW);
           fillTextVCenter(ctx, text, x + cellPadX, y, rowH);
         } else if (col.key === "pcsKg") {
@@ -388,28 +449,62 @@ export function renderCargoDayReportCanvas(
 
 /**
  * Copy ảnh PNG vào clipboard; nếu trình duyệt chặn thì tải file.
- * `basic` = Coppy Ảnh; `withCustomer` = Hiện Trường (+ Short Code + Kiện/Kg).
+ * `vantage` = layout cơ bản; `tecs` = Short Code + Kiện/Kg;
+ * `tcs` / `scsc` = cùng layout Tecs, chỉ một family kho.
  */
 export async function copyCargoDayReportImage(
   model: CargoDayReportModel,
-  options?: { variant?: CargoDayReportImageVariant },
+  options?: {
+    kind?: CargoDayReportCopyKind;
+    /** @deprecated dùng `kind` */
+    variant?: CargoDayReportImageVariant;
+  },
 ): Promise<CopyCargoDayReportImageResult> {
-  if (model.totalLots <= 0 || model.sections.length === 0) {
-    return { ok: false, reason: "Không có lô nào trong ngày phiên này." };
+  const resolved = options?.kind
+    ? resolveCargoDayReportCopyKind(options.kind)
+    : resolveCargoDayReportCopyKind(
+        options?.variant === "withCustomer" ? "tecs" : "vantage",
+      );
+
+  const scoped = resolved.family
+    ? filterCargoDayReportByWarehouseFamily(model, resolved.family)
+    : model;
+
+  if (scoped.totalLots <= 0 || scoped.sections.length === 0) {
+    return {
+      ok: false,
+      reason: resolved.family
+        ? `Không có lô ${resolved.label} trong ngày phiên này.`
+        : "Không có lô nào trong ngày phiên này.",
+    };
   }
 
-  const variant = options?.variant ?? "basic";
-  const suffix = variant === "withCustomer" ? "-hien-truong" : "";
-  const filename = `bao-cao-hang-hoa${suffix}-${model.sessionYmd || "ngay"}.png`;
+  const filename = `bao-cao-hang-hoa${resolved.filenameSuffix}-${scoped.sessionYmd || "ngay"}.png`;
   try {
-    const canvas = renderCargoDayReportCanvas(model, variant);
+    const canvas = renderCargoDayReportCanvas(
+      scoped,
+      resolved.variant,
+      resolved.titleTag,
+    );
     const blob = await canvasToPngBlob(canvas);
     const clipped = await tryWriteImageClipboard(blob);
     if (clipped) {
-      return { ok: true, mode: "clipboard", filename };
+      return {
+        ok: true,
+        mode: "clipboard",
+        filename,
+        label: resolved.label,
+        totalLots: scoped.totalLots,
+      };
     }
     downloadPngBlob(blob, filename);
-    return { ok: true, mode: "download", filename };
+    return {
+      ok: true,
+      mode: "download",
+      filename,
+      label: resolved.label,
+      totalLots: scoped.totalLots,
+    };
   } catch (e) {
     return {
       ok: false,

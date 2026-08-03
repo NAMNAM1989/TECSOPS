@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { CargoDayReportImageVariant } from "../utils/cargoDayReportImage";
+import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
 
 type Props = {
@@ -17,7 +17,7 @@ type Props = {
   onPrefetchSheetImport?: () => void;
   onDownloadDayExcel: () => void;
   onDownloadScscDim?: () => void;
-  onCopyCargoDayReport?: (variant?: CargoDayReportImageVariant) => void;
+  onCopyCargoDayReport?: (kind?: CargoDayReportCopyKind) => void;
 };
 
 // onPrefetchSheetImport giữ optional (không prefetch khi bắt buộc URL)
@@ -45,17 +45,31 @@ export function OpsToolsMenu({
     if (onCopyCargoDayReport) {
       list.push(
         {
-          id: "cargo-report",
-          label: cargoReportCopying ? "Đang copy ảnh…" : "Coppy Ảnh",
+          id: "cargo-report-vantage",
+          label: cargoReportCopying ? "Đang copy ảnh…" : "Vantage",
           description: "AWB · Flight · Cutoff · Dest",
-          onSelect: () => onCopyCargoDayReport("basic"),
+          onSelect: () => onCopyCargoDayReport("vantage"),
           disabled: cargoReportCopying,
         },
         {
-          id: "cargo-report-kh",
-          label: cargoReportCopying ? "Đang copy ảnh…" : "Hiện Trường",
-          description: "Short Code + Kiện/Kg · dán group chat",
-          onSelect: () => onCopyCargoDayReport("withCustomer"),
+          id: "cargo-report-tecs",
+          label: cargoReportCopying ? "Đang copy ảnh…" : "Tecs",
+          description: "Short Code + Kiện/Kg · cả TCS & SCSC",
+          onSelect: () => onCopyCargoDayReport("tecs"),
+          disabled: cargoReportCopying,
+        },
+        {
+          id: "cargo-report-tcs",
+          label: cargoReportCopying ? "Đang copy ảnh…" : "TCS",
+          description: "Ảnh kho TCS · Short Code + Kiện/Kg",
+          onSelect: () => onCopyCargoDayReport("tcs"),
+          disabled: cargoReportCopying,
+        },
+        {
+          id: "cargo-report-scsc",
+          label: cargoReportCopying ? "Đang copy ảnh…" : "SCSC",
+          description: "Ảnh kho SCSC · Short Code + Kiện/Kg",
+          onSelect: () => onCopyCargoDayReport("scsc"),
           disabled: cargoReportCopying,
         },
       );

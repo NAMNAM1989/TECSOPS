@@ -12,7 +12,7 @@ import { DesktopShipmentTable } from "./DesktopShipmentTable";
 import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
 import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentEditSheet";
 import { buildCargoDayReport } from "../utils/cargoDayReport";
-import type { CargoDayReportImageVariant } from "../utils/cargoDayReportImage";
+import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import {
   filterShipmentsBySessionYmd,
@@ -451,7 +451,7 @@ export function AirCargoTracking({
   );
 
   const onCopyCargoDayReport = useCallback(
-    async (variant: CargoDayReportImageVariant = "basic") => {
+    async (kind: CargoDayReportCopyKind = "vantage") => {
       setCargoReportCopying(true);
       try {
         const model = buildCargoDayReport(
@@ -460,16 +460,14 @@ export function AirCargoTracking({
           state?.customers ?? EMPTY_CUSTOMERS_DIR,
         );
         const { copyCargoDayReportImage } = await import("../utils/cargoDayReportImage");
-        const result = await copyCargoDayReportImage(model, { variant });
+        const result = await copyCargoDayReportImage(model, { kind });
         if (!result.ok) {
           toast.error(result.reason, "Báo cáo hàng hóa");
           return;
         }
-        const groupLabel =
-          variant === "withCustomer" ? "Hiện Trường" : "Coppy Ảnh";
         if (result.mode === "clipboard") {
           toast.success(
-            `Đã copy ảnh ${groupLabel} · ${model.totalLots} lô — dán vào group chat.`,
+            `Đã copy ảnh ${result.label} · ${result.totalLots} lô — dán vào group chat.`,
             "Báo cáo hàng hóa",
           );
         } else {
@@ -510,8 +508,8 @@ export function AirCargoTracking({
     onOpenSheetImport: () => setSheetImportOpen(true),
     onDownloadDayExcel: () => setExcelRangeOpen(true),
     onDownloadScscDim: () => void onDownloadScscDimDay(),
-    onCopyCargoDayReport: (variant?: CargoDayReportImageVariant) =>
-      void onCopyCargoDayReport(variant ?? "basic"),
+    onCopyCargoDayReport: (kind?: CargoDayReportCopyKind) =>
+      void onCopyCargoDayReport(kind ?? "vantage"),
   };
 
   const chrome = isMobile ? (
@@ -598,20 +596,46 @@ export function AirCargoTracking({
           size="sm"
           className="border-transparent bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-400"
           disabled={cargoReportCopying || viewRows.length === 0}
-          title="Coppy Ảnh — AWB · Flight · Cutoff · Dest · ngày đỏ = bay cùng phiên"
-          onClick={() => void onCopyCargoDayReport("basic")}
+          title="Vantage — AWB · Flight · Cutoff · Dest · ngày đỏ = bay cùng phiên"
+          onClick={() => void onCopyCargoDayReport("vantage")}
         >
-          {cargoReportCopying ? "…" : "Coppy Ảnh"}
+          {cargoReportCopying ? "…" : "Vantage"}
         </Button>
         <Button
           variant="primary"
           size="sm"
           className="border-transparent bg-teal-700 text-white hover:bg-teal-800 focus-visible:ring-teal-400"
           disabled={cargoReportCopying || viewRows.length === 0}
-          title="Hiện Trường — Short Code + Kiện/Kg · ngày đỏ = bay cùng phiên"
-          onClick={() => void onCopyCargoDayReport("withCustomer")}
+          title="Tecs — Short Code + Kiện/Kg · cả TCS & SCSC · ngày đỏ = bay cùng phiên"
+          onClick={() => void onCopyCargoDayReport("tecs")}
         >
-          {cargoReportCopying ? "…" : "Hiện Trường"}
+          {cargoReportCopying ? "…" : "Tecs"}
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          className="border-transparent bg-sky-600 text-white hover:bg-sky-700 focus-visible:ring-sky-400"
+          disabled={
+            cargoReportCopying ||
+            !viewRows.some((r) => isTcsWarehouse(r.warehouse))
+          }
+          title="Ảnh kho TCS — Short Code + Kiện/Kg · chỉ family TCS"
+          onClick={() => void onCopyCargoDayReport("tcs")}
+        >
+          {cargoReportCopying ? "…" : "TCS"}
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          className="border-transparent bg-violet-600 text-white hover:bg-violet-700 focus-visible:ring-violet-400"
+          disabled={
+            cargoReportCopying ||
+            !viewRows.some((r) => isScscWarehouse(r.warehouse))
+          }
+          title="Ảnh kho SCSC — Short Code + Kiện/Kg · chỉ family SCSC"
+          onClick={() => void onCopyCargoDayReport("scsc")}
+        >
+          {cargoReportCopying ? "…" : "SCSC"}
         </Button>
         <OpsToolsMenu {...toolsProps} />
         <div className="min-w-0 flex-1 md:max-w-sm md:flex-none">

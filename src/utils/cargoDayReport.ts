@@ -1,4 +1,9 @@
-import { WAREHOUSE_ORDER, warehouseLabel } from "../constants/warehouses";
+import {
+  isScscFamily,
+  isTcsFamily,
+  WAREHOUSE_ORDER,
+  warehouseLabel,
+} from "../constants/warehouses";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment, Warehouse } from "../types/shipment";
 import { findCustomerEntry } from "./customerBookingResolve";
@@ -24,7 +29,7 @@ export type CargoDayReportRow = {
   stt: number;
   /** AWB — cột Booking */
   booking: string;
-  /** Short Code khách (mẫu Hiện Trường) */
+  /** Short Code khách (mẫu Tecs / kho) */
   customerShortCode: string;
   /** `kiện/kg` — VD: `12/250.5` */
   pcsKg: string;
@@ -228,6 +233,24 @@ export function buildCargoDayReport(
     titleDate: formatCargoReportTitleDate(sessionYmd),
     totalLots: dayRows.length,
     hasUrgentFlightDate,
+    sections,
+  };
+}
+
+/** Lọc báo cáo theo family kho (TCS hoặc SCSC) — dùng khi copy ảnh riêng từng kho. */
+export function filterCargoDayReportByWarehouseFamily(
+  model: CargoDayReportModel,
+  family: "TCS" | "SCSC",
+): CargoDayReportModel {
+  const match = family === "TCS" ? isTcsFamily : isScscFamily;
+  const sections = model.sections.filter((s) => match(s.warehouse));
+  const totalLots = sections.reduce((n, s) => n + s.rows.length, 0);
+  return {
+    ...model,
+    totalLots,
+    hasUrgentFlightDate: sections.some((sec) =>
+      sec.rows.some((r) => r.flightDateUrgent),
+    ),
     sections,
   };
 }

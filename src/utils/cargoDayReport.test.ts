@@ -4,6 +4,7 @@ import type { Shipment } from "../types/shipment";
 import { blankShipmentDraft } from "./blankShipment";
 import {
   buildCargoDayReport,
+  filterCargoDayReportByWarehouseFamily,
   formatCargoReportBooking,
   formatCargoReportCutoff,
   formatCargoReportFlightDate,
@@ -115,6 +116,20 @@ describe("cargoDayReport", () => {
       "TECS-TCS",
       "TECS-SCSC",
     ]);
+  });
+
+  it("lọc ảnh theo family kho TCS / SCSC", () => {
+    const rows = [
+      lot({ id: "t", warehouse: "TECS-TCS", awb: "17611111111", dest: "SGN" }),
+      lot({ id: "s", warehouse: "TECS-SCSC", awb: "16099999999", dest: "ICN" }),
+    ];
+    const model = buildCargoDayReport(rows, "2026-07-27");
+    const tcs = filterCargoDayReportByWarehouseFamily(model, "TCS");
+    expect(tcs.totalLots).toBe(1);
+    expect(tcs.sections.map((s) => s.warehouse)).toEqual(["TECS-TCS"]);
+    const scsc = filterCargoDayReportByWarehouseFamily(model, "SCSC");
+    expect(scsc.totalLots).toBe(1);
+    expect(scsc.sections.map((s) => s.warehouse)).toEqual(["TECS-SCSC"]);
   });
 
   it("gắn Short Code khi có danh bạ", () => {

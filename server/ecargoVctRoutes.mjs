@@ -10,6 +10,8 @@ import {
 import {
   ecargoImapConfigured,
   findEcargoResultMail,
+  getEcargoImapStatus,
+  testEcargoImapConnection,
   waitForEcargoOtp,
 } from "./ecargoImapOtp.mjs";
 
@@ -27,9 +29,41 @@ export function registerEcargoVctRoutes(app, { runMutation, loadState, io }) {
   app.get("/api/ecargo/otp/status", (_req, res) => {
     res.json({
       ok: true,
-      imapConfigured: ecargoImapConfigured(),
-      host: process.env.ECARGO_IMAP_HOST || "imap.gmail.com",
+      ...getEcargoImapStatus(),
     });
+  });
+
+  /** Connect IMAP + mở mailbox — không đọc/trả OTP hay body mail. */
+  app.post("/api/ecargo/otp/test", async (_req, res) => {
+    try {
+      if (!ecargoImapConfigured()) {
+        res.status(503).json({
+          ok: false,
+          error: "IMAP_NOT_CONFIGURED",
+          message:
+            "Chưa cấu hình ECARGO_IMAP_USER / ECARGO_IMAP_PASS trên server (Railway Variables hoặc .env)",
+        });
+        return;
+      }
+      const hit = await testEcargoImapConnection();
+      res.json({
+        ok: true,
+        message: `IMAP OK — ${hit.userHint} @ ${hit.host} / ${hit.mailbox}`,
+        host: hit.host,
+        mailbox: hit.mailbox,
+        userHint: hit.userHint,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e || "IMAP test failed");
+      const code =
+        e && typeof e === "object" && "code" in e ? String(e.code || "") : "";
+      console.error("[ecargo/otp/test]", message);
+      res.status(code === "IMAP_NOT_CONFIGURED" ? 503 : 502).json({
+        ok: false,
+        error: code || "IMAP_TEST_FAILED",
+        message,
+      });
+    }
   });
 
   app.post("/api/ecargo/otp/wait", async (req, res) => {

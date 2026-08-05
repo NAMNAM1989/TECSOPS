@@ -67,6 +67,31 @@ const INPUT =
   "mt-0.5 w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-[12px] text-slate-900";
 const LABEL = "text-[10px] font-semibold uppercase tracking-wide text-slate-500";
 
+type EcargoImapStatus = {
+  imapConfigured: boolean;
+  host: string;
+  mailbox?: string;
+  userHint: string;
+};
+
+/** So khớp mềm email hồ sơ với userHint mask (ops***@gmail.com). */
+function profileEmailMatchesImapHint(email: string, userHint: string): boolean | null {
+  const e = String(email || "")
+    .trim()
+    .toLowerCase();
+  const hint = String(userHint || "")
+    .trim()
+    .toLowerCase();
+  if (!e || !hint) return null;
+  const at = e.indexOf("@");
+  if (at <= 0) return false;
+  const m = hint.match(/^([^*]+)\*\*\*@(.+)$/);
+  if (!m) return null;
+  const local = e.slice(0, at);
+  const domain = e.slice(at + 1);
+  return local.startsWith(m[1]!) && domain === m[2];
+}
+
 export function EcargoVctRegisterModal({
   open,
   onClose,
@@ -100,6 +125,10 @@ export function EcargoVctRegisterModal({
     null
   );
   const [phaseLabel, setPhaseLabel] = useState("");
+  const [imapStatus, setImapStatus] = useState<EcargoImapStatus | null>(null);
+  const [imapStatusLoading, setImapStatusLoading] = useState(false);
+  const [imapTestBusy, setImapTestBusy] = useState(false);
+  const [imapTestMsg, setImapTestMsg] = useState("");
 
   const shipmentIdsKey = useMemo(
     () => shipments.map((s) => s.id).join("|"),
@@ -114,6 +143,7 @@ export function EcargoVctRegisterModal({
     setArrivalTime(active.defaultArrivalSlot || "8");
     setStatus("");
     setArrivalHint("");
+    setImapTestMsg("");
     const preferred = preferredShipmentId
       ? shipments.filter((s) => s.id === preferredShipmentId)
       : [];
@@ -129,6 +159,51 @@ export function EcargoVctRegisterModal({
     window.addEventListener(ECARGO_SCSC_CHANGED_EVENT, onChange);
     return () => window.removeEventListener(ECARGO_SCSC_CHANGED_EVENT, onChange);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setImapStatusLoading(true);
+    void fetch("/api/ecargo/otp/status")
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as Partial<EcargoImapStatus> & {
+          ok?: boolean;
+        };
+        if (cancelled) return;
+        setImapStatus({
+          imapConfigured: Boolean(data.imapConfigured),
+          host: String(data.host || "imap.gmail.com"),
+          mailbox: data.mailbox ? String(data.mailbox) : "INBOX",
+          userHint: String(data.userHint || ""),
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setImapStatus({
+            imapConfigured: false,
+            host: "imap.gmail.com",
+            mailbox: "INBOX",
+            userHint: "",
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setImapStatusLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const emailMatchesImap = useMemo(
+    () =>
+      imapStatus?.imapConfigured
+        ? profileEmailMatchesImapHint(profile.email, imapStatus.userHint)
+        : null,
+    [imapStatus, profile.email],
+  );
+
+  const canRegisterWithOtp = Boolean(imapStatus?.imapConfigured);
 
   const selectedIdsKey = selectedIds.join("|");
 
@@ -335,12 +410,63 @@ export function EcargoVctRegisterModal({
     }
   };
 
+  const onTestImap = async () => {
+    setImapTestBusy(true);
+    setImapTestMsg("");
+    try {
+      const res = await fetch("/api/ecargo/otp/test", { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        imapConfigured?: boolean;
+        userHint?: string;
+        host?: string;
+        mailbox?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setImapTestMsg(data.message || "Kiểm tra IMAP thất bại");
+        // Làm mới badge từ /status (biến env có thể đã set nhưng auth fail)
+        try {
+          const st = await fetch("/api/ecargo/otp/status");
+          const stData = (await st.json().catch(() => ({}))) as Partial<EcargoImapStatus>;
+          setImapStatus({
+            imapConfigured: Boolean(stData.imapConfigured),
+            host: String(stData.host || "imap.gmail.com"),
+            mailbox: stData.mailbox ? String(stData.mailbox) : "INBOX",
+            userHint: String(stData.userHint || ""),
+          });
+        } catch {
+          /* giữ status cũ */
+        }
+        return;
+      }
+      setImapTestMsg(data.message || "IMAP OK");
+      setImapStatus({
+        imapConfigured: true,
+        host: String(data.host || imapStatus?.host || "imap.gmail.com"),
+        mailbox: String(data.mailbox || imapStatus?.mailbox || "INBOX"),
+        userHint: String(data.userHint || imapStatus?.userHint || ""),
+      });
+    } catch (e) {
+      setImapTestMsg(e instanceof Error ? e.message : "Không gọi được /api/ecargo/otp/test");
+    } finally {
+      setImapTestBusy(false);
+    }
+  };
+
   const onRegister = async () => {
     if (selectedIds.length === 0) {
       setStatus(
         shipments.length === 0
           ? "Không có lô kho SCSC trong ngày để đăng ký. Chọn kho SCSC và kiểm tra bộ lọc."
           : "Chọn ít nhất 1 lô AWB trước khi đăng ký.",
+      );
+      return;
+    }
+    if (!canRegisterWithOtp) {
+      setStatus(
+        "Chưa cấu hình OTP mail trên server (ECARGO_IMAP_USER / ECARGO_IMAP_PASS). " +
+          "Thêm biến trên Railway hoặc .env rồi restart — vẫn dùng được «Chỉ điền form».",
       );
       return;
     }
@@ -423,6 +549,73 @@ export function EcargoVctRegisterModal({
             Đóng
           </button>
         </div>
+
+        <section className="mb-3 rounded-xl border border-slate-200 p-3">
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-[12px] font-bold text-slate-800">OTP mail (IMAP)</h3>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                imapStatusLoading
+                  ? "bg-slate-100 text-slate-500"
+                  : canRegisterWithOtp
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-amber-100 text-amber-900"
+              }`}
+            >
+              {imapStatusLoading
+                ? "Đang kiểm tra…"
+                : canRegisterWithOtp
+                  ? "IMAP sẵn sàng"
+                  : "Chưa cấu hình OTP mail"}
+            </span>
+          </div>
+          {canRegisterWithOtp ? (
+            <p className="text-[11px] text-slate-600">
+              Server đọc OTP từ{" "}
+              <span className="font-mono font-semibold text-slate-800">
+                {imapStatus?.userHint || "***"}
+              </span>{" "}
+              ({imapStatus?.host}
+              {imapStatus?.mailbox ? ` / ${imapStatus.mailbox}` : ""}). Email hồ sơ phải trùng hộp
+              thư này.
+            </p>
+          ) : (
+            <p className="text-[11px] text-amber-900">
+              Thêm <span className="font-mono">ECARGO_IMAP_USER</span> +{" "}
+              <span className="font-mono">ECARGO_IMAP_PASS</span> (Gmail App Password) vào Railway
+              Variables hoặc <span className="font-mono">.env</span>, rồi restart server. Xem{" "}
+              <span className="font-mono">.env.example</span> /{" "}
+              <span className="font-mono">docs/ecargo-vct-otp-flow.md</span>.
+            </p>
+          )}
+          {emailMatchesImap === false ? (
+            <p className="mt-1 text-[11px] font-semibold text-rose-700">
+              Email hồ sơ («{profile.email || "trống"}») có vẻ không khớp mailbox IMAP (
+              {imapStatus?.userHint}). Sửa Email OTP trong hồ sơ đại lý cho trùng.
+            </p>
+          ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="rounded-full border border-slate-300 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              onClick={() => void onTestImap()}
+              disabled={busy || imapTestBusy || imapStatusLoading}
+            >
+              {imapTestBusy ? "Đang thử…" : "Kiểm tra mail OTP"}
+            </button>
+            {imapTestMsg ? (
+              <span
+                className={`text-[11px] ${
+                  /OK|sẵn sàng|thành công/i.test(imapTestMsg)
+                    ? "text-emerald-700"
+                    : "text-rose-700"
+                }`}
+              >
+                {imapTestMsg}
+              </span>
+            ) : null}
+          </div>
+        </section>
 
         <section className="mb-3 rounded-xl border border-slate-200 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -795,7 +988,12 @@ export function EcargoVctRegisterModal({
             type="button"
             className="rounded-full bg-emerald-600 px-4 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
             onClick={() => void onRegister()}
-            disabled={busy}
+            disabled={busy || !canRegisterWithOtp}
+            title={
+              canRegisterWithOtp
+                ? "Điền + Tạo phiếu + OTP mail + QR"
+                : "Cần cấu hình ECARGO_IMAP_* trên server trước"
+            }
           >
             {busy ? "Đang đăng ký…" : "Đăng ký eCargo"}
           </button>

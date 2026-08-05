@@ -23,6 +23,90 @@ export function ecargoImapConfigured() {
   return Boolean(env("ECARGO_IMAP_USER") && env("ECARGO_IMAP_PASS"));
 }
 
+/** Che email: ops***@gmail.com — không lộ full mailbox ra UI. */
+export function maskEcargoImapUser(raw) {
+  const email = String(raw || "").trim().toLowerCase();
+  const at = email.indexOf("@");
+  if (at <= 0) return email ? "***" : "";
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  const keep = Math.min(3, local.length);
+  return `${local.slice(0, keep)}***@${domain}`;
+}
+
+export function getEcargoImapStatus() {
+  const user = env("ECARGO_IMAP_USER");
+  return {
+    imapConfigured: Boolean(user && env("ECARGO_IMAP_PASS")),
+    host: env("ECARGO_IMAP_HOST", DEFAULT_HOST) || DEFAULT_HOST,
+    mailbox: env("ECARGO_IMAP_MAILBOX", DEFAULT_MAILBOX) || DEFAULT_MAILBOX,
+    userHint: user ? maskEcargoImapUser(user) : "",
+  };
+}
+
+/**
+ * Chỉ kiểm tra đăng nhập IMAP + mở mailbox — không đọc body mail.
+ * @returns {Promise<{ ok: true, host: string, mailbox: string, userHint: string }>}
+ */
+export async function testEcargoImapConnection() {
+  const host = env("ECARGO_IMAP_HOST", DEFAULT_HOST) || DEFAULT_HOST;
+  const port = Number(env("ECARGO_IMAP_PORT", String(DEFAULT_PORT))) || DEFAULT_PORT;
+  const user = env("ECARGO_IMAP_USER");
+  const pass = env("ECARGO_IMAP_PASS");
+  const mailbox = env("ECARGO_IMAP_MAILBOX", DEFAULT_MAILBOX) || DEFAULT_MAILBOX;
+  if (!user || !pass) {
+    const err = new Error(
+      "Chưa cấu hình ECARGO_IMAP_USER / ECARGO_IMAP_PASS (Gmail App Password)"
+    );
+    err.code = "IMAP_NOT_CONFIGURED";
+    throw err;
+  }
+
+  const client = new ImapFlow({
+    host,
+    port,
+    secure: true,
+    auth: { user, pass },
+    logger: false,
+  });
+
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock(mailbox);
+    try {
+      // list / status nhẹ — xác nhận quyền đọc hộp thư
+      await client.status(mailbox, { messages: true });
+    } finally {
+      lock.release();
+    }
+    return {
+      ok: true,
+      host,
+      mailbox,
+      userHint: maskEcargoImapUser(user),
+    };
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : String(e || "IMAP failed");
+    const err = new Error(
+      /auth|invalid credentials|login/i.test(raw)
+        ? "IMAP đăng nhập thất bại — kiểm tra ECARGO_IMAP_USER / App Password"
+        : /mailbox|not found|nonexistent/i.test(raw)
+          ? `Không mở được mailbox «${mailbox}» — kiểm tra ECARGO_IMAP_MAILBOX`
+          : `Không kết nối IMAP (${host}:${port}): ${raw.slice(0, 160)}`
+    );
+    err.code = /auth|invalid credentials|login/i.test(raw)
+      ? "IMAP_AUTH"
+      : "IMAP_CONNECT";
+    throw err;
+  } finally {
+    try {
+      await client.logout();
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export function extractOtpFromText(text) {
   const s = String(text || "");
   const labeled = s.match(/OTP[:\s#_-]*([0-9]{4,8})/i);

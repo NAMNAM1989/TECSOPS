@@ -58,10 +58,12 @@
   color: #000;
   border-bottom: 0.6mm solid #000;
   text-align: center;
-  font-weight: 800;
+  /* 700 + tracking rộng: ExtraBold 800 của Jakarta dễ dính chữ khi in nhiệt */
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  line-height: 1.1;
+  letter-spacing: 0.16em;
+  word-spacing: 0.28em;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -236,8 +238,10 @@
 }
 
 .lbl-sheet--compact .lbl-airline {
-  letter-spacing: 0.04em;
-  padding: 0.3mm 1mm;
+  letter-spacing: 0.14em;
+  word-spacing: 0.24em;
+  font-weight: 700;
+  padding: 0.3mm 1.2mm;
 }
 
 .lbl-sheet--compact .lbl-mawb {

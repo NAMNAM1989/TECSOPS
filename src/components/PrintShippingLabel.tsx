@@ -38,7 +38,8 @@ export function LabelContent({
   const compact = sheetVariant === "compact";
   const hasAirline = Boolean(d.airline);
 
-  const airlineMm = compact ? 3.6 : 4.6;
+  /* Nhỏ hơn một chút để letter-spacing rộng vẫn không tràn tên dài */
+  const airlineMm = compact ? 3.3 : 4.2;
   const mawbMm = fitAwbFontMm(d.mawb, { compact });
   const routeLabMm = compact ? 1.9 : 2.3;
   /* DEST ưu tiên to hơn ORIGIN một chút; cả hai vẫn fit nửa ô */

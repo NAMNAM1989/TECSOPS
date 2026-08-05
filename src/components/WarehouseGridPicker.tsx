@@ -15,7 +15,6 @@ const CARD_RING: Record<Warehouse, string> = {
   SCSC: "ring-fuchsia-500/55",
 };
 
-/** Chip đội OPS trên thẻ — ngắn, không chiếm hàng riêng. */
 const TEAM_CHIP: Record<OpsTeam, { label: string; className: string }> = {
   TECS: {
     label: "TECS",
@@ -35,20 +34,16 @@ interface Props {
   rows: readonly Shipment[];
   active: Warehouse;
   onSelect: (wh: Warehouse) => void;
-  /** Thêm dòng trống vào kho — nút + trên thẻ (1 click tại chỗ). */
   onAddRow?: (wh: Warehouse) => void;
-  /** Kho có kết quả tìm kiếm — viền phụ. */
   highlightWarehouses?: readonly Warehouse[];
-  /** Dải gọn — dùng trên mobile. */
+  /** Mobile 2×2 — desktop mặc định 1 hàng 4 thẻ siêu gọn. */
   compact?: boolean;
-  /** Ẩn nút + trên thẻ — mobile dùng FAB. */
   hideAddButton?: boolean;
   className?: string;
 }
 
 /**
- * Chọn kho: 4 thẻ một hàng (desktop) / 2×2 (mobile).
- * Đội OPS hiện bằng chip nhỏ trên thẻ — không xếp 3 khối dọc gây khoảng trống.
+ * Chọn kho — desktop: 1 hàng metric ngang (thấp); mobile: lưới 2×2.
  */
 export function WarehouseGridPicker({
   rows,
@@ -66,8 +61,8 @@ export function WarehouseGridPicker({
     <div
       className={
         compact
-          ? `grid grid-cols-2 gap-1.5 ${className}`
-          : `grid grid-cols-2 gap-2 lg:grid-cols-4 ${className}`
+          ? `grid grid-cols-2 gap-1 ${className}`
+          : `grid grid-cols-2 gap-1 sm:grid-cols-4 ${className}`
       }
       role="tablist"
       aria-label="Chọn kho"
@@ -78,18 +73,19 @@ export function WarehouseGridPicker({
         const hasSearchHit = highlightWarehouses.includes(wh);
         const team = opsTeamOf(wh);
         const chip = TEAM_CHIP[team];
+        const kg = formatKgTotal(m.kg);
 
         return (
           <div
             key={wh}
             role="tab"
             aria-selected={isActive}
-            className={`group relative min-w-0 rounded-xl text-left transition-all duration-150 ${
-              compact ? "px-2 py-1.5" : "px-2.5 py-2"
+            className={`group relative min-w-0 rounded-lg text-left transition-all duration-150 ${
+              compact ? "px-1.5 py-1" : "px-2 py-1"
             } ${
               isActive
                 ? `bg-ui-surface shadow-ui-sm ring-2 ${CARD_RING[wh]}`
-                : "border border-ui-border/90 bg-ui-surface shadow-ui-sm hover:border-ui-border hover:bg-ui-surface-muted"
+                : "border border-ui-border/80 bg-ui-surface hover:bg-ui-surface-muted"
             } ${hasSearchHit && !isActive ? "ring-1 ring-ui-primary/35" : ""}`}
           >
             {onAddRow && !hideAddButton ? (
@@ -98,7 +94,7 @@ export function WarehouseGridPicker({
                 title={`Thêm lô ${warehouseLabel[wh]}`}
                 aria-label={`Thêm lô ${warehouseLabel[wh]}`}
                 onClick={() => onAddRow(wh)}
-                className="absolute right-1.5 top-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border border-ui-primary/35 bg-ui-primary text-[13px] font-bold leading-none text-white shadow-sm transition hover:bg-ui-primary-hover active:scale-95"
+                className="absolute right-1 top-1 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full bg-ui-primary text-[11px] font-bold leading-none text-white shadow-sm transition hover:bg-ui-primary-hover active:scale-95"
               >
                 +
               </button>
@@ -106,79 +102,34 @@ export function WarehouseGridPicker({
             <button
               type="button"
               onClick={() => onSelect(wh)}
-              className="block w-full rounded-lg text-left active:scale-[0.99]"
+              className="block w-full rounded-md text-left active:scale-[0.99]"
             >
-              <div
-                className={`flex min-w-0 items-center gap-1.5 ${
-                  compact ? "pr-6" : "pr-7"
-                }`}
-              >
+              <div className={`flex min-w-0 items-center gap-1 ${compact ? "pr-5" : "pr-5"}`}>
                 <span
-                  className={`inline-flex shrink-0 items-center rounded px-1 py-px text-[8px] font-bold uppercase tracking-wide ring-1 ring-inset ${chip.className}`}
+                  className={`inline-flex shrink-0 items-center rounded px-1 py-px text-[7px] font-bold uppercase tracking-wide ring-1 ring-inset ${chip.className}`}
                 >
                   {chip.label}
                 </span>
-                <p
-                  className={`min-w-0 truncate font-bold tracking-wide text-dashboard-ink ${
-                    compact ? "text-[10px]" : "text-[11px]"
-                  }`}
-                >
+                <p className="min-w-0 truncate text-[10px] font-bold tracking-wide text-dashboard-ink">
                   {warehouseLabel[wh]}
                 </p>
               </div>
-              <div
-                className={`grid grid-cols-3 ${compact ? "mt-1 gap-0.5" : "mt-1.5 gap-1"}`}
+              <p
+                className={`mt-0.5 truncate font-mono tabular-nums text-dashboard-ink ${
+                  isActive ? "text-[11px] font-extrabold" : "text-[10px] font-semibold"
+                } ${compact || !hideAddButton ? "pr-5" : ""}`}
+                title={`Lô ${m.lots} · Kiện ${m.pcs} · Kg ${kg}`}
               >
-                <Metric label="Lô" value={m.lots} large={isActive} compact={compact} />
-                <Metric label="Kiện" value={m.pcs} large={isActive} compact={compact} />
-                <Metric
-                  label="Kg"
-                  value={formatKgTotal(m.kg)}
-                  large={isActive}
-                  compact={compact}
-                />
-              </div>
+                <span className="text-dashboard-muted">Lô</span> {m.lots}
+                <span className="mx-0.5 text-ui-border">·</span>
+                <span className="text-dashboard-muted">Kiện</span> {m.pcs}
+                <span className="mx-0.5 text-ui-border">·</span>
+                <span className="text-dashboard-muted">Kg</span> {kg}
+              </p>
             </button>
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  large,
-  compact,
-}: {
-  label: string;
-  value: string | number;
-  large?: boolean;
-  compact?: boolean;
-}) {
-  return (
-    <div className="min-w-0">
-      <p
-        className={`truncate font-medium uppercase tracking-wide text-dashboard-muted ${
-          compact ? "text-[8px]" : "text-[9px]"
-        }`}
-      >
-        {label}
-      </p>
-      <p
-        className={`truncate font-bold tabular-nums text-dashboard-ink ${
-          large
-            ? compact
-              ? "text-sm"
-              : "text-[15px] leading-tight"
-            : compact
-              ? "text-xs"
-              : "text-sm leading-tight"
-        }`}
-      >
-        {value}
-      </p>
     </div>
   );
 }

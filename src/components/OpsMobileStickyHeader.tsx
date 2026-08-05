@@ -50,6 +50,8 @@ interface Props {
   searchHighlightWarehouses: readonly Warehouse[];
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  flightDateFilter?: string;
+  onFlightDateChange?: (date: string) => void;
   statusFilteredRows: readonly Shipment[];
   searchContext: ShipmentSearchContext;
   searchInputRef?: RefObject<HTMLInputElement>;
@@ -102,6 +104,8 @@ export function OpsMobileStickyHeader({
   searchHighlightWarehouses,
   searchQuery,
   onSearchChange,
+  flightDateFilter = "",
+  onFlightDateChange,
   statusFilteredRows,
   searchContext,
   searchInputRef,
@@ -110,7 +114,8 @@ export function OpsMobileStickyHeader({
   onStatusFilterChange,
   onClearFilters,
 }: Props) {
-  const filtersActive = statusFilter !== "ALL" || searchQuery.trim().length > 0;
+  const filtersActive =
+    statusFilter !== "ALL" || searchQuery.trim().length > 0 || Boolean(flightDateFilter);
   const [statusExpanded, setStatusExpanded] = useState(false);
 
   useEffect(() => {
@@ -163,17 +168,13 @@ export function OpsMobileStickyHeader({
           showDimScsc={showDimScsc}
           excelExporting={excelExporting}
           scscDimExporting={scscDimExporting}
-          cargoReportCopying={cargoReportCopying}
           onNavigateCustomers={onNavigateCustomers}
           onPrefetchCustomers={onPrefetchCustomers}
           onNavigateStats={onNavigateStats}
           onPrefetchStats={onPrefetchStats}
           onOpenAirlineLabels={onOpenAirlineLabels}
-          onOpenSheetImport={onOpenSheetImport}
-          onPrefetchSheetImport={onPrefetchSheetImport}
           onDownloadDayExcel={onDownloadDayExcel}
           onDownloadScscDim={onDownloadScscDim}
-          onCopyCargoDayReport={onCopyCargoDayReport}
         />
       </div>
 
@@ -255,6 +256,8 @@ export function OpsMobileStickyHeader({
                 compact
                 value={searchQuery}
                 onChange={onSearchChange}
+                flightDateFilter={flightDateFilter}
+                onFlightDateChange={onFlightDateChange}
                 searchableRows={statusFilteredRows}
                 matchedRows={filteredViewRows}
                 searchContext={searchContext}

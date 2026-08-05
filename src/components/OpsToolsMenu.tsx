@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
 
 type Props = {
@@ -7,74 +6,37 @@ type Props = {
   showDimScsc?: boolean;
   excelExporting?: boolean;
   scscDimExporting?: boolean;
-  cargoReportCopying?: boolean;
   onNavigateCustomers: () => void;
   onPrefetchCustomers?: () => void;
+  /** Desktop đã có nút Thống kê — chỉ hiện trong menu khi compact (mobile). */
   onNavigateStats?: () => void;
   onPrefetchStats?: () => void;
   onOpenAirlineLabels: () => void;
-  onOpenSheetImport: () => void;
-  onPrefetchSheetImport?: () => void;
   onDownloadDayExcel: () => void;
   onDownloadScscDim?: () => void;
-  onCopyCargoDayReport?: (kind?: CargoDayReportCopyKind) => void;
 };
 
-// onPrefetchSheetImport giữ optional (không prefetch khi bắt buộc URL)
-
-/** Gom action thứ cấp Ops — không gồm CTA + Booking. */
+/**
+ * Menu Công cụ — chỉ action thứ cấp chưa có nút riêng ngoài toolbar.
+ * (Vantage/Tecs/TCS/SCSC, Nhập Sheet, Thống kê desktop → nút riêng.)
+ */
 export function OpsToolsMenu({
   compact = false,
   showDimScsc = false,
   excelExporting = false,
   scscDimExporting = false,
-  cargoReportCopying = false,
   onNavigateCustomers,
   onPrefetchCustomers,
   onNavigateStats,
   onPrefetchStats,
   onOpenAirlineLabels,
-  onOpenSheetImport,
-  onPrefetchSheetImport,
   onDownloadDayExcel,
   onDownloadScscDim,
-  onCopyCargoDayReport,
 }: Props) {
   const items = useMemo(() => {
     const list: OverflowMenuItem[] = [];
-    if (onCopyCargoDayReport) {
-      list.push(
-        {
-          id: "cargo-report-vantage",
-          label: cargoReportCopying ? "Đang copy ảnh…" : "Vantage",
-          description: "Kho TECS (TECS-TCS+TECS-SCSC), không gồm kho TCS/SCSC · ẩn khách",
-          onSelect: () => onCopyCargoDayReport("vantage"),
-          disabled: cargoReportCopying,
-        },
-        {
-          id: "cargo-report-tecs",
-          label: cargoReportCopying ? "Đang copy ảnh…" : "Tecs",
-          description: "Kho TECS (TECS-TCS+TECS-SCSC), không gồm kho TCS/SCSC",
-          onSelect: () => onCopyCargoDayReport("tecs"),
-          disabled: cargoReportCopying,
-        },
-        {
-          id: "cargo-report-tcs",
-          label: cargoReportCopying ? "Đang copy ảnh…" : "TCS",
-          description: "Chỉ kho TCS — không gồm mã TECS-TCS",
-          onSelect: () => onCopyCargoDayReport("tcs"),
-          disabled: cargoReportCopying,
-        },
-        {
-          id: "cargo-report-scsc",
-          label: cargoReportCopying ? "Đang copy ảnh…" : "SCSC",
-          description: "Chỉ kho SCSC — không gồm mã TECS-SCSC",
-          onSelect: () => onCopyCargoDayReport("scsc"),
-          disabled: cargoReportCopying,
-        },
-      );
-    }
-    if (onNavigateStats) {
+    // Mobile không có nút Thống kê ngoài toolbar.
+    if (compact && onNavigateStats) {
       list.push({
         id: "stats",
         label: "Thống kê",
@@ -98,19 +60,12 @@ export function OpsToolsMenu({
         onSelect: onOpenAirlineLabels,
       },
       {
-        id: "sheet",
-        label: "Nhập Sheet",
-        description: "Dán URL Google Sheet mỗi lần",
-        onSelect: onOpenSheetImport,
-        onPrefetch: onPrefetchSheetImport,
-      },
-      {
         id: "excel",
         label: excelExporting ? "Đang xuất Excel…" : "Xuất Excel…",
         description: "Ngày hoặc khoảng ngày · Import Shipments",
         onSelect: onDownloadDayExcel,
         disabled: excelExporting,
-      }
+      },
     );
     if (showDimScsc && onDownloadScscDim) {
       list.push({
@@ -123,17 +78,14 @@ export function OpsToolsMenu({
     }
     return list;
   }, [
-    cargoReportCopying,
+    compact,
     excelExporting,
-    onCopyCargoDayReport,
     onDownloadDayExcel,
     onDownloadScscDim,
     onNavigateCustomers,
     onNavigateStats,
     onOpenAirlineLabels,
-    onOpenSheetImport,
     onPrefetchCustomers,
-    onPrefetchSheetImport,
     onPrefetchStats,
     scscDimExporting,
     showDimScsc,

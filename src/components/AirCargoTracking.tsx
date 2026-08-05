@@ -23,7 +23,13 @@ import { SmartSearchBar } from "./SmartSearchBar";
 import { TcsPortalInlineBar } from "./TcsPortalInlineBar";
 import { TcsPortalActionsProvider } from "./TcsPortalActionsContext";
 import { useTcsPortalActions } from "../hooks/useTcsPortalActions";
-import { WAREHOUSE_ORDER, isScscWarehouse, isTcsWarehouse, warehouseLabel } from "../constants/warehouses";
+import {
+  WAREHOUSE_ORDER,
+  isScscWarehouse,
+  isTcsWarehouse,
+  isTecsHub,
+  warehouseLabel,
+} from "../constants/warehouses";
 import { NewBookingButton } from "./NewBookingButton";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { OpsMobileStickyHeader } from "./OpsMobileStickyHeader";
@@ -42,7 +48,6 @@ import {
   Banner,
   Button,
   EmptyState,
-  KpiStat,
   PageSkeleton,
   SyncStatusPill,
   useToast,
@@ -50,6 +55,7 @@ import {
 } from "../ui";
 import {
   countShipmentsByWarehouse,
+  normalizeFlightDateToken,
   shipmentMatchesSearchQuery,
   type ShipmentSearchContext,
   type ShipmentSearchMatch,
@@ -106,6 +112,8 @@ export function AirCargoTracking({
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
   const [activeWarehouse, setActiveWarehouse] = useState<Warehouse>("TECS-TCS");
   const [searchQuery, setSearchQuery] = useState("");
+  /** Ngày bay (DDMMM) — tách khỏi ô gõ, kết hợp AND với searchQuery. */
+  const [flightDateFilter, setFlightDateFilter] = useState("");
   const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
   const [excelExporting, setExcelExporting] = useState(false);
   const [scscDimExporting, setScscDimExporting] = useState(false);
@@ -141,13 +149,18 @@ export function AirCargoTracking({
     });
   }, [viewRows, statusFilter]);
 
-  const searchActive = searchQuery.trim().length > 0;
+  const searchActive =
+    searchQuery.trim().length > 0 || Boolean(flightDateFilter);
 
   const filteredViewRows = useMemo(() => {
-    return statusFilteredRows.filter((r) =>
-      shipmentMatchesSearchQuery(r, searchQuery, searchContext)
-    );
-  }, [statusFilteredRows, searchQuery, searchContext]);
+    return statusFilteredRows.filter((r) => {
+      if (flightDateFilter) {
+        const fd = normalizeFlightDateToken(r.flightDate || "");
+        if (fd !== flightDateFilter) return false;
+      }
+      return shipmentMatchesSearchQuery(r, searchQuery, searchContext);
+    });
+  }, [statusFilteredRows, searchQuery, flightDateFilter, searchContext]);
 
   const searchHighlightWarehouses = useMemo((): Warehouse[] => {
     if (!searchActive) return [];
@@ -158,6 +171,7 @@ export function AirCargoTracking({
   useEffect(() => {
     setStatusFilter("ALL");
     setSearchQuery("");
+    setFlightDateFilter("");
     setHighlightedShipmentId(null);
     setActiveWarehouse("TECS-TCS");
   }, [selectedYmd]);
@@ -190,6 +204,7 @@ export function AirCargoTracking({
   const clearViewFilters = useCallback(() => {
     setStatusFilter("ALL");
     setSearchQuery("");
+    setFlightDateFilter("");
     setHighlightedShipmentId(null);
   }, []);
 
@@ -269,6 +284,7 @@ export function AirCargoTracking({
       if (info.readyCount <= 0 && info.updatedCount <= 0) return;
       setStatusFilter("RECEPTION_COMPLETED");
       setSearchQuery("");
+      setFlightDateFilter("");
       setActiveWarehouse("TECS-TCS");
     },
     []
@@ -460,7 +476,10 @@ export function AirCargoTracking({
           state?.customers ?? EMPTY_CUSTOMERS_DIR,
         );
         const { copyCargoDayReportImage } = await import("../utils/cargoDayReportImage");
-        const result = await copyCargoDayReportImage(model, { kind });
+        const result = await copyCargoDayReportImage(model, {
+          kind,
+          activeWarehouse,
+        });
         if (!result.ok) {
           toast.error(result.reason, "Báo cáo hàng hóa");
           return;
@@ -486,7 +505,7 @@ export function AirCargoTracking({
         setCargoReportCopying(false);
       }
     },
-    [selectedYmd, state?.customers, toast, viewRows],
+    [activeWarehouse, selectedYmd, state?.customers, toast, viewRows],
   );
 
   const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
@@ -499,17 +518,13 @@ export function AirCargoTracking({
     showDimScsc: isScscWarehouse(activeWarehouse),
     excelExporting,
     scscDimExporting,
-    cargoReportCopying,
     onNavigateCustomers,
     onPrefetchCustomers,
     onNavigateStats,
     onPrefetchStats,
     onOpenAirlineLabels: () => setAirlineLabelSettingsOpen(true),
-    onOpenSheetImport: () => setSheetImportOpen(true),
     onDownloadDayExcel: () => setExcelRangeOpen(true),
     onDownloadScscDim: () => void onDownloadScscDimDay(),
-    onCopyCargoDayReport: (kind?: CargoDayReportCopyKind) =>
-      void onCopyCargoDayReport(kind ?? "vantage"),
   };
 
   const chrome = isMobile ? (
@@ -524,6 +539,9 @@ export function AirCargoTracking({
       socketConnected={socketConnected}
       activeWarehouse={activeWarehouse}
       onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
+      onOpenSheetImport={() => setSheetImportOpen(true)}
+      onCopyCargoDayReport={(kind) => void onCopyCargoDayReport(kind ?? "vantage")}
+      cargoReportCopying={cargoReportCopying}
       {...toolsProps}
       tcsPortalBar={
         isTcsWarehouse(activeWarehouse) ? <TcsPortalInlineBar compact tcs={tcsPortal} /> : null
@@ -534,6 +552,8 @@ export function AirCargoTracking({
       searchHighlightWarehouses={searchHighlightWarehouses}
       searchQuery={searchQuery}
       onSearchChange={setSearchQuery}
+      flightDateFilter={flightDateFilter}
+      onFlightDateChange={setFlightDateFilter}
       statusFilteredRows={statusFilteredRows}
       searchContext={searchContext}
       searchInputRef={searchInputRef}
@@ -543,37 +563,34 @@ export function AirCargoTracking({
       onClearFilters={clearViewFilters}
     />
   ) : (
-    <header className="space-y-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-          <h1 className="m-0 leading-none">
-            <Wordmark size="md" />
-          </h1>
-          <span className="rounded-md bg-ui-surface px-2 py-0.5 text-[11px] font-semibold text-ui-text-muted ring-1 ring-ui-border">
-            OPS
-          </span>
-          <span className="text-[11px] text-ui-text-muted">
-            <span className="font-bold text-ui-text">{workDateLabel}</span>
-            {daysWithData > 0 ? (
-              <span>
-                {" "}
-                · {allRows.length} lô / {daysWithData} ngày
-              </span>
-            ) : null}
-          </span>
-          {!isViewingToday ? (
-            <span
-              className="rounded-md bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-950"
-              title="Vẫn sửa / thêm lô được"
-            >
-              Ngày khác
+    <header className="space-y-1">
+      {/* Hàng 1: brand + CTA + báo cáo ảnh + ngày — gộp để giảm chiều cao */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <h1 className="m-0 leading-none">
+          <Wordmark size="sm" />
+        </h1>
+        <span className="rounded bg-ui-surface px-1.5 py-px text-[10px] font-semibold text-ui-text-muted ring-1 ring-ui-border">
+          OPS
+        </span>
+        <span className="text-[10px] text-ui-text-muted">
+          <span className="font-bold text-ui-text">{workDateLabel}</span>
+          {daysWithData > 0 ? (
+            <span>
+              {" "}
+              · {allRows.length}/{daysWithData}d
             </span>
           ) : null}
-        </div>
-        <SyncStatusPill status={status} socketConnected={socketConnected} />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
+        </span>
+        {!isViewingToday ? (
+          <span
+            className="rounded bg-amber-100 px-1.5 py-px text-[8px] font-bold uppercase text-amber-950"
+            title="Vẫn sửa / thêm lô được"
+          >
+            Ngày khác
+          </span>
+        ) : null}
+        <SyncStatusPill status={status} socketConnected={socketConnected} compact />
+        <span className="mx-0.5 hidden h-4 w-px bg-ui-border sm:inline-block" aria-hidden />
         <NewBookingButton
           activeWarehouse={activeWarehouse}
           onAdd={(wh) => void addBlankRowForWarehouse(wh)}
@@ -594,9 +611,12 @@ export function AirCargoTracking({
         <Button
           variant="primary"
           size="sm"
-          className="border-transparent bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-400"
-          disabled={cargoReportCopying || viewRows.length === 0}
-          title="Vantage — AWB · Flight · Cutoff · Dest · ngày đỏ = bay cùng phiên"
+          className="border-transparent bg-emerald-600 px-2 text-white hover:bg-emerald-700 focus-visible:ring-emerald-400"
+          disabled={
+            cargoReportCopying ||
+            !viewRows.some((r) => isTecsHub(r.warehouse))
+          }
+          title="Vantage — kho TECS, ẩn cột khách hàng"
           onClick={() => void onCopyCargoDayReport("vantage")}
         >
           {cargoReportCopying ? "…" : "Vantage"}
@@ -604,9 +624,12 @@ export function AirCargoTracking({
         <Button
           variant="primary"
           size="sm"
-          className="border-transparent bg-teal-700 text-white hover:bg-teal-800 focus-visible:ring-teal-400"
-          disabled={cargoReportCopying || viewRows.length === 0}
-          title="Tecs — Short Code + Kiện/Kg · cả TCS & SCSC · ngày đỏ = bay cùng phiên"
+          className="border-transparent bg-teal-700 px-2 text-white hover:bg-teal-800 focus-visible:ring-teal-400"
+          disabled={
+            cargoReportCopying ||
+            !viewRows.some((r) => isTecsHub(r.warehouse))
+          }
+          title="Tecs — kho TECS · Short Code + Kiện/Kg"
           onClick={() => void onCopyCargoDayReport("tecs")}
         >
           {cargoReportCopying ? "…" : "Tecs"}
@@ -614,12 +637,12 @@ export function AirCargoTracking({
         <Button
           variant="primary"
           size="sm"
-          className="border-transparent bg-sky-600 text-white hover:bg-sky-700 focus-visible:ring-sky-400"
+          className="border-transparent bg-sky-600 px-2 text-white hover:bg-sky-700 focus-visible:ring-sky-400"
           disabled={
             cargoReportCopying ||
-            !viewRows.some((r) => isTcsWarehouse(r.warehouse))
+            !viewRows.some((r) => r.warehouse === "TCS")
           }
-          title="Ảnh kho TCS — Short Code + Kiện/Kg · chỉ family TCS"
+          title="TCS — chỉ kho TCS"
           onClick={() => void onCopyCargoDayReport("tcs")}
         >
           {cargoReportCopying ? "…" : "TCS"}
@@ -627,19 +650,20 @@ export function AirCargoTracking({
         <Button
           variant="primary"
           size="sm"
-          className="border-transparent bg-violet-600 text-white hover:bg-violet-700 focus-visible:ring-violet-400"
+          className="border-transparent bg-violet-600 px-2 text-white hover:bg-violet-700 focus-visible:ring-violet-400"
           disabled={
             cargoReportCopying ||
-            !viewRows.some((r) => isScscWarehouse(r.warehouse))
+            !viewRows.some((r) => r.warehouse === "SCSC")
           }
-          title="Ảnh kho SCSC — Short Code + Kiện/Kg · chỉ family SCSC"
+          title="SCSC — chỉ kho SCSC"
           onClick={() => void onCopyCargoDayReport("scsc")}
         >
           {cargoReportCopying ? "…" : "SCSC"}
         </Button>
         <OpsToolsMenu {...toolsProps} />
-        <div className="min-w-0 flex-1 md:max-w-sm md:flex-none">
+        <div className="ml-auto min-w-0 shrink-0">
           <OpsDatePicker
+            compact
             value={selectedYmd}
             onChange={(v) => setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(v)))}
             onPrev={goPrevDay}
@@ -651,44 +675,61 @@ export function AirCargoTracking({
       </div>
 
       {viewRows.length > 0 ? (
-        <div className="space-y-2">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
-            <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:pt-0.5">
-              <KpiStat label="Lô" value={filteredViewRows.length} />
-              <KpiStat label="Kiện" value={totalPcs} />
-              <KpiStat label="Kg" value={formatKgTotal(totalKg)} />
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+          <span
+            className="inline-flex shrink-0 items-baseline gap-x-1.5 font-mono text-[11px] tabular-nums text-ui-text"
+            title="Lô · Kiện · Kg (sau lọc)"
+          >
+            <span>
+              <span className="text-[9px] font-semibold text-ui-text-muted">Lô</span>{" "}
+              <span className="font-bold">{filteredViewRows.length}</span>
+            </span>
+            <span className="text-ui-border">·</span>
+            <span>
+              <span className="text-[9px] font-semibold text-ui-text-muted">Kiện</span>{" "}
+              <span className="font-bold">{totalPcs}</span>
+            </span>
+            <span className="text-ui-border">·</span>
+            <span>
+              <span className="text-[9px] font-semibold text-ui-text-muted">Kg</span>{" "}
+              <span className="font-bold">{formatKgTotal(totalKg)}</span>
+            </span>
+          </span>
+          <SmartSearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            flightDateFilter={flightDateFilter}
+            onFlightDateChange={setFlightDateFilter}
+            searchableRows={statusFilteredRows}
+            matchedRows={filteredViewRows}
+            searchContext={searchContext}
+            inputRef={searchInputRef}
+            onSelectMatch={scrollToShipmentMatch}
+            inlineFacets
+          />
+          <StatusFilterBar
+            compact
+            dense
+            hideEmpty
+            warehouse={activeWarehouse}
+            dayRows={viewRows}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
+          {statusFilter !== "ALL" || searchQuery.trim() || flightDateFilter ? (
+            <button
+              type="button"
+              onClick={clearViewFilters}
+              className="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-ui-primary hover:bg-ui-primary/10"
+            >
+              Xóa
+            </button>
+          ) : null}
+          {isTcsWarehouse(activeWarehouse) ? (
+            <div className="min-w-0 shrink-0">
+              <TcsPortalInlineBar compact tcs={tcsPortal} />
             </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <SmartSearchBar
-                value={searchQuery}
-                onChange={setSearchQuery}
-                searchableRows={statusFilteredRows}
-                matchedRows={filteredViewRows}
-                searchContext={searchContext}
-                inputRef={searchInputRef}
-                onSelectMatch={scrollToShipmentMatch}
-              />
-              {isTcsWarehouse(activeWarehouse) ? <TcsPortalInlineBar tcs={tcsPortal} /> : null}
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-            <StatusFilterBar
-              compact
-              warehouse={activeWarehouse}
-              dayRows={viewRows}
-              value={statusFilter}
-              onChange={setStatusFilter}
-            />
-            {statusFilter !== "ALL" || searchQuery.trim() ? (
-              <button
-                type="button"
-                onClick={clearViewFilters}
-                className="shrink-0 self-start rounded-full px-3 py-1 text-[10px] font-semibold text-ui-primary hover:bg-ui-primary/10 lg:ml-auto lg:self-center"
-              >
-                Xóa lọc
-              </button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       ) : null}
     </header>

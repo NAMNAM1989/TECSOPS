@@ -81,8 +81,14 @@ export function StatusFilterBar({
 
   if (compact) {
     return (
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain pb-0.5 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]">
+      <div
+        className={`flex min-w-0 items-center gap-1 ${dense ? "shrink-0" : "flex-1"}`}
+      >
+        <div
+          className={`min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] ${
+            dense ? "" : "flex-1 pb-0.5 [scrollbar-width:thin]"
+          }`}
+        >
           {segments}
         </div>
         {value !== "ALL" ? (

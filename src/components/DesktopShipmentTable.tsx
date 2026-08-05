@@ -85,7 +85,7 @@ export function DesktopShipmentTable({
 
   return (
     <>
-      <div className={isMobile ? "hidden" : "hidden md:block space-y-4"}>
+      <div className={isMobile ? "hidden" : "hidden md:block space-y-1.5"}>
         <WarehouseGridPicker
           rows={metricRows}
           active={activeWarehouse}
@@ -96,31 +96,21 @@ export function DesktopShipmentTable({
 
         <section
           id={`warehouse-section-${activeWarehouse}`}
-          className="overflow-hidden rounded-2xl border border-ui-border bg-ui-surface shadow-ui-sm"
+          className="overflow-hidden rounded-xl border border-ui-border bg-ui-surface shadow-ui-sm"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-ui-border px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2 border-b border-ui-border px-2.5 py-1.5">
             <div className="min-w-0">
-              <h2 className="text-sm font-bold text-ui-text">
+              <h2 className="text-[13px] font-bold leading-tight text-ui-text">
                 {warehouseLabel[activeWarehouse]}
+                <span className="ml-1.5 text-[11px] font-semibold text-ui-text-muted">
+                  · {group.length} lô
+                </span>
               </h2>
-              <p className="text-[11px] text-ui-text-muted">
-                {group.length} lô · cuộn ngang/dọc để xem thêm
-              </p>
             </div>
-            {onAddBlankRow ? (
-              <button
-                type="button"
-                onClick={() => onAddBlankRow(activeWarehouse)}
-                className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-xl bg-ui-primary px-3 py-1.5 text-[12px] font-bold text-white shadow-ui-sm hover:bg-ui-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
-                title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (N)`}
-              >
-                + Booking
-              </button>
-            ) : null}
           </div>
           <div
-            className={`overflow-auto px-2 py-2 ${
-              group.length > 6 ? "max-h-[min(78vh,720px)]" : ""
+            className={`overflow-auto px-1.5 py-1.5 ${
+              group.length > 4 ? "max-h-[min(82vh,820px)]" : ""
             }`}
           >
             <table className="w-full border-separate border-spacing-x-0 border-spacing-y-1 text-left text-[13px] leading-snug">

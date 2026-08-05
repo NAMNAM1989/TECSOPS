@@ -121,17 +121,25 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
     },
   ];
 
+  const shortStatus = tcs.session?.logged_in
+    ? "Sẵn sàng"
+    : tcs.health?.ok
+      ? "Chờ ĐN"
+      : "Offline";
+
   return (
     <div className={`flex min-w-0 flex-col ${compact ? "gap-0.5" : "gap-1"}`}>
       <div
-        className={`flex min-w-0 flex-wrap items-center gap-1 rounded-lg border border-ui-border bg-ui-surface px-1.5 py-1 shadow-sm ${
-          compact ? "" : "sm:flex-nowrap"
+        className={`flex min-w-0 flex-wrap items-center gap-1 ${
+          compact
+            ? ""
+            : "rounded-lg border border-ui-border bg-ui-surface px-1.5 py-1 shadow-sm sm:flex-nowrap"
         }`}
         role="toolbar"
         aria-label="Cổng TCS"
       >
         <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
             tcs.session?.logged_in
               ? "bg-emerald-500/15 text-emerald-800"
               : tcs.health?.ok
@@ -140,11 +148,11 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
           }`}
           title={statusLabel}
         >
-          {statusLabel}
+          {compact ? shortStatus : statusLabel}
         </span>
 
         {workspace?.phase ? (
-          <span className="shrink-0 rounded-full bg-sky-500/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-800">
+          <span className="shrink-0 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-800">
             {workspace.phase}
           </span>
         ) : null}
@@ -162,7 +170,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
               : "Đồng bộ phiên TCS (1 lần: login + quét đúng ngày Ops)"
           }
         >
-          Đồng bộ
+          {compact ? "Sync" : "Đồng bộ"}
         </button>
 
         <EsidSettingsMenu disabled={tcs.busy} compact={compact} />
@@ -175,7 +183,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
         ) : null}
       </div>
 
-      {!tcs.health?.ok && !tcs.extension?.ok && !tcs.busy ? (
+      {!compact && !tcs.health?.ok && !tcs.extension?.ok && !tcs.busy ? (
         <p className="px-1 text-[9px] leading-snug text-ui-text-muted">
           Offline: Ops vẫn dùng được. Muốn Đồng bộ — mở agent máy kho hoặc cài Ext (menu Nâng cao).
         </p>

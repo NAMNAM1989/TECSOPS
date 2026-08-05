@@ -10,7 +10,7 @@ const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const ECARGO_CREATE_URL = "https://ecargo.scsc.vn/Export/VCTOrder/Create";
 const EXT_VERSION = chrome.runtime.getManifest().version;
 const EXPECTED_SCRIPT_VERSION = "2.0.20";
-const EXPECTED_ECARGO_SCRIPT_VERSION = "2.2.0";
+const EXPECTED_ECARGO_SCRIPT_VERSION = "2.2.1";
 const SESSION_KEY = "tecsopsTcsSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
 const WORKSPACE_KEY = "tecsopsTcsWorkspace";
@@ -749,6 +749,39 @@ async function sendToEcargoContent(tabId, message, attempts = 8) {
   throw lastErr || new Error("Không gửi được lệnh tới tab eCargo");
 }
 
+async function ensureEcargoContentReady(tabId) {
+  // findOrOpenEcargoTab đã đưa tới trang Create — không navigate lại (tránh reload dư).
+  let ping = await sendToEcargoContent(tabId, { type: "ECARGO_PING" });
+  if (ping?.ok && ping?.scriptVersion === EXPECTED_ECARGO_SCRIPT_VERSION) {
+    return ping;
+  }
+  // Inject bản mới (handler gắn globalThis → cập nhật ngay cả khi listener cũ còn).
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["content-ecargo.js"],
+  });
+  await new Promise((r) => setTimeout(r, 120));
+  ping = await sendToEcargoContent(tabId, { type: "ECARGO_PING" });
+  if (ping?.ok && ping?.scriptVersion === EXPECTED_ECARGO_SCRIPT_VERSION) {
+    return ping;
+  }
+  // Fallback: reload tab để manifest inject sạch.
+  await chrome.tabs.reload(tabId);
+  await waitTabComplete(tabId);
+  ping = await sendToEcargoContent(tabId, { type: "ECARGO_PING" });
+  if (!ping?.ok) {
+    throw new Error(
+      "Không kết nối được content eCargo. F5 tab ecargo.scsc.vn rồi thử lại."
+    );
+  }
+  if (ping.scriptVersion !== EXPECTED_ECARGO_SCRIPT_VERSION) {
+    throw new Error(
+      `Extension eCargo lệch phiên bản (${ping.scriptVersion || "?"} ≠ ${EXPECTED_ECARGO_SCRIPT_VERSION}). Reload extension tại chrome://extensions.`
+    );
+  }
+  return ping;
+}
+
 async function fillEcargoOnTab(payload) {
   await workspaceReady;
   if (!payload || typeof payload !== "object") {
@@ -760,17 +793,22 @@ async function fillEcargoOnTab(payload) {
     };
   }
   const tabId = await findOrOpenEcargoTab({ active: true, pinned: true });
-  await navigate(tabId, ECARGO_CREATE_URL);
-  const ping = await sendToEcargoContent(tabId, { type: "ECARGO_PING" });
-  if (ping?.scriptVersion !== EXPECTED_ECARGO_SCRIPT_VERSION) {
-    await chrome.tabs.reload(tabId);
-    await waitTabComplete(tabId);
-  }
+  await ensureEcargoContentReady(tabId);
   setWorkspace({ phase: "FILLING", message: "Đang điền eCargo VCT…", error: "" });
   const result = await sendToEcargoContent(tabId, {
     type: "FILL_ECARGO_VCT",
     payload,
   });
+  if (!result || typeof result !== "object") {
+    return {
+      ok: false,
+      error: "NO_CONTENT_RESPONSE",
+      message: "Tab eCargo không trả lời lệnh điền. Reload Ext + F5 tab eCargo.",
+      warnings: [],
+      workspace,
+      version: EXT_VERSION,
+    };
+  }
   setWorkspace(
     result?.ok
       ? { phase: "READY", message: result.message || "Đã điền eCargo" }
@@ -790,12 +828,7 @@ async function registerEcargoOnTab(payload) {
     };
   }
   const tabId = await findOrOpenEcargoTab({ active: true, pinned: true });
-  await navigate(tabId, ECARGO_CREATE_URL);
-  const ping = await sendToEcargoContent(tabId, { type: "ECARGO_PING" });
-  if (ping?.scriptVersion !== EXPECTED_ECARGO_SCRIPT_VERSION) {
-    await chrome.tabs.reload(tabId);
-    await waitTabComplete(tabId);
-  }
+  await ensureEcargoContentReady(tabId);
   setWorkspace({
     phase: "FILLING",
     message: "Đang đăng ký eCargo (điền → OTP → QR)…",
@@ -805,6 +838,17 @@ async function registerEcargoOnTab(payload) {
     type: "REGISTER_ECARGO_VCT",
     payload,
   });
+  if (!result || typeof result !== "object") {
+    return {
+      ok: false,
+      error: "NO_CONTENT_RESPONSE",
+      message:
+        "Tab eCargo không trả lời lệnh đăng ký. Reload Ext v2.2.1 tại chrome://extensions, F5 Ops + tab eCargo.",
+      warnings: [],
+      workspace,
+      version: EXT_VERSION,
+    };
+  }
   setWorkspace(
     result?.ok
       ? { phase: "READY", message: result.message || "Đã đăng ký eCargo" }

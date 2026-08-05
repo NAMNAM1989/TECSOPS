@@ -282,6 +282,14 @@ export function EcargoVctRegisterModal({
   };
 
   const onFill = async () => {
+    if (selectedIds.length === 0) {
+      setStatus(
+        shipments.length === 0
+          ? "Không có lô kho SCSC trong ngày để điền. Chọn kho SCSC và kiểm tra bộ lọc."
+          : "Chọn ít nhất 1 lô AWB trước khi điền form.",
+      );
+      return;
+    }
     setBusy(true);
     setStatus("");
     setLastQr(null);
@@ -296,7 +304,7 @@ export function EcargoVctRegisterModal({
       if (!ping.ok) {
         setStatus(
           ping.message ||
-            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.0, rồi F5 Ops."
+            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.1 tại chrome://extensions, rồi F5 Ops.",
         );
         return;
       }
@@ -310,6 +318,8 @@ export function EcargoVctRegisterModal({
           ? `\n${prepared.warnings!.slice(0, 3).join("\n")}`
           : "";
       setStatus(`${res.message || "Đã điền eCargo."}${warn}`);
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Lỗi không xác định khi điền eCargo.");
     } finally {
       setBusy(false);
       setPhaseLabel("");
@@ -317,6 +327,14 @@ export function EcargoVctRegisterModal({
   };
 
   const onRegister = async () => {
+    if (selectedIds.length === 0) {
+      setStatus(
+        shipments.length === 0
+          ? "Không có lô kho SCSC trong ngày để đăng ký. Chọn kho SCSC và kiểm tra bộ lọc."
+          : "Chọn ít nhất 1 lô AWB trước khi đăng ký.",
+      );
+      return;
+    }
     setBusy(true);
     setStatus("");
     setLastQr(null);
@@ -331,10 +349,13 @@ export function EcargoVctRegisterModal({
       if (!ping.ok) {
         setStatus(
           ping.message ||
-            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.0, rồi F5 Ops."
+            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.1 tại chrome://extensions, rồi F5 Ops.",
         );
         return;
       }
+      setStatus(
+        `Đang gửi lệnh đăng ký qua Ext v${ping.version || "?"}… Tab eCargo sẽ mở/điền form.`,
+      );
       const res = await registerEcargoVctViaExtension({
         ...prepared.payload!,
         submit: true,
@@ -356,6 +377,10 @@ export function EcargoVctRegisterModal({
           ? `\n${prepared.warnings!.slice(0, 3).join("\n")}`
           : "";
       setStatus(`${res.message || "Đã đăng ký eCargo."}${warn}`);
+    } catch (e) {
+      setStatus(
+        e instanceof Error ? e.message : "Lỗi không xác định khi đăng ký eCargo.",
+      );
     } finally {
       setBusy(false);
       setPhaseLabel("");
@@ -688,14 +713,6 @@ export function EcargoVctRegisterModal({
           ) : null}
         </section>
 
-        {phaseLabel ? (
-          <p className="mb-2 text-[11px] font-semibold text-emerald-800">{phaseLabel}</p>
-        ) : null}
-        {status ? (
-          <p className="mb-3 whitespace-pre-wrap rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-700">
-            {status}
-          </p>
-        ) : null}
         {lastQr ? (
           <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
             <p className="text-[12px] font-bold text-emerald-900">
@@ -711,6 +728,22 @@ export function EcargoVctRegisterModal({
           </div>
         ) : null}
 
+        {phaseLabel ? (
+          <p className="mb-2 text-[11px] font-semibold text-emerald-800">{phaseLabel}</p>
+        ) : null}
+        {status ? (
+          <p
+            role="status"
+            className={`mb-3 whitespace-pre-wrap rounded-lg px-3 py-2 text-[11px] ${
+              /thất bại|lỗi|chưa|không|thiếu|failed|error/i.test(status)
+                ? "border border-rose-200 bg-rose-50 text-rose-900"
+                : "border border-emerald-200 bg-emerald-50 text-emerald-900"
+            }`}
+          >
+            {status}
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap justify-end gap-2">
           <button
             type="button"
@@ -724,7 +757,7 @@ export function EcargoVctRegisterModal({
             type="button"
             className="rounded-full border border-slate-300 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             onClick={() => void onFill()}
-            disabled={busy || selectedIds.length === 0}
+            disabled={busy}
             title="Chỉ điền form — bạn tự Tạo phiếu + OTP"
           >
             Chỉ điền form
@@ -733,7 +766,7 @@ export function EcargoVctRegisterModal({
             type="button"
             className="rounded-full bg-emerald-600 px-4 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
             onClick={() => void onRegister()}
-            disabled={busy || selectedIds.length === 0}
+            disabled={busy}
           >
             {busy ? "Đang đăng ký…" : "Đăng ký eCargo"}
           </button>

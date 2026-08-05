@@ -2,57 +2,65 @@
  * Điền / đăng ký eCargo VCT (Export) trên ecargo.scsc.vn.
  * FILL = chỉ điền; REGISTER = điền + Tạo phiếu + OTP + QR.
  *
- * Idempotent: tránh đăng ký listener 2 lần khi vừa manifest vừa executeScript.
+ * Listener đăng ký 1 lần; handler gắn globalThis để inject lại (executeScript)
+ * luôn cập nhật bản mới — tránh kẹt listener cũ khiến REGISTER bị bỏ qua.
  */
 
-const SCRIPT_VERSION = "2.2.0";
+const SCRIPT_VERSION = "2.2.1";
 const CREATE_PATH = "/Export/VCTOrder/Create";
 
-if (globalThis.__TECSOPS_ECARGO_BOUND__) {
-  // already installed
-} else {
-  globalThis.__TECSOPS_ECARGO_BOUND__ = true;
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (!msg || typeof msg !== "object") return false;
+globalThis.__TECSOPS_ECARGO_VERSION__ = SCRIPT_VERSION;
+globalThis.__TECSOPS_ECARGO_HANDLER__ = function tecsopsEcargoOnMessage(msg, _sender, sendResponse) {
+  if (!msg || typeof msg !== "object") return false;
 
-    if (msg.type === "ECARGO_PING") {
-      sendResponse({
-        ok: true,
-        scriptVersion: SCRIPT_VERSION,
-        url: location.href,
-        onCreate: location.pathname.includes(CREATE_PATH),
-      });
-      return true;
+  if (msg.type === "ECARGO_PING") {
+    sendResponse({
+      ok: true,
+      scriptVersion: SCRIPT_VERSION,
+      url: location.href,
+      onCreate: location.pathname.includes(CREATE_PATH),
+    });
+    return true;
+  }
+
+  if (msg.type === "FILL_ECARGO_VCT") {
+    void fillEcargoVct(msg.payload)
+      .then(sendResponse)
+      .catch((err) =>
+        sendResponse({
+          ok: false,
+          error: "FILL_FAILED",
+          message: err instanceof Error ? err.message : String(err || "Fill failed"),
+          scriptVersion: SCRIPT_VERSION,
+        })
+      );
+    return true;
+  }
+
+  if (msg.type === "REGISTER_ECARGO_VCT") {
+    void registerEcargoVct(msg.payload)
+      .then(sendResponse)
+      .catch((err) =>
+        sendResponse({
+          ok: false,
+          error: "REGISTER_FAILED",
+          message: err instanceof Error ? err.message : String(err || "Register failed"),
+          scriptVersion: SCRIPT_VERSION,
+        })
+      );
+    return true;
+  }
+
+  return false;
+};
+
+if (!globalThis.__TECSOPS_ECARGO_LISTENER__) {
+  globalThis.__TECSOPS_ECARGO_LISTENER__ = true;
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    const handler = globalThis.__TECSOPS_ECARGO_HANDLER__;
+    if (typeof handler === "function") {
+      return handler(msg, sender, sendResponse);
     }
-
-    if (msg.type === "FILL_ECARGO_VCT") {
-      void fillEcargoVct(msg.payload)
-        .then(sendResponse)
-        .catch((err) =>
-          sendResponse({
-            ok: false,
-            error: "FILL_FAILED",
-            message: err instanceof Error ? err.message : String(err || "Fill failed"),
-            scriptVersion: SCRIPT_VERSION,
-          })
-        );
-      return true;
-    }
-
-    if (msg.type === "REGISTER_ECARGO_VCT") {
-      void registerEcargoVct(msg.payload)
-        .then(sendResponse)
-        .catch((err) =>
-          sendResponse({
-            ok: false,
-            error: "REGISTER_FAILED",
-            message: err instanceof Error ? err.message : String(err || "Register failed"),
-            scriptVersion: SCRIPT_VERSION,
-          })
-        );
-      return true;
-    }
-
     return false;
   });
 }

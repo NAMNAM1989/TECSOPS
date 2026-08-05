@@ -24,7 +24,7 @@ const installText = `TECSOPS Chrome Extension v${manifest.version}
 
 Hỗ trợ:
 - Điền ESID TCS (tcs.com.vn)
-- Điền đăng ký eCargo SCSC VCT (ecargo.scsc.vn) — không auto «Tạo phiếu»
+- Đăng ký eCargo SCSC VCT 1-click (điền + Tạo phiếu + OTP + QR)
 
 CÀI TRÊN MÁY MỚI
 1. Giải nén toàn bộ file ZIP này vào một thư mục cố định.
@@ -35,7 +35,7 @@ CÀI TRÊN MÁY MỚI
 6. Mở popup extension và kiểm tra phiên bản v${manifest.version}.
 7. F5 trang Ops.
 8. Kho TCS: Đồng bộ TCS / Điền ESID.
-9. Kho SCSC: Đăng ký eCargo → Điền eCargo.
+9. Kho SCSC: nút eCargo → Đăng ký eCargo (bắt buộc Ext v${manifest.version}+).
 
 CẬP NHẬT
 Tải ZIP mới, giải nén đè vào thư mục cũ, sau đó bấm nút tải lại tại

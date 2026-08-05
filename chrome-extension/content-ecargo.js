@@ -6,7 +6,7 @@
  * luôn cập nhật bản mới — tránh kẹt listener cũ khiến REGISTER bị bỏ qua.
  */
 
-const SCRIPT_VERSION = "2.2.4";
+const SCRIPT_VERSION = "2.2.5";
 const CREATE_PATH = "/Export/VCTOrder/Create";
 
 globalThis.__TECSOPS_ECARGO_VERSION__ = SCRIPT_VERSION;
@@ -606,7 +606,7 @@ async function fillEcargoVct(payload) {
       error: "AGENT_MISMATCH",
       message:
         `Tên đại lý trên form («${headerFills.agentNameValue || ""}») không khớp hồ sơ («${wantAgent}»). ` +
-        "Ext không được nhảy theo gợi ý gần giống — Reload Ext v2.2.4 rồi thử lại.",
+        "Ext không được nhảy theo gợi ý gần giống — Reload Ext v2.2.5 rồi thử lại.",
       scriptVersion: SCRIPT_VERSION,
       fills: headerFills,
       warnings: [],
@@ -640,26 +640,169 @@ async function fillEcargoVct(payload) {
   };
 }
 
+function isDomVisible(el) {
+  if (!el || !(el instanceof Element)) return false;
+  const style = window.getComputedStyle(el);
+  if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+    return false;
+  }
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+/** Chỉ lỗi validation thật sự đang hiện — không quét mọi `.text-danger` (hay dính nhãn/help). */
 function visibleValidationErrors() {
   const nodes = [
     ...document.querySelectorAll(
-      ".field-validation-error, .validation-summary-errors li, .text-danger, .alert-danger"
+      ".field-validation-error, .validation-summary-errors li, .validation-summary-errors, .alert-danger, span[data-valmsg-for]"
     ),
   ];
-  return nodes
-    .map((n) => String(n.textContent || "").trim())
-    .filter((t) => t && t.length < 200 && !/^\*$/.test(t));
+  const out = [];
+  const seen = new Set();
+  for (const n of nodes) {
+    if (!isDomVisible(n)) continue;
+    // ASP.NET unobtrusive: field-validation-valid = OK
+    if (n.classList.contains("field-validation-valid")) continue;
+    const t = String(n.textContent || "").replace(/\s+/g, " ").trim();
+    if (!t || t.length > 220 || /^\*$/.test(t)) continue;
+    // Bỏ nhãn không phải lỗi
+    if (/^(otp|lưu ý|note|ghi chú)\b/i.test(t) && t.length < 12) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
 }
 
 function findCreateButton() {
-  return (
-    document.querySelector("#btnCreate") ||
-    document.querySelector("input[type='submit'][value*='Tạo phiếu']") ||
-    document.querySelector("input[type='button'][value*='Tạo phiếu']") ||
-    [...document.querySelectorAll("button, input[type='submit']")].find((el) =>
-      /tạo phiếu/i.test(el.value || el.textContent || "")
-    )
-  );
+  const candidates = [
+    document.querySelector("#btnCreate"),
+    document.querySelector("input#btnCreate"),
+    document.querySelector("input[type='submit'][value*='Tạo phiếu']"),
+    document.querySelector("input[type='button'][value*='Tạo phiếu']"),
+    document.querySelector("button#btnCreate"),
+    ...document.querySelectorAll(
+      "button, input[type='submit'], input[type='button'], a.btn, a.button"
+    ),
+  ].filter(Boolean);
+  for (const el of candidates) {
+    const label = String(el.value || el.textContent || el.getAttribute("title") || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (/tạo\s*phiếu|tao\s*phieu|create/i.test(label) || el.id === "btnCreate") {
+      return el;
+    }
+  }
+  return null;
+}
+
+/** Xóa span lỗi client cũ (tránh chặn nhầm trước/ sau Tạo phiếu). */
+function clearClientValidationUi() {
+  for (const n of document.querySelectorAll(
+    ".field-validation-error, .field-validation-valid, span[data-valmsg-for], .validation-summary-errors li"
+  )) {
+    try {
+      n.textContent = "";
+      n.classList.remove("field-validation-error");
+      if (n.matches("span[data-valmsg-for], .field-validation-valid, .field-validation-error")) {
+        n.classList.add("field-validation-valid");
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  for (const box of document.querySelectorAll(".validation-summary-errors, .alert-danger")) {
+    if (!isDomVisible(box)) continue;
+    // Không xóa alert server thật nếu có nhiều nội dung dài — chỉ xóa summary rỗng/ngắn
+    const t = String(box.textContent || "").trim();
+    if (!t || t.length < 180) {
+      try {
+        box.innerHTML = "";
+        box.style.display = "none";
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+/** Kích hoạt lại change để form nhận giá trị đã điền trước khi Tạo phiếu. */
+function settleFilledFields() {
+  const sels = [
+    "#txtAgentName",
+    "#txtAgentPicName",
+    "#txtAgentPicId",
+    "#txtArrivalDate",
+    "#txtArrivalTime",
+    "#txtVehicleNo",
+    "#txtVehicleQuantity",
+    "#txtDriverName",
+    "#txtDriverId",
+    "#txtEmail",
+    "#txtMobilePhone",
+  ];
+  for (const sel of sels) {
+    const el = document.querySelector(sel);
+    if (!el) continue;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}
+
+/**
+ * Bấm «Tạo phiếu» — jQuery click + DOM click; mở nút nếu bị disabled.
+ * Trả về true nếu đã gửi lệnh click.
+ */
+async function clickCreateOrder() {
+  dismissAutocompleteMenus();
+  await sleep(80);
+  // Nếu chưa gắn AgentIdent mà tên đã đúng — thử chọn lại dòng khớp tuyệt đối trước khi submit.
+  const agentInput = document.querySelector("#txtAgentName");
+  const agentName = String(agentInput?.value || "").trim();
+  if (agentInput && agentName && readAgentIdent() === "0") {
+    await fillAgentName(agentName);
+  }
+  settleFilledFields();
+  clearClientValidationUi();
+  await sleep(100);
+
+  const btn = findCreateButton();
+  if (!btn) return { ok: false, error: "NO_CREATE_BTN" };
+
+  try {
+    if ("disabled" in btn) btn.disabled = false;
+    btn.removeAttribute("disabled");
+    btn.classList.remove("disabled");
+  } catch {
+    /* ignore */
+  }
+
+  const $ = getJQuery();
+  if ($ && $.fn) {
+    try {
+      $(btn).trigger("click");
+    } catch {
+      /* DOM fallback */
+    }
+  }
+  clickEl(btn);
+
+  // Một số bản form bind submit trên <form>, không bắt click input
+  await sleep(400);
+  if (!findOtpInput() && location.pathname.includes(CREATE_PATH)) {
+    const form = btn.closest("form") || document.querySelector("form");
+    if (form && $) {
+      try {
+        // jQuery trigger submit chạy handler (không bỏ qua validation như HTMLFormElement.submit)
+        $(form).trigger("submit");
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  return { ok: true, button: String(btn.id || btn.value || btn.textContent || "create").trim() };
 }
 
 function findOtpInput() {
@@ -795,43 +938,63 @@ async function registerEcargoVct(payload) {
   const fillRes = await fillEcargoVct(payload);
   if (!fillRes?.ok) return { ...fillRes, phase: "fill" };
 
-  const errs = visibleValidationErrors();
-  if (errs.length) {
-    return {
-      ok: false,
-      error: "VALIDATION",
-      message: `Form còn lỗi — chưa Tạo phiếu: ${errs.slice(0, 3).join(" | ")}`,
-      scriptVersion: SCRIPT_VERSION,
-      phase: "preflight",
-      warnings: fillRes.warnings || [],
-    };
-  }
-
-  const createBtn = findCreateButton();
-  if (!createBtn) {
-    return {
-      ok: false,
-      error: "NO_CREATE_BTN",
-      message: "Không thấy nút «Tạo phiếu»",
-      scriptVersion: SCRIPT_VERSION,
-      phase: "submit",
-    };
+  const warnings = [...(fillRes.warnings || [])];
+  // Preflight mềm: không chặn Tạo phiếu vì span .text-danger cũ / nhãn trang.
+  // Chỉ cảnh báo; lỗi thật lấy lại SAU khi đã bấm nút.
+  const softErrs = visibleValidationErrors();
+  if (softErrs.length) {
+    warnings.push(`Trước Tạo phiếu còn thông báo: ${softErrs.slice(0, 2).join(" | ")}`);
   }
 
   const sinceIso = new Date().toISOString();
-  clickEl(createBtn);
-  await sleep(600);
+  const clicked = await clickCreateOrder();
+  if (!clicked.ok) {
+    return {
+      ok: false,
+      error: clicked.error || "NO_CREATE_BTN",
+      message: "Không thấy / không bấm được nút «Tạo phiếu» trên form eCargo.",
+      scriptVersion: SCRIPT_VERSION,
+      phase: "submit",
+      warnings,
+    };
+  }
+
+  // Chờ OTP; sau 1.5s nếu vẫn ở Create mà xuất hiện lỗi validation mới → báo (đã bấm nút).
+  const probeUntil = Date.now() + 8_000;
+  while (Date.now() < probeUntil) {
+    if (findOtpInput()) break;
+    if (Date.now() - Date.parse(sinceIso) > 1500) {
+      const post = visibleValidationErrors();
+      if (post.length) {
+        return {
+          ok: false,
+          error: "VALIDATION",
+          message: `Đã bấm «Tạo phiếu» nhưng form từ chối: ${post.slice(0, 3).join(" | ")}`,
+          scriptVersion: SCRIPT_VERSION,
+          phase: "submit",
+          sinceIso,
+          warnings,
+          createButton: clicked.button,
+        };
+      }
+    }
+    await sleep(250);
+  }
 
   const otpInput = await waitForOtpInput(45_000);
   if (!otpInput) {
+    const postErrs = visibleValidationErrors();
     return {
       ok: false,
-      error: "NO_OTP_UI",
-      message:
-        "Không thấy ô OTP sau «Tạo phiếu». Kiểm tra đăng nhập eCargo / validation form.",
+      error: postErrs.length ? "VALIDATION" : "NO_OTP_UI",
+      message: postErrs.length
+        ? `Đã bấm «Tạo phiếu» nhưng form từ chối: ${postErrs.slice(0, 3).join(" | ")}`
+        : "Đã bấm «Tạo phiếu» nhưng không thấy ô OTP. Kiểm tra đăng nhập eCargo / popup bị chặn.",
       scriptVersion: SCRIPT_VERSION,
       phase: "otp_ui",
       sinceIso,
+      warnings,
+      createButton: clicked.button,
     };
   }
 
@@ -915,7 +1078,8 @@ async function registerEcargoVct(payload) {
     vctCode: capture.vctCode,
     qrDataUrl: capture.qrDataUrl,
     sinceIso,
-    warnings: fillRes.warnings || [],
+    warnings,
+    createButton: clicked.button,
     submit: true,
   };
 }

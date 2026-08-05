@@ -313,7 +313,7 @@ export function EcargoVctRegisterModal({
       if (!ping.ok) {
         setStatus(
           ping.message ||
-            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.4 tại chrome://extensions, rồi F5 Ops.",
+            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.5 tại chrome://extensions, rồi F5 Ops.",
         );
         return;
       }
@@ -358,7 +358,7 @@ export function EcargoVctRegisterModal({
       if (!ping.ok) {
         setStatus(
           ping.message ||
-            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.4 tại chrome://extensions, rồi F5 Ops.",
+            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.5 tại chrome://extensions, rồi F5 Ops.",
         );
         return;
       }

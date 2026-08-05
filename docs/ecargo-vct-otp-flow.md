@@ -47,5 +47,5 @@ ECARGO_IMAP_MAILBOX=INBOX
 
 ## Ghi chú
 
-- TECSOPS **không** auto Tạo phiếu nếu DOM còn `.field-validation-error` / `.text-danger` visible liên quan validation.
+- REGISTER luôn bấm «Tạo phiếu» sau khi điền; chỉ dừng nếu **sau submit** còn `.field-validation-error` / summary lỗi thật (không chặn vì `.text-danger` nhãn trang).
 - OTP chỉ lấy qua `POST /api/ecargo/otp/wait` trên server (App Password không vào extension).

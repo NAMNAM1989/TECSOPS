@@ -1,18 +1,34 @@
 import type { Shipment, Warehouse } from "../types/shipment";
 import {
-  OPS_TEAM_ORDER,
-  opsTeamLabel,
+  WAREHOUSE_ORDER,
+  opsTeamOf,
   warehouseLabel,
-  warehousesOfOpsTeam,
+  type OpsTeam,
 } from "../constants/warehouses";
 import { formatKgTotal } from "../utils/formatKgTotal";
 import { computeWarehouseMetrics } from "../utils/warehouseMetrics";
 
 const CARD_RING: Record<Warehouse, string> = {
-  "TECS-TCS": "ring-sky-500/60",
-  "TECS-SCSC": "ring-violet-500/60",
-  TCS: "ring-cyan-500/60",
-  SCSC: "ring-fuchsia-500/60",
+  "TECS-TCS": "ring-sky-500/55",
+  "TECS-SCSC": "ring-violet-500/55",
+  TCS: "ring-cyan-500/55",
+  SCSC: "ring-fuchsia-500/55",
+};
+
+/** Chip đội OPS trên thẻ — ngắn, không chiếm hàng riêng. */
+const TEAM_CHIP: Record<OpsTeam, { label: string; className: string }> = {
+  TECS: {
+    label: "TECS",
+    className: "bg-teal-50 text-teal-700 ring-teal-200/80",
+  },
+  TCS: {
+    label: "TCS",
+    className: "bg-sky-50 text-sky-700 ring-sky-200/80",
+  },
+  SCSC: {
+    label: "SCSC",
+    className: "bg-violet-50 text-violet-700 ring-violet-200/80",
+  },
 };
 
 interface Props {
@@ -23,13 +39,17 @@ interface Props {
   onAddRow?: (wh: Warehouse) => void;
   /** Kho có kết quả tìm kiếm — viền phụ. */
   highlightWarehouses?: readonly Warehouse[];
-  /** Dải ngang cuộn — dùng trên mobile. */
+  /** Dải gọn — dùng trên mobile. */
   compact?: boolean;
   /** Ẩn nút + trên thẻ — mobile dùng FAB. */
   hideAddButton?: boolean;
   className?: string;
 }
 
+/**
+ * Chọn kho: 4 thẻ một hàng (desktop) / 2×2 (mobile).
+ * Đội OPS hiện bằng chip nhỏ trên thẻ — không xếp 3 khối dọc gây khoảng trống.
+ */
 export function WarehouseGridPicker({
   rows,
   active,
@@ -46,108 +66,80 @@ export function WarehouseGridPicker({
     <div
       className={
         compact
-          ? `flex flex-col gap-2 ${className}`
-          : `flex flex-col gap-2.5 ${className}`
+          ? `grid grid-cols-2 gap-1.5 ${className}`
+          : `grid grid-cols-2 gap-2 lg:grid-cols-4 ${className}`
       }
       role="tablist"
-      aria-label="Chọn kho theo đội OPS"
+      aria-label="Chọn kho"
     >
-      {OPS_TEAM_ORDER.map((team) => {
-        const warehouses = warehousesOfOpsTeam(team);
-        return (
-          <section key={team} className="min-w-0" aria-label={opsTeamLabel[team]}>
-            <p
-              className={`mb-1 font-bold uppercase tracking-wide text-dashboard-muted ${
-                compact ? "text-[9px]" : "text-[10px]"
-              }`}
-            >
-              {opsTeamLabel[team]}
-              {team === "TECS" ? (
-                <span className="ml-1 font-medium normal-case tracking-normal text-zinc-400">
-                  · nhóm TECS–TCS / TECS–SCSC
-                </span>
-              ) : null}
-            </p>
-            <div
-              className={
-                warehouses.length > 1
-                  ? compact
-                    ? "grid grid-cols-2 gap-1.5"
-                    : "grid grid-cols-2 gap-1.5 lg:gap-2"
-                  : compact
-                    ? "grid grid-cols-2 gap-1.5 sm:grid-cols-4"
-                    : "grid grid-cols-2 gap-1.5 lg:grid-cols-4 lg:gap-2"
-              }
-            >
-              {warehouses.map((wh) => {
-                const m = metrics[wh];
-                const isActive = active === wh;
-                const hasSearchHit = highlightWarehouses.includes(wh);
+      {WAREHOUSE_ORDER.map((wh) => {
+        const m = metrics[wh];
+        const isActive = active === wh;
+        const hasSearchHit = highlightWarehouses.includes(wh);
+        const team = opsTeamOf(wh);
+        const chip = TEAM_CHIP[team];
 
-                return (
-                  <div
-                    key={wh}
-                    role="tab"
-                    aria-selected={isActive}
-                    className={`group relative shrink-0 rounded-xl text-left transition-all duration-200 ${
-                      compact ? "p-1.5" : "p-2"
-                    } ${
-                      isActive
-                        ? `bg-ui-surface ring-2 ${CARD_RING[wh]}`
-                        : "border border-ui-border bg-ui-surface shadow-ui-sm hover:bg-ui-surface-muted"
-                    } ${hasSearchHit && !isActive ? "ring-1 ring-ui-primary/35" : ""}`}
-                  >
-                    {onAddRow && !hideAddButton ? (
-                      <button
-                        type="button"
-                        title={`Thêm lô ${warehouseLabel[wh]}`}
-                        aria-label={`Thêm lô ${warehouseLabel[wh]}`}
-                        onClick={() => onAddRow(wh)}
-                        className="absolute right-1.5 top-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border border-apple-blue/40 bg-apple-blue text-[13px] font-bold leading-none text-white shadow-sm transition hover:bg-apple-blue-hover active:scale-95"
-                      >
-                        +
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => onSelect(wh)}
-                      className="block w-full rounded-xl text-left active:scale-[0.99]"
-                    >
-                      <p
-                        className={`font-bold uppercase tracking-wide text-dashboard-muted ${
-                          compact ? "pr-5 text-[9px]" : "pr-7 text-[10px]"
-                        }`}
-                      >
-                        {warehouseLabel[wh]}
-                      </p>
-                      <div
-                        className={`grid grid-cols-3 ${compact ? "mt-1 gap-0.5" : "mt-1 gap-1"}`}
-                      >
-                        <Metric
-                          label="Lô"
-                          value={m.lots}
-                          large={isActive}
-                          compact={compact}
-                        />
-                        <Metric
-                          label="Kiện"
-                          value={m.pcs}
-                          large={isActive}
-                          compact={compact}
-                        />
-                        <Metric
-                          label="Kg"
-                          value={formatKgTotal(m.kg)}
-                          large={isActive}
-                          compact={compact}
-                        />
-                      </div>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+        return (
+          <div
+            key={wh}
+            role="tab"
+            aria-selected={isActive}
+            className={`group relative min-w-0 rounded-xl text-left transition-all duration-150 ${
+              compact ? "px-2 py-1.5" : "px-2.5 py-2"
+            } ${
+              isActive
+                ? `bg-ui-surface shadow-ui-sm ring-2 ${CARD_RING[wh]}`
+                : "border border-ui-border/90 bg-ui-surface shadow-ui-sm hover:border-ui-border hover:bg-ui-surface-muted"
+            } ${hasSearchHit && !isActive ? "ring-1 ring-ui-primary/35" : ""}`}
+          >
+            {onAddRow && !hideAddButton ? (
+              <button
+                type="button"
+                title={`Thêm lô ${warehouseLabel[wh]}`}
+                aria-label={`Thêm lô ${warehouseLabel[wh]}`}
+                onClick={() => onAddRow(wh)}
+                className="absolute right-1.5 top-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border border-ui-primary/35 bg-ui-primary text-[13px] font-bold leading-none text-white shadow-sm transition hover:bg-ui-primary-hover active:scale-95"
+              >
+                +
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onSelect(wh)}
+              className="block w-full rounded-lg text-left active:scale-[0.99]"
+            >
+              <div
+                className={`flex min-w-0 items-center gap-1.5 ${
+                  compact ? "pr-6" : "pr-7"
+                }`}
+              >
+                <span
+                  className={`inline-flex shrink-0 items-center rounded px-1 py-px text-[8px] font-bold uppercase tracking-wide ring-1 ring-inset ${chip.className}`}
+                >
+                  {chip.label}
+                </span>
+                <p
+                  className={`min-w-0 truncate font-bold tracking-wide text-dashboard-ink ${
+                    compact ? "text-[10px]" : "text-[11px]"
+                  }`}
+                >
+                  {warehouseLabel[wh]}
+                </p>
+              </div>
+              <div
+                className={`grid grid-cols-3 ${compact ? "mt-1 gap-0.5" : "mt-1.5 gap-1"}`}
+              >
+                <Metric label="Lô" value={m.lots} large={isActive} compact={compact} />
+                <Metric label="Kiện" value={m.pcs} large={isActive} compact={compact} />
+                <Metric
+                  label="Kg"
+                  value={formatKgTotal(m.kg)}
+                  large={isActive}
+                  compact={compact}
+                />
+              </div>
+            </button>
+          </div>
         );
       })}
     </div>
@@ -179,10 +171,10 @@ function Metric({
           large
             ? compact
               ? "text-sm"
-              : "text-base"
+              : "text-[15px] leading-tight"
             : compact
               ? "text-xs"
-              : "text-sm"
+              : "text-sm leading-tight"
         }`}
       >
         {value}

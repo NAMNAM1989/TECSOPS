@@ -76,6 +76,29 @@ export function isValidNationalId(raw: string): boolean {
   return d.length === 9 || d.length === 12;
 }
 
+/** Giấy tờ tài xế theo loại (CCCD / Passport / GPLX). */
+export function isValidDriverDocument(
+  raw: string,
+  idType: CustomerSavedVehicle["driverIdType"] = "CCCD",
+): boolean {
+  const t = idType || "CCCD";
+  if (t === "CCCD") return isValidNationalId(raw);
+  const id = raw.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  if (!id) return true;
+  if (t === "PP") return id.length >= 6 && id.length <= 20;
+  if (t === "GPLX") return id.length >= 8 && id.length <= 20;
+  return true;
+}
+
+export function driverDocumentDigitsOrToken(
+  raw: string,
+  idType: CustomerSavedVehicle["driverIdType"] = "CCCD",
+): string {
+  const t = idType || "CCCD";
+  if (t === "CCCD") return raw.replace(/\D/g, "");
+  return raw.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
 export function isValidLicensePlate(raw: string): boolean {
   const plate = normalizeVehiclePlateInput(raw);
   // `;` là separator hợp lệ — chỉ đếm chữ/số cho độ dài tối thiểu.
@@ -293,23 +316,33 @@ function validateVehicles(entry: CustomerDirectoryEntry): CustomerFieldError[] {
       }
     }
 
-    if (!isValidNationalId(v.driverId)) {
+    const idType = v.driverIdType || "CCCD";
+    if (!isValidDriverDocument(v.driverId, idType)) {
+      const msg =
+        idType === "PP"
+          ? "Passport cần 6–20 ký tự chữ/số."
+          : idType === "GPLX"
+            ? "GPLX cần 8–20 ký tự chữ/số."
+            : "CCCD/CMND phải 9 hoặc 12 số.";
       errors.push({
         section: "vehicle",
         itemId: v.id,
         field: "driverId",
-        message: "CCCD/CMND phải 9 hoặc 12 số.",
+        message: msg,
       });
     }
 
     const hasDriver = Boolean(v.driverName.trim());
-    const hasId = Boolean(v.driverId.replace(/\D/g, ""));
+    const hasId = Boolean(driverDocumentDigitsOrToken(v.driverId, idType));
     if (hasDriver !== hasId) {
       errors.push({
         section: "vehicle",
         itemId: v.id,
         field: hasDriver ? "driverId" : "driverName",
-        message: "Cần nhập cả tên tài xế và CCCD.",
+        message:
+          idType === "CCCD"
+            ? "Cần nhập cả tên tài xế và CCCD."
+            : "Cần nhập cả tên tài xế và số giấy tờ.",
       });
     }
   }

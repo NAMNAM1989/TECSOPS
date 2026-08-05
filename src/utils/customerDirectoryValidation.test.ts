@@ -103,6 +103,25 @@ describe("customerDirectoryValidation", () => {
     expect(r.valid).toBe(true);
   });
 
+  it("accepts passport driver id when driverIdType=PP", () => {
+    const row = scaffoldNewCustomer("c1");
+    row.code = "ABC";
+    row.name = "TEST CO";
+    row.savedShippers = [{ ...emptyCustomerSavedShipper(), shipperName: "ACME" }];
+    row.savedVehicles = [
+      {
+        ...emptyCustomerSavedVehicle(),
+        licensePlate: "50H17480",
+        driverName: "Nguyen Van A",
+        driverId: "B1234567",
+        driverIdType: "PP",
+        vehicleType: "OTO",
+      },
+    ];
+    const r = validateCustomerEntrySection(row, "vehicle", [row]);
+    expect(r.valid).toBe(true);
+  });
+
   it("license plate: giữ ; nhưng không chấp nhận chỉ separator", () => {
     expect(isValidLicensePlate("50H17480;51G99999")).toBe(true);
     expect(isValidLicensePlate(";;;;")).toBe(false);

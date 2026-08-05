@@ -1,9 +1,11 @@
 import type {
   CustomerDirectoryEntry,
+  CustomerDriverIdType,
   CustomerSavedConsignee,
   CustomerSavedGoods,
   CustomerSavedShipper,
   CustomerSavedVehicle,
+  CustomerVehicleType,
 } from "../types/customerDirectory";
 import {
   inferLetterKeyFromCustomerCode,
@@ -33,11 +35,14 @@ export const CUSTOMER_FULL_PROFILE_HEADERS = [
   "Loại hàng",
   "Biển số xe",
   "Tên tài xế",
-  "CCCD tài xế",
+  "Số giấy tờ TX",
+  "Nhãn xe",
+  "Loại xe",
+  "Loại GT TX",
 ] as const;
 
 const FULL_PROFILE_COLUMN_WIDTHS = [
-  6, 14, 10, 35, 45, 24, 16, 16, 35, 45, 24, 16, 16, 28, 20, 16, 20, 18,
+  6, 14, 10, 35, 45, 24, 16, 16, 35, 45, 24, 16, 16, 28, 20, 16, 20, 18, 16, 12, 12,
 ];
 
 const FULL_PROFILE_GUIDE_LINES = [
@@ -49,9 +54,34 @@ const FULL_PROFILE_GUIDE_LINES = [
   "4. Người gửi: Họ tên, Địa chỉ, Email, ĐT, MST — đồng bộ tab Người gửi & điền OPS.",
   "5. Người nhận + Notify Party — đồng bộ tab CNEE & notify_name khi điền eSID.",
   "6. Loại hàng — tab Tên hàng / Nature of Goods.",
-  "7. Biển số xe, Tên tài xế, CCCD — tab Xe / TX.",
-  "8. Tải mẫu → điền → Import. Export xuất đúng cùng cột để chỉnh rồi Import lại.",
+  "7. Xe/TX: Biển số, Tên TX, Số giấy tờ, Nhãn xe, Loại xe (OTO/XEMAY/BAGAC/DIBO), Loại GT (CCCD/PP/GPLX).",
+  "8. Tải mẫu → điền → Import. Export xuất đúng cùng cột để chỉnh rồi Import lại. File cũ 18 cột vẫn đọc được.",
 ];
+
+function parseExcelVehicleType(raw: string): CustomerVehicleType | undefined {
+  const u = raw
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "");
+  if (!u) return undefined;
+  if (u === "OTO" || u.includes("O TO")) return "OTO";
+  if (u === "XEMAY" || u.includes("XE MAY") || u.includes("MOTOR")) return "XEMAY";
+  if (u === "BAGAC" || u.includes("BA GAC")) return "BAGAC";
+  if (u === "DIBO" || u.includes("DI BO") || u.includes("WALK")) return "DIBO";
+  return undefined;
+}
+
+function parseExcelDriverIdType(raw: string): CustomerDriverIdType | undefined {
+  const u = raw.trim().toUpperCase();
+  if (!u) return undefined;
+  if (u === "PP" || u.includes("PASSPORT") || u.includes("HỘ CHIẾU") || u.includes("HO CHIEU"))
+    return "PP";
+  if (u === "GPLX" || u.includes("BẰNG LÁI") || u.includes("BANG LAI") || u.includes("LICENSE"))
+    return "GPLX";
+  if (u === "CCCD" || u.includes("CMND") || u.includes("CĂN CƯỚC")) return "CCCD";
+  return undefined;
+}
 
 function cellText(v: unknown): string {
   if (v == null) return "";
@@ -143,7 +173,10 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
   let colNatureOfGoods = 15; // O: Loại hàng
   let colPlate = 16; // P: Biển số xe
   let colDriverName = 17; // Q: Tên tài xế
-  let colDriverId = 18; // R: CCCD tài xế
+  let colDriverId = 18; // R: Số giấy tờ TX (cũ: CCCD tài xế)
+  let colVehicleLabel = 19; // S: Nhãn xe (optional — file cũ không có)
+  let colVehicleType = 20; // T: Loại xe
+  let colDriverIdType = 21; // U: Loại GT TX
 
   // Thử dò lại vị trí cột từ header nếu có
   const row1 = ws.getRow(1);
@@ -165,10 +198,33 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
     else if (txt.includes("người nhận") && txt.includes("mst")) colConsigneeTax = colIdx;
     else if (txt.includes("thông báo cho") || txt.includes("notify")) colNotifyName = colIdx;
     else if (txt.includes("loại hàng") || txt.includes("nature of goods")) colNatureOfGoods = colIdx;
-    else if (txt.includes("biển số") || (txt.includes("xe") && !txt.includes("tài xế")))
-      colPlate = colIdx;
-    else if (txt.includes("tài xế") || txt.includes("lái xe")) colDriverName = colIdx;
-    else if (txt.includes("cccd tài xế") || txt.includes("cmnd tài xế")) colDriverId = colIdx;
+    else if (txt.includes("nhãn xe") || txt.includes("nhan xe")) colVehicleLabel = colIdx;
+    else if (txt.includes("loại xe") || txt.includes("loai xe")) colVehicleType = colIdx;
+    else if (
+      txt.includes("loại gt") ||
+      txt.includes("loai gt") ||
+      txt.includes("loại giấy tờ") ||
+      txt.includes("loai giay to")
+    )
+      colDriverIdType = colIdx;
+    else if (txt.includes("biển số")) colPlate = colIdx;
+    else if (
+      (txt.includes("tài xế") || txt.includes("lái xe")) &&
+      !txt.includes("cccd") &&
+      !txt.includes("cmnd") &&
+      !txt.includes("giấy tờ") &&
+      !txt.includes("giay to")
+    )
+      colDriverName = colIdx;
+    else if (
+      txt.includes("cccd") ||
+      txt.includes("cmnd") ||
+      txt.includes("số giấy tờ") ||
+      txt.includes("so giay to") ||
+      txt.includes("giấy tờ tx") ||
+      txt.includes("giay to tx")
+    )
+      colDriverId = colIdx;
   });
   void colConsigneeTax;
 
@@ -247,6 +303,14 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
       const plate = cellText(r.getCell(colPlate));
       const driverName = cellText(r.getCell(colDriverName));
       const driverId = cellText(r.getCell(colDriverId));
+      const vehicleLabel =
+        colVehicleLabel > 0 ? cellText(r.getCell(colVehicleLabel)) : "";
+      const vehicleType = parseExcelVehicleType(
+        colVehicleType > 0 ? cellText(r.getCell(colVehicleType)) : "",
+      );
+      const driverIdType = parseExcelDriverIdType(
+        colDriverIdType > 0 ? cellText(r.getCell(colDriverIdType)) : "",
+      );
 
       // Thêm Consignee nếu có
       if (cneeName) {
@@ -300,9 +364,12 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
         if (!isDuplicate) {
           const vehicleItem: CustomerSavedVehicle = {
             id: newId("veh"),
+            ...(vehicleLabel ? { label: vehicleLabel } : {}),
             licensePlate: plate,
             driverName: driverName,
             driverId: driverId,
+            ...(driverIdType ? { driverIdType } : { driverIdType: "CCCD" }),
+            ...(vehicleType ? { vehicleType } : { vehicleType: "OTO" }),
           };
           savedVehicles.push(vehicleItem);
           totalVehicleCount++;
@@ -420,6 +487,9 @@ export async function buildCustomerFullProfileExportWorkbook(
         v?.licensePlate ?? "",
         v?.driverName ?? "",
         v?.driverId ?? "",
+        v?.label ?? "",
+        v?.vehicleType ?? "",
+        v?.driverIdType ?? "",
       ]);
     }
   }
@@ -449,6 +519,9 @@ export async function buildCustomerFullProfileTemplateWorkbook() {
     "50H-174.80",
     "NGUYỄN VĂN A",
     "079123456789",
+    "Xe cố định",
+    "OTO",
+    "CCCD",
   ]);
 
   ws.addRow([
@@ -470,6 +543,9 @@ export async function buildCustomerFullProfileTemplateWorkbook() {
     "51D-999.88",
     "TRẦN VĂN B",
     "079987654321",
+    "Thuê ngoài",
+    "OTO",
+    "CCCD",
   ]);
 
   return wb;
@@ -662,6 +738,9 @@ export function applyFullProfileImport(
             licensePlate: v.licensePlate || prev.licensePlate,
             driverName: v.driverName || prev.driverName,
             driverId: v.driverId || prev.driverId,
+            label: v.label || prev.label,
+            vehicleType: v.vehicleType || prev.vehicleType,
+            driverIdType: v.driverIdType || prev.driverIdType,
           };
         } else {
           existingVehicles.push(v);

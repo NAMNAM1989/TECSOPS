@@ -7,7 +7,7 @@ import {
 import { scaffoldNewCustomer } from "./customerDirectoryScaffold";
 
 describe("parseCustomerFullProfileWorkbook", () => {
-  it("đọc mẫu 18 cột — không bỏ dòng dữ liệu đầu (row 2)", async () => {
+  it("đọc mẫu hồ sơ KH — không bỏ dòng dữ liệu đầu (row 2)", async () => {
     const wb = await buildCustomerFullProfileTemplateWorkbook();
     const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
     const result = await parseCustomerFullProfileWorkbook(buf);
@@ -20,6 +20,9 @@ describe("parseCustomerFullProfileWorkbook", () => {
     expect(city?.savedGoods?.[0]?.goodsDescription).toBe("GARMENTS");
     expect(city?.savedConsignees?.[0]?.notifyName).toBe("NOTIFY GLOBAL LOGISTICS");
     expect(city?.savedVehicles?.[0]?.licensePlate).toBe("50H-174.80");
+    expect(city?.savedVehicles?.[0]?.label).toBe("Xe cố định");
+    expect(city?.savedVehicles?.[0]?.vehicleType).toBe("OTO");
+    expect(city?.savedVehicles?.[0]?.driverIdType).toBe("CCCD");
   });
 
   it("cập nhật khách đã có — ghi đè thông tin account + shipper", async () => {

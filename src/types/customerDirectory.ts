@@ -52,14 +52,24 @@ export type CustomerSavedDimTemplate = {
   isDefault?: boolean;
 };
 
+/** Loại xe eCargo SCSC. */
+export type CustomerVehicleType = "OTO" | "XEMAY" | "BAGAC" | "DIBO";
+
+/** Loại giấy tờ tài xế eCargo. */
+export type CustomerDriverIdType = "CCCD" | "PP" | "GPLX";
+
 /** Xe / tài xế lưu sẵn theo khách. */
 export type CustomerSavedVehicle = {
   id: string;
-  /** Biển số xe (VD: 50H17480). */
+  /** Nhãn phân biệt: «Xe cố định», «Thuê ngoài»… */
+  label?: string;
+  /** Biển số xe (VD: 50H17480). Nhiều biển cách `;`. */
   licensePlate: string;
   driverName: string;
-  /** CCCD / CMND tài xế. */
+  /** CCCD / CMND / Passport / GPLX tài xế. */
   driverId: string;
+  driverIdType?: CustomerDriverIdType;
+  vehicleType?: CustomerVehicleType;
 };
 
 

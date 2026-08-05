@@ -132,18 +132,48 @@ function newSavedVehicleId(): string {
   return `vehicle-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function normalizeSavedVehicleType(
+  raw: unknown
+): CustomerSavedVehicle["vehicleType"] | undefined {
+  const u = String(raw ?? "")
+    .trim()
+    .toUpperCase();
+  if (u === "OTO" || u === "XEMAY" || u === "BAGAC" || u === "DIBO") return u;
+  return undefined;
+}
+
+function normalizeSavedDriverIdType(
+  raw: unknown
+): CustomerSavedVehicle["driverIdType"] | undefined {
+  const u = String(raw ?? "")
+    .trim()
+    .toUpperCase();
+  if (u === "PASSPORT" || u === "PP") return "PP";
+  if (u === "CCCD" || u === "GPLX") return u;
+  return undefined;
+}
+
 export function clampCustomerSavedVehicle(v: CustomerSavedVehicle): CustomerSavedVehicle {
   const L = CUSTOMER_PROFILE_LIMITS;
+  const label = clip(v.label, L.savedVehicleLabel).trim();
+  const vehicleType = normalizeSavedVehicleType(v.vehicleType);
+  const driverIdType = normalizeSavedDriverIdType(v.driverIdType);
+  const driverIdRaw = clip(v.driverId, L.savedVehicleDriverId).trim();
+  const driverId =
+    driverIdType && driverIdType !== "CCCD"
+      ? driverIdRaw.replace(/[^A-Za-z0-9]/g, "").toUpperCase()
+      : driverIdRaw.replace(/\D/g, "");
   return {
     id: clip(v.id, 80).trim() || newSavedVehicleId(),
+    ...(label ? { label } : {}),
     licensePlate: clip(
       normalizeVehiclePlateInput(v.licensePlate),
       L.savedVehicleLicensePlate
     ),
     driverName: clip(v.driverName, L.savedVehicleDriverName).trim(),
-    driverId: clip(v.driverId, L.savedVehicleDriverId)
-      .trim()
-      .replace(/\D/g, ""),
+    driverId,
+    ...(driverIdType ? { driverIdType } : {}),
+    ...(vehicleType ? { vehicleType } : {}),
   };
 }
 
@@ -153,6 +183,8 @@ export function emptyCustomerSavedVehicle(): CustomerSavedVehicle {
     licensePlate: "",
     driverName: "",
     driverId: "",
+    driverIdType: "CCCD",
+    vehicleType: "OTO",
   });
 }
 

@@ -653,6 +653,38 @@ export function CustomerDefaultDataEditor({
                 >
                   <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                     <label>
+                      <FieldLabel>Nhãn</FieldLabel>
+                      <input
+                        className={fieldInputClass(false)}
+                        value={v.label ?? ""}
+                        onChange={(e) =>
+                          onPatchVehicle(idx, { label: e.target.value })
+                        }
+                        placeholder="Xe cố định / Thuê ngoài"
+                      />
+                    </label>
+                    <label>
+                      <FieldLabel>Loại xe</FieldLabel>
+                      <select
+                        className={fieldInputClass(false)}
+                        value={v.vehicleType ?? "OTO"}
+                        onChange={(e) =>
+                          onPatchVehicle(idx, {
+                            vehicleType: e.target.value as
+                              | "OTO"
+                              | "XEMAY"
+                              | "BAGAC"
+                              | "DIBO",
+                          })
+                        }
+                      >
+                        <option value="OTO">Ô tô</option>
+                        <option value="XEMAY">Xe máy</option>
+                        <option value="BAGAC">Xe ba gác</option>
+                        <option value="DIBO">Đi bộ</option>
+                      </select>
+                    </label>
+                    <label>
                       <FieldLabel>Biển số xe</FieldLabel>
                       <input
                         className={`${fieldInputClass(Boolean(fe("vehicle", "licensePlate", v.id)))} font-mono uppercase`}
@@ -687,18 +719,50 @@ export function CustomerDefaultDataEditor({
                         message={fe("vehicle", "driverName", v.id)}
                       />
                     </label>
-                    <label>
-                      <FieldLabel>CCCD tài xế</FieldLabel>
-                      <input
-                        className={`${fieldInputClass(Boolean(fe("vehicle", "driverId", v.id)))} font-mono`}
-                        inputMode="numeric"
-                        value={v.driverId}
-                        onChange={(e) =>
-                          onPatchVehicle(idx, {
-                            driverId: e.target.value.replace(/\D/g, ""),
-                          })
-                        }
-                      />
+                    <label className="sm:col-span-2">
+                      <FieldLabel>Giấy tờ tài xế</FieldLabel>
+                      <div className="mt-0.5 flex gap-1.5">
+                        <select
+                          className={fieldInputClass(false)}
+                          value={v.driverIdType ?? "CCCD"}
+                          onChange={(e) => {
+                            const driverIdType = e.target.value as
+                              | "CCCD"
+                              | "PP"
+                              | "GPLX";
+                            const nextId =
+                              driverIdType === "CCCD"
+                                ? v.driverId.replace(/\D/g, "")
+                                : v.driverId
+                                    .replace(/[^A-Za-z0-9]/g, "")
+                                    .toUpperCase();
+                            onPatchVehicle(idx, { driverIdType, driverId: nextId });
+                          }}
+                        >
+                          <option value="CCCD">CCCD</option>
+                          <option value="PP">Passport</option>
+                          <option value="GPLX">GPLX</option>
+                        </select>
+                        <input
+                          className={`${fieldInputClass(Boolean(fe("vehicle", "driverId", v.id)))} font-mono uppercase`}
+                          inputMode={
+                            (v.driverIdType ?? "CCCD") === "CCCD"
+                              ? "numeric"
+                              : "text"
+                          }
+                          value={v.driverId}
+                          onChange={(e) => {
+                            const idType = v.driverIdType ?? "CCCD";
+                            const raw = e.target.value;
+                            onPatchVehicle(idx, {
+                              driverId:
+                                idType === "CCCD"
+                                  ? raw.replace(/\D/g, "")
+                                  : raw.replace(/[^A-Za-z0-9]/g, "").toUpperCase(),
+                            });
+                          }}
+                        />
+                      </div>
                       <FieldErrorText
                         message={fe("vehicle", "driverId", v.id)}
                       />

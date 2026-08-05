@@ -4,6 +4,7 @@ import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
 import { findCustomerEntry } from "../utils/customerBookingResolve";
 import {
+  applyAgentDriverFallback,
   buildEcargoVctFillPayload,
   defaultVehiclePickForShipments,
   ECARGO_DEFAULT_GOODS,
@@ -215,19 +216,27 @@ export function EcargoVctRegisterModal({
   };
 
   const resolveVehiclePick = (): EcargoVehiclePick | null => {
-    if (vehicleMode === "saved") {
-      const found = vehiclePool.find((x) => x.vehicle.id === savedVehicleId);
-      if (!found) return null;
-      return pickSavedVehicleForEcargo(found.vehicle, profile.defaultVehicleType);
-    }
-    return {
-      source: "oneshot",
-      licensePlate: normalizeVehiclePlateInput(oneshot.licensePlate),
-      driverName: oneshot.driverName,
-      driverId: oneshot.driverId,
-      driverIdType: oneshot.driverIdType,
-      vehicleType: oneshot.vehicleType,
-    };
+    const raw: EcargoVehiclePick | null =
+      vehicleMode === "saved"
+        ? (() => {
+            const found = vehiclePool.find((x) => x.vehicle.id === savedVehicleId);
+            if (!found) return null;
+            return pickSavedVehicleForEcargo(
+              found.vehicle,
+              profile.defaultVehicleType,
+            );
+          })()
+        : {
+            source: "oneshot",
+            licensePlate: normalizeVehiclePlateInput(oneshot.licensePlate),
+            driverName: oneshot.driverName,
+            driverId: oneshot.driverId,
+            driverIdType: oneshot.driverIdType,
+            vehicleType: oneshot.vehicleType,
+          };
+    if (!raw) return null;
+    // Thiếu TX → gắn NV đại lý (cùng logic payload) để preview/validate nhất quán.
+    return applyAgentDriverFallback(raw, profile).pick;
   };
 
   const preparePayload = () => {
@@ -304,7 +313,7 @@ export function EcargoVctRegisterModal({
       if (!ping.ok) {
         setStatus(
           ping.message ||
-            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.1 tại chrome://extensions, rồi F5 Ops.",
+            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.2 tại chrome://extensions, rồi F5 Ops.",
         );
         return;
       }
@@ -349,7 +358,7 @@ export function EcargoVctRegisterModal({
       if (!ping.ok) {
         setStatus(
           ping.message ||
-            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.1 tại chrome://extensions, rồi F5 Ops.",
+            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.2 tại chrome://extensions, rồi F5 Ops.",
         );
         return;
       }
@@ -593,8 +602,16 @@ export function EcargoVctRegisterModal({
 
         <section className="mb-3 rounded-xl border border-slate-200 p-3">
           <h3 className="mb-2 text-[12px] font-bold text-slate-800">Xe / tài xế</h3>
+          <p className="mb-2 text-[10px] text-slate-500">
+            Chỉ có biển số / thiếu TX → tự lấy NV đại lý ({profile.agentPicName || "…"}) làm tài xế
+            mặc định.
+          </p>
           <div className="mb-2 space-y-1">
-            {vehiclePool.map(({ vehicle, customerLabel }) => (
+            {vehiclePool.map(({ vehicle, customerLabel }) => {
+              const missingDriver =
+                !String(vehicle.driverName || "").trim() ||
+                !String(vehicle.driverId || "").trim();
+              return (
               <label
                 key={vehicle.id}
                 className="flex cursor-pointer items-start gap-2 rounded-lg px-1.5 py-1 hover:bg-slate-50"
@@ -611,16 +628,28 @@ export function EcargoVctRegisterModal({
                 <span className="text-[12px] text-slate-800">
                   <span className="font-mono font-semibold">{vehicle.licensePlate}</span>
                   {" · "}
-                  {vehicle.driverName}
+                  {vehicle.driverName?.trim()
+                    ? vehicle.driverName
+                    : (
+                      <span className="italic text-amber-700">
+                        TX = NV đại lý
+                      </span>
+                    )}
                   {vehicle.label ? (
                     <span className="text-slate-500"> · {vehicle.label}</span>
                   ) : null}
                   {customerLabel ? (
                     <span className="text-slate-400"> · {customerLabel}</span>
                   ) : null}
+                  {missingDriver ? (
+                    <span className="ml-1 text-[10px] font-semibold text-amber-700">
+                      (thiếu TX)
+                    </span>
+                  ) : null}
                 </span>
               </label>
-            ))}
+              );
+            })}
             <label className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-slate-50">
               <input
                 type="radio"

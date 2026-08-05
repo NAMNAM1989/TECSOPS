@@ -159,6 +159,41 @@ export function pickSavedVehicleForEcargo(
   };
 }
 
+/**
+ * Chỉ có biển số / thiếu TX → lấy họ tên + giấy tờ NV đại lý (agentPic*) làm mặc định.
+ */
+export function applyAgentDriverFallback(
+  pick: EcargoVehiclePick,
+  profile: Pick<
+    EcargoScscProfile,
+    "agentPicName" | "agentPicId" | "agentPicIdType"
+  >,
+): { pick: EcargoVehiclePick; usedAgentFallback: boolean } {
+  const hasDriverName = Boolean(normalizeEcargoPersonName(pick.driverName));
+  const hasDriverId = Boolean(normalizeEcargoIdNumber(pick.driverId));
+  if (hasDriverName && hasDriverId) {
+    return { pick, usedAgentFallback: false };
+  }
+
+  const agentName = normalizeEcargoPersonName(profile.agentPicName);
+  const agentId = normalizeEcargoIdNumber(profile.agentPicId);
+  if (!agentName || !agentId) {
+    return { pick, usedAgentFallback: false };
+  }
+
+  return {
+    pick: {
+      ...pick,
+      driverName: hasDriverName ? pick.driverName : profile.agentPicName.trim(),
+      driverId: hasDriverId ? pick.driverId : String(profile.agentPicId || "").trim(),
+      driverIdType: hasDriverId
+        ? pick.driverIdType
+        : (normalizeEcargoIdType(profile.agentPicIdType) as EcargoIdType),
+    },
+    usedAgentFallback: true,
+  };
+}
+
 export function defaultVehiclePickForShipments(
   shipments: Shipment[],
   customers: CustomerDirectoryEntry[],
@@ -211,7 +246,17 @@ export function buildEcargoVctFillPayload(opts: {
     return { payload: null, error: "Hồ sơ đại lý eCargo chưa đủ — hãy lưu thông tin đại lý trước", warnings };
   }
 
-  const vehicleErr = validateEcargoVehiclePick(opts.vehicle);
+  const { pick: vehicle, usedAgentFallback } = applyAgentDriverFallback(
+    opts.vehicle,
+    prepared,
+  );
+  if (usedAgentFallback) {
+    warnings.push(
+      "Xe chỉ có biển số / thiếu TX — dùng NV đại lý làm tài xế mặc định.",
+    );
+  }
+
+  const vehicleErr = validateEcargoVehiclePick(vehicle);
   if (vehicleErr) return { payload: null, error: vehicleErr, warnings };
 
   const awbs: EcargoVctAwbLine[] = [];
@@ -255,7 +300,7 @@ export function buildEcargoVctFillPayload(opts: {
     );
   }
 
-  const plate = normalizeVehiclePlateInput(opts.vehicle.licensePlate);
+  const plate = normalizeVehiclePlateInput(vehicle.licensePlate);
   const vehicleQuantity = Math.max(1, plate.split(";").filter(Boolean).length);
 
   return {
@@ -268,12 +313,12 @@ export function buildEcargoVctFillPayload(opts: {
         agentPicId: prepared.agentPicId,
         arrivalDate,
         arrivalTime: String(opts.arrivalTime ?? prepared.defaultArrivalSlot ?? "8"),
-        vehicleType: opts.vehicle.vehicleType,
+        vehicleType: vehicle.vehicleType,
         vehicleQuantity,
         vehicleNo: plate,
-        driverName: normalizeEcargoPersonName(opts.vehicle.driverName),
-        driverIdType: opts.vehicle.driverIdType,
-        driverId: normalizeEcargoIdNumber(opts.vehicle.driverId),
+        driverName: normalizeEcargoPersonName(vehicle.driverName),
+        driverIdType: vehicle.driverIdType,
+        driverId: normalizeEcargoIdNumber(vehicle.driverId),
         email: prepared.email,
         mobilePhone: prepared.mobilePhone,
       },

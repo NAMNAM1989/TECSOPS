@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
 import {
+  applyAgentDriverFallback,
   buildEcargoVctFillPayload,
   ECARGO_DEFAULT_GOODS,
   ECARGO_DEFAULT_KG,
@@ -190,6 +191,51 @@ describe("buildEcargoVctFillPayload", () => {
     });
     expect(error).toBeUndefined();
     expect(payload?.header.arrivalDate).toBe("2026-08-03");
+  });
+
+  it("thiếu TX trên xe → dùng NV đại lý", () => {
+    const { pick, usedAgentFallback } = applyAgentDriverFallback(
+      {
+        source: "oneshot",
+        licensePlate: "50H17480",
+        driverName: "",
+        driverId: "",
+        driverIdType: "CCCD",
+        vehicleType: "OTO",
+      },
+      {
+        agentPicName: "Nguyen Van Agent",
+        agentPicId: "079123456789",
+        agentPicIdType: "CCCD",
+      },
+    );
+    expect(usedAgentFallback).toBe(true);
+    expect(pick.driverName).toBe("Nguyen Van Agent");
+    expect(pick.driverId).toBe("079123456789");
+
+    const built = buildEcargoVctFillPayload({
+      profile: {
+        ...profile,
+        agentPicName: "Nguyen Van Agent",
+        agentPicId: "079123456789",
+      },
+      vehicle: {
+        source: "saved",
+        vehicleId: "v-plate-only",
+        licensePlate: "50H17480",
+        driverName: "",
+        driverId: "",
+        driverIdType: "CCCD",
+        vehicleType: "OTO",
+      },
+      shipments: [baseShipment()],
+      customers,
+      arrivalDate: todayLocalYmd(),
+      arrivalTime: "8",
+    });
+    expect(built.error).toBeUndefined();
+    expect(built.payload?.header.driverName).toBe("NGUYEN VAN AGENT");
+    expect(built.warnings.some((w) => /NV đại lý/i.test(w))).toBe(true);
   });
 
   it("chỉ nhận lô kho SCSC — bỏ TECS-SCSC / TCS", () => {

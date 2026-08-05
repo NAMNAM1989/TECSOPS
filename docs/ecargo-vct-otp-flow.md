@@ -9,33 +9,33 @@ Khảo sát form Create + pattern ASP.NET eCargo. Cập nhật khi SCSC đổi D
 | Tạo phiếu | `input#btnCreate[type=submit]`, `input[value='Tạo phiếu']`, `button` text «Tạo phiếu» |
 | Email OTP | `#txtEmail` |
 
-## Extension 3 pha (v2.2.6+)
+## Extension — xác thực qua mail (v2.2.7+)
 
-Background điều phối — sống qua reload ASP.NET sau «Tạo phiếu»:
+Luồng thật của SCSC (không phải OTP 6 số trên form Create):
 
-1. `ECARGO_FILL_AND_CREATE` — điền form + bấm Tạo phiếu (content, ngắn)
-2. Background — chờ ô OTP (`ECARGO_FIND_OTP_UI`) + `POST /api/ecargo/otp/wait`
-3. `ECARGO_SUBMIT_OTP` — điền mã + bấm xác thực + bắt QR
+1. `ECARGO_FILL_AND_CREATE` — điền + Tạo phiếu
+2. Background — `POST /api/ecargo/otp/wait` lấy **mã alphanumeric** + **URL** từ link «đây» trong mail
+3. Mở URL trên tab eCargo
+4. `ECARGO_CONFIRM_VERIFY` — đảm bảo ô «Mã xác thực» + bấm nút **Xác Thực** → hoàn thành
 
-Ops vẫn gửi `REGISTER_ECARGO_VCT` → background chạy 3 pha.
+Mail mẫu: subject `[eCargo] Mã xác thực phiếu… số 80ZWUGWM`, body `Mã xác thực : QSSMB88636480ZWUGWM`, link «Bấm vào đây để tiến hành xác thực.»
 
-## Modal / bước OTP (sau Tạo phiếu)
-
-Thử theo thứ tự (content-ecargo), **ưu tiên trong** `.modal.show` / `.bootbox` / `[role=dialog]`:
+## Trang xác thực (sau khi mở link mail)
 
 | Ý nghĩa | Selectors ứng viên |
 |---------|-------------------|
-| Ô OTP | `#txtOTP`, `#txtOtp`, `#txtOtpCode`, `input[name=OTP]`, `input[name=OtpCode]`, `input[placeholder*='OTP' i]` |
-| Nút xác nhận | `#btnConfirmOTP`, `#btnVerifyOTP`, `#btnSubmitOTP`, label `/xác nhận\|xác thực\|verify\|đồng ý\|ok/i` — **loại** `#btnCreate` / «Tạo phiếu» |
-| Modal | `.modal.show`, `#otpModal`, `.bootbox`, `[role=dialog]` chứa OTP |
+| Ô mã | `input` gần label «Mã xác thực», hoặc `name/id/placeholder` chứa mã/code/token |
+| Nút | button/input text `/xác thực/i` (không phải «Tạo phiếu») |
+| Thành công | body text `/hoàn thành xác thực\|đã xác thực\|thành công/i` |
 
-## Email OTP
+## Email xác thực
 
 | Mục | Giá trị mặc định |
 |-----|------------------|
-| From chứa | `scsc`, `ecargo`, `noreply` |
-| Subject chứa | `OTP`, `xác thực`, `verification`, `eCargo` |
-| Regex mã | `/\b(\d{6})\b/` rồi `/OTP[:\s#-]*(\d{4,8})/i` |
+| From | `ecargo@scsc.vn` / chứa `scsc`, `ecargo` |
+| Subject | `Mã xác thực phiếu đăng ký hàng vào kho số …` |
+| Mã | `/Mã xác thực\s*:\s*([A-Z0-9]{10,48})/i` (VD `QSSMB88636480ZWUGWM`) |
+| Link | `href` tới `ecargo.scsc.vn` (anchor «đây») |
 | Cửa sổ thời gian | chỉ mail `internalDate >= sinceIso` |
 
 ## Sau OTP — QR / mã phiếu
@@ -82,7 +82,8 @@ Local: xem thêm [`.env.example`](../.env.example). Server nạp `.env` rồi `.
 
 ## Ghi chú
 
-- Phase create: bấm «Tạo phiếu» rồi trả về; nếu trang reload, background bắt kênh đứt và vẫn chờ OTP UI.
-- OTP chỉ lấy qua `POST /api/ecargo/otp/wait` trên server (App Password không vào extension).
+- Phase create: bấm «Tạo phiếu» rồi trả về; nếu trang reload, background bắt kênh đứt rồi đọc mail.
+- Mail xác thực lấy qua `POST /api/ecargo/otp/wait` (trả `code` + `verifyUrl`) — App Password chỉ trên server.
+- Không chờ modal OTP trên form Create; mở link «đây» rồi bấm **Xác Thực**.
 - Modal Ops: nút **Đăng ký eCargo** disabled khi `imapConfigured: false`; **Chỉ điền form** vẫn dùng được.
-- Lỗi theo `phase`: `create` | `otp_ui` | `otp_mail` | `otp_submit` | `done`.
+- Lỗi theo `phase`: `create` | `otp_mail` | `otp_submit` | `done`.

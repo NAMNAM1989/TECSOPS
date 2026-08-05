@@ -109,15 +109,19 @@ export function registerEcargoVctRoutes(app, { runMutation, loadState, io }) {
         awbHint,
         timeoutMs,
       });
-      // Không log OTP đầy đủ
+      // Không log mã đầy đủ
       console.info(
-        "[ecargo/otp] got otp len=%s subject=%s",
-        hit.otp?.length ?? 0,
+        "[ecargo/otp] got code len=%s hasUrl=%s subject=%s",
+        hit.code?.length || hit.otp?.length || 0,
+        Boolean(hit.verifyUrl),
         hit.subject || ""
       );
       res.json({
         ok: true,
-        otp: hit.otp,
+        otp: hit.otp || hit.code,
+        code: hit.code || hit.otp,
+        verifyUrl: hit.verifyUrl || "",
+        vctCode: hit.vctCode || "",
         subject: hit.subject,
         receivedAt: hit.receivedAt,
       });

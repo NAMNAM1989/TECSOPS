@@ -1,14 +1,15 @@
 /**
  * Điền / đăng ký eCargo VCT (Export) trên ecargo.scsc.vn.
  * FILL = chỉ điền.
- * Đăng ký 1-click do background điều phối 3 pha:
- *   ECARGO_FILL_AND_CREATE → (BG chờ OTP UI + IMAP) → ECARGO_SUBMIT_OTP
+ * Đăng ký 1-click do background điều phối:
+ *   ECARGO_FILL_AND_CREATE → (BG IMAP: mã + link mail) → mở trang xác thực
+ *   → ECARGO_CONFIRM_VERIFY (bấm «Xác Thực»)
  *
  * Listener đăng ký 1 lần; handler gắn globalThis để inject lại (executeScript)
  * luôn cập nhật bản mới — tránh kẹt listener cũ.
  */
 
-const SCRIPT_VERSION = "2.2.6";
+const SCRIPT_VERSION = "2.2.7";
 const CREATE_PATH = "/Export/VCTOrder/Create";
 
 globalThis.__TECSOPS_ECARGO_VERSION__ = SCRIPT_VERSION;
@@ -66,14 +67,14 @@ globalThis.__TECSOPS_ECARGO_HANDLER__ = function tecsopsEcargoOnMessage(msg, _se
     return true;
   }
 
-  if (msg.type === "ECARGO_SUBMIT_OTP") {
-    void submitEcargoOtp(msg.payload)
+  if (msg.type === "ECARGO_SUBMIT_OTP" || msg.type === "ECARGO_CONFIRM_VERIFY") {
+    void confirmEcargoVerifyPage(msg.payload)
       .then(sendResponse)
       .catch((err) =>
         sendResponse({
           ok: false,
-          error: "OTP_SUBMIT_FAILED",
-          message: err instanceof Error ? err.message : String(err || "OTP submit failed"),
+          error: "VERIFY_FAILED",
+          message: err instanceof Error ? err.message : String(err || "Verify failed"),
           scriptVersion: SCRIPT_VERSION,
           phase: "otp_submit",
         })
@@ -81,7 +82,7 @@ globalThis.__TECSOPS_ECARGO_HANDLER__ = function tecsopsEcargoOnMessage(msg, _se
     return true;
   }
 
-  // Backward-compat: không còn chạy full OTP trong content (dễ chết khi reload).
+  // Backward-compat: chỉ Tạo phiếu — background lấy mail + mở link xác thực (Ext v2.2.7+).
   if (msg.type === "REGISTER_ECARGO_VCT") {
     void fillAndCreateEcargoVct(msg.payload)
       .then((res) =>
@@ -89,7 +90,7 @@ globalThis.__TECSOPS_ECARGO_HANDLER__ = function tecsopsEcargoOnMessage(msg, _se
           ...res,
           message:
             (res?.message || "Đã Tạo phiếu") +
-            " — background sẽ lấy OTP (cần Ext v2.2.6+).",
+            " — background sẽ mở link xác thực từ mail (cần Ext v2.2.7+).",
           needsBackgroundOtp: true,
         })
       )
@@ -660,7 +661,7 @@ async function fillEcargoVct(payload) {
       error: "AGENT_MISMATCH",
       message:
         `Tên đại lý trên form («${headerFills.agentNameValue || ""}») không khớp hồ sơ («${wantAgent}»). ` +
-        "Ext không được nhảy theo gợi ý gần giống — Reload Ext v2.2.6 rồi thử lại.",
+        "Ext không được nhảy theo gợi ý gần giống — Reload Ext v2.2.7 rồi thử lại.",
       scriptVersion: SCRIPT_VERSION,
       fills: headerFills,
       warnings: [],
@@ -1125,64 +1126,148 @@ async function fillAndCreateEcargoVct(payload) {
   };
 }
 
-/**
- * Phase C: điền OTP (fresh DOM) + bấm xác thực + bắt QR.
- * payload: { otp, apiBase?, email?, sinceIso?, awbHint? }
- */
-async function submitEcargoOtp(payload) {
-  const otp = String(payload?.otp || "").trim();
-  if (!/^\d{4,8}$/.test(otp)) {
-    return {
-      ok: false,
-      error: "BAD_OTP",
-      message: "OTP không hợp lệ",
-      scriptVersion: SCRIPT_VERSION,
-      phase: "otp_submit",
-    };
+function findVerifyCodeInput() {
+  const labeled = [
+    ...document.querySelectorAll("input[type='text'], input:not([type]), input[type='search']"),
+  ].filter((el) => isDomVisible(el));
+  for (const el of labeled) {
+    const meta = `${el.name || ""} ${el.id || ""} ${el.placeholder || ""} ${
+      el.getAttribute("aria-label") || ""
+    }`;
+    if (/mã|ma|code|token|verify|xác\s*thực|xac\s*thuc/i.test(meta)) return el;
   }
-
-  const otpInput = (await waitForOtpInput(8_000)) || findOtpInput();
-  if (!otpInput) {
-    return {
-      ok: false,
-      error: "NO_OTP_UI",
-      message: "Không thấy ô OTP để điền mã.",
-      scriptVersion: SCRIPT_VERSION,
-      phase: "otp_submit",
-    };
-  }
-
-  otpInput.focus();
-  setNativeValue(otpInput, otp);
-  otpInput.dispatchEvent(new Event("input", { bubbles: true }));
-  otpInput.dispatchEvent(new Event("change", { bubbles: true }));
-  otpInput.dispatchEvent(
-    new KeyboardEvent("keyup", { key: "0", bubbles: true, cancelable: true })
+  // Trang «Xác thực đăng ký hàng vào kho»: ô cạnh nút Xác Thực
+  const byLabel = [...document.querySelectorAll("label, span, div, td, th")].find((n) =>
+    /mã\s*xác\s*thực|ma\s*xac\s*thuc/i.test(String(n.textContent || "").trim())
   );
-  await sleep(150);
-
-  if (String(otpInput.value || "").replace(/\s/g, "") !== otp) {
-    setNativeValue(otpInput, otp);
+  if (byLabel) {
+    const root = byLabel.closest("form, .form-group, .row, tr, div") || byLabel.parentElement;
+    const near = root?.querySelector?.("input");
+    if (near && isDomVisible(near)) return near;
   }
+  return labeled[0] || findOtpInput();
+}
 
-  const clicked = await clickOtpConfirm(otpInput);
-  if (!clicked.ok) {
+function findVerifySubmitButton() {
+  const nodes = [
+    ...document.querySelectorAll(
+      "button, input[type='submit'], input[type='button'], a.btn, .btn"
+    ),
+  ];
+  for (const el of nodes) {
+    if (!isDomVisible(el) || isCreateOrderButton(el)) continue;
+    const label = otpButtonLabel(el);
+    // Đúng nút trang verify — tránh «Tạo phiếu»
+    if (/^xác\s*thực$|^xac\s*thuc$/i.test(label) || /xác\s*thực|xac\s*thuc/i.test(label)) {
+      return el;
+    }
+  }
+  return null;
+}
+
+function pageLooksVerified() {
+  const t = String(document.body?.innerText || "");
+  return /hoàn\s*thành\s*xác\s*thực|đã\s*xác\s*thực|xác\s*thực\s*thành\s*công|verify(?:ied)?\s*success/i.test(
+    t
+  );
+}
+
+/**
+ * Trang xác thực từ link mail «đây»: điền mã (nếu trống) + bấm «Xác Thực».
+ * payload: { code|otp, vctCode?, apiBase?, email?, sinceIso? }
+ */
+async function confirmEcargoVerifyPage(payload) {
+  const code = String(payload?.code || payload?.otp || "")
+    .trim()
+    .toUpperCase();
+  if (!code || code.length < 6) {
     return {
       ok: false,
-      error: "NO_CONFIRM_BTN",
-      message:
-        "Đã điền OTP nhưng không bấm được nút xác thực/xác nhận. Kiểm tra modal eCargo.",
+      error: "BAD_CODE",
+      message: "Thiếu mã xác thực từ mail",
       scriptVersion: SCRIPT_VERSION,
       phase: "otp_submit",
-      otpFilled: true,
     };
   }
 
-  await sleep(1200);
+  const started = Date.now();
+  let input = null;
+  while (Date.now() - started < 12_000) {
+    if (pageLooksVerified()) {
+      return {
+        ok: true,
+        message: "Trang đã báo hoàn thành xác thực.",
+        scriptVersion: SCRIPT_VERSION,
+        phase: "done",
+        vctCode: String(payload?.vctCode || ""),
+        submit: true,
+      };
+    }
+    input = findVerifyCodeInput();
+    if (input) break;
+    await sleep(250);
+  }
+  if (!input) {
+    return {
+      ok: false,
+      error: "NO_VERIFY_UI",
+      message:
+        "Không thấy ô «Mã xác thực» trên trang. Kiểm tra đã mở đúng link «đây» trong mail.",
+      scriptVersion: SCRIPT_VERSION,
+      phase: "otp_submit",
+      url: location.href,
+    };
+  }
+
+  const current = String(input.value || "").trim().toUpperCase();
+  if (current !== code) {
+    input.focus();
+    setNativeValue(input, code);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await sleep(120);
+  }
+
+  let btn = findVerifySubmitButton();
+  for (let attempt = 0; attempt < 3 && !btn; attempt += 1) {
+    await sleep(300);
+    btn = findVerifySubmitButton();
+  }
+  if (!btn) {
+    // fallback: nút cạnh ô input
+    const clicked = await clickOtpConfirm(input);
+    if (!clicked.ok) {
+      return {
+        ok: false,
+        error: "NO_VERIFY_BTN",
+        message: "Không thấy nút «Xác Thực» trên trang xác thực eCargo.",
+        scriptVersion: SCRIPT_VERSION,
+        phase: "otp_submit",
+        url: location.href,
+      };
+    }
+  } else {
+    const $ = getJQuery();
+    if ($ && $.fn) {
+      try {
+        $(btn).trigger("click");
+      } catch {
+        /* DOM */
+      }
+    }
+    clickEl(btn);
+  }
+
+  await sleep(800);
+  let verified = pageLooksVerified();
+  for (let i = 0; i < 8 && !verified; i += 1) {
+    await sleep(500);
+    verified = pageLooksVerified();
+  }
+
   let capture = await captureQrAndVctCode();
-  for (let i = 0; i < 4 && !capture.qrDataUrl && !capture.vctCode; i += 1) {
-    await sleep(1000);
-    capture = await captureQrAndVctCode();
+  if (!capture.vctCode && payload?.vctCode) {
+    capture.vctCode = String(payload.vctCode);
   }
 
   const apiBase = String(payload?.apiBase || "").replace(/\/$/, "");
@@ -1205,19 +1290,19 @@ async function submitEcargoOtp(payload) {
     }
   }
 
-  const ok = Boolean(capture.vctCode || capture.qrDataUrl);
+  const ok = verified || Boolean(capture.vctCode || capture.qrDataUrl);
   return {
     ok,
     message: ok
-      ? `Đã xác thực OTP${capture.vctCode ? `: ${capture.vctCode}` : ""}.`
-      : "Đã bấm xác thực OTP nhưng chưa lấy được QR/mã phiếu",
+      ? `Đã xác thực phiếu${capture.vctCode ? `: ${capture.vctCode}` : ""}.`
+      : "Đã bấm «Xác Thực» nhưng chưa thấy thông báo hoàn thành — kiểm tra tab eCargo.",
     scriptVersion: SCRIPT_VERSION,
     phase: "done",
     vctCode: capture.vctCode,
     qrDataUrl: capture.qrDataUrl,
     sinceIso: sinceIso || undefined,
-    confirmHow: clicked.how,
-    confirmLabel: clicked.label,
+    verified,
+    url: location.href,
     submit: true,
   };
 }

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { extractOtpFromText, maskEcargoImapUser } from "./ecargoImapOtp.mjs";
+import {
+  extractEcargoVerifyFromMail,
+  extractOtpFromText,
+  maskEcargoImapUser,
+} from "./ecargoImapOtp.mjs";
 
 describe("extractOtpFromText", () => {
   it("lấy OTP 6 số có nhãn", () => {
@@ -8,6 +12,25 @@ describe("extractOtpFromText", () => {
 
   it("lấy OTP 6 số đứng riêng", () => {
     expect(extractOtpFromText("Xin chao\n847291\nCam on")).toBe("847291");
+  });
+});
+
+describe("extractEcargoVerifyFromMail", () => {
+  it("lấy mã alphanumeric + link xác thực từ mail SCSC", () => {
+    const html = `
+      <p>Mã xác thực : <b>QSSMB88636480ZWUGWM</b></p>
+      <p>Bấm vào <a href="https://ecargo.scsc.vn/Export/VCTOrder/Verify?token=abc123">đây</a> để tiến hành xác thực.</p>
+    `;
+    const r = extractEcargoVerifyFromMail({
+      subject: "[eCargo] Mã xác thực phiếu đăng ký hàng vào kho số 80ZWUGWM",
+      text: "Mã xác thực : QSSMB88636480ZWUGWM\nBấm vào đây để tiến hành xác thực.",
+      html,
+    });
+    expect(r.code).toBe("QSSMB88636480ZWUGWM");
+    expect(r.otp).toBe("QSSMB88636480ZWUGWM");
+    expect(r.vctCode).toBe("80ZWUGWM");
+    expect(r.verifyUrl).toContain("ecargo.scsc.vn");
+    expect(r.verifyUrl).toMatch(/Verify|token/i);
   });
 });
 

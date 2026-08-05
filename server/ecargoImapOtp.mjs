@@ -117,6 +117,75 @@ export function extractOtpFromText(text) {
   return fourToEight?.[1] || null;
 }
 
+/**
+ * Mail eCargo thật: mã alphanumeric + link «Bấm vào đây để tiến hành xác thực».
+ * VD: Mã xác thực : QSSMB88636480ZWUGWM — subject … số 80ZWUGWM
+ */
+export function extractEcargoVerifyFromMail({ subject, text, html } = {}) {
+  const subjectStr = String(subject || "");
+  const textStr = String(text || "");
+  const htmlStr = typeof html === "string" ? html : "";
+  const plainHtml = htmlStr.replace(/<[^>]+>/g, " ");
+  const blob = `${subjectStr}\n${textStr}\n${plainHtml}`;
+
+  const code =
+    blob.match(/Mã\s*xác\s*thực\s*[:：]\s*([A-Z0-9]{10,48})/i)?.[1] ||
+    blob.match(/Ma\s*xac\s*thuc\s*[:：]\s*([A-Z0-9]{10,48})/i)?.[1] ||
+    blob.match(
+      /xác\s*thực[^A-Z0-9]{0,40}([A-Z]{2,}[A-Z0-9]{8,40})/i
+    )?.[1] ||
+    null;
+
+  const vctCode =
+    subjectStr.match(/số\s+([A-Z0-9]{6,20})\s*$/i)?.[1] ||
+    subjectStr.match(/kho\s+số\s+([A-Z0-9]{6,20})/i)?.[1] ||
+    (code && code.length >= 8 ? code.slice(-8) : "") ||
+    "";
+
+  let verifyUrl = "";
+  const hrefs = [...htmlStr.matchAll(/\bhref\s*=\s*["']([^"']+)["']/gi)].map(
+    (m) => String(m[1] || "").trim()
+  );
+  const scoreHref = (href) => {
+    const h = href.toLowerCase();
+    if (!h || /unsubscribe|mailto:|javascript:/i.test(h)) return -1;
+    let score = 0;
+    if (/ecargo\.scsc\.vn/i.test(h)) score += 50;
+    if (/verif|xac.?thuc|confirm|authenticate|token|code=/i.test(h)) score += 40;
+    if (/export|vct/i.test(h)) score += 10;
+    return score;
+  };
+  let bestScore = 0;
+  for (const href of hrefs) {
+    const sc = scoreHref(href);
+    if (sc > bestScore) {
+      bestScore = sc;
+      verifyUrl = href;
+    }
+  }
+  if (!verifyUrl) {
+    const urlMatch = blob.match(
+      /https?:\/\/(?:www\.)?ecargo\.scsc\.vn[^\s"'<>)]+/i
+    );
+    if (urlMatch?.[0]) verifyUrl = urlMatch[0].replace(/[.,;]+$/, "");
+  }
+  // HTML entity / relative
+  if (verifyUrl && verifyUrl.startsWith("/")) {
+    verifyUrl = `https://ecargo.scsc.vn${verifyUrl}`;
+  }
+  verifyUrl = verifyUrl.replace(/&amp;/g, "&");
+
+  const numericFallback = code ? null : extractOtpFromText(blob);
+  const otp = code || numericFallback || "";
+
+  return {
+    code: otp,
+    otp,
+    verifyUrl,
+    vctCode: vctCode || "",
+  };
+}
+
 function mailLooksLikeEcargoOtp(parsed, emailHint) {
   const from = String(parsed.from?.text || "").toLowerCase();
   const subject = String(parsed.subject || "").toLowerCase();
@@ -125,13 +194,13 @@ function mailLooksLikeEcargoOtp(parsed, emailHint) {
     .trim()
     .toLowerCase();
   if (hint && to && !to.includes(hint)) return false;
-  const fromOk =
-    /scsc|ecargo|noreply|no-reply|mailer/.test(from) || from.length > 0;
+  const fromOk = /scsc|ecargo|noreply|no-reply|mailer/.test(from);
   const subjectOk =
-    /otp|xác thực|xac thuc|verification|verify|mã|code|ecargo|vct/.test(
+    /mã xác thực|ma xac thuc|xác thực phiếu|xac thuc phieu|otp|verification|ecargo|vct|hàng vào kho|hang vao kho/.test(
       subject
-    ) || subject.length > 0;
-  return fromOk && subjectOk;
+    );
+  // Ưu tiên mail eCargo thật; vẫn nhận nếu subject rõ ràng dù from lạ
+  return (fromOk && subjectOk) || (subjectOk && /ecargo|scsc/.test(subject));
 }
 
 async function searchOtpOnce({ email, sinceMs, awbHint }) {
@@ -175,26 +244,18 @@ async function searchOtpOnce({ email, sinceMs, awbHint }) {
           continue;
         }
         if (!mailLooksLikeEcargoOtp(parsed, email)) continue;
-        const blob = [
-          parsed.subject,
-          parsed.text,
-          typeof parsed.html === "string"
-            ? parsed.html.replace(/<[^>]+>/g, " ")
-            : "",
-        ].join("\n");
-        if (awbHint) {
-          const awbDigits = String(awbHint).replace(/\D/g, "");
-          if (
-            awbDigits.length >= 8 &&
-            !blob.replace(/\D/g, "").includes(awbDigits.slice(-8))
-          ) {
-            // không bắt buộc AWB trong mail OTP — bỏ qua filter cứng
-          }
-        }
-        const otp = extractOtpFromText(blob);
-        if (otp) {
+        void awbHint;
+        const extracted = extractEcargoVerifyFromMail({
+          subject: parsed.subject,
+          text: parsed.text,
+          html: typeof parsed.html === "string" ? parsed.html : "",
+        });
+        if (extracted.otp || extracted.verifyUrl) {
           return {
-            otp,
+            otp: extracted.otp,
+            code: extracted.code,
+            verifyUrl: extracted.verifyUrl,
+            vctCode: extracted.vctCode,
             uid: msg.uid,
             subject: String(parsed.subject || "").slice(0, 120),
             receivedAt: internal ? new Date(internal).toISOString() : null,
@@ -215,8 +276,8 @@ async function searchOtpOnce({ email, sinceMs, awbHint }) {
 }
 
 /**
- * Poll IMAP đến khi có OTP hoặc timeout.
- * @returns {{ otp: string, subject?: string, receivedAt?: string|null }}
+ * Poll IMAP đến khi có mail xác thực (mã + link) hoặc timeout.
+ * @returns {{ otp: string, code?: string, verifyUrl?: string, vctCode?: string, subject?: string, receivedAt?: string|null }}
  */
 export async function waitForEcargoOtp(opts = {}) {
   const email = String(opts.email || "").trim();
@@ -239,9 +300,12 @@ export async function waitForEcargoOtp(opts = {}) {
         sinceMs,
         awbHint,
       });
-      if (hit?.otp) {
+      if (hit?.otp || hit?.verifyUrl) {
         return {
-          otp: hit.otp,
+          otp: hit.otp || "",
+          code: hit.code || hit.otp || "",
+          verifyUrl: hit.verifyUrl || "",
+          vctCode: hit.vctCode || "",
           subject: hit.subject,
           receivedAt: hit.receivedAt,
         };
@@ -249,7 +313,7 @@ export async function waitForEcargoOtp(opts = {}) {
       await new Promise((r) => setTimeout(r, POLL_MS));
     }
     throw new Error(
-      `Không thấy OTP eCargo trong hộp thư sau ${Math.round(timeoutMs / 1000)}s`
+      `Không thấy mail xác thực eCargo trong hộp thư sau ${Math.round(timeoutMs / 1000)}s`
     );
   };
 

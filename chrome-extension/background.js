@@ -10,7 +10,7 @@ const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const ECARGO_CREATE_URL = "https://ecargo.scsc.vn/Export/VCTOrder/Create";
 const EXT_VERSION = chrome.runtime.getManifest().version;
 const EXPECTED_SCRIPT_VERSION = "2.0.20";
-const EXPECTED_ECARGO_SCRIPT_VERSION = "2.2.5";
+const EXPECTED_ECARGO_SCRIPT_VERSION = "2.2.6";
 const SESSION_KEY = "tecsopsTcsSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
 const WORKSPACE_KEY = "tecsopsTcsWorkspace";
@@ -817,6 +817,47 @@ async function fillEcargoOnTab(payload) {
   return { ...result, workspace, version: EXT_VERSION };
 }
 
+/** Poll content tới khi thấy ô OTP (sống qua reload sau Tạo phiếu). */
+async function waitForEcargoOtpUi(tabId, timeoutMs = 45_000) {
+  const started = Date.now();
+  let lastErr = "";
+  while (Date.now() - started < timeoutMs) {
+    try {
+      await injectEcargoContent(tabId);
+      const res = await chrome.tabs.sendMessage(tabId, { type: "ECARGO_FIND_OTP_UI" });
+      if (res?.ok || res?.found) {
+        return { ok: true, ...res };
+      }
+      const ping = await chrome.tabs.sendMessage(tabId, { type: "ECARGO_PING" });
+      if (ping?.hasOtpUi) return { ok: true, found: true, via: "ping" };
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : String(err || "");
+      try {
+        await waitTabComplete(tabId, 8_000);
+      } catch {
+        /* keep polling */
+      }
+      try {
+        await ensureEcargoContentReady(tabId);
+      } catch {
+        /* keep polling */
+      }
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return {
+    ok: false,
+    error: "NO_OTP_UI",
+    message:
+      lastErr ||
+      "Không thấy ô OTP sau «Tạo phiếu». Kiểm tra tab eCargo / đăng nhập / popup.",
+  };
+}
+
+/**
+ * 3 pha: FILL_AND_CREATE → chờ OTP UI + IMAP → SUBMIT_OTP → lưu kết quả.
+ * Background giữ luồng khi trang eCargo reload (content script chết).
+ */
 async function registerEcargoOnTab(payload) {
   await workspaceReady;
   if (!payload || typeof payload !== "object") {
@@ -827,34 +868,221 @@ async function registerEcargoOnTab(payload) {
       warnings: [],
     };
   }
+
+  const apiBase = String(payload.apiBase || "").replace(/\/$/, "");
+  const email = String(payload.header?.email || "").trim();
+  const awbHint = payload.awbs?.[0]?.awb || "";
+  const shipmentIds = Array.isArray(payload.shipmentIds)
+    ? payload.shipmentIds.map(String)
+    : [];
+  if (!apiBase) {
+    return {
+      ok: false,
+      error: "NO_API_BASE",
+      message: "Thiếu apiBase để gọi /api/ecargo/otp/wait",
+      warnings: [],
+      version: EXT_VERSION,
+    };
+  }
+
   const tabId = await findOrOpenEcargoTab({ active: true, pinned: true });
   await ensureEcargoContentReady(tabId);
   setWorkspace({
     phase: "FILLING",
-    message: "Đang đăng ký eCargo (điền → OTP → QR)…",
+    message: "eCargo: điền form + Tạo phiếu…",
     error: "",
   });
-  const result = await sendToEcargoContent(tabId, {
-    type: "REGISTER_ECARGO_VCT",
-    payload,
-  });
-  if (!result || typeof result !== "object") {
+
+  let createRes;
+  try {
+    createRes = await sendToEcargoContent(tabId, {
+      type: "ECARGO_FILL_AND_CREATE",
+      payload,
+    });
+  } catch (err) {
+    // Form POST/reload thường cắt kênh content giữa chừng — coi như đã bấm Tạo phiếu.
+    // sinceIso ~ vài giây trước (lúc click), tránh lấy OTP cũ từ lần trước.
+    createRes = {
+      ok: true,
+      navigatedAway: true,
+      sinceIso: new Date(Date.now() - 8_000).toISOString(),
+      warnings: [
+        `Tab có thể đã reload sau Tạo phiếu (${err instanceof Error ? err.message : String(err)}).`,
+      ],
+      phase: "create",
+    };
+  }
+
+  if (!createRes || typeof createRes !== "object") {
     return {
       ok: false,
       error: "NO_CONTENT_RESPONSE",
       message:
-        "Tab eCargo không trả lời lệnh đăng ký. Reload Ext v2.2.5 tại chrome://extensions, F5 Ops + tab eCargo.",
+        "Tab eCargo không trả lời lệnh Tạo phiếu. Reload Ext v2.2.6 tại chrome://extensions, F5 Ops + tab eCargo.",
       warnings: [],
+      workspace,
+      version: EXT_VERSION,
+      phase: "create",
+    };
+  }
+  if (!createRes.ok && !createRes.navigatedAway) {
+    setWorkspace({
+      phase: "ERROR",
+      error: createRes.message || "Tạo phiếu thất bại",
+    });
+    return { ...createRes, workspace, version: EXT_VERSION };
+  }
+
+  const sinceIso = String(
+    createRes.sinceIso || new Date(Date.now() - 8_000).toISOString()
+  ).trim();
+  const warnings = [...(createRes.warnings || [])];
+
+  setWorkspace({
+    phase: "FILLING",
+    message: "eCargo: chờ ô OTP…",
+    error: "",
+  });
+  try {
+    await waitTabComplete(tabId, 20_000);
+  } catch {
+    /* modal AJAX — không bắt buộc reload */
+  }
+  try {
+    await ensureEcargoContentReady(tabId);
+  } catch {
+    /* poll bên dưới sẽ inject lại */
+  }
+
+  if (!createRes.otpUiReady) {
+    const otpUi = await waitForEcargoOtpUi(tabId, 45_000);
+    if (!otpUi?.ok) {
+      setWorkspace({ phase: "ERROR", error: otpUi.message || "Không thấy ô OTP" });
+      return {
+        ok: false,
+        error: otpUi.error || "NO_OTP_UI",
+        message: otpUi.message || "Không thấy ô OTP sau Tạo phiếu",
+        phase: "otp_ui",
+        sinceIso,
+        warnings,
+        workspace,
+        version: EXT_VERSION,
+      };
+    }
+  }
+
+  setWorkspace({
+    phase: "FILLING",
+    message: "eCargo: đọc OTP từ mail…",
+    error: "",
+  });
+  const otpRes = await ecargoOtpWait({
+    apiBase,
+    email,
+    sinceIso,
+    awbHint,
+    timeoutMs: 90_000,
+  });
+  if (!otpRes?.ok || !otpRes.otp) {
+    setWorkspace({
+      phase: "ERROR",
+      error: otpRes?.message || "Không lấy được OTP",
+    });
+    return {
+      ok: false,
+      error: otpRes?.error || "OTP_FAILED",
+      message: otpRes?.message || "Không lấy được OTP từ mailbox",
+      phase: "otp_mail",
+      sinceIso,
+      warnings,
       workspace,
       version: EXT_VERSION,
     };
   }
+
+  setWorkspace({
+    phase: "FILLING",
+    message: "eCargo: điền OTP + xác thực…",
+    error: "",
+  });
+  await ensureEcargoContentReady(tabId);
+  let submitRes;
+  try {
+    submitRes = await sendToEcargoContent(tabId, {
+      type: "ECARGO_SUBMIT_OTP",
+      payload: {
+        otp: otpRes.otp,
+        apiBase,
+        email,
+        sinceIso,
+        awbHint,
+      },
+    });
+  } catch (err) {
+    setWorkspace({
+      phase: "ERROR",
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return {
+      ok: false,
+      error: "OTP_SUBMIT_FAILED",
+      message:
+        err instanceof Error
+          ? err.message
+          : "Không gửi được lệnh điền OTP tới tab eCargo",
+      phase: "otp_submit",
+      sinceIso,
+      warnings,
+      workspace,
+      version: EXT_VERSION,
+    };
+  }
+
+  if (!submitRes || typeof submitRes !== "object") {
+    return {
+      ok: false,
+      error: "NO_CONTENT_RESPONSE",
+      message: "Tab eCargo không trả lời lệnh xác thực OTP.",
+      phase: "otp_submit",
+      sinceIso,
+      warnings,
+      workspace,
+      version: EXT_VERSION,
+    };
+  }
+
+  if (shipmentIds.length) {
+    await ecargoSaveResult({
+      apiBase,
+      shipmentIds,
+      status: submitRes.vctCode || submitRes.qrDataUrl ? "done" : "error",
+      vctCode: submitRes.vctCode,
+      qrDataUrl: submitRes.qrDataUrl,
+      awb: awbHint,
+      error:
+        submitRes.vctCode || submitRes.qrDataUrl
+          ? ""
+          : submitRes.message || "Đã OTP nhưng chưa bắt được mã phiếu/QR",
+      registeredAt: new Date().toISOString(),
+    });
+  }
+
+  const finalOk = Boolean(submitRes.ok);
   setWorkspace(
-    result?.ok
-      ? { phase: "READY", message: result.message || "Đã đăng ký eCargo" }
-      : { phase: "ERROR", error: result?.message || "Đăng ký eCargo thất bại" }
+    finalOk
+      ? { phase: "READY", message: submitRes.message || "Đã đăng ký eCargo" }
+      : { phase: "ERROR", error: submitRes.message || "Xác thực OTP thất bại" }
   );
-  return { ...result, workspace, version: EXT_VERSION };
+  return {
+    ...submitRes,
+    ok: finalOk,
+    phase: submitRes.phase || (finalOk ? "done" : "otp_submit"),
+    sinceIso,
+    warnings: [...warnings, ...(submitRes.warnings || [])],
+    otpSubject: otpRes.subject,
+    workspace,
+    version: EXT_VERSION,
+  };
 }
 
 async function ecargoOtpWait(msg) {

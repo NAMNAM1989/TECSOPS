@@ -9,14 +9,24 @@ Khảo sát form Create + pattern ASP.NET eCargo. Cập nhật khi SCSC đổi D
 | Tạo phiếu | `input#btnCreate[type=submit]`, `input[value='Tạo phiếu']`, `button` text «Tạo phiếu» |
 | Email OTP | `#txtEmail` |
 
+## Extension 3 pha (v2.2.6+)
+
+Background điều phối — sống qua reload ASP.NET sau «Tạo phiếu»:
+
+1. `ECARGO_FILL_AND_CREATE` — điền form + bấm Tạo phiếu (content, ngắn)
+2. Background — chờ ô OTP (`ECARGO_FIND_OTP_UI`) + `POST /api/ecargo/otp/wait`
+3. `ECARGO_SUBMIT_OTP` — điền mã + bấm xác thực + bắt QR
+
+Ops vẫn gửi `REGISTER_ECARGO_VCT` → background chạy 3 pha.
+
 ## Modal / bước OTP (sau Tạo phiếu)
 
-Thử theo thứ tự (content-ecargo):
+Thử theo thứ tự (content-ecargo), **ưu tiên trong** `.modal.show` / `.bootbox` / `[role=dialog]`:
 
 | Ý nghĩa | Selectors ứng viên |
 |---------|-------------------|
 | Ô OTP | `#txtOTP`, `#txtOtp`, `#txtOtpCode`, `input[name=OTP]`, `input[name=OtpCode]`, `input[placeholder*='OTP' i]` |
-| Nút xác nhận | `#btnConfirmOTP`, `#btnVerifyOTP`, `#btnSubmitOTP`, `input[value*='Xác nhận']`, `button` chứa /Xác nhận\|Verify\|Xác thực/i |
+| Nút xác nhận | `#btnConfirmOTP`, `#btnVerifyOTP`, `#btnSubmitOTP`, label `/xác nhận\|xác thực\|verify\|đồng ý\|ok/i` — **loại** `#btnCreate` / «Tạo phiếu» |
 | Modal | `.modal.show`, `#otpModal`, `.bootbox`, `[role=dialog]` chứa OTP |
 
 ## Email OTP
@@ -72,6 +82,7 @@ Local: xem thêm [`.env.example`](../.env.example). Server nạp `.env` rồi `.
 
 ## Ghi chú
 
-- REGISTER luôn bấm «Tạo phiếu» sau khi điền; chỉ dừng nếu **sau submit** còn `.field-validation-error` / summary lỗi thật (không chặn vì `.text-danger` nhãn trang).
+- Phase create: bấm «Tạo phiếu» rồi trả về; nếu trang reload, background bắt kênh đứt và vẫn chờ OTP UI.
 - OTP chỉ lấy qua `POST /api/ecargo/otp/wait` trên server (App Password không vào extension).
 - Modal Ops: nút **Đăng ký eCargo** disabled khi `imapConfigured: false`; **Chỉ điền form** vẫn dùng được.
+- Lỗi theo `phase`: `create` | `otp_ui` | `otp_mail` | `otp_submit` | `done`.

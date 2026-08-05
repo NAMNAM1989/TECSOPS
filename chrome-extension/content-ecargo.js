@@ -1,12 +1,14 @@
 /**
  * Điền / đăng ký eCargo VCT (Export) trên ecargo.scsc.vn.
- * FILL = chỉ điền; REGISTER = điền + Tạo phiếu + OTP + QR.
+ * FILL = chỉ điền.
+ * Đăng ký 1-click do background điều phối 3 pha:
+ *   ECARGO_FILL_AND_CREATE → (BG chờ OTP UI + IMAP) → ECARGO_SUBMIT_OTP
  *
  * Listener đăng ký 1 lần; handler gắn globalThis để inject lại (executeScript)
- * luôn cập nhật bản mới — tránh kẹt listener cũ khiến REGISTER bị bỏ qua.
+ * luôn cập nhật bản mới — tránh kẹt listener cũ.
  */
 
-const SCRIPT_VERSION = "2.2.5";
+const SCRIPT_VERSION = "2.2.6";
 const CREATE_PATH = "/Export/VCTOrder/Create";
 
 globalThis.__TECSOPS_ECARGO_VERSION__ = SCRIPT_VERSION;
@@ -19,6 +21,18 @@ globalThis.__TECSOPS_ECARGO_HANDLER__ = function tecsopsEcargoOnMessage(msg, _se
       scriptVersion: SCRIPT_VERSION,
       url: location.href,
       onCreate: location.pathname.includes(CREATE_PATH),
+      hasOtpUi: Boolean(findOtpInput()),
+    });
+    return true;
+  }
+
+  if (msg.type === "ECARGO_FIND_OTP_UI") {
+    const input = findOtpInput();
+    sendResponse({
+      ok: Boolean(input),
+      found: Boolean(input),
+      scriptVersion: SCRIPT_VERSION,
+      url: location.href,
     });
     return true;
   }
@@ -37,15 +51,55 @@ globalThis.__TECSOPS_ECARGO_HANDLER__ = function tecsopsEcargoOnMessage(msg, _se
     return true;
   }
 
-  if (msg.type === "REGISTER_ECARGO_VCT") {
-    void registerEcargoVct(msg.payload)
+  if (msg.type === "ECARGO_FILL_AND_CREATE") {
+    void fillAndCreateEcargoVct(msg.payload)
       .then(sendResponse)
       .catch((err) =>
         sendResponse({
           ok: false,
-          error: "REGISTER_FAILED",
-          message: err instanceof Error ? err.message : String(err || "Register failed"),
+          error: "CREATE_FAILED",
+          message: err instanceof Error ? err.message : String(err || "Create failed"),
           scriptVersion: SCRIPT_VERSION,
+          phase: "create",
+        })
+      );
+    return true;
+  }
+
+  if (msg.type === "ECARGO_SUBMIT_OTP") {
+    void submitEcargoOtp(msg.payload)
+      .then(sendResponse)
+      .catch((err) =>
+        sendResponse({
+          ok: false,
+          error: "OTP_SUBMIT_FAILED",
+          message: err instanceof Error ? err.message : String(err || "OTP submit failed"),
+          scriptVersion: SCRIPT_VERSION,
+          phase: "otp_submit",
+        })
+      );
+    return true;
+  }
+
+  // Backward-compat: không còn chạy full OTP trong content (dễ chết khi reload).
+  if (msg.type === "REGISTER_ECARGO_VCT") {
+    void fillAndCreateEcargoVct(msg.payload)
+      .then((res) =>
+        sendResponse({
+          ...res,
+          message:
+            (res?.message || "Đã Tạo phiếu") +
+            " — background sẽ lấy OTP (cần Ext v2.2.6+).",
+          needsBackgroundOtp: true,
+        })
+      )
+      .catch((err) =>
+        sendResponse({
+          ok: false,
+          error: "CREATE_FAILED",
+          message: err instanceof Error ? err.message : String(err || "Create failed"),
+          scriptVersion: SCRIPT_VERSION,
+          phase: "create",
         })
       );
     return true;
@@ -606,7 +660,7 @@ async function fillEcargoVct(payload) {
       error: "AGENT_MISMATCH",
       message:
         `Tên đại lý trên form («${headerFills.agentNameValue || ""}») không khớp hồ sơ («${wantAgent}»). ` +
-        "Ext không được nhảy theo gợi ý gần giống — Reload Ext v2.2.5 rồi thử lại.",
+        "Ext không được nhảy theo gợi ý gần giống — Reload Ext v2.2.6 rồi thử lại.",
       scriptVersion: SCRIPT_VERSION,
       fills: headerFills,
       warnings: [],
@@ -805,6 +859,15 @@ async function clickCreateOrder() {
   return { ok: true, button: String(btn.id || btn.value || btn.textContent || "create").trim() };
 }
 
+function otpDialogRoots() {
+  const roots = [
+    ...document.querySelectorAll(
+      ".modal.show, .modal.in, .bootbox.modal, [role='dialog'], #otpModal, .otp-modal"
+    ),
+  ].filter((el) => isDomVisible(el));
+  return roots.length ? roots : [document];
+}
+
 function findOtpInput() {
   const sels = [
     "#txtOTP",
@@ -816,34 +879,71 @@ function findOtpInput() {
     "input[placeholder*='OTP' i]",
     "input[placeholder*='otp' i]",
   ];
-  for (const s of sels) {
-    const el = document.querySelector(s);
-    if (el && el.offsetParent !== null) return el;
+  for (const root of otpDialogRoots()) {
+    for (const s of sels) {
+      const el = root.querySelector?.(s) || (root === document ? document.querySelector(s) : null);
+      if (el && isDomVisible(el)) return el;
+    }
+    const fuzzy = [
+      ...(root.querySelectorAll?.(
+        "input[type='text'], input[type='number'], input[type='tel'], input:not([type])"
+      ) || []),
+    ].find((el) => {
+      if (!isDomVisible(el)) return false;
+      return /otp|mã\s*xác|ma\s*xac|verification|auth.?code/i.test(
+        `${el.name || ""} ${el.id || ""} ${el.placeholder || ""} ${el.getAttribute("aria-label") || ""}`
+      );
+    });
+    if (fuzzy) return fuzzy;
   }
-  return (
-    [...document.querySelectorAll("input[type='text'], input[type='number'], input[type='tel']")].find(
-      (el) =>
-        el.offsetParent !== null &&
-        /otp|mã|code/i.test(
-          `${el.name || ""} ${el.id || ""} ${el.placeholder || ""} ${el.getAttribute("aria-label") || ""}`
-        )
-    ) || null
-  );
+  return null;
 }
 
-function findOtpConfirmButton() {
-  const sels = ["#btnConfirmOTP", "#btnVerifyOTP", "#btnSubmitOTP"];
-  for (const s of sels) {
-    const el = document.querySelector(s);
-    if (el) return el;
+function otpButtonLabel(el) {
+  return String(el.value || el.textContent || el.getAttribute("title") || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isCreateOrderButton(el) {
+  if (!el) return false;
+  if (el.id === "btnCreate") return true;
+  return /tạo\s*phiếu|tao\s*phieu/i.test(otpButtonLabel(el));
+}
+
+function findOtpConfirmButton(scopeEl) {
+  const roots = scopeEl
+    ? [scopeEl]
+    : (() => {
+        const input = findOtpInput();
+        const dialog =
+          input?.closest?.(".modal, .bootbox, [role='dialog'], #otpModal") || null;
+        return dialog && isDomVisible(dialog) ? [dialog, ...otpDialogRoots()] : otpDialogRoots();
+      })();
+
+  const idSels = ["#btnConfirmOTP", "#btnVerifyOTP", "#btnSubmitOTP", "#btnConfirm", "#btnVerify"];
+  for (const root of roots) {
+    const query = (s) =>
+      root.querySelector?.(s) || (root === document ? document.querySelector(s) : null);
+    for (const s of idSels) {
+      const el = query(s);
+      if (el && isDomVisible(el) && !isCreateOrderButton(el)) return el;
+    }
   }
-  return (
-    [...document.querySelectorAll("button, input[type='submit'], input[type='button']")].find((el) =>
-      /xác nhận|xac nhan|verify|xác thực|xac thuc|confirm|gửi|submit/i.test(
-        el.value || el.textContent || ""
-      )
-    ) || null
-  );
+
+  const labelRe = /xác\s*nhận|xac\s*nhan|xác\s*thực|xac\s*thuc|verify|đồng\s*ý|dong\s*y|\bok\b/i;
+  for (const root of roots) {
+    const buttons = [
+      ...(root.querySelectorAll?.(
+        "button, input[type='submit'], input[type='button'], a.btn, .btn"
+      ) || []),
+    ];
+    for (const el of buttons) {
+      if (!isDomVisible(el) || isCreateOrderButton(el)) continue;
+      if (labelRe.test(otpButtonLabel(el))) return el;
+    }
+  }
+  return null;
 }
 
 async function waitForOtpInput(timeoutMs = 45_000) {
@@ -854,6 +954,39 @@ async function waitForOtpInput(timeoutMs = 45_000) {
     await sleep(250);
   }
   return null;
+}
+
+async function clickOtpConfirm(otpInput) {
+  const dialog =
+    otpInput?.closest?.(".modal, .bootbox, [role='dialog'], #otpModal") || null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const btn = findOtpConfirmButton(dialog);
+    if (btn) {
+      const $ = getJQuery();
+      if ($ && $.fn) {
+        try {
+          $(btn).trigger("click");
+        } catch {
+          /* DOM */
+        }
+      }
+      clickEl(btn);
+      await sleep(400);
+      return { ok: true, how: "button", label: otpButtonLabel(btn) };
+    }
+    if (otpInput) {
+      otpInput.focus();
+      otpInput.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
+      );
+      otpInput.dispatchEvent(
+        new KeyboardEvent("keyup", { key: "Enter", bubbles: true, cancelable: true })
+      );
+      await sleep(400);
+    }
+    await sleep(300);
+  }
+  return { ok: false, how: "none" };
 }
 
 async function captureQrAndVctCode() {
@@ -911,27 +1044,17 @@ function bgMessage(message) {
 }
 
 /**
- * Full auto: fill → Tạo phiếu → OTP (server IMAP) → QR → lưu Ops.
+ * Phase A: điền form + bấm Tạo phiếu, trả về ngay (OTP do background lấy).
+ * Tránh chờ IMAP trong content — trang ASP.NET reload sẽ giết script.
  */
-async function registerEcargoVct(payload) {
+async function fillAndCreateEcargoVct(payload) {
   if (!payload || typeof payload !== "object") {
     return {
       ok: false,
       error: "BAD_PAYLOAD",
-      message: "Thiếu payload REGISTER_ECARGO_VCT",
+      message: "Thiếu payload ECARGO_FILL_AND_CREATE",
       scriptVersion: SCRIPT_VERSION,
-    };
-  }
-  const apiBase = String(payload.apiBase || "").replace(/\/$/, "");
-  const shipmentIds = Array.isArray(payload.shipmentIds)
-    ? payload.shipmentIds.map(String)
-    : [];
-  if (!apiBase) {
-    return {
-      ok: false,
-      error: "NO_API_BASE",
-      message: "Thiếu apiBase để gọi /api/ecargo/otp/wait",
-      scriptVersion: SCRIPT_VERSION,
+      phase: "create",
     };
   }
 
@@ -939,8 +1062,6 @@ async function registerEcargoVct(payload) {
   if (!fillRes?.ok) return { ...fillRes, phase: "fill" };
 
   const warnings = [...(fillRes.warnings || [])];
-  // Preflight mềm: không chặn Tạo phiếu vì span .text-danger cũ / nhãn trang.
-  // Chỉ cảnh báo; lỗi thật lấy lại SAU khi đã bấm nút.
   const softErrs = visibleValidationErrors();
   if (softErrs.length) {
     warnings.push(`Trước Tạo phiếu còn thông báo: ${softErrs.slice(0, 2).join(" | ")}`);
@@ -954,16 +1075,27 @@ async function registerEcargoVct(payload) {
       error: clicked.error || "NO_CREATE_BTN",
       message: "Không thấy / không bấm được nút «Tạo phiếu» trên form eCargo.",
       scriptVersion: SCRIPT_VERSION,
-      phase: "submit",
+      phase: "create",
       warnings,
     };
   }
 
-  // Chờ OTP; sau 1.5s nếu vẫn ở Create mà xuất hiện lỗi validation mới → báo (đã bấm nút).
-  const probeUntil = Date.now() + 8_000;
+  // Probe ngắn: bắt lỗi validation tức thì; OTP UI có thể xuất hiện sau reload (BG chờ).
+  const probeUntil = Date.now() + 2_500;
   while (Date.now() < probeUntil) {
-    if (findOtpInput()) break;
-    if (Date.now() - Date.parse(sinceIso) > 1500) {
+    if (findOtpInput()) {
+      return {
+        ok: true,
+        message: "Đã Tạo phiếu — đã thấy ô OTP.",
+        scriptVersion: SCRIPT_VERSION,
+        phase: "create",
+        sinceIso,
+        warnings,
+        createButton: clicked.button,
+        otpUiReady: true,
+      };
+    }
+    if (Date.now() - Date.parse(sinceIso) > 1200) {
       const post = visibleValidationErrors();
       if (post.length) {
         return {
@@ -971,115 +1103,121 @@ async function registerEcargoVct(payload) {
           error: "VALIDATION",
           message: `Đã bấm «Tạo phiếu» nhưng form từ chối: ${post.slice(0, 3).join(" | ")}`,
           scriptVersion: SCRIPT_VERSION,
-          phase: "submit",
+          phase: "create",
           sinceIso,
           warnings,
           createButton: clicked.button,
         };
       }
     }
-    await sleep(250);
+    await sleep(200);
   }
 
-  const otpInput = await waitForOtpInput(45_000);
-  if (!otpInput) {
-    const postErrs = visibleValidationErrors();
-    return {
-      ok: false,
-      error: postErrs.length ? "VALIDATION" : "NO_OTP_UI",
-      message: postErrs.length
-        ? `Đã bấm «Tạo phiếu» nhưng form từ chối: ${postErrs.slice(0, 3).join(" | ")}`
-        : "Đã bấm «Tạo phiếu» nhưng không thấy ô OTP. Kiểm tra đăng nhập eCargo / popup bị chặn.",
-      scriptVersion: SCRIPT_VERSION,
-      phase: "otp_ui",
-      sinceIso,
-      warnings,
-      createButton: clicked.button,
-    };
-  }
-
-  const email = String(payload.header?.email || "").trim();
-  const awbHint = payload.awbs?.[0]?.awb || "";
-  const otpRes = await bgMessage({
-    type: "ECARGO_OTP_WAIT",
-    apiBase,
-    email,
+  return {
+    ok: true,
+    message: "Đã bấm «Tạo phiếu» — chờ ô OTP / reload.",
+    scriptVersion: SCRIPT_VERSION,
+    phase: "create",
     sinceIso,
-    awbHint,
-    timeoutMs: 90_000,
-  });
-  if (!otpRes?.ok || !otpRes.otp) {
+    warnings,
+    createButton: clicked.button,
+    otpUiReady: Boolean(findOtpInput()),
+  };
+}
+
+/**
+ * Phase C: điền OTP (fresh DOM) + bấm xác thực + bắt QR.
+ * payload: { otp, apiBase?, email?, sinceIso?, awbHint? }
+ */
+async function submitEcargoOtp(payload) {
+  const otp = String(payload?.otp || "").trim();
+  if (!/^\d{4,8}$/.test(otp)) {
     return {
       ok: false,
-      error: otpRes?.error || "OTP_FAILED",
-      message: otpRes?.message || "Không lấy được OTP từ mailbox",
+      error: "BAD_OTP",
+      message: "OTP không hợp lệ",
       scriptVersion: SCRIPT_VERSION,
-      phase: "otp_mail",
-      sinceIso,
+      phase: "otp_submit",
     };
   }
 
-  setNativeValue(otpInput, otpRes.otp);
-  const confirmBtn = findOtpConfirmButton();
-  if (confirmBtn) {
-    clickEl(confirmBtn);
-  } else {
-    otpInput.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
-    );
+  const otpInput = (await waitForOtpInput(8_000)) || findOtpInput();
+  if (!otpInput) {
+    return {
+      ok: false,
+      error: "NO_OTP_UI",
+      message: "Không thấy ô OTP để điền mã.",
+      scriptVersion: SCRIPT_VERSION,
+      phase: "otp_submit",
+    };
   }
-  await sleep(1500);
 
+  otpInput.focus();
+  setNativeValue(otpInput, otp);
+  otpInput.dispatchEvent(new Event("input", { bubbles: true }));
+  otpInput.dispatchEvent(new Event("change", { bubbles: true }));
+  otpInput.dispatchEvent(
+    new KeyboardEvent("keyup", { key: "0", bubbles: true, cancelable: true })
+  );
+  await sleep(150);
+
+  if (String(otpInput.value || "").replace(/\s/g, "") !== otp) {
+    setNativeValue(otpInput, otp);
+  }
+
+  const clicked = await clickOtpConfirm(otpInput);
+  if (!clicked.ok) {
+    return {
+      ok: false,
+      error: "NO_CONFIRM_BTN",
+      message:
+        "Đã điền OTP nhưng không bấm được nút xác thực/xác nhận. Kiểm tra modal eCargo.",
+      scriptVersion: SCRIPT_VERSION,
+      phase: "otp_submit",
+      otpFilled: true,
+    };
+  }
+
+  await sleep(1200);
   let capture = await captureQrAndVctCode();
-  if (!capture.qrDataUrl && !capture.vctCode) {
-    await sleep(2000);
+  for (let i = 0; i < 4 && !capture.qrDataUrl && !capture.vctCode; i += 1) {
+    await sleep(1000);
     capture = await captureQrAndVctCode();
   }
 
-  // Fallback email xác nhận (P4)
-  if (!capture.qrDataUrl || !capture.vctCode) {
-    const mailRes = await bgMessage({
-      type: "ECARGO_RESULT_FROM_MAIL",
-      apiBase,
-      email,
-      sinceIso,
-    });
-    if (mailRes?.ok) {
-      if (!capture.vctCode && mailRes.vctCode) capture.vctCode = mailRes.vctCode;
-      if (!capture.qrDataUrl && mailRes.qrUrl) capture.qrDataUrl = mailRes.qrUrl;
+  const apiBase = String(payload?.apiBase || "").replace(/\/$/, "");
+  const email = String(payload?.email || "").trim();
+  const sinceIso = String(payload?.sinceIso || "").trim();
+  if (apiBase && email && sinceIso && (!capture.qrDataUrl || !capture.vctCode)) {
+    try {
+      const mailRes = await bgMessage({
+        type: "ECARGO_RESULT_FROM_MAIL",
+        apiBase,
+        email,
+        sinceIso,
+      });
+      if (mailRes?.ok) {
+        if (!capture.vctCode && mailRes.vctCode) capture.vctCode = mailRes.vctCode;
+        if (!capture.qrDataUrl && mailRes.qrUrl) capture.qrDataUrl = mailRes.qrUrl;
+      }
+    } catch {
+      /* ignore */
     }
-  }
-
-  if (shipmentIds.length) {
-    await bgMessage({
-      type: "ECARGO_SAVE_RESULT",
-      apiBase,
-      shipmentIds,
-      status: capture.vctCode || capture.qrDataUrl ? "done" : "error",
-      vctCode: capture.vctCode,
-      qrDataUrl: capture.qrDataUrl,
-      awb: awbHint,
-      error:
-        capture.vctCode || capture.qrDataUrl
-          ? ""
-          : "Đã OTP nhưng chưa bắt được mã phiếu/QR — kiểm tra trang eCargo",
-      registeredAt: new Date().toISOString(),
-    });
   }
 
   const ok = Boolean(capture.vctCode || capture.qrDataUrl);
   return {
     ok,
     message: ok
-      ? `Đã đăng ký eCargo${capture.vctCode ? `: ${capture.vctCode}` : ""}.`
-      : "OTP xong nhưng chưa lấy được QR/mã phiếu",
+      ? `Đã xác thực OTP${capture.vctCode ? `: ${capture.vctCode}` : ""}.`
+      : "Đã bấm xác thực OTP nhưng chưa lấy được QR/mã phiếu",
     scriptVersion: SCRIPT_VERSION,
     phase: "done",
     vctCode: capture.vctCode,
     qrDataUrl: capture.qrDataUrl,
-    sinceIso,
-    warnings,
-    createButton: clicked.button,
+    sinceIso: sinceIso || undefined,
+    confirmHow: clicked.how,
+    confirmLabel: clicked.label,
     submit: true,
   };
 }

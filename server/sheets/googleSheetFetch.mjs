@@ -79,9 +79,21 @@ function normGridText(s) {
     .toLowerCase();
 }
 
+/** Ô AWB kiểu BOOK (11 chữ số, có thể kèm HAWB). */
+function looksLikeBookAwbCell(raw) {
+  const text = String(raw ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n?\s*hawb\s*[:：]?.*/gi, "")
+    .split(/\n/)[0]
+    ?.trim() ?? "";
+  const digits = text.replace(/\D/g, "");
+  return digits.length >= 11;
+}
+
 /** Nhận diện layout BOOK HẰNG NGÀY — tránh dùng nhầm tab mặc định của gviz. */
 export function isLikelyBookHangNgayGrid(grid) {
   if (!Array.isArray(grid) || grid.length < 8) return false;
+  let awbLikeRows = 0;
   for (const row of grid) {
     const cells = row.cells ?? [];
     const joined = normGridText(cells.join(" "));
@@ -89,6 +101,14 @@ export function isLikelyBookHangNgayGrid(grid) {
     if (normGridText(cells[0] ?? "") === "vlc-tecs" || joined.includes("vlc-tecs")) return true;
     const awbHeader = normGridText(cells[1] ?? cells[0] ?? "");
     if (awbHeader.includes("awb") && awbHeader.includes("booking")) return true;
+    // Tab không header (data từ dòng 1): cột B=AWB + ít nhất chuyến hoặc DEST/kho
+    if (looksLikeBookAwbCell(cells[1])) {
+      const flight = String(cells[2] ?? "").trim();
+      const dest = String(cells[4] ?? "").trim();
+      const wh = String(cells[5] ?? "").trim();
+      if (flight || (dest && wh)) awbLikeRows += 1;
+      if (awbLikeRows >= 2) return true;
+    }
   }
   return false;
 }
@@ -128,7 +148,8 @@ export async function listPublicBookSheetTabs(spreadsheetId) {
   /** @type {Map<string, string>} */
   const byGid = new Map();
 
-  const metaRe = /\[(?:0|1),0,\\"(\d+)\\",\[\{\\"1\\":\[\[0,0,\\"([^\\"]+)/g;
+  // Sheet mới dùng index tab [0|1|2|3,…],0,"gid" — không chỉ [0|1].
+  const metaRe = /\[\d+,0,\\"(\d+)\\",\[\{\\"1\\":\[\[0,0,\\"([^\\"]+)/g;
   let m;
   while ((m = metaRe.exec(html))) {
     byGid.set(m[1], m[2].trim());
@@ -268,14 +289,22 @@ export function bookSheetTabCandidates(sessionYmd) {
   if (month < 1 || month > 12 || day < 1 || day > 31) return [];
   const mmm = MONTHS3[month - 1];
   const full = MONTHS_FULL[month - 1];
+  const day2 = String(day).padStart(2, "0");
   const primary = `NGÀY ${day} ${mmm}`;
+  const primaryPad = `NGÀY ${day2} ${mmm}`;
   return [
     primary,
+    primaryPad,
     `NGAY ${day} ${mmm}`,
+    `NGAY ${day2} ${mmm}`,
     `${day}${mmm}`,
+    `${day2}${mmm}`,
     `${day} ${mmm}`,
+    `${day2} ${mmm}`,
     `${day}${full}${year}`,
+    `${day2}${full}${year}`,
     `${day}${full}`,
+    `${day2}${full}`,
   ];
 }
 
@@ -348,16 +377,17 @@ export async function fetchBookHangNgayGridForSession(
       ? { title: hit.title, gid: hit.gid }
       : { title: `gid=${preferredGid}`, gid: preferredGid };
     const grid = await fetchResolvedBookGrid(id, resolved, fetchByGid, fetchByName);
-    if (!isLikelyBookHangNgayGrid(grid)) {
-      throw new Error(
-        `Tab gid=${preferredGid}${hit ? ` («${hit.title}»)` : ""} không giống mẫu BOOK HẰNG NGÀY.`
-      );
+    if (isLikelyBookHangNgayGrid(grid)) {
+      // Chỉ cache theo phiên khi tab đúng ngày — tránh gid tab ngày khác đầu độc lần kéo sau.
+      if (tabTitleMatchesSession(resolved.title, sessionYmd)) {
+        cacheResolvedSessionTab(id, sessionYmd, resolved);
+      }
+      return { grid, sheetTab: resolved.title, gid: resolved.gid };
     }
-    // Chỉ cache theo phiên khi tab đúng ngày — tránh gid tab ngày khác đầu độc lần kéo sau.
-    if (tabTitleMatchesSession(resolved.title, sessionYmd)) {
-      cacheResolvedSessionTab(id, sessionYmd, resolved);
-    }
-    return { grid, sheetTab: resolved.title, gid: resolved.gid };
+    // Tab gid lệch layout / trống — không chặn cả lần kéo; fallback theo ngày phiên Ops.
+    console.warn(
+      `[sheets] preferredGid=${preferredGid}${hit ? ` («${hit.title}»)` : ""} không giống BOOK — fallback theo ngày phiên ${sessionYmd}`
+    );
   }
 
   const sessionCandidates = bookSheetTabCandidates(sessionYmd);

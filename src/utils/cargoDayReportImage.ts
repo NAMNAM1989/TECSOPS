@@ -1,13 +1,20 @@
-import { isTcsFamily } from "../constants/warehouses";
+import { isTcsFamily, warehouseLabel, warehousesOfOpsTeam } from "../constants/warehouses";
+import type { Warehouse } from "../types/shipment";
 import {
-  filterCargoDayReportByWarehouseFamily,
+  filterCargoDayReportByWarehouses,
   type CargoDayReportModel,
   type CargoDayReportRow,
 } from "./cargoDayReport";
 
 export type CargoDayReportImageVariant = "basic" | "withCustomer";
 
-/** Nút copy ảnh Ops: Vantage / Tecs / kho TCS / kho SCSC. */
+/**
+ * Nút copy ảnh — phạm vi theo 3 kho hoạt động (không gộp theo tên family):
+ * - tecs: kho TECS = mã `TECS-TCS` + `TECS-SCSC` (không lấy kho `TCS`/`SCSC`), có cột khách hàng
+ * - vantage: cùng kho TECS, ẩn cột khách hàng
+ * - tcs: chỉ mã `TCS` (không lấy `TECS-TCS`)
+ * - scsc: chỉ mã `SCSC` (không lấy `TECS-SCSC`)
+ */
 export type CargoDayReportCopyKind = "vantage" | "tecs" | "tcs" | "scsc";
 
 export type CopyCargoDayReportImageResult =
@@ -22,7 +29,7 @@ export type CopyCargoDayReportImageResult =
 
 export type CargoDayReportCopyResolved = {
   variant: CargoDayReportImageVariant;
-  family: "TCS" | "SCSC" | null;
+  warehouses: readonly Warehouse[];
   label: string;
   titleTag: string;
   filenameSuffix: string;
@@ -30,12 +37,13 @@ export type CargoDayReportCopyResolved = {
 
 export function resolveCargoDayReportCopyKind(
   kind: CargoDayReportCopyKind,
+  _activeWarehouse?: Warehouse,
 ): CargoDayReportCopyResolved {
   switch (kind) {
     case "tecs":
       return {
         variant: "withCustomer",
-        family: null,
+        warehouses: warehousesOfOpsTeam("TECS"),
         label: "Tecs",
         titleTag: " · Tecs",
         filenameSuffix: "-tecs",
@@ -43,7 +51,7 @@ export function resolveCargoDayReportCopyKind(
     case "tcs":
       return {
         variant: "withCustomer",
-        family: "TCS",
+        warehouses: warehousesOfOpsTeam("TCS"),
         label: "TCS",
         titleTag: " · TCS",
         filenameSuffix: "-tcs",
@@ -51,7 +59,7 @@ export function resolveCargoDayReportCopyKind(
     case "scsc":
       return {
         variant: "withCustomer",
-        family: "SCSC",
+        warehouses: warehousesOfOpsTeam("SCSC"),
         label: "SCSC",
         titleTag: " · SCSC",
         filenameSuffix: "-scsc",
@@ -60,7 +68,7 @@ export function resolveCargoDayReportCopyKind(
     default:
       return {
         variant: "basic",
-        family: null,
+        warehouses: warehousesOfOpsTeam("TECS"),
         label: "Vantage",
         titleTag: " · Vantage",
         filenameSuffix: "-vantage",
@@ -449,33 +457,32 @@ export function renderCargoDayReportCanvas(
 
 /**
  * Copy ảnh PNG vào clipboard; nếu trình duyệt chặn thì tải file.
- * `vantage` = layout cơ bản; `tecs` = Short Code + Kiện/Kg;
- * `tcs` / `scsc` = cùng layout Tecs, chỉ một family kho.
+ * Phạm vi exact mã lô qua `warehousesOfOpsTeam` — không dùng family portal/DIM.
  */
 export async function copyCargoDayReportImage(
   model: CargoDayReportModel,
   options?: {
     kind?: CargoDayReportCopyKind;
+    activeWarehouse?: Warehouse;
     /** @deprecated dùng `kind` */
     variant?: CargoDayReportImageVariant;
   },
 ): Promise<CopyCargoDayReportImageResult> {
+  const activeWarehouse = options?.activeWarehouse ?? "TECS-TCS";
   const resolved = options?.kind
-    ? resolveCargoDayReportCopyKind(options.kind)
+    ? resolveCargoDayReportCopyKind(options.kind, activeWarehouse)
     : resolveCargoDayReportCopyKind(
         options?.variant === "withCustomer" ? "tecs" : "vantage",
+        activeWarehouse,
       );
 
-  const scoped = resolved.family
-    ? filterCargoDayReportByWarehouseFamily(model, resolved.family)
-    : model;
+  const scoped = filterCargoDayReportByWarehouses(model, resolved.warehouses);
 
   if (scoped.totalLots <= 0 || scoped.sections.length === 0) {
+    const scopeLabel = resolved.warehouses.map((w) => warehouseLabel[w]).join(" + ");
     return {
       ok: false,
-      reason: resolved.family
-        ? `Không có lô ${resolved.label} trong ngày phiên này.`
-        : "Không có lô nào trong ngày phiên này.",
+      reason: `Không có lô ${scopeLabel} trong ngày phiên này.`,
     };
   }
 

@@ -266,10 +266,18 @@ export function parseBookHangNgayGrid(gridRows, sessionDate) {
       continue;
     }
 
-    // Chỉ cần dòng nằm sau header AWB đã nhận diện. Không khóa theo số dòng Excel:
-    // layout BOOK HẰNG NGÀY có thể dịch lên/xuống giữa các tab.
-    if (!colMap || isSkippableRow(cells)) continue;
+    if (isSkippableRow(cells)) continue;
 
+    // Tab BOOK mới có thể không còn hàng header (data từ dòng 1).
+    // Khi thấy ô AWB hợp lệ → dùng layout cột chuẩn A–L.
+    if (!colMap) {
+      const probe = awbFromCells(cells, STANDARD_BOOK_COLS.awb);
+      if (!probe.hasAwbCell) continue;
+      colMap = { ...STANDARD_BOOK_COLS };
+    }
+
+    // Chỉ cần dòng nằm sau header AWB đã nhận diện (hoặc layout chuẩn).
+    // Không khóa theo số dòng Excel: layout BOOK có thể dịch lên/xuống giữa các tab.
     const { awb, hasAwbCell } = awbFromCells(cells, colMap.awb);
     if (!hasAwbCell) continue;
 

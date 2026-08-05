@@ -4,7 +4,8 @@ import type { Shipment } from "../types/shipment";
 import { blankShipmentDraft } from "./blankShipment";
 import {
   buildCargoDayReport,
-  filterCargoDayReportByWarehouseFamily,
+  filterCargoDayReportByWarehouse,
+  filterCargoDayReportByWarehouses,
   formatCargoReportBooking,
   formatCargoReportCutoff,
   formatCargoReportFlightDate,
@@ -118,18 +119,45 @@ describe("cargoDayReport", () => {
     ]);
   });
 
-  it("lọc ảnh theo family kho TCS / SCSC", () => {
+  it("lọc ảnh theo đúng mã kho (không gộp family)", () => {
     const rows = [
       lot({ id: "t", warehouse: "TECS-TCS", awb: "17611111111", dest: "SGN" }),
       lot({ id: "s", warehouse: "TECS-SCSC", awb: "16099999999", dest: "ICN" }),
+      lot({ id: "d", warehouse: "TCS", awb: "16088888888", dest: "HAN" }),
     ];
     const model = buildCargoDayReport(rows, "2026-07-27");
-    const tcs = filterCargoDayReportByWarehouseFamily(model, "TCS");
-    expect(tcs.totalLots).toBe(1);
-    expect(tcs.sections.map((s) => s.warehouse)).toEqual(["TECS-TCS"]);
-    const scsc = filterCargoDayReportByWarehouseFamily(model, "SCSC");
-    expect(scsc.totalLots).toBe(1);
-    expect(scsc.sections.map((s) => s.warehouse)).toEqual(["TECS-SCSC"]);
+    const hub = filterCargoDayReportByWarehouse(model, "TECS-TCS");
+    expect(hub.totalLots).toBe(1);
+    expect(hub.sections.map((s) => s.warehouse)).toEqual(["TECS-TCS"]);
+    const direct = filterCargoDayReportByWarehouse(model, "TCS");
+    expect(direct.totalLots).toBe(1);
+    expect(direct.sections.map((s) => s.warehouse)).toEqual(["TCS"]);
+    // Không gộp TECS-TCS vào ảnh OPS TCS
+    expect(direct.sections.some((s) => s.warehouse === "TECS-TCS")).toBe(false);
+  });
+
+  it("kho TECS = 2 mã TECS-* — không lấy kho TCS/SCSC; TCS/SCSC không lấy TECS-*", () => {
+    const rows = [
+      lot({ id: "t", warehouse: "TECS-TCS", awb: "17611111111", dest: "SGN" }),
+      lot({ id: "s", warehouse: "TECS-SCSC", awb: "16099999999", dest: "ICN" }),
+      lot({ id: "d", warehouse: "TCS", awb: "16088888888", dest: "HAN" }),
+      lot({ id: "c", warehouse: "SCSC", awb: "16077777777", dest: "BKK" }),
+    ];
+    const model = buildCargoDayReport(rows, "2026-07-27");
+    const tecs = filterCargoDayReportByWarehouses(model, ["TECS-TCS", "TECS-SCSC"]);
+    expect(tecs.totalLots).toBe(2);
+    expect(tecs.sections.map((s) => s.warehouse)).toEqual(["TECS-TCS", "TECS-SCSC"]);
+    expect(tecs.sections.some((s) => s.warehouse === "TCS" || s.warehouse === "SCSC")).toBe(
+      false,
+    );
+
+    const tcsOnly = filterCargoDayReportByWarehouses(model, ["TCS"]);
+    expect(tcsOnly.sections.map((s) => s.warehouse)).toEqual(["TCS"]);
+    expect(tcsOnly.sections.some((s) => s.warehouse === "TECS-TCS")).toBe(false);
+
+    const scscOnly = filterCargoDayReportByWarehouses(model, ["SCSC"]);
+    expect(scscOnly.sections.map((s) => s.warehouse)).toEqual(["SCSC"]);
+    expect(scscOnly.sections.some((s) => s.warehouse === "TECS-SCSC")).toBe(false);
   });
 
   it("gắn Short Code khi có danh bạ", () => {

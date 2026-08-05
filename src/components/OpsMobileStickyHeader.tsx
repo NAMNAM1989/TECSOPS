@@ -3,7 +3,7 @@ import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
 import { formatKgTotal } from "../utils/formatKgTotal";
-import { isScscWarehouse, isTcsWarehouse } from "../constants/warehouses";
+import { isTecsHub } from "../constants/warehouses";
 import { SyncStatusPill, Wordmark } from "../ui";
 import { statusLabel } from "./statusStyles";
 import { OpsDatePicker } from "./OpsDatePicker";
@@ -42,6 +42,8 @@ interface Props {
   showDimScsc?: boolean;
   /** Thanh Cổng TCS dưới ô tìm kiếm (TECS-TCS) */
   tcsPortalBar?: ReactNode;
+  /** Thanh đăng ký eCargo SCSC */
+  ecargoBar?: ReactNode;
   filteredViewRows: readonly Shipment[];
   viewRows: readonly Shipment[];
   onWarehouseChange: (wh: Warehouse) => void;
@@ -93,6 +95,7 @@ export function OpsMobileStickyHeader({
   cargoReportCopying,
   showDimScsc,
   tcsPortalBar,
+  ecargoBar,
   filteredViewRows,
   viewRows,
   onWarehouseChange,
@@ -185,8 +188,11 @@ export function OpsMobileStickyHeader({
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
             <button
               type="button"
-              disabled={cargoReportCopying || viewRows.length === 0}
-              title="Vantage — AWB · Flight · Cutoff · Dest"
+              disabled={
+                cargoReportCopying ||
+                !viewRows.some((r) => isTecsHub(r.warehouse))
+              }
+              title="Vantage — kho TECS (TECS-TCS+TECS-SCSC), không gồm kho TCS/SCSC · ẩn khách"
               onClick={() => onCopyCargoDayReport("vantage")}
               className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-emerald-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
@@ -194,8 +200,11 @@ export function OpsMobileStickyHeader({
             </button>
             <button
               type="button"
-              disabled={cargoReportCopying || viewRows.length === 0}
-              title="Tecs — Short Code + Kiện/Kg · cả TCS & SCSC"
+              disabled={
+                cargoReportCopying ||
+                !viewRows.some((r) => isTecsHub(r.warehouse))
+              }
+              title="Tecs — kho TECS (TECS-TCS+TECS-SCSC), không gồm kho TCS/SCSC"
               onClick={() => onCopyCargoDayReport("tecs")}
               className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-teal-700 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-45"
             >
@@ -205,9 +214,9 @@ export function OpsMobileStickyHeader({
               type="button"
               disabled={
                 cargoReportCopying ||
-                !viewRows.some((r) => isTcsWarehouse(r.warehouse))
+                !viewRows.some((r) => r.warehouse === "TCS")
               }
-              title="Ảnh kho TCS"
+              title="TCS — chỉ kho TCS (không gồm TECS-TCS)"
               onClick={() => onCopyCargoDayReport("tcs")}
               className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-sky-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
@@ -217,9 +226,9 @@ export function OpsMobileStickyHeader({
               type="button"
               disabled={
                 cargoReportCopying ||
-                !viewRows.some((r) => isScscWarehouse(r.warehouse))
+                !viewRows.some((r) => r.warehouse === "SCSC")
               }
-              title="Ảnh kho SCSC"
+              title="SCSC — chỉ kho SCSC (không gồm TECS-SCSC)"
               onClick={() => onCopyCargoDayReport("scsc")}
               className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-violet-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
@@ -273,6 +282,7 @@ export function OpsMobileStickyHeader({
             ) : null}
           </div>
           {tcsPortalBar}
+          {ecargoBar}
 
           {showStatusBar ? (
             <div className="flex min-w-0 items-center gap-1">

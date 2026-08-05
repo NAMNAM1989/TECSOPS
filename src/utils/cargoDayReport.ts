@@ -1,9 +1,4 @@
-import {
-  isScscFamily,
-  isTcsFamily,
-  WAREHOUSE_ORDER,
-  warehouseLabel,
-} from "../constants/warehouses";
+import { WAREHOUSE_ORDER, warehouseLabel } from "../constants/warehouses";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment, Warehouse } from "../types/shipment";
 import { findCustomerEntry } from "./customerBookingResolve";
@@ -237,13 +232,16 @@ export function buildCargoDayReport(
   };
 }
 
-/** Lọc báo cáo theo family kho (TCS hoặc SCSC) — dùng khi copy ảnh riêng từng kho. */
-export function filterCargoDayReportByWarehouseFamily(
+/**
+ * Lọc báo cáo theo exact mã lô (giữ thứ tự section gốc).
+ * TECS-TCS/TECS-SCSC ≠ kho TCS/SCSC — chỉ khớp đúng mã trong danh sách.
+ */
+export function filterCargoDayReportByWarehouses(
   model: CargoDayReportModel,
-  family: "TCS" | "SCSC",
+  warehouses: readonly Warehouse[],
 ): CargoDayReportModel {
-  const match = family === "TCS" ? isTcsFamily : isScscFamily;
-  const sections = model.sections.filter((s) => match(s.warehouse));
+  const allow = new Set(warehouses);
+  const sections = model.sections.filter((s) => allow.has(s.warehouse));
   const totalLots = sections.reduce((n, s) => n + s.rows.length, 0);
   return {
     ...model,
@@ -253,4 +251,12 @@ export function filterCargoDayReportByWarehouseFamily(
     ),
     sections,
   };
+}
+
+/** Alias một kho — tương thích chỗ gọi cũ. */
+export function filterCargoDayReportByWarehouse(
+  model: CargoDayReportModel,
+  warehouse: Warehouse,
+): CargoDayReportModel {
+  return filterCargoDayReportByWarehouses(model, [warehouse]);
 }

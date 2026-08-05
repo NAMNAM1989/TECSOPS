@@ -256,7 +256,9 @@ export function registerSheetsRoutes(app, deps) {
       } catch {
         expectedSheetTab = "";
       }
-      const sheetTabMismatch = Boolean(expectedSheetTab && sheetTab !== expectedSheetTab);
+      const sheetTabMismatch = Boolean(
+        sheetTab && !tabTitleMatchesSession(sheetTab, sessionDate)
+      );
       const state = await loadState();
       const customers = Array.isArray(state.customers) ? state.customers : [];
       const customerLookups = buildCustomerLookups(customers);

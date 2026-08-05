@@ -3,11 +3,15 @@ import {
   WAREHOUSE_ORDER,
   emptyWarehouseRecord,
   hasWarehouseCapability,
+  isDirectOpsWarehouse,
   isScscFamily,
+  isTecsHub,
   isTcsFamily,
   normalizeWarehouse,
+  opsTeamOf,
   warehouseFamily,
   warehouseRole,
+  warehousesOfOpsTeam,
 } from "./warehouses";
 
 describe("normalizeWarehouse", () => {
@@ -62,5 +66,19 @@ describe("warehouse registry", () => {
   it("emptyWarehouseRecord đủ 4 kho", () => {
     const r = emptyWarehouseRecord(() => 0);
     expect(Object.keys(r).sort()).toEqual(["SCSC", "TCS", "TECS-SCSC", "TECS-TCS"].sort());
+  });
+
+  it("3 đội OPS — TECS hub tách khỏi kho trực tiếp", () => {
+    expect(opsTeamOf("TECS-TCS")).toBe("TECS");
+    expect(opsTeamOf("TECS-SCSC")).toBe("TECS");
+    expect(opsTeamOf("TCS")).toBe("TCS");
+    expect(opsTeamOf("SCSC")).toBe("SCSC");
+    expect(isTecsHub("TECS-TCS")).toBe(true);
+    expect(isTecsHub("TCS")).toBe(false);
+    expect(isDirectOpsWarehouse("TCS")).toBe(true);
+    expect(isDirectOpsWarehouse("TECS-SCSC")).toBe(false);
+    expect(warehousesOfOpsTeam("TECS")).toEqual(["TECS-TCS", "TECS-SCSC"]);
+    expect(warehousesOfOpsTeam("TCS")).toEqual(["TCS"]);
+    expect(warehousesOfOpsTeam("SCSC")).toEqual(["SCSC"]);
   });
 });

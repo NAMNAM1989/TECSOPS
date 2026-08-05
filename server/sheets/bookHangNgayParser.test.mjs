@@ -128,6 +128,69 @@ describe("parseBookHangNgayGrid", () => {
     expect(rows[0].sheetRowIndex).toBe(17);
   });
 
+  it("tab không có hàng header — dùng layout chuẩn A–L (BOOK 05AUG)", () => {
+    const grid = [
+      {
+        rowIndex: 0,
+        cells: [
+          "1",
+          "297-3970 2773",
+          "CI0784/05AUG",
+          "14:00 - 05AUG",
+          "TPE",
+          "TCS",
+          "",
+          "JER",
+          "SHIPPER X",
+          "CNEE Y",
+          "",
+          "",
+        ],
+      },
+      {
+        rowIndex: 1,
+        cells: [
+          "1",
+          "618-5668 3572",
+          "SQ185/05AUG",
+          "",
+          "SIN",
+          "SCSC",
+          "2 / 30",
+          "HTS",
+          "",
+          "",
+          "",
+          "50H09381",
+        ],
+      },
+      {
+        rowIndex: 2,
+        cells: ["3", "", "", "", "", "TCS", "", "", "", "", "", ""],
+      },
+    ];
+    const rows = parseBookHangNgayGrid(grid, "2026-08-05");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      awb: "297-3970 2773",
+      flight: "CI0784",
+      flightDate: "05AUG",
+      dest: "TPE",
+      warehouse: "TCS",
+      customer: "JER",
+      cutoff: "14:00",
+      cutoffNote: "05AUG",
+    });
+    expect(rows[1]).toMatchObject({
+      awb: "618-5668 3572",
+      flight: "SQ185",
+      warehouse: "SCSC",
+      pcs: 2,
+      kg: 30,
+      note: "50H09381",
+    });
+  });
+
   it("AWB thiếu số (< 11 chữ số) không được nhận — vào luồng booking trống AWB", () => {
     const grid = [
       {

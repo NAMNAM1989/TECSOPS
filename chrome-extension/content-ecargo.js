@@ -6,7 +6,7 @@
  * luôn cập nhật bản mới — tránh kẹt listener cũ khiến REGISTER bị bỏ qua.
  */
 
-const SCRIPT_VERSION = "2.2.2";
+const SCRIPT_VERSION = "2.2.3";
 const CREATE_PATH = "/Export/VCTOrder/Create";
 
 globalThis.__TECSOPS_ECARGO_VERSION__ = SCRIPT_VERSION;
@@ -165,95 +165,227 @@ function closeOpenMenus() {
   if (body) clickEl(body);
 }
 
-/** Điểm khớp gợi ý autocomplete — ưu tiên tên đủ / dài hơn (tránh dính «NAM NAM»). */
-function scoreAutocompleteItem(itemText, preferQuery) {
-  const text = String(itemText || "")
+function normAgentText(raw) {
+  return String(raw || "")
     .trim()
     .toUpperCase()
     .replace(/\s+/g, " ");
-  const q = String(preferQuery || "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, " ");
-  if (!text || !q) return -1;
-  if (text === q) return 10_000;
-  if (text.startsWith(q + " ") || text.startsWith(q)) return 8_000 + text.length;
-  if (text.includes(q)) return 6_000 + text.length;
-  const tokens = q.split(/\s+/).filter((t) => t.length >= 2);
-  if (tokens.length && tokens.every((t) => text.includes(t))) {
-    return 4_000 + text.length + tokens.length * 10;
-  }
-  // Token đầu + token cuối (VD: NAM … LOGISTICS)
-  if (tokens.length >= 2) {
-    const first = tokens[0];
-    const last = tokens[tokens.length - 1];
-    if (text.includes(first) && text.includes(last)) {
-      return 2_000 + text.length;
-    }
-  }
-  return -1;
 }
 
-function listVisibleAutocompleteItems() {
-  return [
-    ...document.querySelectorAll(
-      ".ui-autocomplete li.ui-menu-item:not(.ui-state-disabled), .ui-autocomplete .ui-menu-item-wrapper, ul.ui-autocomplete li"
-    ),
-  ].filter((el) => {
-    const root = el.closest(".ui-autocomplete") || el;
-    const style = window.getComputedStyle(root);
-    return style.display !== "none" && style.visibility !== "hidden";
-  });
+function agentTokens(raw) {
+  return normAgentText(raw)
+    .split(/\s+/)
+    .filter((t) => t.length >= 2);
 }
 
 /**
- * Gõ `query` để mở gợi ý, nhưng chọn dòng khớp tốt nhất với `preferQuery` (thường = tên đầy đủ).
+ * Dòng gợi ý chỉ chấp nhận khi chứa ĐỦ mọi token của tên hồ sơ
+ * (NAM NAM LOGISTICS ≠ NAM NAM).
  */
-async function pickAutocomplete(
-  input,
-  query,
-  { requireSelect = false, timeoutMs = 1200, preferQuery = "" } = {}
-) {
-  if (!input) return false;
-  const search = String(query || "").trim();
-  const prefer = String(preferQuery || query || "").trim();
-  if (!search) return false;
+function agentSuggestionAcceptable(itemText, preferFull) {
+  const text = normAgentText(itemText);
+  const prefer = normAgentText(preferFull);
+  if (!text || !prefer) return false;
+  if (text === prefer) return true;
+  const tokens = agentTokens(prefer);
+  if (!tokens.length) return false;
+  if (!tokens.every((t) => text.includes(t))) return false;
+  // Chặn dòng quá ngắn so với tên hồ sơ (thiếu LOGISTICS…)
+  if (tokens.length >= 3 && text.length + 2 < prefer.length) return false;
+  return true;
+}
 
-  closeOpenMenus();
-  await sleep(80);
+function scoreAgentSuggestion(itemText, preferFull) {
+  if (!agentSuggestionAcceptable(itemText, preferFull)) return -1;
+  const text = normAgentText(itemText);
+  const prefer = normAgentText(preferFull);
+  if (text === prefer) return 50_000;
+  if (text.startsWith(prefer)) return 40_000 + text.length;
+  if (text.includes(prefer)) return 30_000 + text.length;
+  return 10_000 + text.length;
+}
+
+/** Chỉ lấy li.ui-menu-item (tránh đếm trùng wrapper). */
+function listAgentAutocompleteItems() {
+  const menus = [...document.querySelectorAll("ul.ui-autocomplete")].filter((ul) => {
+    const style = window.getComputedStyle(ul);
+    return style.display !== "none" && style.visibility !== "hidden";
+  });
+  const out = [];
+  for (const ul of menus) {
+    for (const li of ul.querySelectorAll(":scope > li.ui-menu-item")) {
+      if (li.classList.contains("ui-state-disabled")) continue;
+      out.push(li);
+    }
+  }
+  // Fallback selector cũ nếu theme khác
+  if (!out.length) {
+    return [...document.querySelectorAll(".ui-autocomplete li.ui-menu-item")].filter((li) => {
+      const root = li.closest(".ui-autocomplete") || li;
+      const style = window.getComputedStyle(root);
+      return style.display !== "none" && style.visibility !== "hidden";
+    });
+  }
+  return out;
+}
+
+function agentItemLabel(li) {
+  const wrap = li.querySelector(".ui-menu-item-wrapper");
+  return String((wrap || li).textContent || "").trim();
+}
+
+function getJQuery() {
+  return window.jQuery || window.$ || null;
+}
+
+/** Mở list gợi ý đúng cách jQuery UI — setNativeValue cả cục thường KHÔNG gọi source. */
+async function openAgentAutocomplete(input, query) {
+  const q = String(query || "").trim();
+  if (!input || !q) return false;
+  input.focus();
+  const $ = getJQuery();
+  if ($ && $.fn && typeof $.fn.autocomplete === "function") {
+    try {
+      const $input = $(input);
+      $input.val(q);
+      $input.trigger("focus");
+      $input.autocomplete("search", q);
+      await sleep(200);
+      return true;
+    } catch {
+      /* fallback gõ từng ký tự */
+    }
+  }
+
+  // Fallback: gõ từng ký tự để kích hoạt keyup/source
   setNativeValue(input, "");
   input.focus();
-  setNativeValue(input, search);
-  input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
-  input.dispatchEvent(new KeyboardEvent("keyup", { key: "ArrowDown", bubbles: true }));
-  // Một số bản jQuery UI chỉ gợi ý sau input event
-  input.dispatchEvent(new Event("input", { bubbles: true }));
+  let acc = "";
+  for (const ch of q) {
+    acc += ch;
+    setNativeValue(input, acc);
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: ch, bubbles: true, cancelable: true })
+    );
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(
+      new KeyboardEvent("keyup", { key: ch, bubbles: true, cancelable: true })
+    );
+    await sleep(35);
+  }
+  await sleep(180);
+  return true;
+}
+
+async function selectAgentMenuItem(input, li) {
+  if (!li) return false;
+  const label = agentItemLabel(li);
+  const $ = getJQuery();
+  const target = li.querySelector(".ui-menu-item-wrapper") || li;
+
+  // jQuery UI thường chọn trên mousedown của wrapper
+  if ($ && $.fn) {
+    try {
+      const $input = $(input);
+      const inst = $input.data("ui-autocomplete");
+      if (inst && typeof inst._trigger === "function") {
+        $input.trigger("focus");
+        inst.menu.focus(null, $(li));
+        inst._trigger("select", "autocompleteselect", {
+          item: { label, value: label },
+        });
+        await sleep(250);
+        if (readAgentIdent() !== "0") return true;
+      }
+    } catch {
+      /* click DOM */
+    }
+  }
+
+  target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+  target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+  target.click();
+  await sleep(280);
+  return readAgentIdent() !== "0";
+}
+
+/**
+ * Mở gợi ý bằng `searchQuery`, chọn dòng khớp đủ token với `preferFull`.
+ * Trả về true chỉ khi AgentIdent != 0 và tên hiển thị chấp nhận được.
+ */
+async function pickAgentFromAutocomplete(input, searchQuery, preferFull, timeoutMs = 2800) {
+  closeOpenMenus();
+  await sleep(60);
+  // Reset Ident cũ
+  const identEl = document.querySelector("#txtAgentIdent");
+  if (identEl) setNativeValue(identEl, "0");
+
+  await openAgentAutocomplete(input, searchQuery);
 
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    const items = listVisibleAutocompleteItems();
+    const items = listAgentAutocompleteItems();
     let best = null;
     let bestScore = -1;
-    for (const item of items) {
-      const text = String(item.textContent || "").trim();
-      const score = scoreAutocompleteItem(text, prefer);
+    let bestIdx = -1;
+    items.forEach((li, idx) => {
+      const score = scoreAgentSuggestion(agentItemLabel(li), preferFull);
       if (score > bestScore) {
         bestScore = score;
-        best = item;
+        best = li;
+        bestIdx = idx;
+      }
+    });
+
+    if (best && bestScore >= 0) {
+      const ok = await selectAgentMenuItem(input, best);
+      if (ok && agentSuggestionAcceptable(input.value, preferFull)) return true;
+
+      // Keyboard: ArrowDown tới đúng dòng + Enter
+      if (bestIdx >= 0) {
+        input.focus();
+        for (let i = 0; i <= bestIdx; i += 1) {
+          input.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })
+          );
+          await sleep(40);
+        }
+        input.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })
+        );
+        await sleep(280);
+        if (
+          readAgentIdent() !== "0" &&
+          agentSuggestionAcceptable(input.value, preferFull)
+        ) {
+          return true;
+        }
       }
     }
-    if (!best && items.length === 1) best = items[0];
-    if (best && bestScore >= 0) {
-      clickEl(best);
-      await sleep(280);
-      return true;
-    }
-    await sleep(120);
+    await sleep(140);
   }
-
-  if (requireSelect) return false;
-  // Không blur giữ chuỗi cắt ngắn — xóa nếu chưa chọn được Ident.
   return false;
+}
+
+function buildAgentSearchQueries(fullName) {
+  const full = String(fullName || "").trim();
+  const words = full.split(/\s+/).filter(Boolean);
+  const queries = [];
+  if (full) queries.push(full);
+  // «NAM NAM» mở list rộng; vẫn chỉ chọn dòng có đủ LOGISTICS
+  if (words.length >= 2) queries.push(words.slice(0, 2).join(" "));
+  if (words.length >= 3) queries.push(words.slice(0, 3).join(" "));
+  if (words.length > 2) queries.push(words.slice(-2).join(" "));
+  // Token đặc trưng dài (không lấy 1 mình «NAM»)
+  const long = words.filter((w) => w.length >= 4);
+  if (long.length) queries.push(long[0]);
+  const seen = new Set();
+  return queries.filter((q) => {
+    const k = normAgentText(q);
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 async function ensureCreatePage() {
@@ -268,6 +400,16 @@ function readAgentIdent() {
   return String(document.querySelector("#txtAgentIdent")?.value || "0").trim();
 }
 
+function agentFillOk(preferFull) {
+  const ident = readAgentIdent();
+  const shown = String(document.querySelector("#txtAgentName")?.value || "");
+  return (
+    Boolean(ident) &&
+    ident !== "0" &&
+    agentSuggestionAcceptable(shown, preferFull)
+  );
+}
+
 async function fillAgentName(agentName) {
   const input = document.querySelector("#txtAgentName");
   const full = String(agentName || "").trim();
@@ -280,62 +422,73 @@ async function fillAgentName(agentName) {
     };
   }
 
-  // 1) Gõ đủ tên hồ sơ — chọn dòng khớp dài nhất / đủ token.
-  let ok = await pickAutocomplete(input, full, {
-    preferQuery: full,
-    requireSelect: true,
-    timeoutMs: 2400,
-  });
-  let ident = readAgentIdent();
+  let picked = false;
+  for (const q of buildAgentSearchQueries(full)) {
+    picked = await pickAgentFromAutocomplete(input, q, full, 3000);
+    if (picked && agentFillOk(full)) break;
+    picked = false;
+  }
 
-  // 2) Nếu chưa gắn AgentIdent: rút ngắn query để mở list, nhưng vẫn prefer tên đầy đủ.
-  if (ident === "0" || !ident) {
-    const words = full.split(/\s+/).filter(Boolean);
-    for (let n = Math.min(words.length, 4); n >= 2; n -= 1) {
-      const q = words.slice(0, n).join(" ");
-      if (q === full) continue;
-      ok = await pickAutocomplete(input, q, {
-        preferQuery: full,
-        requireSelect: true,
-        timeoutMs: 2000,
-      });
-      ident = readAgentIdent();
-      if (ident && ident !== "0") break;
-      // Thử cụm 2 từ cuối (VD: «NAM LOGISTICS») nếu tiền tố không khớp
-      if (n === 2 && words.length > 2) {
-        const tail = words.slice(-2).join(" ");
-        ok = await pickAutocomplete(input, tail, {
-          preferQuery: full,
-          requireSelect: true,
-          timeoutMs: 2000,
-        });
-        ident = readAgentIdent();
-        if (ident && ident !== "0") break;
+  // Không chấp nhận để lại «NAM NAM» khi hồ sơ là «NAM NAM LOGISTICS»
+  if (!agentFillOk(full)) {
+    setNativeValue(input, full);
+    const identEl = document.querySelector("#txtAgentIdent");
+    if (identEl) setNativeValue(identEl, "0");
+  }
+
+  return {
+    ok: agentFillOk(full),
+    agentIdent: readAgentIdent(),
+    agentCode: String(document.querySelector("#txtAgentCode")?.value || ""),
+    agentName: String(document.querySelector("#txtAgentName")?.value || ""),
+  };
+}
+
+/** Autocomplete chung (DEST / carrier) — không dùng rule cứng của tên đại lý. */
+async function pickAutocomplete(input, query, { timeoutMs = 1200 } = {}) {
+  if (!input) return false;
+  const q = String(query || "").trim();
+  if (!q) return false;
+  closeOpenMenus();
+  await sleep(50);
+  await openAgentAutocomplete(input, q);
+  const started = Date.now();
+  const prefer = normAgentText(q);
+  while (Date.now() - started < timeoutMs) {
+    const items = listAgentAutocompleteItems();
+    let best = null;
+    let bestScore = -1;
+    for (const li of items) {
+      const text = normAgentText(agentItemLabel(li));
+      let score = -1;
+      if (text === prefer) score = 1000;
+      else if (text.startsWith(prefer)) score = 800 + text.length;
+      else if (text.includes(prefer) || prefer.includes(text)) score = 400 + text.length;
+      if (score > bestScore) {
+        bestScore = score;
+        best = li;
       }
     }
+    if (!best && items.length === 1) best = items[0];
+    if (best) {
+      const target = best.querySelector(".ui-menu-item-wrapper") || best;
+      target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      target.click();
+      await sleep(200);
+      return true;
+    }
+    await sleep(100);
   }
-
-  // 3) Chưa chọn được — ghi lại đúng tên đầy đủ (không để kẹt «NAM NAM»).
-  const shown = String(input.value || "").trim();
-  if ((!ident || ident === "0") && shown.toUpperCase() !== full.toUpperCase()) {
-    setNativeValue(input, full);
-  }
-
-  const finalName = String(document.querySelector("#txtAgentName")?.value || "");
-  const finalIdent = readAgentIdent();
-  return {
-    ok: ok || (finalIdent !== "0" && Boolean(finalIdent)),
-    agentIdent: finalIdent,
-    agentCode: String(document.querySelector("#txtAgentCode")?.value || ""),
-    agentName: finalName,
-  };
+  setNativeValue(input, q);
+  return Boolean(input.value);
 }
 
 async function fillHeader(header) {
   const fills = {};
   const agent = await fillAgentName(header.agentName || "");
-  fills.agentName = agent.ok || Boolean(agent.agentName);
+  fills.agentName = agent.ok;
   fills.agentIdent = agent.agentIdent;
+  fills.agentNameValue = agent.agentName;
   fills.agentPicName = setNativeValue(
     document.querySelector("#txtAgentPicName"),
     header.agentPicName
@@ -512,6 +665,7 @@ async function fillEcargoVct(payload) {
     return { ok: false, error: "BAD_PAYLOAD", message: "Thiếu payload FILL_ECARGO_VCT" };
   }
   await ensureCreatePage();
+  const wantAgent = String(payload.header?.agentName || "").trim();
   const headerFills = await fillHeader(payload.header || {});
   const awbs = Array.isArray(payload.awbs) ? payload.awbs : [];
   if (!awbs.length) {
@@ -524,13 +678,26 @@ async function fillEcargoVct(payload) {
     };
   }
 
+  // Bắt buộc chọn đúng dòng gợi ý (AgentIdent) — không cho đi tiếp với «NAM NAM» cắt cụt.
+  if (
+    wantAgent &&
+    (String(headerFills.agentIdent || "0") === "0" ||
+      !agentSuggestionAcceptable(headerFills.agentNameValue || "", wantAgent))
+  ) {
+    return {
+      ok: false,
+      error: "AGENT_NOT_SELECTED",
+      message:
+        `Chưa chọn đúng đại lý «${wantAgent}» từ gợi ý eCargo (hiện: «${headerFills.agentNameValue || ""}», Ident=${headerFills.agentIdent || "0"}). ` +
+        "Reload Ext v2.2.3, F5 tab eCargo, đảm bảo đã đăng nhập rồi thử lại.",
+      scriptVersion: SCRIPT_VERSION,
+      fills: headerFills,
+      warnings: [],
+    };
+  }
+
   const awbResults = [];
   const warnings = [];
-  if (String(headerFills.agentIdent || "0") === "0") {
-    warnings.push(
-      "Đại lý chưa gắn AgentIdent — kiểm tra tên đủ trên form (VD: NAM NAM LOGISTICS) rồi chọn lại từ gợi ý trước khi Tạo phiếu."
-    );
-  }
 
   for (let i = 0; i < awbs.length; i += 1) {
     await openAwbModal();
@@ -541,9 +708,7 @@ async function fillEcargoVct(payload) {
 
   return {
     ok: true,
-    message:
-      `Đã điền eCargo: header + ${awbs.length} AWB. Kiểm tra rồi bấm «Tạo phiếu».` +
-      (warnings.length ? ` ${warnings[0]}` : ""),
+    message: `Đã điền eCargo: đại lý «${headerFills.agentNameValue || wantAgent}» + ${awbs.length} AWB.`,
     scriptVersion: SCRIPT_VERSION,
     fills: headerFills,
     awbCount: awbs.length,

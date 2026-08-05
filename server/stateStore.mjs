@@ -17,6 +17,14 @@ import {
   normalizeEsidAgentStoreLoose,
   normalizeEsidRegistrantStoreLoose,
 } from "./esidProfilesNormalize.mjs";
+import {
+  emptyEcargoScscStore,
+  normalizeEcargoScscStoreLoose,
+} from "./ecargoScscProfilesNormalize.mjs";
+import {
+  emptyEcargoVctResultsStore,
+  normalizeEcargoVctResultsStore,
+} from "../shared/ecargoVctResultsNormalize.mjs";
 
 const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "TCS", "SCSC"];
 const WAREHOUSE_SET = new Set(WAREHOUSE_ORDER);
@@ -46,6 +54,8 @@ function emptyInitialState() {
     printerProfiles: emptyPrinterProfilesCatalog(),
     esidRegistrantStore: emptyEsidRegistrantStore(),
     esidAgentStore: emptyEsidAgentStore(),
+    ecargoScscStore: emptyEcargoScscStore(),
+    ecargoVctResultsStore: emptyEcargoVctResultsStore(),
   };
 }
 
@@ -164,6 +174,10 @@ function finishState(state, rows, extras = {}) {
     esidRegistrantStore:
       extras.esidRegistrantStore ?? normalizeEsidRegistrantStoreLoose(state.esidRegistrantStore),
     esidAgentStore: extras.esidAgentStore ?? normalizeEsidAgentStoreLoose(state.esidAgentStore),
+    ecargoScscStore: extras.ecargoScscStore ?? normalizeEcargoScscStoreLoose(state.ecargoScscStore),
+    ecargoVctResultsStore:
+      extras.ecargoVctResultsStore ??
+      normalizeEcargoVctResultsStore(state.ecargoVctResultsStore),
   };
 }
 
@@ -187,6 +201,8 @@ function normalizeState(raw) {
     printerProfiles: normalizePrinterProfilesCatalogLoose(raw.printerProfiles),
     esidRegistrantStore: normalizeEsidRegistrantStoreLoose(raw.esidRegistrantStore),
     esidAgentStore: normalizeEsidAgentStoreLoose(raw.esidAgentStore),
+    ecargoScscStore: normalizeEcargoScscStoreLoose(raw.ecargoScscStore),
+    ecargoVctResultsStore: normalizeEcargoVctResultsStore(raw.ecargoVctResultsStore),
   };
 }
 
@@ -271,6 +287,16 @@ export function applyMutation(state, mutation) {
         esidAgentStore: normalizeEsidAgentStoreLoose(mutation?.store),
       });
     }
+    case "SET_ECARGO_SCSC_STORE": {
+      return finishState(state, rows, {
+        ecargoScscStore: normalizeEcargoScscStoreLoose(mutation?.store),
+      });
+    }
+    case "SET_ECARGO_VCT_RESULTS_STORE": {
+      return finishState(state, rows, {
+        ecargoVctResultsStore: normalizeEcargoVctResultsStore(mutation?.store),
+      });
+    }
     case "UPDATE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
       if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
@@ -303,7 +329,7 @@ export function applyMutation(state, mutation) {
     }
     default:
       throw new Error(
-        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: RESET_TRIAL_DATA, SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, SET_ESID_REGISTRANT_STORE, SET_ESID_AGENT_STORE, UPDATE, DELETE, ADD.`
+        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: RESET_TRIAL_DATA, SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, SET_ESID_REGISTRANT_STORE, SET_ESID_AGENT_STORE, SET_ECARGO_SCSC_STORE, SET_ECARGO_VCT_RESULTS_STORE, UPDATE, DELETE, ADD.`
       );
   }
 

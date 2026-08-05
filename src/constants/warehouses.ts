@@ -185,6 +185,14 @@ export function isDirectOpsWarehouse(w: Warehouse): boolean {
   return warehouseRole(w) === "direct";
 }
 
+/**
+ * eCargo VCT (ecargo.scsc.vn) — chỉ kho SCSC trực tiếp.
+ * Không gồm TECS-SCSC (mã trong kho TECS) và không gồm TCS.
+ */
+export function isEcargoScscWarehouse(w: Warehouse): boolean {
+  return w === "SCSC";
+}
+
 /** Kho hoạt động (OpsTeam) phụ trách mã lô này. */
 export function opsTeamOf(w: Warehouse): OpsTeam {
   if (isTecsHub(w)) return "TECS";

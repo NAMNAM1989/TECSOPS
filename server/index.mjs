@@ -17,6 +17,7 @@ import { registerLookupRoutes } from "./lookupRoutes.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
 import { registerTcsAgentProxy } from "./tcsAgentProxy.mjs";
+import { registerEcargoVctRoutes } from "./ecargoVctRoutes.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
@@ -49,7 +50,7 @@ const io = new Server(httpServer, {
 // Proxy agent TRƯỚC express.json — giữ raw body cho POST /jobs, /esid/*
 registerTcsAgentProxy(app);
 
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "4mb" }));
 
 /** Healthcheck Railway / load balancer — xác nhận cả process và Postgres. */
 app.get("/api/health", async (_req, res) => {
@@ -171,6 +172,7 @@ app.post("/api/mutations", async (req, res) => {
 });
 
 registerSheetsRoutes(app, { io });
+registerEcargoVctRoutes(app, { runMutation, loadState, io });
 
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);

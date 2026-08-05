@@ -1,4 +1,5 @@
 import type { EsidDeclareFillPayload } from "./buildEsidDeclareFillPayload";
+import type { EcargoVctFillPayload } from "./buildEcargoVctFillPayload";
 import type { TcsEsidScanItem } from "./tcsPortalAgentApi";
 
 export const TCS_EXT_CHANNEL = "tecsops-tcs-ext";
@@ -50,13 +51,21 @@ export type TcsExtBootstrapResult = TcsExtResult & {
 export type TcsExtFillResult = TcsExtResult & {
   fills?: Record<string, boolean | string | number | null | undefined>;
   values?: Record<string, string>;
+  vctCode?: string;
+  qrDataUrl?: string;
+  phase?: string;
+  sinceIso?: string;
+  submit?: boolean;
 };
 
 type ExtensionCommand =
   | "PING"
   | "TCS_OPEN"
   | "TCS_BOOTSTRAP"
-  | "FILL_ESID";
+  | "FILL_ESID"
+  | "FILL_ECARGO_VCT"
+  | "REGISTER_ECARGO_VCT"
+  | "ECARGO_OPEN";
 
 type Pending = {
   resolve: (value: TcsExtResult) => void;
@@ -152,4 +161,24 @@ export function fillEsidViaExtension(
 
 export function openTcsExtensionTab(): Promise<TcsExtResult> {
   return request<TcsExtResult>("TCS_OPEN", undefined, 20_000);
+}
+
+export function fillEcargoVctViaExtension(
+  payload: EcargoVctFillPayload
+): Promise<TcsExtFillResult> {
+  return request<TcsExtFillResult>("FILL_ECARGO_VCT", payload, 120_000);
+}
+
+/** 1-click: điền + Tạo phiếu + OTP mail + QR (timeout dài). */
+export function registerEcargoVctViaExtension(
+  payload: EcargoVctFillPayload & {
+    apiBase: string;
+    shipmentIds: string[];
+  }
+): Promise<TcsExtFillResult> {
+  return request<TcsExtFillResult>("REGISTER_ECARGO_VCT", payload, 200_000);
+}
+
+export function openEcargoExtensionTab(): Promise<TcsExtResult> {
+  return request<TcsExtResult>("ECARGO_OPEN", undefined, 20_000);
 }

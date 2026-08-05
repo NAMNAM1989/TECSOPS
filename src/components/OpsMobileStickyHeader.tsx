@@ -42,7 +42,7 @@ interface Props {
   showDimScsc?: boolean;
   /** Thanh Cổng TCS dưới ô tìm kiếm (TECS-TCS) */
   tcsPortalBar?: ReactNode;
-  /** Thanh đăng ký eCargo SCSC */
+  /** Thanh đăng ký eCargo — chỉ khi đang xem kho SCSC trực tiếp */
   ecargoBar?: ReactNode;
   filteredViewRows: readonly Shipment[];
   viewRows: readonly Shipment[];

@@ -7,8 +7,10 @@
 
 const LOGIN_URL = "https://www.tcs.com.vn/AwbLogin";
 const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
+const ECARGO_CREATE_URL = "https://ecargo.scsc.vn/Export/VCTOrder/Create";
 const EXT_VERSION = chrome.runtime.getManifest().version;
 const EXPECTED_SCRIPT_VERSION = "2.0.20";
+const EXPECTED_ECARGO_SCRIPT_VERSION = "2.2.0";
 const SESSION_KEY = "tecsopsTcsSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
 const WORKSPACE_KEY = "tecsopsTcsWorkspace";
@@ -111,6 +113,48 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     void withServiceWorkerKeepAlive(fillEsidOnTcsTab(msg.payload))
       .then(reply)
       .catch((err) => reply(errorResult("FILL_FAILED", err)));
+    return true;
+  }
+
+  if (msg.type === "ECARGO_OPEN") {
+    void withServiceWorkerKeepAlive(findOrOpenEcargoTab({ active: true, pinned: true }))
+      .then((tabId) => reply({ ok: true, tabId, workspace }))
+      .catch((err) => reply(errorResult("OPEN_FAILED", err)));
+    return true;
+  }
+
+  if (msg.type === "FILL_ECARGO_VCT") {
+    void withServiceWorkerKeepAlive(fillEcargoOnTab(msg.payload))
+      .then(reply)
+      .catch((err) => reply(errorResult("FILL_FAILED", err)));
+    return true;
+  }
+
+  if (msg.type === "REGISTER_ECARGO_VCT") {
+    void withServiceWorkerKeepAlive(registerEcargoOnTab(msg.payload))
+      .then(reply)
+      .catch((err) => reply(errorResult("REGISTER_FAILED", err)));
+    return true;
+  }
+
+  if (msg.type === "ECARGO_OTP_WAIT") {
+    void withServiceWorkerKeepAlive(ecargoOtpWait(msg))
+      .then(reply)
+      .catch((err) => reply(errorResult("OTP_FAILED", err)));
+    return true;
+  }
+
+  if (msg.type === "ECARGO_RESULT_FROM_MAIL") {
+    void withServiceWorkerKeepAlive(ecargoResultFromMail(msg))
+      .then(reply)
+      .catch((err) => reply(errorResult("MAIL_RESULT_FAILED", err)));
+    return true;
+  }
+
+  if (msg.type === "ECARGO_SAVE_RESULT") {
+    void withServiceWorkerKeepAlive(ecargoSaveResult(msg))
+      .then(reply)
+      .catch((err) => reply(errorResult("SAVE_FAILED", err)));
     return true;
   }
 
@@ -644,4 +688,213 @@ async function fillEsidOnTcsTab(payload) {
       : { phase: "ERROR", error: result?.message || "Điền ESID thất bại" }
   );
   return { ...result, workspace };
+}
+
+async function findOrOpenEcargoTab({ active = true, pinned = true } = {}) {
+  const tabs = await chrome.tabs.query({ url: ["https://ecargo.scsc.vn/*"] });
+  let tab =
+    tabs.find((item) => (item.url || "").includes("/Export/VCTOrder/Create")) || tabs[0];
+  if (!tab?.id) {
+    tab = await chrome.tabs.create({ url: ECARGO_CREATE_URL, active, pinned });
+    await waitTabComplete(tab.id);
+    return tab.id;
+  }
+  const onCreate = (tab.url || "").includes("/Export/VCTOrder/Create");
+  // Chỉ navigate khi chưa ở trang Create — tránh reload làm inject content 2 lần.
+  if (!onCreate) {
+    tab = await chrome.tabs.update(tab.id, {
+      url: ECARGO_CREATE_URL,
+      active,
+      pinned,
+    });
+    await waitTabComplete(tab.id);
+  } else {
+    tab = await chrome.tabs.update(tab.id, { active, pinned });
+  }
+  return tab.id;
+}
+
+async function injectEcargoContent(tabId) {
+  // Chờ content_scripts từ manifest lên trước — tránh inject trùng listener.
+  for (let i = 0; i < 10; i += 1) {
+    try {
+      const ping = await chrome.tabs.sendMessage(tabId, { type: "ECARGO_PING" });
+      if (ping?.ok && String(ping.scriptVersion || "") === EXPECTED_ECARGO_SCRIPT_VERSION) {
+        return;
+      }
+      // Version cũ: inject bản mới (content có guard idempotent).
+      break;
+    } catch {
+      await new Promise((r) => setTimeout(r, 120));
+    }
+  }
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["content-ecargo.js"],
+  });
+}
+
+async function sendToEcargoContent(tabId, message, attempts = 8) {
+  let lastErr;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      await injectEcargoContent(tabId);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      return await chrome.tabs.sendMessage(tabId, message);
+    } catch (err) {
+      lastErr = err;
+      await new Promise((resolve) => setTimeout(resolve, 180 + i * 100));
+    }
+  }
+  throw lastErr || new Error("Không gửi được lệnh tới tab eCargo");
+}
+
+async function fillEcargoOnTab(payload) {
+  await workspaceReady;
+  if (!payload || typeof payload !== "object") {
+    return {
+      ok: false,
+      error: "BAD_PAYLOAD",
+      message: "Thiếu payload FILL_ECARGO_VCT",
+      warnings: [],
+    };
+  }
+  const tabId = await findOrOpenEcargoTab({ active: true, pinned: true });
+  await navigate(tabId, ECARGO_CREATE_URL);
+  const ping = await sendToEcargoContent(tabId, { type: "ECARGO_PING" });
+  if (ping?.scriptVersion !== EXPECTED_ECARGO_SCRIPT_VERSION) {
+    await chrome.tabs.reload(tabId);
+    await waitTabComplete(tabId);
+  }
+  setWorkspace({ phase: "FILLING", message: "Đang điền eCargo VCT…", error: "" });
+  const result = await sendToEcargoContent(tabId, {
+    type: "FILL_ECARGO_VCT",
+    payload,
+  });
+  setWorkspace(
+    result?.ok
+      ? { phase: "READY", message: result.message || "Đã điền eCargo" }
+      : { phase: "ERROR", error: result?.message || "Điền eCargo thất bại" }
+  );
+  return { ...result, workspace, version: EXT_VERSION };
+}
+
+async function registerEcargoOnTab(payload) {
+  await workspaceReady;
+  if (!payload || typeof payload !== "object") {
+    return {
+      ok: false,
+      error: "BAD_PAYLOAD",
+      message: "Thiếu payload REGISTER_ECARGO_VCT",
+      warnings: [],
+    };
+  }
+  const tabId = await findOrOpenEcargoTab({ active: true, pinned: true });
+  await navigate(tabId, ECARGO_CREATE_URL);
+  const ping = await sendToEcargoContent(tabId, { type: "ECARGO_PING" });
+  if (ping?.scriptVersion !== EXPECTED_ECARGO_SCRIPT_VERSION) {
+    await chrome.tabs.reload(tabId);
+    await waitTabComplete(tabId);
+  }
+  setWorkspace({
+    phase: "FILLING",
+    message: "Đang đăng ký eCargo (điền → OTP → QR)…",
+    error: "",
+  });
+  const result = await sendToEcargoContent(tabId, {
+    type: "REGISTER_ECARGO_VCT",
+    payload,
+  });
+  setWorkspace(
+    result?.ok
+      ? { phase: "READY", message: result.message || "Đã đăng ký eCargo" }
+      : { phase: "ERROR", error: result?.message || "Đăng ký eCargo thất bại" }
+  );
+  return { ...result, workspace, version: EXT_VERSION };
+}
+
+async function ecargoOtpWait(msg) {
+  const apiBase = String(msg.apiBase || "").replace(/\/$/, "");
+  if (!apiBase) {
+    return { ok: false, error: "NO_API_BASE", message: "Thiếu apiBase" };
+  }
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), Number(msg.timeoutMs) || 95_000);
+  try {
+    const res = await fetch(`${apiBase}/api/ecargo/otp/wait`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: msg.email,
+        sinceIso: msg.sinceIso,
+        awbHint: msg.awbHint,
+        timeoutMs: msg.timeoutMs || 90_000,
+      }),
+      signal: ctrl.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: data.error || "OTP_HTTP",
+        message: data.message || `OTP wait HTTP ${res.status}`,
+      };
+    }
+    return data;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function ecargoResultFromMail(msg) {
+  const apiBase = String(msg.apiBase || "").replace(/\/$/, "");
+  if (!apiBase) {
+    return { ok: false, error: "NO_API_BASE", message: "Thiếu apiBase" };
+  }
+  const res = await fetch(`${apiBase}/api/ecargo/result-from-mail`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: msg.email,
+      sinceIso: msg.sinceIso,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: data.error || "MAIL_HTTP",
+      message: data.message || `result-from-mail HTTP ${res.status}`,
+    };
+  }
+  return data;
+}
+
+async function ecargoSaveResult(msg) {
+  const apiBase = String(msg.apiBase || "").replace(/\/$/, "");
+  if (!apiBase) {
+    return { ok: false, error: "NO_API_BASE", message: "Thiếu apiBase" };
+  }
+  const res = await fetch(`${apiBase}/api/ecargo/vct-result`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      shipmentIds: msg.shipmentIds,
+      status: msg.status,
+      vctCode: msg.vctCode,
+      qrDataUrl: msg.qrDataUrl,
+      awb: msg.awb,
+      error: msg.error,
+      registeredAt: msg.registeredAt,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: data.error || "SAVE_HTTP",
+      message: data.message || `vct-result HTTP ${res.status}`,
+    };
+  }
+  return data;
 }

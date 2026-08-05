@@ -5,6 +5,7 @@ import { clampAirlineLabelOverrides } from "./airlineLabelOverridesCore";
 import { clampPrinterProfilesCatalog } from "../printing/printerProfilesCore";
 import { normalizeEsidRegistrantStore } from "./esidRegistrantProfile";
 import { normalizeEsidAgentStore } from "./esidAgentProfile";
+import { normalizeEcargoScscStore } from "./ecargoScscProfile";
 
 export function parseAppState(raw: unknown): AppState | null {
   if (!raw || typeof raw !== "object") return null;
@@ -24,6 +25,9 @@ export function parseAppState(raw: unknown): AppState | null {
   const esidAgentStore = normalizeEsidAgentStore(
     "esidAgentStore" in o ? o.esidAgentStore : undefined
   );
+  const ecargoScscStore = normalizeEcargoScscStore(
+    "ecargoScscStore" in o ? o.ecargoScscStore : undefined
+  );
 
   return {
     version: o.version,
@@ -33,5 +37,6 @@ export function parseAppState(raw: unknown): AppState | null {
     printerProfiles,
     esidRegistrantStore,
     esidAgentStore,
+    ecargoScscStore,
   };
 }

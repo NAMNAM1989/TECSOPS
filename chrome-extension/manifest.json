@@ -1,16 +1,19 @@
 {
   "manifest_version": 3,
-  "name": "TECSOPS — Điền ESID TCS",
-  "version": "2.0.20",
-  "description": "TCS workspace trực quan: Login, quét theo ngày và điền ESID trên một tab Chrome được ghim.",
+  "name": "TECSOPS — TCS ESID & SCSC eCargo",
+  "version": "2.2.0",
+  "description": "Điền ESID TCS và đăng ký eCargo SCSC (VCT) 1-click OTP+QR từ TECSOPS.",
   "permissions": ["tabs", "scripting", "storage"],
   "host_permissions": [
     "https://www.tcs.com.vn/*",
     "https://tcs.com.vn/*",
+    "https://ecargo.scsc.vn/*",
     "http://127.0.0.1:8765/*",
     "http://localhost:8765/*",
     "http://localhost:5173/*",
     "http://127.0.0.1:5173/*",
+    "http://localhost:3001/*",
+    "http://127.0.0.1:3001/*",
     "https://ops-production-b405.up.railway.app/*",
     "https://*.up.railway.app/*"
   ],
@@ -37,6 +40,11 @@
     {
       "matches": ["https://www.tcs.com.vn/*", "https://tcs.com.vn/*"],
       "js": ["content-tcs.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://ecargo.scsc.vn/*"],
+      "js": ["content-ecargo.js"],
       "run_at": "document_idle"
     }
   ],

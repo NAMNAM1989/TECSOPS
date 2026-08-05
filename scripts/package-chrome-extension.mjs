@@ -14,12 +14,17 @@ const runtimeFiles = [
   "background.js",
   "content-ops.js",
   "content-tcs.js",
+  "content-ecargo.js",
   "popup.html",
   "popup.js",
   "locators.json",
 ];
 
 const installText = `TECSOPS Chrome Extension v${manifest.version}
+
+Hỗ trợ:
+- Điền ESID TCS (tcs.com.vn)
+- Điền đăng ký eCargo SCSC VCT (ecargo.scsc.vn) — không auto «Tạo phiếu»
 
 CÀI TRÊN MÁY MỚI
 1. Giải nén toàn bộ file ZIP này vào một thư mục cố định.
@@ -28,11 +33,13 @@ CÀI TRÊN MÁY MỚI
 4. Chọn "Tải tiện ích đã giải nén" (Load unpacked).
 5. Chọn đúng thư mục vừa giải nén.
 6. Mở popup extension và kiểm tra phiên bản v${manifest.version}.
-7. F5 trang Ops rồi bấm "Đồng bộ TCS".
+7. F5 trang Ops.
+8. Kho TCS: Đồng bộ TCS / Điền ESID.
+9. Kho SCSC: Đăng ký eCargo → Điền eCargo.
 
 CẬP NHẬT
 Tải ZIP mới, giải nén đè vào thư mục cũ, sau đó bấm nút tải lại tại
-chrome://extensions và F5 cả Ops lẫn tab TCS.
+chrome://extensions và F5 cả Ops lẫn tab TCS / eCargo.
 `;
 
 const entries = [

@@ -19,6 +19,7 @@ import {
   saveAirlineLabelOverridesToStorage,
 } from "../utils/airlineLabelOverridesStorage";
 import { hydrateEsidProfilesFromAppState } from "../utils/esidProfilesSync";
+import { hydrateEcargoScscFromAppState } from "../utils/ecargoScscProfilesSync";
 
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
@@ -160,6 +161,7 @@ export function useShipmentSync(fallback: Fallback) {
       saveRows(picked.rows);
       saveCustomerDirectoryToStorage(picked.customers);
       hydrateEsidProfilesFromAppState(picked);
+      hydrateEcargoScscFromAppState(picked);
       if (picked.airlineLabelOverrides) {
         saveAirlineLabelOverridesToStorage(picked.airlineLabelOverrides);
       }
@@ -224,6 +226,7 @@ export function useShipmentSync(fallback: Fallback) {
       saveRows(live.rows);
       saveCustomerDirectoryToStorage(live.customers);
       hydrateEsidProfilesFromAppState(live);
+      hydrateEcargoScscFromAppState(live);
       if (live.airlineLabelOverrides) {
         saveAirlineLabelOverridesToStorage(live.airlineLabelOverrides);
       }
@@ -344,6 +347,9 @@ export function useShipmentSync(fallback: Fallback) {
             next.esidAgentStore
           ) {
             hydrateEsidProfilesFromAppState(next);
+          }
+          if (mutation.action === "SET_ECARGO_SCSC_STORE" || next.ecargoScscStore) {
+            hydrateEcargoScscFromAppState(next);
           }
         }
         return applied;

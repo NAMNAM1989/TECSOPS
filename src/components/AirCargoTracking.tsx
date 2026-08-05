@@ -21,10 +21,12 @@ import {
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { TcsPortalInlineBar } from "./TcsPortalInlineBar";
+import { EcargoScscInlineBar } from "./EcargoScscInlineBar";
 import { TcsPortalActionsProvider } from "./TcsPortalActionsContext";
 import { useTcsPortalActions } from "../hooks/useTcsPortalActions";
 import {
   WAREHOUSE_ORDER,
+  isEcargoScscWarehouse,
   isScscWarehouse,
   isTcsWarehouse,
   isTecsHub,
@@ -546,6 +548,16 @@ export function AirCargoTracking({
       tcsPortalBar={
         isTcsWarehouse(activeWarehouse) ? <TcsPortalInlineBar compact tcs={tcsPortal} /> : null
       }
+      ecargoBar={
+        isEcargoScscWarehouse(activeWarehouse) ? (
+          <EcargoScscInlineBar
+            compact
+            shipments={filteredViewRows.filter((r) => isEcargoScscWarehouse(r.warehouse))}
+            customers={state?.customers ?? []}
+            preferredShipmentId={selectedId}
+          />
+        ) : null
+      }
       filteredViewRows={filteredViewRows}
       viewRows={viewRows}
       onWarehouseChange={handleActiveWarehouseChange}
@@ -730,6 +742,16 @@ export function AirCargoTracking({
               <TcsPortalInlineBar compact tcs={tcsPortal} />
             </div>
           ) : null}
+          {isEcargoScscWarehouse(activeWarehouse) ? (
+            <div className="min-w-0 shrink-0">
+              <EcargoScscInlineBar
+                compact
+                shipments={filteredViewRows.filter((r) => isEcargoScscWarehouse(r.warehouse))}
+                customers={state?.customers ?? []}
+                preferredShipmentId={selectedId}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </header>
@@ -801,6 +823,7 @@ export function AirCargoTracking({
           onDelete={onDelete}
           onPrint={requestPrintLabel}
           viewSessionYmd={selectedYmd}
+          ecargoVctById={state.ecargoVctResultsStore?.byShipmentId}
         />
       )}
 

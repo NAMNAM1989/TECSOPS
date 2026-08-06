@@ -21,7 +21,7 @@ import {
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { TcsPortalInlineBar } from "./TcsPortalInlineBar";
-import { EcargoScscInlineBar } from "./EcargoScscInlineBar";
+import { EcargoScscInlineBar, EcargoScscProvider } from "./EcargoScscInlineBar";
 import { TcsPortalActionsProvider } from "./TcsPortalActionsContext";
 import { useTcsPortalActions } from "../hooks/useTcsPortalActions";
 import {
@@ -550,12 +550,7 @@ export function AirCargoTracking({
       }
       ecargoBar={
         isEcargoScscWarehouse(activeWarehouse) ? (
-          <EcargoScscInlineBar
-            compact
-            shipments={filteredViewRows.filter((r) => isEcargoScscWarehouse(r.warehouse))}
-            customers={state?.customers ?? []}
-            preferredShipmentId={selectedId}
-          />
+          <EcargoScscInlineBar compact preferredShipmentId={selectedId} />
         ) : null
       }
       filteredViewRows={filteredViewRows}
@@ -744,12 +739,7 @@ export function AirCargoTracking({
           ) : null}
           {isEcargoScscWarehouse(activeWarehouse) ? (
             <div className="min-w-0 shrink-0">
-              <EcargoScscInlineBar
-                compact
-                shipments={filteredViewRows.filter((r) => isEcargoScscWarehouse(r.warehouse))}
-                customers={state?.customers ?? []}
-                preferredShipmentId={selectedId}
-              />
+              <EcargoScscInlineBar compact preferredShipmentId={selectedId} />
             </div>
           ) : null}
         </div>
@@ -757,7 +747,16 @@ export function AirCargoTracking({
     </header>
   );
 
+  const scscShipmentsForEcargo = useMemo(
+    () => filteredViewRows.filter((r) => isEcargoScscWarehouse(r.warehouse)),
+    [filteredViewRows],
+  );
+
   return (
+    <EcargoScscProvider
+      shipments={scscShipmentsForEcargo}
+      customers={state?.customers ?? []}
+    >
     <TcsPortalActionsProvider value={tcsPortal}>
     <AppShell chrome={chrome}>
       {status === "offline" ? (
@@ -907,5 +906,6 @@ export function AirCargoTracking({
       />
     </AppShell>
     </TcsPortalActionsProvider>
+    </EcargoScscProvider>
   );
 }

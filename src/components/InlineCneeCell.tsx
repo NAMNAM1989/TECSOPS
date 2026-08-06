@@ -1,12 +1,7 @@
 import type { CustomerDirectoryEntry, CustomerSavedConsignee } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
-import {
-  buildShipmentCneeDisplayLines,
-  formatShipmentCneeReadonlySummary,
-} from "../utils/shipmentCneeCopyBlock";
-import {
-  formatSavedConsigneeDetailTitle,
-} from "../utils/customerConsigneeShipmentPatch";
+import { formatShipmentCneeReadonlySummary } from "../utils/shipmentCneeCopyBlock";
+import { formatSavedConsigneeDetailTitle } from "../utils/customerConsigneeShipmentPatch";
 import { findCustomerEntry, resolveSavedConsigneeForBooking } from "../utils/customerBookingResolve";
 import { InlineConsigneeSelect } from "./InlineConsigneeSelect";
 import { CneeDetailPopover } from "./CneeDetailPopover";
@@ -38,11 +33,14 @@ export function InlineCneeCell({
   onChange,
   sessionYmdFallback,
 }: Props) {
-  const panelLines = buildShipmentCneeDisplayLines(shipment, customerDirectory, {
-    sessionYmdFallback,
-  });
-  const detailText = panelLines.join("\n").trim();
-  const hasDetail = detailText.length > 0;
+  const detailBtn = (
+    <CneeDetailPopover
+      shipment={shipment}
+      customerDirectory={customerDirectory}
+      sessionYmdFallback={sessionYmdFallback}
+      className="shrink-0"
+    />
+  );
 
   if (options.length > 0) {
     return (
@@ -53,33 +51,36 @@ export function InlineCneeCell({
           options={options}
           onChange={onChange}
         />
-        {hasDetail ? <CneeDetailPopover text={detailText} className="shrink-0" /> : null}
+        {detailBtn}
       </div>
     );
   }
 
   const primary = formatShipmentCneeReadonlySummary(shipment, customerDirectory);
-  if (!primary && !hasDetail) {
-    return <span className="text-[10px] ops-grid-placeholder">—</span>;
+  if (!primary) {
+    return (
+      <div className="flex min-w-0 items-center gap-0.5" {...stopRowClick}>
+        <span className="text-[10px] ops-grid-placeholder">—</span>
+        {detailBtn}
+      </div>
+    );
   }
 
   const customer = findCustomerEntry(shipment, customerDirectory);
   const saved = resolveSavedConsigneeForBooking(shipment, customer);
   const fullTitle = saved
     ? formatSavedConsigneeDetailTitle(saved)
-    : shipment.consigneeNamePrint?.trim() || primary || detailText;
+    : shipment.consigneeNamePrint?.trim() || primary;
 
   return (
     <div className="flex min-w-0 items-center gap-0.5" {...stopRowClick}>
-      {primary ? (
-        <span
-          className="min-w-0 flex-1 truncate text-[10px] font-bold leading-tight tracking-tight text-ui-text ops-grid-cell"
-          title={fullTitle}
-        >
-          {primary}
-        </span>
-      ) : null}
-      {hasDetail ? <CneeDetailPopover text={detailText} className="shrink-0" /> : null}
+      <span
+        className="min-w-0 flex-1 truncate text-[10px] font-bold leading-tight tracking-tight text-ui-text ops-grid-cell"
+        title={fullTitle}
+      >
+        {primary}
+      </span>
+      {detailBtn}
     </div>
   );
 }

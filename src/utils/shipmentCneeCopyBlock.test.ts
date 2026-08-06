@@ -6,6 +6,8 @@ import {
   buildShipmentCneeCopyBlock,
   buildShipmentCneeDisplayLines,
   buildShipmentCneeMetaLines,
+  buildShipmentCustomerDetailSections,
+  CUSTOMER_DETAIL_EMPTY,
   formatFlightDateDdMmYyyy,
   formatSessionYmdForCneeCopy,
 } from "./shipmentCneeCopyBlock";
@@ -121,6 +123,131 @@ describe("buildShipmentCneeCopyBlock", () => {
     expect(block).toContain("SAVED CNEE CO");
     expect(block).toContain("88 QUEEN ST");
     expect(block).toContain("TEL: 0400111222");
+  });
+});
+
+describe("buildShipmentCustomerDetailSections", () => {
+  it("đủ Shipper + CNEE + Tên hàng từ lô", () => {
+    const detail = buildShipmentCustomerDetailSections(
+      baseShipment({
+        shipperNamePrint: "SHIPPER CO",
+        shipperAddressPrint: "12 SHIP ST",
+        shipperPhonePrint: "0901111222",
+        consigneeNamePrint: "ACME PTY LTD",
+        consigneeAddressPrint: "1 MAIN ST",
+        goodsDescriptionPrint: "GARMENTS",
+      }),
+    );
+    expect(detail.customerName).toBe("CÔNG TY ABC");
+    expect(detail.metaSummary).toContain("AWB 978-1111 2222");
+    expect(detail.metaSummary).toContain("VJ081");
+    expect(detail.metaSummary).toContain("MEL");
+    expect(detail.shipperEmpty).toBe(false);
+    expect(detail.shipperLines).toContain("SHIPPER CO");
+    expect(detail.shipperLines).toContain("TEL: 0901111222");
+    expect(detail.cneeEmpty).toBe(false);
+    expect(detail.cneeLines).toContain("ACME PTY LTD");
+    expect(detail.goodsEmpty).toBe(false);
+    expect(detail.goodsLines).toEqual(["GARMENTS"]);
+    expect(detail.copyAllText).toContain("SHIPPER:");
+    expect(detail.copyAllText).toContain("CNEE:");
+    expect(detail.copyAllText).toContain("TÊN HÀNG:");
+    expect(detail.copyAllText).toContain("GARMENTS");
+    expect(detail.hasContent).toBe(true);
+  });
+
+  it("thiếu shipper / goods → Chưa chọn", () => {
+    const detail = buildShipmentCustomerDetailSections(
+      baseShipment({
+        consigneeNamePrint: "ACME PTY LTD",
+        consigneeAddressPrint: "1 MAIN ST",
+      }),
+    );
+    expect(detail.shipperEmpty).toBe(true);
+    expect(detail.shipperLines).toEqual([CUSTOMER_DETAIL_EMPTY]);
+    expect(detail.goodsEmpty).toBe(true);
+    expect(detail.goodsLines).toEqual([CUSTOMER_DETAIL_EMPTY]);
+    expect(detail.cneeEmpty).toBe(false);
+    expect(detail.copyAllText).toContain(`SHIPPER:\n${CUSTOMER_DETAIL_EMPTY}`);
+    expect(detail.copyAllText).toContain(`TÊN HÀNG:\n${CUSTOMER_DETAIL_EMPTY}`);
+  });
+
+  it("tách tên CNEE khỏi địa chỉ khi dồn một chuỗi", () => {
+    const detail = buildShipmentCustomerDetailSections(
+      baseShipment({
+        consigneeNamePrint: "AUSTRALASIAN MAIL SERVICES 118 DENISON ST HILLSDALE NSW 2036",
+        consigneeAddressPrint: "Ph: +61 2 9316 3200\n75 Harrick Road",
+        consigneePhonePrint: "613.9338.6622",
+      }),
+    );
+    expect(detail.cnee.name).toBe("AUSTRALASIAN MAIL SERVICES");
+    expect(detail.cnee.addressLines[0]).toBe("118 DENISON ST HILLSDALE NSW 2036");
+    expect(detail.cnee.addressLines).toContain("Ph: +61 2 9316 3200");
+    expect(detail.cnee.contactLines).toContain("TEL: 613.9338.6622");
+    // copyAll: dòng trống giữa tên và địa chỉ
+    expect(detail.cnee.lines[0]).toBe("AUSTRALASIAN MAIL SERVICES");
+    expect(detail.cnee.lines[1]).toBe("");
+    expect(detail.cnee.lines[2]).toBe("118 DENISON ST HILLSDALE NSW 2036");
+  });
+
+  it("bỏ trùng tên ở đầu dòng địa chỉ", () => {
+    const detail = buildShipmentCustomerDetailSections(
+      baseShipment({
+        consigneeNamePrint: "ACME PTY LTD",
+        consigneeAddressPrint: "ACME PTY LTD 1 MAIN ST\nMELBOURNE",
+      }),
+    );
+    expect(detail.cnee.name).toBe("ACME PTY LTD");
+    expect(detail.cnee.addressLines[0]).toBe("1 MAIN ST");
+    expect(detail.cnee.addressLines).toContain("MELBOURNE");
+  });
+
+  it("lấy shipper + goods từ hồ sơ khi lô chưa snapshot", () => {
+    const directory: CustomerDirectoryEntry[] = [
+      {
+        id: "c1",
+        code: "CYL",
+        name: "Công ty ABC",
+        parties: [],
+        savedShippers: [
+          {
+            id: "sh1",
+            label: "HCM",
+            shipperName: "PCS SHIPPER",
+            shipperAddress: "99 SHIP RD",
+            shipperPhone: "0281234567",
+            shipperEmail: "a@b.com",
+            taxCode: "0312345678",
+          },
+        ],
+        defaultShipperId: "sh1",
+        savedConsignees: [
+          {
+            id: "cn1",
+            label: "MEL",
+            consigneeName: "SAVED CNEE",
+            consigneeAddress: "88 QUEEN ST",
+            consigneePhone: "",
+            consigneeEmail: "",
+            notifyName: "",
+          },
+        ],
+        defaultConsigneeId: "cn1",
+        savedGoods: [
+          {
+            id: "g1",
+            label: "Garment",
+            goodsDescription: "GARMENT ACCESSORIES",
+          },
+        ],
+        defaultGoodsId: "g1",
+      } as CustomerDirectoryEntry,
+    ];
+    const detail = buildShipmentCustomerDetailSections(baseShipment(), directory);
+    expect(detail.shipperLines).toContain("PCS SHIPPER");
+    expect(detail.shipperLines).toContain("MST: 0312345678");
+    expect(detail.cneeLines).toContain("SAVED CNEE");
+    expect(detail.goodsLines).toEqual(["GARMENT ACCESSORIES"]);
   });
 });
 

@@ -9,8 +9,9 @@ import {
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
 import { awbDigitsKey } from "../utils/awbFormat";
-import { isTcsWarehouse } from "../constants/warehouses";
+import { isEcargoScscWarehouse, isTcsWarehouse } from "../constants/warehouses";
 import { OPS } from "../styles/opsModalStyles";
+import { useEcargoRegisterActions } from "./EcargoRegisterActionsContext";
 import { useTcsPortalActionsContext } from "./TcsPortalActionsContext";
 
 type Props = {
@@ -81,6 +82,18 @@ function IconKebabVertical() {
   );
 }
 
+function IconEcargo() {
+  return (
+    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8 7h12M8 12h12M8 17h8M4 7h.01M4 12h.01M4 17h.01"
+      />
+    </svg>
+  );
+}
+
 function menuPositionFromTrigger(btn: HTMLElement): CSSProperties {
   const tr = btn.getBoundingClientRect();
   const gap = 4;
@@ -112,11 +125,13 @@ export function ShipmentRowActionsMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const tcs = useTcsPortalActionsContext();
+  const ecargo = useEcargoRegisterActions();
 
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   const showTcsEsid = isTcsWarehouse(row.warehouse) && Boolean(tcs);
   const showFillEsid = showTcsEsid && awbDigitsKey(row.awb).length === 11;
+  const showEcargo = isEcargoScscWarehouse(row.warehouse) && Boolean(ecargo);
   const menuExtras =
     (showDim ? 1 : 0) +
     (showTcsDim ? 2 : 0) +
@@ -267,6 +282,28 @@ export function ShipmentRowActionsMenu({
             </ActionIconBtn>
           ) : null}
         </>
+      ) : null}
+      {showEcargo ? (
+        <button
+          type="button"
+          title="Đăng ký eCargo lô này"
+          aria-label="Đăng ký eCargo lô này"
+          data-testid={`row-ecargo-${row.id}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            ecargo?.openForShipment(row.id);
+          }}
+          className="inline-flex h-7 items-center rounded-md border border-emerald-500/35 bg-emerald-50 px-1.5 text-[10px] font-bold text-emerald-900 hover:bg-emerald-100"
+        >
+          {compact ? (
+            "eC"
+          ) : (
+            <>
+              <IconEcargo />
+              <span className="ml-0.5">eCargo</span>
+            </>
+          )}
+        </button>
       ) : null}
       <button
         ref={triggerRef}

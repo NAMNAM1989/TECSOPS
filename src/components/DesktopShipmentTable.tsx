@@ -23,6 +23,7 @@ import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 import { normalizeWarehouse, warehouseLabel } from "../constants/warehouses";
 import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
 import { InlineCustomerInfoCell } from "./InlineCustomerInfoCell";
+import { CneeDetailPopover } from "./CneeDetailPopover";
 import { useIsMobile } from "../hooks/useIsMobile";
 import type { EcargoVctResult } from "../utils/ecargoVctResultsStore";
 
@@ -426,21 +427,31 @@ function ShipmentTableRowImpl({
         </div>
       </td>
       <td className={cell("mid")}>
-        <InlineCustomerEdit
-          value={row.customer}
-          customerId={row.customerId}
-          profileSelection={row}
-          customerDirectory={customerDirectory}
-          placeholder="Khách"
-          className="min-w-0 text-[13px] font-semibold ops-grid-cell"
-          maxLength={120}
-          gridNav={{ rowId: row.id, field: "customer" }}
-          onCommit={(patch) => onUpdate(row.id, patch)}
-          onEnterNavigateDown={
-            hasNextRow ? navDownSameField("customer") : undefined
-          }
-          onTabNavigateNext={() => focusShipmentGridCell(row.id, "note")}
-        />
+        <div className="flex min-w-0 items-start gap-1">
+          <div className="min-w-0 flex-1">
+            <InlineCustomerEdit
+              value={row.customer}
+              customerId={row.customerId}
+              profileSelection={row}
+              customerDirectory={customerDirectory}
+              placeholder="Khách"
+              className="min-w-0 text-[13px] font-semibold ops-grid-cell"
+              maxLength={120}
+              gridNav={{ rowId: row.id, field: "customer" }}
+              onCommit={(patch) => onUpdate(row.id, patch)}
+              onEnterNavigateDown={
+                hasNextRow ? navDownSameField("customer") : undefined
+              }
+              onTabNavigateNext={() => focusShipmentGridCell(row.id, "note")}
+            />
+          </div>
+          <CneeDetailPopover
+            shipment={row}
+            customerDirectory={customerDirectory}
+            sessionYmdFallback={viewSessionYmd}
+            className="mt-0.5 shrink-0"
+          />
+        </div>
       </td>
       <td className={cell("mid", "align-middle")}>
         <InlineCustomerInfoCell

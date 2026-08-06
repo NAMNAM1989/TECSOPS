@@ -4,8 +4,13 @@ import { parseFlightDateDisplayToYmd, ymdToDdMon } from "./bookingDateParse";
 import {
   findCustomerEntry,
   resolveSavedConsigneeForBooking,
+  resolveSavedGoodsForBooking,
+  resolveSavedShipperForBooking,
 } from "./customerBookingResolve";
 import { resolvePrintAddressForShipment } from "./printAddressMultiline";
+
+/** Placeholder section khi chưa chọn Shipper / CNEE / Tên hàng. */
+export const CUSTOMER_DETAIL_EMPTY = "Chưa chọn";
 
 function compactSpace(s: string): string {
   return s.replace(/\s+/g, " ").trim();
@@ -108,12 +113,99 @@ export type BuildShipmentCneeBodyLinesOptions = {
   omitEmail?: boolean;
 };
 
+export type CustomerDetailPartyBlock = {
+  name: string;
+  addressLines: string[];
+  contactLines: string[];
+  empty: boolean;
+  /** Flat: tên · (dòng trống) · địa chỉ · liên hệ — dùng copy / tương thích cũ. */
+  lines: string[];
+};
+
+/** Tách «TÊN 118 STREET…» → tên + dòng địa chỉ (khi name/address bị dồn 1 chuỗi). */
+function peelStreetSuffixFromName(name: string): { name: string; street: string } {
+  const m = name.match(/^(.+?)\s+(\d{1,5}\s+.+)$/);
+  if (!m) return { name, street: "" };
+  const head = compactSpace(m[1] || "");
+  const street = compactSpace(m[2] || "");
+  if (head.length < 3 || street.length < 5) return { name, street: "" };
+  return { name: head, street };
+}
+
+/** Bỏ trùng tên ở đầu dòng địa chỉ. */
+function stripLeadingNameFromAddress(name: string, addressLines: string[]): string[] {
+  if (!name || !addressLines.length) return addressLines;
+  const first = addressLines[0]!;
+  const prefix = `${name} `;
+  if (first.toUpperCase().startsWith(prefix.toUpperCase())) {
+    const rest = first.slice(name.length).trim();
+    return rest ? [rest, ...addressLines.slice(1)] : addressLines.slice(1);
+  }
+  return addressLines;
+}
+
+function partyBlockFromParts(opts: {
+  name: string;
+  addressLines: string[];
+  contactLines: string[];
+}): CustomerDetailPartyBlock {
+  let name = compactSpace(opts.name);
+  let addressLines = opts.addressLines.map(compactSpace).filter(Boolean);
+
+  const peeled = peelStreetSuffixFromName(name);
+  if (peeled.street) {
+    name = peeled.name;
+    const already =
+      addressLines[0] &&
+      addressLines[0].toUpperCase().startsWith(peeled.street.toUpperCase());
+    if (!already) addressLines = [peeled.street, ...addressLines];
+  }
+  addressLines = stripLeadingNameFromAddress(name, addressLines);
+
+  const contactLines = opts.contactLines.map(compactSpace).filter(Boolean);
+  const empty = !name && !addressLines.length && !contactLines.length;
+  if (empty) {
+    return {
+      name: "",
+      addressLines: [],
+      contactLines: [],
+      empty: true,
+      lines: [CUSTOMER_DETAIL_EMPTY],
+    };
+  }
+
+  const lines: string[] = [];
+  if (name) lines.push(name);
+  if (name && addressLines.length) lines.push("");
+  lines.push(...addressLines);
+  lines.push(...contactLines);
+  return { name, addressLines, contactLines, empty: false, lines };
+}
+
 /** Các dòng thông tin CNEE (tên, địa chỉ, SĐT, email, notify). */
 export function buildShipmentCneeBodyLines(
   shipment: Shipment,
   directory: readonly CustomerDirectoryEntry[] = [],
   opts?: BuildShipmentCneeBodyLinesOptions
 ): string[] {
+  const block = buildShipmentCneePartyBlock(shipment, directory, opts);
+  if (block.empty) {
+    return cneePartyFallbackLines(findCustomerEntry(shipment, directory));
+  }
+  // Copy / display cũ: tên rồi địa chỉ liền (không dòng trống).
+  return [
+    ...(block.name ? [block.name] : []),
+    ...block.addressLines,
+    ...block.contactLines,
+  ];
+}
+
+/** CNEE tách tên / địa chỉ / liên hệ — dùng panel chi tiết. */
+export function buildShipmentCneePartyBlock(
+  shipment: Shipment,
+  directory: readonly CustomerDirectoryEntry[] = [],
+  opts?: BuildShipmentCneeBodyLinesOptions,
+): CustomerDetailPartyBlock {
   const customer = findCustomerEntry(shipment, directory);
   const saved = resolveSavedConsigneeForBooking(shipment, customer);
 
@@ -127,17 +219,28 @@ export function buildShipmentCneeBodyLines(
   const email = compactSpace(shipment.consigneeEmailPrint?.trim() || saved?.consigneeEmail?.trim() || "");
   const notify = compactSpace(shipment.notifyNamePrint?.trim() || saved?.notifyName?.trim() || "");
 
-  const lines: string[] = [];
-  if (name) lines.push(name);
-  lines.push(...splitMultilineBlock(address));
-  if (phone) lines.push(`TEL: ${phone}`);
-  if (email && !opts?.omitEmail) lines.push(`EMAIL: ${email}`);
-  if (notify) lines.push(`NOTIFY: ${notify}`);
+  const contactLines: string[] = [];
+  if (phone) contactLines.push(`TEL: ${phone}`);
+  if (email && !opts?.omitEmail) contactLines.push(`EMAIL: ${email}`);
+  if (notify) contactLines.push(`NOTIFY: ${notify}`);
 
-  if (lines.length === 0) {
-    return cneePartyFallbackLines(customer);
+  const block = partyBlockFromParts({
+    name,
+    addressLines: splitMultilineBlock(address),
+    contactLines,
+  });
+
+  if (block.empty) {
+    const fallback = cneePartyFallbackLines(customer);
+    if (!fallback.length) return block;
+    // Fallback party text: dòng đầu = tên, còn lại = địa chỉ (ước lượng).
+    return partyBlockFromParts({
+      name: fallback[0] || "",
+      addressLines: fallback.slice(1),
+      contactLines: [],
+    });
   }
-  return lines;
+  return block;
 }
 
 /** AWB, chuyến, ngày bay (dd-mm-yyyy), DEST — hiển thị phía trên khối CNEE trong ô. */
@@ -178,6 +281,135 @@ export function buildShipmentCneeDisplayLines(
   if (meta.length) return meta;
   if (body.length) return ["CNEE:", ...body];
   return [];
+}
+
+function buildShipmentShipperPartyBlock(
+  shipment: Shipment,
+  directory: readonly CustomerDirectoryEntry[] = [],
+): CustomerDetailPartyBlock {
+  const customer = findCustomerEntry(shipment, directory);
+  const saved = resolveSavedShipperForBooking(shipment, customer);
+
+  const name = compactSpace(shipment.shipperNamePrint?.trim() || saved?.shipperName?.trim() || "");
+  const address = resolvePrintAddressForShipment({
+    bookingPrint: shipment.shipperAddressPrint,
+    directoryPrint: saved?.shipperAddress ?? "",
+    maxLines: 8,
+  });
+  const phone = compactSpace(shipment.shipperPhonePrint?.trim() || saved?.shipperPhone?.trim() || "");
+  const email = compactSpace(shipment.shipperEmailPrint?.trim() || saved?.shipperEmail?.trim() || "");
+  const tax = compactSpace(shipment.taxCodePrint?.trim() || saved?.taxCode?.trim() || "");
+
+  const contactLines: string[] = [];
+  if (phone) contactLines.push(`TEL: ${phone}`);
+  if (email) contactLines.push(`EMAIL: ${email}`);
+  if (tax) contactLines.push(`MST: ${tax}`);
+
+  return partyBlockFromParts({
+    name,
+    addressLines: splitMultilineBlock(address),
+    contactLines,
+  });
+}
+
+function buildShipmentGoodsBodyLines(
+  shipment: Shipment,
+  directory: readonly CustomerDirectoryEntry[] = [],
+): string[] {
+  const customer = findCustomerEntry(shipment, directory);
+  const saved = resolveSavedGoodsForBooking(shipment, customer);
+  const desc = compactSpace(
+    shipment.goodsDescriptionPrint?.trim() || saved?.goodsDescription?.trim() || "",
+  );
+  return desc ? [desc] : [];
+}
+
+function sectionOrEmpty(lines: string[]): { lines: string[]; empty: boolean } {
+  if (lines.length) return { lines, empty: false };
+  return { lines: [CUSTOMER_DETAIL_EMPTY], empty: true };
+}
+
+export type ShipmentCustomerDetailSections = {
+  customerName: string;
+  /** Một dòng meta: AWB · chuyến · ngày · Dest */
+  metaSummary: string;
+  metaLines: string[];
+  shipper: CustomerDetailPartyBlock;
+  cnee: CustomerDetailPartyBlock;
+  shipperLines: string[];
+  cneeLines: string[];
+  goodsLines: string[];
+  shipperEmpty: boolean;
+  cneeEmpty: boolean;
+  goodsEmpty: boolean;
+  copyAllText: string;
+  hasContent: boolean;
+};
+
+/**
+ * Panel thông tin khách đầy đủ: meta lô + Shipper + CNEE + Tên hàng.
+ * Ưu tiên `*Print` trên lô, thiếu thì lấy hồ sơ đã chọn.
+ */
+export function buildShipmentCustomerDetailSections(
+  shipment: Shipment,
+  directory: readonly CustomerDirectoryEntry[] = [],
+  opts?: { sessionYmdFallback?: string },
+): ShipmentCustomerDetailSections {
+  const customerName = customerNameForCneeDisplay(shipment, directory);
+  const awb = (shipment.awb ?? "").trim();
+  const flight = (shipment.flight ?? "").trim().toUpperCase();
+  const dest = (shipment.dest ?? "").trim().toUpperCase();
+  const flightDateDdMmYyyy = formatFlightDateDdMmYyyy(
+    shipment.flightDate ?? "",
+    yearHintFromShipment(shipment, opts?.sessionYmdFallback),
+  );
+
+  const metaParts: string[] = [];
+  if (awb) metaParts.push(`AWB ${awb}`);
+  if (flight) metaParts.push(flight);
+  if (flightDateDdMmYyyy) metaParts.push(flightDateDdMmYyyy);
+  if (dest) metaParts.push(dest);
+  const metaSummary = metaParts.join(" · ");
+
+  const metaLines: string[] = [];
+  if (awb) metaLines.push(`AWB: ${awb}`);
+  if (flightDateDdMmYyyy) metaLines.push(`Ngày bay: ${flightDateDdMmYyyy}`);
+  if (flight) metaLines.push(`Chuyến bay: ${flight}`);
+  if (dest) metaLines.push(`Dest: ${dest}`);
+
+  const shipper = buildShipmentShipperPartyBlock(shipment, directory);
+  const cnee = buildShipmentCneePartyBlock(shipment, directory);
+  const goods = sectionOrEmpty(buildShipmentGoodsBodyLines(shipment, directory));
+
+  const copyParts: string[] = [];
+  if (customerName) copyParts.push(`Khách: ${customerName}`);
+  copyParts.push(...metaLines);
+  if (copyParts.length) copyParts.push("");
+  copyParts.push("SHIPPER:", ...shipper.lines, "", "CNEE:", ...cnee.lines, "", "TÊN HÀNG:", ...goods.lines);
+
+  const hasContent = Boolean(
+    customerName ||
+      metaLines.length ||
+      !shipper.empty ||
+      !cnee.empty ||
+      !goods.empty,
+  );
+
+  return {
+    customerName,
+    metaSummary,
+    metaLines,
+    shipper,
+    cnee,
+    shipperLines: shipper.lines,
+    cneeLines: cnee.lines,
+    goodsLines: goods.lines,
+    shipperEmpty: shipper.empty,
+    cneeEmpty: cnee.empty,
+    goodsEmpty: goods.empty,
+    copyAllText: copyParts.join("\n").trim(),
+    hasContent,
+  };
 }
 
 /**

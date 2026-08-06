@@ -43,6 +43,8 @@ type Props = {
   customers: CustomerDirectoryEntry[];
   /** Lô đang chọn trên bảng — pre-check. */
   preferredShipmentId?: string | null;
+  /** Mở từ nút từng lô — khóa AWB đó, UI gọn để đăng ký nhanh. */
+  singleShipmentMode?: boolean;
 };
 
 const ARRIVAL_SLOTS = Array.from({ length: 24 }, (_, i) => ({
@@ -98,6 +100,7 @@ export function EcargoVctRegisterModal({
   shipments: shipmentsProp,
   customers,
   preferredShipmentId,
+  singleShipmentMode = false,
 }: Props) {
   // Defense: chỉ lô kho SCSC — không nhận TECS-SCSC / TCS dù caller truyền nhầm.
   const shipments = useMemo(
@@ -149,9 +152,11 @@ export function EcargoVctRegisterModal({
       : [];
     const initial = preferred.length ? preferred : shipments.slice(0, 1);
     setSelectedIds(initial.map((s) => s.id));
+    setLastQr(null);
+    setPhaseLabel("");
     // Chỉ reset khi mở modal / đổi danh sách lô — tránh mảng `shipments` mới mỗi render.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- shipmentIdsKey thay cho shipments
-  }, [open, preferredShipmentId, shipmentIdsKey]);
+  }, [open, preferredShipmentId, shipmentIdsKey, singleShipmentMode]);
 
   useEffect(() => {
     if (!open) return;
@@ -545,9 +550,15 @@ export function EcargoVctRegisterModal({
       <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-4 shadow-xl">
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
-            <h2 className="text-[15px] font-bold text-slate-900">Đăng ký eCargo SCSC</h2>
+            <h2 className="text-[15px] font-bold text-slate-900">
+              {singleShipmentMode && selectedShipments[0]
+                ? `eCargo · ${formatAwbLabel(selectedShipments[0].awb) || "lô SCSC"}`
+                : "Đăng ký eCargo SCSC"}
+            </h2>
             <p className="mt-0.5 text-[11px] text-slate-500">
-              «Đăng ký eCargo» = điền + Tạo phiếu + OTP mail chung + lấy QR. «Chỉ điền form» để kiểm tra tay.
+              {singleShipmentMode
+                ? "Đăng ký nhanh 1 lô — kiểm tra xe/giờ rồi bấm «Đăng ký eCargo»."
+                : "«Đăng ký eCargo» = điền + Tạo phiếu + OTP mail chung + lấy QR. «Chỉ điền form» để kiểm tra tay."}
             </p>
           </div>
           <button
@@ -560,72 +571,84 @@ export function EcargoVctRegisterModal({
           </button>
         </div>
 
-        <section className="mb-3 rounded-xl border border-slate-200 p-3">
-          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-[12px] font-bold text-slate-800">OTP mail (IMAP)</h3>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                imapStatusLoading
-                  ? "bg-slate-100 text-slate-500"
-                  : canRegisterWithOtp
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-amber-100 text-amber-900"
-              }`}
-            >
-              {imapStatusLoading
-                ? "Đang kiểm tra…"
-                : canRegisterWithOtp
-                  ? "IMAP sẵn sàng"
-                  : "Chưa cấu hình OTP mail"}
-            </span>
-          </div>
-          {canRegisterWithOtp ? (
-            <p className="text-[11px] text-slate-600">
-              Server đọc OTP từ{" "}
-              <span className="font-mono font-semibold text-slate-800">
-                {imapStatus?.userHint || "***"}
-              </span>{" "}
-              ({imapStatus?.host}
-              {imapStatus?.mailbox ? ` / ${imapStatus.mailbox}` : ""}). Email hồ sơ phải trùng hộp
-              thư này.
-            </p>
-          ) : (
-            <p className="text-[11px] text-amber-900">
-              Thêm <span className="font-mono">ECARGO_IMAP_USER</span> +{" "}
-              <span className="font-mono">ECARGO_IMAP_PASS</span> (Gmail App Password) vào Railway
-              Variables hoặc <span className="font-mono">.env</span>, rồi restart server. Xem{" "}
-              <span className="font-mono">.env.example</span> /{" "}
-              <span className="font-mono">docs/ecargo-vct-otp-flow.md</span>.
-            </p>
-          )}
-          {emailMatchesImap === false ? (
-            <p className="mt-1 text-[11px] font-semibold text-rose-700">
-              Email hồ sơ («{profile.email || "trống"}») có vẻ không khớp mailbox IMAP (
-              {imapStatus?.userHint}). Sửa Email OTP trong hồ sơ đại lý cho trùng.
-            </p>
-          ) : null}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="rounded-full border border-slate-300 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              onClick={() => void onTestImap()}
-              disabled={busy || imapTestBusy || imapStatusLoading}
-            >
-              {imapTestBusy ? "Đang thử…" : "Kiểm tra mail OTP"}
-            </button>
-            {imapTestMsg ? (
+        {singleShipmentMode && canRegisterWithOtp && emailMatchesImap !== false ? (
+          <p className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-1.5 text-[11px] text-emerald-900">
+            OTP mail sẵn sàng
+            {imapStatus?.userHint ? (
+              <>
+                {" "}
+                · <span className="font-mono font-semibold">{imapStatus.userHint}</span>
+              </>
+            ) : null}
+          </p>
+        ) : (
+          <section className="mb-3 rounded-xl border border-slate-200 p-3">
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-[12px] font-bold text-slate-800">OTP mail (IMAP)</h3>
               <span
-                className={`text-[11px] ${
-                  /OK|sẵn sàng|thành công/i.test(imapTestMsg)
-                    ? "text-emerald-700"
-                    : "text-rose-700"
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                  imapStatusLoading
+                    ? "bg-slate-100 text-slate-500"
+                    : canRegisterWithOtp
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-amber-100 text-amber-900"
                 }`}
               >
-                {imapTestMsg}
+                {imapStatusLoading
+                  ? "Đang kiểm tra…"
+                  : canRegisterWithOtp
+                    ? "IMAP sẵn sàng"
+                    : "Chưa cấu hình OTP mail"}
               </span>
+            </div>
+            {canRegisterWithOtp ? (
+              <p className="text-[11px] text-slate-600">
+                Server đọc OTP từ{" "}
+                <span className="font-mono font-semibold text-slate-800">
+                  {imapStatus?.userHint || "***"}
+                </span>{" "}
+                ({imapStatus?.host}
+                {imapStatus?.mailbox ? ` / ${imapStatus.mailbox}` : ""}). Email hồ sơ phải trùng hộp
+                thư này.
+              </p>
+            ) : (
+              <p className="text-[11px] text-amber-900">
+                Thêm <span className="font-mono">ECARGO_IMAP_USER</span> +{" "}
+                <span className="font-mono">ECARGO_IMAP_PASS</span> (Gmail App Password) vào Railway
+                Variables hoặc <span className="font-mono">.env</span>, rồi restart server. Xem{" "}
+                <span className="font-mono">.env.example</span> /{" "}
+                <span className="font-mono">docs/ecargo-vct-otp-flow.md</span>.
+              </p>
+            )}
+            {emailMatchesImap === false ? (
+              <p className="mt-1 text-[11px] font-semibold text-rose-700">
+                Email hồ sơ («{profile.email || "trống"}») có vẻ không khớp mailbox IMAP (
+                {imapStatus?.userHint}). Sửa Email OTP trong hồ sơ đại lý cho trùng.
+              </p>
             ) : null}
-          </div>
-        </section>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="rounded-full border border-slate-300 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                onClick={() => void onTestImap()}
+                disabled={busy || imapTestBusy || imapStatusLoading}
+              >
+                {imapTestBusy ? "Đang thử…" : "Kiểm tra mail OTP"}
+              </button>
+              {imapTestMsg ? (
+                <span
+                  className={`text-[11px] ${
+                    /OK|sẵn sàng|thành công/i.test(imapTestMsg)
+                      ? "text-emerald-700"
+                      : "text-rose-700"
+                  }`}
+                >
+                  {imapTestMsg}
+                </span>
+              ) : null}
+            </div>
+          </section>
+        )}
 
         <section className="mb-3 rounded-xl border border-slate-200 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -761,38 +784,77 @@ export function EcargoVctRegisterModal({
         </section>
 
         <section className="mb-3 rounded-xl border border-slate-200 p-3">
-          <h3 className="mb-2 text-[12px] font-bold text-slate-800">Lô AWB đăng ký</h3>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-[12px] font-bold text-slate-800">
+              {singleShipmentMode ? "Lô đăng ký" : "Lô AWB đăng ký"}
+            </h3>
+            {singleShipmentMode ? (
+              <span
+                className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800"
+                title="Mở từ nút từng lô. Chọn nhiều AWB: dùng nút eCargo trên thanh công cụ."
+              >
+                Nhanh · 1 lô
+              </span>
+            ) : null}
+          </div>
           <p className="mb-2 text-[10px] text-slate-500">
             Tên hàng cố định: {ECARGO_DEFAULT_GOODS}. Thiếu kiện/kg → dùng 99 pcs / 999 kg.
           </p>
-          <div className="max-h-40 space-y-1 overflow-y-auto">
-            {shipments.length === 0 ? (
-              <p className="text-[11px] text-slate-500">Không có lô SCSC trong ngày.</p>
-            ) : (
-              shipments.map((s) => {
-                const qty = resolveEcargoPiecesKg(s);
-                return (
-                  <label
-                    key={s.id}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-slate-50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(s.id)}
-                      onChange={() => toggleId(s.id)}
-                    />
-                    <span className="font-mono text-[12px] font-semibold text-slate-800">
-                      {formatAwbLabel(s.awb) || "—"}
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      {s.flight} {s.flightDate} · {s.dest} · {qty.pieces}pcs / {qty.weight}kg
-                      {qty.usedDefaults ? " (mặc định)" : ""}
-                    </span>
-                  </label>
-                );
-              })
-            )}
-          </div>
+          {singleShipmentMode ? (
+            <div className="space-y-1">
+              {selectedShipments.length === 0 ? (
+                <p className="text-[11px] text-rose-700">Không tìm thấy lô SCSC này trong ngày.</p>
+              ) : (
+                selectedShipments.map((s) => {
+                  const qty = resolveEcargoPiecesKg(s);
+                  return (
+                    <div
+                      key={s.id}
+                      className="rounded-lg border border-emerald-200 bg-emerald-50/50 px-2.5 py-2"
+                    >
+                      <p className="font-mono text-[13px] font-bold text-slate-900">
+                        {formatAwbLabel(s.awb) || "—"}
+                      </p>
+                      <p className="text-[11px] text-slate-600">
+                        {s.flight} {s.flightDate} · {s.dest} · {qty.pieces}pcs / {qty.weight}kg
+                        {qty.usedDefaults ? " (mặc định)" : ""}
+                        {s.customer ? ` · ${s.customer}` : ""}
+                      </p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          ) : (
+            <div className="max-h-40 space-y-1 overflow-y-auto">
+              {shipments.length === 0 ? (
+                <p className="text-[11px] text-slate-500">Không có lô SCSC trong ngày.</p>
+              ) : (
+                shipments.map((s) => {
+                  const qty = resolveEcargoPiecesKg(s);
+                  return (
+                    <label
+                      key={s.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-slate-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(s.id)}
+                        onChange={() => toggleId(s.id)}
+                      />
+                      <span className="font-mono text-[12px] font-semibold text-slate-800">
+                        {formatAwbLabel(s.awb) || "—"}
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        {s.flight} {s.flightDate} · {s.dest} · {qty.pieces}pcs / {qty.weight}kg
+                        {qty.usedDefaults ? " (mặc định)" : ""}
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          )}
         </section>
 
         <section className="mb-3 rounded-xl border border-slate-200 p-3">

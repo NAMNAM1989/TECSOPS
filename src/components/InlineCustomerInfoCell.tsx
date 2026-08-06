@@ -18,12 +18,10 @@ import {
   formatSavedGoodsShortLabel,
   isSavedGoodsSelectable,
 } from "../utils/customerPrintProfileLink";
-import { CneeDetailPopover } from "./CneeDetailPopover";
-import { buildShipmentCneeDisplayLines } from "../utils/shipmentCneeCopyBlock";
-
 type Props = {
   shipment: Shipment;
   customerDirectory: readonly CustomerDirectoryEntry[];
+  /** Giữ prop để caller cũ không vỡ — chi tiết CNEE đã chuyển sang cột KHÁCH. */
   sessionYmdFallback?: string;
   onUpdate: (patch: Partial<Shipment>) => void;
 };
@@ -91,7 +89,6 @@ function MiniSelect({
 export function InlineCustomerInfoCell({
   shipment,
   customerDirectory,
-  sessionYmdFallback,
   onUpdate,
 }: Props) {
   const entry = findCustomerEntry(shipment, customerDirectory);
@@ -103,11 +100,6 @@ export function InlineCustomerInfoCell({
   const shipperId = shipment.customerShipperId?.trim() ?? "";
   const consigneeId = shipment.customerConsigneeId?.trim() ?? "";
   const goodsId = shipment.customerGoodsId?.trim() ?? "";
-
-  const panelLines = buildShipmentCneeDisplayLines(shipment, customerDirectory, {
-    sessionYmdFallback,
-  });
-  const detailText = panelLines.join("\n").trim();
 
   const selectedShipper = shippers.find((x) => x.id === shipperId);
   const selectedConsignee = consignees.find((x) => x.id === consigneeId);
@@ -142,38 +134,33 @@ export function InlineCustomerInfoCell({
         ))}
       </MiniSelect>
 
-      <div className="flex min-w-0 items-center gap-0.5">
-        <MiniSelect
-          ariaLabel="Chọn CNEE lưu sẵn"
-          value={consigneeId}
-          placeholder="CNEE"
-          disabled={consignees.length === 0}
-          title={
-            selectedConsignee
-              ? formatSavedConsigneeDetailTitle(selectedConsignee)
-              : "Chọn CNEE từ hồ sơ khách"
-          }
-          onChange={(id) => {
-            const sc = consignees.find((x) => x.id === id) as
-              | CustomerSavedConsignee
-              | undefined;
-            onUpdate(buildShipmentPatchForSavedConsignee(id ? sc : undefined));
-          }}
-        >
-          {consignees.map((sc) => (
-            <option
-              key={sc.id}
-              value={sc.id}
-              title={formatSavedConsigneeDetailTitle(sc)}
-            >
-              {formatSavedConsigneeShortLabel(sc)}
-            </option>
-          ))}
-        </MiniSelect>
-        {detailText ? (
-          <CneeDetailPopover text={detailText} className="shrink-0" />
-        ) : null}
-      </div>
+      <MiniSelect
+        ariaLabel="Chọn CNEE lưu sẵn"
+        value={consigneeId}
+        placeholder="CNEE"
+        disabled={consignees.length === 0}
+        title={
+          selectedConsignee
+            ? formatSavedConsigneeDetailTitle(selectedConsignee)
+            : "Chọn CNEE từ hồ sơ khách"
+        }
+        onChange={(id) => {
+          const sc = consignees.find((x) => x.id === id) as
+            | CustomerSavedConsignee
+            | undefined;
+          onUpdate(buildShipmentPatchForSavedConsignee(id ? sc : undefined));
+        }}
+      >
+        {consignees.map((sc) => (
+          <option
+            key={sc.id}
+            value={sc.id}
+            title={formatSavedConsigneeDetailTitle(sc)}
+          >
+            {formatSavedConsigneeShortLabel(sc)}
+          </option>
+        ))}
+      </MiniSelect>
 
       <MiniSelect
         ariaLabel="Chọn tên hàng lưu sẵn trong hồ sơ khách"

@@ -182,12 +182,31 @@ describe("buildShipmentCustomerDetailSections", () => {
     );
     expect(detail.cnee.name).toBe("AUSTRALASIAN MAIL SERVICES");
     expect(detail.cnee.addressLines[0]).toBe("118 DENISON ST HILLSDALE NSW 2036");
-    expect(detail.cnee.addressLines).toContain("Ph: +61 2 9316 3200");
+    expect(detail.cnee.addressLines).toContain("75 Harrick Road");
+    expect(detail.cnee.addressLines.join("\n")).not.toMatch(/\bPh\s*:/i);
     expect(detail.cnee.contactLines).toContain("TEL: 613.9338.6622");
     // copyAll: dòng trống giữa tên và địa chỉ
     expect(detail.cnee.lines[0]).toBe("AUSTRALASIAN MAIL SERVICES");
     expect(detail.cnee.lines[1]).toBe("");
     expect(detail.cnee.lines[2]).toBe("118 DENISON ST HILLSDALE NSW 2036");
+  });
+
+  it("tách Ph:/E: nhúng trong dòng địa chỉ sang Liên hệ", () => {
+    const detail = buildShipmentCustomerDetailSections(
+      baseShipment({
+        consigneeNamePrint: "AUSTRALASIAN MAIL SERVICES",
+        consigneeAddressPrint:
+          "118 DENISON ST HILLSDALE NSW 2036 Ph: +61 2 9316 3200 E: sydneyimports@amservices.net.au\n75 Harrick Road Keilor Park VIC 3043",
+      }),
+    );
+    expect(detail.cnee.addressLines).toEqual([
+      "118 DENISON ST HILLSDALE NSW 2036",
+      "75 Harrick Road Keilor Park VIC 3043",
+    ]);
+    expect(detail.cnee.contactLines).toContain("TEL: +61 2 9316 3200");
+    expect(detail.cnee.contactLines).toContain(
+      "EMAIL: sydneyimports@amservices.net.au",
+    );
   });
 
   it("bỏ trùng tên ở đầu dòng địa chỉ", () => {

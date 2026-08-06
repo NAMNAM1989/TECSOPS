@@ -144,6 +144,55 @@ function stripLeadingNameFromAddress(name: string, addressLines: string[]): stri
   return addressLines;
 }
 
+/**
+ * Tách Ph:/E:/Tel:/Email: nhúng trong địa chỉ → Liên hệ (TEL:/EMAIL:).
+ * VD: `118 DENISON ST … Ph: +61 2 9316 3200 E: a@b.com`
+ */
+function peelEmbeddedContactsFromAddress(addressLines: string[]): {
+  addressLines: string[];
+  contactLines: string[];
+} {
+  const contactLines: string[] = [];
+  const nextAddress: string[] = [];
+  const telRe =
+    /(?:^|\s)(?:Ph|Phone|Tel|TEL|Telephone)\s*[:.]\s*(.+?)(?=\s+(?:E|Email|EMAIL|Mail)\s*[:.]|$)/i;
+  const emailRe = /(?:^|\s)(?:E|Email|EMAIL|Mail)\s*[:.]\s*(\S+)/i;
+
+  for (const raw of addressLines) {
+    let line = raw;
+    const telM = telRe.exec(line);
+    if (telM) {
+      contactLines.push(`TEL: ${compactSpace(telM[1]!)}`);
+      line = `${line.slice(0, telM.index)}${line.slice(telM.index + telM[0].length)}`
+        .replace(/\s{2,}/g, " ")
+        .trim();
+    }
+    const emailM = emailRe.exec(line);
+    if (emailM) {
+      contactLines.push(`EMAIL: ${compactSpace(emailM[1]!)}`);
+      line = `${line.slice(0, emailM.index)}${line.slice(emailM.index + emailM[0].length)}`
+        .replace(/\s{2,}/g, " ")
+        .trim();
+    }
+    if (line) nextAddress.push(line);
+  }
+
+  return { addressLines: nextAddress, contactLines };
+}
+
+function mergeContactLines(primary: string[], extracted: string[]): string[] {
+  const out = [...primary];
+  const hasTel = out.some((l) => /^TEL:/i.test(l));
+  const hasEmail = out.some((l) => /^EMAIL:/i.test(l));
+  for (const line of extracted) {
+    if (/^TEL:/i.test(line) && hasTel) continue;
+    if (/^EMAIL:/i.test(line) && hasEmail) continue;
+    if (out.some((x) => x.toUpperCase() === line.toUpperCase())) continue;
+    out.push(line);
+  }
+  return out;
+}
+
 function partyBlockFromParts(opts: {
   name: string;
   addressLines: string[];
@@ -162,7 +211,13 @@ function partyBlockFromParts(opts: {
   }
   addressLines = stripLeadingNameFromAddress(name, addressLines);
 
-  const contactLines = opts.contactLines.map(compactSpace).filter(Boolean);
+  const peeledContacts = peelEmbeddedContactsFromAddress(addressLines);
+  addressLines = peeledContacts.addressLines;
+
+  const contactLines = mergeContactLines(
+    opts.contactLines.map(compactSpace).filter(Boolean),
+    peeledContacts.contactLines,
+  );
   const empty = !name && !addressLines.length && !contactLines.length;
   if (empty) {
     return {

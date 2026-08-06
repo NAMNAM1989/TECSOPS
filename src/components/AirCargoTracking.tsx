@@ -796,7 +796,7 @@ export function AirCargoTracking({
           onUpdate={onUpdate}
           onDelete={onDelete}
           onPrint={requestPrintLabel}
-          customerDirectory={state.customers}
+          customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
           activeWarehouse={activeWarehouse}
           searchActive={searchActive}
           pinnedOpenWarehouses={searchHighlightWarehouses}
@@ -809,7 +809,7 @@ export function AirCargoTracking({
         <DesktopShipmentTable
           rows={filteredViewRows}
           allRows={allRows}
-          customerDirectory={state.customers}
+          customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
           activeWarehouse={activeWarehouse}
           onActiveWarehouseChange={handleActiveWarehouseChange}
           metricRows={filteredViewRows}
@@ -822,7 +822,7 @@ export function AirCargoTracking({
           onDelete={onDelete}
           onPrint={requestPrintLabel}
           viewSessionYmd={selectedYmd}
-          ecargoVctById={state.ecargoVctResultsStore?.byShipmentId}
+          ecargoVctById={state?.ecargoVctResultsStore?.byShipmentId}
         />
       )}
 
@@ -840,7 +840,7 @@ export function AirCargoTracking({
         initialTab={mobileEditInitialTab}
         focusField={mobileEditFocus}
         sessionDateYmd={selectedYmd}
-        customerDirectory={state.customers}
+        customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
         onClose={() => {
           setMobileEditShipment(null);
           setMobileEditFocus(null);
@@ -856,7 +856,7 @@ export function AirCargoTracking({
           <AirlineLabelSettingsModal
             open={airlineLabelSettingsOpen}
             onClose={() => setAirlineLabelSettingsOpen(false)}
-            value={state.airlineLabelOverrides}
+            value={state?.airlineLabelOverrides}
             flightSamples={allRows.map((r) => r.flight)}
             saving={airlineLabelSaving}
             onSave={saveAirlineLabelOverrides}

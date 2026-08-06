@@ -10,7 +10,7 @@ const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const ECARGO_CREATE_URL = "https://ecargo.scsc.vn/Export/VCTOrder/Create";
 const EXT_VERSION = chrome.runtime.getManifest().version;
 const EXPECTED_SCRIPT_VERSION = "2.0.20";
-const EXPECTED_ECARGO_SCRIPT_VERSION = "2.2.13";
+const EXPECTED_ECARGO_SCRIPT_VERSION = "2.2.14";
 const SESSION_KEY = "tecsopsTcsSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
 const WORKSPACE_KEY = "tecsopsTcsWorkspace";
@@ -954,7 +954,7 @@ async function registerEcargoOnTab(payload) {
       ok: false,
       error: "NO_CONTENT_RESPONSE",
       message:
-        "Tab eCargo không trả lời lệnh Tạo phiếu. Reload Ext v2.2.13 tại chrome://extensions, F5 Ops + tab eCargo.",
+        "Tab eCargo không trả lời lệnh Tạo phiếu. Reload Ext v2.2.14 tại chrome://extensions, F5 Ops + tab eCargo.",
       warnings: [],
       workspace,
       version: EXT_VERSION,

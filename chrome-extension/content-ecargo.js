@@ -9,7 +9,7 @@
  * luôn cập nhật bản mới — tránh kẹt listener cũ.
  */
 
-const SCRIPT_VERSION = "2.2.13";
+const SCRIPT_VERSION = "2.2.14";
 const CREATE_PATH = "/Export/VCTOrder/Create";
 
 globalThis.__TECSOPS_ECARGO_VERSION__ = SCRIPT_VERSION;
@@ -217,18 +217,64 @@ function clickEl(el) {
   return true;
 }
 
-function setRadioByName(name, value) {
+/**
+ * @param {string} name
+ * @param {string} value
+ * @param {{ forceClick?: boolean }} [opts]
+ *   eCargo `radVehicleType` click handler xóa #txtVehicleNo — không click lại nếu đã chọn đúng.
+ */
+function setRadioByName(name, value, opts = {}) {
+  const forceClick = Boolean(opts.forceClick);
   const nodes = document.querySelectorAll(`input[type="radio"][name="${name}"]`);
   for (const node of nodes) {
-    if (String(node.value) === String(value)) {
-      node.checked = true;
-      node.dispatchEvent(new Event("input", { bubbles: true }));
-      node.dispatchEvent(new Event("change", { bubbles: true }));
-      clickEl(node);
-      return true;
-    }
+    if (String(node.value) !== String(value)) continue;
+    const already = Boolean(node.checked);
+    node.checked = true;
+    node.dispatchEvent(new Event("input", { bubbles: true }));
+    node.dispatchEvent(new Event("change", { bubbles: true }));
+    if (!already || forceClick) clickEl(node);
+    return true;
   }
   return false;
+}
+
+/**
+ * Loại xe + biển số. eCargo khi click XEMAY/OTO/BAGAC gán `$("#txtVehicleNo").val("")`
+ * → luôn điền biển SAU khi chọn radio.
+ */
+function applyVehicleHeader(header = {}) {
+  const type = String(header.vehicleType || "OTO").trim().toUpperCase() || "OTO";
+  const plate = String(header.vehicleNo || "").trim().toUpperCase();
+  const qtyRaw = Number(header.vehicleQuantity);
+  const qty = Number.isFinite(qtyRaw) && qtyRaw >= 1 ? Math.floor(qtyRaw) : 1;
+  const typeOk = setRadioByName("radVehicleType", type);
+  const qtyEl = document.querySelector("#txtVehicleQuantity");
+  const noEl = document.querySelector("#txtVehicleNo");
+  let quantityOk = false;
+  let noOk = false;
+  if (type === "DIBO") {
+    // eCargo tự gán VehicleNo=DIBO khi click — bổ sung nếu thiếu.
+    quantityOk = setNativeValue(qtyEl, "1");
+    noOk = setNativeValue(noEl, "DIBO");
+  } else {
+    quantityOk = setNativeValue(qtyEl, String(qty));
+    noOk = setNativeValue(noEl, plate);
+  }
+  // Bật lại ô biển nếu eCargo từng disable (DIBO).
+  try {
+    if (noEl && type !== "DIBO") {
+      noEl.disabled = false;
+      noEl.removeAttribute("disabled");
+    }
+  } catch {
+    /* ignore */
+  }
+  return {
+    vehicleType: typeOk,
+    vehicleQuantity: quantityOk,
+    vehicleNo: noOk,
+    vehicleNoValue: String(noEl?.value || ""),
+  };
 }
 
 async function waitFor(selector, timeoutMs = 8_000) {
@@ -524,7 +570,7 @@ async function assertAgentExistsOnEcargo(agentName) {
       `eCargo không có đại lý «${want}» (API tra cứu 0 khớp tên). ` +
       `Sửa hồ sơ Ops → đúng item.name trên eCargo` +
       (sample ? ` — gợi ý gần: ${sample}` : " — thử gõ tay trên form eCargo rồi copy tên.") +
-      " Ext v2.2.13.",
+      " Ext v2.2.14.",
     lookup: best,
   };
 }
@@ -693,15 +739,11 @@ async function fillHeader(header) {
   fills.arrivalTime = setSelectValue(document.querySelector("#txtArrivalTime"), slot);
   fills.arrivalTimeValue = document.querySelector("#txtArrivalTime")?.value;
   fills.arrivalTimeText = document.querySelector("#txtArrivalTime")?.selectedOptions?.[0]?.text;
-  fills.vehicleType = setRadioByName("radVehicleType", header.vehicleType || "OTO");
-  fills.vehicleQuantity = setNativeValue(
-    document.querySelector("#txtVehicleQuantity"),
-    String(header.vehicleQuantity || 1)
-  );
-  fills.vehicleNo = setNativeValue(
-    document.querySelector("#txtVehicleNo"),
-    header.vehicleNo
-  );
+  const vehicleFills = applyVehicleHeader(header);
+  fills.vehicleType = vehicleFills.vehicleType;
+  fills.vehicleQuantity = vehicleFills.vehicleQuantity;
+  fills.vehicleNo = vehicleFills.vehicleNo;
+  fills.vehicleNoValue = vehicleFills.vehicleNoValue;
   fills.driverName = setNativeValue(
     document.querySelector("#txtDriverName"),
     header.driverName
@@ -908,7 +950,7 @@ async function fillEcargoVct(payload, opts = {}) {
       error: "AGENT_MISMATCH",
       message:
         `Tên đại lý trên form («${headerFills.agentNameValue || ""}») không khớp hồ sơ («${wantAgent}»). ` +
-        "Ext không được nhảy theo gợi ý — Reload Ext v2.2.13 rồi thử lại.",
+        "Ext không được nhảy theo gợi ý — Reload Ext v2.2.14 rồi thử lại.",
       scriptVersion: SCRIPT_VERSION,
       fills: headerFills,
       warnings: [],
@@ -1024,6 +1066,17 @@ function clearClientValidationUi() {
       /* ignore */
     }
   }
+  // eCargo custom validators (không dùng ASP.NET unobtrusive): #valVehicle, #valDriverName…
+  for (const n of document.querySelectorAll(
+    "#valVehicle, #valAgentPicName, #valAgentPicId, #valDriverName, #valDriverId, #lbAwbError, #validateFlight, #errorMessage"
+  )) {
+    try {
+      n.textContent = "";
+      n.innerHTML = "";
+    } catch {
+      /* ignore */
+    }
+  }
   for (const box of document.querySelectorAll(".validation-summary-errors, .alert-danger")) {
     if (!isDomVisible(box)) continue;
     // Không xóa alert server thật nếu có nhiều nội dung dài — chỉ xóa summary rỗng/ngắn
@@ -1113,19 +1166,34 @@ async function clickCreateOrder(wantAgentName = "", headerPreset = {}) {
         ok: false,
         error: "AGENT_MISMATCH",
         message:
-          `Không giữ được tên đại lý «${agentName}» trên form trước khi Tạo phiếu. Reload Ext v2.2.13.`,
+          `Không giữ được tên đại lý «${agentName}» trên form trước khi Tạo phiếu. Reload Ext v2.2.14.`,
       };
     }
   }
   // Radio mặc định eCargo = chưa chọn — bắt buộc tick trước validate.
   setRadioByName("radAgentPicId", headerPreset.agentPicIdType || "CCCD");
   setRadioByName("radDriverId", headerPreset.driverIdType || "CCCD");
-  setRadioByName("radVehicleType", headerPreset.vehicleType || "OTO");
+  // Không click lại loại xe nếu đã đúng (click eCargo xóa biển) — rồi gán lại biển/số lượng.
+  applyVehicleHeader(headerPreset);
   ensureArrivalMeetsEcargoRule();
   settleFilledFields();
+  // Gán lại biển sau settle — phòng handler/validate xóa #txtVehicleNo.
+  applyVehicleHeader(headerPreset);
   clearClientValidationUi();
   const errBox = document.querySelector("#errorMessage");
   if (errBox) errBox.innerHTML = "";
+
+  const typeFinal = String(headerPreset.vehicleType || "OTO").trim().toUpperCase();
+  const plateFinal = String(document.querySelector("#txtVehicleNo")?.value || "").trim();
+  if (typeFinal !== "DIBO" && plateFinal.length < 7) {
+    return {
+      ok: false,
+      error: "VEHICLE_NO_MISSING",
+      message:
+        `Biển số xe trống/ngắn trên form («${plateFinal || "∅"}») — eCargo xóa biển khi đổi loại xe. ` +
+        "Reload Ext v2.2.14 rồi đăng ký lại.",
+    };
+  }
 
   const btn = findCreateButton();
   if (!btn) return { ok: false, error: "NO_CREATE_BTN" };

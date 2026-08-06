@@ -377,16 +377,17 @@ export async function fetchBookHangNgayGridForSession(
       ? { title: hit.title, gid: hit.gid }
       : { title: `gid=${preferredGid}`, gid: preferredGid };
     const grid = await fetchResolvedBookGrid(id, resolved, fetchByGid, fetchByName);
-    if (isLikelyBookHangNgayGrid(grid)) {
-      // Chỉ cache theo phiên khi tab đúng ngày — tránh gid tab ngày khác đầu độc lần kéo sau.
-      if (tabTitleMatchesSession(resolved.title, sessionYmd)) {
-        cacheResolvedSessionTab(id, sessionYmd, resolved);
-      }
+    const gidMatchesSession = tabTitleMatchesSession(resolved.title, sessionYmd);
+    if (isLikelyBookHangNgayGrid(grid) && gidMatchesSession) {
+      cacheResolvedSessionTab(id, sessionYmd, resolved);
       return { grid, sheetTab: resolved.title, gid: resolved.gid };
     }
-    // Tab gid lệch layout / trống — không chặn cả lần kéo; fallback theo ngày phiên Ops.
+    // gid tab ngày khác / layout lệch — luôn fallback theo ngày phiên Ops.
+    // (localStorage hay giữ link tab hôm trước → kéo ra 0 lô «AWB đã có»).
     console.warn(
-      `[sheets] preferredGid=${preferredGid}${hit ? ` («${hit.title}»)` : ""} không giống BOOK — fallback theo ngày phiên ${sessionYmd}`
+      `[sheets] preferredGid=${preferredGid}${hit ? ` («${hit.title}»)` : ""}` +
+        `${gidMatchesSession ? " không giống BOOK" : " lệch ngày phiên Ops"}` +
+        ` — fallback theo ngày phiên ${sessionYmd}`
     );
   }
 

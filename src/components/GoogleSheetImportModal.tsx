@@ -165,6 +165,19 @@ export function GoogleSheetImportModal({
           sheetGid: parsed.sheetGid,
           refresh,
         });
+        // Chuẩn hóa URL theo tab đã resolve (bỏ gid tab ngày khác lưu trong localStorage).
+        if (result.spreadsheetId) {
+          const resolvedGid = String(result.sheetGid || "").trim();
+          const cleanUrl = resolvedGid
+            ? `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/edit?gid=${resolvedGid}#gid=${resolvedGid}`
+            : `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/edit`;
+          setSheetUrl(cleanUrl);
+          try {
+            localStorage.setItem(SHEET_URL_STORAGE_KEY, cleanUrl);
+          } catch {
+            /* ignore */
+          }
+        }
         setSync(result);
         setSelected(selectAllImportable(result));
       } catch (e) {

@@ -75,26 +75,40 @@ describe("fetchBookHangNgayGridForSession", () => {
     expect(result.grid).toBe(fakeGrid);
   });
 
-  it("ưu tiên gid từ link — tab không cần trùng ngày phiên Ops", async () => {
-    const fakeGrid = Array.from({ length: 10 }, (_, i) => ({
+  it("gid lệch ngày phiên → fallback tab đúng ngày Ops", async () => {
+    const wrongDayGrid = Array.from({ length: 10 }, (_, i) => ({
       rowIndex: i,
       cells:
         i === 0
           ? ["", "AWB BOOKING", "", "", "", "", "", "", "", "", "", ""]
           : i === 1
-            ? ["VLC-TECS", "555-1234 5678", "VN001", "24JUL", "", "SIN", "TCS", "1", "10", "", "", "TEST"]
+            ? ["VLC-TECS", "555-1234 5678", "VN001", "24JUL", "", "SIN", "TCS", "1", "10", "", "", "OLD"]
             : ["", "", "", "", "", "", "", "", "", "", "", ""],
     }));
+    const sessionGrid = Array.from({ length: 10 }, (_, i) => ({
+      rowIndex: i,
+      cells:
+        i === 0
+          ? ["", "AWB BOOKING", "", "", "", "", "", "", "", "", "", ""]
+          : i === 1
+            ? ["VLC-TECS", "555-9999 0001", "VN002", "27JUL", "", "SIN", "TCS", "2", "20", "", "", "NEW"]
+            : ["", "", "", "", "", "", "", "", "", "", "", ""],
+    }));
+    const dayTabs = [
+      { gid: "1927213684", title: "NGÀY 24 JUL" },
+      { gid: "27", title: "NGÀY 27 JUL" },
+    ];
     const result = await fetchBookHangNgayGridForSession("spreadsheet-gid-test", "2026-07-27", "", {
-      listTabs: async () => [{ gid: "1927213684", title: "NGÀY 24 JUL" }, ...tabs],
+      listTabs: async () => dayTabs,
       preferredGid: "1927213684",
       fetchByGid: async (_id, gid) => {
-        expect(gid).toBe("1927213684");
-        return fakeGrid;
+        if (gid === "1927213684") return wrongDayGrid;
+        if (gid === "27") return sessionGrid;
+        throw new Error(`unexpected gid ${gid}`);
       },
     });
-    expect(result.sheetTab).toBe("NGÀY 24 JUL");
-    expect(result.gid).toBe("1927213684");
+    expect(result.sheetTab).toBe("NGÀY 27 JUL");
+    expect(result.gid).toBe("27");
   });
 
   it("nhận tab không header khi kéo theo gid (layout data từ dòng 1)", async () => {

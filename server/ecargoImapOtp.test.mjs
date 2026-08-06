@@ -32,6 +32,30 @@ describe("extractEcargoVerifyFromMail", () => {
     expect(r.verifyUrl).toContain("ecargo.scsc.vn");
     expect(r.verifyUrl).toMatch(/Verify|token/i);
   });
+
+  it("ưu tiên href gần chữ «đây» hơn link khác trong mail", () => {
+    const html = `
+      <a href="https://ecargo.scsc.vn/Home">Home</a>
+      <p>Bấm vào <a href="https://ecargo.scsc.vn/Export/VCTOrder/Verify?token=real">đây</a> để tiến hành xác thực.</p>
+    `;
+    const r = extractEcargoVerifyFromMail({
+      subject: "[eCargo] Mã xác thực phiếu số ABCDEF12",
+      text: "Mã xác thực : QSSMBABCDEF12XXXX",
+      html,
+    });
+    expect(r.verifyUrl).toContain("token=real");
+  });
+
+  it("không dùng OTP số thuần làm mã xác thực eCargo", () => {
+    const r = extractEcargoVerifyFromMail({
+      subject: "Thông báo hệ thống",
+      text: "Ma OTP cua ban: 123456\nVui long nhap OTP.",
+      html: "",
+    });
+    expect(r.code).toBe("");
+    expect(r.otp).toBe("");
+    expect(r.verifyUrl).toBe("");
+  });
 });
 
 describe("maskEcargoImapUser", () => {

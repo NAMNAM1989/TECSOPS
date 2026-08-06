@@ -15,8 +15,8 @@ import {
   waitForEcargoOtp,
 } from "./ecargoImapOtp.mjs";
 
-const recentOtpWait = new Map(); // key → ts
-const RATE_MS = 8_000;
+const recentOtpWait = new Map(); // key → ts (chỉ sau khi wait thành công)
+const RATE_MS = 2_500;
 
 function rateKey(email) {
   return String(email || "")
@@ -101,7 +101,6 @@ export function registerEcargoVctRoutes(app, { runMutation, loadState, io }) {
         });
         return;
       }
-      recentOtpWait.set(rk, Date.now());
 
       const hit = await waitForEcargoOtp({
         email,
@@ -109,7 +108,8 @@ export function registerEcargoVctRoutes(app, { runMutation, loadState, io }) {
         awbHint,
         timeoutMs,
       });
-      // Không log mã đầy đủ
+      // Chỉ rate-limit sau thành công — timeout/lỗi được gọi lại ngay
+      recentOtpWait.set(rk, Date.now());
       console.info(
         "[ecargo/otp] got code len=%s hasUrl=%s subject=%s",
         hit.code?.length || hit.otp?.length || 0,

@@ -176,7 +176,7 @@ export function registerEcargoVctViaExtension(
     shipmentIds: string[];
   }
 ): Promise<TcsExtFillResult> {
-  return request<TcsExtFillResult>("REGISTER_ECARGO_VCT", payload, 200_000);
+  return request<TcsExtFillResult>("REGISTER_ECARGO_VCT", payload, 360_000);
 }
 
 export function openEcargoExtensionTab(): Promise<TcsExtResult> {

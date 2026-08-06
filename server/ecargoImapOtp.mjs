@@ -9,11 +9,15 @@ import { simpleParser } from "mailparser";
 const DEFAULT_HOST = "imap.gmail.com";
 const DEFAULT_PORT = 993;
 const DEFAULT_MAILBOX = "INBOX";
-const POLL_MS = 2500;
+const POLL_MS = 800;
 const DEFAULT_TIMEOUT_MS = 90_000;
+/** Chỉ parse N mail mới nhất mỗi vòng — tránh fetch cả mailbox. */
+const MAX_FETCH_PER_POLL = 20;
 
 /** Một job OTP / mailbox — tránh lấy nhầm OTP chồng. */
 let otpLock = Promise.resolve();
+/** UID đã trả — tránh lấy lại mail cũ khi đăng ký liên tiếp. */
+const consumedVerifyUids = new Set();
 
 function env(name, fallback = "") {
   return String(process.env[name] || fallback).trim();
@@ -155,9 +159,16 @@ export function extractEcargoVerifyFromMail({ subject, text, html } = {}) {
     if (/export|vct/i.test(h)) score += 10;
     return score;
   };
-  let bestScore = 0;
+  // Ưu tiên link gần chữ «đây» / «tiến hành xác thực»
+  let bestScore = -1;
   for (const href of hrefs) {
-    const sc = scoreHref(href);
+    let sc = scoreHref(href);
+    if (sc < 0) continue;
+    const idx = htmlStr.toLowerCase().indexOf(href.toLowerCase());
+    if (idx >= 0) {
+      const around = htmlStr.slice(Math.max(0, idx - 120), idx + href.length + 80);
+      if (/đây|day|tiến hành xác thực|tien hanh xac thuc/i.test(around)) sc += 30;
+    }
     if (sc > bestScore) {
       bestScore = sc;
       verifyUrl = href;
@@ -175,8 +186,8 @@ export function extractEcargoVerifyFromMail({ subject, text, html } = {}) {
   }
   verifyUrl = verifyUrl.replace(/&amp;/g, "&");
 
-  const numericFallback = code ? null : extractOtpFromText(blob);
-  const otp = code || numericFallback || "";
+  // Không fallback OTP số — mail eCargo dùng mã alphanumeric có nhãn.
+  const otp = code || "";
 
   return {
     code: otp,
@@ -193,91 +204,127 @@ function mailLooksLikeEcargoOtp(parsed, emailHint) {
   const hint = String(emailHint || "")
     .trim()
     .toLowerCase();
-  if (hint && to && !to.includes(hint)) return false;
   const fromOk = /scsc|ecargo|noreply|no-reply|mailer/.test(from);
   const subjectOk =
     /mã xác thực|ma xac thuc|xác thực phiếu|xac thuc phieu|otp|verification|ecargo|vct|hàng vào kho|hang vao kho/.test(
       subject
     );
-  // Ưu tiên mail eCargo thật; vẫn nhận nếu subject rõ ràng dù from lạ
+  // To lệch alias/forward: vẫn nhận nếu from+subject eCargo rõ.
+  if (hint && to && !to.includes(hint) && !(fromOk && subjectOk)) return false;
   return (fromOk && subjectOk) || (subjectOk && /ecargo|scsc/.test(subject));
 }
 
-async function searchOtpOnce({ email, sinceMs, awbHint }) {
-  const host = env("ECARGO_IMAP_HOST", DEFAULT_HOST);
-  const port = Number(env("ECARGO_IMAP_PORT", String(DEFAULT_PORT))) || DEFAULT_PORT;
-  const user = env("ECARGO_IMAP_USER");
-  const pass = env("ECARGO_IMAP_PASS");
-  const mailbox = env("ECARGO_IMAP_MAILBOX", DEFAULT_MAILBOX);
-  if (!user || !pass) {
-    throw new Error(
-      "Chưa cấu hình ECARGO_IMAP_USER / ECARGO_IMAP_PASS (Gmail App Password)"
-    );
+function markConsumedUid(uid) {
+  if (uid == null) return;
+  consumedVerifyUids.add(Number(uid) || uid);
+  if (consumedVerifyUids.size > 300) {
+    const keep = [...consumedVerifyUids].slice(-150);
+    consumedVerifyUids.clear();
+    for (const u of keep) consumedVerifyUids.add(u);
   }
+}
 
-  const client = new ImapFlow({
-    host,
-    port,
-    secure: true,
-    auth: { user, pass },
-    logger: false,
-  });
-
+/**
+ * Tìm mail xác thực mới nhất trên connection đã mở (không reconnect mỗi poll).
+ * Search UID trước → fetch tối đa MAX_FETCH_PER_POLL mail mới nhất.
+ */
+async function searchOtpWithClient(client, { email, sinceMs, awbHint, mailbox }) {
+  const lock = await client.getMailboxLock(mailbox);
   try {
-    await client.connect();
-    const lock = await client.getMailboxLock(mailbox);
+    const sinceDate = new Date(Math.max(0, sinceMs - 15_000));
+    let uidList = [];
     try {
-      const sinceDate = new Date(Math.max(0, sinceMs - 15_000));
-      // imapflow: since = ngày; lọc chặt hơn bằng internalDate
+      const found = await client.search({ since: sinceDate }, { uid: true });
+      uidList = Array.isArray(found) ? found : [];
+    } catch {
+      uidList = [];
+    }
+    // Không search được → fallback fetch theo since (chậm hơn, vẫn 1 connection)
+    if (!uidList.length) {
+      let best = null;
       for await (const msg of client.fetch(
         { since: sinceDate },
-        { uid: true, internalDate: true, source: true, envelope: true }
+        { uid: true, internalDate: true, source: true }
       )) {
-        const internal = msg.internalDate
-          ? new Date(msg.internalDate).getTime()
-          : 0;
-        if (internal && internal + 2000 < sinceMs) continue;
-        let parsed;
-        try {
-          parsed = await simpleParser(msg.source);
-        } catch {
-          continue;
-        }
-        if (!mailLooksLikeEcargoOtp(parsed, email)) continue;
-        void awbHint;
-        const extracted = extractEcargoVerifyFromMail({
-          subject: parsed.subject,
-          text: parsed.text,
-          html: typeof parsed.html === "string" ? parsed.html : "",
-        });
-        if (extracted.otp || extracted.verifyUrl) {
-          return {
-            otp: extracted.otp,
-            code: extracted.code,
-            verifyUrl: extracted.verifyUrl,
-            vctCode: extracted.vctCode,
-            uid: msg.uid,
-            subject: String(parsed.subject || "").slice(0, 120),
-            receivedAt: internal ? new Date(internal).toISOString() : null,
-          };
-        }
+        const hit = await scoreFetchedVerifyMail(msg, { email, sinceMs, awbHint });
+        if (hit && (!best || hit._score > best._score)) best = hit;
       }
-    } finally {
-      lock.release();
+      if (!best) return null;
+      const { _score, ...out } = best;
+      void _score;
+      return out;
     }
+
+    const newestFirst = [...uidList]
+      .map((u) => Number(u) || u)
+      .filter((uid) => !consumedVerifyUids.has(uid))
+      .sort((a, b) => Number(b) - Number(a))
+      .slice(0, MAX_FETCH_PER_POLL);
+    if (!newestFirst.length) return null;
+
+    let best = null;
+    for await (const msg of client.fetch(newestFirst, {
+      uid: true,
+      internalDate: true,
+      source: true,
+    })) {
+      const hit = await scoreFetchedVerifyMail(msg, { email, sinceMs, awbHint });
+      if (hit && (!best || hit._score > best._score)) best = hit;
+    }
+    if (!best) return null;
+    const { _score, ...out } = best;
+    void _score;
+    return out;
   } finally {
-    try {
-      await client.logout();
-    } catch {
-      /* ignore */
+    lock.release();
+  }
+}
+
+async function scoreFetchedVerifyMail(msg, { email, sinceMs, awbHint }) {
+  const uid = msg.uid;
+  if (uid != null && consumedVerifyUids.has(Number(uid) || uid)) return null;
+  const internal = msg.internalDate ? new Date(msg.internalDate).getTime() : 0;
+  if (internal && internal + 2000 < sinceMs) return null;
+  let parsed;
+  try {
+    parsed = await simpleParser(msg.source);
+  } catch {
+    return null;
+  }
+  if (!mailLooksLikeEcargoOtp(parsed, email)) return null;
+  const extracted = extractEcargoVerifyFromMail({
+    subject: parsed.subject,
+    text: parsed.text,
+    html: typeof parsed.html === "string" ? parsed.html : "",
+  });
+  if (!extracted.otp && !extracted.verifyUrl) return null;
+
+  const blob = `${parsed.subject || ""}\n${parsed.text || ""}`;
+  let score = internal || 0;
+  if (awbHint) {
+    const awbDigits = String(awbHint).replace(/\D/g, "");
+    if (awbDigits.length >= 8 && blob.replace(/\D/g, "").includes(awbDigits.slice(-8))) {
+      score += 1e12;
     }
   }
-  return null;
+  if (extracted.vctCode && blob.toUpperCase().includes(extracted.vctCode.toUpperCase())) {
+    score += 1e9;
+  }
+  return {
+    otp: extracted.otp,
+    code: extracted.code,
+    verifyUrl: extracted.verifyUrl,
+    vctCode: extracted.vctCode,
+    uid,
+    subject: String(parsed.subject || "").slice(0, 120),
+    receivedAt: internal ? new Date(internal).toISOString() : null,
+    _score: score,
+  };
 }
 
 /**
  * Poll IMAP đến khi có mail xác thực (mã + link) hoặc timeout.
- * @returns {{ otp: string, code?: string, verifyUrl?: string, vctCode?: string, subject?: string, receivedAt?: string|null }}
+ * Giữ 1 connection / job; chọn mail mới nhất; đánh dấu UID đã dùng.
  */
 export async function waitForEcargoOtp(opts = {}) {
   const email = String(opts.email || "").trim();
@@ -291,30 +338,59 @@ export async function waitForEcargoOtp(opts = {}) {
     180_000
   );
   const awbHint = opts.awbHint ? String(opts.awbHint) : "";
+  const host = env("ECARGO_IMAP_HOST", DEFAULT_HOST);
+  const port = Number(env("ECARGO_IMAP_PORT", String(DEFAULT_PORT))) || DEFAULT_PORT;
+  const user = env("ECARGO_IMAP_USER");
+  const pass = env("ECARGO_IMAP_PASS");
+  const mailbox = env("ECARGO_IMAP_MAILBOX", DEFAULT_MAILBOX);
+  if (!user || !pass) {
+    throw new Error(
+      "Chưa cấu hình ECARGO_IMAP_USER / ECARGO_IMAP_PASS (Gmail App Password)"
+    );
+  }
 
   const run = async () => {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      const hit = await searchOtpOnce({
-        email,
-        sinceMs,
-        awbHint,
-      });
-      if (hit?.otp || hit?.verifyUrl) {
-        return {
-          otp: hit.otp || "",
-          code: hit.code || hit.otp || "",
-          verifyUrl: hit.verifyUrl || "",
-          vctCode: hit.vctCode || "",
-          subject: hit.subject,
-          receivedAt: hit.receivedAt,
-        };
+    const client = new ImapFlow({
+      host,
+      port,
+      secure: true,
+      auth: { user, pass },
+      logger: false,
+    });
+    await client.connect();
+    try {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const hit = await searchOtpWithClient(client, {
+          email,
+          sinceMs,
+          awbHint,
+          mailbox,
+        });
+        if (hit?.otp || hit?.verifyUrl) {
+          markConsumedUid(hit.uid);
+          return {
+            otp: hit.otp || "",
+            code: hit.code || hit.otp || "",
+            verifyUrl: hit.verifyUrl || "",
+            vctCode: hit.vctCode || "",
+            subject: hit.subject,
+            receivedAt: hit.receivedAt,
+            uid: hit.uid,
+          };
+        }
+        await new Promise((r) => setTimeout(r, POLL_MS));
       }
-      await new Promise((r) => setTimeout(r, POLL_MS));
+      throw new Error(
+        `Không thấy mail xác thực eCargo trong hộp thư sau ${Math.round(timeoutMs / 1000)}s`
+      );
+    } finally {
+      try {
+        await client.logout();
+      } catch {
+        /* ignore */
+      }
     }
-    throw new Error(
-      `Không thấy mail xác thực eCargo trong hộp thư sau ${Math.round(timeoutMs / 1000)}s`
-    );
   };
 
   const prev = otpLock;

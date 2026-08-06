@@ -9,14 +9,14 @@ Khảo sát form Create + pattern ASP.NET eCargo. Cập nhật khi SCSC đổi D
 | Tạo phiếu | `input#btnCreate[type=submit]`, `input[value='Tạo phiếu']`, `button` text «Tạo phiếu» |
 | Email OTP | `#txtEmail` |
 
-## Extension — xác thực qua mail (v2.2.7+)
+## Extension — xác thực qua mail (v2.2.8+)
 
 Luồng thật của SCSC (không phải OTP 6 số trên form Create):
 
-1. `ECARGO_FILL_AND_CREATE` — điền + Tạo phiếu
-2. Background — `POST /api/ecargo/otp/wait` lấy **mã alphanumeric** + **URL** từ link «đây» trong mail
+1. `ECARGO_FILL_AND_CREATE` — điền + Tạo phiếu (chống double-submit; fail nếu AgentIdent=0)
+2. Background — `POST /api/ecargo/otp/wait` lấy **mã alphanumeric** + **URL** từ link «đây» (IMAP 1 connection, poll ~800ms, chọn mail mới nhất, UID đã dùng bị bỏ)
 3. Mở URL trên tab eCargo
-4. `ECARGO_CONFIRM_VERIFY` — đảm bảo ô «Mã xác thực» + bấm nút **Xác Thực** → hoàn thành
+4. `ECARGO_CONFIRM_VERIFY` — ô «Mã xác thực» + bấm **Xác Thực**; success chỉ khi trang báo hoàn thành (`ECARGO_CHECK_VERIFIED` nếu kênh đứt sau POST)
 
 Mail mẫu: subject `[eCargo] Mã xác thực phiếu… số 80ZWUGWM`, body `Mã xác thực : QSSMB88636480ZWUGWM`, link «Bấm vào đây để tiến hành xác thực.»
 

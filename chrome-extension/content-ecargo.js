@@ -9,7 +9,7 @@
  * luôn cập nhật bản mới — tránh kẹt listener cũ.
  */
 
-const SCRIPT_VERSION = "2.2.7";
+const SCRIPT_VERSION = "2.2.8";
 const CREATE_PATH = "/Export/VCTOrder/Create";
 
 globalThis.__TECSOPS_ECARGO_VERSION__ = SCRIPT_VERSION;
@@ -23,6 +23,18 @@ globalThis.__TECSOPS_ECARGO_HANDLER__ = function tecsopsEcargoOnMessage(msg, _se
       url: location.href,
       onCreate: location.pathname.includes(CREATE_PATH),
       hasOtpUi: Boolean(findOtpInput()),
+      verified: typeof pageLooksVerified === "function" ? pageLooksVerified() : false,
+    });
+    return true;
+  }
+
+  if (msg.type === "ECARGO_CHECK_VERIFIED") {
+    sendResponse({
+      ok: pageLooksVerified(),
+      verified: pageLooksVerified(),
+      scriptVersion: SCRIPT_VERSION,
+      url: location.href,
+      vctCode: String(msg.payload?.vctCode || ""),
     });
     return true;
   }
@@ -90,7 +102,7 @@ globalThis.__TECSOPS_ECARGO_HANDLER__ = function tecsopsEcargoOnMessage(msg, _se
           ...res,
           message:
             (res?.message || "Đã Tạo phiếu") +
-            " — background sẽ mở link xác thực từ mail (cần Ext v2.2.7+).",
+            " — background sẽ mở link xác thực từ mail (cần Ext v2.2.8+).",
           needsBackgroundOtp: true,
         })
       )
@@ -661,7 +673,20 @@ async function fillEcargoVct(payload) {
       error: "AGENT_MISMATCH",
       message:
         `Tên đại lý trên form («${headerFills.agentNameValue || ""}») không khớp hồ sơ («${wantAgent}»). ` +
-        "Ext không được nhảy theo gợi ý gần giống — Reload Ext v2.2.7 rồi thử lại.",
+        "Ext không được nhảy theo gợi ý gần giống — Reload Ext v2.2.8 rồi thử lại.",
+      scriptVersion: SCRIPT_VERSION,
+      fills: headerFills,
+      warnings: [],
+    };
+  }
+
+  if (wantAgent && String(headerFills.agentIdent || "0") === "0") {
+    return {
+      ok: false,
+      error: "AGENT_IDENT_MISSING",
+      message:
+        `Chưa gắn AgentIdent cho «${wantAgent}» (eCargo không nhận tên gõ tay). ` +
+        "Chọn đúng dòng gợi ý trùng khớp hoặc sửa tên hồ sơ cho khớp list eCargo.",
       scriptVersion: SCRIPT_VERSION,
       fills: headerFills,
       warnings: [],
@@ -670,11 +695,6 @@ async function fillEcargoVct(payload) {
 
   const awbResults = [];
   const warnings = [];
-  if (wantAgent && String(headerFills.agentIdent || "0") === "0") {
-    warnings.push(
-      "Đã điền đúng tên đại lý nhưng eCargo chưa gắn AgentIdent (list không có dòng trùng khớp). Kiểm tra trước khi Tạo phiếu."
-    );
-  }
 
   for (let i = 0; i < awbs.length; i += 1) {
     await openAwbModal();
@@ -842,20 +862,8 @@ async function clickCreateOrder() {
     }
   }
   clickEl(btn);
-
-  // Một số bản form bind submit trên <form>, không bắt click input
-  await sleep(400);
-  if (!findOtpInput() && location.pathname.includes(CREATE_PATH)) {
-    const form = btn.closest("form") || document.querySelector("form");
-    if (form && $) {
-      try {
-        // jQuery trigger submit chạy handler (không bỏ qua validation như HTMLFormElement.submit)
-        $(form).trigger("submit");
-      } catch {
-        /* ignore */
-      }
-    }
-  }
+  // Không trigger submit lần 2 — tránh tạo 2 phiếu / 2 mail OTP.
+  await sleep(350);
 
   return { ok: true, button: String(btn.id || btn.value || btn.textContent || "create").trim() };
 }
@@ -1058,7 +1066,24 @@ async function fillAndCreateEcargoVct(payload) {
       phase: "create",
     };
   }
+  if (globalThis.__TECSOPS_ECARGO_CREATE_BUSY__) {
+    return {
+      ok: false,
+      error: "BUSY",
+      message: "Đang Tạo phiếu — tránh bấm trùng.",
+      scriptVersion: SCRIPT_VERSION,
+      phase: "create",
+    };
+  }
+  globalThis.__TECSOPS_ECARGO_CREATE_BUSY__ = true;
+  try {
+    return await fillAndCreateEcargoVctInner(payload);
+  } finally {
+    globalThis.__TECSOPS_ECARGO_CREATE_BUSY__ = false;
+  }
+}
 
+async function fillAndCreateEcargoVctInner(payload) {
   const fillRes = await fillEcargoVct(payload);
   if (!fillRes?.ok) return { ...fillRes, phase: "fill" };
 
@@ -1081,22 +1106,10 @@ async function fillAndCreateEcargoVct(payload) {
     };
   }
 
-  // Probe ngắn: bắt lỗi validation tức thì; OTP UI có thể xuất hiện sau reload (BG chờ).
-  const probeUntil = Date.now() + 2_500;
+  // Probe validation lâu hơn — tránh báo ok khi form còn lỗi chậm.
+  const probeUntil = Date.now() + 8_000;
   while (Date.now() < probeUntil) {
-    if (findOtpInput()) {
-      return {
-        ok: true,
-        message: "Đã Tạo phiếu — đã thấy ô OTP.",
-        scriptVersion: SCRIPT_VERSION,
-        phase: "create",
-        sinceIso,
-        warnings,
-        createButton: clicked.button,
-        otpUiReady: true,
-      };
-    }
-    if (Date.now() - Date.parse(sinceIso) > 1200) {
+    if (Date.now() - Date.parse(sinceIso) > 900) {
       const post = visibleValidationErrors();
       if (post.length) {
         return {
@@ -1111,41 +1124,66 @@ async function fillAndCreateEcargoVct(payload) {
         };
       }
     }
+    // Đã rời trang Create → coi như đã submit
+    if (!location.pathname.includes(CREATE_PATH)) {
+      return {
+        ok: true,
+        message: "Đã Tạo phiếu — trang đã chuyển.",
+        scriptVersion: SCRIPT_VERSION,
+        phase: "create",
+        sinceIso,
+        warnings,
+        createButton: clicked.button,
+        navigatedAway: true,
+      };
+    }
     await sleep(200);
   }
 
   return {
     ok: true,
-    message: "Đã bấm «Tạo phiếu» — chờ ô OTP / reload.",
+    message: "Đã bấm «Tạo phiếu» — chờ mail xác thực.",
     scriptVersion: SCRIPT_VERSION,
     phase: "create",
     sinceIso,
     warnings,
     createButton: clicked.button,
-    otpUiReady: Boolean(findOtpInput()),
   };
 }
 
 function findVerifyCodeInput() {
-  const labeled = [
+  const visibles = [
     ...document.querySelectorAll("input[type='text'], input:not([type]), input[type='search']"),
   ].filter((el) => isDomVisible(el));
-  for (const el of labeled) {
+  for (const el of visibles) {
     const meta = `${el.name || ""} ${el.id || ""} ${el.placeholder || ""} ${
       el.getAttribute("aria-label") || ""
     }`;
-    if (/mã|ma|code|token|verify|xác\s*thực|xac\s*thuc/i.test(meta)) return el;
+    if (/mã|code|token|verify|xác\s*thực|xac\s*thuc/i.test(meta)) return el;
   }
-  // Trang «Xác thực đăng ký hàng vào kho»: ô cạnh nút Xác Thực
-  const byLabel = [...document.querySelectorAll("label, span, div, td, th")].find((n) =>
-    /mã\s*xác\s*thực|ma\s*xac\s*thuc/i.test(String(n.textContent || "").trim())
-  );
-  if (byLabel) {
-    const root = byLabel.closest("form, .form-group, .row, tr, div") || byLabel.parentElement;
-    const near = root?.querySelector?.("input");
+  // label[for] hoặc form-group nhỏ chứa đúng chữ «Mã xác thực»
+  for (const lab of document.querySelectorAll("label")) {
+    const t = String(lab.textContent || "").replace(/\s+/g, " ").trim();
+    if (!/^mã\s*xác\s*thực|^ma\s*xac\s*thuc/i.test(t) && !/mã\s*xác\s*thực\s*\(?\*?\)?/i.test(t)) {
+      continue;
+    }
+    const forId = lab.getAttribute("for");
+    if (forId) {
+      const byFor = document.getElementById(forId);
+      if (byFor && isDomVisible(byFor)) return byFor;
+    }
+    const root = lab.closest(".form-group, .mb-3, td, .row, form") || lab.parentElement;
+    const near = root?.querySelector?.("input[type='text'], input:not([type])");
     if (near && isDomVisible(near)) return near;
   }
-  return labeled[0] || findOtpInput();
+  // Ô cạnh nút Xác Thực
+  const btn = findVerifySubmitButton();
+  if (btn) {
+    const root = btn.closest("form, .input-group, .row, div") || btn.parentElement;
+    const near = root?.querySelector?.("input[type='text'], input:not([type])");
+    if (near && isDomVisible(near)) return near;
+  }
+  return null;
 }
 
 function findVerifySubmitButton() {
@@ -1174,68 +1212,66 @@ function pageLooksVerified() {
 
 /**
  * Trang xác thực từ link mail «đây»: điền mã (nếu trống) + bấm «Xác Thực».
- * payload: { code|otp, vctCode?, apiBase?, email?, sinceIso? }
+ * Success CHỈ khi pageLooksVerified() — không lấy vctCode từ subject mail làm ok giả.
  */
 async function confirmEcargoVerifyPage(payload) {
   const code = String(payload?.code || payload?.otp || "")
     .trim()
     .toUpperCase();
-  if (!code || code.length < 6) {
-    return {
-      ok: false,
-      error: "BAD_CODE",
-      message: "Thiếu mã xác thực từ mail",
-      scriptVersion: SCRIPT_VERSION,
-      phase: "otp_submit",
-    };
-  }
+  const hintVct = String(payload?.vctCode || "").trim();
 
   const started = Date.now();
   let input = null;
-  while (Date.now() - started < 12_000) {
+  while (Date.now() - started < 10_000) {
     if (pageLooksVerified()) {
       return {
         ok: true,
-        message: "Trang đã báo hoàn thành xác thực.",
+        message: `Đã xác thực phiếu${hintVct ? `: ${hintVct}` : ""}.`,
         scriptVersion: SCRIPT_VERSION,
         phase: "done",
-        vctCode: String(payload?.vctCode || ""),
+        vctCode: hintVct,
+        verified: true,
         submit: true,
+        url: location.href,
       };
     }
     input = findVerifyCodeInput();
-    if (input) break;
-    await sleep(250);
+    const btnEarly = findVerifySubmitButton();
+    if (input || btnEarly) break;
+    await sleep(200);
   }
-  if (!input) {
+
+  // Có nút Xác Thực dù không parse được ô (mã đã prefill từ URL)
+  if (code && code.length >= 6) {
+    if (input) {
+      const current = String(input.value || "").trim().toUpperCase();
+      if (current !== code) {
+        input.focus();
+        setNativeValue(input, code);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        await sleep(80);
+      }
+    }
+  } else if (!findVerifySubmitButton() && !input) {
     return {
       ok: false,
       error: "NO_VERIFY_UI",
       message:
-        "Không thấy ô «Mã xác thực» trên trang. Kiểm tra đã mở đúng link «đây» trong mail.",
+        "Không thấy trang xác thực (ô mã / nút Xác Thực). Kiểm tra link «đây» trong mail.",
       scriptVersion: SCRIPT_VERSION,
       phase: "otp_submit",
       url: location.href,
     };
   }
 
-  const current = String(input.value || "").trim().toUpperCase();
-  if (current !== code) {
-    input.focus();
-    setNativeValue(input, code);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-    await sleep(120);
-  }
-
   let btn = findVerifySubmitButton();
   for (let attempt = 0; attempt < 3 && !btn; attempt += 1) {
-    await sleep(300);
+    await sleep(250);
     btn = findVerifySubmitButton();
   }
   if (!btn) {
-    // fallback: nút cạnh ô input
-    const clicked = await clickOtpConfirm(input);
+    const clicked = input ? await clickOtpConfirm(input) : { ok: false };
     if (!clicked.ok) {
       return {
         ok: false,
@@ -1258,22 +1294,30 @@ async function confirmEcargoVerifyPage(payload) {
     clickEl(btn);
   }
 
-  await sleep(800);
+  await sleep(600);
   let verified = pageLooksVerified();
-  for (let i = 0; i < 8 && !verified; i += 1) {
-    await sleep(500);
+  for (let i = 0; i < 10 && !verified; i += 1) {
+    await sleep(400);
     verified = pageLooksVerified();
   }
 
-  let capture = await captureQrAndVctCode();
-  if (!capture.vctCode && payload?.vctCode) {
-    capture.vctCode = String(payload.vctCode);
+  let capture = { vctCode: "", qrDataUrl: "" };
+  if (verified) {
+    capture = await captureQrAndVctCode();
+    if (!capture.vctCode && hintVct) capture.vctCode = hintVct;
   }
 
+  // Chỉ gọi IMAP fallback khi đã verified mà thiếu QR
   const apiBase = String(payload?.apiBase || "").replace(/\/$/, "");
   const email = String(payload?.email || "").trim();
   const sinceIso = String(payload?.sinceIso || "").trim();
-  if (apiBase && email && sinceIso && (!capture.qrDataUrl || !capture.vctCode)) {
+  if (
+    verified &&
+    apiBase &&
+    email &&
+    sinceIso &&
+    !capture.qrDataUrl
+  ) {
     try {
       const mailRes = await bgMessage({
         type: "ECARGO_RESULT_FROM_MAIL",
@@ -1281,25 +1325,24 @@ async function confirmEcargoVerifyPage(payload) {
         email,
         sinceIso,
       });
-      if (mailRes?.ok) {
-        if (!capture.vctCode && mailRes.vctCode) capture.vctCode = mailRes.vctCode;
-        if (!capture.qrDataUrl && mailRes.qrUrl) capture.qrDataUrl = mailRes.qrUrl;
+      if (mailRes?.ok && mailRes.qrUrl) capture.qrDataUrl = mailRes.qrUrl;
+      if (mailRes?.ok && !capture.vctCode && mailRes.vctCode) {
+        capture.vctCode = mailRes.vctCode;
       }
     } catch {
       /* ignore */
     }
   }
 
-  const ok = verified || Boolean(capture.vctCode || capture.qrDataUrl);
   return {
-    ok,
-    message: ok
+    ok: verified,
+    message: verified
       ? `Đã xác thực phiếu${capture.vctCode ? `: ${capture.vctCode}` : ""}.`
-      : "Đã bấm «Xác Thực» nhưng chưa thấy thông báo hoàn thành — kiểm tra tab eCargo.",
+      : "Đã bấm «Xác Thực» nhưng chưa thấy «hoàn thành xác thực» — kiểm tra tab eCargo.",
     scriptVersion: SCRIPT_VERSION,
-    phase: "done",
-    vctCode: capture.vctCode,
-    qrDataUrl: capture.qrDataUrl,
+    phase: verified ? "done" : "otp_submit",
+    vctCode: verified ? capture.vctCode : "",
+    qrDataUrl: verified ? capture.qrDataUrl : "",
     sinceIso: sinceIso || undefined,
     verified,
     url: location.href,

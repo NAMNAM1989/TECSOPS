@@ -512,6 +512,12 @@ export function AirCargoTracking({
 
   const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
 
+  // Phải gọi hook trước mọi early return — nếu không, loading → live sẽ React #310.
+  const scscShipmentsForEcargo = useMemo(
+    () => filteredViewRows.filter((r) => isEcargoScscWarehouse(r.warehouse)),
+    [filteredViewRows],
+  );
+
   if (status === "loading" || !state) {
     return <PageSkeleton variant="ops" />;
   }
@@ -745,11 +751,6 @@ export function AirCargoTracking({
         </div>
       ) : null}
     </header>
-  );
-
-  const scscShipmentsForEcargo = useMemo(
-    () => filteredViewRows.filter((r) => isEcargoScscWarehouse(r.warehouse)),
-    [filteredViewRows],
   );
 
   return (

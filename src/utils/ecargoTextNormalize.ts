@@ -63,6 +63,66 @@ export function ensureEcargoArrivalDate(
 }
 
 /**
+ * eCargo CheckArrivalDate: cùng ngày thì giờ hàng vào ≥ now + 90 phút.
+ * Trả về ngày/khung hợp lệ (đẩy slot hoặc sang ngày mai nếu cần).
+ */
+export function resolveEcargoArrivalSlotForCreate(
+  arrivalDateYmd: string,
+  preferredSlot: string | number,
+  from = new Date()
+): {
+  arrivalDate: string;
+  arrivalTime: string;
+  adjusted: boolean;
+  reason?: string;
+} {
+  const today = todayLocalYmd(from);
+  let date = ensureEcargoArrivalDate(arrivalDateYmd, from, today);
+  if (date < today) date = today;
+  const prefer = Number(preferredSlot);
+  const slot0 = Number.isInteger(prefer) && prefer >= 0 && prefer <= 23 ? prefer : 8;
+
+  const ok = (ymd: string, hour: number) => {
+    if (ymd > today) return true;
+    if (ymd < today) return false;
+    const [y, m, d] = ymd.split("-").map(Number);
+    const arrival = new Date(y!, m! - 1, d!, hour, 0, 0, 0);
+    return arrival.getTime() >= from.getTime() + 90 * 60 * 1000;
+  };
+
+  if (date > today) {
+    return {
+      arrivalDate: date,
+      arrivalTime: String(slot0),
+      adjusted: date !== String(arrivalDateYmd || "").trim() || String(slot0) !== String(preferredSlot),
+    };
+  }
+
+  for (let h = slot0; h <= 23; h += 1) {
+    if (ok(date, h)) {
+      const adjusted =
+        h !== slot0 || date !== String(arrivalDateYmd || "").trim();
+      return {
+        arrivalDate: date,
+        arrivalTime: String(h),
+        adjusted,
+        reason: adjusted
+          ? `eCargo bắt đăng ký trước ≥90 phút → khung ${String(h).padStart(2, "0")}:00`
+          : undefined,
+      };
+    }
+  }
+
+  const tom = tomorrowLocalYmd(from);
+  return {
+    arrivalDate: tom,
+    arrivalTime: String(slot0),
+    adjusted: true,
+    reason: `Hôm nay hết khung ≥90 phút → chuyển ${tom}, khung ${String(slot0).padStart(2, "0")}:00`,
+  };
+}
+
+/**
  * Tách số hiệu CB Ops (VD VJ842) → carrier + số chuyến cho form eCargo.
  * Ô #txtFlightNo tối đa 4 ký tự (chỉ phần số), carrier ở #txtCarrier.
  */

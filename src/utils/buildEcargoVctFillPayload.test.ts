@@ -138,8 +138,8 @@ describe("buildEcargoVctFillPayload", () => {
     expect(payload?.awbs[0]?.goodsContent).toBe("GARMENTS");
   });
 
-  it("ngày hàng vào = ngày bay cùng ngày — không ép ngày mai", () => {
-    const { payload, error } = buildEcargoVctFillPayload({
+  it("ngày hàng vào quá khứ → đẩy lên hôm nay/khung ≥90 phút (quy tắc eCargo)", () => {
+    const { payload, error, warnings } = buildEcargoVctFillPayload({
       profile,
       vehicle: {
         source: "saved",
@@ -163,10 +163,12 @@ describe("buildEcargoVctFillPayload", () => {
       arrivalTime: "8",
     });
     expect(error).toBeUndefined();
-    expect(payload?.header.arrivalDate).toBe("2026-08-03");
+    // Không giữ ngày quá khứ — eCargo CheckArrivalDate sẽ fail
+    expect(payload?.header.arrivalDate >= "2026-08-06").toBe(true);
+    expect(warnings.some((w) => /90 phút|khung/i.test(w))).toBe(true);
   });
 
-  it("thiếu arrivalDate → mặc định ngày bay sớm nhất", () => {
+  it("thiếu arrivalDate → ngày bay rồi chỉnh theo quy tắc ≥90 phút", () => {
     const { payload, error } = buildEcargoVctFillPayload({
       profile,
       vehicle: {
@@ -190,7 +192,8 @@ describe("buildEcargoVctFillPayload", () => {
       arrivalTime: "8",
     });
     expect(error).toBeUndefined();
-    expect(payload?.header.arrivalDate).toBe("2026-08-03");
+    expect(payload?.header.arrivalDate >= "2026-08-06").toBe(true);
+    expect(Number(payload?.header.arrivalTime)).toBeGreaterThanOrEqual(0);
   });
 
   it("thiếu TX trên xe → dùng NV đại lý", () => {

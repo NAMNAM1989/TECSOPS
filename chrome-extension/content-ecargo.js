@@ -9,7 +9,7 @@
  * luôn cập nhật bản mới — tránh kẹt listener cũ.
  */
 
-const SCRIPT_VERSION = "2.2.8";
+const SCRIPT_VERSION = "2.2.13";
 const CREATE_PATH = "/Export/VCTOrder/Create";
 
 globalThis.__TECSOPS_ECARGO_VERSION__ = SCRIPT_VERSION;
@@ -47,6 +47,21 @@ globalThis.__TECSOPS_ECARGO_HANDLER__ = function tecsopsEcargoOnMessage(msg, _se
       scriptVersion: SCRIPT_VERSION,
       url: location.href,
     });
+    return true;
+  }
+
+  if (msg.type === "ECARGO_LOOKUP_AGENT") {
+    void lookupEcargoAgents(String(msg.payload?.filter || msg.payload?.agentName || ""))
+      .then(sendResponse)
+      .catch((err) =>
+        sendResponse({
+          ok: false,
+          error: "LOOKUP_FAILED",
+          message: err instanceof Error ? err.message : String(err || "Lookup failed"),
+          scriptVersion: SCRIPT_VERSION,
+          items: [],
+        })
+      );
     return true;
   }
 
@@ -102,7 +117,7 @@ globalThis.__TECSOPS_ECARGO_HANDLER__ = function tecsopsEcargoOnMessage(msg, _se
           ...res,
           message:
             (res?.message || "Đã Tạo phiếu") +
-            " — background sẽ mở link xác thực từ mail (cần Ext v2.2.8+).",
+            " — background sẽ mở link xác thực từ mail (cần Ext v2.2.11+).",
           needsBackgroundOtp: true,
         })
       )
@@ -221,7 +236,20 @@ async function waitFor(selector, timeoutMs = 8_000) {
   while (Date.now() - started < timeoutMs) {
     const el = document.querySelector(selector);
     if (el) return el;
-    await sleep(100);
+    await sleep(50);
+  }
+  return null;
+}
+
+/** Chờ phần tử thật sự hiện (AWB modal luôn có #txtPrefix trong DOM khi ẩn). */
+async function waitForVisible(selector, timeoutMs = 5_000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const el = document.querySelector(selector);
+    if (el && isDomVisible(el)) return el;
+    // offsetParent null khi modal ẩn; show xong thường có offsetParent
+    if (el && el.offsetParent !== null) return el;
+    await sleep(50);
   }
   return null;
 }
@@ -303,60 +331,96 @@ async function typeExactIntoInput(input, exact) {
       $input.val(value);
       $input.trigger("focus");
       $input.autocomplete("search", value);
-      await sleep(220);
+      await sleep(80);
       return;
     } catch {
       /* fallback */
     }
   }
-  setNativeValue(input, "");
+  // Fallback nhanh: set 1 lần + input/keyup (không gõ từng ký tự)
+  setNativeValue(input, value);
   input.focus();
-  let acc = "";
-  for (const ch of value) {
-    acc += ch;
-    setNativeValue(input, acc);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(
-      new KeyboardEvent("keyup", { key: ch, bubbles: true, cancelable: true })
-    );
-    await sleep(25);
-  }
-  await sleep(160);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(
+    new KeyboardEvent("keyup", { key: "Unidentified", bubbles: true, cancelable: true })
+  );
+  await sleep(100);
 }
 
-async function selectAgentMenuItemExact(input, li, exactName) {
-  if (!li) return false;
-  const label = agentItemLabel(li);
-  // Chặn chọn dòng khác tên đã cung cấp
-  if (!agentTextExact(label, exactName)) return false;
-
+/** Lấy item thật từ jQuery UI (có id/ident) — không bịa {label,value}. */
+function getAutocompleteItemData(li) {
   const $ = getJQuery();
-  const target = li.querySelector(".ui-menu-item-wrapper") || li;
-  if ($ && $.fn) {
-    try {
-      const $input = $(input);
-      const inst = $input.data("ui-autocomplete");
-      if (inst && typeof inst._trigger === "function") {
-        $input.trigger("focus");
-        inst._trigger("select", "autocompleteselect", {
-          item: { label, value: label },
-        });
-        await sleep(250);
-      }
-    } catch {
-      /* click */
-    }
+  if (!$ || !li) return null;
+  const $li = $(li);
+  return (
+    $li.data("ui-autocomplete-item") ||
+    $li.data("uiAutocompleteItem") ||
+    $li.children("div.ui-menu-item-wrapper").data("ui-autocomplete-item") ||
+    $li.children("a").data("ui-autocomplete-item") ||
+    null
+  );
+}
+
+/**
+ * eCargo menu hiện «CODE - NAME - ADDRESS», select handler ghi item.name / item.code / item.val.
+ * Khớp theo name|code (không so cả chuỗi label dài).
+ */
+function autocompleteItemMatches(li, wantRaw) {
+  const want = normAgentText(wantRaw);
+  if (!want || !li) return false;
+  const data = getAutocompleteItemData(li);
+  if (data) {
+    if (normAgentText(data.name) === want) return true;
+    if (normAgentText(data.code) === want) return true;
+    if (normAgentText(data.label) === want) return true;
+    if (normAgentText(data.value) === want) return true;
   }
+  return agentTextExact(agentItemLabel(li), wantRaw);
+}
+
+/**
+ * Click dòng menu khớp — để handler eCargo gắn AgentIdent (ui.item.val).
+ * Fallback: _trigger select với item THẬT từ data().
+ */
+async function selectAgentMenuItemExact(input, li, exactName) {
+  if (!li || !autocompleteItemMatches(li, exactName)) return false;
+  const item = getAutocompleteItemData(li);
+  const target = li.querySelector(".ui-menu-item-wrapper") || li;
+  input.focus();
   target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
   target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
   target.click();
-  await sleep(280);
-  // Sau select: nếu web đổi sang tên khác → khôi phục đúng chuỗi cung cấp
-  if (!agentTextExact(input.value, exactName)) {
-    setNativeValue(input, exactName);
-    return false;
+  await sleep(120);
+
+  if (readAgentIdent() !== "0" && agentTextExact(input.value, exactName)) return true;
+
+  // Handler chưa chạy — gọi select với item thật (val/code/name)
+  const $ = getJQuery();
+  if (item && $) {
+    try {
+      const inst = $(input).data("ui-autocomplete");
+      if (inst && typeof inst._trigger === "function") {
+        inst._trigger("select", null, { item });
+        await sleep(80);
+      }
+    } catch {
+      /* ignore */
+    }
   }
-  return true;
+  // Gắn tay đúng theo handler eCargo nếu vẫn thiếu Ident
+  if (item && readAgentIdent() === "0" && (item.val != null || item.code)) {
+    const identEl = document.querySelector("#txtAgentIdent");
+    const codeEl = document.querySelector("#txtAgentCode");
+    if (identEl && item.val != null) setNativeValue(identEl, String(item.val));
+    if (codeEl && item.code != null) setNativeValue(codeEl, String(item.code));
+    if (item.name) setNativeValue(input, String(item.name));
+  }
+
+  return (
+    readAgentIdent() !== "0" &&
+    (agentTextExact(input.value, exactName) ||
+      (item && agentTextExact(item.name, exactName)))
+  );
 }
 
 async function ensureCreatePage() {
@@ -371,11 +435,107 @@ function readAgentIdent() {
   return String(document.querySelector("#txtAgentIdent")?.value || "0").trim();
 }
 
+/** Tra cứu đại lý qua API eCargo (cùng endpoint autocomplete). */
+async function lookupEcargoAgents(filterRaw) {
+  const filter = String(filterRaw || "")
+    .trim()
+    .toUpperCase();
+  if (filter.length < 2) {
+    return {
+      ok: false,
+      error: "SHORT_FILTER",
+      message: "Cần ≥2 ký tự để tra cứu đại lý eCargo",
+      filter,
+      items: [],
+      scriptVersion: SCRIPT_VERSION,
+    };
+  }
+  const $ = getJQuery();
+  if (!$ || typeof $.ajax !== "function") {
+    return {
+      ok: false,
+      error: "NO_JQUERY",
+      message: "Trang eCargo chưa sẵn sàng (thiếu jQuery)",
+      filter,
+      items: [],
+      scriptVersion: SCRIPT_VERSION,
+    };
+  }
+  const token = typeof window.getToken === "function" ? window.getToken() : "";
+  const data = await new Promise((resolve) => {
+    $.ajax({
+      url: "/General/ShareData/Customer",
+      type: "Post",
+      data: {
+        __RequestVerificationToken: token,
+        type: "Agent",
+        filter,
+      },
+      success: (res) => resolve(res),
+      error: () => resolve([]),
+    });
+  });
+  const arr = Array.isArray(data) ? data : [];
+  const items = arr.slice(0, 30).map((x) => ({
+    name: String(x?.name || "").trim(),
+    code: String(x?.code || "").trim(),
+    val: x?.val != null ? String(x.val) : "",
+    label: String(x?.label || "").trim().slice(0, 160),
+  }));
+  const exact = items.filter((it) => agentTextExact(it.name, filter));
+  return {
+    ok: true,
+    filter,
+    count: arr.length,
+    exactCount: exact.length,
+    items,
+    exact,
+    scriptVersion: SCRIPT_VERSION,
+  };
+}
+
+/** Nhiều biến thể tìm kiếm — báo rõ khi tên hồ sơ không có trên eCargo. */
+async function assertAgentExistsOnEcargo(agentName) {
+  const want = String(agentName || "").trim();
+  if (!want) {
+    return { ok: false, message: "Thiếu tên đại lý trong hồ sơ Ops" };
+  }
+  const terms = [want];
+  if (!/\bCO\.?\s*LTD\b/i.test(want)) terms.push(`${want} CO LTD`);
+  const firstTwo = want.split(/\s+/).slice(0, 2).join(" ");
+  if (firstTwo && normAgentText(firstTwo) !== normAgentText(want)) terms.push(firstTwo);
+
+  let best = null;
+  for (const term of terms) {
+    const hit = await lookupEcargoAgents(term);
+    if (!best || (hit.count || 0) > (best.count || 0)) best = hit;
+    const exact = (hit.items || []).find((it) => agentTextExact(it.name, want));
+    if (exact) {
+      return { ok: true, match: exact, filter: term };
+    }
+  }
+  const sample = (best?.items || [])
+    .slice(0, 5)
+    .map((it) => `${it.code || "?"} — ${it.name}`)
+    .join("; ");
+  return {
+    ok: false,
+    message:
+      `eCargo không có đại lý «${want}» (API tra cứu 0 khớp tên). ` +
+      `Sửa hồ sơ Ops → đúng item.name trên eCargo` +
+      (sample ? ` — gợi ý gần: ${sample}` : " — thử gõ tay trên form eCargo rồi copy tên.") +
+      " Ext v2.2.13.",
+    lookup: best,
+  };
+}
+
 /**
- * Điền ĐÚNG tên đại lý đã cung cấp.
- * Không chọn gợi ý «gần giống». Chỉ bấm gợi ý khi chữ khớp tuyệt đối.
+ * Điền ĐÚNG tên đại lý từ hồ sơ Ops — không chọn / không focus gợi ý eCargo.
+ *
+ * eCargo autocomplete `focus`/`select` ghi đè ô bằng item.name (đổi «NAM NAM LOGISTICS»
+ * thành tên khác). Client Create chỉ cần tên không trống; AgentIdent="0" vẫn submit được.
  */
-async function fillAgentName(agentName) {
+async function fillAgentName(agentName, headerPreset = {}) {
   const input = document.querySelector("#txtAgentName");
   const exact = String(agentName || "").trim();
   if (!input || !exact) {
@@ -388,93 +548,129 @@ async function fillAgentName(agentName) {
     };
   }
 
-  closeOpenMenus();
-  await sleep(40);
-  const identEl = document.querySelector("#txtAgentIdent");
-  if (identEl) setNativeValue(identEl, "0");
-
-  // 1) Gõ nguyên văn hồ sơ Ops
-  await typeExactIntoInput(input, exact);
-
-  // 2) Chỉ chọn dòng gợi ý TRÙNG KHỚP 100% (để lấy AgentIdent). Không chọn dòng khác.
-  let boundIdent = false;
-  const started = Date.now();
-  while (Date.now() - started < 2200) {
-    const exactLi = listAgentAutocompleteItems().find((li) =>
-      agentTextExact(agentItemLabel(li), exact)
-    );
-    if (exactLi) {
-      boundIdent = await selectAgentMenuItemExact(input, exactLi, exact);
-      if (boundIdent) break;
-    }
-    await sleep(120);
+  const $ = getJQuery();
+  dismissAutocompleteMenus();
+  try {
+    if ($?.(input)?.autocomplete) $(input).autocomplete("disable");
+  } catch {
+    /* ignore */
   }
 
-  // 3) Đóng list — tránh web/jQuery tự nhảy sang dòng khác
-  dismissAutocompleteMenus();
-  await sleep(80);
-
-  // 4) Ép lại đúng chuỗi cung cấp (ưu tiên tuyệt đối so với gợi ý gần giống)
-  const lockExactName = () => {
-    if (!agentTextExact(input.value, exact)) {
-      setNativeValue(input, exact);
-    }
-  };
-  lockExactName();
-  // blur/change của eCargo đôi khi tự chọn dòng gần giống → khóa lại sau vài nhịp
-  for (let i = 0; i < 4; i += 1) {
-    await sleep(120);
+  // Preset Ident/Code từ Ops (nếu có) — vẫn giữ đúng chuỗi tên hồ sơ.
+  if (applyPresetAgentIdent({ ...headerPreset, agentName: exact })) {
     dismissAutocompleteMenus();
-    lockExactName();
+    try {
+      if ($?.(input)?.autocomplete) $(input).autocomplete("enable");
+    } catch {
+      /* ignore */
+    }
+    return {
+      ok: true,
+      exact: true,
+      agentIdent: readAgentIdent(),
+      agentCode: String(document.querySelector("#txtAgentCode")?.value || ""),
+      agentName: exact,
+      via: "preset",
+    };
+  }
+
+  const identEl = document.querySelector("#txtAgentIdent");
+  const codeEl = document.querySelector("#txtAgentCode");
+  if (identEl) setNativeValue(identEl, "0");
+  if (codeEl) setNativeValue(codeEl, "");
+  setNativeValue(input, exact);
+  // Gõ từng ký tự cũng kích hoạt menu → đóng ngay, không chọn dòng nào.
+  dismissAutocompleteMenus();
+  await sleep(40);
+  if (!agentTextExact(input.value, exact)) setNativeValue(input, exact);
+  dismissAutocompleteMenus();
+
+  try {
+    if ($?.(input)?.autocomplete) $(input).autocomplete("enable");
+  } catch {
+    /* ignore */
   }
 
   const finalName = String(document.querySelector("#txtAgentName")?.value || "");
   const exactOk = agentTextExact(finalName, exact);
-  if (!exactOk && identEl) setNativeValue(identEl, "0");
   return {
     ok: exactOk,
     exact: exactOk,
     agentIdent: readAgentIdent(),
     agentCode: String(document.querySelector("#txtAgentCode")?.value || ""),
     agentName: exactOk ? exact : finalName,
+    via: "typed",
   };
 }
 
-/** Autocomplete DEST/carrier — chỉ chọn khi khớp đúng chuỗi; không thì ghi đúng giá trị đã cho. */
-async function pickAutocomplete(input, query, { timeoutMs = 1200 } = {}) {
+/** Autocomplete DEST/carrier — khớp item.code|name (menu là «CODE - …»). */
+async function pickAutocomplete(input, query, { timeoutMs = 800 } = {}) {
   if (!input) return false;
   const q = String(query || "").trim();
   if (!q) return false;
-  closeOpenMenus();
-  await sleep(50);
+  if (agentTextExact(input.value, q)) return true;
   await typeExactIntoInput(input, q);
   const started = Date.now();
+  let picked = false;
   while (Date.now() - started < timeoutMs) {
     const exactLi = listAgentAutocompleteItems().find((li) =>
-      agentTextExact(agentItemLabel(li), q)
+      autocompleteItemMatches(li, q)
     );
     if (exactLi) {
+      const item = getAutocompleteItemData(exactLi);
       const target = exactLi.querySelector(".ui-menu-item-wrapper") || exactLi;
-      target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
       target.click();
-      await sleep(200);
+      await sleep(80);
+      // Carrier/Dest handler thường ghi item.code vào ô
+      if (item?.code && !agentTextExact(input.value, q) && !agentTextExact(input.value, item.code)) {
+        const $ = getJQuery();
+        try {
+          const inst = $?.(input).data("ui-autocomplete");
+          if (inst?.options?.select) {
+            inst.options.select({}, { item });
+          }
+        } catch {
+          setNativeValue(input, String(item.code));
+        }
+      }
+      picked = true;
       break;
     }
-    await sleep(100);
+    await sleep(50);
   }
   dismissAutocompleteMenus();
-  if (!agentTextExact(input.value, q)) setNativeValue(input, q);
-  return agentTextExact(input.value, q);
+  if (!picked && !agentTextExact(input.value, q)) setNativeValue(input, q);
+  return agentTextExact(input.value, q) || picked;
+}
+
+/** Gắn AgentIdent/Code thẳng từ hồ sơ Ops (khi đã biết mã eCargo). */
+function applyPresetAgentIdent(header) {
+  const name = String(header?.agentName || "").trim();
+  const ident = String(header?.agentIdent || "").replace(/\D/g, "");
+  const code = String(header?.agentCode || "")
+    .trim()
+    .toUpperCase();
+  if (!name || !ident || ident === "0") return false;
+  const input = document.querySelector("#txtAgentName");
+  const identEl = document.querySelector("#txtAgentIdent");
+  const codeEl = document.querySelector("#txtAgentCode");
+  if (!input || !identEl) return false;
+  setNativeValue(input, name);
+  setNativeValue(identEl, ident);
+  if (codeEl && code) setNativeValue(codeEl, code);
+  return readAgentIdent() === ident;
 }
 
 async function fillHeader(header) {
   const fills = {};
-  // Đại lý / NV / giấy tờ: điền đúng giá trị Ops gửi — không thay bằng gợi ý gần giống.
-  const agent = await fillAgentName(header.agentName || "");
+  // Điền đúng tên hồ sơ — tắt autocomplete trong lúc gán (không nhảy gợi ý).
+  const agent = await fillAgentName(header.agentName || "", header);
   fills.agentName = agent.ok;
   fills.agentExact = agent.exact;
   fills.agentIdent = agent.agentIdent;
   fills.agentNameValue = agent.agentName;
+  fills.agentVia = agent.via || "typed";
   const picName = String(header.agentPicName || "").trim();
   const picId = String(header.agentPicId || "").trim();
   fills.agentPicName = setNativeValue(
@@ -517,19 +713,22 @@ async function fillHeader(header) {
     document.querySelector("#txtMobilePhone"),
     header.mobilePhone
   );
-  closeOpenMenus();
-  await sleep(100);
+  dismissAutocompleteMenus();
   return fills;
 }
 
 async function openAwbModal() {
-  closeOpenMenus();
+  dismissAutocompleteMenus();
   const btn = document.querySelector("#btnAddAwb");
   if (!btn) throw new Error("Không thấy nút Thêm AWB");
   clickEl(btn);
-  const prefix = await waitFor("#txtPrefix", 5_000);
-  if (!prefix) throw new Error("Modal Thêm AWB không mở");
-  await sleep(200);
+  // #txtPrefix luôn có trong DOM — phải chờ modal #awbModal hiện
+  const prefix = await waitForVisible("#txtPrefix", 5_000);
+  const modalOpen =
+    document.querySelector("#awbModal.show") ||
+    (document.querySelector("#awbModal") &&
+      getComputedStyle(document.querySelector("#awbModal")).display !== "none");
+  if (!prefix || !modalOpen) throw new Error("Modal Thêm AWB không mở");
 }
 
 /** VJ842 → { carrier: VJ, flightNo: 842 } — ô số CB eCargo max 4 ký tự. */
@@ -550,7 +749,7 @@ async function fillAwbLine(line) {
   const split = splitFlightDesignator(line.flightNo);
   const carrier = document.querySelector("#txtCarrier");
   if (carrier && split.carrier) {
-    fills.carrier = await pickAutocomplete(carrier, split.carrier, { timeoutMs: 1000 });
+    fills.carrier = await pickAutocomplete(carrier, split.carrier, { timeoutMs: 400 });
   }
   fills.flightNo = setNativeValue(
     document.querySelector("#txtFlightNo"),
@@ -565,7 +764,7 @@ async function fillAwbLine(line) {
   fills.flightDest = await pickAutocomplete(
     document.querySelector("#txtFlightDest"),
     line.flightDest,
-    { timeoutMs: 1000 }
+    { timeoutMs: 400 }
   );
   fills.prefix = setNativeValue(document.querySelector("#txtPrefix"), line.mawbPrefix);
   fills.mawbNo = setNativeValue(document.querySelector("#txtMawbNo"), line.mawbNo);
@@ -633,25 +832,61 @@ async function saveAndCloseAwb() {
     document.querySelector("#btnAddAndClose") ||
     document.querySelector("#btnAddAWB");
   if (!btn) throw new Error("Không thấy nút Save & Close AWB");
-  // Đảm bảo nút visible (modal đang mở)
-  if (btn.offsetParent === null && !document.querySelector("#txtPrefix")) {
+  if (btn.offsetParent === null && !isDomVisible(document.querySelector("#txtPrefix"))) {
     throw new Error("Modal AWB đã đóng trước khi lưu");
   }
-  clickEl(btn);
-  await sleep(500);
-  // chờ modal đóng
+  const errEl = document.querySelector("#lbAwbError");
+  if (errEl) errEl.innerHTML = "";
+  const rowsBefore = document.querySelectorAll("#awbItems tr").length;
+  // addAWB gắn jQuery — phải trigger click
+  const $ = getJQuery();
+  if ($ && $.fn) {
+    try {
+      $(btn).trigger("click");
+    } catch {
+      clickEl(btn);
+    }
+  } else {
+    clickEl(btn);
+  }
   const started = Date.now();
-  while (Date.now() - started < 3000) {
-    const modalOpen = document.querySelector("#txtPrefix")?.offsetParent != null;
-    if (!modalOpen) break;
-    await sleep(100);
+  while (Date.now() - started < 4000) {
+    const awbErr = String(document.querySelector("#lbAwbError")?.innerText || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (awbErr) {
+      throw new Error(`Thêm AWB bị eCargo từ chối: ${awbErr.slice(0, 220)}`);
+    }
+    const rowsNow = document.querySelectorAll("#awbItems tr").length;
+    const modal = document.querySelector("#awbModal");
+    const modalHidden =
+      modal &&
+      !modal.classList.contains("show") &&
+      getComputedStyle(modal).display === "none";
+    if (rowsNow > rowsBefore || modalHidden) return;
+    await sleep(80);
+  }
+  const awbErr = String(document.querySelector("#lbAwbError")?.innerText || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (awbErr) throw new Error(`Thêm AWB bị eCargo từ chối: ${awbErr.slice(0, 220)}`);
+  if (document.querySelectorAll("#awbItems tr").length <= rowsBefore) {
+    throw new Error(
+      "Không thêm được dòng AWB (chuyến bay có thể không tồn tại trên eCargo / cut-off)."
+    );
   }
 }
 
-async function fillEcargoVct(payload) {
+/**
+ * @param payload
+ * @param {{ requireAgentIdent?: boolean }} [opts]
+ *   AgentIdent không bắt buộc — eCargo Create chấp nhận Ident=0 + tên gõ tay.
+ */
+async function fillEcargoVct(payload, opts = {}) {
   if (!payload || typeof payload !== "object") {
     return { ok: false, error: "BAD_PAYLOAD", message: "Thiếu payload FILL_ECARGO_VCT" };
   }
+  void opts.requireAgentIdent; // giữ tương thích caller cũ
   await ensureCreatePage();
   const wantAgent = String(payload.header?.agentName || "").trim();
   const headerFills = await fillHeader(payload.header || {});
@@ -673,20 +908,7 @@ async function fillEcargoVct(payload) {
       error: "AGENT_MISMATCH",
       message:
         `Tên đại lý trên form («${headerFills.agentNameValue || ""}») không khớp hồ sơ («${wantAgent}»). ` +
-        "Ext không được nhảy theo gợi ý gần giống — Reload Ext v2.2.8 rồi thử lại.",
-      scriptVersion: SCRIPT_VERSION,
-      fills: headerFills,
-      warnings: [],
-    };
-  }
-
-  if (wantAgent && String(headerFills.agentIdent || "0") === "0") {
-    return {
-      ok: false,
-      error: "AGENT_IDENT_MISSING",
-      message:
-        `Chưa gắn AgentIdent cho «${wantAgent}» (eCargo không nhận tên gõ tay). ` +
-        "Chọn đúng dòng gợi ý trùng khớp hoặc sửa tên hồ sơ cho khớp list eCargo.",
+        "Ext không được nhảy theo gợi ý — Reload Ext v2.2.13 rồi thử lại.",
       scriptVersion: SCRIPT_VERSION,
       fills: headerFills,
       warnings: [],
@@ -697,10 +919,25 @@ async function fillEcargoVct(payload) {
   const warnings = [];
 
   for (let i = 0; i < awbs.length; i += 1) {
-    await openAwbModal();
-    const fills = await fillAwbLine(awbs[i]);
-    await saveAndCloseAwb();
-    awbResults.push({ index: i, awb: awbs[i].awb, fills });
+    try {
+      await openAwbModal();
+      const fills = await fillAwbLine(awbs[i]);
+      await saveAndCloseAwb();
+      awbResults.push({ index: i, awb: awbs[i].awb, fills });
+    } catch (err) {
+      return {
+        ok: false,
+        error: "AWB_ADD_FAILED",
+        message:
+          err instanceof Error
+            ? err.message
+            : `Không thêm được AWB ${awbs[i].awb || i + 1}`,
+        scriptVersion: SCRIPT_VERSION,
+        fills: headerFills,
+        awbResults,
+        warnings,
+      };
+    }
   }
 
   return {
@@ -802,10 +1039,10 @@ function clearClientValidationUi() {
   }
 }
 
-/** Kích hoạt lại change để form nhận giá trị đã điền trước khi Tạo phiếu. */
+/** Kích hoạt lại change để form nhận giá trị đã điền trước khi Tạo phiếu.
+ *  Không đụng #txtAgentName — change/blur có thể xóa AgentIdent sau khi chọn gợi ý. */
 function settleFilledFields() {
   const sels = [
-    "#txtAgentName",
     "#txtAgentPicName",
     "#txtAgentPicId",
     "#txtArrivalDate",
@@ -829,18 +1066,66 @@ function settleFilledFields() {
  * Bấm «Tạo phiếu» — jQuery click + DOM click; mở nút nếu bị disabled.
  * Trả về true nếu đã gửi lệnh click.
  */
-async function clickCreateOrder() {
-  dismissAutocompleteMenus();
-  await sleep(80);
-  // Nếu chưa gắn AgentIdent mà tên đã đúng — thử chọn lại dòng khớp tuyệt đối trước khi submit.
-  const agentInput = document.querySelector("#txtAgentName");
-  const agentName = String(agentInput?.value || "").trim();
-  if (agentInput && agentName && readAgentIdent() === "0") {
-    await fillAgentName(agentName);
+/** Đồng bộ CheckArrivalDate eCargo: cùng ngày → giờ vào ≥ now+90 phút. */
+function ensureArrivalMeetsEcargoRule() {
+  const dateEl = document.querySelector("#txtArrivalDate");
+  const timeEl = document.querySelector("#txtArrivalTime");
+  if (!dateEl || !timeEl) return null;
+  const today = new Date();
+  const ymd = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const todayY = ymd(today);
+  let dateVal = String(dateEl.value || todayY);
+  if (dateVal < todayY) {
+    setDateInput(dateEl, todayY);
+    dateVal = todayY;
   }
+  const ok = (hour) => {
+    if (dateVal > todayY) return true;
+    const [y, m, d] = dateVal.split("-").map(Number);
+    const arrival = new Date(y, m - 1, d, hour, 0, 0, 0);
+    return arrival.getTime() >= today.getTime() + 90 * 60 * 1000;
+  };
+  let hour = Number(timeEl.value);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) hour = 8;
+  if (ok(hour)) return { arrivalDate: dateVal, arrivalTime: String(hour) };
+  for (let h = hour; h <= 23; h += 1) {
+    if (ok(h)) {
+      setSelectValue(timeEl, String(h));
+      return { arrivalDate: dateVal, arrivalTime: String(h), adjusted: true };
+    }
+  }
+  const tom = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  const tomY = ymd(tom);
+  setDateInput(dateEl, tomY);
+  setSelectValue(timeEl, String(hour));
+  return { arrivalDate: tomY, arrivalTime: String(hour), adjusted: true };
+}
+
+async function clickCreateOrder(wantAgentName = "", headerPreset = {}) {
+  dismissAutocompleteMenus();
+  const agentName = String(wantAgentName || "").trim();
+  // Ép lại đúng tên hồ sơ trước submit — không mở/chọn gợi ý (tránh ghi đè).
+  if (agentName) {
+    await fillAgentName(agentName, headerPreset);
+    if (!agentTextExact(document.querySelector("#txtAgentName")?.value || "", agentName)) {
+      return {
+        ok: false,
+        error: "AGENT_MISMATCH",
+        message:
+          `Không giữ được tên đại lý «${agentName}» trên form trước khi Tạo phiếu. Reload Ext v2.2.13.`,
+      };
+    }
+  }
+  // Radio mặc định eCargo = chưa chọn — bắt buộc tick trước validate.
+  setRadioByName("radAgentPicId", headerPreset.agentPicIdType || "CCCD");
+  setRadioByName("radDriverId", headerPreset.driverIdType || "CCCD");
+  setRadioByName("radVehicleType", headerPreset.vehicleType || "OTO");
+  ensureArrivalMeetsEcargoRule();
   settleFilledFields();
   clearClientValidationUi();
-  await sleep(100);
+  const errBox = document.querySelector("#errorMessage");
+  if (errBox) errBox.innerHTML = "";
 
   const btn = findCreateButton();
   if (!btn) return { ok: false, error: "NO_CREATE_BTN" };
@@ -853,17 +1138,31 @@ async function clickCreateOrder() {
     /* ignore */
   }
 
+  // #btnCreate type=button + jQuery (validate + Turnstile + AJAX)
   const $ = getJQuery();
   if ($ && $.fn) {
     try {
       $(btn).trigger("click");
     } catch {
-      /* DOM fallback */
+      clickEl(btn);
     }
+  } else {
+    clickEl(btn);
   }
-  clickEl(btn);
-  // Không trigger submit lần 2 — tránh tạo 2 phiếu / 2 mail OTP.
-  await sleep(350);
+  await sleep(400);
+  const htmlErr = String(document.querySelector("#errorMessage")?.innerHTML || "")
+    .replace(/<br\s*\/?>/gi, " | ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (htmlErr) {
+    return {
+      ok: false,
+      error: "CREATE_REJECTED",
+      message: `eCargo từ chối Tạo phiếu: ${htmlErr.slice(0, 280)}`,
+      button: String(btn.id || btn.value || "create").trim(),
+    };
+  }
 
   return { ok: true, button: String(btn.id || btn.value || btn.textContent || "create").trim() };
 }
@@ -1084,7 +1383,9 @@ async function fillAndCreateEcargoVct(payload) {
 }
 
 async function fillAndCreateEcargoVctInner(payload) {
-  const fillRes = await fillEcargoVct(payload);
+  const wantAgent = String(payload.header?.agentName || "").trim();
+  // Điền đúng tên hồ sơ (không bắt buộc tên có trong list Agent eCargo).
+  const fillRes = await fillEcargoVct(payload, { requireAgentIdent: false });
   if (!fillRes?.ok) return { ...fillRes, phase: "fill" };
 
   const warnings = [...(fillRes.warnings || [])];
@@ -1094,22 +1395,36 @@ async function fillAndCreateEcargoVctInner(payload) {
   }
 
   const sinceIso = new Date().toISOString();
-  const clicked = await clickCreateOrder();
+  const clicked = await clickCreateOrder(wantAgent, payload.header || {});
   if (!clicked.ok) {
     return {
       ok: false,
       error: clicked.error || "NO_CREATE_BTN",
-      message: "Không thấy / không bấm được nút «Tạo phiếu» trên form eCargo.",
+      message:
+        clicked.message ||
+        "Không thấy / không bấm được nút «Tạo phiếu» trên form eCargo.",
       scriptVersion: SCRIPT_VERSION,
       phase: "create",
       warnings,
     };
   }
 
-  // Probe validation lâu hơn — tránh báo ok khi form còn lỗi chậm.
-  const probeUntil = Date.now() + 8_000;
+  // Probe ngắn — lỗi validation thường hiện <1.5s; rời Create = đã submit.
+  const probeUntil = Date.now() + 3_000;
   while (Date.now() < probeUntil) {
-    if (Date.now() - Date.parse(sinceIso) > 900) {
+    if (!location.pathname.includes(CREATE_PATH)) {
+      return {
+        ok: true,
+        message: "Đã Tạo phiếu — trang đã chuyển.",
+        scriptVersion: SCRIPT_VERSION,
+        phase: "create",
+        sinceIso,
+        warnings,
+        createButton: clicked.button,
+        navigatedAway: true,
+      };
+    }
+    if (Date.now() - Date.parse(sinceIso) > 500) {
       const post = visibleValidationErrors();
       if (post.length) {
         return {
@@ -1124,20 +1439,7 @@ async function fillAndCreateEcargoVctInner(payload) {
         };
       }
     }
-    // Đã rời trang Create → coi như đã submit
-    if (!location.pathname.includes(CREATE_PATH)) {
-      return {
-        ok: true,
-        message: "Đã Tạo phiếu — trang đã chuyển.",
-        scriptVersion: SCRIPT_VERSION,
-        phase: "create",
-        sinceIso,
-        warnings,
-        createButton: clicked.button,
-        navigatedAway: true,
-      };
-    }
-    await sleep(200);
+    await sleep(100);
   }
 
   return {

@@ -19,8 +19,12 @@ export type EcargoVehicleType = "OTO" | "XEMAY" | "BAGAC" | "DIBO";
 
 export type EcargoScscProfile = {
   id: string;
-  /** Tên đại lý (autocomplete eCargo). */
+  /** Tên đại lý hiện trên phiếu eCargo — điền nguyên văn từ hồ sơ (không bắt buộc có trong list Agent). */
   name: string;
+  /** AgentIdent eCargo (số) — gắn tay nếu biết, bỏ qua autocomplete. */
+  agentIdent?: string;
+  /** AgentCode eCargo (VD NNL). */
+  agentCode?: string;
   agentPicName: string;
   agentPicIdType: EcargoIdType;
   agentPicId: string;
@@ -42,6 +46,8 @@ export type EcargoScscPatch = Partial<
   Pick<
     EcargoScscProfile,
     | "name"
+    | "agentIdent"
+    | "agentCode"
     | "agentPicName"
     | "agentPicIdType"
     | "agentPicId"
@@ -62,6 +68,8 @@ const api = createEsidProfileStoreApi<EcargoScscProfile, EcargoScscPatch>({
   createEmpty: (name, newId) => ({
     id: newId(),
     name: name.trim(),
+    agentIdent: "",
+    agentCode: "",
     agentPicName: "",
     agentPicIdType: "CCCD",
     agentPicId: "",
@@ -76,6 +84,12 @@ const api = createEsidProfileStoreApi<EcargoScscProfile, EcargoScscPatch>({
     return {
       id: String(p.id || newId()),
       name: String(p.name || "").trim(),
+      agentIdent: String(p.agentIdent || "")
+        .replace(/\D/g, "")
+        .trim(),
+      agentCode: String(p.agentCode || "")
+        .trim()
+        .toUpperCase(),
       agentPicName: String(p.agentPicName || "").trim(),
       agentPicIdType: normalizeEcargoIdType(p.agentPicIdType) as EcargoIdType,
       agentPicId: String(p.agentPicId || "")
@@ -101,6 +115,14 @@ const api = createEsidProfileStoreApi<EcargoScscProfile, EcargoScscPatch>({
   mergePatch: (current, patch) => ({
     ...current,
     name: patch.name !== undefined ? String(patch.name).trim() : current.name,
+    agentIdent:
+      patch.agentIdent !== undefined
+        ? String(patch.agentIdent).replace(/\D/g, "").trim()
+        : current.agentIdent || "",
+    agentCode:
+      patch.agentCode !== undefined
+        ? String(patch.agentCode).trim().toUpperCase()
+        : current.agentCode || "",
     agentPicName:
       patch.agentPicName !== undefined
         ? String(patch.agentPicName).trim()
@@ -156,6 +178,12 @@ export function prepareEcargoProfileForFill(p: EcargoScscProfile): EcargoScscPro
   return {
     ...p,
     name: p.name.trim(),
+    agentIdent: String(p.agentIdent || "")
+      .replace(/\D/g, "")
+      .trim(),
+    agentCode: String(p.agentCode || "")
+      .trim()
+      .toUpperCase(),
     agentPicName: normalizeEcargoPersonName(p.agentPicName),
     agentPicId: normalizeEcargoIdNumber(p.agentPicId),
     email: p.email.trim(),

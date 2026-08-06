@@ -56,6 +56,19 @@ describe("extractEcargoVerifyFromMail", () => {
     expect(r.otp).toBe("");
     expect(r.verifyUrl).toBe("");
   });
+
+  it("bỏ dấu ] thừa khi URL chỉ có trong text kiểu [https://...]", () => {
+    const r = extractEcargoVerifyFromMail({
+      subject: "[eCargo] Mã xác thực phiếu đăng ký hàng vào kho số 14IOH47H",
+      text:
+        "Mã xác thực : XTOSF88669314IOH47H\nBấm vào đây [https://ecargo.scsc.vn/Export/VCTOrder/Verify/XTOSF88669314IOH47H]\nđể tiến hành xác thực.",
+      html: "",
+    });
+    expect(r.code).toBe("XTOSF88669314IOH47H");
+    expect(r.verifyUrl).toBe(
+      "https://ecargo.scsc.vn/Export/VCTOrder/Verify/XTOSF88669314IOH47H"
+    );
+  });
 });
 
 describe("maskEcargoImapUser", () => {

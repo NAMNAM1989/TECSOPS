@@ -176,10 +176,12 @@ export function extractEcargoVerifyFromMail({ subject, text, html } = {}) {
   }
   if (!verifyUrl) {
     const urlMatch = blob.match(
-      /https?:\/\/(?:www\.)?ecargo\.scsc\.vn[^\s"'<>)]+/i
+      /https?:\/\/(?:www\.)?ecargo\.scsc\.vn[^\s"'<>)\]]+/i
     );
-    if (urlMatch?.[0]) verifyUrl = urlMatch[0].replace(/[.,;]+$/, "");
+    if (urlMatch?.[0]) verifyUrl = urlMatch[0].replace(/[.,;\]]+$/, "");
   }
+  // Text mail hay bọc URL bằng [...] — bỏ dấu ] thừa cuối link.
+  verifyUrl = verifyUrl.replace(/\]+$/, "");
   // HTML entity / relative
   if (verifyUrl && verifyUrl.startsWith("/")) {
     verifyUrl = `https://ecargo.scsc.vn${verifyUrl}`;
@@ -232,42 +234,27 @@ async function searchOtpWithClient(client, { email, sinceMs, awbHint, mailbox })
   const lock = await client.getMailboxLock(mailbox);
   try {
     const sinceDate = new Date(Math.max(0, sinceMs - 15_000));
-    let uidList = [];
-    try {
-      const found = await client.search({ since: sinceDate }, { uid: true });
-      uidList = Array.isArray(found) ? found : [];
-    } catch {
-      uidList = [];
+    /**
+     * Gmail + imapflow: search(UID) OK nhưng fetch([uid...]) / fetch('uid:uid')
+     * thường trả 0 message. Fetch theo query `{ since }` thì ổn.
+     */
+    const collected = [];
+    for await (const msg of client.fetch(
+      { since: sinceDate },
+      { uid: true, internalDate: true, source: true }
+    )) {
+      collected.push(msg);
     }
-    // Không search được → fallback fetch theo since (chậm hơn, vẫn 1 connection)
-    if (!uidList.length) {
-      let best = null;
-      for await (const msg of client.fetch(
-        { since: sinceDate },
-        { uid: true, internalDate: true, source: true }
-      )) {
-        const hit = await scoreFetchedVerifyMail(msg, { email, sinceMs, awbHint });
-        if (hit && (!best || hit._score > best._score)) best = hit;
-      }
-      if (!best) return null;
-      const { _score, ...out } = best;
-      void _score;
-      return out;
-    }
-
-    const newestFirst = [...uidList]
-      .map((u) => Number(u) || u)
-      .filter((uid) => !consumedVerifyUids.has(uid))
-      .sort((a, b) => Number(b) - Number(a))
+    collected.sort((a, b) => Number(b.uid || 0) - Number(a.uid || 0));
+    const newest = collected
+      .filter((msg) => {
+        const uid = msg.uid;
+        return uid == null || !consumedVerifyUids.has(Number(uid) || uid);
+      })
       .slice(0, MAX_FETCH_PER_POLL);
-    if (!newestFirst.length) return null;
 
     let best = null;
-    for await (const msg of client.fetch(newestFirst, {
-      uid: true,
-      internalDate: true,
-      source: true,
-    })) {
+    for (const msg of newest) {
       const hit = await scoreFetchedVerifyMail(msg, { email, sinceMs, awbHint });
       if (hit && (!best || hit._score > best._score)) best = hit;
     }

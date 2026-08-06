@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TECSOPS — TCS ESID & SCSC eCargo",
-  "version": "2.2.8",
+  "version": "2.2.13",
   "description": "Điền ESID TCS và đăng ký eCargo SCSC (VCT) 1-click OTP+QR từ TECSOPS.",
   "permissions": ["tabs", "scripting", "storage"],
   "host_permissions": [

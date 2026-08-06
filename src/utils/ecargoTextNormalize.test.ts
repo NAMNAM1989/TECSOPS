@@ -3,6 +3,7 @@ import {
   ensureEcargoArrivalDate,
   normalizeEcargoPersonName,
   resolveEcargoArrivalDateFromShipments,
+  resolveEcargoArrivalSlotForCreate,
   splitEcargoFlightDesignator,
   stripVietnameseDiacritics,
   todayLocalYmd,
@@ -44,6 +45,14 @@ describe("ecargoTextNormalize", () => {
     ]);
     expect(r.arrivalDate).toBe("2026-08-03");
     expect(r.warning).toBeUndefined();
+  });
+
+  it("resolveEcargoArrivalSlotForCreate đẩy slot khi <90 phút", () => {
+    const from = new Date(2026, 7, 6, 10, 30, 0); // 10:30 → cần ≥12:00
+    const r = resolveEcargoArrivalSlotForCreate("2026-08-06", "8", from);
+    expect(r.arrivalDate).toBe("2026-08-06");
+    expect(Number(r.arrivalTime)).toBeGreaterThanOrEqual(12);
+    expect(r.adjusted).toBe(true);
   });
 
   it("splitEcargoFlightDesignator tách carrier / số CB", () => {

@@ -42,6 +42,8 @@ export function emptyEcargoScscStore() {
       {
         id,
         name: "",
+        agentIdent: "",
+        agentCode: "",
         agentPicName: "",
         agentPicIdType: "CCCD",
         agentPicId: "",
@@ -64,6 +66,12 @@ export function normalizeEcargoScscStoreLoose(raw) {
     .map((p) => ({
       id: String(p.id || newId("ecargo")),
       name: String(p.name || "").trim(),
+      agentIdent: String(p.agentIdent || "")
+        .replace(/\D/g, "")
+        .trim(),
+      agentCode: String(p.agentCode || "")
+        .trim()
+        .toUpperCase(),
       agentPicName: String(p.agentPicName || "").trim(),
       agentPicIdType: normalizeEcargoIdType(p.agentPicIdType),
       agentPicId: String(p.agentPicId || "")

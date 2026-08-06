@@ -275,6 +275,8 @@ export function EcargoVctRegisterModal({
   const saveProfile = async () => {
     updateActiveEcargoScscProfile({
       name: profile.name,
+      agentIdent: profile.agentIdent || "",
+      agentCode: profile.agentCode || "",
       agentPicName: profile.agentPicName,
       agentPicIdType: profile.agentPicIdType,
       agentPicId: profile.agentPicId,
@@ -318,6 +320,8 @@ export function EcargoVctRegisterModal({
     if (ecargoScscProfileIsComplete(profile)) {
       updateActiveEcargoScscProfile({
         name: profile.name,
+        agentIdent: profile.agentIdent || "",
+        agentCode: profile.agentCode || "",
         agentPicName: profile.agentPicName,
         agentPicIdType: profile.agentPicIdType,
         agentPicId: profile.agentPicId,
@@ -388,7 +392,7 @@ export function EcargoVctRegisterModal({
       if (!ping.ok) {
         setStatus(
           ping.message ||
-            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.8 tại chrome://extensions, rồi F5 Ops.",
+            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.13 tại chrome://extensions, rồi F5 Ops.",
         );
         return;
       }
@@ -484,13 +488,19 @@ export function EcargoVctRegisterModal({
       if (!ping.ok) {
         setStatus(
           ping.message ||
-            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.8 tại chrome://extensions, rồi F5 Ops.",
+            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.13 tại chrome://extensions, rồi F5 Ops.",
         );
         return;
       }
+      // Điền đúng tên hồ sơ Ops — không thay bằng gợi ý eCargo (Agent list có thể không có tên).
+      const agentName = String(prepared.payload?.header?.agentName || "").trim();
+      if (agentName) {
+        prepared.payload!.header.agentName = agentName;
+      }
       setStatus(
-        `Đang gửi lệnh đăng ký qua Ext v${ping.version || "?"}… Tab eCargo sẽ mở/điền form.`,
+        `Đang gửi lệnh đăng ký qua Ext v${ping.version || "?"}… Điền đúng «${agentName || "hồ sơ"}».`,
       );
+      setPhaseLabel("Điền → Tạo phiếu → OTP → QR…");
       const res = await registerEcargoVctViaExtension({
         ...prepared.payload!,
         submit: true,
@@ -640,8 +650,40 @@ export function EcargoVctRegisterModal({
                   className={INPUT}
                   value={profile.name}
                   onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="Tên đại lý trên eCargo"
+                  placeholder="VD: NAM NAM LOGISTICS"
                 />
+                <span className="mt-0.5 block text-[10px] text-slate-500">
+                  Điền đúng tên muốn hiện trên phiếu (VD «NAM NAM LOGISTICS»). Ext không chọn
+                  gợi ý gần giống trên eCargo.
+                </span>
+              </label>
+              <label>
+                <span className={LABEL}>Mã đại lý (AgentCode)</span>
+                <input
+                  className={`${INPUT} uppercase`}
+                  value={profile.agentCode || ""}
+                  onChange={(e) =>
+                    setProfile((p) => ({ ...p, agentCode: e.target.value.toUpperCase() }))
+                  }
+                  placeholder="VD: NNL"
+                />
+              </label>
+              <label>
+                <span className={LABEL}>AgentIdent (số)</span>
+                <input
+                  className={`${INPUT} font-mono`}
+                  value={profile.agentIdent || ""}
+                  onChange={(e) =>
+                    setProfile((p) => ({
+                      ...p,
+                      agentIdent: e.target.value.replace(/\D/g, ""),
+                    }))
+                  }
+                  placeholder="VD: 80928"
+                />
+                <span className="mt-0.5 block text-[10px] text-slate-400">
+                  Tùy chọn — nếu điền, Ext gắn thẳng Ident (không phụ thuộc autocomplete).
+                </span>
               </label>
               <label>
                 <span className={LABEL}>Nhân viên đại lý *</span>

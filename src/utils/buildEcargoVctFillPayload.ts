@@ -14,6 +14,7 @@ import {
   normalizeEcargoIdNumber,
   normalizeEcargoPersonName,
   resolveEcargoArrivalDateFromShipments,
+  resolveEcargoArrivalSlotForCreate,
 } from "./ecargoTextNormalize";
 import { flightDateToYmd } from "./esidDeclareFields";
 import { normalizeVehiclePlateInput } from "./vehiclePlateNormalize";
@@ -70,6 +71,8 @@ export type EcargoVctFillPayload = {
   url: string;
   header: {
     agentName: string;
+    agentIdent?: string;
+    agentCode?: string;
     agentPicName: string;
     agentPicIdType: EcargoIdType;
     agentPicId: string;
@@ -220,6 +223,10 @@ export function validateEcargoVehiclePick(pick: EcargoVehiclePick): string | nul
     if (p.length < ECARGO_PLATE_MIN) {
       return `Biển số «${p}» phải ≥ ${ECARGO_PLATE_MIN} ký tự (viết liền)`;
     }
+    // eCargo validateVehicle: OTO chỉ chấp nhận 7–9 ký tự
+    if (pick.vehicleType === "OTO" && (p.length < 7 || p.length > 9)) {
+      return `Ô tô: biển «${p}» phải 7–9 ký tự (quy tắc eCargo)`;
+    }
   }
   if (!normalizeEcargoPersonName(pick.driverName)) return "Thiếu họ tên tài xế";
   if (!normalizeEcargoIdNumber(pick.driverId)) return "Thiếu số giấy tờ tài xế";
@@ -284,35 +291,44 @@ export function buildEcargoVctFillPayload(opts: {
     };
   }
 
-  // Mặc định theo ngày bay (cho phép cùng ngày). Chỉ sửa format sai/trống.
+  // Mặc định theo ngày bay + ép quy tắc eCargo ≥90 phút trước giờ hàng vào.
   const scscShipments = opts.shipments.filter((s) => isEcargoScscWarehouse(s.warehouse));
   const fromFlights = resolveEcargoArrivalDateFromShipments(scscShipments);
   if (fromFlights.warning) warnings.push(fromFlights.warning);
   const requestedArrival = String(opts.arrivalDate || "").trim();
-  const arrivalDate = ensureEcargoArrivalDate(
+  const baseArrival = ensureEcargoArrivalDate(
     requestedArrival || fromFlights.arrivalDate,
     new Date(),
     fromFlights.arrivalDate
   );
-  if (requestedArrival && requestedArrival !== arrivalDate) {
-    warnings.push(
-      `Ngày hàng vào «${requestedArrival}» không hợp lệ → dùng ${arrivalDate}`
-    );
-  }
+  const slotResolved = resolveEcargoArrivalSlotForCreate(
+    baseArrival,
+    opts.arrivalTime ?? prepared.defaultArrivalSlot ?? "8",
+    new Date()
+  );
+  if (slotResolved.reason) warnings.push(slotResolved.reason);
+  const arrivalDate = slotResolved.arrivalDate;
+  const arrivalTime = slotResolved.arrivalTime;
 
   const plate = normalizeVehiclePlateInput(vehicle.licensePlate);
   const vehicleQuantity = Math.max(1, plate.split(";").filter(Boolean).length);
+  const agentIdent = String(prepared.agentIdent || "").replace(/\D/g, "");
+  const agentCode = String(prepared.agentCode || "")
+    .trim()
+    .toUpperCase();
 
   return {
     payload: {
       url: ECARGO_VCT_CREATE_URL,
       header: {
         agentName: prepared.name,
+        agentIdent: agentIdent || undefined,
+        agentCode: agentCode || undefined,
         agentPicName: prepared.agentPicName,
         agentPicIdType: prepared.agentPicIdType,
         agentPicId: prepared.agentPicId,
         arrivalDate,
-        arrivalTime: String(opts.arrivalTime ?? prepared.defaultArrivalSlot ?? "8"),
+        arrivalTime,
         vehicleType: vehicle.vehicleType,
         vehicleQuantity,
         vehicleNo: plate,

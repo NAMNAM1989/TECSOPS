@@ -65,6 +65,7 @@ type ExtensionCommand =
   | "FILL_ESID"
   | "FILL_ECARGO_VCT"
   | "REGISTER_ECARGO_VCT"
+  | "ECARGO_LOOKUP_AGENT"
   | "ECARGO_OPEN";
 
 type Pending = {
@@ -181,4 +182,16 @@ export function registerEcargoVctViaExtension(
 
 export function openEcargoExtensionTab(): Promise<TcsExtResult> {
   return request<TcsExtResult>("ECARGO_OPEN", undefined, 20_000);
+}
+
+/** Tra cứu đại lý trên eCargo (API Customer/Agent). */
+export function lookupEcargoAgentViaExtension(filter: string): Promise<
+  TcsExtResult & {
+    count?: number;
+    exactCount?: number;
+    items?: Array<{ name: string; code: string; val: string; label: string }>;
+    exact?: Array<{ name: string; code: string; val: string; label: string }>;
+  }
+> {
+  return request("ECARGO_LOOKUP_AGENT", { filter, agentName: filter }, 45_000);
 }

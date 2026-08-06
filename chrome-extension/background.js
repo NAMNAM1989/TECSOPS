@@ -10,7 +10,7 @@ const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const ECARGO_CREATE_URL = "https://ecargo.scsc.vn/Export/VCTOrder/Create";
 const EXT_VERSION = chrome.runtime.getManifest().version;
 const EXPECTED_SCRIPT_VERSION = "2.0.20";
-const EXPECTED_ECARGO_SCRIPT_VERSION = "2.2.8";
+const EXPECTED_ECARGO_SCRIPT_VERSION = "2.2.13";
 const SESSION_KEY = "tecsopsTcsSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
 const WORKSPACE_KEY = "tecsopsTcsWorkspace";
@@ -134,6 +134,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     void withServiceWorkerKeepAlive(registerEcargoOnTab(msg.payload))
       .then(reply)
       .catch((err) => reply(errorResult("REGISTER_FAILED", err)));
+    return true;
+  }
+
+  if (msg.type === "ECARGO_LOOKUP_AGENT") {
+    void withServiceWorkerKeepAlive(lookupEcargoAgentOnTab(msg.payload))
+      .then(reply)
+      .catch((err) => reply(errorResult("LOOKUP_FAILED", err)));
     return true;
   }
 
@@ -782,6 +789,17 @@ async function ensureEcargoContentReady(tabId) {
   return ping;
 }
 
+async function lookupEcargoAgentOnTab(payload) {
+  const filter = String(payload?.filter || payload?.agentName || "").trim();
+  const tabId = await findOrOpenEcargoTab({ active: false, pinned: true });
+  await ensureEcargoContentReady(tabId);
+  const res = await sendToEcargoContent(tabId, {
+    type: "ECARGO_LOOKUP_AGENT",
+    payload: { filter, agentName: filter },
+  });
+  return { ...res, workspace, version: EXT_VERSION };
+}
+
 async function fillEcargoOnTab(payload) {
   await workspaceReady;
   if (!payload || typeof payload !== "object") {
@@ -936,7 +954,7 @@ async function registerEcargoOnTab(payload) {
       ok: false,
       error: "NO_CONTENT_RESPONSE",
       message:
-        "Tab eCargo không trả lời lệnh Tạo phiếu. Reload Ext v2.2.8 tại chrome://extensions, F5 Ops + tab eCargo.",
+        "Tab eCargo không trả lời lệnh Tạo phiếu. Reload Ext v2.2.13 tại chrome://extensions, F5 Ops + tab eCargo.",
       warnings: [],
       workspace,
       version: EXT_VERSION,

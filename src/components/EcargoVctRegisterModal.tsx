@@ -155,7 +155,7 @@ export function EcargoVctRegisterModal({
     setLastQr(null);
     setPhaseLabel("");
     // Chỉ reset khi mở modal / đổi danh sách lô — tránh mảng `shipments` mới mỗi render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- shipmentIdsKey thay cho shipments
+    // deps: shipmentIdsKey thay cho shipments (tránh reset khi reference mảng đổi).
   }, [open, preferredShipmentId, shipmentIdsKey, singleShipmentMode]);
 
   useEffect(() => {
@@ -225,7 +225,7 @@ export function EcargoVctRegisterModal({
     const resolved = resolveEcargoArrivalDateFromShipments(rows);
     setArrivalDate(resolved.arrivalDate);
     setArrivalHint(resolved.warning || "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedIdsKey đủ ổn định
+    // deps: selectedIdsKey đủ ổn định thay selectedIds.
   }, [open, selectedIdsKey, shipmentIdsKey]);
 
   const vehiclePool = useMemo(() => {
@@ -266,7 +266,7 @@ export function EcargoVctRegisterModal({
         vehicleType: profile.defaultVehicleType,
       }));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedIdsKey / shipmentIdsKey ổn định hơn object
+    // deps: selectedIdsKey / shipmentIdsKey ổn định hơn object shipments.
   }, [open, selectedIdsKey, shipmentIdsKey, customers, profile.defaultVehicleType]);
 
   if (!open) return null;

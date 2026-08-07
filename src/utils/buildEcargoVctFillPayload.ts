@@ -146,8 +146,14 @@ export function shipmentToEcargoAwbLine(
 
 export function pickSavedVehicleForEcargo(
   vehicle: CustomerSavedVehicle,
-  fallbackVehicleType: EcargoVehicleType
+  fallbackVehicleType: EcargoVehicleType = "OTO"
 ): Extract<EcargoVehiclePick, { source: "saved" }> {
+  // Xe danh bạ thường thiếu vehicleType — KHÔNG lấy defaultVehicleType hồ sơ eCargo
+  // (hay bị ghi đè thành XEMAY sau lần «nhập xe lần này» xe máy). Thiếu → OTO.
+  const hasOwnType = Boolean(
+    String(vehicle.vehicleType ?? "")
+      .trim()
+  );
   return {
     source: "saved",
     vehicleId: vehicle.id,
@@ -156,7 +162,8 @@ export function pickSavedVehicleForEcargo(
     driverId: vehicle.driverId,
     driverIdType: normalizeEcargoIdType(vehicle.driverIdType) as EcargoIdType,
     vehicleType: normalizeEcargoVehicleType(
-      vehicle.vehicleType || fallbackVehicleType
+      vehicle.vehicleType,
+      hasOwnType ? fallbackVehicleType : "OTO"
     ) as EcargoVehicleType,
     label: vehicle.label?.trim() || undefined,
   };

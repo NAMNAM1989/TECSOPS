@@ -7,6 +7,7 @@ import {
   ECARGO_DEFAULT_GOODS,
   ECARGO_DEFAULT_KG,
   ECARGO_DEFAULT_PCS,
+  pickSavedVehicleForEcargo,
   resolveEcargoPiecesKg,
   shipmentToEcargoAwbLine,
   validateEcargoVehiclePick,
@@ -109,6 +110,33 @@ describe("buildEcargoVctFillPayload", () => {
         vehicleType: "OTO",
       })
     ).toMatch(/≥ 7/);
+  });
+
+  it("xe lưu thiếu vehicleType → OTO (không lấy XEMAY từ hồ sơ)", () => {
+    const pick = pickSavedVehicleForEcargo(
+      {
+        id: "v-missing",
+        licensePlate: "50H17480",
+        driverName: "A",
+        driverId: "1",
+      },
+      "XEMAY"
+    );
+    expect(pick.vehicleType).toBe("OTO");
+  });
+
+  it("xe lưu có vehicleType XEMAY → giữ XEMAY", () => {
+    const pick = pickSavedVehicleForEcargo(
+      {
+        id: "v-bike",
+        licensePlate: "59X12345",
+        driverName: "A",
+        driverId: "1",
+        vehicleType: "XEMAY",
+      },
+      "OTO"
+    );
+    expect(pick.vehicleType).toBe("XEMAY");
   });
 
   it("build payload không submit", () => {

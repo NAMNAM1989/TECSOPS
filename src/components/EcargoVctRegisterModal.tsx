@@ -115,6 +115,9 @@ export function EcargoVctRegisterModal({
   const [arrivalHint, setArrivalHint] = useState("");
   const [vehicleMode, setVehicleMode] = useState<"saved" | "oneshot">("saved");
   const [savedVehicleId, setSavedVehicleId] = useState("");
+  /** Loại xe gửi lên form eCargo — luôn hiện, kể cả khi chọn xe đã lưu. */
+  const [registerVehicleType, setRegisterVehicleType] =
+    useState<EcargoVehicleType>("OTO");
   const [oneshot, setOneshot] = useState({
     licensePlate: "",
     driverName: "",
@@ -246,24 +249,28 @@ export function EcargoVctRegisterModal({
 
   useEffect(() => {
     if (!open) return;
+    // Fallback OTO — không truyền defaultVehicleType hồ sơ (tránh XEMAY lệch).
     const pick = defaultVehiclePickForShipments(
       selectedShipments.length ? selectedShipments : shipments.slice(0, 1),
       customers,
-      profile.defaultVehicleType
+      "OTO"
     );
     if (pick?.source === "saved") {
       setVehicleMode("saved");
       setSavedVehicleId(pick.vehicleId);
+      setRegisterVehicleType(pick.vehicleType || "OTO");
       setOneshot((prev) => ({
         ...prev,
-        vehicleType: pick.vehicleType || profile.defaultVehicleType,
+        vehicleType: pick.vehicleType || "OTO",
       }));
     } else {
       setVehicleMode("oneshot");
       setSavedVehicleId("");
+      const t = profile.defaultVehicleType || "OTO";
+      setRegisterVehicleType(t);
       setOneshot((prev) => ({
         ...prev,
-        vehicleType: profile.defaultVehicleType,
+        vehicleType: t,
       }));
     }
     // deps: selectedIdsKey / shipmentIdsKey ổn định hơn object shipments.
@@ -288,7 +295,10 @@ export function EcargoVctRegisterModal({
       email: profile.email,
       mobilePhone: profile.mobilePhone,
       defaultArrivalSlot: arrivalTime,
-      defaultVehicleType: oneshot.vehicleType || profile.defaultVehicleType,
+      // Chỉ cập nhật loại xe mặc định khi đang ở chế độ nhập xe lần này.
+      ...(vehicleMode === "oneshot"
+        ? { defaultVehicleType: oneshot.vehicleType || registerVehicleType }
+        : {}),
     });
     await pushEcargoScscStore(loadEcargoScscStore());
     const next = getActiveEcargoScscProfile();
@@ -303,10 +313,8 @@ export function EcargoVctRegisterModal({
         ? (() => {
             const found = vehiclePool.find((x) => x.vehicle.id === savedVehicleId);
             if (!found) return null;
-            return pickSavedVehicleForEcargo(
-              found.vehicle,
-              profile.defaultVehicleType,
-            );
+            const base = pickSavedVehicleForEcargo(found.vehicle, "OTO");
+            return { ...base, vehicleType: registerVehicleType || base.vehicleType };
           })()
         : {
             source: "oneshot",
@@ -314,7 +322,7 @@ export function EcargoVctRegisterModal({
             driverName: oneshot.driverName,
             driverId: oneshot.driverId,
             driverIdType: oneshot.driverIdType,
-            vehicleType: oneshot.vehicleType,
+            vehicleType: registerVehicleType || oneshot.vehicleType,
           };
     if (!raw) return null;
     // Thiếu TX → gắn NV đại lý (cùng logic payload) để preview/validate nhất quán.
@@ -333,8 +341,12 @@ export function EcargoVctRegisterModal({
         email: profile.email,
         mobilePhone: profile.mobilePhone,
         defaultArrivalSlot: arrivalTime,
+        // Chỉ ghi nhớ loại xe mặc định khi user chọn oneshot — tránh XEMAY
+        // từ lần trước làm lệch xe lưu (không có vehicleType).
         defaultVehicleType:
-          vehicleMode === "oneshot" ? oneshot.vehicleType : profile.defaultVehicleType,
+          vehicleMode === "oneshot"
+            ? registerVehicleType || oneshot.vehicleType
+            : profile.defaultVehicleType,
       });
       void pushEcargoScscStore(loadEcargoScscStore());
     }
@@ -908,6 +920,9 @@ export function EcargoVctRegisterModal({
               const missingDriver =
                 !String(vehicle.driverName || "").trim() ||
                 !String(vehicle.driverId || "").trim();
+              const typeLabel =
+                VEHICLE_TYPES.find((t) => t.value === vehicle.vehicleType)?.label ||
+                "Ô tô (mặc định)";
               return (
               <label
                 key={vehicle.id}
@@ -920,10 +935,14 @@ export function EcargoVctRegisterModal({
                   onChange={() => {
                     setVehicleMode("saved");
                     setSavedVehicleId(vehicle.id);
+                    const t = pickSavedVehicleForEcargo(vehicle, "OTO").vehicleType;
+                    setRegisterVehicleType(t);
+                    setOneshot((p) => ({ ...p, vehicleType: t }));
                   }}
                 />
                 <span className="text-[12px] text-slate-800">
                   <span className="font-mono font-semibold">{vehicle.licensePlate}</span>
+                  <span className="text-slate-500"> · {typeLabel}</span>
                   {" · "}
                   {vehicle.driverName?.trim()
                     ? vehicle.driverName
@@ -959,6 +978,24 @@ export function EcargoVctRegisterModal({
               </span>
             </label>
           </div>
+          <label className="mb-2 block">
+            <span className={LABEL}>Loại xe gửi eCargo *</span>
+            <select
+              className={INPUT}
+              value={registerVehicleType}
+              onChange={(e) => {
+                const t = e.target.value as EcargoVehicleType;
+                setRegisterVehicleType(t);
+                setOneshot((p) => ({ ...p, vehicleType: t }));
+              }}
+            >
+              {VEHICLE_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
           {vehicleMode === "oneshot" ? (
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label>
@@ -977,25 +1014,6 @@ export function EcargoVctRegisterModal({
                   }
                   placeholder="50H17480"
                 />
-              </label>
-              <label>
-                <span className={LABEL}>Loại xe</span>
-                <select
-                  className={INPUT}
-                  value={oneshot.vehicleType}
-                  onChange={(e) =>
-                    setOneshot((p) => ({
-                      ...p,
-                      vehicleType: e.target.value as EcargoVehicleType,
-                    }))
-                  }
-                >
-                  {VEHICLE_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
               </label>
               <label>
                 <span className={LABEL}>Tài xế *</span>

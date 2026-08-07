@@ -6,6 +6,7 @@ import { WarehouseGridPicker } from "./WarehouseGridPicker";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { InlineTextEdit } from "./InlineTextEdit";
 import { InlineCustomerEdit } from "./InlineCustomerEdit";
+import { OpsRowNoteControl } from "./OpsRowNoteControl";
 import {
   formatYmdToFlightDateDdMon,
   parseBookingDateLoose,
@@ -24,8 +25,14 @@ import { normalizeWarehouse, warehouseLabel } from "../constants/warehouses";
 import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
 import { InlineCustomerInfoCell } from "./InlineCustomerInfoCell";
 import { CneeDetailPopover } from "./CneeDetailPopover";
+import { VehicleTypeMissingBadge } from "./VehicleTypeMissingBadge";
 import { useIsMobile } from "../hooks/useIsMobile";
 import type { EcargoVctResult } from "../utils/ecargoVctResultsStore";
+import {
+  validateInlineDimWeightKg,
+  validateInlineKg,
+  validateInlinePcs,
+} from "../utils/inlineShipmentFieldValidation";
 
 interface Props {
   rows: Shipment[];
@@ -34,7 +41,7 @@ interface Props {
   activeWarehouse: Warehouse;
   onActiveWarehouseChange: (wh: Warehouse) => void;
   metricRows: Shipment[];
-  onUpdate: (id: string, patch: Partial<Shipment>) => void;
+  onUpdate: (id: string, patch: Partial<Shipment>) => void | Promise<boolean | void>;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   viewSessionYmd: string;
@@ -45,21 +52,44 @@ interface Props {
   onAddBlankRow?: (warehouse: Warehouse) => void;
   /** Kết quả eCargo VCT theo shipmentId */
   ecargoVctById?: Record<string, EcargoVctResult>;
+  onUpdateCustomers?: (
+    customers: CustomerDirectoryEntry[]
+  ) => Promise<boolean | void>;
 }
 
-const COL_HEADERS = [
+type ColHeader = { key: string; label: string; w: string; title?: string };
+
+/** ~200px — đủ đọc tên Shipper/CNEE, vẫn gọn cạnh STATUS. */
+const INFO_KH_W = "w-[12.5rem] max-w-[12.5rem]";
+/** Vừa đủ nội dung thật — không truncate AWB/chuyến; KHÁCH tối đa 2 dòng. */
+const AWB_W = "w-[9rem] max-w-[9rem]";
+const FLIGHT_W = "w-[5rem] max-w-[5rem]";
+const CUSTOMER_W = "w-[6.5rem] max-w-[6.5rem]";
+
+const COL_HEADERS: ColHeader[] = [
   { key: "stt", label: "#", w: "w-9" },
-  { key: "awb", label: "AWB / HAWB", w: "min-w-[10rem] sticky left-0 z-[1]" },
-  { key: "flight", label: "CHUYẾN", w: "min-w-[5.5rem]" },
+  { key: "awb", label: "AWB / HAWB", w: `${AWB_W} sticky left-0 z-[1]` },
+  { key: "flight", label: "CHUYẾN", w: FLIGHT_W },
   { key: "dest", label: "DST", w: "w-14 text-center" },
   { key: "pcs", label: "KIỆN", w: "w-14 text-right" },
   { key: "kg", label: "KG", w: "w-14 text-right" },
   { key: "dim", label: "DIM", w: "w-16 text-right" },
-  { key: "customer", label: "KHÁCH", w: "min-w-[5.5rem] max-w-[8rem]" },
-  { key: "customerInfo", label: "THÔNG TIN KH", w: "min-w-[8.5rem] max-w-[12rem]" },
-  { key: "status", label: "TT", w: "min-w-[7.5rem]" },
-  { key: "actions", label: "", w: "min-w-[5.5rem]" },
-] as const;
+  { key: "customer", label: "KHÁCH", w: CUSTOMER_W },
+  {
+    key: "customerInfo",
+    label: "INFO KH",
+    /** Cố định bề rộng — tránh <select> option dài kéo cột. */
+    w: INFO_KH_W,
+    title: "Shipper · CNEE · Tên hàng · CNEE in ấn",
+  },
+  {
+    key: "status",
+    label: "STATUS",
+    w: "min-w-[6.5rem] max-w-[7.5rem]",
+    title: "Trạng thái lô",
+  },
+  { key: "actions", label: "", w: "min-w-[6.5rem]", title: "Ghi chú & thao tác" },
+];
 
 export function DesktopShipmentTable({
   rows,
@@ -78,6 +108,7 @@ export function DesktopShipmentTable({
   onPrint,
   viewSessionYmd,
   ecargoVctById,
+  onUpdateCustomers,
 }: Props) {
   const isMobile = useIsMobile();
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
@@ -118,15 +149,18 @@ export function DesktopShipmentTable({
               group.length > 4 ? "max-h-[min(82vh,820px)]" : ""
             }`}
           >
-            <table className="w-full border-separate border-spacing-x-0 border-spacing-y-1 text-left text-[13px] leading-snug">
+            <table className="w-full border-separate border-spacing-x-0 border-spacing-y-0.5 text-left text-[13px] leading-snug">
               <thead className="sticky top-0 z-20">
                 <tr className="bg-ui-background">
                   {COL_HEADERS.map((c) => (
                     <th
                       key={c.key}
-                      className={`whitespace-nowrap px-2 py-2 text-[10px] font-bold uppercase tracking-wide text-ui-text-muted ${c.w} ${
-                        c.key === "awb" ? "bg-ui-background" : ""
-                      }`}
+                      title={c.title}
+                      className={`box-border px-1.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-ui-text-muted ${
+                        c.key === "customerInfo" || c.key === "status"
+                          ? "truncate"
+                          : "whitespace-nowrap"
+                      } ${c.w} ${c.key === "awb" ? "bg-ui-background" : ""}`}
                     >
                       {c.label}
                     </th>
@@ -163,6 +197,7 @@ export function DesktopShipmentTable({
                       allRows={allRows}
                       customerDirectory={customerDirectory}
                       onUpdate={onUpdate}
+                      onUpdateCustomers={onUpdateCustomers}
                       onDelete={onDelete}
                       onPrint={onPrint}
                       onOpenDimModal={setDimModalRow}
@@ -202,6 +237,7 @@ function ShipmentTableRowImpl({
   allRows,
   customerDirectory,
   onUpdate,
+  onUpdateCustomers,
   onDelete,
   onPrint,
   onOpenDimModal,
@@ -216,7 +252,10 @@ function ShipmentTableRowImpl({
   onSelectRow?: (id: string | null) => void;
   allRows: Shipment[];
   customerDirectory: readonly CustomerDirectoryEntry[];
-  onUpdate: (id: string, patch: Partial<Shipment>) => void;
+  onUpdate: (id: string, patch: Partial<Shipment>) => void | Promise<boolean | void>;
+  onUpdateCustomers?: (
+    customers: CustomerDirectoryEntry[]
+  ) => Promise<boolean | void>;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
@@ -236,7 +275,7 @@ function ShipmentTableRowImpl({
         : "";
     return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} border-y border-ui-border/70 ${
       part === "first" ? "border-l border-ui-border/70" : ""
-    } ${part === "last" ? "border-r border-ui-border/70" : ""} px-2 py-1.5 ${extra}`.trim();
+    } ${part === "last" ? "border-r border-ui-border/70" : ""} px-1.5 py-1 ${extra}`.trim();
   };
 
   const hasNextRow = rowIdx < groupRowIds.length - 1;
@@ -277,19 +316,20 @@ function ShipmentTableRowImpl({
       >
         {row.stt}
       </td>
-      <td className={cell("awb", "align-top")}>
-        <div className="flex min-w-[9rem] flex-col gap-0">
+      <td className={cell("awb", `box-border ${AWB_W} align-top`)}>
+        <div className="flex w-full flex-col gap-0">
           <InlineAwbEdit
             rowId={row.id}
             value={row.awb}
             allRows={allRows}
-            className="font-shipment-data text-[15px] font-bold leading-tight"
+            className="font-shipment-data text-[14px] font-bold leading-tight tracking-tight"
             onCommit={(awb) => onUpdate(row.id, { awb })}
             onEnterNavigateDown={() => focusShipmentGridCell(row.id, "hawb")}
           />
           <InlineTextEdit
             value={row.hawb ?? ""}
             placeholder="HAWB"
+            title={row.hawb?.trim() ? `HAWB: ${row.hawb}` : undefined}
             className="font-shipment-data text-[11px] font-semibold ops-grid-cell-muted"
             maxLength={32}
             gridNav={{ rowId: row.id, field: "hawb" }}
@@ -315,11 +355,12 @@ function ShipmentTableRowImpl({
           ) : null}
         </div>
       </td>
-      <td className={cell("mid", "align-top")}>
-        <div className="flex min-w-[5.5rem] flex-col gap-0">
+      <td className={cell("mid", `box-border ${FLIGHT_W} align-top`)}>
+        <div className="flex w-full flex-col gap-0">
           <InlineTextEdit
             value={row.flight}
             placeholder="Chuyến"
+            title={row.flight?.trim() ? `Chuyến: ${row.flight}` : undefined}
             className={`font-shipment-data text-[13px] font-bold ${flightNumberAccent} ops-grid-cell`}
             uppercase
             maxLength={12}
@@ -332,6 +373,7 @@ function ShipmentTableRowImpl({
           <InlineTextEdit
             value={row.flightDate}
             placeholder="15APR"
+            title={row.flightDate?.trim() ? `Ngày: ${row.flightDate}` : undefined}
             className="font-shipment-data text-[11px] font-medium ops-grid-cell-muted"
             uppercase
             maxLength={16}
@@ -359,8 +401,10 @@ function ShipmentTableRowImpl({
         <InlineNumberEdit
           value={row.pcs}
           variant="grid"
+          title="Click để sửa số kiện"
           className="font-shipment-data text-right text-[13px] font-bold tabular-nums text-ui-text"
           gridNav={{ rowId: row.id, field: "pcs" }}
+          validate={validateInlinePcs}
           onCommit={(v) => onUpdate(row.id, { pcs: v })}
           onEnterNavigateDown={hasNextRow ? navDownSameField("pcs") : undefined}
         />
@@ -369,8 +413,10 @@ function ShipmentTableRowImpl({
         <InlineNumberEdit
           value={row.kg}
           variant="grid"
+          title="Click để sửa kg"
           className="font-shipment-data text-right text-[13px] font-bold tabular-nums text-ui-text"
           gridNav={{ rowId: row.id, field: "kg" }}
+          validate={validateInlineKg}
           onCommit={(v) => onUpdate(row.id, { kg: v })}
           onEnterNavigateDown={hasNextRow ? navDownSameField("kg") : undefined}
         />
@@ -385,8 +431,10 @@ function ShipmentTableRowImpl({
             <InlineNumberEdit
               value={row.dimWeightKg}
               placeholder="—"
+              title="Click để sửa DIM kg"
               className="font-shipment-data text-right text-[12px] font-semibold tabular-nums text-ui-text"
               gridNav={{ rowId: row.id, field: "dimKg" }}
+              validate={validateInlineDimWeightKg}
               onCommit={(v) =>
                 onUpdate(row.id, {
                   dimWeightKg: v,
@@ -426,8 +474,8 @@ function ShipmentTableRowImpl({
           </button>
         </div>
       </td>
-      <td className={cell("mid")}>
-        <div className="flex min-w-0 items-start gap-1">
+      <td className={cell("mid", `box-border ${CUSTOMER_W} align-top`)}>
+        <div className="flex w-full items-start gap-0.5">
           <div className="min-w-0 flex-1">
             <InlineCustomerEdit
               value={row.customer}
@@ -435,7 +483,7 @@ function ShipmentTableRowImpl({
               profileSelection={row}
               customerDirectory={customerDirectory}
               placeholder="Khách"
-              className="min-w-0 text-[13px] font-semibold ops-grid-cell"
+              className="min-w-0 whitespace-normal break-words text-[12px] font-semibold leading-snug line-clamp-2 ops-grid-cell"
               maxLength={120}
               gridNav={{ rowId: row.id, field: "customer" }}
               onCommit={(patch) => onUpdate(row.id, patch)}
@@ -445,6 +493,13 @@ function ShipmentTableRowImpl({
               onTabNavigateNext={() => focusShipmentGridCell(row.id, "note")}
             />
           </div>
+          {onUpdateCustomers ? (
+            <VehicleTypeMissingBadge
+              shipment={row}
+              customerDirectory={customerDirectory}
+              onUpdateCustomers={onUpdateCustomers}
+            />
+          ) : null}
           <CneeDetailPopover
             shipment={row}
             customerDirectory={customerDirectory}
@@ -453,43 +508,44 @@ function ShipmentTableRowImpl({
           />
         </div>
       </td>
-      <td className={cell("mid", "align-middle")}>
-        <InlineCustomerInfoCell
-          shipment={row}
-          customerDirectory={customerDirectory}
-          sessionYmdFallback={viewSessionYmd}
-          onUpdate={(patch) => onUpdate(row.id, patch)}
-        />
-      </td>
-      <td className={cell("mid", "py-1 align-top")}>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <InlineTextEdit
-            value={row.note ?? ""}
-            placeholder="Ghi chú"
-            className="ops-grid-note line-clamp-2 min-w-0 text-left text-[10px] leading-snug"
-            maxLength={2000}
-            gridNav={{ rowId: row.id, field: "note" }}
-            onCommit={(v) => onUpdate(row.id, { note: v })}
-            onEnterNavigateDown={
-              hasNextRow ? navDownSameField("note") : undefined
-            }
-          />
-          <StatusSelect
-            value={row.status}
-            warehouse={row.warehouse}
-            compact
-            onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
+      <td
+        className={cell(
+          "mid",
+          `box-border ${INFO_KH_W} align-middle overflow-hidden`,
+        )}
+      >
+        <div className="min-w-0 w-full max-w-[12.5rem] overflow-hidden">
+          <InlineCustomerInfoCell
+            shipment={row}
+            customerDirectory={customerDirectory}
+            sessionYmdFallback={viewSessionYmd}
+            onUpdate={(patch) => onUpdate(row.id, patch)}
           />
         </div>
       </td>
-      <td className={cell("last", "overflow-visible py-0.5 align-middle")}>
-        <ShipmentRowActionsMenu
-          row={row}
-          customerDirectory={customerDirectory}
-          onPrint={onPrint}
-          onDelete={onDelete}
-          onUpdate={onUpdate}
+      <td className={cell("mid", "align-middle")}>
+        <StatusSelect
+          value={row.status}
+          warehouse={row.warehouse}
+          compact
+          onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
         />
+      </td>
+      <td className={cell("last", "overflow-visible py-0.5 align-middle")}>
+        <div className="flex items-center justify-end gap-0.5">
+          <OpsRowNoteControl
+            rowId={row.id}
+            value={row.note ?? ""}
+            onCommit={(v) => onUpdate(row.id, { note: v })}
+          />
+          <ShipmentRowActionsMenu
+            row={row}
+            customerDirectory={customerDirectory}
+            onPrint={onPrint}
+            onDelete={onDelete}
+            onUpdate={onUpdate}
+          />
+        </div>
       </td>
     </tr>
   );

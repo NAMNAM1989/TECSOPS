@@ -3,6 +3,21 @@ import type { ShipmentStatus } from "../types/shipment";
 /** Nhãn theo spec §5.6 — OLA giữ viết hoa nghiệp vụ (viết tắt). */
 export const statusLabel: Record<ShipmentStatus, string> = {
   PENDING: "Booking",
+  /** Nhãn quick filter Ops — «Hàng mới tiếp nhận». */
+  RECEIVED: "Hàng mới tiếp nhận",
+  VOLUME_DONE: "Đã đo Volume",
+  CUSTOMS: "Hải quan",
+  SECURITY: "An ninh",
+  OLA_PULL: "Kéo OLA",
+  /** Nhãn quick filter Ops — «Đã hoàn thành tiếp nhận». */
+  RECEPTION_COMPLETED: "Đã hoàn thành tiếp nhận",
+  WEIGH_SLIP: "Nộp tờ cân",
+  COMPLETED: "Hoàn thành",
+};
+
+/** Nhãn ngắn cho dropdown trạng thái hàng (giữ gọn hơn chip lọc). */
+export const statusLabelShort: Record<ShipmentStatus, string> = {
+  PENDING: "Booking",
   RECEIVED: "Nhận hàng",
   VOLUME_DONE: "Đã đo Volume",
   CUSTOMS: "Hải quan",

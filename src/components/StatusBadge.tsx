@@ -1,6 +1,6 @@
 import type { ShipmentStatus, Warehouse } from "../types/shipment";
 import { selectableStatusesForShipment } from "../utils/shipmentWorkflowStatus";
-import { statusIcon, statusLabel, statusSelectSurface } from "./statusStyles";
+import { statusIcon, statusLabelShort, statusSelectSurface } from "./statusStyles";
 
 interface StatusSelectProps {
   value: ShipmentStatus;
@@ -18,8 +18,8 @@ export function StatusSelect({ value, onChange, warehouse, compact }: StatusSele
       value={value}
       onChange={(e) => onChange(e.target.value as ShipmentStatus)}
       onClick={(e) => e.stopPropagation()}
-      aria-label={`Trạng thái · ${statusLabel[value]}`}
-      title={`${statusIcon[value]} ${statusLabel[value]}`}
+      aria-label={`Trạng thái · ${statusLabelShort[value]}`}
+      title={`${statusIcon[value]} ${statusLabelShort[value]}`}
       className={`cursor-pointer rounded-md border font-semibold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ui-focus ${statusSelectSurface[value]} ${
         compact
           ? "max-w-[5.25rem] truncate px-1 py-0.5 text-[8px] leading-tight"
@@ -28,7 +28,7 @@ export function StatusSelect({ value, onChange, warehouse, compact }: StatusSele
     >
       {options.map((st) => (
         <option key={st} value={st}>
-          {statusIcon[st]} {statusLabel[st]}
+          {statusIcon[st]} {statusLabelShort[st]}
         </option>
       ))}
     </select>

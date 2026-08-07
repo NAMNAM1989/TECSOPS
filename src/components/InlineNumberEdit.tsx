@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 interface Props {
   value: number | null;
   placeholder?: string;
-  onCommit: (v: number | null) => void;
+  onCommit: (v: number | null) => void | Promise<boolean | void>;
   className?: string;
   /** Thu gọn cho hàng mobile 1–2 dòng */
   compact?: boolean;
@@ -13,6 +13,9 @@ interface Props {
   gridNav?: { rowId: string; field: string };
   /** Enter sau khi commit: ví dụ nhảy xuống ô cùng cột hàng dưới */
   onEnterNavigateDown?: () => void;
+  /** Validation — trả message lỗi để giữ chế độ edit. */
+  validate?: (v: number | null) => string | null;
+  title?: string;
 }
 
 export function InlineNumberEdit({
@@ -24,9 +27,13 @@ export function InlineNumberEdit({
   variant = "default",
   gridNav,
   onEnterNavigateDown,
+  validate,
+  title,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value !== null ? String(value) : "");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -43,14 +50,40 @@ export function InlineNumberEdit({
   }, [editing]);
 
   const commit = () => {
-    setEditing(false);
+    if (saving) return;
     const trimmed = draft.trim();
-    if (trimmed === "") {
-      if (value !== null) onCommit(null);
+    const next: number | null =
+      trimmed === "" ? null : Number(trimmed.replace(",", "."));
+    if (trimmed !== "" && Number.isNaN(next)) {
+      setError("Số không hợp lệ.");
       return;
     }
-    const n = Number(trimmed.replace(",", "."));
-    if (!Number.isNaN(n) && n !== value) onCommit(n);
+    const err = validate?.(next) ?? null;
+    if (err) {
+      setError(err);
+      return;
+    }
+    setError(null);
+    if (next === value || (next == null && value == null)) {
+      setEditing(false);
+      return;
+    }
+    const result = onCommit(next);
+    if (result && typeof (result as Promise<unknown>).then === "function") {
+      setSaving(true);
+      void (result as Promise<boolean | void>)
+        .then((ok) => {
+          if (ok === false) {
+            setDraft(value !== null ? String(value) : "");
+            setError("Không lưu được — thử lại.");
+            return;
+          }
+          setEditing(false);
+        })
+        .finally(() => setSaving(false));
+      return;
+    }
+    setEditing(false);
   };
 
   const gridProps = gridNav
@@ -71,6 +104,7 @@ export function InlineNumberEdit({
       <button
         type="button"
         {...gridProps}
+        title={title || "Click để sửa"}
         onFocus={(e) => {
           e.stopPropagation();
           setEditing(true);
@@ -79,11 +113,15 @@ export function InlineNumberEdit({
           e.stopPropagation();
           setEditing(true);
         }}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+        }}
         className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 ${className} ${
           value === null ? "ops-grid-placeholder" : ""
-        }`}
+        } ${saving ? "opacity-60" : ""}`}
       >
-        {value !== null ? value.toLocaleString() : emptyLabel}
+        {saving ? "…" : value !== null ? value.toLocaleString() : emptyLabel}
       </button>
     );
   }
@@ -96,32 +134,47 @@ export function InlineNumberEdit({
         : "w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 text-right text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20";
 
   return (
-    <input
-      ref={ref}
-      type="number"
-      inputMode="numeric"
-      {...gridProps}
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (
-          e.key === "Enter" &&
-          !(e.nativeEvent as KeyboardEvent).isComposing
-        ) {
-          e.preventDefault();
-          commit();
-          queueMicrotask(() => onEnterNavigateDown?.());
-          return;
-        }
-        if (e.key === "Escape") {
-          setDraft(value !== null ? String(value) : "");
-          setEditing(false);
-        }
-      }}
-      onClick={(e) => e.stopPropagation()}
-      className={inputCls}
-      step="any"
-    />
+    <span className="relative inline-flex w-full flex-col items-stretch">
+      <input
+        ref={ref}
+        type="number"
+        inputMode="numeric"
+        {...gridProps}
+        value={draft}
+        disabled={saving}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setError(null);
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (
+            e.key === "Enter" &&
+            !(e.nativeEvent as KeyboardEvent).isComposing
+          ) {
+            e.preventDefault();
+            commit();
+            queueMicrotask(() => {
+              if (!error) onEnterNavigateDown?.();
+            });
+            return;
+          }
+          if (e.key === "Escape") {
+            setDraft(value !== null ? String(value) : "");
+            setError(null);
+            setEditing(false);
+          }
+        }}
+        onClick={(e) => e.stopPropagation()}
+        className={`${inputCls} ${error ? "border-rose-400 ring-1 ring-rose-300" : ""}`}
+        step="any"
+        aria-invalid={Boolean(error)}
+      />
+      {error ? (
+        <span className="mt-0.5 text-[9px] font-semibold leading-tight text-rose-600">
+          {error}
+        </span>
+      ) : null}
+    </span>
   );
 }

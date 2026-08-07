@@ -154,6 +154,7 @@ export function InlineCustomerEdit({
       <button
         type="button"
         {...gridProps}
+        title={displayValue !== "" ? displayValue : "Click để chọn / sửa khách"}
         onFocus={(e) => {
           e.stopPropagation();
           setEditing(true);

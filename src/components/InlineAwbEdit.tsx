@@ -69,10 +69,17 @@ export function InlineAwbEdit({
   const btnBase = "w-full rounded px-1 py-0.5 text-left font-mono text-sm font-semibold tracking-tight";
 
   if (!editing) {
+    const shown =
+      value && rawAwbDigits(value).length > 0 ? value : "Nhập AWB";
     return (
       <button
         type="button"
         {...gridProps}
+        title={
+          value && rawAwbDigits(value).length > 0
+            ? `AWB: ${value}`
+            : "Click để nhập AWB"
+        }
         onFocus={(e) => {
           e.stopPropagation();
           setEditing(true);
@@ -87,7 +94,7 @@ export function InlineAwbEdit({
             : "text-ui-danger"
         }`}
       >
-        {value && rawAwbDigits(value).length > 0 ? value : "Nhập AWB"}
+        {shown}
       </button>
     );
   }

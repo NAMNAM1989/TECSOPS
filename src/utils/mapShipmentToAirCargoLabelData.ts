@@ -1,7 +1,11 @@
 import type { Shipment } from "../types/shipment";
 import { formatAwbLabel, rawAwbDigits } from "./awbFormat";
 import type { AirlineLabelOverrides } from "./airlineLabelOverridesCore";
-import { mergeAirlineLookupMaps, syntheticAirlineLabelName } from "./airlineLabelOverridesCore";
+import {
+  mergeAirlineLookupMaps,
+  repairGluedAirlineDisplayName,
+  syntheticAirlineLabelName,
+} from "./airlineLabelOverridesCore";
 
 export type AirCargoLabelSpecial = "" | "cold" | "danger";
 
@@ -58,11 +62,15 @@ function airlineNameFromShipment(s: Shipment, maps: ReturnType<typeof mergeAirli
 
   // Tem nhãn: ưu tiên prefix cột chuyến bay
   const flightPrefix = extractFlightAirlinePrefix(s.flight, byFlight);
-  if (flightPrefix && byFlight[flightPrefix]) return byFlight[flightPrefix];
+  if (flightPrefix && byFlight[flightPrefix]) {
+    return repairGluedAirlineDisplayName(byFlight[flightPrefix]);
+  }
 
   // Fallback: 3 số đầu AWB nếu không suy được từ chuyến
   const awbPrefix = rawAwbDigits(s.awb).slice(0, 3);
-  if (awbPrefix.length === 3 && byAwb[awbPrefix]) return byAwb[awbPrefix];
+  if (awbPrefix.length === 3 && byAwb[awbPrefix]) {
+    return repairGluedAirlineDisplayName(byAwb[awbPrefix]);
+  }
 
   return flightPrefix ? syntheticAirlineLabelName(flightPrefix) : "";
 }

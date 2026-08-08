@@ -3,8 +3,10 @@ import {
   DEFAULT_AIRLINE_BY_FLIGHT_PREFIX,
 } from "../constants/airlineLabelDefaults";
 import {
+  airlineNameLooksGlued as airlineNameLooksGluedShared,
   emptyAirlineLabelOverrides,
   normalizeAirlineLabelOverridesLoose,
+  repairGluedAirlineDisplayName as repairGluedAirlineDisplayNameShared,
 } from "../../shared/airlineLabelOverridesNormalize.mjs";
 
 export type AirlineLabelOverrides = {
@@ -21,8 +23,16 @@ export function clampAirlineLabelOverrides(raw: unknown): AirlineLabelOverrides 
   return normalizeAirlineLabelOverridesLoose(raw);
 }
 
+export function repairGluedAirlineDisplayName(raw: unknown): string {
+  return repairGluedAirlineDisplayNameShared(raw);
+}
+
+export function airlineNameLooksGlued(raw: unknown): boolean {
+  return airlineNameLooksGluedShared(raw);
+}
+
 function trimName(s: string): string {
-  return s.replace(/\s+/g, " ").trim().slice(0, 80);
+  return repairGluedAirlineDisplayName(s);
 }
 
 /** Tên hiển thị khi chưa có trong bảng mặc định / ghi đè — khớp tem in. */

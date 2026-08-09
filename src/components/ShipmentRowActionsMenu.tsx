@@ -273,7 +273,7 @@ export function ShipmentRowActionsMenu({
               },
               undefined,
               `row-fill-esid-${row.id}`,
-              "Điền ESID trên page Khai báo của workspace TCS đã Login. Agent ESID = nút Agent thanh TCS."
+              "Điền ESID từng lô — đúng kho đang chọn + đã Quét (HT tiếp nhận). Kiểm tra form rồi HOÀN TẤT trên TCS."
             )
           : null}
         {showTcsEsid

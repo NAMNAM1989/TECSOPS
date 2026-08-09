@@ -73,27 +73,30 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
-app.get("/api/tcs-extension", (_req, res) => {
+function respondChromeExtensionPackage(res, {
+  manifestRel,
+  stableZipName,
+  versionedPrefix,
+  installExtra = [],
+}) {
   try {
     const manifest = JSON.parse(
-      fs.readFileSync(
-        path.join(__dirname, "..", "chrome-extension", "manifest.json"),
-        "utf8"
-      )
+      fs.readFileSync(path.join(__dirname, "..", manifestRel), "utf8")
     );
     const version = String(manifest.version || "").trim();
     const downloadsDir = path.join(__dirname, "..", "public", "downloads");
     const versionedName = version
-      ? `tecsops-chrome-extension-v${version}.zip`
-      : "tecsops-chrome-extension.zip";
+      ? `${versionedPrefix}-v${version}.zip`
+      : `${stableZipName}`;
     const versionedPath = path.join(downloadsDir, versionedName);
-    const stablePath = path.join(downloadsDir, "tecsops-chrome-extension.zip");
+    const stablePath = path.join(downloadsDir, stableZipName);
     const hasVersioned = version && fs.existsSync(versionedPath);
     const hasStable = fs.existsSync(stablePath);
     if (!hasVersioned && !hasStable) {
       res.status(404).json({
         ok: false,
-        error: "Chưa đóng gói Chrome Ext — chạy npm run prebuild (hoặc npm run build).",
+        error:
+          "Chưa đóng gói Chrome Ext — chạy npm run prebuild (hoặc npm run build).",
         version,
       });
       return;
@@ -104,18 +107,41 @@ app.get("/api/tcs-extension", (_req, res) => {
       filename: versionedName,
       download_url: hasVersioned
         ? `/downloads/${versionedName}`
-        : "/downloads/tecsops-chrome-extension.zip",
+        : `/downloads/${stableZipName}`,
       install: [
         `Giải nén ZIP (v${version || "?"}) vào một thư mục cố định`,
         "Mở chrome://extensions và bật Chế độ dành cho nhà phát triển",
         "Chọn Tải tiện ích đã giải nén rồi chọn thư mục vừa giải nén",
         "F5 trang Ops và tab TCS",
+        ...installExtra,
       ],
     });
   } catch (error) {
     console.error("[api/tcs-extension]", error);
     res.status(500).json({ ok: false, error: "Extension package unavailable" });
   }
+}
+
+app.get("/api/tcs-extension", (_req, res) => {
+  respondChromeExtensionPackage(res, {
+    manifestRel: path.join("chrome-extension", "manifest.json"),
+    stableZipName: "tecsops-chrome-extension.zip",
+    versionedPrefix: "tecsops-chrome-extension",
+    installExtra: ["Ext này: kho TECS-TCS + eCargo SCSC"],
+  });
+});
+
+/** Ext riêng kho TCS — tài khoản portal độc lập. */
+app.get("/api/tcs-extension-direct", (_req, res) => {
+  respondChromeExtensionPackage(res, {
+    manifestRel: path.join("chrome-extension-tcs", "manifest.json"),
+    stableZipName: "tecsops-chrome-extension-tcs.zip",
+    versionedPrefix: "tecsops-chrome-extension-tcs",
+    installExtra: [
+      "Ext này chỉ kho TCS — cài song song với Ext TECS hub",
+      "Trên Ops chọn kho TCS rồi Đồng bộ",
+    ],
+  });
 });
 
 app.get("/api/state", async (_req, res) => {

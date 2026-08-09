@@ -10,6 +10,8 @@
 1. Mở Chrome → `chrome://extensions`
 2. Bật **Developer mode** (góc trên bên phải)
 3. **Load unpacked** → chọn đúng thư mục `chrome-extension` (có `manifest.json` bên trong), ví dụ `D:\TECSOPS\chrome-extension`
+
+> Kho **TCS** (tài khoản portal độc lập): cài thêm Ext riêng `chrome-extension-tcs` — xem README trong thư mục đó. Hai Ext chạy song song; Ops chọn đúng kho rồi Đồng bộ.
 4. Thấy extension **TECSOPS — Điền ESID TCS** · bật (toggle xanh)
 5. Bấm icon extension trên thanh Chrome → popup hiện «Sẵn sàng · v2.0.10…»
 

@@ -32,6 +32,29 @@ export async function syncBookGoogleSheet(
   return data as SheetBookSyncResult;
 }
 
+export async function syncBookLocalCsv(
+  sessionDate: string,
+  opts: { csvText: string; fileName?: string }
+): Promise<SheetBookSyncResult> {
+  const res = await fetch("/api/sheets/book/sync-local", {
+    ...credFetch,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sessionDate,
+      csvText: opts.csvText,
+      fileName: opts.fileName || "upload.csv",
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      typeof data?.error === "string" ? data.error : "Không đọc được file CSV/TSV."
+    );
+  }
+  return data as SheetBookSyncResult;
+}
+
 export async function applyBookGoogleSheetRows(
   sessionDate: string,
   indices: number[],

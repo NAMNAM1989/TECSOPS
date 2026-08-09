@@ -1,13 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "TECSOPS — TCS ESID & SCSC eCargo",
-  "version": "2.3.0",
-  "description": "Điền ESID TCS và đăng ký eCargo SCSC (VCT) 1-click OTP+QR từ TECSOPS.",
+  "name": "TECSOPS — Kho TCS ESID",
+  "version": "1.1.0",
+  "description": "Điền ESID cho kho TCS (tài khoản độc lập, không dùng chung session với Ext TECS-TCS).",
   "permissions": ["tabs", "scripting", "storage"],
   "host_permissions": [
     "https://www.tcs.com.vn/*",
     "https://tcs.com.vn/*",
-    "https://ecargo.scsc.vn/*",
     "http://127.0.0.1:8765/*",
     "http://localhost:8765/*",
     "http://localhost:5173/*",
@@ -21,7 +20,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "TECSOPS · Điền ESID",
+    "default_title": "TECSOPS · Kho TCS ESID",
     "default_popup": "popup.html"
   },
   "content_scripts": [
@@ -40,11 +39,6 @@
     {
       "matches": ["https://www.tcs.com.vn/*", "https://tcs.com.vn/*"],
       "js": ["content-tcs.js"],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": ["https://ecargo.scsc.vn/*"],
-      "js": ["content-ecargo.js"],
       "run_at": "document_idle"
     }
   ],

@@ -4,6 +4,7 @@ import {
   canPrintCsd,
   csdCarrierForShipment,
   csdDownloadFilename,
+  csdRaForWarehouse,
   getCsdCarrierProfile,
   isCsdFdFlight,
   isCsdThFlight,
@@ -32,12 +33,20 @@ describe("csdForms", () => {
     expect(canPrintCsd({ flight: "TH621", awb: "123" })).toBe(false);
   });
 
-  it("build TH: awb + dest + goods + transfer; không ép origin", () => {
+  it("map mã RA theo 3 kho hoạt động", () => {
+    expect(csdRaForWarehouse("TECS-TCS").raCode).toBe("VN/RA3/00013-01");
+    expect(csdRaForWarehouse("TECS-SCSC").raCode).toBe("VN/RA3/00013-01");
+    expect(csdRaForWarehouse("SCSC").raCode).toBe("VN/RA3/00009-01");
+    expect(csdRaForWarehouse("TCS").raCode).toBe("VN/RA3/00010-01");
+  });
+
+  it("build TH: awb + dest + goods + transfer + RA; không ép origin", () => {
     const f = buildCsdFields(
       {
         awb: "21712345675",
         dest: "bkk",
         goodsDescriptionPrint: "CLOTHES PANTS",
+        warehouse: "SCSC",
       },
       "TH",
       { transfer: "cnx" }
@@ -47,16 +56,24 @@ describe("csdForms", () => {
     expect(f.goods).toBe("CLOTHES PANTS");
     expect(f.origin).toBeUndefined();
     expect(f.transfer).toBe("CNX");
+    expect(f.raCode).toBe("VN/RA3/00009-01");
+    expect(f.opsTeam).toBe("SCSC");
   });
 
-  it("build FD: origin mặc định SGN + transfer", () => {
+  it("build FD: origin mặc định SGN + transfer + RA TECS", () => {
     const f = buildCsdFields(
-      { awb: "21712345675", dest: "HKT", goodsDescriptionPrint: "X" },
+      {
+        awb: "21712345675",
+        dest: "HKT",
+        goodsDescriptionPrint: "X",
+        warehouse: "TECS-TCS",
+      },
       "FD",
       { transfer: "BKK" }
     );
     expect(f.origin).toBe("SGN");
     expect(f.transfer).toBe("BKK");
+    expect(f.raCode).toBe("VN/RA3/00013-01");
   });
 
   it("normalizeCsdTransfer chuẩn hoá mã IATA", () => {
@@ -75,12 +92,12 @@ describe("csdForms", () => {
     expect(suggestCsdTransfer("HKT", "FD")).toBe("DMK");
   });
 
-  it("tên file tải về theo AWB", () => {
-    expect(csdDownloadFilename("TH", "217-12345675")).toBe(
-      "CSD-TH-217-12345675.pdf"
+  it("tên file tải về theo kho + hãng + AWB", () => {
+    expect(csdDownloadFilename("TH", "217-12345675", "SCSC")).toBe(
+      "CSD-SCSC-TH-217-12345675.pdf"
     );
-    expect(csdDownloadFilename("FD", "21712345675")).toBe(
-      "CSD-FD-217-12345675.pdf"
+    expect(csdDownloadFilename("FD", "21712345675", "TECS")).toBe(
+      "CSD-TECS-FD-217-12345675.pdf"
     );
   });
 

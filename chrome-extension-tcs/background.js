@@ -1,8 +1,8 @@
 /**
- * TECSOPS TCS workspace owner.
+ * TECSOPS — Kho TCS (direct) workspace owner.
  *
- * Extension giữ một tab TCS được ghim và là controller duy nhất khi chạy
- * extension mode. Playwright chỉ là fallback do Ops quyết định.
+ * Session / credential / tab tách hẳn Ext TECS-TCS (chrome-extension/).
+ * Không hỗ trợ eCargo — dùng Ext hub.
  */
 
 const LOGIN_URL = "https://www.tcs.com.vn/AwbLogin";
@@ -11,10 +11,12 @@ const ECARGO_CREATE_URL = "https://ecargo.scsc.vn/Export/VCTOrder/Create";
 const EXT_VERSION = chrome.runtime.getManifest().version;
 const EXPECTED_SCRIPT_VERSION = "2.0.20";
 const EXPECTED_ECARGO_SCRIPT_VERSION = "2.2.14";
-const SESSION_KEY = "tecsopsTcsSessionCredentials";
-const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
-const WORKSPACE_KEY = "tecsopsTcsWorkspace";
-const INDEX_KEY = "tecsopsTcsWorkspaceIndex";
+/** Keys riêng — không đụng storage Ext TECS-TCS. */
+const SESSION_KEY = "tecsopsTcsDirectSessionCredentials";
+const LOCAL_KEY = "tecsopsTcsDirectRememberedCredentials";
+const WORKSPACE_KEY = "tecsopsTcsDirectWorkspace";
+const INDEX_KEY = "tecsopsTcsDirectWorkspaceIndex";
+const PORTAL_WAREHOUSE = "TCS";
 
 let workspace = {
   phase: "IDLE",
@@ -39,7 +41,7 @@ const workspaceReady = chrome.storage.session.get([WORKSPACE_KEY, INDEX_KEY]).th
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.info("[tecsops-ext] installed", EXT_VERSION);
+  console.info("[tecsops-ext-tcs-direct] installed", EXT_VERSION);
 });
 
 /** Gọi sendResponse đúng 1 lần; nuốt lỗi kênh đã đóng (tránh spam Errors trên chrome://extensions). */
@@ -85,6 +87,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           type: "PONG",
           version: EXT_VERSION,
           extensionId: chrome.runtime.id,
+          portalWarehouse: PORTAL_WAREHOUSE,
           workspace,
         })
       )
@@ -126,52 +129,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
-  if (msg.type === "ECARGO_OPEN") {
-    void withServiceWorkerKeepAlive(findOrOpenEcargoTab({ active: true, pinned: true }))
-      .then((tabId) => reply({ ok: true, tabId, workspace }))
-      .catch((err) => reply(errorResult("OPEN_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "FILL_ECARGO_VCT") {
-    void withServiceWorkerKeepAlive(fillEcargoOnTab(msg.payload))
-      .then(reply)
-      .catch((err) => reply(errorResult("FILL_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "REGISTER_ECARGO_VCT") {
-    void withServiceWorkerKeepAlive(registerEcargoOnTab(msg.payload))
-      .then(reply)
-      .catch((err) => reply(errorResult("REGISTER_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "ECARGO_LOOKUP_AGENT") {
-    void withServiceWorkerKeepAlive(lookupEcargoAgentOnTab(msg.payload))
-      .then(reply)
-      .catch((err) => reply(errorResult("LOOKUP_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "ECARGO_OTP_WAIT") {
-    void withServiceWorkerKeepAlive(ecargoOtpWait(msg))
-      .then(reply)
-      .catch((err) => reply(errorResult("OTP_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "ECARGO_RESULT_FROM_MAIL") {
-    void withServiceWorkerKeepAlive(ecargoResultFromMail(msg))
-      .then(reply)
-      .catch((err) => reply(errorResult("MAIL_RESULT_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "ECARGO_SAVE_RESULT") {
-    void withServiceWorkerKeepAlive(ecargoSaveResult(msg))
-      .then(reply)
-      .catch((err) => reply(errorResult("SAVE_FAILED", err)));
+  if (
+    String(msg.type || "").startsWith("ECARGO_") ||
+    msg.type === "FILL_ECARGO_VCT" ||
+    msg.type === "REGISTER_ECARGO_VCT"
+  ) {
+    reply({
+      ok: false,
+      error: "WRONG_EXTENSION",
+      message:
+        "Ext kho TCS không hỗ trợ eCargo — dùng Ext «TECSOPS — TCS ESID & SCSC eCargo».",
+      version: EXT_VERSION,
+      portalWarehouse: PORTAL_WAREHOUSE,
+      workspace,
+    });
     return true;
   }
 

@@ -133,6 +133,7 @@ export function sheetRowToPatch(row, sessionDate, customers, lookupCustomerCode,
     customer,
     customerCode: lookupCustomerCode(customers, customer),
     customerId: lookupCustomerId(customers, customer),
+    shipperNamePrint: row.shipperNamePrint || "",
     consigneeNamePrint: row.consigneeNamePrint,
   };
   // Sheet BOOK thường không có DIM — không ghi null để khỏi xóa volume đã đo trên Ops.
@@ -170,6 +171,7 @@ export function sheetRowToUpdatePatch(row, sessionDate, customers, lookupCustome
     patch.customerId = lookupCustomerId(customers, customer);
   }
 
+  if (normStr(row.shipperNamePrint)) patch.shipperNamePrint = row.shipperNamePrint;
   if (normStr(row.consigneeNamePrint)) patch.consigneeNamePrint = row.consigneeNamePrint;
 
   if (row.dimWeightKg != null && Number.isFinite(Number(row.dimWeightKg))) {
@@ -206,6 +208,7 @@ export function sheetRowNeedsUpdate(existing, row, sessionDate, customers, looku
   if (patchFieldDiffers(existing, patch, "kg", "num")) return true;
   if (patchFieldDiffers(existing, patch, "dimWeightKg", "num")) return true;
   if (patchFieldDiffers(existing, patch, "note", "str")) return true;
+  if (patchFieldDiffers(existing, patch, "shipperNamePrint", "str")) return true;
   if (patchFieldDiffers(existing, patch, "consigneeNamePrint", "str")) return true;
   return false;
 }

@@ -2,7 +2,9 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
+  type DragEvent,
   type MutableRefObject,
 } from "react";
 import {
@@ -14,6 +16,7 @@ import {
   applyBookGoogleSheetRows,
   fetchBookSheetConfig,
   syncBookGoogleSheet,
+  syncBookLocalCsv,
 } from "../utils/googleSheetBookApi";
 import { parseGoogleSheetLink } from "../utils/googleSheetUrl";
 import {
@@ -26,6 +29,18 @@ import type { Warehouse } from "../types/shipment";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { MOBILE } from "../styles/mobileOpsStyles";
 import { Banner, Button } from "../ui";
+import { trackAiEvent } from "../utils/aiOpsClient";
+import {
+  loadSheetBookUrl,
+  loadSheetColMapping,
+  loadSheetWarehouseFilter,
+  saveSheetBookUrl,
+  saveSheetColMapping,
+  saveSheetWarehouseFilter,
+  sheetHeaderFingerprint,
+  clearSheetColMapping,
+  type SheetWarehouseFilter,
+} from "../utils/sheetImportPrefs";
 
 export type SheetImportAppliedMeta = {
   appliedByWarehouse: Partial<Record<Warehouse, number>>;
@@ -52,13 +67,13 @@ type Props = {
   ) => void;
 };
 
-const SHEET_URL_STORAGE_KEY = "tecsops.sheetBookUrl";
-
-type WarehouseFilter = Warehouse | "ALL";
+type WarehouseFilter = SheetWarehouseFilter;
 
 function rowWarehouse(row: SheetBookSyncRow): Warehouse {
   return normalizeWarehouse(row.warehouse);
 }
+
+const MAX_LOCAL_FILE_BYTES = 8_000_000;
 
 function countByWarehouse(
   rows: { warehouse?: string }[],
@@ -98,13 +113,7 @@ export function GoogleSheetImportModal({
   onApplied,
 }: Props) {
   const isMobile = useIsMobile();
-  const [sheetUrl, setSheetUrl] = useState(() => {
-    try {
-      return localStorage.getItem(SHEET_URL_STORAGE_KEY) ?? "";
-    } catch {
-      return "";
-    }
-  });
+  const [sheetUrl, setSheetUrl] = useState(() => loadSheetBookUrl());
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [sync, setSync] = useState<SheetBookSyncResult | null>(null);
@@ -114,8 +123,18 @@ export function GoogleSheetImportModal({
     { awb: string; error: string }[]
   >([]);
   const [showErrors, setShowErrors] = useState(false);
-  const [warehouseFilter, setWarehouseFilter] =
-    useState<WarehouseFilter>("ALL");
+  const [warehouseFilter, setWarehouseFilter] = useState<WarehouseFilter>(() =>
+    loadSheetWarehouseFilter()
+  );
+  const [dragOver, setDragOver] = useState(false);
+  const [mappingWarn, setMappingWarn] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastDropTokenRef = useRef("");
+
+  useEffect(() => {
+    if (!open) return;
+    trackAiEvent("sheet.modal.open", { sessionYmd, warehouse: activeWarehouse });
+  }, [open, sessionYmd, activeWarehouse]);
 
   /** Luôn chọn mọi dòng nhập được (cả TCS + SCSC) — không giới hạn theo chip lọc xem. */
   const selectAllImportable = useCallback((result: SheetBookSyncResult) => {
@@ -149,11 +168,7 @@ export function GoogleSheetImportModal({
         setSync(null);
         return;
       }
-      try {
-        localStorage.setItem(SHEET_URL_STORAGE_KEY, sheetUrl.trim());
-      } catch {
-        /* ignore */
-      }
+      saveSheetBookUrl(sheetUrl);
       if (sheetSyncPrefetchRef) sheetSyncPrefetchRef.current = null;
       setLoading(true);
       setError(null);
@@ -172,14 +187,39 @@ export function GoogleSheetImportModal({
             ? `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/edit?gid=${resolvedGid}#gid=${resolvedGid}`
             : `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/edit`;
           setSheetUrl(cleanUrl);
-          try {
-            localStorage.setItem(SHEET_URL_STORAGE_KEY, cleanUrl);
-          } catch {
-            /* ignore */
-          }
+          saveSheetBookUrl(cleanUrl);
         }
         setSync(result);
         setSelected(selectAllImportable(result));
+        const headers =
+          (result as SheetBookSyncResult & { headerPreview?: string[] })
+            .headerPreview ?? [];
+        if (headers.length) {
+          const fp = sheetHeaderFingerprint(headers);
+          const saved = loadSheetColMapping(result.spreadsheetId);
+          if (saved && saved.headerFingerprint !== fp) {
+            setMappingWarn(
+              "Cấu trúc cột Sheet đã đổi so với lần trước — hãy kiểm tra lại preview trước khi nhập."
+            );
+          } else {
+            setMappingWarn(null);
+            if (saved) {
+              trackAiEvent("sheet.mapping.restored", {
+                spreadsheetId: String(result.spreadsheetId || "").slice(0, 24),
+              });
+            }
+            saveSheetColMapping({
+              headerFingerprint: fp,
+              colMap: Object.fromEntries(headers.map((h, i) => [h || `c${i}`, i])),
+              updatedAt: new Date().toISOString(),
+              spreadsheetId: result.spreadsheetId,
+            });
+          }
+        }
+        trackAiEvent("sheet.preview.ok", {
+          total: result.total,
+          importable: result.importable,
+        });
       } catch (e) {
         setSync(null);
         setError(e instanceof Error ? e.message : String(e));
@@ -190,6 +230,46 @@ export function GoogleSheetImportModal({
     [sessionYmd, sheetUrl, sheetSyncPrefetchRef, selectAllImportable, loading, applying],
   );
 
+  const ingestLocalFile = useCallback(
+    async (file: File) => {
+      if (loading || applying) return;
+      const name = file.name || "upload.csv";
+      const lower = name.toLowerCase();
+      if (!/\.(csv|tsv|txt)$/.test(lower)) {
+        setError("Chỉ hỗ trợ file .csv / .tsv / .txt (hoặc dán URL Google Sheet).");
+        return;
+      }
+      if (file.size > MAX_LOCAL_FILE_BYTES) {
+        setError("File quá lớn (tối đa ~8MB).");
+        return;
+      }
+      const token = `${name}:${file.size}:${file.lastModified}`;
+      if (lastDropTokenRef.current === token) return;
+      lastDropTokenRef.current = token;
+      setLoading(true);
+      setError(null);
+      setApplyErrors([]);
+      try {
+        const csvText = await file.text();
+        const result = await syncBookLocalCsv(sessionYmd, { csvText, fileName: name });
+        setSync(result);
+        setSelected(selectAllImportable(result));
+        trackAiEvent("sheet.preview.ok", {
+          total: result.total,
+          importable: result.importable,
+          source: "local-file",
+        });
+        setMappingWarn(null);
+      } catch (e) {
+        setSync(null);
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loading, applying, sessionYmd, selectAllImportable],
+  );
+
   useEffect(() => {
     if (!open) {
       setLoading(false);
@@ -198,9 +278,11 @@ export function GoogleSheetImportModal({
       setApplyErrors([]);
       setShowErrors(false);
       setSelected(new Set());
+      setMappingWarn(null);
+      lastDropTokenRef.current = "";
       return;
     }
-    setWarehouseFilter("ALL");
+    setWarehouseFilter(loadSheetWarehouseFilter());
   }, [open, sessionYmd]);
 
   useEffect(() => {
@@ -216,7 +298,37 @@ export function GoogleSheetImportModal({
 
   const applyWarehouseFilter = (next: WarehouseFilter) => {
     setWarehouseFilter(next);
+    saveSheetWarehouseFilter(next);
     // Chỉ lọc danh sách xem — giữ nguyên selection (tránh bỏ sót SCSC khi đang xem TCS).
+  };
+
+  const onDropZoneDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  };
+  const onDropZoneDragLeave = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  };
+  const onDropZoneDrop = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      void ingestLocalFile(file);
+      return;
+    }
+    const uri =
+      e.dataTransfer.getData("text/uri-list") ||
+      e.dataTransfer.getData("text/plain");
+    const link = String(uri || "").trim().split(/\r?\n/)[0] || "";
+    if (link.includes("docs.google.com") || link.includes("spreadsheets")) {
+      setSheetUrl(link);
+      saveSheetBookUrl(link);
+    }
   };
 
   const toggle = (index: number) => {
@@ -262,6 +374,11 @@ export function GoogleSheetImportModal({
       (wh) => wh !== warehouseFilter && selectedBreakdown[wh] > 0,
     );
 
+  const handleClose = () => {
+    trackAiEvent("sheet.modal.close");
+    onClose();
+  };
+
   const onApply = async () => {
     if (!sync || selected.size === 0 || applying || loading) return;
     setApplying(true);
@@ -281,16 +398,21 @@ export function GoogleSheetImportModal({
         preferredWarehouseFromCounts(appliedByWarehouse, activeWarehouse) ??
         activeWarehouse;
       const errs = result.errors ?? [];
-      onApplied(
-        result.appliedCount + (result.updatedCount ?? 0),
-        result.state,
+      const appliedTotal = result.appliedCount + (result.updatedCount ?? 0);
+      trackAiEvent(
+        result.errorCount > 0 ? "sheet.apply.partial" : "sheet.apply.ok",
         {
-          appliedByWarehouse,
-          preferredWarehouse: preferred,
-          errorCount: result.errorCount,
-          errors: errs,
+          applied: appliedTotal,
+          errorCount: result.errorCount ?? 0,
+          selected: selected.size,
         },
       );
+      onApplied(appliedTotal, result.state, {
+        appliedByWarehouse,
+        preferredWarehouse: preferred,
+        errorCount: result.errorCount,
+        errors: errs,
+      });
       if (result.errorCount > 0) {
         setApplyErrors(errs);
         setShowErrors(true);
@@ -298,9 +420,12 @@ export function GoogleSheetImportModal({
           `Nhập một phần: ${result.appliedCount} mới · ${result.updatedCount ?? 0} cập nhật · ${result.errorCount} lỗi.`,
         );
       } else {
-        onClose();
+        handleClose();
       }
     } catch (e) {
+      trackAiEvent("sheet.apply.fail", {
+        error: e instanceof Error ? e.message.slice(0, 80) : "unknown",
+      });
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setApplying(false);
@@ -316,7 +441,7 @@ export function GoogleSheetImportModal({
   return (
     <div
       className={`fixed inset-0 z-[480] flex bg-black/40 p-0 ${isMobile ? "flex-col justify-end" : "items-end justify-center sm:items-center sm:p-4"}`}
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         className={shellClass}
@@ -345,7 +470,7 @@ export function GoogleSheetImportModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="shrink-0 rounded-lg px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100"
           >
             Đóng
@@ -353,9 +478,58 @@ export function GoogleSheetImportModal({
         </header>
 
         <div className="space-y-2 border-b border-ui-border px-4 py-2">
+          <div
+            onDragOver={onDropZoneDragOver}
+            onDragLeave={onDropZoneDragLeave}
+            onDrop={onDropZoneDrop}
+            className={`rounded-xl border-2 border-dashed px-3 py-3 transition ${
+              dragOver
+                ? "border-emerald-500 bg-emerald-50/80"
+                : "border-ui-border bg-ui-surface-muted/40"
+            }`}
+          >
+            <p className="text-[11px] font-semibold text-ui-text">
+              Kéo thả file CSV/TSV hoặc link Google Sheet vào đây
+            </p>
+            <p className="mt-0.5 text-[10px] text-ui-text-muted">
+              Hoặc chọn file · vẫn giữ URL Google Sheet bên dưới.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={loading || applying}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Chọn file…
+              </Button>
+              <button
+                type="button"
+                className="text-[10px] font-semibold text-ui-text-muted underline hover:text-ui-text"
+                onClick={() => {
+                  clearSheetColMapping();
+                  setMappingWarn(null);
+                }}
+              >
+                Đặt lại mapping đã lưu
+              </button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void ingestLocalFile(f);
+                e.target.value = "";
+              }}
+            />
+          </div>
           <label className="block">
             <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
-              URL Google Sheet (bắt buộc mỗi lần)
+              URL Google Sheet
             </span>
             <input
               type="url"
@@ -367,9 +541,14 @@ export function GoogleSheetImportModal({
             />
             <p className="mt-1 text-[10px] leading-snug text-ui-text-muted">
               Dán link tab đang mở trên Google (có gid) hoặc link file. Share «Anyone with the link
-              can view». Bấm «Tải dòng» sau khi dán.
+              can view». Bấm «Tải dòng» sau khi dán. Mapping cột lần trước được nhớ theo spreadsheet.
             </p>
           </label>
+          {mappingWarn ? (
+            <Banner tone="warning" title="Cột Sheet đã đổi">
+              {mappingWarn}
+            </Banner>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
@@ -425,18 +604,20 @@ export function GoogleSheetImportModal({
           </div>
           {sync && (
             <span className="text-xs leading-snug text-zinc-500">
-              {sync.total} lô · {sync.newCount ?? 0} mới
-              {(sync.updateCount ?? 0) > 0
-                ? ` · ${sync.updateCount} cập nhật`
+              Tổng {sync.total} · hợp lệ {sync.importable}
+              {(sync.newCount ?? 0) > 0 ? ` · mới ${sync.newCount}` : ""}
+              {(sync.updateCount ?? 0) > 0 ? ` · cập nhật ${sync.updateCount}` : ""}
+              {(sync.sheetDuplicateCount ?? 0) + (sync.awbTakenCount ?? 0) > 0
+                ? ` · cảnh báo ${(sync.sheetDuplicateCount ?? 0) + (sync.awbTakenCount ?? 0)}`
                 : ""}
-              {(sync.sheetDuplicateCount ?? 0) > 0
-                ? ` · ${sync.sheetDuplicateCount} trùng Sheet`
-                : ""}
-              {(sync.awbTakenCount ?? 0) > 0
-                ? ` · ${sync.awbTakenCount} AWB đã có`
+              {(sync.total ?? 0) - (sync.importable ?? 0) > 0
+                ? ` · lỗi/chặn ${(sync.total ?? 0) - (sync.importable ?? 0)}`
                 : ""}
               {sync.skippedByDate > 0
                 ? ` · bỏ ${sync.skippedByDate} ngày khác`
+                : ""}
+              {(sync as { fileName?: string }).fileName
+                ? ` · file ${(sync as { fileName?: string }).fileName}`
                 : ""}
             </span>
           )}

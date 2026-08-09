@@ -252,8 +252,19 @@ export function AirCargoTracking({
   );
 
   const onUpdate = useCallback(
-    (id: string, patch: Partial<Shipment>) => {
-      void runMutate({ action: "UPDATE", id, patch });
+    async (id: string, patch: Partial<Shipment>) => {
+      const fields = Object.keys(patch);
+      if (fields.length === 0) return true;
+      const result = await runMutate({ action: "UPDATE", id, patch });
+      return Boolean(result);
+    },
+    [runMutate]
+  );
+
+  const onUpdateCustomers = useCallback(
+    async (customers: CustomerDirectoryEntry[]) => {
+      const result = await runMutate({ action: "SET_CUSTOMERS", customers });
+      return Boolean(result);
     },
     [runMutate]
   );
@@ -287,7 +298,7 @@ export function AirCargoTracking({
       setStatusFilter("RECEPTION_COMPLETED");
       setSearchQuery("");
       setFlightDateFilter("");
-      setActiveWarehouse("TECS-TCS");
+      // Giữ kho đang thao tác (TECS-TCS hoặc TCS) — không nhảy sang kho kia.
     },
     []
   );
@@ -299,6 +310,7 @@ export function AirCargoTracking({
     onMarkReceptionCompleted,
     onReceptionScanDone,
     active: isTcsWarehouse(activeWarehouse),
+    portalWarehouse: activeWarehouse,
   });
 
   const onDelete = useCallback(
@@ -820,6 +832,7 @@ export function AirCargoTracking({
           onSelectRow={setSelectedId}
           onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
           onUpdate={onUpdate}
+          onUpdateCustomers={onUpdateCustomers}
           onDelete={onDelete}
           onPrint={requestPrintLabel}
           viewSessionYmd={selectedYmd}

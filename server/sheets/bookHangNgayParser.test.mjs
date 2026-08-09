@@ -257,6 +257,7 @@ describe("parseBookHangNgayGrid", () => {
     expect(rows[0].kg).toBe(65);
     expect(rows[0].dimWeightKg).toBe(68);
     expect(rows[0].note).toBe("TACT 100");
+    expect(rows[0].shipperNamePrint).toBe("SHIPPER CO");
     expect(rows[0].consigneeNamePrint).toBe("CNEE CO");
     expect(rows[0].flightDate).toBe("14JUL");
   });

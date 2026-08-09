@@ -50,6 +50,10 @@ export type SheetBookSyncResult = {
   sheetDuplicateCount?: number;
   awbTakenCount?: number;
   rows: SheetBookSyncRow[];
+  /** sync-local file upload */
+  source?: string;
+  fileName?: string;
+  headerPreview?: string[];
 };
 
 export type SheetBookApplyResult = {

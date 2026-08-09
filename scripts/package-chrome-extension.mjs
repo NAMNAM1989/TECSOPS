@@ -145,3 +145,46 @@ fs.writeFileSync(versionedPath, archive);
 console.info(
   `[extension:package] v${manifest.version} · ${versionedName} · ${entries.length} files · ${archive.length} bytes`
 );
+
+/** Ext B — kho TCS (tài khoản độc lập). */
+const directDir = path.join(root, "chrome-extension-tcs");
+const directManifest = JSON.parse(
+  fs.readFileSync(path.join(directDir, "manifest.json"), "utf8")
+);
+const directFiles = [
+  "manifest.json",
+  "background.js",
+  "content-ops.js",
+  "content-tcs.js",
+  "popup.html",
+  "popup.js",
+  "locators.json",
+  "INSTALL.txt",
+  "README.md",
+];
+const directInstall = `TECSOPS — Kho TCS ESID v${directManifest.version}
+
+Ext riêng cho kho TCS (tài khoản portal độc lập với Ext TECS-TCS).
+
+1. Giải nén ZIP vào thư mục cố định.
+2. chrome://extensions → Load unpacked → chọn thư mục này.
+3. Giữ luôn Ext TECS hub nếu vẫn dùng TECS-TCS / eCargo.
+4. F5 Ops → chọn kho TCS → Đồng bộ.
+`;
+const directEntries = [
+  ...directFiles.map((name) => ({
+    name,
+    data: fs.readFileSync(path.join(directDir, name)),
+  })),
+  { name: "INSTALL.txt", data: Buffer.from(directInstall, "utf8") },
+];
+const directArchive = createZip(directEntries);
+const directVersioned = `tecsops-chrome-extension-tcs-v${directManifest.version}.zip`;
+fs.writeFileSync(
+  path.join(outputDir, "tecsops-chrome-extension-tcs.zip"),
+  directArchive
+);
+fs.writeFileSync(path.join(outputDir, directVersioned), directArchive);
+console.info(
+  `[extension:package:tcs] v${directManifest.version} · ${directVersioned} · ${directEntries.length} files · ${directArchive.length} bytes`
+);

@@ -1,5 +1,10 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import type { Shipment } from "../types/shipment";
+import {
+  normalizeWarehouse,
+  opsTeamOf,
+  type OpsTeam,
+} from "../constants/warehouses";
+import type { Shipment, Warehouse } from "../types/shipment";
 import { awbDigitsKey, formatAwb } from "./awbFormat";
 import { loadLastCsdTransfer, saveLastCsdTransfer } from "./csdPrintPrefs";
 
@@ -18,6 +23,25 @@ export type CsdCarrierProfile = {
   defaultOrigin?: string;
   transferPresets: readonly string[];
 };
+
+/** Mã RA §1 theo 3 kho hoạt động (TECS / TCS / SCSC) — chỉ đóng dấu mã, không ghi tên kho. */
+export type CsdRaProfile = {
+  opsTeam: OpsTeam;
+  raCode: string;
+};
+
+export const CSD_RA_BY_OPS_TEAM: Record<OpsTeam, CsdRaProfile> = {
+  TECS: { opsTeam: "TECS", raCode: "VN/RA3/00013-01" },
+  SCSC: { opsTeam: "SCSC", raCode: "VN/RA3/00009-01" },
+  TCS: { opsTeam: "TCS", raCode: "VN/RA3/00010-01" },
+};
+
+export function csdRaForWarehouse(
+  warehouse: Warehouse | string | undefined | null
+): CsdRaProfile {
+  const team = opsTeamOf(normalizeWarehouse(warehouse));
+  return CSD_RA_BY_OPS_TEAM[team];
+}
 
 /** Origin mặc định CSD FD (form TH đã in sẵn SGN). */
 export const CSD_FD_DEFAULT_ORIGIN = "SGN";
@@ -60,6 +84,9 @@ export type CsdFillFields = {
   origin?: string;
   /** Mã sân bay Transfer/Transit (1–n điểm, vd. BKK hoặc BKK/CNX). */
   transfer?: string;
+  /** Mã RA theo kho lô (đóng dấu §1). */
+  raCode?: string;
+  opsTeam?: OpsTeam;
 };
 
 export type PrintCsdOptions = {
@@ -164,16 +191,19 @@ export function wrapCsdGoodsLines(text: string, maxChars = 72): string[] {
 }
 
 export function buildCsdFields(
-  s: Pick<Shipment, "awb" | "dest" | "goodsDescriptionPrint">,
+  s: Pick<Shipment, "awb" | "dest" | "goodsDescriptionPrint" | "warehouse">,
   carrier: CsdCarrier,
   overrides?: Pick<PrintCsdOptions, "transfer" | "origin">
 ): CsdFillFields {
   const profile = getCsdCarrierProfile(carrier);
+  const ra = csdRaForWarehouse(s.warehouse);
   const digits = awbDigitsKey(s.awb);
   const base: CsdFillFields = {
     awb: digits.length === 11 ? formatAwb(digits) : (s.awb || "").trim(),
     goods: (s.goodsDescriptionPrint || "").trim(),
     dest: (s.dest || "").trim().toUpperCase().slice(0, 3),
+    raCode: ra.raCode,
+    opsTeam: ra.opsTeam,
   };
   if (profile.showOrigin) {
     const origin =
@@ -191,7 +221,7 @@ export function buildCsdFields(
 
 /** @deprecated */
 export function buildCsdFdFields(
-  s: Pick<Shipment, "awb" | "dest" | "goodsDescriptionPrint">
+  s: Pick<Shipment, "awb" | "dest" | "goodsDescriptionPrint" | "warehouse">
 ): CsdFillFields & { origin: string } {
   return buildCsdFields(s, "FD") as CsdFillFields & { origin: string };
 }
@@ -217,14 +247,22 @@ const LAYOUT_FD = {
   dest: { x: 230, yTop: 325, size: 14 },
   /** §6 Transfer/Transit Points — dưới nhãn, trên đường gạch. */
   transfer: { x: 340, yTop: 332, size: 13 },
+  /** §1 tick Regulated Agent + mã RA trên đường gạch. */
+  raCheck: { x: 64, yTop: 155, size: 11 },
+  raCode: { x: 175, yTop: 155, size: 9 },
 } as const;
 
-/** Layout TH — AirWaybill No / Contents / Destination / Transfer. */
+/** Layout TH — AirWaybill No / Contents / Destination / Transfer + RA overlay. */
 const LAYOUT_TH = {
   awb: { x: 375, yTop: 144, size: 13 },
   goods: { x: 80, yTop: 230, size: 12 },
   dest: { x: 255, yTop: 300, size: 14 },
   transfer: { x: 340, yTop: 300, size: 13 },
+  /** Chỉ phủ/ghi lại dòng mã RA (giữ nguyên tên entity trên mẫu). */
+  raWipe: { x: 78, yTop: 178, w: 100, h: 16 },
+  raCode: { x: 79.2, yTop: 188, size: 9 },
+  footerWipe: { x: 78, yTop: 575, w: 100, h: 20 },
+  footerRa: { x: 79.2, yTop: 588, size: 9 },
 } as const;
 
 async function loadTemplate(carrier: CsdCarrier): Promise<ArrayBuffer> {
@@ -238,6 +276,29 @@ async function loadTemplate(carrier: CsdCarrier): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
+function wipeRect(
+  page: {
+    drawRectangle: (opts: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      color: ReturnType<typeof rgb>;
+      borderWidth: number;
+    }) => void;
+  },
+  box: { x: number; yTop: number; w: number; h: number }
+) {
+  page.drawRectangle({
+    x: box.x,
+    y: PAGE_H - box.yTop - box.h,
+    width: box.w,
+    height: box.h,
+    color: rgb(1, 1, 1),
+    borderWidth: 0,
+  });
+}
+
 export async function fillCsdPdfBytes(
   carrier: CsdCarrier,
   fields: CsdFillFields,
@@ -249,6 +310,7 @@ export async function fillCsdPdfBytes(
   if (!page) throw new Error(`Mẫu CSD ${carrier} không có trang.`);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const ink = rgb(0, 0, 0);
+  const raCode = (fields.raCode || "").trim();
 
   const draw = (text: string, x: number, y: number, size: number) => {
     const t = text.trim();
@@ -257,6 +319,20 @@ export async function fillCsdPdfBytes(
   };
 
   if (carrier === "FD") {
+    if (raCode) {
+      draw(
+        "X",
+        LAYOUT_FD.raCheck.x,
+        topYToPdfLibBaseline(LAYOUT_FD.raCheck.yTop),
+        LAYOUT_FD.raCheck.size
+      );
+      draw(
+        raCode,
+        LAYOUT_FD.raCode.x,
+        topYToPdfLibBaseline(LAYOUT_FD.raCode.yTop),
+        LAYOUT_FD.raCode.size
+      );
+    }
     draw(
       fields.awb,
       LAYOUT_FD.awb.x,
@@ -289,6 +365,22 @@ export async function fillCsdPdfBytes(
       );
     }
   } else {
+    if (raCode) {
+      wipeRect(page, LAYOUT_TH.raWipe);
+      draw(
+        raCode,
+        LAYOUT_TH.raCode.x,
+        topYToPdfLibBaseline(LAYOUT_TH.raCode.yTop),
+        LAYOUT_TH.raCode.size
+      );
+      wipeRect(page, LAYOUT_TH.footerWipe);
+      draw(
+        raCode,
+        LAYOUT_TH.footerRa.x,
+        topYToPdfLibBaseline(LAYOUT_TH.footerRa.yTop),
+        LAYOUT_TH.footerRa.size
+      );
+    }
     draw(
       fields.awb,
       LAYOUT_TH.awb.x,
@@ -329,17 +421,19 @@ export async function fillCsdFdPdfBytes(
   return fillCsdPdfBytes("FD", fields, templateBytes);
 }
 
-/** Tên file tải về — theo số AWB (+ mã hãng để phân biệt form). */
+/** Tên file tải về — theo kho + hãng + AWB. */
 export function csdDownloadFilename(
   carrier: CsdCarrier,
-  awb: string
+  awb: string,
+  opsTeam?: OpsTeam
 ): string {
   const digits = awbDigitsKey(awb);
   const label =
     digits.length === 11
       ? `${digits.slice(0, 3)}-${digits.slice(3)}`
       : digits || "draft";
-  return `CSD-${carrier}-${label}.pdf`;
+  const team = opsTeam ? `${opsTeam}-` : "";
+  return `CSD-${team}${carrier}-${label}.pdf`;
 }
 
 function downloadPdfBytes(bytes: Uint8Array, filename: string) {
@@ -392,7 +486,7 @@ export async function printCsdForShipment(
   }
 
   const bytes = await fillCsdPdfBytes(carrier, fields);
-  const filename = csdDownloadFilename(carrier, s.awb);
+  const filename = csdDownloadFilename(carrier, s.awb, fields.opsTeam);
 
   downloadPdfBytes(bytes, filename);
 

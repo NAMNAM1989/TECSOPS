@@ -4,9 +4,11 @@ import type { Shipment } from "../types/shipment";
 import { OPS } from "../styles/opsModalStyles";
 import { Button } from "../ui";
 import { trackAiEvent } from "../utils/aiOpsClient";
+import { opsTeamLabel } from "../constants/warehouses";
 import {
   buildCsdFields,
   csdCarrierForShipment,
+  csdRaForWarehouse,
   getCsdCarrierProfile,
   normalizeCsdTransfer,
   printCsdForShipment,
@@ -23,6 +25,7 @@ export function CsdPrintModal({ open, shipment, onClose }: Props) {
   const titleId = useId();
   const carrier = shipment ? csdCarrierForShipment(shipment) : null;
   const profile = carrier ? getCsdCarrierProfile(carrier) : null;
+  const ra = shipment ? csdRaForWarehouse(shipment.warehouse) : null;
 
   const [transfer, setTransfer] = useState("");
   const [origin, setOrigin] = useState("");
@@ -37,9 +40,10 @@ export function CsdPrintModal({ open, shipment, onClose }: Props) {
     setOrigin(profile.defaultOrigin || "SGN");
     trackAiEvent("csd.modal.open", {
       carrier,
+      opsTeam: ra?.opsTeam,
       dest: (shipment.dest || "").slice(0, 3),
     });
-  }, [open, shipment, carrier, profile]);
+  }, [open, shipment, carrier, profile, ra?.opsTeam]);
 
   useEffect(() => {
     if (!open) return;
@@ -70,6 +74,8 @@ export function CsdPrintModal({ open, shipment, onClose }: Props) {
       });
       trackAiEvent("csd.print.ok", {
         carrier,
+        opsTeam: ra?.opsTeam,
+        raCode: ra?.raCode,
         hasTransfer: Boolean(normTransfer),
         transfer: normTransfer.slice(0, 16),
       });
@@ -133,6 +139,14 @@ export function CsdPrintModal({ open, shipment, onClose }: Props) {
           <dl className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-1 text-[12px]">
             <dt className={OPS.muted}>AWB</dt>
             <dd className={`font-semibold tabular-nums ${OPS.title}`}>{preview.awb || "—"}</dd>
+            <dt className={OPS.muted}>Kho</dt>
+            <dd className={`font-semibold ${OPS.title}`}>
+              {ra ? `${opsTeamLabel[ra.opsTeam]} · ${shipment.warehouse}` : shipment.warehouse}
+            </dd>
+            <dt className={OPS.muted}>Mã RA</dt>
+            <dd className={`font-mono text-[11px] font-bold tracking-tight ${OPS.title}`}>
+              {preview.raCode || "—"}
+            </dd>
             <dt className={OPS.muted}>DEST</dt>
             <dd className={`font-semibold ${OPS.title}`}>{preview.dest || "—"}</dd>
             <dt className={OPS.muted}>Hàng</dt>

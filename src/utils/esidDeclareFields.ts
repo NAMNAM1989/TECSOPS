@@ -41,7 +41,7 @@ export type EsidDeclareCoreFields = {
   nature_of_goods: string;
   payment_mode: string;
   consol: false;
-  tecs_warehouse: true;
+  tecs_warehouse: boolean;
   shipper_name: string;
   shipper_address: string;
   shipper_tel: string;
@@ -120,7 +120,8 @@ export function buildEsidDeclareCoreFields(
     nature_of_goods: (s.goodsDescriptionPrint || "").trim(),
     payment_mode: ESID_DEFAULT_PAYMENT_MODE,
     consol: false,
-    tecs_warehouse: true,
+    /** Checkbox TECS trên form — chỉ bật cho kho TECS-TCS. */
+    tecs_warehouse: s.warehouse === "TECS-TCS",
     shipper_name: (s.shipperNamePrint || "").split(/\r?\n/).map((l) => l.trim()).find(Boolean) || "",
     shipper_address: (s.shipperAddressPrint || "").trim(),
     shipper_tel: (s.shipperPhonePrint || "").trim(),

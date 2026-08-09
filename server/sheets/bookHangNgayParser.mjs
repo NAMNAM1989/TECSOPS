@@ -15,6 +15,7 @@ const WAREHOUSES = new Set(["TECS-TCS", "TECS-SCSC", "TCS", "SCSC"]);
  * @property {number|null} kg
  * @property {number|null} dimWeightKg
  * @property {string} customer
+ * @property {string} shipperNamePrint
  * @property {string} consigneeNamePrint
  * @property {string} note
  * @property {number} sheetRowIndex
@@ -56,6 +57,7 @@ function headerKind(label) {
   if (h.includes("kho hang")) return "warehouse";
   if (h.includes("kien") && h.includes("kg")) return "pcsKg";
   if (h.includes("khach hang")) return "customer";
+  if (h.includes("shipper") || h.includes("nguoi gui") || h === "ship") return "shipper";
   if (h.includes("cnne") || h.includes("cnee") || h.includes("consignee")) return "consignee";
   if (h.includes("ghi chu") || h === "note" || h === "notes") return "note";
   if (h === "stt") return "stt";
@@ -87,13 +89,23 @@ const STANDARD_BOOK_COLS = {
   warehouse: 5,
   pcsKg: 6,
   customer: 7,
+  shipper: 8,
   consignee: 9,
   note: 11,
 };
 
 function mergeStandardBookCols(map) {
   if (!map) return null;
-  return { ...STANDARD_BOOK_COLS, ...map };
+  const merged = { ...STANDARD_BOOK_COLS, ...map };
+  // Layout cũ: header map CNEE vào cột I (không có cột Shipper) — tránh đọc trùng ô.
+  if (
+    map.consignee != null &&
+    map.shipper == null &&
+    map.consignee === STANDARD_BOOK_COLS.shipper
+  ) {
+    delete merged.shipper;
+  }
+  return merged;
 }
 
 function parseFlightDate(raw) {
@@ -287,6 +299,12 @@ export function parseBookHangNgayGrid(gridRows, sessionDate) {
     const warehouse = mapSheetWarehouse(cells[colMap.warehouse ?? -1] ?? "", blockDefault);
     const { pcs, kg, dimWeightKg } = parsePcsKg(cells[colMap.pcsKg ?? -1] ?? "");
     const customer = customerFromCell(cells[colMap.customer ?? -1] ?? "");
+    const shipperNamePrint =
+      colMap.shipper != null
+        ? String(cells[colMap.shipper] ?? "")
+            .trim()
+            .slice(0, 2000)
+        : "";
     const consigneeNamePrint = String(cells[colMap.consignee ?? -1] ?? "")
       .trim()
       .slice(0, 2000);
@@ -304,6 +322,7 @@ export function parseBookHangNgayGrid(gridRows, sessionDate) {
       kg,
       dimWeightKg,
       customer,
+      shipperNamePrint,
       consigneeNamePrint,
       note,
       sheetRowIndex: rowIndex,

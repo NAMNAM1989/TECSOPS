@@ -8,7 +8,7 @@ import {
 
 /** Payload gửi agent POST /esid/declare-fill */
 export type EsidDeclareFillPayload = {
-  warehouse: "TECS-TCS";
+  warehouse: "TECS-TCS" | "TCS";
   submit: false;
   confirm_submit: false;
   /** Bắt buộc chọn chuyến qua nút CHỌN CHUYẾN BAY */
@@ -46,7 +46,7 @@ export type EsidDeclareFillPayload = {
     other_request: string;
     payment_mode: string;
     total_hawbs: number;
-    tecs_warehouse: true;
+    tecs_warehouse: boolean;
     consol: false;
   };
 };
@@ -59,8 +59,9 @@ export function buildEsidDeclareFillPayload(
   const awb = awbDigitsKey(s.awb);
   if (awb.length !== 11) return null;
   const core = buildEsidDeclareCoreFields(s, registrant, agent);
+  const portalWh = s.warehouse === "TCS" ? "TCS" : "TECS-TCS";
   return {
-    warehouse: "TECS-TCS",
+    warehouse: portalWh,
     submit: false,
     confirm_submit: false,
     choose_flight: true,
@@ -97,7 +98,7 @@ export function buildEsidDeclareFillPayload(
       other_request: core.other_request,
       payment_mode: core.payment_mode,
       total_hawbs: core.total_hawbs,
-      tecs_warehouse: true,
+      tecs_warehouse: core.tecs_warehouse,
       consol: false,
     },
   };

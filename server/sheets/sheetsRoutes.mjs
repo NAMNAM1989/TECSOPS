@@ -57,6 +57,23 @@ async function loadBookGridForSession(
 ) {
   const preferred = String(preferredTab ?? "").trim();
   const gid = String(preferredGid ?? "").trim();
+  if (String(spreadsheetId || "").startsWith("local:")) {
+    const cachedSession = getCachedGridForSession(spreadsheetId, sessionDate);
+    if (cachedSession?.grid?.length) {
+      return {
+        grid: cachedSession.grid,
+        sheetTab: cachedSession.sheetTab || preferred || "local",
+        gid: "",
+      };
+    }
+    if (preferred) {
+      const cached = getCachedGrid(spreadsheetId, sessionDate, preferred);
+      if (cached?.grid?.length) {
+        return { grid: cached.grid, sheetTab: cached.sheetTab, gid: "" };
+      }
+    }
+    throw new Error("Chưa có dữ liệu file local — hãy kéo thả / tải file lại trước khi nhập.");
+  }
   if (!forceRefresh && !gid) {
     const cachedSession = getCachedGridForSession(spreadsheetId, sessionDate);
     if (
@@ -100,7 +117,7 @@ function parsedRowToShipment(row, sessionDate, customers) {
     customerGoodsId: "",
     goodsDescriptionPrint: "",
     otherRequirementsPrint: "",
-    shipperNamePrint: "",
+    shipperNamePrint: row.shipperNamePrint || "",
     shipperAddressPrint: "",
     shipperPhonePrint: "",
     shipperEmailPrint: "",
@@ -161,7 +178,8 @@ function mapSyncRow(
     note: row.note,
     customerCode,
     customerKnown: Boolean(customerCode),
-    consigneePreview: row.consigneeNamePrint.slice(0, 120),
+    shipperPreview: String(row.shipperNamePrint || "").slice(0, 120),
+    consigneePreview: String(row.consigneeNamePrint || "").slice(0, 120),
     syncStatus,
     duplicate: syncStatus === "duplicate",
     needsUpdate: syncStatus === "update",
@@ -183,10 +201,59 @@ function resolveSheetLinkFromRequest(raw, explicitGid = "") {
   if (!s) {
     return { spreadsheetId: getBookSpreadsheetId(), sheetGid: gid };
   }
+  if (s.startsWith("local:")) {
+    return { spreadsheetId: s, sheetGid: gid };
+  }
   return {
     spreadsheetId: parseSpreadsheetIdFromInput(s),
     sheetGid: gid || parseSheetGidFromInput(s),
   };
+}
+
+/** CSV/TSV → grid 2D (giống Google Sheet cells). */
+function csvTextToGrid(text) {
+  const raw = String(text ?? "").replace(/^\uFEFF/, "");
+  const lines = raw.split(/\r?\n/);
+  const delim =
+    lines.slice(0, 5).some((l) => (l.match(/\t/g) || []).length >= 2) ? "\t" : ",";
+  /** @type {string[][]} */
+  const grid = [];
+  for (const line of lines) {
+    if (!line.trim()) {
+      grid.push([]);
+      continue;
+    }
+    if (delim === "\t") {
+      grid.push(line.split("\t").map((c) => c.trim()));
+      continue;
+    }
+    // CSV đơn giản — hỗ trợ quoted field.
+    const row = [];
+    let cur = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') {
+          cur += '"';
+          i += 1;
+        } else {
+          inQ = !inQ;
+        }
+        continue;
+      }
+      if (ch === "," && !inQ) {
+        row.push(cur.trim());
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+    row.push(cur.trim());
+    grid.push(row);
+  }
+  while (grid.length && grid[grid.length - 1].every((c) => !c)) grid.pop();
+  return grid;
 }
 
 export function registerSheetsRoutes(app, deps) {
@@ -302,6 +369,79 @@ export function registerSheetsRoutes(app, deps) {
       res.json(payload);
     } catch (e) {
       console.error("[api/sheets/book/sync]", e);
+      res.status(500).json({ error: String(e?.message ?? e) });
+    }
+  });
+
+  /** Sync từ CSV/TSV local (kéo-thả file) — cùng schema preview với Google Sheet. */
+  app.post("/api/sheets/book/sync-local", async (req, res) => {
+    try {
+      const sessionDate = String(req.body?.sessionDate ?? "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) {
+        res.status(400).json({ error: "Thiếu hoặc sai sessionDate (YYYY-MM-DD)." });
+        return;
+      }
+      const fileName = String(req.body?.fileName ?? "upload.csv").trim() || "upload.csv";
+      const text = String(req.body?.csvText ?? "");
+      if (!text.trim()) {
+        res.status(400).json({ error: "File trống hoặc không đọc được nội dung." });
+        return;
+      }
+      if (text.length > 8_000_000) {
+        res.status(400).json({ error: "File quá lớn (tối đa ~8MB)." });
+        return;
+      }
+      const grid = csvTextToGrid(text);
+      if (!grid.length) {
+        res.status(400).json({ error: "Không parse được dòng nào từ file." });
+        return;
+      }
+      const spreadsheetId = `local:${sessionDate}`;
+      const sheetTab = fileName.slice(0, 80);
+      setCachedGrid(spreadsheetId, sessionDate, sheetTab, grid, { bindSession: true });
+
+      const parsed = parseBookHangNgayGrid(grid, sessionDate);
+      const sessionFlightDate = sessionYmdToFlightDateToken(sessionDate);
+      const state = await loadState();
+      const customers = Array.isArray(state.customers) ? state.customers : [];
+      const customerLookups = buildCustomerLookups(customers);
+      const awbIndexes = buildAwbIndexes(state.rows, sessionDate);
+      const awbFirstIndex = sheetAwbFirstIndexByKey(parsed);
+      const rows = parsed.map((row, index) =>
+        mapSyncRow(
+          row,
+          index,
+          sessionDate,
+          sessionFlightDate,
+          awbIndexes,
+          customerLookups,
+          awbFirstIndex,
+          state.rows
+        )
+      );
+      const payload = {
+        sessionDate,
+        sessionFlightDate,
+        sheetTab,
+        spreadsheetId,
+        syncedAt: new Date().toISOString(),
+        totalInTab: parsed.length,
+        skippedByDate: 0,
+        total: rows.length,
+        importable: rows.filter((r) => !r.blocked).length,
+        newCount: rows.filter((r) => r.syncStatus === "new").length,
+        updateCount: rows.filter((r) => r.syncStatus === "update").length,
+        sheetDuplicateCount: rows.filter((r) => r.syncStatus === "sheet_duplicate").length,
+        awbTakenCount: rows.filter((r) => r.syncStatus === "awb_taken").length,
+        source: "local-file",
+        fileName,
+        rows,
+        headerPreview: (grid[0] || []).slice(0, 16).map((c) => String(c ?? "")),
+      };
+      setCachedSyncResult(syncResultCacheKey(spreadsheetId, sessionDate, state.version), payload);
+      res.json(payload);
+    } catch (e) {
+      console.error("[api/sheets/book/sync-local]", e);
       res.status(500).json({ error: String(e?.message ?? e) });
     }
   });

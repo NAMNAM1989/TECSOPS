@@ -56,6 +56,34 @@ describe("sheetRowReconcile", () => {
     expect(hit?.id).toBe("new-1");
   });
 
+  it("phát hiện cần cập nhật khi Sheet có shipper mà lô web còn trống", () => {
+    const existing = {
+      ...state.rows[0],
+      warehouse: "TECS-TCS",
+      customer: "TÍN PHÁT",
+      shipperNamePrint: "",
+      consigneeNamePrint: "VERTEX",
+    };
+    const row = {
+      awb: "235-4501 1960",
+      warehouse: "TECS-TCS",
+      customer: "TÍN PHÁT",
+      flight: "TK163",
+      flightDate: "14JUN",
+      cutoff: "17:00",
+      cutoffNote: "13JUN",
+      dest: "AMS",
+      pcs: 78,
+      kg: 1258,
+      note: "",
+      shipperNamePrint: "SHIPPER CO\n12 STREET",
+      consigneeNamePrint: "VERTEX",
+    };
+    expect(
+      sheetRowSyncStatus(existing, row, "2026-06-13", customers, lookupCode, lookupId)
+    ).toBe("update");
+  });
+
   it("phát hiện cần cập nhật khi sai kho hoặc thiếu khách", () => {
     const row = {
       awb: "235-4501 1960",

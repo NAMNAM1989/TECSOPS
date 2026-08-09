@@ -8,7 +8,18 @@
 Logic điền + tải PDF: `src/utils/csdForms.ts`  
 Popup nhập Transfer/Transit: `src/components/CsdPrintModal.tsx`
 
-Tên file tải về: `CSD-{FD|TH}-{AWB}.pdf` (vd. `CSD-TH-217-12345675.pdf`).
+Tên file tải về: `CSD-{TECS|TCS|SCSC}-{FD|TH}-{AWB}.pdf`.
+
+## Mã RA theo kho (overlay §1)
+
+| Kho hoạt động | Mã lô Ops | Mã RA |
+|---------------|-----------|-------|
+| TECS | `TECS-TCS`, `TECS-SCSC` | `VN/RA3/00013-01` |
+| SCSC | `SCSC` | `VN/RA3/00009-01` |
+| TCS | `TCS` | `VN/RA3/00010-01` |
+
+FD: tick Regulated Agent + ghi mã RA.  
+TH: chỉ phủ/ghi lại dòng mã RA (giữ nguyên tên entity trên mẫu; cập nhật cả footer).
 
 ## Thêm hãng mới
 

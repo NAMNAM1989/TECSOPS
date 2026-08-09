@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { Shipment } from "../types/shipment";
 import {
   buildTcsPortalJob,
+  canFillEsidForPortal,
   shipmentsEligibleForTcsPortal,
+  shipmentsPendingReceptionScan,
   shipmentsToMarkReceptionCompleted,
 } from "./tcsPortalJob";
 
@@ -28,16 +30,29 @@ function row(partial: Partial<Shipment> & Pick<Shipment, "id" | "awb" | "warehou
 }
 
 describe("tcsPortalJob", () => {
-  it("chỉ lấy TECS-TCS đủ AWB trong phiên", () => {
+  it("chỉ lấy family TCS đủ AWB trong phiên; có thể lọc đúng một kho", () => {
     const ymd = "2026-07-17";
     const rows = [
       row({ id: "1", awb: "123-1234 5678", warehouse: "TECS-TCS", sessionDate: ymd }),
       row({ id: "2", awb: "123-1234 5679", warehouse: "TECS-SCSC", sessionDate: ymd }),
       row({ id: "3", awb: "123", warehouse: "TECS-TCS", sessionDate: ymd }),
       row({ id: "4", awb: "123-1234 5680", warehouse: "TECS-TCS", sessionDate: "2026-07-16" }),
+      row({ id: "5", awb: "123-1234 5681", warehouse: "TCS", sessionDate: ymd }),
     ];
-    const eligible = shipmentsEligibleForTcsPortal(rows, ymd);
-    expect(eligible.map((s) => s.id)).toEqual(["1"]);
+    expect(shipmentsEligibleForTcsPortal(rows, ymd).map((s) => s.id)).toEqual([
+      "1",
+      "5",
+    ]);
+    expect(
+      shipmentsEligibleForTcsPortal(rows, ymd, { warehouse: "TECS-TCS" }).map(
+        (s) => s.id
+      )
+    ).toEqual(["1"]);
+    expect(
+      shipmentsEligibleForTcsPortal(rows, ymd, { warehouse: "TCS" }).map(
+        (s) => s.id
+      )
+    ).toEqual(["5"]);
   });
 
   it("mặc định gửi mọi TECS-TCS đủ AWB; onlyCompleted mới lọc Ops COMPLETED / WEIGH_SLIP", () => {
@@ -69,6 +84,25 @@ describe("tcsPortalJob", () => {
     expect(payload.mock).toBe(true);
   });
 
+  it("build job stamp warehouse TCS khi scope kho TCS", () => {
+    const ymd = "2026-07-17";
+    const payload = buildTcsPortalJob(
+      [
+        row({ id: "1", awb: "12312345678", warehouse: "TCS", sessionDate: ymd }),
+        row({
+          id: "2",
+          awb: "12312345679",
+          warehouse: "TECS-TCS",
+          sessionDate: ymd,
+        }),
+      ],
+      { sessionYmd: ymd, action: "DOWNLOAD", warehouse: "TCS" }
+    );
+    expect(payload.warehouse).toBe("TCS");
+    expect(payload.rows.map((r) => r.shipment_id)).toEqual(["1"]);
+    expect(payload.rows[0].warehouse).toBe("TCS");
+  });
+
   it("awbDigitsFilter chỉ giữ AWB ready sau quét ESID", () => {
     const ymd = "2026-07-17";
     const rows = [
@@ -98,5 +132,78 @@ describe("tcsPortalJob", () => {
     ];
     const mark = shipmentsToMarkReceptionCompleted(rows, ymd, ["12312345678", "12312345679"]);
     expect(mark.map((s) => s.id)).toEqual(["1"]);
+  });
+
+  it("shipmentsPendingReceptionScan bỏ lô đã RECEPTION_COMPLETED", () => {
+    const ymd = "2026-07-17";
+    const rows = [
+      row({
+        id: "1",
+        awb: "12312345678",
+        warehouse: "TECS-TCS",
+        sessionDate: ymd,
+        status: "RECEIVED",
+      }),
+      row({
+        id: "2",
+        awb: "12312345679",
+        warehouse: "TECS-TCS",
+        sessionDate: ymd,
+        status: "RECEPTION_COMPLETED",
+      }),
+      row({
+        id: "3",
+        awb: "12312345670",
+        warehouse: "TCS",
+        sessionDate: ymd,
+        status: "OLA_PULL",
+      }),
+    ];
+    expect(
+      shipmentsPendingReceptionScan(rows, ymd, { warehouse: "TECS-TCS" }).map(
+        (s) => s.id
+      )
+    ).toEqual(["1"]);
+    expect(
+      shipmentsPendingReceptionScan(rows, ymd, { warehouse: "TCS" }).map(
+        (s) => s.id
+      )
+    ).toEqual(["3"]);
+  });
+
+  it("canFillEsidForPortal: đúng kho + đã HT tiếp nhận", () => {
+    const ok = canFillEsidForPortal(
+      row({
+        id: "1",
+        awb: "12312345678",
+        warehouse: "TECS-TCS",
+        sessionDate: "2026-07-17",
+        status: "RECEPTION_COMPLETED",
+      }),
+      "TECS-TCS"
+    );
+    expect(ok.ok).toBe(true);
+    const wrongWh = canFillEsidForPortal(
+      row({
+        id: "1",
+        awb: "12312345678",
+        warehouse: "TCS",
+        sessionDate: "2026-07-17",
+        status: "RECEPTION_COMPLETED",
+      }),
+      "TECS-TCS"
+    );
+    expect(wrongWh.ok).toBe(false);
+    const notReady = canFillEsidForPortal(
+      row({
+        id: "1",
+        awb: "12312345678",
+        warehouse: "TECS-TCS",
+        sessionDate: "2026-07-17",
+        status: "RECEIVED",
+      }),
+      "TECS-TCS"
+    );
+    expect(notReady.ok).toBe(false);
   });
 });

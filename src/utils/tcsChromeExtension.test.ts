@@ -3,18 +3,23 @@ import {
   bootstrapTcsExtension,
   pingTcsExtension,
   TCS_EXT_CHANNEL,
+  TCS_EXT_CHANNEL_DIRECT,
+  tcsExtChannelForWarehouse,
 } from "./tcsChromeExtension";
 
-function answerNext(response: Record<string, unknown>) {
+function answerNext(
+  response: Record<string, unknown>,
+  channel = TCS_EXT_CHANNEL
+) {
   const spy = vi.spyOn(window, "postMessage").mockImplementation((message) => {
-    const request = message as { id?: string };
+    const request = message as { id?: string; channel?: string };
     queueMicrotask(() => {
       window.dispatchEvent(
         new MessageEvent("message", {
           source: window,
           origin: window.location.origin,
           data: {
-            channel: TCS_EXT_CHANNEL,
+            channel: request.channel || channel,
             direction: "from-ext",
             id: request.id,
             ...response,
@@ -87,5 +92,26 @@ describe("tcsChromeExtension bridge", () => {
     const result = await pingTcsExtension(50);
     expect(result.ok).toBe(false);
     expect(result.error).toBe("TIMEOUT");
+  });
+
+  it("route channel theo kho TECS-TCS vs TCS", () => {
+    expect(tcsExtChannelForWarehouse("TECS-TCS")).toBe(TCS_EXT_CHANNEL);
+    expect(tcsExtChannelForWarehouse("TCS")).toBe(TCS_EXT_CHANNEL_DIRECT);
+  });
+
+  it("ping Ext kho TCS qua channel direct", async () => {
+    const spy = answerNext(
+      { ok: true, type: "PONG", version: "1.0.0", portalWarehouse: "TCS" },
+      TCS_EXT_CHANNEL_DIRECT
+    );
+    const result = await pingTcsExtension({ warehouse: "TCS" });
+    expect(result).toMatchObject({ ok: true, version: "1.0.0" });
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: TCS_EXT_CHANNEL_DIRECT,
+        type: "PING",
+      }),
+      window.location.origin
+    );
   });
 });

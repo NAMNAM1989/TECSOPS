@@ -8,6 +8,10 @@ import {
   downloadTcsAttachedDimsExcel,
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
+import {
+  canDownloadTcsDimRecordPdf,
+  downloadTcsDimRecordPdf,
+} from "../utils/tcsDimRecordForm";
 import { awbDigitsKey } from "../utils/awbFormat";
 import { isEcargoScscWarehouse, isTcsWarehouse } from "../constants/warehouses";
 import {
@@ -74,6 +78,18 @@ function IconDimReport() {
   return (
     <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h10M8 7v10" />
+    </svg>
+  );
+}
+
+function IconPdfDim() {
+  return (
+    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M7 3h7l5 5v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1zM14 3v5h5M9 13h6M9 17h4"
+      />
     </svg>
   );
 }
@@ -147,6 +163,8 @@ export function ShipmentRowActionsMenu({
 
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
+  /** Form QF/ED/49 — family TCS (TCS / TECS-TCS), cùng chỗ LIST DIM. */
+  const showTcsDimPdf = canDownloadTcsDimRecordPdf(row);
   const showTcsEsid = isTcsWarehouse(row.warehouse) && Boolean(tcs);
   /** Điền ESID chỉ desktop — phone không dùng (compact = mobile cards). */
   const showFillEsid =
@@ -159,6 +177,7 @@ export function ShipmentRowActionsMenu({
   const menuExtras =
     (showDim ? 1 : 0) +
     (showTcsDim ? 2 : 0) +
+    (showTcsDimPdf ? 1 : 0) +
     (showTcsEsid ? 1 : 0) +
     (showFillEsid ? 1 : 0) +
     (showCsd ? 1 : 0) +
@@ -266,6 +285,9 @@ export function ShipmentRowActionsMenu({
         {showTcsDim
           ? menuItem("Excel ATTACHED DIM", () => void downloadTcsAttachedDimsExcel(row))
           : null}
+        {showTcsDimPdf
+          ? menuItem("Tải PDF DIM TCS", () => void downloadTcsDimRecordPdf(row))
+          : null}
         {showFillEsid
           ? menuItem(
               "Điền",
@@ -316,6 +338,14 @@ export function ShipmentRowActionsMenu({
           {showDim ? (
             <ActionIconBtn label="In LIST DIM SCSC" onClick={() => printDimReport(row)}>
               <IconDimReport />
+            </ActionIconBtn>
+          ) : null}
+          {showTcsDimPdf ? (
+            <ActionIconBtn
+              label="Tải PDF DIM TCS (QF/ED/49)"
+              onClick={() => void downloadTcsDimRecordPdf(row)}
+            >
+              <IconPdfDim />
             </ActionIconBtn>
           ) : null}
         </>

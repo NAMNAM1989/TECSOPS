@@ -200,7 +200,7 @@ export function useTcsPortalActions({
     return result;
   }, [portalWarehouse]);
 
-  // Đổi kho: cookie tcs.com.vn dùng chung 2 Ext → buộc ĐN lại đúng user trước Quét.
+  // Đổi kho: cookie tcs.com.vn dùng chung 2 Ext → invalidate CẢ HAI (không chỉ kho đích).
   const prevPortalWhRef = useRef<TcsPortalWarehouse | null>(null);
   useEffect(() => {
     const prev = prevPortalWhRef.current;
@@ -220,9 +220,10 @@ export function useTcsPortalActions({
           }
         : ext
     );
-    void invalidateTcsExtensionSession({ warehouse: portalWarehouse }).catch(
-      () => undefined
-    );
+    void Promise.all([
+      invalidateTcsExtensionSession({ warehouse: "TECS-TCS" }),
+      invalidateTcsExtensionSession({ warehouse: "TCS" }),
+    ]).catch(() => undefined);
   }, [portalWarehouse]);
 
   useEffect(() => {
@@ -383,6 +384,12 @@ export function useTcsPortalActions({
         setMessage(
           `${tcsExtLabel(portalWarehouse)} đã đăng nhập · ${seconds}s · kho ${portalWarehouse}` +
             ` · dùng Chrome profile riêng cho kho này`
+        );
+        // Cookie portal dùng chung — đánh dấu Ext kho kia stale ngay sau ĐN thành công.
+        const otherWh: TcsPortalWarehouse =
+          portalWarehouse === "TCS" ? "TECS-TCS" : "TCS";
+        void invalidateTcsExtensionSession({ warehouse: otherWh }).catch(
+          () => undefined
         );
         // Nền: warmup agent đúng kho (PDF / fallback) — cả TECS-TCS và TCS
         const warmup = (async () => {

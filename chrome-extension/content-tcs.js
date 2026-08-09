@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.22";
+  const SCRIPT_VERSION = "2.0.24";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -305,6 +305,11 @@
           busy: Boolean(window.__TECSOPS_TCS__?.busy),
           loggedIn: !needsLogin(),
         });
+        return true;
+      }
+
+      if (msg.type === "TCS_SESSION_IDENTITY") {
+        reply(readSessionIdentity());
         return true;
       }
 
@@ -1156,6 +1161,66 @@
       return true;
     }
     return false;
+  }
+
+  /** Username đang login trên portal (cookie dùng chung 2 Ext). */
+  function readSessionIdentity() {
+    if (needsLogin()) {
+      return { ok: true, loggedIn: false, username: "", source: "login_page" };
+    }
+    const isUserLike = (raw) => {
+      const t = String(raw || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!t || t.length < 3 || t.length > 40) return "";
+      if (/đăng xuất|dang xuat|logout|hotline|esid|tìm kiếm|tim kiem|giới thiệu|gioi thieu/i.test(t)) {
+        return "";
+      }
+      if (/^[a-zA-Z][a-zA-Z0-9._-]{2,31}$/.test(t)) return t;
+      return "";
+    };
+    const logoutEl = Array.from(
+      document.querySelectorAll("a, button, span, li, div")
+    ).find((el) => {
+      const t = String(el.textContent || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      return (
+        /^(đăng xuất|dang xuat|logout)$/i.test(t) ||
+        (/đăng xuất|dang xuat|logout/i.test(t) && t.length < 24)
+      );
+    });
+    let username = "";
+    let source = "unknown";
+    if (logoutEl) {
+      let node = logoutEl.parentElement;
+      for (let depth = 0; depth < 6 && node && !username; depth += 1) {
+        for (const el of node.querySelectorAll("span, div, a, strong, b")) {
+          const hit = isUserLike(el.textContent);
+          if (hit) {
+            username = hit;
+            source = "near_logout";
+            break;
+          }
+        }
+        node = node.parentElement;
+      }
+    }
+    if (!username) {
+      const header =
+        document.querySelector(
+          "header, .ant-layout-header, .ant-pro-global-header, .ant-dropdown-trigger"
+        ) || document.body;
+      for (const el of header.querySelectorAll("span, div, a, strong")) {
+        const hit = isUserLike(el.textContent);
+        if (hit) {
+          username = hit;
+          source = "header";
+          break;
+        }
+      }
+    }
+    return { ok: true, loggedIn: true, username, source };
   }
 
   async function ensureDeclareTab(warnings) {

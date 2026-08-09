@@ -6,7 +6,7 @@
 const LOGIN_URL = "https://www.tcs.com.vn/AwbLogin";
 const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const EXT_VERSION = chrome.runtime.getManifest().version;
-const EXPECTED_SCRIPT_VERSION = "2.0.22";
+const EXPECTED_SCRIPT_VERSION = "2.0.24";
 const SESSION_KEY = "tecsopsTcsSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
 const WORKSPACE_KEY = "tecsopsTcsWorkspace";
@@ -522,6 +522,44 @@ function sameUsername(a, b) {
   return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
 }
 
+async function clearTcsCookies() {
+  if (!chrome.cookies?.getAll) return 0;
+  let removed = 0;
+  const domains = [".tcs.com.vn", "tcs.com.vn", "www.tcs.com.vn"];
+  for (const domain of domains) {
+    try {
+      const list = await chrome.cookies.getAll({ domain });
+      for (const c of list) {
+        const host = String(c.domain || "").replace(/^\./, "");
+        const url = `http${c.secure ? "s" : ""}://${host}${c.path || "/"}`;
+        try {
+          const ok = await chrome.cookies.remove({ url, name: c.name });
+          if (ok) removed += 1;
+        } catch {
+          /* ignore single cookie */
+        }
+      }
+    } catch {
+      /* ignore domain */
+    }
+  }
+  return removed;
+}
+
+async function readLiveSessionUser(tabId) {
+  try {
+    await injectTcsContent(tabId);
+    const identity = await sendToTcsContent(tabId, { type: "TCS_SESSION_IDENTITY" }, 3);
+    return {
+      loggedIn: Boolean(identity?.loggedIn),
+      username: String(identity?.username || "").trim(),
+      source: String(identity?.source || ""),
+    };
+  } catch {
+    return { loggedIn: false, username: "", source: "error" };
+  }
+}
+
 async function logoutTcsTab(tabId) {
   try {
     await injectTcsContent(tabId);
@@ -529,9 +567,20 @@ async function logoutTcsTab(tabId) {
   } catch {
     /* tab có thể đang chuyển trang */
   }
+  await clearTcsCookies();
   setWorkspace({ logged_in: false, logged_in_username: "", phase: "IDLE" });
   try {
     await navigate(tabId, LOGIN_URL);
+  } catch {
+    /* ignore */
+  }
+  // Cookie còn sót → portal redirect về ESID: xóa lại + mở login.
+  try {
+    const live = await readLiveSessionUser(tabId);
+    if (live.loggedIn) {
+      await clearTcsCookies();
+      await navigate(tabId, LOGIN_URL);
+    }
   } catch {
     /* ignore */
   }
@@ -542,14 +591,11 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
   const current = await chrome.tabs.get(tabId);
   const isLogin = /awblogin|\/login/i.test(current.url || "");
   if (!isLogin) {
-    const ping = await sendToTcsContent(tabId, { type: "TCS_PING" });
-    if (ping?.loggedIn) {
-      // Cookie tcs.com.vn dùng chung giữa Ext TECS-TCS / TCS — chỉ reuse khi đúng user.
-      if (
-        expectedUser &&
-        workspace.logged_in_username &&
-        sameUsername(workspace.logged_in_username, expectedUser)
-      ) {
+    const live = await readLiveSessionUser(tabId);
+    if (live.loggedIn) {
+      // Chỉ reuse khi identity LIVE trên portal khớp expected — không tin memory Ext.
+      if (expectedUser && live.username && sameUsername(live.username, expectedUser)) {
+        setWorkspace({ logged_in: true, logged_in_username: expectedUser });
         return { ok: true, alreadyLoggedIn: true, username: expectedUser };
       }
       await logoutTcsTab(tabId);
@@ -755,25 +801,33 @@ async function scanWorkspaceDate(payload, opts = {}) {
     payload.expected_username || credentials.username || ""
   ).trim();
   const tabId = opts.tabId || (await findOrOpenTcsTab({ active: true, pinned: true }));
-  // Cookie dùng chung 2 Ext — bắt buộc đúng user trước khi Quét.
-  if (
-    !expectedUser ||
-    !workspace.logged_in_username ||
-    !sameUsername(workspace.logged_in_username, expectedUser)
-  ) {
+  // Cookie dùng chung 2 Ext — luôn xác thực identity LIVE trước khi Quét.
+  await navigate(tabId, ESID_URL);
+  let live = await readLiveSessionUser(tabId);
+  const liveOk =
+    Boolean(expectedUser) &&
+    live.loggedIn &&
+    live.username &&
+    sameUsername(live.username, expectedUser);
+  if (!liveOk) {
     if (!credentials.username || !credentials.password) {
       setWorkspace({ logged_in: false, logged_in_username: "" });
       return {
         ok: false,
         error: "NEEDS_LOGIN",
         message:
-          `Chưa ĐN đúng tài khoản kho ${PORTAL_WAREHOUSE}` +
-          (expectedUser ? ` (${expectedUser})` : "") +
-          " — bấm «Đăng nhập» trước khi Quét (tránh nhầm user kho kia).",
+          `Session portal không khớp user kho ${PORTAL_WAREHOUSE}` +
+          (expectedUser ? ` (cần ${expectedUser}` : "") +
+          (live.username ? `, đang ${live.username}` : "") +
+          (expectedUser ? ")" : "") +
+          " — bấm «Đăng nhập» trước khi Quét.",
         workspace,
       };
     }
-    setWorkspace({ phase: "LOGIN", message: `Đang ĐN ${expectedUser || credentials.username} trước khi Quét…` });
+    setWorkspace({
+      phase: "LOGIN",
+      message: `Đang ĐN ${expectedUser || credentials.username} trước khi Quét…`,
+    });
     const login = await loginOnTcsTab(tabId, credentials, payload.agent_base_url);
     if (!login?.ok) {
       setWorkspace({
@@ -783,35 +837,28 @@ async function scanWorkspaceDate(payload, opts = {}) {
       });
       return { ...login, workspace };
     }
-  }
-  await navigate(tabId, ESID_URL);
-  if (!workspace.logged_in || !sameUsername(workspace.logged_in_username, expectedUser)) {
-    try {
-      const ping = await sendToTcsContent(tabId, { type: "TCS_PING" }, 3);
-      if (ping?.loggedIn && sameUsername(workspace.logged_in_username, expectedUser)) {
-        setWorkspace({ logged_in: true });
-      } else {
-        return {
-          ok: false,
-          error: "NEEDS_LOGIN",
-          message:
-            `Session TCS không khớp user kho ${PORTAL_WAREHOUSE}` +
-            (expectedUser ? ` (${expectedUser})` : "") +
-            " — bấm «Đăng nhập» lại trước khi Quét.",
-          workspace,
-        };
-      }
-    } catch {
+    await navigate(tabId, ESID_URL);
+    live = await readLiveSessionUser(tabId);
+    if (
+      expectedUser &&
+      live.loggedIn &&
+      live.username &&
+      !sameUsername(live.username, expectedUser)
+    ) {
+      setWorkspace({ logged_in: false, logged_in_username: "" });
       return {
         ok: false,
-        error: "NEEDS_LOGIN",
-        message: "Chưa đăng nhập Ext — bấm «Đăng nhập» trước khi Quét tiếp nhận.",
+        error: "WRONG_USER",
+        message:
+          `Portal vẫn là «${live.username}» thay vì «${expectedUser}» (kho ${PORTAL_WAREHOUSE}). ` +
+          "Hai Ext dùng chung cookie — ĐN lại hoặc dùng Chrome profile riêng.",
         workspace,
       };
     }
   }
   setWorkspace({
     logged_in: true,
+    logged_in_username: expectedUser || live.username || workspace.logged_in_username,
     phase: "SCANNING",
     session_date: sessionDate,
     message: `Đang quét ${sessionDate}…`,

@@ -148,7 +148,9 @@ export function ShipmentRowActionsMenu({
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   const showTcsEsid = isTcsWarehouse(row.warehouse) && Boolean(tcs);
-  const showFillEsid = showTcsEsid && awbDigitsKey(row.awb).length === 11;
+  /** Điền ESID chỉ desktop — phone không dùng (compact = mobile cards). */
+  const showFillEsid =
+    !compact && showTcsEsid && awbDigitsKey(row.awb).length === 11;
   const showEcargo = isEcargoScscWarehouse(row.warehouse) && Boolean(ecargo);
   const showCsd = canPrintCsd(row);
   const csdCarrier = csdCarrierForShipment(row);

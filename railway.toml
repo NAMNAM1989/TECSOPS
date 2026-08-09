@@ -1,11 +1,10 @@
 # Dockerfile: Node + agent Playwright. API-first (headless).
-# Ops → /tcs-agent. Điền trực quan = Chrome Ext trên máy user.
-# Không còn noVNC / TCS_VNC.
+# Phone: Quét/PDF qua /tcs-agent (header X-Portal-Warehouse); CSD trên Ops.
+# Dual agent: TCS_AGENT_DUAL=1 + credential kho TCS.
+# Region khuyến nghị: asia-southeast1. Volume giữ browser_profile_*.
 #
-# Build: Docker build từ Dockerfile (Railway dùng builder dockerfile).
-# startCommand: node scripts/start-fullstack.mjs
-# start-fullstack: agent headless mặc định (TCS_HEADLESS=1).
-# Volume TCS_BROWSER_PROFILE giữ session.
+# Build: Docker build từ Dockerfile.
+# start: node scripts/start-fullstack.mjs
 
 [build]
 builder = "DOCKERFILE"

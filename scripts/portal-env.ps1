@@ -44,8 +44,11 @@ function Start-PortalWorkerWindow([string]$Warehouse, [string]$AgentUrl) {
 `$env:PORTAL_WORKER_SECRET='$secret'
 `$env:TCS_AGENT_URL='$AgentUrl'
 `$env:PORTAL_WAREHOUSE='$Warehouse'
+`$env:PORTAL_CLOSE_AFTER_PDF='1'
+`$env:PORTAL_BROWSER_IDLE_MS='15000'
 Set-Location '$Root'
 Write-Host '[portal-worker]' '$Warehouse' '->' `$env:OPS_API_BASE 'agent' `$env:TCS_AGENT_URL -ForegroundColor Cyan
+Write-Host '[portal-worker] close Chrome after PDF (idle 15s)' -ForegroundColor DarkCyan
 npm run portal:worker
 "@
   Start-Process powershell -ArgumentList @("-NoExit", "-Command", $cmd) -WorkingDirectory $Root

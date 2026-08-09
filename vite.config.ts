@@ -5,10 +5,16 @@ import react from "@vitejs/plugin-react";
 const apiPort = process.env.VITE_PROXY_PORT ?? "3001";
 const apiTarget = `http://127.0.0.1:${apiPort}`;
 
-const tcsAgentTarget = (process.env.VITE_TCS_AGENT_PROXY_TARGET || "http://127.0.0.1:8765").replace(
-  /\/$/,
-  ""
-);
+const tcsAgentTargetHub = (
+  process.env.VITE_TCS_AGENT_PROXY_TARGET ||
+  process.env.TCS_AGENT_URL ||
+  "http://127.0.0.1:8765"
+).replace(/\/$/, "");
+const tcsAgentTargetTcs = (
+  process.env.VITE_TCS_AGENT_PROXY_TARGET_TCS ||
+  process.env.TCS_AGENT_URL_TCS ||
+  "http://127.0.0.1:8766"
+).replace(/\/$/, "");
 
 export default defineConfig({
   plugins: [react()],
@@ -22,20 +28,30 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
-      // Same-origin → agent Playwright trên máy kho (không lộ :8765 ra LAN)
+      // Same-origin → agent theo kho (header X-Portal-Warehouse)
       "/tcs-agent": {
-        target: tcsAgentTarget,
+        target: tcsAgentTargetHub,
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/tcs-agent/, ""),
+        router: (req) => {
+          const wh = String(req.headers["x-portal-warehouse"] || "")
+            .trim()
+            .toUpperCase();
+          return wh === "TCS" ? tcsAgentTargetTcs : tcsAgentTargetHub;
+        },
         configure: (proxy) => {
-          proxy.on("error", (err, _req, res) => {
-            // Tránh HTTP 500 opaque — FE đọc được AGENT_OFFLINE
+          proxy.on("error", (err, req, res) => {
+            const wh = String(req?.headers?.["x-portal-warehouse"] || "")
+              .trim()
+              .toUpperCase();
+            const target =
+              wh === "TCS" ? tcsAgentTargetTcs : tcsAgentTargetHub;
             const body = JSON.stringify({
               ok: false,
               error: "AGENT_OFFLINE",
               message:
-                `Không nối được agent TCS (${tcsAgentTarget}). ` +
-                "`npm run dev` sẽ tự chạy agent; hoặc chạy riêng: npm run tcs:agent:real. " +
+                `Không nối được agent TCS (${target}, kho=${wh || "TECS-TCS"}). ` +
+                "`npm run portal:start:both` hoặc `npm run dev`. " +
                 "Máy khác: mở Ops bằng IP máy kho (không dùng 127.0.0.1).",
               detail: String(err?.message || err),
             });

@@ -1,8 +1,12 @@
 /**
- * Railway/Docker: agent Playwright + Node server (API-first).
+ * Railway/Docker: Ops + agent Playwright (API-first, headless mặc định).
  *
- * Agent: TCS_HEADLESS (mặc định 1 trên cloud). Máy kho local: TCS_HEADLESS=0.
- * Không còn noVNC / TCS_VNC — điều khiển TCS qua Ext + Playwright API.
+ * Dual agent (parity TECS-TCS / TCS):
+ *   :8765  hub — TCS_USERNAME / TCS_PASSWORD, TCS_BROWSER_PROFILE
+ *   :8766  TCS — bật khi TCS_AGENT_DUAL=1 hoặc có TCS_USERNAME_TCS
+ *                TCS_USERNAME_TCS / TCS_PASSWORD_TCS, TCS_BROWSER_PROFILE_TCS
+ *
+ * Phone trên Railway gọi /tcs-agent + header X-Portal-Warehouse (không cần PC kho).
  */
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
@@ -12,7 +16,6 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const agentDir = path.join(root, "tcs-awb-automation");
 
-// Safety gate (giống start:railway) — chặn deploy có pattern phá DB.
 const check = spawnSync(process.execPath, ["scripts/check-deploy-safe.mjs"], {
   cwd: root,
   stdio: "inherit",
@@ -25,6 +28,12 @@ const pythonBin =
 const children = [];
 let shuttingDown = false;
 
+function flagOn(raw, defaultOn = false) {
+  if (raw == null || String(raw).trim() === "") return defaultOn;
+  const t = String(raw).trim().toLowerCase();
+  return t !== "0" && t !== "false" && t !== "off" && t !== "no";
+}
+
 function shutdown(code) {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -32,7 +41,7 @@ function shutdown(code) {
     try {
       c.kill();
     } catch {
-      // ignore
+      /* ignore */
     }
   }
   process.exit(code);
@@ -48,7 +57,6 @@ function run(name, cmd, args, opts = {}) {
   children.push(child);
   child.on("exit", (code, signal) => {
     console.error(`[start] ✖ ${name} thoát (code=${code} signal=${signal})`);
-    // Trong container: 1 tiến trình chết → cả service restart (Railway ON_FAILURE).
     shutdown(code ?? 1);
   });
   child.on("error", (err) => {
@@ -58,6 +66,35 @@ function run(name, cmd, args, opts = {}) {
   return child;
 }
 
+function baseAgentEnv(headless) {
+  const env = {
+    PYTHONIOENCODING: "utf-8",
+    PYTHONUNBUFFERED: "1",
+    TCS_MOCK: "0",
+    TCS_HEADLESS: headless,
+    TCS_AUTO_OPEN: process.env.TCS_AUTO_OPEN || "1",
+    TCS_CAPTCHA_OCR: process.env.TCS_CAPTCHA_OCR || "1",
+    TCS_PREFER_SESSION: process.env.TCS_PREFER_SESSION || "1",
+    TCS_AGENT_HOST: process.env.TCS_AGENT_HOST || "127.0.0.1",
+  };
+  const headed =
+    headless === "0" ||
+    headless.toLowerCase() === "false" ||
+    headless.toLowerCase() === "off";
+  if (headed && process.env.DISPLAY) {
+    env.DISPLAY = process.env.DISPLAY;
+  }
+  return env;
+}
+
+function dualAgentEnabled() {
+  if (flagOn(process.env.TCS_AGENT_DUAL, false)) return true;
+  return Boolean(
+    String(process.env.TCS_USERNAME_TCS || "").trim() &&
+      String(process.env.TCS_PASSWORD_TCS || "").trim()
+  );
+}
+
 function main() {
   const envHeadless = process.env.TCS_HEADLESS;
   const headless =
@@ -65,29 +102,48 @@ function main() {
       ? String(envHeadless).trim()
       : "1";
 
-  const agentEnv = {
-    PYTHONIOENCODING: "utf-8",
-    PYTHONUNBUFFERED: "1",
-    TCS_MOCK: "0",
-    TCS_HEADLESS: headless,
-    TCS_AUTO_OPEN: process.env.TCS_AUTO_OPEN || "1",
-    TCS_AGENT_HOST: process.env.TCS_AGENT_HOST || "127.0.0.1",
-    TCS_AGENT_PORT: process.env.TCS_AGENT_PORT || "8765",
-  };
   const headed =
     headless === "0" ||
     headless.toLowerCase() === "false" ||
     headless.toLowerCase() === "off";
-  if (headed && process.env.DISPLAY) {
-    agentEnv.DISPLAY = process.env.DISPLAY;
-  }
+  console.info(
+    `[start] agent ${headed ? "HEADED" : "HEADLESS"} · API-first · dual=${dualAgentEnabled()}`
+  );
 
-  console.info(`[start] agent ${headed ? "HEADED" : "HEADLESS"} · API-first (no VNC)`);
-
-  run("tcs-agent", pythonBin, ["-m", "app.main", "agent", "--real"], {
+  // Hub TECS-TCS :8765
+  run("tcs-agent-hub", pythonBin, ["-m", "app.main", "agent", "--real"], {
     cwd: agentDir,
-    env: agentEnv,
+    env: {
+      ...baseAgentEnv(headless),
+      TCS_AGENT_PORT: process.env.TCS_AGENT_PORT || "8765",
+      TCS_WAREHOUSE_SCOPE: "TECS-TCS",
+      TCS_BROWSER_PROFILE:
+        process.env.TCS_BROWSER_PROFILE || "./browser_profile_hub",
+      TCS_USERNAME: process.env.TCS_USERNAME || "",
+      TCS_PASSWORD: process.env.TCS_PASSWORD || "",
+    },
   });
+
+  if (dualAgentEnabled()) {
+    run("tcs-agent-tcs", pythonBin, ["-m", "app.main", "agent", "--real"], {
+      cwd: agentDir,
+      env: {
+        ...baseAgentEnv(headless),
+        TCS_AGENT_PORT: process.env.TCS_AGENT_PORT_TCS || "8766",
+        TCS_WAREHOUSE_SCOPE: "TCS",
+        TCS_BROWSER_PROFILE:
+          process.env.TCS_BROWSER_PROFILE_TCS || "./browser_profile_tcs",
+        TCS_USERNAME:
+          process.env.TCS_USERNAME_TCS || process.env.TCS_USERNAME || "",
+        TCS_PASSWORD:
+          process.env.TCS_PASSWORD_TCS || process.env.TCS_PASSWORD || "",
+      },
+    });
+  } else {
+    console.info(
+      "[start] agent kho TCS :8766 tắt — set TCS_AGENT_DUAL=1 hoặc TCS_USERNAME_TCS + TCS_PASSWORD_TCS"
+    );
+  }
 
   run("web", process.execPath, ["server/index.mjs"], { cwd: root });
 }

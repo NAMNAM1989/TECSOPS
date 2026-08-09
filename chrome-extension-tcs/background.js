@@ -852,22 +852,37 @@ function debuggerDetach(tabId) {
   });
 }
 
+/**
+ * MV3 service worker không có URL.createObjectURL — dùng trang extension tạm
+ * rồi inject HTML phiếu ESID trước khi Page.printToPDF.
+ */
 async function printHtmlToPdfBase64(html, title) {
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
+  const rawHtml = String(html || "");
+  if (rawHtml.length < 40) {
+    throw new Error("HTML phiếu ESID rỗng");
+  }
+  const frameUrl = chrome.runtime.getURL("print-frame.html");
   let tabId = null;
   try {
-    const tab = await chrome.tabs.create({ url, active: false, pinned: false });
+    const tab = await chrome.tabs.create({
+      url: frameUrl,
+      active: false,
+      pinned: false,
+    });
     tabId = tab.id;
     await waitTabComplete(tabId, 20_000);
-    // Đặt title (tên gợi ý khi Save as PDF)
     await chrome.scripting.executeScript({
       target: { tabId },
-      func: (name) => {
-        document.title = name;
+      func: (raw, name) => {
+        document.open();
+        document.write(raw);
+        document.close();
+        document.title = String(name || "ESID").replace(/\.pdf$/i, "");
       },
-      args: [String(title || "ESID").replace(/\.pdf$/i, "")],
+      args: [rawHtml, String(title || "ESID").replace(/\.pdf$/i, "")],
     });
+    // Cho layout/style kịp áp trước khi in
+    await new Promise((r) => setTimeout(r, 400));
     await debuggerAttach(tabId);
     try {
       const result = await debuggerSend(tabId, "Page.printToPDF", {
@@ -895,11 +910,6 @@ async function printHtmlToPdfBase64(html, title) {
       } catch {
         /* ignore */
       }
-    }
-    try {
-      URL.revokeObjectURL(url);
-    } catch {
-      /* ignore */
     }
   }
 }

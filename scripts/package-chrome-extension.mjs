@@ -155,6 +155,7 @@ packageExt({
     "popup.html",
     "popup.js",
     "locators.json",
+    "print-frame.html",
     "README.md",
   ],
   stableZipName: "tecsops-chrome-extension-tcs.zip",

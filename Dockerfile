@@ -26,7 +26,8 @@ RUN pip install --no-cache-dir -r tcs-awb-automation/requirements-server.txt \
 COPY . .
 RUN npm run build
 
-# API-first: headless. Điền trực quan = Chrome Ext trên máy user.
+# API-first: headless. Phone Quét/PDF qua /tcs-agent (same-origin).
+# Dual agent kho TCS: set TCS_AGENT_DUAL=1 + TCS_USERNAME_TCS / TCS_PASSWORD_TCS.
 ENV NODE_ENV=production \
     TCS_MOCK=0 \
     TCS_HEADLESS=1 \
@@ -34,6 +35,7 @@ ENV NODE_ENV=production \
     TCS_CAPTCHA_OCR=1 \
     TCS_PREFER_SESSION=1 \
     TCS_AGENT_URL=http://127.0.0.1:8765 \
+    TCS_AGENT_URL_TCS=http://127.0.0.1:8766 \
     TCS_AGENT_PROXY=1
 
 # PORT do Railway cấp; server bind 0.0.0.0:$PORT (mặc định 3001).

@@ -16,6 +16,8 @@
     "portal:start:hub": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-hub.ps1",
     "portal:start:tcs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-tcs.ps1",
     "portal:start:both": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-both.ps1",
+    "portal:start:warehouse": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-warehouse-pc.ps1",
+    "portal:pin-shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pin-warehouse-shortcut.ps1",
     "qa:smoke": "node scripts/qa-smoke-e2e.mjs",
     "ext:verify": "node chrome-extension/scripts/cdp-load-and-verify.mjs",
     "build": "tsc -b && vite build",

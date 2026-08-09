@@ -25,6 +25,11 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
   const portalWh = tcs.portalWarehouse;
   const extLabel = tcs.extLabel;
   const extLoggedIn = Boolean(tcs.extension?.ok && tcs.extension.workspace?.logged_in);
+  const agentLoggedIn = Boolean(tcs.session?.logged_in || tcs.health?.session?.logged_in);
+  const workerLoggedIn = Boolean(tcs.portalWorker?.logged_in);
+  /** Phone: ẩn ĐN khi đã có session (agent Railway hoặc worker). */
+  const showLoginBtn =
+    !compact || (!extLoggedIn && !agentLoggedIn && !workerLoggedIn);
   const [showExtLogin, setShowExtLogin] = useState(false);
   const [tcsUsername, setTcsUsername] = useState("");
   const [tcsPassword, setTcsPassword] = useState("");
@@ -227,27 +232,34 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
           </span>
         ) : null}
 
-        <button
-          type="button"
-          className={btnLogin}
-          disabled={tcs.busy || (!tcs.health?.ok && !tcs.extension?.ok)}
-          onClick={() => {
-            // Ext có thể đã nhớ MK — thử login; thiếu user thì mở form.
-            if (!tcsUsername.trim() && !extLoggedIn) {
-              setShowExtLogin(true);
-              return;
+        {showLoginBtn ? (
+          <button
+            type="button"
+            className={btnLogin}
+            disabled={
+              tcs.busy ||
+              (!tcs.health?.ok && !tcs.extension?.ok && !tcs.portalWorker?.online)
             }
-            void doLogin();
-          }}
-          title="Chỉ đăng nhập portal kho đang chọn (không quét). Dùng Chrome profile riêng từng kho."
-        >
-          {compact ? "ĐN" : "Đăng nhập"}
-        </button>
+            onClick={() => {
+              if (!tcsUsername.trim() && !extLoggedIn && !compact) {
+                setShowExtLogin(true);
+                return;
+              }
+              void doLogin();
+            }}
+            title="Đăng nhập portal kho đang chọn (không quét)."
+          >
+            {compact ? "ĐN" : "Đăng nhập"}
+          </button>
+        ) : null}
 
         <button
           type="button"
           className={btnScan}
-          disabled={tcs.busy || (!tcs.health?.ok && !tcs.extension?.ok)}
+          disabled={
+            tcs.busy ||
+            (!tcs.health?.ok && !tcs.extension?.ok && !tcs.portalWorker?.online)
+          }
           onClick={() => {
             void doScan();
           }}
@@ -264,8 +276,12 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
               : "Quét tiếp nhận"}
         </button>
 
-        <EsidSettingsMenu disabled={tcs.busy} compact={compact} />
-        <OverflowMenu label="Nâng cao" compact items={advancedItems} align="left" />
+        {!compact ? (
+          <EsidSettingsMenu disabled={tcs.busy} compact={compact} />
+        ) : null}
+        {!compact ? (
+          <OverflowMenu label="Nâng cao" compact items={advancedItems} align="left" />
+        ) : null}
 
         {tcs.busy ? (
           <span className="truncate text-[10px] font-semibold text-sky-700">
@@ -375,7 +391,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
         </div>
       )}
 
-      {preview ? (
+      {preview && !compact ? (
         <div
           className="mx-0.5 flex min-w-0 flex-col gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-50/70 p-2"
           role="region"

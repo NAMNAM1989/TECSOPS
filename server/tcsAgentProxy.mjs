@@ -1,27 +1,42 @@
 /**
- * Proxy same-origin `/tcs-agent/*` → agent Playwright trên máy kho (localhost:8765).
+ * Proxy same-origin `/tcs-agent/*` → agent Playwright trên máy kho.
  *
- * Máy khác mở Ops qua IP máy kho → browser chỉ gọi cùng origin → Express
- * chuyển tiếp tới agent local. Agent không cần bind 0.0.0.0 / mở firewall rộng.
+ * Dual agent (auto parity TECS-TCS / TCS):
+ *   Header `X-Portal-Warehouse: TCS` → TCS_AGENT_URL_TCS (mặc định :8766)
+ *   Còn lại / TECS-TCS → TCS_AGENT_URL (mặc định :8765)
  *
- * Local: `npm run dev` tự spawn agent. Railway all-in-one: start-fullstack chạy agent trong container.
- *
- * Bao gồm cả GET /tcs-agent/docs?file=… (PDF ESID + ảnh preview form KHAI BÁO).
+ * Local: `npm run dev` tự spawn agent hub. Railway: production tắt proxy mặc định.
  */
 import http from "node:http";
 import https from "node:https";
 import { URL } from "node:url";
 
+function normalizeBase(raw, fallback) {
+  const t = String(raw || "").trim().replace(/\/$/, "");
+  return t || fallback;
+}
+
+export function agentTargetForWarehouse(warehouse) {
+  const wh = String(warehouse || "")
+    .trim()
+    .toUpperCase();
+  if (wh === "TCS") {
+    return normalizeBase(
+      process.env.TCS_AGENT_URL_TCS || process.env.TCS_AGENT_URL_DIRECT,
+      "http://127.0.0.1:8766"
+    );
+  }
+  return normalizeBase(process.env.TCS_AGENT_URL, "http://127.0.0.1:8765");
+}
+
 function agentTarget() {
-  const raw = (process.env.TCS_AGENT_URL || "http://127.0.0.1:8765").trim();
-  return raw.replace(/\/$/, "") || "http://127.0.0.1:8765";
+  return agentTargetForWarehouse("TECS-TCS");
 }
 
 /** Export để unit test — production mặc định tắt trừ khi TCS_AGENT_PROXY=1 (Docker set sẵn). */
 export function isTcsAgentProxyEnabled() {
   const raw = process.env.TCS_AGENT_PROXY;
   if (raw === undefined || String(raw).trim() === "") {
-    // Production (Railway URL công khai): tắt mặc định — tránh mở agent qua proxy không auth.
     return process.env.NODE_ENV !== "production";
   }
   const flag = String(raw).trim().toLowerCase();
@@ -34,13 +49,17 @@ export function registerTcsAgentProxy(app) {
     return;
   }
 
-  const targetBase = agentTarget();
-  console.info(`[tcs-agent-proxy] /tcs-agent → ${targetBase}`);
+  const hub = agentTargetForWarehouse("TECS-TCS");
+  const tcs = agentTargetForWarehouse("TCS");
+  console.info(`[tcs-agent-proxy] /tcs-agent → hub ${hub} · TCS ${tcs} (header X-Portal-Warehouse)`);
 
   app.use("/tcs-agent", (req, res) => {
+    const warehouse = String(
+      req.get("x-portal-warehouse") || req.query?.warehouse || ""
+    ).trim();
+    const targetBase = agentTargetForWarehouse(warehouse);
     let target;
     try {
-      // Express strip prefix: req.url bắt đầu bằng /health, /jobs, ...
       target = new URL(req.url || "/", `${targetBase}/`);
     } catch {
       res.status(502).json({
@@ -67,9 +86,15 @@ export function registerTcsAgentProxy(app) {
         timeout: 180_000,
       },
       (upRes) => {
-        // Bỏ hop-by-hop; chỉ bỏ transfer-encoding khi đã có Content-Length (PDF /docs)
         const outHeaders = { ...upRes.headers };
-        for (const key of ["connection", "keep-alive", "proxy-connection", "te", "trailer", "upgrade"]) {
+        for (const key of [
+          "connection",
+          "keep-alive",
+          "proxy-connection",
+          "te",
+          "trailer",
+          "upgrade",
+        ]) {
           delete outHeaders[key];
         }
         if (outHeaders["content-length"] != null) {
@@ -86,7 +111,8 @@ export function registerTcsAgentProxy(app) {
         res.status(504).json({
           ok: false,
           error: "AGENT_PROXY_TIMEOUT",
-          message: "Agent TCS không trả lời (timeout). Kiểm tra npm run tcs:agent:real trên máy kho.",
+          message:
+            "Agent TCS không trả lời (timeout). Kiểm tra agent :8765 / :8766 trên máy kho.",
         });
       }
     });
@@ -100,8 +126,8 @@ export function registerTcsAgentProxy(app) {
         ok: false,
         error: "AGENT_OFFLINE",
         message:
-          `Không nối được agent TCS (${targetBase}). ` +
-          "Local: npm run dev (tự chạy agent) hoặc npm run tcs:agent:real. " +
+          `Không nối được agent (${targetBase}, kho=${warehouse || "TECS-TCS"}). ` +
+          "Local: npm run portal:start:both hoặc npm run dev. " +
           "Máy khác: mở Ops bằng IP máy kho — không dùng 127.0.0.1.",
         detail: String(err?.message || err),
       });
@@ -110,3 +136,6 @@ export function registerTcsAgentProxy(app) {
     req.pipe(upstream);
   });
 }
+
+// giữ export cũ cho chỗ gọi agentTarget nếu có
+export { agentTarget };

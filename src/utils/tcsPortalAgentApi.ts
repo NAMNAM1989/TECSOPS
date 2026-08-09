@@ -1,7 +1,21 @@
-import type { TcsPortalJobPayload } from "./tcsPortalJob";
+import type { TcsPortalJobPayload, TcsPortalWarehouse } from "./tcsPortalJob";
 
 /** localStorage override — IP/tunnel tùy chỉnh */
 const TCS_AGENT_URL_LS_KEY = "tecsops-tcs-agent-url";
+
+export type AgentWarehouseOpts = {
+  warehouse?: TcsPortalWarehouse | string;
+};
+
+function warehouseHeader(
+  warehouse?: string | null
+): Record<string, string> {
+  const wh = String(warehouse || "").trim().toUpperCase();
+  if (wh === "TCS" || wh === "TECS-TCS") {
+    return { "X-Portal-Warehouse": wh };
+  }
+  return {};
+}
 
 /**
  * Mặc định: same-origin `/tcs-agent` (Vite/Express proxy → Playwright trên máy kho).
@@ -157,14 +171,18 @@ type AgentJsonEnvelope = {
 async function postAgentJson<T extends AgentJsonEnvelope>(
   path: string,
   body: unknown,
-  fallbackMessage: string
+  fallbackMessage: string,
+  opts: AgentWarehouseOpts = {}
 ): Promise<T> {
   const base = agentBase();
   let res: Response;
   try {
     res = await fetch(`${base}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...warehouseHeader(opts.warehouse),
+      },
       body: JSON.stringify(body),
     });
   } catch {
@@ -195,11 +213,17 @@ async function postAgentJson<T extends AgentJsonEnvelope>(
   return parsed;
 }
 
-export async function pingTcsAgent(timeoutMs = 3500): Promise<TcsAgentHealth | null> {
+export async function pingTcsAgent(
+  timeoutMs = 3500,
+  opts: AgentWarehouseOpts = {}
+): Promise<TcsAgentHealth | null> {
   const ctrl = new AbortController();
   const t = window.setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(`${agentBase()}/health`, { signal: ctrl.signal });
+    const res = await fetch(`${agentBase()}/health`, {
+      signal: ctrl.signal,
+      headers: warehouseHeader(opts.warehouse),
+    });
     if (!res.ok) return null;
     const body = (await res.json()) as TcsAgentHealth & { error?: string };
     // Proxy Express/Vite khi agent chết trả 502 JSON { ok:false, error:AGENT_OFFLINE }
@@ -212,9 +236,13 @@ export async function pingTcsAgent(timeoutMs = 3500): Promise<TcsAgentHealth | n
   }
 }
 
-export async function fetchTcsSessionStatus(): Promise<TcsAgentSession | null> {
+export async function fetchTcsSessionStatus(
+  opts: AgentWarehouseOpts = {}
+): Promise<TcsAgentSession | null> {
   try {
-    const res = await fetch(`${agentBase()}/session/status`);
+    const res = await fetch(`${agentBase()}/session/status`, {
+      headers: warehouseHeader(opts.warehouse),
+    });
     if (!res.ok) return null;
     const body = (await res.json()) as TcsAgentSession & { ok?: boolean };
     return body;
@@ -226,6 +254,7 @@ export async function fetchTcsSessionStatus(): Promise<TcsAgentSession | null> {
 /** Mở Chrome agent (Playwright). Ext Đồng bộ ≠ session agent — PDF vẫn cần bước này. */
 export async function openTcsAgentSession(opts: {
   visible?: boolean;
+  warehouse?: TcsPortalWarehouse | string;
 } = {}): Promise<TcsAgentSession & { ok: boolean; error?: string; message?: string }> {
   const visible = opts.visible === true;
   return postAgentJson(
@@ -235,7 +264,8 @@ export async function openTcsAgentSession(opts: {
       headed: visible,
       show_browser: visible,
     },
-    "Không mở được phiên Chrome agent TCS"
+    "Không mở được phiên Chrome agent TCS",
+    { warehouse: opts.warehouse }
   );
 }
 
@@ -276,24 +306,26 @@ export type TcsWorkspaceBootstrapResponse = TcsEsidScanResponse &
 export async function bootstrapTcsWorkspace(
   sessionDate: string,
   awbs: string[],
-  opts: { visible?: boolean } = {}
+  opts: { visible?: boolean; warehouse?: TcsPortalWarehouse | string } = {}
 ): Promise<TcsWorkspaceBootstrapResponse> {
+  const warehouse = opts.warehouse || "TECS-TCS";
   return postAgentJson<TcsWorkspaceBootstrapResponse>(
     "/workspace/bootstrap",
     {
-      warehouse: "TECS-TCS",
+      warehouse,
       session_date: sessionDate,
       awbs,
       visible: opts.visible === true,
     },
-    "Không khởi tạo được workspace TCS"
+    "Không khởi tạo được workspace TCS",
+    { warehouse }
   );
 }
 
 /** In sẵn PDF ESID vào cache agent (sau Đồng bộ Ext hoặc gọi tay). */
 export async function prefetchTcsPdfs(
   awbs: string[],
-  opts: { limit?: number } = {}
+  opts: { limit?: number; warehouse?: TcsPortalWarehouse | string } = {}
 ): Promise<{
   ok: boolean;
   prefetched?: number;
@@ -302,15 +334,17 @@ export async function prefetchTcsPdfs(
   error?: string;
   message?: string;
 }> {
+  const warehouse = opts.warehouse || "TECS-TCS";
   try {
     return await postAgentJson(
       "/workspace/prefetch-pdfs",
       {
-        warehouse: "TECS-TCS",
+        warehouse,
         awbs,
         limit: opts.limit ?? 5,
       },
-      "Prefetch PDF thất bại"
+      "Prefetch PDF thất bại",
+      { warehouse }
     );
   } catch (e) {
     return {
@@ -380,12 +414,18 @@ export type TcsEsidDeclareSubmitResponse = {
 
 /** Điền form KHAI BÁO ESID từ Ops — không HOÀN TẤT. */
 export async function declareFillTcsEsid(
-  payload: import("./buildEsidDeclareFillPayload").EsidDeclareFillPayload
+  payload: import("./buildEsidDeclareFillPayload").EsidDeclareFillPayload,
+  opts: AgentWarehouseOpts = {}
 ): Promise<TcsEsidDeclareFillResponse> {
+  const warehouse =
+    opts.warehouse ||
+    (payload as { warehouse?: string }).warehouse ||
+    "TECS-TCS";
   return postAgentJson<TcsEsidDeclareFillResponse>(
     "/esid/declare-fill",
-    payload,
-    "Điền ESID thất bại"
+    { ...payload, warehouse },
+    "Điền ESID thất bại",
+    { warehouse }
   );
 }
 
@@ -394,21 +434,31 @@ export async function declareSubmitTcsEsid(opts: {
   awb: string;
   shipment_id?: string;
   confirm_submit: true;
+  warehouse?: TcsPortalWarehouse | string;
 }): Promise<TcsEsidDeclareSubmitResponse> {
+  const warehouse = opts.warehouse || "TECS-TCS";
   return postAgentJson<TcsEsidDeclareSubmitResponse>(
     "/esid/declare-submit",
     {
-      warehouse: "TECS-TCS",
+      warehouse,
       awb: opts.awb,
       shipment_id: opts.shipment_id || undefined,
       confirm_submit: true,
     },
-    "HOÀN TẤT ESID thất bại"
+    "HOÀN TẤT ESID thất bại",
+    { warehouse }
   );
 }
 
-export async function submitTcsPortalJob(payload: TcsPortalJobPayload): Promise<TcsAgentJobResponse> {
-  return postAgentJson<TcsAgentJobResponse>("/jobs", payload, "Agent từ chối job");
+export async function submitTcsPortalJob(
+  payload: TcsPortalJobPayload
+): Promise<TcsAgentJobResponse> {
+  return postAgentJson<TcsAgentJobResponse>(
+    "/jobs",
+    payload,
+    "Agent từ chối job",
+    { warehouse: payload.warehouse }
+  );
 }
 
 export function getTcsAgentBaseUrl(): string {
@@ -426,12 +476,18 @@ export function tcsAgentDocUrl(nameOrPath: string): string {
  * Job agent thường > vài giây → mất user activation; `<a download>` bị Chrome bỏ qua.
  * Một lần fetch → blob URL dùng cho cả `<a download>` và iframe fallback (không tải mạng 2 lần).
  */
-export async function downloadPdfFromAgent(pdfNameOrPath: string): Promise<boolean> {
+export async function downloadPdfFromAgent(
+  pdfNameOrPath: string,
+  opts: AgentWarehouseOpts = {}
+): Promise<boolean> {
   const name = pdfNameOrPath.replace(/^.*[/\\]/, "");
   if (!name.toLowerCase().endsWith(".pdf")) return false;
   const docUrl = tcsAgentDocUrl(name);
   try {
-    const res = await fetch(docUrl, { cache: "no-store" });
+    const res = await fetch(docUrl, {
+      cache: "no-store",
+      headers: warehouseHeader(opts.warehouse),
+    });
     if (!res.ok) return false;
     const buf = await res.arrayBuffer();
     if (buf.byteLength < 100) return false;

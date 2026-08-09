@@ -19,10 +19,80 @@ const AGENT = String(process.env.TCS_AGENT_URL || "http://127.0.0.1:8765")
 const WAREHOUSE = String(process.env.PORTAL_WAREHOUSE || "TCS").trim().toUpperCase();
 const WORKER_ID = `pc-${process.env.COMPUTERNAME || process.env.HOSTNAME || "local"}`;
 const POLL_MS = Number(process.env.PORTAL_WORKER_POLL_MS || 2000);
+/** Sau PDF: đóng Chrome để nhẹ máy. 0=tắt. Mặc định bật. */
+const CLOSE_AFTER_PDF = !["0", "false", "off", "no"].includes(
+  String(process.env.PORTAL_CLOSE_AFTER_PDF ?? "1").trim().toLowerCase()
+);
+/** Chờ idle trước khi đóng (ms) — tải liên tiếp không phải mở Chrome lại. 0=đóng ngay. */
+const BROWSER_IDLE_MS = Math.max(
+  0,
+  Number(process.env.PORTAL_BROWSER_IDLE_MS ?? 15_000)
+);
 
 if (!SECRET) {
   console.error("[portal-worker] Thiếu PORTAL_WORKER_SECRET");
   process.exit(1);
+}
+
+/** @type {ReturnType<typeof setTimeout> | null} */
+let browserCloseTimer = null;
+
+function cancelBrowserClose() {
+  if (browserCloseTimer) {
+    clearTimeout(browserCloseTimer);
+    browserCloseTimer = null;
+  }
+}
+
+async function closeAgentBrowser(reason) {
+  try {
+    await agentFetch("/session/close", {
+      method: "POST",
+      body: "{}",
+    });
+    console.info(`[portal-worker] closed Chrome (${reason})`);
+  } catch (e) {
+    console.warn(`[portal-worker] close Chrome failed: ${e.message}`);
+  }
+}
+
+function scheduleBrowserClose(reason) {
+  if (!CLOSE_AFTER_PDF) return;
+  cancelBrowserClose();
+  if (BROWSER_IDLE_MS <= 0) {
+    void closeAgentBrowser(reason);
+    return;
+  }
+  console.info(
+    `[portal-worker] sẽ đóng Chrome sau ${BROWSER_IDLE_MS}ms idle (${reason})`
+  );
+  browserCloseTimer = setTimeout(() => {
+    browserCloseTimer = null;
+    void closeAgentBrowser(reason);
+  }, BROWSER_IDLE_MS);
+}
+
+async function ensureAgentSession() {
+  try {
+    const h = await agentFetch("/health");
+    if (h?.session?.logged_in) return;
+  } catch {
+    /* open below */
+  }
+  const opened = await agentFetch("/session/open", {
+    method: "POST",
+    body: JSON.stringify({
+      visible: true,
+      headed: true,
+      show_browser: true,
+    }),
+  });
+  if (!opened?.logged_in) {
+    throw new Error(
+      opened?.message ||
+        "Agent chưa ĐN — nhập CAPTCHA trên Chrome máy kho rồi thử lại."
+    );
+  }
 }
 
 function headers(json = true) {
@@ -152,6 +222,7 @@ async function runScan(job) {
 async function runPdf(job) {
   const awb = String(job.payload?.awb || "").replace(/\D/g, "").slice(0, 11);
   if (awb.length !== 11) throw new Error("pdf cần AWB 11 số");
+  await ensureAgentSession();
   const res = await agentFetch("/jobs", {
     method: "POST",
     body: JSON.stringify({
@@ -196,6 +267,7 @@ async function runPdf(job) {
 }
 
 async function handleJob(job) {
+  cancelBrowserClose();
   console.info(`[portal-worker] claim ${job.type} ${job.id}`);
   try {
     let out;
@@ -209,6 +281,7 @@ async function handleJob(job) {
       body: JSON.stringify(out),
     });
     console.info(`[portal-worker] done ${job.id}`);
+    if (job.type === "pdf") scheduleBrowserClose(`pdf ${job.id}`);
   } catch (e) {
     console.error(`[portal-worker] fail ${job.id}:`, e.message);
     await opsFetch(`/api/portal-worker/jobs/${job.id}/fail`, {
@@ -220,7 +293,8 @@ async function handleJob(job) {
 
 async function loop() {
   console.info(
-    `[portal-worker] OPS=${OPS_API_BASE} AGENT=${AGENT} WH=${WAREHOUSE} id=${WORKER_ID}`
+    `[portal-worker] OPS=${OPS_API_BASE} AGENT=${AGENT} WH=${WAREHOUSE} id=${WORKER_ID}` +
+      ` closeAfterPdf=${CLOSE_AFTER_PDF} idleMs=${BROWSER_IDLE_MS}`
   );
   for (;;) {
     try {

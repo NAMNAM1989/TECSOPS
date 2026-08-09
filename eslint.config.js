@@ -60,6 +60,8 @@ export default tseslint.config(
         location: "readonly",
         Event: "readonly",
         KeyboardEvent: "readonly",
+        AbortController: "readonly",
+        AbortSignal: "readonly",
       },
     },
     rules: {

@@ -10,7 +10,13 @@ import {
 } from "../utils/exportTcsAttachedDimsExcel";
 import { awbDigitsKey } from "../utils/awbFormat";
 import { isEcargoScscWarehouse, isTcsWarehouse } from "../constants/warehouses";
+import {
+  canPrintCsd,
+  csdCarrierForShipment,
+  getCsdCarrierProfile,
+} from "../utils/csdForms";
 import { OPS } from "../styles/opsModalStyles";
+import { CsdPrintModal } from "./CsdPrintModal";
 import { useEcargoRegisterActions } from "./EcargoRegisterActionsContext";
 import { useTcsPortalActionsContext } from "./TcsPortalActionsContext";
 
@@ -94,6 +100,18 @@ function IconEcargo() {
   );
 }
 
+function IconCsd() {
+  return (
+    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 12h6M9 16h6M7 4h7l3 3v13a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z"
+      />
+    </svg>
+  );
+}
+
 function menuPositionFromTrigger(btn: HTMLElement): CSSProperties {
   const tr = btn.getBoundingClientRect();
   const gap = 4;
@@ -132,11 +150,16 @@ export function ShipmentRowActionsMenu({
   const showTcsEsid = isTcsWarehouse(row.warehouse) && Boolean(tcs);
   const showFillEsid = showTcsEsid && awbDigitsKey(row.awb).length === 11;
   const showEcargo = isEcargoScscWarehouse(row.warehouse) && Boolean(ecargo);
+  const showCsd = canPrintCsd(row);
+  const csdCarrier = csdCarrierForShipment(row);
+  const csdProfile = csdCarrier ? getCsdCarrierProfile(csdCarrier) : null;
+  const [csdOpen, setCsdOpen] = useState(false);
   const menuExtras =
     (showDim ? 1 : 0) +
     (showTcsDim ? 2 : 0) +
     (showTcsEsid ? 1 : 0) +
     (showFillEsid ? 1 : 0) +
+    (showCsd ? 1 : 0) +
     1;
 
   const confirmDelete = () => {
@@ -264,6 +287,18 @@ export function ShipmentRowActionsMenu({
               `row-pdf-esid-${row.id}`
             )
           : null}
+        {showCsd && csdCarrier && csdProfile
+          ? menuItem(
+              `In CSD ${csdCarrier}`,
+              () => {
+                closeMenu();
+                setCsdOpen(true);
+              },
+              undefined,
+              `row-csd-${row.id}`,
+              `Form CSD ${csdProfile.airlineName} — nhập Transit rồi in`
+            )
+          : null}
         {menuExtras > 1 ? <div className={`my-0.5 border-t ${OPS.border}`} aria-hidden /> : null}
         {menuItem("Xóa lô", confirmDelete, "danger", `row-delete-${row.id}`)}
       </div>
@@ -305,6 +340,28 @@ export function ShipmentRowActionsMenu({
           )}
         </button>
       ) : null}
+      {showCsd && csdCarrier && csdProfile ? (
+        <button
+          type="button"
+          title={`In CSD ${csdCarrier} (${csdProfile.airlineName}) — nhập Transit rồi in`}
+          aria-label={`In CSD ${csdCarrier}`}
+          data-testid={`row-csd-btn-${row.id}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setCsdOpen(true);
+          }}
+          className="inline-flex h-7 items-center rounded-md border border-rose-500/35 bg-rose-50 px-1.5 text-[10px] font-bold text-rose-900 hover:bg-rose-100"
+        >
+          {compact ? (
+            `CSD`
+          ) : (
+            <>
+              <IconCsd />
+              <span className="ml-0.5">CSD {csdCarrier}</span>
+            </>
+          )}
+        </button>
+      ) : null}
       <button
         ref={triggerRef}
         type="button"
@@ -324,6 +381,11 @@ export function ShipmentRowActionsMenu({
         <IconKebabVertical />
       </button>
       {typeof document !== "undefined" && dropdown ? createPortal(dropdown, document.body) : null}
+      <CsdPrintModal
+        open={csdOpen}
+        shipment={csdOpen ? row : null}
+        onClose={() => setCsdOpen(false)}
+      />
     </div>
   );
 }

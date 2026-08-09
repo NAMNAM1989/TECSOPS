@@ -3,52 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const extensionDir = path.join(root, "chrome-extension");
 const outputDir = path.join(root, "public", "downloads");
-const manifest = JSON.parse(
-  fs.readFileSync(path.join(extensionDir, "manifest.json"), "utf8")
-);
-
-const runtimeFiles = [
-  "manifest.json",
-  "background.js",
-  "content-ops.js",
-  "content-tcs.js",
-  "content-ecargo.js",
-  "popup.html",
-  "popup.js",
-  "locators.json",
-];
-
-const installText = `TECSOPS Chrome Extension v${manifest.version}
-
-Hỗ trợ:
-- Điền ESID TCS (tcs.com.vn)
-- Đăng ký eCargo SCSC VCT 1-click (điền + Tạo phiếu + OTP + QR)
-
-CÀI TRÊN MÁY MỚI
-1. Giải nén toàn bộ file ZIP này vào một thư mục cố định.
-2. Mở Chrome: chrome://extensions
-3. Bật "Chế độ dành cho nhà phát triển".
-4. Chọn "Tải tiện ích đã giải nén" (Load unpacked).
-5. Chọn đúng thư mục vừa giải nén.
-6. Mở popup extension và kiểm tra phiên bản v${manifest.version}.
-7. F5 trang Ops.
-8. Kho TCS: Đồng bộ TCS / Điền ESID.
-9. Kho SCSC: nút eCargo → Đăng ký eCargo (bắt buộc Ext v${manifest.version}+).
-
-CẬP NHẬT
-Tải ZIP mới, giải nén đè vào thư mục cũ, sau đó bấm nút tải lại tại
-chrome://extensions và F5 cả Ops lẫn tab TCS / eCargo.
-`;
-
-const entries = [
-  ...runtimeFiles.map((name) => ({
-    name,
-    data: fs.readFileSync(path.join(extensionDir, name)),
-  })),
-  { name: "INSTALL.txt", data: Buffer.from(installText, "utf8") },
-];
 
 function crc32(buffer) {
   let crc = 0xffffffff;
@@ -135,56 +90,107 @@ function createZip(files) {
   return Buffer.concat([...localParts, centralDirectory, end]);
 }
 
+function packageExt({
+  dirName,
+  files,
+  stableZipName,
+  versionedPrefix,
+  installText,
+  logTag,
+}) {
+  const dir = path.join(root, dirName);
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(dir, "manifest.json"), "utf8")
+  );
+  const entries = [
+    ...files.map((name) => ({
+      name,
+      data: fs.readFileSync(path.join(dir, name)),
+    })),
+    { name: "INSTALL.txt", data: Buffer.from(installText(manifest.version), "utf8") },
+  ];
+  const archive = createZip(entries);
+  const versionedName = `${versionedPrefix}-v${manifest.version}.zip`;
+  fs.writeFileSync(path.join(outputDir, stableZipName), archive);
+  fs.writeFileSync(path.join(outputDir, versionedName), archive);
+  console.info(
+    `[${logTag}] v${manifest.version} · ${versionedName} · ${entries.length} files · ${archive.length} bytes`
+  );
+}
+
 fs.mkdirSync(outputDir, { recursive: true });
-const archive = createZip(entries);
-const versionedName = `tecsops-chrome-extension-v${manifest.version}.zip`;
-const stablePath = path.join(outputDir, "tecsops-chrome-extension.zip");
-const versionedPath = path.join(outputDir, versionedName);
-fs.writeFileSync(stablePath, archive);
-fs.writeFileSync(versionedPath, archive);
-console.info(
-  `[extension:package] v${manifest.version} · ${versionedName} · ${entries.length} files · ${archive.length} bytes`
-);
 
-/** Ext B — kho TCS (tài khoản độc lập). */
-const directDir = path.join(root, "chrome-extension-tcs");
-const directManifest = JSON.parse(
-  fs.readFileSync(path.join(directDir, "manifest.json"), "utf8")
-);
-const directFiles = [
-  "manifest.json",
-  "background.js",
-  "content-ops.js",
-  "content-tcs.js",
-  "popup.html",
-  "popup.js",
-  "locators.json",
-  "INSTALL.txt",
-  "README.md",
-];
-const directInstall = `TECSOPS — Kho TCS ESID v${directManifest.version}
+packageExt({
+  dirName: "chrome-extension",
+  files: [
+    "manifest.json",
+    "background.js",
+    "content-ops.js",
+    "content-tcs.js",
+    "popup.html",
+    "popup.js",
+    "locators.json",
+  ],
+  stableZipName: "tecsops-chrome-extension.zip",
+  versionedPrefix: "tecsops-chrome-extension",
+  logTag: "extension:package:tecs-tcs",
+  installText: (v) => `TECSOPS — Kho TECS-TCS ESID v${v}
 
-Ext riêng cho kho TCS (tài khoản portal độc lập với Ext TECS-TCS).
+Ext riêng ESID kho TECS-TCS (tcs.com.vn).
+eCargo → Ext SCSC riêng. Kho TCS → Ext TCS trên Chrome profile khác.
 
 1. Giải nén ZIP vào thư mục cố định.
-2. chrome://extensions → Load unpacked → chọn thư mục này.
-3. Giữ luôn Ext TECS hub nếu vẫn dùng TECS-TCS / eCargo.
-4. F5 Ops → chọn kho TCS → Đồng bộ.
-`;
-const directEntries = [
-  ...directFiles.map((name) => ({
-    name,
-    data: fs.readFileSync(path.join(directDir, name)),
-  })),
-  { name: "INSTALL.txt", data: Buffer.from(directInstall, "utf8") },
-];
-const directArchive = createZip(directEntries);
-const directVersioned = `tecsops-chrome-extension-tcs-v${directManifest.version}.zip`;
-fs.writeFileSync(
-  path.join(outputDir, "tecsops-chrome-extension-tcs.zip"),
-  directArchive
-);
-fs.writeFileSync(path.join(outputDir, directVersioned), directArchive);
-console.info(
-  `[extension:package:tcs] v${directManifest.version} · ${directVersioned} · ${directEntries.length} files · ${directArchive.length} bytes`
-);
+2. chrome://extensions → Load unpacked.
+3. F5 Ops → chọn kho TECS-TCS → Đăng nhập / Quét / Điền.
+`,
+});
+
+packageExt({
+  dirName: "chrome-extension-tcs",
+  files: [
+    "manifest.json",
+    "background.js",
+    "content-ops.js",
+    "content-tcs.js",
+    "popup.html",
+    "popup.js",
+    "locators.json",
+    "README.md",
+  ],
+  stableZipName: "tecsops-chrome-extension-tcs.zip",
+  versionedPrefix: "tecsops-chrome-extension-tcs",
+  logTag: "extension:package:tcs",
+  installText: (v) => `TECSOPS — Kho TCS ESID v${v}
+
+Ext riêng ESID kho TCS. BẮT BUỘC Chrome profile riêng với Ext TECS-TCS.
+
+1. Giải nén ZIP vào thư mục cố định.
+2. chrome://extensions → Load unpacked.
+3. F5 Ops → chọn kho TCS → Đăng nhập / Quét / Điền.
+eCargo → Ext SCSC riêng.
+`,
+});
+
+packageExt({
+  dirName: "chrome-extension-scsc",
+  files: [
+    "manifest.json",
+    "background.js",
+    "content-ops.js",
+    "content-ecargo.js",
+    "popup.html",
+    "popup.js",
+    "README.md",
+  ],
+  stableZipName: "tecsops-chrome-extension-scsc.zip",
+  versionedPrefix: "tecsops-chrome-extension-scsc",
+  logTag: "extension:package:scsc",
+  installText: (v) => `TECSOPS — Kho SCSC eCargo v${v}
+
+Ext riêng đăng ký eCargo SCSC (VCT 1-click OTP+QR).
+
+1. Giải nén ZIP vào thư mục cố định.
+2. chrome://extensions → Load unpacked.
+3. F5 Ops → chọn kho SCSC → Đăng ký eCargo.
+`,
+});

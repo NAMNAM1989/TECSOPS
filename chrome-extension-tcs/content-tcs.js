@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.20";
+  const SCRIPT_VERSION = "2.0.22";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -65,11 +65,12 @@
   // Prefetch sớm; runFill vẫn await để chắc chắn.
   void ensureLocators();
 
-  /** @type {{ version: string, busy: boolean, runFill: Function }} */
-  const api = (window.__TECSOPS_TCS__ = window.__TECSOPS_TCS__ || {
+  /** @type {{ version: string, busy: boolean, runFill: Function, runDownloadPdf: Function }} */
+  const api = (window.__TECSOPS_TCS_DIRECT__ = window.__TECSOPS_TCS_DIRECT__ || {
     version: SCRIPT_VERSION,
     busy: false,
     runFill: null,
+    runDownloadPdf: null,
   });
   api.version = SCRIPT_VERSION;
 
@@ -283,6 +284,66 @@
 
   api.runFill = runFill;
 
+  /**
+   * Tải PDF ESID: danh sách → AWB# → mở dòng → IN → lấy HTML phiếu (canvas→img).
+   * Background sẽ printToPDF + chrome.downloads.
+   */
+  async function runDownloadPdf(payload) {
+    if (api.busy) {
+      return { ok: false, error: "BUSY", message: "Ext đang bận — thử lại sau." };
+    }
+    api.busy = true;
+    try {
+      await ensureLocators();
+      const awb = String(payload?.awb || payload?.AWB || "").replace(/\D/g, "").slice(0, 11);
+      if (awb.length !== 11) {
+        return { ok: false, error: "VALIDATION", message: "AWB phải đủ 11 số" };
+      }
+      if (needsLogin()) {
+        return {
+          ok: false,
+          error: "NEED_LOGIN",
+          message: "Chưa đăng nhập Ext kho TCS — bấm Đăng nhập trước khi tải PDF.",
+        };
+      }
+      showWorkspaceOverlay("DOWNLOADING", `Tìm ESID …${awb.slice(-8)}`, 0, 5);
+      const prepared = await prepareEsidDetailForPdf(awb);
+      if (!prepared.ok) {
+        updateWorkspaceOverlay("ERROR", prepared.message || "Không mở được phiếu", 0, 1);
+        return prepared;
+      }
+      updateWorkspaceOverlay("DOWNLOADING", "Bấm IN lấy phiếu…", 3, 5);
+      installPrintStub();
+      if (!clickInButton()) {
+        return { ok: false, error: "NO_PRINT", message: "Không thấy / không bấm được nút IN" };
+      }
+      updateWorkspaceOverlay("DOWNLOADING", "Đọc HTML phiếu…", 4, 5);
+      const bill = await waitForBillHtml(9000);
+      if (!bill?.html) {
+        return {
+          ok: false,
+          error: "NO_BILL",
+          message: "Sau IN không thấy phiếu ESID trong iframe/popup.",
+        };
+      }
+      const pdfName = `${awb.slice(0, 3)}-${awb.slice(3)}_ESID.pdf`;
+      updateWorkspaceOverlay("READY", `Đã lấy phiếu …${awb.slice(-8)}`, 1, 1);
+      return {
+        ok: true,
+        awb,
+        pdf_name: pdfName,
+        html: bill.html,
+        bill_chars: bill.html.length,
+        source: "chrome-extension-tcs-direct",
+        scriptVersion: SCRIPT_VERSION,
+        message: `Đã lấy phiếu ESID …${awb.slice(-8)} — đang lưu PDF…`,
+      };
+    } finally {
+      api.busy = false;
+    }
+  }
+  api.runDownloadPdf = runDownloadPdf;
+
   if (!window.__TECSOPS_TCS_LISTENER__) {
     window.__TECSOPS_TCS_LISTENER__ = true;
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -301,8 +362,8 @@
       if (msg.type === "TCS_PING") {
         reply({
           ok: true,
-          scriptVersion: window.__TECSOPS_TCS__?.version || SCRIPT_VERSION,
-          busy: Boolean(window.__TECSOPS_TCS__?.busy),
+          scriptVersion: window.__TECSOPS_TCS_DIRECT__?.version || SCRIPT_VERSION,
+          busy: Boolean(window.__TECSOPS_TCS_DIRECT__?.busy),
           loggedIn: !needsLogin(),
         });
         return true;
@@ -356,7 +417,7 @@
       }
 
       if (msg.type === "FILL_ESID") {
-        const fn = window.__TECSOPS_TCS__?.runFill;
+        const fn = window.__TECSOPS_TCS_DIRECT__?.runFill;
         if (typeof fn !== "function") {
           reply({
             ok: false,
@@ -379,6 +440,30 @@
           });
         return true;
       }
+
+      if (msg.type === "DOWNLOAD_ESID_PDF") {
+        const fn = window.__TECSOPS_TCS_DIRECT__?.runDownloadPdf;
+        if (typeof fn !== "function") {
+          reply({
+            ok: false,
+            error: "NO_RUNNER",
+            message: "Content script chưa sẵn sàng — Reload extension + F5 tab TCS.",
+          });
+          return true;
+        }
+        void fn(msg.payload || {})
+          .then(reply)
+          .catch((err) => {
+            reply({
+              ok: false,
+              error: "DOWNLOAD_FAILED",
+              message: err instanceof Error ? err.message : String(err),
+              scriptVersion: SCRIPT_VERSION,
+            });
+          });
+        return true;
+      }
+
       reply({
         ok: false,
         error: "UNKNOWN_TYPE",
@@ -389,10 +474,10 @@
   }
 
   function ensureWorkspaceOverlay() {
-    let root = document.getElementById("tecsops-tcs-workspace");
+    let root = document.getElementById("tecsops-tcs-direct-workspace");
     if (root) return root;
     root = document.createElement("aside");
-    root.id = "tecsops-tcs-workspace";
+    root.id = "tecsops-tcs-direct-workspace";
     root.innerHTML = `
       <div class="tecsops-head">
         <strong>TECSOPS · TCS</strong>
@@ -404,22 +489,22 @@
       <div class="tecsops-count" data-count></div>
     `;
     const style = document.createElement("style");
-    style.id = "tecsops-tcs-workspace-style";
+    style.id = "tecsops-tcs-direct-workspace-style";
     style.textContent = `
-      #tecsops-tcs-workspace {
+      #tecsops-tcs-direct-workspace {
         position: fixed; z-index: 2147483647; top: 72px; right: 18px; width: 290px;
         padding: 12px; border: 1px solid rgba(14,165,233,.45); border-radius: 14px;
         background: rgba(15,23,42,.95); color: #f8fafc; box-shadow: 0 18px 45px rgba(15,23,42,.32);
         font: 12px/1.45 system-ui, sans-serif; backdrop-filter: blur(10px);
       }
-      #tecsops-tcs-workspace .tecsops-head { display:flex; align-items:center; justify-content:space-between; }
-      #tecsops-tcs-workspace .tecsops-head strong { color:#7dd3fc; letter-spacing:.04em; }
-      #tecsops-tcs-workspace button { border:0; background:transparent; color:#cbd5e1; font-size:18px; cursor:pointer; }
-      #tecsops-tcs-workspace .tecsops-phase { margin-top:8px; color:#34d399; font-weight:800; }
-      #tecsops-tcs-workspace .tecsops-message { margin-top:3px; min-height:34px; }
-      #tecsops-tcs-workspace .tecsops-track { height:6px; margin-top:8px; overflow:hidden; border-radius:999px; background:#334155; }
-      #tecsops-tcs-workspace .tecsops-track span { display:block; width:0; height:100%; background:#38bdf8; transition:width .2s ease; }
-      #tecsops-tcs-workspace .tecsops-count { margin-top:5px; color:#94a3b8; font-size:10px; }
+      #tecsops-tcs-direct-workspace .tecsops-head { display:flex; align-items:center; justify-content:space-between; }
+      #tecsops-tcs-direct-workspace .tecsops-head strong { color:#7dd3fc; letter-spacing:.04em; }
+      #tecsops-tcs-direct-workspace button { border:0; background:transparent; color:#cbd5e1; font-size:18px; cursor:pointer; }
+      #tecsops-tcs-direct-workspace .tecsops-phase { margin-top:8px; color:#34d399; font-weight:800; }
+      #tecsops-tcs-direct-workspace .tecsops-message { margin-top:3px; min-height:34px; }
+      #tecsops-tcs-direct-workspace .tecsops-track { height:6px; margin-top:8px; overflow:hidden; border-radius:999px; background:#334155; }
+      #tecsops-tcs-direct-workspace .tecsops-track span { display:block; width:0; height:100%; background:#38bdf8; transition:width .2s ease; }
+      #tecsops-tcs-direct-workspace .tecsops-count { margin-top:5px; color:#94a3b8; font-size:10px; }
       .tecsops-active-field { outline:3px solid #fb923c !important; outline-offset:2px !important; }
       .tecsops-done-field { outline:2px solid #34d399 !important; outline-offset:1px !important; }
     `;
@@ -603,7 +688,7 @@
       return { ok: false, error: "LOGIN_BUTTON_NOT_FOUND", message: "Không thấy nút Đăng nhập" };
     }
     updateWorkspaceOverlay("LOGIN", "Đang gửi đăng nhập…", 3, 3);
-    window.setTimeout(() => simulateClick(submit), 180);
+    window.setTimeout(() => simulateClick(submit), 40);
     return {
       ok: true,
       clicked: true,
@@ -676,17 +761,15 @@
 
     const allRows = [];
     const seen = new Set();
+    // Đã lọc ngày trên portal — lấy toàn bộ dòng kết quả (không cắt theo flight_date).
     for (let pageIndex = 0; pageIndex < 40; pageIndex += 1) {
       const pageNumber = currentPageNumber();
       const rows = readEsidRows(pageNumber);
-      let keptOnPage = 0;
       for (const row of rows) {
-        if (!rowMatchesSessionDate(row, sessionDate)) continue;
         const key = `${row.awb}|${row.esid}|${row.flight_date}|${row.status}`;
         if (seen.has(key)) continue;
         seen.add(key);
         allRows.push(row);
-        keptOnPage += 1;
       }
       updateWorkspaceOverlay(
         "SCANNING",
@@ -694,11 +777,10 @@
         pageIndex + 1,
         Math.max(pageIndex + 2, 2)
       );
-      if (rows.length > 0 && keptOnPage === 0) break;
       const next = document.querySelector(
         ".ant-pagination-next:not(.ant-pagination-disabled)"
       );
-      if (!next || !isVisible(next)) break;
+      if (!next || !isVisible(next) || rows.length === 0) break;
       const before = rows[0]?.awb || "";
       simulateClick(next);
       await waitForTableChange(before);
@@ -707,20 +789,41 @@
     const opsAwbs = (Array.isArray(payload.awbs) ? payload.awbs : [])
       .map((awb) => String(awb || "").replace(/\D/g, "").slice(0, 11))
       .filter((awb) => awb.length === 11);
+    const opsSet = new Set(opsAwbs);
     const readyRows = allRows.filter((row) => isReceptionComplete(row.status, row.text));
     const ready = [];
     const readySet = new Set();
-    for (const row of readyRows) {
-      const digits = String(row.awb || "").replace(/\D/g, "");
-      let match =
-        digits.length >= 11 && opsAwbs.includes(digits.slice(0, 11))
-          ? digits.slice(0, 11)
-          : "";
-      if (!match && digits.length >= 8) {
-        const candidates = opsAwbs.filter((awb) => awb.slice(3) === digits.slice(-8));
-        if (candidates.length === 1) match = candidates[0];
+
+    function awbDigitsFromRow(row) {
+      const fromCell = String(row?.awb || "").replace(/\D/g, "");
+      if (fromCell.length >= 11) return fromCell.slice(0, 11);
+      const fromText = String(row?.text || "").replace(/\D/g, "");
+      const m = fromText.match(/(\d{11})/);
+      if (m) return m[1];
+      if (fromCell.length >= 8) return fromCell.slice(-8);
+      return fromCell;
+    }
+
+    function matchOpsAwb(digits) {
+      if (!digits) return "";
+      if (digits.length === 11) {
+        if (!opsSet.size || opsSet.has(digits)) return digits;
       }
-      if (!match || readySet.has(match)) continue;
+      if (digits.length >= 8 && opsSet.size) {
+        const last8 = digits.slice(-8);
+        const candidates = opsAwbs.filter((awb) => awb.slice(3) === last8);
+        if (candidates.length === 1) return candidates[0];
+        if (candidates.length === 0 && digits.length === 11) return "";
+      }
+      // Không có danh sách Ops — trả AWB 11 số từ TCS để Ops đối soát theo kho.
+      if (!opsSet.size && digits.length === 11) return digits;
+      return "";
+    }
+
+    for (const row of readyRows) {
+      const digits = awbDigitsFromRow(row);
+      const match = matchOpsAwb(digits.length >= 8 ? digits : awbDigitsFromRow(row));
+      if (!match || match.length !== 11 || readySet.has(match)) continue;
       readySet.add(match);
       ready.push({
         awb: match,
@@ -751,7 +854,7 @@
     });
     updateWorkspaceOverlay(
       "READY",
-      `Ngày ${sessionDate} · ${allRows.length} dòng · ${ready.length} AWB sẵn sàng`,
+      `Ngày ${sessionDate} · ${allRows.length} dòng · ${readyRows.length} HT · khớp Ops ${ready.length}`,
       1,
       1
     );
@@ -761,7 +864,7 @@
       session_date: sessionDate,
       ready,
       items,
-      total: opsAwbs.length,
+      total: opsAwbs.length || ready.length,
       list_total: allRows.length,
       reception_total: readyRows.length,
       cache_count: allRows.length,
@@ -1088,7 +1191,13 @@
 
   function isReceptionComplete(status, text) {
     const normalized = normalizeText(`${status || ""} ${text || ""}`);
-    return normalized.includes("HOAN THANH TIEP NHAN");
+    // Đủ cụm «Hoàn thành tiếp nhận» — tránh khớp nhầm «Hoàn thành» đơn.
+    return (
+      normalized.includes("HOAN THANH TIEP NHAN") ||
+      normalized.includes("HOANTHANHTIEPNHAN") ||
+      normalized.includes("RECEPTION COMPLETED") ||
+      normalized.includes("RECEPTIONCOMPLETED")
+    );
   }
 
   function needsLogin() {
@@ -2083,6 +2192,264 @@
 
   function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
+  }
+
+  function awbDigitsFromText(text) {
+    const digits = String(text || "").replace(/\D/g, "");
+    if (digits.length >= 11) return digits.slice(0, 11);
+    const m = String(text || "").match(/(\d{11})/);
+    return m ? m[1] : digits;
+  }
+
+  function findAwbSearchInputs() {
+    const last =
+      document.querySelector("#search-form_awbNum") ||
+      document.querySelector('input[placeholder="AWB#"]') ||
+      [...document.querySelectorAll("input")].find((el) =>
+        normalizeText(el.getAttribute("placeholder") || "").includes("AWB#")
+      ) ||
+      null;
+    const prefix =
+      document.querySelector("#search-form_awbPfx") ||
+      document.querySelector('input[placeholder="Prefix"]') ||
+      [...document.querySelectorAll("input")].find((el) =>
+        normalizeText(el.getAttribute("placeholder") || "").includes("PREFIX")
+      ) ||
+      null;
+    return { prefix, last };
+  }
+
+  function clickSearchEsidList() {
+    const primary = [...document.querySelectorAll("button.ant-btn-primary")].find((btn) =>
+      normalizeText(btn.textContent || "").includes("TIM KIEM")
+    );
+    if (primary) {
+      simulateClick(primary);
+      return true;
+    }
+    const any = [...document.querySelectorAll("button")].find((btn) =>
+      normalizeText(btn.textContent || "").includes("TIM KIEM")
+    );
+    if (any) {
+      simulateClick(any);
+      return true;
+    }
+    return false;
+  }
+
+  function findInButton() {
+    return (
+      [...document.querySelectorAll("button, a, [role='button'], input[type='button']")].find(
+        (el) => {
+          const label = normalizeText(el.innerText || el.value || el.getAttribute("aria-label") || "");
+          return label === "IN" && isVisible(el);
+        }
+      ) || null
+    );
+  }
+
+  function clickInButton() {
+    const btn = findInButton();
+    if (!btn) return false;
+    try {
+      btn.scrollIntoView({ block: "center" });
+    } catch {
+      /* ignore */
+    }
+    simulateClick(btn);
+    return true;
+  }
+
+  function installPrintStub() {
+    try {
+      const root = document.documentElement;
+      root.dataset.tecsopsPrintStub = "1";
+      window.print = () => false;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function textLooksLikeEsidBill(text) {
+    const raw = String(text || "").trim();
+    if (raw.length < 120) return false;
+    const low = normalizeText(raw);
+    const chromeHits = ["GIOI THIEU", "DANH SACH ESID", "HOTLINE", "TIM KIEM", "DANG XUAT"].filter(
+      (m) => low.includes(m)
+    ).length;
+    if (chromeHits >= 2) return false;
+    const markers = [
+      "SHIPPER",
+      "CONSIGNEE",
+      "AIR WAYBILL",
+      "INSTRUCTION",
+      "NGUOI GUI",
+      "NGUOI NHAN",
+      "SAN BAY",
+      "KHONG VAN DON",
+    ];
+    const hits = markers.filter((m) => low.includes(m)).length;
+    return hits >= 2 || (hits >= 1 && raw.length >= 280);
+  }
+
+  function serializeBillDocument(doc) {
+    if (!doc) return "";
+    try {
+      for (const canvas of [...doc.querySelectorAll("canvas")]) {
+        try {
+          const img = doc.createElement("img");
+          img.src = canvas.toDataURL("image/png");
+          img.setAttribute("style", canvas.getAttribute("style") || "");
+          if (canvas.width) img.width = canvas.width;
+          if (canvas.height) img.height = canvas.height;
+          canvas.replaceWith(img);
+        } catch {
+          /* ignore */
+        }
+      }
+      const ORIGIN = "https://www.tcs.com.vn";
+      const abs = (u) => {
+        if (!u) return u;
+        const s = String(u);
+        if (/^(data:|blob:|https?:)/i.test(s)) return s;
+        try {
+          return new URL(s, `${ORIGIN}/`).href;
+        } catch {
+          return s;
+        }
+      };
+      for (const el of doc.querySelectorAll("link[href], script[src], img[src]")) {
+        const attr = el.hasAttribute("href") ? "href" : "src";
+        const v = el.getAttribute(attr);
+        if (v) el.setAttribute(attr, abs(v));
+      }
+      let head = doc.head;
+      if (!head) {
+        head = doc.createElement("head");
+        doc.documentElement.insertBefore(head, doc.body);
+      }
+      if (!head.querySelector("base")) {
+        const b = doc.createElement("base");
+        b.href = `${ORIGIN}/`;
+        head.prepend(b);
+      }
+      if (!head.querySelector("style[data-tecsops-page]")) {
+        const st = doc.createElement("style");
+        st.setAttribute("data-tecsops-page", "1");
+        st.textContent =
+          "@media print { @page { size: A4 portrait; margin: 0; } html, body { margin: 0; } }";
+        head.appendChild(st);
+      }
+      return "<!DOCTYPE html>" + doc.documentElement.outerHTML;
+    } catch {
+      return "";
+    }
+  }
+
+  function collectBillHtmlNow() {
+    let best = null;
+    let bestScore = 0;
+    for (let i = 0; i < window.frames.length; i += 1) {
+      try {
+        const frame = window.frames[i];
+        const doc = frame.document;
+        const text = String(doc?.body?.innerText || "").trim();
+        if (!textLooksLikeEsidBill(text)) continue;
+        const html = serializeBillDocument(doc);
+        const score = text.length + html.length;
+        if (html && score > bestScore) {
+          bestScore = score;
+          best = html;
+        }
+      } catch {
+        /* cross-origin */
+      }
+    }
+    if (best) return { html: best };
+    const mainText = String(document.body?.innerText || "").trim();
+    if (textLooksLikeEsidBill(mainText)) {
+      const html = serializeBillDocument(document);
+      if (html) return { html };
+    }
+    return null;
+  }
+
+  async function waitForBillHtml(timeoutMs = 9000) {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const hit = collectBillHtmlNow();
+      if (hit?.html && hit.html.length > 200) return hit;
+      await sleep(120);
+    }
+    return collectBillHtmlNow();
+  }
+
+  async function prepareEsidDetailForPdf(awbDigits) {
+    clickTabByText("DANH SÁCH ESID") || clickTabByText("DANH SACH ESID");
+    await sleep(280);
+    if (findInButton()) {
+      const pageText = String(document.body?.innerText || "");
+      if (pageText.includes(awbDigits.slice(-8)) || pageText.includes(awbDigits)) {
+        updateWorkspaceOverlay("DOWNLOADING", "Đã mở đúng phiếu", 2, 5);
+        return { ok: true };
+      }
+      clickTabByText("DANH SÁCH ESID") || clickTabByText("DANH SACH ESID");
+      await sleep(200);
+    }
+
+    clearDateFiltersBeforeScan();
+    await sleep(80);
+    const { prefix, last } = findAwbSearchInputs();
+    if (!last) {
+      return { ok: false, error: "AWB_INPUT", message: "Không thấy ô AWB# trên danh sách ESID" };
+    }
+    const last8 = awbDigits.slice(3);
+    const pfx = awbDigits.slice(0, 3);
+    if (prefix) setReactInput(prefix, pfx);
+    setReactInput(last, last8);
+    updateWorkspaceOverlay("DOWNLOADING", `Tìm AWB# ${last8}`, 1, 5);
+    if (!clickSearchEsidList()) {
+      return { ok: false, error: "SEARCH_NOT_FOUND", message: "Không thấy nút TÌM KIẾM" };
+    }
+    await waitForTableRows(8000);
+    await sleep(200);
+
+    const rows = [...document.querySelectorAll(".ant-table-tbody tr, table tbody tr")].filter(
+      (row) => row.querySelectorAll("td").length >= 3
+    );
+    let match = null;
+    for (const row of rows) {
+      const text = String(row.innerText || "");
+      const digits = awbDigitsFromText(text);
+      if (digits === awbDigits || digits.slice(-8) === last8 || text.includes(last8)) {
+        match = row;
+        break;
+      }
+    }
+    if (!match) {
+      return {
+        ok: false,
+        error: "NOT_FOUND",
+        message: `Không thấy dòng ESID cho AWB …${last8} trên Ext kho TCS (rows=${rows.length}).`,
+      };
+    }
+    updateWorkspaceOverlay("DOWNLOADING", "Mở chi tiết phiếu…", 2, 5);
+    simulateClick(match);
+    await sleep(350);
+    for (let i = 0; i < 30; i += 1) {
+      if (findInButton()) return { ok: true };
+      await sleep(100);
+    }
+    try {
+      window.scrollTo(0, document.body.scrollHeight);
+    } catch {
+      /* ignore */
+    }
+    await sleep(200);
+    if (!findInButton()) {
+      return { ok: false, error: "NO_PRINT", message: "Đã mở dòng nhưng không thấy nút IN" };
+    }
+    return { ok: true };
   }
 
   console.info(`[tecsops-ext] content-tcs ready v${SCRIPT_VERSION}`);

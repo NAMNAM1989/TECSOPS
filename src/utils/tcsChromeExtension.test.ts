@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   bootstrapTcsExtension,
+  downloadEsidPdfViaExtension,
+  fillEcargoVctViaExtension,
   pingTcsExtension,
   TCS_EXT_CHANNEL,
   TCS_EXT_CHANNEL_DIRECT,
+  TCS_EXT_CHANNEL_SCSC,
   tcsExtChannelForWarehouse,
 } from "./tcsChromeExtension";
 
@@ -94,9 +97,10 @@ describe("tcsChromeExtension bridge", () => {
     expect(result.error).toBe("TIMEOUT");
   });
 
-  it("route channel theo kho TECS-TCS vs TCS", () => {
+  it("route channel theo kho TECS-TCS / TCS / SCSC", () => {
     expect(tcsExtChannelForWarehouse("TECS-TCS")).toBe(TCS_EXT_CHANNEL);
     expect(tcsExtChannelForWarehouse("TCS")).toBe(TCS_EXT_CHANNEL_DIRECT);
+    expect(tcsExtChannelForWarehouse("SCSC")).toBe(TCS_EXT_CHANNEL_SCSC);
   });
 
   it("ping Ext kho TCS qua channel direct", async () => {
@@ -110,6 +114,53 @@ describe("tcsChromeExtension bridge", () => {
       expect.objectContaining({
         channel: TCS_EXT_CHANNEL_DIRECT,
         type: "PING",
+      }),
+      window.location.origin
+    );
+  });
+
+  it("eCargo đi qua channel SCSC", async () => {
+    const spy = answerNext(
+      { ok: true, message: "filled" },
+      TCS_EXT_CHANNEL_SCSC
+    );
+    const result = await fillEcargoVctViaExtension({
+      header: { agentName: "A" },
+      awbs: [],
+    } as never);
+    expect(result.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: TCS_EXT_CHANNEL_SCSC,
+        type: "FILL_ECARGO_VCT",
+      }),
+      window.location.origin
+    );
+  });
+
+  it("DOWNLOAD_ESID_PDF qua channel kho TCS", async () => {
+    const spy = answerNext(
+      {
+        ok: true,
+        pdf_name: "297-39702876_ESID.pdf",
+        pdf_base64: "JVBERi0xLjQ=",
+        downloaded: true,
+      },
+      TCS_EXT_CHANNEL_DIRECT
+    );
+    const result = await downloadEsidPdfViaExtension(
+      { awb: "29739702876" },
+      { warehouse: "TCS" }
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      pdf_name: "297-39702876_ESID.pdf",
+    });
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: TCS_EXT_CHANNEL_DIRECT,
+        type: "DOWNLOAD_ESID_PDF",
+        payload: { awb: "29739702876" },
       }),
       window.location.origin
     );

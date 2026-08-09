@@ -56,5 +56,5 @@ export function saveTcsExtLoginPrefs(
 }
 
 export function tcsExtLabel(warehouse: TcsPortalExtWarehouse): string {
-  return warehouse === "TCS" ? "Ext kho TCS" : "Ext TECS-TCS";
+  return warehouse === "TCS" ? "Ext kho TCS ESID" : "Ext TECS-TCS ESID";
 }

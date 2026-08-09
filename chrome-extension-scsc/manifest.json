@@ -1,16 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "TECSOPS — Kho TECS-TCS ESID",
-  "version": "2.4.2",
-  "description": "Điền ESID TCS cho kho TECS-TCS (tài khoản độc lập). eCargo SCSC dùng Ext riêng.",
+  "name": "TECSOPS — Kho SCSC eCargo",
+  "version": "1.0.0",
+  "description": "Đăng ký eCargo SCSC VCT 1-click (điền + Tạo phiếu + OTP + QR) — độc lập với Ext ESID.",
   "permissions": [
     "tabs",
     "scripting",
     "storage"
   ],
   "host_permissions": [
-    "https://www.tcs.com.vn/*",
-    "https://tcs.com.vn/*",
+    "https://ecargo.scsc.vn/*",
     "http://127.0.0.1:8765/*",
     "http://localhost:8765/*",
     "http://localhost:5173/*",
@@ -24,7 +23,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "TECSOPS · Kho TECS-TCS ESID",
+    "default_title": "TECSOPS · Kho SCSC eCargo",
     "default_popup": "popup.html"
   },
   "content_scripts": [
@@ -44,24 +43,12 @@
     },
     {
       "matches": [
-        "https://www.tcs.com.vn/*",
-        "https://tcs.com.vn/*"
+        "https://ecargo.scsc.vn/*"
       ],
       "js": [
-        "content-tcs.js"
+        "content-ecargo.js"
       ],
       "run_at": "document_idle"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "locators.json"
-      ],
-      "matches": [
-        "https://www.tcs.com.vn/*",
-        "https://tcs.com.vn/*"
-      ]
     }
   ]
 }

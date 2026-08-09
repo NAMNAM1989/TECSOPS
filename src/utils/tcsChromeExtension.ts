@@ -2,20 +2,27 @@ import type { EsidDeclareFillPayload } from "./buildEsidDeclareFillPayload";
 import type { EcargoVctFillPayload } from "./buildEcargoVctFillPayload";
 import type { TcsEsidScanItem } from "./tcsPortalAgentApi";
 
-/** Ext TECS-TCS (+ eCargo SCSC). */
+/** Ext TECS-TCS ESID. */
 export const TCS_EXT_CHANNEL = "tecsops-tcs-ext";
-/** Ext kho TCS — tài khoản / session độc lập. */
+/** Ext kho TCS ESID — tài khoản / session độc lập. */
 export const TCS_EXT_CHANNEL_DIRECT = "tecsops-tcs-direct-ext";
+/** Ext kho SCSC eCargo VCT. */
+export const TCS_EXT_CHANNEL_SCSC = "tecsops-scsc-ecargo-ext";
 
 /** Alias cũ — giữ tương thích import. */
 export const TCS_EXT_CHANNEL_HUB = TCS_EXT_CHANNEL;
 
+/** Kho portal ESID. */
 export type TcsPortalExtWarehouse = "TECS-TCS" | "TCS";
+/** Mục tiêu channel Ops → Ext (ESID + eCargo). */
+export type TcsExtChannelTarget = TcsPortalExtWarehouse | "SCSC";
 
 export function tcsExtChannelForWarehouse(
-  warehouse: TcsPortalExtWarehouse = "TECS-TCS"
+  warehouse: TcsExtChannelTarget = "TECS-TCS"
 ): string {
-  return warehouse === "TCS" ? TCS_EXT_CHANNEL_DIRECT : TCS_EXT_CHANNEL;
+  if (warehouse === "TCS") return TCS_EXT_CHANNEL_DIRECT;
+  if (warehouse === "SCSC") return TCS_EXT_CHANNEL_SCSC;
+  return TCS_EXT_CHANNEL;
 }
 
 export type TcsExtensionWorkspace = {
@@ -41,7 +48,7 @@ export type TcsExtResult = {
   warnings?: string[];
   source?: string;
   scriptVersion?: string;
-  portalWarehouse?: TcsPortalExtWarehouse;
+  portalWarehouse?: TcsExtChannelTarget;
   workspace?: TcsExtensionWorkspace;
 };
 
@@ -67,6 +74,7 @@ export type TcsExtBootstrapResult = TcsExtResult & {
   items?: TcsEsidScanItem[];
   total?: number;
   list_total?: number;
+  reception_total?: number;
   cache_count?: number;
 };
 
@@ -80,12 +88,21 @@ export type TcsExtFillResult = TcsExtResult & {
   submit?: boolean;
 };
 
+export type TcsExtDownloadPdfResult = TcsExtResult & {
+  awb?: string;
+  pdf_name?: string;
+  /** Base64 PDF (không có prefix data:) — Ops tạo blob tải về. */
+  pdf_base64?: string;
+  downloaded?: boolean;
+};
+
 type ExtensionCommand =
   | "PING"
   | "TCS_OPEN"
   | "TCS_BOOTSTRAP"
   | "TCS_SCAN_DATE"
   | "FILL_ESID"
+  | "DOWNLOAD_ESID_PDF"
   | "FILL_ECARGO_VCT"
   | "REGISTER_ECARGO_VCT"
   | "ECARGO_LOOKUP_AGENT"
@@ -100,6 +117,12 @@ type Pending = {
 const pending = new Map<string, Pending>();
 let listenerBound = false;
 
+const ALL_CHANNELS = new Set([
+  TCS_EXT_CHANNEL,
+  TCS_EXT_CHANNEL_DIRECT,
+  TCS_EXT_CHANNEL_SCSC,
+]);
+
 function ensureListener() {
   if (listenerBound || typeof window === "undefined") return;
   listenerBound = true;
@@ -113,8 +136,8 @@ function ensureListener() {
     };
     if (
       !data ||
-      (data.channel !== TCS_EXT_CHANNEL &&
-        data.channel !== TCS_EXT_CHANNEL_DIRECT) ||
+      !data.channel ||
+      !ALL_CHANNELS.has(data.channel) ||
       data.direction !== "from-ext"
     ) {
       return;
@@ -132,17 +155,21 @@ function ensureListener() {
   });
 }
 
-function extTimeoutMessage(warehouse: TcsPortalExtWarehouse): string {
-  return warehouse === "TCS"
-    ? "Không nhận được phản hồi từ Chrome extension kho TCS. Cài Ext «TECSOPS — Kho TCS ESID», Reload rồi F5 Ops."
-    : "Không nhận được phản hồi từ Chrome extension TECSOPS. Hãy Reload extension và F5 trang Ops.";
+function extTimeoutMessage(target: TcsExtChannelTarget): string {
+  if (target === "TCS") {
+    return "Không nhận được phản hồi từ Chrome extension kho TCS. Cài Ext «TECSOPS — Kho TCS ESID», Reload rồi F5 Ops.";
+  }
+  if (target === "SCSC") {
+    return "Không nhận được phản hồi từ Chrome extension SCSC eCargo. Cài Ext «TECSOPS — Kho SCSC eCargo», Reload rồi F5 Ops.";
+  }
+  return "Không nhận được phản hồi từ Chrome extension TECS-TCS ESID. Hãy Reload extension và F5 trang Ops.";
 }
 
 function request<T extends TcsExtResult>(
   type: ExtensionCommand,
   payload?: unknown,
   timeoutMs = 60_000,
-  warehouse: TcsPortalExtWarehouse = "TECS-TCS"
+  warehouse: TcsExtChannelTarget = "TECS-TCS"
 ): Promise<T> {
   ensureListener();
   const channel = tcsExtChannelForWarehouse(warehouse);
@@ -179,7 +206,7 @@ function request<T extends TcsExtResult>(
 }
 
 export type TcsExtRequestOpts = {
-  warehouse?: TcsPortalExtWarehouse;
+  warehouse?: TcsExtChannelTarget;
 };
 
 export async function pingTcsExtension(
@@ -231,6 +258,20 @@ export function fillEsidViaExtension(
   return request<TcsExtFillResult>("FILL_ESID", payload, 120_000, warehouse);
 }
 
+/** Kho TCS: tải PDF ESID qua Ext (không Playwright). */
+export function downloadEsidPdfViaExtension(
+  payload: { awb: string },
+  opts?: TcsExtRequestOpts
+): Promise<TcsExtDownloadPdfResult> {
+  const warehouse = opts?.warehouse ?? "TCS";
+  return request<TcsExtDownloadPdfResult>(
+    "DOWNLOAD_ESID_PDF",
+    payload,
+    180_000,
+    warehouse
+  );
+}
+
 export function openTcsExtensionTab(
   opts?: TcsExtRequestOpts
 ): Promise<TcsExtResult> {
@@ -245,7 +286,7 @@ export function fillEcargoVctViaExtension(
     "FILL_ECARGO_VCT",
     payload,
     120_000,
-    "TECS-TCS"
+    "SCSC"
   );
 }
 
@@ -260,12 +301,12 @@ export function registerEcargoVctViaExtension(
     "REGISTER_ECARGO_VCT",
     payload,
     360_000,
-    "TECS-TCS"
+    "SCSC"
   );
 }
 
 export function openEcargoExtensionTab(): Promise<TcsExtResult> {
-  return request<TcsExtResult>("ECARGO_OPEN", undefined, 20_000, "TECS-TCS");
+  return request<TcsExtResult>("ECARGO_OPEN", undefined, 20_000, "SCSC");
 }
 
 /** Tra cứu đại lý trên eCargo (API Customer/Agent). */
@@ -281,6 +322,6 @@ export function lookupEcargoAgentViaExtension(filter: string): Promise<
     "ECARGO_LOOKUP_AGENT",
     { filter, agentName: filter },
     45_000,
-    "TECS-TCS"
+    "SCSC"
   );
 }

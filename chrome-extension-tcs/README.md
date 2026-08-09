@@ -1,13 +1,5 @@
-# TECSOPS — Kho TCS ESID (Ext B)
+# TECSOPS — Chrome extension Kho TCS ESID
 
-Chrome extension riêng cho kho **TCS**: cùng chức năng eSID, **tài khoản đăng nhập độc lập** với Ext TECS-TCS (`../chrome-extension`).
+Channel: `tecsops-tcs-direct-ext`. Storage / overlay / tab ownership tách khỏi Ext TECS-TCS.
 
-| | Ext A (`chrome-extension`) | Ext B (thư mục này) |
-|--|--|--|
-| Kho | TECS-TCS (+ eCargo SCSC) | **TCS** |
-| Channel Ops | `tecsops-tcs-ext` | `tecsops-tcs-direct-ext` |
-| Storage keys | `tecsopsTcs*` | `tecsopsTcsDirect*` |
-
-## Cài
-
-`chrome://extensions` → Load unpacked → chọn `chrome-extension-tcs`.
+**Quan trọng:** dùng Chrome profile (hoặc máy) riêng với tài khoản TECS-TCS.

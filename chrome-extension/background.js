@@ -1,20 +1,17 @@
 /**
- * TECSOPS TCS workspace owner.
- *
- * Extension giữ một tab TCS được ghim và là controller duy nhất khi chạy
- * extension mode. Playwright chỉ là fallback do Ops quyết định.
+ * TECSOPS — Kho TECS-TCS ESID (độc lập).
+ * Chỉ Login / Quét / Điền ESID trên tcs.com.vn. eCargo → Ext SCSC riêng.
  */
 
 const LOGIN_URL = "https://www.tcs.com.vn/AwbLogin";
 const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
-const ECARGO_CREATE_URL = "https://ecargo.scsc.vn/Export/VCTOrder/Create";
 const EXT_VERSION = chrome.runtime.getManifest().version;
-const EXPECTED_SCRIPT_VERSION = "2.0.20";
-const EXPECTED_ECARGO_SCRIPT_VERSION = "2.2.14";
+const EXPECTED_SCRIPT_VERSION = "2.0.21";
 const SESSION_KEY = "tecsopsTcsSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsRememberedCredentials";
 const WORKSPACE_KEY = "tecsopsTcsWorkspace";
 const INDEX_KEY = "tecsopsTcsWorkspaceIndex";
+const PORTAL_WAREHOUSE = "TECS-TCS";
 
 let workspace = {
   phase: "IDLE",
@@ -39,7 +36,7 @@ const workspaceReady = chrome.storage.session.get([WORKSPACE_KEY, INDEX_KEY]).th
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.info("[tecsops-ext] installed", EXT_VERSION);
+  console.info("[tecsops-ext-tecs-tcs] installed", EXT_VERSION);
 });
 
 /** Gọi sendResponse đúng 1 lần; nuốt lỗi kênh đã đóng (tránh spam Errors trên chrome://extensions). */
@@ -79,15 +76,30 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.type === "PING") {
     void workspaceReady
-      .then(() =>
+      .then(async () => {
+        if (!workspace.logged_in && workspace.tab_id != null) {
+          try {
+            const tab = await chrome.tabs.get(workspace.tab_id);
+            if (tab?.id && /tcs\.com\.vn/i.test(String(tab.url || ""))) {
+              await injectTcsContent(tab.id);
+              const ping = await chrome.tabs.sendMessage(tab.id, { type: "TCS_PING" });
+              if (ping?.loggedIn) {
+                setWorkspace({ logged_in: true, phase: workspace.phase || "READY" });
+              }
+            }
+          } catch {
+            /* ignore */
+          }
+        }
         reply({
           ok: true,
           type: "PONG",
           version: EXT_VERSION,
           extensionId: chrome.runtime.id,
+          portalWarehouse: PORTAL_WAREHOUSE,
           workspace,
-        })
-      )
+        });
+      })
       .catch((err) => reply(errorResult("PING_FAILED", err)));
     return true;
   }
@@ -126,52 +138,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
-  if (msg.type === "ECARGO_OPEN") {
-    void withServiceWorkerKeepAlive(findOrOpenEcargoTab({ active: true, pinned: true }))
-      .then((tabId) => reply({ ok: true, tabId, workspace }))
-      .catch((err) => reply(errorResult("OPEN_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "FILL_ECARGO_VCT") {
-    void withServiceWorkerKeepAlive(fillEcargoOnTab(msg.payload))
-      .then(reply)
-      .catch((err) => reply(errorResult("FILL_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "REGISTER_ECARGO_VCT") {
-    void withServiceWorkerKeepAlive(registerEcargoOnTab(msg.payload))
-      .then(reply)
-      .catch((err) => reply(errorResult("REGISTER_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "ECARGO_LOOKUP_AGENT") {
-    void withServiceWorkerKeepAlive(lookupEcargoAgentOnTab(msg.payload))
-      .then(reply)
-      .catch((err) => reply(errorResult("LOOKUP_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "ECARGO_OTP_WAIT") {
-    void withServiceWorkerKeepAlive(ecargoOtpWait(msg))
-      .then(reply)
-      .catch((err) => reply(errorResult("OTP_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "ECARGO_RESULT_FROM_MAIL") {
-    void withServiceWorkerKeepAlive(ecargoResultFromMail(msg))
-      .then(reply)
-      .catch((err) => reply(errorResult("MAIL_RESULT_FAILED", err)));
-    return true;
-  }
-
-  if (msg.type === "ECARGO_SAVE_RESULT") {
-    void withServiceWorkerKeepAlive(ecargoSaveResult(msg))
-      .then(reply)
-      .catch((err) => reply(errorResult("SAVE_FAILED", err)));
+  if (
+    String(msg.type || "").startsWith("ECARGO_") ||
+    msg.type === "FILL_ECARGO_VCT" ||
+    msg.type === "REGISTER_ECARGO_VCT"
+  ) {
+    reply({
+      ok: false,
+      error: "WRONG_EXTENSION",
+      message:
+        "Ext TECS-TCS ESID không hỗ trợ eCargo — cài Ext «TECSOPS — Kho SCSC eCargo».",
+      version: EXT_VERSION,
+      portalWarehouse: PORTAL_WAREHOUSE,
+      workspace,
+    });
     return true;
   }
 
@@ -234,12 +214,16 @@ async function loadCredentials(payload) {
 }
 
 async function findOrOpenTcsTab({ active = true, pinned = true } = {}) {
-  const tabs = await chrome.tabs.query({
-    url: ["https://www.tcs.com.vn/*", "https://tcs.com.vn/*"],
-  });
-  let tab = tabs.find((item) => item.id === workspace.tab_id);
-  if (!tab) {
-    tab = tabs.find((item) => (item.url || "").includes("/Esid/")) || tabs[0];
+  // Chỉ dùng tab do chính Ext này tạo/ghi workspace.tab_id — không nhặt tab của Ext kho khác.
+  let tab = null;
+  if (workspace.tab_id != null) {
+    try {
+      tab = await chrome.tabs.get(workspace.tab_id);
+      const url = String(tab.url || "");
+      if (!/tcs\.com\.vn/i.test(url)) tab = null;
+    } catch {
+      tab = null;
+    }
   }
   if (!tab?.id) {
     tab = await chrome.tabs.create({ url: LOGIN_URL, active, pinned });
@@ -358,11 +342,33 @@ async function sendToTcsContent(tabId, message, attempts = 8) {
   throw lastErr || new Error("Không gửi được lệnh tới tab TCS");
 }
 
+function pickBestCaptchaCandidate(candidates, expectedLength = 5) {
+  if (!Array.isArray(candidates) || !candidates.length) return null;
+  const normalized = candidates
+    .map((item) => {
+      if (typeof item === "string") {
+        return { text: String(item).trim().toUpperCase(), votes: 1 };
+      }
+      return {
+        text: String(item?.text || "")
+          .trim()
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, ""),
+        votes: Number(item?.votes || 1),
+      };
+    })
+    .filter((item) => item.text);
+  const exact = normalized
+    .filter((item) => item.text.length === expectedLength)
+    .sort((a, b) => b.votes - a.votes || a.text.localeCompare(b.text));
+  return exact[0] || null;
+}
+
 async function solveCaptcha(dataUrl, agentBaseUrl, opts = {}) {
   if (!dataUrl) {
     return { ok: false, error: "CAPTCHA_IMAGE_EMPTY", text: "", confidence: 0 };
   }
-  const minConfidence = Number(opts.minConfidence ?? 0.55);
+  const minConfidence = Number(opts.minConfidence ?? 0.4);
   // Luôn ưu tiên agent local (OCR ddddocr trên máy kho). Ops/Railway URL sau —
   // tránh proxy xa che lỗi OCR hoặc chậm khiến Đồng bộ fail lần 1.
   const candidates = ["http://127.0.0.1:8765", "http://localhost:8765"];
@@ -373,6 +379,7 @@ async function solveCaptcha(dataUrl, agentBaseUrl, opts = {}) {
     candidates.unshift(explicit);
   }
   let lastHardError = null;
+  let lastSoft = null;
   for (const base of [...new Set(candidates)]) {
     try {
       const response = await fetch(`${base}/captcha/solve`, {
@@ -382,27 +389,42 @@ async function solveCaptcha(dataUrl, agentBaseUrl, opts = {}) {
           image: dataUrl,
           expected_length: 5,
           min_confidence: minConfidence,
+          mode: "auto",
         }),
       });
       const body = await response.json().catch(() => ({}));
       if (response.ok && body?.ok && body.text) {
         return {
           ok: true,
-          text: String(body.text),
+          text: String(body.text).trim().toUpperCase(),
           confidence: Number(body.confidence || 0),
           candidates: Array.isArray(body.candidates) ? body.candidates : [],
           agentBase: base,
         };
       }
       if (response.status === 422) {
-        return {
+        // Agent từ chối theo ngưỡng — vẫn thử ứng viên 5 ký tự có ≥2 phiếu.
+        const best = pickBestCaptchaCandidate(body?.candidates, 5);
+        if (best && best.votes >= 2) {
+          return {
+            ok: true,
+            text: best.text,
+            confidence: Math.max(Number(body?.confidence || 0), best.votes / 3),
+            candidates: Array.isArray(body.candidates) ? body.candidates : [],
+            agentBase: base,
+            rescued: true,
+          };
+        }
+        lastSoft = {
           ok: false,
           error: String(body?.error || "OCR_LOW_CONFIDENCE"),
-          text: "",
+          text: best?.text || "",
           confidence: Number(body?.confidence || 0),
           candidates: Array.isArray(body?.candidates) ? body.candidates : [],
           agentBase: base,
         };
+        // Local đã trả lời 422 — không cần thử remote cùng ảnh.
+        return lastSoft;
       }
       // Agent trả lời nhưng OCR hỏng (thiếu ddddocr, v.v.) — không giả là "offline"
       if (body?.error === "OCR_FAILED" || response.status >= 500) {
@@ -422,13 +444,14 @@ async function solveCaptcha(dataUrl, agentBaseUrl, opts = {}) {
     }
   }
   if (lastHardError) return lastHardError;
+  if (lastSoft) return lastSoft;
   return { ok: false, error: "OCR_AGENT_UNAVAILABLE", text: "", confidence: 0 };
 }
 
-async function waitForCaptchaChange(tabId, previousDataUrl, timeoutMs = 4_000) {
+async function waitForCaptchaChange(tabId, previousDataUrl, timeoutMs = 1_600) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    await new Promise((resolve) => setTimeout(resolve, 180));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     try {
       const captcha = await sendToTcsContent(
         tabId,
@@ -448,10 +471,10 @@ async function refreshCaptchaAndWait(tabId, previousDataUrl) {
   return waitForCaptchaChange(tabId, previousDataUrl);
 }
 
-async function waitForLoginOutcome(tabId, previousDataUrl, timeoutMs = 12_000) {
+async function waitForLoginOutcome(tabId, previousDataUrl, timeoutMs = 8_000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await new Promise((resolve) => setTimeout(resolve, 120));
     const tab = await chrome.tabs.get(tabId);
     if (!/awblogin|\/login/i.test(tab.url || "")) {
       return { loggedIn: true, captchaChanged: false, message: "" };
@@ -472,7 +495,8 @@ async function waitForLoginOutcome(tabId, previousDataUrl, timeoutMs = 12_000) {
           message: String(status.message || ""),
         };
       }
-      if (status?.message) {
+      // Chỉ tin message lỗi sau ≥600ms — tránh bắt toast cũ / rỗng làm fail sớm.
+      if (status?.message && Date.now() - started > 600) {
         return {
           loggedIn: false,
           captchaChanged: false,
@@ -496,24 +520,30 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
   }
 
   // Chờ form + ảnh CAPTCHA sẵn sàng (tránh lần 1 fail / lần 2 mới login)
-  for (let i = 0; i < 20; i += 1) {
+  for (let i = 0; i < 25; i += 1) {
     try {
       const captcha = await sendToTcsContent(tabId, { type: "TCS_GET_CAPTCHA" }, 2);
-      if (captcha?.dataUrl || captcha?.diag?.hasInput) break;
+      if (captcha?.dataUrl) break;
     } catch {
       /* trang đang hydrate */
     }
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 120));
   }
 
   let submittedAttempts = 0;
   let sampledCaptchas = 0;
   let lastMessage = "";
-  while (submittedAttempts < 5 && sampledCaptchas < 10) {
+  while (submittedAttempts < 6 && sampledCaptchas < 8) {
     const captcha = await sendToTcsContent(tabId, { type: "TCS_GET_CAPTCHA" });
     const dataUrl = captcha?.dataUrl || "";
-    // Hạ ngưỡng dần: lần đầu chặt, sau đó nới để vẫn login được CAPTCHA khó đọc
-    const minConfidence = sampledCaptchas < 3 ? 0.55 : sampledCaptchas < 6 ? 0.45 : 0.38;
+    if (!dataUrl) {
+      lastMessage = "Chưa thấy ảnh CAPTCHA trên form TCS";
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      sampledCaptchas += 1;
+      continue;
+    }
+    // CAPTCHA TCS đơn giản — ưu tiên submit nhanh, chỉ nới thêm khi fail.
+    const minConfidence = sampledCaptchas < 2 ? 0.4 : sampledCaptchas < 4 ? 0.34 : 0.28;
     const solved = await solveCaptcha(dataUrl, agentBaseUrl, { minConfidence });
     sampledCaptchas += 1;
 
@@ -565,11 +595,9 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
     });
     if (!clicked?.ok) return clicked;
     if (!clicked?.captchaFilled || Number(clicked?.captchaLength || 0) !== 5) {
-      return {
-        ok: false,
-        error: "CAPTCHA_FILL_FAILED",
-        message: "OCR đã đọc CAPTCHA nhưng ô CAPTCHA trên TCS chưa nhận đủ 5 ký tự.",
-      };
+      lastMessage = "OCR đã đọc CAPTCHA nhưng ô CAPTCHA trên TCS chưa nhận đủ 5 ký tự.";
+      await refreshCaptchaAndWait(tabId, dataUrl);
+      continue;
     }
 
     const outcome = await waitForLoginOutcome(tabId, dataUrl);
@@ -676,15 +704,30 @@ async function scanWorkspaceDate(payload, opts = {}) {
       workspace,
     };
   }
-  if (!workspace.logged_in) {
-    return {
-      ok: false,
-      error: "NEEDS_LOGIN",
-      message: "Chưa đăng nhập Ext — bấm «Đăng nhập» trước khi Quét tiếp nhận.",
-      workspace,
-    };
-  }
   const tabId = opts.tabId || (await findOrOpenTcsTab({ active: true, pinned: true }));
+  await navigate(tabId, ESID_URL);
+  if (!workspace.logged_in) {
+    try {
+      const ping = await sendToTcsContent(tabId, { type: "TCS_PING" }, 3);
+      if (ping?.loggedIn) {
+        setWorkspace({ logged_in: true });
+      } else {
+        return {
+          ok: false,
+          error: "NEEDS_LOGIN",
+          message: "Chưa đăng nhập Ext — bấm «Đăng nhập» trước khi Quét tiếp nhận.",
+          workspace,
+        };
+      }
+    } catch {
+      return {
+        ok: false,
+        error: "NEEDS_LOGIN",
+        message: "Chưa đăng nhập Ext — bấm «Đăng nhập» trước khi Quét tiếp nhận.",
+        workspace,
+      };
+    }
+  }
   setWorkspace({
     logged_in: true,
     phase: "SCANNING",
@@ -692,7 +735,6 @@ async function scanWorkspaceDate(payload, opts = {}) {
     message: `Đang quét ${sessionDate}…`,
     error: "",
   });
-  await navigate(tabId, ESID_URL);
   const scan = await sendToTcsContent(tabId, {
     type: "TCS_SCAN_DATE",
     payload: { session_date: sessionDate, awbs },
@@ -708,19 +750,24 @@ async function scanWorkspaceDate(payload, opts = {}) {
   const { index_rows: indexRows = [], ...scanResult } = scan;
   workspaceIndex = Array.isArray(indexRows) ? indexRows : [];
   await chrome.storage.session.set({ [INDEX_KEY]: workspaceIndex });
+  const listTotal = Number(scan.list_total || scan.cache_count || 0);
+  const receptionTotal = Number(scan.reception_total || 0);
+  const readyCount = Number((scan.ready || []).length);
   setWorkspace({
     phase: "READY",
     logged_in: true,
     session_date: sessionDate,
-    cache_count: Number(scan.cache_count || scan.list_total || 0),
-    ready_count: Number((scan.ready || []).length),
-    message: `Đã quét ngày ${sessionDate}: ${scan.list_total || 0} dòng`,
+    cache_count: listTotal,
+    ready_count: readyCount,
+    message: `Đã quét ${sessionDate}: ${listTotal} dòng · ${receptionTotal} HT · khớp ${readyCount} AWB`,
     error: "",
   });
   return {
     ...scanResult,
     ok: true,
     logged_in: true,
+    reception_total: receptionTotal,
+    list_total: listTotal,
     source: "chrome-extension",
     version: EXT_VERSION,
     workspace,
@@ -758,561 +805,4 @@ async function fillEsidOnTcsTab(payload) {
       : { phase: "ERROR", error: result?.message || "Điền ESID thất bại" }
   );
   return { ...result, workspace };
-}
-
-async function findOrOpenEcargoTab({ active = true, pinned = true } = {}) {
-  const tabs = await chrome.tabs.query({ url: ["https://ecargo.scsc.vn/*"] });
-  let tab =
-    tabs.find((item) => (item.url || "").includes("/Export/VCTOrder/Create")) || tabs[0];
-  if (!tab?.id) {
-    tab = await chrome.tabs.create({ url: ECARGO_CREATE_URL, active, pinned });
-    await waitTabComplete(tab.id);
-    return tab.id;
-  }
-  const onCreate = (tab.url || "").includes("/Export/VCTOrder/Create");
-  // Chỉ navigate khi chưa ở trang Create — tránh reload làm inject content 2 lần.
-  if (!onCreate) {
-    tab = await chrome.tabs.update(tab.id, {
-      url: ECARGO_CREATE_URL,
-      active,
-      pinned,
-    });
-    await waitTabComplete(tab.id);
-  } else {
-    tab = await chrome.tabs.update(tab.id, { active, pinned });
-  }
-  return tab.id;
-}
-
-async function injectEcargoContent(tabId) {
-  // Chờ content_scripts từ manifest lên trước — tránh inject trùng listener.
-  for (let i = 0; i < 6; i += 1) {
-    try {
-      const ping = await chrome.tabs.sendMessage(tabId, { type: "ECARGO_PING" });
-      if (ping?.ok && String(ping.scriptVersion || "") === EXPECTED_ECARGO_SCRIPT_VERSION) {
-        return;
-      }
-      // Version cũ: inject bản mới (content có guard idempotent).
-      break;
-    } catch {
-      await new Promise((r) => setTimeout(r, 60));
-    }
-  }
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    files: ["content-ecargo.js"],
-  });
-}
-
-async function sendToEcargoContent(tabId, message, attempts = 6) {
-  let lastErr;
-  for (let i = 0; i < attempts; i += 1) {
-    try {
-      await injectEcargoContent(tabId);
-      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 40));
-      return await chrome.tabs.sendMessage(tabId, message);
-    } catch (err) {
-      lastErr = err;
-      await new Promise((resolve) => setTimeout(resolve, 100 + i * 80));
-    }
-  }
-  throw lastErr || new Error("Không gửi được lệnh tới tab eCargo");
-}
-
-async function ensureEcargoContentReady(tabId) {
-  // findOrOpenEcargoTab đã đưa tới trang Create — không navigate lại (tránh reload dư).
-  let ping = await sendToEcargoContent(tabId, { type: "ECARGO_PING" });
-  if (ping?.ok && ping?.scriptVersion === EXPECTED_ECARGO_SCRIPT_VERSION) {
-    return ping;
-  }
-  // Inject bản mới (handler gắn globalThis → cập nhật ngay cả khi listener cũ còn).
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    files: ["content-ecargo.js"],
-  });
-  await new Promise((r) => setTimeout(r, 50));
-  ping = await sendToEcargoContent(tabId, { type: "ECARGO_PING" });
-  if (ping?.ok && ping?.scriptVersion === EXPECTED_ECARGO_SCRIPT_VERSION) {
-    return ping;
-  }
-  // Fallback: reload tab để manifest inject sạch.
-  await chrome.tabs.reload(tabId);
-  await waitTabComplete(tabId);
-  ping = await sendToEcargoContent(tabId, { type: "ECARGO_PING" });
-  if (!ping?.ok) {
-    throw new Error(
-      "Không kết nối được content eCargo. F5 tab ecargo.scsc.vn rồi thử lại."
-    );
-  }
-  if (ping.scriptVersion !== EXPECTED_ECARGO_SCRIPT_VERSION) {
-    throw new Error(
-      `Extension eCargo lệch phiên bản (${ping.scriptVersion || "?"} ≠ ${EXPECTED_ECARGO_SCRIPT_VERSION}). Reload extension tại chrome://extensions.`
-    );
-  }
-  return ping;
-}
-
-async function lookupEcargoAgentOnTab(payload) {
-  const filter = String(payload?.filter || payload?.agentName || "").trim();
-  const tabId = await findOrOpenEcargoTab({ active: false, pinned: true });
-  await ensureEcargoContentReady(tabId);
-  const res = await sendToEcargoContent(tabId, {
-    type: "ECARGO_LOOKUP_AGENT",
-    payload: { filter, agentName: filter },
-  });
-  return { ...res, workspace, version: EXT_VERSION };
-}
-
-async function fillEcargoOnTab(payload) {
-  await workspaceReady;
-  if (!payload || typeof payload !== "object") {
-    return {
-      ok: false,
-      error: "BAD_PAYLOAD",
-      message: "Thiếu payload FILL_ECARGO_VCT",
-      warnings: [],
-    };
-  }
-  const tabId = await findOrOpenEcargoTab({ active: true, pinned: true });
-  await ensureEcargoContentReady(tabId);
-  setWorkspace({ phase: "FILLING", message: "Đang điền eCargo VCT…", error: "" });
-  const result = await sendToEcargoContent(tabId, {
-    type: "FILL_ECARGO_VCT",
-    payload,
-  });
-  if (!result || typeof result !== "object") {
-    return {
-      ok: false,
-      error: "NO_CONTENT_RESPONSE",
-      message: "Tab eCargo không trả lời lệnh điền. Reload Ext + F5 tab eCargo.",
-      warnings: [],
-      workspace,
-      version: EXT_VERSION,
-    };
-  }
-  setWorkspace(
-    result?.ok
-      ? { phase: "READY", message: result.message || "Đã điền eCargo" }
-      : { phase: "ERROR", error: result?.message || "Điền eCargo thất bại" }
-  );
-  return { ...result, workspace, version: EXT_VERSION };
-}
-
-/** Poll content tới khi thấy ô OTP (sống qua reload sau Tạo phiếu). */
-async function waitForEcargoOtpUi(tabId, timeoutMs = 45_000) {
-  const started = Date.now();
-  let lastErr = "";
-  while (Date.now() - started < timeoutMs) {
-    try {
-      await injectEcargoContent(tabId);
-      const res = await chrome.tabs.sendMessage(tabId, { type: "ECARGO_FIND_OTP_UI" });
-      if (res?.ok || res?.found) {
-        return { ok: true, ...res };
-      }
-      const ping = await chrome.tabs.sendMessage(tabId, { type: "ECARGO_PING" });
-      if (ping?.hasOtpUi) return { ok: true, found: true, via: "ping" };
-    } catch (err) {
-      lastErr = err instanceof Error ? err.message : String(err || "");
-      try {
-        await waitTabComplete(tabId, 8_000);
-      } catch {
-        /* keep polling */
-      }
-      try {
-        await ensureEcargoContentReady(tabId);
-      } catch {
-        /* keep polling */
-      }
-    }
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  return {
-    ok: false,
-    error: "NO_OTP_UI",
-    message:
-      lastErr ||
-      "Không thấy ô OTP sau «Tạo phiếu». Kiểm tra tab eCargo / đăng nhập / popup.",
-  };
-}
-
-/**
- * 3 pha: FILL_AND_CREATE → chờ OTP UI + IMAP → SUBMIT_OTP → lưu kết quả.
- * Background giữ luồng khi trang eCargo reload (content script chết).
- */
-async function registerEcargoOnTab(payload) {
-  await workspaceReady;
-  if (!payload || typeof payload !== "object") {
-    return {
-      ok: false,
-      error: "BAD_PAYLOAD",
-      message: "Thiếu payload REGISTER_ECARGO_VCT",
-      warnings: [],
-    };
-  }
-
-  const apiBase = String(payload.apiBase || "").replace(/\/$/, "");
-  const email = String(payload.header?.email || "").trim();
-  const awbHint = payload.awbs?.[0]?.awb || "";
-  const shipmentIds = Array.isArray(payload.shipmentIds)
-    ? payload.shipmentIds.map(String)
-    : [];
-  if (!apiBase) {
-    return {
-      ok: false,
-      error: "NO_API_BASE",
-      message: "Thiếu apiBase để gọi /api/ecargo/otp/wait",
-      warnings: [],
-      version: EXT_VERSION,
-    };
-  }
-
-  const tabId = await findOrOpenEcargoTab({ active: true, pinned: true });
-  await ensureEcargoContentReady(tabId);
-  setWorkspace({
-    phase: "FILLING",
-    message: "eCargo: điền form + Tạo phiếu…",
-    error: "",
-  });
-
-  const createStartedIso = new Date().toISOString();
-  let createRes;
-  try {
-    createRes = await sendToEcargoContent(tabId, {
-      type: "ECARGO_FILL_AND_CREATE",
-      payload,
-    });
-  } catch (err) {
-    // Form POST/reload thường cắt kênh — sinceIso = lúc bắt đầu Tạo phiếu (không lùi 8s → tránh mail cũ).
-    try {
-      await waitTabComplete(tabId, 12_000);
-      await ensureEcargoContentReady(tabId);
-      const ping = await chrome.tabs.sendMessage(tabId, { type: "ECARGO_PING" });
-      const leftCreate = Boolean(ping && ping.onCreate === false);
-      createRes = {
-        ok: true,
-        navigatedAway: leftCreate,
-        sinceIso: createStartedIso,
-        warnings: [
-          `Kênh content đứt sau Tạo phiếu (${err instanceof Error ? err.message : String(err)})${
-            leftCreate ? " — đã rời trang Create." : " — vẫn trên Create, tiếp tục đọc mail."
-          }`,
-        ],
-        phase: "create",
-      };
-    } catch {
-      createRes = {
-        ok: true,
-        navigatedAway: true,
-        sinceIso: createStartedIso,
-        warnings: [
-          `Tab có thể đã reload sau Tạo phiếu (${err instanceof Error ? err.message : String(err)}).`,
-        ],
-        phase: "create",
-      };
-    }
-  }
-
-  if (!createRes || typeof createRes !== "object") {
-    return {
-      ok: false,
-      error: "NO_CONTENT_RESPONSE",
-      message:
-        "Tab eCargo không trả lời lệnh Tạo phiếu. Reload Ext v2.2.14 tại chrome://extensions, F5 Ops + tab eCargo.",
-      warnings: [],
-      workspace,
-      version: EXT_VERSION,
-      phase: "create",
-    };
-  }
-  if (!createRes.ok && !createRes.navigatedAway) {
-    setWorkspace({
-      phase: "ERROR",
-      error: createRes.message || "Tạo phiếu thất bại",
-    });
-    return { ...createRes, workspace, version: EXT_VERSION };
-  }
-
-  const sinceIso = String(createRes.sinceIso || createStartedIso).trim();
-  const warnings = [...(createRes.warnings || [])];
-
-  // Mail eCargo = mã alphanumeric + link «đây» → trang Xác Thực (bỏ chờ OTP UI trên Create).
-  setWorkspace({
-    phase: "FILLING",
-    message: "eCargo: đọc mail xác thực (mã + link)…",
-    error: "",
-  });
-  const otpRes = await ecargoOtpWait({
-    apiBase,
-    email,
-    sinceIso,
-    awbHint,
-    timeoutMs: 90_000,
-  });
-  const code = String(otpRes?.code || otpRes?.otp || "").trim();
-  const verifyUrl = String(otpRes?.verifyUrl || "").trim();
-  if (!otpRes?.ok || (!code && !verifyUrl)) {
-    setWorkspace({
-      phase: "ERROR",
-      error: otpRes?.message || "Không lấy được mail xác thực",
-    });
-    return {
-      ok: false,
-      error: otpRes?.error || "OTP_FAILED",
-      message:
-        otpRes?.message ||
-        "Không lấy được mail xác thực eCargo (mã + link «đây») từ mailbox",
-      phase: "otp_mail",
-      sinceIso,
-      warnings,
-      workspace,
-      version: EXT_VERSION,
-    };
-  }
-  if (!verifyUrl) {
-    setWorkspace({
-      phase: "ERROR",
-      error: "Mail có mã nhưng thiếu link xác thực",
-    });
-    return {
-      ok: false,
-      error: "NO_VERIFY_URL",
-      message:
-        `Đã có mã «${code.slice(0, 6)}…» nhưng không thấy link «đây» trong mail. ` +
-        "Kiểm tra HTML mail eCargo / parser.",
-      phase: "otp_mail",
-      sinceIso,
-      code,
-      warnings,
-      workspace,
-      version: EXT_VERSION,
-    };
-  }
-
-  setWorkspace({
-    phase: "FILLING",
-    message: "eCargo: mở link xác thực từ mail…",
-    error: "",
-  });
-  try {
-    await chrome.tabs.update(tabId, { url: verifyUrl, active: true });
-    await waitTabComplete(tabId, 45_000);
-  } catch (err) {
-    setWorkspace({
-      phase: "ERROR",
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return {
-      ok: false,
-      error: "VERIFY_NAV_FAILED",
-      message:
-        err instanceof Error
-          ? err.message
-          : "Không mở được trang xác thực từ link mail",
-      phase: "otp_submit",
-      sinceIso,
-      verifyUrl,
-      warnings,
-      workspace,
-      version: EXT_VERSION,
-    };
-  }
-
-  setWorkspace({
-    phase: "FILLING",
-    message: "eCargo: bấm «Xác Thực»…",
-    error: "",
-  });
-  await ensureEcargoContentReady(tabId);
-  let submitRes;
-  try {
-    submitRes = await sendToEcargoContent(tabId, {
-      type: "ECARGO_CONFIRM_VERIFY",
-      payload: {
-        code,
-        otp: code,
-        vctCode: otpRes.vctCode || "",
-        apiBase,
-        email,
-        sinceIso,
-        awbHint,
-      },
-    });
-  } catch (err) {
-    // POST Xác Thực thường reload — bắt kênh đứt rồi kiểm tra trang thành công.
-    try {
-      await waitTabComplete(tabId, 20_000);
-      await ensureEcargoContentReady(tabId);
-      const check = await chrome.tabs.sendMessage(tabId, {
-        type: "ECARGO_CHECK_VERIFIED",
-        payload: { vctCode: otpRes.vctCode || "" },
-      });
-      if (check?.verified || check?.ok) {
-        submitRes = {
-          ok: true,
-          verified: true,
-          message: `Đã xác thực phiếu${otpRes.vctCode ? `: ${otpRes.vctCode}` : ""}.`,
-          vctCode: otpRes.vctCode || "",
-          phase: "done",
-          submit: true,
-          warnings: [
-            `Kênh đứt sau Xác Thực (${err instanceof Error ? err.message : String(err)}) — trang báo hoàn thành.`,
-          ],
-        };
-      } else {
-        throw err;
-      }
-    } catch (err2) {
-      setWorkspace({
-        phase: "ERROR",
-        error: err2 instanceof Error ? err2.message : String(err2),
-      });
-      return {
-        ok: false,
-        error: "OTP_SUBMIT_FAILED",
-        message:
-          err2 instanceof Error
-            ? err2.message
-            : "Không xác nhận được sau khi bấm Xác Thực",
-        phase: "otp_submit",
-        sinceIso,
-        verifyUrl,
-        warnings,
-        workspace,
-        version: EXT_VERSION,
-      };
-    }
-  }
-
-  if (!submitRes || typeof submitRes !== "object") {
-    return {
-      ok: false,
-      error: "NO_CONTENT_RESPONSE",
-      message: "Tab eCargo không trả lời lệnh Xác Thực.",
-      phase: "otp_submit",
-      sinceIso,
-      verifyUrl,
-      warnings,
-      workspace,
-      version: EXT_VERSION,
-    };
-  }
-
-  const finalOk = Boolean(submitRes.ok && submitRes.verified !== false);
-  const vctCode = finalOk ? submitRes.vctCode || otpRes.vctCode || "" : "";
-  if (shipmentIds.length) {
-    await ecargoSaveResult({
-      apiBase,
-      shipmentIds,
-      status: finalOk ? "done" : "error",
-      vctCode,
-      qrDataUrl: finalOk ? submitRes.qrDataUrl : "",
-      awb: awbHint,
-      error: finalOk ? "" : submitRes.message || "Chưa xác nhận hoàn thành xác thực",
-      registeredAt: new Date().toISOString(),
-    });
-  }
-
-  setWorkspace(
-    finalOk
-      ? { phase: "READY", message: submitRes.message || "Đã xác thực eCargo" }
-      : { phase: "ERROR", error: submitRes.message || "Xác thực thất bại" }
-  );
-  return {
-    ...submitRes,
-    ok: finalOk,
-    vctCode,
-    phase: submitRes.phase || (finalOk ? "done" : "otp_submit"),
-    sinceIso,
-    verifyUrl,
-    warnings: [...warnings, ...(submitRes.warnings || [])],
-    otpSubject: otpRes.subject,
-    workspace,
-    version: EXT_VERSION,
-  };
-}
-
-async function ecargoOtpWait(msg) {
-  const apiBase = String(msg.apiBase || "").replace(/\/$/, "");
-  if (!apiBase) {
-    return { ok: false, error: "NO_API_BASE", message: "Thiếu apiBase" };
-  }
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), Number(msg.timeoutMs) || 95_000);
-  try {
-    const res = await fetch(`${apiBase}/api/ecargo/otp/wait`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: msg.email,
-        sinceIso: msg.sinceIso,
-        awbHint: msg.awbHint,
-        timeoutMs: msg.timeoutMs || 90_000,
-      }),
-      signal: ctrl.signal,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return {
-        ok: false,
-        error: data.error || "OTP_HTTP",
-        message: data.message || `OTP wait HTTP ${res.status}`,
-      };
-    }
-    return data;
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-async function ecargoResultFromMail(msg) {
-  const apiBase = String(msg.apiBase || "").replace(/\/$/, "");
-  if (!apiBase) {
-    return { ok: false, error: "NO_API_BASE", message: "Thiếu apiBase" };
-  }
-  const res = await fetch(`${apiBase}/api/ecargo/result-from-mail`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email: msg.email,
-      sinceIso: msg.sinceIso,
-    }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return {
-      ok: false,
-      error: data.error || "MAIL_HTTP",
-      message: data.message || `result-from-mail HTTP ${res.status}`,
-    };
-  }
-  return data;
-}
-
-async function ecargoSaveResult(msg) {
-  const apiBase = String(msg.apiBase || "").replace(/\/$/, "");
-  if (!apiBase) {
-    return { ok: false, error: "NO_API_BASE", message: "Thiếu apiBase" };
-  }
-  const res = await fetch(`${apiBase}/api/ecargo/vct-result`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      shipmentIds: msg.shipmentIds,
-      status: msg.status,
-      vctCode: msg.vctCode,
-      qrDataUrl: msg.qrDataUrl,
-      awb: msg.awb,
-      error: msg.error,
-      registeredAt: msg.registeredAt,
-    }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return {
-      ok: false,
-      error: data.error || "SAVE_HTTP",
-      message: data.message || `vct-result HTTP ${res.status}`,
-    };
-  }
-  return data;
 }

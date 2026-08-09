@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.20";
+  const SCRIPT_VERSION = "2.0.21";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -603,7 +603,7 @@
       return { ok: false, error: "LOGIN_BUTTON_NOT_FOUND", message: "Không thấy nút Đăng nhập" };
     }
     updateWorkspaceOverlay("LOGIN", "Đang gửi đăng nhập…", 3, 3);
-    window.setTimeout(() => simulateClick(submit), 180);
+    window.setTimeout(() => simulateClick(submit), 40);
     return {
       ok: true,
       clicked: true,
@@ -676,17 +676,15 @@
 
     const allRows = [];
     const seen = new Set();
+    // Đã lọc ngày trên portal — lấy toàn bộ dòng kết quả (không cắt theo flight_date).
     for (let pageIndex = 0; pageIndex < 40; pageIndex += 1) {
       const pageNumber = currentPageNumber();
       const rows = readEsidRows(pageNumber);
-      let keptOnPage = 0;
       for (const row of rows) {
-        if (!rowMatchesSessionDate(row, sessionDate)) continue;
         const key = `${row.awb}|${row.esid}|${row.flight_date}|${row.status}`;
         if (seen.has(key)) continue;
         seen.add(key);
         allRows.push(row);
-        keptOnPage += 1;
       }
       updateWorkspaceOverlay(
         "SCANNING",
@@ -694,11 +692,10 @@
         pageIndex + 1,
         Math.max(pageIndex + 2, 2)
       );
-      if (rows.length > 0 && keptOnPage === 0) break;
       const next = document.querySelector(
         ".ant-pagination-next:not(.ant-pagination-disabled)"
       );
-      if (!next || !isVisible(next)) break;
+      if (!next || !isVisible(next) || rows.length === 0) break;
       const before = rows[0]?.awb || "";
       simulateClick(next);
       await waitForTableChange(before);
@@ -707,20 +704,39 @@
     const opsAwbs = (Array.isArray(payload.awbs) ? payload.awbs : [])
       .map((awb) => String(awb || "").replace(/\D/g, "").slice(0, 11))
       .filter((awb) => awb.length === 11);
+    const opsSet = new Set(opsAwbs);
     const readyRows = allRows.filter((row) => isReceptionComplete(row.status, row.text));
     const ready = [];
     const readySet = new Set();
-    for (const row of readyRows) {
-      const digits = String(row.awb || "").replace(/\D/g, "");
-      let match =
-        digits.length >= 11 && opsAwbs.includes(digits.slice(0, 11))
-          ? digits.slice(0, 11)
-          : "";
-      if (!match && digits.length >= 8) {
-        const candidates = opsAwbs.filter((awb) => awb.slice(3) === digits.slice(-8));
-        if (candidates.length === 1) match = candidates[0];
+
+    function awbDigitsFromRow(row) {
+      const fromCell = String(row?.awb || "").replace(/\D/g, "");
+      if (fromCell.length >= 11) return fromCell.slice(0, 11);
+      const fromText = String(row?.text || "").replace(/\D/g, "");
+      const m = fromText.match(/(\d{11})/);
+      if (m) return m[1];
+      if (fromCell.length >= 8) return fromCell.slice(-8);
+      return fromCell;
+    }
+
+    function matchOpsAwb(digits) {
+      if (!digits) return "";
+      if (digits.length === 11) {
+        if (!opsSet.size || opsSet.has(digits)) return digits;
       }
-      if (!match || readySet.has(match)) continue;
+      if (digits.length >= 8 && opsSet.size) {
+        const last8 = digits.slice(-8);
+        const candidates = opsAwbs.filter((awb) => awb.slice(3) === last8);
+        if (candidates.length === 1) return candidates[0];
+      }
+      if (!opsSet.size && digits.length === 11) return digits;
+      return "";
+    }
+
+    for (const row of readyRows) {
+      const digits = awbDigitsFromRow(row);
+      const match = matchOpsAwb(digits);
+      if (!match || match.length !== 11 || readySet.has(match)) continue;
       readySet.add(match);
       ready.push({
         awb: match,
@@ -751,7 +767,7 @@
     });
     updateWorkspaceOverlay(
       "READY",
-      `Ngày ${sessionDate} · ${allRows.length} dòng · ${ready.length} AWB sẵn sàng`,
+      `Ngày ${sessionDate} · ${allRows.length} dòng · ${readyRows.length} HT · khớp Ops ${ready.length}`,
       1,
       1
     );
@@ -761,7 +777,7 @@
       session_date: sessionDate,
       ready,
       items,
-      total: opsAwbs.length,
+      total: opsAwbs.length || ready.length,
       list_total: allRows.length,
       reception_total: readyRows.length,
       cache_count: allRows.length,
@@ -1088,7 +1104,12 @@
 
   function isReceptionComplete(status, text) {
     const normalized = normalizeText(`${status || ""} ${text || ""}`);
-    return normalized.includes("HOAN THANH TIEP NHAN");
+    return (
+      normalized.includes("HOAN THANH TIEP NHAN") ||
+      normalized.includes("HOANTHANHTIEPNHAN") ||
+      normalized.includes("RECEPTION COMPLETED") ||
+      normalized.includes("RECEPTIONCOMPLETED")
+    );
   }
 
   function needsLogin() {

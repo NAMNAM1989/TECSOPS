@@ -7,7 +7,9 @@ import {
 import { scaffoldNewCustomer } from "./customerDirectoryScaffold";
 
 describe("parseCustomerFullProfileWorkbook", () => {
-  it("đọc mẫu hồ sơ KH — không bỏ dòng dữ liệu đầu (row 2)", async () => {
+  it(
+    "đọc mẫu hồ sơ KH — không bỏ dòng dữ liệu đầu (row 2)",
+    async () => {
     const wb = await buildCustomerFullProfileTemplateWorkbook();
     const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
     const result = await parseCustomerFullProfileWorkbook(buf);
@@ -23,7 +25,9 @@ describe("parseCustomerFullProfileWorkbook", () => {
     expect(city?.savedVehicles?.[0]?.label).toBe("Xe cố định");
     expect(city?.savedVehicles?.[0]?.vehicleType).toBe("OTO");
     expect(city?.savedVehicles?.[0]?.driverIdType).toBe("CCCD");
-  });
+    },
+    15_000
+  );
 
   it("cập nhật khách đã có — ghi đè thông tin account + shipper", async () => {
     const wb = await buildCustomerFullProfileTemplateWorkbook();

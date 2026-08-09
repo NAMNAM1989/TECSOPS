@@ -89,14 +89,18 @@ export function spawnTcsAgent(opts = {}) {
     opts.env?.TCS_HEADLESS ??
     process.env.TCS_HEADLESS ??
     "0";
+  const port = String(
+    opts.env?.TCS_AGENT_PORT || process.env.TCS_AGENT_PORT || AGENT_PORT
+  );
   const env = {
     ...process.env,
     ...(opts.env || {}),
     TCS_MOCK: real ? "0" : "1",
     TCS_DRY_RUN: real ? process.env.TCS_DRY_RUN || "0" : "1",
     TCS_HEADLESS: String(headless),
-    TCS_AGENT_HOST: process.env.TCS_AGENT_HOST || "127.0.0.1",
-    TCS_AGENT_PORT: String(AGENT_PORT),
+    TCS_AGENT_HOST:
+      opts.env?.TCS_AGENT_HOST || process.env.TCS_AGENT_HOST || "127.0.0.1",
+    TCS_AGENT_PORT: port,
     PYTHONIOENCODING: "utf-8",
     PYTHONUNBUFFERED: "1",
   };

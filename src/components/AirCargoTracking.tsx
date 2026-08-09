@@ -63,12 +63,16 @@ import {
   type ShipmentSearchMatch,
 } from "../utils/shipmentSearch";
 import { DayExcelExportDialog } from "./DayExcelExportDialog";
+import { trackAiEvent } from "../utils/aiOpsClient";
 
 const GoogleSheetImportModal = lazy(() =>
   import("./GoogleSheetImportModal").then((m) => ({ default: m.GoogleSheetImportModal }))
 );
 const AirlineLabelSettingsModal = lazy(() =>
   import("./AirlineLabelSettingsModal").then((m) => ({ default: m.AirlineLabelSettingsModal }))
+);
+const AiImprovementReportModal = lazy(() =>
+  import("./AiImprovementReportModal").then((m) => ({ default: m.AiImprovementReportModal }))
 );
 
 type SyncApi = ReturnType<typeof useShipmentSync>;
@@ -124,6 +128,7 @@ export function AirCargoTracking({
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
+  const [aiImproveOpen, setAiImproveOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
 
@@ -191,6 +196,7 @@ export function AirCargoTracking({
 
   const handleActiveWarehouseChange = useCallback(
     (wh: Warehouse) => {
+      trackAiEvent("ops.quick_filter.change", { kind: "warehouse", value: wh });
       setActiveWarehouse(wh);
       setStatusFilter((prev) => {
         if (prev === "ALL") return prev;
@@ -255,8 +261,14 @@ export function AirCargoTracking({
     async (id: string, patch: Partial<Shipment>) => {
       const fields = Object.keys(patch);
       if (fields.length === 0) return true;
+      trackAiEvent("ops.inline_edit.start", { fields });
       const result = await runMutate({ action: "UPDATE", id, patch });
-      return Boolean(result);
+      if (result) {
+        trackAiEvent("ops.inline_edit.ok", { fields });
+        return true;
+      }
+      trackAiEvent("ops.inline_edit.fail", { fields });
+      return false;
     },
     [runMutate]
   );
@@ -311,6 +323,8 @@ export function AirCargoTracking({
     onReceptionScanDone,
     active: isTcsWarehouse(activeWarehouse),
     portalWarehouse: activeWarehouse,
+    /** Phone / màn hẹp: ĐN·Quét·PDF kho TCS qua Railway → worker PC */
+    preferRemotePortal: isMobile,
   });
 
   const onDelete = useCallback(
@@ -545,6 +559,7 @@ export function AirCargoTracking({
     onOpenAirlineLabels: () => setAirlineLabelSettingsOpen(true),
     onDownloadDayExcel: () => setExcelRangeOpen(true),
     onDownloadScscDim: () => void onDownloadScscDimDay(),
+    onOpenAiImprove: () => setAiImproveOpen(true),
   };
 
   const chrome = isMobile ? (
@@ -918,6 +933,15 @@ export function AirCargoTracking({
         onClose={() => setExcelRangeOpen(false)}
         onExport={(from, to) => void onDownloadDayExcelRange(from, to)}
       />
+
+      <Suspense fallback={null}>
+        {aiImproveOpen ? (
+          <AiImprovementReportModal
+            open={aiImproveOpen}
+            onClose={() => setAiImproveOpen(false)}
+          />
+        ) : null}
+      </Suspense>
     </AppShell>
     </TcsPortalActionsProvider>
     </EcargoScscProvider>

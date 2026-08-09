@@ -40,7 +40,10 @@ tcs-awb-automation/screenshots/
 tcs-awb-automation/logs/
 tcs-awb-automation/data/
 tcs-awb-automation/browser_profile/
+tcs-awb-automation/browser_profile_tcs/
 tcs-awb-automation/browser_profile_chromium/
+tcs-awb-automation/.env.hub
+tcs-awb-automation/.env.tcs
 tcs-awb-automation/discovery_artifacts/
 tcs-awb-automation/**/__pycache__/
 tcs-awb-automation/.pytest_cache/

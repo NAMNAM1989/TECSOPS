@@ -351,11 +351,16 @@ def make_handler(state: AgentState):
                     return
                 try:
                     expected_length = int(payload.get("expected_length") or 5)
-                    min_confidence = float(payload.get("min_confidence") or 0.60)
+                    # CAPTCHA TCS đơn giản — mặc định nới hơn 0.60 cũ; client vẫn có thể siết.
+                    min_confidence = float(payload.get("min_confidence") or 0.40)
+                    mode = str(payload.get("mode") or "auto").strip().lower() or "auto"
+                    if mode not in {"auto", "fast", "medium", "full"}:
+                        mode = "auto"
                     result = ocr_image_bytes_detailed(
                         image,
                         expected_length=max(1, min(expected_length, 12)),
                         min_confidence=max(0.0, min(min_confidence, 1.0)),
+                        mode=mode,
                     )
                 except Exception as e:
                     self._json(
@@ -573,7 +578,7 @@ def make_handler(state: AgentState):
                 if force_pdf:
                     pass  # rơi xuống worker in lại
                 elif (
-                    warehouse.upper() in {"TECS-TCS", "KHO-TCS"}
+                    warehouse.upper() in {"TECS-TCS", "KHO-TCS", "TCS"}
                     and not bool(payload.get("mock", state.settings.mock))
                 ):
                     try:
@@ -639,8 +644,8 @@ def make_handler(state: AgentState):
 
             def _job() -> tuple[int, dict[str, Any]]:
                 warehouse = str(payload.get("warehouse") or "TECS-TCS")
-                if warehouse.upper() not in {"TECS-TCS", "KHO-TCS"}:
-                    return 400, {"ok": False, "error": "WAREHOUSE_SCOPE", "message": "Chỉ TECS-TCS"}
+                if warehouse.upper() not in {"TECS-TCS", "KHO-TCS", "TCS"}:
+                    return 400, {"ok": False, "error": "WAREHOUSE_SCOPE", "message": "Chỉ TECS-TCS / TCS"}
                 rows = validate_ops_payload(payload)
                 dry_run = bool(payload.get("dry_run", state.settings.dry_run))
                 mock = bool(payload.get("mock", state.settings.mock))

@@ -35,6 +35,7 @@ interface Props {
   onOpenAirlineLabels: () => void;
   onDownloadDayExcel: () => void;
   onDownloadScscDim?: () => void;
+  onOpenAiImprove?: () => void;
   onCopyCargoDayReport?: (kind?: CargoDayReportCopyKind) => void;
   excelExporting?: boolean;
   scscDimExporting?: boolean;
@@ -91,6 +92,7 @@ export function OpsMobileStickyHeader({
   onOpenAirlineLabels,
   onDownloadDayExcel,
   onDownloadScscDim,
+  onOpenAiImprove,
   onCopyCargoDayReport,
   excelExporting,
   scscDimExporting,
@@ -175,6 +177,7 @@ export function OpsMobileStickyHeader({
           onOpenAirlineLabels={onOpenAirlineLabels}
           onDownloadDayExcel={onDownloadDayExcel}
           onDownloadScscDim={onDownloadScscDim}
+          onOpenAiImprove={onOpenAiImprove}
         />
       </div>
 

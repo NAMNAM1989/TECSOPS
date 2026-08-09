@@ -116,7 +116,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
       return;
     }
 
-    // Không có Ext → Playwright (chỉ TECS-TCS)
+    // Không có Ext: TECS-TCS → agent local; kho TCS → ĐN máy kho (Railway worker)
     await tcs.login();
   };
 
@@ -171,7 +171,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
       description:
         portalWh === "TCS"
           ? "Ext riêng kho TCS · cài trên Chrome profile TCS"
-          : "Ext TECS-TCS + eCargo · cài trên Chrome profile TECS",
+          : "Ext TECS-TCS ESID · Chrome profile TECS (tách khỏi kho TCS)",
       disabled: extBusy || tcs.busy,
       onSelect: () => {
         void downloadChromeExt();
@@ -277,9 +277,9 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
       {!compact && !tcs.health?.ok && !tcs.extension?.ok && !tcs.busy ? (
         <p className="px-1 text-[9px] leading-snug text-ui-text-muted">
           Offline: mở đúng Chrome profile kho {portalWh} và cài {extLabel} (menu
-          Nâng cao
-          {portalWh === "TCS" ? " · chrome-extension-tcs" : ""}). Mỗi kho một
-          profile để tránh đá login.
+          Nâng cao ·{" "}
+          {portalWh === "TCS" ? "chrome-extension-tcs" : "chrome-extension"}
+          ). TECS-TCS và TCS phải khác profile Chrome.
         </p>
       ) : null}
 

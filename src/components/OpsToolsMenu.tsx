@@ -14,6 +14,8 @@ type Props = {
   onOpenAirlineLabels: () => void;
   onDownloadDayExcel: () => void;
   onDownloadScscDim?: () => void;
+  /** Báo cáo đề xuất nâng cấp qua Gemini */
+  onOpenAiImprove?: () => void;
 };
 
 /**
@@ -32,6 +34,7 @@ export function OpsToolsMenu({
   onOpenAirlineLabels,
   onDownloadDayExcel,
   onDownloadScscDim,
+  onOpenAiImprove,
 }: Props) {
   const items = useMemo(() => {
     const list: OverflowMenuItem[] = [];
@@ -67,6 +70,14 @@ export function OpsToolsMenu({
         disabled: excelExporting,
       },
     );
+    if (onOpenAiImprove) {
+      list.push({
+        id: "ai-improve",
+        label: "Đề xuất AI",
+        description: "Gemini · phân tích thao tác → gợi ý nâng cấp",
+        onSelect: onOpenAiImprove,
+      });
+    }
     if (showDimScsc && onDownloadScscDim) {
       list.push({
         id: "dim-scsc",
@@ -87,6 +98,7 @@ export function OpsToolsMenu({
     onOpenAirlineLabels,
     onPrefetchCustomers,
     onPrefetchStats,
+    onOpenAiImprove,
     scscDimExporting,
     showDimScsc,
   ]);

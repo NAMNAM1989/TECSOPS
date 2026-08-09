@@ -17,7 +17,10 @@ import { registerLookupRoutes } from "./lookupRoutes.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
 import { registerTcsAgentProxy } from "./tcsAgentProxy.mjs";
+import { registerPortalJobRoutes } from "./portalJobs.mjs";
 import { registerEcargoVctRoutes } from "./ecargoVctRoutes.mjs";
+import { registerAiRoutes } from "./ai/aiRoutes.mjs";
+import { recordMutationEventSafe } from "./ai/opsAiEventsStore.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
@@ -50,7 +53,9 @@ const io = new Server(httpServer, {
 // Proxy agent TRƯỚC express.json — giữ raw body cho POST /jobs, /esid/*
 registerTcsAgentProxy(app);
 
-app.use(express.json({ limit: "4mb" }));
+// PDF base64 từ worker portal (~0.5–2MB) — nới limit
+app.use(express.json({ limit: "12mb" }));
+registerPortalJobRoutes(app);
 
 /** Healthcheck Railway / load balancer — xác nhận cả process và Postgres. */
 app.get("/api/health", async (_req, res) => {
@@ -127,7 +132,10 @@ app.get("/api/tcs-extension", (_req, res) => {
     manifestRel: path.join("chrome-extension", "manifest.json"),
     stableZipName: "tecsops-chrome-extension.zip",
     versionedPrefix: "tecsops-chrome-extension",
-    installExtra: ["Ext này: kho TECS-TCS + eCargo SCSC"],
+    installExtra: [
+      "Ext này chỉ ESID kho TECS-TCS",
+      "eCargo SCSC → Ext riêng /api/ecargo-extension",
+    ],
   });
 });
 
@@ -138,8 +146,21 @@ app.get("/api/tcs-extension-direct", (_req, res) => {
     stableZipName: "tecsops-chrome-extension-tcs.zip",
     versionedPrefix: "tecsops-chrome-extension-tcs",
     installExtra: [
-      "Ext này chỉ kho TCS — cài song song với Ext TECS hub",
-      "Trên Ops chọn kho TCS rồi Đồng bộ",
+      "Ext này chỉ ESID kho TCS — Chrome profile riêng với Ext TECS-TCS",
+      "Trên Ops chọn kho TCS → Đăng nhập / Quét / Điền",
+    ],
+  });
+});
+
+/** Ext riêng kho SCSC eCargo. */
+app.get("/api/ecargo-extension", (_req, res) => {
+  respondChromeExtensionPackage(res, {
+    manifestRel: path.join("chrome-extension-scsc", "manifest.json"),
+    stableZipName: "tecsops-chrome-extension-scsc.zip",
+    versionedPrefix: "tecsops-chrome-extension-scsc",
+    installExtra: [
+      "Ext này chỉ eCargo SCSC (VCT / OTP / QR)",
+      "Trên Ops chọn kho SCSC → Đăng ký eCargo",
     ],
   });
 });
@@ -163,6 +184,7 @@ app.post("/api/mutation", async (req, res) => {
       return;
     }
     const next = await runMutation(body);
+    recordMutationEventSafe(body);
     io.emit("sync", next);
     res.json(next);
   } catch (e) {
@@ -188,6 +210,7 @@ app.post("/api/mutations", async (req, res) => {
       return;
     }
     const next = await runBatchMutations(list);
+    for (const m of list) recordMutationEventSafe(m);
     io.emit("sync", next);
     res.json(next);
   } catch (e) {
@@ -199,6 +222,8 @@ app.post("/api/mutations", async (req, res) => {
 
 registerSheetsRoutes(app, { io });
 registerEcargoVctRoutes(app, { runMutation, loadState, io });
+registerAiRoutes(app, { loadState });
+console.info("[api] ai (Gemini improvement report)");
 
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);

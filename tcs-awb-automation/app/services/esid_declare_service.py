@@ -39,8 +39,8 @@ def fill_esid_declare(
     payload: dict[str, Any],
 ) -> dict[str, Any]:
     warehouse = str(payload.get("warehouse") or "TECS-TCS").upper()
-    if warehouse not in {"TECS-TCS", "KHO-TCS"}:
-        return {"ok": False, "error": "WAREHOUSE_SCOPE", "message": "Chỉ TECS-TCS"}
+    if warehouse not in {"TECS-TCS", "KHO-TCS", "TCS"}:
+        return {"ok": False, "error": "WAREHOUSE_SCOPE", "message": "Chỉ TECS-TCS / TCS"}
 
     submit = bool(payload.get("submit", False))
     # An toàn: mặc định không submit; cần confirm_submit tường minh
@@ -173,8 +173,8 @@ def submit_esid_declare(
 ) -> dict[str, Any]:
     """HOÀN TẤT form KHAI BÁO đang mở — bắt buộc confirm_submit."""
     warehouse = str(payload.get("warehouse") or "TECS-TCS").upper()
-    if warehouse not in {"TECS-TCS", "KHO-TCS"}:
-        return {"ok": False, "error": "WAREHOUSE_SCOPE", "message": "Chỉ TECS-TCS"}
+    if warehouse not in {"TECS-TCS", "KHO-TCS", "TCS"}:
+        return {"ok": False, "error": "WAREHOUSE_SCOPE", "message": "Chỉ TECS-TCS / TCS"}
 
     if not bool(payload.get("confirm_submit", False)):
         return {

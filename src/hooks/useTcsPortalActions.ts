@@ -39,6 +39,7 @@ import { agentIsComplete, getActiveEsidAgent } from "../utils/esidAgentProfile";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import {
   bootstrapTcsExtension,
+  downloadEsidPdfViaExtension,
   fillEsidViaExtension,
   openTcsExtensionTab,
   pingTcsExtension,
@@ -46,6 +47,41 @@ import {
   type TcsExtensionWorkspace,
   type TcsExtResult,
 } from "../utils/tcsChromeExtension";
+import {
+  downloadPortalJobArtifact,
+  fetchPortalWorkerStatus,
+  runPortalJob,
+  type PortalWorkerStatus,
+} from "../utils/portalRemoteJobs";
+
+function downloadPdfFromBase64(pdfName: string, base64: string): boolean {
+  const name = pdfName.replace(/^.*[/\\]/, "");
+  if (!name.toLowerCase().endsWith(".pdf") || !base64) return false;
+  try {
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    const objectUrl = URL.createObjectURL(
+      new Blob([bytes], { type: "application/pdf" })
+    );
+    try {
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = name;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      return true;
+    } catch {
+      URL.revokeObjectURL(objectUrl);
+      return false;
+    }
+  } catch {
+    return false;
+  }
+}
 
 export type EsidDeclarePreviewState = {
   awb: string;
@@ -74,6 +110,11 @@ export type TcsPortalActionsOpts = {
    * Mặc định TECS-TCS (Ext hub).
    */
   portalWarehouse?: Warehouse;
+  /**
+   * true = ưu tiên hàng đợi Railway+worker (phone / ngoài WiFi).
+   * Desktop trong kho vẫn dùng Ext khi có.
+   */
+  preferRemotePortal?: boolean;
 };
 
 export function useTcsPortalActions({
@@ -84,6 +125,7 @@ export function useTcsPortalActions({
   onReceptionScanDone,
   active = true,
   portalWarehouse: portalWarehouseProp = "TECS-TCS",
+  preferRemotePortal = false,
 }: TcsPortalActionsOpts) {
   const portalWarehouse: TcsPortalWarehouse =
     asTcsPortalWarehouse(portalWarehouseProp) || "TECS-TCS";
@@ -94,6 +136,9 @@ export function useTcsPortalActions({
   const [health, setHealth] = useState<TcsAgentHealth | null>(null);
   const [extension, setExtension] = useState<TcsExtResult | null>(null);
   const [session, setSession] = useState<TcsAgentSession | null>(null);
+  const [portalWorker, setPortalWorker] = useState<PortalWorkerStatus | null>(
+    null
+  );
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
   const [message, setMessage] = useState("");
@@ -151,6 +196,21 @@ export function useTcsPortalActions({
     const timer = window.setInterval(() => void refreshExtension(), 10_000);
     return () => window.clearInterval(timer);
   }, [active, refreshExtension]);
+
+  const refreshPortalWorker = useCallback(async () => {
+    if (portalWarehouse !== "TCS" && portalWarehouse !== "TECS-TCS") return null;
+    const status = await fetchPortalWorkerStatus(portalWarehouse);
+    setPortalWorker(status);
+    return status;
+  }, [portalWarehouse]);
+
+  useEffect(() => {
+    if (!active) return;
+    if (portalWarehouse !== "TCS" && portalWarehouse !== "TECS-TCS") return;
+    void refreshPortalWorker();
+    const timer = window.setInterval(() => void refreshPortalWorker(), 8_000);
+    return () => window.clearInterval(timer);
+  }, [active, portalWarehouse, refreshPortalWorker]);
 
   const ensureSessionReady = useCallback(async (): Promise<boolean> => {
     // Fast-path: đã login từ poll gần đây — bỏ 2 RTT ping/status trước mỗi PDF
@@ -345,13 +405,28 @@ export function useTcsPortalActions({
       const ready = result.ready || [];
       const updatedCount = await applyReadyItemsToOps(ready);
       const seconds = ((performance.now() - started) / 1000).toFixed(1);
+      const listTotal = Number(result.list_total ?? result.cache_count ?? 0);
+      const receptionTotal = Number(
+        result.reception_total ?? ready.length
+      );
+      let detail = "";
+      if (updatedCount) {
+        detail = ` · cập nhật Ops ${updatedCount} lô`;
+      } else if (pendingAwbs.length === 0) {
+        detail =
+          receptionTotal > 0
+            ? ` · TCS có ${receptionTotal} HT nhưng Ops không có lô kho ${portalWarehouse} chưa HT (ngày ${sessionYmd})`
+            : ` · Ops không có lô kho ${portalWarehouse} cần quét (ngày ${sessionYmd})`;
+      } else if (receptionTotal > 0 && ready.length === 0) {
+        detail = ` · TCS ${receptionTotal} HT nhưng không khớp ${pendingAwbs.length} AWB Ops`;
+      } else if (listTotal === 0) {
+        detail = " · danh sách ESID trống sau lọc ngày — kiểm tra ngày phiên / bộ lọc TCS";
+      } else {
+        detail = " · không có lô mới cần cập nhật";
+      }
       setMessage(
-        `Quét ${portalWarehouse} · ${seconds}s · ${ready.length} HT tiếp nhận trên TCS` +
-          (updatedCount
-            ? ` · cập nhật Ops ${updatedCount} lô`
-            : pendingAwbs.length === 0
-              ? " · không còn lô cần cập nhật"
-              : " · không có lô mới cần cập nhật")
+        `Quét ${portalWarehouse} · ${seconds}s · ${listTotal} dòng · ${receptionTotal} HT trên TCS · khớp ${ready.length}` +
+          detail
       );
       const readyAwbs = ready
         .map((item) => String(item.awb || "").replace(/\D/g, "").slice(0, 11))
@@ -389,13 +464,64 @@ export function useTcsPortalActions({
     sessionYmd,
   ]);
 
-  /** Fallback Playwright: mở/login agent (kho TECS-TCS). */
+  /** Mobile / từ xa: Railway→worker. Desktop cùng LAN: agent local (TECS-TCS) hoặc Ext. */
   const login = useCallback(async () => {
     setError("");
     setMessage("");
+    const remote =
+      preferRemotePortal &&
+      (portalWarehouse === "TCS" || portalWarehouse === "TECS-TCS");
+    if (remote) {
+      setBusy(true);
+      setBusyLabel(`ĐN máy kho ${portalWarehouse} (từ xa)…`);
+      try {
+        const ws = await refreshPortalWorker();
+        if (!ws?.worker_configured) {
+          setError(
+            "Server chưa PORTAL_WORKER_SECRET — thêm env Railway rồi chạy portal:worker trên PC."
+          );
+          return;
+        }
+        if (!ws.online) {
+          setError(
+            `Máy kho ${portalWarehouse} offline — bật PC, agent + npm run portal:worker (PORTAL_WAREHOUSE=${portalWarehouse}).`
+          );
+          return;
+        }
+        const job = await runPortalJob({
+          warehouse: portalWarehouse,
+          type: "login",
+          payload: { visible: true },
+          timeoutMs: 120_000,
+          onTick: (j) => {
+            if (j.status === "queued") setBusyLabel("Chờ máy kho nhận lệnh ĐN…");
+            if (j.status === "claimed") {
+              setBusyLabel(`Máy kho đang ĐN ${portalWarehouse}…`);
+            }
+          },
+        });
+        await refreshPortalWorker();
+        if (job.status === "error") {
+          setError(job.error || "ĐN máy kho thất bại");
+          return;
+        }
+        setMessage(
+          String(
+            job.result?.message ||
+              `Đã ĐN ${portalWarehouse} trên máy kho — phone có thể Quét / Tải PDF`
+          )
+        );
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "ĐN từ xa thất bại");
+      } finally {
+        setBusy(false);
+        setBusyLabel("");
+      }
+      return;
+    }
     if (portalWarehouse === "TCS") {
       setError(
-        "Kho TCS cần Chrome Ext riêng (profile Chrome TCS). Không dùng agent Playwright cho kho này."
+        "Kho TCS trên desktop: cài Ext hoặc bật preferRemotePortal / dùng phone. Từ xa cần portal:worker."
       );
       return;
     }
@@ -424,14 +550,59 @@ export function useTcsPortalActions({
       setBusy(false);
       setBusyLabel("");
     }
-  }, [portalWarehouse, refreshHealth]);
+  }, [portalWarehouse, preferRemotePortal, refreshHealth, refreshPortalWorker]);
 
-  /** Fallback Playwright: bootstrap + quét (chỉ TECS-TCS). */
+  /** Mobile: job scan qua worker theo kho. Desktop TECS-TCS: agent local. */
   const scanReceptionWithAgent = useCallback(async () => {
     setError("");
     setMessage("");
-    if (portalWarehouse === "TCS") {
-      setError("Kho TCS: cài Ext kho TCS và bấm Đăng nhập / Quét trên Ext.");
+    const remote =
+      preferRemotePortal &&
+      (portalWarehouse === "TCS" || portalWarehouse === "TECS-TCS");
+    if (remote || portalWarehouse === "TCS") {
+      if (!preferRemotePortal && portalWarehouse === "TCS") {
+        /* desktop không Ext → vẫn remote */
+      }
+      setBusy(true);
+      const pendingAwbs = pendingReception.map((s) => awbDigitsKey(s.awb));
+      setBusyLabel(
+        pendingAwbs.length
+          ? `Máy kho quét ${pendingAwbs.length} AWB…`
+          : `Máy kho quét ngày ${sessionYmd}…`
+      );
+      const t0 = performance.now();
+      try {
+        const job = await runPortalJob({
+          warehouse: portalWarehouse,
+          type: "scan",
+          payload: { session_date: sessionYmd, awbs: pendingAwbs },
+          timeoutMs: 180_000,
+          onTick: (j) => {
+            if (j.status === "queued") setBusyLabel("Chờ máy kho nhận lệnh Quét…");
+            if (j.status === "claimed") setBusyLabel("Máy kho đang quét ESID…");
+          },
+        });
+        if (job.status === "error") {
+          setError(job.error || "Quét từ xa thất bại");
+          return;
+        }
+        const ready = pickEsidScanReadyItems({
+          ready: (job.result?.ready as TcsEsidScanItem[]) || [],
+          items: (job.result?.items as TcsEsidScanItem[]) || [],
+        });
+        const updatedCount = await applyReadyItemsToOps(ready);
+        await refreshPortalWorker();
+        const sec = ((performance.now() - t0) / 1000).toFixed(1);
+        setMessage(
+          `Quét máy kho · ${sec}s · ${ready.length} HT` +
+            (updatedCount ? ` · cập nhật Ops ${updatedCount} lô` : "")
+        );
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Quét từ xa thất bại");
+      } finally {
+        setBusy(false);
+        setBusyLabel("");
+      }
       return;
     }
     setBusy(true);
@@ -484,7 +655,9 @@ export function useTcsPortalActions({
     applyReadyItemsToOps,
     pendingReception,
     portalWarehouse,
+    preferRemotePortal,
     refreshHealth,
+    refreshPortalWorker,
     sessionYmd,
   ]);
 
@@ -511,6 +684,127 @@ export function useTcsPortalActions({
         setError("AWB phải đủ 11 số để tải PDF ESID.");
         return;
       }
+
+      // TCS / TECS-TCS từ xa (phone): worker. TCS desktop: Ext nếu có.
+      if (rowPortal === "TCS" || (rowPortal === "TECS-TCS" && preferRemotePortal)) {
+        setBusy(true);
+        const t0 = performance.now();
+        try {
+          const ext = await pingTcsExtension({ warehouse: rowPortal });
+          setExtension(ext);
+          const remote =
+            preferRemotePortal || (rowPortal === "TCS" && !ext.ok);
+
+          if (!remote && ext.ok && rowPortal === "TCS") {
+            setBusyLabel(`${tcsExtLabel("TCS")} đang lấy phiếu …${digits.slice(-8)}…`);
+            const res = await downloadEsidPdfViaExtension(
+              { awb: digits },
+              { warehouse: "TCS" }
+            );
+            setExtension(res);
+            const sec = ((performance.now() - t0) / 1000).toFixed(1);
+            if (!res.ok) {
+              setError(res.message || res.error || "Ext tải PDF thất bại");
+              return;
+            }
+            const pdfName =
+              String(res.pdf_name || "").replace(/^.*[/\\]/, "") ||
+              `${digits.slice(0, 3)}-${digits.slice(3)}_ESID.pdf`;
+            const saved = res.pdf_base64
+              ? downloadPdfFromBase64(pdfName, res.pdf_base64)
+              : Boolean(res.downloaded);
+            setDownloadedCount(1);
+            setResults([
+              {
+                stt: 1,
+                awb: digits,
+                action: "DOWNLOAD",
+                normalized_status: "DOWNLOADED",
+                pdf_name: pdfName,
+                downloaded_file: pdfName,
+                print_status: "EXT_TCS",
+                tcs_status_raw: "Ext kho TCS",
+                shipment_id: String(shipment.id || ""),
+              },
+            ]);
+            if (!saved && !res.downloaded) {
+              setError(
+                `Tải PDF Ext …${digits.slice(-8)} · ${sec}s — không tải về máy.`
+              );
+              return;
+            }
+            setMessage(`Tải PDF Ext …${digits.slice(-8)} · ${sec}s — ${pdfName}`);
+            return;
+          }
+
+          setBusyLabel(`Máy kho ${rowPortal} tải PDF …${digits.slice(-8)}…`);
+          const ws = await refreshPortalWorker();
+          if (!ws?.online) {
+            setError(
+              `Máy kho ${rowPortal} offline — chạy portal:worker + agent đúng tài khoản kho trên PC 24/7.`
+            );
+            return;
+          }
+          const job = await runPortalJob({
+            warehouse: rowPortal,
+            type: "pdf",
+            payload: {
+              awb: digits,
+              shipment_id: String(shipment.id || ""),
+            },
+            timeoutMs: 180_000,
+            onTick: (j) => {
+              if (j.status === "queued") setBusyLabel("Chờ máy kho nhận lệnh PDF…");
+              if (j.status === "claimed") {
+                setBusyLabel(`Máy kho đang lấy PDF …${digits.slice(-8)}…`);
+              }
+            },
+          });
+          const sec = ((performance.now() - t0) / 1000).toFixed(1);
+          if (job.status === "error") {
+            setError(job.error || "Tải PDF máy kho thất bại");
+            return;
+          }
+          const pdfName =
+            String(job.result?.pdf_name || job.artifact_name || "").replace(
+              /^.*[/\\]/,
+              ""
+            ) || `${digits.slice(0, 3)}-${digits.slice(3)}_ESID.pdf`;
+          const saved = await downloadPortalJobArtifact(job.id, pdfName);
+          setDownloadedCount(1);
+          setResults([
+            {
+              stt: 1,
+              awb: digits,
+              action: "DOWNLOAD",
+              normalized_status: "DOWNLOADED",
+              pdf_name: pdfName,
+              downloaded_file: pdfName,
+              print_status: "REMOTE_WORKER",
+              tcs_status_raw: `Máy kho ${rowPortal}`,
+              shipment_id: String(shipment.id || ""),
+            },
+          ]);
+          if (!saved) {
+            setError(
+              `PDF sẵn trên server …${digits.slice(-8)} · ${sec}s — không kích hoạt tải. Mở lại hoặc kiểm tra trình duyệt.`
+            );
+            setMessage(`File: ${pdfName}`);
+            return;
+          }
+          setMessage(
+            `Tải PDF ${rowPortal} …${digits.slice(-8)} · ${sec}s — ${pdfName}`
+          );
+          await refreshPortalWorker();
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Lỗi tải PDF từ xa");
+        } finally {
+          setBusy(false);
+          setBusyLabel("");
+        }
+        return;
+      }
+
       const payload = buildTcsPortalJob([shipment], {
         sessionYmd: String(shipment.sessionDate || sessionYmd).trim() || sessionYmd,
         action: "DOWNLOAD",
@@ -612,7 +906,14 @@ export function useTcsPortalActions({
         setBusyLabel("");
       }
     },
-    [ensureSessionReady, health?.ok, refreshHealth, sessionYmd]
+    [
+      ensureSessionReady,
+      health?.ok,
+      preferRemotePortal,
+      refreshHealth,
+      refreshPortalWorker,
+      sessionYmd,
+    ]
   );
 
   /** Điền ESID từng lô — đúng kho đang thao tác + đã HT tiếp nhận. */
@@ -666,13 +967,34 @@ export function useTcsPortalActions({
         setExtension(ext);
         let executor: "extension" | "playwright" = "playwright";
         let res;
-        if (ext.ok && ext.workspace?.logged_in) {
+        // Kho TCS: chỉ Ext. Cho phép thử Điền khi Ext online (PING có thể vừa khôi phục logged_in).
+        const useExt =
+          ext.ok &&
+          (Boolean(ext.workspace?.logged_in) || rowPortal === "TCS");
+        if (useExt) {
           executor = "extension";
           setBusyLabel(
             `${tcsExtLabel(rowPortal)} đang điền …${digits.slice(-8)}…`
           );
           res = await fillEsidViaExtension(payload, { warehouse: rowPortal });
           setExtension(res);
+          if (
+            !res.ok &&
+            rowPortal === "TCS" &&
+            (res.error === "NEEDS_LOGIN" ||
+              res.error === "NEED_LOGIN" ||
+              /đăng nhập|login/i.test(String(res.message || "")))
+          ) {
+            setError(
+              "Kho TCS: cần Ext «Kho TCS ESID» đã Đăng nhập (Chrome profile TCS) trước khi Điền — không dùng agent Playwright."
+            );
+            return;
+          }
+        } else if (rowPortal === "TCS") {
+          setError(
+            "Kho TCS: cài / bật Ext «Kho TCS ESID» rồi bấm Đăng nhập trên thanh Ops trước khi Điền."
+          );
+          return;
         } else {
           if (!(await ensureSessionReady())) return;
           res = await declareFillTcsEsid(payload);
@@ -801,15 +1123,19 @@ export function useTcsPortalActions({
 
   const sessionLabel = busy
     ? "Đang xử lý"
-    : extension?.ok && extension.workspace?.logged_in
-      ? `${tcsExtLabel(portalWarehouse)} đã login`
-    : !health?.ok
-      ? "Offline"
-      : !session?.open
-        ? "Chưa mở"
-        : session.logged_in
-          ? "Đã login"
-          : "Cần CAPTCHA";
+    : preferRemotePortal && portalWorker?.logged_in
+      ? "Máy kho đã ĐN"
+      : preferRemotePortal && portalWorker?.online
+        ? "Máy kho online"
+        : extension?.ok && extension.workspace?.logged_in
+          ? `${tcsExtLabel(portalWarehouse)} đã login`
+          : !health?.ok
+            ? "Offline"
+            : !session?.open
+              ? "Chưa mở"
+              : session.logged_in
+                ? "Đã login"
+                : "Cần CAPTCHA";
 
   const extensionWorkspaceActive =
     extension?.workspace?.logged_in === true ||
@@ -822,6 +1148,7 @@ export function useTcsPortalActions({
     error,
     health,
     extension,
+    portalWorker,
     session,
     sessionLabel,
     results,
@@ -833,6 +1160,7 @@ export function useTcsPortalActions({
     scanReceptionWithAgent,
     pendingReceptionCount: pendingReception.length,
     refreshExtension,
+    refreshPortalWorker,
     downloadEsidFor,
     fillEsidDeclareFor,
     submitEsidDeclare,
@@ -841,6 +1169,7 @@ export function useTcsPortalActions({
     /** Kho portal đang gắn Ext/channel. */
     portalWarehouse,
     extLabel: tcsExtLabel(portalWarehouse),
+    preferRemotePortal,
     /** false = Chrome thật trên máy kho */
     agentHeadless: health?.headless ?? session?.headless,
     workspace:

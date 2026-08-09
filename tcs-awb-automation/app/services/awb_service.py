@@ -73,8 +73,9 @@ def validate_row(raw: dict[str, Any], stt: int) -> AwbJobRow:
         errors.append("PRINT_COPIES không hợp lệ")
 
     warehouse = str(raw.get("warehouse") or raw.get("WAREHOUSE") or "TECS-TCS").strip()
-    if warehouse.upper() not in {"TECS-TCS", "KHO-TCS"}:
-        errors.append(f"Chỉ hỗ trợ kho TECS-TCS (nhận được: {warehouse})")
+    # TCS = kho TCS (Ops); TECS-TCS / KHO-TCS = hub — cùng portal tcs.com.vn.
+    if warehouse.upper() not in {"TECS-TCS", "KHO-TCS", "TCS"}:
+        errors.append(f"Chỉ hỗ trợ kho TECS-TCS / TCS (nhận được: {warehouse})")
 
     return AwbJobRow(
         stt=stt,
@@ -191,8 +192,8 @@ def map_tcs_status_to_normalized(raw_status: str) -> NormalizedStatus:
 
 def validate_ops_payload(payload: dict[str, Any]) -> list[AwbJobRow]:
     warehouse = str(payload.get("warehouse") or "TECS-TCS")
-    if warehouse.upper() not in {"TECS-TCS", "KHO-TCS"}:
-        raise ValueError("Agent chỉ nhận job kho TECS-TCS")
+    if warehouse.upper() not in {"TECS-TCS", "KHO-TCS", "TCS"}:
+        raise ValueError("Agent chỉ nhận job kho TECS-TCS / TCS")
     rows_raw = payload.get("rows") or []
     rows = [validate_row({**r, "warehouse": "TECS-TCS"}, i + 1) for i, r in enumerate(rows_raw)]
     return mark_duplicates(rows)

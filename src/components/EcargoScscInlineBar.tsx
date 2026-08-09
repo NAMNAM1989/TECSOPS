@@ -21,6 +21,7 @@ import {
   ecargoScscProfileIsComplete,
   getActiveEcargoScscProfile,
 } from "../utils/ecargoScscProfile";
+import { trackAiEvent } from "../utils/aiOpsClient";
 
 type HostProps = {
   shipments: Shipment[];
@@ -51,12 +52,17 @@ function EcargoScscModalBridge({
     setPreferredShipmentId(shipmentId);
     setSingleShipmentMode(true);
     setOpen(true);
+    trackAiEvent("ecargo.modal.open", { mode: "single", shipmentId });
   }, []);
 
   const openRegister = useCallback((preferred?: string | null) => {
     setPreferredShipmentId(preferred ?? null);
     setSingleShipmentMode(false);
     setOpen(true);
+    trackAiEvent("ecargo.modal.open", {
+      mode: "multi",
+      preferred: preferred || null,
+    });
   }, []);
 
   useEffect(() => {
@@ -69,7 +75,10 @@ function EcargoScscModalBridge({
   return (
     <EcargoVctRegisterModal
       open={open}
-      onClose={() => setOpen(false)}
+      onClose={() => {
+        trackAiEvent("ecargo.modal.close");
+        setOpen(false);
+      }}
       shipments={scscShipments}
       customers={customers}
       preferredShipmentId={preferredShipmentId}
@@ -114,6 +123,7 @@ export function EcargoScscInlineBar({ preferredShipmentId, compact = false }: Ba
   const [complete, setComplete] = useState(() =>
     ecargoScscProfileIsComplete(getActiveEcargoScscProfile()),
   );
+  const [extBusy, setExtBusy] = useState(false);
 
   useEffect(() => {
     const sync = () => setComplete(ecargoScscProfileIsComplete(getActiveEcargoScscProfile()));
@@ -121,23 +131,74 @@ export function EcargoScscInlineBar({ preferredShipmentId, compact = false }: Ba
     return () => window.removeEventListener(ECARGO_SCSC_CHANGED_EVENT, sync);
   }, []);
 
+  const downloadScscExt = async () => {
+    setExtBusy(true);
+    try {
+      const res = await fetch("/api/ecargo-extension", { cache: "no-store" });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        version?: string;
+        download_url?: string;
+        error?: string;
+        filename?: string;
+      };
+      if (!res.ok || !data.ok || !data.download_url) {
+        throw new Error(
+          data.error ||
+            "Chưa đóng gói Ext SCSC — load unpacked thư mục chrome-extension-scsc.",
+        );
+      }
+      const version = String(data.version || "").trim();
+      const a = document.createElement("a");
+      a.href = data.download_url;
+      a.download =
+        data.filename ||
+        (version
+          ? `tecsops-chrome-extension-scsc-v${version}.zip`
+          : "tecsops-chrome-extension-scsc.zip");
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Tải Ext SCSC thất bại");
+    } finally {
+      setExtBusy(false);
+    }
+  };
+
   const btn =
     "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition active:scale-[0.98] border border-emerald-500/30 bg-emerald-50 text-emerald-900 hover:bg-emerald-100";
+  const btnExt =
+    "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold transition border border-slate-300/80 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-45";
 
   return (
-    <button
-      type="button"
-      className={btn}
-      title={
-        complete
-          ? "Đăng ký eCargo — chọn lô kho SCSC"
-          : "Đăng ký eCargo SCSC — cần lưu hồ sơ đại lý lần đầu"
-      }
-      onClick={() => api?.openRegister(preferredShipmentId)}
-      disabled={!api}
-    >
-      {compact ? "eCargo" : "Đăng ký eCargo"}
-      {!complete ? <span className="text-amber-600">·</span> : null}
-    </button>
+    <span className="inline-flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        className={btn}
+        title={
+          complete
+            ? "Đăng ký eCargo — chọn lô kho SCSC"
+            : "Đăng ký eCargo SCSC — cần lưu hồ sơ đại lý lần đầu"
+        }
+        onClick={() => api?.openRegister(preferredShipmentId)}
+        disabled={!api}
+      >
+        {compact ? "eCargo" : "Đăng ký eCargo"}
+        {!complete ? <span className="text-amber-600">·</span> : null}
+      </button>
+      {!compact ? (
+        <button
+          type="button"
+          className={btnExt}
+          title="Tải Ext «TECSOPS — Kho SCSC eCargo»"
+          onClick={() => void downloadScscExt()}
+          disabled={extBusy}
+        >
+          {extBusy ? "…" : "Tải Ext SCSC"}
+        </button>
+      ) : null}
+    </span>
   );
 }

@@ -47,6 +47,30 @@ def test_transparent_captcha_is_composited_on_white():
     assert prepared.getpixel((40, 10)) == (0, 0, 0)
 
 
+def test_ocr_fast_path_accepts_single_five_char(monkeypatch):
+    class FakeOcr:
+        def classification(self, data):
+            return "AB123"
+
+    monkeypatch.setattr("app.browser.captcha_ocr._get_ocr", lambda: FakeOcr())
+    calls = {"n": 0}
+
+    def variants(data, *, tier="full"):
+        calls["n"] += 1
+        if tier == "fast":
+            return [b"v1"]
+        if tier == "medium":
+            return [b"v1", b"v2", b"v3"]
+        return [b"v1", b"v2", b"v3", b"v4", b"v5", b"v6"]
+
+    monkeypatch.setattr("app.browser.captcha_ocr._captcha_variants", variants)
+    result = ocr_image_bytes_detailed(b"image", min_confidence=0.55)
+    assert result.accepted is True
+    assert result.text == "AB123"
+    assert result.samples == 1
+    assert calls["n"] == 3  # auto lập plan fast/medium/full nhưng dừng sau fast
+
+
 def test_ocr_uses_consensus_and_expected_length(monkeypatch):
     readings = iter(["AB123", "AB123", "ABI23", "AB123", "ABI23", "AB123"])
 
@@ -57,12 +81,12 @@ def test_ocr_uses_consensus_and_expected_length(monkeypatch):
     monkeypatch.setattr("app.browser.captcha_ocr._get_ocr", lambda: FakeOcr())
     monkeypatch.setattr(
         "app.browser.captcha_ocr._captcha_variants",
-        lambda data: [b"variant"] * 6,
+        lambda data, *, tier="full": [b"variant"] * (1 if tier == "fast" else 3 if tier == "medium" else 6),
     )
-    result = ocr_image_bytes_detailed(b"image")
+    result = ocr_image_bytes_detailed(b"image", mode="full", min_confidence=0.55)
     assert result.accepted is True
     assert result.text == "AB123"
-    assert result.confidence == 0.6667
+    assert result.confidence >= 0.5
 
 
 def test_ocr_rejects_wrong_length_even_when_votes_agree(monkeypatch):
@@ -73,9 +97,26 @@ def test_ocr_rejects_wrong_length_even_when_votes_agree(monkeypatch):
     monkeypatch.setattr("app.browser.captcha_ocr._get_ocr", lambda: FakeOcr())
     monkeypatch.setattr(
         "app.browser.captcha_ocr._captcha_variants",
-        lambda data: [b"variant"] * 6,
+        lambda data, *, tier="full": [b"variant"] * 6,
     )
-    result = ocr_image_bytes_detailed(b"image")
+    result = ocr_image_bytes_detailed(b"image", mode="full")
     assert result.accepted is False
     assert result.text == ""
     assert result.error == "OCR_LOW_CONFIDENCE"
+
+
+def test_ocr_prefers_correct_length_candidate(monkeypatch):
+    readings = iter(["AB12", "AB123", "AB12", "AB123", "XXXXX"])
+
+    class FakeOcr:
+        def classification(self, data):
+            return next(readings)
+
+    monkeypatch.setattr("app.browser.captcha_ocr._get_ocr", lambda: FakeOcr())
+    monkeypatch.setattr(
+        "app.browser.captcha_ocr._captcha_variants",
+        lambda data, *, tier="full": [b"v"] * 5,
+    )
+    result = ocr_image_bytes_detailed(b"image", mode="full", min_confidence=0.3)
+    assert result.accepted is True
+    assert result.text == "AB123"

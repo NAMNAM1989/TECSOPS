@@ -1,4 +1,4 @@
-"""OCR CAPTCHA local (ddddocr) — dùng khi ảnh chữ rõ, không méo mạnh."""
+"""OCR CAPTCHA local (ddddocr) — tối ưu cho CAPTCHA TCS đơn giản (5 ký tự A-Z0-9)."""
 from __future__ import annotations
 
 import base64
@@ -65,49 +65,52 @@ def _encode_png(image: Any) -> bytes:
     return buf.getvalue()
 
 
-def _captcha_variants(data: bytes) -> list[bytes]:
-    """
-    TCS trả PNG RGBA nền trong suốt, chữ đen. ``convert("RGB")`` trực tiếp sẽ
-    biến cả nền lẫn chữ thành đen và làm mất CAPTCHA. Luôn ghép lên nền trắng
-    trước, sau đó tạo vài biến thể ít phá nét để bỏ phiếu OCR.
-    """
-    from PIL import Image, ImageOps
+def _base_rgb(data: bytes):
+    """Ghép PNG RGBA nền trong suốt lên trắng — bắt buộc với CAPTCHA TCS."""
+    from PIL import Image
 
     source = Image.open(BytesIO(data))
     if source.mode in {"RGBA", "LA"} or "transparency" in source.info:
         rgba = source.convert("RGBA")
         canvas = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
         canvas.alpha_composite(rgba)
-        rgb = canvas.convert("RGB")
-    else:
-        rgb = source.convert("RGB")
+        return canvas.convert("RGB")
+    return source.convert("RGB")
 
+
+def _captcha_variants(data: bytes, *, tier: str = "full") -> list[bytes]:
+    """
+    TCS trả PNG RGBA nền trong suốt, chữ đen. ``convert("RGB")`` trực tiếp sẽ
+    biến cả nền lẫn chữ thành đen. Luôn ghép lên nền trắng trước.
+
+    tier:
+      - fast: 1 ảnh (RGB trắng) — đủ cho CAPTCHA rõ
+      - medium: + gray + scale 2x
+      - full: thêm scale 3x (fallback)
+    """
+    from PIL import Image, ImageOps
+
+    rgb = _base_rgb(data)
     gray = ImageOps.autocontrast(ImageOps.grayscale(rgb))
-    variants = [rgb, gray]
+    variants = [rgb]
+    if tier == "fast":
+        return [_encode_png(image) for image in variants]
+
+    variants.append(gray)
     resampling = getattr(Image, "Resampling", Image)
-    for scale in (2, 3):
-        size = (rgb.width * scale, rgb.height * scale)
-        variants.append(rgb.resize(size, resampling.LANCZOS))
-        variants.append(gray.resize(size, resampling.LANCZOS))
+    size2 = (rgb.width * 2, rgb.height * 2)
+    variants.append(rgb.resize(size2, resampling.LANCZOS))
+    if tier == "medium":
+        return [_encode_png(image) for image in variants]
+
+    variants.append(gray.resize(size2, resampling.LANCZOS))
+    size3 = (rgb.width * 3, rgb.height * 3)
+    variants.append(rgb.resize(size3, resampling.LANCZOS))
+    variants.append(gray.resize(size3, resampling.LANCZOS))
     return [_encode_png(image) for image in variants]
 
 
-def ocr_image_bytes_detailed(
-    data: bytes,
-    *,
-    expected_length: int = 5,
-    min_confidence: float = 0.60,
-) -> CaptchaOcrResult:
-    """OCR nhiều biến thể và chỉ chấp nhận kết quả có đồng thuận đủ mạnh."""
-    if not data:
-        return CaptchaOcrResult("", 0.0, (), 0, False)
-
-    try:
-        variants = _captcha_variants(data)
-    except Exception:
-        # Fallback cho định dạng ảnh lạ; vẫn không bỏ qua bước bỏ phiếu/độ dài.
-        variants = [data]
-
+def _run_ocr_on_variants(variants: list[bytes]) -> list[str]:
     readings: list[str] = []
     ocr = _get_ocr()
     # DdddOcr dùng chung trong HTTP server đa luồng, nên serialize inference.
@@ -119,24 +122,137 @@ def ocr_image_bytes_detailed(
                 text = ""
             if text:
                 readings.append(text)
+    return readings
 
+
+def _rank_readings(
+    readings: list[str], *, expected_length: int
+) -> tuple[tuple[str, int], ...]:
     counts = Counter(readings)
-    ranked = tuple(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+    # Ưu tiên đúng độ dài trước, rồi số phiếu, rồi thứ tự chữ.
+    return tuple(
+        sorted(
+            counts.items(),
+            key=lambda item: (
+                0 if (expected_length <= 0 or len(item[0]) == expected_length) else 1,
+                -item[1],
+                item[0],
+            ),
+        )
+    )
+
+
+def _decide(
+    ranked: tuple[tuple[str, int], ...],
+    *,
+    readings_n: int,
+    variants_n: int,
+    expected_length: int,
+    min_confidence: float,
+) -> CaptchaOcrResult:
     if not ranked:
-        return CaptchaOcrResult("", 0.0, (), len(variants), False)
+        return CaptchaOcrResult("", 0.0, (), variants_n, False)
 
     best_text, best_votes = ranked[0]
-    confidence = best_votes / max(1, len(readings))
-    accepted = (
-        (expected_length <= 0 or len(best_text) == expected_length)
-        and confidence >= min_confidence
-    )
+    length_ok = expected_length <= 0 or len(best_text) == expected_length
+    confidence = best_votes / max(1, readings_n)
+
+    # CAPTCHA TCS đơn giản: chấp nhận sớm khi
+    # - đúng 5 ký tự và ≥2 biến thể đồng thuận, hoặc
+    # - đúng 5 ký tự và là kết quả duy nhất hợp lệ (fast-path 1 lần đọc).
+    valid_len = [
+        (text, votes)
+        for text, votes in ranked
+        if expected_length <= 0 or len(text) == expected_length
+    ]
+    accepted = False
+    if length_ok:
+        if best_votes >= 2:
+            accepted = True
+            confidence = max(confidence, best_votes / max(1, readings_n))
+        elif len(valid_len) == 1 and best_votes >= 1:
+            # Một ứng viên đúng độ dài duy nhất — tin cậy với CAPTCHA rõ.
+            accepted = confidence >= min(min_confidence, 0.34) or variants_n == 1
+            if variants_n == 1 and best_votes == 1:
+                confidence = max(confidence, 0.9)
+                accepted = True
+        elif confidence >= min_confidence:
+            accepted = True
+
     return CaptchaOcrResult(
         best_text if accepted else "",
         round(confidence, 4),
         ranked,
-        len(variants),
+        variants_n,
         accepted,
+    )
+
+
+def ocr_image_bytes_detailed(
+    data: bytes,
+    *,
+    expected_length: int = 5,
+    min_confidence: float = 0.60,
+    mode: str = "auto",
+) -> CaptchaOcrResult:
+    """
+    OCR CAPTCHA. mode=auto: fast → medium → full chỉ khi chưa chấp nhận.
+    Giảm latency rõ với CAPTCHA TCS đơn giản (thường xong ở fast 1 inference).
+    """
+    if not data:
+        return CaptchaOcrResult("", 0.0, (), 0, False)
+
+    def _variants(tier: str) -> list[bytes]:
+        try:
+            return _captcha_variants(data, tier=tier)
+        except Exception:
+            return [data]
+
+    plan: list[tuple[str, list[bytes]]] = []
+    if mode == "fast":
+        plan = [("fast", _variants("fast"))]
+    elif mode == "medium":
+        plan = [("medium", _variants("medium"))]
+    elif mode == "full":
+        plan = [("full", _variants("full"))]
+    else:
+        # auto: không OCR lại ảnh đã chạy — chỉ thêm biến thể mới
+        fast = _variants("fast")
+        medium = _variants("medium")
+        full = _variants("full")
+        plan = [
+            ("fast", fast),
+            ("medium", medium[len(fast) :]),
+            ("full", full[len(medium) :]),
+        ]
+
+    all_readings: list[str] = []
+    total_variants = 0
+    last_ranked: tuple[tuple[str, int], ...] = ()
+
+    for _tier, chunk in plan:
+        if not chunk:
+            continue
+        readings = _run_ocr_on_variants(chunk)
+        all_readings.extend(readings)
+        total_variants += len(chunk)
+        last_ranked = _rank_readings(all_readings, expected_length=expected_length)
+        decided = _decide(
+            last_ranked,
+            readings_n=len(all_readings),
+            variants_n=total_variants,
+            expected_length=expected_length,
+            min_confidence=min_confidence,
+        )
+        if decided.accepted:
+            return decided
+
+    return _decide(
+        last_ranked,
+        readings_n=len(all_readings),
+        variants_n=total_variants,
+        expected_length=expected_length,
+        min_confidence=min_confidence,
     )
 
 
@@ -256,7 +372,7 @@ def refresh_captcha_via_reload_icon(page: Any) -> bool:
             loc = root.locator(sel)
             if loc.count() > 0:
                 loc.last.click(timeout=2000)
-                page.wait_for_timeout(700)
+                page.wait_for_timeout(450)
                 return True
     except Exception:
         pass
@@ -265,7 +381,7 @@ def refresh_captcha_via_reload_icon(page: Any) -> bool:
     if img is not None:
         try:
             img.click(timeout=2000)
-            page.wait_for_timeout(700)
+            page.wait_for_timeout(450)
             return True
         except Exception:
             pass

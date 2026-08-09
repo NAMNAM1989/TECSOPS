@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isEcargoScscWarehouse } from "../constants/warehouses";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
@@ -29,11 +29,18 @@ import {
   todayLocalYmd,
 } from "../utils/ecargoTextNormalize";
 import {
+  ECARGO_PLATE_REQUIRED_MSG,
+  getEcargoPlateFieldError,
+  getEcargoVehicleGateError,
+  isVehicleNoMissingError,
+  normalizeEcargoPlateForSubmit,
+} from "../utils/ecargoVehicleValidation";
+import { trackAiEvent } from "../utils/aiOpsClient";
+import {
   fillEcargoVctViaExtension,
   pingTcsExtension,
   registerEcargoVctViaExtension,
 } from "../utils/tcsChromeExtension";
-import { normalizeVehiclePlateInput } from "../utils/vehiclePlateNormalize";
 import { formatAwbLabel } from "../utils/awbFormat";
 
 type Props = {
@@ -135,6 +142,10 @@ export function EcargoVctRegisterModal({
   const [imapStatusLoading, setImapStatusLoading] = useState(false);
   const [imapTestBusy, setImapTestBusy] = useState(false);
   const [imapTestMsg, setImapTestMsg] = useState("");
+  /** Lỗi field biển số (client hoặc map từ Ext VEHICLE_NO_MISSING). */
+  const [plateFieldError, setPlateFieldError] = useState<string | null>(null);
+  const [prefillNote, setPrefillNote] = useState("");
+  const plateInputRef = useRef<HTMLInputElement>(null);
 
   const shipmentIdsKey = useMemo(
     () => shipments.map((s) => s.id).join("|"),
@@ -261,8 +272,13 @@ export function EcargoVctRegisterModal({
       setRegisterVehicleType(pick.vehicleType || "OTO");
       setOneshot((prev) => ({
         ...prev,
+        licensePlate: pick.licensePlate || prev.licensePlate,
+        driverName: pick.driverName || prev.driverName,
+        driverId: pick.driverId || prev.driverId,
+        driverIdType: pick.driverIdType || prev.driverIdType,
         vehicleType: pick.vehicleType || "OTO",
       }));
+      setPrefillNote("Đã tự động điền từ Ops Board / danh bạ khách.");
     } else {
       setVehicleMode("oneshot");
       setSavedVehicleId("");
@@ -272,9 +288,81 @@ export function EcargoVctRegisterModal({
         ...prev,
         vehicleType: t,
       }));
+      const first = (selectedShipments.length ? selectedShipments : shipments.slice(0, 1))[0];
+      if (first) {
+        setPrefillNote(
+          `Đã chọn AWB ${formatAwbLabel(first.awb)} · ${first.pcs ?? "—"} kiện / ${first.kg ?? "—"} kg từ Ops Board.`
+        );
+      } else {
+        setPrefillNote("");
+      }
     }
+    setPlateFieldError(null);
     // deps: selectedIdsKey / shipmentIdsKey ổn định hơn object shipments.
   }, [open, selectedIdsKey, shipmentIdsKey, customers, profile.defaultVehicleType]);
+
+  const liveVehiclePick = useMemo((): EcargoVehiclePick | null => {
+    if (!open) return null;
+    const raw: EcargoVehiclePick | null =
+      vehicleMode === "saved"
+        ? (() => {
+            const found = vehiclePool.find((x) => x.vehicle.id === savedVehicleId);
+            if (!found) return null;
+            const base = pickSavedVehicleForEcargo(found.vehicle, "OTO");
+            return { ...base, vehicleType: registerVehicleType || base.vehicleType };
+          })()
+        : {
+            source: "oneshot",
+            licensePlate: normalizeEcargoPlateForSubmit(oneshot.licensePlate),
+            driverName: oneshot.driverName,
+            driverId: oneshot.driverId,
+            driverIdType: oneshot.driverIdType,
+            vehicleType: registerVehicleType || oneshot.vehicleType,
+          };
+    if (!raw) return null;
+    return applyAgentDriverFallback(raw, profile).pick;
+  }, [
+    open,
+    vehicleMode,
+    savedVehicleId,
+    registerVehicleType,
+    oneshot.licensePlate,
+    oneshot.driverName,
+    oneshot.driverId,
+    oneshot.driverIdType,
+    oneshot.vehicleType,
+    vehiclePool,
+    profile,
+  ]);
+
+  const livePlateError = useMemo(
+    () => getEcargoPlateFieldError(liveVehiclePick),
+    [liveVehiclePick]
+  );
+  const liveVehicleGateError = useMemo(
+    () => getEcargoVehicleGateError(liveVehiclePick),
+    [liveVehiclePick]
+  );
+  const displayPlateError = plateFieldError || livePlateError;
+  const vehicleTypeMissingInPool = useMemo(
+    () =>
+      vehiclePool.some(
+        ({ vehicle }) =>
+          !vehicle.vehicleType || String(vehicle.vehicleType).trim() === ""
+      ),
+    [vehiclePool]
+  );
+
+  useEffect(() => {
+    if (!open || !displayPlateError) return;
+    // Chỉ auto-focus khi user đang ở chế độ nhập biển (tránh nhảy focus khi mới mở với xe lưu đủ biển).
+    if (vehicleMode !== "oneshot" && !plateFieldError) return;
+    const t = window.setTimeout(() => {
+      plateInputRef.current?.focus();
+      plateInputRef.current?.select();
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [open, displayPlateError, vehicleMode, plateFieldError]);
 
   if (!open) return null;
 
@@ -307,26 +395,19 @@ export function EcargoVctRegisterModal({
     setStatus("Đã lưu hồ sơ đại lý eCargo.");
   };
 
-  const resolveVehiclePick = (): EcargoVehiclePick | null => {
-    const raw: EcargoVehiclePick | null =
-      vehicleMode === "saved"
-        ? (() => {
-            const found = vehiclePool.find((x) => x.vehicle.id === savedVehicleId);
-            if (!found) return null;
-            const base = pickSavedVehicleForEcargo(found.vehicle, "OTO");
-            return { ...base, vehicleType: registerVehicleType || base.vehicleType };
-          })()
-        : {
-            source: "oneshot",
-            licensePlate: normalizeVehiclePlateInput(oneshot.licensePlate),
-            driverName: oneshot.driverName,
-            driverId: oneshot.driverId,
-            driverIdType: oneshot.driverIdType,
-            vehicleType: registerVehicleType || oneshot.vehicleType,
-          };
-    if (!raw) return null;
-    // Thiếu TX → gắn NV đại lý (cùng logic payload) để preview/validate nhất quán.
-    return applyAgentDriverFallback(raw, profile).pick;
+  const resolveVehiclePick = (): EcargoVehiclePick | null => liveVehiclePick;
+
+  const focusPlateAndBlock = (msg: string) => {
+    setPlateFieldError(msg);
+    setStatus(msg);
+    trackAiEvent("ecargo.validation.fail", {
+      error: "VEHICLE_NO_MISSING",
+      message: msg.slice(0, 80),
+    });
+    queueMicrotask(() => {
+      if (vehicleMode === "saved") setVehicleMode("oneshot");
+      plateInputRef.current?.focus();
+    });
   };
 
   const preparePayload = () => {
@@ -359,6 +440,18 @@ export function EcargoVctRegisterModal({
     if (!vehicle) {
       return { error: "Chọn xe từ hồ sơ khách hoặc nhập xe lần này." };
     }
+    const plateErr = getEcargoPlateFieldError(vehicle);
+    if (plateErr) {
+      focusPlateAndBlock(plateErr);
+      return { error: plateErr };
+    }
+    const gateErr = getEcargoVehicleGateError(vehicle);
+    if (gateErr) {
+      trackAiEvent("ecargo.validation.fail", {
+        error: gateErr.slice(0, 80),
+      });
+      return { error: gateErr };
+    }
     const fromFlights = resolveEcargoArrivalDateFromShipments(selectedShipments);
     const safeArrivalDate = ensureEcargoArrivalDate(
       arrivalDate,
@@ -379,10 +472,13 @@ export function EcargoVctRegisterModal({
         built.warnings.length > 0
           ? `\n${built.warnings.slice(0, 4).join("\n")}`
           : "";
-      return {
-        error: `${built.error || "Không tạo được payload eCargo"}${detail}`,
-      };
+      const errMsg = `${built.error || "Không tạo được payload eCargo"}${detail}`;
+      if (isVehicleNoMissingError(built.error)) {
+        focusPlateAndBlock(ECARGO_PLATE_REQUIRED_MSG);
+      }
+      return { error: errMsg };
     }
+    setPlateFieldError(null);
     return { payload: built.payload, warnings: built.warnings };
   };
 
@@ -395,6 +491,10 @@ export function EcargoVctRegisterModal({
       );
       return;
     }
+    if (livePlateError) {
+      focusPlateAndBlock(livePlateError);
+      return;
+    }
     setBusy(true);
     setStatus("");
     setLastQr(null);
@@ -405,25 +505,43 @@ export function EcargoVctRegisterModal({
         setStatus(prepared.error);
         return;
       }
-      const ping = await pingTcsExtension(2500);
+      const ping = await pingTcsExtension(2500, { warehouse: "SCSC" });
       if (!ping.ok) {
         setStatus(
           ping.message ||
-            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.14 tại chrome://extensions, rồi F5 Ops.",
+            "Chưa thấy Ext «TECSOPS — Kho SCSC eCargo». Cài chrome-extension-scsc, Reload rồi F5 Ops.",
         );
         return;
       }
       const res = await fillEcargoVctViaExtension(prepared.payload!);
       if (!res.ok) {
+        const errCode = String(res.error || res.message || "fail");
+        trackAiEvent("ecargo.fill.fail", {
+          error: isVehicleNoMissingError(errCode)
+            ? "VEHICLE_NO_MISSING"
+            : errCode.slice(0, 80),
+          awbCount: selectedIds.length,
+        });
+        if (isVehicleNoMissingError(errCode)) {
+          focusPlateAndBlock(ECARGO_PLATE_REQUIRED_MSG);
+          return;
+        }
         setStatus(res.message || "Điền eCargo thất bại");
         return;
       }
+      trackAiEvent("ecargo.fill.ok", {
+        awbCount: selectedIds.length,
+        vehicleType: prepared.payload?.header?.vehicleType,
+      });
       const warn =
         (prepared.warnings?.length ?? 0) > 0
           ? `\n${prepared.warnings!.slice(0, 3).join("\n")}`
           : "";
       setStatus(`${res.message || "Đã điền eCargo."}${warn}`);
     } catch (e) {
+      trackAiEvent("ecargo.fill.fail", {
+        error: e instanceof Error ? e.message.slice(0, 80) : "unknown",
+      });
       setStatus(e instanceof Error ? e.message : "Lỗi không xác định khi điền eCargo.");
     } finally {
       setBusy(false);
@@ -484,6 +602,17 @@ export function EcargoVctRegisterModal({
       );
       return;
     }
+    if (livePlateError) {
+      focusPlateAndBlock(livePlateError);
+      return;
+    }
+    if (liveVehicleGateError) {
+      setStatus(liveVehicleGateError);
+      trackAiEvent("ecargo.validation.fail", {
+        error: liveVehicleGateError.slice(0, 80),
+      });
+      return;
+    }
     if (!canRegisterWithOtp) {
       setStatus(
         "Chưa cấu hình OTP mail trên server (ECARGO_IMAP_USER / ECARGO_IMAP_PASS). " +
@@ -501,11 +630,11 @@ export function EcargoVctRegisterModal({
         setStatus(prepared.error);
         return;
       }
-      const ping = await pingTcsExtension(2500);
+      const ping = await pingTcsExtension(2500, { warehouse: "SCSC" });
       if (!ping.ok) {
         setStatus(
           ping.message ||
-            "Chưa thấy Chrome extension TECSOPS. Reload Ext v2.2.14 tại chrome://extensions, rồi F5 Ops.",
+            "Chưa thấy Ext «TECSOPS — Kho SCSC eCargo». Cài chrome-extension-scsc, Reload rồi F5 Ops.",
         );
         return;
       }
@@ -525,9 +654,25 @@ export function EcargoVctRegisterModal({
         shipmentIds: selectedIds,
       });
       if (!res.ok) {
+        const errCode = String(res.error || res.message || "fail");
+        trackAiEvent("ecargo.register.fail", {
+          error: isVehicleNoMissingError(errCode)
+            ? "VEHICLE_NO_MISSING"
+            : errCode.slice(0, 80),
+          awbCount: selectedIds.length,
+        });
+        if (isVehicleNoMissingError(errCode)) {
+          focusPlateAndBlock(ECARGO_PLATE_REQUIRED_MSG);
+          return;
+        }
         setStatus(res.message || "Đăng ký eCargo thất bại");
         return;
       }
+      trackAiEvent("ecargo.register.ok", {
+        awbCount: selectedIds.length,
+        hasVct: Boolean(res.vctCode),
+        vehicleType: prepared.payload?.header?.vehicleType,
+      });
       if (res.vctCode || res.qrDataUrl) {
         setLastQr({
           vctCode: res.vctCode || "",
@@ -540,6 +685,9 @@ export function EcargoVctRegisterModal({
           : "";
       setStatus(`${res.message || "Đã đăng ký eCargo."}${warn}`);
     } catch (e) {
+      trackAiEvent("ecargo.register.fail", {
+        error: e instanceof Error ? e.message.slice(0, 80) : "unknown",
+      });
       setStatus(
         e instanceof Error ? e.message : "Lỗi không xác định khi đăng ký eCargo.",
       );
@@ -911,15 +1059,26 @@ export function EcargoVctRegisterModal({
 
         <section className="mb-3 rounded-xl border border-slate-200 p-3">
           <h3 className="mb-2 text-[12px] font-bold text-slate-800">Xe / tài xế</h3>
+          {prefillNote ? (
+            <p className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50/70 px-2 py-1 text-[10px] font-medium text-emerald-800">
+              {prefillNote}
+            </p>
+          ) : null}
           <p className="mb-2 text-[10px] text-slate-500">
             Chỉ có biển số / thiếu TX → tự lấy NV đại lý ({profile.agentPicName || "…"}) làm tài xế
             mặc định.
           </p>
+          {vehicleTypeMissingInPool ? (
+            <p className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-semibold text-amber-900">
+              ⚠ Có phương tiện chưa chọn loại xe — hãy chọn «Loại xe gửi eCargo» bên dưới trước khi đăng ký.
+            </p>
+          ) : null}
           <div className="mb-2 space-y-1">
             {vehiclePool.map(({ vehicle, customerLabel }) => {
               const missingDriver =
                 !String(vehicle.driverName || "").trim() ||
                 !String(vehicle.driverId || "").trim();
+              const missingType = !vehicle.vehicleType;
               const typeLabel =
                 VEHICLE_TYPES.find((t) => t.value === vehicle.vehicleType)?.label ||
                 "Ô tô (mặc định)";
@@ -937,7 +1096,14 @@ export function EcargoVctRegisterModal({
                     setSavedVehicleId(vehicle.id);
                     const t = pickSavedVehicleForEcargo(vehicle, "OTO").vehicleType;
                     setRegisterVehicleType(t);
-                    setOneshot((p) => ({ ...p, vehicleType: t }));
+                    setPlateFieldError(null);
+                    setOneshot((p) => ({
+                      ...p,
+                      licensePlate: vehicle.licensePlate || p.licensePlate,
+                      driverName: vehicle.driverName || p.driverName,
+                      driverId: vehicle.driverId || p.driverId,
+                      vehicleType: t,
+                    }));
                   }}
                 />
                 <span className="text-[12px] text-slate-800">
@@ -960,6 +1126,14 @@ export function EcargoVctRegisterModal({
                   {missingDriver ? (
                     <span className="ml-1 text-[10px] font-semibold text-amber-700">
                       (thiếu TX)
+                    </span>
+                  ) : null}
+                  {missingType ? (
+                    <span
+                      className="ml-1 inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-600"
+                      title="Phương tiện chưa được chọn loại xe."
+                    >
+                      ⚠ thiếu loại xe
                     </span>
                   ) : null}
                 </span>
@@ -986,6 +1160,7 @@ export function EcargoVctRegisterModal({
               onChange={(e) => {
                 const t = e.target.value as EcargoVehicleType;
                 setRegisterVehicleType(t);
+                setPlateFieldError(null);
                 setOneshot((p) => ({ ...p, vehicleType: t }));
               }}
             >
@@ -996,65 +1171,90 @@ export function EcargoVctRegisterModal({
               ))}
             </select>
           </label>
-          {vehicleMode === "oneshot" ? (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <label>
-                <span className={LABEL}>Biển số *</span>
-                <input
-                  className={`${INPUT} font-mono uppercase`}
-                  value={oneshot.licensePlate}
-                  onChange={(e) =>
-                    setOneshot((p) => ({ ...p, licensePlate: e.target.value }))
-                  }
-                  onBlur={(e) =>
-                    setOneshot((p) => ({
-                      ...p,
-                      licensePlate: normalizeVehiclePlateInput(e.target.value),
-                    }))
-                  }
-                  placeholder="50H17480"
-                />
-              </label>
-              <label>
-                <span className={LABEL}>Tài xế *</span>
-                <input
-                  className={`${INPUT} uppercase`}
-                  value={oneshot.driverName}
-                  onChange={(e) =>
-                    setOneshot((p) => ({ ...p, driverName: e.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                <span className={LABEL}>Giấy tờ TX *</span>
-                <div className="mt-0.5 flex gap-2">
-                  <select
-                    className={INPUT}
-                    value={oneshot.driverIdType}
-                    onChange={(e) =>
-                      setOneshot((p) => ({
-                        ...p,
-                        driverIdType: e.target.value as EcargoIdType,
-                      }))
-                    }
-                  >
-                    {ID_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <label>
+              <span className={LABEL}>
+                Biển số {registerVehicleType === "DIBO" ? "(không bắt buộc)" : "*"}
+              </span>
+              <input
+                ref={plateInputRef}
+                className={`${INPUT} font-mono uppercase ${
+                  displayPlateError
+                    ? "border-rose-400 bg-rose-50 ring-2 ring-rose-200"
+                    : ""
+                }`}
+                value={
+                  vehicleMode === "saved" && savedVehicleId
+                    ? oneshot.licensePlate ||
+                      vehiclePool.find((x) => x.vehicle.id === savedVehicleId)?.vehicle
+                        .licensePlate ||
+                      ""
+                    : oneshot.licensePlate
+                }
+                onChange={(e) => {
+                  setVehicleMode("oneshot");
+                  setPlateFieldError(null);
+                  setOneshot((p) => ({ ...p, licensePlate: e.target.value }));
+                }}
+                onBlur={(e) =>
+                  setOneshot((p) => ({
+                    ...p,
+                    licensePlate: normalizeEcargoPlateForSubmit(e.target.value),
+                  }))
+                }
+                placeholder="50H17480"
+                aria-invalid={Boolean(displayPlateError)}
+                aria-describedby={displayPlateError ? "ecargo-plate-error" : undefined}
+              />
+              {displayPlateError ? (
+                <p id="ecargo-plate-error" className="mt-1 text-[11px] font-semibold text-rose-700">
+                  {displayPlateError}
+                </p>
+              ) : null}
+            </label>
+            {vehicleMode === "oneshot" ? (
+              <>
+                <label>
+                  <span className={LABEL}>Tài xế *</span>
                   <input
-                    className={`${INPUT} font-mono`}
-                    value={oneshot.driverId}
+                    className={`${INPUT} uppercase`}
+                    value={oneshot.driverName}
                     onChange={(e) =>
-                      setOneshot((p) => ({ ...p, driverId: e.target.value }))
+                      setOneshot((p) => ({ ...p, driverName: e.target.value }))
                     }
                   />
-                </div>
-              </label>
-            </div>
-          ) : null}
+                </label>
+                <label className="sm:col-span-2">
+                  <span className={LABEL}>Giấy tờ TX *</span>
+                  <div className="mt-0.5 flex gap-2">
+                    <select
+                      className={INPUT}
+                      value={oneshot.driverIdType}
+                      onChange={(e) =>
+                        setOneshot((p) => ({
+                          ...p,
+                          driverIdType: e.target.value as EcargoIdType,
+                        }))
+                      }
+                    >
+                      {ID_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className={`${INPUT} font-mono`}
+                      value={oneshot.driverId}
+                      onChange={(e) =>
+                        setOneshot((p) => ({ ...p, driverId: e.target.value }))
+                      }
+                    />
+                  </div>
+                </label>
+              </>
+            ) : null}
+          </div>
         </section>
 
         {lastQr ? (
@@ -1101,8 +1301,12 @@ export function EcargoVctRegisterModal({
             type="button"
             className="rounded-full border border-slate-300 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             onClick={() => void onFill()}
-            disabled={busy}
-            title="Chỉ điền form — bạn tự Tạo phiếu + OTP"
+            disabled={busy || Boolean(livePlateError)}
+            title={
+              livePlateError
+                ? livePlateError
+                : "Chỉ điền form — bạn tự Tạo phiếu + OTP"
+            }
           >
             Chỉ điền form
           </button>
@@ -1110,11 +1314,13 @@ export function EcargoVctRegisterModal({
             type="button"
             className="rounded-full bg-emerald-600 px-4 py-1.5 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
             onClick={() => void onRegister()}
-            disabled={busy || !canRegisterWithOtp}
+            disabled={busy || !canRegisterWithOtp || Boolean(livePlateError)}
             title={
-              canRegisterWithOtp
-                ? "Điền + Tạo phiếu + OTP mail + QR"
-                : "Cần cấu hình ECARGO_IMAP_* trên server trước"
+              livePlateError
+                ? livePlateError
+                : canRegisterWithOtp
+                  ? "Điền + Tạo phiếu + OTP mail + QR"
+                  : "Cần cấu hình ECARGO_IMAP_* trên server trước"
             }
           >
             {busy ? "Đang đăng ký…" : "Đăng ký eCargo"}

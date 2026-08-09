@@ -1,4 +1,9 @@
-import type { CustomerDirectoryEntry, CustomerParty, CustomerPartyType } from "../types/customerDirectory";
+import type {
+  CustomerDirectoryEntry,
+  CustomerParty,
+  CustomerPartyType,
+  CustomerSavedVehicle,
+} from "../types/customerDirectory";
 import { validateCustomerDirectory } from "./customerDirectoryValidation";
 import {
   clampCustomerDirectoryEntry,
@@ -145,9 +150,12 @@ function parseSavedVehiclesLoose(raw: unknown): CustomerDirectoryEntry["savedVeh
     out.push(
       clampCustomerSavedVehicle({
         id,
+        label: trimStr(o.label),
         licensePlate: trimStr(o.licensePlate),
         driverName: trimStr(o.driverName),
         driverId: trimStr(o.driverId),
+        driverIdType: trimStr(o.driverIdType) as CustomerSavedVehicle["driverIdType"],
+        vehicleType: trimStr(o.vehicleType) as CustomerSavedVehicle["vehicleType"],
       })
     );
   }

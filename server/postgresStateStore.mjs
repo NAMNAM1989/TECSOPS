@@ -387,6 +387,9 @@ function mergeCustomerBlobProfile(base, fromBlob) {
     savedVehicles: Array.isArray(fromBlob.savedVehicles)
       ? fromBlob.savedVehicles
       : base.savedVehicles ?? [],
+    savedDimTemplates: Array.isArray(fromBlob.savedDimTemplates)
+      ? fromBlob.savedDimTemplates
+      : base.savedDimTemplates ?? [],
     ...(typeof fromBlob.defaultShipperId === "string"
       ? { defaultShipperId: fromBlob.defaultShipperId }
       : {}),
@@ -396,6 +399,9 @@ function mergeCustomerBlobProfile(base, fromBlob) {
     ...(typeof fromBlob.defaultGoodsId === "string" ? { defaultGoodsId: fromBlob.defaultGoodsId } : {}),
     ...(typeof fromBlob.defaultVehicleId === "string"
       ? { defaultVehicleId: fromBlob.defaultVehicleId }
+      : {}),
+    ...(typeof fromBlob.defaultDimTemplateId === "string"
+      ? { defaultDimTemplateId: fromBlob.defaultDimTemplateId }
       : {}),
     ...(typeof fromBlob.otherRequirementsPrint === "string"
       ? { otherRequirementsPrint: fromBlob.otherRequirementsPrint }

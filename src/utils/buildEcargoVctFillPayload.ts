@@ -28,7 +28,7 @@ export const ECARGO_PLATE_MIN = 7;
 /** Placeholder đăng ký nhanh khi lô chưa có kiện/kg thực. */
 export const ECARGO_DEFAULT_PCS = 99;
 export const ECARGO_DEFAULT_KG = 999;
-/** Tên hàng cố định khi đăng ký eCargo — không lấy từ hồ sơ khách. */
+/** Fallback tên hàng eCargo khi lô chưa có goodsDescriptionPrint. */
 export const ECARGO_DEFAULT_GOODS = "GARMENTS";
 
 export type EcargoVehiclePick =
@@ -92,11 +92,13 @@ export type EcargoVctFillPayload = {
   submit: boolean;
 };
 
-/** Tên hàng eCargo — luôn GARMENTS (đăng ký nhanh). */
+/** Tên hàng eCargo — ưu tiên mô tả hàng trên lô / hồ sơ; thiếu thì GARMENTS. */
 export function resolveEcargoGoodsContent(
-  _s?: Shipment,
+  s?: Shipment,
   _customers?: CustomerDirectoryEntry[]
 ): string {
+  const fromPrint = (s?.goodsDescriptionPrint || "").trim();
+  if (fromPrint) return fromPrint.slice(0, 120);
   return ECARGO_DEFAULT_GOODS;
 }
 
@@ -138,7 +140,7 @@ export function shipmentToEcargoAwbLine(
     flightDest: dest,
     pieces,
     weight,
-    goodsContent: ECARGO_DEFAULT_GOODS,
+    goodsContent: resolveEcargoGoodsContent(s, _customers),
     shc: "KHÔNG CÓ",
     customIdent: "",
   };
@@ -223,16 +225,21 @@ export function defaultVehiclePickForShipments(
 }
 
 export function validateEcargoVehiclePick(pick: EcargoVehiclePick): string | null {
-  const plate = normalizeVehiclePlateInput(pick.licensePlate);
-  const plates = plate.split(";").filter(Boolean);
-  if (!plates.length) return "Thiếu biển số xe";
-  for (const p of plates) {
-    if (p.length < ECARGO_PLATE_MIN) {
-      return `Biển số «${p}» phải ≥ ${ECARGO_PLATE_MIN} ký tự (viết liền)`;
+  // Đi bộ: eCargo không bắt buộc biển số (khớp Ext content-ecargo).
+  if (pick.vehicleType !== "DIBO") {
+    const plate = normalizeVehiclePlateInput(pick.licensePlate);
+    const plates = plate.split(";").filter(Boolean);
+    if (!plates.length) {
+      return "Vui lòng nhập biển số xe trước khi đăng ký eCargo.";
     }
-    // eCargo validateVehicle: OTO chỉ chấp nhận 7–9 ký tự
-    if (pick.vehicleType === "OTO" && (p.length < 7 || p.length > 9)) {
-      return `Ô tô: biển «${p}» phải 7–9 ký tự (quy tắc eCargo)`;
+    for (const p of plates) {
+      if (p.length < ECARGO_PLATE_MIN) {
+        return `Biển số «${p}» phải ≥ ${ECARGO_PLATE_MIN} ký tự (viết liền)`;
+      }
+      // eCargo validateVehicle: OTO chỉ chấp nhận 7–9 ký tự
+      if (pick.vehicleType === "OTO" && (p.length < 7 || p.length > 9)) {
+        return `Ô tô: biển «${p}» phải 7–9 ký tự (quy tắc eCargo)`;
+      }
     }
   }
   if (!normalizeEcargoPersonName(pick.driverName)) return "Thiếu họ tên tài xế";

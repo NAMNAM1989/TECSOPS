@@ -76,15 +76,25 @@ const customers: CustomerDirectoryEntry[] = [
 ];
 
 describe("buildEcargoVctFillPayload", () => {
-  it("dùng GARMENTS cố định, không lấy tên hàng hồ sơ KH", () => {
+  it("dùng goodsDescriptionPrint trên lô; trống → GARMENTS", () => {
     const line = shipmentToEcargoAwbLine(baseShipment(), customers);
     expect(line).toMatchObject({
       mawbPrefix: "232",
       mawbNo: "18269159",
       flightDest: "SIN",
-      goodsContent: ECARGO_DEFAULT_GOODS,
+      goodsContent: "CONSOLE",
       shc: "KHÔNG CÓ",
     });
+    const fallback = shipmentToEcargoAwbLine(
+      baseShipment({ goodsDescriptionPrint: "" }),
+      customers
+    );
+    expect(fallback?.goodsContent).toBe(ECARGO_DEFAULT_GOODS);
+    const withGoods = shipmentToEcargoAwbLine(
+      baseShipment({ goodsDescriptionPrint: "CLOTHES PANTS" }),
+      customers
+    );
+    expect(withGoods?.goodsContent).toBe("CLOTHES PANTS");
   });
 
   it("thiếu kiện/kg → 99 pcs / 999 kg", () => {
@@ -96,7 +106,7 @@ describe("buildEcargoVctFillPayload", () => {
     const line = shipmentToEcargoAwbLine(baseShipment({ pcs: null, kg: null }));
     expect(line?.pieces).toBe(99);
     expect(line?.weight).toBe(999);
-    expect(line?.goodsContent).toBe("GARMENTS");
+    expect(line?.goodsContent).toBe("CONSOLE");
   });
 
   it("validate biển số ≥ 7 ký tự", () => {
@@ -163,7 +173,7 @@ describe("buildEcargoVctFillPayload", () => {
     expect(payload?.awbs).toHaveLength(1);
     expect(payload?.awbs[0]?.pieces).toBe(99);
     expect(payload?.awbs[0]?.weight).toBe(999);
-    expect(payload?.awbs[0]?.goodsContent).toBe("GARMENTS");
+    expect(payload?.awbs[0]?.goodsContent).toBe("CONSOLE");
   });
 
   it("ngày hàng vào quá khứ → đẩy lên hôm nay/khung ≥90 phút (quy tắc eCargo)", () => {

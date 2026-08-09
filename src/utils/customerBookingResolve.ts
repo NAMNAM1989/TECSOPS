@@ -57,7 +57,7 @@ export function findCustomerEntry(
   return undefined;
 }
 
-/** Shipper lưu sẵn: theo `customerShipperId`, hoặc một mục nếu danh bạ chỉ có một. */
+/** Shipper lưu sẵn: theo `customerShipperId`, hoặc default / một mục. ID lệch khách → fallback. */
 export function resolveSavedShipperForBooking(
   booking: Shipment,
   customer: CustomerDirectoryEntry | undefined,
@@ -66,7 +66,11 @@ export function resolveSavedShipperForBooking(
   const list = customer?.savedShippers ?? [];
   if (!list.length) return undefined;
   const id = booking.customerShipperId?.trim();
-  if (id) return list.find((x) => norm(x.id) === norm(id));
+  if (id) {
+    const hit = list.find((x) => norm(x.id) === norm(id));
+    if (hit) return hit;
+    // Stale ID (đổi khách / xóa profile) — không dừng, lấy default.
+  }
   if (opts?.skipAutoSingleShipper) return undefined;
   const defId = customer?.defaultShipperId?.trim();
   if (defId) {
@@ -77,7 +81,7 @@ export function resolveSavedShipperForBooking(
   return undefined;
 }
 
-/** CNEE lưu sẵn: theo `customerConsigneeId`, hoặc một mục nếu danh bạ chỉ có một. */
+/** CNEE lưu sẵn: theo `customerConsigneeId`, hoặc default / một mục. ID lệch → fallback. */
 export function resolveSavedConsigneeForBooking(
   booking: Shipment,
   customer: CustomerDirectoryEntry | undefined,
@@ -86,7 +90,10 @@ export function resolveSavedConsigneeForBooking(
   const list = customer?.savedConsignees ?? [];
   if (!list.length) return undefined;
   const id = booking.customerConsigneeId?.trim();
-  if (id) return list.find((x) => norm(x.id) === norm(id));
+  if (id) {
+    const hit = list.find((x) => norm(x.id) === norm(id));
+    if (hit) return hit;
+  }
   if (opts?.skipAutoSingleConsignee) return undefined;
   const defId = customer?.defaultConsigneeId?.trim();
   if (defId) {
@@ -97,7 +104,7 @@ export function resolveSavedConsigneeForBooking(
   return undefined;
 }
 
-/** Tên hàng lưu sẵn theo khách. */
+/** Tên hàng lưu sẵn theo khách. ID lệch → fallback default/single. */
 export function resolveSavedGoodsForBooking(
   booking: Shipment,
   customer: CustomerDirectoryEntry | undefined,
@@ -106,7 +113,10 @@ export function resolveSavedGoodsForBooking(
   const list = customer?.savedGoods ?? [];
   if (!list.length) return undefined;
   const id = booking.customerGoodsId?.trim();
-  if (id) return list.find((x) => norm(x.id) === norm(id));
+  if (id) {
+    const hit = list.find((x) => norm(x.id) === norm(id));
+    if (hit) return hit;
+  }
   if (opts?.skipAutoSingleGoods) return undefined;
   const defId = customer?.defaultGoodsId?.trim();
   if (defId) {

@@ -172,6 +172,23 @@ function parseSavedGoodsLoose(item) {
   return out.slice(0, L.savedGoodsCount);
 }
 
+function normalizeVehicleTypeLoose(v) {
+  const u = String(v ?? "")
+    .trim()
+    .toUpperCase();
+  if (u === "OTO" || u === "XEMAY" || u === "BAGAC" || u === "DIBO") return u;
+  return "";
+}
+
+function normalizeDriverIdTypeLoose(v) {
+  const u = String(v ?? "")
+    .trim()
+    .toUpperCase();
+  if (u === "PASSPORT" || u === "PP") return "PP";
+  if (u === "CCCD" || u === "GPLX") return u;
+  return "";
+}
+
 function parseSavedVehiclesLoose(item) {
   if (!Array.isArray(item.savedVehicles)) return [];
   const out = [];
@@ -181,42 +198,101 @@ function parseSavedVehiclesLoose(item) {
     if (!sid) continue;
     const licensePlate = sliceStr(normalizeVehiclePlate(x.licensePlate), L.savedVehicleLicensePlate);
     const driverName = sliceStr(x.driverName, L.savedVehicleDriverName).trim();
-    const driverId = sliceStr(x.driverId, L.savedVehicleDriverId)
-      .trim()
-      .replace(/\D/g, "");
+    const driverIdType = normalizeDriverIdTypeLoose(x.driverIdType);
+    const driverIdRaw = sliceStr(x.driverId, L.savedVehicleDriverId).trim();
+    const driverId =
+      driverIdType && driverIdType !== "CCCD"
+        ? driverIdRaw.replace(/[^A-Za-z0-9]/g, "").toUpperCase()
+        : driverIdRaw.replace(/\D/g, "");
+    const label = sliceStr(x.label, L.savedVehicleLabel).trim();
+    const vehicleType = normalizeVehicleTypeLoose(x.vehicleType);
     if (!licensePlate && !driverName && !driverId) continue;
     out.push({
       id: sliceStr(sid, 80).trim(),
+      ...(label ? { label } : {}),
       licensePlate,
       driverName,
       driverId,
+      ...(driverIdType ? { driverIdType } : {}),
+      ...(vehicleType ? { vehicleType } : {}),
     });
   }
   return out.slice(0, L.savedVehicleCount);
 }
 
-function normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods, savedVehicles) {
+function parseSavedDimTemplatesLoose(item) {
+  if (!Array.isArray(item.savedDimTemplates)) return [];
+  const out = [];
+  for (const x of item.savedDimTemplates) {
+    if (!x || typeof x !== "object") continue;
+    const sid = typeof x.id === "string" ? x.id.trim() : "";
+    if (!sid) continue;
+    const lCm = Number(x.lCm);
+    const wCm = Number(x.wCm);
+    const hCm = Number(x.hCm);
+    if (
+      !Number.isFinite(lCm) ||
+      lCm <= 0 ||
+      !Number.isFinite(wCm) ||
+      wCm <= 0 ||
+      !Number.isFinite(hCm) ||
+      hCm <= 0
+    ) {
+      continue;
+    }
+    const stdRaw = Number(x.stdPcsKg);
+    const stdPcsKg =
+      Number.isFinite(stdRaw) && stdRaw > 0 ? Math.round(stdRaw * 100) / 100 : null;
+    const label =
+      sliceStr(x.label, L.savedDimTemplateLabel).trim() ||
+      `${Math.round(lCm)}×${Math.round(wCm)}×${Math.round(hCm)}`;
+    out.push({
+      id: sliceStr(sid, 80).trim(),
+      label,
+      lCm: Math.round(lCm),
+      wCm: Math.round(wCm),
+      hCm: Math.round(hCm),
+      ...(stdPcsKg != null ? { stdPcsKg } : {}),
+      ...(x.isDefault ? { isDefault: true } : {}),
+    });
+  }
+  return out.slice(0, L.savedDimTemplateCount);
+}
+
+function normalizeDefaultProfileIds(
+  item,
+  savedShippers,
+  savedConsignees,
+  savedGoods,
+  savedVehicles,
+  savedDimTemplates = []
+) {
   const shipperIds = new Set(savedShippers.map((x) => x.id));
   const cneeIds = new Set(savedConsignees.map((x) => x.id));
   const goodsIds = new Set(savedGoods.map((x) => x.id));
   const vehicleIds = new Set(savedVehicles.map((x) => x.id));
+  const dimIds = new Set(savedDimTemplates.map((x) => x.id));
   let defaultShipperId = sliceStr(item.defaultShipperId, 80).trim();
   let defaultConsigneeId = sliceStr(item.defaultConsigneeId, 80).trim();
   let defaultGoodsId = sliceStr(item.defaultGoodsId, 80).trim();
   let defaultVehicleId = sliceStr(item.defaultVehicleId, 80).trim();
+  let defaultDimTemplateId = sliceStr(item.defaultDimTemplateId, 80).trim();
   if (defaultShipperId && !shipperIds.has(defaultShipperId)) defaultShipperId = "";
   if (defaultConsigneeId && !cneeIds.has(defaultConsigneeId)) defaultConsigneeId = "";
   if (defaultGoodsId && !goodsIds.has(defaultGoodsId)) defaultGoodsId = "";
   if (defaultVehicleId && !vehicleIds.has(defaultVehicleId)) defaultVehicleId = "";
+  if (defaultDimTemplateId && !dimIds.has(defaultDimTemplateId)) defaultDimTemplateId = "";
   if (savedShippers.length === 1) defaultShipperId = savedShippers[0].id;
   if (savedConsignees.length === 1) defaultConsigneeId = savedConsignees[0].id;
   if (savedGoods.length === 1) defaultGoodsId = savedGoods[0].id;
   if (savedVehicles.length === 1) defaultVehicleId = savedVehicles[0].id;
+  if (savedDimTemplates.length === 1) defaultDimTemplateId = savedDimTemplates[0].id;
   const out = {};
   if (defaultShipperId) out.defaultShipperId = defaultShipperId;
   if (defaultConsigneeId) out.defaultConsigneeId = defaultConsigneeId;
   if (defaultGoodsId) out.defaultGoodsId = defaultGoodsId;
   if (defaultVehicleId) out.defaultVehicleId = defaultVehicleId;
+  if (defaultDimTemplateId) out.defaultDimTemplateId = defaultDimTemplateId;
   return out;
 }
 
@@ -234,6 +310,7 @@ export function parseCustomersLoose(raw) {
     const savedGoods = parseSavedGoodsLoose(item);
     const savedConsignees = parseSavedConsigneesLoose(item);
     const savedVehicles = parseSavedVehiclesLoose(item);
+    const savedDimTemplates = parseSavedDimTemplatesLoose(item);
     out.push({
       id: sliceStr(id, 80).trim(),
       ...accountFieldsFromItem(item, code, name),
@@ -256,9 +333,17 @@ export function parseCustomersLoose(raw) {
       savedGoods,
       savedConsignees,
       savedVehicles,
+      savedDimTemplates,
       parties: parsePartiesLoose(item),
       otherRequirementsPrint: sliceStr(item.otherRequirementsPrint, L.otherRequirementsPrint).trim(),
-      ...normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods, savedVehicles),
+      ...normalizeDefaultProfileIds(
+        item,
+        savedShippers,
+        savedConsignees,
+        savedGoods,
+        savedVehicles,
+        savedDimTemplates
+      ),
     });
   }
   return out;
@@ -291,6 +376,7 @@ export function validateCustomerDirectoryPayload(raw) {
     const savedGoods = parseSavedGoodsLoose(item);
     const savedConsignees = parseSavedConsigneesLoose(item);
     const savedVehicles = parseSavedVehiclesLoose(item);
+    const savedDimTemplates = parseSavedDimTemplatesLoose(item);
     const seenShipper = new Set();
     for (let j = 0; j < savedShippers.length; j++) {
       const ss = savedShippers[j];
@@ -339,6 +425,18 @@ export function validateCustomerDirectoryPayload(raw) {
       }
       seenVehicle.add(sk);
     }
+    const seenDim = new Set();
+    for (let j = 0; j < savedDimTemplates.length; j++) {
+      const dt = savedDimTemplates[j];
+      const sk = dt.id.toLowerCase();
+      if (!dt.id.trim()) {
+        throw new Error(`Dòng ${i + 1}: mẫu DIM thứ ${j + 1} thiếu id.`);
+      }
+      if (seenDim.has(sk)) {
+        throw new Error(`Dòng ${i + 1}: id mẫu DIM «${dt.id}» bị trùng.`);
+      }
+      seenDim.add(sk);
+    }
     out.push({
       id: sliceStr(id, 80).trim(),
       ...accountFieldsFromItem(item, code, name),
@@ -361,9 +459,17 @@ export function validateCustomerDirectoryPayload(raw) {
       savedGoods,
       savedConsignees,
       savedVehicles,
+      savedDimTemplates,
       parties: parsePartiesLoose(item),
       otherRequirementsPrint: sliceStr(item.otherRequirementsPrint, L.otherRequirementsPrint).trim(),
-      ...normalizeDefaultProfileIds(item, savedShippers, savedConsignees, savedGoods, savedVehicles),
+      ...normalizeDefaultProfileIds(
+        item,
+        savedShippers,
+        savedConsignees,
+        savedGoods,
+        savedVehicles,
+        savedDimTemplates
+      ),
     });
   }
   return out;

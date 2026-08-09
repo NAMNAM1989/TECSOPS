@@ -6,7 +6,6 @@ import {
   loadTcsExtLoginPrefs,
   saveTcsExtLoginPrefs,
 } from "../utils/tcsExtLoginPrefs";
-import { OverflowMenu } from "../ui";
 
 type Props = {
   tcs: TcsPortalActions;
@@ -34,7 +33,6 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
   const [tcsUsername, setTcsUsername] = useState("");
   const [tcsPassword, setTcsPassword] = useState("");
   const [rememberTcs, setRememberTcs] = useState(true);
-  const [extBusy, setExtBusy] = useState(false);
 
   useEffect(() => {
     const prefs = loadTcsExtLoginPrefs(portalWh);
@@ -43,52 +41,6 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
     setTcsPassword("");
     setShowExtLogin(false);
   }, [portalWh]);
-
-  const downloadChromeExt = async () => {
-    setExtBusy(true);
-    try {
-      const apiPath =
-        portalWh === "TCS"
-          ? "/api/tcs-extension-direct"
-          : "/api/tcs-extension";
-      const res = await fetch(apiPath, { cache: "no-store" });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        version?: string;
-        download_url?: string;
-        error?: string;
-        filename?: string;
-      };
-      if (!res.ok || !data.ok || !data.download_url) {
-        throw new Error(
-          data.error ||
-            (portalWh === "TCS"
-              ? "Chưa đóng gói Ext kho TCS — load unpacked thư mục chrome-extension-tcs."
-              : "Không lấy được gói Chrome Ext")
-        );
-      }
-      const version = String(data.version || "").trim();
-      const a = document.createElement("a");
-      a.href = data.download_url;
-      a.download =
-        data.filename ||
-        (portalWh === "TCS"
-          ? version
-            ? `tecsops-chrome-extension-tcs-v${version}.zip`
-            : "tecsops-chrome-extension-tcs.zip"
-          : version
-            ? `tecsops-chrome-extension-v${version}.zip`
-            : "tecsops-chrome-extension.zip");
-      a.rel = "noopener";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Tải Chrome Ext thất bại");
-    } finally {
-      setExtBusy(false);
-    }
-  };
 
   const doLogin = async () => {
     if (tcs.busy) return;
@@ -168,21 +120,6 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
       : tcs.health?.ok || tcs.extension?.ok
         ? "Chờ đăng nhập"
         : "TCS offline";
-
-  const advancedItems = [
-    {
-      id: "ext",
-      label: extBusy ? "Đang tải Ext…" : `Tải ${extLabel}`,
-      description:
-        portalWh === "TCS"
-          ? "Ext riêng kho TCS · cài trên Chrome profile TCS"
-          : "Ext TECS-TCS ESID · Chrome profile TECS (tách khỏi kho TCS)",
-      disabled: extBusy || tcs.busy,
-      onSelect: () => {
-        void downloadChromeExt();
-      },
-    },
-  ];
 
   const shortStatus = extLoggedIn
     ? "Đã ĐN"
@@ -279,9 +216,6 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
         {!compact ? (
           <EsidSettingsMenu disabled={tcs.busy} compact={compact} />
         ) : null}
-        {!compact ? (
-          <OverflowMenu label="Nâng cao" compact items={advancedItems} align="left" />
-        ) : null}
 
         {tcs.busy ? (
           <span className="truncate text-[10px] font-semibold text-sky-700">
@@ -292,10 +226,8 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
 
       {!compact && !tcs.health?.ok && !tcs.extension?.ok && !tcs.busy ? (
         <p className="px-1 text-[9px] leading-snug text-ui-text-muted">
-          Offline: mở đúng Chrome profile kho {portalWh} và cài {extLabel} (menu
-          Nâng cao ·{" "}
-          {portalWh === "TCS" ? "chrome-extension-tcs" : "chrome-extension"}
-          ). TECS-TCS và TCS phải khác profile Chrome.
+          Offline: mở đúng Chrome profile kho {portalWh} và cài {extLabel} (nút
+          «Tải Ext» trên toolbar). TECS-TCS và TCS phải khác profile Chrome.
         </p>
       ) : null}
 

@@ -22,6 +22,7 @@ import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { TcsPortalInlineBar } from "./TcsPortalInlineBar";
 import { EcargoScscInlineBar, EcargoScscProvider } from "./EcargoScscInlineBar";
+import { ChromeExtensionsDownloadMenu } from "./ChromeExtensionsDownloadMenu";
 import { TcsPortalActionsProvider } from "./TcsPortalActionsContext";
 import { useTcsPortalActions } from "../hooks/useTcsPortalActions";
 import {
@@ -730,6 +731,7 @@ export function AirCargoTracking({
         >
           {cargoReportCopying ? "…" : "SCSC"}
         </Button>
+        <ChromeExtensionsDownloadMenu />
         <OpsToolsMenu {...toolsProps} />
         <div className="ml-auto min-w-0 shrink-0">
           <OpsDatePicker

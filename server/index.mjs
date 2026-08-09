@@ -78,70 +78,25 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
-function respondChromeExtensionPackage(res, {
-  manifestRel,
-  stableZipName,
-  versionedPrefix,
-  installExtra = [],
-}) {
-  try {
-    const manifest = JSON.parse(
-      fs.readFileSync(path.join(__dirname, "..", manifestRel), "utf8")
-    );
-    const version = String(manifest.version || "").trim();
-    const downloadsDir = path.join(__dirname, "..", "public", "downloads");
-    const versionedName = version
-      ? `${versionedPrefix}-v${version}.zip`
-      : `${stableZipName}`;
-    const versionedPath = path.join(downloadsDir, versionedName);
-    const stablePath = path.join(downloadsDir, stableZipName);
-    const hasVersioned = version && fs.existsSync(versionedPath);
-    const hasStable = fs.existsSync(stablePath);
-    if (!hasVersioned && !hasStable) {
-      res.status(404).json({
-        ok: false,
-        error:
-          "Chưa đóng gói Chrome Ext — chạy npm run prebuild (hoặc npm run build).",
-        version,
-      });
-      return;
-    }
-    res.json({
-      ok: true,
-      version,
-      filename: versionedName,
-      download_url: hasVersioned
-        ? `/downloads/${versionedName}`
-        : `/downloads/${stableZipName}`,
-      install: [
-        `Giải nén ZIP (v${version || "?"}) vào một thư mục cố định`,
-        "Mở chrome://extensions và bật Chế độ dành cho nhà phát triển",
-        "Chọn Tải tiện ích đã giải nén rồi chọn thư mục vừa giải nén",
-        "F5 trang Ops và tab TCS",
-        ...installExtra,
-      ],
-    });
-  } catch (error) {
-    console.error("[api/tcs-extension]", error);
-    res.status(500).json({ ok: false, error: "Extension package unavailable" });
-  }
-}
-
-app.get("/api/tcs-extension", (_req, res) => {
-  respondChromeExtensionPackage(res, {
+const CHROME_EXTENSION_PACKAGES = [
+  {
+    id: "tecs-tcs",
+    label: "TECS-TCS",
+    title: "TECSOPS — Kho TECS-TCS ESID",
+    warehouse: "TECS-TCS",
     manifestRel: path.join("chrome-extension", "manifest.json"),
     stableZipName: "tecsops-chrome-extension.zip",
     versionedPrefix: "tecsops-chrome-extension",
     installExtra: [
       "Ext này chỉ ESID kho TECS-TCS",
-      "eCargo SCSC → Ext riêng /api/ecargo-extension",
+      "eCargo SCSC → Ext SCSC riêng · kho TCS → Ext TCS (Chrome profile khác)",
     ],
-  });
-});
-
-/** Ext riêng kho TCS — tài khoản portal độc lập. */
-app.get("/api/tcs-extension-direct", (_req, res) => {
-  respondChromeExtensionPackage(res, {
+  },
+  {
+    id: "tcs",
+    label: "TCS",
+    title: "TECSOPS — Kho TCS ESID",
+    warehouse: "TCS",
     manifestRel: path.join("chrome-extension-tcs", "manifest.json"),
     stableZipName: "tecsops-chrome-extension-tcs.zip",
     versionedPrefix: "tecsops-chrome-extension-tcs",
@@ -149,12 +104,12 @@ app.get("/api/tcs-extension-direct", (_req, res) => {
       "Ext này chỉ ESID kho TCS — Chrome profile riêng với Ext TECS-TCS",
       "Trên Ops chọn kho TCS → Đăng nhập / Quét / Điền",
     ],
-  });
-});
-
-/** Ext riêng kho SCSC eCargo. */
-app.get("/api/ecargo-extension", (_req, res) => {
-  respondChromeExtensionPackage(res, {
+  },
+  {
+    id: "scsc",
+    label: "SCSC",
+    title: "TECSOPS — Kho SCSC eCargo",
+    warehouse: "SCSC",
     manifestRel: path.join("chrome-extension-scsc", "manifest.json"),
     stableZipName: "tecsops-chrome-extension-scsc.zip",
     versionedPrefix: "tecsops-chrome-extension-scsc",
@@ -162,7 +117,123 @@ app.get("/api/ecargo-extension", (_req, res) => {
       "Ext này chỉ eCargo SCSC (VCT / OTP / QR)",
       "Trên Ops chọn kho SCSC → Đăng ký eCargo",
     ],
-  });
+  },
+];
+
+function extensionDownloadsDirs() {
+  return [
+    path.join(__dirname, "..", "public", "downloads"),
+    path.join(__dirname, "..", "dist", "downloads"),
+  ];
+}
+
+function resolveChromeExtensionPackage({
+  manifestRel,
+  stableZipName,
+  versionedPrefix,
+  installExtra = [],
+  id,
+  label,
+  title,
+  warehouse,
+}) {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "..", manifestRel), "utf8"),
+  );
+  const version = String(manifest.version || "").trim();
+  const versionedName = version
+    ? `${versionedPrefix}-v${version}.zip`
+    : `${stableZipName}`;
+  let hasVersioned = false;
+  let hasStable = false;
+  for (const downloadsDir of extensionDownloadsDirs()) {
+    if (version && fs.existsSync(path.join(downloadsDir, versionedName))) {
+      hasVersioned = true;
+    }
+    if (fs.existsSync(path.join(downloadsDir, stableZipName))) {
+      hasStable = true;
+    }
+  }
+  if (!hasVersioned && !hasStable) {
+    return {
+      ok: false,
+      id,
+      label,
+      title,
+      warehouse,
+      version,
+      error:
+        "Chưa đóng gói Chrome Ext — chạy npm run prebuild (hoặc npm run build).",
+    };
+  }
+  return {
+    ok: true,
+    id,
+    label,
+    title,
+    warehouse,
+    version,
+    filename: hasVersioned ? versionedName : stableZipName,
+    download_url: hasVersioned
+      ? `/downloads/${versionedName}`
+      : `/downloads/${stableZipName}`,
+    install: [
+      `Giải nén ZIP (v${version || "?"}) vào một thư mục cố định`,
+      "Mở chrome://extensions và bật Chế độ dành cho nhà phát triển",
+      "Chọn Tải tiện ích đã giải nén rồi chọn thư mục vừa giải nén",
+      "F5 trang Ops",
+      ...installExtra,
+    ],
+  };
+}
+
+function respondChromeExtensionPackage(res, pack) {
+  try {
+    const payload = resolveChromeExtensionPackage(pack);
+    if (!payload.ok) {
+      res.status(404).json(payload);
+      return;
+    }
+    res.json(payload);
+  } catch (error) {
+    console.error("[api/chrome-extension]", error);
+    res.status(500).json({ ok: false, error: "Extension package unavailable" });
+  }
+}
+
+/** Danh sách 3 Ext (TECS-TCS / TCS / SCSC) — nút tải chung trên Ops. */
+app.get("/api/chrome-extensions", (_req, res) => {
+  try {
+    const extensions = CHROME_EXTENSION_PACKAGES.map((pack) =>
+      resolveChromeExtensionPackage(pack),
+    );
+    const ready = extensions.filter((x) => x.ok).length;
+    res.status(ready > 0 ? 200 : 404).json({
+      ok: ready > 0,
+      count: ready,
+      total: extensions.length,
+      extensions,
+      tip:
+        "Mỗi lần bump version trong manifest + deploy (prebuild đóng ZIP vào /downloads).",
+    });
+  } catch (error) {
+    console.error("[api/chrome-extensions]", error);
+    res.status(500).json({ ok: false, error: "Extension catalog unavailable" });
+  }
+});
+
+app.get("/api/tcs-extension", (_req, res) => {
+  respondChromeExtensionPackage(res, CHROME_EXTENSION_PACKAGES[0]);
+});
+
+/** Ext riêng kho TCS — tài khoản portal độc lập. */
+app.get("/api/tcs-extension-direct", (_req, res) => {
+  respondChromeExtensionPackage(res, CHROME_EXTENSION_PACKAGES[1]);
+});
+
+/** Ext riêng kho SCSC eCargo. */
+app.get("/api/ecargo-extension", (_req, res) => {
+  respondChromeExtensionPackage(res, CHROME_EXTENSION_PACKAGES[2]);
 });
 
 app.get("/api/state", async (_req, res) => {

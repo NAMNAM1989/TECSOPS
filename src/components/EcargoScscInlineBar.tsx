@@ -123,7 +123,6 @@ export function EcargoScscInlineBar({ preferredShipmentId, compact = false }: Ba
   const [complete, setComplete] = useState(() =>
     ecargoScscProfileIsComplete(getActiveEcargoScscProfile()),
   );
-  const [extBusy, setExtBusy] = useState(false);
 
   useEffect(() => {
     const sync = () => setComplete(ecargoScscProfileIsComplete(getActiveEcargoScscProfile()));
@@ -131,46 +130,8 @@ export function EcargoScscInlineBar({ preferredShipmentId, compact = false }: Ba
     return () => window.removeEventListener(ECARGO_SCSC_CHANGED_EVENT, sync);
   }, []);
 
-  const downloadScscExt = async () => {
-    setExtBusy(true);
-    try {
-      const res = await fetch("/api/ecargo-extension", { cache: "no-store" });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        version?: string;
-        download_url?: string;
-        error?: string;
-        filename?: string;
-      };
-      if (!res.ok || !data.ok || !data.download_url) {
-        throw new Error(
-          data.error ||
-            "Chưa đóng gói Ext SCSC — load unpacked thư mục chrome-extension-scsc.",
-        );
-      }
-      const version = String(data.version || "").trim();
-      const a = document.createElement("a");
-      a.href = data.download_url;
-      a.download =
-        data.filename ||
-        (version
-          ? `tecsops-chrome-extension-scsc-v${version}.zip`
-          : "tecsops-chrome-extension-scsc.zip");
-      a.rel = "noopener";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Tải Ext SCSC thất bại");
-    } finally {
-      setExtBusy(false);
-    }
-  };
-
   const btn =
     "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition active:scale-[0.98] border border-emerald-500/30 bg-emerald-50 text-emerald-900 hover:bg-emerald-100";
-  const btnExt =
-    "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold transition border border-slate-300/80 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-45";
 
   return (
     <span className="inline-flex shrink-0 items-center gap-1">
@@ -180,7 +141,7 @@ export function EcargoScscInlineBar({ preferredShipmentId, compact = false }: Ba
         title={
           complete
             ? "Đăng ký eCargo — chọn lô kho SCSC"
-            : "Đăng ký eCargo SCSC — cần lưu hồ sơ đại lý lần đầu"
+            : "Đăng ký eCargo SCSC — cần lưu hồ sơ đại lý lần đầu (Ext SCSC: nút «Tải Ext»)"
         }
         onClick={() => api?.openRegister(preferredShipmentId)}
         disabled={!api}
@@ -188,17 +149,6 @@ export function EcargoScscInlineBar({ preferredShipmentId, compact = false }: Ba
         {compact ? "eCargo" : "Đăng ký eCargo"}
         {!complete ? <span className="text-amber-600">·</span> : null}
       </button>
-      {!compact ? (
-        <button
-          type="button"
-          className={btnExt}
-          title="Tải Ext «TECSOPS — Kho SCSC eCargo»"
-          onClick={() => void downloadScscExt()}
-          disabled={extBusy}
-        >
-          {extBusy ? "…" : "Tải Ext SCSC"}
-        </button>
-      ) : null}
     </span>
   );
 }

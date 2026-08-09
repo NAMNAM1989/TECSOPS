@@ -10,6 +10,7 @@ import { OpsDatePicker } from "./OpsDatePicker";
 import { NewBookingButton } from "./NewBookingButton";
 import { OpsSheetImportButton } from "./OpsSheetImportButton";
 import { OpsToolsMenu } from "./OpsToolsMenu";
+import { ChromeExtensionsDownloadMenu } from "./ChromeExtensionsDownloadMenu";
 import { WarehouseGridPicker } from "./WarehouseGridPicker";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
@@ -165,6 +166,7 @@ export function OpsMobileStickyHeader({
           onOpenSheetImport={onOpenSheetImport}
           onPrefetchSheetImport={onPrefetchSheetImport}
         />
+        <ChromeExtensionsDownloadMenu compact />
         <OpsToolsMenu
           compact
           showDimScsc={showDimScsc}

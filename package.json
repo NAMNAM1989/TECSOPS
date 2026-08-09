@@ -8,6 +8,7 @@
   },
   "scripts": {
     "prebuild": "node scripts/package-chrome-extension.mjs",
+    "ext:package": "node scripts/package-chrome-extension.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:db": "docker compose up -d",
     "tcs:agent": "node scripts/tcs-agent.mjs",

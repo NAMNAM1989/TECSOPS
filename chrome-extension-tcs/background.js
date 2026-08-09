@@ -6,7 +6,7 @@
 const LOGIN_URL = "https://www.tcs.com.vn/AwbLogin";
 const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const EXT_VERSION = chrome.runtime.getManifest().version;
-const EXPECTED_SCRIPT_VERSION = "2.0.22";
+const EXPECTED_SCRIPT_VERSION = "2.0.23";
 /** Keys riêng — không đụng storage Ext TECS-TCS. */
 const SESSION_KEY = "tecsopsTcsDirectSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsDirectRememberedCredentials";
@@ -17,6 +17,8 @@ const PORTAL_WAREHOUSE = "TCS";
 let workspace = {
   phase: "IDLE",
   logged_in: false,
+  /** User đã ĐN thành công lần cuối trên Ext này — chống nhầm cookie kho TECS-TCS. */
+  logged_in_username: "",
   session_date: "",
   cache_count: 0,
   ready_count: 0,
@@ -78,20 +80,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "PING") {
     void workspaceReady
       .then(async () => {
-        // SW mất state logged_in dễ xảy ra — probe tab sở hữu nếu còn.
-        if (!workspace.logged_in && workspace.tab_id != null) {
-          try {
-            const tab = await chrome.tabs.get(workspace.tab_id);
-            if (tab?.id && /tcs\.com\.vn/i.test(String(tab.url || ""))) {
-              await injectTcsContent(tab.id);
-              const ping = await chrome.tabs.sendMessage(tab.id, { type: "TCS_PING" });
-              if (ping?.loggedIn) {
-                setWorkspace({ logged_in: true, phase: workspace.phase || "READY" });
-              }
-            }
-          } catch {
-            /* tab đóng / chưa inject — giữ logged_in cũ */
-          }
+        // Không suy ra logged_in chỉ từ cookie tab — cookie tcs.com.vn dùng chung
+        // Ext TECS-TCS / TCS, dễ nhầm user. Chỉ tin logged_in_username sau ĐN Ops.
+        if (
+          workspace.logged_in &&
+          !String(workspace.logged_in_username || "").trim()
+        ) {
+          setWorkspace({ logged_in: false, phase: "IDLE" });
         }
         reply({
           ok: true,
@@ -130,6 +125,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         setWorkspace({ phase: "ERROR", error: errorMessage(err) });
         reply(errorResult("SCAN_FAILED", err));
       });
+    return true;
+  }
+
+  if (msg.type === "TCS_INVALIDATE_SESSION") {
+    setWorkspace({
+      logged_in: false,
+      logged_in_username: "",
+      phase: "IDLE",
+      message: "Đã hủy session — ĐN lại đúng user kho trước khi Quét",
+      error: "",
+    });
+    reply({ ok: true, workspace });
     return true;
   }
 
@@ -518,13 +525,44 @@ async function waitForLoginOutcome(tabId, previousDataUrl, timeoutMs = 8_000) {
   return { loggedIn: false, captchaChanged: false, message: "Timeout chờ phản hồi đăng nhập" };
 }
 
+function sameUsername(a, b) {
+  return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+}
+
+async function logoutTcsTab(tabId) {
+  try {
+    await injectTcsContent(tabId);
+    await sendToTcsContent(tabId, { type: "TCS_LOGOUT" }, 3);
+  } catch {
+    /* tab có thể đang chuyển trang */
+  }
+  setWorkspace({ logged_in: false, logged_in_username: "", phase: "IDLE" });
+  try {
+    await navigate(tabId, LOGIN_URL);
+  } catch {
+    /* ignore */
+  }
+}
+
 async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
+  const expectedUser = String(credentials?.username || "").trim();
   const current = await chrome.tabs.get(tabId);
   const isLogin = /awblogin|\/login/i.test(current.url || "");
   if (!isLogin) {
     const ping = await sendToTcsContent(tabId, { type: "TCS_PING" });
-    if (ping?.loggedIn) return { ok: true, alreadyLoggedIn: true };
-    await navigate(tabId, LOGIN_URL);
+    if (ping?.loggedIn) {
+      // Cookie tcs.com.vn dùng chung giữa Ext TECS-TCS / TCS — chỉ reuse khi đúng user.
+      if (
+        expectedUser &&
+        workspace.logged_in_username &&
+        sameUsername(workspace.logged_in_username, expectedUser)
+      ) {
+        return { ok: true, alreadyLoggedIn: true, username: expectedUser };
+      }
+      await logoutTcsTab(tabId);
+    } else {
+      await navigate(tabId, LOGIN_URL);
+    }
   }
 
   // Chờ form + ảnh CAPTCHA sẵn sàng (tránh lần 1 fail / lần 2 mới login)
@@ -610,10 +648,15 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
 
     const outcome = await waitForLoginOutcome(tabId, dataUrl);
     if (outcome.loggedIn) {
+      setWorkspace({
+        logged_in: true,
+        logged_in_username: expectedUser,
+      });
       return {
         ok: true,
         attempt: submittedAttempts,
         captchaConfidence: solved.confidence,
+        username: expectedUser,
       };
     }
     lastMessage = outcome.message || `TCS từ chối lần đăng nhập ${submittedAttempts}`;
@@ -680,16 +723,18 @@ async function bootstrapWorkspace(payload) {
   if (loginOnly) {
     setWorkspace({
       logged_in: true,
+      logged_in_username: credentials.username,
       phase: "READY",
       session_date: sessionDate,
       cache_count: 0,
       ready_count: 0,
-      message: `Đã đăng nhập · ngày phiên ${sessionDate} — bấm Quét tiếp nhận khi cần`,
+      message: `Đã đăng nhập ${credentials.username} · ngày phiên ${sessionDate} — bấm Quét tiếp nhận khi cần`,
       error: "",
     });
     return {
       ok: true,
       logged_in: true,
+      username: credentials.username,
       ready: [],
       source: "chrome-extension-tcs-direct",
       version: EXT_VERSION,
@@ -712,19 +757,54 @@ async function scanWorkspaceDate(payload, opts = {}) {
       workspace,
     };
   }
+  const credentials = await loadCredentials(payload);
+  const expectedUser = String(
+    payload.expected_username || credentials.username || ""
+  ).trim();
   const tabId = opts.tabId || (await findOrOpenTcsTab({ active: true, pinned: true }));
+  // Cookie dùng chung 2 Ext — bắt buộc đúng user trước khi Quét.
+  if (
+    !expectedUser ||
+    !workspace.logged_in_username ||
+    !sameUsername(workspace.logged_in_username, expectedUser)
+  ) {
+    if (!credentials.username || !credentials.password) {
+      setWorkspace({ logged_in: false, logged_in_username: "" });
+      return {
+        ok: false,
+        error: "NEEDS_LOGIN",
+        message:
+          `Chưa ĐN đúng tài khoản kho ${PORTAL_WAREHOUSE}` +
+          (expectedUser ? ` (${expectedUser})` : "") +
+          " — bấm «Đăng nhập» trước khi Quét (tránh nhầm user kho kia).",
+        workspace,
+      };
+    }
+    setWorkspace({ phase: "LOGIN", message: `Đang ĐN ${expectedUser || credentials.username} trước khi Quét…` });
+    const login = await loginOnTcsTab(tabId, credentials, payload.agent_base_url);
+    if (!login?.ok) {
+      setWorkspace({
+        phase: "ERROR",
+        logged_in: false,
+        error: login?.message || "Đăng nhập thất bại trước khi Quét",
+      });
+      return { ...login, workspace };
+    }
+  }
   await navigate(tabId, ESID_URL);
-  // SW có thể mất workspace.logged_in — xác nhận lại trên tab trước khi từ chối.
-  if (!workspace.logged_in) {
+  if (!workspace.logged_in || !sameUsername(workspace.logged_in_username, expectedUser)) {
     try {
       const ping = await sendToTcsContent(tabId, { type: "TCS_PING" }, 3);
-      if (ping?.loggedIn) {
+      if (ping?.loggedIn && sameUsername(workspace.logged_in_username, expectedUser)) {
         setWorkspace({ logged_in: true });
       } else {
         return {
           ok: false,
           error: "NEEDS_LOGIN",
-          message: "Chưa đăng nhập Ext — bấm «Đăng nhập» trước khi Quét tiếp nhận.",
+          message:
+            `Session TCS không khớp user kho ${PORTAL_WAREHOUSE}` +
+            (expectedUser ? ` (${expectedUser})` : "") +
+            " — bấm «Đăng nhập» lại trước khi Quét.",
           workspace,
         };
       }

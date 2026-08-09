@@ -26,6 +26,7 @@ export function tcsExtChannelForWarehouse(
 }
 
 export type TcsExtensionWorkspace = {
+  logged_in_username?: string;
   phase?: string;
   logged_in?: boolean;
   session_date?: string;
@@ -66,6 +67,9 @@ export type TcsExtBootstrapPayload = {
 export type TcsExtScanPayload = {
   session_date: string;
   awbs: string[];
+  /** User kỳ vọng — Ext từ chối Quét nếu session cookie đang là user kho kia. */
+  expected_username?: string;
+  agent_base_url?: string;
 };
 
 export type TcsExtBootstrapResult = TcsExtResult & {
@@ -101,6 +105,7 @@ type ExtensionCommand =
   | "TCS_OPEN"
   | "TCS_BOOTSTRAP"
   | "TCS_SCAN_DATE"
+  | "TCS_INVALIDATE_SESSION"
   | "FILL_ESID"
   | "DOWNLOAD_ESID_PDF"
   | "FILL_ECARGO_VCT"
@@ -277,6 +282,19 @@ export function openTcsExtensionTab(
 ): Promise<TcsExtResult> {
   const warehouse = opts?.warehouse ?? "TECS-TCS";
   return request<TcsExtResult>("TCS_OPEN", undefined, 20_000, warehouse);
+}
+
+/** Đổi kho Ops → hủy cờ logged_in của Ext (cookie tcs.com.vn dùng chung 2 Ext). */
+export function invalidateTcsExtensionSession(
+  opts?: TcsExtRequestOpts
+): Promise<TcsExtResult> {
+  const warehouse = opts?.warehouse ?? "TECS-TCS";
+  return request<TcsExtResult>(
+    "TCS_INVALIDATE_SESSION",
+    undefined,
+    8_000,
+    warehouse
+  );
 }
 
 export function fillEcargoVctViaExtension(

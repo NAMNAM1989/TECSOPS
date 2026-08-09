@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.21";
+  const SCRIPT_VERSION = "2.0.22";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -305,6 +305,43 @@
           busy: Boolean(window.__TECSOPS_TCS__?.busy),
           loggedIn: !needsLogin(),
         });
+        return true;
+      }
+
+      if (msg.type === "TCS_LOGOUT") {
+        void (async () => {
+          try {
+            if (needsLogin()) {
+              reply({ ok: true, alreadyLoggedOut: true });
+              return;
+            }
+            const nodes = Array.from(
+              document.querySelectorAll("a, button, span, li, div")
+            );
+            const logoutEl = nodes.find((el) => {
+              const t = String(el.textContent || "")
+                .replace(/\s+/g, " ")
+                .trim();
+              return /^(đăng xuất|dang xuat|logout)$/i.test(t) ||
+                (/đăng xuất|dang xuat|logout/i.test(t) && t.length < 24);
+            });
+            if (logoutEl) {
+              logoutEl.click();
+              await new Promise((r) => setTimeout(r, 1200));
+            }
+            if (!needsLogin()) {
+              window.location.href = "https://www.tcs.com.vn/AwbLogin";
+              await new Promise((r) => setTimeout(r, 800));
+            }
+            reply({ ok: true, loggedIn: !needsLogin() });
+          } catch (err) {
+            reply({
+              ok: false,
+              error: "LOGOUT_FAILED",
+              message: err instanceof Error ? err.message : String(err),
+            });
+          }
+        })();
         return true;
       }
 

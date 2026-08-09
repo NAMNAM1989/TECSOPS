@@ -6,11 +6,12 @@ import {
   asTcsPortalWarehouse,
   buildTcsPortalJob,
   canFillEsidForPortal,
+  invalidateTcsExtensionSession,
   shipmentsPendingReceptionScan,
   shipmentsToMarkReceptionCompleted,
   type TcsPortalWarehouse,
 } from "../utils/tcsPortalJob";
-import { tcsExtLabel } from "../utils/tcsExtLoginPrefs";
+import { loadTcsExtLoginPrefs, tcsExtLabel } from "../utils/tcsExtLoginPrefs";
 import {
   downloadPdfFromAgent,
   fetchTcsSessionStatus,
@@ -41,6 +42,7 @@ import {
   bootstrapTcsExtension,
   downloadEsidPdfViaExtension,
   fillEsidViaExtension,
+  invalidateTcsExtensionSession,
   openTcsExtensionTab,
   pingTcsExtension,
   scanTcsExtensionDate,
@@ -197,6 +199,31 @@ export function useTcsPortalActions({
     const result = await pingTcsExtension({ warehouse: portalWarehouse });
     setExtension(result);
     return result;
+  }, [portalWarehouse]);
+
+  // Đổi kho: cookie tcs.com.vn dùng chung 2 Ext → buộc ĐN lại đúng user trước Quét.
+  const prevPortalWhRef = useRef<TcsPortalWarehouse | null>(null);
+  useEffect(() => {
+    const prev = prevPortalWhRef.current;
+    prevPortalWhRef.current = portalWarehouse;
+    if (!prev || prev === portalWarehouse) return;
+    setExtension((ext) =>
+      ext
+        ? {
+            ...ext,
+            workspace: {
+              ...(ext.workspace || {}),
+              logged_in: false,
+              logged_in_username: "",
+              phase: "IDLE",
+              message: `Đã chuyển sang ${portalWarehouse} — ĐN lại user kho này trước khi Quét`,
+            } as TcsExtensionWorkspace,
+          }
+        : ext
+    );
+    void invalidateTcsExtensionSession({ warehouse: portalWarehouse }).catch(
+      () => undefined
+    );
   }, [portalWarehouse]);
 
   useEffect(() => {
@@ -410,8 +437,14 @@ export function useTcsPortalActions({
     );
     const started = performance.now();
     try {
+      const expectedUser = loadTcsExtLoginPrefs(portalWarehouse).username;
       const result = await scanTcsExtensionDate(
-        { session_date: sessionYmd, awbs: pendingAwbs },
+        {
+          session_date: sessionYmd,
+          awbs: pendingAwbs,
+          expected_username: expectedUser || undefined,
+          agent_base_url: getTcsAgentBaseUrl(),
+        },
         extOpts
       );
       setExtension(result);

@@ -85,9 +85,16 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
       ext = (await tcs.refreshExtension?.()) || tcs.extension;
     }
     if (ext?.ok) {
-      if (!ext.workspace?.logged_in) {
+      const loggedInUser = String(ext.workspace?.logged_in_username || "").trim();
+      if (!ext.workspace?.logged_in || !loggedInUser) {
         setShowExtLogin(true);
-        window.alert("Bấm «Đăng nhập» trước khi Quét tiếp nhận.");
+        window.alert(
+          `Bấm «Đăng nhập» đúng user kho ${portalWh} trước khi Quét` +
+            (portalWh === "TCS"
+              ? " (vd. namnam8012)."
+              : " (vd. hanam7195).") +
+            "\nHai Ext dùng chung cookie TCS — đổi kho phải ĐN lại."
+        );
         return;
       }
       await tcs.scanReceptionWithExtension();

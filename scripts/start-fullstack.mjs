@@ -110,7 +110,14 @@ function main() {
     `[start] agent ${headed ? "HEADED" : "HEADLESS"} · API-first · dual=${dualAgentEnabled()}`
   );
 
-  // Hub TECS-TCS :8765
+  const hubUser = String(process.env.TCS_USERNAME || "").trim();
+  const hubPass = String(process.env.TCS_PASSWORD || "");
+  const tcsUser = String(process.env.TCS_USERNAME_TCS || "").trim();
+  const tcsPass = String(process.env.TCS_PASSWORD_TCS || "");
+  const mask = (u) => (u ? `${u.slice(0, 2)}***${u.slice(-2)}` : "(empty)");
+
+  // Hub TECS-TCS :8765 — tuyệt đối không dùng credential kho TCS
+  console.info(`[start] agent TECS-TCS :8765 user=${mask(hubUser)}`);
   run("tcs-agent-hub", pythonBin, ["-m", "app.main", "agent", "--real"], {
     cwd: agentDir,
     env: {
@@ -119,12 +126,28 @@ function main() {
       TCS_WAREHOUSE_SCOPE: "TECS-TCS",
       TCS_BROWSER_PROFILE:
         process.env.TCS_BROWSER_PROFILE || "./browser_profile_hub",
-      TCS_USERNAME: process.env.TCS_USERNAME || "",
-      TCS_PASSWORD: process.env.TCS_PASSWORD || "",
+      TCS_USERNAME: hubUser,
+      TCS_PASSWORD: hubPass,
+      // Chặn agent đọc nhầm biến kho TCS từ process.env cha
+      TCS_USERNAME_TCS: "",
+      TCS_PASSWORD_TCS: "",
     },
   });
 
   if (dualAgentEnabled()) {
+    if (!tcsUser || !tcsPass) {
+      console.error(
+        "[start] TCS_AGENT_DUAL bật nhưng thiếu TCS_USERNAME_TCS / TCS_PASSWORD_TCS — không fallback sang user hub (tránh ĐN nhầm)."
+      );
+      shutdown(1);
+      return;
+    }
+    if (hubUser && tcsUser && hubUser.toLowerCase() === tcsUser.toLowerCase()) {
+      console.warn(
+        "[start] CẢNH BÁO: TCS_USERNAME và TCS_USERNAME_TCS trùng nhau — hai kho sẽ dùng cùng tài khoản portal."
+      );
+    }
+    console.info(`[start] agent TCS :8766 user=${mask(tcsUser)}`);
     run("tcs-agent-tcs", pythonBin, ["-m", "app.main", "agent", "--real"], {
       cwd: agentDir,
       env: {
@@ -133,10 +156,11 @@ function main() {
         TCS_WAREHOUSE_SCOPE: "TCS",
         TCS_BROWSER_PROFILE:
           process.env.TCS_BROWSER_PROFILE_TCS || "./browser_profile_tcs",
-        TCS_USERNAME:
-          process.env.TCS_USERNAME_TCS || process.env.TCS_USERNAME || "",
-        TCS_PASSWORD:
-          process.env.TCS_PASSWORD_TCS || process.env.TCS_PASSWORD || "",
+        // Chỉ dùng credential kho TCS — không fallback hub
+        TCS_USERNAME: tcsUser,
+        TCS_PASSWORD: tcsPass,
+        TCS_USERNAME_TCS: tcsUser,
+        TCS_PASSWORD_TCS: tcsPass,
       },
     });
   } else {

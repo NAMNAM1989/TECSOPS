@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,7 @@ from app.browser.session import AGENT_HOME, BrowserSession
 from app.config import Settings
 
 ESID_HOME = "https://www.tcs.com.vn/Esid/Export"
+LOGIN_USER_MARKER = ".tecsops_login_user"
 
 
 @dataclass
@@ -273,13 +275,61 @@ class SessionManager:
             except Exception:
                 pass
 
+    def _login_marker_path(self) -> Path:
+        return Path(self.settings.browser_profile) / LOGIN_USER_MARKER
+
+    def _read_login_marker(self) -> str:
+        try:
+            return self._login_marker_path().read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+
+    def _write_login_marker(self, username: str) -> None:
+        try:
+            path = self._login_marker_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(str(username or "").strip(), encoding="utf-8")
+        except OSError:
+            pass
+
+    def _force_logout_wrong_user(self, portal: AwbPortalPage) -> None:
+        """Xóa session portal khi profile đang giữ user khác (tránh Quét nhầm kho)."""
+        try:
+            portal.page.get_by_text(
+                re.compile(r"đăng\s*xuất|dang\s*xuat|logout", re.I)
+            ).first.click(timeout=3500)
+            portal.page.wait_for_timeout(1000)
+        except Exception:
+            pass
+        try:
+            portal.page.context.clear_cookies()
+        except Exception:
+            pass
+        try:
+            BrowserSession._goto_fast(portal.page, self.settings.base_url)
+            portal.page.wait_for_timeout(500)
+        except Exception:
+            pass
+        try:
+            self._login_marker_path().unlink(missing_ok=True)
+        except OSError:
+            pass
+
     def _ensure_login(self) -> tuple[bool, str]:
         if not self._has_live_session():
             return False, ""
         assert self.session is not None
         portal = AwbPortalPage(self.session.page, self.locators)
+        expected = str(self.settings.tcs_username or "").strip()
         if not portal.is_login_page():
-            return False, "Session còn hiệu lực — không cần CAPTCHA"
+            marker = self._read_login_marker()
+            if expected and marker and marker.lower() == expected.lower():
+                return False, f"Session còn hiệu lực ({expected})"
+            # Session profile có thể thuộc user khác / chưa gắn marker → ĐN lại đúng user
+            if expected:
+                self._force_logout_wrong_user(portal)
+            elif self.settings.prefer_session:
+                return False, "Session còn hiệu lực — không cần CAPTCHA"
         if not self.settings.has_login_credentials:
             return False, "Thiếu TCS_USERNAME/TCS_PASSWORD trong .env"
         # Agent HTTP: chỉ OCR (không chặn lâu chờ tay). Script live dùng timeout đầy đủ.
@@ -287,12 +337,14 @@ class SessionManager:
             portal,
             username=self.settings.tcs_username,
             password=self.settings.tcs_password,
-            prefer_session=self.settings.prefer_session,
+            prefer_session=False if expected else self.settings.prefer_session,
             use_ocr=self.settings.captcha_ocr,
             ocr_attempts=self.settings.captcha_ocr_attempts,
             manual_timeout_s=0,
             debug_dir=self.settings.screenshots_dir / "captcha",
         )
+        if ok and expected:
+            self._write_login_marker(expected)
         return True, msg if ok else f"NEEDS_LOGIN: {msg}"
 
     def _try_fill_credentials_only(self) -> bool:
@@ -347,6 +399,11 @@ class SessionManager:
                 captcha_ocr=ocr,
                 prefer_session=prefer,
                 headless=bool(self.settings.headless),
+                extra={
+                    "configured_username": str(self.settings.tcs_username or "").strip(),
+                    "session_username": self._read_login_marker(),
+                    "warehouse_scope": str(self.settings.warehouse_scope or ""),
+                },
             )
         assert self.session is not None
         page = self.session.page
@@ -379,6 +436,11 @@ class SessionManager:
                 headless=sess_headless,
                 visible_ok=not sess_headless,
                 browser_engine=getattr(self.session, "browser_engine", "") or "",
+                extra={
+                    "configured_username": str(self.settings.tcs_username or "").strip(),
+                    "session_username": self._read_login_marker(),
+                    "warehouse_scope": str(self.settings.warehouse_scope or ""),
+                },
             )
         except Exception as e:
             return SessionStatus(

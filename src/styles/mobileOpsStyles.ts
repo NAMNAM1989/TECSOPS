@@ -5,11 +5,11 @@ export const MOBILE = {
   sheetBackdrop:
     "fixed inset-0 z-[470] flex flex-col justify-end bg-black/40 md:hidden",
   /** Card lô — AWB hàng riêng, tương thích mọi độ rộng điện thoại */
-  card: "relative overflow-clip rounded-lg border border-ui-border/80 bg-ui-surface",
-  cardInner: "relative z-10 bg-transparent px-2.5 py-1.5",
-  cardMeta: "truncate font-shipment-data text-[10px] font-medium leading-tight text-ui-text-muted",
-  customerName: "truncate text-[11px] font-semibold leading-tight text-ui-text",
-  awb: "font-shipment-data text-[14px] font-extrabold leading-tight tracking-tight tabular-nums text-ui-danger",
+  card: "relative overflow-clip rounded-xl border border-ui-border/80 bg-ui-surface",
+  cardInner: "relative z-10 bg-transparent px-3 py-2",
+  cardMeta: "truncate font-shipment-data text-[11px] font-medium leading-snug text-ui-text-muted",
+  customerName: "truncate text-[12px] font-semibold leading-snug text-ui-text",
+  awb: "font-shipment-data text-[15px] font-extrabold leading-tight tracking-tight tabular-nums text-ui-danger",
   awbEmpty: "text-[13px] font-semibold leading-tight text-ui-primary hover:text-ui-primary-hover",
   chip: "inline-flex items-center rounded-md bg-ui-surface-muted px-1.5 py-px text-[9px] font-bold uppercase tracking-wide tabular-nums text-ui-text",
   chipCutoff:

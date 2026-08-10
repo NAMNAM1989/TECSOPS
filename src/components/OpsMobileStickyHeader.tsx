@@ -136,9 +136,9 @@ export function OpsMobileStickyHeader({
 
   return (
     <div className="space-y-1">
-      {/* Hàng 1: brand · ngày · CTA gọn */}
-      <div className="flex items-center gap-1">
-        <div className="flex shrink-0 items-center gap-0.5">
+      {/* Hàng 1: brand · Live · cụm CTA icon (không chồng/che nhau) */}
+      <div className="flex min-w-0 items-center gap-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
           <h1 className="m-0 leading-none">
             <Wordmark size="sm" />
           </h1>
@@ -149,37 +149,41 @@ export function OpsMobileStickyHeader({
             </span>
           ) : null}
         </div>
-        <div className="min-w-0 flex-1">
-          <OpsDatePicker
+        <div className="flex shrink-0 items-center gap-1.5">
+          <NewBookingButton iconOnly activeWarehouse={activeWarehouse} onAdd={onAddBooking} />
+          <OpsSheetImportButton
             compact
-            value={selectedYmd}
-            onChange={onDateChange}
-            onPrev={onPrevDay}
-            onNext={onNextDay}
-            onToday={onToday}
-            isViewingToday={isViewingToday}
+            onOpenSheetImport={onOpenSheetImport}
+            onPrefetchSheetImport={onPrefetchSheetImport}
+          />
+          <ChromeExtensionsDownloadMenu compact />
+          <OpsToolsMenu
+            compact
+            showDimScsc={showDimScsc}
+            excelExporting={excelExporting}
+            scscDimExporting={scscDimExporting}
+            onNavigateCustomers={onNavigateCustomers}
+            onPrefetchCustomers={onPrefetchCustomers}
+            onNavigateStats={onNavigateStats}
+            onPrefetchStats={onPrefetchStats}
+            onOpenAirlineLabels={onOpenAirlineLabels}
+            onDownloadDayExcel={onDownloadDayExcel}
+            onDownloadScscDim={onDownloadScscDim}
+            onOpenAiImprove={onOpenAiImprove}
           />
         </div>
-        <NewBookingButton iconOnly activeWarehouse={activeWarehouse} onAdd={onAddBooking} />
-        <OpsSheetImportButton
+      </div>
+
+      {/* Hàng 1b: ngày phiên full-width — không bị icon bên phải đè */}
+      <div className="min-w-0">
+        <OpsDatePicker
           compact
-          onOpenSheetImport={onOpenSheetImport}
-          onPrefetchSheetImport={onPrefetchSheetImport}
-        />
-        <ChromeExtensionsDownloadMenu compact />
-        <OpsToolsMenu
-          compact
-          showDimScsc={showDimScsc}
-          excelExporting={excelExporting}
-          scscDimExporting={scscDimExporting}
-          onNavigateCustomers={onNavigateCustomers}
-          onPrefetchCustomers={onPrefetchCustomers}
-          onNavigateStats={onNavigateStats}
-          onPrefetchStats={onPrefetchStats}
-          onOpenAirlineLabels={onOpenAirlineLabels}
-          onDownloadDayExcel={onDownloadDayExcel}
-          onDownloadScscDim={onDownloadScscDim}
-          onOpenAiImprove={onOpenAiImprove}
+          value={selectedYmd}
+          onChange={onDateChange}
+          onPrev={onPrevDay}
+          onNext={onNextDay}
+          onToday={onToday}
+          isViewingToday={isViewingToday}
         />
       </div>
 
@@ -255,7 +259,7 @@ export function OpsMobileStickyHeader({
 
       {viewRows.length > 0 ? (
         <div className="space-y-1">
-          <div className="flex min-w-0 items-center gap-1">
+          <div className="flex min-w-0 items-start gap-1.5">
             <div className="min-w-0 flex-1">
               <SmartSearchBar
                 compact
@@ -274,7 +278,9 @@ export function OpsMobileStickyHeader({
               <button
                 type="button"
                 onClick={() => setStatusExpanded(true)}
-                className="min-h-8 shrink-0 rounded-lg border border-ui-border bg-ui-surface px-2 text-[10px] font-semibold text-ui-text-muted"
+                className="inline-flex h-9 min-w-9 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface px-2 text-[11px] font-bold text-ui-text-muted"
+                aria-label="Lọc trạng thái"
+                title="Lọc trạng thái"
               >
                 ST
               </button>
@@ -283,7 +289,7 @@ export function OpsMobileStickyHeader({
               <button
                 type="button"
                 onClick={onClearFilters}
-                className="min-h-8 shrink-0 rounded-lg px-1.5 text-[10px] font-semibold text-ui-primary"
+                className="inline-flex h-9 shrink-0 touch-manipulation items-center justify-center rounded-xl px-2 text-[11px] font-bold text-ui-primary"
               >
                 Xóa
               </button>

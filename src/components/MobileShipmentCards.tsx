@@ -82,17 +82,17 @@ function MobileQuickNumber({
 }) {
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-ui-surface-muted px-1.5 py-0.5"
+      className="inline-flex h-9 min-w-[3.25rem] shrink-0 touch-manipulation items-center gap-1 rounded-xl bg-ui-surface-muted px-2"
       onClick={(e) => e.stopPropagation()}
     >
-      <span className="text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">
+      <span className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
         {label}
       </span>
       <InlineNumberEdit
         value={value}
         compact
         placeholder="—"
-        className="min-h-[22px] px-0.5 font-shipment-data text-[12px] font-bold tabular-nums text-ui-text"
+        className="min-h-[28px] min-w-[1.75rem] px-0.5 font-shipment-data text-[13px] font-bold tabular-nums text-ui-text"
         onCommit={onCommit}
       />
     </span>
@@ -156,11 +156,11 @@ const MobileShipmentCard = memo(
         }`}
       >
         <div className={MOBILE.cardInner}>
-          {/* Hàng 1: AWB full width còn lại — không chia chỗ với khách/K/Kg */}
-          <div className="flex min-w-0 items-center gap-1">
+          {/* Hàng 1: AWB · Status · ⋮ — khoảng cách đủ để bấm bằng ngón tay */}
+          <div className="flex min-w-0 items-center gap-1.5">
             <button
               type="button"
-              className="min-w-0 flex-1 text-left active:opacity-90"
+              className="min-w-0 flex-1 py-0.5 text-left active:opacity-90"
               onClick={() => onOpenEdit(row)}
               aria-label={awbTrim ? `Sửa lô ${awbTrim}` : "Thêm AWB"}
             >
@@ -178,7 +178,7 @@ const MobileShipmentCard = memo(
               )}
             </button>
             <div
-              className="flex shrink-0 items-center gap-0.5"
+              className="flex shrink-0 items-center gap-1.5"
               onClick={(e) => e.stopPropagation()}
             >
               <StatusSelect
@@ -198,11 +198,11 @@ const MobileShipmentCard = memo(
             </div>
           </div>
 
-          {/* Hàng 2: Short Code khách + K/Kg */}
-          <div className="mt-0.5 flex min-w-0 items-center gap-1">
+          {/* Hàng 2: Short Code khách + K/Kg (ô lớn hơn) */}
+          <div className="mt-1 flex min-w-0 items-center gap-1.5">
             <button
               type="button"
-              className="min-w-0 flex-1 text-left active:opacity-90"
+              className="min-w-0 flex-1 py-0.5 text-left active:opacity-90"
               onClick={() => onOpenEdit(row)}
             >
               <span
@@ -213,7 +213,7 @@ const MobileShipmentCard = memo(
               </span>
             </button>
             <div
-              className="flex shrink-0 items-center gap-0.5"
+              className="flex shrink-0 items-center gap-1.5"
               onClick={(e) => e.stopPropagation()}
             >
               <MobileQuickNumber

@@ -22,7 +22,7 @@ export function StatusSelect({ value, onChange, warehouse, compact }: StatusSele
       title={`${statusIcon[value]} ${statusLabelShort[value]}`}
       className={`cursor-pointer rounded-md border font-semibold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ui-focus ${statusSelectSurface[value]} ${
         compact
-          ? "max-w-[5.25rem] truncate px-1 py-0.5 text-[8px] leading-tight"
+          ? "h-9 max-w-[6.5rem] touch-manipulation truncate px-1.5 text-[10px] leading-none"
           : "px-2.5 py-1 text-xs"
       }`}
     >

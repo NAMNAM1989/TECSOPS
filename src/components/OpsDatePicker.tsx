@@ -21,18 +21,20 @@ export function OpsDatePicker({
 }: Props) {
   return (
     <div
-      className={`inline-flex min-w-0 items-center ${compact ? "gap-0.5" : "gap-1"}`}
+      className={`inline-flex min-w-0 items-center ${compact ? "w-full gap-1" : "gap-1"}`}
     >
       <div
         className={`inline-flex min-w-0 flex-1 items-center rounded-full border border-black/[0.05] bg-white shadow-dashboard-card ${
-          compact ? "p-px" : "p-0.5"
+          compact ? "p-0.5" : "p-0.5"
         }`}
       >
         <button
           type="button"
           onClick={onPrev}
           className={`rounded-full font-semibold text-dashboard-primary hover:bg-black/[0.04] ${
-            compact ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-1 text-xs"
+            compact
+              ? "inline-flex h-8 min-w-8 touch-manipulation items-center justify-center px-1 text-[14px]"
+              : "px-2 py-1 text-xs"
           }`}
           aria-label="Ngày trước"
         >
@@ -46,14 +48,16 @@ export function OpsDatePicker({
             if (v) onChange(v);
           }}
           className={`min-w-0 flex-1 border-0 bg-transparent px-0.5 font-mono font-semibold text-dashboard-primary focus:outline-none focus:ring-1 focus:ring-apple-blue/30 ${
-            compact ? "py-0.5 text-[10px]" : "w-[7.25rem] py-1 text-[11px]"
+            compact ? "py-1 text-[11px]" : "w-[7.25rem] py-1 text-[11px]"
           }`}
         />
         <button
           type="button"
           onClick={onNext}
           className={`rounded-full font-semibold text-dashboard-primary hover:bg-black/[0.04] ${
-            compact ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-1 text-xs"
+            compact
+              ? "inline-flex h-8 min-w-8 touch-manipulation items-center justify-center px-1 text-[14px]"
+              : "px-2 py-1 text-xs"
           }`}
           aria-label="Ngày sau"
         >
@@ -74,7 +78,7 @@ export function OpsDatePicker({
         <button
           type="button"
           onClick={onToday}
-          className="shrink-0 rounded-full bg-apple-blue px-2 py-0.5 text-[10px] font-semibold text-white shadow-[0_4px_12px_rgba(0,113,227,0.28)] hover:bg-apple-blue-hover"
+          className="inline-flex h-8 shrink-0 touch-manipulation items-center rounded-full bg-apple-blue px-2.5 text-[11px] font-semibold text-white shadow-[0_4px_12px_rgba(0,113,227,0.28)] hover:bg-apple-blue-hover"
         >
           Nay
         </button>

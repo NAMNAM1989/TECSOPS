@@ -23,6 +23,8 @@ type Props = {
   /** Nút kích hoạt tùy chỉnh */
   triggerClassName?: string;
   compact?: boolean;
+  /** Icon tùy chỉnh khi compact (mặc định ⋯). */
+  children?: ReactNode;
 };
 
 /** Menu ⋯ / Công cụ — đóng khi click ngoài hoặc Escape. */
@@ -32,6 +34,7 @@ export function OverflowMenu({
   items,
   triggerClassName = "",
   compact = false,
+  children,
 }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -66,14 +69,16 @@ export function OverflowMenu({
         className={
           triggerClassName ||
           (compact
-            ? "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+            ? "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus touch-manipulation"
             : "inline-flex min-h-9 items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 text-[12px] font-semibold text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus")
         }
       >
         {compact ? (
-          <span className="text-lg font-bold leading-none tracking-widest" aria-hidden>
-            ⋯
-          </span>
+          children ?? (
+            <span className="text-lg font-bold leading-none tracking-widest" aria-hidden>
+              ⋯
+            </span>
+          )
         ) : (
           <>
             <span aria-hidden className="text-base font-bold leading-none">

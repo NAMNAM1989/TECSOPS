@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import {
@@ -63,6 +63,8 @@ function StatusBanner({
   snap,
   actionNote,
   declaredPcs,
+  /** Mobile sticky đã hiện thiếu kiện — bỏ banner vàng trùng. */
+  hideRemainingHint = false,
 }: {
   snap: {
     pcsMatch: boolean;
@@ -72,6 +74,7 @@ function StatusBanner({
   };
   actionNote: string | null;
   declaredPcs: number | null | undefined;
+  hideRemainingHint?: boolean;
 }) {
   if (snap.pcsExcess) {
     return (
@@ -100,7 +103,7 @@ function StatusBanner({
       </div>
     );
   }
-  if (snap.remainingPcs > 0) {
+  if (snap.remainingPcs > 0 && !hideRemainingHint) {
     return (
       <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs font-bold text-amber-900">
         <span className="sr-only">Cảnh báo</span>
@@ -108,16 +111,16 @@ function StatusBanner({
           Đang thiếu <strong>{snap.remainingPcs} kiện</strong> — Bấm nút{" "}
           <strong className="text-violet-800">⚡ TỰ ĐỘNG TẠO ĐỦ DIM</strong>{" "}
           <span className="hidden lg:inline">bên trái</span>
-          <span className="lg:hidden">ở trên</span>{" "}
+          <span className="lg:hidden">ở thanh thao tác</span>{" "}
           để hệ thống tự điền đủ.
         </span>
       </div>
     );
   }
-  if (actionNote) {
+  if (actionNote && !actionNote.startsWith("🎉") && !actionNote.startsWith("✨")) {
     return (
       <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-900">
-        <span className="shrink-0">ℹ️</span>
+        <span className="sr-only">Thông tin</span>
         <span>{actionNote}</span>
       </div>
     );
@@ -408,15 +411,24 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
 
   const [comboInput, setComboInput] = useState("");
 
-  const [autoRandomAfterAdd, setAutoRandomAfterAdd] = useState(false);
+  /** Mobile: mặc định ON — dán đo xong tự điền phần kiện còn lại. */
+  const [autoRandomAfterAdd, setAutoRandomAfterAdd] = useState(true);
   const [actionNote, setActionNote] = useState<string | null>(null);
   const [randomNonce, setRandomNonce] = useState(0);
   const [targetRatioPercent, setTargetRatioPercent] = useState(95.0);
   const [randomLineCountInput, setRandomLineCountInput] = useState("");
   const [randomTargetKgInput, setRandomTargetKgInput] = useState("");
 
-  // Mobile/md only — estimation config collapsible
+  /** Mobile: Nhanh (1-click) | Đo thật (dán) — mở Đo thật nếu lô đã có dòng đo. */
+  const [mobileMode, setMobileMode] = useState<"quick" | "measure">(() =>
+    (row.dimLines ?? []).some((l) => !l.estimated) ? "measure" : "quick",
+  );
   const [showEstimationConfigMobile, setShowEstimationConfigMobile] = useState(false);
+  const [showPasteMobile, setShowPasteMobile] = useState(
+    () => (row.dimLines ?? []).some((l) => !l.estimated),
+  );
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const listSectionRef = useRef<HTMLDivElement>(null);
 
   // Mẫu DIM đã lưu
   const [dimTemplates, setDimTemplates] = useState<DimTemplate[]>(() => loadDimTemplates());
@@ -471,15 +483,60 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     [lot, divisor, dimCtx, seed]
   );
 
-  const applyMutation = useCallback((next: DimPieceLine[], note?: string | null) => {
-    setLines(next);
-    setActionNote(note ?? null);
+  const scrollListIntoView = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
   }, []);
+
+  const applyMutation = useCallback(
+    (next: DimPieceLine[], note?: string | null, opts?: { scrollList?: boolean }) => {
+      setLines(next);
+      setActionNote(note ?? null);
+      if (opts?.scrollList) scrollListIntoView();
+    },
+    [scrollListIntoView],
+  );
 
   const parsedPreview = useMemo(() => {
     if (!comboInput.trim()) return null;
     return tryParseDimPieceLinesFromComboText(comboInput);
   }, [comboInput]);
+
+  /** Ưu tiên mẫu cùng mã KH — tối đa 5 chip trên mobile. */
+  const mobileTemplates = useMemo(() => {
+    const code = (row.customerCode || "").trim().toUpperCase();
+    const matched = code
+      ? dimTemplates.filter((t) => (t.customerCode || "").toUpperCase() === code)
+      : [];
+    const pool = matched.length > 0 ? matched : dimTemplates;
+    return pool.slice(0, 5);
+  }, [dimTemplates, row.customerCode]);
+
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const close = () => setMoreMenuOpen(false);
+    window.addEventListener("scroll", close, true);
+    return () => window.removeEventListener("scroll", close, true);
+  }, [moreMenuOpen]);
+
+  const handlePasteClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) {
+        setActionNote("❌ Clipboard trống — hãy copy kích thước trước.");
+        return;
+      }
+      setComboInput(normalizeDimComboInput(text));
+      setMobileMode("measure");
+      setShowPasteMobile(true);
+      setActionNote("📋 Đã dán từ clipboard — kiểm tra rồi bấm Thêm.");
+    } catch {
+      setActionNote("❌ Không đọc được clipboard — dán thủ công vào ô bên dưới.");
+      setMobileMode("measure");
+      setShowPasteMobile(true);
+    }
+  };
 
   // ── Handlers Mẫu DIM ──────────────────────────────────────
 
@@ -498,12 +555,24 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
         targetRatioPercent,
       });
       if (fill.ok) {
-        applyMutation(fill.lines, `✨ Đã áp dụng mẫu "${t.name}" và tự động điền đủ kiện!`);
+        applyMutation(
+          fill.lines,
+          `✨ Đã áp dụng mẫu "${t.name}" và tự động điền đủ kiện!`,
+          { scrollList: true },
+        );
       } else {
-        applyMutation(templatePieceLines, `✨ Đã áp dụng mẫu "${t.name}" (${t.totalPcs} kiện).`);
+        applyMutation(
+          templatePieceLines,
+          `✨ Đã áp dụng mẫu "${t.name}" (${t.totalPcs} kiện).`,
+          { scrollList: true },
+        );
       }
     } else {
-      applyMutation(templatePieceLines, `✨ Đã áp dụng mẫu "${t.name}" (${t.totalPcs} kiện).`);
+      applyMutation(
+        templatePieceLines,
+        `✨ Đã áp dụng mẫu "${t.name}" (${t.totalPcs} kiện).`,
+        { scrollList: true },
+      );
     }
   };
 
@@ -543,7 +612,9 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
       setActionNote(`❌ ${r.error}`);
       return;
     }
-    applyMutation(r.lines, r.note ?? "Đã bóc tách và thêm dòng đo mới.");
+    applyMutation(r.lines, r.note ?? "Đã bóc tách và thêm dòng đo mới.", {
+      scrollList: true,
+    });
     setComboInput("");
   };
 
@@ -574,7 +645,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
       return;
     }
     setRandomNonce((n) => n + 1);
-    applyMutation(r.lines, r.note ?? null);
+    applyMutation(r.lines, r.note ?? null, { scrollList: true });
   };
 
   const handleOneClickAutoFill = () => {
@@ -610,7 +681,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     setRandomNonce((n) => n + 1);
     applyMutation(
       fill.lines,
-      `🎉 ĐÃ TỰ ĐỘNG ĐIỀN ĐỦ ${lot.declaredPcs}/${lot.declaredPcs} KIỆN! BẤM NÚT 'LƯU DIM'.`
+      `🎉 ĐÃ TỰ ĐỘNG ĐIỀN ĐỦ ${lot.declaredPcs}/${lot.declaredPcs} KIỆN! BẤM NÚT 'LƯU DIM'.`,
+      { scrollList: true },
     );
   };
 
@@ -671,8 +743,59 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
     autoRandomAfterAdd,
     setAutoRandomAfterAdd,
     onGenerate: handleRandom,
-    onClearEstimated: () => applyMutation(dimEntryClearEstimated(lines), "Đã xóa kiện ước tính chưa khóa."),
+    onClearEstimated: () =>
+      applyMutation(dimEntryClearEstimated(lines), "Đã xóa kiện ước tính chưa khóa."),
   };
+
+  const pcsPct =
+    lot.declaredPcs != null && lot.declaredPcs > 0
+      ? Math.min(100, Math.round((snap.sumDimPcs / lot.declaredPcs) * 100))
+      : 0;
+  const canOneClick =
+    lot.declaredPcs != null &&
+    lot.declaredPcs > 0 &&
+    lot.declaredKg != null &&
+    lot.declaredKg > 0 &&
+    !snap.pcsMatch;
+
+  const renderDimList = () => (
+    <div className="space-y-2.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold text-slate-700">Danh sách DIM</span>
+        <span className="text-[10px] font-bold text-slate-400">
+          {snap.lineCount} dòng
+          {snap.targetLineCount
+            ? ` · mục tiêu ${snap.targetLineCount.min}–${snap.targetLineCount.max}`
+            : ""}
+        </span>
+      </div>
+      <DimLineSection
+        title="Đo thật"
+        tone="measured"
+        lines={snap.measured}
+        startIndex={0}
+        divisor={divisor}
+        dimCtx={dimCtx}
+        onRemove={(idx) => applyMutation(dimEntryRemoveLine(lines, idx))}
+        emptyHint="Chưa có đo — bấm ⚡ hoặc mở tab Đo thật"
+      />
+      <DimLineSection
+        title="Ước tính"
+        tone="estimated"
+        lines={snap.estimated}
+        startIndex={snap.measured.length}
+        divisor={divisor}
+        dimCtx={dimCtx}
+        onRemove={(idx) => applyMutation(dimEntryRemoveLine(lines, idx))}
+        onToggleLock={handleToggleLock}
+        emptyHint={
+          snap.pcsMatch
+            ? "Đã đủ kiện — không cần ước tính"
+            : "Bấm ⚡ Điền đủ để sinh phần còn lại"
+        }
+      />
+    </div>
+  );
 
   // ── Render ─────────────────────────────────────────────────
   return (
@@ -743,163 +866,423 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
           </div>
         </div>
 
-        {/* ── STATUS BANNER — sticky ── */}
-        {(snap.pcsExcess || snap.pcsMatch || snap.remainingPcs > 0 || actionNote) && (
-          <div className="shrink-0 border-b border-black/[0.04] bg-white/95 px-4 py-2 sm:px-5 md:px-6">
+        {/* ── STATUS — desktop / lỗi; mobile ẩn «thiếu kiện» trùng sticky ── */}
+        {(snap.pcsExcess ||
+          snap.pcsMatch ||
+          snap.remainingPcs > 0 ||
+          Boolean(actionNote)) && (
+          <div className="hidden shrink-0 border-b border-black/[0.04] bg-white/95 px-4 py-2 md:block md:px-6 sm:px-5">
             <StatusBanner snap={snap} actionNote={actionNote} declaredPcs={lot.declaredPcs} />
           </div>
         )}
+        {(snap.pcsExcess || (actionNote?.startsWith("❌") ?? false)) && (
+          <div className="shrink-0 border-b border-black/[0.04] bg-white/95 px-4 py-2 md:hidden">
+            <StatusBanner
+              snap={snap}
+              actionNote={actionNote}
+              declaredPcs={lot.declaredPcs}
+              hideRemainingHint
+            />
+          </div>
+        )}
 
-        {/* ── BODY ── */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50/40 px-4 py-3 sm:px-5 md:px-6">
-          {/*
-            Mobile: 1 column
-            md: 2 columns [260px, 1fr]
-            lg+: 3 columns [280px, 1fr, 256px]
-          */}
-          <div className="space-y-3 md:grid md:grid-cols-[260px_1fr] md:gap-4 md:space-y-0 lg:grid-cols-[280px_1fr_256px] lg:gap-5">
-
-            {/* ══ COLUMN A: Input Controls ══ */}
-            <div className="space-y-2.5">
-
-              {/* 1-Click Auto Fill */}
+        {/* ── MOBILE STICKY: tiến độ + ⚡ ── */}
+        <div className="shrink-0 border-b border-black/[0.06] bg-white px-3 py-2 md:hidden">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  {snap.pcsMatch
+                    ? "Đủ kiện"
+                    : snap.remainingPcs > 0
+                      ? `Thiếu ${snap.remainingPcs}`
+                      : snap.pcsExcess
+                        ? "Dư kiện"
+                        : "Kiện DIM"}
+                </span>
+                <span
+                  className={`text-[13px] font-extrabold tabular-nums ${
+                    snap.pcsMatch
+                      ? "text-emerald-700"
+                      : snap.pcsExcess
+                        ? "text-red-600"
+                        : "text-amber-600"
+                  }`}
+                >
+                  {snap.sumDimPcs}
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    /{lot.declaredPcs ?? "—"}
+                  </span>
+                  {snap.totalDim != null ? (
+                    <span className="ml-1.5 text-[11px] font-bold text-violet-700">
+                      · {totalDimLabel}
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    snap.pcsExcess
+                      ? "bg-red-500"
+                      : snap.pcsMatch
+                        ? "bg-emerald-500"
+                        : "bg-amber-400"
+                  }`}
+                  style={{ width: `${snap.pcsExcess ? 100 : pcsPct}%` }}
+                />
+              </div>
+            </div>
+            {canOneClick ? (
               <button
                 type="button"
                 onClick={handleOneClickAutoFill}
-                className="w-full rounded-2xl bg-gradient-to-br from-violet-600 via-indigo-600 to-purple-700 hover:from-violet-700 hover:to-purple-800 py-4 px-4 font-bold text-white shadow-lg shadow-violet-500/25 transition-all active:scale-[0.97] flex items-center justify-between gap-3 border border-violet-400/30"
+                className="inline-flex h-10 shrink-0 touch-manipulation items-center gap-1 rounded-xl bg-violet-600 px-3 text-[12px] font-extrabold text-white shadow-sm active:scale-[0.98]"
+              >
+                ⚡ Điền đủ
+              </button>
+            ) : null}
+          </div>
+          {limitWarnings.length > 0 ? (
+            <p className="mt-1.5 truncate text-[10px] font-medium text-amber-800">
+              ⚠ {limitWarnings[0]?.message}
+              {limitWarnings.length > 1 ? ` · +${limitWarnings.length - 1}` : ""}
+            </p>
+          ) : null}
+        </div>
+
+        {/* ── BODY ── */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50/40 px-3 py-2.5 sm:px-5 md:px-6 md:py-3">
+          {/* ===== MOBILE (<md): list-first + chế độ Nhanh/Đo thật ===== */}
+          <div className="space-y-2.5 md:hidden">
+            <div ref={listSectionRef}>{renderDimList()}</div>
+
+            {/* Mode switch */}
+            <div className="flex rounded-xl border border-slate-200 bg-white p-0.5 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setMobileMode("quick")}
+                className={`min-h-9 flex-1 touch-manipulation rounded-[10px] text-[12px] font-bold transition ${
+                  mobileMode === "quick"
+                    ? "bg-violet-600 text-white shadow-sm"
+                    : "text-slate-600"
+                }`}
+              >
+                Nhanh
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMode("measure");
+                  setShowPasteMobile(true);
+                }}
+                className={`min-h-9 flex-1 touch-manipulation rounded-[10px] text-[12px] font-bold transition ${
+                  mobileMode === "measure"
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "text-slate-600"
+                }`}
+              >
+                Đo thật
+              </button>
+            </div>
+
+            {mobileMode === "quick" ? (
+              <div className="space-y-2 rounded-2xl border border-violet-200/80 bg-white p-3 shadow-xs">
+                <p className="text-[11px] font-medium text-slate-600">
+                  Tạo đủ {lot.declaredPcs ?? "?"} kiện @ {targetRatioPercent.toFixed(0)}% gross — rồi bấm{" "}
+                  <strong className="text-emerald-700">Lưu DIM</strong>.
+                </p>
+                {canOneClick ? (
+                  <button
+                    type="button"
+                    onClick={handleOneClickAutoFill}
+                    className="flex w-full touch-manipulation items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-3.5 py-3 text-left font-bold text-white shadow-md active:scale-[0.98]"
+                  >
+                    <span>
+                      <span className="block text-[12px] font-black uppercase tracking-wide">
+                        ⚡ Tạo đủ DIM
+                      </span>
+                      <span className="mt-0.5 block text-[10px] font-medium opacity-90">
+                        1 chạm · giữ dòng đo/khóa nếu có
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-white/20 px-2 py-1 text-[10px] font-black">
+                      GO
+                    </span>
+                  </button>
+                ) : snap.pcsMatch ? (
+                  <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-900">
+                    Đã đủ kiện — bấm Lưu DIM bên dưới.
+                  </p>
+                ) : null}
+
+                {mobileTemplates.length > 0 ? (
+                  <div className="space-y-1.5 border-t border-slate-100 pt-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-800">
+                      Mẫu {row.customerCode ? `· ${row.customerCode}` : ""}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {mobileTemplates.map((tmpl) => (
+                        <button
+                          key={tmpl.id}
+                          type="button"
+                          onClick={() => handleApplyTemplate(tmpl)}
+                          className="inline-flex min-h-8 touch-manipulation items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-950 active:scale-95"
+                        >
+                          {tmpl.name}
+                          <span className="rounded bg-white/80 px-1 text-[10px] tabular-nums text-indigo-700">
+                            {tmpl.totalPcs}k
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {lines.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewTemplateName(
+                        `Mẫu ${row.customerCode || "DIM"} (${snap.sumDimPcs}k)`,
+                      );
+                      setShowSaveTemplateForm(true);
+                    }}
+                    className="text-[11px] font-semibold text-indigo-700"
+                  >
+                    + Lưu thành mẫu
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-2 rounded-2xl border border-emerald-200/80 bg-white p-3 shadow-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-bold text-emerald-900">Dán kích thước đo</p>
+                  <button
+                    type="button"
+                    onClick={() => void handlePasteClipboard()}
+                    className="inline-flex min-h-8 touch-manipulation items-center rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 text-[11px] font-bold text-emerald-900"
+                  >
+                    📋 Clipboard
+                  </button>
+                </div>
+                <p className="text-[10px] font-medium text-slate-500">
+                  Sau khi Thêm: {autoRandomAfterAdd ? "tự điền phần kiện còn" : "chỉ thêm dòng đo"}{" "}
+                  · {targetRatioPercent.toFixed(0)}% GW
+                </p>
+                {(showPasteMobile || comboInput.trim() || mobileMode === "measure") && (
+                  <>
+                    <textarea
+                      id="dim-combo-input-mobile"
+                      rows={2}
+                      value={comboInput}
+                      onChange={(e) =>
+                        setComboInput(normalizeDimComboInput(e.target.value))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleAddComboRows();
+                        }
+                      }}
+                      placeholder={"40x50x30x10 hoặc dán nhiều dòng"}
+                      className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 font-mono text-[12px] font-semibold focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/15 min-h-[2.75rem]"
+                    />
+                    {comboInput.trim() && parsedPreview ? (
+                      parsedPreview.ok ? (
+                        <button
+                          type="button"
+                          onClick={handleAddComboRows}
+                          className="w-full touch-manipulation rounded-xl bg-emerald-600 py-2.5 text-[12px] font-bold text-white active:scale-[0.99]"
+                        >
+                          ➕ Thêm{" "}
+                          {parsedPreview.lines.reduce((s, l) => s + l.pcs, 0)} kiện
+                          {autoRandomAfterAdd ? " + điền phần còn" : ""}
+                        </button>
+                      ) : (
+                        <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-900">
+                          ⚠ {parsedPreview.error}
+                        </p>
+                      )
+                    ) : null}
+                  </>
+                )}
+              </div>
+            )}
+
+            {showSaveTemplateForm ? (
+              <div className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/80 p-2.5">
+                <input
+                  type="text"
+                  value={newTemplateName}
+                  onChange={(e) => setNewTemplateName(e.target.value)}
+                  className="w-full rounded-lg border border-indigo-200 bg-white px-2.5 py-2 text-[12px] font-semibold"
+                  placeholder="Tên mẫu"
+                />
+                <div className="flex justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowSaveTemplateForm(false)}
+                    className="rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-slate-500"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveCurrentTemplate}
+                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white"
+                  >
+                    Lưu mẫu
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Nâng cao — thu gọn */}
+            <div className="rounded-2xl border border-violet-200 bg-white shadow-xs">
+              <button
+                type="button"
+                onClick={() => setShowEstimationConfigMobile((v) => !v)}
+                className="flex min-h-10 w-full touch-manipulation items-center justify-between px-3 text-[12px] font-bold text-violet-800"
+              >
+                <span>Nâng cao · cấu hình sinh</span>
+                <span className="text-[10px] text-slate-400">
+                  {showEstimationConfigMobile ? "▲ Thu" : "▼ Mở"}
+                </span>
+              </button>
+              {showEstimationConfigMobile ? (
+                <div className="border-t border-violet-100 px-3 pb-3 pt-2">
+                  <EstimationConfigPanel {...estimationConfigProps} compact />
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* ===== md+: giữ layout cột cũ ===== */}
+          <div className="hidden space-y-3 md:grid md:grid-cols-[260px_1fr] md:gap-4 md:space-y-0 lg:grid-cols-[280px_1fr_256px] lg:gap-5">
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={handleOneClickAutoFill}
+                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-violet-400/30 bg-gradient-to-br from-violet-600 via-indigo-600 to-purple-700 px-4 py-4 font-bold text-white shadow-lg shadow-violet-500/25 transition-all hover:from-violet-700 hover:to-purple-800 active:scale-[0.97]"
               >
                 <div className="flex items-center gap-3 text-left">
                   <span className="text-2xl">⚡</span>
                   <div>
-                    <p className="text-xs font-black tracking-wide uppercase leading-tight">TỰ ĐỘNG TẠO ĐỦ DIM</p>
-                    <p className="text-[10px] opacity-85 font-medium mt-0.5">
-                      Điền đủ {lot.declaredPcs ?? "?"} kiện · 95% Gross Wt
+                    <p className="text-xs font-black uppercase tracking-wide leading-tight">
+                      TỰ ĐỘNG TẠO ĐỦ DIM
+                    </p>
+                    <p className="mt-0.5 text-[10px] font-medium opacity-85">
+                      Điền đủ {lot.declaredPcs ?? "?"} kiện · {targetRatioPercent.toFixed(0)}% Gross Wt
                     </p>
                   </div>
                 </div>
                 <span className="shrink-0 rounded-full bg-white/25 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider">
-                  1-CLICK ➔
+                  1-CLICK
                 </span>
               </button>
 
-              {limitWarnings.length > 0 && (
-                <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950 font-medium">
+              {limitWarnings.length > 0 ? (
+                <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-[11px] font-medium text-amber-950">
                   {limitWarnings.map((w, i) => (
-                    <p key={i}>{w.kind === "dims" ? "⚠ " : "ℹ "}{w.message}</p>
+                    <p key={i}>
+                      {w.kind === "dims" ? "⚠ " : "ℹ "}
+                      {w.message}
+                    </p>
                   ))}
                 </div>
-              )}
+              ) : null}
 
-              {/* 💾 MẪU DIM ĐÃ LƯU & LƯU MẪU MỚI */}
-              <div className="rounded-2xl border border-indigo-100 bg-gradient-to-b from-indigo-50/50 to-white p-3 shadow-xs space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                    <span>📁</span>
-                    <span>Mẫu DIM đã lưu ({dimTemplates.length})</span>
-                  </span>
-                  {lines.length > 0 && !showSaveTemplateForm && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewTemplateName(`Mẫu ${row.customerCode || "DIM"} (${snap.sumDimPcs}k)`);
-                        setShowSaveTemplateForm(true);
-                      }}
-                      className="rounded-lg bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-xs active:scale-95 transition-all"
-                    >
-                      + Lưu Mẫu
-                    </button>
-                  )}
-                </div>
-
-                {/* Form tạo mẫu mới */}
-                {showSaveTemplateForm && (
-                  <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-2.5 space-y-2">
-                    <p className="text-[11px] font-bold text-indigo-900">
-                      💾 Đặt tên mẫu ({snap.sumDimPcs} kiện · {lines.length} dòng):
-                    </p>
-                    <input
-                      type="text"
-                      value={newTemplateName}
-                      onChange={(e) => setNewTemplateName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleSaveCurrentTemplate();
-                        }
-                      }}
-                      placeholder="VD: Thùng Áo 60x40, Linh Kiện S..."
-                      className="w-full rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs font-semibold focus:border-indigo-500 focus:outline-none"
-                      autoFocus
-                    />
-                    <div className="flex justify-end gap-1.5">
+              {dimTemplates.length > 0 || lines.length > 0 ? (
+                <div className="space-y-2.5 rounded-2xl border border-indigo-100 bg-gradient-to-b from-indigo-50/50 to-white p-3 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-950">
+                      Mẫu DIM ({dimTemplates.length})
+                    </span>
+                    {lines.length > 0 && !showSaveTemplateForm ? (
                       <button
                         type="button"
-                        onClick={() => setShowSaveTemplateForm(false)}
-                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:bg-slate-50"
+                        onClick={() => {
+                          setNewTemplateName(
+                            `Mẫu ${row.customerCode || "DIM"} (${snap.sumDimPcs}k)`,
+                          );
+                          setShowSaveTemplateForm(true);
+                        }}
+                        className="rounded-lg bg-indigo-600 px-2.5 py-1 text-[11px] font-bold text-white"
                       >
-                        Hủy
+                        + Lưu Mẫu
                       </button>
-                      <button
-                        type="button"
-                        onClick={handleSaveCurrentTemplate}
-                        className="rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 py-1 text-[11px] font-bold text-white shadow-xs"
-                      >
-                        Lưu Mẫu
-                      </button>
-                    </div>
+                    ) : null}
                   </div>
-                )}
-
-                {/* Danh sách chip mẫu đã lưu */}
-                {dimTemplates.length === 0 ? (
-                  <p className="text-[11px] text-slate-400 font-medium py-1">
-                    Chưa có mẫu nào. Nhập DIM và bấm <strong className="text-indigo-700">+ Lưu Mẫu</strong> để lưu cho lần sau.
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto">
-                    {dimTemplates.map((tmpl) => (
-                      <div
-                        key={tmpl.id}
-                        onClick={() => handleApplyTemplate(tmpl)}
-                        className="group inline-flex items-center gap-1.5 rounded-xl border border-indigo-200/80 bg-white hover:bg-indigo-50/80 hover:border-indigo-300 px-2.5 py-1.5 text-xs font-bold text-indigo-950 shadow-xs cursor-pointer active:scale-95 transition-all"
-                        title={`Áp dụng mẫu ${tmpl.name} (${tmpl.totalPcs} kiện, ${tmpl.lines.length} dòng)`}
-                      >
-                        <span className="text-indigo-600">🏷️</span>
-                        <span>{tmpl.name}</span>
-                        <span className="rounded-full bg-indigo-100 text-indigo-800 px-1.5 py-0.2 text-[10px] tabular-nums">
-                          {tmpl.totalPcs}k
-                        </span>
+                  {showSaveTemplateForm ? (
+                    <div className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/70 p-2.5">
+                      <input
+                        type="text"
+                        value={newTemplateName}
+                        onChange={(e) => setNewTemplateName(e.target.value)}
+                        className="w-full rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs font-semibold"
+                      />
+                      <div className="flex justify-end gap-1.5">
                         <button
                           type="button"
-                          onClick={(e) => handleDeleteTemplate(tmpl.id, e)}
-                          className="ml-0.5 text-slate-300 hover:text-red-600 font-black text-xs px-0.5"
-                          title="Xóa mẫu này"
+                          onClick={() => setShowSaveTemplateForm(false)}
+                          className="rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-500"
                         >
-                          ×
+                          Hủy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveCurrentTemplate}
+                          className="rounded-lg bg-indigo-600 px-3 py-1 text-[11px] font-bold text-white"
+                        >
+                          Lưu Mẫu
                         </button>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    </div>
+                  ) : null}
+                  {dimTemplates.length > 0 ? (
+                    <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto">
+                      {dimTemplates.map((tmpl) => (
+                        <div
+                          key={tmpl.id}
+                          onClick={() => handleApplyTemplate(tmpl)}
+                          className="group inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-indigo-200/80 bg-white px-2.5 py-1.5 text-xs font-bold text-indigo-950 shadow-xs active:scale-95"
+                        >
+                          <span>{tmpl.name}</span>
+                          <span className="rounded-full bg-indigo-100 px-1.5 text-[10px] tabular-nums text-indigo-800">
+                            {tmpl.totalPcs}k
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteTemplate(tmpl.id, e)}
+                            className="px-0.5 text-xs font-black text-slate-300 hover:text-red-600"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
-              {/* Smart paste input */}
-              <div className="rounded-2xl border border-black/[0.08] bg-white p-3.5 shadow-xs space-y-2">
+              <div className="space-y-2 rounded-2xl border border-black/[0.08] bg-white p-3.5 shadow-xs">
                 <div className="flex items-center justify-between">
-                  <label htmlFor="dim-combo-input" className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <span>📋</span>
-                    <span>Dán kích thước đo thật</span>
+                  <label
+                    htmlFor="dim-combo-input"
+                    className="flex items-center gap-1.5 text-xs font-bold text-slate-700"
+                  >
+                    Dán kích thước đo thật
                   </label>
-                  {parsedPreview?.ok && (
+                  {parsedPreview?.ok ? (
                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
                       ✓ Hợp lệ
                     </span>
-                  )}
+                  ) : null}
                 </div>
-
                 <textarea
                   id="dim-combo-input"
-                  rows={5}
+                  rows={4}
                   value={comboInput}
                   onChange={(e) => setComboInput(normalizeDimComboInput(e.target.value))}
                   onKeyDown={(e) => {
@@ -908,140 +1291,88 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                       handleAddComboRows();
                     }
                   }}
-                  placeholder={"Dán từ Excel / Zalo\nVí dụ: 40x50x30x10 hoặc 40 50 30 10\nHỗ trợ nhiều dòng cùng lúc"}
-                  className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 font-mono text-xs font-semibold focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/15 min-h-[6rem]"
+                  placeholder={"Dán từ Excel / Zalo\nVí dụ: 40x50x30x10"}
+                  className="min-h-[5rem] w-full resize-y rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 font-mono text-xs font-semibold focus:border-apple-blue focus:bg-white focus:outline-none focus:ring-2 focus:ring-apple-blue/15"
                 />
-
                 {comboInput.trim() && parsedPreview ? (
                   parsedPreview.ok ? (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-2.5 space-y-2">
-                      <p className="text-[11px] font-bold text-emerald-800">
-                        ✨ {parsedPreview.lines.length} nhóm · {parsedPreview.lines.reduce((s, l) => s + l.pcs, 0)} kiện nhận diện được:
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {parsedPreview.lines.map((l, i) => (
-                          <span key={i} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2 py-1 text-[11px] font-mono font-bold text-emerald-900 shadow-xs">
-                            {l.lCm}×{l.wCm}×{l.hCm} <span className="text-violet-700">×{l.pcs}</span>
-                          </span>
-                        ))}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleAddComboRows}
-                        className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2 text-xs font-bold text-white shadow-xs transition-all active:scale-[0.99]"
-                      >
-                        ➕ Thêm {parsedPreview.lines.reduce((s, l) => s + l.pcs, 0)} kiện đo (Enter)
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddComboRows}
+                      className="w-full rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white"
+                    >
+                      ➕ Thêm {parsedPreview.lines.reduce((s, l) => s + l.pcs, 0)} kiện đo
+                    </button>
                   ) : (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900 font-medium">
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs font-medium text-amber-900">
                       ⚠ {parsedPreview.error}
                     </div>
                   )
                 ) : null}
               </div>
 
-
-
-              {/* Mobile-only estimation config (hidden on lg+ where Col C takes over) */}
-              <div className="lg:hidden rounded-2xl border border-violet-200 bg-white p-3.5 shadow-xs space-y-2">
+              <div className="rounded-2xl border border-violet-200 bg-white p-3.5 shadow-xs lg:hidden">
                 <button
                   type="button"
                   onClick={() => setShowEstimationConfigMobile((v) => !v)}
                   className="flex w-full items-center justify-between text-xs font-bold text-violet-800"
                 >
-                  <span>✨ Cấu hình & Sinh ngẫu nhiên</span>
-                  <span className="text-[10px] text-slate-400">{showEstimationConfigMobile ? "▲ Thu" : "▼ Mở"}</span>
+                  <span>Cấu hình & Sinh ngẫu nhiên</span>
+                  <span className="text-[10px] text-slate-400">
+                    {showEstimationConfigMobile ? "▲ Thu" : "▼ Mở"}
+                  </span>
                 </button>
-                {showEstimationConfigMobile && (
-                  <div className="border-t border-violet-100 pt-2.5">
+                {showEstimationConfigMobile ? (
+                  <div className="mt-2 border-t border-violet-100 pt-2.5">
                     <EstimationConfigPanel {...estimationConfigProps} compact />
                   </div>
-                )}
-                {!showEstimationConfigMobile && (
+                ) : (
                   <button
                     type="button"
                     onClick={() => handleRandom()}
-                    className="w-full rounded-xl bg-violet-600 hover:bg-violet-700 py-2 text-xs font-bold text-white shadow-xs transition-all active:scale-95"
+                    className="mt-2 w-full rounded-xl bg-violet-600 py-2 text-xs font-bold text-white"
                   >
-                    Sinh ngay (mặc định {targetRatioPercent.toFixed(0)}%)
+                    Sinh ngay ({targetRatioPercent.toFixed(0)}%)
                   </button>
                 )}
               </div>
-
             </div>
 
-            {/* ══ COLUMN B: DIM List ══ */}
             <div
               className="space-y-2.5 md:overflow-y-auto md:rounded-2xl md:border md:border-black/[0.06] md:bg-white/70 md:p-3"
               style={{ maxHeight: "min(540px, 62dvh)" }}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700">Danh sách DIM</span>
-                <span className="text-[10px] font-bold text-slate-400">
-                  {snap.lineCount} dòng
-                  {snap.targetLineCount
-                    ? ` · mục tiêu ${snap.targetLineCount.min}–${snap.targetLineCount.max}`
-                    : ""}
-                </span>
-              </div>
-
-              <DimLineSection
-                title="Đo thật"
-                tone="measured"
-                lines={snap.measured}
-                startIndex={0}
-                divisor={divisor}
-                dimCtx={dimCtx}
-                onRemove={(idx) => applyMutation(dimEntryRemoveLine(lines, idx))}
-                emptyHint="Dán hoặc nhập kích thước đo thật ở bên trái"
-              />
-
-              <DimLineSection
-                title="Ước tính"
-                tone="estimated"
-                lines={snap.estimated}
-                startIndex={snap.measured.length}
-                divisor={divisor}
-                dimCtx={dimCtx}
-                onRemove={(idx) => applyMutation(dimEntryRemoveLine(lines, idx))}
-                onToggleLock={handleToggleLock}
-                emptyHint={
-                  snap.pcsMatch
-                    ? "Đã đủ kiện — không cần ước tính"
-                    : "Bấm ⚡ TỰ ĐỘNG TẠO ĐỦ DIM hoặc Sinh ngay"
-                }
-              />
+              {renderDimList()}
             </div>
 
-            {/* ══ COLUMN C: Stats + Config + Save (lg+ only) ══ */}
             <div className="hidden lg:flex lg:flex-col lg:gap-3">
-
-              {/* Progress + Stats card */}
-              <div className="rounded-2xl border border-black/[0.08] bg-white p-4 shadow-xs space-y-3.5">
+              <div className="space-y-3.5 rounded-2xl border border-black/[0.08] bg-white p-4 shadow-xs">
                 <PiecesProgress current={snap.sumDimPcs} total={lot.declaredPcs} />
-
-                <div className="border-t border-slate-100 pt-3 space-y-1.5">
+                <div className="space-y-1.5 border-t border-slate-100 pt-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tổng DIM</span>
-                    <span className="text-base font-extrabold tabular-nums text-violet-800">{totalDimLabel}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Tổng DIM
+                    </span>
+                    <span className="text-base font-extrabold tabular-nums text-violet-800">
+                      {totalDimLabel}
+                    </span>
                   </div>
-                  {lot.declaredKg != null && snap.totalDim != null && (
-                    <p className={`text-[10px] font-semibold ${snap.dimBelowGross ? "text-slate-500" : "text-violet-700"}`}>
+                  {lot.declaredKg != null && snap.totalDim != null ? (
+                    <p
+                      className={`text-[10px] font-semibold ${
+                        snap.dimBelowGross ? "text-slate-500" : "text-violet-700"
+                      }`}
+                    >
                       {snap.dimBelowGross
                         ? `DIM < Gross ${lot.declaredKg} kg → Chargeable theo cân thực`
                         : `DIM ≥ Gross ${lot.declaredKg} kg → Chargeable theo DIM`}
                     </p>
-                  )}
+                  ) : null}
                 </div>
               </div>
-
-              {/* Estimation config — always expanded on desktop */}
               <div className="rounded-2xl border border-violet-200/80 bg-white p-4 shadow-xs">
                 <EstimationConfigPanel {...estimationConfigProps} />
               </div>
-
-              {/* Save + Actions — sticky at bottom */}
               <div className="mt-auto space-y-2">
                 <button
                   type="button"
@@ -1051,69 +1382,111 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                 >
                   {saveBtnLabel}
                 </button>
-
                 <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
                     onClick={handleResetOriginal}
-                    className="rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 py-2.5 text-[11px] font-bold text-amber-900 transition-colors"
+                    className="rounded-xl border border-amber-200 bg-amber-50 py-2.5 text-[11px] font-bold text-amber-900"
                   >
                     ↺ Làm lại
                   </button>
                   <button
                     type="button"
-                    onClick={() => onSave({ dimWeightKg: null, dimLines: null, dimDivisor: null })}
-                    className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 py-2.5 text-[11px] font-bold text-slate-600 transition-colors"
+                    onClick={() =>
+                      onSave({ dimWeightKg: null, dimLines: null, dimDivisor: null })
+                    }
+                    className="rounded-xl border border-slate-200 bg-white py-2.5 text-[11px] font-bold text-slate-600"
                   >
                     Xóa DIM
                   </button>
                   <button
                     type="button"
                     onClick={onClose}
-                    className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 py-2.5 text-[11px] font-bold text-slate-400 transition-colors"
+                    className="rounded-xl border border-slate-200 bg-white py-2.5 text-[11px] font-bold text-slate-400"
                   >
                     Hủy
                   </button>
                 </div>
               </div>
             </div>
-
           </div>
         </div>
 
-        {/* ── FOOTER — mobile/md only (lg+ uses Col C save button) ── */}
-        <div className="shrink-0 border-t border-ui-border bg-ui-surface p-3.5 lg:hidden">
-          <div className="flex gap-2">
+        {/* ── FOOTER mobile/md: Lưu + menu ⋯ ── */}
+        <div className="shrink-0 border-t border-ui-border bg-ui-surface px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={!snap.pcsMatch}
               onClick={handleSave}
-              className={`flex-1 rounded-full py-3.5 text-xs sm:text-sm font-extrabold shadow-md transition-all active:scale-[0.98] ${saveBtnClass}`}
+              className={`min-h-12 flex-1 touch-manipulation rounded-2xl text-[13px] font-extrabold shadow-md transition-all active:scale-[0.98] ${saveBtnClass}`}
             >
-              {saveBtnLabel}
+              {snap.pcsMatch ? "Lưu DIM" : saveBtnLabel}
             </button>
-            <button
-              type="button"
-              onClick={handleResetOriginal}
-              className="rounded-full border border-amber-200 bg-amber-50 hover:bg-amber-100 px-3.5 py-3 text-xs font-bold text-amber-900 shadow-xs"
-              title="Khôi phục lại dữ liệu DIM ban đầu"
-            >
-              ↺ Làm lại
-            </button>
-            <button
-              type="button"
-              onClick={() => onSave({ dimWeightKg: null, dimLines: null, dimDivisor: null })}
-              className="rounded-full border border-slate-200 bg-white hover:bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-700 shadow-xs"
-            >
-              Xóa DIM
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full border border-slate-200 bg-white hover:bg-slate-50 px-3.5 py-3 text-xs font-bold text-slate-500 shadow-xs"
-            >
-              Hủy
-            </button>
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                aria-expanded={moreMenuOpen}
+                aria-haspopup="menu"
+                onClick={() => setMoreMenuOpen((v) => !v)}
+                className="inline-flex h-12 w-12 touch-manipulation items-center justify-center rounded-2xl border border-ui-border bg-white text-lg font-bold text-slate-700 shadow-xs"
+                title="Thêm"
+              >
+                ⋯
+              </button>
+              {moreMenuOpen ? (
+                <div
+                  role="menu"
+                  className="absolute bottom-full right-0 z-50 mb-2 min-w-[11rem] overflow-hidden rounded-xl border border-ui-border bg-white py-1 shadow-apple-md"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      handleResetOriginal();
+                    }}
+                    className="block w-full px-3 py-2.5 text-left text-[13px] font-semibold text-amber-900 hover:bg-amber-50"
+                  >
+                    ↺ Làm lại
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      onSave({ dimWeightKg: null, dimLines: null, dimDivisor: null });
+                    }}
+                    className="block w-full px-3 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Xóa DIM
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      setShowEstimationConfigMobile(true);
+                      setMobileMode("quick");
+                    }}
+                    className="block w-full px-3 py-2.5 text-left text-[13px] font-semibold text-violet-800 hover:bg-violet-50"
+                  >
+                    Nâng cao
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      onClose();
+                    }}
+                    className="block w-full px-3 py-2.5 text-left text-[13px] font-semibold text-slate-500 hover:bg-slate-50"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>

@@ -149,7 +149,7 @@ export function OpsMobileStickyHeader({
             </span>
           ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1.5">
           <NewBookingButton iconOnly activeWarehouse={activeWarehouse} onAdd={onAddBooking} />
           <OpsSheetImportButton
             compact

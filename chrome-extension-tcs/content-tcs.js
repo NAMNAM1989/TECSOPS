@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.24";
+  const SCRIPT_VERSION = "2.0.26";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -1254,61 +1254,175 @@
   /** Username đang login trên portal (cookie dùng chung 2 Ext). */
   function readSessionIdentity() {
     if (needsLogin()) {
-      return { ok: true, loggedIn: false, username: "", source: "login_page" };
+      return {
+        ok: true,
+        loggedIn: false,
+        username: "",
+        source: "login_page",
+        confident: true,
+      };
     }
-    const isUserLike = (raw) => {
-      const t = String(raw || "")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (!t || t.length < 3 || t.length > 40) return "";
-      if (/đăng xuất|dang xuat|logout|hotline|esid|tìm kiếm|tim kiem|giới thiệu|gioi thieu/i.test(t)) {
-        return "";
-      }
-      if (/^[a-zA-Z][a-zA-Z0-9._-]{2,31}$/.test(t)) return t;
-      return "";
+    const fromStorage = readIdentityFromStorage();
+    if (fromStorage) {
+      return { ok: true, loggedIn: true, confident: true, ...fromStorage };
+    }
+    const fromDom = readIdentityFromDom();
+    if (fromDom) {
+      return { ok: true, loggedIn: true, ...fromDom };
+    }
+    // Đang có phiên nhưng không đọc được là ai — KHÔNG suy ra "sai user".
+    return {
+      ok: true,
+      loggedIn: true,
+      username: "",
+      source: "unreadable",
+      confident: false,
     };
+  }
+
+  /** Nhãn UI hay bị nhặt nhầm thành username (bug «Email»). */
+  const IDENTITY_LABEL_BLOCKLIST = new Set([
+    "email", "password", "username", "user", "account", "login", "logout",
+    "profile", "home", "menu", "export", "import", "esid", "search", "hotline",
+    "support", "help", "language", "setting", "settings", "notification",
+    "dashboard", "report", "history", "admin", "guest", "name", "phone",
+    "mobile", "address", "company", "submit", "cancel", "save", "close", "back",
+  ]);
+
+  /**
+   * Tài khoản portal TCS luôn là chữ + số liền nhau (namnam8012, hanam7195).
+   * Bắt buộc có chữ số để loại sạch nhãn giao diện.
+   */
+  function looksLikePortalAccount(raw) {
+    const t = String(raw || "").replace(/\s+/g, " ").trim();
+    if (!t || t.length < 4 || t.length > 40) return "";
+    if (/\s/.test(t)) return "";
+    if (IDENTITY_LABEL_BLOCKLIST.has(t.toLowerCase())) return "";
+    if (!/^[a-zA-Z][a-zA-Z0-9._@-]{3,39}$/.test(t)) return "";
+    if (!/\d/.test(t)) return "";
+    return t;
+  }
+
+  function decodeJwtPayload(token) {
+    const parts = String(token || "").split(".");
+    if (parts.length !== 3) return null;
+    try {
+      const json = atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"));
+      const parsed = JSON.parse(json);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const IDENTITY_FIELD_KEYS = [
+    "username", "userName", "user_name", "userLogin", "loginName", "login_name",
+    "account", "accountName", "userId", "userID", "unique_name",
+    "preferred_username", "sub",
+  ];
+
+  /** Tìm field username trong object/JSON đã parse (giới hạn độ sâu). */
+  function findIdentityField(value, depth = 0) {
+    if (depth > 4 || !value || typeof value !== "object") return "";
+    for (const key of IDENTITY_FIELD_KEYS) {
+      const hit = looksLikePortalAccount(value[key]);
+      if (hit) return hit;
+    }
+    for (const nested of Object.values(value)) {
+      if (nested && typeof nested === "object") {
+        const hit = findIdentityField(nested, depth + 1);
+        if (hit) return hit;
+      }
+    }
+    return "";
+  }
+
+  /** Nguồn đáng tin nhất: state/token SPA mà portal tự lưu. */
+  function readIdentityFromStorage() {
+    const stores = [];
+    try {
+      if (window.localStorage) stores.push(["localStorage", window.localStorage]);
+    } catch {
+      /* storage bị chặn */
+    }
+    try {
+      if (window.sessionStorage) {
+        stores.push(["sessionStorage", window.sessionStorage]);
+      }
+    } catch {
+      /* storage bị chặn */
+    }
+    for (const [label, store] of stores) {
+      let length = 0;
+      try {
+        length = store.length;
+      } catch {
+        continue;
+      }
+      for (let i = 0; i < length; i += 1) {
+        let key = "";
+        let raw = "";
+        try {
+          key = String(store.key(i) || "");
+          raw = String(store.getItem(key) || "");
+        } catch {
+          continue;
+        }
+        if (!raw || raw.length > 200_000) continue;
+        const jwt = decodeJwtPayload(raw);
+        if (jwt) {
+          const hit = findIdentityField(jwt);
+          if (hit) return { username: hit, source: `${label}:${key}:jwt` };
+        }
+        if (/^[[{]/.test(raw.trim())) {
+          try {
+            const hit = findIdentityField(JSON.parse(raw));
+            if (hit) return { username: hit, source: `${label}:${key}` };
+          } catch {
+            /* không phải JSON */
+          }
+        }
+        if (IDENTITY_FIELD_KEYS.includes(key)) {
+          const hit = looksLikePortalAccount(raw);
+          if (hit) return { username: hit, source: `${label}:${key}` };
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Dự phòng: quét DOM quanh nút Đăng xuất. Không quét cả body nữa. */
+  function readIdentityFromDom() {
     const logoutEl = Array.from(
       document.querySelectorAll("a, button, span, li, div")
     ).find((el) => {
-      const t = String(el.textContent || "")
-        .replace(/\s+/g, " ")
-        .trim();
+      const t = String(el.textContent || "").replace(/\s+/g, " ").trim();
       return (
         /^(đăng xuất|dang xuat|logout)$/i.test(t) ||
         (/đăng xuất|dang xuat|logout/i.test(t) && t.length < 24)
       );
     });
-    let username = "";
-    let source = "unknown";
     if (logoutEl) {
       let node = logoutEl.parentElement;
-      for (let depth = 0; depth < 6 && node && !username; depth += 1) {
+      for (let depth = 0; depth < 6 && node; depth += 1) {
         for (const el of node.querySelectorAll("span, div, a, strong, b")) {
-          const hit = isUserLike(el.textContent);
-          if (hit) {
-            username = hit;
-            source = "near_logout";
-            break;
-          }
+          const hit = looksLikePortalAccount(el.textContent);
+          if (hit) return { username: hit, source: "near_logout", confident: true };
         }
         node = node.parentElement;
       }
     }
-    if (!username) {
-      const header =
-        document.querySelector(
-          "header, .ant-layout-header, .ant-pro-global-header, .ant-dropdown-trigger"
-        ) || document.body;
+    const header = document.querySelector(
+      "header, .ant-layout-header, .ant-pro-global-header, .ant-dropdown-trigger"
+    );
+    if (header) {
       for (const el of header.querySelectorAll("span, div, a, strong")) {
-        const hit = isUserLike(el.textContent);
-        if (hit) {
-          username = hit;
-          source = "header";
-          break;
-        }
+        const hit = looksLikePortalAccount(el.textContent);
+        // Header có thể chứa mã chuyến/AWB — không coi là bằng chứng chắc chắn.
+        if (hit) return { username: hit, source: "header", confident: false };
       }
     }
-    return { ok: true, loggedIn: true, username, source };
+    return null;
   }
 
   async function ensureDeclareTab(warnings) {

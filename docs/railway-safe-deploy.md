@@ -24,8 +24,12 @@ Vì vậy:
 | **`PORT`** | Railway inject sẵn. |
 | **`NODE_ENV`** | `production` khi build Nixpacks. |
 | **`GOOGLE_SHEETS_BOOK_SPREADSHEET_ID`** | Tùy chọn — import BOOK Hằng Ngày. |
+| **`TCS_USERNAME` / `TCS_PASSWORD`** | Portal TECS-TCS (Playwright cloud). |
+| **`TCS_USERNAME_TCS` / `TCS_PASSWORD_TCS`** | Portal kho TCS + `TCS_AGENT_DUAL=1`. |
 
 Socket.IO chạy **in-memory** — khuyến nghị **1 replica**.
+
+Portal online (không máy kho): xem [railway-online-portal.md](./railway-online-portal.md).
 
 ---
 

@@ -1,6 +1,7 @@
 import type { EsidDeclareFillPayload } from "./buildEsidDeclareFillPayload";
 import type { EcargoVctFillPayload } from "./buildEcargoVctFillPayload";
 import type { TcsEsidScanItem } from "./tcsPortalAgentApi";
+import { loadTcsExtLoginPrefs } from "./tcsExtLoginPrefs";
 
 /** Ext TECS-TCS ESID. */
 export const TCS_EXT_CHANNEL = "tecsops-tcs-ext";
@@ -29,6 +30,8 @@ export type TcsExtensionWorkspace = {
   logged_in_username?: string;
   phase?: string;
   logged_in?: boolean;
+  /** Cookie portal bị Ext/kho khác ghi đè — thao tác kế tiếp sẽ khôi phục jar. */
+  session_dirty?: boolean;
   session_date?: string;
   cache_count?: number;
   cache_age_seconds?: number | null;
@@ -122,6 +125,32 @@ type Pending = {
 const pending = new Map<string, Pending>();
 let listenerBound = false;
 
+/**
+ * Lệnh chạy trên portal TCS — bắt buộc kèm user kỳ vọng của kho.
+ * Cookie tcs.com.vn dùng chung 2 Ext nên Ext phải tự chặn khi session lệch user.
+ */
+const IDENTITY_GUARDED_COMMANDS: ReadonlySet<ExtensionCommand> = new Set([
+  "TCS_SCAN_DATE",
+  "FILL_ESID",
+  "DOWNLOAD_ESID_PDF",
+]);
+
+/** Gắn `expected_username` theo kho nếu chỗ gọi chưa truyền. */
+function withExpectedUsername(
+  type: ExtensionCommand,
+  payload: unknown,
+  warehouse: TcsExtChannelTarget
+): unknown {
+  if (!IDENTITY_GUARDED_COMMANDS.has(type)) return payload;
+  if (warehouse !== "TCS" && warehouse !== "TECS-TCS") return payload;
+  if (!payload || typeof payload !== "object") return payload;
+  const current = (payload as { expected_username?: unknown }).expected_username;
+  if (typeof current === "string" && current.trim()) return payload;
+  const username = loadTcsExtLoginPrefs(warehouse).username;
+  if (!username) return payload;
+  return { ...(payload as Record<string, unknown>), expected_username: username };
+}
+
 const ALL_CHANNELS = new Set([
   TCS_EXT_CHANNEL,
   TCS_EXT_CHANNEL_DIRECT,
@@ -203,7 +232,7 @@ function request<T extends TcsExtResult>(
         direction: "to-ext",
         id,
         type,
-        payload,
+        payload: withExpectedUsername(type, payload, warehouse),
       },
       window.location.origin
     );
@@ -213,6 +242,14 @@ function request<T extends TcsExtResult>(
 export type TcsExtRequestOpts = {
   warehouse?: TcsExtChannelTarget;
 };
+
+/**
+ * Ext kho kia đang giữ khoá portal. Không fallback sang executor khác —
+ * chờ nó xong để tránh hai luồng cùng ghi đè session tcs.com.vn.
+ */
+export function isPortalBusyExtError(result: TcsExtResult | undefined): boolean {
+  return result?.error === "PORTAL_BUSY";
+}
 
 export async function pingTcsExtension(
   timeoutMsOrOpts: number | TcsExtRequestOpts = 2_500,

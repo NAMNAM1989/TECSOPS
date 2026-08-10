@@ -3,12 +3,15 @@ import {
   bootstrapTcsExtension,
   downloadEsidPdfViaExtension,
   fillEcargoVctViaExtension,
+  fillEsidViaExtension,
+  isPortalBusyExtError,
   pingTcsExtension,
   TCS_EXT_CHANNEL,
   TCS_EXT_CHANNEL_DIRECT,
   TCS_EXT_CHANNEL_SCSC,
   tcsExtChannelForWarehouse,
 } from "./tcsChromeExtension";
+import { saveTcsExtLoginPrefs } from "./tcsExtLoginPrefs";
 
 function answerNext(
   response: Record<string, unknown>,
@@ -37,6 +40,7 @@ function answerNext(
 describe("tcsChromeExtension bridge", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    localStorage.clear();
   });
 
   it("ping qua content-script bridge", async () => {
@@ -161,6 +165,84 @@ describe("tcsChromeExtension bridge", () => {
         channel: TCS_EXT_CHANNEL_DIRECT,
         type: "DOWNLOAD_ESID_PDF",
         payload: { awb: "29739702876" },
+      }),
+      window.location.origin
+    );
+  });
+
+  it("DOWNLOAD_ESID_PDF qua channel TECS-TCS", async () => {
+    const spy = answerNext({
+      ok: true,
+      pdf_name: "297-39702876_ESID.pdf",
+      pdf_base64: "JVBERi0xLjQ=",
+    });
+    const result = await downloadEsidPdfViaExtension(
+      { awb: "29739702876" },
+      { warehouse: "TECS-TCS" }
+    );
+    expect(result.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: TCS_EXT_CHANNEL,
+        type: "DOWNLOAD_ESID_PDF",
+      }),
+      window.location.origin
+    );
+  });
+
+  it("gắn expected_username theo kho cho lệnh chạy trên portal", async () => {
+    saveTcsExtLoginPrefs("TCS", { username: "namnam8012", remember: true });
+    saveTcsExtLoginPrefs("TECS-TCS", { username: "hanam7195", remember: true });
+
+    const pdfSpy = answerNext({ ok: true }, TCS_EXT_CHANNEL_DIRECT);
+    await downloadEsidPdfViaExtension({ awb: "29739702876" }, { warehouse: "TCS" });
+    expect(pdfSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ expected_username: "namnam8012" }),
+      }),
+      window.location.origin
+    );
+    vi.restoreAllMocks();
+
+    const fillSpy = answerNext({ ok: true });
+    await fillEsidViaExtension({ warehouse: "TECS-TCS" } as never);
+    expect(fillSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: TCS_EXT_CHANNEL,
+        payload: expect.objectContaining({ expected_username: "hanam7195" }),
+      }),
+      window.location.origin
+    );
+  });
+
+  it("không ghi đè expected_username do chỗ gọi truyền vào", async () => {
+    saveTcsExtLoginPrefs("TCS", { username: "namnam8012", remember: true });
+    const spy = answerNext({ ok: true }, TCS_EXT_CHANNEL_DIRECT);
+    await downloadEsidPdfViaExtension(
+      { awb: "29739702876", expected_username: "khac9999" } as never,
+      { warehouse: "TCS" }
+    );
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ expected_username: "khac9999" }),
+      }),
+      window.location.origin
+    );
+  });
+
+  it("isPortalBusyExtError nhận PORTAL_BUSY", () => {
+    expect(isPortalBusyExtError({ error: "PORTAL_BUSY" })).toBe(true);
+    expect(isPortalBusyExtError({ error: "WRONG_USER" })).toBe(false);
+  });
+
+  it("lệnh eCargo không bị gắn expected_username", async () => {
+    saveTcsExtLoginPrefs("TCS", { username: "namnam8012", remember: true });
+    const spy = answerNext({ ok: true }, TCS_EXT_CHANNEL_SCSC);
+    await fillEcargoVctViaExtension({ header: { agentName: "A" }, awbs: [] } as never);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "FILL_ECARGO_VCT",
+        payload: expect.not.objectContaining({ expected_username: expect.anything() }),
       }),
       window.location.origin
     );

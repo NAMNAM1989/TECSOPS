@@ -1,6 +1,6 @@
 /**
- * Railway / máy chủ all-in-one: Ops và agent cùng origin (/tcs-agent).
- * Phone nên gọi agent trực tiếp (không portal-worker PC) khi health OK.
+ * Probe agent nội bộ (legacy). Vận hành mặc định chỉ Chrome Ext —
+ * không ưu tiên remote máy kho / portal-worker.
  */
 import { pingTcsAgent } from "./tcsPortalAgentApi";
 import type { TcsPortalWarehouse } from "./tcsPortalJob";
@@ -25,15 +25,12 @@ export async function probeInlineTcsAgent(
 }
 
 /**
- * true = phone/desktop nên dùng remote worker (PC kho).
- * false = có agent same-origin → đường nóng Railway/local.
+ * Luôn false — đã bỏ portal-worker / máy kho từ xa.
+ * Giữ chữ ký để không phá call site (AirCargoTracking).
  */
 export function shouldPreferRemotePortal(
-  isMobile: boolean,
-  inlineAgentOk: boolean | null
+  _isMobile: boolean,
+  _inlineAgentOk: boolean | null
 ): boolean {
-  if (!isMobile) return false;
-  // Chưa probe xong: tạm remote để không block; sau probe sẽ chỉnh lại.
-  if (inlineAgentOk === null) return true;
-  return !inlineAgentOk;
+  return false;
 }

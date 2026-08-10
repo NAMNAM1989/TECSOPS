@@ -47,6 +47,21 @@ def test_ops_payload():
     assert len(rows) == 2
 
 
+def test_ops_payload_awbs_shorthand_download():
+    rows = validate_ops_payload(
+        {
+            "warehouse": "TCS",
+            "type": "DOWNLOAD",
+            "awbs": ["738-0601 3335", "203-0124 3174"],
+            "document_type": "ESID",
+        }
+    )
+    assert len(rows) == 2
+    assert rows[0].action == Action.DOWNLOAD
+    assert rows[0].awb_digits == "73806013335"
+    assert rows[1].document_type == "ESID"
+
+
 def test_map_status():
     assert map_tcs_status_to_normalized("Hoàn thành") == NormalizedStatus.COMPLETED
     assert map_tcs_status_to_normalized("Chưa hoàn thành") == NormalizedStatus.NOT_COMPLETED

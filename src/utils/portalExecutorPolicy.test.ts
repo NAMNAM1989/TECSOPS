@@ -1,32 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { resolvePortalExecutorOrder } from "./portalExecutorPolicy";
+import {
+  portalPolicyUsesAgent,
+  resolvePortalExecutorOrder,
+} from "./portalExecutorPolicy";
 
 describe("resolvePortalExecutorOrder", () => {
-  it("auto desktop: login/scan/fill ưu tiên Ext", () => {
+  it("auto: agent cloud trước, Ext sau (online-first)", () => {
     expect(resolvePortalExecutorOrder("login", { policy: "auto" })).toEqual([
-      "extension",
       "agent",
-      "remote",
+      "extension",
+    ]);
+    expect(resolvePortalExecutorOrder("scan", { policy: "auto" })).toEqual([
+      "agent",
+      "extension",
     ]);
     expect(resolvePortalExecutorOrder("fill", { policy: "auto" })).toEqual([
-      "extension",
       "agent",
-      "remote",
+      "extension",
     ]);
-  });
-
-  it("auto desktop: PDF ưu tiên agent", () => {
     expect(resolvePortalExecutorOrder("pdf", { policy: "auto" })).toEqual([
       "agent",
       "extension",
-      "remote",
     ]);
   });
 
-  it("preferRemote: remote trước rồi agent", () => {
+  it("preferRemote bị bỏ qua — vẫn agent → Ext", () => {
     expect(
       resolvePortalExecutorOrder("scan", { policy: "auto", preferRemote: true })
-    ).toEqual(["remote", "agent", "extension"]);
+    ).toEqual(["agent", "extension"]);
   });
 
   it("ext-only / agent-only / remote-only", () => {
@@ -39,5 +40,11 @@ describe("resolvePortalExecutorOrder", () => {
     expect(resolvePortalExecutorOrder("fill", { policy: "remote-only" })).toEqual([
       "remote",
     ]);
+  });
+
+  it("portalPolicyUsesAgent", () => {
+    expect(portalPolicyUsesAgent("auto")).toBe(true);
+    expect(portalPolicyUsesAgent("agent-only")).toBe(true);
+    expect(portalPolicyUsesAgent("ext-only")).toBe(false);
   });
 });

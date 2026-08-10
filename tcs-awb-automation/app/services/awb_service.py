@@ -195,5 +195,27 @@ def validate_ops_payload(payload: dict[str, Any]) -> list[AwbJobRow]:
     if warehouse.upper() not in {"TECS-TCS", "KHO-TCS", "TCS"}:
         raise ValueError("Agent chỉ nhận job kho TECS-TCS / TCS")
     rows_raw = payload.get("rows") or []
+    # Shorthand: { type|action, awbs: [...] } — tránh /jobs trả ok + results=[] im lặng
+    if not rows_raw:
+        awbs = payload.get("awbs") or []
+        action = (
+            payload.get("type")
+            or payload.get("action")
+            or payload.get("ACTION")
+            or "LOOKUP"
+        )
+        if isinstance(awbs, list) and awbs:
+            rows_raw = [
+                {
+                    "awb": a,
+                    "action": action,
+                    "document_type": payload.get("document_type") or "ESID",
+                    "session_date": payload.get("session_date")
+                    or payload.get("sessionDate")
+                    or "",
+                }
+                for a in awbs
+                if str(a or "").strip()
+            ]
     rows = [validate_row({**r, "warehouse": "TECS-TCS"}, i + 1) for i, r in enumerate(rows_raw)]
     return mark_duplicates(rows)

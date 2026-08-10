@@ -1,4 +1,7 @@
 /**
+ * DEPRECATED — vận hành ngày dùng Chrome Ext; xem docs/playwright-mcp-ops-qa.md.
+ * Legacy: npm run portal:worker:legacy
+ *
  * Worker máy kho — poll Railway/local Ops, chạy agent Playwright cho kho TCS.
  *
  * Env:

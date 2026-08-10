@@ -13,11 +13,13 @@
     "dev:db": "docker compose up -d",
     "tcs:agent": "node scripts/tcs-agent.mjs",
     "tcs:agent:real": "node scripts/tcs-agent.mjs --real",
-    "portal:worker": "node scripts/portal-worker.mjs",
+    "portal:worker": "node scripts/deprecated-portal-remote.mjs worker",
     "portal:start:hub": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-hub.ps1",
     "portal:start:tcs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-tcs.ps1",
     "portal:start:both": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-both.ps1",
-    "portal:start:warehouse": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-warehouse-pc.ps1",
+    "portal:start:warehouse": "node scripts/deprecated-portal-remote.mjs warehouse",
+    "portal:worker:legacy": "node scripts/portal-worker.mjs",
+    "portal:start:warehouse:legacy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-warehouse-pc.ps1",
     "portal:pin-shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pin-warehouse-shortcut.ps1",
     "qa:smoke": "node scripts/qa-smoke-e2e.mjs",
     "ext:verify": "node chrome-extension/scripts/cdp-load-and-verify.mjs",
@@ -40,7 +42,8 @@
     "backup:postgres-state": "node scripts/postgres-backup-state.mjs",
     "restore:postgres-state": "node scripts/postgres-restore-state.mjs",
     "railway:check": "node scripts/railway-check-token.mjs",
-    "railway:up": "node scripts/railway-up.mjs"
+    "railway:up": "node scripts/railway-up.mjs",
+    "railway:setup-portal": "node scripts/railway-setup-online-portal.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",

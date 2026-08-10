@@ -1,6 +1,7 @@
 /**
  * Policy chọn đường portal TCS — đồng loạt TECS-TCS & TCS.
- * Mặc định: auto = Ext (nhanh) → agent local → remote worker.
+ * Mặc định online: auto = Playwright agent (Railway /tcs-agent) rồi mới Chrome Ext.
+ * Không còn máy kho / portal-worker.
  */
 
 export type PortalExecutorPolicy =
@@ -25,7 +26,7 @@ function normalizePolicy(raw: string | undefined | null): PortalExecutorPolicy |
   return null;
 }
 
-/** Mặc định auto. Có thể ghi đè bằng VITE_PORTAL_EXECUTOR_POLICY hoặc localStorage. */
+/** Mặc định auto (= agent → Ext). Ghi đè: VITE_PORTAL_EXECUTOR_POLICY hoặc localStorage. */
 export function getPortalExecutorPolicy(): PortalExecutorPolicy {
   try {
     const fromLs = normalizePolicy(localStorage.getItem(LS_KEY));
@@ -56,10 +57,20 @@ export function setPortalExecutorPolicy(policy: PortalExecutorPolicy | ""): void
   }
 }
 
+/** Policy có dùng Playwright agent (Railway/local) không. */
+export function portalPolicyUsesAgent(
+  policy: PortalExecutorPolicy = getPortalExecutorPolicy()
+): boolean {
+  return policy === "auto" || policy === "agent-only";
+}
+
 /**
- * Thứ tự thử executor cho một thao tác.
- * - auto + desktop: Ext → agent → remote (PDF: agent → Ext → remote)
- * - preferRemote (phone): remote trước, rồi Ext/agent nếu còn
+ * Thứ tự thử executor.
+ * - auto: agent (Railway online) → Ext (desktop tuỳ chọn)
+ * - ext-only: chỉ Chrome Ext
+ * - agent-only: chỉ agent
+ * - remote-only: deprecated — Ops không gọi
+ * - preferRemote: bỏ qua
  */
 export function resolvePortalExecutorOrder(
   action: PortalAction,
@@ -68,29 +79,19 @@ export function resolvePortalExecutorOrder(
     preferRemote?: boolean;
   } = {}
 ): PortalExecutor[] {
+  void action;
+  void opts.preferRemote;
   const policy = opts.policy || getPortalExecutorPolicy();
 
-  if (policy === "ext-only") return ["extension"];
   if (policy === "agent-only") return ["agent"];
   if (policy === "remote-only") return ["remote"];
-
-  // auto
-  if (opts.preferRemote) {
-    // Phone ngoài WiFi / không có agent nội bộ: worker trước
-    return ["remote", "agent", "extension"];
-  }
-
-  if (action === "pdf") {
-    // Railway/local agent: cache/prefetch → gần tức thời
-    return ["agent", "extension", "remote"];
-  }
-
-  // login / scan / fill — Ext desktop nhanh; phone không Ext → agent
-  return ["extension", "agent", "remote"];
+  if (policy === "ext-only") return ["extension"];
+  // auto — online-first
+  return ["agent", "extension"];
 }
 
 export function portalExecutorLabel(ex: PortalExecutor): string {
   if (ex === "extension") return "Ext";
-  if (ex === "agent") return "Agent";
-  return "Máy kho từ xa";
+  if (ex === "agent") return "Agent cloud";
+  return "Máy kho từ xa (deprecated)";
 }

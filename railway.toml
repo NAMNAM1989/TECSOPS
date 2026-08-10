@@ -1,10 +1,9 @@
-# Dockerfile: Node + agent Playwright. API-first (headless).
-# Phone: Quét/PDF qua /tcs-agent (header X-Portal-Warehouse); CSD trên Ops.
-# Dual agent: TCS_AGENT_DUAL=1 + credential kho TCS.
-# Region khuyến nghị: asia-southeast1. Volume giữ browser_profile_*.
+# Dockerfile: Node + Playwright headless — portal online, không máy kho.
+# Ops → /tcs-agent → :8765 (TECS-TCS) + :8766 (TCS).
+# Variables: TCS_USERNAME(_TCS) / TCS_PASSWORD(_TCS). Docs: docs/railway-online-portal.md
+# Region: asia-southeast1. Mount volume browser_profile_hub + browser_profile_tcs.
 #
-# Build: Docker build từ Dockerfile.
-# start: node scripts/start-fullstack.mjs
+# Build: Dockerfile · start: node scripts/start-fullstack.mjs
 
 [build]
 builder = "DOCKERFILE"

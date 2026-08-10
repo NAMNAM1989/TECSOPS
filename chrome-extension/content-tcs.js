@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.24";
+  const SCRIPT_VERSION = "2.0.26";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -65,11 +65,12 @@
   // Prefetch sớm; runFill vẫn await để chắc chắn.
   void ensureLocators();
 
-  /** @type {{ version: string, busy: boolean, runFill: Function }} */
+  /** @type {{ version: string, busy: boolean, runFill: Function, runDownloadPdf: Function }} */
   const api = (window.__TECSOPS_TCS__ = window.__TECSOPS_TCS__ || {
     version: SCRIPT_VERSION,
     busy: false,
     runFill: null,
+    runDownloadPdf: null,
   });
   api.version = SCRIPT_VERSION;
 
@@ -283,6 +284,73 @@
 
   api.runFill = runFill;
 
+  /**
+   * Tải PDF ESID: danh sách → AWB# → mở dòng → IN → lấy HTML phiếu.
+   * Background printToPDF + chrome.downloads.
+   */
+  async function runDownloadPdf(payload) {
+    if (api.busy) {
+      return { ok: false, error: "BUSY", message: "Ext đang bận — thử lại sau." };
+    }
+    api.busy = true;
+    try {
+      await ensureLocators();
+      const awb = String(payload?.awb || payload?.AWB || "")
+        .replace(/\D/g, "")
+        .slice(0, 11);
+      if (awb.length !== 11) {
+        return { ok: false, error: "VALIDATION", message: "AWB phải đủ 11 số" };
+      }
+      if (needsLogin()) {
+        return {
+          ok: false,
+          error: "NEED_LOGIN",
+          message:
+            "Chưa đăng nhập Ext TECS-TCS — bấm Đăng nhập trước khi tải PDF.",
+        };
+      }
+      showWorkspaceOverlay("DOWNLOADING", `Tìm ESID …${awb.slice(-8)}`, 0, 5);
+      const prepared = await prepareEsidDetailForPdf(awb);
+      if (!prepared.ok) {
+        updateWorkspaceOverlay("ERROR", prepared.message || "Không mở được phiếu", 0, 1);
+        return prepared;
+      }
+      updateWorkspaceOverlay("DOWNLOADING", "Bấm IN lấy phiếu…", 3, 5);
+      installPrintStub();
+      if (!clickInButton()) {
+        return {
+          ok: false,
+          error: "NO_PRINT",
+          message: "Không thấy / không bấm được nút IN",
+        };
+      }
+      updateWorkspaceOverlay("DOWNLOADING", "Đọc HTML phiếu…", 4, 5);
+      const bill = await waitForBillHtml(9000);
+      if (!bill?.html) {
+        return {
+          ok: false,
+          error: "NO_BILL",
+          message: "Sau IN không thấy phiếu ESID trong iframe/popup.",
+        };
+      }
+      const pdfName = `${awb.slice(0, 3)}-${awb.slice(3)}_ESID.pdf`;
+      updateWorkspaceOverlay("READY", `Đã lấy phiếu …${awb.slice(-8)}`, 1, 1);
+      return {
+        ok: true,
+        awb,
+        pdf_name: pdfName,
+        html: bill.html,
+        bill_chars: bill.html.length,
+        source: "chrome-extension",
+        scriptVersion: SCRIPT_VERSION,
+        message: `Đã lấy phiếu ESID …${awb.slice(-8)} — đang lưu PDF…`,
+      };
+    } finally {
+      api.busy = false;
+    }
+  }
+  api.runDownloadPdf = runDownloadPdf;
+
   if (!window.__TECSOPS_TCS_LISTENER__) {
     window.__TECSOPS_TCS_LISTENER__ = true;
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -421,6 +489,30 @@
           });
         return true;
       }
+
+      if (msg.type === "DOWNLOAD_ESID_PDF") {
+        const fn = window.__TECSOPS_TCS__?.runDownloadPdf;
+        if (typeof fn !== "function") {
+          reply({
+            ok: false,
+            error: "NO_RUNNER",
+            message: "Content script chưa sẵn sàng — Reload extension + F5 tab TCS.",
+          });
+          return true;
+        }
+        void fn(msg.payload || {})
+          .then(reply)
+          .catch((err) => {
+            reply({
+              ok: false,
+              error: "DOWNLOAD_FAILED",
+              message: err instanceof Error ? err.message : String(err),
+              scriptVersion: SCRIPT_VERSION,
+            });
+          });
+        return true;
+      }
+
       reply({
         ok: false,
         error: "UNKNOWN_TYPE",
@@ -1166,61 +1258,175 @@
   /** Username đang login trên portal (cookie dùng chung 2 Ext). */
   function readSessionIdentity() {
     if (needsLogin()) {
-      return { ok: true, loggedIn: false, username: "", source: "login_page" };
+      return {
+        ok: true,
+        loggedIn: false,
+        username: "",
+        source: "login_page",
+        confident: true,
+      };
     }
-    const isUserLike = (raw) => {
-      const t = String(raw || "")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (!t || t.length < 3 || t.length > 40) return "";
-      if (/đăng xuất|dang xuat|logout|hotline|esid|tìm kiếm|tim kiem|giới thiệu|gioi thieu/i.test(t)) {
-        return "";
-      }
-      if (/^[a-zA-Z][a-zA-Z0-9._-]{2,31}$/.test(t)) return t;
-      return "";
+    const fromStorage = readIdentityFromStorage();
+    if (fromStorage) {
+      return { ok: true, loggedIn: true, confident: true, ...fromStorage };
+    }
+    const fromDom = readIdentityFromDom();
+    if (fromDom) {
+      return { ok: true, loggedIn: true, ...fromDom };
+    }
+    // Đang có phiên nhưng không đọc được là ai — KHÔNG suy ra "sai user".
+    return {
+      ok: true,
+      loggedIn: true,
+      username: "",
+      source: "unreadable",
+      confident: false,
     };
+  }
+
+  /** Nhãn UI hay bị nhặt nhầm thành username (bug «Email»). */
+  const IDENTITY_LABEL_BLOCKLIST = new Set([
+    "email", "password", "username", "user", "account", "login", "logout",
+    "profile", "home", "menu", "export", "import", "esid", "search", "hotline",
+    "support", "help", "language", "setting", "settings", "notification",
+    "dashboard", "report", "history", "admin", "guest", "name", "phone",
+    "mobile", "address", "company", "submit", "cancel", "save", "close", "back",
+  ]);
+
+  /**
+   * Tài khoản portal TCS luôn là chữ + số liền nhau (namnam8012, hanam7195).
+   * Bắt buộc có chữ số để loại sạch nhãn giao diện.
+   */
+  function looksLikePortalAccount(raw) {
+    const t = String(raw || "").replace(/\s+/g, " ").trim();
+    if (!t || t.length < 4 || t.length > 40) return "";
+    if (/\s/.test(t)) return "";
+    if (IDENTITY_LABEL_BLOCKLIST.has(t.toLowerCase())) return "";
+    if (!/^[a-zA-Z][a-zA-Z0-9._@-]{3,39}$/.test(t)) return "";
+    if (!/\d/.test(t)) return "";
+    return t;
+  }
+
+  function decodeJwtPayload(token) {
+    const parts = String(token || "").split(".");
+    if (parts.length !== 3) return null;
+    try {
+      const json = atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"));
+      const parsed = JSON.parse(json);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const IDENTITY_FIELD_KEYS = [
+    "username", "userName", "user_name", "userLogin", "loginName", "login_name",
+    "account", "accountName", "userId", "userID", "unique_name",
+    "preferred_username", "sub",
+  ];
+
+  /** Tìm field username trong object/JSON đã parse (giới hạn độ sâu). */
+  function findIdentityField(value, depth = 0) {
+    if (depth > 4 || !value || typeof value !== "object") return "";
+    for (const key of IDENTITY_FIELD_KEYS) {
+      const hit = looksLikePortalAccount(value[key]);
+      if (hit) return hit;
+    }
+    for (const nested of Object.values(value)) {
+      if (nested && typeof nested === "object") {
+        const hit = findIdentityField(nested, depth + 1);
+        if (hit) return hit;
+      }
+    }
+    return "";
+  }
+
+  /** Nguồn đáng tin nhất: state/token SPA mà portal tự lưu. */
+  function readIdentityFromStorage() {
+    const stores = [];
+    try {
+      if (window.localStorage) stores.push(["localStorage", window.localStorage]);
+    } catch {
+      /* storage bị chặn */
+    }
+    try {
+      if (window.sessionStorage) {
+        stores.push(["sessionStorage", window.sessionStorage]);
+      }
+    } catch {
+      /* storage bị chặn */
+    }
+    for (const [label, store] of stores) {
+      let length = 0;
+      try {
+        length = store.length;
+      } catch {
+        continue;
+      }
+      for (let i = 0; i < length; i += 1) {
+        let key = "";
+        let raw = "";
+        try {
+          key = String(store.key(i) || "");
+          raw = String(store.getItem(key) || "");
+        } catch {
+          continue;
+        }
+        if (!raw || raw.length > 200_000) continue;
+        const jwt = decodeJwtPayload(raw);
+        if (jwt) {
+          const hit = findIdentityField(jwt);
+          if (hit) return { username: hit, source: `${label}:${key}:jwt` };
+        }
+        if (/^[[{]/.test(raw.trim())) {
+          try {
+            const hit = findIdentityField(JSON.parse(raw));
+            if (hit) return { username: hit, source: `${label}:${key}` };
+          } catch {
+            /* không phải JSON */
+          }
+        }
+        if (IDENTITY_FIELD_KEYS.includes(key)) {
+          const hit = looksLikePortalAccount(raw);
+          if (hit) return { username: hit, source: `${label}:${key}` };
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Dự phòng: quét DOM quanh nút Đăng xuất. Không quét cả body nữa. */
+  function readIdentityFromDom() {
     const logoutEl = Array.from(
       document.querySelectorAll("a, button, span, li, div")
     ).find((el) => {
-      const t = String(el.textContent || "")
-        .replace(/\s+/g, " ")
-        .trim();
+      const t = String(el.textContent || "").replace(/\s+/g, " ").trim();
       return (
         /^(đăng xuất|dang xuat|logout)$/i.test(t) ||
         (/đăng xuất|dang xuat|logout/i.test(t) && t.length < 24)
       );
     });
-    let username = "";
-    let source = "unknown";
     if (logoutEl) {
       let node = logoutEl.parentElement;
-      for (let depth = 0; depth < 6 && node && !username; depth += 1) {
+      for (let depth = 0; depth < 6 && node; depth += 1) {
         for (const el of node.querySelectorAll("span, div, a, strong, b")) {
-          const hit = isUserLike(el.textContent);
-          if (hit) {
-            username = hit;
-            source = "near_logout";
-            break;
-          }
+          const hit = looksLikePortalAccount(el.textContent);
+          if (hit) return { username: hit, source: "near_logout", confident: true };
         }
         node = node.parentElement;
       }
     }
-    if (!username) {
-      const header =
-        document.querySelector(
-          "header, .ant-layout-header, .ant-pro-global-header, .ant-dropdown-trigger"
-        ) || document.body;
+    const header = document.querySelector(
+      "header, .ant-layout-header, .ant-pro-global-header, .ant-dropdown-trigger"
+    );
+    if (header) {
       for (const el of header.querySelectorAll("span, div, a, strong")) {
-        const hit = isUserLike(el.textContent);
-        if (hit) {
-          username = hit;
-          source = "header";
-          break;
-        }
+        const hit = looksLikePortalAccount(el.textContent);
+        // Header có thể chứa mã chuyến/AWB — không coi là bằng chứng chắc chắn.
+        if (hit) return { username: hit, source: "header", confident: false };
       }
     }
-    return { ok: true, loggedIn: true, username, source };
+    return null;
   }
 
   async function ensureDeclareTab(warnings) {
@@ -2206,6 +2412,282 @@
 
   function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
+  }
+
+  function awbDigitsFromText(text) {
+    const digits = String(text || "").replace(/\D/g, "");
+    if (digits.length >= 11) return digits.slice(0, 11);
+    const m = String(text || "").match(/(\d{11})/);
+    return m ? m[1] : digits;
+  }
+
+  function findAwbSearchInputs() {
+    const last =
+      document.querySelector("#search-form_awbNum") ||
+      document.querySelector('input[placeholder="AWB#"]') ||
+      [...document.querySelectorAll("input")].find((el) =>
+        normalizeText(el.getAttribute("placeholder") || "").includes("AWB#")
+      ) ||
+      null;
+    const prefix =
+      document.querySelector("#search-form_awbPfx") ||
+      document.querySelector('input[placeholder="Prefix"]') ||
+      [...document.querySelectorAll("input")].find((el) =>
+        normalizeText(el.getAttribute("placeholder") || "").includes("PREFIX")
+      ) ||
+      null;
+    return { prefix, last };
+  }
+
+  function clickSearchEsidList() {
+    const primary = [...document.querySelectorAll("button.ant-btn-primary")].find(
+      (btn) => normalizeText(btn.textContent || "").includes("TIM KIEM")
+    );
+    if (primary) {
+      simulateClick(primary);
+      return true;
+    }
+    const any = [...document.querySelectorAll("button")].find((btn) =>
+      normalizeText(btn.textContent || "").includes("TIM KIEM")
+    );
+    if (any) {
+      simulateClick(any);
+      return true;
+    }
+    return false;
+  }
+
+  function findInButton() {
+    return (
+      [...document.querySelectorAll("button, a, [role='button'], input[type='button']")].find(
+        (el) => {
+          const label = normalizeText(
+            el.innerText || el.value || el.getAttribute("aria-label") || ""
+          );
+          return label === "IN" && isVisible(el);
+        }
+      ) || null
+    );
+  }
+
+  function clickInButton() {
+    const btn = findInButton();
+    if (!btn) return false;
+    try {
+      btn.scrollIntoView({ block: "center" });
+    } catch {
+      /* ignore */
+    }
+    simulateClick(btn);
+    return true;
+  }
+
+  function installPrintStub() {
+    try {
+      const root = document.documentElement;
+      root.dataset.tecsopsPrintStub = "1";
+      window.print = () => false;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function textLooksLikeEsidBill(text) {
+    const raw = String(text || "").trim();
+    if (raw.length < 120) return false;
+    const low = normalizeText(raw);
+    const chromeHits = [
+      "GIOI THIEU",
+      "DANH SACH ESID",
+      "HOTLINE",
+      "TIM KIEM",
+      "DANG XUAT",
+    ].filter((m) => low.includes(m)).length;
+    if (chromeHits >= 2) return false;
+    const markers = [
+      "SHIPPER",
+      "CONSIGNEE",
+      "AIR WAYBILL",
+      "INSTRUCTION",
+      "NGUOI GUI",
+      "NGUOI NHAN",
+      "SAN BAY",
+      "KHONG VAN DON",
+    ];
+    const hits = markers.filter((m) => low.includes(m)).length;
+    return hits >= 2 || (hits >= 1 && raw.length >= 280);
+  }
+
+  function serializeBillDocument(doc) {
+    if (!doc) return "";
+    try {
+      for (const canvas of [...doc.querySelectorAll("canvas")]) {
+        try {
+          const img = doc.createElement("img");
+          img.src = canvas.toDataURL("image/png");
+          img.setAttribute("style", canvas.getAttribute("style") || "");
+          if (canvas.width) img.width = canvas.width;
+          if (canvas.height) img.height = canvas.height;
+          canvas.replaceWith(img);
+        } catch {
+          /* ignore */
+        }
+      }
+      const ORIGIN = "https://www.tcs.com.vn";
+      const abs = (u) => {
+        if (!u) return u;
+        const s = String(u);
+        if (/^(data:|blob:|https?:)/i.test(s)) return s;
+        try {
+          return new URL(s, `${ORIGIN}/`).href;
+        } catch {
+          return s;
+        }
+      };
+      for (const el of doc.querySelectorAll("link[href], script[src], img[src]")) {
+        const attr = el.hasAttribute("href") ? "href" : "src";
+        const v = el.getAttribute(attr);
+        if (v) el.setAttribute(attr, abs(v));
+      }
+      let head = doc.head;
+      if (!head) {
+        head = doc.createElement("head");
+        doc.documentElement.insertBefore(head, doc.body);
+      }
+      if (!head.querySelector("base")) {
+        const b = doc.createElement("base");
+        b.href = `${ORIGIN}/`;
+        head.prepend(b);
+      }
+      if (!head.querySelector("style[data-tecsops-page]")) {
+        const st = doc.createElement("style");
+        st.setAttribute("data-tecsops-page", "1");
+        st.textContent =
+          "@media print { @page { size: A4 portrait; margin: 0; } html, body { margin: 0; } }";
+        head.appendChild(st);
+      }
+      return "<!DOCTYPE html>" + doc.documentElement.outerHTML;
+    } catch {
+      return "";
+    }
+  }
+
+  function collectBillHtmlNow() {
+    let best = null;
+    let bestScore = 0;
+    for (let i = 0; i < window.frames.length; i += 1) {
+      try {
+        const frame = window.frames[i];
+        const doc = frame.document;
+        const text = String(doc?.body?.innerText || "").trim();
+        if (!textLooksLikeEsidBill(text)) continue;
+        const html = serializeBillDocument(doc);
+        const score = text.length + html.length;
+        if (html && score > bestScore) {
+          bestScore = score;
+          best = html;
+        }
+      } catch {
+        /* cross-origin */
+      }
+    }
+    if (best) return { html: best };
+    const mainText = String(document.body?.innerText || "").trim();
+    if (textLooksLikeEsidBill(mainText)) {
+      const html = serializeBillDocument(document);
+      if (html) return { html };
+    }
+    return null;
+  }
+
+  async function waitForBillHtml(timeoutMs = 9000) {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const hit = collectBillHtmlNow();
+      if (hit?.html && hit.html.length > 200) return hit;
+      await sleep(120);
+    }
+    return collectBillHtmlNow();
+  }
+
+  async function prepareEsidDetailForPdf(awbDigits) {
+    clickTabByText("DANH SÁCH ESID") || clickTabByText("DANH SACH ESID");
+    await sleep(280);
+    if (findInButton()) {
+      const pageText = String(document.body?.innerText || "");
+      if (pageText.includes(awbDigits.slice(-8)) || pageText.includes(awbDigits)) {
+        updateWorkspaceOverlay("DOWNLOADING", "Đã mở đúng phiếu", 2, 5);
+        return { ok: true };
+      }
+      clickTabByText("DANH SÁCH ESID") || clickTabByText("DANH SACH ESID");
+      await sleep(200);
+    }
+
+    clearDateFiltersBeforeScan();
+    await sleep(80);
+    const { prefix, last } = findAwbSearchInputs();
+    if (!last) {
+      return {
+        ok: false,
+        error: "AWB_INPUT",
+        message: "Không thấy ô AWB# trên danh sách ESID",
+      };
+    }
+    const last8 = awbDigits.slice(3);
+    const pfx = awbDigits.slice(0, 3);
+    if (prefix) setReactInput(prefix, pfx);
+    setReactInput(last, last8);
+    updateWorkspaceOverlay("DOWNLOADING", `Tìm AWB# ${last8}`, 1, 5);
+    if (!clickSearchEsidList()) {
+      return {
+        ok: false,
+        error: "SEARCH_NOT_FOUND",
+        message: "Không thấy nút TÌM KIẾM",
+      };
+    }
+    await waitForTableRows(8000);
+    await sleep(200);
+
+    const rows = [...document.querySelectorAll(".ant-table-tbody tr, table tbody tr")].filter(
+      (row) => row.querySelectorAll("td").length >= 3
+    );
+    let match = null;
+    for (const row of rows) {
+      const text = String(row.innerText || "");
+      const digits = awbDigitsFromText(text);
+      if (digits === awbDigits || digits.slice(-8) === last8 || text.includes(last8)) {
+        match = row;
+        break;
+      }
+    }
+    if (!match) {
+      return {
+        ok: false,
+        error: "NOT_FOUND",
+        message: `Không thấy dòng ESID cho AWB …${last8} trên Ext TECS-TCS (rows=${rows.length}).`,
+      };
+    }
+    updateWorkspaceOverlay("DOWNLOADING", "Mở chi tiết phiếu…", 2, 5);
+    simulateClick(match);
+    await sleep(350);
+    for (let i = 0; i < 30; i += 1) {
+      if (findInButton()) return { ok: true };
+      await sleep(100);
+    }
+    try {
+      window.scrollTo(0, document.body.scrollHeight);
+    } catch {
+      /* ignore */
+    }
+    await sleep(200);
+    if (!findInButton()) {
+      return {
+        ok: false,
+        error: "NO_PRINT",
+        message: "Đã mở dòng nhưng không thấy nút IN",
+      };
+    }
+    return { ok: true };
   }
 
   console.info(`[tecsops-ext] content-tcs ready v${SCRIPT_VERSION}`);

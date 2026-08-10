@@ -431,7 +431,9 @@ def make_handler(state: AgentState):
                 return
             if path == "/control/stop":
                 state.batch.stop()
-                self._json(200, {"ok": True, "action": "stop"})
+                # Client disconnect / timeout proxy hay để running=True kẹt → BUSY
+                state.release_running()
+                self._json(200, {"ok": True, "action": "stop", "running": False})
                 return
             self._json(404, {"ok": False, "error": "NOT_FOUND"})
 

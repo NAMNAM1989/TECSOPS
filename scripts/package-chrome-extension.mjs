@@ -130,6 +130,7 @@ packageExt({
     "popup.html",
     "popup.js",
     "locators.json",
+    "print-frame.html",
   ],
   stableZipName: "tecsops-chrome-extension.zip",
   versionedPrefix: "tecsops-chrome-extension",

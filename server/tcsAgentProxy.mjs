@@ -75,6 +75,16 @@ export function registerTcsAgentProxy(app) {
     const headers = { ...req.headers, host: target.host };
     delete headers["connection"];
 
+    // bootstrap / jobs / declare / session-open có thể >3 phút khi agent xếp hàng
+    const pathLower = String(target.pathname || "").toLowerCase();
+    const longOp =
+      pathLower.includes("/workspace/bootstrap") ||
+      pathLower.includes("/jobs") ||
+      pathLower.includes("/esid/") ||
+      pathLower.includes("/session/open") ||
+      pathLower.includes("/workspace/prefetch");
+    const upstreamTimeoutMs = longOp ? 360_000 : 60_000;
+
     const upstream = lib.request(
       {
         protocol: target.protocol,
@@ -83,7 +93,7 @@ export function registerTcsAgentProxy(app) {
         path: `${target.pathname}${target.search}`,
         method: req.method,
         headers,
-        timeout: 180_000,
+        timeout: upstreamTimeoutMs,
       },
       (upRes) => {
         const outHeaders = { ...upRes.headers };

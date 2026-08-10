@@ -148,17 +148,17 @@ export function agentOfflineHint(base = agentBase()): string {
   const isProxy = base.includes("/tcs-agent") || base.endsWith("/tcs-agent");
   if (isProxy) {
     return (
-      `Agent Offline (${base}). Trên máy kho: restart npm run dev (tự chạy agent) hoặc npm run tcs:agent:real. ` +
-      `Máy khác: mở Ops bằng IP máy kho (vd. http://192.168.x.x:5173), không dùng 127.0.0.1.`
+      `Agent Offline (${base}). Online: kiểm tra Railway service đang chạy + TCS_AGENT_PROXY=1 ` +
+      `(Playwright headless trong container). Local: npm run tcs:agent:real hoặc npm run portal:start:both.`
     );
   }
   if (isLoopback) {
     return (
-      `Agent Offline (${base}). 127.0.0.1 chỉ đúng trên máy đang chạy agent. ` +
-      `Máy khác: mở Ops qua IP máy kho (proxy /tcs-agent), không dùng 127.0.0.1.`
+      `Agent Offline (${base}). Local: chạy agent trên máy này. ` +
+      `Online: mở Ops trên domain Railway (same-origin /tcs-agent), không hardcode 127.0.0.1.`
     );
   }
-  return `Agent Offline (${base}). Kiểm tra agent đang chạy và URL/firewall.`;
+  return `Agent Offline (${base}). Kiểm tra Railway/agent URL và firewall.`;
 }
 
 type AgentJsonEnvelope = {
@@ -288,6 +288,8 @@ export type TcsEsidScanResponse = {
   ready?: TcsEsidScanItem[];
   total?: number;
   ready_count?: number;
+  list_total?: number;
+  reception_total?: number;
   error?: string;
   message?: string;
   workspace?: TcsWorkspaceStatus;

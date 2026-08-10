@@ -81,6 +81,10 @@ class EsidListPage:
         if "/esid/" not in url:
             return False
         try:
+            # Tab KHAI BÁO cũng có ô AWB — bắt buộc thấy bộ lọc ngày của DANH SÁCH
+            date = self.page.locator("#search-form_dateSearch")
+            if date.count() == 0 or not date.first.is_visible(timeout=800):
+                return False
             awb_ref = self.esid_ref("awb_last")
             inp = self._resolve(awb_ref) if awb_ref else self.page.get_by_placeholder("AWB#")
             return inp.first.is_visible(timeout=800)
@@ -88,14 +92,98 @@ class EsidListPage:
             return False
 
     def _click_list_tab(self) -> None:
-        try:
-            tab = self.page.get_by_text("DANH SÁCH ESID", exact=False)
-            if tab.count() > 0 and tab.first.is_visible(timeout=400):
-                tab.first.click(timeout=1500, no_wait_after=True)
-                self.page.wait_for_timeout(50)
+        """Ép tab DANH SÁCH ESID (sau KHAI BÁO / chi tiết / warm declare)."""
+        finders = (
+            lambda: self.page.get_by_role(
+                "tab", name=re.compile(r"DANH\s*S[ÁA]CH\s*ESID", re.I)
+            ),
+            lambda: self.page.locator(".ant-tabs-tab").filter(
+                has_text=re.compile(r"DANH\s*S[ÁA]CH\s*ESID", re.I)
+            ),
+            lambda: self.page.get_by_text("DANH SÁCH ESID", exact=False),
+        )
+        for finder in finders:
+            try:
+                tab = finder()
+                if tab.count() == 0:
+                    continue
+                tab.first.click(timeout=2000, force=True, no_wait_after=True)
+                self.page.wait_for_timeout(120)
                 self._detail_awb = None
-        except Exception:
-            pass
+                return
+            except Exception:
+                continue
+
+    def _date_start_locator(self):
+        """Ô Ngày bắt đầu — id chính + fallback placeholder / RangePicker."""
+        selectors = (
+            "#search-form_dateSearch",
+            "input[placeholder*='Ngày bắt đầu']",
+            "input[placeholder*='Ngay bat dau']",
+            "input[id*='dateSearch']",
+            ".ant-picker input",
+        )
+        for sel in selectors:
+            try:
+                loc = self.page.locator(sel)
+                if loc.count() == 0:
+                    continue
+                # Ưu tiên ô visible; nếu chỉ attached thì vẫn dùng (Ant readonly).
+                try:
+                    if loc.first.is_visible(timeout=400):
+                        return loc.first
+                except Exception:
+                    pass
+                return loc.first
+            except Exception:
+                continue
+        return None
+
+    def _ensure_list_search_form(self, *, timeout_ms: int = 15000) -> Any:
+        """Đảm bảo đang ở tab danh sách và thấy bộ lọc ngày."""
+        deadline = time.time() + max(2.0, timeout_ms / 1000)
+        last_force = 0.0
+        while time.time() < deadline:
+            self._click_list_tab()
+            loc = self._date_start_locator()
+            if loc is not None:
+                try:
+                    loc.scroll_into_view_if_needed(timeout=800)
+                except Exception:
+                    pass
+                try:
+                    if loc.is_visible(timeout=600):
+                        return loc
+                except Exception:
+                    pass
+                # attached nhưng Ant đang ẩn tạm — vẫn dùng để gán React value
+                return loc
+            now = time.time()
+            if now - last_force > 2.0:
+                self.goto_list(force=True)
+                last_force = now
+            else:
+                self.page.wait_for_timeout(200)
+        diag = {}
+        try:
+            diag = self.page.evaluate(
+                """() => ({
+                  url: location.href,
+                  tabs: [...document.querySelectorAll('.ant-tabs-tab')]
+                    .map((t) => (t.textContent || '').trim()).filter(Boolean).slice(0, 8),
+                  inputs: [...document.querySelectorAll('input')].slice(0, 16).map((i) => ({
+                    id: i.id || '',
+                    ph: i.getAttribute('placeholder') || '',
+                    type: i.type || '',
+                    vis: !!(i.offsetWidth || i.offsetHeight || i.getClientRects().length)
+                  }))
+                })"""
+            )
+        except Exception as e:
+            diag = {"eval_error": str(e)[:120]}
+        raise SiteChangedError(
+            f"Không thấy ô Ngày bắt đầu trên danh sách ESID: {diag}"
+        )
 
     def goto_list(self, *, force: bool = False) -> None:
         """Vào Danh sách ESID — bỏ qua reload nếu đã ở đúng màn."""
@@ -110,7 +198,7 @@ class EsidListPage:
             self.page.wait_for_load_state("domcontentloaded", timeout=3000)
         except Exception:
             pass
-        self.page.wait_for_timeout(100)
+        self.page.wait_for_timeout(150)
         self._click_list_tab()
 
     def _wait_search_results(self, last8: str = "", *, timeout_ms: int = 8000) -> bool:
@@ -355,11 +443,7 @@ class EsidListPage:
                 if self._date_vals_match_dmy(last_start, last_end, dmy):
                     return
             # Fallback gõ text — ép cả 2 ô cùng ngày
-            start = self.page.locator("#search-form_dateSearch")
-            try:
-                start.first.wait_for(state="visible", timeout=10000)
-            except Exception as e:
-                raise SiteChangedError(f"Không thấy ô Ngày bắt đầu: {e}") from e
+            start = self._ensure_list_search_form(timeout_ms=12000)
             self._set_react_input(start, dmy)
             self.page.wait_for_timeout(50)
             end = self.page.get_by_placeholder("Ngày kết thúc")
@@ -485,6 +569,8 @@ class EsidListPage:
     def search_by_flight_date(self, ymd: str, *, ymd_to: str | None = None) -> None:
         """Lọc Danh sách ESID theo ngày bay (1 ngày Ops = from=to)."""
         self.goto_list(force=False)
+        # Sau Điền / warm declare / PDF: ép lại DANH SÁCH + bộ lọc ngày
+        self._ensure_list_search_form(timeout_ms=12000)
         self.clear_awb_filters()
         self.set_flight_date_range(ymd, ymd_to)
         # Nút primary TÌM KIẾM (force — tránh overlay Ant Form)

@@ -1,6 +1,7 @@
-# TECSOPS all-in-one image cho Railway:
+# TECSOPS all-in-one image cho Railway (online, không máy kho):
 #   - Node server (Express + static + /api + socket.io + proxy /tcs-agent)
-#   - Agent Playwright headless — nhập liệu API-first từ Ops + Chrome Ext
+#   - Agent Playwright headless — ĐN/Quét/Điền/PDF từ Ops qua /tcs-agent
+# Mount volume: browser_profile_hub + browser_profile_tcs (+ output) để giữ session.
 FROM mcr.microsoft.com/playwright/python:v1.49.1-jammy
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -26,17 +27,21 @@ RUN pip install --no-cache-dir -r tcs-awb-automation/requirements-server.txt \
 COPY . .
 RUN npm run build
 
-# API-first: headless. Phone Quét/PDF qua /tcs-agent (same-origin).
-# Dual agent kho TCS: set TCS_AGENT_DUAL=1 + TCS_USERNAME_TCS / TCS_PASSWORD_TCS.
+# API-first headless — Ops online gọi same-origin /tcs-agent.
+# Dual agent kho TCS: Railway Variables TCS_AGENT_DUAL=1 + TCS_USERNAME_TCS / TCS_PASSWORD_TCS.
 ENV NODE_ENV=production \
     TCS_MOCK=0 \
     TCS_HEADLESS=1 \
     TCS_AUTO_OPEN=1 \
     TCS_CAPTCHA_OCR=1 \
     TCS_PREFER_SESSION=1 \
+    TCS_AGENT_DUAL=1 \
     TCS_AGENT_URL=http://127.0.0.1:8765 \
     TCS_AGENT_URL_TCS=http://127.0.0.1:8766 \
-    TCS_AGENT_PROXY=1
+    TCS_AGENT_PROXY=1 \
+    TCS_BROWSER_PROFILE=/app/tcs-awb-automation/browser_profile/hub \
+    TCS_BROWSER_PROFILE_TCS=/app/tcs-awb-automation/browser_profile/tcs \
+    TCS_OUTPUT_DIR=/app/tcs-awb-automation/browser_profile/output
 
 # PORT do Railway cấp; server bind 0.0.0.0:$PORT (mặc định 3001).
 EXPOSE 3001

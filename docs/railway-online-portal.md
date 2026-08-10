@@ -1,0 +1,68 @@
+# Portal TCS online trên Railway (không máy kho)
+
+Ops dùng **Playwright headless trong container Railway** qua same-origin `/tcs-agent`.
+Không cần PC kho / `portal:worker`. Chrome Ext chỉ là fallback desktop tuỳ chọn.
+
+## Kiến trúc
+
+```
+Phone / laptop → Ops (Railway HTTPS)
+                 → /tcs-agent  (Express proxy)
+                 → agent :8765 (TECS-TCS) + :8766 (TCS)
+                 → Chromium headless + cookie volume
+```
+
+Policy mặc định `auto` = **agent → Ext**.
+
+## Railway Variables (bắt buộc)
+
+| Biến | Ý nghĩa |
+|---|---|
+| `DATABASE_URL` | Postgres (đã có) |
+| `TCS_USERNAME` / `TCS_PASSWORD` | Tài khoản portal kho TECS-TCS |
+| `TCS_USERNAME_TCS` / `TCS_PASSWORD_TCS` | Tài khoản portal kho TCS |
+| `TCS_AGENT_DUAL=1` | Bật agent thứ hai :8766 |
+| `TCS_AGENT_PROXY=1` | Bật proxy `/tcs-agent` (Dockerfile đã set) |
+| `TCS_HEADLESS=1` | Headless (Dockerfile đã set) |
+| `TCS_CAPTCHA_OCR=1` | OCR CAPTCHA khi ĐN (Dockerfile đã set) |
+| `TCS_AUTO_OPEN=1` | Mở session lúc boot |
+| `TCS_PREFER_SESSION=1` | Ưu tiên cookie trong profile |
+
+## Volumes (giữ session sau redeploy)
+
+Một volume app mount:
+
+`/app/tcs-awb-automation/browser_profile`
+
+| Subdir | Env |
+|---|---|
+| `…/browser_profile/hub` | `TCS_BROWSER_PROFILE` |
+| `…/browser_profile/tcs` | `TCS_BROWSER_PROFILE_TCS` |
+| `…/browser_profile/output` | `TCS_OUTPUT_DIR` |
+
+Script thiết lập: `node scripts/railway-setup-online-portal.mjs`
+
+Region khuyến nghị: `asia-southeast1`.
+
+## Quy trình dùng trên điện thoại / máy bất kỳ
+
+1. Mở Ops bằng URL Railway (không dùng `127.0.0.1`).
+2. Chọn kho TECS-TCS hoặc TCS + ngày phiên.
+3. **Đăng nhập** — agent OCR CAPTCHA / khôi phục cookie volume.
+4. **Quét** → menu ⋮ **Điền** / **Tải PDF**.
+5. **HOÀN TẤT** trên Ops khi agent đã điền form.
+
+## CAPTCHA
+
+- Headless **không** nhập tay được — phụ thuộc `TCS_CAPTCHA_OCR` + session volume.
+- Nếu ĐN fail: kiểm tra password Variables, OCR (`ddddocr` trong image), hoặc xóa/refresh volume profile rồi ĐN lại.
+
+## Local (dev)
+
+- `npm run portal:start:both` hoặc `tcs:agent:real` — agent local headed.
+- Policy `ext-only` nếu muốn chỉ Chrome Ext trên máy dev.
+
+## Không dùng nữa
+
+- `portal:worker` / `portal:start:warehouse` (deprecated).
+- Mở Ops qua IP máy kho.

@@ -89,18 +89,35 @@ export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
     });
   }, [busyId, downloadPack, loadError, packs, refresh]);
 
-  // Luôn hiện chữ «Tải Ext» (không dùng compact ⋯) — desktop + mobile.
+  // Mobile: icon-only để không chèn/che toolbar; desktop vẫn hiện chữ «Tải Ext».
   return (
     <OverflowMenu
       label="Tải Ext"
-      compact={false}
+      compact={compact}
       align="right"
       items={items}
       triggerClassName={
         compact
-          ? "inline-flex h-9 items-center justify-center gap-0.5 rounded-xl border border-sky-500/35 bg-sky-50 px-2 text-[11px] font-bold text-sky-900 shadow-ui-sm transition hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+          ? "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky-500/35 bg-sky-50 text-sky-900 shadow-ui-sm transition hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus touch-manipulation"
           : "inline-flex min-h-9 items-center gap-1 rounded-xl border border-sky-500/35 bg-sky-50 px-2.5 text-[12px] font-bold text-sky-900 shadow-ui-sm transition hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
       }
-    />
+    >
+      {compact ? (
+        <svg
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.25}
+          viewBox="0 0 24 24"
+          aria-hidden
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12l4.5 4.5L16.5 12M12 3v13.5"
+          />
+        </svg>
+      ) : null}
+    </OverflowMenu>
   );
 }

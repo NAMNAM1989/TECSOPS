@@ -11,8 +11,8 @@ export function AppShell({
   maxWidthClass?: string;
 }) {
   return (
-    <div className={`mx-auto min-w-0 ${maxWidthClass} px-2 py-1 sm:px-3 sm:py-1.5 lg:px-4`}>
-      <div className="sticky top-0 z-40 -mx-2 mb-1 min-w-0 border-b border-ui-border bg-ui-background px-2 pb-1 pt-[max(0.15rem,env(safe-area-inset-top))] sm:-mx-3 sm:mb-1.5 sm:px-3 sm:pb-1.5 sm:pt-1 lg:-mx-4 lg:px-4">
+    <div className={`mx-auto min-w-0 ${maxWidthClass} px-3 py-1.5 sm:px-3 sm:py-1.5 lg:px-4`}>
+      <div className="sticky top-0 z-40 -mx-3 mb-1.5 min-w-0 border-b border-ui-border bg-ui-background px-3 pb-1.5 pt-[max(0.25rem,env(safe-area-inset-top))] sm:-mx-3 sm:mb-1.5 sm:px-3 sm:pb-1.5 sm:pt-1 lg:-mx-4 lg:px-4">
         {chrome}
       </div>
       <div className="min-w-0">{children}</div>

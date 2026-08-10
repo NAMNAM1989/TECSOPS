@@ -36,7 +36,7 @@ export function OpsSheetImportButton({
         aria-label="Nhập Sheet"
         onPointerDown={() => onPrefetchSheetImport?.()}
         onClick={onOpenSheetImport}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-ui-border bg-ui-surface font-semibold text-ui-text shadow-ui-sm transition hover:border-emerald-500/40 hover:bg-emerald-50/80 active:scale-[0.98]"
+        className="inline-flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface font-semibold text-ui-text shadow-ui-sm transition hover:border-emerald-500/40 hover:bg-emerald-50/80 active:scale-[0.98]"
       >
         {icon}
       </button>

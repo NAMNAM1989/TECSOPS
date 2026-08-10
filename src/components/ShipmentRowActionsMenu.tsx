@@ -171,6 +171,9 @@ export function ShipmentRowActionsMenu({
     !compact && showTcsEsid && awbDigitsKey(row.awb).length === 11;
   const showEcargo = isEcargoScscWarehouse(row.warehouse) && Boolean(ecargo);
   const showCsd = canPrintCsd(row);
+  /** Mobile card: eC / CSD vào menu ⋮ — tránh che AWB và nút nhỏ khó bấm. */
+  const showEcargoInline = showEcargo && !compact;
+  const showCsdInline = showCsd && !compact;
   const csdCarrier = csdCarrierForShipment(row);
   const csdProfile = csdCarrier ? getCsdCarrierProfile(csdCarrier) : null;
   const [csdOpen, setCsdOpen] = useState(false);
@@ -181,6 +184,7 @@ export function ShipmentRowActionsMenu({
     (showTcsEsid ? 1 : 0) +
     (showFillEsid ? 1 : 0) +
     (showCsd ? 1 : 0) +
+    (compact && showEcargo ? 1 : 0) +
     1;
 
   const confirmDelete = () => {
@@ -274,6 +278,16 @@ export function ShipmentRowActionsMenu({
         className={OPS.dropdown}
       >
         {compact ? menuItem("In nhãn", () => onPrint(row)) : null}
+        {compact && showEcargo
+          ? menuItem(
+              "Đăng ký eCargo",
+              () => {
+                ecargo?.openForShipment(row.id);
+              },
+              undefined,
+              `row-ecargo-${row.id}`,
+            )
+          : null}
         {showDim
           ? menuItem("Excel LIST DIM", () => {
               void import("../utils/exportScscDimListExcel").then((m) =>
@@ -329,7 +343,14 @@ export function ShipmentRowActionsMenu({
     ) : null;
 
   return (
-    <div ref={wrapRef} className={OPS.actionToolbar}>
+    <div
+      ref={wrapRef}
+      className={
+        compact
+          ? "inline-flex shrink-0 items-center"
+          : OPS.actionToolbar
+      }
+    >
       {!compact ? (
         <>
           <ActionIconBtn label="In nhãn vận chuyển" onClick={() => onPrint(row)}>
@@ -350,7 +371,7 @@ export function ShipmentRowActionsMenu({
           ) : null}
         </>
       ) : null}
-      {showEcargo ? (
+      {showEcargoInline ? (
         <button
           type="button"
           title="Đăng ký eCargo lô này"
@@ -362,17 +383,11 @@ export function ShipmentRowActionsMenu({
           }}
           className="inline-flex h-7 items-center rounded-md border border-emerald-500/35 bg-emerald-50 px-1.5 text-[10px] font-bold text-emerald-900 hover:bg-emerald-100"
         >
-          {compact ? (
-            "eC"
-          ) : (
-            <>
-              <IconEcargo />
-              <span className="ml-0.5">eCargo</span>
-            </>
-          )}
+          <IconEcargo />
+          <span className="ml-0.5">eCargo</span>
         </button>
       ) : null}
-      {showCsd && csdCarrier && csdProfile ? (
+      {showCsdInline && csdCarrier && csdProfile ? (
         <button
           type="button"
           title={`In CSD ${csdCarrier} (${csdProfile.airlineName}) — nhập Transit rồi in`}
@@ -384,14 +399,8 @@ export function ShipmentRowActionsMenu({
           }}
           className="inline-flex h-7 items-center rounded-md border border-rose-500/35 bg-rose-50 px-1.5 text-[10px] font-bold text-rose-900 hover:bg-rose-100"
         >
-          {compact ? (
-            `CSD`
-          ) : (
-            <>
-              <IconCsd />
-              <span className="ml-0.5">CSD {csdCarrier}</span>
-            </>
-          )}
+          <IconCsd />
+          <span className="ml-0.5">CSD {csdCarrier}</span>
         </button>
       ) : null}
       <button
@@ -408,7 +417,11 @@ export function ShipmentRowActionsMenu({
           if (menuOpen) closeMenu();
           else openMenu();
         }}
-        className={`${OPS.actionIcon} ${menuOpen ? OPS.actionIconOpen : ""}`}
+        className={`${
+          compact
+            ? "inline-flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-text shadow-sm transition-colors hover:bg-ui-surface-muted focus:outline-none focus:ring-2 focus:ring-ui-focus"
+            : OPS.actionIcon
+        } ${menuOpen ? OPS.actionIconOpen : ""}`}
       >
         <IconKebabVertical />
       </button>

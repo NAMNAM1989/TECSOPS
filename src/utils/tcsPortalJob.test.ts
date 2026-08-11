@@ -171,7 +171,7 @@ describe("tcsPortalJob", () => {
     ).toEqual(["3"]);
   });
 
-  it("canFillEsidForPortal: đúng kho + đã HT tiếp nhận", () => {
+  it("canFillEsidForPortal: đúng kho + AWB — không bắt HT Ops", () => {
     const ok = canFillEsidForPortal(
       row({
         id: "1",
@@ -194,7 +194,8 @@ describe("tcsPortalJob", () => {
       "TECS-TCS"
     );
     expect(wrongWh.ok).toBe(false);
-    const notReady = canFillEsidForPortal(
+    if (!wrongWh.ok) expect(wrongWh.code).toBe("PORTAL_MISMATCH");
+    const beforeHt = canFillEsidForPortal(
       row({
         id: "1",
         awb: "12312345678",
@@ -204,6 +205,17 @@ describe("tcsPortalJob", () => {
       }),
       "TECS-TCS"
     );
-    expect(notReady.ok).toBe(false);
+    expect(beforeHt.ok).toBe(true);
+    const volume = canFillEsidForPortal(
+      row({
+        id: "2",
+        awb: "12312345679",
+        warehouse: "TCS",
+        sessionDate: "2026-07-17",
+        status: "VOLUME_MEASURED",
+      }),
+      "TCS"
+    );
+    expect(volume.ok).toBe(true);
   });
 });

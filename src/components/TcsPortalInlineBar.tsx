@@ -264,8 +264,8 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
           }}
           title={
             tcs.pendingReceptionCount > 0
-              ? `Quét tiếp nhận — đối soát ${tcs.pendingReceptionCount} AWB chưa HT tiếp nhận (kho ${portalWh})`
-              : `Quét tiếp nhận ngày phiên — chỉ cập nhật lô chưa RECEPTION_COMPLETED (kho ${portalWh})`
+              ? `Quét — cập nhật status Ops HT cho ${tcs.pendingReceptionCount} AWB (kho ${portalWh}). Không tạo phiếu ESID.`
+              : `Quét — đối soát HT trên TCS rồi cập nhật status Ops (kho ${portalWh}). Điền phiếu ESID dùng menu ⋮ → Điền.`
           }
         >
           {compact
@@ -297,8 +297,8 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
       {!compact && canOperate && !tcs.busy ? (
         <p className="px-1 text-[9px] leading-snug text-ui-text-muted">
           {usesAgent
-            ? "Online: ĐN → Quét → menu ⋮ → Điền / Tải PDF qua Playwright trên Railway (không máy kho)."
-            : "Quy trình Ext: Đăng nhập → Quét → menu ⋮ → Điền → HOÀN TẤT trên TCS."}
+            ? "Online: ĐN → menu ⋮ → Điền (tạo phiếu ESID) / Tải PDF. Quét chỉ cập nhật HT trên Ops — tách riêng."
+            : "Ext: ĐN → menu ⋮ → Điền (tạo phiếu ESID) → HOÀN TẤT trên TCS. Quét chỉ cập nhật HT Ops."}
         </p>
       ) : null}
 

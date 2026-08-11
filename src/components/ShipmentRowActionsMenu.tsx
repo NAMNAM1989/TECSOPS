@@ -311,7 +311,7 @@ export function ShipmentRowActionsMenu({
               },
               undefined,
               `row-fill-esid-${row.id}`,
-              "Điền ESID từng lô — đúng kho đang chọn + đã Quét (HT tiếp nhận). Kiểm tra form rồi HOÀN TẤT trên TCS."
+              "Điền = tạo phiếu khai báo ESID trên TCS (đúng kho đang chọn). Không phụ thuộc Quét HT. Kiểm tra form rồi HOÀN TẤT."
             )
           : null}
         {showTcsEsid

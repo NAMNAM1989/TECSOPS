@@ -787,7 +787,7 @@ export function useTcsPortalActions({
     [ensureSessionReady, executorPolicy, preferRemotePortal, sessionYmd]
   );
 
-  /** Điền ESID từng lô — đúng kho đang thao tác + đã HT tiếp nhận. */
+  /** Điền ESID = tạo phiếu khai báo trên TCS — độc lập với Quét HT Ops. */
   const fillEsidDeclareFor = useCallback(
     async (shipment: Shipment) => {
       setError("");

@@ -115,29 +115,43 @@ export function shipmentsToMarkReceptionCompleted(
   });
 }
 
+/**
+ * Kết quả gate Điền ESID (= tạo phiếu khai báo).
+ * Không phụ thuộc status HT Ops — Quét là bước riêng cập nhật bảng Ops.
+ */
+export type CanFillEsidResult =
+  | { ok: true }
+  | {
+      ok: false;
+      code: "WAREHOUSE" | "PORTAL_MISMATCH" | "AWB";
+      reason: string;
+    };
+
 /** Điều kiện Điền ESID từng lô theo kho đang thao tác. */
 export function canFillEsidForPortal(
   shipment: Shipment,
   portalWarehouse: TcsPortalWarehouse
-): { ok: true } | { ok: false; reason: string } {
+): CanFillEsidResult {
   const rowPortal = asTcsPortalWarehouse(shipment.warehouse);
   if (!rowPortal) {
-    return { ok: false, reason: "Chỉ kho TECS-TCS / TCS mới điền khai báo ESID." };
+    return {
+      ok: false,
+      code: "WAREHOUSE",
+      reason: "Chỉ kho TECS-TCS / TCS mới điền khai báo ESID.",
+    };
   }
   if (rowPortal !== portalWarehouse) {
     return {
       ok: false,
+      code: "PORTAL_MISMATCH",
       reason: `Đang thao tác kho ${portalWarehouse} — chọn kho ${rowPortal} trên Ops rồi Điền lại.`,
     };
   }
   if (awbDigitsKey(shipment.awb).length !== 11) {
-    return { ok: false, reason: "AWB phải đủ 11 số để điền ESID." };
-  }
-  if (!isOpsReceptionAlreadyDone(shipment.status)) {
     return {
       ok: false,
-      reason:
-        "Chỉ điền lô đã Hoàn thành tiếp nhận — bấm «Quét tiếp nhận» trước (đúng kho + ngày).",
+      code: "AWB",
+      reason: "AWB phải đủ 11 số để điền ESID.",
     };
   }
   return { ok: true };

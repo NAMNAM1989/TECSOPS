@@ -849,6 +849,11 @@ export function useTcsPortalActions({
             version: "",
           } as TcsExtResult;
 
+        let lastAgentFail: {
+          ok: false;
+          error?: string;
+          message?: string;
+        } | null = null;
         for (const ex of fillOrder) {
           if (ex === "agent") {
             executor = "playwright";
@@ -864,18 +869,36 @@ export function useTcsPortalActions({
               res = await declareFillTcsEsid(payload, { warehouse: rowPortal });
             }
             if (res.ok) break;
+            lastAgentFail = {
+              ok: false,
+              error: res.error,
+              message: res.message,
+            };
             continue;
           }
           if (ex === "extension") {
             if (!ext.ok || !ext.workspace?.logged_in) {
-              res = {
-                ok: false,
-                error: "SKIP_EXT",
-                message: !ext.ok
-                  ? `Cần ${tcsExtLabel(rowPortal)} online`
-                  : `Cần ĐN ${tcsExtLabel(rowPortal)} trước khi Điền`,
-                version: "",
-              } as TcsExtResult;
+              // Không che lỗi agent bằng SKIP_EXT khi browser không có Ext.
+              if (!lastAgentFail) {
+                res = {
+                  ok: false,
+                  error: "SKIP_EXT",
+                  message: !ext.ok
+                    ? `Cần ${tcsExtLabel(rowPortal)} online`
+                    : `Cần ĐN ${tcsExtLabel(rowPortal)} trước khi Điền`,
+                  version: "",
+                } as TcsExtResult;
+              } else {
+                res = {
+                  ok: false,
+                  error: lastAgentFail.error || "AGENT_FILL_FAILED",
+                  message:
+                    lastAgentFail.message ||
+                    lastAgentFail.error ||
+                    "Điền ESID thất bại trên agent cloud",
+                  version: "",
+                } as TcsExtResult;
+              }
               continue;
             }
             executor = "extension";
@@ -895,7 +918,10 @@ export function useTcsPortalActions({
         const sec = ((performance.now() - t0) / 1000).toFixed(1);
         if (!res.ok) {
           setError(
-            res.message ||
+            (lastAgentFail && (!ext.ok || !ext.workspace?.logged_in)
+              ? lastAgentFail.message || lastAgentFail.error
+              : null) ||
+              res.message ||
               res.error ||
               "Điền ESID thất bại — kiểm tra agent cloud hoặc Ext."
           );

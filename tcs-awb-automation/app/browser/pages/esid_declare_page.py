@@ -869,6 +869,16 @@ class EsidDeclarePage:
                 except Exception:
                     return
 
+    def _flight_date_value_matches(self, got: str, ymd: str) -> bool:
+        """Chấp nhận MM-DD-YYYY / MM/DD/YYYY / YYYY-MM-DD."""
+        want = self._ymd_to_mdy(ymd)
+        g = re.sub(r"[^0-9]", "", (got or "").strip())
+        w = re.sub(r"[^0-9]", "", want)
+        if g and w and g == w:
+            return True
+        ymd_digits = re.sub(r"[^0-9]", "", (ymd or "").strip())
+        return bool(g and ymd_digits and g == ymd_digits)
+
     def _select_modal_flight_date(self, modal, ymd: str) -> bool:
         """Chọn ngày bằng Ant DatePicker; không gán text vào input readonly."""
         target_text = (ymd or "").strip()
@@ -876,6 +886,7 @@ class EsidDeclarePage:
             target = datetime.strptime(target_text, "%Y-%m-%d")
         except ValueError:
             return False
+        want_mdy = self._ymd_to_mdy(target_text)
         date_input = modal.locator("#flightDate").first
         if date_input.count() == 0:
             return False
@@ -883,18 +894,104 @@ class EsidDeclarePage:
             current_value = date_input.input_value(timeout=500)
         except Exception:
             current_value = ""
-        try:
-            current = datetime.strptime(current_value, "%m-%d-%Y")
-        except ValueError:
-            current = datetime.now()
+        if self._flight_date_value_matches(current_value, target_text):
+            return True
 
+        # Hot-path JS (giống Ext): picker Ant thường portal ra body, ngoài modal.
+        try:
+            ok = bool(
+                self.page.evaluate(
+                    """({ ymd, wantMdy }) => {
+                      const input = document.querySelector('#flightDate');
+                      if (!input) return false;
+                      const visible = (el) => {
+                        if (!el) return false;
+                        const st = window.getComputedStyle(el);
+                        if (st.display === 'none' || st.visibility === 'hidden') return false;
+                        const r = el.getBoundingClientRect();
+                        return r.width > 0 && r.height > 0;
+                      };
+                      const click = (el) => {
+                        if (!el) return;
+                        el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                        el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                        el.click();
+                      };
+                      const parseMdy = (s) => {
+                        const m = /^(\\d{2})-(\\d{2})-(\\d{4})$/.exec(String(s || '').trim());
+                        return m ? { y: +m[3], m: +m[1], d: +m[2] } : null;
+                      };
+                      const parseYmd = (s) => {
+                        const m = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(String(s || '').trim());
+                        return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+                      };
+                      const tgt = parseYmd(ymd);
+                      if (!tgt) return false;
+                      const cur = parseMdy(input.value) || tgt;
+                      const monthDelta = (tgt.y - cur.y) * 12 + (tgt.m - cur.m);
+                      if (Math.abs(monthDelta) > 24) return false;
+                      click(input);
+                      const popupOf = () => [...document.querySelectorAll(
+                        '.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)'
+                      )].filter(visible).at(-1);
+                      let popup = popupOf();
+                      if (!popup) return false;
+                      const navSel = monthDelta > 0
+                        ? '.ant-picker-header-next-btn'
+                        : '.ant-picker-header-prev-btn';
+                      for (let i = 0; i < Math.abs(monthDelta); i++) {
+                        const nav = popup.querySelector(navSel);
+                        if (!nav) return false;
+                        click(nav);
+                        popup = popupOf() || popup;
+                      }
+                      const titles = [ymd, wantMdy,
+                        `${String(tgt.m).padStart(2,'0')}/${String(tgt.d).padStart(2,'0')}/${tgt.y}`,
+                        `${tgt.y}/${String(tgt.m).padStart(2,'0')}/${String(tgt.d).padStart(2,'0')}`
+                      ];
+                      let cell = null;
+                      for (const t of titles) {
+                        cell = popup.querySelector(
+                          `td[title="${t}"]:not(.ant-picker-cell-disabled)`
+                        );
+                        if (cell) break;
+                      }
+                      if (!cell) {
+                        const day = String(tgt.d);
+                        cell = [...popup.querySelectorAll(
+                          'td.ant-picker-cell-in-view:not(.ant-picker-cell-disabled)'
+                        )].find((td) => {
+                          const inner = td.querySelector('.ant-picker-cell-inner');
+                          return String(inner?.textContent || '').trim() === day;
+                        }) || null;
+                      }
+                      if (!cell) return false;
+                      click(cell.querySelector('.ant-picker-cell-inner') || cell);
+                      const got = String(input.value || '').trim().replace(/[^0-9]/g, '');
+                      const want = String(wantMdy || '').replace(/[^0-9]/g, '');
+                      const ymdDigits = String(ymd || '').replace(/[^0-9]/g, '');
+                      return got === want || got === ymdDigits;
+                    }""",
+                    {"ymd": target_text, "wantMdy": want_mdy},
+                )
+            )
+            if ok:
+                self.page.wait_for_timeout(80)
+                return True
+        except Exception:
+            pass
+
+        # Fallback Playwright locator (headed / popup chậm).
         try:
             date_input.click(timeout=1200, force=True)
             popup = self.page.locator(
-                ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden):visible"
+                ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)"
             ).last
-            popup.wait_for(state="visible", timeout=1800)
-
+            popup.wait_for(state="visible", timeout=2500)
+            try:
+                current = datetime.strptime(current_value, "%m-%d-%Y")
+            except ValueError:
+                current = datetime.now()
             month_delta = (
                 (target.year - current.year) * 12
                 + target.month
@@ -913,16 +1010,34 @@ class EsidDeclarePage:
                     return False
                 nav.evaluate("el => el.click()")
                 self.page.wait_for_timeout(80)
-
-            cell = popup.locator(
-                f"td[title='{target_text}']:not(.ant-picker-cell-disabled)"
-            ).last
-            if cell.count() == 0:
+            cell = None
+            for title in (
+                target_text,
+                want_mdy,
+                target.strftime("%m/%d/%Y"),
+                target.strftime("%Y/%m/%d"),
+            ):
+                cand = popup.locator(
+                    f"td[title='{title}']:not(.ant-picker-cell-disabled)"
+                ).last
+                if cand.count() > 0:
+                    cell = cand
+                    break
+            if cell is None:
+                day = str(target.day)
+                cand = popup.locator(
+                    "td.ant-picker-cell-in-view:not(.ant-picker-cell-disabled)"
+                ).filter(has_text=re.compile(rf"^{day}$"))
+                if cand.count() > 0:
+                    cell = cand.first
+            if cell is None:
                 return False
-            cell.evaluate("el => el.click()")
+            cell.evaluate(
+                "el => (el.querySelector('.ant-picker-cell-inner') || el).click()"
+            )
             self.page.wait_for_timeout(140)
             got = date_input.input_value(timeout=500)
-            return got == self._ymd_to_mdy(target_text)
+            return self._flight_date_value_matches(got, target_text)
         except Exception:
             return False
 
@@ -1021,15 +1136,46 @@ class EsidDeclarePage:
                 "warnings": ["Không bấm được nút CHỌN CHUYẾN BAY"],
             }
 
-        self.page.wait_for_timeout(200)
-        modal = self.page.locator(
-            ".ant-modal:visible, [role=dialog]:visible"
-        ).filter(
-            has_text=re.compile(r"Danh\s*sách\s*chuyến\s*bay|flight", re.I)
-        ).last
-        try:
-            modal.wait_for(state="visible", timeout=4000)
-        except Exception:
+        # Chờ modal danh sách — khớp Ext: có #flightNo (+ search/table), không
+        # chỉ dựa title "Danh sách chuyến bay" (TCS đổi copy / chậm headless).
+        modal = None
+        deadline = time.perf_counter() + 8.0
+        while time.perf_counter() < deadline:
+            try:
+                by_field = self.page.locator(
+                    ".ant-modal:visible, [role=dialog]:visible"
+                ).filter(has=self.page.locator("#flightNo"))
+                if by_field.count() > 0 and by_field.last.is_visible(timeout=200):
+                    modal = by_field.last
+                    break
+            except Exception:
+                pass
+            try:
+                by_text = self.page.locator(
+                    ".ant-modal:visible, [role=dialog]:visible"
+                ).filter(
+                    has_text=re.compile(
+                        r"Danh\s*sách\s*chuyến\s*bay|chuyến\s*bay|flight",
+                        re.I,
+                    )
+                )
+                if by_text.count() > 0 and by_text.last.is_visible(timeout=200):
+                    # Tránh nhầm popup «Đồng ý chọn chuyến bay»
+                    txt = (by_text.last.inner_text(timeout=300) or "").lower()
+                    has_flight_field = by_text.last.locator("#flightNo").count() > 0
+                    if (
+                        not has_flight_field
+                        and "đồng ý" in txt
+                        and "chọn chuyến" in txt
+                    ):
+                        pass
+                    else:
+                        modal = by_text.last
+                        break
+            except Exception:
+                pass
+            self.page.wait_for_timeout(200)
+        if modal is None:
             return {
                 "ok": False,
                 "flight_ok": False,

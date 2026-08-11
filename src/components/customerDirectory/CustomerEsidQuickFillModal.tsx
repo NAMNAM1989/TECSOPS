@@ -1,12 +1,24 @@
 import { useState, useMemo, useEffect } from "react";
 import type { CustomerDirectoryEntry } from "../../types/customerDirectory";
 import type { Shipment } from "../../types/shipment";
-import { getActiveEsidRegistrant } from "../../utils/esidRegistrantProfile";
-import { getActiveEsidAgent } from "../../utils/esidAgentProfile";
+import {
+  getActiveEsidRegistrant,
+  registrantIsComplete,
+} from "../../utils/esidRegistrantProfile";
+import {
+  agentIsComplete,
+  getActiveEsidAgent,
+} from "../../utils/esidAgentProfile";
 import { buildEsidDeclareFillPayload } from "../../utils/buildEsidDeclareFillPayload";
 import {
+  formatQuickFillError,
+  resolveQuickFillWarehouse,
+} from "../../utils/customerEsidQuickFill";
+import {
   fillEsidViaExtension,
+  isPortalBusyExtError,
   pingTcsExtension,
+  type TcsPortalExtWarehouse,
 } from "../../utils/tcsChromeExtension";
 import { declareFillTcsEsid } from "../../utils/tcsPortalAgentApi";
 
@@ -14,9 +26,16 @@ type Props = {
   open: boolean;
   customer: CustomerDirectoryEntry | null;
   onClose: () => void;
+  /** Kho portal mặc định khi mở modal (từ Ops filter nếu có). */
+  defaultWarehouse?: TcsPortalExtWarehouse;
 };
 
-export function CustomerEsidQuickFillModal({ open, customer, onClose }: Props) {
+export function CustomerEsidQuickFillModal({
+  open,
+  customer,
+  onClose,
+  defaultWarehouse = "TECS-TCS",
+}: Props) {
   const [awb, setAwb] = useState("");
   const [flightNo, setFlightNo] = useState("");
   const [flightDate, setFlightDate] = useState("");
@@ -26,6 +45,8 @@ export function CustomerEsidQuickFillModal({ open, customer, onClose }: Props) {
   const [selectedShipperId, setSelectedShipperId] = useState<string>("");
   const [selectedConsigneeId, setSelectedConsigneeId] = useState<string>("");
   const [selectedGoodsId, setSelectedGoodsId] = useState<string>("");
+  const [portalWarehouse, setPortalWarehouse] =
+    useState<TcsPortalExtWarehouse>(defaultWarehouse);
 
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
@@ -48,9 +69,10 @@ export function CustomerEsidQuickFillModal({ open, customer, onClose }: Props) {
     setSelectedShipperId(defShipper?.id ?? "");
     setSelectedConsigneeId(defCnee?.id ?? "");
     setSelectedGoodsId(defGoods?.id ?? "");
+    setPortalWarehouse(resolveQuickFillWarehouse(defaultWarehouse));
     setStatusMsg("");
     setErrorMsg("");
-  }, [customer]);
+  }, [customer, defaultWarehouse]);
 
   const currentShipper = useMemo(() => {
     return shippers.find((s) => s.id === selectedShipperId) ?? shippers[0];
@@ -74,8 +96,21 @@ export function CustomerEsidQuickFillModal({ open, customer, onClose }: Props) {
     setLoading(true);
 
     try {
+      const warehouse = resolveQuickFillWarehouse(portalWarehouse);
       const registrant = getActiveEsidRegistrant();
       const agent = getActiveEsidAgent();
+      if (!registrantIsComplete(registrant)) {
+        setErrorMsg(
+          "Chưa có Người khai ESID. Mở Ops → thanh TCS → «Người khai» trước khi điền.",
+        );
+        return;
+      }
+      if (!agentIsComplete(agent)) {
+        setErrorMsg(
+          "Chưa có Agent cố định. Mở Ops → thanh TCS → «Agent» trước khi điền.",
+        );
+        return;
+      }
 
       const synthShipment: Shipment = {
         id: `synth-${Date.now()}`,
@@ -96,7 +131,7 @@ export function CustomerEsidQuickFillModal({ open, customer, onClose }: Props) {
         status: "PENDING",
         customerCode: customer.code,
         customer: customer.name,
-        warehouse: "TECS-TCS",
+        warehouse,
         shipperNamePrint: currentShipper?.shipperName || customer.name,
         shipperAddressPrint:
           currentShipper?.shipperAddress || customer.address || "",
@@ -119,30 +154,30 @@ export function CustomerEsidQuickFillModal({ open, customer, onClose }: Props) {
         setErrorMsg(
           "Vui lòng nhập đúng định dạng số AWB (VD: 232-18253045 hoặc 23218253045)",
         );
-        setLoading(false);
         return;
       }
 
-      setStatusMsg("Đang gửi thông tin Hồ sơ Khách hàng lên cổng TCS...");
-      const ext = await pingTcsExtension();
+      const extOpts = { warehouse };
+      setStatusMsg(`Đang điền qua kho ${warehouse}…`);
+      const ext = await pingTcsExtension(extOpts);
 
       let res;
       if (ext.ok) {
-        res = await fillEsidViaExtension(payload);
+        res = await fillEsidViaExtension(payload, extOpts);
+        if (isPortalBusyExtError(res)) {
+          setErrorMsg(formatQuickFillError(res));
+          return;
+        }
       } else {
-        res = await declareFillTcsEsid(payload);
+        res = await declareFillTcsEsid(payload, { warehouse });
       }
 
       if (res.ok) {
         setStatusMsg(
-          "✅ Đã điền 100% thông tin từ Hồ sơ Khách hàng vào form TCS! Vui lòng kiểm tra tab TCS.",
+          `Đã điền hồ sơ KH vào form TCS (kho ${warehouse}). Kiểm tra tab portal rồi HOÀN TẤT.`,
         );
       } else {
-        setErrorMsg(
-          res.message ||
-            res.error ||
-            "Điền eSID thất bại. Đảm bảo đã mở tab TCS.",
-        );
+        setErrorMsg(formatQuickFillError(res));
       }
     } catch (err) {
       setErrorMsg(
@@ -247,6 +282,23 @@ export function CustomerEsidQuickFillModal({ open, customer, onClose }: Props) {
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
               Thông tin Số hiệu (Nhập hoặc dán nhanh):
             </span>
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">
+                Kho portal (Ext / Agent):
+              </label>
+              <select
+                value={portalWarehouse}
+                onChange={(e) =>
+                  setPortalWarehouse(
+                    resolveQuickFillWarehouse(e.target.value)
+                  )
+                }
+                className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-amber-500 focus:outline-none"
+              >
+                <option value="TECS-TCS">TECS-TCS (Ext TECS-TCS · agent :8765)</option>
+                <option value="TCS">TCS (Ext kho TCS · agent :8766)</option>
+              </select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-400 block mb-1">

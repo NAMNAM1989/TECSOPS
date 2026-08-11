@@ -114,22 +114,35 @@ def fill_esid_declare(
         return gate
 
     # Đưa Chrome lên trước khi điền (headed máy kho)
-    sessions.focus_workspace_page("declare")
-
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
-    declare_page = sessions.workspace_page("declare", url="https://www.tcs.com.vn/Esid/Export")
+    declare_page = sessions.workspace_page(
+        "declare",
+        url="https://www.tcs.com.vn/Esid/Export",
+        recover_login=True,
+    )
+    sessions.focus_workspace_page("declare")
     portal = AwbPortalPage(declare_page, loc)
     declare = EsidDeclarePage(declare_page, loc)
     docs_dir = settings.output_dir / "docs"
     t0 = time_ms()
     try:
         if portal.is_login_page():
-            return {
-                "ok": False,
-                "error": "NEEDS_LOGIN",
-                "message": "Đang ở trang login",
-                "awb": awb,
-            }
+            # Fallback: điền trên tab list nếu tab declare phụ vẫn login.
+            list_page = sessions.workspace_page(
+                "list", url="https://www.tcs.com.vn/Esid/Export"
+            )
+            list_portal = AwbPortalPage(list_page, loc)
+            if list_portal.is_login_page():
+                return {
+                    "ok": False,
+                    "error": "NEEDS_LOGIN",
+                    "message": "Đang ở trang login",
+                    "awb": awb,
+                }
+            declare_page = list_page
+            portal = list_portal
+            declare = EsidDeclarePage(declare_page, loc)
+            sessions.focus_workspace_page("list")
         result = declare.fill_declare(data, submit=submit)
         # Ảnh preview phụ (Ops từ máy khác); headed: cửa sổ Chrome máy kho là nguồn kiểm tra
         if result.get("ok") and not result.get("submitted"):
@@ -198,23 +211,35 @@ def submit_esid_declare(
         gate["submitted"] = False
         return gate
 
-    sessions.focus_workspace_page("declare")
-
     loc = LocatorsConfig.load(locators_path(settings.discovery_dir))
-    declare_page = sessions.workspace_page("declare", url="https://www.tcs.com.vn/Esid/Export")
+    declare_page = sessions.workspace_page(
+        "declare",
+        url="https://www.tcs.com.vn/Esid/Export",
+        recover_login=True,
+    )
+    sessions.focus_workspace_page("declare")
     portal = AwbPortalPage(declare_page, loc)
     declare = EsidDeclarePage(declare_page, loc)
     docs_dir = settings.output_dir / "docs"
     t0 = time_ms()
     try:
         if portal.is_login_page():
-            return {
-                "ok": False,
-                "error": "NEEDS_LOGIN",
-                "message": "Đang ở trang login",
-                "awb": awb,
-                "submitted": False,
-            }
+            list_page = sessions.workspace_page(
+                "list", url="https://www.tcs.com.vn/Esid/Export"
+            )
+            list_portal = AwbPortalPage(list_page, loc)
+            if list_portal.is_login_page():
+                return {
+                    "ok": False,
+                    "error": "NEEDS_LOGIN",
+                    "message": "Đang ở trang login",
+                    "awb": awb,
+                    "submitted": False,
+                }
+            declare_page = list_page
+            portal = list_portal
+            declare = EsidDeclarePage(declare_page, loc)
+            sessions.focus_workspace_page("list")
         result = declare.submit_open_declare(awb)
         # Ảnh sau submit (thành công hoặc lỗi) để Ops đối chiếu
         preview = declare.capture_preview(docs_dir, awb)

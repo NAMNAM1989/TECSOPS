@@ -86,7 +86,29 @@ class SessionManager:
         except Exception:
             return False
 
-    def workspace_page(self, role: str = "list", *, url: str | None = None):
+    def reset_workspace_page(self, role: str) -> None:
+        """Đóng và bỏ cache page phụ (không đụng page list chính)."""
+        if role == "list":
+            return
+        pages = getattr(self, "_workspace_pages", None)
+        if not pages:
+            return
+        page = pages.pop(role, None)
+        if page is None:
+            return
+        try:
+            if self._page_alive(page):
+                page.close()
+        except Exception:
+            pass
+
+    def workspace_page(
+        self,
+        role: str = "list",
+        *,
+        url: str | None = None,
+        recover_login: bool = False,
+    ):
         """Lấy/tạo page theo vai trò nhưng vẫn dùng chung session đăng nhập."""
         if not self._has_live_session() or self.session is None:
             if self.session is not None:
@@ -105,6 +127,35 @@ class SessionManager:
                 page = self.session.new_page(url)
                 pages[role] = page
                 url = None
+
+        # Tab declare phụ có thể kẹt trang login dù list vẫn Đã ĐN (cookie chung
+        # nhưng tab cũ redirect/login stale). Tạo lại tab khi list còn session.
+        if (
+            recover_login
+            and role != "list"
+            and page is not None
+            and self.session is not None
+        ):
+            try:
+                from app.browser.pages.awb_page import AwbPortalPage
+
+                self.reload_locators()
+                if AwbPortalPage(page, self.locators).is_login_page():
+                    list_ok = False
+                    try:
+                        list_ok = not AwbPortalPage(
+                            self.session.page, self.locators
+                        ).is_login_page()
+                    except Exception:
+                        list_ok = False
+                    if list_ok:
+                        self.reset_workspace_page(role)
+                        page = self.session.new_page(url)
+                        pages[role] = page
+                        url = None
+            except Exception:
+                pass
+
         if url and page is not None:
             current = str(getattr(page, "url", "") or "")
             if url.lower() not in current.lower():

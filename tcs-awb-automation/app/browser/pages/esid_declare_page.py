@@ -1717,30 +1717,91 @@ class EsidDeclarePage:
             modal = self.page.locator(
                 ".ant-modal-wrap:not(.ant-modal-wrap-hidden) .ant-modal:visible, "
                 "[role=dialog]:visible"
-            ).last
+            ).filter(has=self.page.locator("#flightNo")).last
+        # Re-score ngay trước click — index có thể lệch sau virtualization/pagination.
+        try:
+            fresh = modal.evaluate(
+                _PICK_ROWS_JS,
+                {
+                    "wantFlight": want_flight,
+                    "dateToks": list(date_toks),
+                    "ddmon": ddmon,
+                },
+            ) or {}
+            if fresh.get("ok"):
+                pick["index"] = fresh.get("index")
+                pick["text"] = fresh.get("text") or pick.get("text")
+                pick["count"] = fresh.get("count")
+                pick["rescored"] = True
+        except Exception:
+            pass
         row_idx = int(pick.get("index") or 0)
         radio_ok = False
         try:
-            rows_loc = modal.locator(
-                ".ant-table-tbody > tr.ant-table-row, .ant-table-tbody tr"
-            )
-            if rows_loc.count() == 0:
-                rows_loc = modal.locator("table tbody tr")
-            target = rows_loc.nth(row_idx)
-            for sel in (".ant-radio-wrapper", ".ant-radio", "td >> nth=0"):
-                loc = target.locator(sel)
-                if loc.count() == 0:
-                    continue
-                try:
-                    loc.first.click(timeout=2000)
-                    radio_ok = True
-                    break
-                except Exception:
-                    continue
+            # Click bằng JS theo index ổn định hơn Playwright nth() khi bảng dài /
+            # row ngoài viewport (headless hay timeout ở .nth(17)).
+            js_radio = modal.evaluate(
+                """(wrap, idx) => {
+                  const rows = [...wrap.querySelectorAll(
+                    '.ant-table-tbody > tr.ant-table-row, .ant-table-tbody tr, table tbody tr'
+                  )].filter(tr => {
+                    const t = (tr.innerText || '').trim();
+                    return t.length >= 4
+                      && !/ant-table-measure|ant-table-placeholder/i.test(tr.className || '');
+                  });
+                  const tr = rows[idx];
+                  if (!tr) return { ok:false, reason:'missing_row', total: rows.length };
+                  tr.scrollIntoView({ block: 'center', inline: 'nearest' });
+                  const wrapper = tr.querySelector('.ant-radio-wrapper, .ant-radio');
+                  const input = tr.querySelector('input[type=radio]');
+                  const target = wrapper || input || tr;
+                  target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                  target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                  target.click();
+                  if (input && !input.checked) {
+                    try { input.click(); } catch (_) {}
+                    try {
+                      input.checked = true;
+                      input.dispatchEvent(new Event('change', { bubbles: true }));
+                      input.dispatchEvent(new Event('click', { bubbles: true }));
+                    } catch (_) {}
+                  }
+                  return {
+                    ok: true,
+                    total: rows.length,
+                    checked: !!(input && input.checked)
+                      || !!tr.querySelector('.ant-radio-wrapper-checked, .ant-radio-checked'),
+                  };
+                }""",
+                row_idx,
+            ) or {}
+            radio_ok = bool(js_radio.get("ok"))
+            pick["radio_js"] = js_radio
+            self.page.wait_for_timeout(140)
             if not radio_ok:
-                target.click(timeout=2000)
-                radio_ok = True
-            self.page.wait_for_timeout(120)
+                rows_loc = modal.locator(
+                    ".ant-table-tbody > tr.ant-table-row, .ant-table-tbody tr"
+                )
+                if rows_loc.count() == 0:
+                    rows_loc = modal.locator("table tbody tr")
+                target = rows_loc.nth(row_idx)
+                try:
+                    target.scroll_into_view_if_needed(timeout=1500)
+                except Exception:
+                    pass
+                for sel in (".ant-radio-wrapper", ".ant-radio", "td >> nth=0"):
+                    loc = target.locator(sel)
+                    if loc.count() == 0:
+                        continue
+                    try:
+                        loc.first.click(timeout=2500, force=True)
+                        radio_ok = True
+                        break
+                    except Exception:
+                        continue
+                if not radio_ok:
+                    target.click(timeout=2500, force=True)
+                    radio_ok = True
             pick["radio_state"] = modal.evaluate(
                 """(wrap, idx) => {
                   const rows = [...wrap.querySelectorAll('.ant-table-tbody tr')].filter(tr =>
@@ -1759,11 +1820,13 @@ class EsidDeclarePage:
                 }""",
                 row_idx,
             )
-            # Double-click chỉ khi radio chưa selected
             st = pick.get("radio_state") or {}
             if not (st.get("checked") or st.get("wrapperChecked")):
                 try:
-                    target.dblclick(timeout=1500)
+                    rows_loc = modal.locator(
+                        ".ant-table-tbody > tr.ant-table-row, .ant-table-tbody tr"
+                    )
+                    rows_loc.nth(row_idx).dblclick(timeout=1500)
                     self.page.wait_for_timeout(200)
                 except Exception:
                     pass

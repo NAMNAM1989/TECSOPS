@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 import time
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -1101,6 +1101,7 @@ class EsidDeclarePage:
         flight_date: str,
         *,
         _empty_retry: bool = False,
+        _date_slip_retry: bool = False,
     ) -> dict[str, Any]:
         """
         Bắt buộc điền ngày/số hiệu qua nút CHỌN CHUYẾN BAY (không gõ tay datFltOri).
@@ -1279,6 +1280,7 @@ class EsidDeclarePage:
             matched_early = False
             for attempt in range(3):
                 stable_rows = 0
+                empty_stable = 0
                 for _ in range(24):
                     snap = modal.evaluate(
                         """(el, wantFlight) => {
@@ -1292,7 +1294,8 @@ class EsidDeclarePage:
                             return t.length >= 4
                               && !/ant-table-measure|ant-table-placeholder/i.test(
                                 tr.className || ''
-                              );
+                              )
+                              && !/^No\\s*data|^Không\\s*có\\s*dữ\\s*liệu/i.test(t);
                           });
                           const texts = rows.map(
                             tr => (tr.innerText || '').replace(/\\s+/g,' ').trim()
@@ -1308,11 +1311,21 @@ class EsidDeclarePage:
                     if int(snap.get("hit") if snap.get("hit") is not None else -1) >= 0:
                         matched_early = True
                         break
-                    stable_rows = stable_rows + 1 if last_count > 0 else 0
-                    if stable_rows >= 3 and attempt >= 1:
-                        break
+                    if last_count > 0:
+                        empty_stable = 0
+                        stable_rows += 1
+                        if stable_rows >= 3 and attempt >= 1:
+                            break
+                    else:
+                        stable_rows = 0
+                        empty_stable += 1
+                        # Search flight+date trả rỗng → mau chuyển fallback ngày.
+                        if empty_stable >= 6:
+                            break
                     self.page.wait_for_timeout(160)
                 if matched_early:
+                    break
+                if last_count == 0:
                     break
                 if attempt < 2 and flight_query:
                     try:
@@ -1360,6 +1373,8 @@ class EsidDeclarePage:
                 const t = (tr.innerText||'').trim();
                 if (!t || t.length < 4) return false;
                 if (/ant-table-measure|ant-table-placeholder/i.test(tr.className||'')) return false;
+                // bỏ dòng empty Ant
+                if (/^No\\s*data|^Không\\s*có\\s*dữ\\s*liệu/i.test(t)) return false;
                 return true;
               });
               const scored = [];
@@ -1370,8 +1385,7 @@ class EsidDeclarePage:
                 const nf = normFlightsInText(text);
                 const flightMatched = !wantFlight || nf.includes(wantFlight);
                 if (!flightMatched) continue;
-                let score = 0;
-                if (wantFlight) score += 12;
+                let score = wantFlight ? 12 : 0;
                 let dateMatched = !(ddmon || (dateToks || []).length);
                 for (const tok of (dateToks || [])) {
                   if (tok && (text.includes(tok) || nf.includes(norm(tok)))) {
@@ -1380,8 +1394,13 @@ class EsidDeclarePage:
                     break;
                   }
                 }
-                if (ddmon && nf.includes(norm(ddmon))) {
+                if (!dateMatched && ddmon && nf.includes(norm(ddmon))) {
                   score += 6;
+                  dateMatched = true;
+                }
+                // Sau khi #flightDate đã filter, danh sách ngắn → tin ngày filter.
+                if (!dateMatched && rows.length > 0 && rows.length <= 8) {
+                  score += 5;
                   dateMatched = true;
                 }
                 if (!dateMatched) continue;
@@ -1419,6 +1438,51 @@ class EsidDeclarePage:
                 "flight": flight_query,
                 "date": mdy,
             }
+
+        # Flight+date search trả 0/không khớp → xóa số hiệu, search theo ngày, duyệt Next.
+        if (not pick or not pick.get("ok")) and flight_query:
+            try:
+                if modal_flight.count() > 0:
+                    modal_flight.first.click(timeout=800)
+                    modal_flight.first.fill("", timeout=800)
+                    self.page.wait_for_timeout(60)
+                _click_flight_search()
+                for _ in range(20):
+                    cnt = int(
+                        modal.evaluate(
+                            """el => [...el.querySelectorAll(
+                              '.ant-table-tbody tr, table tbody tr'
+                            )].filter(tr => {
+                              const t = (tr.innerText || '').trim();
+                              return t.length >= 4
+                                && !/ant-table-measure|ant-table-placeholder|No\\s*data/i.test(
+                                  tr.className + ' ' + t
+                                );
+                            }).length"""
+                        )
+                        or 0
+                    )
+                    if cnt > 0:
+                        break
+                    self.page.wait_for_timeout(150)
+                filter_diag["date_only_fallback"] = True
+                pick = modal.evaluate(
+                    _PICK_ROWS_JS,
+                    {
+                        "wantFlight": want_flight,
+                        "dateToks": list(date_toks),
+                        "ddmon": ddmon,
+                    },
+                ) or pick
+                if isinstance(pick, dict):
+                    pick["requested"] = {
+                        "flight": flight_query,
+                        "date": mdy,
+                        "mode": "date_only_fallback",
+                    }
+            except Exception as e:
+                warnings.append(f"Fallback search theo ngày: {e}")
+
         # Một số account TCS không lọc theo số hiệu — duyệt Next tới khi hết trang.
         if not pick or not pick.get("ok"):
             page_previews: list[str] = list((pick or {}).get("rows") or [])
@@ -1559,6 +1623,40 @@ class EsidDeclarePage:
                     flight_date,
                     _empty_retry=True,
                 )
+            # Ngày Ops lệch lịch TCS (±1 ngày) — hay gặp VN* bay đêm hôm trước.
+            if not _date_slip_retry and fdate:
+                alt_dates: list[str] = []
+                try:
+                    base = datetime.strptime(fdate, "%Y-%m-%d")
+                    for delta in (-1, 1):
+                        alt_dates.append(
+                            (base + timedelta(days=delta)).strftime("%Y-%m-%d")
+                        )
+                except Exception:
+                    alt_dates = []
+                for alt in alt_dates:
+                    warnings.append(
+                        f"Không thấy {flight_query or flight} ngày {fdate} — thử ngày lân cận {alt}"
+                    )
+                    try:
+                        self.page.keyboard.press("Escape")
+                        self.page.wait_for_timeout(280)
+                    except Exception:
+                        pass
+                    slipped = self.choose_flight(
+                        flight_no,
+                        alt,
+                        _empty_retry=False,
+                        _date_slip_retry=True,
+                    )
+                    if slipped.get("ok"):
+                        slipped.setdefault("warnings", [])
+                        slipped["warnings"] = list(warnings) + list(
+                            slipped.get("warnings") or []
+                        )
+                        slipped["date_slipped_from"] = fdate
+                        slipped["date_slipped_to"] = alt
+                        return slipped
             warnings.append(
                 f"Không khớp chuyến bay trong modal ({reason}, rows={(pick or {}).get('count')})"
             )

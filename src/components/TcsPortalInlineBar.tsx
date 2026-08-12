@@ -19,7 +19,9 @@ type Props = {
 
 export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
   const btn =
-    "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-45 active:scale-[0.98]";
+    `inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-45 active:scale-[0.98] ${
+      compact ? "min-h-11 min-w-11 touch-manipulation" : ""
+    }`;
   const btnLogin = `${btn} bg-ui-primary text-white hover:bg-ui-primary-hover shadow-sm`;
   const btnScan = `${btn} border border-sky-600/40 bg-sky-50 text-sky-900 hover:bg-sky-100`;
   const btnSubmit = `${btn} bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm`;
@@ -275,9 +277,8 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
               : "Quét tiếp nhận"}
         </button>
 
-        {!compact ? (
-          <EsidSettingsMenu disabled={tcs.busy} compact={compact} />
-        ) : null}
+        {/* Luôn hiện — compact trước đây ẩn mất Cài đặt ESID (Người khai · Agent) cho cả 2 kho. */}
+        <EsidSettingsMenu disabled={tcs.busy} compact={compact} />
 
         {tcs.busy ? (
           <span className="truncate text-[10px] font-semibold text-sky-700">
@@ -363,7 +364,8 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
         </div>
       )}
 
-      {preview && !compact ? (
+      {/* Preview + HOÀN TẤT sau Điền — bắt buộc cả compact (mobile/desktop đều truyền compact). */}
+      {preview ? (
         <div
           className="mx-0.5 flex min-w-0 flex-col gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-50/70 p-2"
           role="region"

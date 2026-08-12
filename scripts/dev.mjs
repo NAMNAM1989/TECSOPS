@@ -20,10 +20,56 @@ import {
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const API_PORT = Number(process.env.PORT || 3001);
 const VITE_PORT = Number(process.env.VITE_PORT || 5173);
+const AGENT_PORT_TCS = Number(process.env.TCS_AGENT_PORT_TCS || 8766);
 /** Tự chạy agent Playwright cùng `npm run dev` (mặc định bật). Tắt: TCS_AGENT_AUTO=0 */
 const AUTO_AGENT = !["0", "false", "off"].includes(
   String(process.env.TCS_AGENT_AUTO ?? "1").trim().toLowerCase()
 );
+
+function envFlagOn(raw, defaultOn = false) {
+  if (raw == null || String(raw).trim() === "") return defaultOn;
+  const t = String(raw).trim().toLowerCase();
+  return t !== "0" && t !== "false" && t !== "off";
+}
+
+/** Dual TECS-TCS(:8765) + TCS(:8766) — từ .env.local hoặc cặp credential TCS. */
+function dualAgentEnabled() {
+  if (envFlagOn(process.env.TCS_AGENT_DUAL, false)) return true;
+  if (envFlagOn(readEnvFileValue(".env.local", "TCS_AGENT_DUAL"), false)) {
+    return true;
+  }
+  const u =
+    process.env.TCS_USERNAME_TCS?.trim() ||
+    readEnvFileValue(".env.local", "TCS_USERNAME_TCS") ||
+    readEnvFileValue("tcs-awb-automation/.env.tcs", "TCS_USERNAME");
+  const p =
+    process.env.TCS_PASSWORD_TCS ||
+    readEnvFileValue(".env.local", "TCS_PASSWORD_TCS") ||
+    readEnvFileValue("tcs-awb-automation/.env.tcs", "TCS_PASSWORD");
+  return Boolean(String(u || "").trim() && String(p || "").trim());
+}
+
+function resolveDualCredentials() {
+  const hubUser =
+    process.env.TCS_USERNAME?.trim() ||
+    readEnvFileValue(".env.local", "TCS_USERNAME") ||
+    readEnvFileValue("tcs-awb-automation/.env.hub", "TCS_USERNAME") ||
+    readEnvFileValue("tcs-awb-automation/.env", "TCS_USERNAME");
+  const hubPass =
+    process.env.TCS_PASSWORD ||
+    readEnvFileValue(".env.local", "TCS_PASSWORD") ||
+    readEnvFileValue("tcs-awb-automation/.env.hub", "TCS_PASSWORD") ||
+    readEnvFileValue("tcs-awb-automation/.env", "TCS_PASSWORD");
+  const tcsUser =
+    process.env.TCS_USERNAME_TCS?.trim() ||
+    readEnvFileValue(".env.local", "TCS_USERNAME_TCS") ||
+    readEnvFileValue("tcs-awb-automation/.env.tcs", "TCS_USERNAME");
+  const tcsPass =
+    process.env.TCS_PASSWORD_TCS ||
+    readEnvFileValue(".env.local", "TCS_PASSWORD_TCS") ||
+    readEnvFileValue("tcs-awb-automation/.env.tcs", "TCS_PASSWORD");
+  return { hubUser, hubPass, tcsUser, tcsPass };
+}
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -198,10 +244,16 @@ function run(cmd, args, extraEnv = {}) {
 ensureDatabaseUrlHint();
 await ensureLocalPostgres();
 
-console.info(`[dev] Giải phóng port ${API_PORT}, ${VITE_PORT}${AUTO_AGENT ? `, ${AGENT_PORT}` : ""}…`);
+const DUAL_AGENT = dualAgentEnabled();
+console.info(
+  `[dev] Giải phóng port ${API_PORT}, ${VITE_PORT}` +
+    `${AUTO_AGENT ? `, ${AGENT_PORT}` : ""}` +
+    `${AUTO_AGENT && DUAL_AGENT ? `, ${AGENT_PORT_TCS}` : ""}…`
+);
 freePort(API_PORT);
 freePort(VITE_PORT);
 if (AUTO_AGENT) freePort(AGENT_PORT);
+if (AUTO_AGENT && DUAL_AGENT) freePort(AGENT_PORT_TCS);
 await sleep(800);
 
 console.info(`[dev] Khởi động API :${API_PORT}…`);
@@ -221,48 +273,142 @@ if (!ready) {
 
 /** @type {import("node:child_process").ChildProcess | null} */
 let agent = null;
+/** @type {import("node:child_process").ChildProcess | null} */
+let agentTcs = null;
 let shuttingDown = false;
 let agentRestarts = 0;
+let agentTcsRestarts = 0;
+
+function wireAgentExit(child, label, onRetry) {
+  child.on("error", (err) => {
+    console.error(`[dev] Agent ${label} spawn lỗi: ${err?.message || err}`);
+    console.error(
+      "  Cài Python deps: cd tcs-awb-automation && python -m venv .venv && .venv\\Scripts\\pip install -r requirements.txt && python -m playwright install chromium"
+    );
+  });
+  child.on("exit", (code, signal) => {
+    if (shuttingDown) return;
+    console.warn(`[dev] Agent ${label} thoát (code=${code} signal=${signal})`);
+    onRetry();
+  });
+}
 
 async function ensureTcsAgent() {
   if (!AUTO_AGENT) {
     console.info("[dev] TCS_AGENT_AUTO=0 — không tự chạy agent. Cần: npm run tcs:agent:real");
     return;
   }
-  if (await isAgentListening()) {
-    console.info(`[dev] Agent TCS đã listen :${AGENT_PORT} — giữ nguyên.`);
+  const creds = resolveDualCredentials();
+  const hubEnv = {
+    TCS_AGENT_PORT: String(AGENT_PORT),
+    TCS_WAREHOUSE_SCOPE: "TECS-TCS",
+    TCS_BROWSER_PROFILE:
+      process.env.TCS_BROWSER_PROFILE ||
+      readEnvFileValue(".env.local", "TCS_BROWSER_PROFILE") ||
+      "./browser_profile_hub",
+    TCS_USERNAME: creds.hubUser || "",
+    TCS_PASSWORD: creds.hubPass || "",
+    // Chặn agent hub đọc nhầm credential kho TCS
+    TCS_USERNAME_TCS: "",
+    TCS_PASSWORD_TCS: "",
+  };
+
+  if (await isAgentListening(AGENT_PORT)) {
+    console.info(`[dev] Agent TECS-TCS đã listen :${AGENT_PORT} — giữ nguyên.`);
+  } else {
+    console.info(
+      `[dev] Khởi động agent TECS-TCS (REAL) :${AGENT_PORT} user=${creds.hubUser || "(empty)"}…`
+    );
+    agent = spawnTcsAgent({ real: true, stdio: "inherit", env: hubEnv });
+    wireAgentExit(agent, "TECS-TCS", () => {
+      if (agentRestarts < 2) {
+        agentRestarts += 1;
+        console.warn(`[dev] Thử start lại hub (${agentRestarts}/2) sau 2s…`);
+        setTimeout(() => {
+          void ensureTcsAgent();
+        }, 2000);
+      } else {
+        console.error(
+          `[dev] Agent hub không giữ được — Ops TECS-TCS Offline. Chạy: npm run portal:start:hub`
+        );
+      }
+    });
+    const ok = await waitForAgentHealth(45_000, AGENT_PORT);
+    if (ok) {
+      console.info(
+        `[dev] Agent TECS-TCS OK — proxy /tcs-agent → http://127.0.0.1:${AGENT_PORT}`
+      );
+    } else {
+      console.error(
+        `[dev] Agent hub chưa sẵn sàng sau 45s — thử: npm run tcs:agent:real`
+      );
+    }
+  }
+
+  if (!DUAL_AGENT) {
+    console.info(
+      "[dev] agent kho TCS :8766 tắt — set TCS_AGENT_DUAL=1 hoặc TCS_USERNAME_TCS + TCS_PASSWORD_TCS trong .env.local"
+    );
     return;
   }
-  console.info(`[dev] Khởi động agent TCS (REAL) :${AGENT_PORT}…`);
-  agent = spawnTcsAgent({ real: true, stdio: "inherit" });
-  agent.on("error", (err) => {
-    console.error(`[dev] Agent spawn lỗi: ${err?.message || err}`);
+  if (!creds.tcsUser || !creds.tcsPass) {
     console.error(
-      "  Cài Python deps: cd tcs-awb-automation && python -m venv .venv && .venv\\Scripts\\pip install -r requirements.txt && python -m playwright install chromium"
+      "[dev] TCS_AGENT_DUAL bật nhưng thiếu TCS_USERNAME_TCS / TCS_PASSWORD_TCS — không fallback sang user hub."
     );
-  });
-  agent.on("exit", (code, signal) => {
-    if (shuttingDown) return;
-    console.warn(`[dev] Agent thoát (code=${code} signal=${signal})`);
-    if (agentRestarts < 2) {
-      agentRestarts += 1;
-      console.warn(`[dev] Thử start lại agent (${agentRestarts}/2) sau 2s…`);
+    return;
+  }
+  if (
+    creds.hubUser &&
+    creds.tcsUser &&
+    creds.hubUser.toLowerCase() === creds.tcsUser.toLowerCase()
+  ) {
+    console.warn(
+      "[dev] CẢNH BÁO: TCS_USERNAME và TCS_USERNAME_TCS trùng — hai kho dùng cùng tài khoản portal."
+    );
+  }
+
+  if (await isAgentListening(AGENT_PORT_TCS)) {
+    console.info(`[dev] Agent kho TCS đã listen :${AGENT_PORT_TCS} — giữ nguyên.`);
+    return;
+  }
+
+  const tcsEnv = {
+    TCS_AGENT_PORT: String(AGENT_PORT_TCS),
+    TCS_WAREHOUSE_SCOPE: "TCS",
+    TCS_BROWSER_PROFILE:
+      process.env.TCS_BROWSER_PROFILE_TCS ||
+      readEnvFileValue(".env.local", "TCS_BROWSER_PROFILE_TCS") ||
+      "./browser_profile_tcs",
+    TCS_USERNAME: creds.tcsUser,
+    TCS_PASSWORD: creds.tcsPass,
+    TCS_USERNAME_TCS: creds.tcsUser,
+    TCS_PASSWORD_TCS: creds.tcsPass,
+  };
+  console.info(
+    `[dev] Khởi động agent kho TCS (REAL) :${AGENT_PORT_TCS} user=${creds.tcsUser}…`
+  );
+  agentTcs = spawnTcsAgent({ real: true, stdio: "inherit", env: tcsEnv });
+  wireAgentExit(agentTcs, "TCS", () => {
+    if (agentTcsRestarts < 2) {
+      agentTcsRestarts += 1;
+      console.warn(`[dev] Thử start lại kho TCS (${agentTcsRestarts}/2) sau 2s…`);
       setTimeout(() => {
         void ensureTcsAgent();
       }, 2000);
     } else {
       console.error(
-        `[dev] Agent không giữ được — Ops sẽ hiện Offline. Chạy tay: npm run tcs:agent:real`
+        `[dev] Agent kho TCS không giữ được — Ops TCS Offline. Chạy: npm run portal:start:tcs`
       );
     }
   });
-  const ok = await waitForAgentHealth(45_000);
-  if (ok) {
-    console.info(`[dev] Agent TCS OK — proxy /tcs-agent → http://127.0.0.1:${AGENT_PORT}`);
+  const okTcs = await waitForAgentHealth(45_000, AGENT_PORT_TCS);
+  if (okTcs) {
+    console.info(
+      `[dev] Agent kho TCS OK — proxy X-Portal-Warehouse:TCS → :${AGENT_PORT_TCS}`
+    );
   } else {
     console.error(
-      `[dev] Agent chưa sẵn sàng sau 45s — kiểm tra Python/venv/playwright.\n` +
-        `      Thử: npm run tcs:agent:real`
+      `[dev] Agent kho TCS chưa sẵn sàng sau 45s — thử: npm run portal:start:tcs`
     );
   }
 }
@@ -275,13 +421,19 @@ const vite = run("npx", ["vite", "--host", "0.0.0.0", "--port", String(VITE_PORT
   VITE_PROXY_PORT: String(API_PORT),
 });
 
+function killAgents() {
+  for (const child of [agent, agentTcs]) {
+    try {
+      child?.kill("SIGTERM");
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 function shutdown() {
   shuttingDown = true;
-  try {
-    agent?.kill("SIGTERM");
-  } catch {
-    /* ignore */
-  }
+  killAgents();
   vite.kill("SIGTERM");
   server.kill("SIGTERM");
   process.exit(0);
@@ -293,11 +445,7 @@ process.on("SIGTERM", shutdown);
 server.on("exit", (code) => {
   if (code && code !== 0) {
     shuttingDown = true;
-    try {
-      agent?.kill("SIGTERM");
-    } catch {
-      /* ignore */
-    }
+    killAgents();
     vite.kill("SIGTERM");
     process.exit(code);
   }
@@ -305,11 +453,7 @@ server.on("exit", (code) => {
 
 vite.on("exit", (code) => {
   shuttingDown = true;
-  try {
-    agent?.kill("SIGTERM");
-  } catch {
-    /* ignore */
-  }
+  killAgents();
   server.kill("SIGTERM");
   if (code && code !== 0) process.exit(code);
 });

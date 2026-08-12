@@ -148,6 +148,8 @@ export function useTcsPortalActions({
   /** Tránh poll /health ghi đè Offline khi đang chờ job dài trên agent */
   const busyRef = useRef(false);
   busyRef.current = busy;
+  /** Ping miss liên tiếp — chỉ bỏ qua 1 lần (tránh nhấp nháy), không giữ forever. */
+  const healthMissRef = useRef(0);
   const [results, setResults] = useState<TcsAgentJobResultRow[]>([]);
   const [downloadedCount, setDownloadedCount] = useState(0);
   /** Sau Điền: trạng thái + nút HOÀN TẤT trên cùng workspace. */
@@ -167,15 +169,35 @@ export function useTcsPortalActions({
     if (busyRef.current) return;
     const h = await pingTcsAgent(3500, agentOpts);
     if (busyRef.current) return;
-    if (!h?.ok) {
-      // Giữ session cũ nếu chỉ mất 1 lần ping (tránh nhấp nháy Offline)
-      setHealth((prev) => (prev?.ok ? prev : h));
+    const scope = String(h?.warehouse_scope || "").trim();
+    const scopeMismatch =
+      Boolean(h?.ok) &&
+      Boolean(scope) &&
+      asTcsPortalWarehouse(scope) != null &&
+      asTcsPortalWarehouse(scope) !== portalWarehouse;
+    if (!h?.ok || scopeMismatch) {
+      healthMissRef.current += 1;
+      // 1 miss: giữ prev cùng kho (tránh nhấp nháy). Từ miss 2 hoặc đổi kho: Offline thật.
+      if (healthMissRef.current <= 1) {
+        setHealth((prev) => {
+          const prevScope = String(prev?.warehouse_scope || "").trim();
+          const sameWh =
+            !prevScope ||
+            asTcsPortalWarehouse(prevScope) === portalWarehouse ||
+            asTcsPortalWarehouse(prevScope) == null;
+          return prev?.ok && sameWh ? prev : h;
+        });
+        return;
+      }
+      setHealth(h);
+      setSession(null);
       return;
     }
+    healthMissRef.current = 0;
     setHealth(h);
     if (h.session) setSession(h.session);
     else setSession(await fetchTcsSessionStatus(agentOpts));
-  }, [agentOpts]);
+  }, [agentOpts, portalWarehouse]);
 
   useEffect(() => {
     if (!active) return;
@@ -191,11 +213,18 @@ export function useTcsPortalActions({
   }, [portalWarehouse]);
 
   // Đổi kho: cookie tcs.com.vn dùng chung 2 Ext → invalidate CẢ HAI (không chỉ kho đích).
+  // Đồng thời xoá health/session agent kho cũ — tránh UI «Chờ ĐN / READY» dính từ :8765 khi :8766 offline.
   const prevPortalWhRef = useRef<TcsPortalWarehouse | null>(null);
   useEffect(() => {
     const prev = prevPortalWhRef.current;
     prevPortalWhRef.current = portalWarehouse;
     if (!prev || prev === portalWarehouse) return;
+    healthMissRef.current = 99;
+    setHealth(null);
+    setSession(null);
+    setLastDeclarePreview(null);
+    setMessage("");
+    setError("");
     setExtension((ext) =>
       ext
         ? {

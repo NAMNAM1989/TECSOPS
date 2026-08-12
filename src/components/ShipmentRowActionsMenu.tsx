@@ -1,4 +1,13 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
@@ -8,21 +17,42 @@ import {
   downloadTcsAttachedDimsExcel,
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
-import {
-  canDownloadTcsDimRecordPdf,
-  downloadTcsDimRecordPdf,
-} from "../utils/tcsDimRecordForm";
 import { awbDigitsKey } from "../utils/awbFormat";
 import { isEcargoScscWarehouse, isTcsWarehouse } from "../constants/warehouses";
-import {
-  canPrintCsd,
-  csdCarrierForShipment,
-  getCsdCarrierProfile,
-} from "../utils/csdForms";
 import { OPS } from "../styles/opsModalStyles";
-import { CsdPrintModal } from "./CsdPrintModal";
 import { useEcargoRegisterActions } from "./EcargoRegisterActionsContext";
 import { useTcsPortalActionsContext } from "./TcsPortalActionsContext";
+
+const CsdPrintModal = lazy(() =>
+  import("./CsdPrintModal").then((module) => ({ default: module.CsdPrintModal })),
+);
+
+const CSD_AIRLINE: Record<"FD" | "TH", string> = {
+  FD: "Thai AirAsia",
+  TH: "Thai Airways",
+};
+
+function lightweightCsdCarrier(row: Pick<Shipment, "flight" | "awb">): "FD" | "TH" | null {
+  if (awbDigitsKey(row.awb).length !== 11) return null;
+  const flight = String(row.flight || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (flight.startsWith("FD")) return "FD";
+  if (flight.startsWith("TH")) return "TH";
+  return null;
+}
+
+function confirmPortalChecklist(row: Shipment): boolean {
+  const warnings = [
+    !String(row.flight || "").trim() ? "Thiếu chuyến bay" : "",
+    !String(row.dest || "").trim() ? "Thiếu điểm đến" : "",
+    !(Number(row.pcs) > 0) ? "PCS chưa hợp lệ" : "",
+    !(Number(row.kg) > 0) ? "KG chưa hợp lệ" : "",
+    !String(row.customerCode || "").trim() ? "Chưa gắn Customer Code" : "",
+  ].filter(Boolean);
+  if (!warnings.length) return true;
+  return window.confirm(
+    `Checklist trước Fill/Register:\n• ${warnings.join("\n• ")}\n\nTiếp tục mở form để kiểm tra thủ công?`,
+  );
+}
 
 type Props = {
   row: Shipment;
@@ -164,18 +194,21 @@ export function ShipmentRowActionsMenu({
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   /** Form QF/ED/49 — family TCS (TCS / TECS-TCS), cùng chỗ LIST DIM. */
-  const showTcsDimPdf = canDownloadTcsDimRecordPdf(row);
+  const showTcsDimPdf = isTcsWarehouse(row.warehouse) && (row.dimLines?.length ?? 0) > 0;
   const showTcsEsid = isTcsWarehouse(row.warehouse) && Boolean(tcs);
-  /** Điền ESID chỉ desktop — phone không dùng (compact = mobile cards). */
+  /**
+   * Điền ESID: bật cả mobile — phone 4G dùng agent cloud Railway
+   * (không cần máy kho / Chrome Ext). Trước đây `!compact` cắt mất trên phone.
+   */
   const showFillEsid =
-    !compact && showTcsEsid && awbDigitsKey(row.awb).length === 11;
+    showTcsEsid && awbDigitsKey(row.awb).length === 11;
   const showEcargo = isEcargoScscWarehouse(row.warehouse) && Boolean(ecargo);
-  const showCsd = canPrintCsd(row);
+  const csdCarrier = lightweightCsdCarrier(row);
+  const showCsd = csdCarrier != null;
   /** Mobile card: eC / CSD vào menu ⋮ — tránh che AWB và nút nhỏ khó bấm. */
   const showEcargoInline = showEcargo && !compact;
   const showCsdInline = showCsd && !compact;
-  const csdCarrier = csdCarrierForShipment(row);
-  const csdProfile = csdCarrier ? getCsdCarrierProfile(csdCarrier) : null;
+  const csdAirline = csdCarrier ? CSD_AIRLINE[csdCarrier] : "";
   const [csdOpen, setCsdOpen] = useState(false);
   const menuExtras =
     (showDim ? 1 : 0) +
@@ -282,7 +315,7 @@ export function ShipmentRowActionsMenu({
           ? menuItem(
               "Đăng ký eCargo",
               () => {
-                ecargo?.openForShipment(row.id);
+                if (confirmPortalChecklist(row)) ecargo?.openForShipment(row.id);
               },
               undefined,
               `row-ecargo-${row.id}`,
@@ -300,14 +333,18 @@ export function ShipmentRowActionsMenu({
           ? menuItem("Excel ATTACHED DIM", () => void downloadTcsAttachedDimsExcel(row))
           : null}
         {showTcsDimPdf
-          ? menuItem("Tải PDF DIM TCS", () => void downloadTcsDimRecordPdf(row))
+          ? menuItem("Tải PDF DIM TCS", () => {
+              void import("../utils/tcsDimRecordForm").then((module) =>
+                module.downloadTcsDimRecordPdf(row),
+              );
+            })
           : null}
         {showFillEsid
           ? menuItem(
               "Điền",
               () => {
                 if (tcs?.busy) return;
-                void tcs?.fillEsidDeclareFor(row);
+                if (confirmPortalChecklist(row)) void tcs?.fillEsidDeclareFor(row);
               },
               undefined,
               `row-fill-esid-${row.id}`,
@@ -325,7 +362,7 @@ export function ShipmentRowActionsMenu({
               `row-pdf-esid-${row.id}`
             )
           : null}
-        {showCsd && csdCarrier && csdProfile
+        {showCsd && csdCarrier
           ? menuItem(
               `In CSD ${csdCarrier}`,
               () => {
@@ -334,7 +371,7 @@ export function ShipmentRowActionsMenu({
               },
               undefined,
               `row-csd-${row.id}`,
-              `Form CSD ${csdProfile.airlineName} — nhập Transit rồi in`
+              `Form CSD ${csdAirline} — nhập Transit rồi in`
             )
           : null}
         {menuExtras > 1 ? <div className={`my-0.5 border-t ${OPS.border}`} aria-hidden /> : null}
@@ -364,7 +401,11 @@ export function ShipmentRowActionsMenu({
           {showTcsDimPdf ? (
             <ActionIconBtn
               label="Tải PDF DIM TCS (QF/ED/49)"
-              onClick={() => void downloadTcsDimRecordPdf(row)}
+              onClick={() => {
+                void import("../utils/tcsDimRecordForm").then((module) =>
+                  module.downloadTcsDimRecordPdf(row),
+                );
+              }}
             >
               <IconPdfDim />
             </ActionIconBtn>
@@ -379,7 +420,7 @@ export function ShipmentRowActionsMenu({
           data-testid={`row-ecargo-${row.id}`}
           onClick={(e) => {
             e.stopPropagation();
-            ecargo?.openForShipment(row.id);
+            if (confirmPortalChecklist(row)) ecargo?.openForShipment(row.id);
           }}
           className="inline-flex h-7 items-center rounded-md border border-emerald-500/35 bg-emerald-50 px-1.5 text-[10px] font-bold text-emerald-900 hover:bg-emerald-100"
         >
@@ -387,10 +428,10 @@ export function ShipmentRowActionsMenu({
           <span className="ml-0.5">eCargo</span>
         </button>
       ) : null}
-      {showCsdInline && csdCarrier && csdProfile ? (
+      {showCsdInline && csdCarrier ? (
         <button
           type="button"
-          title={`In CSD ${csdCarrier} (${csdProfile.airlineName}) — nhập Transit rồi in`}
+          title={`In CSD ${csdCarrier} (${csdAirline}) — nhập Transit rồi in`}
           aria-label={`In CSD ${csdCarrier}`}
           data-testid={`row-csd-btn-${row.id}`}
           onClick={(e) => {
@@ -419,18 +460,22 @@ export function ShipmentRowActionsMenu({
         }}
         className={`${
           compact
-            ? "inline-flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-text shadow-sm transition-colors hover:bg-ui-surface-muted focus:outline-none focus:ring-2 focus:ring-ui-focus"
+            ? "inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-text shadow-sm transition-colors hover:bg-ui-surface-muted focus:outline-none focus:ring-2 focus:ring-ui-focus"
             : OPS.actionIcon
         } ${menuOpen ? OPS.actionIconOpen : ""}`}
       >
         <IconKebabVertical />
       </button>
       {typeof document !== "undefined" && dropdown ? createPortal(dropdown, document.body) : null}
-      <CsdPrintModal
-        open={csdOpen}
-        shipment={csdOpen ? row : null}
-        onClose={() => setCsdOpen(false)}
-      />
+      {csdOpen ? (
+        <Suspense fallback={null}>
+          <CsdPrintModal
+            open
+            shipment={row}
+            onClose={() => setCsdOpen(false)}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

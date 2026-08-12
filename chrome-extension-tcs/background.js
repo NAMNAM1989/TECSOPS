@@ -6,7 +6,7 @@
 const LOGIN_URL = "https://www.tcs.com.vn/AwbLogin";
 const ESID_URL = "https://www.tcs.com.vn/Esid/Export";
 const EXT_VERSION = chrome.runtime.getManifest().version;
-const EXPECTED_SCRIPT_VERSION = "2.0.26";
+const EXPECTED_SCRIPT_VERSION = "2.0.29";
 /** Keys riêng — không đụng storage Ext TECS-TCS. */
 const SESSION_KEY = "tecsopsTcsDirectSessionCredentials";
 const LOCAL_KEY = "tecsopsTcsDirectRememberedCredentials";

@@ -880,15 +880,19 @@ class EsidDeclarePage:
                 except Exception:
                     return
 
-    def _flight_date_value_matches(self, got: str, ymd: str) -> bool:
-        """Chấp nhận MM-DD-YYYY / MM/DD/YYYY / YYYY-MM-DD."""
-        want = self._ymd_to_mdy(ymd)
+    @staticmethod
+    def _flight_date_value_matches(got: str, ymd: str) -> bool:
+        """Chấp nhận MM-DD-YYYY, DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD."""
         g = re.sub(r"[^0-9]", "", (got or "").strip())
-        w = re.sub(r"[^0-9]", "", want)
-        if g and w and g == w:
-            return True
+        if not g:
+            return False
+        want_mdy = re.sub(r"[^0-9]", "", EsidDeclarePage._ymd_to_mdy(ymd))
         ymd_digits = re.sub(r"[^0-9]", "", (ymd or "").strip())
-        return bool(g and ymd_digits and g == ymd_digits)
+        want_dmy = ""
+        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", (ymd or "").strip())
+        if m:
+            want_dmy = f"{m.group(3)}{m.group(2)}{m.group(1)}"
+        return g in {want_mdy, ymd_digits, want_dmy} - {""}
 
     def _select_modal_flight_date(self, modal, ymd: str) -> bool:
         """Chọn ngày bằng Ant DatePicker; không gán text vào input readonly."""
@@ -928,17 +932,25 @@ class EsidDeclarePage:
                         el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
                         el.click();
                       };
-                      const parseMdy = (s) => {
-                        const m = /^(\\d{2})-(\\d{2})-(\\d{4})$/.exec(String(s || '').trim());
-                        return m ? { y: +m[3], m: +m[1], d: +m[2] } : null;
-                      };
                       const parseYmd = (s) => {
                         const m = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(String(s || '').trim());
                         return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
                       };
+                      // Modal TCS #flightDate thường MM-DD-YYYY; form đôi khi DD/MM.
+                      const parseFlexible = (s) => {
+                        const raw = String(s || '').trim();
+                        const ymd = parseYmd(raw);
+                        if (ymd) return ymd;
+                        const a = /^(\\d{2})[-/.](\\d{2})[-/.](\\d{4})$/.exec(raw);
+                        if (!a) return null;
+                        const x = +a[1], y = +a[2], z = +a[3];
+                        // Ưu tiên MM-DD khi phần đầu ≤ 12 (đúng format modal).
+                        if (x <= 12) return { y: z, m: x, d: y };
+                        return { y: z, m: y, d: x };
+                      };
                       const tgt = parseYmd(ymd);
                       if (!tgt) return false;
-                      const cur = parseMdy(input.value) || tgt;
+                      const cur = parseFlexible(input.value) || tgt;
                       const monthDelta = (tgt.y - cur.y) * 12 + (tgt.m - cur.m);
                       if (Math.abs(monthDelta) > 24) return false;
                       click(input);
@@ -946,6 +958,10 @@ class EsidDeclarePage:
                         '.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)'
                       )].filter(visible).at(-1);
                       let popup = popupOf();
+                      const until = Date.now() + 900;
+                      while (!popup && Date.now() < until) {
+                        popup = popupOf();
+                      }
                       if (!popup) return false;
                       const navSel = monthDelta > 0
                         ? '.ant-picker-header-next-btn'
@@ -956,9 +972,13 @@ class EsidDeclarePage:
                         click(nav);
                         popup = popupOf() || popup;
                       }
+                      const dd = String(tgt.d).padStart(2,'0');
+                      const mm = String(tgt.m).padStart(2,'0');
                       const titles = [ymd, wantMdy,
-                        `${String(tgt.m).padStart(2,'0')}/${String(tgt.d).padStart(2,'0')}/${tgt.y}`,
-                        `${tgt.y}/${String(tgt.m).padStart(2,'0')}/${String(tgt.d).padStart(2,'0')}`
+                        `${mm}/${dd}/${tgt.y}`,
+                        `${dd}/${mm}/${tgt.y}`,
+                        `${dd}-${mm}-${tgt.y}`,
+                        `${tgt.y}/${mm}/${dd}`
                       ];
                       let cell = null;
                       for (const t of titles) {
@@ -979,9 +999,10 @@ class EsidDeclarePage:
                       if (!cell) return false;
                       click(cell.querySelector('.ant-picker-cell-inner') || cell);
                       const got = String(input.value || '').trim().replace(/[^0-9]/g, '');
-                      const want = String(wantMdy || '').replace(/[^0-9]/g, '');
+                      const wantMdyDigits = String(wantMdy || '').replace(/[^0-9]/g, '');
                       const ymdDigits = String(ymd || '').replace(/[^0-9]/g, '');
-                      return got === want || got === ymdDigits;
+                      const dmyDigits = `${dd}${mm}${tgt.y}`;
+                      return got === wantMdyDigits || got === ymdDigits || got === dmyDigits;
                     }""",
                     {"ymd": target_text, "wantMdy": want_mdy},
                 )
@@ -1221,51 +1242,87 @@ class EsidDeclarePage:
                 # Ô flight không readonly: dùng thao tác fill thật để Ant Input
                 # cập nhật state; native setter có thể bị React trả về giá trị cũ.
                 modal_flight.first.click(timeout=1000)
+                modal_flight.first.fill("", timeout=800)
                 modal_flight.first.fill(flight_query, timeout=1200)
                 self.page.wait_for_timeout(80)
 
-            search_clicked = False
-            search_btn = modal.locator(
-                "button.ant-input-search-button, "
-                ".ant-input-search-button"
-            ).first
-            if search_btn.count() > 0:
-                search_btn.evaluate("el => el.click()")
-                search_clicked = True
-            if not search_clicked:
-                search_btn = modal.get_by_role(
+            def _click_flight_search() -> bool:
+                btn = modal.locator(
+                    "button.ant-input-search-button, "
+                    ".ant-input-search-button"
+                ).first
+                if btn.count() > 0:
+                    btn.evaluate("el => el.click()")
+                    return True
+                btn = modal.get_by_role(
                     "button", name=re.compile(r"search|tìm", re.I)
                 ).first
-                if search_btn.count() > 0:
-                    search_btn.click(timeout=1200, force=True)
-                    search_clicked = True
-            if not search_clicked:
-                warnings.append("Không thấy nút search chuyến bay (.ant-input-search-button)")
+                if btn.count() > 0:
+                    btn.click(timeout=1200, force=True)
+                    return True
+                try:
+                    modal_flight.first.press("Enter", timeout=800)
+                    return True
+                except Exception:
+                    return False
 
-            # Ant dựng một row tạm rồi thay toàn bộ tbody khi request hoàn tất;
-            # wait_for(first row) có thể bắt đúng row tạm. Poll ngay trên modal
-            # đang dùng cho tới khi có row dữ liệu ổn định.
-            stable_rows = 0
-            last_count = 0
-            for _ in range(28):
-                last_count = int(
-                    modal.evaluate(
-                        """el => [...el.querySelectorAll(
-                          '.ant-table-tbody tr, table tbody tr'
-                        )].filter(tr => {
-                          const t = (tr.innerText || '').trim();
-                          return t.length >= 4
-                            && !/ant-table-measure|ant-table-placeholder/i.test(
-                              tr.className || ''
-                            );
-                        }).length"""
-                    )
-                    or 0
+            search_clicked = _click_flight_search()
+            if not search_clicked:
+                warnings.append(
+                    "Không thấy nút search chuyến bay (.ant-input-search-button)"
                 )
-                stable_rows = stable_rows + 1 if last_count > 0 else 0
-                if stable_rows >= 2:
+
+            # Ant dựng row tạm rồi thay tbody. Đồng thời một số account TCS
+            # không lọc theo số hiệu ngay — poll tới khi thấy đúng flight hoặc
+            # bảng ổn định, rồi search lại tối đa 2 lần.
+            last_count = 0
+            matched_early = False
+            for attempt in range(3):
+                stable_rows = 0
+                for _ in range(24):
+                    snap = modal.evaluate(
+                        """(el, wantFlight) => {
+                          const norm = s => String(s||'').toUpperCase()
+                            .replace(/[^A-Z0-9]/g,'')
+                            .replace(/([A-Z]{2,3})0+(\\d{2,4})/g, '$1$2');
+                          const rows = [...el.querySelectorAll(
+                            '.ant-table-tbody tr, table tbody tr'
+                          )].filter(tr => {
+                            const t = (tr.innerText || '').trim();
+                            return t.length >= 4
+                              && !/ant-table-measure|ant-table-placeholder/i.test(
+                                tr.className || ''
+                              );
+                          });
+                          const texts = rows.map(
+                            tr => (tr.innerText || '').replace(/\\s+/g,' ').trim()
+                          );
+                          const hit = wantFlight
+                            ? texts.findIndex(t => norm(t).includes(wantFlight))
+                            : (rows.length ? 0 : -1);
+                          return { count: rows.length, hit };
+                        }""",
+                        want_flight,
+                    ) or {}
+                    last_count = int(snap.get("count") or 0)
+                    if int(snap.get("hit") if snap.get("hit") is not None else -1) >= 0:
+                        matched_early = True
+                        break
+                    stable_rows = stable_rows + 1 if last_count > 0 else 0
+                    if stable_rows >= 3 and attempt >= 1:
+                        break
+                    self.page.wait_for_timeout(160)
+                if matched_early:
                     break
-                self.page.wait_for_timeout(150)
+                if attempt < 2 and flight_query:
+                    try:
+                        modal_flight.first.click(timeout=600)
+                        modal_flight.first.press("Enter", timeout=800)
+                    except Exception:
+                        pass
+                    _click_flight_search()
+                    self.page.wait_for_timeout(220)
+
             filter_diag = modal.evaluate(
                 """modal => {
                   return {
@@ -1289,11 +1346,11 @@ class EsidDeclarePage:
             filter_diag["search_clicked"] = search_clicked
             filter_diag["requested_date"] = mdy
             filter_diag["requested_flight"] = flight_query
+            filter_diag["matched_early"] = matched_early
         except Exception as e:
             warnings.append(f"Chờ danh sách chuyến bay: {e}")
 
-        pick = modal.evaluate(
-            """(wrap, { wantFlight, dateToks, ddmon }) => {
+        _PICK_ROWS_JS = """(wrap, { wantFlight, dateToks, ddmon }) => {
               const norm = s => String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
               const normFlightsInText = s =>
                 norm(s).replace(/([A-Z]{2,3})0+(\\d{2,4})/g, '$1$2');
@@ -1347,7 +1404,10 @@ class EsidDeclarePage:
                 index: best.i,
                 count: rows.length
               };
-            }""",
+            }"""
+
+        pick = modal.evaluate(
+            _PICK_ROWS_JS,
             {
                 "wantFlight": want_flight,
                 "dateToks": list(date_toks),
@@ -1359,160 +1419,126 @@ class EsidDeclarePage:
                 "flight": flight_query,
                 "date": mdy,
             }
-        # Một số phiên bản TCS chỉ lưu text filter nhưng không lọc bảng. Khi đó
-        # duyệt pagination (20 dòng/trang) và chỉ nhận đúng flight + ngày.
+        # Một số account TCS không lọc theo số hiệu — duyệt Next tới khi hết trang.
         if not pick or not pick.get("ok"):
             page_previews: list[str] = list((pick or {}).get("rows") or [])
             pagination_trace: list[dict[str, Any]] = []
-            pagination_state = modal.evaluate(
-                """el => ({
-                  active: Number(
-                    (el.querySelector('.ant-pagination-item-active')?.textContent || '0').trim()
-                  ),
-                  pages: [...el.querySelectorAll('.ant-pagination-item')]
-                    .map(x => Number((x.textContent || '').trim()))
-                    .filter(Number.isFinite)
-                    .slice(0, 12)
-                })"""
-            ) or {}
-            active_page = int(pagination_state.get("active") or 0)
-            page_numbers = [
-                int(n)
-                for n in (pagination_state.get("pages") or [])
-                if int(n) != active_page
-            ]
-            for page_number in page_numbers:
+            max_page_hops = 30
+            for hop in range(max_page_hops):
                 try:
-                    click_diag = self.page.evaluate(
-                            """pageNo => {
-                              const visible = el => {
-                                const r = el.getBoundingClientRect();
-                                const s = getComputedStyle(el);
-                                return r.width > 80 && r.height > 80
-                                  && s.display !== 'none'
-                                  && s.visibility !== 'hidden';
-                              };
-                              const dialogs = [...document.querySelectorAll(
-                                '.ant-modal, [role=dialog]'
-                              )].filter(visible);
-                              const current = dialogs[dialogs.length - 1];
-                              if (!current) return {clicked:false, reason:'no_modal'};
-                              const items = [...current.querySelectorAll(
-                                '.ant-pagination-item'
-                              )];
-                              const item = items.find(el =>
-                                String(el.getAttribute('title') || '').trim() === String(pageNo)
-                                || String(el.textContent || '').trim() === String(pageNo)
-                              );
-                              const labels = items.map(el => ({
-                                title: el.getAttribute('title') || '',
-                                text: String(el.textContent || '').trim(),
-                                cls: String(el.className || '')
-                              }));
-                              if (!item) return {
-                                clicked:false, reason:'no_page_item', labels
-                              };
-                              (item.querySelector('button, a') || item).click();
-                              return {clicked:true, labels};
-                            }""",
-                            page_number,
-                        ) or {}
-                    if not click_diag.get("clicked"):
-                        pagination_trace.append(
-                            {"page": page_number, **click_diag}
-                        )
-                        break
-                    try:
-                        self.page.wait_for_function(
-                            """pageNo => {
-                              const visible = el => {
-                                const r = el.getBoundingClientRect();
-                                const s = getComputedStyle(el);
-                                return r.width > 80 && r.height > 80
-                                  && s.display !== 'none'
-                                  && s.visibility !== 'hidden';
-                              };
-                              const dialogs = [...document.querySelectorAll(
-                                '.ant-modal, [role=dialog]'
-                              )].filter(visible);
-                              const modal = dialogs[dialogs.length - 1];
-                              const active = modal?.querySelector(
-                                '.ant-pagination-item-active'
-                              );
-                              return Number((active?.textContent || '').trim()) === pageNo;
-                            }""",
-                            page_number,
-                            timeout=800,
-                        )
-                    except Exception:
-                        self.page.wait_for_timeout(100)
-                    page_pick = self.page.evaluate(
-                        """({wantFlight, ddmon}) => {
+                    hop_state = self.page.evaluate(
+                        """() => {
                           const visible = el => {
                             const r = el.getBoundingClientRect();
                             const s = getComputedStyle(el);
-                            return r.width > 80 && r.height > 80
+                            return r.width > 40 && r.height > 40
                               && s.display !== 'none'
                               && s.visibility !== 'hidden';
                           };
                           const dialogs = [...document.querySelectorAll(
                             '.ant-modal, [role=dialog]'
-                          )].filter(visible);
+                          )].filter(visible).filter(el => el.querySelector('#flightNo'));
                           const modal = dialogs[dialogs.length - 1];
-                          if (!modal) return {
-                            ok:false, reason:'no_modal', count:0, preview:[], active:''
-                          };
-                          const norm = s => String(s||'').toUpperCase()
-                            .replace(/[^A-Z0-9]/g,'')
-                            .replace(/([A-Z]{2,3})0+(\\d{2,4})/g, '$1$2');
-                          const rows = [...modal.querySelectorAll(
-                            '.ant-table-tbody tr, table tbody tr'
-                          )].filter(tr => {
-                            const t = (tr.innerText||'').trim();
-                            return t.length >= 4
-                              && !/ant-table-measure|ant-table-placeholder/i.test(
-                                tr.className||''
-                              );
-                          });
-                          const preview = rows.slice(0, 4).map(
-                            tr => (tr.innerText||'').replace(/\\s+/g,' ').trim().slice(0,140)
-                          );
+                          if (!modal) return { ok:false, reason:'no_modal' };
                           const active = String(
                             modal.querySelector('.ant-pagination-item-active')?.textContent || ''
                           ).trim();
-                          for (let i=0; i<rows.length; i++) {
-                            const text = (rows[i].innerText||'').replace(/\\s+/g,' ').trim();
-                            const folded = norm(text);
-                            if (wantFlight && !folded.includes(wantFlight)) continue;
-                            if (ddmon && !folded.includes(norm(ddmon))) continue;
-                            return {
-                              ok:true, index:i, count:rows.length, score:30,
-                              text:text.slice(0,140), preview, active
-                            };
-                          }
-                          return {
-                            ok:false, reason:'no_match', count:rows.length, preview, active
+                          const next = modal.querySelector(
+                            '.ant-pagination-next:not(.ant-pagination-disabled)'
+                          );
+                          if (!next) return {
+                            ok:false, reason:'no_next', active, clicked:false
                           };
-                        }""",
-                        {"wantFlight": want_flight, "ddmon": ddmon},
+                          const before = active;
+                          (next.querySelector('button, a') || next).click();
+                          return { ok:true, clicked:true, before, active };
+                        }"""
                     ) or {}
-                    page_previews.extend(page_pick.get("preview") or [])
+                    if not hop_state.get("clicked"):
+                        pagination_trace.append({"hop": hop, **hop_state})
+                        break
+                    # Chờ trang đổi + có row (tránh count=0 lúc tbody đang replace).
+                    try:
+                        self.page.wait_for_function(
+                            """before => {
+                              const visible = el => {
+                                const r = el.getBoundingClientRect();
+                                const s = getComputedStyle(el);
+                                return r.width > 40 && r.height > 40
+                                  && s.display !== 'none'
+                                  && s.visibility !== 'hidden';
+                              };
+                              const dialogs = [...document.querySelectorAll(
+                                '.ant-modal, [role=dialog]'
+                              )].filter(visible).filter(el => el.querySelector('#flightNo'));
+                              const modal = dialogs[dialogs.length - 1];
+                              if (!modal) return false;
+                              const active = String(
+                                modal.querySelector('.ant-pagination-item-active')?.textContent || ''
+                              ).trim();
+                              const rows = [...modal.querySelectorAll(
+                                '.ant-table-tbody tr, table tbody tr'
+                              )].filter(tr => {
+                                const t = (tr.innerText||'').trim();
+                                return t.length >= 4
+                                  && !/ant-table-measure|ant-table-placeholder/i.test(
+                                    tr.className||''
+                                  );
+                              });
+                              return active && active !== String(before || '') && rows.length > 0;
+                            }""",
+                            hop_state.get("before") or hop_state.get("active") or "",
+                            timeout=2500,
+                        )
+                    except Exception:
+                        self.page.wait_for_timeout(350)
+
+                    # Re-bind modal sau mỗi hop (tránh stale locator).
+                    try:
+                        modal = self.page.locator(
+                            ".ant-modal:visible, [role=dialog]:visible"
+                        ).filter(has=self.page.locator("#flightNo")).last
+                    except Exception:
+                        pass
+
+                    page_pick = modal.evaluate(
+                        _PICK_ROWS_JS,
+                        {
+                            "wantFlight": want_flight,
+                            "dateToks": list(date_toks),
+                            "ddmon": ddmon,
+                        },
+                    ) or {}
+                    page_previews.extend(page_pick.get("rows") or [])
+                    active_now = ""
+                    try:
+                        active_now = str(
+                            modal.evaluate(
+                                """el => (el.querySelector(
+                                  '.ant-pagination-item-active'
+                                )?.textContent || '').trim()"""
+                            )
+                            or ""
+                        )
+                    except Exception:
+                        active_now = ""
                     pagination_trace.append(
                         {
-                            "page": page_number,
+                            "hop": hop,
                             "clicked": True,
-                            "active": page_pick.get("active"),
+                            "active": active_now,
                             "count": page_pick.get("count"),
-                            "preview": (page_pick.get("preview") or [])[:2],
+                            "preview": (page_pick.get("rows") or [])[:2],
+                            "ok": bool(page_pick.get("ok")),
                         }
                     )
                     if page_pick.get("ok"):
                         pick = page_pick
-                        pick["pagination_page"] = page_number
+                        pick["pagination_page"] = active_now or (hop + 2)
                         pick["pagination_trace"] = pagination_trace
                         break
                 except Exception as e:
-                    warnings.append(f"Duyệt trang chuyến bay {page_number}: {e}")
+                    warnings.append(f"Duyệt trang chuyến bay hop={hop}: {e}")
                     break
             if isinstance(pick, dict) and not pick.get("ok"):
                 pick["pagination_preview"] = page_previews[:24]
@@ -1698,7 +1724,7 @@ class EsidDeclarePage:
                         re.I,
                     )
                 )
-                confirm_modal.last.wait_for(state="visible", timeout=4200)
+                confirm_modal.last.wait_for(state="visible", timeout=9000)
                 dialog = confirm_modal.last
                 agree = dialog.get_by_role(
                     "button", name=re.compile(r"^Đồng\s*ý$", re.I)
@@ -1713,21 +1739,52 @@ class EsidDeclarePage:
                         has_text=re.compile(r"Đồng\s*ý", re.I)
                     )
                 if agree.count() == 0:
+                    # Fallback toàn trang (portal confirm ngoài dialog filter).
+                    agree = self.page.get_by_role(
+                        "button", name=re.compile(r"^Đồng\s*ý$", re.I)
+                    )
+                if agree.count() == 0:
                     warnings.append(
                         "Không thấy đúng nút Đồng ý trong hộp xác nhận chuyến bay"
                     )
                 else:
-                    agree.last.click(timeout=2500, force=True)
+                    agree.last.click(timeout=3000, force=True)
                     agree_clicked = True
                     try:
-                        dialog.wait_for(state="hidden", timeout=3600)
+                        dialog.wait_for(state="hidden", timeout=5000)
                         agree_modal_closed = True
                     except Exception:
-                        warnings.append(
-                            "Đã bấm Đồng ý nhưng hộp xác nhận chuyến bay chưa đóng"
-                        )
+                        # Có thể dialog locator stale — coi như đóng nếu hết confirm.
+                        try:
+                            still = self.page.locator(
+                                ".ant-modal-confirm:visible"
+                            ).count()
+                            agree_modal_closed = still == 0
+                        except Exception:
+                            agree_modal_closed = False
+                        if not agree_modal_closed:
+                            warnings.append(
+                                "Đã bấm Đồng ý nhưng hộp xác nhận chuyến bay chưa đóng"
+                            )
             except Exception as e:
-                warnings.append(f"Không xử lý được popup Đồng ý chuyến bay: {e}")
+                # Thử bấm Đồng ý toàn cục nếu filter modal fail.
+                try:
+                    global_agree = self.page.get_by_role(
+                        "button", name=re.compile(r"^Đồng\s*ý$", re.I)
+                    )
+                    if global_agree.count() > 0:
+                        global_agree.last.click(timeout=2500, force=True)
+                        agree_clicked = True
+                        self.page.wait_for_timeout(400)
+                        agree_modal_closed = True
+                    else:
+                        warnings.append(
+                            f"Không xử lý được popup Đồng ý chuyến bay: {e}"
+                        )
+                except Exception as e2:
+                    warnings.append(
+                        f"Không xử lý được popup Đồng ý chuyến bay: {e}; fallback: {e2}"
+                    )
 
         pick["agree_clicked"] = agree_clicked
         pick["agree_modal_closed"] = agree_modal_closed

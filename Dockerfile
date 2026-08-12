@@ -23,9 +23,10 @@ COPY tcs-awb-automation/requirements-server.txt tcs-awb-automation/requirements-
 RUN pip install --no-cache-dir -r tcs-awb-automation/requirements-server.txt \
     && python -m playwright install chromium
 
-# Source + build frontend
+# Source + build frontend.
+# OCR Ext (common.onnx + ORT WASM) — lấy từ ddddocr/pip + onnxruntime-web trước khi package ZIP.
 COPY . .
-RUN npm run build
+RUN npm run ext:fetch-ocr && npm run build
 
 # API-first headless — Ops online gọi same-origin /tcs-agent.
 # Dual agent kho TCS: Railway Variables TCS_AGENT_DUAL=1 + TCS_USERNAME_TCS / TCS_PASSWORD_TCS.

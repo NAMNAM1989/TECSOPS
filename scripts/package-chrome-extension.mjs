@@ -136,12 +136,15 @@ function warnIfOcrIncomplete(dirName) {
   const hasOrt = fs.existsSync(ort);
   if (!hasOnnx || !hasOrt) {
     console.warn(
-      `[${dirName}] OCR binary thiếu — ZIP không đủ OCR offline. Máy PC: npm run ext:fetch-ocr`
+      `[${dirName}] OCR binary thiếu — ZIP không đủ OCR offline. Chạy: npm run ext:fetch-ocr`
+    );
+  } else {
+    console.info(
+      `[${dirName}] OCR OK · onnx=${fs.statSync(onnx).size} · ort=${fs.statSync(ort).size}`
     );
   }
 }
 
-// Railway/prebuild: không bắt buộc common.onnx (gitignore, chỉ cần trên máy cài Ext).
 warnIfOcrIncomplete("chrome-extension");
 warnIfOcrIncomplete("chrome-extension-tcs");
 

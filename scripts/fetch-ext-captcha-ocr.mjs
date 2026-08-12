@@ -1,6 +1,9 @@
 /**
  * Chuẩn bị asset OCR CAPTCHA cho Chrome Ext (ddddocr common.onnx + ORT WASM).
  * Chạy: npm run ext:fetch-ocr
+ *
+ * Railway/Docker: ddddocr đã cài qua pip — copy common.onnx từ site-packages.
+ * charsets.json giữ trong repo (không bắt buộc API get_charset).
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -17,7 +20,9 @@ const primary = targets[0];
 function copyFile(src, dest) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.copyFileSync(src, dest);
-  console.info(`[ext:fetch-ocr] ${path.relative(root, dest)} (${fs.statSync(dest).size} bytes)`);
+  console.info(
+    `[ext:fetch-ocr] ${path.relative(root, dest)} (${fs.statSync(dest).size} bytes)`
+  );
 }
 
 function findOrtDist() {
@@ -30,9 +35,23 @@ function findOrtDist() {
   return dist;
 }
 
+function runPython(code) {
+  for (const bin of ["python3", "python"]) {
+    const result = spawnSync(bin, ["-c", code], {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+    });
+    if (result.error?.code === "ENOENT") continue;
+    return result;
+  }
+  return { status: 127, stdout: "", stderr: "python not found" };
+}
+
 function exportFromPython(outDir) {
+  const outPosix = outDir.replaceAll("\\", "/");
   const py = `
-import json, pathlib, shutil, sys
+import pathlib, shutil, sys
 try:
     import ddddocr
 except ImportError:
@@ -41,54 +60,45 @@ pkg = pathlib.Path(ddddocr.__file__).parent
 onnx = pkg / "common.onnx"
 if not onnx.exists():
     sys.exit(3)
-out = pathlib.Path(r"""${outDir.replaceAll("\\", "/")}""")
+out = pathlib.Path(r"""${outPosix}""")
 out.mkdir(parents=True, exist_ok=True)
 shutil.copy2(onnx, out / "common.onnx")
-ocr = ddddocr.DdddOcr(show_ad=False)
+charset = out / "charsets.json"
+if charset.exists() and charset.stat().st_size > 1000:
+    print("ok-onnx", onnx.stat().st_size, "charset-cached")
+    raise SystemExit(0)
+# Cố gắng export charset; không bắt buộc nếu đã có file trong repo.
 chars = None
-if hasattr(ocr, "get_charset"):
-    chars = list(ocr.get_charset())
-elif hasattr(ocr, "charset_manager") and getattr(ocr.charset_manager, "charset", None):
-    chars = list(ocr.charset_manager.charset)
-else:
-    # ddddocr 1.5.x trên Linux/Docker: lấy từ module charsets
-    try:
-        from ddddocr import charsets as csmod
-        for name in ("charset", "CHARSET", "common_charset", "characters"):
-            if hasattr(csmod, name):
-                chars = list(getattr(csmod, name))
-                break
-        if chars is None:
-            # một số bản export dict / list ở cấp module
-            for v in vars(csmod).values():
-                if isinstance(v, (list, tuple)) and len(v) > 100:
-                    chars = list(v)
-                    break
-    except Exception:
-        chars = None
-if not chars:
-    # Giữ charsets.json đã có trong repo nếu export fail
-    existing = out / "charsets.json"
-    if existing.exists() and existing.stat().st_size > 1000:
-        print("ok-charset-cached", onnx.stat().st_size)
-        raise SystemExit(0)
-    sys.exit(4)
-(out / "charsets.json").write_text(json.dumps(chars, ensure_ascii=False), encoding="utf-8")
-print("ok", len(chars), onnx.stat().st_size)
+try:
+    ocr = ddddocr.DdddOcr(show_ad=False)
+    if hasattr(ocr, "get_charset"):
+        chars = list(ocr.get_charset())
+    elif hasattr(ocr, "charset_manager") and getattr(ocr.charset_manager, "charset", None):
+        chars = list(ocr.charset_manager.charset)
+except Exception as exc:
+    print("charset-skip", type(exc).__name__, str(exc)[:120], file=sys.stderr)
+if chars:
+    import json
+    charset.write_text(json.dumps(chars, ensure_ascii=False), encoding="utf-8")
+    print("ok", len(chars), onnx.stat().st_size)
+    raise SystemExit(0)
+if charset.exists() and charset.stat().st_size > 1000:
+    print("ok-onnx", onnx.stat().st_size, "charset-kept")
+    raise SystemExit(0)
+sys.exit(4)
 `;
-  const result = spawnSync("python", ["-c", py], {
-    cwd: root,
-    encoding: "utf8",
-    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-  });
+  const result = runPython(py);
   if (result.status === 0) {
-    console.info(`[ext:fetch-ocr] python ddddocr → ${result.stdout.trim()}`);
+    console.info(`[ext:fetch-ocr] python ddddocr → ${String(result.stdout || "").trim()}`);
     return true;
   }
   if (result.status === 2) {
     console.warn("[ext:fetch-ocr] Chưa cài ddddocr (pip install ddddocr)");
   } else {
-    console.warn("[ext:fetch-ocr] python export fail:", result.stderr || result.stdout);
+    console.warn(
+      "[ext:fetch-ocr] python export fail:",
+      String(result.stderr || result.stdout || result.status).slice(0, 400)
+    );
   }
   return false;
 }
@@ -96,9 +106,18 @@ print("ok", len(chars), onnx.stat().st_size)
 function ensureModelAndCharset() {
   const onnxPath = path.join(primary, "common.onnx");
   const charsetPath = path.join(primary, "charsets.json");
-  if (fs.existsSync(onnxPath) && fs.statSync(onnxPath).size > 1_000_000 && fs.existsSync(charsetPath)) {
+  if (
+    fs.existsSync(onnxPath) &&
+    fs.statSync(onnxPath).size > 1_000_000 &&
+    fs.existsSync(charsetPath)
+  ) {
     console.info("[ext:fetch-ocr] Đã có common.onnx + charsets.json");
     return;
+  }
+  if (!fs.existsSync(charsetPath) || fs.statSync(charsetPath).size < 1000) {
+    throw new Error(
+      "Thiếu chrome-extension-tcs/ocr/charsets.json trong repo"
+    );
   }
   if (exportFromPython(primary)) return;
   throw new Error(
@@ -123,8 +142,7 @@ function ensureOrtFiles() {
 }
 
 function syncSharedJsAndAssets() {
-  const sharedJs = ["offscreen.html", "offscreen.js"];
-  for (const name of sharedJs) {
+  for (const name of ["offscreen.html", "offscreen.js", "charsets.json"]) {
     const src = path.join(primary, name);
     if (!fs.existsSync(src)) {
       throw new Error(`Thiếu ${src} — giữ file này trong repo`);
@@ -138,6 +156,7 @@ function syncSharedJsAndAssets() {
     "ort-wasm-simd-threaded.mjs",
     "offscreen.html",
     "offscreen.js",
+    "README.md",
   ];
   for (const destDir of targets.slice(1)) {
     fs.mkdirSync(destDir, { recursive: true });

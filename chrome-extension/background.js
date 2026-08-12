@@ -521,9 +521,37 @@ function buildOcrAgentCandidates(agentBaseUrl) {
 }
 
 /** Offscreen + ONNX (ddddocr) — OCR CAPTCHA không cần agent/cloud. */
+async function extOcrAssetsReady() {
+  // Chỉ check file nhỏ — ZIP thiếu OCR thường mất ort.min.js (Railway build cũ).
+  // Không fetch common.onnx (~54MB) chỉ để kiểm tra.
+  try {
+    const checks = await Promise.all(
+      ["ocr/ort.min.js", "ocr/charsets.json"].map(async (rel) => {
+        const res = await fetch(chrome.runtime.getURL(rel));
+        if (res.body) {
+          try {
+            await res.body.cancel();
+          } catch {
+            /* ignore */
+          }
+        }
+        return res.ok;
+      })
+    );
+    return checks.every(Boolean);
+  } catch {
+    return false;
+  }
+}
+
 async function ensureOcrOffscreen() {
   if (!chrome.offscreen?.createDocument) {
     throw new Error("Trình duyệt không hỗ trợ chrome.offscreen");
+  }
+  if (!(await extOcrAssetsReady())) {
+    throw new Error(
+      "Thiếu model OCR trong Ext (ort.min.js / common.onnx). Tải lại ZIP từ Ops hoặc chạy npm run ext:fetch-ocr rồi Reload."
+    );
   }
   const url = chrome.runtime.getURL("ocr/offscreen.html");
   const existing = await chrome.runtime.getContexts({

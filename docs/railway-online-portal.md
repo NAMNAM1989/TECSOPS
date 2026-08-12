@@ -61,8 +61,9 @@ Quét agent dùng `POST /workspace/scan` (nhẹ — không prefetch PDF).
 ## CAPTCHA
 
 - **PC + Chrome Ext (ưu tiên):** OCR **trong Ext** (ONNX / ddddocr `common.onnx`, offscreen MV3) — không cần agent/cloud để ĐN.
-  - Chuẩn bị asset: `npm run ext:fetch-ocr` (cần `pip install ddddocr` + `onnxruntime-web`).
-  - Ext TCS **≥1.5.0** / TECS-TCS **≥2.6.0** → Reload unpacked.
+  - ZIP tải từ Ops phải **≥ ~60MB** (có `ocr/ort.min.js` + `ocr/common.onnx`). ZIP ~200KB = thiếu OCR (build cũ) → ĐN lỗi / CAPTCHA tay.
+  - Local: `npm run ext:fetch-ocr` rồi load unpacked / `npm run ext:package`.
+  - Ext TCS **≥1.5.1** / TECS-TCS **≥2.6.1** → Reload.
   - Fallback: agent localhost `/captcha/solve` → nhập tay trên tab TCS.
 - **Phone / headless Railway:** vẫn phụ thuộc `TCS_CAPTCHA_OCR` + session volume (không có cửa sổ nhập tay).
 - Nếu ĐN fail trên cloud: kiểm tra password Variables, OCR trong image, hoặc refresh volume profile.

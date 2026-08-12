@@ -60,13 +60,30 @@ Quét agent dùng `POST /workspace/scan` (nhẹ — không prefetch PDF).
 
 ## CAPTCHA
 
-- Headless **không** nhập tay được — phụ thuộc `TCS_CAPTCHA_OCR` + session volume.
-- Nếu ĐN fail: kiểm tra password Variables, OCR (`ddddocr` trong image), hoặc xóa/refresh volume profile rồi ĐN lại.
+- **PC + Chrome Ext (ưu tiên):** OCR **trong Ext** (ONNX / ddddocr `common.onnx`, offscreen MV3) — không cần agent/cloud để ĐN.
+  - Chuẩn bị asset: `npm run ext:fetch-ocr` (cần `pip install ddddocr` + `onnxruntime-web`).
+  - Ext TCS **≥1.5.0** / TECS-TCS **≥2.6.0** → Reload unpacked.
+  - Fallback: agent localhost `/captcha/solve` → nhập tay trên tab TCS.
+- **Phone / headless Railway:** vẫn phụ thuộc `TCS_CAPTCHA_OCR` + session volume (không có cửa sổ nhập tay).
+- Nếu ĐN fail trên cloud: kiểm tra password Variables, OCR trong image, hoặc refresh volume profile.
 
 ## Local (dev)
 
 - `npm run portal:start:both` hoặc `tcs:agent:real` — agent local headed.
 - Policy `ext-only` nếu muốn chỉ Chrome Ext trên máy dev.
+- OCR Ext: `npm run ext:fetch-ocr` rồi load unpacked.
+
+## Máy kiểm soát — Playwright headed (nhìn thấy cửa sổ)
+
+Giữ Ops trên Railway HTTPS; chạy Playwright **headed trên máy đó** qua cầu Chrome Ext (localhost).
+
+1. `git pull` + `npm run ext:fetch-ocr` + Reload Ext đúng kho (TCS **1.5.0** / TECS-TCS **2.6.0**).
+2. Trên máy kiểm soát: `npm run portal:headed:local` (mở Chromium headed `:8765` / `:8766`).
+3. Mở Ops Railway **trên cùng Chrome** đã cài Ext.
+4. Bật nút **PW local** trên thanh TCS.
+5. **ĐN** → **Quét** / **Điền** — theo dõi cửa sổ Chromium trên máy này.
+
+Tắt **PW local** để về agent cloud headless / Ext content-script như trước.
 
 ## Không dùng nữa
 

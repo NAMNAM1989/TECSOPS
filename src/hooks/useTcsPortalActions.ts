@@ -54,6 +54,10 @@ import {
   setPortalVisualControl,
   shouldLockToExtensionVisual,
 } from "../utils/portalExecutorPolicy";
+import {
+  getPortalPlaywrightLocal,
+  setPortalPlaywrightLocal,
+} from "../utils/portalPlaywrightLocal";
 import { extensionOcrBaseUrl } from "../utils/tcsOcrAgentEndpoints";
 import { portalBusyUserMessage } from "../utils/tcsPortalScanGate";
 
@@ -150,6 +154,13 @@ export function useTcsPortalActions({
   const setVisualControl = useCallback((on: boolean) => {
     setPortalVisualControl(on);
     setVisualControlState(on);
+  }, []);
+  const [playwrightLocal, setPlaywrightLocalState] = useState(() =>
+    getPortalPlaywrightLocal()
+  );
+  const setPlaywrightLocal = useCallback((on: boolean) => {
+    setPortalPlaywrightLocal(on);
+    setPlaywrightLocalState(on);
   }, []);
   const [health, setHealth] = useState<TcsAgentHealth | null>(null);
   const [extension, setExtension] = useState<TcsExtResult | null>(null);
@@ -284,7 +295,7 @@ export function useTcsPortalActions({
     // Ext Đồng bộ chỉ login tab Chrome user — agent Playwright có thể chưa mở.
     // Tự mở session khi tải PDF / điền (không bắt user bấm Login riêng).
     if (!s?.open || !s?.logged_in) {
-      const wantVisible = online.headless === false;
+      const wantVisible = playwrightLocal || online.headless === false;
       setBusyLabel(
         wantVisible
           ? `Đang mở Chrome agent ${portalWarehouse} (PDF/Điền)…`
@@ -309,13 +320,15 @@ export function useTcsPortalActions({
     if (!s?.open) {
       setError(
         (s?.message && String(s.message).trim()) ||
-          `Không mở được agent cloud ${portalWarehouse}. ` +
-            "Kiểm tra Railway /tcs-agent hoặc chạy agent local."
+          (playwrightLocal
+            ? `Không mở được agent headed local ${portalWarehouse}. Chạy npm run portal:headed:local.`
+            : `Không mở được agent cloud ${portalWarehouse}. ` +
+              "Kiểm tra Railway /tcs-agent hoặc chạy agent local.")
       );
       return false;
     }
     if (!s?.logged_in) {
-      const headless = online.headless !== false;
+      const headless = !playwrightLocal && online.headless !== false;
       setError(
         headless
           ? "Agent cloud chưa login — bấm ĐN để OCR CAPTCHA / khôi phục session (volume browser_profile)."
@@ -328,6 +341,7 @@ export function useTcsPortalActions({
   }, [
     agentOpts,
     health?.ok,
+    playwrightLocal,
     portalWarehouse,
     refreshHealth,
     session?.logged_in,
@@ -522,30 +536,45 @@ export function useTcsPortalActions({
   const login = useCallback(async () => {
     setError("");
     setMessage("");
-    const extPing = await pingTcsExtension({ warehouse: portalWarehouse });
-    setExtension(extPing);
-    const order = resolvePortalExecutorOrder("login", {
-      policy: executorPolicy,
-      preferRemote: preferRemotePortal,
-      isMobile,
-      visualControl,
-      extensionOnline: Boolean(extPing.ok),
-    });
-    const tryAgent = order.includes("agent");
+    if (playwrightLocal && !isMobile) {
+      const extPing = await pingTcsExtension({ warehouse: portalWarehouse });
+      setExtension(extPing);
+      if (!extPing.ok) {
+        setError(
+          `PW local: cần ${tcsExtLabel(portalWarehouse)} online để nối agent headed. Reload Ext rồi thử lại.`
+        );
+        return;
+      }
+    } else {
+      const extPing = await pingTcsExtension({ warehouse: portalWarehouse });
+      setExtension(extPing);
+      const order = resolvePortalExecutorOrder("login", {
+        policy: executorPolicy,
+        preferRemote: preferRemotePortal,
+        isMobile,
+        visualControl,
+        extensionOnline: Boolean(extPing.ok),
+      });
+      const tryAgent = order.includes("agent");
 
-    if (!tryAgent) {
-      setError(
-        visualControl && extPing.ok
-          ? `Chế độ trực quan: ĐN bằng ${tcsExtLabel(portalWarehouse)} (tab Chrome). ` +
-              "Điền user/pass trên form Ext — không dùng agent ẩn."
-          : `Cần Chrome Ext kho ${portalWarehouse} (${tcsExtLabel(portalWarehouse)}). ` +
-              "Bấm «Tải Ext» trên toolbar, mở đúng profile Chrome, rồi ĐN lại."
-      );
-      return;
+      if (!tryAgent) {
+        setError(
+          visualControl && extPing.ok
+            ? `Chế độ trực quan: ĐN bằng ${tcsExtLabel(portalWarehouse)} (tab Chrome). ` +
+                "Điền user/pass trên form Ext — không dùng agent ẩn."
+            : `Cần Chrome Ext kho ${portalWarehouse} (${tcsExtLabel(portalWarehouse)}). ` +
+                "Bấm «Tải Ext» trên toolbar, mở đúng profile Chrome, rồi ĐN lại."
+        );
+        return;
+      }
     }
 
     setBusy(true);
-    setBusyLabel(`Đăng nhập agent ${portalWarehouse}…`);
+    setBusyLabel(
+      playwrightLocal
+        ? `Đăng nhập Playwright local ${portalWarehouse}…`
+        : `Đăng nhập agent ${portalWarehouse}…`
+    );
     try {
       const online = await pingTcsAgent(3500, agentOpts);
       setHealth(online);
@@ -553,14 +582,14 @@ export function useTcsPortalActions({
         setError(agentOfflineHint(getTcsAgentBaseUrl()));
         return;
       }
-      const wantVisible = online.headless === false;
+      const wantVisible = playwrightLocal || online.headless === false;
       const opened = await openTcsAgentSession({
         visible: wantVisible,
         warehouse: portalWarehouse,
       });
       setSession(opened);
       if (!opened?.open || !opened?.logged_in) {
-        const headless = online.headless !== false;
+        const headless = !playwrightLocal && online.headless !== false;
         setError(
           opened?.message ||
             (headless
@@ -571,7 +600,9 @@ export function useTcsPortalActions({
         return;
       }
       setMessage(
-        `Agent cloud đã đăng nhập (${portalWarehouse}) — bấm Quét tiếp nhận khi cần.`
+        playwrightLocal
+          ? `Playwright local đã đăng nhập (${portalWarehouse}) — xem cửa sổ Chromium.`
+          : `Agent cloud đã đăng nhập (${portalWarehouse}) — bấm Quét tiếp nhận khi cần.`
       );
       await refreshHealth();
     } finally {
@@ -582,6 +613,7 @@ export function useTcsPortalActions({
     agentOpts,
     executorPolicy,
     isMobile,
+    playwrightLocal,
     portalWarehouse,
     preferRemotePortal,
     refreshHealth,
@@ -624,7 +656,7 @@ export function useTcsPortalActions({
         setError(agentOfflineHint(getTcsAgentBaseUrl()));
         return;
       }
-      const wantVisible = online.headless === false;
+      const wantVisible = playwrightLocal || online.headless === false;
       const res = await scanTcsWorkspace(sessionYmd, pendingAwbs, {
         visible: wantVisible,
         warehouse: portalWarehouse,
@@ -677,6 +709,7 @@ export function useTcsPortalActions({
     extension?.ok,
     isMobile,
     pendingReception,
+    playwrightLocal,
     portalWarehouse,
     preferRemotePortal,
     refreshHealth,
@@ -710,13 +743,15 @@ export function useTcsPortalActions({
 
       const extForOrder = await pingTcsExtension({ warehouse: rowPortal });
       setExtension(extForOrder);
-      const pdfOrder = resolvePortalExecutorOrder("pdf", {
-        policy: executorPolicy,
-        preferRemote: preferRemotePortal,
-        isMobile,
-        visualControl,
-        extensionOnline: Boolean(extForOrder.ok),
-      });
+      const pdfOrder = playwrightLocal
+        ? (["agent"] as const)
+        : resolvePortalExecutorOrder("pdf", {
+            policy: executorPolicy,
+            preferRemote: preferRemotePortal,
+            isMobile,
+            visualControl,
+            extensionOnline: Boolean(extForOrder.ok),
+          });
 
       const tryPdfExt = async (t0: number) => {
         const ext = await pingTcsExtension({ warehouse: rowPortal });
@@ -850,7 +885,7 @@ export function useTcsPortalActions({
         setBusyLabel("");
       }
     },
-    [ensureSessionReady, executorPolicy, isMobile, preferRemotePortal, sessionYmd, visualControl]
+    [ensureSessionReady, executorPolicy, isMobile, playwrightLocal, preferRemotePortal, sessionYmd, visualControl]
   );
 
   /** Điền ESID = tạo phiếu khai báo trên TCS — độc lập với Quét HT Ops. */
@@ -906,14 +941,17 @@ export function useTcsPortalActions({
         setBusyLabel(`Điền ESID …${digits.slice(-8)}${custNote}…`);
         const ext = await pingTcsExtension({ warehouse: rowPortal });
         setExtension(ext);
-        const fillOrder = resolvePortalExecutorOrder("fill", {
-          policy: executorPolicy,
-          preferRemote: preferRemotePortal,
-          isMobile,
-          visualControl,
-          extensionOnline: Boolean(ext.ok),
-        });
+        const fillOrder = playwrightLocal
+          ? (["agent"] as const)
+          : resolvePortalExecutorOrder("fill", {
+              policy: executorPolicy,
+              preferRemote: preferRemotePortal,
+              isMobile,
+              visualControl,
+              extensionOnline: Boolean(ext.ok),
+            });
         if (
+          !playwrightLocal &&
           shouldLockToExtensionVisual({
             isMobile,
             visualControl,
@@ -926,6 +964,12 @@ export function useTcsPortalActions({
             !ext.ok
               ? `Chế độ trực quan: cần ${tcsExtLabel(rowPortal)} online để xem thao tác trên Chrome.`
               : `Chế độ trực quan: ĐN ${tcsExtLabel(rowPortal)} trước khi Điền (không chạy agent ẩn).`
+          );
+          return;
+        }
+        if (playwrightLocal && !ext.ok) {
+          setError(
+            `PW local: cần ${tcsExtLabel(rowPortal)} online để nối Playwright headed. Reload Ext + npm run portal:headed:local.`
           );
           return;
         }
@@ -1063,6 +1107,7 @@ export function useTcsPortalActions({
       executorPolicy,
       health?.headless,
       isMobile,
+      playwrightLocal,
       portalWarehouse,
       preferRemotePortal,
       refreshHealth,
@@ -1193,6 +1238,9 @@ export function useTcsPortalActions({
     /** true = desktop + Ext → không fallback headless ẩn (mặc định bật). */
     visualControl,
     setVisualControl,
+    /** true = Playwright headed local qua cầu Ext (máy kiểm soát). */
+    playwrightLocal,
+    setPlaywrightLocal,
     preferRemotePortal: false,
     /** false = Chrome thật (legacy agent-only) */
     agentHeadless: health?.headless ?? session?.headless,

@@ -111,6 +111,7 @@ type ExtensionCommand =
   | "TCS_INVALIDATE_SESSION"
   | "FILL_ESID"
   | "DOWNLOAD_ESID_PDF"
+  | "AGENT_FETCH"
   | "FILL_ECARGO_VCT"
   | "REGISTER_ECARGO_VCT"
   | "ECARGO_LOOKUP_AGENT"
@@ -310,6 +311,41 @@ export function downloadEsidPdfViaExtension(
     "DOWNLOAD_ESID_PDF",
     payload,
     180_000,
+    warehouse
+  );
+}
+
+export type TcsExtAgentFetchPayload = {
+  path: string;
+  method?: string;
+  body?: unknown;
+  timeoutMs?: number;
+  agentBaseUrl?: string;
+};
+
+export type TcsExtAgentFetchResult = TcsExtResult & {
+  status?: number;
+  agentBase?: string;
+  data?: Record<string, unknown>;
+};
+
+/**
+ * Ops → Ext → Playwright agent localhost (headed trên máy kiểm soát).
+ * Dùng khi bật «PW local» từ trang Railway HTTPS.
+ */
+export function agentFetchViaExtension(
+  payload: TcsExtAgentFetchPayload,
+  opts?: TcsExtRequestOpts
+): Promise<TcsExtAgentFetchResult> {
+  const warehouse = opts?.warehouse ?? "TECS-TCS";
+  const timeoutMs = Math.max(
+    5_000,
+    Math.min(360_000, Number(payload.timeoutMs) || 60_000)
+  );
+  return request<TcsExtAgentFetchResult>(
+    "AGENT_FETCH",
+    { ...payload, timeoutMs },
+    timeoutMs + 5_000,
     warehouse
   );
 }

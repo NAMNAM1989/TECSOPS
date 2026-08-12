@@ -48,3 +48,13 @@ tcs-awb-automation/discovery_artifacts/
 tcs-awb-automation/**/__pycache__/
 tcs-awb-automation/.pytest_cache/
 public/downloads/*.zip
+
+# Chrome Ext OCR binaries (lấy bằng npm run ext:fetch-ocr)
+chrome-extension/ocr/common.onnx
+chrome-extension/ocr/ort.min.js
+chrome-extension/ocr/ort-wasm*.wasm
+chrome-extension/ocr/ort-wasm*.mjs
+chrome-extension-tcs/ocr/common.onnx
+chrome-extension-tcs/ocr/ort.min.js
+chrome-extension-tcs/ocr/ort-wasm*.wasm
+chrome-extension-tcs/ocr/ort-wasm*.mjs

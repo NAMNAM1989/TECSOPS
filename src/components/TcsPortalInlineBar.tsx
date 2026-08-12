@@ -33,11 +33,14 @@ export function TcsPortalInlineBar({
   const btnSubmit = `${btn} bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm`;
   const btnVisualOn = `${btn} border border-violet-600/50 bg-violet-50 text-violet-900 hover:bg-violet-100`;
   const btnVisualOff = `${btn} border border-ui-border bg-ui-surface text-slate-600 hover:bg-slate-50`;
+  const btnPwOn = `${btn} border border-teal-600/50 bg-teal-50 text-teal-900 hover:bg-teal-100`;
+  const btnPwOff = `${btn} border border-ui-border bg-ui-surface text-slate-600 hover:bg-slate-50`;
 
   const portalWh = tcs.portalWarehouse;
   const extLabel = tcs.extLabel;
   const usesAgent = portalPolicyUsesAgent(tcs.executorPolicy);
   const visualControl = Boolean(tcs.visualControl);
+  const playwrightLocal = Boolean(tcs.playwrightLocal);
   const agentOk = Boolean(tcs.health?.ok);
   const agentLoggedIn = Boolean(
     tcs.session?.logged_in || tcs.health?.session?.logged_in
@@ -73,6 +76,12 @@ export function TcsPortalInlineBar({
     // Phone: chỉ agent (nút ĐN đã ẩn — giữ path cho gọi nội bộ).
     if (isMobile) {
       if (usesAgent) await tcs.login();
+      return;
+    }
+
+    // PW local: ĐN Playwright headed qua cầu Ext (không form Ext content-script).
+    if (playwrightLocal) {
+      await tcs.login();
       return;
     }
 
@@ -152,6 +161,18 @@ export function TcsPortalInlineBar({
       window.alert(
         `Cần agent cloud để Quét kho ${portalWh} trên điện thoại.`
       );
+      return;
+    }
+
+    // PW local: Quét Playwright headed (Ext chỉ làm cầu localhost).
+    if (playwrightLocal) {
+      if (!extOk) {
+        window.alert(
+          `PW local: cần ${extLabel} online. Reload Ext + chạy npm run portal:headed:local.`
+        );
+        return;
+      }
+      await tcs.scanReceptionWithAgent();
       return;
     }
 
@@ -294,6 +315,30 @@ export function TcsPortalInlineBar({
             onClick={() => tcs.setVisualControl(!visualControl)}
           >
             {compact ? (visualControl ? "TQ" : "Ẩn") : visualControl ? "Trực quan" : "Ẩn"}
+          </button>
+        ) : null}
+
+        {!isMobile ? (
+          <button
+            type="button"
+            className={playwrightLocal ? btnPwOn : btnPwOff}
+            disabled={tcs.busy}
+            title={
+              playwrightLocal
+                ? "PW local BẬT: Quét/Điền qua Playwright headed trên máy này (Ext cầu localhost). Bấm để tắt."
+                : "PW local TẮT. Bật sau khi chạy npm run portal:headed:local để thấy cửa sổ Chromium."
+            }
+            onClick={() => {
+              const next = !playwrightLocal;
+              tcs.setPlaywrightLocal(next);
+              if (next) {
+                window.alert(
+                  "PW local BẬT.\n\n1) npm run portal:headed:local\n2) Reload Ext đúng kho\n3) ĐN → Quét/Điền — nhìn cửa sổ Chromium trên máy này."
+                );
+              }
+            }}
+          >
+            {compact ? (playwrightLocal ? "PW" : "PW·") : playwrightLocal ? "PW local" : "PW off"}
           </button>
         ) : null}
 

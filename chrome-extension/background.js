@@ -74,6 +74,11 @@ function withServiceWorkerKeepAlive(promise) {
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  // OCR_SOLVE → offscreen document trả lời; OCR_RESULT không dùng ở đây.
+  if (msg?.type === "OCR_SOLVE" || msg?.type === "OCR_RESULT") {
+    return false;
+  }
+
   const reply = replyOnce(sendResponse);
   if (!msg || typeof msg !== "object") {
     reply({ ok: false, error: "INVALID_MESSAGE", message: "Payload không hợp lệ", version: EXT_VERSION });
@@ -161,6 +166,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     void withServiceWorkerKeepAlive(downloadEsidPdfOnTcsTab(msg.payload || {}))
       .then(reply)
       .catch((err) => reply(errorResult("DOWNLOAD_FAILED", err)));
+    return true;
+  }
+
+  if (msg.type === "AGENT_FETCH") {
+    void withServiceWorkerKeepAlive(agentFetchLocal(msg.payload || {}))
+      .then(reply)
+      .catch((err) => reply(errorResult("AGENT_FETCH_FAILED", err)));
     return true;
   }
 
@@ -403,6 +415,94 @@ function localAgentPortForWarehouse() {
 }
 
 /**
+ * Proxy Ops (Railway HTTPS) → Playwright agent headed trên máy này.
+ * payload: { path, method?, body?, timeoutMs?, agentBaseUrl? }
+ */
+async function agentFetchLocal(payload) {
+  const pathRaw = String(payload.path || "/health");
+  const path = pathRaw.startsWith("/") ? pathRaw : `/${pathRaw}`;
+  const method = String(payload.method || "GET").toUpperCase();
+  const timeoutMs = Math.max(
+    3_000,
+    Math.min(360_000, Number(payload.timeoutMs) || 60_000)
+  );
+  const primary = localAgentPortForWarehouse();
+  const bases = [
+    String(payload.agentBaseUrl || "").trim().replace(/\/+$/, ""),
+    `http://127.0.0.1:${primary}`,
+    `http://localhost:${primary}`,
+  ].filter(Boolean);
+  const uniqueBases = [...new Set(bases)];
+  let lastErr = "AGENT_OFFLINE";
+  for (const base of uniqueBases) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const init = {
+        method,
+        signal: ctrl.signal,
+        headers: {
+          Accept: "application/json",
+          "X-Portal-Warehouse": PORTAL_WAREHOUSE,
+        },
+      };
+      if (method !== "GET" && method !== "HEAD") {
+        init.headers["Content-Type"] = "application/json";
+        init.body = JSON.stringify(
+          payload.body == null ? {} : payload.body
+        );
+      }
+      const res = await fetch(`${base}${path}`, init);
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = {
+          ok: false,
+          error: "BAD_RESPONSE",
+          message: `Agent trả về không phải JSON (HTTP ${res.status})`,
+        };
+      }
+      if (!res.ok && data && typeof data === "object" && data.ok !== true) {
+        return {
+          ok: false,
+          error: data.error || `HTTP_${res.status}`,
+          message: data.message || `Agent HTTP ${res.status}`,
+          status: res.status,
+          agentBase: base,
+          data,
+          version: EXT_VERSION,
+          portalWarehouse: PORTAL_WAREHOUSE,
+        };
+      }
+      return {
+        ok: data?.ok !== false,
+        status: res.status,
+        agentBase: base,
+        data: data && typeof data === "object" ? data : { ok: true, value: data },
+        version: EXT_VERSION,
+        portalWarehouse: PORTAL_WAREHOUSE,
+        ...(data && typeof data === "object" ? data : {}),
+      };
+    } catch (err) {
+      lastErr = err?.name === "AbortError" ? "AGENT_PROXY_TIMEOUT" : String(err?.message || err);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return {
+    ok: false,
+    error: lastErr === "AGENT_PROXY_TIMEOUT" ? "AGENT_PROXY_TIMEOUT" : "AGENT_OFFLINE",
+    message:
+      lastErr === "AGENT_PROXY_TIMEOUT"
+        ? `Agent local timeout sau ${Math.round(timeoutMs / 1000)}s (${path})`
+        : `Agent headed local offline (${path}). Chạy: npm run portal:headed:local`,
+    version: EXT_VERSION,
+    portalWarehouse: PORTAL_WAREHOUSE,
+  };
+}
+
+/**
  * Danh sách endpoint OCR: ưu tiên port đúng kho, rồi port kia, rồi URL Ops truyền vào.
  * Mọi request gửi kèm X-Portal-Warehouse để proxy dual-agent không nhầm.
  */
@@ -420,14 +520,108 @@ function buildOcrAgentCandidates(agentBaseUrl) {
   return [...new Set(candidates)];
 }
 
+/** Offscreen + ONNX (ddddocr) — OCR CAPTCHA không cần agent/cloud. */
+async function ensureOcrOffscreen() {
+  if (!chrome.offscreen?.createDocument) {
+    throw new Error("Trình duyệt không hỗ trợ chrome.offscreen");
+  }
+  const url = chrome.runtime.getURL("ocr/offscreen.html");
+  const existing = await chrome.runtime.getContexts({
+    contextTypes: ["OFFSCREEN_DOCUMENT"],
+    documentUrls: [url],
+  });
+  if (existing?.length) return;
+  try {
+    await chrome.offscreen.createDocument({
+      url: "ocr/offscreen.html",
+      reasons: ["WORKERS", "BLOBS"],
+      justification: "OCR CAPTCHA TCS offline bằng ONNX trong extension",
+    });
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (!/already exists|Only a single offscreen/i.test(msg)) throw err;
+  }
+}
+
+async function solveCaptchaInExtension(dataUrl, opts = {}) {
+  let lastErr = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await ensureOcrOffscreen();
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 250 * attempt));
+      }
+      const result = await chrome.runtime.sendMessage({
+        type: "OCR_SOLVE",
+        dataUrl,
+        expectedLength: Number(opts.expectedLength ?? 5),
+        minConfidence: Number(opts.minConfidence ?? 0.4),
+      });
+      if (!result || typeof result !== "object") {
+        lastErr = "OCR_EXT_NO_RESPONSE";
+        continue;
+      }
+      if (result.ok && result.text) {
+        return {
+          ok: true,
+          text: String(result.text).trim().toUpperCase(),
+          confidence: Number(result.confidence || 0),
+          candidates: Array.isArray(result.candidates) ? result.candidates : [],
+          source: "extension-onnx",
+        };
+      }
+      // Cứu ứng viên 5 ký tự có ≥2 phiếu (giống nhánh agent 422).
+      const best = pickBestCaptchaCandidate(result.candidates, 5);
+      if (best && best.votes >= 2) {
+        return {
+          ok: true,
+          text: best.text,
+          confidence: Math.max(Number(result.confidence || 0), best.votes / 3),
+          candidates: Array.isArray(result.candidates) ? result.candidates : [],
+          source: "extension-onnx",
+          rescued: true,
+        };
+      }
+      return {
+        ok: false,
+        error: String(result.error || "OCR_LOW_CONFIDENCE"),
+        text: best?.text || String(result.text || ""),
+        confidence: Number(result.confidence || 0),
+        candidates: Array.isArray(result.candidates) ? result.candidates : [],
+        source: "extension-onnx",
+        message: result.message || "",
+      };
+    } catch (err) {
+      lastErr = String(err?.message || err);
+    }
+  }
+  return {
+    ok: false,
+    error: "OCR_EXT_FAILED",
+    text: "",
+    confidence: 0,
+    message: lastErr || "OCR_EXT_FAILED",
+  };
+}
+
 async function solveCaptcha(dataUrl, agentBaseUrl, opts = {}) {
   if (!dataUrl) {
     return { ok: false, error: "CAPTCHA_IMAGE_EMPTY", text: "", confidence: 0 };
   }
   const minConfidence = Number(opts.minConfidence ?? 0.4);
+
+  // Hướng 5: OCR trong Ext trước — PC không cần agent/cloud cho CAPTCHA.
+  const localOcr = await solveCaptchaInExtension(dataUrl, { minConfidence });
+  if (localOcr.ok) return localOcr;
+
   const candidates = buildOcrAgentCandidates(agentBaseUrl);
   let lastHardError = null;
-  let lastSoft = null;
+  let lastSoft =
+    localOcr.error === "OCR_LOW_CONFIDENCE" || localOcr.error === "OCR_EMPTY"
+      ? localOcr
+      : null;
+  const lastExtHard =
+    localOcr.error === "OCR_EXT_FAILED" ? localOcr : null;
   for (const base of candidates) {
     try {
       const response = await fetch(`${base}/captcha/solve`, {
@@ -496,6 +690,7 @@ async function solveCaptcha(dataUrl, agentBaseUrl, opts = {}) {
   }
   if (lastHardError) return lastHardError;
   if (lastSoft) return lastSoft;
+  if (lastExtHard) return lastExtHard;
   return { ok: false, error: "OCR_AGENT_UNAVAILABLE", text: "", confidence: 0 };
 }
 
@@ -1002,10 +1197,11 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
     sampledCaptchas += 1;
 
     if (!solved.ok) {
-      // Không phụ thuộc agent headed cho ĐN: OCR lỗi / offline → điền user/pass, chờ CAPTCHA tay.
+      // Ext OCR + agent đều không dùng được → điền user/pass, chờ CAPTCHA tay.
       if (
         solved.error === "OCR_AGENT_UNAVAILABLE" ||
-        solved.error === "OCR_FAILED"
+        solved.error === "OCR_FAILED" ||
+        solved.error === "OCR_EXT_FAILED"
       ) {
         const manual = await sendToTcsContent(tabId, {
           type: "TCS_LOGIN",
@@ -1021,7 +1217,7 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
           error: "CAPTCHA_REQUIRED",
           message:
             "Đã điền user/password trên tab TCS. Hãy nhập CAPTCHA (5 ký tự) rồi bấm Đăng nhập trên portal. " +
-            "(OCR tùy chọn — không bắt buộc agent Playwright.)",
+            "(OCR trong Ext — chạy npm run ext:fetch-ocr rồi Reload Ext nếu chưa có model.)",
         };
       }
       lastMessage = "OCR chưa đủ tin cậy, đang đổi CAPTCHA";
@@ -1029,11 +1225,12 @@ async function loginOnTcsTab(tabId, credentials, agentBaseUrl) {
       continue;
     }
 
+    const ocrSrc = solved.source === "extension-onnx" ? "Ext" : "agent";
     setWorkspace({
       phase: "LOGIN",
       message: `Đã đọc CAPTCHA ${solved.text} (${Math.round(
         Number(solved.confidence || 0) * 100
-      )}%) — đang điền…`,
+      )}% · ${ocrSrc}) — đang điền…`,
     });
     submittedAttempts += 1;
     const clicked = await sendToTcsContent(tabId, {

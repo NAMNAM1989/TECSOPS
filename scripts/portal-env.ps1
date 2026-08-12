@@ -54,11 +54,14 @@ npm run portal:worker
   Start-Process powershell -ArgumentList @("-NoExit", "-Command", $cmd) -WorkingDirectory $Root
 }
 
-function Start-AgentFromEnvFile([string]$EnvFile, [string]$Title) {
+function Start-AgentFromEnvFile([string]$EnvFile, [string]$Title, [hashtable]$ForceEnv = @{}) {
   if (-not (Test-Path $EnvFile)) { throw "Missing $EnvFile" }
   $map = Read-DotEnvFile $EnvFile
   if (-not $map["TCS_USERNAME"] -or -not $map["TCS_PASSWORD"]) {
     throw "$EnvFile missing TCS_USERNAME / TCS_PASSWORD"
+  }
+  foreach ($k in $ForceEnv.Keys) {
+    $map[$k] = [string]$ForceEnv[$k]
   }
   $assign = ($map.GetEnumerator() | ForEach-Object {
       $k = $_.Key
@@ -71,7 +74,7 @@ function Start-AgentFromEnvFile([string]$EnvFile, [string]$Title) {
   $cmd = @"
 $assign
 Set-Location '$agentDir'
-Write-Host '[agent]' '$Title' 'port' `$env:TCS_AGENT_PORT 'user' `$env:TCS_USERNAME -ForegroundColor Green
+Write-Host '[agent]' '$Title' 'port' `$env:TCS_AGENT_PORT 'user' `$env:TCS_USERNAME 'headless' `$env:TCS_HEADLESS -ForegroundColor Green
 & '$py' -m app.main agent --real
 "@
   Start-Process powershell -ArgumentList @("-NoExit", "-Command", $cmd) -WorkingDirectory $agentDir

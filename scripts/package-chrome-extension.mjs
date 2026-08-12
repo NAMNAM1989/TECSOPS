@@ -120,6 +120,33 @@ function packageExt({
 
 fs.mkdirSync(outputDir, { recursive: true });
 
+function listOcrFiles(extDir) {
+  const ocrDir = path.join(extDir, "ocr");
+  if (!fs.existsSync(ocrDir)) return [];
+  return fs
+    .readdirSync(ocrDir)
+    .filter((name) => fs.statSync(path.join(ocrDir, name)).isFile())
+    .map((name) => path.join("ocr", name));
+}
+
+function assertOcrReady(dirName) {
+  const onnx = path.join(root, dirName, "ocr", "common.onnx");
+  const ort = path.join(root, dirName, "ocr", "ort.min.js");
+  if (!fs.existsSync(onnx) || fs.statSync(onnx).size < 1_000_000) {
+    throw new Error(
+      `Thiếu ${dirName}/ocr/common.onnx — chạy: npm run ext:fetch-ocr`
+    );
+  }
+  if (!fs.existsSync(ort)) {
+    throw new Error(
+      `Thiếu ${dirName}/ocr/ort.min.js — chạy: npm run ext:fetch-ocr`
+    );
+  }
+}
+
+assertOcrReady("chrome-extension");
+assertOcrReady("chrome-extension-tcs");
+
 packageExt({
   dirName: "chrome-extension",
   files: [
@@ -131,6 +158,7 @@ packageExt({
     "popup.js",
     "locators.json",
     "print-frame.html",
+    ...listOcrFiles(path.join(root, "chrome-extension")),
   ],
   stableZipName: "tecsops-chrome-extension.zip",
   versionedPrefix: "tecsops-chrome-extension",
@@ -138,6 +166,7 @@ packageExt({
   installText: (v) => `TECSOPS — Kho TECS-TCS ESID v${v}
 
 Ext riêng ESID kho TECS-TCS (tcs.com.vn).
+OCR CAPTCHA offline trong Ext (không cần agent cho ĐN PC).
 eCargo → Ext SCSC riêng. Kho TCS → Ext TCS trên Chrome profile khác.
 
 1. Giải nén ZIP vào thư mục cố định.
@@ -158,6 +187,7 @@ packageExt({
     "locators.json",
     "print-frame.html",
     "README.md",
+    ...listOcrFiles(path.join(root, "chrome-extension-tcs")),
   ],
   stableZipName: "tecsops-chrome-extension-tcs.zip",
   versionedPrefix: "tecsops-chrome-extension-tcs",
@@ -165,6 +195,7 @@ packageExt({
   installText: (v) => `TECSOPS — Kho TCS ESID v${v}
 
 Ext riêng ESID kho TCS. BẮT BUỘC Chrome profile riêng với Ext TECS-TCS.
+OCR CAPTCHA offline trong Ext (không cần agent cho ĐN PC).
 
 1. Giải nén ZIP vào thư mục cố định.
 2. chrome://extensions → Load unpacked.

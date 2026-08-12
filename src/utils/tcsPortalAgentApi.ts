@@ -1,4 +1,10 @@
 import type { TcsPortalJobPayload, TcsPortalWarehouse } from "./tcsPortalJob";
+import { getPortalPlaywrightLocal } from "./portalPlaywrightLocal";
+import {
+  agentFetchViaExtension,
+  type TcsPortalExtWarehouse,
+} from "./tcsChromeExtension";
+import { extensionOcrBaseUrl } from "./tcsOcrAgentEndpoints";
 
 /** localStorage override — IP/tunnel tùy chỉnh */
 const TCS_AGENT_URL_LS_KEY = "tecsops-tcs-agent-url";
@@ -6,6 +12,14 @@ const TCS_AGENT_URL_LS_KEY = "tecsops-tcs-agent-url";
 export type AgentWarehouseOpts = {
   warehouse?: TcsPortalWarehouse | string;
 };
+
+function asExtWarehouse(warehouse?: string | null): TcsPortalExtWarehouse {
+  return String(warehouse || "")
+    .trim()
+    .toUpperCase() === "TCS"
+    ? "TCS"
+    : "TECS-TCS";
+}
 
 function warehouseHeader(
   warehouse?: string | null
@@ -144,6 +158,12 @@ export function clearTcsAgentBaseUrl(): string {
 }
 
 export function agentOfflineHint(base = agentBase()): string {
+  if (getPortalPlaywrightLocal()) {
+    return (
+      "Agent headed local offline. Chạy `npm run portal:headed:local` trên máy này, " +
+      "Reload Ext, bật «PW local», rồi thử lại."
+    );
+  }
   const isLoopback = /^(https?:\/\/)?(127\.0\.0\.1|localhost)(:|\/|$)/i.test(base);
   const isProxy = base.includes("/tcs-agent") || base.endsWith("/tcs-agent");
   if (isProxy) {
@@ -167,6 +187,62 @@ type AgentJsonEnvelope = {
   message?: string;
 };
 
+function agentPathTimeoutMs(path: string): number {
+  const p = path.toLowerCase();
+  if (
+    p.includes("/workspace/") ||
+    p.includes("/jobs") ||
+    p.includes("/esid/") ||
+    p.includes("/session/open")
+  ) {
+    return 360_000;
+  }
+  return 60_000;
+}
+
+async function postAgentJsonViaExt<T extends AgentJsonEnvelope>(
+  path: string,
+  body: unknown,
+  fallbackMessage: string,
+  opts: AgentWarehouseOpts = {}
+): Promise<T> {
+  const wh = asExtWarehouse(opts.warehouse);
+  const res = await agentFetchViaExtension(
+    {
+      path,
+      method: "POST",
+      body,
+      timeoutMs: agentPathTimeoutMs(path),
+      agentBaseUrl: extensionOcrBaseUrl(wh),
+    },
+    { warehouse: wh }
+  );
+  if (!res.ok && !(res.data && typeof res.data === "object")) {
+    return {
+      ok: false,
+      error: res.error || "AGENT_OFFLINE",
+      message:
+        res.message ||
+        agentOfflineHint(extensionOcrBaseUrl(wh)) ||
+        fallbackMessage,
+    } as T;
+  }
+  const parsed = {
+    ...(typeof res.data === "object" && res.data ? res.data : {}),
+    ...res,
+  } as T & { data?: unknown };
+  delete (parsed as { data?: unknown }).data;
+  if (parsed.ok === false) {
+    return {
+      ...parsed,
+      ok: false,
+      error: parsed.error || res.error || "AGENT_ERROR",
+      message: parsed.message || res.message || fallbackMessage,
+    };
+  }
+  return parsed;
+}
+
 /** Một đường xử lý chung cho mọi POST agent: offline, bad JSON và HTTP error. */
 async function postAgentJson<T extends AgentJsonEnvelope>(
   path: string,
@@ -174,6 +250,9 @@ async function postAgentJson<T extends AgentJsonEnvelope>(
   fallbackMessage: string,
   opts: AgentWarehouseOpts = {}
 ): Promise<T> {
+  if (getPortalPlaywrightLocal()) {
+    return postAgentJsonViaExt<T>(path, body, fallbackMessage, opts);
+  }
   const base = agentBase();
   let res: Response;
   try {
@@ -217,6 +296,26 @@ export async function pingTcsAgent(
   timeoutMs = 3500,
   opts: AgentWarehouseOpts = {}
 ): Promise<TcsAgentHealth | null> {
+  if (getPortalPlaywrightLocal()) {
+    const wh = asExtWarehouse(opts.warehouse);
+    const res = await agentFetchViaExtension(
+      {
+        path: "/health",
+        method: "GET",
+        timeoutMs: Math.max(timeoutMs, 3_500),
+        agentBaseUrl: extensionOcrBaseUrl(wh),
+      },
+      { warehouse: wh }
+    );
+    if (!res.ok) return null;
+    const body = {
+      ...(typeof res.data === "object" && res.data ? res.data : {}),
+      ...res,
+    } as TcsAgentHealth & { data?: unknown; error?: string };
+    delete (body as { data?: unknown }).data;
+    if (body.ok === false) return null;
+    return body;
+  }
   const ctrl = new AbortController();
   const t = window.setTimeout(() => ctrl.abort(), timeoutMs);
   try {

@@ -7,8 +7,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "prebuild": "node scripts/package-chrome-extension.mjs",
-    "ext:package": "node scripts/package-chrome-extension.mjs",
+    "ext:package": "node scripts/fetch-ext-captcha-ocr.mjs && node scripts/package-chrome-extension.mjs",
+    "ext:fetch-ocr": "node scripts/fetch-ext-captcha-ocr.mjs",
+    "prebuild": "node scripts/fetch-ext-captcha-ocr.mjs && node scripts/package-chrome-extension.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:db": "docker compose up -d",
     "tcs:agent": "node scripts/tcs-agent.mjs",
@@ -17,6 +18,7 @@
     "portal:start:hub": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-hub.ps1",
     "portal:start:tcs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-tcs.ps1",
     "portal:start:both": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-both.ps1",
+    "portal:headed:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-headed-agents.ps1",
     "portal:start:warehouse": "node scripts/deprecated-portal-remote.mjs warehouse",
     "portal:worker:legacy": "node scripts/portal-worker.mjs",
     "portal:start:warehouse:legacy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-warehouse-pc.ps1",
@@ -63,7 +65,8 @@
     "react-dom": "^18.3.1",
     "recharts": "^2.15.0",
     "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "onnxruntime-web": "1.21.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

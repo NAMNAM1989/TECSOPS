@@ -45,7 +45,34 @@ out = pathlib.Path(r"""${outDir.replaceAll("\\", "/")}""")
 out.mkdir(parents=True, exist_ok=True)
 shutil.copy2(onnx, out / "common.onnx")
 ocr = ddddocr.DdddOcr(show_ad=False)
-chars = list(ocr.get_charset())
+chars = None
+if hasattr(ocr, "get_charset"):
+    chars = list(ocr.get_charset())
+elif hasattr(ocr, "charset_manager") and getattr(ocr.charset_manager, "charset", None):
+    chars = list(ocr.charset_manager.charset)
+else:
+    # ddddocr 1.5.x trên Linux/Docker: lấy từ module charsets
+    try:
+        from ddddocr import charsets as csmod
+        for name in ("charset", "CHARSET", "common_charset", "characters"):
+            if hasattr(csmod, name):
+                chars = list(getattr(csmod, name))
+                break
+        if chars is None:
+            # một số bản export dict / list ở cấp module
+            for v in vars(csmod).values():
+                if isinstance(v, (list, tuple)) and len(v) > 100:
+                    chars = list(v)
+                    break
+    except Exception:
+        chars = None
+if not chars:
+    # Giữ charsets.json đã có trong repo nếu export fail
+    existing = out / "charsets.json"
+    if existing.exists() and existing.stat().st_size > 1000:
+        print("ok-charset-cached", onnx.stat().st_size)
+        raise SystemExit(0)
+    sys.exit(4)
 (out / "charsets.json").write_text(json.dumps(chars, ensure_ascii=False), encoding="utf-8")
 print("ok", len(chars), onnx.stat().st_size)
 `;

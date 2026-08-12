@@ -129,23 +129,21 @@ function listOcrFiles(extDir) {
     .map((name) => path.join("ocr", name));
 }
 
-function assertOcrReady(dirName) {
+function warnIfOcrIncomplete(dirName) {
   const onnx = path.join(root, dirName, "ocr", "common.onnx");
   const ort = path.join(root, dirName, "ocr", "ort.min.js");
-  if (!fs.existsSync(onnx) || fs.statSync(onnx).size < 1_000_000) {
-    throw new Error(
-      `Thiếu ${dirName}/ocr/common.onnx — chạy: npm run ext:fetch-ocr`
-    );
-  }
-  if (!fs.existsSync(ort)) {
-    throw new Error(
-      `Thiếu ${dirName}/ocr/ort.min.js — chạy: npm run ext:fetch-ocr`
+  const hasOnnx = fs.existsSync(onnx) && fs.statSync(onnx).size > 1_000_000;
+  const hasOrt = fs.existsSync(ort);
+  if (!hasOnnx || !hasOrt) {
+    console.warn(
+      `[${dirName}] OCR binary thiếu — ZIP không đủ OCR offline. Máy PC: npm run ext:fetch-ocr`
     );
   }
 }
 
-assertOcrReady("chrome-extension");
-assertOcrReady("chrome-extension-tcs");
+// Railway/prebuild: không bắt buộc common.onnx (gitignore, chỉ cần trên máy cài Ext).
+warnIfOcrIncomplete("chrome-extension");
+warnIfOcrIncomplete("chrome-extension-tcs");
 
 packageExt({
   dirName: "chrome-extension",

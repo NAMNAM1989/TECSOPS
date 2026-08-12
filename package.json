@@ -9,7 +9,7 @@
   "scripts": {
     "ext:package": "node scripts/fetch-ext-captcha-ocr.mjs && node scripts/package-chrome-extension.mjs",
     "ext:fetch-ocr": "node scripts/fetch-ext-captcha-ocr.mjs",
-    "prebuild": "node scripts/fetch-ext-captcha-ocr.mjs && node scripts/package-chrome-extension.mjs",
+    "prebuild": "node scripts/package-chrome-extension.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:db": "docker compose up -d",
     "tcs:agent": "node scripts/tcs-agent.mjs",

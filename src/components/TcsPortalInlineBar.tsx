@@ -31,10 +31,13 @@ export function TcsPortalInlineBar({
   const btnLogin = `${btn} bg-ui-primary text-white hover:bg-ui-primary-hover shadow-sm`;
   const btnScan = `${btn} border border-sky-600/40 bg-sky-50 text-sky-900 hover:bg-sky-100`;
   const btnSubmit = `${btn} bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm`;
+  const btnVisualOn = `${btn} border border-violet-600/50 bg-violet-50 text-violet-900 hover:bg-violet-100`;
+  const btnVisualOff = `${btn} border border-ui-border bg-ui-surface text-slate-600 hover:bg-slate-50`;
 
   const portalWh = tcs.portalWarehouse;
   const extLabel = tcs.extLabel;
   const usesAgent = portalPolicyUsesAgent(tcs.executorPolicy);
+  const visualControl = Boolean(tcs.visualControl);
   const agentOk = Boolean(tcs.health?.ok);
   const agentLoggedIn = Boolean(
     tcs.session?.logged_in || tcs.health?.session?.logged_in
@@ -115,6 +118,16 @@ export function TcsPortalInlineBar({
       return;
     }
 
+    // Trực quan + có Ext path: không ĐN agent ẩn.
+    if (visualControl && !isMobile) {
+      setShowExtLogin(true);
+      window.alert(
+        `Chế độ trực quan: cần ${extLabel} online để ĐN trên tab Chrome.\n` +
+          "Reload Ext / mở Ops trên cùng Chrome đã cài Ext. Tắt «Trực quan» nếu muốn dùng agent cloud ẩn."
+      );
+      return;
+    }
+
     if (usesAgent) {
       await tcs.login();
       return;
@@ -164,6 +177,14 @@ export function TcsPortalInlineBar({
       if (shouldOpenExtLoginAfterScanFailure(result ?? undefined)) {
         setShowExtLogin(true);
       }
+      return;
+    }
+
+    if (visualControl && !isMobile) {
+      window.alert(
+        `Chế độ trực quan: cần ${extLabel} để Quét trên tab Chrome (không chạy agent ẩn).\n` +
+          "Reload Ext hoặc tắt «Trực quan» nếu muốn Quét bằng agent cloud."
+      );
       return;
     }
 
@@ -258,6 +279,22 @@ export function TcsPortalInlineBar({
           <span className="shrink-0 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-800">
             {workspace.phase}
           </span>
+        ) : null}
+
+        {!isMobile ? (
+          <button
+            type="button"
+            className={visualControl ? btnVisualOn : btnVisualOff}
+            disabled={tcs.busy}
+            title={
+              visualControl
+                ? "Trực quan BẬT: Quét/Điền trên tab Chrome Ext — không fallback agent ẩn. Bấm để tắt."
+                : "Trực quan TẮT: có thể fallback agent cloud headless (không thấy cửa sổ). Bấm để bật."
+            }
+            onClick={() => tcs.setVisualControl(!visualControl)}
+          >
+            {compact ? (visualControl ? "TQ" : "Ẩn") : visualControl ? "Trực quan" : "Ẩn"}
+          </button>
         ) : null}
 
         {showLoginBtn ? (

@@ -49,7 +49,10 @@ import {
 } from "../utils/tcsChromeExtension";
 import {
   getPortalExecutorPolicy,
+  getPortalVisualControl,
   resolvePortalExecutorOrder,
+  setPortalVisualControl,
+  shouldLockToExtensionVisual,
 } from "../utils/portalExecutorPolicy";
 import { extensionOcrBaseUrl } from "../utils/tcsOcrAgentEndpoints";
 import { portalBusyUserMessage } from "../utils/tcsPortalScanGate";
@@ -141,6 +144,13 @@ export function useTcsPortalActions({
     [portalWarehouse]
   );
   const executorPolicy = getPortalExecutorPolicy();
+  const [visualControl, setVisualControlState] = useState(() =>
+    getPortalVisualControl()
+  );
+  const setVisualControl = useCallback((on: boolean) => {
+    setPortalVisualControl(on);
+    setVisualControlState(on);
+  }, []);
   const [health, setHealth] = useState<TcsAgentHealth | null>(null);
   const [extension, setExtension] = useState<TcsExtResult | null>(null);
   const [session, setSession] = useState<TcsAgentSession | null>(null);
@@ -512,17 +522,24 @@ export function useTcsPortalActions({
   const login = useCallback(async () => {
     setError("");
     setMessage("");
+    const extPing = await pingTcsExtension({ warehouse: portalWarehouse });
+    setExtension(extPing);
     const order = resolvePortalExecutorOrder("login", {
       policy: executorPolicy,
       preferRemote: preferRemotePortal,
       isMobile,
+      visualControl,
+      extensionOnline: Boolean(extPing.ok),
     });
     const tryAgent = order.includes("agent");
 
     if (!tryAgent) {
       setError(
-        `Cần Chrome Ext kho ${portalWarehouse} (${tcsExtLabel(portalWarehouse)}). ` +
-          "Bấm «Tải Ext» trên toolbar, mở đúng profile Chrome, rồi ĐN lại."
+        visualControl && extPing.ok
+          ? `Chế độ trực quan: ĐN bằng ${tcsExtLabel(portalWarehouse)} (tab Chrome). ` +
+              "Điền user/pass trên form Ext — không dùng agent ẩn."
+          : `Cần Chrome Ext kho ${portalWarehouse} (${tcsExtLabel(portalWarehouse)}). ` +
+              "Bấm «Tải Ext» trên toolbar, mở đúng profile Chrome, rồi ĐN lại."
       );
       return;
     }
@@ -568,6 +585,7 @@ export function useTcsPortalActions({
     portalWarehouse,
     preferRemotePortal,
     refreshHealth,
+    visualControl,
   ]);
 
   /** Quét qua Playwright agent (Railway online / local). */
@@ -578,10 +596,15 @@ export function useTcsPortalActions({
       policy: executorPolicy,
       preferRemote: preferRemotePortal,
       isMobile,
+      visualControl,
+      extensionOnline: Boolean(extension?.ok),
     });
     if (!order.includes("agent")) {
       setError(
-        `Cần Chrome Ext kho ${portalWarehouse} để Quét. Bấm «Tải Ext» rồi ĐN trước.`
+        visualControl && extension?.ok
+          ? `Chế độ trực quan: Quét bằng ${tcsExtLabel(portalWarehouse)} trên tab Chrome. ` +
+              "ĐN Ext trước — không chạy agent ẩn."
+          : `Cần Chrome Ext kho ${portalWarehouse} để Quét. Bấm «Tải Ext» rồi ĐN trước.`
       );
       return;
     }
@@ -651,12 +674,14 @@ export function useTcsPortalActions({
     agentOpts,
     applyReadyItemsToOps,
     executorPolicy,
+    extension?.ok,
     isMobile,
     pendingReception,
     portalWarehouse,
     preferRemotePortal,
     refreshHealth,
     sessionYmd,
+    visualControl,
   ]);
 
 
@@ -683,10 +708,14 @@ export function useTcsPortalActions({
         return;
       }
 
+      const extForOrder = await pingTcsExtension({ warehouse: rowPortal });
+      setExtension(extForOrder);
       const pdfOrder = resolvePortalExecutorOrder("pdf", {
         policy: executorPolicy,
         preferRemote: preferRemotePortal,
         isMobile,
+        visualControl,
+        extensionOnline: Boolean(extForOrder.ok),
       });
 
       const tryPdfExt = async (t0: number) => {
@@ -821,7 +850,7 @@ export function useTcsPortalActions({
         setBusyLabel("");
       }
     },
-    [ensureSessionReady, executorPolicy, isMobile, preferRemotePortal, sessionYmd]
+    [ensureSessionReady, executorPolicy, isMobile, preferRemotePortal, sessionYmd, visualControl]
   );
 
   /** Điền ESID = tạo phiếu khai báo trên TCS — độc lập với Quét HT Ops. */
@@ -875,13 +904,31 @@ export function useTcsPortalActions({
       const t0 = performance.now();
       try {
         setBusyLabel(`Điền ESID …${digits.slice(-8)}${custNote}…`);
+        const ext = await pingTcsExtension({ warehouse: rowPortal });
+        setExtension(ext);
         const fillOrder = resolvePortalExecutorOrder("fill", {
           policy: executorPolicy,
           preferRemote: preferRemotePortal,
           isMobile,
+          visualControl,
+          extensionOnline: Boolean(ext.ok),
         });
-        const ext = await pingTcsExtension({ warehouse: rowPortal });
-        setExtension(ext);
+        if (
+          shouldLockToExtensionVisual({
+            isMobile,
+            visualControl,
+            extensionOnline: Boolean(ext.ok),
+            policy: executorPolicy,
+          }) &&
+          (!ext.ok || !ext.workspace?.logged_in)
+        ) {
+          setError(
+            !ext.ok
+              ? `Chế độ trực quan: cần ${tcsExtLabel(rowPortal)} online để xem thao tác trên Chrome.`
+              : `Chế độ trực quan: ĐN ${tcsExtLabel(rowPortal)} trước khi Điền (không chạy agent ẩn).`
+          );
+          return;
+        }
         let executor: "extension" | "playwright" = "playwright";
         let res: Awaited<ReturnType<typeof declareFillTcsEsid>> | TcsExtResult =
           {
@@ -1019,6 +1066,7 @@ export function useTcsPortalActions({
       portalWarehouse,
       preferRemotePortal,
       refreshHealth,
+      visualControl,
     ]
   );
 
@@ -1142,6 +1190,9 @@ export function useTcsPortalActions({
     extLabel: tcsExtLabel(portalWarehouse),
     /** Policy hiện tại (auto/ext-only mặc định; agent-only = QA/legacy). */
     executorPolicy,
+    /** true = desktop + Ext → không fallback headless ẩn (mặc định bật). */
+    visualControl,
+    setVisualControl,
     preferRemotePortal: false,
     /** false = Chrome thật (legacy agent-only) */
     agentHeadless: health?.headless ?? session?.headless,

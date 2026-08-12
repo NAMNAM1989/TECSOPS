@@ -257,6 +257,14 @@ async function findOrOpenTcsTab({ active = true, pinned = true } = {}) {
     tab = await chrome.tabs.update(tab.id, { active, pinned });
   }
   setWorkspace({ tab_id: tab.id });
+  // Đưa cửa sổ Chrome ra trước Ops để máy kiểm soát nhìn thấy thao tác.
+  if (active && tab.windowId != null) {
+    try {
+      await chrome.windows.update(tab.windowId, { focused: true });
+    } catch {
+      /* ignore */
+    }
+  }
   await waitTabComplete(tab.id);
   return tab.id;
 }

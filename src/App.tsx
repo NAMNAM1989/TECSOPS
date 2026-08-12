@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { Shipment } from "./types/shipment";
 import type { CustomerDirectoryEntry } from "./types/customerDirectory";
 import { loadRows } from "./utils/shipmentStorage";
@@ -7,6 +7,7 @@ import { useHashRoute } from "./hooks/useHashRoute";
 import type { AirlineLabelOverrides } from "./utils/airlineLabelOverridesCore";
 import { PageSkeleton } from "./ui";
 import { AppAuthGate } from "./components/AppAuthGate";
+import { formatLocalSessionDate } from "./utils/sessionDate";
 
 const loadCustomersPage = () =>
   import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage }));
@@ -28,9 +29,21 @@ const EMPTY_CUSTOMERS: CustomerDirectoryEntry[] = [];
 
 function AuthenticatedApp() {
   const fallback = useMemo(() => ({ rows: loadRows() ?? [] }), []);
-  const sync = useShipmentSync(fallback);
+  const todayYmd = formatLocalSessionDate(new Date());
+  const sync = useShipmentSync(fallback, { sessionDate: todayYmd });
   const { route, navigate } = useHashRoute();
   const [printJob, setPrintJob] = useState<PrintJob | null>(null);
+  const [opsSessionYmd, setOpsSessionYmd] = useState(todayYmd);
+
+  useEffect(() => {
+    if (route === "stats") {
+      void sync.setSyncScope({ full: true });
+      return;
+    }
+    void sync.setSyncScope({ sessionDate: opsSessionYmd });
+    // Chỉ đổi khi route / ngày phiên — không phụ thuộc identity setSyncScope.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route, opsSessionYmd]);
 
   const prefetchCustomers = useCallback(() => {
     void loadCustomersPage();
@@ -77,6 +90,7 @@ function AuthenticatedApp() {
           ) : (
             <AirCargoTracking
               sync={sync}
+              onSessionDateChange={setOpsSessionYmd}
               onNavigateCustomers={() => navigate("customers")}
               onPrefetchCustomers={prefetchCustomers}
               onNavigateStats={() => navigate("stats")}

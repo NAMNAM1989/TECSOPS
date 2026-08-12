@@ -1,6 +1,8 @@
 /**
  * Policy chọn đường portal TCS — đồng loạt TECS-TCS & TCS.
- * Mặc định online: auto = Playwright agent (Railway /tcs-agent) rồi mới Chrome Ext.
+ * Mặc định auto:
+ * - Desktop: Ext → agent (nhìn được trên PC có Ext)
+ * - Mobile: agent-only cho Quét/PDF (không gọi Ext)
  * Không còn máy kho / portal-worker.
  */
 
@@ -26,7 +28,7 @@ function normalizePolicy(raw: string | undefined | null): PortalExecutorPolicy |
   return null;
 }
 
-/** Mặc định auto (= agent → Ext). Ghi đè: VITE_PORTAL_EXECUTOR_POLICY hoặc localStorage. */
+/** Mặc định auto (desktop Ext→agent; mobile agent-only). Ghi đè: VITE_ / localStorage. */
 export function getPortalExecutorPolicy(): PortalExecutorPolicy {
   try {
     const fromLs = normalizePolicy(localStorage.getItem(LS_KEY));
@@ -66,17 +68,18 @@ export function portalPolicyUsesAgent(
 
 /**
  * Thứ tự thử executor.
- * - auto: agent (Railway online) → Ext (desktop tuỳ chọn)
- * - ext-only: chỉ Chrome Ext
- * - agent-only: chỉ agent
- * - remote-only: deprecated — Ops không gọi
- * - preferRemote: bỏ qua
+ * - auto + desktop: Ext → agent
+ * - auto + mobile: chỉ agent (Quét/PDF trên phone)
+ * - ext-only / agent-only / remote-only: như tên
+ * - preferRemote: deprecated — bỏ qua
  */
 export function resolvePortalExecutorOrder(
   action: PortalAction,
   opts: {
     policy?: PortalExecutorPolicy;
     preferRemote?: boolean;
+    /** Viewport ≤767 — phone: agent-only khi auto */
+    isMobile?: boolean;
   } = {}
 ): PortalExecutor[] {
   void action;
@@ -86,8 +89,9 @@ export function resolvePortalExecutorOrder(
   if (policy === "agent-only") return ["agent"];
   if (policy === "remote-only") return ["remote"];
   if (policy === "ext-only") return ["extension"];
-  // auto — online-first
-  return ["agent", "extension"];
+  // auto
+  if (opts.isMobile) return ["agent"];
+  return ["extension", "agent"];
 }
 
 export function portalExecutorLabel(ex: PortalExecutor): string {

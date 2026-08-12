@@ -5,29 +5,48 @@ import {
 } from "./portalExecutorPolicy";
 
 describe("resolvePortalExecutorOrder", () => {
-  it("auto: agent cloud trước, Ext sau (online-first)", () => {
-    expect(resolvePortalExecutorOrder("login", { policy: "auto" })).toEqual([
-      "agent",
-      "extension",
-    ]);
+  it("auto desktop: Ext trước, agent sau", () => {
+    expect(
+      resolvePortalExecutorOrder("login", { policy: "auto", isMobile: false })
+    ).toEqual(["extension", "agent"]);
+    expect(
+      resolvePortalExecutorOrder("scan", { policy: "auto", isMobile: false })
+    ).toEqual(["extension", "agent"]);
+    expect(
+      resolvePortalExecutorOrder("fill", { policy: "auto", isMobile: false })
+    ).toEqual(["extension", "agent"]);
+    expect(
+      resolvePortalExecutorOrder("pdf", { policy: "auto", isMobile: false })
+    ).toEqual(["extension", "agent"]);
+  });
+
+  it("auto không truyền isMobile: coi như desktop Ext→agent", () => {
     expect(resolvePortalExecutorOrder("scan", { policy: "auto" })).toEqual([
-      "agent",
       "extension",
-    ]);
-    expect(resolvePortalExecutorOrder("fill", { policy: "auto" })).toEqual([
       "agent",
-      "extension",
-    ]);
-    expect(resolvePortalExecutorOrder("pdf", { policy: "auto" })).toEqual([
-      "agent",
-      "extension",
     ]);
   });
 
-  it("preferRemote bị bỏ qua — vẫn agent → Ext", () => {
+  it("auto mobile: chỉ agent", () => {
     expect(
-      resolvePortalExecutorOrder("scan", { policy: "auto", preferRemote: true })
-    ).toEqual(["agent", "extension"]);
+      resolvePortalExecutorOrder("scan", { policy: "auto", isMobile: true })
+    ).toEqual(["agent"]);
+    expect(
+      resolvePortalExecutorOrder("pdf", { policy: "auto", isMobile: true })
+    ).toEqual(["agent"]);
+    expect(
+      resolvePortalExecutorOrder("login", { policy: "auto", isMobile: true })
+    ).toEqual(["agent"]);
+  });
+
+  it("preferRemote bị bỏ qua — vẫn Ext → agent trên desktop", () => {
+    expect(
+      resolvePortalExecutorOrder("scan", {
+        policy: "auto",
+        preferRemote: true,
+        isMobile: false,
+      })
+    ).toEqual(["extension", "agent"]);
   });
 
   it("ext-only / agent-only / remote-only", () => {

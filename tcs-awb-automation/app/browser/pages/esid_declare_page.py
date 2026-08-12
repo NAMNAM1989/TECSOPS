@@ -19,6 +19,17 @@ ESID_HOME = "https://www.tcs.com.vn/Esid/Export"
 _PAYMENT_LABEL_CACHE: str = "Chuyển khoản/Bank transfer"
 
 
+def _payment_target_keys(pay: str) -> tuple[str, ...]:
+    """Khóa fold-text để verify payment (Cash vs Bank)."""
+    folded = unicodedata.normalize("NFD", pay or "")
+    folded = "".join(c for c in folded if unicodedata.category(c) != "Mn")
+    folded = folded.replace("đ", "d").replace("Đ", "D")
+    folded = re.sub(r"\s+", " ", folded).strip().upper()
+    if any(k in folded for k in ("TIEN MAT", "CASH")):
+        return ("TIEN MAT", "CASH")
+    return ("CHUYEN KHOAN", "BANK TRANSFER")
+
+
 class EsidDeclarePage:
     def __init__(self, page, locators: LocatorsConfig) -> None:
         self.page = page
@@ -222,38 +233,166 @@ class EsidDeclarePage:
             return False
 
     def _set_checkbox(self, eid: str, checked: bool) -> bool:
+        """Tick Ant Design checkbox — click wrapper + ép React checked."""
+        if not eid:
+            return False
         try:
-            loc = self._active_pane().locator(f"#{eid}")
-            if loc.count() == 0:
-                loc = self.page.locator(f"#{eid}")
-            if loc.count() == 0:
-                return False
-            now = loc.first.is_checked()
-            if bool(now) == bool(checked):
-                return True
-            try:
-                if checked:
-                    loc.first.check(force=True, timeout=1200)
-                else:
-                    loc.first.uncheck(force=True, timeout=1200)
-            except Exception:
-                # Một số checkbox TCS dùng input ẩn; click label/wrapper để React nhận.
+            # Ưu tiên JS: ổn định hơn Playwright check() với input ẩn opacity:0
+            ok = bool(
                 self.page.evaluate(
                     """({eid, checked}) => {
                       const el = document.getElementById(eid);
-                      if (!el) return false;
-                      if (!!el.checked === !!checked) return true;
-                      const label = document.querySelector(`label[for="${eid}"]`)
+                      if (!el || String(el.type || '').toLowerCase() !== 'checkbox') {
+                        return false;
+                      }
+                      const wrap = el.closest('.ant-checkbox-wrapper')
+                        || document.querySelector(`label[for="${eid}"]`)
                         || el.closest('label')
                         || el.parentElement;
-                      (label || el).click();
-                      return !!el.checked === !!checked;
+                      const isOn = () => {
+                        const w = el.closest('.ant-checkbox-wrapper');
+                        return !!el.checked
+                          || !!(w && w.querySelector('.ant-checkbox-checked'));
+                      };
+                      if (isOn() === !!checked) return true;
+                      const box = (wrap && wrap.querySelector('.ant-checkbox')) || wrap || el;
+                      box.click();
+                      if (isOn() === !!checked) return true;
+                      // Ép native + event (một số build Ant không đổi sau click giả)
+                      const desc = Object.getOwnPropertyDescriptor(
+                        HTMLInputElement.prototype, 'checked'
+                      );
+                      if (desc && desc.set) desc.set.call(el, !!checked);
+                      else el.checked = !!checked;
+                      el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                      el.dispatchEvent(new Event('input', { bubbles: true }));
+                      el.dispatchEvent(new Event('change', { bubbles: true }));
+                      if (wrap) {
+                        wrap.classList.toggle('ant-checkbox-wrapper-checked', !!checked);
+                        const inner = wrap.querySelector('.ant-checkbox');
+                        if (inner) inner.classList.toggle('ant-checkbox-checked', !!checked);
+                      }
+                      return isOn() === !!checked;
                     }""",
                     {"eid": eid, "checked": bool(checked)},
                 )
-            return bool(loc.first.is_checked(timeout=500)) == bool(checked)
+            )
+            if ok:
+                return True
+        except Exception:
+            pass
+        try:
+            loc = self.page.locator(f"#{eid}")
+            if loc.count() == 0:
+                return False
+            target = loc.first
+            try:
+                target.scroll_into_view_if_needed(timeout=800)
+            except Exception:
+                pass
+            if checked:
+                target.check(force=True, timeout=1500)
+            else:
+                target.uncheck(force=True, timeout=1500)
+            return bool(target.is_checked(timeout=500)) == bool(checked)
         except Exception:
             return False
+
+    def _tick_checkbox_by_label(self, patterns: list[str], *, max_label_len: int = 80) -> bool:
+        """Tìm checkbox theo nhãn (Khác/Other, Tôi đồng ý, …)."""
+        try:
+            ok = bool(
+                self.page.evaluate(
+                    """({patterns, maxLen}) => {
+                      const norms = patterns.map(p => {
+                        const s = String(p || '')
+                          .normalize('NFD')
+                          .replace(/[\\u0300-\\u036f]/g, '')
+                          .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+                          .replace(/\\s+/g, ' ')
+                          .trim()
+                          .toLowerCase();
+                        return s;
+                      });
+                      const fold = (s) => String(s || '')
+                        .normalize('NFD')
+                        .replace(/[\\u0300-\\u036f]/g, '')
+                        .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+                        .replace(/\\s+/g, ' ')
+                        .trim()
+                        .toLowerCase();
+                      const inputs = [
+                        ...document.querySelectorAll(
+                          'input.ant-checkbox-input, input[type=checkbox]'
+                        ),
+                      ];
+                      for (const el of inputs) {
+                        if (el.closest('.ant-modal')) continue;
+                        const wrap = el.closest('.ant-checkbox-wrapper')
+                          || el.closest('label')
+                          || el.parentElement;
+                        let t = (wrap && wrap.textContent || '').replace(/\\s+/g, ' ').trim();
+                        if (!t || t.length > maxLen) continue;
+                        // Bỏ ô text «Other Request»
+                        if (/other\\s*request|yeu cau|yêu cầu/i.test(t) && /request|yeu cau|yêu cầu/i.test(t)) {
+                          if (!/^khac\\b|^other\\b|khac\\s*\\/\\s*other/i.test(fold(t))) continue;
+                        }
+                        const ft = fold(t);
+                        if (!norms.some(p => p && (ft === p || ft.includes(p)))) continue;
+                        const isOn = () => {
+                          const w = el.closest('.ant-checkbox-wrapper');
+                          return !!el.checked
+                            || !!(w && w.querySelector('.ant-checkbox-checked'));
+                        };
+                        if (isOn()) return true;
+                        const box = (wrap && wrap.querySelector('.ant-checkbox')) || wrap || el;
+                        box.click();
+                        if (isOn()) return true;
+                        const desc = Object.getOwnPropertyDescriptor(
+                          HTMLInputElement.prototype, 'checked'
+                        );
+                        if (desc && desc.set) desc.set.call(el, true);
+                        else el.checked = true;
+                        el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                        if (wrap) {
+                          wrap.classList.add('ant-checkbox-wrapper-checked');
+                          const inner = wrap.querySelector('.ant-checkbox');
+                          if (inner) inner.classList.add('ant-checkbox-checked');
+                        }
+                        return isOn();
+                      }
+                      return false;
+                    }""",
+                    {
+                        "patterns": [p.lower() for p in patterns],
+                        "maxLen": int(max_label_len),
+                    },
+                )
+            )
+            return ok
+        except Exception:
+            return False
+
+    def _list_checkbox_debug(self) -> list[dict[str, Any]]:
+        """Hỗ trợ debug khi tick fail — id + nhãn ngắn."""
+        try:
+            raw = self.page.evaluate(
+                """() => [...document.querySelectorAll(
+                  'input.ant-checkbox-input, input[type=checkbox]'
+                )].filter(el => !el.closest('.ant-modal')).slice(0, 40).map(el => {
+                  const wrap = el.closest('.ant-checkbox-wrapper') || el.closest('label');
+                  const t = (wrap && wrap.textContent || '').replace(/\\s+/g, ' ').trim();
+                  return {
+                    id: el.id || '',
+                    checked: !!el.checked,
+                    label: t.slice(0, 80),
+                  };
+                })"""
+            )
+            return list(raw or [])
+        except Exception:
+            return []
 
     @staticmethod
     def _fold_text(s: str) -> str:
@@ -364,10 +503,19 @@ class EsidDeclarePage:
         fold_opt = self._fold_text(option_text)
         if not fold_full or not fold_opt:
             return 0
+        # Không bao giờ chọn «+ Thêm mới»
+        if re.search(r"\bTHEM MOI\b|\bADD NEW\b", fold_opt):
+            return 0
         if fold_opt == fold_full:
             return 100
-        if fold_full in fold_opt or fold_opt in fold_full:
-            return 82
+        # Option chứa đúng cả chuỗi tìm → rất chắc
+        if fold_full in fold_opt:
+            return 96
+        # Option ngắn nằm trong full — chỉ chấp nhận nếu option đủ dài (tránh khớp 1 từ)
+        if fold_opt in fold_full:
+            if len(fold_opt) >= max(10, int(len(fold_full) * 0.55)):
+                return 88
+            return 0
         generic = {
             "CONG",
             "TY",
@@ -406,6 +554,8 @@ class EsidDeclarePage:
             "FORWARDING",
             "AND",
             "THE",
+            "AGENT",
+            "AGENCY",
         }
         full_arr = [w for w in fold_full.split() if w]
         opt_arr = [w for w in fold_opt.split() if w]
@@ -423,14 +573,43 @@ class EsidDeclarePage:
         rare_common = sum(1 for w in full_rare_unique if w in opt_rare)
         if not rare_common:
             return 0
+        # Phải khớp ≥60% token riêng (tránh chọn agent gần giống)
+        if full_rare_unique and rare_common / len(full_rare_unique) < 0.6:
+            return 0
         score = int(70 * rare_common / max(len(full_rare_unique), 1))
         if full_rare_unique and full_rare_unique[0] in opt_rare:
             score += 20
         if full_arr and opt_arr and full_arr[-1] == opt_arr[-1] and full_arr[-1] not in generic:
             score += 15
-        return score
+        # Phạt option có nhiều token riêng thừa (công ty khác)
+        extra = len(opt_rare - set(full_rare_unique))
+        if extra >= 2:
+            score -= 12 * min(extra, 3)
+        return max(0, score)
 
-    def _pick_combobox_option(self, full_text: str) -> bool:
+    def _hint_boost_score(self, label: str, hints: list[str] | None) -> int:
+        """MST/VAT hoặc SĐT trong option → điểm gần tuyệt đối."""
+        fold_opt = self._fold_text(label)
+        best = 0
+        for h in hints or []:
+            raw = re.sub(r"[\s.\-_/]", "", str(h or ""))
+            if len(raw) < 6:
+                continue
+            fold_h = self._fold_text(raw)
+            digits = re.sub(r"\D", "", raw)
+            if fold_h and fold_h in fold_opt:
+                best = max(best, 98)
+            elif digits and len(digits) >= 8 and digits in re.sub(r"\D", "", fold_opt):
+                best = max(best, 98)
+        return best
+
+    def _pick_combobox_option(
+        self,
+        full_text: str,
+        *,
+        min_score: int = 45,
+        hints: list[str] | None = None,
+    ) -> bool:
         """Chọn option ant-select khớp nhất (không phân biệt dấu)."""
         fold_full = self._fold_text(full_text)
         if not fold_full:
@@ -445,7 +624,7 @@ class EsidDeclarePage:
 
         try:
             labels = opts.evaluate_all(
-                """els => els.slice(0, 24).map(el =>
+                """els => els.slice(0, 30).map(el =>
                   (el.getAttribute('title')
                     || el.querySelector('.ant-select-item-option-content')?.textContent
                     || el.textContent || '').replace(/\\s+/g, ' ').trim()
@@ -455,13 +634,29 @@ class EsidDeclarePage:
             labels = []
         best_i = -1
         best_score = 0
+        second_score = 0
         for i, label in enumerate(labels):
-            score = self._score_select_option(full_text, label)
+            score = max(
+                self._score_select_option(full_text, label),
+                self._hint_boost_score(label, hints),
+            )
             if score > best_score:
+                second_score = best_score
                 best_score = score
                 best_i = i
+            elif score > second_score:
+                second_score = score
 
-        min_score = 45
+        # Ambiguous: top 2 gần nhau → không chọn (tránh agent sai)
+        if (
+            best_i >= 0
+            and best_score >= min_score
+            and second_score > 0
+            and best_score - second_score < 8
+            and best_score < 95
+        ):
+            return False
+
         if best_i >= 0 and best_score >= min_score:
             try:
                 opts.nth(best_i).click(timeout=2000)
@@ -469,6 +664,63 @@ class EsidDeclarePage:
             except Exception:
                 return False
         return False
+
+    def _read_select_label(self, eid: str) -> str:
+        try:
+            return str(
+                self.page.evaluate(
+                    """(eid) => {
+                      const wrap = document.querySelector('.ant-select:has(#' + eid + ')')
+                        || document.querySelector('#' + eid)?.closest('.ant-select');
+                      const item = wrap && wrap.querySelector('.ant-select-selection-item');
+                      return item
+                        ? (item.getAttribute('title') || item.textContent || '').trim()
+                        : '';
+                    }""",
+                    eid,
+                )
+                or ""
+            )
+        except Exception:
+            return ""
+
+    def _selection_matches(
+        self,
+        eid: str,
+        full_text: str,
+        *,
+        min_score: int,
+        hints: list[str] | None = None,
+    ) -> bool:
+        selected = self._read_select_label(eid)
+        if not selected:
+            return False
+        score = max(
+            self._score_select_option(full_text, selected),
+            self._hint_boost_score(selected, hints),
+        )
+        return score >= min_score
+
+    def _clear_select(self, eid: str) -> None:
+        try:
+            self.page.evaluate(
+                """(eid) => {
+                  const wrap = document.querySelector('.ant-select:has(#' + eid + ')')
+                    || document.querySelector('#' + eid)?.closest('.ant-select');
+                  if (!wrap) return;
+                  const clear = wrap.querySelector('.ant-select-clear');
+                  if (clear) { clear.click(); return; }
+                  const inp = wrap.querySelector('input');
+                  if (inp) {
+                    inp.value = '';
+                    inp.dispatchEvent(new Event('input', { bubbles: true }));
+                    inp.dispatchEvent(new Event('change', { bubbles: true }));
+                  }
+                }""",
+                eid,
+            )
+        except Exception:
+            pass
 
     def _type_combobox_search(self, eid: str, target, query: str) -> None:
         try:
@@ -496,6 +748,10 @@ class EsidDeclarePage:
         *,
         max_queries: int = 3,
         budget_ms: int = 6500,
+        min_score: int = 45,
+        extra_queries: list[str] | None = None,
+        hints: list[str] | None = None,
+        verify: bool = True,
     ) -> bool:
         """Ant Select có ngân sách thời gian cứng; không để một master treo cả job."""
         text = next(
@@ -505,6 +761,7 @@ class EsidDeclarePage:
         if not text:
             return False
         deadline = time.monotonic() + max(1000, budget_ms) / 1000
+        match_hints = [h for h in (hints or []) if str(h or "").strip()]
         try:
             # Ô ant-select: input#id hoặc #id trong .ant-select
             loc = self._active_pane().locator(f"#{eid}")
@@ -536,7 +793,17 @@ class EsidDeclarePage:
                     pass
             self.page.wait_for_timeout(80)
 
-            for query in self._combobox_search_queries(text)[: max(max_queries, 4)]:
+            queries: list[str] = []
+            for q in list(extra_queries or []) + self._combobox_search_queries(text):
+                qn = (q or "").strip()
+                if not qn:
+                    continue
+                if any(self._fold_text(qn) == self._fold_text(x) for x in queries):
+                    continue
+                queries.append(qn)
+            queries = queries[: max(max_queries, 4)]
+
+            for query in queries:
                 if time.monotonic() >= deadline:
                     break
                 self._type_combobox_search(eid, target, query)
@@ -550,8 +817,28 @@ class EsidDeclarePage:
                     )
                 except Exception:
                     self.page.wait_for_timeout(100)
-                if self._pick_combobox_option(text):
+                if not self._pick_combobox_option(
+                    text, min_score=min_score, hints=match_hints
+                ):
+                    continue
+                self.page.wait_for_timeout(120)
+                if not verify:
                     return True
+                if self._selection_matches(
+                    eid, text, min_score=min_score, hints=match_hints
+                ):
+                    return True
+                # Chọn nhầm — xóa và thử query tiếp
+                self._clear_select(eid)
+                try:
+                    wrap = self.page.locator(
+                        f".ant-select:has(#{eid}), .ant-select#{eid}"
+                    ).first
+                    if wrap.count() > 0:
+                        wrap.click(timeout=1500, force=True)
+                except Exception:
+                    pass
+                self.page.wait_for_timeout(60)
 
             try:
                 self.page.keyboard.press("Escape")
@@ -642,12 +929,11 @@ class EsidDeclarePage:
         if include_payment and pay:
             payment_ok = self._fill_payment(pay)
             # Ant Select đôi lúc cập nhật label sau timeout click; xác minh
-            # trạng thái cuối để tránh cảnh báo giả dù form đã là Chuyển khoản.
+            # trạng thái cuối theo target (Cash hoặc Bank).
             if not payment_ok:
                 current_payment = self._fold_text(self._read_payment_label())
                 payment_ok = any(
-                    token in current_payment
-                    for token in ("CHUYEN KHOAN", "BANK TRANSFER")
+                    token in current_payment for token in _payment_target_keys(pay)
                 )
             fills["codPayMod"] = payment_ok
             if not fills["codPayMod"]:
@@ -670,40 +956,46 @@ class EsidDeclarePage:
             return ""
 
     def _fill_payment(self, pay: str) -> bool:
-        """Chọn thanh toán nhanh — cache nhãn session + 1 lần mở select."""
+        """Chọn thanh toán (Cash hoặc Bank) — cache nhãn session + verify theo target."""
         global _PAYMENT_LABEL_CACHE
         text = (pay or _PAYMENT_LABEL_CACHE or "").strip()
         if not text:
             return False
+        keys = _payment_target_keys(text)
         cur = self._read_payment_label()
-        want_keys = ("chuyển khoản", "bank transfer", "chuyen khoan")
         if cur:
-            cl = cur.lower()
-            if any(k in cl for k in want_keys) or text[:12].lower() in cl:
+            folded_cur = self._fold_text(cur)
+            if any(k in folded_cur for k in keys):
                 _PAYMENT_LABEL_CACHE = cur
                 return True
         tokens: list[str] = []
-        for t in (_PAYMENT_LABEL_CACHE, text, "Chuyển khoản", "Bank transfer"):
+        for t in (text, _PAYMENT_LABEL_CACHE):
             if t and t not in tokens:
                 tokens.append(t)
             for part in re.split(r"[/]", t or ""):
                 p = part.strip()
                 if p and p not in tokens:
                     tokens.append(p)
+        # Ưu tiên token khớp target (Cash / Bank)
+        if keys[0] == "TIEN MAT":
+            for extra in ("Tiền mặt", "Cash", "tiền mặt"):
+                if extra not in tokens:
+                    tokens.insert(0, extra)
+        else:
+            for extra in ("Chuyển khoản", "Bank transfer"):
+                if extra not in tokens:
+                    tokens.append(extra)
         try:
-            # Ant Select cần một click Playwright "trusted". HTMLElement.click()
-            # không ổn định vì đôi lúc React không mở dropdown sau khi modal
-            # chuyến bay vừa đóng.
             pay_input = self.page.locator("#codPayMod:visible")
             if pay_input.count() == 0:
                 pay_input = self.page.locator("#codPayMod")
             if pay_input.count() == 0:
                 return False
-            pay_input.last.click(timeout=1800, force=True)
+            pay_input.last.click(timeout=1500, force=True)
             self.page.locator(
                 ".ant-select-dropdown:not(.ant-select-dropdown-hidden) "
                 ".ant-select-item-option"
-            ).first.wait_for(state="visible", timeout=2000)
+            ).first.wait_for(state="visible", timeout=1800)
             opts = self.page.locator(
                 ".ant-select-dropdown:not(.ant-select-dropdown-hidden) "
                 ".ant-select-item-option:not(.ant-select-item-option-disabled)"
@@ -717,32 +1009,125 @@ class EsidDeclarePage:
             folded_tokens = [self._fold_text(t) for t in tokens]
             for idx, label in enumerate(labels):
                 folded_label = self._fold_text(label)
-                if any(
-                    token and (token in folded_label or folded_label in token)
-                    for token in folded_tokens
-                ):
-                    opts.nth(idx).click(timeout=1200)
-                    self.page.wait_for_timeout(120)
-                    got = self._read_payment_label()
-                    got_folded = self._fold_text(got)
-                    if got and any(
-                        key in got_folded
-                        for key in ("chuyen khoan", "bank transfer")
+                # Ưu tiên option chứa key target (CASH / BANK)
+                if not any(k in folded_label for k in keys):
+                    if not any(
+                        token and (token in folded_label or folded_label in token)
+                        for token in folded_tokens
                     ):
-                        _PAYMENT_LABEL_CACHE = got
-                        return True
+                        continue
+                opts.nth(idx).click(timeout=1000)
+                try:
+                    self.page.wait_for_timeout(40)
+                except Exception:
+                    pass
+                got = self._read_payment_label()
+                got_folded = self._fold_text(got)
+                if got and any(k in got_folded for k in keys):
+                    _PAYMENT_LABEL_CACHE = got
+                    return True
         except Exception:
             pass
         if self._fill_combobox(
             "codPayMod",
             text,
             max_queries=1,
-            budget_ms=2600,
+            budget_ms=2200,
         ):
             got = self._read_payment_label()
+            got_folded = self._fold_text(got)
+            if got and any(k in got_folded for k in keys):
+                _PAYMENT_LABEL_CACHE = got
+                return True
             if got:
                 _PAYMENT_LABEL_CACHE = got
+            return bool(got) and any(k in got_folded for k in keys)
+        return False
+
+    def _tick_shc_other(self) -> bool:
+        """Tick checkbox Khác/Other (không nhầm ô text Other Request)."""
+        candidates = [
+            self._field_id("shc_other", "shcOth"),
+            "shcOth",
+            "shcOth001",
+            "shcOth003",
+            "shcOther",
+            "otherShc",
+            "shcOth000",
+        ]
+        seen: set[str] = set()
+        for eid in candidates:
+            if not eid or eid in seen:
+                continue
+            seen.add(eid)
+            if self._set_checkbox(eid, True):
+                return True
+        # Nhãn form TCS thường: «Khác/Other»
+        if self._tick_checkbox_by_label(
+            [
+                "khac/other",
+                "khác/other",
+                "khac / other",
+                "khác / other",
+                "khac",
+                "khác",
+            ],
+            max_label_len=28,
+        ):
             return True
+        # Playwright role/text fallback
+        try:
+            loc = self.page.get_by_role(
+                "checkbox", name=re.compile(r"^\s*khác\s*/\s*other\s*$", re.I)
+            )
+            if loc.count() == 0:
+                loc = self.page.locator("label.ant-checkbox-wrapper").filter(
+                    has_text=re.compile(r"^\s*Khác\s*/\s*Other\s*$", re.I)
+                )
+            if loc.count() > 0:
+                loc.first.click(force=True, timeout=1500)
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _tick_agree_confirm(self) -> bool:
+        """Tick «Tôi đồng ý nội dung sau / I agree…»."""
+        if self._set_checkbox("agreeConfirm", True):
+            return True
+        for eid in ("agreeConfirm", "agree", "chkAgree", "agree_confirm"):
+            if self._set_checkbox(eid, True):
+                return True
+        if self._tick_checkbox_by_label(
+            [
+                "toi dong y noi dung sau",
+                "toi dong y",
+                "i agree with the following",
+                "i agree with the following content",
+                "i agree",
+            ],
+            max_label_len=120,
+        ):
+            return True
+        try:
+            loc = self.page.get_by_role(
+                "checkbox",
+                name=re.compile(r"đồng ý|i agree", re.I),
+            )
+            if loc.count() > 0:
+                loc.first.check(force=True, timeout=1500)
+                return bool(loc.first.is_checked(timeout=500))
+        except Exception:
+            pass
+        try:
+            wrap = self.page.locator("label.ant-checkbox-wrapper").filter(
+                has_text=re.compile(r"Tôi đồng ý|I agree", re.I)
+            )
+            if wrap.count() > 0:
+                wrap.first.click(force=True, timeout=1500)
+                return True
+        except Exception:
+            pass
         return False
 
     @staticmethod
@@ -2074,14 +2459,15 @@ class EsidDeclarePage:
 
     def fill_declare(self, data: dict[str, Any], *, submit: bool = False) -> dict[str, Any]:
         """
-        Điền form từ payload Ops. Mặc định submit=False: không tick đồng ý, không HOÀN TẤT.
+        Điền form từ payload Ops. Mặc định submit=False: không bấm HOÀN TẤT.
+        Kho TCS (agree_on_fill): tick #agreeConfirm lúc Điền; TECS-TCS: bỏ tick trừ khi submit.
 
         Thứ tự tối ưu:
         1) CHỌN CHUYẾN BAY trước — TCS có thể dựng/reset phần còn lại của form
         2) Party master (Shipper/Agent/CNEE) — giữ dữ liệu TCS tự điền
-        3) Chuyển khoản + Kho hàng TECS
+        3) Thanh toán (Cash TCS / Bank TECS) + checkbox kho / Khác
         4) AWB/destination/pcs/goods và các text không thuộc master
-        5) Người khai
+        5) Người khai (+ Đồng ý nếu agree_on_fill)
         """
         t_all = time.perf_counter()
         timings: dict[str, Any] = {}
@@ -2154,30 +2540,63 @@ class EsidDeclarePage:
             if not val:
                 continue
             party_started = time.perf_counter()
+            extra_q: list[str] = []
+            hints: list[str] = []
+            min_score = 55
+            max_q = 4
+            budget = 7000
+            if eid == "agentId":
+                # Agent: ưu tiên MST/VAT rồi SĐT — chọn master chính xác hơn tên gần giống
+                vat = str(data.get("agent_vat") or "").strip()
+                tel = str(data.get("agent_tel") or "").strip()
+                if vat:
+                    extra_q.append(vat)
+                    hints.append(vat)
+                if tel:
+                    digits = re.sub(r"\D", "", tel)
+                    if len(digits) >= 8:
+                        extra_q.append(digits)
+                        hints.append(digits)
+                    extra_q.append(tel)
+                    hints.append(tel)
+                min_score = 72
+                max_q = 6
+                budget = 9500
+            elif eid == "shipperId":
+                vat = str(data.get("shipper_vat") or "").strip()
+                if vat:
+                    extra_q.append(vat)
+                    hints.append(vat)
+                min_score = 60
             ok = self._fill_combobox(
                 eid,
                 val,
-                max_queries=4,
-                budget_ms=7000,
+                max_queries=max_q,
+                budget_ms=budget,
+                min_score=min_score,
+                extra_queries=extra_q or None,
+                hints=hints or None,
+                verify=True,
             )
             fills[eid] = ok
             party_timings[eid] = int((time.perf_counter() - party_started) * 1000)
             if not ok:
                 warnings.append(
-                    f"Không chọn được master #{eid} trong 7s — để trống, không ghi đè text"
+                    f"Không chọn được master #{eid} (min_score={min_score}) — "
+                    "để trống, không ghi đè text"
                 )
             else:
                 self.page.wait_for_timeout(120)
         timings["party_ms"] = int((time.perf_counter() - t0) * 1000)
         timings["party_fields_ms"] = party_timings
 
-        # 3) Mặc định nghiệp vụ: chuyển khoản và Kho hàng TECS.
+        # 3) Mặc định nghiệp vụ: thanh toán + checkbox kho / Khác.
         t0 = time.perf_counter()
         # Master combobox có thể để lại dropdown/lớp phủ trong lúc React cập nhật;
         # đóng trước khi mở payment để click không bị chặn.
         try:
             self.page.keyboard.press("Escape")
-            self.page.wait_for_timeout(60)
+            self.page.wait_for_timeout(40)
         except Exception:
             pass
         self._fill_ops_selects(
@@ -2191,6 +2610,15 @@ class EsidDeclarePage:
             fills["shcCod002"] = self._set_checkbox("shcCod002", True)
             if not fills["shcCod002"]:
                 warnings.append("Chưa chọn được Kho hàng TECS (#shcCod002)")
+        # Khác/Other: tick sớm + tick lại cuối (Ant đôi lúc reset khi điền text)
+        want_other = bool(data.get("shc_other")) or any(
+            k in self._fold_text(str(data.get("payment_mode") or ""))
+            for k in ("TIEN MAT", "CASH")
+        )
+        if want_other:
+            fills["shcOther"] = self._tick_shc_other()
+            if not fills["shcOther"]:
+                warnings.append("Chưa tick được checkbox Khác/Other (sẽ thử lại cuối)")
         if data.get("consol"):
             fills["shcConsol"] = self._set_checkbox("shcConsol", True)
         timings["defaults_ms"] = int((time.perf_counter() - t0) * 1000)
@@ -2205,28 +2633,20 @@ class EsidDeclarePage:
             include_destination=True,
             include_payment=False,
         )
-        notify_remark = str(data.get("notify_remark") or "").strip()
-        if notify_remark:
-            fills["desRmk001"] = self._set_id("desRmk001", notify_remark)
-
-        other_request = str(data.get("other_request") or "").strip()
-        if other_request:
-            other_ok = False
-            for eid in (
-                self._field_id("other_request", "shcOthReq"),
-                "shcOthReq",
-                "otherRequest",
-            ):
-                if not eid:
-                    continue
-                if self._set_id(eid, other_request):
-                    fills[eid] = True
-                    other_ok = True
-                    break
-            if not other_ok:
-                warnings.append(
-                    "Không điền được Other Request (shcOthReq/otherRequest)"
-                )
+        # Không dùng Notify master + textarea Other Request trên form TCS.
+        self._clear_select("notifyId")
+        fills["notifyId"] = False
+        for eid in (
+            self._field_id("other_request", "shcOthReq"),
+            "shcOthReq",
+            "otherRequest",
+        ):
+            if not eid:
+                continue
+            if self._set_id(eid, ""):
+                fills["otherRequest"] = False
+                fills["otherRequest_cleared"] = True
+                break
         timings["ops_text_ms"] = int((time.perf_counter() - t0) * 1000)
 
         # 5) Người khai
@@ -2237,15 +2657,48 @@ class EsidDeclarePage:
         fills["shpRegTel"] = self._set_id("shpRegTel", reg_tel)
         fills["shpRegIdx"] = self._set_id("shpRegIdx", reg_cccd)
 
-        # An toàn: bỏ tick đồng ý trừ khi submit
-        self._set_checkbox("agreeConfirm", False)
+        # Cuối bước Điền: tick lại Khác + Đồng ý (tránh bị reset giữa chừng).
+        want_other = bool(data.get("shc_other")) or any(
+            k in self._fold_text(str(data.get("payment_mode") or ""))
+            for k in ("TIEN MAT", "CASH")
+        )
+        want_agree = bool(data.get("agree_on_fill")) or want_other
+        if want_other:
+            fills["shcOther"] = self._tick_shc_other()
+            if not fills["shcOther"]:
+                dbg = self._list_checkbox_debug()
+                hints = [
+                    f"#{x.get('id') or '?'}«{x.get('label') or ''}»"
+                    for x in dbg[:12]
+                ]
+                warnings.append(
+                    "Chưa tick được checkbox Khác/Other"
+                    + (f" · thấy: {', '.join(hints)}" if hints else "")
+                )
+        if want_agree:
+            fills["agreeConfirm"] = self._tick_agree_confirm()
+            if not fills["agreeConfirm"]:
+                dbg = self._list_checkbox_debug()
+                hints = [
+                    f"#{x.get('id') or '?'}«{x.get('label') or ''}»"
+                    for x in dbg
+                    if re.search(r"đồng ý|agree|khác|other", str(x.get("label") or ""), re.I)
+                ][:8]
+                warnings.append(
+                    "Chưa tick được «Tôi đồng ý» (#agreeConfirm)"
+                    + (f" · thấy: {', '.join(hints)}" if hints else "")
+                )
+        elif not submit:
+            self._set_checkbox("agreeConfirm", False)
+            fills["agreeConfirm"] = False
 
         submitted = False
         if submit:
             if not (reg_name and reg_tel and reg_cccd):
                 warnings.append("SUBMIT yêu cầu đủ người khai (tên/tel/CCCD) — đã bỏ qua HOÀN TẤT")
             else:
-                self._set_checkbox("agreeConfirm", True)
+                self._tick_agree_confirm()
+                fills["agreeConfirm"] = True
                 try:
                     btn = self.page.get_by_role("button", name=re.compile(r"HOÀN\s*TẤT", re.I))
                     btn.first.click(timeout=4000)

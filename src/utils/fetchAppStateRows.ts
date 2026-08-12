@@ -6,10 +6,13 @@ import { debugError, debugWarn } from "./debugLog";
 /** Snapshot đầy đủ (lô + danh bạ khách) — dùng khi xuất Excel cần mã khách hàng. */
 export async function fetchAppStateSnapshot(): Promise<AppState | null> {
   try {
-    const res = await fetch("/api/state", {
+    const res = await fetch("/api/state?full=1", {
       ...credFetch,
       cache: "no-store",
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        "X-TECSOPS-State-Full": "1",
+      },
     });
     if (!res.ok) {
       debugWarn("fetch:app-state", "HTTP", res.status);

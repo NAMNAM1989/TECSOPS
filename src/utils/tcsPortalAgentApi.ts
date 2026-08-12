@@ -308,7 +308,13 @@ export type TcsWorkspaceBootstrapResponse = TcsEsidScanResponse &
 export async function bootstrapTcsWorkspace(
   sessionDate: string,
   awbs: string[],
-  opts: { visible?: boolean; warehouse?: TcsPortalWarehouse | string } = {}
+  opts: {
+    visible?: boolean;
+    warehouse?: TcsPortalWarehouse | string;
+    /** Mặc định false — Quét nhẹ. Bật khi cần prefetch/warm. */
+    prefetch?: boolean;
+    warm?: boolean;
+  } = {}
 ): Promise<TcsWorkspaceBootstrapResponse> {
   const warehouse = opts.warehouse || "TECS-TCS";
   return postAgentJson<TcsWorkspaceBootstrapResponse>(
@@ -318,10 +324,41 @@ export async function bootstrapTcsWorkspace(
       session_date: sessionDate,
       awbs,
       visible: opts.visible === true,
+      prefetch: opts.prefetch === true,
+      warm: opts.warm === true,
     },
     "Không khởi tạo được workspace TCS",
     { warehouse }
   );
+}
+
+/** Quét HT nhẹ — không prefetch PDF / warm declare. */
+export async function scanTcsWorkspace(
+  sessionDate: string,
+  awbs: string[],
+  opts: { visible?: boolean; warehouse?: TcsPortalWarehouse | string } = {}
+): Promise<TcsWorkspaceBootstrapResponse> {
+  const warehouse = opts.warehouse || "TECS-TCS";
+  try {
+    return await postAgentJson<TcsWorkspaceBootstrapResponse>(
+      "/workspace/scan",
+      {
+        warehouse,
+        session_date: sessionDate,
+        awbs,
+        visible: opts.visible === true,
+      },
+      "Không quét được workspace TCS",
+      { warehouse }
+    );
+  } catch {
+    // Agent cũ chưa có /workspace/scan → bootstrap nhẹ (không prefetch/warm).
+    return bootstrapTcsWorkspace(sessionDate, awbs, {
+      ...opts,
+      prefetch: false,
+      warm: false,
+    });
+  }
 }
 
 /** In sẵn PDF ESID vào cache agent (sau Đồng bộ Ext hoặc gọi tay). */

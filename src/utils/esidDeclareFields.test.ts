@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Shipment } from "../types/shipment";
 import {
+  ESID_CASH_PAYMENT_MODE,
   ESID_DEFAULT_PAYMENT_MODE,
   buildEsidDeclareCoreFields,
   composeEsidOtherRequest,
@@ -93,11 +94,14 @@ describe("esidDeclareFields — một nguồn cho Excel + fill", () => {
         dimWeightKg: 99,
         note: "NOTE A",
         otherRequirementsPrint: "REQ B",
+        notifyNamePrint: "SOME NOTIFY",
       }),
       registrant,
       agent,
     );
-    expect(fill?.shipment.other_request).toBe(core.other_request);
+    // Điền portal: bỏ Notify + Other Request (Excel vẫn có core.other_request).
+    expect(fill?.shipment.other_request).toBe("");
+    expect(fill?.shipment.notify_name).toBe("");
   });
 
   it("Excel row và fill payload cùng payment_mode / party / hawbs", () => {
@@ -118,5 +122,22 @@ describe("esidDeclareFields — một nguồn cho Excel + fill", () => {
     expect(row.AGENT_NAME).toBe(fill?.shipment.agent_name);
     expect(row.CONSIGNEE_NAME).toBe(fill?.shipment.consignee_name);
     expect(row.REGISTRANT_CCCD).toBe(fill?.registrant.cccd);
+    expect(core.tecs_warehouse).toBe(true);
+    expect(core.shc_other).toBe(false);
+    expect(core.agree_on_fill).toBe(false);
+  });
+
+  it("kho TCS: Tiền mặt + Khác + Đồng ý lúc Điền", () => {
+    const s = base({ warehouse: "TCS" });
+    const core = buildEsidDeclareCoreFields(s, registrant, agent);
+    const fill = buildEsidDeclareFillPayload(s, registrant, agent);
+    expect(core.payment_mode).toBe(ESID_CASH_PAYMENT_MODE);
+    expect(core.tecs_warehouse).toBe(false);
+    expect(core.shc_other).toBe(true);
+    expect(core.agree_on_fill).toBe(true);
+    expect(fill?.shipment.payment_mode).toBe(ESID_CASH_PAYMENT_MODE);
+    expect(fill?.shipment.shc_other).toBe(true);
+    expect(fill?.shipment.agree_on_fill).toBe(true);
+    expect(fill?.warehouse).toBe("TCS");
   });
 });

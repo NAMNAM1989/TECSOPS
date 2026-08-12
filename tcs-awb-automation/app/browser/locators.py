@@ -108,6 +108,7 @@ DEFAULT_LOCATORS: dict[str, Any] = {
         "notify_remark": {"by": "id", "value": "desRmk001"},
         "nature_of_goods": {"by": "id", "value": "natureOfGoods"},
         "other_request": {"by": "id", "value": "shcOthReq"},
+        "shc_other": {"by": "id", "value": "shcOth"},
         "agree": {"by": "id", "value": "agreeConfirm"},
         "registrant_name": {"by": "id", "value": "shpRegNam"},
         "registrant_tel": {"by": "id", "value": "shpRegTel"},
@@ -117,7 +118,8 @@ DEFAULT_LOCATORS: dict[str, Any] = {
         "notes": (
             "Dry-fill only; không submit. Combobox shipper/agent/cnee cần chọn master TCS. "
             "Field ids resolve qua EsidDeclarePage._field_id (DEFAULT + discovery). "
-            "other_request: primary shcOthReq, fill cũng thử otherRequest."
+            "Không điền notifyId + other_request (shcOthReq/otherRequest) — luôn để trống. "
+            "shc_other: checkbox Khác/Other (kho TCS) — fallback label nếu id lệch."
         ),
     },
 }

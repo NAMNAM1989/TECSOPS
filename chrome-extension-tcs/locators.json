@@ -30,6 +30,7 @@
       "notify_name": "notifyId",
       "nature_of_goods": "natureOfGoods",
       "other_request": "otherRequest",
+      "shc_other": "shcOth",
       "registrant_name": "shpRegNam",
       "registrant_tel": "shpRegTel",
       "registrant_id": "shpRegIdx",
@@ -37,6 +38,6 @@
     },
     "choose_flight_button": "CHỌN CHUYẾN BAY",
     "submit_button": "HOÀN TẤT",
-    "notes": "Điền không HOÀN TẤT. Thứ tự: AWB→chuyến bay→dest→party master (click option, không +Thêm mới)→địa chỉ. Đóng overlay giữa các bước để tránh treo. other_request: JSON ghi otherRequest; content-tcs cũng thử shcOthReq (Python fill/excel)."
+    "notes": "Điền không HOÀN TẤT. Kho TCS: Cash + tick Khác/Other + agreeConfirm. TECS-TCS: Bank + shcCod002. Không điền notifyId + otherRequest/shcOthReq."
   }
 }

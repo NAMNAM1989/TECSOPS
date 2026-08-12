@@ -61,6 +61,8 @@ type Props = {
   onDelete: (id: string) => void;
   onUpdate?: (id: string, patch: Partial<Shipment>) => void;
   compact?: boolean;
+  /** Viewport ≤767 — ẩn Điền; giữ PDF */
+  isMobile?: boolean;
 };
 
 const iconCls = "h-3.5 w-3.5";
@@ -181,6 +183,7 @@ export function ShipmentRowActionsMenu({
   onPrint,
   onDelete,
   compact = false,
+  isMobile = false,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
@@ -196,12 +199,9 @@ export function ShipmentRowActionsMenu({
   /** Form QF/ED/49 — family TCS (TCS / TECS-TCS), cùng chỗ LIST DIM. */
   const showTcsDimPdf = isTcsWarehouse(row.warehouse) && (row.dimLines?.length ?? 0) > 0;
   const showTcsEsid = isTcsWarehouse(row.warehouse) && Boolean(tcs);
-  /**
-   * Điền ESID: bật cả mobile — phone 4G dùng agent cloud Railway
-   * (không cần máy kho / Chrome Ext). Trước đây `!compact` cắt mất trên phone.
-   */
+  /** Điền ESID: chỉ PC — phone dùng Quét + PDF qua agent. */
   const showFillEsid =
-    showTcsEsid && awbDigitsKey(row.awb).length === 11;
+    showTcsEsid && !isMobile && awbDigitsKey(row.awb).length === 11;
   const showEcargo = isEcargoScscWarehouse(row.warehouse) && Boolean(ecargo);
   const csdCarrier = lightweightCsdCarrier(row);
   const showCsd = csdCarrier != null;

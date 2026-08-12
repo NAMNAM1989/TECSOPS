@@ -4,6 +4,7 @@ import concurrent.futures
 import base64
 import json
 import mimetypes
+import os
 import queue
 import socket
 import threading
@@ -21,7 +22,11 @@ from app.config import Settings, ensure_runtime_dirs, load_settings
 from app.data.repository import Repository
 from app.services.awb_service import validate_ops_payload
 from app.services.batch_service import BatchService
-from app.services.download_service import find_recent_esid_pdf, resolve_docs_file
+from app.services.download_service import (
+    find_recent_esid_pdf,
+    prune_docs,
+    resolve_docs_file,
+)
 from app.data.models import NormalizedStatus
 from app.services.esid_declare_service import fill_esid_declare, submit_esid_declare
 from app.services.tcs_workspace_service import TcsWorkspaceService
@@ -320,6 +325,9 @@ def make_handler(state: AgentState):
             if path == "/workspace/bootstrap":
                 self._handle_workspace_bootstrap(payload)
                 return
+            if path == "/workspace/scan":
+                self._handle_workspace_scan(payload)
+                return
             if path == "/workspace/prefetch-pdfs":
                 self._handle_prefetch_pdfs(payload)
                 return
@@ -465,9 +473,71 @@ def make_handler(state: AgentState):
                 or payload.get("headed", False)
                 or payload.get("show_browser", False)
             )
+            # Mặc định Quét nhẹ; bật prefetch/warm chỉ khi client yêu cầu rõ.
+            do_prefetch = bool(
+                payload.get("prefetch", False) or payload.get("do_prefetch", False)
+            )
+            do_warm = bool(payload.get("warm", False) or payload.get("do_warm", False))
             try:
                 result = state.call_on_worker(
                     state.workspace.bootstrap,
+                    session_date=session_date,
+                    raw_awbs=raw_awbs,
+                    visible=want_visible,
+                    do_prefetch=do_prefetch,
+                    do_warm=do_warm,
+                )
+                state.call_on_worker(state.refresh_session_snapshot)
+                code = 200 if result.get("ok") else 400
+                if result.get("error") in {"NO_BROWSER", "NEEDS_LOGIN"}:
+                    code = 400
+                self._json(code, result)
+            except Exception as e:
+                state.workspace.phase = "ERROR"
+                state.workspace.error = str(e)[:300]
+                try:
+                    state.call_on_worker(state.refresh_session_snapshot)
+                except Exception:
+                    pass
+                self._json(
+                    500,
+                    {"ok": False, "error": "INTERNAL", "message": str(e)[:300]},
+                )
+            finally:
+                state.release_running()
+
+        def _handle_workspace_scan(self, payload: dict[str, Any]) -> None:
+            """Quét HT nhẹ — không prefetch PDF / warm declare."""
+            session_date = str(
+                payload.get("session_date") or payload.get("sessionDate") or ""
+            ).strip()
+            raw_awbs = payload.get("awbs") or []
+            if not session_date:
+                self._json(
+                    400,
+                    {
+                        "ok": False,
+                        "error": "VALIDATION",
+                        "message": "Thiếu session_date để quét ESID",
+                    },
+                )
+                return
+            if not isinstance(raw_awbs, list):
+                self._json(
+                    400,
+                    {"ok": False, "error": "VALIDATION", "message": "awbs phải là mảng"},
+                )
+                return
+            if not self._try_begin_job():
+                return
+            want_visible = bool(
+                payload.get("visible", False)
+                or payload.get("headed", False)
+                or payload.get("show_browser", False)
+            )
+            try:
+                result = state.call_on_worker(
+                    state.workspace.scan_only,
                     session_date=session_date,
                     raw_awbs=raw_awbs,
                     visible=want_visible,
@@ -746,6 +816,15 @@ def make_handler(state: AgentState):
                     "results": enriched,
                 }
                 state.last_job = summary
+                try:
+                    prune_stats = prune_docs(state.settings.output_dir / "docs")
+                    if prune_stats.get("deleted"):
+                        print(
+                            f"[prune-docs] deleted={prune_stats.get('deleted')} "
+                            f"bytes≈{prune_stats.get('bytes')} kept={prune_stats.get('kept')}"
+                        )
+                except Exception as e:  # noqa: BLE001
+                    print(f"[prune-docs] bỏ qua: {e}")
                 # Hộp in OS (USER_*) có thể chặn page — không đọc DOM session
                 opened_dialog = any(
                     str(getattr(r, "print_status", "") or "").startswith("USER_")
@@ -816,6 +895,15 @@ def serve_agent(settings: Settings | None = None) -> None:
     # Seed locators.json từ DEFAULT nếu container chưa có discovery_artifacts/
     ensure_default_locators(locators_path(settings.discovery_dir))
     state = AgentState(settings)
+    if os.getenv("TCS_PRUNE_ON_START", "1").strip() not in {"0", "false", "False"}:
+        try:
+            stats = prune_docs(settings.output_dir / "docs")
+            print(
+                f"[prune-docs] on_start deleted={stats.get('deleted')} "
+                f"bytes≈{stats.get('bytes')} kept={stats.get('kept')}"
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[prune-docs] on_start bỏ qua: {e}")
     host = settings.agent_host
     port = settings.agent_port
     if settings.auto_open and not settings.mock:
@@ -829,13 +917,13 @@ def serve_agent(settings: Settings | None = None) -> None:
     print("GET  /health  /session/status  /docs?file=")
     print(
         f"mode={'HEADLESS' if settings.headless else 'HEADED'} · "
-        "POST /workspace/bootstrap  /session/open|/close|/focus  /jobs  "
+        "POST /workspace/scan|/bootstrap  /session/open|/close|/focus  /jobs  "
         "/esid/declare-fill|/declare-submit"
     )
     if not settings.mock:
         print(
-            "REAL mode: POST /workspace/bootstrap → Login + Quét → "
-            "/esid/declare-fill|declare-submit → /jobs DOWNLOAD"
+            "REAL mode: POST /workspace/scan → Quét nhẹ (không prefetch) · "
+            "/jobs DOWNLOAD · PDF cache TTL"
         )
     try:
         httpd.serve_forever()

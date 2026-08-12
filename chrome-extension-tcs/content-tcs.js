@@ -3,7 +3,7 @@
  * Idempotent: inject nhiều lần chỉ cập nhật runner, không thêm listener.
  */
 (() => {
-  const SCRIPT_VERSION = "2.0.26";
+  const SCRIPT_VERSION = "2.0.29";
 
   /** Fallback nếu không fetch được locators.json (đồng bộ với file đó). */
   const DEFAULT_LOCATORS = {
@@ -155,12 +155,13 @@
       await hardResetUi();
 
       // 2) Party master: chọn danh mục TCS và giữ nguyên dữ liệu tự điền.
+      // Không dùng ô Notify (#notifyId) — luôn để trống.
       const partyMap = [
         [LOCATORS.fields.shipper_name, ship.shipper_name, "shipperId"],
         [LOCATORS.fields.agent_name, ship.agent_name, "agentId"],
         [LOCATORS.fields.consignee_name, ship.consignee_name, "consigneeId"],
-        [LOCATORS.fields.notify_name, ship.notify_name, "notifyId"],
       ];
+      fills.notifyId = clearMasterField(LOCATORS.fields.notify_name || "notifyId");
       for (const [id, value, key] of partyMap) {
         if (value == null || String(value).trim() === "") {
           fills[key] = clearMasterField(id);
@@ -168,28 +169,84 @@
         }
         updateWorkspaceOverlay("FILLING", `Đang chọn ${key} từ danh mục TCS`, 2, 7);
         await hardResetUi();
-        fills[key] = await fillMasterField(id, String(value), {
+        const fillOpts = {
           maxQueries: 4,
           budgetMs: 6_000,
-          minScore: 45,
-        });
+          minScore: 55,
+          extraQueries: [],
+          hints: [],
+        };
+        if (key === "agentId") {
+          const vat = String(ship.agent_vat || "").trim();
+          const tel = String(ship.agent_tel || "").trim();
+          if (vat) {
+            fillOpts.extraQueries.push(vat);
+            fillOpts.hints.push(vat);
+          }
+          if (tel) {
+            const digits = tel.replace(/\D/g, "");
+            if (digits.length >= 8) {
+              fillOpts.extraQueries.push(digits);
+              fillOpts.hints.push(digits);
+            }
+            fillOpts.extraQueries.push(tel);
+            fillOpts.hints.push(tel);
+          }
+          fillOpts.minScore = 72;
+          fillOpts.maxQueries = 6;
+          fillOpts.budgetMs = 9_000;
+        } else if (key === "shipperId") {
+          const vat = String(ship.shipper_vat || "").trim();
+          if (vat) {
+            fillOpts.extraQueries.push(vat);
+            fillOpts.hints.push(vat);
+          }
+          fillOpts.minScore = 60;
+        }
+        fills[key] = await fillMasterField(id, String(value), fillOpts);
         if (!fills[key]) {
-          warnings.push(`#${id} chưa chọn được master trong 4 giây — để trống, không ghi đè text`);
+          warnings.push(
+            `#${id} chưa chọn được master (minScore=${fillOpts.minScore}) — để trống, không ghi đè text`
+          );
         }
         await hardResetUi();
       }
 
-      // 3) Mặc định nghiệp vụ.
-      updateWorkspaceOverlay("FILLING", "Đang chọn Chuyển khoản và Kho hàng TECS", 3, 7);
+      // 3) Mặc định nghiệp vụ (TCS: Cash; TECS-TCS: Bank + Kho TECS).
+      // Tick Khác + Đồng ý làm lại ở cuối để tránh bị hardResetUi/điền text làm mất.
+      const isTcsWh =
+        String(payload.warehouse || "").toUpperCase() === "TCS" ||
+        ship.shc_other === true ||
+        ship.agree_on_fill === true ||
+        /ti[eề]n\s*m[aặ]t|cash/i.test(String(ship.payment_mode || ""));
+      updateWorkspaceOverlay(
+        "FILLING",
+        isTcsWh
+          ? "Đang chọn Tiền mặt (kho TCS)"
+          : "Đang chọn Chuyển khoản và Kho hàng TECS",
+        3,
+        7
+      );
       fills.codPayMod = await selectPaymentMode(
-        String(ship.payment_mode || "Chuyển khoản/Bank transfer")
+        String(
+          ship.payment_mode ||
+            (isTcsWh ? "Tiền mặt/Cash" : "Chuyển khoản/Bank transfer")
+        )
       );
-      if (!fills.codPayMod) warnings.push("Chưa chọn được Chuyển khoản");
-      fills.shcCod002 = setCheckboxById(
-        LOCATORS.fields.tecs_warehouse || "shcCod002",
-        ship.tecs_warehouse !== false
-      );
-      if (!fills.shcCod002) warnings.push("Chưa chọn được Kho hàng TECS");
+      if (!fills.codPayMod) {
+        warnings.push(
+          isTcsWh
+            ? "Chưa chọn được Tiền mặt/Cash"
+            : "Chưa chọn được Chuyển khoản"
+        );
+      }
+      if (ship.tecs_warehouse === true) {
+        fills.shcCod002 = setAntCheckboxById(
+          LOCATORS.fields.tecs_warehouse || "shcCod002",
+          true
+        );
+        if (!fills.shcCod002) warnings.push("Chưa chọn được Kho hàng TECS");
+      }
       await hardResetUi();
 
       // 4) Các trường còn lại sau khi flight/master đã ổn định.
@@ -224,31 +281,62 @@
         fills.codFds = clearMasterField(LOCATORS.fields.dest_code);
       }
       {
-        const otherVal =
-          ship.other_request != null ? String(ship.other_request) : "";
+        // Không nhập liệu ô Other Request — xóa nếu còn giá trị cũ.
         const otherIds = [
           LOCATORS.fields.other_request,
           "otherRequest",
           "shcOthReq",
         ].filter((id, i, arr) => id && arr.indexOf(id) === i);
-        let otherOk = false;
+        let cleared = false;
         for (const id of otherIds) {
-          if (setById(id, otherVal)) {
-            otherOk = true;
+          if (setById(id, "")) {
+            cleared = true;
             break;
           }
         }
-        fills.otherRequest = otherOk;
-        if (otherVal && !otherOk) {
-          warnings.push("Không điền được Other Request (otherRequest/shcOthReq)");
-        }
+        fills.otherRequest = false;
+        fills.otherRequest_cleared = cleared;
       }
 
       fills.shpRegNam = setById(LOCATORS.fields.registrant_name, reg.name || "");
       fills.shpRegTel = setById(LOCATORS.fields.registrant_tel, reg.tel || "");
       fills.shpRegIdx = setById(LOCATORS.fields.registrant_id, reg.cccd || "");
 
+      // Cuối: tick Khác + Đồng ý (kho TCS) — sau mọi hardResetUi.
+      if (isTcsWh) {
+        fills.shcOther = setShcOtherCheckbox(true);
+        if (!fills.shcOther) {
+          const hints = listCheckboxDebug()
+            .slice(0, 10)
+            .map((x) => `#${x.id || "?"}«${x.label || ""}»`)
+            .join(", ");
+          warnings.push(
+            "Chưa tick được checkbox Khác/Other" +
+              (hints ? ` · thấy: ${hints}` : "")
+          );
+        }
+        fills.agreeConfirm = setAgreeConfirmCheckbox(true);
+        if (!fills.agreeConfirm) {
+          const hints = listCheckboxDebug()
+            .filter((x) => /đồng ý|agree|khác|other/i.test(x.label || ""))
+            .slice(0, 8)
+            .map((x) => `#${x.id || "?"}«${x.label || ""}»`)
+            .join(", ");
+          warnings.push(
+            "Chưa tick được «Tôi đồng ý» (#agreeConfirm)" +
+              (hints ? ` · thấy: ${hints}` : "")
+          );
+        }
+      }
+
       await hardResetUi();
+      // Tick lại sau Escape (hardReset đôi khi bỏ check visual)
+      if (isTcsWh) {
+        if (!fills.shcOther) fills.shcOther = setShcOtherCheckbox(true);
+        else setShcOtherCheckbox(true);
+        if (!fills.agreeConfirm) fills.agreeConfirm = setAgreeConfirmCheckbox(true);
+        else setAgreeConfirmCheckbox(true);
+      }
       updateWorkspaceOverlay("READY", "Đã điền xong — kiểm tra rồi HOÀN TẤT", 7, 7);
 
       return {
@@ -1897,6 +1985,10 @@
     const maxQueries = opts.maxQueries || 4;
     const deadline = Date.now() + Math.max(1_000, Number(opts.budgetMs || 6_000));
     const minAccept = Number(opts.minScore || 45);
+    const hints = Array.isArray(opts.hints) ? opts.hints.filter(Boolean) : [];
+    const extraQueries = Array.isArray(opts.extraQueries)
+      ? opts.extraQueries.filter(Boolean)
+      : [];
 
     const wrap = el.closest(".ant-select") || el;
     wrap.click();
@@ -1907,8 +1999,17 @@
       document.querySelector(`#${CSS.escape(id)}.ant-select-selection-search-input`) ||
       (el.matches("input") ? el : null);
 
-    const queries = comboboxSearchQueries(text).slice(0, maxQueries);
-    for (const query of queries) {
+    const queries = [];
+    const seenQ = new Set();
+    for (const q of [...extraQueries, ...comboboxSearchQueries(text)]) {
+      const fold = normalizeText(q);
+      if (!fold || seenQ.has(fold)) continue;
+      seenQ.add(fold);
+      queries.push(String(q).trim());
+    }
+    const queryList = queries.slice(0, Math.max(maxQueries, 4));
+
+    for (const query of queryList) {
       if (Date.now() >= deadline) break;
       if (search) {
         setNativeValue(search, "");
@@ -1924,41 +2025,96 @@
       }
       await sleep(Math.min(520, Math.max(160, deadline - Date.now())));
 
-      const options = collectMasterOptions();
+      const options = collectMasterOptions().filter(
+        (o) => !/\bTHEM MOI\b|\bADD NEW\b/i.test(normalizeText(o.label))
+      );
       // 1 option: chỉ Enter khi điểm đủ (tránh chọn nhầm vì query quá chung)
-      if (options.length === 1 && scoreSelectOption(text, options[0].label) >= minAccept) {
+      if (options.length === 1 && optionMatchScore(text, options[0].label, hints) >= minAccept) {
         pressKey("ArrowDown");
         await sleep(60);
         pressKey("Enter");
         await sleep(180);
-        if (!dropdownStillOpen()) return true;
+        if (!dropdownStillOpen() && selectionMatches(id, text, minAccept, hints)) {
+          return true;
+        }
+        if (!dropdownStillOpen()) {
+          clearMasterField(id);
+          wrap.click();
+          await sleep(80);
+          continue;
+        }
       }
 
       let best = null;
       let bestScore = 0;
-      for (const opt of options.slice(0, 20)) {
-        const score = scoreSelectOption(text, opt.label);
+      let secondScore = 0;
+      for (const opt of options.slice(0, 30)) {
+        const score = optionMatchScore(text, opt.label, hints);
         if (score > bestScore) {
+          secondScore = bestScore;
           bestScore = score;
           best = opt;
+        } else if (score > secondScore) {
+          secondScore = score;
         }
       }
-      if (best && bestScore >= minAccept) {
+      if (
+        best &&
+        bestScore >= minAccept &&
+        !(secondScore > 0 && bestScore - secondScore < 8 && bestScore < 95)
+      ) {
         const target =
           best.el.querySelector(".ant-select-item-option-content") ||
           best.titleEl ||
           best.el;
         simulateClick(target);
         await sleep(200);
-        if (!dropdownStillOpen()) return true;
+        if (!dropdownStillOpen()) {
+          if (selectionMatches(id, text, minAccept, hints)) return true;
+          clearMasterField(id);
+          wrap.click();
+          await sleep(80);
+          continue;
+        }
         pressKey("Enter");
         await sleep(150);
-        if (!dropdownStillOpen()) return true;
+        if (!dropdownStillOpen()) {
+          if (selectionMatches(id, text, minAccept, hints)) return true;
+          clearMasterField(id);
+          wrap.click();
+          await sleep(80);
+        }
       }
     }
 
     await hardResetUi();
     return false;
+  }
+
+  function hintBoostScore(label, hints) {
+    const foldOpt = normalizeText(label);
+    let best = 0;
+    for (const h of hints || []) {
+      const raw = String(h || "").replace(/[\s.\-_/]/g, "");
+      if (raw.length < 6) continue;
+      const foldH = normalizeText(raw);
+      const digits = raw.replace(/\D/g, "");
+      if (foldH && foldOpt.includes(foldH)) best = Math.max(best, 98);
+      else if (digits.length >= 8 && foldOpt.replace(/\D/g, "").includes(digits)) {
+        best = Math.max(best, 98);
+      }
+    }
+    return best;
+  }
+
+  function optionMatchScore(fullText, optionText, hints) {
+    return Math.max(scoreSelectOption(fullText, optionText), hintBoostScore(optionText, hints));
+  }
+
+  function selectionMatches(id, fullText, minAccept, hints) {
+    const selected = getControlValue(id);
+    if (!selected) return false;
+    return optionMatchScore(fullText, selected, hints) >= minAccept;
   }
 
   function dropdownStillOpen() {
@@ -2091,8 +2247,13 @@
     const foldFull = normalizeText(fullText);
     const foldOpt = normalizeText(optionText);
     if (!foldFull || !foldOpt) return 0;
+    if (/\bTHEM MOI\b|\bADD NEW\b/.test(foldOpt)) return 0;
     if (foldOpt === foldFull) return 100;
-    if (foldFull.includes(foldOpt) || foldOpt.includes(foldFull)) return 82;
+    if (foldOpt.includes(foldFull)) return 96;
+    if (foldFull.includes(foldOpt)) {
+      if (foldOpt.length >= Math.max(10, Math.floor(foldFull.length * 0.55))) return 88;
+      return 0;
+    }
     const generic = new Set([
       "CONG", "TY", "CO", "PHAN", "VA", "DICH", "VU", "CHI", "NHANH",
       "SO", "CTY", "CTCP", "TNHH", "LTD", "COMPANY", "CORP", "CORPORATION",
@@ -2100,6 +2261,7 @@
       "INTERNATIONAL", "LOGISTICS", "EXPRESS", "SHIPPING", "TRADING",
       "IMPORT", "EXPORT", "SERVICE", "SERVICES", "GROUP", "HOLDINGS",
       "GLOBAL", "CARGO", "FREIGHT", "FORWARDING", "AND", "THE",
+      "AGENT", "AGENCY",
     ]);
     const fullArr = foldFull.split(/\s+/).filter(Boolean);
     const optArr = foldOpt.split(/\s+/).filter(Boolean);
@@ -2114,12 +2276,15 @@
     const fullRareUnique = [...new Set(fullRare)];
     for (const w of fullRareUnique) if (optRare.has(w)) rareCommon += 1;
     if (!rareCommon) return 0;
+    if (fullRareUnique.length && rareCommon / fullRareUnique.length < 0.6) return 0;
     let score = Math.floor((70 * rareCommon) / Math.max(fullRareUnique.length, 1));
     if (fullRareUnique[0] && optRare.has(fullRareUnique[0])) score += 20;
     if (fullArr.at(-1) && fullArr.at(-1) === optArr.at(-1) && !generic.has(fullArr.at(-1))) {
       score += 15;
     }
-    return score;
+    const extra = [...optRare].filter((w) => !fullRareUnique.includes(w)).length;
+    if (extra >= 2) score -= 12 * Math.min(extra, 3);
+    return Math.max(0, score);
   }
 
   function findButtonByText(label) {
@@ -2137,19 +2302,23 @@
 
   async function selectPaymentMode(label) {
     const id = LOCATORS.fields.payment_mode || "codPayMod";
+    const wantCash = /ti[eề]n\s*m[aặ]t|cash/i.test(String(label || ""));
+    const keys = wantCash
+      ? ["TIEN MAT", "CASH"]
+      : ["CHUYEN KHOAN", "BANK TRANSFER"];
     const current = normalizeText(getControlValue(id));
-    if (current.includes("CHUYEN KHOAN") || current.includes("BANK TRANSFER")) {
+    if (keys.some((k) => current.includes(k))) {
       return true;
     }
     const el = document.getElementById(id);
     if (!el) return false;
     const wrap = el.closest(".ant-select") || el;
     wrap.click();
-    await sleep(160);
+    await sleep(100);
     const options = collectMasterOptions();
     const match = options.find((option) => {
       const text = normalizeText(option.label);
-      return text.includes("CHUYEN KHOAN") || text.includes("BANK TRANSFER");
+      return keys.some((k) => text.includes(k));
     });
     if (match) {
       simulateClick(
@@ -2157,28 +2326,163 @@
           match.titleEl ||
           match.el
       );
-      await sleep(160);
+      await sleep(100);
       const selected = normalizeText(getControlValue(id));
-      if (selected.includes("CHUYEN KHOAN") || selected.includes("BANK TRANSFER")) {
+      if (keys.some((k) => selected.includes(k))) {
         return true;
       }
     }
-    return fillMasterField(id, label || "Chuyển khoản", {
+    return fillMasterField(id, label || (wantCash ? "Tiền mặt" : "Chuyển khoản"), {
       maxQueries: 2,
-      budgetMs: 2_800,
+      budgetMs: 2_400,
     });
   }
 
-  function setCheckboxById(id, checked) {
+  function isCheckboxOn(el) {
+    if (!el) return false;
+    const wrap = el.closest(".ant-checkbox-wrapper");
+    return (
+      Boolean(el.checked) ||
+      Boolean(wrap && wrap.querySelector(".ant-checkbox-checked"))
+    );
+  }
+
+  function setAntCheckboxById(id, checked) {
     const el = document.getElementById(id);
     if (!el || String(el.type || "").toLowerCase() !== "checkbox") return false;
-    if (Boolean(el.checked) === Boolean(checked)) return true;
-    const label =
+    if (isCheckboxOn(el) === Boolean(checked)) return true;
+    const wrap =
+      el.closest(".ant-checkbox-wrapper") ||
       document.querySelector(`label[for="${CSS.escape(id)}"]`) ||
       el.closest("label") ||
       el.parentElement;
-    simulateClick(label || el);
-    return Boolean(el.checked) === Boolean(checked);
+    const box = (wrap && wrap.querySelector(".ant-checkbox")) || wrap || el;
+    simulateClick(box);
+    if (isCheckboxOn(el) === Boolean(checked)) return true;
+    try {
+      const desc = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "checked"
+      );
+      if (desc && desc.set) desc.set.call(el, Boolean(checked));
+      else el.checked = Boolean(checked);
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      if (wrap) {
+        wrap.classList.toggle("ant-checkbox-wrapper-checked", Boolean(checked));
+        const inner = wrap.querySelector(".ant-checkbox");
+        if (inner) inner.classList.toggle("ant-checkbox-checked", Boolean(checked));
+      }
+    } catch {
+      /* ignore */
+    }
+    return isCheckboxOn(el) === Boolean(checked);
+  }
+
+  function setCheckboxByLabelPatterns(patterns, maxLen = 80) {
+    const norms = patterns.map((p) =>
+      String(p || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/gi, "d")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase()
+    );
+    const fold = (s) =>
+      String(s || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/gi, "d")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+    for (const el of document.querySelectorAll(
+      "input.ant-checkbox-input, input[type=checkbox]"
+    )) {
+      if (el.closest(".ant-modal")) continue;
+      const wrap =
+        el.closest(".ant-checkbox-wrapper") ||
+        el.closest("label") ||
+        el.parentElement;
+      const t = String(wrap?.textContent || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!t || t.length > maxLen) continue;
+      if (/other\s*request/i.test(t)) continue;
+      const ft = fold(t);
+      if (!norms.some((p) => p && (ft === p || ft.includes(p)))) continue;
+      if (isCheckboxOn(el)) return true;
+      const box = (wrap && wrap.querySelector(".ant-checkbox")) || wrap || el;
+      simulateClick(box);
+      if (isCheckboxOn(el)) return true;
+      return setAntCheckboxById(el.id, true) || isCheckboxOn(el);
+    }
+    return false;
+  }
+
+  function listCheckboxDebug() {
+    return [...document.querySelectorAll("input.ant-checkbox-input, input[type=checkbox]")]
+      .filter((el) => !el.closest(".ant-modal"))
+      .slice(0, 40)
+      .map((el) => {
+        const wrap =
+          el.closest(".ant-checkbox-wrapper") || el.closest("label");
+        return {
+          id: el.id || "",
+          checked: Boolean(el.checked),
+          label: String(wrap?.textContent || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 80),
+        };
+      });
+  }
+
+  function setShcOtherCheckbox(checked) {
+    if (!checked) return false;
+    const ids = [
+      LOCATORS.fields.shc_other,
+      "shcOth",
+      "shcOth001",
+      "shcOth003",
+      "shcOther",
+      "otherShc",
+    ].filter((id, i, arr) => id && arr.indexOf(id) === i);
+    for (const id of ids) {
+      if (setAntCheckboxById(id, true)) return true;
+    }
+    return setCheckboxByLabelPatterns(
+      ["khac/other", "khac / other", "khac", "other"],
+      28
+    );
+  }
+
+  function setAgreeConfirmCheckbox(checked) {
+    if (!checked) return false;
+    for (const id of [
+      LOCATORS.fields.agree || "agreeConfirm",
+      "agreeConfirm",
+      "agree",
+      "chkAgree",
+    ]) {
+      if (setAntCheckboxById(id, true)) return true;
+    }
+    return setCheckboxByLabelPatterns(
+      [
+        "toi dong y noi dung sau",
+        "toi dong y",
+        "i agree with the following content",
+        "i agree with the following",
+        "i agree",
+      ],
+      120
+    );
+  }
+
+  function setCheckboxById(id, checked) {
+    return setAntCheckboxById(id, checked);
   }
 
   function isCheckboxChecked(id) {

@@ -7,8 +7,11 @@ import { awbDigitsKey } from "./awbFormat";
 import { parseFlightDateDisplayToYmd } from "./bookingDateParse";
 import { formatKgTotal } from "./formatKgTotal";
 
-/** Khớp agent TCS / memory esid-declare-optimize — không dùng Tiền mặt. */
+/** Khớp agent — TECS-TCS mặc định Chuyển khoản. */
 export const ESID_DEFAULT_PAYMENT_MODE = "Chuyển khoản/Bank transfer";
+
+/** Kho TCS — Điền chọn Tiền mặt/Cash. */
+export const ESID_CASH_PAYMENT_MODE = "Tiền mặt/Cash";
 
 /** Giới hạn ô Other Request trên form TCS khi ghép Volume Weight + Note + yêu cầu KH. */
 export const ESID_OTHER_REQUEST_MAX = 500;
@@ -42,6 +45,10 @@ export type EsidDeclareCoreFields = {
   payment_mode: string;
   consol: false;
   tecs_warehouse: boolean;
+  /** Kho TCS: tick checkbox Khác/Other */
+  shc_other: boolean;
+  /** Kho TCS: tick #agreeConfirm lúc Điền (không HOÀN TẤT) */
+  agree_on_fill: boolean;
   shipper_name: string;
   shipper_address: string;
   shipper_tel: string;
@@ -108,6 +115,7 @@ export function buildEsidDeclareCoreFields(
   const kgRaw = s.kg;
   const grossWeight =
     kgRaw == null || Number.isNaN(Number(kgRaw)) ? null : Number(kgRaw);
+  const isTcsWh = s.warehouse === "TCS";
   return {
     shipment_id: s.id,
     awb: awb.length === 11 ? awb : (s.awb || "").trim(),
@@ -118,10 +126,12 @@ export function buildEsidDeclareCoreFields(
     gross_weight: grossWeight,
     total_hawbs: esidTotalHawbs(s),
     nature_of_goods: (s.goodsDescriptionPrint || "").trim(),
-    payment_mode: ESID_DEFAULT_PAYMENT_MODE,
+    payment_mode: isTcsWh ? ESID_CASH_PAYMENT_MODE : ESID_DEFAULT_PAYMENT_MODE,
     consol: false,
     /** Checkbox TECS trên form — chỉ bật cho kho TECS-TCS. */
     tecs_warehouse: s.warehouse === "TECS-TCS",
+    shc_other: isTcsWh,
+    agree_on_fill: isTcsWh,
     shipper_name: (s.shipperNamePrint || "").split(/\r?\n/).map((l) => l.trim()).find(Boolean) || "",
     shipper_address: (s.shipperAddressPrint || "").trim(),
     shipper_tel: (s.shipperPhonePrint || "").trim(),

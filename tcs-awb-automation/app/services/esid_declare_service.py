@@ -8,7 +8,10 @@ from app.browser.pages.awb_page import AwbPortalPage, NeedsLoginError, SiteChang
 from app.browser.pages.esid_declare_page import EsidDeclarePage
 from app.browser.session_manager import SessionManager
 from app.config import Settings
-from app.services.esid_defaults import ESID_DEFAULT_PAYMENT_MODE
+from app.services.esid_defaults import (
+    ESID_CASH_PAYMENT_MODE,
+    ESID_DEFAULT_PAYMENT_MODE,
+)
 from app.utils.awb import digits_only
 
 
@@ -59,6 +62,22 @@ def fill_esid_declare(
     if not isinstance(registrant, dict):
         registrant = {}
 
+    is_tcs_wh = warehouse in {"TCS", "KHO-TCS"}
+    default_pay = ESID_CASH_PAYMENT_MODE if is_tcs_wh else ESID_DEFAULT_PAYMENT_MODE
+    # Payload có thể ghi đè; thiếu field → theo kho.
+    if "tecs_warehouse" in shipment:
+        tecs_wh = bool(shipment.get("tecs_warehouse"))
+    else:
+        tecs_wh = not is_tcs_wh
+    if "shc_other" in shipment:
+        shc_other = bool(shipment.get("shc_other"))
+    else:
+        shc_other = is_tcs_wh
+    if "agree_on_fill" in shipment:
+        agree_on_fill = bool(shipment.get("agree_on_fill"))
+    else:
+        agree_on_fill = is_tcs_wh
+
     data: dict[str, Any] = {
         "awb": awb,
         "flight_no": shipment.get("flight_no") or shipment.get("flight") or "",
@@ -81,17 +100,20 @@ def fill_esid_declare(
         "consignee_email": shipment.get("consignee_email") or shipment.get("consigneeEmailPrint") or "",
         "consignee_fax": shipment.get("consignee_fax") or "",
         "consignee_vat": shipment.get("consignee_vat") or shipment.get("taxCodePrint") or "",
-        "notify_name": shipment.get("notify_name") or shipment.get("notifyNamePrint") or "",
-        "notify_address": shipment.get("notify_address") or "",
-        "notify_tel": shipment.get("notify_tel") or "",
-        "notify_email": shipment.get("notify_email") or "",
-        "notify_fax": shipment.get("notify_fax") or "",
-        "notify_remark": shipment.get("notify_remark") or "",
+        # Form TCS: không điền Notify + textarea Other Request (kể cả payload cũ).
+        "notify_name": "",
+        "notify_address": "",
+        "notify_tel": "",
+        "notify_email": "",
+        "notify_fax": "",
+        "notify_remark": "",
         "nature_of_goods": shipment.get("nature_of_goods") or shipment.get("goodsDescriptionPrint") or "",
-        "other_request": shipment.get("other_request") or shipment.get("otherRequirementsPrint") or "",
+        "other_request": "",
         "consol": bool(shipment.get("consol", False)),
-        "tecs_warehouse": shipment.get("tecs_warehouse", True),
-        "payment_mode": shipment.get("payment_mode") or ESID_DEFAULT_PAYMENT_MODE,
+        "tecs_warehouse": tecs_wh,
+        "shc_other": shc_other,
+        "agree_on_fill": agree_on_fill,
+        "payment_mode": shipment.get("payment_mode") or default_pay,
         "total_hawbs": (
             shipment.get("total_hawbs")
             if shipment.get("total_hawbs") is not None

@@ -28,10 +28,22 @@ import {
   mutationErrorPayload,
 } from "./httpSecurity.mjs";
 import { createAppAuth } from "./appAuth.mjs";
+import {
+  emitScopedSync,
+  parseStateScopeFromHeaders,
+  parseStateScopeFromQuery,
+  projectAppState,
+} from "./stateScope.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
 const MAX_BATCH_MUTATIONS = 500;
+
+function resolveRequestStateScope(req) {
+  const fromQuery = parseStateScopeFromQuery(req.query || {});
+  if (fromQuery.full || fromQuery.sessionDate) return fromQuery;
+  return parseStateScopeFromHeaders(req.headers || {});
+}
 
 const app = express();
 app.set("trust proxy", 1);
@@ -247,9 +259,11 @@ app.get("/api/ecargo-extension", (_req, res) => {
   respondChromeExtensionPackage(res, CHROME_EXTENSION_PACKAGES[2]);
 });
 
-app.get("/api/state", appAuth.requireAuth, async (_req, res) => {
+app.get("/api/state", appAuth.requireAuth, async (req, res) => {
   try {
-    res.json(await loadState());
+    const full = await loadState();
+    const scope = resolveRequestStateScope(req);
+    res.json(projectAppState(full, scope));
   } catch (e) {
     console.error("[api/state]", e);
     res.status(500).json({
@@ -279,8 +293,9 @@ app.post("/api/mutation", appAuth.requireAuth, mutationRateLimit, async (req, re
     }
     const next = await runMutation(body);
     recordMutationEventSafe(body);
-    io.emit("sync", next);
-    res.json(next);
+    await emitScopedSync(io, next);
+    const scope = resolveRequestStateScope(req);
+    res.json(projectAppState(next, scope));
   } catch (e) {
     console.error("[api/mutation]", e);
     res.status(400).json(
@@ -309,8 +324,9 @@ app.post("/api/mutations", appAuth.requireAuth, mutationRateLimit, async (req, r
     }
     const next = await runBatchMutations(list);
     for (const m of list) recordMutationEventSafe(m);
-    io.emit("sync", next);
-    res.json(next);
+    await emitScopedSync(io, next);
+    const scope = resolveRequestStateScope(req);
+    res.json(projectAppState(next, scope));
   } catch (e) {
     console.error("[api/mutations]", e);
     res.status(400).json(
@@ -405,10 +421,16 @@ async function start() {
 
 io.on("connection", async (socket) => {
   try {
+    const scope = parseStateScopeFromQuery(socket.handshake.query || {});
+    socket.data.stateScope = scope;
+    socket.on("setStateScope", (payload) => {
+      const nextScope = parseStateScopeFromQuery(payload || {});
+      socket.data.stateScope = nextScope;
+    });
     const clientVersion = parseInt(socket.handshake.query?.v || "0", 10);
     const initial = await loadState();
     if (initial.version > clientVersion) {
-      socket.emit("sync", initial);
+      socket.emit("sync", projectAppState(initial, scope));
     } else {
       console.info(`[socket] client already has latest version ${clientVersion}. Sync bypassed.`);
     }

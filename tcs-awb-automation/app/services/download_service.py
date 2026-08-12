@@ -136,3 +136,131 @@ def resolve_docs_file(docs_dir: Path, name: str) -> Path | None:
 
 def pdf_download_name(path: Path) -> str:
     return path.name
+
+
+def docs_retention_s() -> float:
+    """Giữ docs tối đa N giây. Mặc định 48h. 0 = không prune."""
+    raw = os.getenv("TCS_DOCS_RETENTION_S", "172800").strip()
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return 172800.0
+
+
+def prune_docs(
+    docs_dir: Path,
+    *,
+    retention_s: float | None = None,
+) -> dict[str, int | float]:
+    """
+    Xóa PDF/PNG/JPG trong docs/ già hơn retention.
+    Giữ file mới nhất mỗi prefix AWB nếu vẫn trong TTL PDF cache (tránh mất cache hit).
+    """
+    docs = Path(docs_dir)
+    retention = docs_retention_s() if retention_s is None else max(0.0, float(retention_s))
+    if retention <= 0 or not docs.is_dir():
+        return {"deleted": 0, "bytes": 0, "kept": 0}
+    now = time.time()
+    cache_ttl = pdf_cache_ttl_s()
+    # Nhóm theo prefix trước _ESID_ / _AWB_ / preview
+    newest_keep: set[Path] = set()
+    by_prefix: dict[str, list[tuple[float, Path]]] = {}
+    deleted = 0
+    freed = 0
+    kept = 0
+    for path in docs.iterdir():
+        if not path.is_file():
+            continue
+        lower = path.name.lower()
+        if not lower.endswith((".pdf", ".png", ".jpg", ".jpeg", ".webp")):
+            continue
+        try:
+            st = path.stat()
+        except OSError:
+            continue
+        age = now - st.st_mtime
+        # Prefix AWB 11 số đầu (safe_filename)
+        stem = path.name
+        prefix = stem.split("_", 1)[0] if "_" in stem else stem
+        by_prefix.setdefault(prefix, []).append((st.st_mtime, path))
+
+    for _prefix, items in by_prefix.items():
+        items.sort(key=lambda x: x[0], reverse=True)
+        if items:
+            newest_mtime, newest_path = items[0]
+            if (now - newest_mtime) <= max(cache_ttl, retention):
+                newest_keep.add(newest_path)
+
+    for path in docs.iterdir():
+        if not path.is_file():
+            continue
+        lower = path.name.lower()
+        if not lower.endswith((".pdf", ".png", ".jpg", ".jpeg", ".webp")):
+            continue
+        try:
+            st = path.stat()
+        except OSError:
+            continue
+        age = now - st.st_mtime
+        if path in newest_keep and age <= max(cache_ttl, retention):
+            kept += 1
+            continue
+        if age <= retention:
+            kept += 1
+            continue
+        try:
+            size = st.st_size
+            path.unlink()
+            deleted += 1
+            freed += size
+        except OSError:
+            continue
+    return {"deleted": deleted, "bytes": freed, "kept": kept}
+
+
+def prune_chromium_disk_cache(profile_dir: Path) -> dict[str, int]:
+    """
+    Xóa Cache/Code Cache/GPUCache/Shader* dưới profile Chromium.
+    Giữ Cookies, Local Storage, Login Data, marker login.
+    """
+    root = Path(profile_dir)
+    if not root.is_dir():
+        return {"deleted_dirs": 0, "bytes": 0}
+    targets = (
+        "Default/Cache",
+        "Default/Code Cache",
+        "Default/GPUCache",
+        "Default/GrShaderCache",
+        "Default/ShaderCache",
+        "GrShaderCache",
+        "ShaderCache",
+        "GraphiteDawnCache",
+    )
+    deleted_dirs = 0
+    freed = 0
+    import shutil
+
+    for rel in targets:
+        p = root / rel
+        if not p.exists():
+            continue
+        try:
+            for sub in p.rglob("*"):
+                if sub.is_file():
+                    try:
+                        freed += sub.stat().st_size
+                    except OSError:
+                        pass
+            shutil.rmtree(p, ignore_errors=True)
+            deleted_dirs += 1
+        except Exception:
+            continue
+    # Recovery sibling profile cũ
+    recovery = Path(str(root) + "_recovery")
+    if recovery.is_dir():
+        try:
+            shutil.rmtree(recovery, ignore_errors=True)
+            deleted_dirs += 1
+        except Exception:
+            pass
+    return {"deleted_dirs": deleted_dirs, "bytes": freed}

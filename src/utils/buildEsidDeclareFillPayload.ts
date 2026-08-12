@@ -47,6 +47,8 @@ export type EsidDeclareFillPayload = {
     payment_mode: string;
     total_hawbs: number;
     tecs_warehouse: boolean;
+    shc_other: boolean;
+    agree_on_fill: boolean;
     consol: false;
   };
 };
@@ -93,12 +95,15 @@ export function buildEsidDeclareFillPayload(
       consignee_tel: core.consignee_tel,
       consignee_email: core.consignee_email,
       consignee_vat: core.consignee_vat,
-      notify_name: core.notify_name,
+      // Form TCS: không dùng ô Notify + textarea Other Request khi Điền.
+      notify_name: "",
       nature_of_goods: core.nature_of_goods,
-      other_request: core.other_request,
+      other_request: "",
       payment_mode: core.payment_mode,
       total_hawbs: core.total_hawbs,
       tecs_warehouse: core.tecs_warehouse,
+      shc_other: core.shc_other,
+      agree_on_fill: core.agree_on_fill,
       consol: false,
     },
   };

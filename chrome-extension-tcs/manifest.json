@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TECSOPS — Kho TCS ESID",
-  "version": "1.4.3",
+  "version": "1.4.6",
   "description": "Đăng nhập / Quét / Điền / Tải PDF ESID cho kho TCS (tài khoản độc lập).",
   "permissions": [
     "tabs",

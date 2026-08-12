@@ -23,6 +23,13 @@ import { hydrateEcargoScscFromAppState } from "../utils/ecargoScscProfilesSync";
 
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
+export type StateSyncScope = {
+  /** YYYY-MM-DD — chỉ tải rows ngày phiên */
+  sessionDate?: string;
+  /** Stats/export — full history */
+  full?: boolean;
+};
+
 type Fallback = { rows: Shipment[] };
 
 /** Mutation đã áp offline, chờ đẩy lên server khi có mạng lại. */
@@ -65,19 +72,33 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchAppState(): Promise<AppState> {
-  const res = await fetch("/api/state", { ...credFetch, cache: "no-store" });
+async function fetchAppState(scope: StateSyncScope = {}): Promise<AppState> {
+  const q = new URLSearchParams();
+  if (scope.full) q.set("full", "1");
+  else if (scope.sessionDate) q.set("sessionDate", scope.sessionDate);
+  const qs = q.toString();
+  const res = await fetch(`/api/state${qs ? `?${qs}` : ""}`, {
+    ...credFetch,
+    cache: "no-store",
+    headers: {
+      ...(credFetch.headers || {}),
+      ...scopeHeaders(scope),
+    },
+  });
   if (!res.ok) throw new Error(String(res.status));
   const parsed = parseAppState(await res.json());
   if (!parsed) throw new Error("Invalid state");
   return parsed;
 }
 
-async function fetchAppStateWithRetry(attempts = STATE_FETCH_ATTEMPTS): Promise<AppState> {
+async function fetchAppStateWithRetry(
+  scope: StateSyncScope = {},
+  attempts = STATE_FETCH_ATTEMPTS
+): Promise<AppState> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
-      return await fetchAppState();
+      return await fetchAppState(scope);
     } catch (e) {
       lastErr = e;
       if (i < attempts - 1) await sleep(STATE_FETCH_RETRY_MS * (i + 1));
@@ -86,11 +107,23 @@ async function fetchAppStateWithRetry(attempts = STATE_FETCH_ATTEMPTS): Promise<
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
-async function postMutation(mutation: ShipmentMutation): Promise<AppState> {
+function scopeHeaders(scope: StateSyncScope): Record<string, string> {
+  if (scope.full) return { "X-TECSOPS-State-Full": "1" };
+  if (scope.sessionDate) return { "X-TECSOPS-Session-Date": scope.sessionDate };
+  return {};
+}
+
+async function postMutation(
+  mutation: ShipmentMutation,
+  scope: StateSyncScope = {}
+): Promise<AppState> {
   const res = await fetch("/api/mutation", {
     ...credFetch,
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...scopeHeaders(scope),
+    },
     body: JSON.stringify(mutation),
   });
   const body: unknown = await res.json().catch(() => ({}));
@@ -126,7 +159,8 @@ function remapMutationId(mutation: ShipmentMutation, idMap: Map<string, string>)
  */
 async function replayOfflineQueue(
   queue: QueuedMutation[],
-  serverState: AppState
+  serverState: AppState,
+  scope: StateSyncScope = {}
 ): Promise<{ state: AppState; pending: QueuedMutation[] }> {
   const idMap = new Map<string, string>();
   const pending: QueuedMutation[] = [];
@@ -135,7 +169,7 @@ async function replayOfflineQueue(
   for (const entry of queue) {
     const mutation = remapMutationId(entry.mutation, idMap);
     try {
-      const next = await postMutation(mutation);
+      const next = await postMutation(mutation, scope);
       if (entry.mutation.action === "ADD" && entry.localId) {
         const serverId = addedRowId(current, next);
         if (serverId) idMap.set(entry.localId, serverId);
@@ -152,10 +186,16 @@ async function replayOfflineQueue(
 /**
  * Đồng bộ state lô hàng: fetch `/api/state`, Socket.IO `sync`, mutation POST hoặc chế độ offline + `localStorage`.
  */
-export function useShipmentSync(fallback: Fallback) {
+export function useShipmentSync(
+  fallback: Fallback,
+  initialScope: StateSyncScope = {}
+) {
   const [status, setStatus] = useState<SyncStatus>("loading");
   const [socketConnected, setSocketConnected] = useState(false);
   const [state, setState] = useState<AppState | null>(null);
+  const [syncScope, setSyncScopeState] = useState<StateSyncScope>(initialScope);
+  const syncScopeRef = useRef(syncScope);
+  syncScopeRef.current = syncScope;
   const apiOkRef = useRef(false);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const cancelledRef = useRef(false);
@@ -177,12 +217,15 @@ export function useShipmentSync(fallback: Fallback) {
     return picked;
   }, []);
 
-  const connectSocket = useCallback((version: number) => {
+  const connectSocket = useCallback((version: number, scope: StateSyncScope) => {
     if (cancelledRef.current) return;
     socketRef.current?.close();
+    const query: Record<string, string> = { v: String(version) };
+    if (scope.full) query.full = "1";
+    else if (scope.sessionDate) query.sessionDate = scope.sessionDate;
     const socket = io({
       path: SOCKET_IO_PATH,
-      query: { v: String(version) },
+      query,
       transports: ["websocket", "polling"],
       withCredentials: true,
       reconnectionAttempts: Infinity,
@@ -206,6 +249,10 @@ export function useShipmentSync(fallback: Fallback) {
       if (cancelledRef.current) return;
       setSocketConnected(true);
       setStatus("live");
+      socket.emit("setStateScope", {
+        full: scope.full ? "1" : undefined,
+        sessionDate: scope.sessionDate,
+      });
     });
     socket.on("disconnect", () => {
       if (cancelledRef.current) return;
@@ -224,7 +271,11 @@ export function useShipmentSync(fallback: Fallback) {
       if (offlineQueueRef.current.length > 0) {
         const queued = offlineQueueRef.current;
         offlineQueueRef.current = [];
-        const { state: replayed, pending } = await replayOfflineQueue(queued, parsed);
+        const { state: replayed, pending } = await replayOfflineQueue(
+          queued,
+          parsed,
+          syncScopeRef.current
+        );
         if (cancelledRef.current) return;
         offlineQueueRef.current = pending;
         live = replayed;
@@ -239,7 +290,7 @@ export function useShipmentSync(fallback: Fallback) {
         saveAirlineLabelOverridesToStorage(live.airlineLabelOverrides);
       }
       setStatus("degraded");
-      connectSocket(live.version);
+      connectSocket(live.version, syncScopeRef.current);
     },
     [connectSocket]
   );
@@ -249,7 +300,7 @@ export function useShipmentSync(fallback: Fallback) {
 
     (async () => {
       try {
-        const parsed = await fetchAppStateWithRetry();
+        const parsed = await fetchAppStateWithRetry(syncScopeRef.current);
         if (cancelledRef.current) return;
         await goLiveFromParsed(parsed);
       } catch (e) {
@@ -266,7 +317,7 @@ export function useShipmentSync(fallback: Fallback) {
       if (cancelledRef.current || apiOkRef.current) return;
       void (async () => {
         try {
-          const parsed = await fetchAppStateWithRetry();
+          const parsed = await fetchAppStateWithRetry(syncScopeRef.current);
           if (cancelledRef.current) return;
           await goLiveFromParsed(parsed);
         } catch (e) {
@@ -284,6 +335,27 @@ export function useShipmentSync(fallback: Fallback) {
       socketRef.current = null;
     };
   }, [goLiveFromParsed]);
+
+  const setSyncScope = useCallback(
+    async (nextScope: StateSyncScope) => {
+      const prev = syncScopeRef.current;
+      const same =
+        Boolean(prev.full) === Boolean(nextScope.full) &&
+        String(prev.sessionDate || "") === String(nextScope.sessionDate || "");
+      setSyncScopeState(nextScope);
+      syncScopeRef.current = nextScope;
+      if (same || !apiOkRef.current) return;
+      try {
+        const parsed = await fetchAppState(nextScope);
+        if (cancelledRef.current) return;
+        setState((p) => persistIfApplied(p, parsed, true));
+        connectSocket(parsed.version, nextScope);
+      } catch (e) {
+        debugWarn("sync:setScope", e);
+      }
+    },
+    [connectSocket, persistIfApplied]
+  );
 
   const mutate = useCallback(async (mutation: ShipmentMutation): Promise<AppState | null> => {
     if (!apiOkRef.current) {
@@ -324,7 +396,7 @@ export function useShipmentSync(fallback: Fallback) {
     }
 
     try {
-      const next = await postMutation(mutation);
+      const next = await postMutation(mutation, syncScopeRef.current);
       let applied: AppState = next;
       setState((prev) => {
         applied = pickNewerState(prev, next);
@@ -344,7 +416,7 @@ export function useShipmentSync(fallback: Fallback) {
           ) {
             hydrateEsidProfilesFromAppState(next);
           }
-          if (mutation.action === "SET_ECARGO_SCSC_STORE" || next.ecargoScscStore) {
+          if (next.ecargoScscStore) {
             hydrateEcargoScscFromAppState(next);
           }
         }
@@ -375,7 +447,10 @@ export function useShipmentSync(fallback: Fallback) {
       const res = await fetch("/api/mutations", {
         ...credFetch,
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...scopeHeaders(syncScopeRef.current),
+        },
         body: JSON.stringify(mutations),
       });
       const body: unknown = await res.json().catch(() => ({}));
@@ -400,7 +475,7 @@ export function useShipmentSync(fallback: Fallback) {
   const refreshState = useCallback(async (): Promise<void> => {
     if (!apiOkRef.current) return;
     try {
-      const parsed = await fetchAppState();
+      const parsed = await fetchAppState(syncScopeRef.current);
       setState((prev) => persistIfApplied(prev, parsed, false));
     } catch (e) {
       debugWarn("sync:refresh", e);
@@ -425,5 +500,7 @@ export function useShipmentSync(fallback: Fallback) {
     socketConnected,
     refreshState,
     applyRemoteState,
+    setSyncScope,
+    syncScope,
   };
 }

@@ -13,11 +13,17 @@ import {
 
 type Props = {
   tcs: TcsPortalActions;
-  /** Gọn cho mobile */
+  /** Layout nút nhỏ — desktop header cũng dùng; KHÔNG dùng để ẩn ĐN/Điền */
   compact?: boolean;
+  /** Viewport ≤767 — ẩn ĐN + HOÀN TẤT; Quét chỉ agent */
+  isMobile?: boolean;
 };
 
-export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
+export function TcsPortalInlineBar({
+  tcs,
+  compact = false,
+  isMobile = false,
+}: Props) {
   const btn =
     `inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-45 active:scale-[0.98] ${
       compact ? "min-h-11 min-w-11 touch-manipulation" : ""
@@ -37,10 +43,14 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
   const extLoggedIn = Boolean(
     extOk && tcs.extension?.workspace?.logged_in
   );
-  const canOperate = (usesAgent && agentOk) || extOk;
-  const loggedIn = extLoggedIn || (usesAgent && agentLoggedIn);
-  /** Ẩn ĐN khi đã login (compact). */
-  const showLoginBtn = !compact || !loggedIn;
+  const canOperate = isMobile
+    ? usesAgent && agentOk
+    : (usesAgent && agentOk) || extOk;
+  const loggedIn = isMobile
+    ? usesAgent && agentLoggedIn
+    : extLoggedIn || (usesAgent && agentLoggedIn);
+  /** Phone: không nút ĐN. Desktop compact: ẩn khi đã login. */
+  const showLoginBtn = !isMobile && (!compact || !loggedIn);
   const [showExtLogin, setShowExtLogin] = useState(false);
   const [tcsUsername, setTcsUsername] = useState("");
   const [tcsPassword, setTcsPassword] = useState("");
@@ -57,12 +67,13 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
   const doLogin = async () => {
     if (tcs.busy) return;
 
-    // Online-first: agent cloud (Railway /tcs-agent) trước.
-    if (usesAgent && agentOk) {
-      await tcs.login();
+    // Phone: chỉ agent (nút ĐN đã ẩn — giữ path cho gọi nội bộ).
+    if (isMobile) {
+      if (usesAgent) await tcs.login();
       return;
     }
 
+    // Desktop Ext-first.
     let ext = (await tcs.refreshExtension?.()) || tcs.extension;
     if (!ext?.ok) {
       await new Promise((r) => window.setTimeout(r, 350));
@@ -111,19 +122,27 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
 
     setShowExtLogin(true);
     window.alert(
-      `Cần agent cloud (/tcs-agent) hoặc ${extLabel}.\n` +
-        "Online: mở Ops trên Railway. Desktop: cài Ext hoặc chạy agent local."
+      `Cần ${extLabel} hoặc agent cloud (/tcs-agent).\n` +
+        "Desktop: cài Ext. Online: mở Ops trên Railway."
     );
   };
 
   const doScan = async () => {
     if (tcs.busy) return;
 
-    if (usesAgent && agentOk) {
-      await tcs.scanReceptionWithAgent();
+    // Phone: agent-only.
+    if (isMobile) {
+      if (usesAgent && agentOk) {
+        await tcs.scanReceptionWithAgent();
+        return;
+      }
+      window.alert(
+        `Cần agent cloud để Quét kho ${portalWh} trên điện thoại.`
+      );
       return;
     }
 
+    // Desktop Ext-first.
     let ext = (await tcs.refreshExtension?.()) || tcs.extension;
     if (!ext?.ok) {
       await new Promise((r) => window.setTimeout(r, 350));
@@ -154,7 +173,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
     }
 
     window.alert(
-      `Cần agent cloud hoặc ${extLabel} để Quét kho ${portalWh}.`
+      `Cần ${extLabel} hoặc agent cloud để Quét kho ${portalWh}.`
     );
   };
 
@@ -175,22 +194,30 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
   const preview = tcs.lastDeclarePreview;
   const workspace = tcs.workspace;
 
-  const statusLabel = extLoggedIn
-    ? `${extLabel} đã login`
-    : agentLoggedIn
+  const statusLabel = isMobile
+    ? agentLoggedIn
       ? "Agent cloud đã login"
       : agentOk
-        ? "Agent cloud — cần ĐN"
-        : extOk
-          ? `${extLabel} — cần ĐN`
-          : usesAgent
-            ? "Agent cloud offline"
-            : "Cần Chrome Ext";
+        ? "Agent cloud đang khôi phục session"
+        : "Agent cloud offline"
+    : extLoggedIn
+      ? `${extLabel} đã login`
+      : agentLoggedIn
+        ? "Agent cloud đã login"
+        : agentOk
+          ? "Agent cloud — cần ĐN"
+          : extOk
+            ? `${extLabel} — cần ĐN`
+            : usesAgent
+              ? "Agent cloud offline"
+              : "Cần Chrome Ext";
 
   const shortStatus = loggedIn
     ? "Đã ĐN"
     : canOperate
-      ? "Chờ ĐN"
+      ? isMobile
+        ? "Chờ session"
+        : "Chờ ĐN"
       : "Offline";
 
   return (
@@ -251,10 +278,19 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
               }
               void doLogin();
             }}
-            title="Đăng nhập portal (agent cloud Railway ưu tiên)."
+            title="Đăng nhập portal (Ext trên PC ưu tiên; agent fallback)."
           >
             {compact ? "ĐN" : "Đăng nhập"}
           </button>
+        ) : null}
+
+        {isMobile && canOperate && !loggedIn && !tcs.busy ? (
+          <span
+            className="max-w-[9rem] truncate text-[9px] font-medium text-amber-800"
+            title="Agent cloud tự login / OCR — không cần nút ĐN trên phone"
+          >
+            Đang khôi phục session
+          </span>
         ) : null}
 
         <button
@@ -303,7 +339,7 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
         </p>
       ) : null}
 
-      {showExtLogin ? (
+      {showExtLogin && !isMobile ? (
         <form
           className="mx-0.5 grid gap-1.5 rounded-xl border border-sky-500/25 bg-sky-50/80 p-2 sm:grid-cols-[1fr_1fr_auto]"
           onSubmit={(event) => {
@@ -364,8 +400,8 @@ export function TcsPortalInlineBar({ tcs, compact = false }: Props) {
         </div>
       )}
 
-      {/* Preview + HOÀN TẤT sau Điền — bắt buộc cả compact (mobile/desktop đều truyền compact). */}
-      {preview ? (
+      {/* HOÀN TẤT chỉ PC — phone ẩn Điền nên không hiện panel. */}
+      {preview && !isMobile ? (
         <div
           className="mx-0.5 flex min-w-0 flex-col gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-50/70 p-2"
           role="region"

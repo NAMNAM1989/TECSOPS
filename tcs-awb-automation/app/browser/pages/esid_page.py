@@ -230,8 +230,8 @@ class EsidListPage:
     @staticmethod
     def _set_react_input(locator, value: str) -> None:
         """Gán giá trị input Ant/React — fill() thường không cập nhật form store."""
-        locator.first.wait_for(state="visible", timeout=8000)
-        locator.first.click(timeout=2000)
+        locator.first.wait_for(state="visible", timeout=3000)
+        locator.first.click(timeout=1200)
         try:
             locator.first.fill("")
         except Exception:
@@ -258,6 +258,14 @@ class EsidListPage:
             locator.first.fill(value)
         try:
             locator.first.press("Tab")
+        except Exception:
+            pass
+        # Verify nhanh — retry 1 lần nếu lệch
+        try:
+            got = (locator.first.input_value(timeout=300) or "").strip()
+            if got != str(value).strip():
+                locator.first.fill(value)
+                locator.first.press("Tab")
         except Exception:
             pass
 

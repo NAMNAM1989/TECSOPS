@@ -15,7 +15,7 @@ import {
   downloadPdfFromAgent,
   fetchTcsSessionStatus,
   agentOfflineHint,
-  bootstrapTcsWorkspace,
+  scanTcsWorkspace,
   openTcsAgentSession,
   getTcsAgentBaseUrl,
   pingTcsAgent,
@@ -115,6 +115,8 @@ export type TcsPortalActionsOpts = {
    * Giữ prop để không phá AirCargoTracking.
    */
   preferRemotePortal?: boolean;
+  /** Viewport ≤767 — auto policy = agent-only */
+  isMobile?: boolean;
 };
 
 export function useTcsPortalActions({
@@ -126,6 +128,7 @@ export function useTcsPortalActions({
   active = true,
   portalWarehouse: portalWarehouseProp = "TECS-TCS",
   preferRemotePortal = false,
+  isMobile = false,
 }: TcsPortalActionsOpts) {
   const portalWarehouse: TcsPortalWarehouse =
     asTcsPortalWarehouse(portalWarehouseProp) || "TECS-TCS";
@@ -512,6 +515,7 @@ export function useTcsPortalActions({
     const order = resolvePortalExecutorOrder("login", {
       policy: executorPolicy,
       preferRemote: preferRemotePortal,
+      isMobile,
     });
     const tryAgent = order.includes("agent");
 
@@ -560,6 +564,7 @@ export function useTcsPortalActions({
   }, [
     agentOpts,
     executorPolicy,
+    isMobile,
     portalWarehouse,
     preferRemotePortal,
     refreshHealth,
@@ -572,6 +577,7 @@ export function useTcsPortalActions({
     const order = resolvePortalExecutorOrder("scan", {
       policy: executorPolicy,
       preferRemote: preferRemotePortal,
+      isMobile,
     });
     if (!order.includes("agent")) {
       setError(
@@ -596,7 +602,7 @@ export function useTcsPortalActions({
         return;
       }
       const wantVisible = online.headless === false;
-      const res = await bootstrapTcsWorkspace(sessionYmd, pendingAwbs, {
+      const res = await scanTcsWorkspace(sessionYmd, pendingAwbs, {
         visible: wantVisible,
         warehouse: portalWarehouse,
       });
@@ -645,6 +651,7 @@ export function useTcsPortalActions({
     agentOpts,
     applyReadyItemsToOps,
     executorPolicy,
+    isMobile,
     pendingReception,
     portalWarehouse,
     preferRemotePortal,
@@ -654,8 +661,8 @@ export function useTcsPortalActions({
 
 
   /**
-   * Menu dòng — Tải PDF ESID qua Chrome Ext (mặc định).
-   * Agent chỉ khi policy agent-only (legacy).
+   * Menu dòng — Tải PDF ESID qua Chrome Ext (mặc định desktop).
+   * Mobile: agent-only.
    */
   const downloadEsidFor = useCallback(
     async (shipment: Shipment) => {
@@ -679,6 +686,7 @@ export function useTcsPortalActions({
       const pdfOrder = resolvePortalExecutorOrder("pdf", {
         policy: executorPolicy,
         preferRemote: preferRemotePortal,
+        isMobile,
       });
 
       const tryPdfExt = async (t0: number) => {
@@ -813,7 +821,7 @@ export function useTcsPortalActions({
         setBusyLabel("");
       }
     },
-    [ensureSessionReady, executorPolicy, preferRemotePortal, sessionYmd]
+    [ensureSessionReady, executorPolicy, isMobile, preferRemotePortal, sessionYmd]
   );
 
   /** Điền ESID = tạo phiếu khai báo trên TCS — độc lập với Quét HT Ops. */
@@ -821,6 +829,10 @@ export function useTcsPortalActions({
     async (shipment: Shipment) => {
       setError("");
       setMessage("");
+      if (isMobile) {
+        setError("Điền ESID chỉ trên PC — phone dùng Quét + Tải PDF.");
+        return;
+      }
       const gate = canFillEsidForPortal(shipment, portalWarehouse);
       if (!gate.ok) {
         setError(gate.reason);
@@ -866,6 +878,7 @@ export function useTcsPortalActions({
         const fillOrder = resolvePortalExecutorOrder("fill", {
           policy: executorPolicy,
           preferRemote: preferRemotePortal,
+          isMobile,
         });
         const ext = await pingTcsExtension({ warehouse: rowPortal });
         setExtension(ext);
@@ -1002,6 +1015,7 @@ export function useTcsPortalActions({
       ensureSessionReady,
       executorPolicy,
       health?.headless,
+      isMobile,
       portalWarehouse,
       preferRemotePortal,
       refreshHealth,

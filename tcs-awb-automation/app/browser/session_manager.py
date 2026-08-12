@@ -415,12 +415,24 @@ class SessionManager:
 
     def close(self) -> None:
         self._workspace_pages = {}
+        profile = Path(self.settings.browser_profile)
         if self.session:
             try:
                 self.session.close()
             except Exception:
                 pass
             self.session = None
+        try:
+            from app.services.download_service import prune_chromium_disk_cache
+
+            stats = prune_chromium_disk_cache(profile)
+            if stats.get("deleted_dirs"):
+                print(
+                    f"[prune-profile] dirs={stats.get('deleted_dirs')} "
+                    f"bytes≈{stats.get('bytes')}"
+                )
+        except Exception as e:  # noqa: BLE001
+            print(f"[prune-profile] bỏ qua: {e}")
 
     def status(self) -> SessionStatus:
         self.reload_locators()

@@ -12,7 +12,7 @@ Phone / laptop → Ops (Railway HTTPS)
                  → Chromium headless + cookie volume
 ```
 
-Policy mặc định `auto` = **agent → Ext**.
+Policy mặc định `auto` = **desktop Ext → agent**; **phone agent-only** (Quét/PDF).
 
 ## Railway Variables (bắt buộc)
 
@@ -27,6 +27,10 @@ Policy mặc định `auto` = **agent → Ext**.
 | `TCS_CAPTCHA_OCR=1` | OCR CAPTCHA khi ĐN (Dockerfile đã set) |
 | `TCS_AUTO_OPEN=1` | Mở session lúc boot |
 | `TCS_PREFER_SESSION=1` | Ưu tiên cookie trong profile |
+| `TCS_PDF_CACHE_TTL_S` | TTL tái dùng PDF (mặc định 28800 = 8h) |
+| `TCS_PDF_PREFETCH_N` | Prefetch sau Quét (mặc định **0** = tắt) |
+| `TCS_DOCS_RETENTION_S` | Prune docs già hơn N giây (mặc định 172800 = 48h) |
+| `TCS_PRUNE_ON_START` | Prune docs lúc boot agent (mặc định 1) |
 
 ## Volumes (giữ session sau redeploy)
 
@@ -48,9 +52,11 @@ Region khuyến nghị: `asia-southeast1`.
 
 1. Mở Ops bằng URL Railway (không dùng `127.0.0.1`).
 2. Chọn kho TECS-TCS hoặc TCS + ngày phiên.
-3. **Đăng nhập** — agent OCR CAPTCHA / khôi phục cookie volume.
-4. **Quét** → menu ⋮ **Điền** / **Tải PDF**.
-5. **HOÀN TẤT** trên Ops khi agent đã điền form.
+3. **Phone:** không nút ĐN/Điền — agent tự session; **Quét** + menu ⋮ **Tải PDF**.
+4. **PC:** ĐN Ext (nhìn được) → Quét / Điền / PDF; fallback agent nếu không có Ext.
+5. **HOÀN TẤT** trên Ops (PC) khi agent/Ext đã điền form.
+
+Quét agent dùng `POST /workspace/scan` (nhẹ — không prefetch PDF).
 
 ## CAPTCHA
 

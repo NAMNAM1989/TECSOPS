@@ -98,6 +98,7 @@ const EMPTY_CUSTOMERS_DIR: CustomerDirectoryEntry[] = [];
 
 interface AirCargoTrackingProps {
   sync: SyncApi;
+  onSessionDateChange?: (ymd: string) => void;
   onNavigateCustomers: () => void;
   onPrefetchCustomers?: () => void;
   onNavigateStats?: () => void;
@@ -116,6 +117,7 @@ function formatWorkDateLabel(d: Date): string {
 
 export function AirCargoTracking({
   sync,
+  onSessionDateChange,
   onNavigateCustomers,
   onPrefetchCustomers,
   onNavigateStats,
@@ -127,6 +129,11 @@ export function AirCargoTracking({
   const toast = useToast();
 
   const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
+  const selectedYmd = formatLocalSessionDate(selectedViewDate);
+
+  useEffect(() => {
+    onSessionDateChange?.(selectedYmd);
+  }, [selectedYmd, onSessionDateChange]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mobileEditShipment, setMobileEditShipment] = useState<Shipment | null>(null);
   const [mobileEditInitialTab, setMobileEditInitialTab] = useState<"lot" | "notify" | "dim">("lot");
@@ -151,7 +158,6 @@ export function AirCargoTracking({
   /** null = chưa probe; true = /tcs-agent OK (Railway/local all-in-one). */
   const [inlineAgentOk, setInlineAgentOk] = useState<boolean | null>(null);
 
-  const selectedYmd = formatLocalSessionDate(selectedViewDate);
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
   const isViewingToday = selectedYmd === todayYmd;
 
@@ -367,6 +373,7 @@ export function AirCargoTracking({
      * Có /tcs-agent → đường nóng same-origin (nhanh, không poll PC).
      */
     preferRemotePortal: shouldPreferRemotePortal(isMobile, inlineAgentOk),
+    isMobile,
   });
 
   const onDelete = useCallback(
@@ -742,7 +749,9 @@ export function AirCargoTracking({
       cargoReportCopying={cargoReportCopying}
       {...toolsProps}
       tcsPortalBar={
-        isTcsWarehouse(activeWarehouse) ? <TcsPortalInlineBar compact tcs={tcsPortal} /> : null
+        isTcsWarehouse(activeWarehouse) ? (
+          <TcsPortalInlineBar compact isMobile tcs={tcsPortal} />
+        ) : null
       }
       ecargoBar={
         isEcargoScscWarehouse(activeWarehouse) ? (
@@ -931,7 +940,7 @@ export function AirCargoTracking({
           ) : null}
           {isTcsWarehouse(activeWarehouse) ? (
             <div className="min-w-0 shrink-0">
-              <TcsPortalInlineBar compact tcs={tcsPortal} />
+              <TcsPortalInlineBar compact isMobile={false} tcs={tcsPortal} />
             </div>
           ) : null}
           {isEcargoScscWarehouse(activeWarehouse) ? (

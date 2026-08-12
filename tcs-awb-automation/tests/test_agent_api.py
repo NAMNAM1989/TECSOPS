@@ -128,11 +128,13 @@ def test_workspace_bootstrap_route(tmp_path: Path, monkeypatch):
     state = AgentState(settings)
     seen: dict = {}
 
-    def fake_bootstrap(*, session_date, raw_awbs, visible):
+    def fake_bootstrap(*, session_date, raw_awbs, visible, do_prefetch=False, do_warm=False):
         seen.update(
             session_date=session_date,
             raw_awbs=raw_awbs,
             visible=visible,
+            do_prefetch=do_prefetch,
+            do_warm=do_warm,
         )
         return {
             "ok": True,
@@ -170,6 +172,8 @@ def test_workspace_bootstrap_route(tmp_path: Path, monkeypatch):
             "session_date": "2026-07-23",
             "raw_awbs": ["12312345670"],
             "visible": False,
+            "do_prefetch": False,
+            "do_warm": False,
         }
     finally:
         httpd.shutdown()

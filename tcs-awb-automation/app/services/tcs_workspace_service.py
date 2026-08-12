@@ -132,6 +132,8 @@ class TcsWorkspaceService:
         session_date: str,
         raw_awbs: list[Any] | None,
         visible: bool,
+        do_prefetch: bool = False,
+        do_warm: bool = False,
     ) -> dict[str, Any]:
         self.phase = "OPENING"
         self.error = ""
@@ -157,29 +159,53 @@ class TcsWorkspaceService:
         scan_error = "" if scan_ok else str(
             result.get("message") or result.get("error") or "Quét thất bại"
         )
-        # Prefetch PDF trước warm declare — lần bấm Tải PDF sau ≈ cache hit
-        prefetch = self.prefetch_ready_pdfs()
-        if prefetch.get("prefetched"):
-            result.setdefault("warnings", []).append(
-                f"Đã prefetch {prefetch['prefetched']} PDF ESID"
-            )
-        result["pdf_prefetch"] = prefetch
-        warm = self.warm_declare_page()
-        if not warm.get("ok"):
-            result.setdefault("warnings", []).append(
-                f"Chưa warm được trang khai báo: {warm.get('message') or ''}"
-            )
-        # Trả session cùng scan để frontend cập nhật trạng thái Ops ngay sau Login.
+        # Quét nhẹ mặc định: không prefetch/warm (giảm CPU/disk). Bật qua payload hoặc env.
+        if do_prefetch:
+            prefetch = self.prefetch_ready_pdfs()
+            if prefetch.get("prefetched"):
+                result.setdefault("warnings", []).append(
+                    f"Đã prefetch {prefetch['prefetched']} PDF ESID"
+                )
+            result["pdf_prefetch"] = prefetch
+        else:
+            result["pdf_prefetch"] = {
+                "ok": True,
+                "prefetched": 0,
+                "skipped": 0,
+                "failed": 0,
+                "awbs": [],
+                "skipped_reason": "prefetch_disabled_on_scan",
+            }
+        if do_warm:
+            warm = self.warm_declare_page()
+            if not warm.get("ok"):
+                result.setdefault("warnings", []).append(
+                    f"Chưa warm được trang khai báo: {warm.get('message') or ''}"
+                )
         return {
             **result,
             **st.to_dict(),
-            # Login là điều kiện chính; scan lỗi vẫn giữ session/page Khai báo
-            # để người dùng Điền và có thể bấm Làm mới sau.
             "ok": True,
             "scan_ok": scan_ok,
             "scan_error": scan_error,
             "workspace": self.snapshot(),
         }
+
+    def scan_only(
+        self,
+        *,
+        session_date: str,
+        raw_awbs: list[Any] | None,
+        visible: bool,
+    ) -> dict[str, Any]:
+        """Quét HT nhẹ: open/reuse session + refresh_scan — không prefetch PDF, không warm declare."""
+        return self.bootstrap(
+            session_date=session_date,
+            raw_awbs=raw_awbs,
+            visible=visible,
+            do_prefetch=False,
+            do_warm=False,
+        )
 
     def prefetch_ready_pdfs(
         self,
@@ -189,13 +215,13 @@ class TcsWorkspaceService:
     ) -> dict[str, Any]:
         """
         In sẵn PDF cho AWB «Hoàn thành tiếp nhận» (hoặc danh sách chỉ định).
-        TCS_PDF_PREFETCH_N=0 tắt. Mặc định 5.
+        TCS_PDF_PREFETCH_N=0 tắt. Mặc định 0 (không prefetch trừ khi gọi tay / env > 0).
         """
-        raw_n = os.getenv("TCS_PDF_PREFETCH_N", "5").strip()
+        raw_n = os.getenv("TCS_PDF_PREFETCH_N", "0").strip()
         try:
             default_n = max(0, int(raw_n))
         except ValueError:
-            default_n = 5
+            default_n = 0
         n = default_n if limit is None else max(0, int(limit))
         if n <= 0:
             return {"ok": True, "prefetched": 0, "skipped": 0, "failed": 0, "awbs": []}

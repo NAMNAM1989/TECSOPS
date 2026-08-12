@@ -881,6 +881,46 @@ class EsidDeclarePage:
                     return
 
     @staticmethod
+    def _parse_loose_day(value: str):
+        """Parse ngày từ datFltOri TCS (DD/MM/YYYY …) hoặc YYYY-MM-DD."""
+        s = (value or "").strip()
+        m = re.match(r"^(\d{2})[./-](\d{2})[./-](\d{4})", s)
+        if m:
+            a, b, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            # TCS form: DD/MM/YYYY; modal filter: MM-DD-YYYY
+            if a > 12:
+                d, mo = a, b
+            elif b > 12:
+                d, mo = b, a
+            else:
+                # ưu tiên DD/MM (form sau Ok)
+                d, mo = a, b
+            try:
+                return datetime(y, mo, d).date()
+            except Exception:
+                try:
+                    return datetime(y, a, b).date()
+                except Exception:
+                    return None
+        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
+        if m:
+            try:
+                return datetime(
+                    int(m.group(1)), int(m.group(2)), int(m.group(3))
+                ).date()
+            except Exception:
+                return None
+        return None
+
+    @classmethod
+    def _dates_within_days(cls, got: str, want_ymd: str, days: int = 1) -> bool:
+        g = cls._parse_loose_day(got)
+        w = cls._parse_loose_day(want_ymd)
+        if not g or not w:
+            return False
+        return abs((g - w).days) <= days
+
+    @staticmethod
     def _flight_date_value_matches(got: str, ymd: str) -> bool:
         """Chấp nhận MM-DD-YYYY, DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD."""
         g = re.sub(r"[^0-9]", "", (got or "").strip())
@@ -1931,6 +1971,15 @@ class EsidDeclarePage:
                 )
                 if not date_ok and ddmon and ddmon.upper() in gd_norm:
                     date_ok = True
+                # TCS đôi khi chỉ có chuyến ngày liền kề Ops — form đã ghi nhận.
+                if not date_ok and fdate and EsidDeclarePage._dates_within_days(
+                    got_d, fdate, 1
+                ):
+                    date_ok = True
+                    warnings.append(
+                        f"Ngày TCS {got_d!r} lệch ±1 ngày so với Ops {fdate!r} — "
+                        "chấp nhận theo lịch TCS"
+                    )
 
         if not flight_ok:
             warnings.append(

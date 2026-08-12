@@ -35,8 +35,14 @@ export function createAppAuth({
   isProduction = process.env.NODE_ENV === "production",
   cookieSecure =
     process.env.TECSOPS_COOKIE_SECURE === "0" ? false : isProduction,
+  /** Cho phép khởi động production khi chưa có token (hoặc môi trường non-prod). */
   allowUnauthenticated =
     process.env.TECSOPS_ALLOW_UNAUTHENTICATED === "1" || !isProduction,
+  /**
+   * Tắt hẳn gate login (site thử nghiệm). Chỉ bật bằng
+   * TECSOPS_ALLOW_UNAUTHENTICATED=1 — giữ TECSOPS_APP_TOKEN để bật lại dễ.
+   */
+  disableLoginGate = process.env.TECSOPS_ALLOW_UNAUTHENTICATED === "1",
 } = {}) {
   if (token && token.length < 24) {
     throw new Error("TECSOPS_APP_TOKEN phải dài tối thiểu 24 ký tự.");
@@ -47,7 +53,7 @@ export function createAppAuth({
     );
   }
 
-  const required = Boolean(token);
+  const required = Boolean(token) && !disableLoginGate;
   const sessionValue = required ? digest(`tecsops-session-v1:${token}`) : "";
 
   function tokenFromRequest(req) {

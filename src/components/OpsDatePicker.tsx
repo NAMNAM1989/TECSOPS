@@ -33,7 +33,7 @@ export function OpsDatePicker({
           onClick={onPrev}
           className={`rounded-full font-semibold text-dashboard-primary hover:bg-black/[0.04] ${
             compact
-              ? "inline-flex h-8 min-w-8 touch-manipulation items-center justify-center px-1 text-[14px]"
+              ? "inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center px-1 text-[14px]"
               : "px-2 py-1 text-xs"
           }`}
           aria-label="Ngày trước"
@@ -41,6 +41,7 @@ export function OpsDatePicker({
           ‹
         </button>
         <input
+          aria-label="Ngày phiên Ops"
           type="date"
           value={value}
           onChange={(e) => {
@@ -56,7 +57,7 @@ export function OpsDatePicker({
           onClick={onNext}
           className={`rounded-full font-semibold text-dashboard-primary hover:bg-black/[0.04] ${
             compact
-              ? "inline-flex h-8 min-w-8 touch-manipulation items-center justify-center px-1 text-[14px]"
+              ? "inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center px-1 text-[14px]"
               : "px-2 py-1 text-xs"
           }`}
           aria-label="Ngày sau"
@@ -78,7 +79,7 @@ export function OpsDatePicker({
         <button
           type="button"
           onClick={onToday}
-          className="inline-flex h-8 shrink-0 touch-manipulation items-center rounded-full bg-apple-blue px-2.5 text-[11px] font-semibold text-white shadow-[0_4px_12px_rgba(0,113,227,0.28)] hover:bg-apple-blue-hover"
+          className="inline-flex min-h-11 shrink-0 touch-manipulation items-center rounded-full bg-apple-blue px-2.5 text-[11px] font-semibold text-white shadow-[0_4px_12px_rgba(0,113,227,0.28)] hover:bg-apple-blue-hover"
         >
           Nay
         </button>

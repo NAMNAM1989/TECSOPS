@@ -6,6 +6,7 @@ import { useShipmentSync } from "./hooks/useShipmentSync";
 import { useHashRoute } from "./hooks/useHashRoute";
 import type { AirlineLabelOverrides } from "./utils/airlineLabelOverridesCore";
 import { PageSkeleton } from "./ui";
+import { AppAuthGate } from "./components/AppAuthGate";
 
 const loadCustomersPage = () =>
   import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage }));
@@ -25,7 +26,7 @@ type PrintJob = { shipment: Shipment; airlineLabelOverrides?: AirlineLabelOverri
 
 const EMPTY_CUSTOMERS: CustomerDirectoryEntry[] = [];
 
-export default function App() {
+function AuthenticatedApp() {
   const fallback = useMemo(() => ({ rows: loadRows() ?? [] }), []);
   const sync = useShipmentSync(fallback);
   const { route, navigate } = useHashRoute();
@@ -97,5 +98,13 @@ export default function App() {
         </Suspense>
       ) : null}
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <AppAuthGate>
+      <AuthenticatedApp />
+    </AppAuthGate>
   );
 }

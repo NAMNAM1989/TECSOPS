@@ -362,11 +362,27 @@ export function validateCustomerDirectoryPayload(raw) {
       throw new Error(`Dòng ${i + 1}: dữ liệu không hợp lệ.`);
     }
     const id = typeof item.id === "string" ? item.id.trim() : "";
-    const code = typeof item.code === "string" ? item.code.trim() : "";
+    const code =
+      typeof item.code === "string"
+        ? item.code.trim().toUpperCase().replace(/\s+/g, "")
+        : "";
     const name = typeof item.name === "string" ? item.name.trim() : "";
     if (!id) throw new Error(`Dòng ${i + 1}: thiếu id.`);
     if (!code) throw new Error(`Dòng ${i + 1}: mã khách hàng không được để trống.`);
     if (!name) throw new Error(`Dòng ${i + 1}: tên khách hàng không được để trống.`);
+    if (code.length <= 5 && !/^[A-Z]{2,5}$/.test(code)) {
+      throw new Error(
+        `Dòng ${i + 1}: Customer Code phải gồm 2–5 chữ cái A–Z.`,
+      );
+    }
+    if (
+      code.length > 5 &&
+      (code.length > 40 || !/^[A-Z0-9][A-Z0-9._-]*$/.test(code))
+    ) {
+      throw new Error(
+        `Dòng ${i + 1}: mã chỉ gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.`,
+      );
+    }
     const k = code.toLowerCase();
     if (seenCode.has(k)) {
       throw new Error(`Mã «${code}» bị trùng — mỗi mã chỉ dùng một lần.`);

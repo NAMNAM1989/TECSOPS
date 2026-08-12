@@ -22,6 +22,11 @@
     "portal:start:warehouse:legacy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-warehouse-pc.ps1",
     "portal:pin-shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pin-warehouse-shortcut.ps1",
     "qa:smoke": "node scripts/qa-smoke-e2e.mjs",
+    "test:e2e": "node tests/e2e/read-only.mjs",
+    "test:e2e:ai": "node tests/e2e/ai-mock.mjs",
+    "test:e2e:a11y": "node tests/e2e/accessibility.mjs",
+    "test:e2e:mutation": "node tests/e2e/mutation.mjs",
+    "e2e:cleanup": "node scripts/cleanup-e2e-records.mjs",
     "ext:verify": "node chrome-extension/scripts/cdp-load-and-verify.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
@@ -61,6 +66,7 @@
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",

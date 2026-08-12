@@ -16,6 +16,8 @@ type Props = {
   onDownloadScscDim?: () => void;
   /** Báo cáo đề xuất nâng cấp qua Gemini */
   onOpenAiImprove?: () => void;
+  /** AI-1…AI-9: draft/gợi ý Ops có bước xác nhận. */
+  onOpenAiWorkbench?: () => void;
 };
 
 /**
@@ -35,6 +37,7 @@ export function OpsToolsMenu({
   onDownloadDayExcel,
   onDownloadScscDim,
   onOpenAiImprove,
+  onOpenAiWorkbench,
 }: Props) {
   const items = useMemo(() => {
     const list: OverflowMenuItem[] = [];
@@ -78,6 +81,14 @@ export function OpsToolsMenu({
         onSelect: onOpenAiImprove,
       });
     }
+    if (onOpenAiWorkbench) {
+      list.push({
+        id: "ai-workbench",
+        label: "Trợ lý AI Ops",
+        description: "Booking · hồ sơ · Sheet · eSID · DIM · Ask",
+        onSelect: onOpenAiWorkbench,
+      });
+    }
     if (showDimScsc && onDownloadScscDim) {
       list.push({
         id: "dim-scsc",
@@ -99,6 +110,7 @@ export function OpsToolsMenu({
     onPrefetchCustomers,
     onPrefetchStats,
     onOpenAiImprove,
+    onOpenAiWorkbench,
     scscDimExporting,
     showDimScsc,
   ]);

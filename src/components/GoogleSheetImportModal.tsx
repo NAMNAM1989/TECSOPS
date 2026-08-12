@@ -29,7 +29,7 @@ import type { Warehouse } from "../types/shipment";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { MOBILE } from "../styles/mobileOpsStyles";
 import { Banner, Button } from "../ui";
-import { trackAiEvent } from "../utils/aiOpsClient";
+import { requestAiFeature, trackAiEvent } from "../utils/aiOpsClient";
 import {
   loadSheetBookUrl,
   loadSheetColMapping,
@@ -128,6 +128,8 @@ export function GoogleSheetImportModal({
   );
   const [dragOver, setDragOver] = useState(false);
   const [mappingWarn, setMappingWarn] = useState<string | null>(null);
+  const [aiExplain, setAiExplain] = useState<unknown>(null);
+  const [aiExplaining, setAiExplaining] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastDropTokenRef = useRef("");
 
@@ -345,6 +347,28 @@ export function GoogleSheetImportModal({
     if (warehouseFilter === "ALL") return rows;
     return rows.filter((r) => rowWarehouse(r) === warehouseFilter);
   }, [sync, warehouseFilter]);
+
+  const explainVisibleRows = useCallback(async () => {
+    if (!visibleRows.length || aiExplaining) return;
+    setAiExplaining(true);
+    setAiExplain(null);
+    try {
+      const rows = visibleRows
+        .filter((row) => selected.has(row.index) || !isSheetRowSelectable(row))
+        .slice(0, 25);
+      const response = await requestAiFeature<unknown>("explain-sheet-rows", {
+        rows: rows.length ? rows : visibleRows.slice(0, 25),
+      });
+      if (!response.ok) throw new Error(response.error || "AI không giải thích được.");
+      setAiExplain(response.result ?? null);
+      trackAiEvent("ai_sheet_explain_ui_ok", { rows: rows.length });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "AI không giải thích được.");
+      trackAiEvent("ai_sheet_explain_ui_fail");
+    } finally {
+      setAiExplaining(false);
+    }
+  }, [aiExplaining, selected, visibleRows]);
 
   const warehouseCounts = useMemo(() => {
     const rows = sync?.rows ?? [];
@@ -660,6 +684,30 @@ export function GoogleSheetImportModal({
                   </li>
                 ))}
               </ul>
+            ) : null}
+          </div>
+        ) : null}
+
+        {sync ? (
+          <div className="mx-4 mt-3 rounded-xl border border-violet-200 bg-violet-50 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-violet-950">AI giải thích dòng Sheet</p>
+                <p className="text-xs text-violet-800">Chỉ gợi ý; không tự chọn hoặc nhập dòng.</p>
+              </div>
+              <Button
+                disabled={aiExplaining || visibleRows.length === 0}
+                onClick={() => void explainVisibleRows()}
+                size="sm"
+                variant="secondary"
+              >
+                {aiExplaining ? "Đang giải thích…" : "Giải thích dòng đang xem"}
+              </Button>
+            </div>
+            {aiExplain ? (
+              <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap text-xs text-violet-950">
+                {JSON.stringify(aiExplain, null, 2)}
+              </pre>
             ) : null}
           </div>
         ) : null}

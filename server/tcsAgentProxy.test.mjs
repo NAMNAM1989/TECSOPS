@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
+import express from "express";
+import { createServer } from "node:http";
 import {
   agentTargetForWarehouse,
+  isAgentHealthProbe,
   isTcsAgentProxyEnabled,
+  registerTcsAgentProxy,
 } from "./tcsAgentProxy.mjs";
 
 describe("isTcsAgentProxyEnabled", () => {
@@ -13,7 +17,8 @@ describe("isTcsAgentProxyEnabled", () => {
   afterEach(() => {
     if (prevProxy === undefined) delete process.env.TCS_AGENT_PROXY;
     else process.env.TCS_AGENT_PROXY = prevProxy;
-    process.env.NODE_ENV = prevNode;
+    if (prevNode === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = prevNode;
     if (prevHub === undefined) delete process.env.TCS_AGENT_URL;
     else process.env.TCS_AGENT_URL = prevHub;
     if (prevTcs === undefined) delete process.env.TCS_AGENT_URL_TCS;
@@ -43,5 +48,35 @@ describe("isTcsAgentProxyEnabled", () => {
     delete process.env.TCS_AGENT_URL_TCS;
     expect(agentTargetForWarehouse("TCS")).toBe("http://127.0.0.1:8766");
     expect(agentTargetForWarehouse("TECS-TCS")).toBe("http://127.0.0.1:8765");
+  });
+
+  it("chỉ coi đúng /health là probe offline êm", () => {
+    expect(isAgentHealthProbe("/health")).toBe(true);
+    expect(isAgentHealthProbe("/health/")).toBe(true);
+    expect(isAgentHealthProbe("/workspace/health")).toBe(false);
+    expect(isAgentHealthProbe("/jobs")).toBe(false);
+  });
+
+  it("agent offline: health trả 200 + ok=false để không spam console", async () => {
+    process.env.NODE_ENV = "development";
+    process.env.TCS_AGENT_PROXY = "1";
+    process.env.TCS_AGENT_URL = "http://127.0.0.1:1";
+    const app = express();
+    registerTcsAgentProxy(app);
+    const server = createServer(app);
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      const response = await fetch(`http://127.0.0.1:${port}/tcs-agent/health`);
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({
+        ok: false,
+        offline: true,
+        error: "AGENT_OFFLINE",
+      });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 });

@@ -33,6 +33,11 @@ function agentTarget() {
   return agentTargetForWarehouse("TECS-TCS");
 }
 
+export function isAgentHealthProbe(pathname) {
+  const normalized = String(pathname || "").toLowerCase().replace(/\/+$/, "");
+  return normalized === "/health";
+}
+
 /** Export để unit test — production mặc định tắt trừ khi TCS_AGENT_PROXY=1 (Docker set sẵn). */
 export function isTcsAgentProxyEnabled() {
   const raw = process.env.TCS_AGENT_PROXY;
@@ -51,6 +56,7 @@ export function registerTcsAgentProxy(app) {
 
   const hub = agentTargetForWarehouse("TECS-TCS");
   const tcs = agentTargetForWarehouse("TCS");
+  const isProduction = process.env.NODE_ENV === "production";
   console.info(`[tcs-agent-proxy] /tcs-agent → hub ${hub} · TCS ${tcs} (header X-Portal-Warehouse)`);
 
   app.use("/tcs-agent", (req, res) => {
@@ -77,6 +83,7 @@ export function registerTcsAgentProxy(app) {
 
     // bootstrap / jobs / declare / session-open có thể >3 phút khi agent xếp hàng
     const pathLower = String(target.pathname || "").toLowerCase();
+    const healthProbe = isAgentHealthProbe(pathLower);
     const longOp =
       pathLower.includes("/workspace/bootstrap") ||
       pathLower.includes("/jobs") ||
@@ -118,9 +125,10 @@ export function registerTcsAgentProxy(app) {
     upstream.on("timeout", () => {
       upstream.destroy();
       if (!res.headersSent) {
-        res.status(504).json({
+        res.status(healthProbe ? 200 : 504).json({
           ok: false,
           error: "AGENT_PROXY_TIMEOUT",
+          offline: healthProbe,
           message:
             "Agent TCS không trả lời (timeout). Kiểm tra agent :8765 / :8766 trên máy kho.",
         });
@@ -132,14 +140,16 @@ export function registerTcsAgentProxy(app) {
         res.end();
         return;
       }
-      res.status(502).json({
+      res.status(healthProbe ? 200 : 502).json({
         ok: false,
         error: "AGENT_OFFLINE",
-        message:
-          `Không nối được agent (${targetBase}, kho=${warehouse || "TECS-TCS"}). ` +
-          "Local: npm run portal:start:both hoặc npm run dev. " +
-          "Máy khác: mở Ops bằng IP máy kho — không dùng 127.0.0.1.",
-        detail: String(err?.message || err),
+        offline: healthProbe,
+        message: isProduction
+          ? "Agent TCS đang offline."
+          : `Không nối được agent (${targetBase}, kho=${warehouse || "TECS-TCS"}). ` +
+            "Local: npm run portal:start:both hoặc npm run dev. " +
+            "Máy khác: mở Ops bằng IP máy kho — không dùng 127.0.0.1.",
+        ...(isProduction ? {} : { detail: String(err?.message || err) }),
       });
     });
 

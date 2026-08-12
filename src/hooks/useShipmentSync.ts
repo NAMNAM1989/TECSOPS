@@ -40,6 +40,14 @@ const STATE_FETCH_RETRY_MS = 400;
 /** Chặn hàng đợi phình vô hạn nếu offline kéo dài. */
 const OFFLINE_QUEUE_MAX = 500;
 
+export function assertOfflineQueueCapacity(currentLength: number, max = OFFLINE_QUEUE_MAX): void {
+  if (currentLength >= max) {
+    throw new Error(
+      `Hàng đợi offline đã đầy (${max} thao tác). Kết nối mạng trước khi tiếp tục để tránh mất dữ liệu.`,
+    );
+  }
+}
+
 function pickNewerState(prev: AppState | null, next: AppState): AppState {
   return !prev || next.version >= prev.version ? next : prev;
 }
@@ -279,36 +287,24 @@ export function useShipmentSync(fallback: Fallback) {
 
   const mutate = useCallback(async (mutation: ShipmentMutation): Promise<AppState | null> => {
     if (!apiOkRef.current) {
-      let computed: AppState | null = null;
-      let offlineErr: Error | null = null;
-      let queued: QueuedMutation | null = null;
-      setState((prev) => {
-        if (!prev) return prev;
-        try {
-          const next = applyShipmentMutation(prev, mutation);
-          saveRows(next.rows);
-          if (mutation.action === "SET_CUSTOMERS" || mutation.action === "RESET_TRIAL_DATA") {
-            saveCustomerDirectoryToStorage(next.customers);
-          }
-          if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
-            saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
-          }
-          queued = {
-            mutation,
-            localId: mutation.action === "ADD" ? (addedRowId(prev, next) ?? undefined) : undefined,
-          };
-          computed = next;
-          return next;
-        } catch (e) {
-          offlineErr = e instanceof Error ? e : new Error(String(e));
-          return prev;
-        }
-      });
-      if (offlineErr) throw offlineErr;
-      if (queued && offlineQueueRef.current.length < OFFLINE_QUEUE_MAX) {
-        offlineQueueRef.current.push(queued);
+      assertOfflineQueueCapacity(offlineQueueRef.current.length);
+      if (!state) return null;
+      const next = applyShipmentMutation(state, mutation);
+      const queued: QueuedMutation = {
+        mutation,
+        localId: mutation.action === "ADD" ? (addedRowId(state, next) ?? undefined) : undefined,
+      };
+      // Enqueue trước khi hiển thị/persist local: không bao giờ apply-without-enqueue.
+      offlineQueueRef.current.push(queued);
+      saveRows(next.rows);
+      if (mutation.action === "SET_CUSTOMERS" || mutation.action === "RESET_TRIAL_DATA") {
+        saveCustomerDirectoryToStorage(next.customers);
       }
-      return computed;
+      if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
+        saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
+      }
+      setState(next);
+      return next;
     }
 
     /** Xóa lô: cập nhật UI ngay để AWB được giải phóng trước khi server phản hồi. */
@@ -362,7 +358,7 @@ export function useShipmentSync(fallback: Fallback) {
       }
       throw e;
     }
-  }, []);
+  }, [state]);
 
   /**
    * Nhiều mutation trong một request — tránh N round-trip + N lần broadcast full state.

@@ -25,6 +25,7 @@ import {
   emptyEcargoVctResultsStore,
   normalizeEcargoVctResultsStore,
 } from "../shared/ecargoVctResultsNormalize.mjs";
+import { formatAwb } from "../shared/awbFormat.mjs";
 
 const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "TCS", "SCSC"];
 const WAREHOUSE_SET = new Set(WAREHOUSE_ORDER);
@@ -121,6 +122,7 @@ function migrateRows(rows, workDateIso) {
       customerCode: typeof r.customerCode === "string" ? r.customerCode : "",
       customerId: typeof r.customerId === "string" ? r.customerId : "",
       hawb: typeof r.hawb === "string" ? r.hawb : "",
+      awb: formatAwb(r.awb),
       dimWeightKg:
         r.dimWeightKg === null || typeof r.dimWeightKg === "number" ? r.dimWeightKg : null,
       dimLines: normalizeDimLines(r.dimLines),
@@ -304,8 +306,12 @@ export function applyMutation(state, mutation) {
         assertAwbUnique(rows, mutation.patch.awb, mutation.id);
       }
       const prev = rows[i];
-      const merged = { ...prev, ...mutation.patch };
-      const statusExtra = workflowStatusPatchFromDataEdit(prev, mutation.patch, merged);
+      const patch =
+        mutation.patch.awb === undefined
+          ? mutation.patch
+          : { ...mutation.patch, awb: formatAwb(mutation.patch.awb) };
+      const merged = { ...prev, ...patch };
+      const statusExtra = workflowStatusPatchFromDataEdit(prev, patch, merged);
       rows[i] = { ...merged, ...statusExtra };
       break;
     }
@@ -323,7 +329,7 @@ export function applyMutation(state, mutation) {
       }
       assertAwbUnique(rows, s.awb, null);
       const id = nextNewId(rows);
-      const withId = { ...s, id };
+      const withId = { ...s, awb: formatAwb(s.awb), id };
       rows.push({ ...withId, status: migrateShipmentStatus(withId) });
       break;
     }

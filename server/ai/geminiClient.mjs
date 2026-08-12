@@ -11,7 +11,7 @@ export function getGeminiModel() {
 }
 
 export function isGeminiConfigured() {
-  return Boolean(process.env.GEMINI_API_KEY?.trim());
+  return process.env.GEMINI_DISABLED !== "1" && Boolean(process.env.GEMINI_API_KEY?.trim());
 }
 
 function stripCodeFence(text) {
@@ -35,10 +35,15 @@ export function extractJsonFromGeminiText(raw) {
 }
 
 /**
- * @param {{ system?: string, user: string, schemaHint?: string, timeoutMs?: number }} opts
+ * @param {{ system?: string, user: string, schemaHint?: string, timeoutMs?: number, inlineData?: { mimeType: string, data: string } }} opts
  * @returns {Promise<unknown>}
  */
 export async function generateGeminiJson(opts) {
+  if (process.env.GEMINI_DISABLED === "1") {
+    const err = new Error("Gemini đã tắt bằng GEMINI_DISABLED=1");
+    err.code = "GEMINI_NOT_CONFIGURED";
+    throw err;
+  }
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
     const err = new Error("Thiếu GEMINI_API_KEY — thêm vào .env.local hoặc Railway Variables");
@@ -68,7 +73,18 @@ export async function generateGeminiJson(opts) {
         "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        contents: [{
+          role: "user",
+          parts: [
+            { text: prompt },
+            ...(opts.inlineData
+              ? [{ inlineData: {
+                  mimeType: String(opts.inlineData.mimeType),
+                  data: String(opts.inlineData.data),
+                } }]
+              : []),
+          ],
+        }],
         generationConfig: {
           temperature: 0.3,
           responseMimeType: "application/json",

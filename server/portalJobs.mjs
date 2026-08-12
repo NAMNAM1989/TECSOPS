@@ -75,10 +75,26 @@ async function withPool() {
   const pool = getDbPool();
   if (!pool) return null;
   if (!schemaReady) {
-    await ensurePortalSchema(pool);
-    schemaReady = true;
+    try {
+      await ensurePortalSchema(pool);
+      schemaReady = true;
+    } catch (err) {
+      // DB cấu hình nhưng không nối được → fallback memory (local test / Postgres tắt).
+      console.warn(
+        "[portalJobs] Postgres unavailable — dùng memory fallback:",
+        err?.message || err
+      );
+      return null;
+    }
   }
   return pool;
+}
+
+/** Vitest: xóa job memory + buộc ensure schema lại. */
+export function resetPortalJobsMemoryForTests() {
+  memoryJobs.clear();
+  memoryHeartbeat.clear();
+  schemaReady = false;
 }
 
 function rowToJob(row) {

@@ -131,8 +131,11 @@ describe("downloadTcsDimRecordPdf", () => {
   });
 
   it("alert khi kho không phải family TCS", async () => {
-    const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const alert = vi.fn();
+    // Suite chạy dưới environment node (đọc font file) — stub window.alert.
+    vi.stubGlobal("window", { alert });
     await downloadTcsDimRecordPdf(sample({ warehouse: "SCSC" }));
     expect(alert).toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

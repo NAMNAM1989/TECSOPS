@@ -21,6 +21,13 @@ import { registerPortalJobRoutes } from "./portalJobs.mjs";
 import { registerEcargoVctRoutes } from "./ecargoVctRoutes.mjs";
 import { registerAiRoutes } from "./ai/aiRoutes.mjs";
 import { recordMutationEventSafe } from "./ai/opsAiEventsStore.mjs";
+import {
+  applySecurityHeaders,
+  createRateLimit,
+  createMutationRateLimit,
+  mutationErrorPayload,
+} from "./httpSecurity.mjs";
+import { createAppAuth } from "./appAuth.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
@@ -28,8 +35,10 @@ const MAX_BATCH_MUTATIONS = 500;
 
 const app = express();
 app.set("trust proxy", 1);
+app.use(applySecurityHeaders({ isProduction }));
 app.use(compression());
 const httpServer = createServer(app);
+const appAuth = createAppAuth({ isProduction });
 
 /**
  * CORS cho Socket.IO: production mặc định same-origin (`false`);
@@ -49,12 +58,14 @@ const io = new Server(httpServer, {
   path: "/socket.io/",
   cors: socketIoCorsOptions(),
 });
+io.use(appAuth.socketMiddleware);
 
 // Proxy agent TRƯỚC express.json — giữ raw body cho POST /jobs, /esid/*
 registerTcsAgentProxy(app);
 
 // PDF base64 từ worker portal (~0.5–2MB) — nới limit
 app.use(express.json({ limit: "12mb" }));
+appAuth.registerRoutes(app);
 registerPortalJobRoutes(app);
 
 /** Healthcheck Railway / load balancer — xác nhận cả process và Postgres. */
@@ -236,7 +247,7 @@ app.get("/api/ecargo-extension", (_req, res) => {
   respondChromeExtensionPackage(res, CHROME_EXTENSION_PACKAGES[2]);
 });
 
-app.get("/api/state", async (_req, res) => {
+app.get("/api/state", appAuth.requireAuth, async (_req, res) => {
   try {
     res.json(await loadState());
   } catch (e) {
@@ -247,7 +258,19 @@ app.get("/api/state", async (_req, res) => {
   }
 });
 
-app.post("/api/mutation", async (req, res) => {
+const mutationRateLimit = createMutationRateLimit();
+const aiRateLimit = createRateLimit({
+  max: Number(process.env.AI_RATE_LIMIT_MAX) > 0
+    ? Number(process.env.AI_RATE_LIMIT_MAX)
+    : 60,
+  windowMs: Number(process.env.AI_RATE_LIMIT_WINDOW_MS) > 0
+    ? Number(process.env.AI_RATE_LIMIT_WINDOW_MS)
+    : 60_000,
+  error: "Quá nhiều yêu cầu AI. Vui lòng thử lại sau.",
+  code: "AI_RATE_LIMITED",
+});
+
+app.post("/api/mutation", appAuth.requireAuth, mutationRateLimit, async (req, res) => {
   try {
     const body = req.body;
     if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -260,8 +283,12 @@ app.post("/api/mutation", async (req, res) => {
     res.json(next);
   } catch (e) {
     console.error("[api/mutation]", e);
-    const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
-    res.status(400).json({ error: msg || "Mutation failed" });
+    res.status(400).json(
+      mutationErrorPayload(e, {
+        isProduction,
+        fallback: "Không thể cập nhật dữ liệu.",
+      }),
+    );
   }
 });
 
@@ -269,7 +296,7 @@ app.post("/api/mutation", async (req, res) => {
  * Nhiều mutation trong một request — một lần khóa Postgres, một lần broadcast.
  * Dùng cho thao tác hàng loạt (quét eSID) thay vì N round-trip.
  */
-app.post("/api/mutations", async (req, res) => {
+app.post("/api/mutations", appAuth.requireAuth, mutationRateLimit, async (req, res) => {
   try {
     const list = req.body;
     if (!Array.isArray(list) || list.some((m) => !m || typeof m !== "object")) {
@@ -286,13 +313,19 @@ app.post("/api/mutations", async (req, res) => {
     res.json(next);
   } catch (e) {
     console.error("[api/mutations]", e);
-    const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
-    res.status(400).json({ error: msg || "Batch mutation failed" });
+    res.status(400).json(
+      mutationErrorPayload(e, {
+        isProduction,
+        fallback: "Không thể cập nhật dữ liệu hàng loạt.",
+      }),
+    );
   }
 });
 
 registerSheetsRoutes(app, { io });
 registerEcargoVctRoutes(app, { runMutation, loadState, io });
+app.use("/api/ai", appAuth.requireAuth);
+app.use("/api/ai", aiRateLimit);
 registerAiRoutes(app, { loadState });
 console.info("[api] ai (Gemini improvement report)");
 
@@ -332,10 +365,13 @@ app.get("*", (req, res, next) => {
 app.use((err, _req, res, _next) => {
   console.error("[http]", err);
   const status = Number(err?.statusCode || err?.status) || 500;
-  const safe =
-    isProduction && status >= 500
-      ? "Internal Server Error"
-      : String(err?.message || "Request failed");
+  const safe = isProduction
+    ? err?.type === "entity.parse.failed"
+      ? "Invalid JSON body"
+      : status >= 500
+        ? "Internal Server Error"
+        : String(err?.message || "Request failed")
+    : String(err?.message || "Request failed");
   res.status(status).json({ error: safe });
 });
 

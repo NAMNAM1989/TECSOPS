@@ -63,4 +63,23 @@ describe("customerDirectoryValidate — giữ vehicleType + DIM templates", () =
     expect(c.savedDimTemplates).toHaveLength(1);
     expect(c.defaultDimTemplateId).toBe("d1");
   });
+
+  it("server enforce Customer Code giống client", () => {
+    expect(validateCustomerDirectoryPayload([{ ...base, code: " abc " }])[0].code).toBe("ABC");
+    expect(() =>
+      validateCustomerDirectoryPayload([{ ...base, code: "A" }]),
+    ).toThrow(/2–5 chữ cái A–Z/);
+    expect(() =>
+      validateCustomerDirectoryPayload([{ ...base, code: "A@" }]),
+    ).toThrow(/2–5 chữ cái A–Z/);
+    expect(
+      validateCustomerDirectoryPayload([{ ...base, code: "AGENT-001" }])[0].code,
+    ).toBe("AGENT-001");
+    expect(
+      validateCustomerDirectoryPayload([{ ...base, code: "AGENT 001" }])[0].code,
+    ).toBe("AGENT001");
+    expect(() =>
+      validateCustomerDirectoryPayload([{ ...base, code: "AGENT@001" }]),
+    ).toThrow(/mã chỉ gồm/);
+  });
 });

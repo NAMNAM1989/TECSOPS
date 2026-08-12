@@ -98,7 +98,7 @@ export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
       items={items}
       triggerClassName={
         compact
-          ? "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky-500/35 bg-sky-50 text-sky-900 shadow-ui-sm transition hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus touch-manipulation"
+          ? "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-sky-500/35 bg-sky-50 text-sky-900 shadow-ui-sm transition hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus touch-manipulation"
           : "inline-flex min-h-9 items-center gap-1 rounded-xl border border-sky-500/35 bg-sky-50 px-2.5 text-[12px] font-bold text-sky-900 shadow-ui-sm transition hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
       }
     >

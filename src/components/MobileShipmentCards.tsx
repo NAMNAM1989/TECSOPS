@@ -82,7 +82,7 @@ function MobileQuickNumber({
 }) {
   return (
     <span
-      className="inline-flex h-9 min-w-[3.25rem] shrink-0 touch-manipulation items-center gap-1 rounded-xl bg-ui-surface-muted px-2"
+      className="inline-flex min-h-11 min-w-[3.25rem] shrink-0 touch-manipulation items-center gap-1 rounded-xl bg-ui-surface-muted px-2"
       onClick={(e) => e.stopPropagation()}
     >
       <span className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">

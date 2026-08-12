@@ -1,4 +1,5 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { resetDbPoolForTests } from "./dbPool.mjs";
 import {
   claimPortalJob,
   completePortalJob,
@@ -6,11 +7,25 @@ import {
   getPortalArtifact,
   isPortalWorkerAuthorized,
   portalWorkerConfigured,
+  resetPortalJobsMemoryForTests,
 } from "./portalJobs.mjs";
 
 describe("portalJobs memory fallback", () => {
-  beforeEach(() => {
+  const prevDatabaseUrl = process.env.DATABASE_URL;
+
+  beforeEach(async () => {
     process.env.PORTAL_WORKER_SECRET = "test-secret";
+    // Ép memory fallback — không phụ thuộc Postgres local.
+    delete process.env.DATABASE_URL;
+    await resetDbPoolForTests();
+    resetPortalJobsMemoryForTests();
+  });
+
+  afterEach(async () => {
+    if (prevDatabaseUrl == null) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prevDatabaseUrl;
+    await resetDbPoolForTests();
+    resetPortalJobsMemoryForTests();
   });
 
   it("create → claim → complete pdf artifact", async () => {

@@ -135,7 +135,7 @@ export function OpsMobileStickyHeader({
   }, [filteredViewRows]);
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1" data-testid="ops-mobile-sticky-header">
       {/* Hàng 1: brand · Live · cụm CTA icon (không chồng/che nhau) */}
       <div className="flex min-w-0 items-center gap-1.5">
         <div className="flex min-w-0 flex-1 items-center gap-1">
@@ -204,7 +204,7 @@ export function OpsMobileStickyHeader({
               }
               title="Vantage — kho TECS (TECS-TCS+TECS-SCSC), không gồm kho TCS/SCSC · ẩn khách"
               onClick={() => onCopyCargoDayReport("vantage")}
-              className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-emerald-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg bg-emerald-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {cargoReportCopying ? "…" : "Vantage"}
             </button>
@@ -216,7 +216,7 @@ export function OpsMobileStickyHeader({
               }
               title="Tecs — kho TECS (TECS-TCS+TECS-SCSC), không gồm kho TCS/SCSC"
               onClick={() => onCopyCargoDayReport("tecs")}
-              className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-teal-700 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg bg-teal-700 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {cargoReportCopying ? "…" : "Tecs"}
             </button>
@@ -228,7 +228,7 @@ export function OpsMobileStickyHeader({
               }
               title="TCS — chỉ kho TCS (không gồm TECS-TCS)"
               onClick={() => onCopyCargoDayReport("tcs")}
-              className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-sky-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg bg-sky-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {cargoReportCopying ? "…" : "TCS"}
             </button>
@@ -240,7 +240,7 @@ export function OpsMobileStickyHeader({
               }
               title="SCSC — chỉ kho SCSC (không gồm TECS-SCSC)"
               onClick={() => onCopyCargoDayReport("scsc")}
-              className="inline-flex h-8 touch-manipulation items-center rounded-lg bg-violet-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg bg-violet-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {cargoReportCopying ? "…" : "SCSC"}
             </button>
@@ -278,7 +278,7 @@ export function OpsMobileStickyHeader({
               <button
                 type="button"
                 onClick={() => setStatusExpanded(true)}
-                className="inline-flex h-9 min-w-9 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface px-2 text-[11px] font-bold text-ui-text-muted"
+                className="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface px-2 text-[11px] font-bold text-ui-text-muted"
                 aria-label="Lọc trạng thái"
                 title="Lọc trạng thái"
               >
@@ -289,7 +289,7 @@ export function OpsMobileStickyHeader({
               <button
                 type="button"
                 onClick={onClearFilters}
-                className="inline-flex h-9 shrink-0 touch-manipulation items-center justify-center rounded-xl px-2 text-[11px] font-bold text-ui-primary"
+                className="inline-flex min-h-11 shrink-0 touch-manipulation items-center justify-center rounded-xl px-2 text-[11px] font-bold text-ui-primary"
               >
                 Xóa
               </button>

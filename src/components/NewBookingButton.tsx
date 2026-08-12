@@ -15,7 +15,7 @@ export function NewBookingButton({ activeWarehouse, onAdd, iconOnly = false }: P
       <button
         type="button"
         onClick={() => onAdd(activeWarehouse)}
-        className="inline-flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-xl bg-ui-primary text-white shadow-ui-sm transition hover:bg-ui-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus active:scale-[0.98]"
+        className="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl bg-ui-primary text-white shadow-ui-sm transition hover:bg-ui-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus active:scale-[0.98]"
         title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (phím N)`}
         aria-label={`Thêm booking ${warehouseLabel[activeWarehouse]}`}
       >

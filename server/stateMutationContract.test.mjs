@@ -39,6 +39,25 @@ describe("state mutation contract (server)", () => {
     expect(afterDel.rows[0]?.id).toBe("c-1");
   });
 
+  it("canonicalize AWB hoàn chỉnh ở server khi ADD/UPDATE", () => {
+    const draft = baseContractRow("placeholder");
+    delete draft.id;
+    delete draft.stt;
+    draft.awb = "00012345678";
+    const afterAdd = applyMutation(structuredClone(baseContractState()), {
+      action: "ADD",
+      shipment: draft,
+    });
+    const added = afterAdd.rows.find((row) => row.awb.startsWith("000-"));
+    expect(added?.awb).toBe("000-1234 5678");
+    const afterUpdate = applyMutation(afterAdd, {
+      action: "UPDATE",
+      id: added.id,
+      patch: { awb: "00187654321" },
+    });
+    expect(afterUpdate.rows.find((row) => row.id === added.id)?.awb).toBe("001-8765 4321");
+  });
+
   it("SET_AIRLINE_LABEL_OVERRIDES", () => {
     const next = applyMutation(structuredClone(baseContractState()), {
       action: "SET_AIRLINE_LABEL_OVERRIDES",
@@ -78,6 +97,27 @@ describe("state mutation contract (server)", () => {
     const afterAdd = applyMutation(structuredClone(state), addMut);
     const added = afterAdd.rows.find((r) => String(r.awb).includes("978"));
     expect(added?.status).toBe("RECEIVED");
+  });
+
+  it("server chặn AWB hoàn chỉnh trùng nhưng cho phép nhiều booking AWB dở", () => {
+    const duplicate = baseContractRow("placeholder");
+    delete duplicate.id;
+    delete duplicate.stt;
+    expect(() =>
+      applyMutation(structuredClone(baseContractState()), {
+        action: "ADD",
+        shipment: duplicate,
+      }),
+    ).toThrow(/AWB đã tồn tại/);
+
+    const partialState = baseContractState();
+    partialState.rows[0].awb = "618";
+    const partial = { ...duplicate, awb: "618", sessionDate: "2026-05-29" };
+    const next = applyMutation(partialState, {
+      action: "ADD",
+      shipment: partial,
+    });
+    expect(next.rows.filter((row) => row.awb === "618")).toHaveLength(2);
   });
 
   it("RESET_TRIAL_DATA bị chặn khi NODE_ENV=production trừ ALLOW_RESET_TRIAL_DATA=1", () => {

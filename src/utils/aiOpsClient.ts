@@ -51,6 +51,14 @@ export type AiImprovementReportResult = {
   code?: string;
 };
 
+export type AiFeatureResult<T> = {
+  ok: boolean;
+  model?: string;
+  result?: T;
+  error?: string;
+  code?: string;
+};
+
 /** Fire-and-forget — không chặn UI nếu log fail. */
 export function trackAiEvent(
   action: string,
@@ -105,6 +113,28 @@ export async function requestImprovementReport(
     return {
       ok: false,
       error: String(data.error || res.statusText || "Tạo báo cáo thất bại"),
+      code: data.code,
+    };
+  }
+  return data;
+}
+
+export async function requestAiFeature<T>(
+  route: string,
+  payload: Record<string, unknown>,
+): Promise<AiFeatureResult<T>> {
+  const safeRoute = String(route || "").replace(/[^a-z0-9-]/gi, "");
+  const res = await fetch(`/api/ai/${safeRoute}`, {
+    ...credFetch,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as AiFeatureResult<T>;
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: String(data.error || res.statusText || "AI thất bại"),
       code: data.code,
     };
   }

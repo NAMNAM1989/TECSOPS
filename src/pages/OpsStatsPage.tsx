@@ -36,6 +36,7 @@ import {
   todaySessionYmd,
   type StatsPeriodMode,
 } from "../utils/opsStatsPeriod";
+import { requestAiFeature, trackAiEvent } from "../utils/aiOpsClient";
 
 type Props = {
   rows: readonly Shipment[];
@@ -278,6 +279,8 @@ export function OpsStatsPage({
   const [exporting, setExporting] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>("lots");
   const [lotSearch, setLotSearch] = useState("");
+  const [aiSummary, setAiSummary] = useState<unknown>(null);
+  const [aiSummarizing, setAiSummarizing] = useState(false);
 
   const range = useMemo(
     () =>
@@ -376,6 +379,26 @@ export function OpsStatsPage({
     }
   }, [dest, mode, range, stats, toast, warehouse]);
 
+  const onAiEndOfDay = useCallback(async () => {
+    const sessionDate = mode === "today" ? today : mode === "day" ? dayYmd : range.toYmd;
+    setAiSummarizing(true);
+    setAiSummary(null);
+    try {
+      const response = await requestAiFeature<unknown>("end-of-day-summary", { sessionDate });
+      if (!response.ok) throw new Error(response.error || "Không tạo được tóm tắt.");
+      setAiSummary(response.result ?? null);
+      trackAiEvent("ai_end_day_ui_ok", { sessionDate });
+    } catch (reason) {
+      toast.error(
+        reason instanceof Error ? reason.message : "Không tạo được tóm tắt.",
+        "AI cuối ngày",
+      );
+      trackAiEvent("ai_end_day_ui_fail");
+    } finally {
+      setAiSummarizing(false);
+    }
+  }, [dayYmd, mode, range.toYmd, toast, today]);
+
   const t = stats.totals;
   const deltaPositive = t.deltaKg > 0;
 
@@ -409,15 +432,25 @@ export function OpsStatsPage({
                 >
                   {exporting ? "Đang xuất…" : "Xuất Excel"}
                 </Button>
+                <Button
+                  disabled={aiSummarizing || !ready}
+                  onClick={() => void onAiEndOfDay()}
+                  size="sm"
+                  variant="secondary"
+                >
+                  {aiSummarizing ? "AI đang tóm tắt…" : "AI cuối ngày"}
+                </Button>
               </div>
             </div>
 
             <div
               className="rounded-2xl border border-teal-100/80 bg-white/80 p-3 shadow-ui-sm backdrop-blur-sm"
-              role="tablist"
-              aria-label="Bộ lọc thống kê"
             >
-              <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+              <div
+                aria-label="Bộ lọc thống kê"
+                className="mb-2.5 flex flex-wrap items-center gap-1.5"
+                role="tablist"
+              >
                 {PERIOD_MODES.map((p) => {
                   const active = mode === p.id;
                   return (
@@ -565,6 +598,23 @@ export function OpsStatsPage({
                 tone="amber"
               />
             </div>
+
+            {aiSummary ? (
+              <section
+                aria-label="Tóm tắt AI cuối ngày"
+                className="rounded-2xl border border-violet-200 bg-violet-50 p-4"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h2 className="font-bold text-violet-950">Tóm tắt AI cuối ngày</h2>
+                  <Button onClick={() => setAiSummary(null)} size="sm" variant="ghost">
+                    Ẩn
+                  </Button>
+                </div>
+                <pre className="whitespace-pre-wrap text-sm text-violet-950">
+                  {JSON.stringify(aiSummary, null, 2)}
+                </pre>
+              </section>
+            ) : null}
 
             <div className="flex flex-wrap items-center gap-2">
               {t.missingDimLots > 0 ? (

@@ -5,6 +5,14 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
+    environmentMatchGlobs: [
+      ["server/**", "node"],
+      // Tests đọc file/path Node — không chạy dưới jsdom (fs bị externalize).
+      ["src/utils/chromeExtensionPackage.test.ts", "node"],
+      ["src/utils/portalSessionIdentity.test.ts", "node"],
+      ["src/utils/tcsDimRecordForm.test.ts", "node"],
+      ["src/utils/tcsOcrAgentEndpoints.test.ts", "node"],
+    ],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx", "server/**/*.test.mjs"],
   },
 });

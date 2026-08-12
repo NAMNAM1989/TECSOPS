@@ -25,6 +25,18 @@ export function getDbPool() {
   return pool;
 }
 
+/** Vitest: bỏ cache pool khi test muốn memory-fallback (xóa DATABASE_URL). */
+export async function resetDbPoolForTests() {
+  if (!pool) return;
+  const p = pool;
+  pool = null;
+  try {
+    await p.end();
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function withDbClient(fn) {
   const p = getDbPool();
   if (!p) {

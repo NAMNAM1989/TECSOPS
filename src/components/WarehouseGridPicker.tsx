@@ -102,7 +102,9 @@ export function WarehouseGridPicker({
             <button
               type="button"
               onClick={() => onSelect(wh)}
-              className="block w-full rounded-md text-left active:scale-[0.99]"
+              className={`block w-full rounded-md text-left active:scale-[0.99] ${
+                compact ? "min-h-11" : ""
+              }`}
             >
               <div className={`flex min-w-0 items-center gap-1 ${compact ? "pr-5" : "pr-5"}`}>
                 <span

@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Shipment } from "../types/shipment";
 import { OPS } from "../styles/opsModalStyles";
@@ -14,6 +14,7 @@ import {
   printCsdForShipment,
   suggestCsdTransfer,
 } from "../utils/csdForms";
+import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 
 type Props = {
   open: boolean;
@@ -31,6 +32,10 @@ export function CsdPrintModal({ open, shipment, onClose }: Props) {
   const [origin, setOrigin] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocusTrap(open, dialogRef, () => {
+    if (!busy) onClose();
+  });
 
   useEffect(() => {
     if (!open || !shipment || !carrier || !profile) return;
@@ -44,15 +49,6 @@ export function CsdPrintModal({ open, shipment, onClose }: Props) {
       dest: (shipment.dest || "").slice(0, 3),
     });
   }, [open, shipment, carrier, profile, ra?.opsTeam]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, busy, onClose]);
 
   if (!open || !shipment || !carrier || !profile) return null;
 
@@ -98,6 +94,7 @@ export function CsdPrintModal({ open, shipment, onClose }: Props) {
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
+      ref={dialogRef}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onClose();
       }}

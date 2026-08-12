@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 import {
   type DimDivisor,
   type DimPieceLine,
@@ -429,6 +430,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   );
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const listSectionRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocusTrap(true, dialogRef, onClose);
 
   // Mẫu DIM đã lưu
   const [dimTemplates, setDimTemplates] = useState<DimTemplate[]>(() => loadDimTemplates());
@@ -588,8 +591,9 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
       setNewTemplateName("");
       setShowSaveTemplateForm(false);
       setActionNote(`💾 Đã lưu thành công mẫu "${nameToSave}"!`);
-    } catch (err: any) {
-      setActionNote(`❌ Lỗi lưu mẫu: ${err?.message || err}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setActionNote(`❌ Lỗi lưu mẫu: ${message}`);
     }
   };
 
@@ -804,6 +808,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
       role="dialog"
       aria-modal="true"
       aria-labelledby="dim-modal-title"
+      ref={dialogRef}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -962,7 +967,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
               <button
                 type="button"
                 onClick={() => setMobileMode("quick")}
-                className={`min-h-9 flex-1 touch-manipulation rounded-[10px] text-[12px] font-bold transition ${
+                className={`min-h-11 flex-1 touch-manipulation rounded-[10px] text-[12px] font-bold transition ${
                   mobileMode === "quick"
                     ? "bg-violet-600 text-white shadow-sm"
                     : "text-slate-600"
@@ -976,7 +981,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
                   setMobileMode("measure");
                   setShowPasteMobile(true);
                 }}
-                className={`min-h-9 flex-1 touch-manipulation rounded-[10px] text-[12px] font-bold transition ${
+                className={`min-h-11 flex-1 touch-manipulation rounded-[10px] text-[12px] font-bold transition ${
                   mobileMode === "measure"
                     ? "bg-emerald-600 text-white shadow-sm"
                     : "text-slate-600"

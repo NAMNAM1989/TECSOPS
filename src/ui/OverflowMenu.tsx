@@ -69,7 +69,7 @@ export function OverflowMenu({
         className={
           triggerClassName ||
           (compact
-            ? "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus touch-manipulation"
+            ? "inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus touch-manipulation"
             : "inline-flex min-h-9 items-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-2.5 text-[12px] font-semibold text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus")
         }
       >

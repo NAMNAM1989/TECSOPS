@@ -145,7 +145,7 @@ export async function parseCustomerFullProfileWorkbook(buffer: ArrayBuffer | Buf
   const inputBuffer =
     typeof Buffer !== "undefined" && buffer instanceof ArrayBuffer
       ? Buffer.from(buffer)
-      : (buffer as any);
+      : (buffer as Parameters<typeof wb.xlsx.load>[0]);
   await wb.xlsx.load(inputBuffer);
 
   const ws =

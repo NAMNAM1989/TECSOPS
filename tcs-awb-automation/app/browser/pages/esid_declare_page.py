@@ -319,14 +319,25 @@ class EsidDeclarePage:
             if w not in rare_unique:
                 rare_unique.append(w)
         queries: list[str] = []
-        # Luôn tên đầy đủ trước — tránh query "NAM" chọn nhầm shipper
+        short_tail = None
+        if distinctive:
+            tail = distinctive[-1]
+            if 3 <= len(tail) <= 8 and distinctive.count(tail) == 1:
+                short_tail = tail
+        if short_tail:
+            # Master TCS thường lưu tên viết tắt ở cuối tên pháp lý dài
+            # (vd. «... CHUYEN PHAT NHANH PCS» → query PCS trước).
+            queries.append(short_tail)
+        # Tên đầy đủ vẫn đứng trước các query đầu tên để tránh "NAM" chọn nhầm.
         queries.append(raw if len(raw) <= 48 else raw[:48].rstrip())
         if len(distinctive) >= 2:
             queries.append(" ".join(distinctive[: min(3, len(distinctive))]))
         if len(rare_unique) >= 2:
             queries.append(" ".join(rare_unique[:2]))
+        if short_tail:
+            queries.append(" ".join(distinctive[-min(4, len(distinctive)) :]))
         long_rare = [w for w in rare_unique if len(w) >= 4]
-        if long_rare:
+        if long_rare and not short_tail:
             queries.append(max(long_rare, key=len))
             queries.append(long_rare[0])
         elif len(rare_unique) == 1 and len(distinctive) < 2:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -245,6 +246,18 @@ class SessionManager:
         else:
             filled = self._try_fill_credentials_only()
 
+        # Tự mở trang TCS + focus (headed) hoặc chụp ảnh (headless/Railway).
+        # Sau goto ESID, cookie hết có thể đẩy về AwbLogin — OCR lại, đừng tin marker.
+        if show_portal and self._has_live_session():
+            mid = self.status()
+            self._show_tcs_portal(logged_in=mid.logged_in)
+            if auto_login and self.session is not None:
+                self._wait_portal_settle(AwbPortalPage(self.session.page, self.locators))
+                if not self.status().logged_in:
+                    filled, login_msg = self._ensure_login()
+                    if self.status().logged_in:
+                        self._show_tcs_portal(logged_in=True)
+
         st = self.status()
         st.credentials_filled = filled
         st.visible_ok = visible_ok and not headless
@@ -255,24 +268,21 @@ class SessionManager:
         elif login_msg and st.logged_in:
             st.message = login_msg
 
-        # Tự mở trang TCS + focus (headed) hoặc chụp ảnh (headless/Railway)
         if show_portal and self._has_live_session():
-            self._show_tcs_portal(logged_in=st.logged_in)
             if not headless:
                 self.focus_window()
                 try:
-                    import time as _time
-
-                    _time.sleep(0.25)
+                    time.sleep(0.25)
                     self.focus_window()
                 except Exception:
                     pass
                 st.visible_ok = True
-                st.message = (
-                    "Đã tự mở trang TCS trên Chrome — sẵn sàng Quét/Điền"
-                    if st.logged_in
-                    else "Đã tự mở trang đăng nhập TCS trên Chrome — nhập CAPTCHA trên cửa sổ đó"
-                )
+                if not login_msg or st.logged_in:
+                    st.message = (
+                        "Đã tự mở trang TCS trên Chrome — sẵn sàng Quét/Điền"
+                        if st.logged_in
+                        else "Đã tự mở trang đăng nhập TCS trên Chrome — nhập CAPTCHA trên cửa sổ đó"
+                    )
             else:
                 shot = self._capture_login_preview()
                 if shot.get("preview_file"):
@@ -285,9 +295,12 @@ class SessionManager:
                 )
                 if headed_err:
                     tip += f" (headed lỗi: {headed_err[:120]})"
-                st.message = (
-                    f"{'Đã login' if st.logged_in else 'Chrome headless đã mở'} — {tip}"
-                )
+                if login_msg and not st.logged_in:
+                    st.message = f"{login_msg} — {tip}"
+                elif not login_msg:
+                    st.message = (
+                        f"{'Đã login' if st.logged_in else 'Chrome headless đã mở'} — {tip}"
+                    )
         return st
 
     def _capture_login_preview(self) -> dict[str, Any]:
@@ -366,23 +379,95 @@ class SessionManager:
         except OSError:
             pass
 
+    def _has_logged_in_ui(self, portal: AwbPortalPage) -> bool:
+        """Cần thấy UI ESID/Agent — URL /Awb/Agent lúc redirect vẫn giả 'đã ĐN'."""
+        try:
+            page = portal.page
+            awb_first = page.locator("#awbFirst")
+            if awb_first.count() > 0 and awb_first.first.is_visible():
+                return True
+            if page.get_by_text("DANH SÁCH ESID", exact=False).count() > 0:
+                return True
+            if page.get_by_placeholder("AWB#").count() > 0:
+                return True
+            kiem_tra = page.get_by_role("button", name="KIỂM TRA")
+            if kiem_tra.count() > 0 and kiem_tra.first.is_visible():
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _wait_portal_settle(self, portal: AwbPortalPage) -> None:
+        """Chờ redirect login hoặc UI đã ĐN — tránh tin marker khi URL chưa kịp đổi."""
+        try:
+            portal.page.wait_for_load_state("domcontentloaded", timeout=8_000)
+        except Exception:
+            pass
+        deadline = time.time() + 6.0
+        last_url = ""
+        stable = 0
+        while time.time() < deadline:
+            url = (portal.page.url or "").lower()
+            if "awblogin" in url or "checkoutlogin" in url:
+                break
+            if self._has_logged_in_ui(portal) or portal.is_login_page():
+                break
+            if url == last_url:
+                stable += 1
+                # URL đứng yên mà chưa có UI/login → hết redirect, đừng chờ đủ 6s
+                if stable >= 8:
+                    break
+            else:
+                stable = 0
+                last_url = url
+            try:
+                portal.page.wait_for_timeout(250)
+            except Exception:
+                break
+
+    def _is_authenticated_app(self, portal: AwbPortalPage) -> bool:
+        """Chỉ tin đã ĐN khi URL app + thấy UI, không phải trang login / đang redirect."""
+        if portal.is_login_page():
+            return False
+        url = (portal.page.url or "").lower()
+        if not any(p in url for p in ("/esid/", "/awb/agent")):
+            return False
+        return self._has_logged_in_ui(portal)
+
+    def _goto_login_form(self, portal: AwbPortalPage) -> None:
+        try:
+            BrowserSession._goto_fast(portal.page, self.settings.base_url)
+        except Exception:
+            return
+        self._wait_portal_settle(portal)
+
     def _ensure_login(self) -> tuple[bool, str]:
         if not self._has_live_session():
             return False, ""
         assert self.session is not None
         portal = AwbPortalPage(self.session.page, self.locators)
         expected = str(self.settings.tcs_username or "").strip()
-        if not portal.is_login_page():
+        self._wait_portal_settle(portal)
+        if self._is_authenticated_app(portal):
             marker = self._read_login_marker()
             if expected and marker and marker.lower() == expected.lower():
                 return False, f"Session còn hiệu lực ({expected})"
             # Session profile có thể thuộc user khác / chưa gắn marker → ĐN lại đúng user
             if expected:
                 self._force_logout_wrong_user(portal)
+                self._wait_portal_settle(portal)
             elif self.settings.prefer_session:
                 return False, "Session còn hiệu lực — không cần CAPTCHA"
         if not self.settings.has_login_credentials:
             return False, "Thiếu TCS_USERNAME/TCS_PASSWORD trong .env"
+        # URL /Awb/Agent lúc cookie hết: is_login_page=False nhưng chưa có UI
+        # → ensure_logged_in_smart sẽ bỏ OCR. Phải về AwbLogin trước.
+        if not portal.is_login_page() and not self._is_authenticated_app(portal):
+            self._goto_login_form(portal)
+            if self._is_authenticated_app(portal):
+                marker = self._read_login_marker()
+                if expected and marker and marker.lower() == expected.lower():
+                    return False, f"Session còn hiệu lực ({expected})"
         # Agent HTTP: chỉ OCR (không chặn lâu chờ tay). Script live dùng timeout đầy đủ.
         ok, msg = ensure_logged_in_smart(
             portal,
@@ -396,7 +481,9 @@ class SessionManager:
         )
         if ok and expected:
             self._write_login_marker(expected)
-        return True, msg if ok else f"NEEDS_LOGIN: {msg}"
+        if ok:
+            return True, msg
+        return False, f"NEEDS_LOGIN: {msg}"
 
     def _try_fill_credentials_only(self) -> bool:
         if not self.settings.has_login_credentials:

@@ -4,12 +4,12 @@ export const MOBILE = {
     "flex w-full max-h-[min(92vh,92dvh)] max-w-[100vw] flex-col rounded-t-[28px] border border-ui-border bg-ui-surface shadow-[0_-8px_32px_rgba(15,23,42,0.12)] animate-cnee-slide-up",
   sheetBackdrop:
     "fixed inset-0 z-[470] flex flex-col justify-end bg-black/40 md:hidden",
-  /** Card lô — AWB hàng riêng, tương thích mọi độ rộng điện thoại */
-  card: "relative overflow-clip rounded-xl border border-ui-border/80 bg-ui-surface",
+  /** Card lô — AWB hàng riêng, không truncate số */
+  card: "relative overflow-hidden rounded-xl border border-ui-border/80 bg-ui-surface",
   cardInner: "relative z-10 bg-transparent px-3 py-2",
   cardMeta: "truncate font-shipment-data text-[11px] font-medium leading-snug text-ui-text-muted",
   customerName: "truncate text-[12px] font-semibold leading-snug text-ui-text",
-  awb: "font-shipment-data text-[15px] font-extrabold leading-tight tracking-tight tabular-nums text-ui-danger",
+  awb: "font-shipment-data text-[15px] font-extrabold leading-tight tracking-tight tabular-nums text-ui-danger whitespace-nowrap",
   awbEmpty: "text-[13px] font-semibold leading-tight text-ui-primary hover:text-ui-primary-hover",
   chip: "inline-flex items-center rounded-md bg-ui-surface-muted px-1.5 py-px text-[9px] font-bold uppercase tracking-wide tabular-nums text-ui-text",
   chipCutoff:

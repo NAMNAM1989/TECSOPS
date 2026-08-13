@@ -28,6 +28,7 @@ import {
 import { MOBILE, mobileOnlyVisibility } from "../styles/mobileOpsStyles";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
+import { formatAwb } from "../utils/awbFormat";
 
 type MobileFlightMeta = {
   flight: string;
@@ -147,7 +148,7 @@ const MobileShipmentCard = memo(
         style={{
           contentVisibility: "auto",
           containIntrinsicSize:
-            flightMeta.plain || hasNote ? "0 64px" : "0 52px",
+            flightMeta.plain || hasNote ? "0 118px" : "0 96px",
         }}
         className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
           selected ? "ring-2 ring-ui-primary/40" : ""
@@ -156,8 +157,8 @@ const MobileShipmentCard = memo(
         }`}
       >
         <div className={MOBILE.cardInner}>
-          {/* Hàng 1: AWB · Status · ⋮ — khoảng cách đủ để bấm bằng ngón tay */}
-          <div className="flex min-w-0 items-center gap-1.5">
+          {/* Hàng 1: AWB đủ 11 số — không chung hàng với status (iOS select đè số). */}
+          <div className="flex min-w-0 items-center gap-1">
             <button
               type="button"
               className="min-w-0 flex-1 py-0.5 text-left active:opacity-90"
@@ -165,28 +166,22 @@ const MobileShipmentCard = memo(
               aria-label={awbTrim ? `Sửa lô ${awbTrim}` : "Thêm AWB"}
             >
               {awbTrim ? (
-                <span className={`block min-w-0 truncate ${MOBILE.awb}`} title={awbTrim}>
-                  {awbTrim}
-                  {hawbTrim ? (
-                    <span className="ml-0.5 font-shipment-data text-[10px] font-bold text-ui-text-muted">
-                      /{hawbTrim}
-                    </span>
-                  ) : null}
+                <span className={`block ${MOBILE.awb}`} title={awbTrim}>
+                  {formatAwb(awbTrim)}
                 </span>
               ) : (
                 <span className={MOBILE.awbEmpty}>+ AWB</span>
               )}
+              {hawbTrim ? (
+                <span className="mt-0.5 block truncate font-shipment-data text-[10px] font-bold text-ui-text-muted">
+                  HAWB {hawbTrim}
+                </span>
+              ) : null}
             </button>
             <div
-              className="flex shrink-0 items-center gap-1.5"
+              className="shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
-              <StatusSelect
-                compact
-                warehouse={row.warehouse}
-                value={row.status}
-                onChange={(s) => onUpdate(row.id, { status: s })}
-              />
               <ShipmentRowActionsMenu
                 compact
                 isMobile
@@ -199,7 +194,7 @@ const MobileShipmentCard = memo(
             </div>
           </div>
 
-          {/* Hàng 2: Short Code khách + K/Kg (ô lớn hơn) */}
+          {/* Hàng 2: khách · status gọn · K/Kg */}
           <div className="mt-1 flex min-w-0 items-center gap-1.5">
             <button
               type="button"
@@ -214,9 +209,15 @@ const MobileShipmentCard = memo(
               </span>
             </button>
             <div
-              className="flex shrink-0 items-center gap-1.5"
+              className="flex shrink-0 items-center gap-1"
               onClick={(e) => e.stopPropagation()}
             >
+              <StatusSelect
+                compact
+                warehouse={row.warehouse}
+                value={row.status}
+                onChange={(s) => onUpdate(row.id, { status: s })}
+              />
               <MobileQuickNumber
                 label="K"
                 value={row.pcs}

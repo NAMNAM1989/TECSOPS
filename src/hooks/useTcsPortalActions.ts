@@ -96,6 +96,8 @@ export type EsidDeclarePreviewState = {
   warnings: string[];
   valuesSummary: string;
   executor: "extension" | "playwright";
+  /** Kho đã Điền — HOÀN TẤT phải gửi đúng agent này, không theo tab đang chọn. */
+  warehouse: TcsPortalWarehouse;
 };
 
 export type TcsPortalActionsOpts = {
@@ -279,50 +281,56 @@ export function useTcsPortalActions({
   /** @deprecated Không còn portal-worker / máy kho từ xa. */
   const refreshPortalWorker = useCallback(async () => null, []);
 
-  const ensureSessionReady = useCallback(async (): Promise<boolean> => {
+  const ensureSessionReady = useCallback(async (
+    warehouse: TcsPortalWarehouse = portalWarehouse
+  ): Promise<boolean> => {
+    const opts = { warehouse };
+    const sameWh = warehouse === portalWarehouse;
     // Fast-path: đã login từ poll gần đây — bỏ 2 RTT ping/status trước mỗi PDF
-    if (health?.ok && session?.open && session?.logged_in) {
+    if (sameWh && health?.ok && session?.open && session?.logged_in) {
       return true;
     }
-    const online = await pingTcsAgent(3500, agentOpts);
-    setHealth(online);
+    const online = await pingTcsAgent(3500, opts);
+    if (sameWh) setHealth(online);
     if (!online?.ok) {
       setError(agentOfflineHint(getTcsAgentBaseUrl()));
       return false;
     }
-    let s = online.session || (await fetchTcsSessionStatus(agentOpts));
-    setSession(s);
+    let s = online.session || (await fetchTcsSessionStatus(opts));
+    if (sameWh) setSession(s);
     // Ext Đồng bộ chỉ login tab Chrome user — agent Playwright có thể chưa mở.
     // Tự mở session khi tải PDF / điền (không bắt user bấm Login riêng).
     if (!s?.open || !s?.logged_in) {
       const wantVisible = playwrightLocal || online.headless === false;
       setBusyLabel(
         wantVisible
-          ? `Đang mở Chrome agent ${portalWarehouse} (PDF/Điền)…`
-          : `Đang khởi tạo phiên agent ${portalWarehouse}…`
+          ? `Đang mở Chrome agent ${warehouse} (PDF/Điền)…`
+          : `Đang khởi tạo phiên agent ${warehouse}…`
       );
       const opened = await openTcsAgentSession({
         visible: wantVisible,
-        warehouse: portalWarehouse,
+        warehouse,
       });
       if (opened.ok === false && opened.error === "AGENT_OFFLINE") {
         setError(opened.message || agentOfflineHint(getTcsAgentBaseUrl()));
         return false;
       }
       s = opened;
-      setSession(opened);
-      setHealth((prev) =>
-        prev
-          ? { ...prev, ok: true, session: opened }
-          : { ok: true, session: opened }
-      );
+      if (sameWh) {
+        setSession(opened);
+        setHealth((prev) =>
+          prev
+            ? { ...prev, ok: true, session: opened }
+            : { ok: true, session: opened }
+        );
+      }
     }
     if (!s?.open) {
       setError(
         (s?.message && String(s.message).trim()) ||
           (playwrightLocal
-            ? `Không mở được agent headed local ${portalWarehouse}. Chạy npm run portal:headed:local.`
-            : `Không mở được agent cloud ${portalWarehouse}. ` +
+            ? `Không mở được agent headed local ${warehouse}. Chạy npm run portal:headed:local.`
+            : `Không mở được agent cloud ${warehouse}. ` +
               "Kiểm tra Railway /tcs-agent hoặc chạy agent local.")
       );
       return false;
@@ -331,10 +339,10 @@ export function useTcsPortalActions({
       const headless = !playwrightLocal && online.headless !== false;
       setError(
         headless
-          ? "Agent cloud chưa login — bấm ĐN để OCR CAPTCHA / khôi phục session (volume browser_profile)."
-          : "Agent Chrome đang ở trang login — nhập CAPTCHA trên cửa sổ agent rồi thử lại."
+          ? `Agent cloud ${warehouse} chưa login — bấm ĐN kho này để OCR CAPTCHA / khôi phục session.`
+          : `Agent Chrome kho ${warehouse} đang ở trang login — nhập CAPTCHA trên cửa sổ agent rồi thử lại.`
       );
-      await refreshHealth();
+      if (sameWh) await refreshHealth();
       return false;
     }
     return true;
@@ -991,7 +999,7 @@ export function useTcsPortalActions({
           if (ex === "agent") {
             executor = "playwright";
             setBusyLabel(`Agent cloud ${rowPortal} điền …${digits.slice(-8)}…`);
-            if (!(await ensureSessionReady())) {
+            if (!(await ensureSessionReady(rowPortal))) {
               // Giữ lỗi từ ensureSessionReady; thử Ext nếu còn trong order.
               continue;
             }
@@ -1085,6 +1093,7 @@ export function useTcsPortalActions({
           warnings: warn,
           valuesSummary: bits.join(" · "),
           executor,
+          warehouse: rowPortal,
         });
         setMessage(
           executor === "extension"
@@ -1133,27 +1142,29 @@ export function useTcsPortalActions({
       setBusyLabel(`HOÀN TẤT ESID …${target.awb.slice(-8)}…`);
       const t0 = performance.now();
       try {
+        const submitWh =
+          asTcsPortalWarehouse(target.warehouse) || portalWarehouse;
         if (target.executor === "extension") {
-          const opened = await openTcsExtensionTab(extOpts);
+          const opened = await openTcsExtensionTab({ warehouse: submitWh });
           setExtension(opened);
           if (!opened.ok) {
             setError(
               opened.message ||
-                `Không mở được tab TCS của ${tcsExtLabel(portalWarehouse)}`
+                `Không mở được tab TCS của ${tcsExtLabel(submitWh)}`
             );
             return;
           }
           setMessage(
-            `Đã mở tab TCS cho AWB …${target.awb.slice(-8)} — kiểm tra và bấm HOÀN TẤT trực tiếp trên TCS.`
+            `Đã mở tab TCS (${submitWh}) cho AWB …${target.awb.slice(-8)} — kiểm tra và bấm HOÀN TẤT trực tiếp trên TCS.`
           );
           return;
         }
-        if (!(await ensureSessionReady())) return;
+        if (!(await ensureSessionReady(submitWh))) return;
         let res = await declareSubmitTcsEsid({
           awb: target.awb,
           shipment_id: target.shipmentId || undefined,
           confirm_submit: true,
-          warehouse: portalWarehouse,
+          warehouse: submitWh,
         });
         for (let i = 0; i < 40 && res.error === "BUSY"; i++) {
           setBusyLabel(`HOÀN TẤT ESID …${target.awb.slice(-8)} — chờ…`);
@@ -1162,7 +1173,7 @@ export function useTcsPortalActions({
             awb: target.awb,
             shipment_id: target.shipmentId || undefined,
             confirm_submit: true,
-            warehouse: portalWarehouse,
+            warehouse: submitWh,
           });
         }
         const sec = ((performance.now() - t0) / 1000).toFixed(1);

@@ -28,6 +28,19 @@ export const statusLabelShort: Record<ShipmentStatus, string> = {
   COMPLETED: "Hoàn thành",
 };
 
+/** Nhãn cực ngắn — card điện thoại. Native <select> iOS phình theo option dài và đè AWB. */
+export const statusLabelCompact: Record<ShipmentStatus, string> = {
+  PENDING: "Booking",
+  RECEIVED: "Nhận",
+  VOLUME_DONE: "Volume",
+  CUSTOMS: "HQ",
+  SECURITY: "AN",
+  OLA_PULL: "OLA",
+  RECEPTION_COMPLETED: "HT",
+  WEIGH_SLIP: "Tờ cân",
+  COMPLETED: "Xong",
+};
+
 /** Icon ngắn kèm text — không chỉ dựa vào màu. */
 export const statusIcon: Record<ShipmentStatus, string> = {
   PENDING: "○",

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { EsidSettingsMenu } from "./EsidSettingsMenu";
 import type { TcsPortalActions } from "../hooks/useTcsPortalActions";
-import { portalPolicyUsesAgent } from "../utils/portalExecutorPolicy";
+import {
+  portalPolicyUsesAgent,
+  shouldLockToExtensionVisual,
+} from "../utils/portalExecutorPolicy";
 import {
   loadTcsExtLoginPrefs,
   saveTcsExtLoginPrefs,
@@ -127,8 +130,16 @@ export function TcsPortalInlineBar({
       return;
     }
 
-    // Trực quan + có Ext path: không ĐN agent ẩn.
-    if (visualControl && !isMobile) {
+    // Không có Ext trên máy này. Trực quan chỉ khóa khi Ext online —
+    // máy khác / chưa cài Ext phải ĐN agent cloud đúng kho.
+    if (
+      shouldLockToExtensionVisual({
+        isMobile,
+        visualControl,
+        extensionOnline: Boolean(ext?.ok),
+        policy: tcs.executorPolicy,
+      })
+    ) {
       setShowExtLogin(true);
       window.alert(
         `Chế độ trực quan: cần ${extLabel} online để ĐN trên tab Chrome.\n` +
@@ -201,7 +212,14 @@ export function TcsPortalInlineBar({
       return;
     }
 
-    if (visualControl && !isMobile) {
+    if (
+      shouldLockToExtensionVisual({
+        isMobile,
+        visualControl,
+        extensionOnline: Boolean(ext?.ok),
+        policy: tcs.executorPolicy,
+      })
+    ) {
       window.alert(
         `Chế độ trực quan: cần ${extLabel} để Quét trên tab Chrome (không chạy agent ẩn).\n` +
           "Reload Ext hoặc tắt «Trực quan» nếu muốn Quét bằng agent cloud."

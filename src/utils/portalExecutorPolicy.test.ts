@@ -98,6 +98,13 @@ describe("resolvePortalExecutorOrder", () => {
         extensionOnline: false,
       })
     ).toEqual(["extension", "agent"]);
+    expect(
+      shouldLockToExtensionVisual({
+        isMobile: false,
+        visualControl: true,
+        extensionOnline: false,
+      })
+    ).toBe(false);
   });
 
   it("ext-only / agent-only / remote-only", () => {

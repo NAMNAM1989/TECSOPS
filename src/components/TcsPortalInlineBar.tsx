@@ -265,19 +265,19 @@ export function TcsPortalInlineBar({
       : agentLoggedIn
         ? "Agent cloud đã login"
         : agentOk
-          ? "Agent cloud — cần ĐN"
+          ? "Agent cloud — cần Đăng Nhập TCS"
           : extOk
-            ? `${extLabel} — cần ĐN`
+            ? `${extLabel} — cần Đăng Nhập TCS`
             : usesAgent
               ? "Agent cloud offline"
               : "Cần Chrome Ext";
 
   const shortStatus = loggedIn
-    ? "Đã ĐN"
+    ? "Đã Đăng Nhập TCS"
     : canOperate
       ? isMobile
         ? "Chờ session"
-        : "Chờ ĐN"
+        : "Chờ Đăng Nhập TCS"
       : "Offline";
 
   return (
@@ -378,9 +378,9 @@ export function TcsPortalInlineBar({
               }
               void doLogin();
             }}
-            title="Đăng nhập portal (Ext trên PC ưu tiên; agent fallback)."
+            title="Đăng Nhập TCS (Ext trên PC ưu tiên; agent fallback)."
           >
-            {compact ? "ĐN" : "Đăng nhập"}
+            Đăng Nhập TCS
           </button>
         ) : null}
 

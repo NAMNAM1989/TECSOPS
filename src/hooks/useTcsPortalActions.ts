@@ -60,6 +60,11 @@ import {
 } from "../utils/portalPlaywrightLocal";
 import { extensionOcrBaseUrl } from "../utils/tcsOcrAgentEndpoints";
 import { portalBusyUserMessage } from "../utils/tcsPortalScanGate";
+import {
+  isTcsAgentHealthStopError,
+  shouldPollTcsAgentHealth,
+  TCS_AGENT_HEALTH_POLL_MS,
+} from "../utils/tcsAgentHealthPoll";
 
 function downloadPdfFromBase64(pdfName: string, base64: string): boolean {
   const name = pdfName.replace(/^.*[/\\]/, "");
@@ -112,7 +117,7 @@ export type TcsPortalActionsOpts = {
     updatedCount: number;
     readyAwbs: string[];
   }) => void;
-  /** Poll agent khi toolbar hiển thị */
+  /** Toolbar TCS đang hiện — chưa đủ để poll health */
   active?: boolean;
   /**
    * Kho portal đang thao tác trên Ops — quyết định Ext/channel + phạm vi bootstrap.
@@ -176,6 +181,13 @@ export function useTcsPortalActions({
   busyRef.current = busy;
   /** Ping miss liên tiếp — chỉ bỏ qua 1 lần (tránh nhấp nháy), không giữ forever. */
   const healthMissRef = useRef(0);
+  /** Poll /health chỉ sau Đăng Nhập TCS / Quét / session mở. */
+  const [agentWatch, setAgentWatch] = useState(false);
+  const lastAgentActivityRef = useRef<number | null>(null);
+  const beginAgentWatch = useCallback(() => {
+    lastAgentActivityRef.current = Date.now();
+    setAgentWatch(true);
+  }, []);
   const [results, setResults] = useState<TcsAgentJobResultRow[]>([]);
   const [downloadedCount, setDownloadedCount] = useState(0);
   /** Sau Điền: trạng thái + nút HOÀN TẤT trên cùng workspace. */
@@ -202,6 +214,13 @@ export function useTcsPortalActions({
       asTcsPortalWarehouse(scope) != null &&
       asTcsPortalWarehouse(scope) !== portalWarehouse;
     if (!h?.ok || scopeMismatch) {
+      if (isTcsAgentHealthStopError(h?.error)) {
+        healthMissRef.current = 99;
+        setHealth(h);
+        setSession(null);
+        setAgentWatch(false);
+        return;
+      }
       healthMissRef.current += 1;
       // 1 miss: giữ prev cùng kho (tránh nhấp nháy). Từ miss 2 hoặc đổi kho: Offline thật.
       if (healthMissRef.current <= 1) {
@@ -217,6 +236,7 @@ export function useTcsPortalActions({
       }
       setHealth(h);
       setSession(null);
+      setAgentWatch(false);
       return;
     }
     healthMissRef.current = 0;
@@ -225,12 +245,34 @@ export function useTcsPortalActions({
     else setSession(await fetchTcsSessionStatus(agentOpts));
   }, [agentOpts, portalWarehouse]);
 
+  const healthPollOn = shouldPollTcsAgentHealth({
+    toolbarActive: active,
+    watching: agentWatch,
+    sessionOpen: Boolean(session?.open),
+    lastActivityAt: lastAgentActivityRef.current,
+    healthError: health?.error,
+  });
+
   useEffect(() => {
-    if (!active) return;
+    if (!healthPollOn) return;
     void refreshHealth();
-    const t = window.setInterval(() => void refreshHealth(), 15000);
+    const t = window.setInterval(() => {
+      const still = shouldPollTcsAgentHealth({
+        toolbarActive: active,
+        watching: agentWatch,
+        sessionOpen: Boolean(session?.open),
+        lastActivityAt: lastAgentActivityRef.current,
+        healthError: health?.error,
+      });
+      if (!still) {
+        window.clearInterval(t);
+        setAgentWatch(false);
+        return;
+      }
+      void refreshHealth();
+    }, TCS_AGENT_HEALTH_POLL_MS);
     return () => window.clearInterval(t);
-  }, [active, refreshHealth]);
+  }, [active, agentWatch, health?.error, healthPollOn, refreshHealth, session?.open]);
 
   const refreshExtension = useCallback(async () => {
     const result = await pingTcsExtension({ warehouse: portalWarehouse });
@@ -248,6 +290,8 @@ export function useTcsPortalActions({
     healthMissRef.current = 99;
     setHealth(null);
     setSession(null);
+    setAgentWatch(false);
+    lastAgentActivityRef.current = null;
     setLastDeclarePreview(null);
     setMessage("");
     setError("");
@@ -290,6 +334,7 @@ export function useTcsPortalActions({
     if (sameWh && health?.ok && session?.open && session?.logged_in) {
       return true;
     }
+    beginAgentWatch();
     const online = await pingTcsAgent(3500, opts);
     if (sameWh) setHealth(online);
     if (!online?.ok) {
@@ -339,7 +384,7 @@ export function useTcsPortalActions({
       const headless = !playwrightLocal && online.headless !== false;
       setError(
         headless
-          ? `Agent cloud ${warehouse} chưa login — bấm ĐN kho này để OCR CAPTCHA / khôi phục session.`
+          ? `Agent cloud ${warehouse} chưa login — bấm Đăng Nhập TCS kho này để OCR CAPTCHA / khôi phục session.`
           : `Agent Chrome kho ${warehouse} đang ở trang login — nhập CAPTCHA trên cửa sổ agent rồi thử lại.`
       );
       if (sameWh) await refreshHealth();
@@ -348,6 +393,7 @@ export function useTcsPortalActions({
     return true;
   }, [
     agentOpts,
+    beginAgentWatch,
     health?.ok,
     playwrightLocal,
     portalWarehouse,
@@ -395,6 +441,7 @@ export function useTcsPortalActions({
       password: string;
       remember: boolean;
     }) => {
+      beginAgentWatch();
       setError("");
       setMessage("");
       setBusy(true);
@@ -451,11 +498,12 @@ export function useTcsPortalActions({
         setBusyLabel("");
       }
     },
-    [extOpts, portalWarehouse, sessionYmd]
+    [beginAgentWatch, extOpts, portalWarehouse, sessionYmd]
   );
 
   /** Quét tiếp nhận trên Ext đã login — chỉ AWB chưa RECEPTION_COMPLETED. */
   const scanReceptionWithExtension = useCallback(async () => {
+    beginAgentWatch();
     setError("");
     setMessage("");
     setBusy(true);
@@ -531,6 +579,7 @@ export function useTcsPortalActions({
     }
   }, [
     applyReadyItemsToOps,
+    beginAgentWatch,
     extOpts,
     pendingReception,
     portalWarehouse,
@@ -542,6 +591,7 @@ export function useTcsPortalActions({
    * Mặc định chỉ Ext — agent-only còn dùng cho debug legacy.
    */
   const login = useCallback(async () => {
+    beginAgentWatch();
     setError("");
     setMessage("");
     if (playwrightLocal && !isMobile) {
@@ -624,12 +674,14 @@ export function useTcsPortalActions({
     playwrightLocal,
     portalWarehouse,
     preferRemotePortal,
+    beginAgentWatch,
     refreshHealth,
     visualControl,
   ]);
 
   /** Quét qua Playwright agent (Railway online / local). */
   const scanReceptionWithAgent = useCallback(async () => {
+    beginAgentWatch();
     setError("");
     setMessage("");
     const order = resolvePortalExecutorOrder("scan", {
@@ -713,6 +765,7 @@ export function useTcsPortalActions({
   }, [
     agentOpts,
     applyReadyItemsToOps,
+    beginAgentWatch,
     executorPolicy,
     extension?.ok,
     isMobile,
@@ -1204,9 +1257,9 @@ export function useTcsPortalActions({
       : session?.logged_in || health?.session?.logged_in
         ? "Agent cloud đã login"
         : health?.ok && agentInPolicy
-          ? "Agent cloud — cần ĐN"
+          ? "Agent cloud — cần Đăng Nhập TCS"
           : extension?.ok
-            ? `${tcsExtLabel(portalWarehouse)} — cần ĐN`
+            ? `${tcsExtLabel(portalWarehouse)} — cần Đăng Nhập TCS`
             : agentInPolicy
               ? "Agent cloud offline"
               : "Cần Chrome Ext";
@@ -1228,7 +1281,7 @@ export function useTcsPortalActions({
     sessionLabel,
     results,
     downloadedCount,
-    /** ĐN agent cloud (Railway) — đường chính khi online. */
+    /** Đăng Nhập TCS agent cloud (Railway) — đường chính khi online. */
     login,
     loginWithExtension,
     scanReceptionWithExtension,

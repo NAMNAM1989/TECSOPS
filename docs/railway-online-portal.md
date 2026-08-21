@@ -8,8 +8,8 @@ Không cần PC kho / `portal:worker`. Chrome Ext chỉ là fallback desktop tu�
 ```
 Phone / laptop → Ops (Railway HTTPS)
                  → /tcs-agent  (Express proxy)
-                 → agent :8765 (TECS-TCS) + :8766 (TCS)
-                 → Chromium headless + cookie volume
+                 → agent :8765 (TECS-TCS; :8766 chỉ khi TCS_AGENT_DUAL=1)
+                 → Chromium on-demand (Đăng Nhập TCS / Quét), cookie volume
 ```
 
 Policy mặc định `auto` = **desktop Ext → agent**; **phone agent-only** (Quét/PDF).
@@ -21,11 +21,12 @@ Policy mặc định `auto` = **desktop Ext → agent**; **phone agent-only** (Q
 | `DATABASE_URL` | Postgres (đã có) |
 | `TCS_USERNAME` / `TCS_PASSWORD` | Tài khoản portal kho TECS-TCS |
 | `TCS_USERNAME_TCS` / `TCS_PASSWORD_TCS` | Tài khoản portal kho TCS |
-| `TCS_AGENT_DUAL=1` | Bật agent thứ hai :8766 |
+| `TCS_AGENT_DUAL=0` | Mặc định tắt. Chỉ `1` mới spawn agent :8766 — không tự bật vì có user/pass TCS |
+| `TCS_AGENT_ENABLED=1` | Mặc định bật HTTP agent. `0` = không spawn Python; `/tcs-agent` trả `AGENT_OFF` |
 | `TCS_AGENT_PROXY=1` | Bật proxy `/tcs-agent` (Dockerfile đã set) |
 | `TCS_HEADLESS=1` | Headless (Dockerfile đã set) |
-| `TCS_CAPTCHA_OCR=1` | OCR CAPTCHA khi ĐN (Dockerfile đã set) |
-| `TCS_AUTO_OPEN=1` | Mở session lúc boot |
+| `TCS_CAPTCHA_OCR=1` | OCR CAPTCHA khi Đăng Nhập TCS (Dockerfile đã set) |
+| `TCS_AUTO_OPEN=0` | Mặc định tắt. Không mở Chromium lúc boot — chỉ khi Đăng Nhập TCS / Quét / `POST /session/open` |
 | `TCS_PREFER_SESSION=1` | Ưu tiên cookie trong profile |
 | `TCS_PDF_CACHE_TTL_S` | TTL tái dùng PDF (mặc định 28800 = 8h) |
 | `TCS_PDF_PREFETCH_N` | Prefetch sau Quét (mặc định **0** = tắt) |
@@ -52,21 +53,21 @@ Region khuyến nghị: `asia-southeast1`.
 
 1. Mở Ops bằng URL Railway (không dùng `127.0.0.1`).
 2. Chọn kho TECS-TCS hoặc TCS + ngày phiên.
-3. **Phone:** không nút ĐN/Điền — agent tự session; **Quét** + menu ⋮ **Tải PDF**.
-4. **PC:** ĐN Ext (nhìn được) → Quét / Điền / PDF; fallback agent nếu không có Ext.
+3. **Phone:** không nút Đăng Nhập TCS/Điền — bấm **Quét** để mở Chrome on-demand; menu ⋮ **Tải PDF**.
+4. **PC:** Đăng Nhập TCS Ext (nhìn được) → Quét / Điền / PDF; fallback agent nếu không có Ext.
 5. **HOÀN TẤT** trên Ops (PC) khi agent/Ext đã điền form.
 
 Quét agent dùng `POST /workspace/scan` (nhẹ — không prefetch PDF).
 
 ## CAPTCHA
 
-- **PC + Chrome Ext (ưu tiên):** OCR **trong Ext** (ONNX / ddddocr `common.onnx`, offscreen MV3) — không cần agent/cloud để ĐN.
-  - ZIP tải từ Ops phải **≥ ~60MB** (có `ocr/ort.min.js` + `ocr/common.onnx`). ZIP ~200KB = thiếu OCR (build cũ) → ĐN lỗi / CAPTCHA tay.
+- **PC + Chrome Ext (ưu tiên):** OCR **trong Ext** (ONNX / ddddocr `common.onnx`, offscreen MV3) — không cần agent/cloud để Đăng Nhập TCS.
+  - ZIP tải từ Ops phải **≥ ~60MB** (có `ocr/ort.min.js` + `ocr/common.onnx`). ZIP ~200KB = thiếu OCR (build cũ) → Đăng Nhập TCS lỗi / CAPTCHA tay.
   - Local: `npm run ext:fetch-ocr` rồi load unpacked / `npm run ext:package`.
   - Ext TCS **≥1.5.1** / TECS-TCS **≥2.6.1** → Reload.
   - Fallback: agent localhost `/captcha/solve` → nhập tay trên tab TCS.
 - **Phone / headless Railway:** vẫn phụ thuộc `TCS_CAPTCHA_OCR` + session volume (không có cửa sổ nhập tay).
-- Nếu ĐN fail trên cloud: kiểm tra password Variables, OCR trong image, hoặc refresh volume profile.
+- Nếu Đăng Nhập TCS fail trên cloud: kiểm tra password Variables, OCR trong image, hoặc refresh volume profile.
 
 ## Local (dev)
 

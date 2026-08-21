@@ -62,6 +62,7 @@ export type TcsAgentSession = {
 
 export type TcsAgentHealth = {
   ok: boolean;
+  error?: string;
   service?: string;
   version?: string;
   warehouse_scope?: string;
@@ -313,7 +314,9 @@ export async function pingTcsAgent(
       ...res,
     } as TcsAgentHealth & { data?: unknown; error?: string };
     delete (body as { data?: unknown }).data;
-    if (body.ok === false) return null;
+    if (body.ok === false) {
+      return { ok: false, error: body.error || "AGENT_OFFLINE" };
+    }
     return body;
   }
   const ctrl = new AbortController();
@@ -323,13 +326,15 @@ export async function pingTcsAgent(
       signal: ctrl.signal,
       headers: warehouseHeader(opts.warehouse),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { ok: false, error: "AGENT_OFFLINE" };
     const body = (await res.json()) as TcsAgentHealth & { error?: string };
-    // Proxy Express/Vite khi agent chết trả 502 JSON { ok:false, error:AGENT_OFFLINE }
-    if (body && body.ok === false) return null;
+    // Proxy: 200 + { ok:false, error: AGENT_OFFLINE | AGENT_OFF }
+    if (body && body.ok === false) {
+      return { ok: false, error: body.error || "AGENT_OFFLINE" };
+    }
     return body;
   } catch {
-    return null;
+    return { ok: false, error: "AGENT_OFFLINE" };
   } finally {
     window.clearTimeout(t);
   }

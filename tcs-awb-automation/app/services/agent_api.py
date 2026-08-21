@@ -184,17 +184,11 @@ def make_handler(state: AgentState):
             parsed = urlparse(self.path)
             path = parsed.path
             if path in {"/", "/health"}:
-                # Khi đang job: trả snapshot (không đụng page — tránh treo /health)
+                # Chỉ snapshot — không gọi status()/Playwright (cấm mở Chromium từ poll).
+                sess = dict(state.session_snapshot)
                 if state.running:
-                    sess = dict(state.session_snapshot)
                     base_msg = (sess.get("message") or "").strip()
                     sess["message"] = (base_msg + " · đang chạy job").strip(" ·")
-                else:
-                    # status() đọc page — marshal sang worker
-                    try:
-                        sess = state.call_on_worker(state.refresh_session_snapshot)
-                    except Exception:
-                        sess = dict(state.session_snapshot)
                 docs = state.settings.output_dir / "docs"
                 ocr_ok = ddddocr_ready()
                 self._json(

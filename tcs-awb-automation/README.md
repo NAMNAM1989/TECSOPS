@@ -26,7 +26,7 @@ Deploy:
 1. `railway.toml` dùng `Dockerfile`. Deploy: `npm run railway:up` / `npm run deploy:ship`.
 2. Railway **Variables**:
    - Bắt buộc login: `TCS_USERNAME`, `TCS_PASSWORD`.
-   - Mặc định image: `TCS_HEADLESS=1`, `TCS_AUTO_OPEN=1`, `TCS_CAPTCHA_OCR=1`, `TCS_MOCK=0`.
+   - Mặc định image: `TCS_HEADLESS=1`, `TCS_AUTO_OPEN=0`, `TCS_AGENT_DUAL=0`, `TCS_CAPTCHA_OCR=1`, `TCS_MOCK=0`. Chrome chỉ mở khi Đăng Nhập TCS / Quét.
 3. Mount **Railway Volume**:
    - `TCS_BROWSER_PROFILE=/app/tcs-awb-automation/browser_profile` — giữ cookie.
    - `TCS_OUTPUT_DIR=/app/tcs-awb-automation/output` — giữ PDF.

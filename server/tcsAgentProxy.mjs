@@ -48,6 +48,14 @@ export function isTcsAgentProxyEnabled() {
   return flag !== "0" && flag !== "false" && flag !== "off";
 }
 
+/** TCS_AGENT_ENABLED=0: không spawn Python — proxy trả AGENT_OFF, không treo. */
+export function isTcsAgentProcessEnabled() {
+  const raw = process.env.TCS_AGENT_ENABLED;
+  if (raw == null || String(raw).trim() === "") return true;
+  const flag = String(raw).trim().toLowerCase();
+  return flag !== "0" && flag !== "false" && flag !== "off";
+}
+
 export function registerTcsAgentProxy(app) {
   if (!isTcsAgentProxyEnabled()) {
     console.info("[tcs-agent-proxy] tắt (production mặc định hoặc TCS_AGENT_PROXY=0)");
@@ -57,6 +65,18 @@ export function registerTcsAgentProxy(app) {
   const hub = agentTargetForWarehouse("TECS-TCS");
   const tcs = agentTargetForWarehouse("TCS");
   const isProduction = process.env.NODE_ENV === "production";
+  if (!isTcsAgentProcessEnabled()) {
+    console.info("[tcs-agent-proxy] TCS_AGENT_ENABLED=0 — /tcs-agent trả AGENT_OFF");
+    app.use("/tcs-agent", (_req, res) => {
+      res.status(200).json({
+        ok: false,
+        error: "AGENT_OFF",
+        offline: true,
+        message: "Agent Python tắt (TCS_AGENT_ENABLED=0).",
+      });
+    });
+    return;
+  }
   console.info(`[tcs-agent-proxy] /tcs-agent → hub ${hub} · TCS ${tcs} (header X-Portal-Warehouse)`);
 
   app.use("/tcs-agent", (req, res) => {

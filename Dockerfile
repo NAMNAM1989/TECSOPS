@@ -1,6 +1,6 @@
 # TECSOPS all-in-one image cho Railway (online, không máy kho):
 #   - Node server (Express + static + /api + socket.io + proxy /tcs-agent)
-#   - Agent Playwright headless — ĐN/Quét/Điền/PDF từ Ops qua /tcs-agent
+#   - Agent Playwright — Đăng Nhập TCS / Quét / Điền / PDF từ Ops qua /tcs-agent (Chrome on-demand)
 # Mount volume: browser_profile_hub + browser_profile_tcs (+ output) để giữ session.
 FROM mcr.microsoft.com/playwright/python:v1.49.1-jammy
 
@@ -28,15 +28,15 @@ RUN pip install --no-cache-dir -r tcs-awb-automation/requirements-server.txt \
 COPY . .
 RUN npm run ext:fetch-ocr && npm run build
 
-# API-first headless — Ops online gọi same-origin /tcs-agent.
-# Dual agent kho TCS: Railway Variables TCS_AGENT_DUAL=1 + TCS_USERNAME_TCS / TCS_PASSWORD_TCS.
+# API-first — Chrome chỉ mở khi user bấm Đăng Nhập TCS / Quét (hoặc POST /session/open).
+# Dual :8766 chỉ khi Railway set TCS_AGENT_DUAL=1 (không tự bật vì có user/pass).
 ENV NODE_ENV=production \
     TCS_MOCK=0 \
     TCS_HEADLESS=1 \
-    TCS_AUTO_OPEN=1 \
+    TCS_AUTO_OPEN=0 \
     TCS_CAPTCHA_OCR=1 \
     TCS_PREFER_SESSION=1 \
-    TCS_AGENT_DUAL=1 \
+    TCS_AGENT_DUAL=0 \
     TCS_AGENT_URL=http://127.0.0.1:8765 \
     TCS_AGENT_URL_TCS=http://127.0.0.1:8766 \
     TCS_AGENT_PROXY=1 \

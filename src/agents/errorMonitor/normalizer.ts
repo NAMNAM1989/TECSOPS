@@ -1,21 +1,17 @@
-/**
- * ErrorNormalizer — chuẩn hóa sự kiện thô thành Error Event schema.
- */
+import { sanitizeRecord, sanitizeSecrets, sanitizeText } from "./sanitizer";
+import { AGENT_NAME, DEFAULT_CONFIG } from "./types";
+import type { AutomationInfo, ErrorMonitorHost, HttpInfo, NormalizedErrorEvent } from "./types";
 
-import crypto from "node:crypto";
-import { AGENT_NAME, DEFAULTS, SCHEMA_VERSION } from "./constants.mjs";
-import { sanitizeSecrets, sanitizeText } from "./secretSanitizer.mjs";
-
-function asString(value, max = 2_000) {
+function asString(value: unknown, max = 2_000): string {
   if (value == null) return "";
   return String(value).slice(0, max);
 }
 
-function asObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-function pickHttp(raw) {
+function pickHttp(raw: Record<string, unknown>): HttpInfo {
   const http = asObject(raw.http);
   const status = Number(http.status ?? raw.status ?? raw.statusCode);
   return {
@@ -26,7 +22,7 @@ function pickHttp(raw) {
   };
 }
 
-function pickAutomation(raw) {
+function pickAutomation(raw: Record<string, unknown>): AutomationInfo | null {
   const auto = asObject(raw.automation || raw.job);
   if (!raw.automation && !raw.job && !raw.automation_id && !raw.workflow) return null;
   return {
@@ -38,44 +34,34 @@ function pickAutomation(raw) {
     page_url: asString(auto.page_url || raw.page_url, 400) || null,
     screenshot: asString(auto.screenshot || raw.screenshot, 400) || null,
     console_errors: Array.isArray(auto.console_errors)
-      ? auto.console_errors.slice(0, 12).map((x) => asString(x, 240))
+      ? auto.console_errors.slice(0, 12).map((item) => asString(item, 240))
       : [],
     network_errors: Array.isArray(auto.network_errors)
-      ? auto.network_errors.slice(0, 12).map((x) => asString(x, 240))
+      ? auto.network_errors.slice(0, 12).map((item) => asString(item, 240))
       : [],
   };
 }
 
-/**
- * @param {Record<string, unknown>} raw
- * @param {{ now?: () => number, environment?: string, release?: string, git_commit?: string }} [ctx]
- */
-export function normalizeErrorEvent(raw, ctx = {}) {
-  const source = asObject(raw);
-  const { sanitized } = sanitizeSecrets(source);
-  const now = ctx.now ? ctx.now() : Date.now();
+export function normalizeErrorEvent(
+  raw: Record<string, unknown>,
+  host: ErrorMonitorHost,
+  ctx: { environment?: string; release?: string; git_commit?: string; service?: string } = {},
+): NormalizedErrorEvent {
+  const { sanitized } = sanitizeRecord(raw);
   const http = pickHttp(sanitized);
   const automation = pickAutomation(sanitized);
-  const message = sanitizeText(
-    asString(sanitized.message || sanitized.error || sanitized.msg || "Unknown error", 1_500),
-  );
-  const stack = sanitizeText(asString(sanitized.stack_trace || sanitized.stack, 6_000));
   const metaRaw = asObject(sanitized.metadata || sanitized.meta);
   const { sanitized: metadata } = sanitizeSecrets(metaRaw);
-
   return {
-    schema_version: SCHEMA_VERSION,
-    event_id: asString(sanitized.event_id, 80) || crypto.randomUUID(),
-    timestamp: asString(sanitized.timestamp) || new Date(now).toISOString(),
-    environment:
-      asString(sanitized.environment || ctx.environment || process.env.NODE_ENV, 32) ||
-      "development",
+    event_id: asString(sanitized.event_id, 80) || host.randomId("evt"),
+    timestamp: asString(sanitized.timestamp) || host.now(),
+    environment: asString(sanitized.environment || ctx.environment, 32) || "development",
     source: asString(sanitized.source, 40) || "unknown",
-    service: asString(sanitized.service || ctx.service || DEFAULTS.service, 40),
+    service: asString(sanitized.service || ctx.service || DEFAULT_CONFIG.service, 40),
     module: asString(sanitized.module || sanitized.component, 80) || "unknown",
     error_type: asString(sanitized.error_type || sanitized.name || sanitized.code, 80) || "Error",
-    message,
-    stack_trace: stack || null,
+    message: sanitizeText(asString(sanitized.message || sanitized.error || sanitized.msg || "Unknown error", 1_500)),
+    stack_trace: sanitizeText(asString(sanitized.stack_trace || sanitized.stack, 6_000)) || null,
     request_id: asString(sanitized.request_id || sanitized.requestId, 80) || null,
     trace_id: asString(sanitized.trace_id || sanitized.traceId, 80) || null,
     user_flow: asString(sanitized.user_flow || sanitized.userFlow, 80) || null,
@@ -85,8 +71,11 @@ export function normalizeErrorEvent(raw, ctx = {}) {
     automation,
     browser: asString(sanitized.browser, 80) || null,
     release: asString(sanitized.release || ctx.release, 80) || null,
-    git_commit: asString(sanitized.git_commit || ctx.git_commit || process.env.RAILWAY_GIT_COMMIT, 80) || null,
+    git_commit: asString(sanitized.git_commit || ctx.git_commit, 80) || null,
     collected_by: AGENT_NAME,
-    metadata,
+    metadata:
+      metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : {},
   };
 }

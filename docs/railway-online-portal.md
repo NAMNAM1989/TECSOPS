@@ -83,7 +83,7 @@ Giữ Ops trên Railway HTTPS; chạy Playwright **headed trên máy đó** qua 
 2. Trên máy kiểm soát: `npm run portal:headed:local` (mở Chromium headed `:8765` / `:8766`).
 3. Mở Ops Railway **trên cùng Chrome** đã cài Ext.
 4. Bật nút **PW local** trên thanh TCS.
-5. **ĐN** → **Quét** / **Điền** — theo dõi cửa sổ Chromium trên máy này.
+5. **Đăng Nhập TCS** → **Quét** / **Điền** — theo dõi cửa sổ Chromium trên máy này.
 
 Tắt **PW local** để về agent cloud headless / Ext content-script như trước.
 

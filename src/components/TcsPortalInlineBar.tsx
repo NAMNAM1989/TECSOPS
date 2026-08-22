@@ -142,7 +142,7 @@ export function TcsPortalInlineBar({
     ) {
       setShowExtLogin(true);
       window.alert(
-        `Chế độ trực quan: cần ${extLabel} online để ĐN trên tab Chrome.\n` +
+        `Chế độ trực quan: cần ${extLabel} online để Đăng Nhập TCS trên tab Chrome.\n` +
           "Reload Ext / mở Ops trên cùng Chrome đã cài Ext. Tắt «Trực quan» nếu muốn dùng agent cloud ẩn."
       );
       return;
@@ -201,7 +201,7 @@ export function TcsPortalInlineBar({
             (portalWh === "TCS"
               ? " (vd. namnam8012)."
               : " (vd. hanam7195).") +
-            "\nHai Ext dùng chung cookie TCS — đổi kho phải ĐN lại."
+            "\nHai Ext dùng chung cookie TCS — đổi kho phải Đăng Nhập TCS lại."
         );
         return;
       }
@@ -351,7 +351,7 @@ export function TcsPortalInlineBar({
               tcs.setPlaywrightLocal(next);
               if (next) {
                 window.alert(
-                  "PW local BẬT.\n\n1) npm run portal:headed:local\n2) Reload Ext đúng kho\n3) ĐN → Quét/Điền — nhìn cửa sổ Chromium trên máy này."
+                  "PW local BẬT.\n\n1) npm run portal:headed:local\n2) Reload Ext đúng kho\n3) Đăng Nhập TCS → Quét/Điền — nhìn cửa sổ Chromium trên máy này."
                 );
               }
             }}
@@ -387,7 +387,7 @@ export function TcsPortalInlineBar({
         {isMobile && canOperate && !loggedIn && !tcs.busy ? (
           <span
             className="max-w-[9rem] truncate text-[9px] font-medium text-amber-800"
-            title="Agent cloud tự login / OCR — không cần nút ĐN trên phone"
+            title="Agent cloud tự login / OCR — không cần nút Đăng Nhập TCS trên phone"
           >
             Đang khôi phục session
           </span>
@@ -434,8 +434,8 @@ export function TcsPortalInlineBar({
       {!compact && canOperate && !tcs.busy ? (
         <p className="px-1 text-[9px] leading-snug text-ui-text-muted">
           {usesAgent
-            ? "Online: ĐN → menu ⋮ → Điền (tạo phiếu ESID) / Tải PDF. Quét chỉ cập nhật HT trên Ops — tách riêng."
-            : "Ext: ĐN → menu ⋮ → Điền (tạo phiếu ESID) → HOÀN TẤT trên TCS. Quét chỉ cập nhật HT Ops."}
+            ? "Online: Đăng Nhập TCS → menu ⋮ → Điền (tạo phiếu ESID) / Tải PDF. Quét chỉ cập nhật HT trên Ops — tách riêng."
+            : "Ext: Đăng Nhập TCS → menu ⋮ → Điền (tạo phiếu ESID) → HOÀN TẤT trên TCS. Quét chỉ cập nhật HT Ops."}
         </p>
       ) : null}
 

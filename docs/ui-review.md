@@ -12,6 +12,8 @@
 
 P1 lite: EmptyState khi lọc không khớp; Excel thống kê dùng `statusLabel`.
 
+Follow-up: `notify` → Toast dùng `TOAST_DURATION_MS` theo tone (warning 5600 / danger 6400), không còn đóng sớm 4200ms.
+
 ## Round 3.1 — Mobile occlusion
 
 | Mục tiêu | Thay đổi |

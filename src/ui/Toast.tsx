@@ -12,11 +12,19 @@ import { registerNotifySink } from "./notify";
 
 export type ToastTone = "info" | "success" | "warning" | "danger";
 
+/** Thời gian tự đóng theo tone — error/warning dài hơn vì copy nhiều câu. */
+export const TOAST_DURATION_MS: Record<ToastTone, number> = {
+  info: 4200,
+  success: 4200,
+  warning: 5600,
+  danger: 6400,
+};
+
 export type ToastInput = {
   title?: string;
   message: string;
   tone?: ToastTone;
-  /** ms — mặc định 4200; 0 = không tự đóng */
+  /** ms — mặc định theo TOAST_DURATION_MS[tone]; 0 = không tự đóng */
   durationMs?: number;
 };
 
@@ -66,7 +74,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (input: ToastInput) => {
       const id = `toast-${++seq}`;
       const tone = input.tone ?? "info";
-      const durationMs = input.durationMs ?? 4200;
+      const durationMs = input.durationMs ?? TOAST_DURATION_MS[tone];
       setItems((prev) => [...prev.slice(-4), { ...input, id, tone }]);
       if (durationMs > 0) {
         const t = setTimeout(() => dismiss(id), durationMs);
@@ -82,9 +90,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       push,
       dismiss,
       success: (message, title) => push({ message, title, tone: "success" }),
-      error: (message, title) => push({ message, title, tone: "danger", durationMs: 6400 }),
+      error: (message, title) => push({ message, title, tone: "danger" }),
       info: (message, title) => push({ message, title, tone: "info" }),
-      warning: (message, title) => push({ message, title, tone: "warning", durationMs: 5600 }),
+      warning: (message, title) => push({ message, title, tone: "warning" }),
     }),
     [push, dismiss]
   );

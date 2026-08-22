@@ -31,11 +31,9 @@ export function TcsPortalInlineBar({
   const toast = useToast();
   const btn =
     `inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-45 active:scale-[0.98] ${
-      compact || isMobile ? "min-h-11 touch-manipulation" : ""
+      compact ? "min-h-11 min-w-11 touch-manipulation" : ""
     }`;
-  const btnLogin = `${btn} bg-ui-primary text-white hover:bg-ui-primary-hover shadow-sm ${
-    isMobile ? "min-w-[7.5rem] px-3 text-[11px]" : ""
-  }`;
+  const btnLogin = `${btn} bg-ui-primary text-white hover:bg-ui-primary-hover shadow-sm`;
   const btnScan = `${btn} border border-sky-600/40 bg-sky-50 text-sky-900 hover:bg-sky-100`;
   const btnSubmit = `${btn} bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm`;
   const btnVisualOn = `${btn} border border-violet-600/50 bg-violet-50 text-violet-900 hover:bg-violet-100`;

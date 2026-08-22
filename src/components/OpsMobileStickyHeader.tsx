@@ -130,12 +130,15 @@ export function OpsMobileStickyHeader({
   const filtersActive =
     statusFilter !== "ALL" || searchQuery.trim().length > 0 || Boolean(flightDateFilter);
   const [statusExpanded, setStatusExpanded] = useState(false);
+  /** Portal/eCargo mặc định thu gọn trên mobile — không mở rộng tính năng TCS, chỉ giảm chrome. */
+  const [portalExpanded, setPortalExpanded] = useState(false);
 
   useEffect(() => {
     if (statusFilter !== "ALL") setStatusExpanded(true);
   }, [statusFilter]);
 
   const showStatusBar = viewRows.length > 0 && (statusExpanded || statusFilter !== "ALL");
+  const hasPortalSlot = Boolean(tcsPortalBar || ecargoBar);
 
   const scopedMetrics = useMemo(() => {
     const source = filteredViewRows.filter((r) => r.warehouse === activeWarehouse);
@@ -306,8 +309,28 @@ export function OpsMobileStickyHeader({
               </button>
             ) : null}
           </div>
-          {tcsPortalBar}
-          {ecargoBar}
+          {hasPortalSlot ? (
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={() => setPortalExpanded((v) => !v)}
+                className="inline-flex min-h-11 w-full touch-manipulation items-center justify-between gap-2 rounded-xl border border-ui-border/80 bg-ui-surface px-2.5 text-left text-[11px] font-bold text-ui-text-muted"
+                aria-expanded={portalExpanded}
+              >
+                <span>
+                  {tcsPortalBar ? "Cổng TCS / ESID" : "eCargo SCSC"}
+                  {portalExpanded ? "" : " · chạm để mở"}
+                </span>
+                <span aria-hidden>{portalExpanded ? "▴" : "▾"}</span>
+              </button>
+              {portalExpanded ? (
+                <div className="min-w-0 space-y-1">
+                  {tcsPortalBar}
+                  {ecargoBar}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {showStatusBar ? (
             <div className="flex min-w-0 items-center gap-1">

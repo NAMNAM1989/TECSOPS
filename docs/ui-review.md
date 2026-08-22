@@ -11,8 +11,9 @@
 | Lot density | Card denser: AWB+status · khách/chuyến/DEST · K/Kg; expand CNEE; `contentVisibility` |
 | Safe area | FAB trên BottomNav; padding list `8.25rem + safe-area` |
 | Touch | Status filter / status select / kho chip ≥44px |
-| eCargo | Badge từ `ecargoVctResultsStore`: Đã Cấp VCT / Mã xác thực / eCargo… / lỗi (không invent Đình Chỉ) |
-| Copy | Giữ «Đăng Nhập TCS» / «Thử Đăng Nhập TCS» — không «ĐN» |
+| eCargo | Badge từ `ecargoVctResultsStore` (Đã Cấp VCT / Mã xác thực) — không mở rộng portal |
+| Portal TCS | **Không** mở rộng agent/ext/PW; thanh cổng **thu gọn mặc định** trên mobile (giảm chrome) |
+| Copy | Nếu CTA login còn hiện: «Đăng Nhập TCS» — không «ĐN» |
 
 ### Sync source of truth
 
@@ -24,6 +25,15 @@
 
 - Có field VCT status/code trong store → badge compact.
 - Không có field «Đình Chỉ» trên lot model → không fake badge (TODO nếu Gmail ops cần).
+
+### TCS / TECS-TCS — không xóa trong Round 3
+
+Chờ keep/delete list từ inventory GitHub. Ứng viên cleanup (follow-up PR):
+
+- `TcsPortalInlineBar` / `useTcsPortalActions` / agent·ext·PW controls trên mobile
+- Chrome Ext TECS-TCS + routes `/tcs-agent` UI surface trong Ops header
+- Menu ESID / Quét / Đăng Nhập TCS nếu kho TCS bị sunset
+- `docs/ecargo-vct-otp-flow.md` tách khỏi TCS portal (eCargo = SCSC)
 
 ## Round 2 — nâng cấp hình ảnh
 

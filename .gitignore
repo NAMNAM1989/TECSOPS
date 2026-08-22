@@ -36,6 +36,7 @@ tmp/
 outputs/
 output/
 .openclaw/
+.tecsops/
 
 # TCS AWB sidecar runtime
 tcs-awb-automation/.venv/

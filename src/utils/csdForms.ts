@@ -15,7 +15,7 @@ import {
 import { savedGoodsPrintText } from "./customerPrintProfileLink";
 import { loadLastCsdTransfer, saveLastCsdTransfer } from "./csdPrintPrefs";
 import { clipScscGoodsDescriptionPrint } from "./scscPrintContent";
-import { notifyError, notifyInfo, notifyWarning } from "../ui/notify";
+import { notifyInfo, notifyWarning } from "../ui/notify";
 
 /** Thêm hãng mới: mở rộng union + thêm entry trong CSD_CARRIER_PROFILES + PDF mẫu. */
 export type CsdCarrier = "FD" | "TH";

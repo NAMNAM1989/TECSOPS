@@ -215,6 +215,17 @@ The goal: Be helpful without being annoying. Check in a few times a day, do usef
 
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.
 
+## TECSOPS agent skills
+
+Skills live under `.agents/skills/` (mirrored in `.cursor/skills/` when useful):
+
+- `tecsops-project-auditor` — audit nghiệp vụ vận đơn / eSID / sync / UI
+- `bug-fix-agent` — autonomous debugger (root-cause first, persist session, no speculative thrash)
+
+Runnable module: `src/agents/bugFix/` · CLI: `npm run bugfix:agent` · docs: `docs/bug-fix-agent.md`.
+
+In UI/copy never abbreviate “Đăng Nhập TCS” as “ĐN”.
+
 ## Related
 
 - [Default AGENTS.md](/reference/AGENTS.default)

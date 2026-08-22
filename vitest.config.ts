@@ -13,6 +13,7 @@ export default defineConfig({
       ["src/utils/portalSessionIdentity.test.ts", "node"],
       ["src/utils/tcsDimRecordForm.test.ts", "node"],
       ["src/utils/tcsOcrAgentEndpoints.test.ts", "node"],
+      ["src/agents/**", "node"],
     ],
     include: [
       "src/**/*.test.ts",

@@ -781,7 +781,7 @@ export function AirCargoTracking({
         <h1 className="m-0 leading-none">
           <Wordmark size="sm" />
         </h1>
-        <span className="rounded bg-ui-surface px-1.5 py-px text-[10px] font-semibold text-ui-text-muted ring-1 ring-ui-border">
+        <span className="rounded-full bg-ui-navy px-2 py-px text-[9px] font-bold uppercase tracking-wide text-white shadow-ui-sm">
           OPS
         </span>
         <span className="text-[10px] text-ui-text-muted">
@@ -890,7 +890,7 @@ export function AirCargoTracking({
       {viewRows.length > 0 ? (
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
           <span
-            className="inline-flex shrink-0 items-baseline gap-x-1.5 font-mono text-[11px] tabular-nums text-ui-text"
+            className="inline-flex shrink-0 items-baseline gap-x-2 rounded-xl border border-ui-border/80 bg-ui-surface px-2.5 py-1 font-mono text-[11px] tabular-nums text-ui-navy shadow-ui-sm"
             title="Lô · Kiện · Kg (sau lọc)"
           >
             <span>

@@ -26,9 +26,9 @@ export function StatusSelect({ value, onChange, warehouse, compact }: StatusSele
       onClick={(e) => e.stopPropagation()}
       aria-label={`Trạng thái · ${statusLabel[value]}`}
       title={`${statusIcon[value]} ${statusLabel[value]}`}
-      className={`cursor-pointer rounded-lg border font-semibold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ui-focus ${statusSelectSurface[value]} ${
+      className={`cursor-pointer rounded-full border font-bold shadow-ui-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ui-focus ${statusSelectSurface[value]} ${
         compact
-          ? "h-9 w-full min-w-0 touch-manipulation truncate px-1 text-[10px] leading-none"
+          ? "h-9 w-full min-w-0 touch-manipulation truncate px-1.5 text-[10px] leading-none"
           : "px-2.5 py-1 text-xs"
       }`}
     >
@@ -62,7 +62,7 @@ export function StatusPill({
   return (
     <span
       title={statusLabel[status]}
-      className={`inline-flex max-w-full items-center gap-1 truncate rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusSelectSurface[status]} ${className}`}
+      className={`inline-flex max-w-full items-center gap-1 truncate rounded-full border px-2.5 py-0.5 text-[10px] font-bold shadow-ui-sm ${statusSelectSurface[status]} ${className}`}
     >
       <span aria-hidden>{statusIcon[status]}</span>
       <span className="truncate">{label}</span>

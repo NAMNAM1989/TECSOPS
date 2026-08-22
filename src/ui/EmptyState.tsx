@@ -13,8 +13,8 @@ export function EmptyState({
   onAction?: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-ui-border bg-ui-surface px-4 py-10 text-center">
-      <p className="text-sm font-bold text-ui-text">{title}</p>
+    <div className="rounded-2xl border border-dashed border-ui-border/90 bg-ui-surface/80 px-4 py-10 text-center shadow-ui-sm">
+      <p className="text-sm font-extrabold text-ui-navy">{title}</p>
       {description ? <p className="mx-auto mt-1 max-w-md text-[13px] text-ui-text-muted">{description}</p> : null}
       {actionLabel && onAction ? (
         <Button className="mt-4" size="sm" onClick={onAction}>

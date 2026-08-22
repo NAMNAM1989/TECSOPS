@@ -32,13 +32,13 @@ export function SyncStatusPill({
   if (live) {
     return (
       <span
-        className={`inline-flex items-center gap-1.5 rounded-full bg-emerald-50 font-semibold text-emerald-900 ring-1 ring-emerald-200/80 ${
+        className={`inline-flex items-center gap-1.5 rounded-full bg-emerald-50 font-bold text-emerald-900 shadow-ui-sm ring-1 ring-emerald-200/90 ${
           compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]"
         }`}
         title="Đang nhận cập nhật tức thì từ các máy khác"
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
-        {compact ? "Live" : "Live"}
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" aria-hidden />
+        Live
       </span>
     );
   }

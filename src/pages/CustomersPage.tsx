@@ -84,7 +84,7 @@ type MobilePane = "list" | "detail";
 type SaveStatus = "idle" | "saved" | "error";
 
 const FIELD =
-  "w-full min-h-11 touch-manipulation rounded-lg border border-ui-border bg-ui-surface px-2.5 py-2 text-base text-ui-text outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs";
+  "w-full min-h-11 touch-manipulation rounded-xl border border-ui-border/90 bg-ui-surface px-2.5 py-2 text-base text-ui-text shadow-ui-sm outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs";
 
 function newId(prefix: string): string {
   if (
@@ -695,7 +695,7 @@ export function CustomersPage({
 
   return (
     <div className="flex min-h-screen flex-col bg-ui-background text-ui-text">
-      <header className="sticky top-0 z-30 border-b border-ui-border bg-ui-surface pt-[env(safe-area-inset-top)]">
+      <header className="sticky top-0 z-30 border-b border-ui-border/90 bg-ui-surface/95 pt-[env(safe-area-inset-top)] shadow-ui-sm backdrop-blur-[6px]">
         <div className="mx-auto flex max-w-[1400px] items-center gap-2 px-3 py-2.5 sm:px-4">
           {isMobile && mobilePane === "detail" ? (
             <Button
@@ -717,7 +717,7 @@ export function CustomersPage({
             </Button>
           )}
           <div className="min-w-0 flex-1">
-            <h1 className="m-0 truncate text-base font-bold tracking-tight text-ui-navy sm:text-lg">
+            <h1 className="m-0 truncate text-base font-extrabold tracking-tight text-ui-navy sm:text-lg">
               {isMobile && mobilePane === "detail" && selected
                 ? normalizeCustomerNameInput(selected.name) || "Khách hàng"
                 : "Khách hàng"}
@@ -806,7 +806,7 @@ export function CustomersPage({
       <div className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1 flex-col overflow-hidden sm:flex-row">
         {showList ? (
           <aside className="flex min-h-0 w-full flex-1 flex-col border-ui-border bg-ui-surface sm:max-h-none sm:w-[17.5rem] sm:flex-none sm:border-r lg:w-72">
-            <div className="space-y-1.5 border-b border-ui-border p-2.5">
+            <div className="space-y-1.5 border-b border-ui-border/90 bg-gradient-to-b from-slate-50/80 to-white p-2.5">
               <input
                 type="search"
                 value={query}
@@ -828,10 +828,10 @@ export function CustomersPage({
                     key={id}
                     type="button"
                     onClick={() => setTypeFilter(id)}
-                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold transition ${
                       typeFilter === id
-                        ? "bg-ui-primary text-white"
-                        : "bg-ui-surface-muted text-ui-text-muted hover:text-ui-text"
+                        ? "bg-ui-primary text-white shadow-ui-sm"
+                        : "bg-ui-surface-muted text-ui-text-muted ring-1 ring-ui-border/80 hover:text-ui-text"
                     }`}
                   >
                     {label} {typeCounts[id]}
@@ -854,24 +854,24 @@ export function CustomersPage({
                     type="button"
                     data-customer-id={c.id}
                     onClick={() => selectCustomer(c.id)}
-                    className={`mb-1 w-full touch-manipulation rounded-xl px-2.5 py-2.5 text-left transition sm:py-2 ${
+                    className={`mb-1 w-full touch-manipulation rounded-xl border-l-[3px] px-2.5 py-2.5 text-left transition sm:py-2 ${
                       active
-                        ? "bg-teal-500/10 ring-1 ring-teal-500/35 shadow-ui-sm"
-                        : "hover:bg-ui-surface-muted"
+                        ? "border-l-teal-600 bg-teal-500/10 shadow-ui-sm ring-1 ring-teal-500/30"
+                        : "border-l-transparent hover:border-l-slate-300 hover:bg-ui-surface-muted"
                     }`}
                   >
-                    <span className="block truncate text-xs font-semibold">
+                    <span className="block truncate text-xs font-bold text-ui-navy">
                       {normalizeCustomerNameInput(c.name) || "Chưa đặt tên"}
                     </span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                      <span className="font-mono text-[10px] uppercase text-ui-text-muted">
+                      <span className="font-mono text-[10px] font-semibold uppercase text-ui-text-muted">
                         {customerDirectoryListCode(c)}
                       </span>
-                      <span className="rounded bg-ui-surface-muted px-1 py-px text-[9px] font-semibold text-ui-text-muted">
+                      <span className="rounded-full bg-ui-surface-muted px-1.5 py-px text-[9px] font-bold text-ui-text-muted">
                         {typeLabel(c.customerType)}
                       </span>
                       {badge ? (
-                        <span className="text-[9px] font-medium text-ui-primary">
+                        <span className="rounded-full bg-teal-50 px-1.5 py-px text-[9px] font-bold text-teal-800 ring-1 ring-teal-200/80">
                           {badge}
                         </span>
                       ) : null}
@@ -885,8 +885,8 @@ export function CustomersPage({
                 );
               })}
               {filtered.length === 0 ? (
-                <p className="px-2 py-6 text-center text-xs text-ui-text-muted">
-                  Không tìm thấy.
+                <p className="px-2 py-8 text-center text-xs text-ui-text-muted">
+                  Không tìm thấy khách phù hợp.
                 </p>
               ) : null}
             </div>
@@ -903,7 +903,7 @@ export function CustomersPage({
                 >
                   <div className="mx-auto max-w-2xl space-y-3">
                     <div
-                      className="flex gap-1 rounded-lg border border-ui-border bg-ui-surface p-0.5"
+                      className="flex gap-1 rounded-xl border border-ui-border/90 bg-ui-surface p-1 shadow-ui-sm"
                       role="tablist"
                       aria-label="Nhóm hồ sơ"
                     >
@@ -919,9 +919,9 @@ export function CustomersPage({
                           role="tab"
                           aria-selected={profileTab === id}
                           onClick={() => setProfileTab(id)}
-                          className={`min-h-10 flex-1 touch-manipulation rounded-md px-2 text-[12px] font-semibold transition sm:min-h-9 sm:text-[11px] ${
+                          className={`min-h-10 flex-1 touch-manipulation rounded-lg px-2 text-[12px] font-bold transition sm:min-h-9 sm:text-[11px] ${
                             profileTab === id
-                              ? "bg-ui-primary text-white"
+                              ? "bg-ui-primary text-white shadow-ui-sm"
                               : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
                           }`}
                         >
@@ -937,9 +937,9 @@ export function CustomersPage({
                     ) : null}
 
                     {profileTab === "info" ? (
-                      <section className="rounded-xl border border-ui-border bg-ui-surface p-3 shadow-sm">
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
+                      <section className="rounded-2xl border border-ui-border/90 bg-ui-surface p-3.5 shadow-ui-md sm:p-4">
+                        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
                             Thông tin
                           </p>
                           <Button
@@ -1067,17 +1067,17 @@ export function CustomersPage({
                           </label>
                         </div>
 
-                        <div className="mt-4 rounded-lg border border-red-200 bg-red-50/80 p-3">
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-red-800">
+                        <div className="mt-5 rounded-xl border border-red-300/80 bg-gradient-to-br from-red-50 to-rose-50/80 p-3.5 shadow-ui-sm">
+                          <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-900">
                             Vùng nguy hiểm
                           </p>
-                          <p className="mt-1 text-[11px] text-red-800/80">
-                            Xóa khách khỏi danh bạ. Cần Lưu sau khi xác nhận.
+                          <p className="mt-1 text-[11px] leading-relaxed text-red-900/75">
+                            Xóa khách khỏi danh bạ. Thao tác cần xác nhận và bấm Lưu để ghi nhận.
                           </p>
                           <Button
                             variant="danger"
                             size="sm"
-                            className="mt-2"
+                            className="mt-2.5"
                             onClick={() => setDeleteModalOpen(true)}
                           >
                             Xóa khách

@@ -46,7 +46,7 @@ export function StatusFilterBar({
 
   const segments = (
     <div
-      className={`inline-flex min-w-0 items-center rounded-lg border border-ui-border bg-ui-surface p-0.5 shadow-sm ${
+      className={`inline-flex min-w-0 items-center rounded-full border border-ui-border/90 bg-ui-surface p-0.5 shadow-ui-sm ${
         compact ? "gap-0.5" : "gap-1 p-1"
       }`}
       role="tablist"
@@ -160,11 +160,11 @@ function FilterSegment({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`relative shrink-0 whitespace-nowrap rounded-md font-semibold leading-tight transition-colors ${
+      className={`relative shrink-0 whitespace-nowrap rounded-full font-semibold leading-tight transition-colors ${
         dense ? "px-2 py-0.5 text-[9px]" : compact ? "px-2.5 py-1 text-[10px]" : "px-3 py-1.5 text-[11px] sm:text-xs"
       } ${isEmpty && !active ? "opacity-40" : "opacity-100"} ${
         active
-          ? "bg-ui-primary text-white"
+          ? "bg-ui-primary text-white shadow-ui-sm"
           : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
       }`}
     >

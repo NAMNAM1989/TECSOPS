@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Khung trang tối giản — sticky chrome phẳng, không blur/glass. */
+/** Khung trang tối giản — sticky chrome phẳng Round 2. */
 export function AppShell({
   children,
   chrome,
@@ -11,8 +11,8 @@ export function AppShell({
   maxWidthClass?: string;
 }) {
   return (
-    <div className={`mx-auto min-w-0 ${maxWidthClass} px-3 py-1.5 sm:px-3 sm:py-1.5 lg:px-4`}>
-      <div className="sticky top-0 z-40 -mx-3 mb-1.5 min-w-0 border-b border-ui-border bg-ui-background px-3 pb-1.5 pt-[max(0.25rem,env(safe-area-inset-top))] sm:-mx-3 sm:mb-1.5 sm:px-3 sm:pb-1.5 sm:pt-1 lg:-mx-4 lg:px-4">
+    <div className={`mx-auto min-w-0 ${maxWidthClass} px-3 py-1 sm:px-3 sm:py-1.5 lg:px-4`}>
+      <div className="sticky top-0 z-40 -mx-3 mb-1.5 min-w-0 border-b border-ui-border/80 bg-ui-background/92 px-3 pb-1.5 pt-[max(0.2rem,env(safe-area-inset-top))] backdrop-blur-[6px] sm:-mx-3 sm:mb-1.5 sm:px-3 sm:pb-1.5 sm:pt-1 lg:-mx-4 lg:px-4">
         {chrome}
       </div>
       <div className="min-w-0">{children}</div>
@@ -20,12 +20,12 @@ export function AppShell({
   );
 }
 
-/** KPI Lô / Kiện / Kg — nền phẳng, gọn. */
+/** KPI Lô / Kiện / Kg — nền phẳng, gọn Round 2. */
 export function KpiStat({ label, value }: { label: string; value: string | number }) {
   return (
-    <span className="inline-flex min-w-[3.25rem] flex-col items-center rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1 shadow-ui-sm">
-      <span className="text-[9px] font-semibold uppercase tracking-wide text-ui-text-muted">{label}</span>
-      <span className="font-mono text-[13px] font-bold tabular-nums leading-tight text-ui-text">{value}</span>
+    <span className="inline-flex min-w-[3.25rem] flex-col items-center rounded-xl border border-ui-border/90 bg-ui-surface px-2.5 py-1 shadow-ui-sm">
+      <span className="text-[8px] font-bold uppercase tracking-wider text-ui-text-muted">{label}</span>
+      <span className="font-mono text-[13px] font-extrabold tabular-nums leading-tight text-ui-navy">{value}</span>
     </span>
   );
 }

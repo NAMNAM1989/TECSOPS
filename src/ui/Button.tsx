@@ -5,13 +5,13 @@ type Size = "sm" | "md" | "lg";
 
 const VARIANT: Record<Variant, string> = {
   primary:
-    "bg-ui-primary text-white hover:bg-ui-primary-hover focus-visible:ring-ui-focus disabled:bg-ui-primary/50",
+    "bg-ui-primary text-white shadow-ui-sm hover:bg-ui-primary-hover focus-visible:ring-ui-focus disabled:bg-ui-primary/50",
   secondary:
-    "border border-ui-border bg-ui-surface text-ui-text hover:bg-ui-surface-muted focus-visible:ring-ui-focus disabled:opacity-50",
+    "border border-ui-border/90 bg-ui-surface text-ui-text shadow-ui-sm hover:bg-ui-surface-muted focus-visible:ring-ui-focus disabled:opacity-50",
   ghost:
     "bg-transparent text-ui-text hover:bg-ui-surface-muted focus-visible:ring-ui-focus disabled:opacity-50",
   danger:
-    "bg-ui-danger text-white hover:bg-red-700 focus-visible:ring-red-300 disabled:bg-ui-danger/50",
+    "bg-ui-danger text-white shadow-ui-sm hover:bg-red-800 focus-visible:ring-red-300 disabled:bg-ui-danger/50",
 };
 
 const SIZE: Record<Size, string> = {

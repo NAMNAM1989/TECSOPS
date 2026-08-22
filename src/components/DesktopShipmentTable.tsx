@@ -16,7 +16,6 @@ import { InlineAwbEdit } from "./InlineAwbEdit";
 import { MobileDimKgModal } from "./MobileDimKgModal";
 import {
   statusRowAccent,
-  statusRowBg,
   statusRowSelected,
   flightNumberAccent,
 } from "./statusStyles";
@@ -135,11 +134,11 @@ export function DesktopShipmentTable({
 
         <section
           id={`warehouse-section-${activeWarehouse}`}
-          className="overflow-hidden rounded-xl border border-ui-border bg-ui-surface shadow-ui-sm"
+          className="overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-ui-border px-2.5 py-1.5">
+          <div className="flex items-center justify-between gap-2 border-b border-ui-border/80 bg-gradient-to-r from-slate-50 to-white px-3 py-2">
             <div className="min-w-0">
-              <h2 className="text-[13px] font-bold leading-tight text-ui-text">
+              <h2 className="text-[13px] font-extrabold leading-tight tracking-tight text-ui-navy">
                 {warehouseLabel[activeWarehouse]}
                 <span className="ml-1.5 text-[11px] font-semibold text-ui-text-muted">
                   · {group.length} lô
@@ -148,22 +147,22 @@ export function DesktopShipmentTable({
             </div>
           </div>
           <div
-            className={`overflow-auto px-1.5 py-1.5 ${
+            className={`overflow-auto px-1.5 py-1 ${
               group.length > 4 ? "max-h-[min(82vh,820px)]" : ""
             }`}
           >
-            <table className="w-full border-separate border-spacing-x-0 border-spacing-y-0.5 text-left text-[13px] leading-snug">
+            <table className="w-full border-separate border-spacing-x-0 border-spacing-y-0 text-left text-[13px] leading-snug">
               <thead className="sticky top-0 z-20">
-                <tr className="bg-ui-background">
+                <tr className="ops-table-head">
                   {COL_HEADERS.map((c) => (
                     <th
                       key={c.key}
                       title={c.title}
-                      className={`box-border px-1.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-ui-text-muted ${
+                      className={`box-border px-1.5 py-2 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted ${
                         c.key === "customerInfo" || c.key === "status"
                           ? "truncate"
                           : "whitespace-nowrap"
-                      } ${c.w} ${c.key === "awb" ? "bg-ui-background" : ""}`}
+                      } ${c.w} ${c.key === "awb" ? "ops-table-head" : ""}`}
                     >
                       {c.label}
                     </th>
@@ -265,21 +264,22 @@ function ShipmentTableRowImpl({
   ecargoVct?: EcargoVctResult;
 }) {
   const toast = useToast();
-  const bg = statusRowBg;
+  const zebra = rowIdx % 2 === 0 ? "ops-row-zebra-odd" : "ops-row-zebra-even";
+  const bg = selected ? statusRowSelected : zebra;
   const accent = statusRowAccent[row.status];
   const cell = (part: "first" | "mid" | "last" | "awb", extra = "") => {
     const round =
-      part === "first" ? "rounded-l-xl" : part === "last" ? "rounded-r-xl" : "";
+      part === "first" ? "rounded-l-lg" : part === "last" ? "rounded-r-lg" : "";
     const accentCls = part === "first" ? accent : "";
     const hl = highlighted ? "ring-2 ring-inset ring-ui-primary/45" : "";
     const surface = selected ? statusRowSelected : bg;
     const stickyAwb =
       part === "awb"
-        ? "sticky left-0 z-[1] shadow-[2px_0_0_rgba(15,23,42,0.06)]"
+        ? "sticky left-0 z-[1] shadow-[2px_0_0_rgba(11,18,32,0.06)]"
         : "";
-    return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} border-y border-ui-border/70 ${
-      part === "first" ? "border-l border-ui-border/70" : ""
-    } ${part === "last" ? "border-r border-ui-border/70" : ""} px-1.5 py-1 ${extra}`.trim();
+    return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} border-b border-ui-border/50 group-hover/row:bg-teal-50/35 ${
+      part === "first" ? "border-l border-ui-border/60" : ""
+    } ${part === "last" ? "border-r border-ui-border/60" : ""} px-1.5 py-1.5 ${extra}`.trim();
   };
 
   const hasNextRow = rowIdx < groupRowIds.length - 1;
@@ -329,7 +329,7 @@ function ShipmentTableRowImpl({
             rowId={row.id}
             value={row.awb}
             allRows={allRows}
-            className="font-shipment-data text-[14px] font-bold leading-tight tracking-tight"
+            className="ops-awb text-[14px] leading-tight"
             onCommit={(awb) => onUpdate(row.id, { awb })}
             onEnterNavigateDown={() => focusShipmentGridCell(row.id, "hawb")}
           />

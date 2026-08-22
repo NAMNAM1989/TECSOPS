@@ -60,21 +60,21 @@ export const statusRowAccent: Record<ShipmentStatus, string> = {
   COMPLETED: "border-l-[3px] border-l-emerald-500",
 };
 
-/** Hàng được chọn — tint amber nhẹ. */
-export const statusRowSelected = "bg-amber-500/[0.07] ring-1 ring-amber-500/40";
+/** Hàng được chọn — tint teal nhẹ Round 2. */
+export const statusRowSelected = "bg-teal-500/[0.08] ring-1 ring-teal-600/35";
 
-/** Dropdown trạng thái — nền tint + chữ tương phản (light). */
+/** Dropdown / pill trạng thái — nền tint + chữ tương phản (Round 2). */
 export const statusSelectSurface: Record<ShipmentStatus, string> = {
-  PENDING: "bg-blue-500/10 text-blue-800 border-blue-500/20",
-  RECEIVED: "bg-amber-500/10 text-amber-900 border-amber-500/20",
-  VOLUME_DONE: "bg-cyan-500/10 text-cyan-900 border-cyan-500/20",
-  CUSTOMS: "bg-sky-500/10 text-sky-900 border-sky-500/20",
-  SECURITY: "bg-orange-500/10 text-orange-900 border-orange-500/20",
-  OLA_PULL: "bg-fuchsia-500/10 text-fuchsia-900 border-fuchsia-500/20",
-  RECEPTION_COMPLETED: "bg-teal-500/10 text-teal-900 border-teal-500/20",
-  WEIGH_SLIP: "bg-lime-500/10 text-lime-900 border-lime-500/20",
-  COMPLETED: "bg-emerald-500/10 text-emerald-900 border-emerald-500/20",
+  PENDING: "bg-blue-50 text-blue-900 border-blue-200/90",
+  RECEIVED: "bg-amber-50 text-amber-950 border-amber-200/90",
+  VOLUME_DONE: "bg-cyan-50 text-cyan-950 border-cyan-200/90",
+  CUSTOMS: "bg-sky-50 text-sky-950 border-sky-200/90",
+  SECURITY: "bg-orange-50 text-orange-950 border-orange-200/90",
+  OLA_PULL: "bg-fuchsia-50 text-fuchsia-950 border-fuchsia-200/90",
+  RECEPTION_COMPLETED: "bg-teal-50 text-teal-950 border-teal-200/90",
+  WEIGH_SLIP: "bg-lime-50 text-lime-950 border-lime-200/90",
+  COMPLETED: "bg-emerald-50 text-emerald-950 border-emerald-200/90",
 };
 
 /** Màu nhấn số hiệu chuyến bay. */
-export const flightNumberAccent = "text-violet-800";
+export const flightNumberAccent = "text-violet-900";

@@ -94,7 +94,7 @@ export function InlineAwbEdit({
         className={`${btnBase} hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
           !value || rawAwbDigits(value).length === 0
             ? "ops-grid-placeholder"
-            : "text-ui-danger"
+            : "text-ui-awb"
         }`}
       >
         {shown}

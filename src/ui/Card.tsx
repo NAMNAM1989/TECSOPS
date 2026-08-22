@@ -15,7 +15,7 @@ export function Card({
     padding === "none" ? "" : padding === "sm" ? "p-2.5 sm:p-3" : "p-3.5 sm:p-4";
   return (
     <Tag
-      className={`rounded-2xl border border-ui-border bg-ui-surface shadow-ui-sm ${pad} ${className}`}
+      className={`rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md ${pad} ${className}`}
     >
       {children}
     </Tag>

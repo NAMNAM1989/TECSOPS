@@ -121,7 +121,7 @@ export function InlineNumberEdit({
           value === null ? "ops-grid-placeholder" : ""
         } ${saving ? "opacity-60" : ""}`}
       >
-        {saving ? "…" : value !== null ? value.toLocaleString() : emptyLabel}
+        {saving ? "…" : typeof value === "number" ? value.toLocaleString() : emptyLabel}
       </button>
     );
   }

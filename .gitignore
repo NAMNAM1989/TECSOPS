@@ -11,6 +11,10 @@ pnpm-debug.log*
 *.tsbuildinfo
 server/data/state.json
 server/data/*.tmp
+server/data/error-monitor/outbox/*.json
+server/data/error-monitor/inbox/*.json
+server/data/error-monitor/processed/*.json
+server/data/error-monitor/**/*.tmp
 .DS_Store
 *.local
 .env

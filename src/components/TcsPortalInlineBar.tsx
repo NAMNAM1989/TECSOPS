@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { EsidSettingsMenu } from "./EsidSettingsMenu";
 import type { TcsPortalActions } from "../hooks/useTcsPortalActions";
+import { useToast } from "../ui";
 import {
   portalPolicyUsesAgent,
   shouldLockToExtensionVisual,
@@ -16,9 +17,9 @@ import {
 
 type Props = {
   tcs: TcsPortalActions;
-  /** Layout nút nhỏ — desktop header cũng dùng; KHÔNG dùng để ẩn ĐN/Điền */
+  /** Layout nút nhỏ — desktop header cũng dùng; KHÔNG dùng để ẩn Đăng Nhập TCS/Điền */
   compact?: boolean;
-  /** Viewport ≤767 — ẩn ĐN + HOÀN TẤT; Quét chỉ agent */
+  /** Viewport ≤767 — Quét ưu tiên agent; vẫn hiện CTA Đăng Nhập TCS khi chưa login / agent lỗi */
   isMobile?: boolean;
 };
 
@@ -27,6 +28,7 @@ export function TcsPortalInlineBar({
   compact = false,
   isMobile = false,
 }: Props) {
+  const toast = useToast();
   const btn =
     `inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition disabled:opacity-45 active:scale-[0.98] ${
       compact ? "min-h-11 min-w-11 touch-manipulation" : ""
@@ -58,8 +60,11 @@ export function TcsPortalInlineBar({
   const loggedIn = isMobile
     ? usesAgent && agentLoggedIn
     : extLoggedIn || (usesAgent && agentLoggedIn);
-  /** Phone: không nút ĐN. Desktop compact: ẩn khi đã login. */
-  const showLoginBtn = !isMobile && (!compact || !loggedIn);
+  /**
+   * Mobile: luôn hiện CTA khi chưa login (kể cả agent offline) để retry Đăng Nhập TCS.
+   * Desktop compact: ẩn khi đã login.
+   */
+  const showLoginBtn = isMobile ? !loggedIn : !compact || !loggedIn;
   const [showExtLogin, setShowExtLogin] = useState(false);
   const [tcsUsername, setTcsUsername] = useState("");
   const [tcsPassword, setTcsPassword] = useState("");
@@ -76,13 +81,20 @@ export function TcsPortalInlineBar({
   const doLogin = async () => {
     if (tcs.busy) return;
 
-    // Phone: chỉ agent (nút ĐN đã ẩn — giữ path cho gọi nội bộ).
+    // Phone: agent login / retry khi offline.
     if (isMobile) {
-      if (usesAgent) await tcs.login();
+      if (!usesAgent) {
+        toast.error(
+          "Trên điện thoại cần agent cloud (/tcs-agent). Mở Ops trên Railway hoặc bật policy agent.",
+          "Không Đăng Nhập TCS được"
+        );
+        return;
+      }
+      await tcs.login();
       return;
     }
 
-    // PW local: ĐN Playwright headed qua cầu Ext (không form Ext content-script).
+    // PW local: Đăng Nhập TCS Playwright headed qua cầu Ext (không form Ext content-script).
     if (playwrightLocal) {
       await tcs.login();
       return;
@@ -117,21 +129,23 @@ export function TcsPortalInlineBar({
         /CAPTCHA/i.test(String(result.message || ""))
       ) {
         setShowExtLogin(false);
-        window.alert(
+        toast.warning(
           result.message ||
-            "Đã điền user/password trên tab TCS. Hãy nhập CAPTCHA rồi bấm Đăng nhập trên portal."
+            "Đã điền user/password trên tab TCS. Hãy nhập CAPTCHA rồi bấm Đăng nhập trên portal.",
+          "CAPTCHA"
         );
         return;
       }
       if (result.ok) {
         setShowExtLogin(false);
         setTcsPassword("");
+        toast.success("Đăng Nhập TCS thành công", portalWh);
       }
       return;
     }
 
     // Không có Ext trên máy này. Trực quan chỉ khóa khi Ext online —
-    // máy khác / chưa cài Ext phải ĐN agent cloud đúng kho.
+    // máy khác / chưa cài Ext phải Đăng Nhập TCS agent cloud đúng kho.
     if (
       shouldLockToExtensionVisual({
         isMobile,
@@ -141,9 +155,9 @@ export function TcsPortalInlineBar({
       })
     ) {
       setShowExtLogin(true);
-      window.alert(
-        `Chế độ trực quan: cần ${extLabel} online để ĐN trên tab Chrome.\n` +
-          "Reload Ext / mở Ops trên cùng Chrome đã cài Ext. Tắt «Trực quan» nếu muốn dùng agent cloud ẩn."
+      toast.warning(
+        `Chế độ trực quan: cần ${extLabel} online để Đăng Nhập TCS trên tab Chrome. Reload Ext / mở Ops trên cùng Chrome đã cài Ext. Tắt «Trực quan» nếu muốn dùng agent cloud ẩn.`,
+        "Cần Chrome Ext"
       );
       return;
     }
@@ -154,9 +168,9 @@ export function TcsPortalInlineBar({
     }
 
     setShowExtLogin(true);
-    window.alert(
-      `Cần ${extLabel} hoặc agent cloud (/tcs-agent).\n` +
-        "Desktop: cài Ext. Online: mở Ops trên Railway."
+    toast.error(
+      `Cần ${extLabel} hoặc agent cloud (/tcs-agent). Desktop: cài Ext. Online: mở Ops trên Railway.`,
+      "Không Đăng Nhập TCS được"
     );
   };
 
@@ -169,8 +183,9 @@ export function TcsPortalInlineBar({
         await tcs.scanReceptionWithAgent();
         return;
       }
-      window.alert(
-        `Cần agent cloud để Quét kho ${portalWh} trên điện thoại.`
+      toast.error(
+        `Cần agent cloud để Quét kho ${portalWh} trên điện thoại. Bấm «Đăng Nhập TCS» để thử lại.`,
+        "Agent offline"
       );
       return;
     }
@@ -178,8 +193,9 @@ export function TcsPortalInlineBar({
     // PW local: Quét Playwright headed (Ext chỉ làm cầu localhost).
     if (playwrightLocal) {
       if (!extOk) {
-        window.alert(
-          `PW local: cần ${extLabel} online. Reload Ext + chạy npm run portal:headed:local.`
+        toast.error(
+          `PW local: cần ${extLabel} online. Reload Ext + chạy npm run portal:headed:local.`,
+          "PW local"
         );
         return;
       }
@@ -196,12 +212,13 @@ export function TcsPortalInlineBar({
     if (ext?.ok) {
       if (shouldPromptExtLoginBeforeScan(ext)) {
         setShowExtLogin(true);
-        window.alert(
-          `Bấm «Đăng nhập» đúng user kho ${portalWh} trước khi Quét` +
+        toast.warning(
+          `Bấm «Đăng Nhập TCS» đúng user kho ${portalWh} trước khi Quét` +
             (portalWh === "TCS"
               ? " (vd. namnam8012)."
               : " (vd. hanam7195).") +
-            "\nHai Ext dùng chung cookie TCS — đổi kho phải ĐN lại."
+            " Hai Ext dùng chung cookie TCS — đổi kho phải Đăng Nhập TCS lại.",
+          "Chưa Đăng Nhập TCS"
         );
         return;
       }
@@ -220,9 +237,9 @@ export function TcsPortalInlineBar({
         policy: tcs.executorPolicy,
       })
     ) {
-      window.alert(
-        `Chế độ trực quan: cần ${extLabel} để Quét trên tab Chrome (không chạy agent ẩn).\n` +
-          "Reload Ext hoặc tắt «Trực quan» nếu muốn Quét bằng agent cloud."
+      toast.warning(
+        `Chế độ trực quan: cần ${extLabel} để Quét trên tab Chrome (không chạy agent ẩn). Reload Ext hoặc tắt «Trực quan» nếu muốn Quét bằng agent cloud.`,
+        "Cần Chrome Ext"
       );
       return;
     }
@@ -232,8 +249,9 @@ export function TcsPortalInlineBar({
       return;
     }
 
-    window.alert(
-      `Cần ${extLabel} hoặc agent cloud để Quét kho ${portalWh}.`
+    toast.error(
+      `Cần ${extLabel} hoặc agent cloud để Quét kho ${portalWh}.`,
+      "Không Quét được"
     );
   };
 
@@ -254,12 +272,12 @@ export function TcsPortalInlineBar({
   const preview = tcs.lastDeclarePreview;
   const workspace = tcs.workspace;
 
-  const statusLabel = isMobile
+  const portalStatusLabel = isMobile
     ? agentLoggedIn
       ? "Agent cloud đã login"
       : agentOk
         ? "Agent cloud đang khôi phục session"
-        : "Agent cloud offline"
+        : "Agent cloud offline — bấm Đăng Nhập TCS"
     : extLoggedIn
       ? `${extLabel} đã login`
       : agentLoggedIn
@@ -286,7 +304,7 @@ export function TcsPortalInlineBar({
         className={`flex min-w-0 flex-wrap items-center gap-1 ${
           compact
             ? ""
-            : "rounded-lg border border-ui-border bg-ui-surface px-1.5 py-1 shadow-sm sm:flex-nowrap"
+            : "rounded-xl border border-ui-border bg-ui-surface px-1.5 py-1 shadow-ui-sm sm:flex-nowrap"
         }`}
         role="toolbar"
         aria-label={`Cổng TCS · ${portalWh}`}
@@ -309,9 +327,9 @@ export function TcsPortalInlineBar({
                 ? "bg-amber-500/15 text-amber-900"
                 : "bg-slate-500/15 text-slate-700"
           }`}
-          title={statusLabel}
+          title={portalStatusLabel}
         >
-          {compact ? shortStatus : tcs.sessionLabel || statusLabel}
+          {compact ? shortStatus : tcs.sessionLabel || portalStatusLabel}
         </span>
 
         {workspace?.phase ? (
@@ -350,8 +368,9 @@ export function TcsPortalInlineBar({
               const next = !playwrightLocal;
               tcs.setPlaywrightLocal(next);
               if (next) {
-                window.alert(
-                  "PW local BẬT.\n\n1) npm run portal:headed:local\n2) Reload Ext đúng kho\n3) ĐN → Quét/Điền — nhìn cửa sổ Chromium trên máy này."
+                toast.info(
+                  "1) npm run portal:headed:local · 2) Reload Ext đúng kho · 3) Đăng Nhập TCS → Quét/Điền — nhìn cửa sổ Chromium trên máy này.",
+                  "PW local BẬT"
                 );
               }
             }}
@@ -366,8 +385,9 @@ export function TcsPortalInlineBar({
             className={btnLogin}
             disabled={tcs.busy}
             onClick={() => {
-              // Ext cần form user/pass; agent cloud dùng credential env — ĐN ngay.
+              // Ext cần form user/pass; agent cloud dùng credential env — Đăng Nhập TCS ngay.
               if (
+                !isMobile &&
                 !usesAgent &&
                 !tcsUsername.trim() &&
                 !extLoggedIn &&
@@ -378,16 +398,22 @@ export function TcsPortalInlineBar({
               }
               void doLogin();
             }}
-            title="Đăng Nhập TCS (Ext trên PC ưu tiên; agent fallback)."
+            title={
+              isMobile
+                ? agentOk
+                  ? "Đăng Nhập TCS qua agent cloud (OCR / credential Railway)."
+                  : "Agent offline — bấm để thử Đăng Nhập TCS lại."
+                : "Đăng Nhập TCS (Ext trên PC ưu tiên; agent fallback)."
+            }
           >
-            Đăng Nhập TCS
+            {isMobile && !agentOk ? "Thử Đăng Nhập TCS" : "Đăng Nhập TCS"}
           </button>
         ) : null}
 
         {isMobile && canOperate && !loggedIn && !tcs.busy ? (
           <span
             className="max-w-[9rem] truncate text-[9px] font-medium text-amber-800"
-            title="Agent cloud tự login / OCR — không cần nút ĐN trên phone"
+            title="Agent cloud tự login / OCR khi session còn — hoặc bấm Đăng Nhập TCS"
           >
             Đang khôi phục session
           </span>
@@ -426,7 +452,7 @@ export function TcsPortalInlineBar({
       {!compact && !canOperate && !tcs.busy ? (
         <p className="px-1 text-[9px] leading-snug text-ui-text-muted">
           {usesAgent
-            ? `Agent cloud offline — trên Railway kiểm tra service + credential kho ${portalWh}. Không cần máy kho.`
+            ? `Agent cloud offline — bấm «Đăng Nhập TCS» để thử lại. Trên Railway kiểm tra service + credential kho ${portalWh}.`
             : `Offline: cài ${extLabel} hoặc bật policy auto/agent-only để dùng Playwright cloud.`}
         </p>
       ) : null}
@@ -434,8 +460,8 @@ export function TcsPortalInlineBar({
       {!compact && canOperate && !tcs.busy ? (
         <p className="px-1 text-[9px] leading-snug text-ui-text-muted">
           {usesAgent
-            ? "Online: ĐN → menu ⋮ → Điền (tạo phiếu ESID) / Tải PDF. Quét chỉ cập nhật HT trên Ops — tách riêng."
-            : "Ext: ĐN → menu ⋮ → Điền (tạo phiếu ESID) → HOÀN TẤT trên TCS. Quét chỉ cập nhật HT Ops."}
+            ? "Online: Đăng Nhập TCS → menu ⋮ → Điền (tạo phiếu ESID) / Tải PDF. Quét chỉ cập nhật HT trên Ops — tách riêng."
+            : "Ext: Đăng Nhập TCS → menu ⋮ → Điền (tạo phiếu ESID) → HOÀN TẤT trên TCS. Quét chỉ cập nhật HT Ops."}
         </p>
       ) : null}
 
@@ -469,11 +495,11 @@ export function TcsPortalInlineBar({
             className={btnLogin}
             disabled={!tcsUsername.trim() || !tcsPassword || tcs.busy}
           >
-            Đăng nhập {portalWh === "TCS" ? "TCS" : "TECS"}
+            Đăng Nhập TCS {portalWh === "TCS" ? "TCS" : "TECS"}
           </button>
           <p className="text-[10px] text-slate-600 sm:col-span-3">
             Form này cho Chrome Ext. Agent cloud dùng credential trên Railway
-            (Variables) — bấm «Đăng nhập» khi agent online là đủ.
+            (Variables) — bấm «Đăng Nhập TCS» khi agent online là đủ.
           </p>
           <label className="flex items-center gap-1 text-[10px] text-slate-600 sm:col-span-3">
             <input
@@ -487,9 +513,12 @@ export function TcsPortalInlineBar({
       ) : null}
 
       {(tcs.message || tcs.error) && (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-1">
+        <div
+          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-1"
+          aria-live="polite"
+        >
           {tcs.error ? (
-            <p className="min-w-0 text-[10px] font-medium text-red-600">
+            <p className="min-w-0 text-[10px] font-medium text-red-600" role="alert">
               {tcs.error}
             </p>
           ) : tcs.message ? (

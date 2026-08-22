@@ -304,7 +304,7 @@ export function useTcsPortalActions({
               logged_in: false,
               logged_in_username: "",
               phase: "IDLE",
-              message: `Đã chuyển sang ${portalWarehouse} — ĐN lại user kho này trước khi Quét`,
+              message: `Đã chuyển sang ${portalWarehouse} — Đăng Nhập TCS lại user kho này trước khi Quét`,
             } as TcsExtensionWorkspace,
           }
         : ext
@@ -618,10 +618,10 @@ export function useTcsPortalActions({
       if (!tryAgent) {
         setError(
           visualControl && extPing.ok
-            ? `Chế độ trực quan: ĐN bằng ${tcsExtLabel(portalWarehouse)} (tab Chrome). ` +
+            ? `Chế độ trực quan: Đăng Nhập TCS bằng ${tcsExtLabel(portalWarehouse)} (tab Chrome). ` +
                 "Điền user/pass trên form Ext — không dùng agent ẩn."
             : `Cần Chrome Ext kho ${portalWarehouse} (${tcsExtLabel(portalWarehouse)}). ` +
-                "Bấm «Tải Ext» trên toolbar, mở đúng profile Chrome, rồi ĐN lại."
+                "Bấm «Tải Ext» trên toolbar, mở đúng profile Chrome, rồi Đăng Nhập TCS lại."
         );
         return;
       }
@@ -652,7 +652,7 @@ export function useTcsPortalActions({
           opened?.message ||
             (headless
               ? "Agent cloud chưa login — OCR CAPTCHA thất bại hoặc hết session. " +
-                "Kiểm tra TCS_USERNAME(_TCS)/password + volume browser_profile trên Railway, rồi ĐN lại."
+                "Kiểm tra TCS_USERNAME(_TCS)/password + volume browser_profile trên Railway, rồi Đăng Nhập TCS lại."
               : "Agent chưa login — nhập CAPTCHA trên cửa sổ Chrome agent rồi thử lại.")
         );
         return;
@@ -695,8 +695,8 @@ export function useTcsPortalActions({
       setError(
         visualControl && extension?.ok
           ? `Chế độ trực quan: Quét bằng ${tcsExtLabel(portalWarehouse)} trên tab Chrome. ` +
-              "ĐN Ext trước — không chạy agent ẩn."
-          : `Cần Chrome Ext kho ${portalWarehouse} để Quét. Bấm «Tải Ext» rồi ĐN trước.`
+              "Đăng Nhập TCS Ext trước — không chạy agent ẩn."
+          : `Cần Chrome Ext kho ${portalWarehouse} để Quét. Bấm «Tải Ext» rồi Đăng Nhập TCS trước.`
       );
       return;
     }
@@ -937,7 +937,7 @@ export function useTcsPortalActions({
           if (ex === "agent" && (await tryPdfAgent(t0))) return;
         }
         setError(
-          `Cần Chrome Ext kho ${rowPortal} để tải PDF. Bấm «Tải Ext» rồi ĐN trước.`
+          `Cần Chrome Ext kho ${rowPortal} để tải PDF. Bấm «Tải Ext» rồi Đăng Nhập TCS trước.`
         );
       } catch (e) {
         setError(e instanceof Error ? e.message : "Lỗi tải PDF ESID");
@@ -1024,7 +1024,7 @@ export function useTcsPortalActions({
           setError(
             !ext.ok
               ? `Chế độ trực quan: cần ${tcsExtLabel(rowPortal)} online để xem thao tác trên Chrome.`
-              : `Chế độ trực quan: ĐN ${tcsExtLabel(rowPortal)} trước khi Điền (không chạy agent ẩn).`
+              : `Chế độ trực quan: Đăng Nhập TCS ${tcsExtLabel(rowPortal)} trước khi Điền (không chạy agent ẩn).`
           );
           return;
         }
@@ -1079,7 +1079,7 @@ export function useTcsPortalActions({
                   error: "SKIP_EXT",
                   message: !ext.ok
                     ? `Cần ${tcsExtLabel(rowPortal)} online`
-                    : `Cần ĐN ${tcsExtLabel(rowPortal)} trước khi Điền`,
+                    : `Cần Đăng Nhập TCS ${tcsExtLabel(rowPortal)} trước khi Điền`,
                   version: "",
                 } as TcsExtResult;
               } else {

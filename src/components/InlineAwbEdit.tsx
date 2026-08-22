@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
 import { awbConflictMessage, findAwbDigitsConflict } from "../utils/awbUnique";
+import { useToast } from "../ui";
 
 interface Props {
   rowId: string;
@@ -20,6 +21,7 @@ export function InlineAwbEdit({
   className = "",
   onEnterNavigateDown,
 }: Props) {
+  const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [draftDigits, setDraftDigits] = useState(() => rawAwbDigits(value));
   const ref = useRef<HTMLInputElement>(null);
@@ -46,17 +48,18 @@ export function InlineAwbEdit({
       return true;
     }
     if (d.length !== 11) {
-      window.alert(
+      toast.warning(
         d.length < 11
           ? `AWB phải đủ 11 chữ số (Air Waybill). Hiện bạn mới nhập ${d.length} số.`
-          : `AWB chỉ được đúng 11 chữ số — bạn đã nhập ${d.length} số.`
+          : `AWB chỉ được đúng 11 chữ số — bạn đã nhập ${d.length} số.`,
+        "AWB chưa hợp lệ"
       );
       setEditing(false);
       return false;
     }
     const conflict = findAwbDigitsConflict(allRows, d, rowId);
     if (conflict) {
-      window.alert(awbConflictMessage(conflict));
+      toast.error(awbConflictMessage(conflict), "AWB trùng");
       setEditing(false);
       return false;
     }
@@ -114,7 +117,7 @@ export function InlineAwbEdit({
       onChange={(e) => {
         const raw = rawAwbDigits(e.target.value);
         if (raw.length > 11) {
-          window.alert("AWB chỉ được 11 chữ số — chỉ giữ 11 số đầu.");
+          toast.info("AWB chỉ được 11 chữ số — chỉ giữ 11 số đầu.", "AWB");
         }
         setDraftDigits(raw.slice(0, 11));
       }}

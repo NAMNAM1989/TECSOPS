@@ -23,7 +23,7 @@ export function AppShell({
 /** KPI Lô / Kiện / Kg — nền phẳng, gọn. */
 export function KpiStat({ label, value }: { label: string; value: string | number }) {
   return (
-    <span className="inline-flex min-w-[3rem] flex-col items-center rounded-lg border border-ui-border bg-ui-surface px-2 py-0.5 shadow-ui-sm">
+    <span className="inline-flex min-w-[3.25rem] flex-col items-center rounded-xl border border-ui-border bg-ui-surface px-2.5 py-1 shadow-ui-sm">
       <span className="text-[9px] font-semibold uppercase tracking-wide text-ui-text-muted">{label}</span>
       <span className="font-mono text-[13px] font-bold tabular-nums leading-tight text-ui-text">{value}</span>
     </span>

@@ -8,7 +8,8 @@
  * Message types:
  *   EXT_READY  — Ext announce khi content-script load (không có id)
  *   PING       — Ops kiểm tra sống → PONG (+ workspace)
- *   (job)      — ECARGO_OPEN / FILL_ECARGO_VCT / REGISTER_ECARGO_VCT / …
+ *   (job)      — ECARGO_OPEN / FILL_ECARGO_VCT / REGISTER_ECARGO_VCT /
+ *                ECARGO_OTP_PROVIDE (hook mã+URL; Gmail mapping PC sau này) / …
  *   result     — trả về cùng `id`, `ok: true|false`
  *   error      — `ok: false` + `error` code
  *

@@ -292,4 +292,27 @@ describe("tcsChromeExtension bridge", () => {
       window.location.origin
     );
   });
+
+  it("ECARGO_OTP_PROVIDE gửi code+verifyUrl qua channel SCSC (không credential)", async () => {
+    const { provideEcargoOtpViaExtension } = await import("./tcsChromeExtension");
+    const spy = answerNext({ ok: true, phase: "otp_provide" }, TCS_EXT_CHANNEL_SCSC);
+    const result = await provideEcargoOtpViaExtension({
+      code: "QSSMB88636480ZWUGWM",
+      verifyUrl: "https://ecargo.scsc.vn/Export/VCTOrder/Verify?x=1",
+    });
+    expect(result.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: TCS_EXT_CHANNEL_SCSC,
+        type: "ECARGO_OTP_PROVIDE",
+        payload: expect.objectContaining({
+          code: "QSSMB88636480ZWUGWM",
+          verifyUrl: expect.stringContaining("ecargo.scsc.vn"),
+        }),
+      }),
+      window.location.origin
+    );
+    const sent = spy.mock.calls[0]?.[0] as { payload?: Record<string, unknown> };
+    expect(JSON.stringify(sent.payload || {})).not.toMatch(/password|imap|credential/i);
+  });
 });

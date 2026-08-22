@@ -1,6 +1,19 @@
 # Giao thức Ops ↔ Chrome Ext (TECSOPS)
 
-Chuẩn hoá handshake giữa trang Ops và `content-ops.js` của **hai** Ext khuyến nghị:
+## Mô hình thực thi (bắt buộc)
+
+```
+Người dùng bấm nút trên Ops (web)
+        ↓  postMessage (content-ops.js)
+Chrome Ext trên PC kho (ext_tcs / ext_scsc)
+        ↓
+Tab tcs.com.vn / ecargo.scsc.vn trên máy đó
+```
+
+**Không** dùng Playwright server / Railway dual-agent / automation trong container để thay Ext khi làm việc trên PC kho.
+`TCS_AGENT_*` + `browser_profile` chỉ là **fallback** (tắt «Trực quan» hoặc mobile không có Ext).
+
+## Hai Ext chuẩn
 
 | Ext | Thư mục | Channel | Kho |
 |---|---|---|---|
@@ -29,28 +42,27 @@ Chuẩn hoá handshake giữa trang Ops và `content-ops.js` của **hai** Ext k
 
 | Type | Hướng | Ý nghĩa |
 |---|---|---|
-| `EXT_READY` | Ext→Ops | Content-script vừa load — Ops cập nhật chip Ext ngay (không chờ poll 10s) |
+| `EXT_READY` | Ext→Ops | Content-script vừa load — Ops cập nhật chip Ext ngay |
 | `PING` | Ops→Ext | Kiểm tra sống → `PONG` + `workspace` |
 | Job TCS | Ops→Ext | `TCS_OPEN`, `TCS_BOOTSTRAP`, `TCS_SCAN_DATE`, `TCS_INVALIDATE_SESSION`, `FILL_ESID`, `DOWNLOAD_ESID_PDF`, `AGENT_FETCH` |
-| Job SCSC | Ops→Ext | `ECARGO_OPEN`, `FILL_ECARGO_VCT`, `REGISTER_ECARGO_VCT`, `ECARGO_LOOKUP_AGENT` |
+| Job SCSC | Ops→Ext | `ECARGO_OPEN`, `FILL_ECARGO_VCT`, `REGISTER_ECARGO_VCT`, `ECARGO_LOOKUP_AGENT`, `ECARGO_OTP_PROVIDE` |
 | Result | Ext→Ops | Cùng `id`, `ok: true` (+ dữ liệu job) |
-| Error | Ext→Ops | `ok: false` + `error` (`EXT_CONTEXT_INVALIDATED`, `EXT_SEND_FAILED`, `EMPTY_RESPONSE`, `EXT_THROW`, …). Ops tự gắn `TIMEOUT` nếu hết hạn |
+| Error | Ext→Ops | `ok: false` + `error` … Ops tự gắn `TIMEOUT` nếu hết hạn |
+
+### `ECARGO_OTP_PROVIDE` (hook Ext-friendly)
+
+Ops (hoặc mapper Gmail trên PC sau này) gửi `{ code?, verifyUrl? }` → Ext mở link + «Xác Thực».
+Không chứa / không yêu cầu credential Gmail trong payload. IMAP server hiện tại vẫn dùng cho `REGISTER_ECARGO_VCT` cho đến khi mapping Gmail trên Ext sẵn sàng.
 
 ## UX trạng thái Ext (Ops bar)
 
 | Trước | Sau |
 |---|---|
-| Trạng thái Ext lẫn với agent trong 1 pill / title | Chip **Ext · offline / sẵn sàng / đã login** luôn hiện trên bar |
-| Phải chờ poll 10s sau Reload Ext | `EXT_READY` → ping ngay |
-| Menu tải 3 Ext (TECS-TCS / TCS / SCSC) | Chỉ **TCS + SCSC**; TECS-TCS soft-deprecate |
-
-## Automation policy
-
-- **Desktop mặc định Ext-first** (`trực quan` bật): có Ext → chỉ Ext; không có Ext → fallback agent Railway.
-- **Mobile**: agent-only (Quét/PDF) — không đổi.
-- Agent Railway (`TCS_AGENT_*`, `browser_profile`) giữ làm **fallback**, không xoá trong PR này.
+| Trạng thái Ext lẫn với agent trong 1 pill | Chip **Ext · offline / sẵn sàng / đã login** luôn hiện |
+| Ext offline + Trực quan → vẫn fallback Railway | Chỉ Ext; chip báo offline — cài từ «Tải Ext» |
+| Menu tải 3 Ext | Chỉ **TCS + SCSC**; TECS-TCS soft-deprecate |
 
 ## eSID / eCargo
 
-- eSID (điền phiếu): không đụng trong PR protocol — vẫn qua Ext TCS / agent như cũ.
-- eCargo VCT + SCSC: giữ nguyên luồng Ext SCSC.
+- eSID: không đụng trong PR này (chờ quyết định user).
+- eCargo VCT + SCSC: App-click → Ext SCSC; hook OTP provide sẵn cho Gmail mapping sau.

@@ -1,6 +1,7 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { isTcsFamily } from "../constants/warehouses";
+import { notifyError, notifyWarning } from "../ui/notify";
 import type { Shipment } from "../types/shipment";
 import {
   dimDivisorFromFlight,
@@ -583,17 +584,20 @@ function downloadPdfBytes(bytes: Uint8Array, filename: string) {
 /** Tải PDF form DIM TCS (QF/ED/49). >13 dòng → tự thêm hàng, co vừa 1 trang. */
 export async function downloadTcsDimRecordPdf(s: Shipment): Promise<void> {
   if (!isTcsDimRecordWarehouse(s.warehouse)) {
-    window.alert("Form DIM TCS (QF/ED/49) chỉ áp dụng cho family TCS (TCS hoặc TECS-TCS).");
+    notifyWarning(
+      "Form DIM TCS (QF/ED/49) chỉ áp dụng cho family TCS (TCS hoặc TECS-TCS).",
+      "PDF DIM TCS"
+    );
     return;
   }
   if ((s.dimLines?.length ?? 0) <= 0) {
-    window.alert("Chưa có chi tiết DIM (D×R×C×kiện). Hãy nhập DIM trước.");
+    notifyWarning("Chưa có chi tiết DIM (D×R×C×kiện). Hãy nhập DIM trước.", "PDF DIM TCS");
     return;
   }
 
   const model = buildTcsDimRecordModel(s);
   if (!model) {
-    window.alert("Không đọc được dữ liệu DIM.");
+    notifyWarning("Không đọc được dữ liệu DIM.", "PDF DIM TCS");
     return;
   }
 
@@ -602,6 +606,6 @@ export async function downloadTcsDimRecordPdf(s: Shipment): Promise<void> {
     downloadPdfBytes(bytes, tcsDimRecordFilename(model.customer));
   } catch (e) {
     console.error("[downloadTcsDimRecordPdf]", e);
-    window.alert(e instanceof Error ? e.message : "Không tạo được file PDF DIM.");
+    notifyError(e instanceof Error ? e.message : "Không tạo được file PDF DIM.", "PDF DIM TCS");
   }
 }

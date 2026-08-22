@@ -2,11 +2,13 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import { registerNotifySink } from "./notify";
 
 export type ToastTone = "info" | "success" | "warning" | "danger";
 
@@ -86,6 +88,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }),
     [push, dismiss]
   );
+
+  useEffect(() => {
+    registerNotifySink((input) => {
+      push({
+        message: input.message,
+        title: input.title,
+        tone: input.tone ?? "info",
+      });
+    });
+    return () => registerNotifySink(null);
+  }, [push]);
 
   return (
     <ToastContext.Provider value={api}>

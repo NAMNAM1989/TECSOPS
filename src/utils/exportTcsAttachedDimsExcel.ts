@@ -1,5 +1,6 @@
 import type { Shipment } from "../types/shipment";
 import { isTcsWarehouse } from "../constants/warehouses";
+import { notifyError, notifyWarning } from "../ui/notify";
 import { awbForFilename, downloadXlsxBuffer } from "./downloadXlsx";
 import { escapeHtml, printHtmlViaHiddenIframe } from "./printHtmlViaHiddenIframe";
 
@@ -27,7 +28,10 @@ export function canExportTcsDimTemplate(s: Shipment): boolean {
 /** Xuất một sheet đúng mẫu ATTACHED_LIST_DIMS cho một lô TCS — dynamic import exceljs. */
 export async function downloadTcsAttachedDimsExcel(s: Shipment): Promise<void> {
   if (!canExportTcsDimTemplate(s) || !s.dimLines) {
-    window.alert("Chỉ áp dụng cho family TCS (TECS-TCS hoặc TCS) và lô đã có nhập DIM (chi tiết kiện).");
+    notifyWarning(
+      "Chỉ áp dụng cho family TCS (TECS-TCS hoặc TCS) và lô đã có nhập DIM (chi tiết kiện).",
+      "Xuất DIM TCS"
+    );
     return;
   }
 
@@ -68,14 +72,17 @@ export async function downloadTcsAttachedDimsExcel(s: Shipment): Promise<void> {
     downloadXlsxBuffer(buf, `ATTACHED_LIST_DIMS_${awbForFilename(s.awb)}.xlsx`);
   } catch (e) {
     console.error("[downloadTcsAttachedDimsExcel]", e);
-    window.alert(e instanceof Error ? e.message : "Không tạo được file Excel.");
+    notifyError(e instanceof Error ? e.message : "Không tạo được file Excel.", "Xuất DIM TCS");
   }
 }
 
 /** In nhanh bảng DIM cùng layout (4 cột) trong trình duyệt. */
 export function printTcsAttachedDimsList(s: Shipment): void {
   if (!canExportTcsDimTemplate(s) || !s.dimLines) {
-    window.alert("Chỉ áp dụng cho family TCS (TECS-TCS hoặc TCS) và lô đã có nhập DIM (chi tiết kiện).");
+    notifyWarning(
+      "Chỉ áp dụng cho family TCS (TECS-TCS hoặc TCS) và lô đã có nhập DIM (chi tiết kiện).",
+      "In LIST DIM TCS"
+    );
     return;
   }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import type { Shipment } from "../types/shipment";
+import { registerNotifySink, type NotifyInput } from "../ui/notify";
 import { canPrintDimReport, canPrintDimScscReport, printDimReport } from "./printDimReport";
 import {
   formatDimKgDisplay,
@@ -72,25 +73,31 @@ describe("canPrintDimScscReport", () => {
 
 describe("printDimReport", () => {
   afterEach(() => {
+    registerNotifySink(null);
     vi.restoreAllMocks();
   });
 
-  it("báo khi chưa có chi tiết DIM", () => {
+  it("báo khi chưa có chi tiết DIM — Toast, không alert", () => {
+    const notes: NotifyInput[] = [];
+    registerNotifySink((n) => notes.push(n));
     const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
     printDimReport(sampleShipment({ dimLines: null }));
-    expect(alert).toHaveBeenCalledWith(expect.stringContaining("Chưa có chi tiết DIM"));
+    expect(notes.some((n) => n.message.includes("Chưa có chi tiết DIM"))).toBe(true);
+    expect(alert).not.toHaveBeenCalled();
   });
 
   it("từ chối kho TCS dù có dimLines", () => {
-    const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const notes: NotifyInput[] = [];
+    registerNotifySink((n) => notes.push(n));
     printDimReport(sampleShipment({ warehouse: "TECS-TCS" }));
-    expect(alert).toHaveBeenCalledWith(expect.stringContaining("TCS"));
+    expect(notes.some((n) => n.message.includes("TCS"))).toBe(true);
   });
 
   it("từ chối KHO TCS dù có dimLines", () => {
-    const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const notes: NotifyInput[] = [];
+    registerNotifySink((n) => notes.push(n));
     printDimReport(sampleShipment({ warehouse: "TECS-TCS" }));
-    expect(alert).toHaveBeenCalledWith(expect.stringContaining("SCSC"));
+    expect(notes.some((n) => n.message.includes("SCSC"))).toBe(true);
   });
 
   it("ghi HTML meta + bảng DIM (kg) theo lineDimKg như modal", () => {

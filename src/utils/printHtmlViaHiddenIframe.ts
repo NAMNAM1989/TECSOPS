@@ -1,3 +1,5 @@
+import { notifyError } from "../ui/notify";
+
 /** In HTML qua iframe ẩn — dùng chung DIM SCSC / LIST DIM TCS. */
 
 export function escapeHtml(s: string): string {
@@ -11,7 +13,7 @@ export function escapeHtml(s: string): string {
 export type PrintHtmlViaHiddenIframeOpts = {
   /** Delay trước khi gọi print (ms). */
   delayMs?: number;
-  /** Cảnh báo khi không tạo được khung in. */
+  /** Thông báo Toast khi không tạo được khung in (không window.alert). */
   failAlert?: string;
 };
 
@@ -41,7 +43,7 @@ export function printHtmlViaHiddenIframe(
   const doc = iframe.contentDocument;
   if (!doc) {
     iframe.remove();
-    if (opts.failAlert) window.alert(opts.failAlert);
+    if (opts.failAlert) notifyError(opts.failAlert, "In");
     return false;
   }
 
@@ -70,7 +72,7 @@ export function printHtmlViaHiddenIframe(
       win.focus();
       win.print();
     } catch {
-      window.alert("Không gọi được lệnh in.");
+      notifyError("Không gọi được lệnh in.", "In");
       cleanup();
     }
   };

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Shipment } from "../types/shipment";
+import { registerNotifySink, type NotifyInput } from "../ui/notify";
 import {
   buildTcsDimRecordModel,
   buildTcsDimRecordPdfBytes,
@@ -127,15 +128,18 @@ describe("buildTcsDimRecordPdfBytes", () => {
 
 describe("downloadTcsDimRecordPdf", () => {
   afterEach(() => {
+    registerNotifySink(null);
     vi.restoreAllMocks();
   });
 
-  it("alert khi kho không phải family TCS", async () => {
+  it("Toast khi kho không phải family TCS — không window.alert", async () => {
+    const notes: NotifyInput[] = [];
+    registerNotifySink((n) => notes.push(n));
     const alert = vi.fn();
-    // Suite chạy dưới environment node (đọc font file) — stub window.alert.
     vi.stubGlobal("window", { alert });
     await downloadTcsDimRecordPdf(sample({ warehouse: "SCSC" }));
-    expect(alert).toHaveBeenCalled();
+    expect(notes.some((n) => n.message.includes("family TCS"))).toBe(true);
+    expect(alert).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 });

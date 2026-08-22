@@ -15,6 +15,7 @@ import {
 import { savedGoodsPrintText } from "./customerPrintProfileLink";
 import { loadLastCsdTransfer, saveLastCsdTransfer } from "./csdPrintPrefs";
 import { clipScscGoodsDescriptionPrint } from "./scscPrintContent";
+import { notifyInfo, notifyWarning } from "../ui/notify";
 
 /** Thêm hãng mới: mở rộng union + thêm entry trong CSD_CARRIER_PROFILES + PDF mẫu. */
 export type CsdCarrier = "FD" | "TH";
@@ -543,16 +544,16 @@ export async function printCsdForShipment(
     const known = Object.values(CSD_CARRIER_PROFILES)
       .map((p) => `${p.label} (${p.airlineName})`)
       .join(", ");
-    window.alert(`Form CSD chỉ áp dụng cho chuyến: ${known}.`);
+    notifyWarning(`Form CSD chỉ áp dụng cho chuyến: ${known}.`, "In CSD");
     return;
   }
   if (awbDigitsKey(s.awb).length !== 11) {
-    window.alert("AWB phải đủ 11 số để in CSD.");
+    notifyWarning("AWB phải đủ 11 số để in CSD.", "In CSD");
     return;
   }
   const fields = buildCsdFields(s, carrier, opts);
   if (!fields.dest) {
-    window.alert("Lô chưa có DEST — nhập mã sân bay đích trước khi in CSD.");
+    notifyWarning("Lô chưa có DEST — nhập mã sân bay đích trước khi in CSD.", "In CSD");
     return;
   }
   if (!fields.goods && !opts.allowEmptyGoods) {
@@ -575,7 +576,7 @@ export async function printCsdForShipment(
   const url = URL.createObjectURL(blob);
   const win = window.open(url, "_blank", "noopener,noreferrer");
   if (!win) {
-    window.alert(`Đã tải ${filename}. Cho phép popup nếu muốn mở bản in ngay.`);
+    notifyInfo(`Đã tải ${filename}. Cho phép popup nếu muốn mở bản in ngay.`, "In CSD");
     return;
   }
   window.setTimeout(() => {

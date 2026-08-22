@@ -1,5 +1,6 @@
 import type { Borders, Cell, Font } from "exceljs";
 import type { Shipment } from "../types/shipment";
+import { notifyError, notifyWarning } from "../ui/notify";
 import { canPrintDimScscReport } from "./printDimReport";
 import { buildScscDimListModel, dimKgExcelLineNumFmt, type ScscDimListModel } from "./scscDimListReport";
 import { awbForFilename, downloadXlsxBuffer } from "./downloadXlsx";
@@ -201,8 +202,9 @@ export async function downloadScscDimDayExcel(
 ): Promise<number> {
   const ready = shipments.filter((s) => canPrintDimScscReport(s));
   if (ready.length === 0) {
-    window.alert(
-      "Chưa có lô TECS-SCSC nào đã nhập chi tiết DIM (D×R×C×kiện) trong ngày này."
+    notifyWarning(
+      "Chưa có lô TECS-SCSC nào đã nhập chi tiết DIM (D×R×C×kiện) trong ngày này.",
+      "Xuất DIM SCSC"
     );
     return 0;
   }
@@ -232,12 +234,15 @@ export async function downloadScscDimDayExcel(
 /** Excel LIST SCSC — meta không viền; chỉ bảng DIM có lưới đen. */
 export function downloadScscDimListExcel(s: Shipment): void {
   if (!canPrintDimScscReport(s) || !s.dimLines) {
-    window.alert("Chỉ áp dụng cho kho SCSC (TECS-SCSC hoặc KHO SCSC) và lô đã có nhập DIM (chi tiết kiện).");
+    notifyWarning(
+      "Chỉ áp dụng cho kho SCSC (TECS-SCSC hoặc KHO SCSC) và lô đã có nhập DIM (chi tiết kiện).",
+      "Xuất DIM SCSC"
+    );
     return;
   }
   const model = buildScscDimListModel(s);
   if (!model) {
-    window.alert("Không đọc được dữ liệu DIM.");
+    notifyWarning("Không đọc được dữ liệu DIM.", "Xuất DIM SCSC");
     return;
   }
 
@@ -248,8 +253,9 @@ export function downloadScscDimListExcel(s: Shipment): void {
       downloadXlsxBuffer(buf, `LIST_SCSC_${awbForFilename(s.awb)}.xlsx`);
     } catch (e) {
       console.error("[downloadScscDimListExcel]", e);
-      window.alert(
-        e instanceof Error ? e.message : "Không tạo được file Excel. Thử lại hoặc kiểm tra bộ nhớ trình duyệt."
+      notifyError(
+        e instanceof Error ? e.message : "Không tạo được file Excel. Thử lại hoặc kiểm tra bộ nhớ trình duyệt.",
+        "Xuất DIM SCSC"
       );
     }
   })();

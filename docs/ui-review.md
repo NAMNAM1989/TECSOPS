@@ -1,6 +1,16 @@
 # TECSOPS UI Review — Ops / Customers / Stats redesign
 
-> Cập nhật: 2026-08-22 · Round 3.1 occlusion fix (PR #41)
+> Cập nhật: 2026-08-22 · Round 3.2 alert→Toast + CTA Đăng Nhập TCS
+
+## Round 3.2 — Alert → Toast + CTA login
+
+| Finding (#39 P0) | Fix |
+| --- | --- |
+| `window.alert` chặn UI (portal / AWB / export / in) | `src/ui/notify.ts` → Toast; export/print/CSD/DIM không còn `window.alert` |
+| Mobile ẩn CTA khi agent/ext fail (cổng thu gọn) | Header collapsed vẫn hiện «Đăng Nhập TCS» / «Thử Đăng Nhập TCS»; login fail Toast |
+| Copy «ĐN» | `tcsLoginCtaLabel` — luôn cụm đầy đủ |
+
+P1 lite: EmptyState khi lọc không khớp; Excel thống kê dùng `statusLabel`.
 
 ## Round 3.1 — Mobile occlusion
 
@@ -57,13 +67,13 @@ Chờ keep/delete list từ inventory GitHub. Ứng viên cleanup (follow-up PR)
 | Thống kê | KPI card gradient tone; chart/table đồng bộ token Ops |
 | A11y | `:focus-visible` global; focus ring giữ trên control chính |
 
-## P0 từ #39 (giữ nguyên)
+## P0 từ #39 — đã xử lý Round 3.2
 
 | Finding | Fix |
 | --- | --- |
-| `window.alert` chặn UI | Toast non-blocking |
-| Mobile ẩn CTA khi agent fail | Hiện «Đăng Nhập TCS» / «Thử Đăng Nhập TCS» |
-| Copy user-visible dùng «ĐN» | Luôn «Đăng Nhập TCS» |
+| `window.alert` chặn UI | Toast non-blocking (`notify` + ToastProvider) |
+| Mobile ẩn CTA khi agent fail | Hiện «Đăng Nhập TCS» / «Thử Đăng Nhập TCS» cả khi cổng thu gọn |
+| Copy user-visible dùng «ĐN» | Luôn «Đăng Nhập TCS» (`tcsLoginCtaLabel`) |
 
 ## Không đụng
 

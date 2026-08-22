@@ -60,7 +60,8 @@ export async function applyBookGoogleSheetRows(
   indices: number[],
   sheetTab: string,
   spreadsheetId: string,
-  sheetGid?: string
+  sheetGid?: string,
+  removeIds: string[] = []
 ): Promise<SheetBookApplyResult> {
   const res = await fetch("/api/sheets/book/apply", {
     ...credFetch,
@@ -69,6 +70,8 @@ export async function applyBookGoogleSheetRows(
     body: JSON.stringify({
       sessionDate,
       indices,
+      removeIds,
+      reorder: true,
       sheetTab,
       spreadsheetId,
       ...(sheetGid ? { gid: sheetGid } : {}),

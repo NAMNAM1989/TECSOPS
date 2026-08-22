@@ -1071,22 +1071,33 @@ export function AirCargoTracking({
             activeWarehouse={activeWarehouse}
             onClose={() => setSheetImportOpen(false)}
             onApplied={(count, serverState, meta) => {
+              const removedN = meta?.removedCount ?? 0;
+              const reorderedN = meta?.reorderedCount ?? 0;
               if (serverState) {
                 if (!applyRemoteState(serverState, { force: true })) void refreshState();
-              } else if (count > 0) {
+              } else if (count > 0 || removedN > 0 || reorderedN > 0) {
                 void refreshState();
               }
               if (meta?.preferredWarehouse) {
                 setActiveWarehouse(meta.preferredWarehouse);
               }
               const errN = meta?.errorCount ?? 0;
-              if (count > 0 && errN === 0) {
+              if ((count > 0 || removedN > 0 || reorderedN > 0) && errN === 0) {
                 const parts = WAREHOUSE_ORDER.map((wh) => {
                   const n = meta?.appliedByWarehouse?.[wh] ?? 0;
                   return n > 0 ? `${warehouseLabel[wh]} ${n}` : null;
                 }).filter(Boolean);
                 const detail = parts.length ? ` (${parts.join(" · ")})` : "";
-                toast.success(`Đã nhập ${count} lô từ Google Sheet${detail}.`, "Nhập Sheet");
+                const removeHint = removedN > 0 ? ` · xóa ${removedN} lô thừa` : "";
+                const orderHint = reorderedN > 0 ? ` · STT ${reorderedN} lô theo Sheet` : "";
+                toast.success(
+                  count > 0
+                    ? `Đã đồng bộ ${count} lô từ Google Sheet${detail}${removeHint}${orderHint}.`
+                    : removedN > 0
+                      ? `Đã xóa ${removedN} lô không còn trên Sheet${orderHint}.`
+                      : `Đã sắp ${reorderedN} lô theo thứ tự Sheet.`,
+                  "Nhập Sheet"
+                );
                 setSheetImportOpen(false);
               } else if (count > 0 && errN > 0) {
                 toast.warning(

@@ -34,11 +34,11 @@ export function isValidAwb(awb) {
 }
 
 /**
- * Lô booking trống AWB nhưng đã có dữ liệu khớp dòng Sheet (chuyến/khách/DEST/kho/kiện-kg).
+ * Khớp fingerprint nghiệp vụ (chuyến/khách/DEST/kho/kiện-kg) — không xét AWB.
+ * Dùng khi Sheet đổi số AWB hoặc lô web còn trống AWB.
  */
-export function blankBookingMatchesSheetRow(existing, row, sessionDate) {
+export function lotFingerprintMatchesSheetRow(existing, row, sessionDate) {
   if (!existing || existing.sessionDate !== sessionDate) return false;
-  if (isValidAwb(existing.awb) || !isValidAwb(row.awb)) return false;
 
   const flight = normStr(row.flight).toUpperCase();
   if (!flight || flight !== normStr(existing.flight).toUpperCase()) return false;
@@ -57,27 +57,135 @@ export function blankBookingMatchesSheetRow(existing, row, sessionDate) {
   return true;
 }
 
-/** Tìm lô cùng phiên thiếu AWB nhưng khớp fingerprint Sheet. */
-export function findBlankAwbBookingInSession(rows, sessionDate, sheetRow, claimedIds = null) {
+/**
+ * Lô booking trống AWB nhưng đã có dữ liệu khớp dòng Sheet (chuyến/khách/DEST/kho/kiện-kg).
+ */
+export function blankBookingMatchesSheetRow(existing, row, sessionDate) {
+  if (isValidAwb(existing?.awb) || !isValidAwb(row?.awb)) return false;
+  return lotFingerprintMatchesSheetRow(existing, row, sessionDate);
+}
+
+/**
+ * Lô web còn AWB cũ — Sheet đã sửa sang AWB khác, fingerprint vẫn khớp.
+ * Không ghép nếu AWB cũ vẫn còn trên Sheet (hai lô thật).
+ */
+export function replacedAwbBookingMatchesSheetRow(existing, row, sessionDate, sheetAwbKeys) {
+  if (!isValidAwb(existing?.awb) || !isValidAwb(row?.awb)) return false;
+  const existingKey = awbKeyForMatch(existing.awb);
+  const sheetKey = awbKeyForMatch(row.awb);
+  if (!existingKey || existingKey === sheetKey) return false;
+  if (sheetAwbKeys?.has(existingKey)) return false;
+  return lotFingerprintMatchesSheetRow(existing, row, sessionDate);
+}
+
+function firstUnclaimedMatch(rows, sessionDate, claimedIds, predicate) {
   for (const r of rows) {
     if (r.sessionDate !== sessionDate) continue;
     if (claimedIds?.has(r.id)) continue;
-    if (blankBookingMatchesSheetRow(r, sheetRow, sessionDate)) return r;
+    if (predicate(r)) return r;
   }
   return null;
 }
 
+/** Tìm lô cùng phiên thiếu AWB nhưng khớp fingerprint Sheet. */
+export function findBlankAwbBookingInSession(rows, sessionDate, sheetRow, claimedIds = null) {
+  return firstUnclaimedMatch(rows, sessionDate, claimedIds, (r) =>
+    blankBookingMatchesSheetRow(r, sheetRow, sessionDate)
+  );
+}
+
 /**
- * Khớp theo AWB trước; nếu không có — thử ghép lô booking trống AWB.
- * @param {{ inSession: Map<string, object> }} awbIndexes
+ * Chỉ ghép khi đúng 1 lô web khớp fingerprint — tránh nhập nhầm 2 lô cùng khách/chuyến.
  */
-export function resolveExistingForSheetRow(rows, awbIndexes, sessionDate, sheetRow, claimedBlankIds = null) {
+export function findReplacedAwbBookingInSession(
+  rows,
+  sessionDate,
+  sheetRow,
+  sheetAwbKeys,
+  claimedIds = null
+) {
+  const hits = [];
+  for (const r of rows) {
+    if (r.sessionDate !== sessionDate) continue;
+    if (claimedIds?.has(r.id)) continue;
+    if (replacedAwbBookingMatchesSheetRow(r, sheetRow, sessionDate, sheetAwbKeys)) hits.push(r);
+  }
+  return hits.length === 1 ? hits[0] : null;
+}
+
+/**
+ * Khớp theo AWB trước; nếu không có — thử ghép lô trống AWB, rồi AWB Sheet đã sửa.
+ * @param {{ inSession: Map<string, object> }} awbIndexes
+ * @param {Set<string>|null} sheetAwbKeys AWB 11 số đang có trên tab Sheet
+ */
+export function resolveExistingForSheetRow(
+  rows,
+  awbIndexes,
+  sessionDate,
+  sheetRow,
+  claimedBlankIds = null,
+  sheetAwbKeys = null
+) {
   const key = awbKeyForMatch(sheetRow.awb);
   if (key.length >= 11) {
     const byAwb = awbIndexes.inSession.get(key) ?? null;
     if (byAwb) return byAwb;
   }
-  return findBlankAwbBookingInSession(rows, sessionDate, sheetRow, claimedBlankIds);
+  const blank = findBlankAwbBookingInSession(rows, sessionDate, sheetRow, claimedBlankIds);
+  if (blank) return blank;
+  if (sheetAwbKeys) {
+    return findReplacedAwbBookingInSession(
+      rows,
+      sessionDate,
+      sheetRow,
+      sheetAwbKeys,
+      claimedBlankIds
+    );
+  }
+  return null;
+}
+
+export function sheetAwbKeySet(rows) {
+  /** @type {Set<string>} */
+  const keys = new Set();
+  for (const row of rows ?? []) {
+    const key = awbKeyForMatch(row.awb);
+    if (key.length >= 11) keys.add(key);
+  }
+  return keys;
+}
+
+/**
+ * Lô web cùng phiên có AWB hợp lệ nhưng không còn trên Sheet.
+ * @returns {object[]}
+ */
+export function findOrphanSessionLots(rows, sessionDate, sheetRows, claimedIds = null) {
+  const sheetKeys = sheetAwbKeySet(sheetRows);
+  const orphans = [];
+  for (const r of rows ?? []) {
+    if (r.sessionDate !== sessionDate) continue;
+    if (claimedIds?.has(r.id)) continue;
+    const key = awbKeyForMatch(r.awb);
+    if (key.length < 11) continue;
+    if (sheetKeys.has(key)) continue;
+    orphans.push(r);
+  }
+  return orphans;
+}
+
+/**
+ * @returns {{ kind: "replaced"|"web_only", replacedByAwb: string|null, autoRemove: boolean }}
+ */
+export function classifySheetOrphan(orphan, sheetRows, sessionDate) {
+  const hits = (sheetRows ?? []).filter((row) =>
+    lotFingerprintMatchesSheetRow(orphan, row, sessionDate)
+  );
+  if (hits.length === 1) {
+    const status = String(orphan.status ?? "PENDING").toUpperCase();
+    const autoRemove = status === "PENDING" || status === "";
+    return { kind: "replaced", replacedByAwb: hits[0].awb || null, autoRemove };
+  }
+  return { kind: "web_only", replacedByAwb: null, autoRemove: false };
 }
 
 /** Tìm lô cùng AWB trong phiên (bất kể kho). */
@@ -195,7 +303,12 @@ export function sheetRowNeedsUpdate(existing, row, sessionDate, customers, looku
   if (!existing) return false;
   const patch = sheetRowToUpdatePatch(row, sessionDate, customers, lookupCustomerCode, lookupCustomerId);
 
-  if (isValidAwb(patch.awb) && !isValidAwb(existing.awb)) return true;
+  if (
+    isValidAwb(patch.awb) &&
+    awbKeyForMatch(patch.awb) !== awbKeyForMatch(existing.awb)
+  ) {
+    return true;
+  }
 
   if (patchFieldDiffers(existing, patch, "warehouse", "str")) return true;
   if (patchFieldDiffers(existing, patch, "customer", "customer")) return true;
@@ -265,4 +378,141 @@ export function resolveSheetRowSyncStatus(ctx, row, sessionDate, customers, look
 /** Dòng không được chọn / nhập. */
 export function sheetRowIsBlocked(syncStatus) {
   return syncStatus === "duplicate" || syncStatus === "sheet_duplicate" || syncStatus === "awb_taken";
+}
+
+const SHEET_WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "TCS", "SCSC"];
+
+/** STT trên Sheet = thứ tự xuất hiện trong tab, tính riêng từng kho. */
+export function assignSheetSttByWarehouse(parsed) {
+  /** @type {Record<string, number>} */
+  const c = {};
+  return (parsed ?? []).map((row) => {
+    const wh = String(row.warehouse || "TECS-TCS").trim() || "TECS-TCS";
+    c[wh] = (c[wh] ?? 0) + 1;
+    return { ...row, sheetStt: c[wh] };
+  });
+}
+
+export function sheetOrderKeysByWarehouse(parsed) {
+  /** @type {Map<string, string[]>} */
+  const map = new Map(SHEET_WAREHOUSE_ORDER.map((wh) => [wh, []]));
+  for (const row of parsed ?? []) {
+    const key = awbKeyForMatch(row.awb);
+    if (key.length < 11) continue;
+    const wh = String(row.warehouse || "TECS-TCS").trim() || "TECS-TCS";
+    if (!map.has(wh)) map.set(wh, []);
+    const list = map.get(wh);
+    if (!list.includes(key)) list.push(key);
+  }
+  return map;
+}
+
+/**
+ * ID lô cùng phiên theo thứ tự Sheet (từng kho) — lô chỉ có trên web đứng sau.
+ * @returns {string[]}
+ */
+export function orderedSessionIdsBySheet(rows, sessionDate, parsed) {
+  const keysByWh = sheetOrderKeysByWarehouse(parsed);
+  const session = (rows ?? []).filter((r) => r.sessionDate === sessionDate);
+  /** @type {Map<string, object>} */
+  const byAwb = new Map();
+  for (const r of session) {
+    const key = awbKeyForMatch(r.awb);
+    if (key.length >= 11 && !byAwb.has(key)) byAwb.set(key, r);
+  }
+  const used = new Set();
+  /** @type {string[]} */
+  const ordered = [];
+  for (const wh of [...SHEET_WAREHOUSE_ORDER, ...[...keysByWh.keys()].filter((w) => !SHEET_WAREHOUSE_ORDER.includes(w))]) {
+    for (const key of keysByWh.get(wh) ?? []) {
+      const lot = byAwb.get(key);
+      if (!lot || used.has(lot.id)) continue;
+      if (String(lot.warehouse || "") !== wh) continue;
+      ordered.push(lot.id);
+      used.add(lot.id);
+    }
+  }
+  const rest = session
+    .filter((r) => !used.has(r.id))
+    .sort((a, b) => {
+      const wa = SHEET_WAREHOUSE_ORDER.indexOf(a.warehouse);
+      const wb = SHEET_WAREHOUSE_ORDER.indexOf(b.warehouse);
+      if (wa !== wb) return (wa < 0 ? 99 : wa) - (wb < 0 ? 99 : wb);
+      return (Number(a.stt) || 0) - (Number(b.stt) || 0);
+    });
+  for (const r of rest) ordered.push(r.id);
+  return ordered;
+}
+
+/** Đặt lại thứ tự lô một phiên theo danh sách id — ngày khác giữ nguyên chỗ. */
+export function applySessionIdOrder(rows, sessionDate, orderedIds) {
+  const list = Array.isArray(rows) ? rows : [];
+  const ids = Array.isArray(orderedIds) ? orderedIds.map(String) : [];
+  /** @type {Map<string, object>} */
+  const byId = new Map();
+  for (const r of list) {
+    if (r.sessionDate === sessionDate) byId.set(r.id, r);
+  }
+  const seen = new Set();
+  /** @type {object[]} */
+  const ordered = [];
+  for (const id of ids) {
+    const r = byId.get(id);
+    if (!r || seen.has(id)) continue;
+    ordered.push(r);
+    seen.add(id);
+  }
+  for (const r of list) {
+    if (r.sessionDate !== sessionDate || seen.has(r.id)) continue;
+    ordered.push(r);
+    seen.add(r.id);
+  }
+  const out = [];
+  let inserted = false;
+  for (const r of list) {
+    if (r.sessionDate !== sessionDate) {
+      out.push(r);
+      continue;
+    }
+    if (!inserted) {
+      out.push(...ordered);
+      inserted = true;
+    }
+  }
+  if (!inserted) out.push(...ordered);
+  return out;
+}
+
+export function countSessionSttShifts(rows, sessionDate, orderedIds) {
+  const next = applySessionIdOrder(rows, sessionDate, orderedIds);
+  /** @type {Map<string, number>} */
+  const before = new Map();
+  for (const r of rows ?? []) {
+    if (r.sessionDate === sessionDate) before.set(r.id, Number(r.stt) || 0);
+  }
+  /** @type {Record<string, number>} */
+  const c = {};
+  let n = 0;
+  for (const r of next) {
+    if (r.sessionDate !== sessionDate) continue;
+    const wh = String(r.warehouse || "TECS-TCS");
+    c[wh] = (c[wh] ?? 0) + 1;
+    if (before.get(r.id) !== c[wh]) n += 1;
+  }
+  return n;
+}
+
+/**
+ * @returns {{ rows: object[], orderedIds: string[], changed: boolean, sttShiftCount: number }}
+ */
+export function reorderSessionRowsBySheet(rows, sessionDate, parsed) {
+  const orderedIds = orderedSessionIdsBySheet(rows, sessionDate, parsed);
+  const next = applySessionIdOrder(rows, sessionDate, orderedIds);
+  const sttShiftCount = countSessionSttShifts(rows, sessionDate, orderedIds);
+  const currentIds = (rows ?? []).filter((r) => r.sessionDate === sessionDate).map((r) => r.id);
+  const changed =
+    sttShiftCount > 0 ||
+    currentIds.length !== orderedIds.length ||
+    currentIds.some((id, i) => id !== orderedIds[i]);
+  return { rows: next, orderedIds, changed, sttShiftCount };
 }

@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   isSheetRowSelectable,
+  type SheetBookOrphanRow,
   type SheetBookSyncResult,
   type SheetBookSyncRow,
 } from "../types/googleSheetBook";
@@ -47,6 +48,8 @@ export type SheetImportAppliedMeta = {
   preferredWarehouse: Warehouse | null;
   errorCount?: number;
   errors?: { awb: string; error: string }[];
+  removedCount?: number;
+  reorderedCount?: number;
 };
 
 type Props = {
@@ -118,6 +121,7 @@ export function GoogleSheetImportModal({
   const [applying, setApplying] = useState(false);
   const [sync, setSync] = useState<SheetBookSyncResult | null>(null);
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
+  const [selectedOrphans, setSelectedOrphans] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [applyErrors, setApplyErrors] = useState<
     { awb: string; error: string }[]
@@ -193,6 +197,9 @@ export function GoogleSheetImportModal({
         }
         setSync(result);
         setSelected(selectAllImportable(result));
+        setSelectedOrphans(
+          new Set((result.orphans ?? []).filter((o) => o.autoRemove).map((o) => o.id))
+        );
         const headers =
           (result as SheetBookSyncResult & { headerPreview?: string[] })
             .headerPreview ?? [];
@@ -256,6 +263,9 @@ export function GoogleSheetImportModal({
         const result = await syncBookLocalCsv(sessionYmd, { csvText, fileName: name });
         setSync(result);
         setSelected(selectAllImportable(result));
+        setSelectedOrphans(
+          new Set((result.orphans ?? []).filter((o) => o.autoRemove).map((o) => o.id))
+        );
         trackAiEvent("sheet.preview.ok", {
           total: result.total,
           importable: result.importable,
@@ -280,6 +290,7 @@ export function GoogleSheetImportModal({
       setApplyErrors([]);
       setShowErrors(false);
       setSelected(new Set());
+      setSelectedOrphans(new Set());
       setMappingWarn(null);
       lastDropTokenRef.current = "";
       return;
@@ -342,10 +353,25 @@ export function GoogleSheetImportModal({
     });
   };
 
+  const toggleOrphan = (id: string) => {
+    setSelectedOrphans((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const visibleRows = useMemo(() => {
     const rows = sync?.rows ?? [];
     if (warehouseFilter === "ALL") return rows;
     return rows.filter((r) => rowWarehouse(r) === warehouseFilter);
+  }, [sync, warehouseFilter]);
+
+  const visibleOrphans = useMemo(() => {
+    const orphans = sync?.orphans ?? [];
+    if (warehouseFilter === "ALL") return orphans;
+    return orphans.filter((o) => rowWarehouse(o) === warehouseFilter);
   }, [sync, warehouseFilter]);
 
   const explainVisibleRows = useCallback(async () => {
@@ -404,7 +430,7 @@ export function GoogleSheetImportModal({
   };
 
   const onApply = async () => {
-    if (!sync || selected.size === 0 || applying || loading) return;
+    if (!sync || applying || loading) return;
     setApplying(true);
     setError(null);
     setApplyErrors([]);
@@ -414,7 +440,8 @@ export function GoogleSheetImportModal({
         [...selected],
         sync.sheetTab,
         sync.spreadsheetId,
-        sync.sheetGid
+        sync.sheetGid,
+        [...selectedOrphans]
       );
       const touched = [...(result.applied ?? []), ...(result.updated ?? [])];
       const appliedByWarehouse = countByWarehouse(touched);
@@ -423,10 +450,13 @@ export function GoogleSheetImportModal({
         activeWarehouse;
       const errs = result.errors ?? [];
       const appliedTotal = result.appliedCount + (result.updatedCount ?? 0);
+      const removedCount = result.removedCount ?? 0;
+      const reorderedCount = result.reorderedCount ?? 0;
       trackAiEvent(
         result.errorCount > 0 ? "sheet.apply.partial" : "sheet.apply.ok",
         {
           applied: appliedTotal,
+          removed: removedCount,
           errorCount: result.errorCount ?? 0,
           selected: selected.size,
         },
@@ -436,6 +466,8 @@ export function GoogleSheetImportModal({
         preferredWarehouse: preferred,
         errorCount: result.errorCount,
         errors: errs,
+        removedCount,
+        reorderedCount,
       });
       if (result.errorCount > 0) {
         setApplyErrors(errs);
@@ -486,7 +518,7 @@ export function GoogleSheetImportModal({
               <span className="font-mono text-zinc-700">
                 {sync?.sheetTab ?? "…"}
               </span>{" "}
-              · chỉ lô ngày{""}
+              · Sheet là nguồn chuẩn · STT theo Sheet · chỉ lô ngày{""}
               <span className="font-semibold text-zinc-700">
                 {sync?.sessionFlightDate ?? "…"}
               </span>
@@ -634,6 +666,9 @@ export function GoogleSheetImportModal({
               {(sync.sheetDuplicateCount ?? 0) + (sync.awbTakenCount ?? 0) > 0
                 ? ` · cảnh báo ${(sync.sheetDuplicateCount ?? 0) + (sync.awbTakenCount ?? 0)}`
                 : ""}
+              {(sync.orphanCount ?? 0) > 0
+                ? ` · thừa trên web ${sync.orphanCount}`
+                : ""}
               {(sync.total ?? 0) - (sync.importable ?? 0) > 0
                 ? ` · lỗi/chặn ${(sync.total ?? 0) - (sync.importable ?? 0)}`
                 : ""}
@@ -723,7 +758,7 @@ export function GoogleSheetImportModal({
               Dán URL Sheet rồi bấm «Tải dòng».
             </p>
           )}
-          {sync && visibleRows.length === 0 && (
+          {sync && visibleRows.length === 0 && visibleOrphans.length === 0 && (
             <p className="p-4 text-sm text-zinc-500">
               {warehouseFilter === "ALL"
                 ? "Tab Sheet không có lô AWB hợp lệ cho ngày này."
@@ -742,11 +777,32 @@ export function GoogleSheetImportModal({
               ))}
             </ul>
           ) : null}
+          {sync && visibleOrphans.length > 0 ? (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-[11px] font-semibold text-amber-950">
+                Lô trên web không còn trên Sheet · {visibleOrphans.length}
+              </p>
+              <p className="mt-0.5 text-[10px] text-amber-800">
+                Thường gặp khi Sheet sửa số AWB — lô AWB cũ còn lại. Tick để xóa khi nhập.
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {visibleOrphans.map((orphan) => (
+                  <OrphanRow
+                    key={orphan.id}
+                    orphan={orphan}
+                    checked={selectedOrphans.has(orphan.id)}
+                    onToggle={toggleOrphan}
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {sync && visibleRows.length > 0 && !isMobile ? (
             <table className="w-full min-w-[640px] border-collapse text-left text-[11px]">
               <thead>
                 <tr className="border-b border-zinc-200 text-zinc-500">
                   <th className="w-8 p-2" />
+                  <th className="p-2">STT</th>
                   <th className="p-2">AWB</th>
                   <th className="p-2">Chuyến</th>
                   <th className="p-2">DEST</th>
@@ -771,14 +827,17 @@ export function GoogleSheetImportModal({
         </div>
 
         <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          {selected.size > 0 ? (
+          {sync ? (
             <span className="mr-auto text-[10px] text-zinc-500">
-              Chọn {selected.size} lô
+              {selected.size > 0 ? `Chọn ${selected.size} lô` : "Đồng bộ STT theo Sheet"}
               {WAREHOUSE_ORDER.filter((wh) => selectedBreakdown[wh] > 0)
                 .map(
                   (wh) => ` · ${warehouseLabel[wh]} ${selectedBreakdown[wh]}`,
                 )
                 .join("")}
+              {selectedOrphans.size > 0
+                ? `${selected.size > 0 ? " · " : " · "}xóa ${selectedOrphans.size} thừa`
+                : ""}
               {selectedOutsideFilter ? " (có lô kho khác đang ẩn)" : ""}
             </span>
           ) : null}
@@ -797,15 +856,64 @@ export function GoogleSheetImportModal({
           </button>
           <button
             type="button"
-            disabled={applying || selected.size === 0}
+            disabled={applying || !sync}
             onClick={() => void onApply()}
             className={`rounded-lg bg-apple-blue px-4 py-2.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50 ${isMobile ? "min-h-11 flex-1 sm:flex-none" : ""}`}
           >
-            {applying ? "Đang nhập…" : `Nhập / cập nhật ${selected.size} lô`}
+            {applying
+              ? "Đang đồng bộ…"
+              : selected.size > 0 && selectedOrphans.size > 0
+                ? `Đồng bộ ${selected.size} · xóa ${selectedOrphans.size} thừa`
+                : selected.size > 0
+                  ? `Đồng bộ ${selected.size} lô theo Sheet`
+                  : selectedOrphans.size > 0
+                    ? `Xóa ${selectedOrphans.size} thừa · sắp STT`
+                    : "Đồng bộ thứ tự STT theo Sheet"}
           </button>
         </footer>
       </div>
     </div>
+  );
+}
+
+function OrphanRow({
+  orphan,
+  checked,
+  onToggle,
+}: {
+  orphan: SheetBookOrphanRow;
+  checked: boolean;
+  onToggle: (id: string) => void;
+}) {
+  const wh = rowWarehouse(orphan);
+  const hint =
+    orphan.kind === "replaced" && orphan.replacedByAwb
+      ? `Sheet đã đổi sang ${orphan.replacedByAwb}`
+      : "Chỉ có trên web — không có dòng Sheet khớp";
+  return (
+    <li>
+      <label className="flex cursor-pointer items-start gap-2 rounded-lg px-1 py-1 hover:bg-amber-100/70">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={checked}
+          onChange={() => onToggle(orphan.id)}
+          aria-label={`Xóa lô thừa ${orphan.awb}`}
+        />
+        <span className="min-w-0 text-[11px] text-amber-950">
+          <span className="font-mono font-semibold">{orphan.awb}</span>
+          {" · "}
+          {orphan.flight}
+          {orphan.flightDate ? `/${orphan.flightDate}` : ""}
+          {" · "}
+          {orphan.dest}
+          {" · "}
+          {warehouseLabel[wh] ?? orphan.warehouse}
+          {orphan.customer ? ` · ${orphan.customer}` : ""}
+          <span className="block text-[10px] text-amber-800">{hint}</span>
+        </span>
+      </label>
+    </li>
   );
 }
 
@@ -888,7 +996,13 @@ function SheetRowCard({
               </span>
             </div>
             <p className="mt-1 text-[11px] text-zinc-600">
-              {row.flight}
+              STT {row.sheetStt ?? "—"}
+              {row.existingStt != null &&
+              row.sheetStt != null &&
+              row.existingStt !== row.sheetStt
+                ? ` · web #${row.existingStt}`
+                : ""}{" "}
+              · {row.flight}
               {row.flightDate ? ` / ${row.flightDate}` : ""} · {row.dest} ·{" "}
               {whLabel}
             </p>
@@ -943,6 +1057,16 @@ function SheetRowTable({
           onChange={() => onToggle(row.index)}
           aria-label={`Chọn ${row.awb}`}
         />
+      </td>
+      <td className="p-2 font-mono tabular-nums text-zinc-600">
+        {row.sheetStt ?? "—"}
+        {row.existingStt != null &&
+        row.sheetStt != null &&
+        row.existingStt !== row.sheetStt ? (
+          <span className="ml-1 text-amber-700" title={`Web đang STT ${row.existingStt}`}>
+            ←{row.existingStt}
+          </span>
+        ) : null}
       </td>
       <td className="p-2 font-mono">{row.awb}</td>
       <td className="p-2">

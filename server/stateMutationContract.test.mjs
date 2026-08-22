@@ -68,6 +68,23 @@ describe("state mutation contract (server)", () => {
     expect(n.airlineLabelOverrides.byFlightPrefix.VJ).toBe("VJ AIR");
   });
 
+  it("REORDER_SESSION đổi thứ tự rồi đánh lại STT", () => {
+    const state = baseContractState();
+    const extra = {
+      ...baseContractRow("c-2"),
+      awb: "738-0809 7386",
+      stt: 2,
+    };
+    state.rows.push(extra);
+    const next = applyMutation(state, {
+      action: "REORDER_SESSION",
+      sessionDate: extra.sessionDate,
+      orderedIds: ["c-2", "c-1"],
+    });
+    expect(next.rows.map((r) => r.id)).toEqual(["c-2", "c-1"]);
+    expect(next.rows.map((r) => r.stt)).toEqual([1, 2]);
+  });
+
   it("rejects obsolete actions", () => {
     expect(() =>
       applyMutation(structuredClone(baseContractState()), {

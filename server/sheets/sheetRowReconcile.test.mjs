@@ -2,12 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   awbKeyForMatch,
   blankBookingMatchesSheetRow,
+  classifySheetOrphan,
   findBlankAwbBookingInSession,
   findExistingInSession,
   findExistingOtherSession,
+  findOrphanSessionLots,
+  findReplacedAwbBookingInSession,
+  orderedSessionIdsBySheet,
+  reorderSessionRowsBySheet,
   resolveExistingForSheetRow,
   resolveSheetRowSyncStatus,
   sheetAwbFirstIndexByKey,
+  sheetAwbKeySet,
   sheetRowIsBlocked,
   sheetRowNeedsUpdate,
   sheetRowSyncStatus,
@@ -342,5 +348,201 @@ describe("sheetRowReconcile", () => {
     expect(
       sheetRowNeedsUpdate(existing, sheetRow, "2026-06-13", customers, lookupCode, lookupId)
     ).toBe(false);
+  });
+
+  it("ghép lô web khi Sheet sửa AWB cùng fingerprint (7160 → 7106)", () => {
+    const oldLot = {
+      id: "skylink-old",
+      sessionDate: "2026-08-22",
+      awb: "189-0564 7160",
+      warehouse: "TECS-TCS",
+      customer: "SKYLINK",
+      flight: "JX0712",
+      flightDate: "23AUG",
+      dest: "TPE",
+      pcs: null,
+      kg: null,
+      status: "PENDING",
+    };
+    const sheetRow = {
+      awb: "189-0564 7106",
+      warehouse: "TECS-TCS",
+      customer: "SKYLINK",
+      flight: "JX0712",
+      flightDate: "23AUG",
+      dest: "TPE",
+      pcs: null,
+      kg: null,
+    };
+    const sheetAwbKeys = sheetAwbKeySet([sheetRow]);
+    const awbIndexes = { inSession: new Map(), otherSession: new Map() };
+
+    expect(
+      findReplacedAwbBookingInSession(
+        [oldLot],
+        "2026-08-22",
+        sheetRow,
+        sheetAwbKeys
+      )?.id
+    ).toBe("skylink-old");
+    expect(
+      resolveExistingForSheetRow(
+        [oldLot],
+        awbIndexes,
+        "2026-08-22",
+        sheetRow,
+        null,
+        sheetAwbKeys
+      )?.id
+    ).toBe("skylink-old");
+    expect(
+      sheetRowSyncStatus(oldLot, sheetRow, "2026-08-22", customers, lookupCode, lookupId)
+    ).toBe("update");
+  });
+
+  it("không ghép AWB cũ nếu AWB đó vẫn còn trên Sheet", () => {
+    const keepLot = {
+      id: "keep",
+      sessionDate: "2026-08-22",
+      awb: "189-0564 7160",
+      warehouse: "TECS-TCS",
+      customer: "SKYLINK",
+      flight: "JX0712",
+      dest: "TPE",
+    };
+    const sheetRows = [
+      { awb: "189-0564 7106", warehouse: "TECS-TCS", customer: "SKYLINK", flight: "JX0712", dest: "TPE" },
+      { awb: "189-0564 7160", warehouse: "TECS-TCS", customer: "SKYLINK", flight: "JX0712", dest: "TPE" },
+    ];
+    const sheetAwbKeys = sheetAwbKeySet(sheetRows);
+    expect(
+      findReplacedAwbBookingInSession(
+        [keepLot],
+        "2026-08-22",
+        sheetRows[0],
+        sheetAwbKeys
+      )
+    ).toBeNull();
+  });
+
+  it("phát hiện lô thừa khi AWB mới đã có trên web (7160 còn lại sau khi nhập 7106)", () => {
+    const oldLot = {
+      id: "skylink-old",
+      sessionDate: "2026-08-22",
+      awb: "189-0564 7160",
+      warehouse: "TECS-TCS",
+      customer: "SKYLINK",
+      flight: "JX0712",
+      dest: "TPE",
+      status: "PENDING",
+    };
+    const newLot = {
+      id: "skylink-new",
+      sessionDate: "2026-08-22",
+      awb: "189-0564 7106",
+      warehouse: "TECS-TCS",
+      customer: "SKYLINK",
+      flight: "JX0712",
+      dest: "TPE",
+      status: "PENDING",
+    };
+    const sheetRows = [
+      { awb: "189-0564 7106", warehouse: "TECS-TCS", customer: "SKYLINK", flight: "JX0712", dest: "TPE" },
+    ];
+    const claimed = new Set(["skylink-new"]);
+    const orphans = findOrphanSessionLots(
+      [oldLot, newLot],
+      "2026-08-22",
+      sheetRows,
+      claimed
+    );
+    expect(orphans.map((r) => r.id)).toEqual(["skylink-old"]);
+    const classified = classifySheetOrphan(oldLot, sheetRows, "2026-08-22");
+    expect(classified.kind).toBe("replaced");
+    expect(classified.replacedByAwb).toBe("189-0564 7106");
+    expect(classified.autoRemove).toBe(true);
+  });
+
+  it("không tự xóa lô thừa đã nhận hàng", () => {
+    const received = {
+      id: "keep-received",
+      sessionDate: "2026-08-22",
+      awb: "900-1111 2222",
+      warehouse: "TECS-TCS",
+      customer: "SHOPEE",
+      flight: "FD659",
+      dest: "KUL",
+      status: "RECEIVED",
+    };
+    const sheetRows = [
+      { awb: "900-1569 3366", warehouse: "TECS-TCS", customer: "SHOPEE", flight: "FD659", dest: "KUL" },
+    ];
+    const classified = classifySheetOrphan(received, sheetRows, "2026-08-22");
+    expect(classified.kind).toBe("replaced");
+    expect(classified.autoRemove).toBe(false);
+  });
+
+  it("sắp STT theo thứ tự Sheet trong cùng kho", () => {
+    const rows = [
+      {
+        id: "c",
+        sessionDate: "2026-08-22",
+        awb: "189-0564 7106",
+        warehouse: "TECS-TCS",
+        stt: 1,
+      },
+      {
+        id: "a",
+        sessionDate: "2026-08-22",
+        awb: "738-0809 5533",
+        warehouse: "TECS-TCS",
+        stt: 2,
+      },
+      {
+        id: "b",
+        sessionDate: "2026-08-22",
+        awb: "738-0809 7386",
+        warehouse: "TECS-TCS",
+        stt: 3,
+      },
+    ];
+    const sheetRows = [
+      { awb: "738-0809 5533", warehouse: "TECS-TCS" },
+      { awb: "738-0809 7386", warehouse: "TECS-TCS" },
+      { awb: "189-0564 7106", warehouse: "TECS-TCS" },
+    ];
+    expect(orderedSessionIdsBySheet(rows, "2026-08-22", sheetRows)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    const plan = reorderSessionRowsBySheet(rows, "2026-08-22", sheetRows);
+    expect(plan.changed).toBe(true);
+    expect(plan.sttShiftCount).toBe(3);
+    expect(plan.rows.map((r) => r.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("lô chỉ có trên web đứng sau khối Sheet cùng kho", () => {
+    const rows = [
+      {
+        id: "web-only",
+        sessionDate: "2026-08-22",
+        awb: "999-0000 0001",
+        warehouse: "TECS-TCS",
+        stt: 1,
+      },
+      {
+        id: "sheet-1",
+        sessionDate: "2026-08-22",
+        awb: "738-0809 5533",
+        warehouse: "TECS-TCS",
+        stt: 2,
+      },
+    ];
+    const sheetRows = [{ awb: "738-0809 5533", warehouse: "TECS-TCS" }];
+    expect(orderedSessionIdsBySheet(rows, "2026-08-22", sheetRows)).toEqual([
+      "sheet-1",
+      "web-only",
+    ]);
   });
 });

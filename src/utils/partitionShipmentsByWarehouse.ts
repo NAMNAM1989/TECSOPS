@@ -16,5 +16,8 @@ export function partitionShipmentsByWarehouse(rows: Shipment[]): ShipmentsByWare
     const w: Warehouse = normalizeWarehouse(r.warehouse);
     buckets[w].push(r);
   }
+  for (const w of WAREHOUSE_ORDER) {
+    buckets[w].sort((a, b) => (a.stt ?? 0) - (b.stt ?? 0) || a.id.localeCompare(b.id));
+  }
   return buckets;
 }

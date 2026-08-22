@@ -115,7 +115,9 @@ export function DesktopShipmentTable({
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const group = useMemo(
     () =>
-      rows.filter((r) => normalizeWarehouse(r.warehouse) === activeWarehouse),
+      rows
+        .filter((r) => normalizeWarehouse(r.warehouse) === activeWarehouse)
+        .sort((a, b) => (a.stt ?? 0) - (b.stt ?? 0) || a.id.localeCompare(b.id)),
     [rows, activeWarehouse],
   );
   const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);

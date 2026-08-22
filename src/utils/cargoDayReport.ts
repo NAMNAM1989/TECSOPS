@@ -155,22 +155,11 @@ export function resolveCargoReportCustomerShortCode(
   return name || "—";
 }
 
-function cutoffSortKey(s: Shipment): number {
-  const iso = (s.cutoff ?? "").trim();
-  if (!iso) return Number.POSITIVE_INFINITY;
-  const t = Date.parse(iso);
-  return Number.isFinite(t) ? t : Number.POSITIVE_INFINITY;
-}
-
+/** Thứ tự ảnh = STT đã đồng bộ Sheet (không xếp lại theo cutoff/ngày bay). */
 function sortDayLots(rows: Shipment[]): Shipment[] {
-  return [...rows].sort((a, b) => {
-    const ca = cutoffSortKey(a);
-    const cb = cutoffSortKey(b);
-    if (ca !== cb) return ca - cb;
-    const fa = (a.flightDate || "").localeCompare(b.flightDate || "");
-    if (fa !== 0) return fa;
-    return (a.awb || "").localeCompare(b.awb || "");
-  });
+  return [...rows].sort(
+    (a, b) => (a.stt ?? 0) - (b.stt ?? 0) || (a.awb || "").localeCompare(b.awb || ""),
+  );
 }
 
 function toReportRows(
@@ -182,7 +171,7 @@ function toReportRows(
     const flight = (s.flight ?? "").trim();
     const flightDateLabel = (s.flightDate ?? "").trim();
     return {
-      stt: i + 1,
+      stt: Number.isFinite(s.stt) && (s.stt ?? 0) > 0 ? s.stt : i + 1,
       booking: formatCargoReportBooking(s),
       customerShortCode: resolveCargoReportCustomerShortCode(s, customerDirectory),
       pcsKg: formatCargoReportPcsKg(s),

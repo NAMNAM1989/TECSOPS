@@ -188,6 +188,42 @@ describe("cargoDayReport", () => {
     expect(model.hasUrgentFlightDate).toBe(false);
   });
 
+  it("ảnh / báo cáo từng kho giữ thứ tự STT Sheet, không xếp lại theo cutoff", () => {
+    const rows = [
+      lot({
+        id: "late",
+        warehouse: "TECS-TCS",
+        stt: 2,
+        awb: "189-0564 7106",
+        dest: "TPE",
+        cutoff: new Date(2026, 7, 22, 10, 0).toISOString(),
+      }),
+      lot({
+        id: "first",
+        warehouse: "TECS-TCS",
+        stt: 1,
+        awb: "738-0809 5533",
+        dest: "SYD",
+        cutoff: new Date(2026, 7, 22, 22, 0).toISOString(),
+      }),
+      lot({
+        id: "third",
+        warehouse: "TECS-TCS",
+        stt: 3,
+        awb: "900-1569 3366",
+        dest: "KUL",
+        cutoff: "",
+      }),
+    ];
+    const model = buildCargoDayReport(rows, "2026-07-27");
+    expect(model.sections[0]!.rows.map((r) => r.booking)).toEqual([
+      "738-0809 5533",
+      "189-0564 7106",
+      "900-1569 3366",
+    ]);
+    expect(model.sections[0]!.rows.map((r) => r.stt)).toEqual([1, 2, 3]);
+  });
+
   it("format cutoff display", () => {
     const iso = new Date(2026, 3, 15, 17, 0).toISOString();
     expect(formatCargoReportCutoff({ cutoff: iso, cutoffNote: "" })).toMatch(

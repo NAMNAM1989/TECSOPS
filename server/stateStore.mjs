@@ -26,6 +26,7 @@ import {
   normalizeEcargoVctResultsStore,
 } from "../shared/ecargoVctResultsNormalize.mjs";
 import { formatAwb } from "../shared/awbFormat.mjs";
+import { applySessionIdOrder } from "./sheets/sheetRowReconcile.mjs";
 
 const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "TCS", "SCSC"];
 const WAREHOUSE_SET = new Set(WAREHOUSE_ORDER);
@@ -333,9 +334,22 @@ export function applyMutation(state, mutation) {
       rows.push({ ...withId, status: migrateShipmentStatus(withId) });
       break;
     }
+    case "REORDER_SESSION": {
+      const sessionDate = String(mutation.sessionDate ?? "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) {
+        throw new Error("REORDER_SESSION requires sessionDate (YYYY-MM-DD)");
+      }
+      const orderedIds = Array.isArray(mutation.orderedIds)
+        ? mutation.orderedIds.map((id) => String(id ?? "").trim()).filter(Boolean)
+        : [];
+      const sessionCount = rows.filter((r) => r.sessionDate === sessionDate).length;
+      if (!sessionCount) break;
+      rows = applySessionIdOrder(rows, sessionDate, orderedIds);
+      break;
+    }
     default:
       throw new Error(
-        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: RESET_TRIAL_DATA, SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, SET_ESID_REGISTRANT_STORE, SET_ESID_AGENT_STORE, SET_ECARGO_SCSC_STORE, SET_ECARGO_VCT_RESULTS_STORE, UPDATE, DELETE, ADD.`
+        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: RESET_TRIAL_DATA, SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, SET_ESID_REGISTRANT_STORE, SET_ESID_AGENT_STORE, SET_ECARGO_SCSC_STORE, SET_ECARGO_VCT_RESULTS_STORE, UPDATE, DELETE, ADD, REORDER_SESSION.`
       );
   }
 

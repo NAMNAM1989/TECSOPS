@@ -42,6 +42,10 @@ import { copyTextToClipboard } from "../utils/copyTextToClipboard";
 import { MOBILE, mobileSheetBackdrop } from "../styles/mobileOpsStyles";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { OPS } from "../styles/opsModalStyles";
+import {
+  useOpsMobileOverlayLock,
+  useVisualViewportBottomInset,
+} from "../hooks/useOpsMobileOverlayLock";
 
 type TabId = "lot" | "notify" | "dim";
 
@@ -80,6 +84,9 @@ export function MobileShipmentEditSheet({
   const [copyOk, setCopyOk] = useState(false);
   const awbRef = useRef<HTMLInputElement>(null);
   const hawbRef = useRef<HTMLInputElement>(null);
+  const sheetOpen = open && shipment != null && isMobile;
+  useOpsMobileOverlayLock(sheetOpen && !dimOpen);
+  const keyboardInset = useVisualViewportBottomInset(sheetOpen);
 
   const sessionYear = useMemo(() => {
     const y = parseInt(
@@ -577,7 +584,13 @@ export function MobileShipmentEditSheet({
             ) : null}
           </div>
 
-          <div className="border-t border-ui-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div
+            className="shrink-0 border-t border-ui-border bg-ui-surface px-4 pt-3"
+            style={{
+              paddingBottom: `max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + ${keyboardInset}px))`,
+            }}
+            data-testid="mobile-edit-sheet-footer"
+          >
             <div className="flex gap-2">
               <button
                 type="button"

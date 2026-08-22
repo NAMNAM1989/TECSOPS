@@ -29,6 +29,15 @@ import { MOBILE, mobileOnlyVisibility } from "../styles/mobileOpsStyles";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 import { formatAwb } from "../utils/awbFormat";
+import {
+  formatShipmentCneeReadonlySummary,
+} from "../utils/shipmentCneeCopyBlock";
+import {
+  findCustomerEntry,
+  resolveSavedConsigneeForBooking,
+} from "../utils/customerBookingResolve";
+import { formatSavedConsigneeDetailTitle } from "../utils/customerConsigneeShipmentPatch";
+import type { EcargoVctResult } from "../utils/ecargoVctResultsStore";
 
 type MobileFlightMeta = {
   flight: string;
@@ -36,7 +45,6 @@ type MobileFlightMeta = {
   flightDateUrgent: boolean;
   dest: string;
   dimLabel: string;
-  /** Chuỗi phẳng cho title / empty check */
   plain: string;
 };
 
@@ -72,6 +80,55 @@ function buildMobileFlightMeta(
   };
 }
 
+/** Badge eCargo từ store hiện có — không invent Đình Chỉ nếu chưa có field. */
+function MobileEcargoBadges({
+  warehouse,
+  ecargoVct,
+}: {
+  warehouse: Warehouse;
+  ecargoVct?: EcargoVctResult | null;
+}) {
+  if (warehouse !== "SCSC" && warehouse !== "TECS-SCSC") return null;
+  if (!ecargoVct) return null;
+
+  if (ecargoVct.status === "done") {
+    const code = (ecargoVct.vctCode || "").trim();
+    return (
+      <span className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-900">
+        <span>Đã Cấp VCT</span>
+        {code ? (
+          <span className="font-mono normal-case tracking-tight">{code.slice(0, 10)}</span>
+        ) : null}
+      </span>
+    );
+  }
+  if (ecargoVct.status === "otp") {
+    return (
+      <span className="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-950">
+        Mã xác thực
+      </span>
+    );
+  }
+  if (ecargoVct.status === "pending") {
+    return (
+      <span className="inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-900">
+        eCargo…
+      </span>
+    );
+  }
+  if (ecargoVct.status === "error") {
+    return (
+      <span
+        className="inline-flex rounded-md bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-900"
+        title={ecargoVct.error || "eCargo lỗi"}
+      >
+        eCargo lỗi
+      </span>
+    );
+  }
+  return null;
+}
+
 function MobileQuickNumber({
   label,
   value,
@@ -83,17 +140,17 @@ function MobileQuickNumber({
 }) {
   return (
     <span
-      className="inline-flex min-h-11 min-w-[3.25rem] shrink-0 touch-manipulation items-center gap-1 rounded-xl border border-ui-border/70 bg-ui-surface-muted/80 px-2 shadow-ui-sm"
+      className="inline-flex min-h-11 min-w-[3rem] shrink-0 touch-manipulation items-center gap-0.5 rounded-lg bg-ui-surface-muted px-1.5"
       onClick={(e) => e.stopPropagation()}
     >
-      <span className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
+      <span className="text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">
         {label}
       </span>
       <InlineNumberEdit
         value={value}
         compact
         placeholder="—"
-        className="min-h-[28px] min-w-[1.75rem] px-0.5 font-shipment-data text-[13px] font-bold tabular-nums text-ui-text"
+        className="min-h-[28px] min-w-[1.5rem] px-0.5 font-shipment-data text-[13px] font-bold tabular-nums text-ui-text"
         onCommit={onCommit}
       />
     </span>
@@ -107,6 +164,7 @@ const MobileShipmentCard = memo(
     highlighted,
     customerDirectory,
     sessionYmd,
+    ecargoVct,
     onOpenEdit,
     onUpdate,
     onDelete,
@@ -117,11 +175,13 @@ const MobileShipmentCard = memo(
     highlighted: boolean;
     customerDirectory: readonly CustomerDirectoryEntry[];
     sessionYmd: string;
+    ecargoVct?: EcargoVctResult | null;
     onOpenEdit: (row: Shipment) => void;
     onUpdate: (id: string, patch: Partial<Shipment>) => void;
     onDelete: (id: string) => void;
     onPrint: (s: Shipment) => void;
   }) {
+    const [cneeOpen, setCneeOpen] = useState(false);
     const rowAccent = statusRowAccent[row.status];
     const rowSurface = selected ? statusRowSelected : statusRowBg;
     const awbTrim = (row.awb ?? "").trim();
@@ -129,7 +189,6 @@ const MobileShipmentCard = memo(
     const noteTrim = (row.note ?? "").trim();
 
     const flightMeta = buildMobileFlightMeta(row, sessionYmd);
-    const hasNote = noteTrim.length > 0;
     const shortCode = resolveCargoReportCustomerShortCode(
       row,
       customerDirectory,
@@ -142,23 +201,31 @@ const MobileShipmentCard = memo(
       .filter(Boolean)
       .join(" · ");
 
+    const cneeSummary = formatShipmentCneeReadonlySummary(row, customerDirectory);
+    const customer = findCustomerEntry(row, customerDirectory);
+    const saved = resolveSavedConsigneeForBooking(row, customer);
+    const cneeDetail = saved
+      ? formatSavedConsigneeDetailTitle(saved)
+      : (row.consigneeNamePrint ?? "").trim() || cneeSummary;
+    const cneeAddress = (row.consigneeAddressPrint ?? saved?.consigneeAddress ?? "").trim();
+    const hasCnee = Boolean(cneeSummary || cneeDetail || cneeAddress);
+
     return (
       <Box
         id={`mobile-shipment-${row.id}`}
         style={{
           contentVisibility: "auto",
-          containIntrinsicSize:
-            flightMeta.plain || hasNote ? "0 118px" : "0 96px",
+          containIntrinsicSize: cneeOpen ? "0 140px" : "0 78px",
         }}
-        className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
+        className={`${MOBILE.card} scroll-mt-2 scroll-mb-[calc(10.5rem+env(safe-area-inset-bottom))] ${rowAccent} ${rowSurface} ${
           selected ? "ring-2 ring-ui-primary/40" : ""
         } ${highlighted ? "ring-2 ring-amber-400/70" : ""} ${
           flightMeta.flightDateUrgent ? "ring-1 ring-red-300/80" : ""
         }`}
       >
-        <div className={MOBILE.cardInner}>
-          {/* Hàng 1: AWB đủ 11 số — không chung hàng với status (iOS select đè số). */}
-          <div className="flex min-w-0 items-center gap-1">
+        <div className={`${MOBILE.cardInner} !py-1.5`}>
+          {/* Hàng 1: AWB · status · menu — scannable */}
+          <div className="flex min-w-0 items-center gap-1.5">
             <button
               type="button"
               className="min-w-0 flex-1 py-0.5 text-left active:opacity-90"
@@ -166,22 +233,28 @@ const MobileShipmentCard = memo(
               aria-label={awbTrim ? `Sửa lô ${awbTrim}` : "Thêm AWB"}
             >
               {awbTrim ? (
-                <span className={`block ${MOBILE.awb}`} title={awbTrim}>
+                <span className={`block ${MOBILE.awb} !text-[15px]`} title={awbTrim}>
                   {formatAwb(awbTrim)}
                 </span>
               ) : (
                 <span className={MOBILE.awbEmpty}>+ AWB</span>
               )}
               {hawbTrim ? (
-                <span className="mt-0.5 block truncate font-shipment-data text-[10px] font-bold text-ui-text-muted">
+                <span className="mt-px block truncate font-shipment-data text-[9px] font-bold text-ui-text-muted">
                   HAWB {hawbTrim}
                 </span>
               ) : null}
             </button>
             <div
-              className="shrink-0"
+              className="flex shrink-0 items-center gap-1"
               onClick={(e) => e.stopPropagation()}
             >
+              <StatusSelect
+                compact
+                warehouse={row.warehouse}
+                value={row.status}
+                onChange={(s) => onUpdate(row.id, { status: s })}
+              />
               <ShipmentRowActionsMenu
                 compact
                 isMobile
@@ -194,30 +267,32 @@ const MobileShipmentCard = memo(
             </div>
           </div>
 
-          {/* Hàng 2: khách · status gọn · K/Kg */}
-          <div className="mt-1 flex min-w-0 items-center gap-1.5">
+          {/* Hàng 2: khách · chuyến/DEST · K/Kg */}
+          <div className="mt-0.5 flex min-w-0 items-center gap-1">
             <button
               type="button"
-              className="min-w-0 flex-1 py-0.5 text-left active:opacity-90"
+              className="min-w-0 flex-1 truncate py-0.5 text-left active:opacity-90"
               onClick={() => onOpenEdit(row)}
+              title={
+                [customerTitle, flightMeta.plain].filter(Boolean).join(" · ") ||
+                undefined
+              }
             >
-              <span
-                className={`block min-w-0 truncate ${MOBILE.customerName}`}
-                title={customerTitle || undefined}
-              >
-                {customerLabel}
-              </span>
+              <span className={`mr-1 ${MOBILE.customerName}`}>{customerLabel}</span>
+              {flightMeta.plain ? (
+                <span
+                  className={`${MOBILE.cardMeta} ${
+                    flightMeta.flightDateUrgent ? "!text-red-600 !font-extrabold" : ""
+                  }`}
+                >
+                  · {flightMeta.plain}
+                </span>
+              ) : null}
             </button>
             <div
-              className="flex shrink-0 items-center gap-1"
+              className="flex shrink-0 items-center gap-0.5"
               onClick={(e) => e.stopPropagation()}
             >
-              <StatusSelect
-                compact
-                warehouse={row.warehouse}
-                value={row.status}
-                onChange={(s) => onUpdate(row.id, { status: s })}
-              />
               <MobileQuickNumber
                 label="K"
                 value={row.pcs}
@@ -231,67 +306,44 @@ const MobileShipmentCard = memo(
             </div>
           </div>
 
-          {flightMeta.plain || hasNote ? (
-            <button
-              type="button"
-              className="mt-0.5 block w-full min-w-0 text-left active:opacity-90"
-              onClick={() => onOpenEdit(row)}
-            >
-              <p
-                className={`truncate ${MOBILE.cardMeta}`}
-                title={
-                  hasNote
-                    ? noteTrim
-                    : flightMeta.flightDateUrgent
-                      ? `${flightMeta.plain} · gấp (bay cùng phiên)`
-                      : flightMeta.plain
-                }
+          {/* Hàng 3: eCargo badges + CNEE expand + note */}
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1">
+            <MobileEcargoBadges warehouse={row.warehouse} ecargoVct={ecargoVct} />
+            {hasCnee ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCneeOpen((v) => !v);
+                }}
+                className="inline-flex min-h-9 touch-manipulation items-center gap-1 rounded-lg px-1.5 text-[10px] font-bold text-ui-primary"
+                aria-expanded={cneeOpen}
               >
-                {flightMeta.flight || flightMeta.flightDate ? (
-                  <>
-                    {flightMeta.flight ? (
-                      <span>{flightMeta.flight}</span>
-                    ) : null}
-                    {flightMeta.flight && flightMeta.flightDate ? (
-                      <span>/</span>
-                    ) : null}
-                    {flightMeta.flightDate ? (
-                      <span
-                        className={
-                          flightMeta.flightDateUrgent
-                            ? "font-extrabold text-red-600"
-                            : undefined
-                        }
-                      >
-                        {flightMeta.flightDate}
-                      </span>
-                    ) : null}
-                  </>
+                CNEE {cneeOpen ? "▴" : "▾"}
+                {!cneeOpen && cneeSummary ? (
+                  <span className="max-w-[9rem] truncate font-semibold text-ui-text-muted">
+                    {cneeSummary}
+                  </span>
                 ) : null}
-                {flightMeta.dest ? (
-                  <>
-                    {(flightMeta.flight || flightMeta.flightDate) ? " · " : ""}
-                    {flightMeta.dest}
-                  </>
-                ) : null}
-                {flightMeta.dimLabel ? (
-                  <>
-                    {(flightMeta.flight ||
-                      flightMeta.flightDate ||
-                      flightMeta.dest)
-                      ? " · "
-                      : ""}
-                    {flightMeta.dimLabel}
-                  </>
-                ) : null}
-                {hasNote ? (
-                  <>
-                    {flightMeta.plain ? " · " : ""}
-                    {noteTrim}
-                  </>
-                ) : null}
-              </p>
-            </button>
+              </button>
+            ) : null}
+            {noteTrim && !cneeOpen ? (
+              <span className="truncate text-[10px] text-ui-text-muted" title={noteTrim}>
+                · {noteTrim}
+              </span>
+            ) : null}
+          </div>
+
+          {cneeOpen && hasCnee ? (
+            <div className="mt-1 rounded-lg bg-ui-surface-muted/80 px-2 py-1.5 text-[11px] leading-snug text-ui-text">
+              <p className="font-bold">{cneeDetail || cneeSummary || "—"}</p>
+              {cneeAddress ? (
+                <p className="mt-0.5 whitespace-pre-wrap text-ui-text-muted">{cneeAddress}</p>
+              ) : null}
+              {noteTrim ? (
+                <p className="mt-1 text-[10px] text-ui-text-muted">Ghi chú: {noteTrim}</p>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </Box>
@@ -302,7 +354,8 @@ const MobileShipmentCard = memo(
     prev.selected === next.selected &&
     prev.highlighted === next.highlighted &&
     prev.customerDirectory === next.customerDirectory &&
-    prev.sessionYmd === next.sessionYmd,
+    prev.sessionYmd === next.sessionYmd &&
+    prev.ecargoVct === next.ecargoVct,
 );
 
 interface MobileShipmentCardsProps {
@@ -320,6 +373,7 @@ interface MobileShipmentCardsProps {
   pinnedOpenWarehouses?: readonly Warehouse[];
   highlightedShipmentId?: string | null;
   onAddBlankRow?: (warehouse: Warehouse) => void;
+  ecargoVctById?: Record<string, EcargoVctResult>;
 }
 
 export function MobileShipmentCards({
@@ -337,6 +391,7 @@ export function MobileShipmentCards({
   pinnedOpenWarehouses = [],
   highlightedShipmentId = null,
   onAddBlankRow: _onAddBlankRow,
+  ecargoVctById,
 }: MobileShipmentCardsProps) {
   const isMobile = useIsMobile();
   const rowsByWarehouse = useMemo(
@@ -365,9 +420,26 @@ export function MobileShipmentCards({
     [onSelect, onQuickEdit],
   );
 
+  const renderCard = (row: Shipment) => (
+    <MobileShipmentCard
+      key={row.id}
+      row={row}
+      selected={selectedId === row.id}
+      highlighted={highlightedShipmentId === row.id}
+      customerDirectory={customerDirectory}
+      sessionYmd={viewSessionYmd}
+      ecargoVct={ecargoVctById?.[row.id]}
+      onOpenEdit={handleOpenEdit}
+      onUpdate={onUpdate}
+      onDelete={onDelete}
+      onPrint={onPrint}
+    />
+  );
+
   return (
     <div
-      className={`space-y-0.5 pb-[calc(4.5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
+      className={`space-y-1 pb-[calc(10.5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(10.5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
+      data-testid="mobile-shipment-list"
     >
       {searchActive
         ? warehouseSections.map((wh) => {
@@ -383,49 +455,21 @@ export function MobileShipmentCards({
                 <button
                   type="button"
                   onClick={() => toggle(wh)}
-                  className="flex w-full items-center gap-1.5 px-0.5 py-0.5 text-left"
+                  className="flex min-h-11 w-full touch-manipulation items-center gap-1.5 px-0.5 py-0.5 text-left"
                 >
                   <Chevron collapsed={collapsed} />
-                  <span className="text-[10px] font-bold text-dashboard-primary">
+                  <span className="text-[11px] font-bold text-dashboard-primary">
                     {warehouseLabel[wh]}
                   </span>
-                  <span className="text-[9px] text-dashboard-muted">
+                  <span className="text-[10px] text-dashboard-muted">
                     {group.length}
                   </span>
                 </button>
-                {!collapsed
-                  ? group.map((row) => (
-                      <MobileShipmentCard
-                        key={row.id}
-                        row={row}
-                        selected={selectedId === row.id}
-                        highlighted={highlightedShipmentId === row.id}
-                        customerDirectory={customerDirectory}
-                        sessionYmd={viewSessionYmd}
-                        onOpenEdit={handleOpenEdit}
-                        onUpdate={onUpdate}
-                        onDelete={onDelete}
-                        onPrint={onPrint}
-                      />
-                    ))
-                  : null}
+                {!collapsed ? group.map(renderCard) : null}
               </section>
             );
           })
-        : (rowsByWarehouse[activeWarehouse] ?? []).map((row) => (
-            <MobileShipmentCard
-              key={row.id}
-              row={row}
-              selected={selectedId === row.id}
-              highlighted={highlightedShipmentId === row.id}
-              customerDirectory={customerDirectory}
-              sessionYmd={viewSessionYmd}
-              onOpenEdit={handleOpenEdit}
-              onUpdate={onUpdate}
-              onDelete={onDelete}
-              onPrint={onPrint}
-            />
-          ))}
+        : (rowsByWarehouse[activeWarehouse] ?? []).map(renderCard)}
     </div>
   );
 }
@@ -436,21 +480,28 @@ interface StickyMobileActionsProps {
   onDelete: () => void;
   onAdd: () => void;
   onQuickEdit: () => void;
+  /** Ẩn khi edit sheet / modal mở */
+  hidden?: boolean;
 }
 
+/** FAB booking/sửa — nằm trên BottomNav, không che card cuối. */
 export function StickyMobileActions({
   selected,
   activeWarehouse,
   onDelete,
   onAdd,
   onQuickEdit,
+  hidden = false,
 }: StickyMobileActionsProps) {
   const isMobile = useIsMobile();
   const [moreOpen, setMoreOpen] = useState(false);
 
+  if (hidden) return null;
+
   return (
     <Box
-      className={`no-print fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[440px] -translate-x-1/2 ${mobileOnlyVisibility(isMobile)}`}
+      className={`no-print fixed bottom-[calc(3.85rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[440px] -translate-x-1/2 [[data-ops-mobile-overlay=sheet]_&]:pointer-events-none [[data-ops-mobile-overlay=sheet]_&]:invisible ${mobileOnlyVisibility(isMobile)}`}
+      data-testid="sticky-mobile-actions"
     >
       <Box className="rounded-2xl border border-ui-border bg-ui-surface p-1.5 shadow-apple-md">
         {selected ? (

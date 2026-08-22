@@ -124,9 +124,19 @@ export function AirCargoTracking({
   onPrefetchStats,
   onRequestPrint,
 }: AirCargoTrackingProps) {
-  const { status, state, mutate, mutateBatch, socketConnected, refreshState, applyRemoteState } =
-    sync;
+  const {
+    status,
+    state,
+    mutate,
+    mutateBatch,
+    socketConnected,
+    lastSyncAt,
+    pendingOfflineCount,
+    refreshState,
+    applyRemoteState,
+  } = sync;
   const toast = useToast();
+  const [syncRefreshing, setSyncRefreshing] = useState(false);
 
   const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
@@ -742,6 +752,23 @@ export function AirCargoTracking({
       isViewingToday={isViewingToday}
       syncStatus={status}
       socketConnected={socketConnected}
+      lastSyncAt={lastSyncAt ?? null}
+      pendingOfflineCount={pendingOfflineCount ?? 0}
+      syncRefreshing={syncRefreshing}
+      onSyncRefresh={async () => {
+        setSyncRefreshing(true);
+        try {
+          await refreshState();
+          toast.success("Đã làm mới dữ liệu", "Đồng bộ");
+        } catch (e) {
+          toast.error(
+            e instanceof Error ? e.message : "Không làm mới được.",
+            "Đồng bộ thất bại"
+          );
+        } finally {
+          setSyncRefreshing(false);
+        }
+      }}
       activeWarehouse={activeWarehouse}
       onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
       onOpenSheetImport={() => setSheetImportOpen(true)}
@@ -961,7 +988,7 @@ export function AirCargoTracking({
     <TcsPortalActionsProvider value={tcsPortal}>
     <AppShell chrome={chrome}>
       {status === "offline" ? (
-        <div className="mb-2">
+        <div className="mb-2 md:block hidden">
           <Banner tone="warning" title="Chỉ máy này">
             Không kết nối máy chủ. Thay đổi vẫn lưu trên trình duyệt; sẽ đồng bộ khi có mạng lại.
           </Banner>
@@ -1005,6 +1032,7 @@ export function AirCargoTracking({
           viewSessionYmd={selectedYmd}
           onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
           onQuickEdit={(row) => openMobileEdit(row)}
+          ecargoVctById={state?.ecargoVctResultsStore?.byShipmentId}
         />
       ) : (
         <DesktopShipmentTable
@@ -1031,6 +1059,7 @@ export function AirCargoTracking({
       <StickyMobileActions
         selected={selected}
         activeWarehouse={activeWarehouse}
+        hidden={mobileEditShipment != null}
         onDelete={() => selected && onDelete(selected.id)}
         onAdd={() => void addBlankRowForWarehouse(activeWarehouse)}
         onQuickEdit={() => selected && openMobileEdit(selected)}

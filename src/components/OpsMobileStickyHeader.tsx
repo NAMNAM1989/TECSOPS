@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type RefObject } from "react";
+import { useEffect, useMemo, useState, type RefObject, type ReactNode } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
 import { formatKgTotal } from "../utils/formatKgTotal";
 import { isTecsHub } from "../constants/warehouses";
-import { SyncStatusPill, Wordmark } from "../ui";
+import { Wordmark } from "../ui";
+import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
 import { statusLabel, statusLabelCompact } from "./statusStyles";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { NewBookingButton } from "./NewBookingButton";
@@ -14,7 +15,8 @@ import { ChromeExtensionsDownloadMenu } from "./ChromeExtensionsDownloadMenu";
 import { WarehouseGridPicker } from "./WarehouseGridPicker";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
-import type { ReactNode } from "react";
+import { OpsMobileSyncBar } from "./OpsMobileSyncBar";
+import type { SyncStatus } from "../hooks/useShipmentSync";
 
 interface Props {
   selectedYmd: string;
@@ -23,8 +25,12 @@ interface Props {
   onNextDay: () => void;
   onToday: () => void;
   isViewingToday: boolean;
-  syncStatus: "live" | "degraded" | "offline";
+  syncStatus: SyncStatus;
   socketConnected: boolean;
+  lastSyncAt?: number | null;
+  pendingOfflineCount?: number;
+  onSyncRefresh?: () => void | Promise<void>;
+  syncRefreshing?: boolean;
   activeWarehouse: Warehouse;
   onAddBooking: (wh: Warehouse) => void;
   onOpenSheetImport: () => void;
@@ -65,14 +71,14 @@ interface Props {
 
 function MiniKpi({ label, value }: { label: string; value: string | number }) {
   return (
-    <span className="inline-flex items-baseline gap-0.5 rounded-lg bg-ui-surface px-1.5 py-0.5 shadow-ui-sm ring-1 ring-ui-border/80">
-      <span className="text-[8px] font-bold uppercase tracking-wider text-ui-text-muted">{label}</span>
+    <span className="inline-flex items-baseline gap-0.5 rounded-md bg-ui-surface px-1.5 py-0.5 ring-1 ring-ui-border">
+      <span className="text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">{label}</span>
       <span className="font-mono text-[12px] font-extrabold tabular-nums text-ui-navy">{value}</span>
     </span>
   );
 }
 
-/** Header sticky mobile — mật độ cao, nút copy ảnh luôn hiện rõ, tối ưu chỗ cho danh sách lô. */
+/** Header sticky mobile Round 3 — chrome thấp, sync rõ, kho chip 1 hàng. */
 export function OpsMobileStickyHeader({
   selectedYmd,
   onDateChange,
@@ -82,6 +88,10 @@ export function OpsMobileStickyHeader({
   isViewingToday,
   syncStatus,
   socketConnected,
+  lastSyncAt = null,
+  pendingOfflineCount = 0,
+  onSyncRefresh,
+  syncRefreshing = false,
   activeWarehouse,
   onAddBooking,
   onOpenSheetImport,
@@ -120,32 +130,67 @@ export function OpsMobileStickyHeader({
   const filtersActive =
     statusFilter !== "ALL" || searchQuery.trim().length > 0 || Boolean(flightDateFilter);
   const [statusExpanded, setStatusExpanded] = useState(false);
+  /** Portal/eCargo mặc định thu gọn trên mobile — không mở rộng tính năng TCS, chỉ giảm chrome. */
+  const [portalExpanded, setPortalExpanded] = useState(false);
 
   useEffect(() => {
     if (statusFilter !== "ALL") setStatusExpanded(true);
   }, [statusFilter]);
 
   const showStatusBar = viewRows.length > 0 && (statusExpanded || statusFilter !== "ALL");
+  const hasPortalSlot = Boolean(tcsPortalBar || ecargoBar);
 
-  const { lotCount, totalPcs, totalKg } = useMemo(() => {
-    const rows = filteredViewRows;
-    const pcs = rows.reduce((sum, r) => sum + (r.pcs ?? 0), 0);
-    const kg = rows.reduce((sum, r) => sum + (r.kg ?? 0), 0);
-    return { lotCount: rows.length, totalPcs: pcs, totalKg: kg };
-  }, [filteredViewRows]);
+  const scopedMetrics = useMemo(() => {
+    const source = filteredViewRows.filter((r) => r.warehouse === activeWarehouse);
+    const pcs = source.reduce((sum, r) => sum + (r.pcs ?? 0), 0);
+    const kg = source.reduce((sum, r) => sum + (r.kg ?? 0), 0);
+    return { lotCount: source.length, totalPcs: pcs, totalKg: kg };
+  }, [activeWarehouse, filteredViewRows]);
 
-  const copyChip =
-    "inline-flex min-h-9 min-w-[2.75rem] touch-manipulation items-center justify-center rounded-lg px-1.5 text-[9px] font-extrabold uppercase tracking-wide text-white shadow-ui-sm disabled:cursor-not-allowed disabled:opacity-45";
+  const cargoReportItems = useMemo((): OverflowMenuItem[] => {
+    if (!onCopyCargoDayReport) return [];
+    return [
+      {
+        id: "vantage",
+        label: cargoReportCopying ? "Đang copy…" : "Vantage",
+        description: "TECS hub · ẩn khách",
+        disabled:
+          cargoReportCopying || !viewRows.some((r) => isTecsHub(r.warehouse)),
+        onSelect: () => onCopyCargoDayReport("vantage"),
+      },
+      {
+        id: "tecs",
+        label: cargoReportCopying ? "Đang copy…" : "Tecs",
+        description: "TECS hub · short code",
+        disabled:
+          cargoReportCopying || !viewRows.some((r) => isTecsHub(r.warehouse)),
+        onSelect: () => onCopyCargoDayReport("tecs"),
+      },
+      {
+        id: "tcs",
+        label: cargoReportCopying ? "Đang copy…" : "TCS",
+        description: "Chỉ kho TCS",
+        disabled: cargoReportCopying || !viewRows.some((r) => r.warehouse === "TCS"),
+        onSelect: () => onCopyCargoDayReport("tcs"),
+      },
+      {
+        id: "scsc",
+        label: cargoReportCopying ? "Đang copy…" : "SCSC",
+        description: "Chỉ kho SCSC",
+        disabled: cargoReportCopying || !viewRows.some((r) => r.warehouse === "SCSC"),
+        onSelect: () => onCopyCargoDayReport("scsc"),
+      },
+    ];
+  }, [cargoReportCopying, onCopyCargoDayReport, viewRows]);
 
   return (
     <div className="space-y-0.5" data-testid="ops-mobile-sticky-header">
-      {/* Hàng 1: brand · sync · ngày · CTA — gộp để header thấp hơn Round 2 */}
-      <div className="flex min-w-0 items-center gap-1">
+      {/* Hàng 1: brand + CTA icon */}
+      <div className="flex min-w-0 items-center gap-1.5">
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <h1 className="m-0 leading-none">
             <Wordmark size="sm" />
           </h1>
-          <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
           {!isViewingToday ? (
             <span className="rounded bg-amber-100 px-1 text-[8px] font-bold text-amber-950" title="Ngày khác">
               ≠
@@ -159,6 +204,16 @@ export function OpsMobileStickyHeader({
             onOpenSheetImport={onOpenSheetImport}
             onPrefetchSheetImport={onPrefetchSheetImport}
           />
+          {cargoReportItems.length > 0 ? (
+            <OverflowMenu
+              compact
+              label="Copy ảnh báo cáo"
+              items={cargoReportItems}
+              triggerClassName="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-[10px] font-extrabold text-ui-navy shadow-ui-sm"
+            >
+              Ảnh
+            </OverflowMenu>
+          ) : null}
           <ChromeExtensionsDownloadMenu compact />
           <OpsToolsMenu
             compact
@@ -177,81 +232,38 @@ export function OpsMobileStickyHeader({
         </div>
       </div>
 
-      <div className="min-w-0">
-        <OpsDatePicker
-          compact
-          value={selectedYmd}
-          onChange={onDateChange}
-          onPrev={onPrevDay}
-          onNext={onNextDay}
-          onToday={onToday}
-          isViewingToday={isViewingToday}
-        />
-      </div>
+      {/* Sync strip — luôn thấy; không giấu trong menu */}
+      <OpsMobileSyncBar
+        status={syncStatus}
+        socketConnected={socketConnected}
+        lastSyncAt={lastSyncAt}
+        pendingOfflineCount={pendingOfflineCount}
+        onRefresh={onSyncRefresh}
+        refreshing={syncRefreshing}
+      />
 
-      {/* Hàng KPI + copy ảnh — nút thấp hơn để nhường chỗ danh sách */}
-      <div className="flex items-center gap-1">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-          <MiniKpi label="Lô" value={lotCount} />
-          <MiniKpi label="Kiện" value={totalPcs} />
-          <MiniKpi label="Kg" value={formatKgTotal(totalKg)} />
+      {/* Ngày + KPI kho đang chọn */}
+      <div className="flex min-w-0 items-center gap-1.5">
+        <div className="min-w-0 flex-1">
+          <OpsDatePicker
+            compact
+            value={selectedYmd}
+            onChange={onDateChange}
+            onPrev={onPrevDay}
+            onNext={onNextDay}
+            onToday={onToday}
+            isViewingToday={isViewingToday}
+          />
         </div>
-        {onCopyCargoDayReport ? (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-0.5">
-            <button
-              type="button"
-              disabled={
-                cargoReportCopying ||
-                !viewRows.some((r) => isTecsHub(r.warehouse))
-              }
-              title="Vantage — kho TECS (TECS-TCS+TECS-SCSC), không gồm kho TCS/SCSC · ẩn khách"
-              onClick={() => onCopyCargoDayReport("vantage")}
-              className={`${copyChip} bg-emerald-600 hover:bg-emerald-700`}
-            >
-              {cargoReportCopying ? "…" : "Vant"}
-            </button>
-            <button
-              type="button"
-              disabled={
-                cargoReportCopying ||
-                !viewRows.some((r) => isTecsHub(r.warehouse))
-              }
-              title="Tecs — kho TECS (TECS-TCS+TECS-SCSC), không gồm kho TCS/SCSC"
-              onClick={() => onCopyCargoDayReport("tecs")}
-              className={`${copyChip} bg-teal-700 hover:bg-teal-800`}
-            >
-              {cargoReportCopying ? "…" : "Tecs"}
-            </button>
-            <button
-              type="button"
-              disabled={
-                cargoReportCopying ||
-                !viewRows.some((r) => r.warehouse === "TCS")
-              }
-              title="TCS — chỉ kho TCS (không gồm TECS-TCS)"
-              onClick={() => onCopyCargoDayReport("tcs")}
-              className={`${copyChip} bg-sky-600 hover:bg-sky-700`}
-            >
-              {cargoReportCopying ? "…" : "TCS"}
-            </button>
-            <button
-              type="button"
-              disabled={
-                cargoReportCopying ||
-                !viewRows.some((r) => r.warehouse === "SCSC")
-              }
-              title="SCSC — chỉ kho SCSC (không gồm TECS-SCSC)"
-              onClick={() => onCopyCargoDayReport("scsc")}
-              className={`${copyChip} bg-violet-600 hover:bg-violet-700`}
-            >
-              {cargoReportCopying ? "…" : "SCSC"}
-            </button>
-          </div>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-1">
+          <MiniKpi label="Lô" value={scopedMetrics.lotCount} />
+          <MiniKpi label="Kiện" value={scopedMetrics.totalPcs} />
+          <MiniKpi label="Kg" value={formatKgTotal(scopedMetrics.totalKg)} />
+        </div>
       </div>
 
       <WarehouseGridPicker
-        compact
+        chips
         hideAddButton
         rows={filteredViewRows}
         active={activeWarehouse}
@@ -297,8 +309,28 @@ export function OpsMobileStickyHeader({
               </button>
             ) : null}
           </div>
-          {tcsPortalBar}
-          {ecargoBar}
+          {hasPortalSlot ? (
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={() => setPortalExpanded((v) => !v)}
+                className="inline-flex min-h-11 w-full touch-manipulation items-center justify-between gap-2 rounded-xl border border-ui-border/80 bg-ui-surface px-2.5 text-left text-[11px] font-bold text-ui-text-muted"
+                aria-expanded={portalExpanded}
+              >
+                <span>
+                  {tcsPortalBar ? "Cổng TCS / ESID" : "eCargo SCSC"}
+                  {portalExpanded ? "" : " · chạm để mở"}
+                </span>
+                <span aria-hidden>{portalExpanded ? "▴" : "▾"}</span>
+              </button>
+              {portalExpanded ? (
+                <div className="min-w-0 space-y-1">
+                  {tcsPortalBar}
+                  {ecargoBar}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {showStatusBar ? (
             <div className="flex min-w-0 items-center gap-1">
@@ -315,7 +347,7 @@ export function OpsMobileStickyHeader({
                 <button
                   type="button"
                   onClick={() => setStatusExpanded(false)}
-                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-ui-text-muted"
+                  className="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl text-[11px] font-semibold text-ui-text-muted"
                   aria-label="Thu gọn lọc trạng thái"
                 >
                   ▲
@@ -324,7 +356,7 @@ export function OpsMobileStickyHeader({
                 <button
                   type="button"
                   onClick={() => onStatusFilterChange("ALL")}
-                  className="shrink-0 rounded-full bg-ui-navy/10 px-2 py-0.5 text-[9px] font-semibold text-ui-navy"
+                  className="inline-flex min-h-11 shrink-0 touch-manipulation items-center justify-center rounded-xl bg-ui-navy/10 px-2 text-[10px] font-semibold text-ui-navy"
                 >
                   {statusLabelCompact[statusFilter as keyof typeof statusLabelCompact] ??
                     statusLabel[statusFilter as keyof typeof statusLabel]}{" "}

@@ -193,6 +193,8 @@ export function useShipmentSync(
   const [status, setStatus] = useState<SyncStatus>("loading");
   const [socketConnected, setSocketConnected] = useState(false);
   const [state, setState] = useState<AppState | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
   const [syncScope, setSyncScopeState] = useState<StateSyncScope>(initialScope);
   const syncScopeRef = useRef(syncScope);
   syncScopeRef.current = syncScope;
@@ -202,6 +204,14 @@ export function useShipmentSync(
   const offlineQueueRef = useRef<QueuedMutation[]>([]);
   const fallbackRef = useRef(fallback);
   fallbackRef.current = fallback;
+
+  const markSynced = useCallback(() => {
+    setLastSyncAt(Date.now());
+  }, []);
+
+  const syncPendingCount = useCallback(() => {
+    setPendingOfflineCount(offlineQueueRef.current.length);
+  }, []);
 
   const persistIfApplied = useCallback((prev: AppState | null, next: AppState, force: boolean) => {
     const picked = force ? next : pickNewerState(prev, next);
@@ -237,6 +247,7 @@ export function useShipmentSync(
     const mergeIfNewer = (next: AppState) => {
       if (cancelledRef.current) return;
       setState((prev) => persistIfApplied(prev, next, false));
+      markSynced();
     };
 
     const onSync = (payload: unknown) => {
@@ -249,6 +260,7 @@ export function useShipmentSync(
       if (cancelledRef.current) return;
       setSocketConnected(true);
       setStatus("live");
+      markSynced();
       socket.emit("setStateScope", {
         full: scope.full ? "1" : undefined,
         sessionDate: scope.sessionDate,
@@ -260,7 +272,7 @@ export function useShipmentSync(
       if (apiOkRef.current) setStatus("degraded");
     });
     socket.on("sync", onSync);
-  }, [persistIfApplied]);
+  }, [markSynced, persistIfApplied]);
 
   const goLiveFromParsed = useCallback(
     async (parsed: AppState) => {
@@ -289,10 +301,12 @@ export function useShipmentSync(
       if (live.airlineLabelOverrides) {
         saveAirlineLabelOverridesToStorage(live.airlineLabelOverrides);
       }
+      syncPendingCount();
+      markSynced();
       setStatus("degraded");
       connectSocket(live.version, syncScopeRef.current);
     },
-    [connectSocket]
+    [connectSocket, markSynced, syncPendingCount]
   );
 
   useEffect(() => {
@@ -368,6 +382,7 @@ export function useShipmentSync(
       };
       // Enqueue trước khi hiển thị/persist local: không bao giờ apply-without-enqueue.
       offlineQueueRef.current.push(queued);
+      syncPendingCount();
       saveRows(next.rows);
       if (mutation.action === "SET_CUSTOMERS" || mutation.action === "RESET_TRIAL_DATA") {
         saveCustomerDirectoryToStorage(next.customers);
@@ -422,6 +437,7 @@ export function useShipmentSync(
         }
         return applied;
       });
+      markSynced();
       return applied;
     } catch (e) {
       if (rollbackRef.current) {
@@ -430,7 +446,7 @@ export function useShipmentSync(
       }
       throw e;
     }
-  }, [state]);
+  }, [markSynced, state, syncPendingCount]);
 
   /**
    * Nhiều mutation trong một request — tránh N round-trip + N lần broadcast full state.
@@ -467,29 +483,36 @@ export function useShipmentSync(
         applied = persistIfApplied(prev, next, false);
         return applied;
       });
+      markSynced();
       return applied;
     },
-    [mutate, persistIfApplied]
+    [markSynced, mutate, persistIfApplied]
   );
 
   const refreshState = useCallback(async (): Promise<void> => {
-    if (!apiOkRef.current) return;
     try {
-      const parsed = await fetchAppState(syncScopeRef.current);
-      setState((prev) => persistIfApplied(prev, parsed, false));
+      const parsed = await fetchAppStateWithRetry(syncScopeRef.current);
+      if (cancelledRef.current) return;
+      await goLiveFromParsed(parsed);
     } catch (e) {
       debugWarn("sync:refresh", e);
+      if (!apiOkRef.current) {
+        setStatus("offline");
+        setSocketConnected(false);
+      }
+      throw e;
     }
-  }, [persistIfApplied]);
+  }, [goLiveFromParsed]);
 
   const applyRemoteState = useCallback(
     (raw: unknown, opts?: { force?: boolean }): boolean => {
       const parsed = parseAppState(raw);
       if (!parsed) return false;
       setState((prev) => persistIfApplied(prev, parsed, Boolean(opts?.force)));
+      markSynced();
       return true;
     },
-    [persistIfApplied]
+    [markSynced, persistIfApplied]
   );
 
   return {
@@ -498,6 +521,9 @@ export function useShipmentSync(
     mutate,
     mutateBatch,
     socketConnected,
+    /** Epoch ms lần nhận state / socket sync gần nhất (client). Không có lots.synced_at trong API. */
+    lastSyncAt,
+    pendingOfflineCount,
     refreshState,
     applyRemoteState,
     setSyncScope,

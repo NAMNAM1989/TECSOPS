@@ -3,6 +3,10 @@ import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 import {
+  useOpsMobileOverlayLock,
+  useVisualViewportBottomInset,
+} from "../hooks/useOpsMobileOverlayLock";
+import {
   type DimDivisor,
   type DimPieceLine,
   dimDivisorFromFlight,
@@ -577,6 +581,8 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   const [lines, setLines] = useState<DimPieceLine[]>(() =>
     consolidateDimPieceLines(cloneLines(row.dimLines))
   );
+  useOpsMobileOverlayLock(true);
+  const keyboardInset = useVisualViewportBottomInset(true);
 
   const [comboInput, setComboInput] = useState("");
 
@@ -1012,7 +1018,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
   // ── Render ─────────────────────────────────────────────────
   return (
     <div
-      className="no-print fixed inset-0 z-[480] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-3 md:p-4"
+      className="no-print fixed inset-0 z-[560] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-3 md:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="dim-modal-title"
@@ -1597,7 +1603,12 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
         </div>
 
         {/* ── FOOTER mobile/md: Lưu + menu ⋯ ── */}
-        <div className="shrink-0 border-t border-ui-border bg-ui-surface px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
+        <div
+          className="shrink-0 border-t border-ui-border bg-ui-surface px-3 pt-2.5 lg:hidden"
+          style={{
+            paddingBottom: `max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + ${keyboardInset}px))`,
+          }}
+        >
           <div className="flex items-center gap-2">
             <button
               type="button"

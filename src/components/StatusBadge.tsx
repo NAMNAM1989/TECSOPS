@@ -28,7 +28,7 @@ export function StatusSelect({ value, onChange, warehouse, compact }: StatusSele
       title={`${statusIcon[value]} ${statusLabel[value]}`}
       className={`cursor-pointer rounded-full border font-bold shadow-ui-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ui-focus ${statusSelectSurface[value]} ${
         compact
-          ? "h-9 w-full min-w-0 touch-manipulation truncate px-1.5 text-[10px] leading-none"
+          ? "h-11 w-full min-h-11 min-w-0 touch-manipulation truncate px-1.5 text-[10px] leading-none"
           : "px-2.5 py-1 text-xs"
       }`}
     >

@@ -28,6 +28,7 @@ import {
 } from "../constants/warehouses";
 import type { Warehouse } from "../types/shipment";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useOpsMobileOverlayLock } from "../hooks/useOpsMobileOverlayLock";
 import { MOBILE } from "../styles/mobileOpsStyles";
 import { Banner, Button } from "../ui";
 import { requestAiFeature, trackAiEvent } from "../utils/aiOpsClient";
@@ -116,6 +117,7 @@ export function GoogleSheetImportModal({
   onApplied,
 }: Props) {
   const isMobile = useIsMobile();
+  useOpsMobileOverlayLock(open && isMobile);
   const [sheetUrl, setSheetUrl] = useState(() => loadSheetBookUrl());
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -496,7 +498,7 @@ export function GoogleSheetImportModal({
 
   return (
     <div
-      className={`fixed inset-0 z-[480] flex bg-black/40 p-0 ${isMobile ? "flex-col justify-end" : "items-end justify-center sm:items-center sm:p-4"}`}
+      className={`fixed inset-0 z-[560] flex bg-black/40 p-0 ${isMobile ? "flex-col justify-end" : "items-end justify-center sm:items-center sm:p-4"}`}
       onClick={handleClose}
     >
       <div

@@ -80,20 +80,32 @@ Không đụng logic vận đơn, eSID, mutation, Postgres schema nghiệp vụ.
 
 ## Tests
 
-Vitest `server/errorMonitor/ErrorMonitorAgent.test.mjs`:
+`npx vitest run server/errorMonitor` — **13/13 PASS** (1.20s):
 
-- A Backend 500 → Bug Report + file queue
-- B 100 identical → 1 incident / 1 dispatch
-- C validation → no dispatch
-- D Playwright selector → AUTOMATION_ERROR + EXTERNAL_UI_CHANGE
-- E token redacted
-- F DB down → SEV-1 + escalate
-- G resolved fingerprint → REGRESSION + reopen
-- H 10_000 identical → aggregate, LLM ≪ 10k
+| ID | Kết quả |
+|---|---|
+| A Backend 500 → fingerprint + Bug Report + outbox | PASS |
+| B 100 identical → 1 incident, occurrence=100, 1 dispatch | PASS |
+| C validation / customer not found → no dispatch | PASS |
+| D Playwright selector → AUTOMATION_ERROR + EXTERNAL_UI_CHANGE | PASS |
+| E Authorization token redacted | PASS |
+| F DB ECONNREFUSED → SEV-1 + ESCALATED | PASS |
+| G RESOLVED fingerprint → REGRESSION_DETECTED + reopen | PASS |
+| H 10_000 identical (860ms) → 1 dispatch, LLM ≪ 10k | PASS |
+| HTTP health + ingest | PASS |
+| Sanitizer / permissions / heartbeat trần restart | PASS |
 
 ## Runtime Verification
 
-`node server/errorMonitor/cli.mjs --demo backend-500` ghi Bug Report thật vào outbox.
+```
+node server/errorMonitor/cli.mjs --demo backend-500
+→ SOFTWARE_ERROR SEV-2 dispatched bug_86d3658a-… outbox JSON
+
+node server/errorMonitor/cli.mjs --demo db-down
+→ INFRASTRUCTURE_ERROR SEV-1 dispatched bug_a5a577f4-…
+```
+
+`npx eslint server/errorMonitor server/index.mjs` — 0 errors.
 
 ## Limitations
 

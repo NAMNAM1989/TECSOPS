@@ -22,7 +22,7 @@ import { buildBugReport } from "./bugReportBuilder.mjs";
 import { createBugFixDispatcher } from "./bugFixDispatcher.mjs";
 import { createNotificationPolicy } from "./notificationPolicy.mjs";
 import { createHealthMonitor } from "./healthMonitor.mjs";
-import { automationEventFromRun, classifyAutomationFailure, trackAutomationRun } from "./automationMonitor.mjs";
+import { automationEventFromRun, trackAutomationRun } from "./automationMonitor.mjs";
 import { createRegressionMonitor } from "./regressionMonitor.mjs";
 
 export function createErrorMonitorAgent(options = {}) {

@@ -80,7 +80,7 @@ export function registerErrorMonitorRoutes(app, { agent, requireAuth = null } = 
         subtype: result.subtype || null,
         bug_id: result.bug_report?.bug_id || null,
       });
-    } catch (err) {
+    } catch {
       res.status(200).json({ ok: false, isolated: true });
     }
   });
@@ -89,7 +89,7 @@ export function registerErrorMonitorRoutes(app, { agent, requireAuth = null } = 
     try {
       const result = agent.acceptFixResult(req.body || {});
       res.json(result);
-    } catch (err) {
+    } catch {
       res.status(200).json({ ok: false, isolated: true });
     }
   });

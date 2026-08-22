@@ -160,8 +160,12 @@ function FilterSegment({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`relative shrink-0 whitespace-nowrap rounded-full font-semibold leading-tight transition-colors ${
-        dense ? "px-2 py-0.5 text-[9px]" : compact ? "px-2.5 py-1 text-[10px]" : "px-3 py-1.5 text-[11px] sm:text-xs"
+      className={`relative shrink-0 whitespace-nowrap rounded-full font-semibold leading-tight transition-colors touch-manipulation ${
+        dense
+          ? "inline-flex min-h-11 items-center px-2.5 py-1 text-[11px]"
+          : compact
+            ? "px-2.5 py-1 text-[10px]"
+            : "px-3 py-1.5 text-[11px] sm:text-xs"
       } ${isEmpty && !active ? "opacity-40" : "opacity-100"} ${
         active
           ? "bg-ui-primary text-white shadow-ui-sm"

@@ -184,7 +184,7 @@ export function OpsMobileStickyHeader({
   }, [cargoReportCopying, onCopyCargoDayReport, viewRows]);
 
   return (
-    <div className="space-y-1" data-testid="ops-mobile-sticky-header">
+    <div className="space-y-0.5" data-testid="ops-mobile-sticky-header">
       {/* Hàng 1: brand + CTA icon */}
       <div className="flex min-w-0 items-center gap-1.5">
         <div className="flex min-w-0 flex-1 items-center gap-1">

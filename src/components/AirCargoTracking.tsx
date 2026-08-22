@@ -1059,6 +1059,7 @@ export function AirCargoTracking({
       <StickyMobileActions
         selected={selected}
         activeWarehouse={activeWarehouse}
+        hidden={mobileEditShipment != null}
         onDelete={() => selected && onDelete(selected.id)}
         onAdd={() => void addBlankRowForWarehouse(activeWarehouse)}
         onQuickEdit={() => selected && openMobileEdit(selected)}

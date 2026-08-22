@@ -37,7 +37,7 @@ function formatClock(at: number | null): string {
 
 /**
  * Thanh Đồng bộ mobile — luôn thấy idle / syncing / last sync / lỗi / offline + CTA.
- * Không nhét vào menu.
+ * Live: 1 hàng gọn. Hạn chế/Offline: 2 hàng + CTA rõ.
  */
 export function OpsMobileSyncBar({
   status,
@@ -71,14 +71,14 @@ export function OpsMobileSyncBar({
     "border-emerald-200/90 bg-emerald-50 text-emerald-950 ring-emerald-200/70";
   let dotClass = "bg-emerald-500 animate-pulse";
   let title = "Live";
-  let detail = `Đồng bộ · ${syncedPhrase}${pendingLabel}`;
+  let detail = syncedPhrase + pendingLabel;
   let ctaLabel: string | null = null;
 
   if (loading) {
     toneClass = "border-sky-200/90 bg-sky-50 text-sky-950 ring-sky-200/70";
     dotClass = "bg-sky-500 animate-pulse";
     title = "Đang đồng bộ";
-    detail = "Đang tải / làm mới dữ liệu…";
+    detail = "Đang tải / làm mới…";
     ctaLabel = null;
   } else if (offline) {
     toneClass = "border-slate-300 bg-slate-100 text-slate-800 ring-slate-300/80";
@@ -92,28 +92,37 @@ export function OpsMobileSyncBar({
     title = "Hạn chế";
     detail = `Đồng bộ hạn chế · ${syncedPhrase}${pendingLabel}`;
     ctaLabel = "Làm mới";
-  } else {
-    ctaLabel = null;
   }
+
+  const compactLive = live && !loading;
 
   return (
     <div
-      className={`flex min-h-11 min-w-0 items-center gap-2 rounded-xl border px-2.5 py-1.5 shadow-ui-sm ring-1 ${toneClass}`}
+      className={`flex min-w-0 items-center gap-1.5 rounded-lg border px-2 shadow-ui-sm ring-1 ${toneClass} ${
+        compactLive ? "min-h-8 py-0.5" : "min-h-10 py-1"
+      }`}
       data-testid="ops-mobile-sync-bar"
       role="status"
       aria-live="polite"
     >
-      <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} aria-hidden />
-      <div className="min-w-0 flex-1 leading-tight">
-        <p className="truncate text-[12px] font-extrabold tracking-tight">{title}</p>
-        <p className="truncate text-[10px] font-semibold opacity-80">{detail}</p>
-      </div>
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} aria-hidden />
+      {compactLive ? (
+        <p className="min-w-0 flex-1 truncate text-[10px] font-bold leading-tight">
+          <span className="font-extrabold">{title}</span>
+          <span className="font-semibold opacity-80"> · {detail}</span>
+        </p>
+      ) : (
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="truncate text-[11px] font-extrabold tracking-tight">{title}</p>
+          <p className="truncate text-[9px] font-semibold opacity-80">{detail}</p>
+        </div>
+      )}
       {ctaLabel && onRefresh ? (
         <button
           type="button"
           disabled={refreshing}
           onClick={() => void onRefresh()}
-          className="inline-flex min-h-11 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-ui-navy px-3 text-[11px] font-bold text-white disabled:opacity-50"
+          className="inline-flex min-h-10 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-ui-navy px-2.5 text-[10px] font-bold text-white disabled:opacity-50"
         >
           {ctaLabel}
         </button>

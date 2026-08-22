@@ -217,7 +217,7 @@ const MobileShipmentCard = memo(
           contentVisibility: "auto",
           containIntrinsicSize: cneeOpen ? "0 140px" : "0 78px",
         }}
-        className={`${MOBILE.card} ${rowAccent} ${rowSurface} ${
+        className={`${MOBILE.card} scroll-mt-2 scroll-mb-[calc(10.5rem+env(safe-area-inset-bottom))] ${rowAccent} ${rowSurface} ${
           selected ? "ring-2 ring-ui-primary/40" : ""
         } ${highlighted ? "ring-2 ring-amber-400/70" : ""} ${
           flightMeta.flightDateUrgent ? "ring-1 ring-red-300/80" : ""
@@ -438,7 +438,7 @@ export function MobileShipmentCards({
 
   return (
     <div
-      className={`space-y-1 pb-[calc(8.25rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
+      className={`space-y-1 pb-[calc(10.5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(10.5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
       data-testid="mobile-shipment-list"
     >
       {searchActive
@@ -480,6 +480,8 @@ interface StickyMobileActionsProps {
   onDelete: () => void;
   onAdd: () => void;
   onQuickEdit: () => void;
+  /** Ẩn khi edit sheet / modal mở */
+  hidden?: boolean;
 }
 
 /** FAB booking/sửa — nằm trên BottomNav, không che card cuối. */
@@ -489,13 +491,17 @@ export function StickyMobileActions({
   onDelete,
   onAdd,
   onQuickEdit,
+  hidden = false,
 }: StickyMobileActionsProps) {
   const isMobile = useIsMobile();
   const [moreOpen, setMoreOpen] = useState(false);
 
+  if (hidden) return null;
+
   return (
     <Box
-      className={`no-print fixed bottom-[calc(3.85rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[440px] -translate-x-1/2 ${mobileOnlyVisibility(isMobile)}`}
+      className={`no-print fixed bottom-[calc(3.85rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[440px] -translate-x-1/2 [[data-ops-mobile-overlay=sheet]_&]:pointer-events-none [[data-ops-mobile-overlay=sheet]_&]:invisible ${mobileOnlyVisibility(isMobile)}`}
+      data-testid="sticky-mobile-actions"
     >
       <Box className="rounded-2xl border border-ui-border bg-ui-surface p-1.5 shadow-apple-md">
         {selected ? (

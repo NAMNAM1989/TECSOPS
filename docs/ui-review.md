@@ -1,6 +1,17 @@
 # TECSOPS UI Review — Ops / Customers / Stats redesign
 
-> Cập nhật: 2026-08-22 · Round 3 mobile-first Ops (sau PR #40 Round 2)
+> Cập nhật: 2026-08-22 · Round 3.1 occlusion fix (PR #41)
+
+## Round 3.1 — Mobile occlusion
+
+| Mục tiêu | Thay đổi |
+| --- | --- |
+| Sheet Lưu/Hủy | `z-[560]` > BottomNav `z-500`; footer + safe-area + `visualViewport` keyboard inset |
+| Ẩn chrome khi sheet | `html[data-ops-mobile-overlay=sheet]` → BottomNav + FAB invisible; hook `useOpsMobileOverlayLock` |
+| List lô | `pb` / `scroll-mb` ≈ `10.5rem + safe-area` — status/⋮ không bị FAB che |
+| Header thấp hơn | Sync Live 1 hàng; `space-y-0.5`; AppShell padding giảm |
+| Customers | Sticky Lưu/Hủy `pb` đủ cao trên BottomNav |
+| DIM / Sheet import | Cùng z-index + overlay lock |
 
 ## Round 3 — Mobile Ops monitoring + sync
 

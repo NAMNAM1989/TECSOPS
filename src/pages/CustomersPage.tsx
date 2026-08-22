@@ -1124,7 +1124,7 @@ export function CustomersPage({
                   </div>
                 </div>
 
-                <div className="sticky bottom-0 z-20 border-t border-ui-border bg-ui-surface px-3 py-2.5 pb-[max(0.65rem,calc(env(safe-area-inset-bottom)+0.25rem))] sm:hidden">
+                <div className="sticky bottom-0 z-20 border-t border-ui-border bg-ui-surface px-3 py-2.5 pb-[max(0.65rem,calc(4.25rem+env(safe-area-inset-bottom)))] sm:hidden">
                   <div className="flex gap-2">
                     <Button
                       variant="secondary"

@@ -5,9 +5,10 @@ import { loadRows } from "./utils/shipmentStorage";
 import { useShipmentSync } from "./hooks/useShipmentSync";
 import { useHashRoute } from "./hooks/useHashRoute";
 import type { AirlineLabelOverrides } from "./utils/airlineLabelOverridesCore";
-import { PageSkeleton } from "./ui";
+import { BottomNav, PageSkeleton } from "./ui";
 import { AppAuthGate } from "./components/AppAuthGate";
 import { formatLocalSessionDate } from "./utils/sessionDate";
+import { useIsMobile } from "./hooks/useIsMobile";
 
 const loadCustomersPage = () =>
   import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage }));
@@ -32,6 +33,7 @@ function AuthenticatedApp() {
   const todayYmd = formatLocalSessionDate(new Date());
   const sync = useShipmentSync(fallback, { sessionDate: todayYmd });
   const { route, navigate } = useHashRoute();
+  const isMobile = useIsMobile();
   const [printJob, setPrintJob] = useState<PrintJob | null>(null);
   const [opsSessionYmd, setOpsSessionYmd] = useState(todayYmd);
 
@@ -42,7 +44,6 @@ function AuthenticatedApp() {
     }
     void sync.setSyncScope({ sessionDate: opsSessionYmd });
     // Chỉ đổi khi route / ngày phiên — không phụ thuộc identity setSyncScope.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, opsSessionYmd]);
 
   const prefetchCustomers = useCallback(() => {
@@ -65,7 +66,11 @@ function AuthenticatedApp() {
 
   return (
     <>
-      <div className="no-print min-h-screen bg-ui-background">
+      <div
+        className={`no-print min-h-screen bg-ui-background ${
+          isMobile ? "pb-[calc(3.75rem+env(safe-area-inset-bottom))]" : ""
+        }`}
+      >
         <Suspense fallback={<PageSkeleton variant={skeletonVariant} />}>
           {route === "customers" ? (
             <CustomersPage
@@ -100,6 +105,14 @@ function AuthenticatedApp() {
           )}
         </Suspense>
       </div>
+      {isMobile ? (
+        <BottomNav
+          active={route}
+          onNavigate={navigate}
+          onPrefetchCustomers={prefetchCustomers}
+          onPrefetchStats={prefetchStats}
+        />
+      ) : null}
       {printJob ? (
         <Suspense fallback={null}>
           <PrintShippingLabel

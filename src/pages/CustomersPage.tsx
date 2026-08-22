@@ -22,6 +22,7 @@ import { CustomerEsidQuickFillModal } from "../components/customerDirectory/Cust
 import {
   Banner,
   Button,
+  ConfirmDialog,
   EmptyState,
   OverflowMenu,
   PageSkeleton,
@@ -212,6 +213,9 @@ export function CustomersPage({
     useState<CustomerDirectoryEntry | null>(null);
   const [importing, setImporting] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState<"back" | "discard" | null>(
+    null,
+  );
   const importInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const detailTopRef = useRef<HTMLDivElement>(null);
@@ -448,16 +452,17 @@ export function CustomersPage({
   }, [draft, onSave, toast]);
 
   const handleBack = useCallback(() => {
-    if (dirty && !window.confirm("Có thay đổi chưa lưu. Rời trang và hủy?"))
+    if (dirty) {
+      setConfirmLeave("back");
       return;
+    }
     onBack();
   }, [dirty, onBack]);
 
   const handleDiscard = useCallback(() => {
     if (!dirty) return;
-    if (!window.confirm("Hủy mọi thay đổi chưa lưu?")) return;
-    syncFromInitial(initial);
-  }, [dirty, initial, syncFromInitial]);
+    setConfirmLeave("discard");
+  }, [dirty]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -712,13 +717,13 @@ export function CustomersPage({
             </Button>
           )}
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-bold tracking-tight sm:text-lg">
+            <h1 className="m-0 truncate text-base font-bold tracking-tight text-ui-navy sm:text-lg">
               {isMobile && mobilePane === "detail" && selected
                 ? normalizeCustomerNameInput(selected.name) || "Khách hàng"
                 : "Khách hàng"}
             </h1>
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ui-text-muted">
-              <span>{countLabel}</span>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ui-text-muted">
+              <span className="font-medium">{countLabel}</span>
               <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
               {headerStatus ? (
                 <span
@@ -849,9 +854,9 @@ export function CustomersPage({
                     type="button"
                     data-customer-id={c.id}
                     onClick={() => selectCustomer(c.id)}
-                    className={`mb-0.5 w-full touch-manipulation rounded-lg px-2.5 py-2.5 text-left transition sm:py-2 ${
+                    className={`mb-1 w-full touch-manipulation rounded-xl px-2.5 py-2.5 text-left transition sm:py-2 ${
                       active
-                        ? "bg-ui-primary/10 ring-1 ring-ui-primary/35"
+                        ? "bg-teal-500/10 ring-1 ring-teal-500/35 shadow-ui-sm"
                         : "hover:bg-ui-surface-muted"
                     }`}
                   >
@@ -1119,7 +1124,7 @@ export function CustomersPage({
                   </div>
                 </div>
 
-                <div className="sticky bottom-0 z-20 border-t border-ui-border bg-ui-surface px-3 py-2.5 pb-[max(0.65rem,env(safe-area-inset-bottom))] sm:hidden">
+                <div className="sticky bottom-0 z-20 border-t border-ui-border bg-ui-surface px-3 py-2.5 pb-[max(0.65rem,calc(env(safe-area-inset-bottom)+0.25rem))] sm:hidden">
                   <div className="flex gap-2">
                     <Button
                       variant="secondary"
@@ -1175,6 +1180,33 @@ export function CustomersPage({
         open={Boolean(quickFillCustomer)}
         customer={quickFillCustomer}
         onClose={() => setQuickFillCustomer(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmLeave === "back"}
+        title="Chưa lưu thay đổi"
+        message="Có thay đổi chưa lưu. Rời trang và hủy các thay đổi?"
+        confirmLabel="Rời trang"
+        cancelLabel="Ở lại"
+        danger
+        onCancel={() => setConfirmLeave(null)}
+        onConfirm={() => {
+          setConfirmLeave(null);
+          onBack();
+        }}
+      />
+      <ConfirmDialog
+        open={confirmLeave === "discard"}
+        title="Hủy thay đổi?"
+        message="Hủy mọi thay đổi chưa lưu trên khách hiện tại?"
+        confirmLabel="Hủy thay đổi"
+        cancelLabel="Giữ lại"
+        danger
+        onCancel={() => setConfirmLeave(null)}
+        onConfirm={() => {
+          setConfirmLeave(null);
+          syncFromInitial(initial);
+        }}
       />
     </div>
   );

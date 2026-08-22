@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
+import { useToast } from "../ui";
 import {
   fetchChromeExtensionsCatalog,
   triggerChromeExtensionDownload,
@@ -15,6 +16,7 @@ type Props = {
  * ZIP do `npm run prebuild` đóng từ manifest — mỗi bump version + deploy là có bản mới.
  */
 export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
+  const toast = useToast();
   const [packs, setPacks] = useState<ChromeExtensionPackInfo[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -52,11 +54,14 @@ export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
       }
       triggerChromeExtensionDownload(target);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Tải Chrome Ext thất bại");
+      toast.error(
+        e instanceof Error ? e.message : "Tải Chrome Ext thất bại",
+        "Chrome Ext"
+      );
     } finally {
       setBusyId(null);
     }
-  }, []);
+  }, [toast]);
 
   const items = useMemo((): OverflowMenuItem[] => {
     const list = packs?.length

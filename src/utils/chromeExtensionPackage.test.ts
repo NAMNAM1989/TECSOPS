@@ -9,6 +9,7 @@ type ExtPack = {
   warehouse: "TECS-TCS" | "TCS";
   requiredFiles: string[];
   version: string;
+  scriptVersion: string;
   mustHaveDownloadPdf: boolean;
 };
 
@@ -16,7 +17,8 @@ const PACKS: ExtPack[] = [
   {
     dir: "chrome-extension",
     warehouse: "TECS-TCS",
-    version: "2.5.3",
+    version: "2.6.1",
+    scriptVersion: "2.0.26",
     mustHaveDownloadPdf: true,
     requiredFiles: [
       "manifest.json",
@@ -32,7 +34,8 @@ const PACKS: ExtPack[] = [
   {
     dir: "chrome-extension-tcs",
     warehouse: "TCS",
-    version: "1.4.3",
+    version: "1.5.1",
+    scriptVersion: "2.0.29",
     mustHaveDownloadPdf: true,
     requiredFiles: [
       "manifest.json",
@@ -88,7 +91,7 @@ describe("chrome extension packaging invariants", () => {
     expect(bg).toContain(`PORTAL_WAREHOUSE = "${pack.warehouse}"`);
     expect(content).toContain('msg.type === "DOWNLOAD_ESID_PDF"');
     expect(content).toContain("runDownloadPdf");
-    expect(content).toContain('SCRIPT_VERSION = "2.0.26"');
+    expect(content).toContain(`SCRIPT_VERSION = "${pack.scriptVersion}"`);
   });
 
   it("package script gồm print-frame cho cả 2 Ext ESID", () => {

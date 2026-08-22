@@ -84,12 +84,12 @@ function KpiCard({
 }) {
   const toneClass =
     tone === "amber"
-      ? "border-amber-200/80 bg-gradient-to-br from-amber-50 to-white"
+      ? "border-amber-200 bg-amber-50/80"
       : tone === "teal"
-        ? "border-teal-200/80 bg-gradient-to-br from-teal-50 to-white"
+        ? "border-teal-200 bg-teal-50/70"
         : tone === "sky"
-          ? "border-sky-200/80 bg-gradient-to-br from-sky-50 to-white"
-          : "border-ui-border/80 bg-gradient-to-br from-white to-slate-50";
+          ? "border-sky-200 bg-sky-50/70"
+          : "border-ui-border bg-ui-surface";
 
   return (
     <div
@@ -403,7 +403,7 @@ export function OpsStatsPage({
   const deltaPositive = t.deltaKg > 0;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_#ecfdf5_0%,_#f8fafc_45%,_#f1f5f9_100%)]">
+    <div className="min-h-screen bg-ui-background">
       <AppShell
         chrome={
           <div className="space-y-3">
@@ -412,8 +412,8 @@ export function OpsStatsPage({
                 <h1 className="m-0 leading-none">
                   <Wordmark size="md" />
                 </h1>
-                <span className="rounded-full bg-gradient-to-r from-teal-600 to-cyan-600 px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm">
-                  Dashboard
+                <span className="rounded-full bg-ui-navy px-2.5 py-0.5 text-[11px] font-bold text-white shadow-ui-sm">
+                  Thống kê
                 </span>
                 <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
               </div>
@@ -443,9 +443,7 @@ export function OpsStatsPage({
               </div>
             </div>
 
-            <div
-              className="rounded-2xl border border-teal-100/80 bg-white/80 p-3 shadow-ui-sm backdrop-blur-sm"
-            >
+            <div className="rounded-2xl border border-ui-border bg-ui-surface p-3 shadow-ui-sm">
               <div
                 aria-label="Bộ lọc thống kê"
                 className="mb-2.5 flex flex-wrap items-center gap-1.5"

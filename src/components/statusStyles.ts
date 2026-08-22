@@ -1,22 +1,10 @@
 import type { ShipmentStatus } from "../types/shipment";
 
-/** Nhãn theo spec §5.6 — OLA giữ viết hoa nghiệp vụ (viết tắt). */
+/**
+ * Nhãn chuẩn một nguồn — filter / select / stats dùng cùng từ vựng.
+ * Compact chỉ rút gọn cùng gốc (Nhận hàng → Nhận, Hoàn thành tiếp nhận → HT).
+ */
 export const statusLabel: Record<ShipmentStatus, string> = {
-  PENDING: "Booking",
-  /** Nhãn quick filter Ops — «Hàng mới tiếp nhận». */
-  RECEIVED: "Hàng mới tiếp nhận",
-  VOLUME_DONE: "Đã đo Volume",
-  CUSTOMS: "Hải quan",
-  SECURITY: "An ninh",
-  OLA_PULL: "Kéo OLA",
-  /** Nhãn quick filter Ops — «Đã hoàn thành tiếp nhận». */
-  RECEPTION_COMPLETED: "Đã hoàn thành tiếp nhận",
-  WEIGH_SLIP: "Nộp tờ cân",
-  COMPLETED: "Hoàn thành",
-};
-
-/** Nhãn ngắn cho dropdown trạng thái hàng (giữ gọn hơn chip lọc). */
-export const statusLabelShort: Record<ShipmentStatus, string> = {
   PENDING: "Booking",
   RECEIVED: "Nhận hàng",
   VOLUME_DONE: "Đã đo Volume",
@@ -28,7 +16,10 @@ export const statusLabelShort: Record<ShipmentStatus, string> = {
   COMPLETED: "Hoàn thành",
 };
 
-/** Nhãn cực ngắn — card điện thoại. Native <select> iOS phình theo option dài và đè AWB. */
+/** Alias rõ nghĩa — dropdown desktop / aria dùng cùng bộ với filter. */
+export const statusLabelShort = statusLabel;
+
+/** Nhãn cực ngắn — card điện thoại / filter dense. Cùng gốc với statusLabel. */
 export const statusLabelCompact: Record<ShipmentStatus, string> = {
   PENDING: "Booking",
   RECEIVED: "Nhận",
@@ -58,19 +49,19 @@ export const statusIcon: Record<ShipmentStatus, string> = {
 export const statusRowBg = "bg-ui-surface";
 
 export const statusRowAccent: Record<ShipmentStatus, string> = {
-  PENDING: "border-l-2 border-l-blue-500",
-  RECEIVED: "border-l-2 border-l-amber-500",
-  VOLUME_DONE: "border-l-2 border-l-cyan-500",
-  CUSTOMS: "border-l-2 border-l-sky-500",
-  SECURITY: "border-l-2 border-l-orange-500",
-  OLA_PULL: "border-l-2 border-l-fuchsia-500",
-  RECEPTION_COMPLETED: "border-l-2 border-l-teal-600",
-  WEIGH_SLIP: "border-l-2 border-l-lime-600",
-  COMPLETED: "border-l-2 border-l-emerald-500",
+  PENDING: "border-l-[3px] border-l-blue-500",
+  RECEIVED: "border-l-[3px] border-l-amber-500",
+  VOLUME_DONE: "border-l-[3px] border-l-cyan-500",
+  CUSTOMS: "border-l-[3px] border-l-sky-500",
+  SECURITY: "border-l-[3px] border-l-orange-500",
+  OLA_PULL: "border-l-[3px] border-l-fuchsia-500",
+  RECEPTION_COMPLETED: "border-l-[3px] border-l-teal-600",
+  WEIGH_SLIP: "border-l-[3px] border-l-lime-600",
+  COMPLETED: "border-l-[3px] border-l-emerald-500",
 };
 
 /** Hàng được chọn — tint amber nhẹ. */
-export const statusRowSelected = "bg-amber-500/[0.06] ring-1 ring-amber-500/35";
+export const statusRowSelected = "bg-amber-500/[0.07] ring-1 ring-amber-500/40";
 
 /** Dropdown trạng thái — nền tint + chữ tương phản (light). */
 export const statusSelectSurface: Record<ShipmentStatus, string> = {

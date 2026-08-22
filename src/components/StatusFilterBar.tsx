@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { statusOrderForFilter } from "../utils/shipmentWorkflowStatus";
 import { trackAiEvent } from "../utils/aiOpsClient";
-import { statusIcon, statusLabel } from "./statusStyles";
+import { statusIcon, statusLabel, statusLabelCompact } from "./statusStyles";
 
 export type StatusFilterValue = ShipmentStatus | "ALL";
 
@@ -77,7 +77,7 @@ export function StatusFilterBar({
               onChange(st);
               trackAiEvent("ops.quick_filter.change", { kind: "status", value: st });
             }}
-            label={statusLabel[st]}
+            label={dense ? statusLabelCompact[st] : statusLabel[st]}
             icon={statusIcon[st]}
             count={count}
           />

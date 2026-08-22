@@ -5,7 +5,7 @@ import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipme
 import { formatKgTotal } from "../utils/formatKgTotal";
 import { isTecsHub } from "../constants/warehouses";
 import { SyncStatusPill, Wordmark } from "../ui";
-import { statusLabel } from "./statusStyles";
+import { statusLabel, statusLabelCompact } from "./statusStyles";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { NewBookingButton } from "./NewBookingButton";
 import { OpsSheetImportButton } from "./OpsSheetImportButton";
@@ -324,7 +324,9 @@ export function OpsMobileStickyHeader({
                   onClick={() => onStatusFilterChange("ALL")}
                   className="shrink-0 rounded-full bg-ui-navy/10 px-2 py-0.5 text-[9px] font-semibold text-ui-navy"
                 >
-                  {statusLabel[statusFilter as keyof typeof statusLabel]} ×
+                  {statusLabelCompact[statusFilter as keyof typeof statusLabelCompact] ??
+                    statusLabel[statusFilter as keyof typeof statusLabel]}{" "}
+                  ×
                 </button>
               )}
             </div>

@@ -33,6 +33,7 @@ import {
   validateInlineKg,
   validateInlinePcs,
 } from "../utils/inlineShipmentFieldValidation";
+import { useToast } from "../ui";
 
 interface Props {
   rows: Shipment[];
@@ -261,6 +262,7 @@ function ShipmentTableRowImpl({
   onOpenDimModal: (s: Shipment) => void;
   ecargoVct?: EcargoVctResult;
 }) {
+  const toast = useToast();
   const bg = statusRowBg;
   const accent = statusRowAccent[row.status];
   const cell = (part: "first" | "mid" | "last" | "awb", extra = "") => {
@@ -291,7 +293,10 @@ function ShipmentTableRowImpl({
   const onFlightDateCommit = (t: string) => {
     const ymd = parseBookingDateLoose(t, sessionYear);
     if (!ymd) {
-      window.alert("Ngày bay không hợp lệ (ví dụ 15APR hoặc 15/04/2026).");
+      toast.warning(
+        "Ngày bay không hợp lệ (ví dụ 15APR hoặc 15/04/2026).",
+        "Ngày bay"
+      );
       return;
     }
     onUpdate(row.id, { flightDate: formatYmdToFlightDateDdMon(ymd) });

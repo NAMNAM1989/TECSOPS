@@ -1,9 +1,9 @@
-TECSOPS — Kho TCS ESID v1.2.0
+TECSOPS — Kho TCS ESID (chrome-extension-tcs)
 
-Ext riêng ESID kho TCS. BẮT BUỘC Chrome profile riêng với Ext TECS-TCS
-(cookie tcs.com.vn dùng chung nếu cùng profile).
+Ext chuẩn ESID kho TCS — cặp với Ext SCSC.
+Protocol: docs/ops-ext-protocol.md
 
 1. Giải nén ZIP vào thư mục cố định.
 2. chrome://extensions → Load unpacked.
-3. F5 Ops → chọn kho TCS → Đăng nhập / Quét / Điền.
+3. F5 Ops → chọn kho TCS → Đăng Nhập TCS / Quét / Điền.
 eCargo → Ext SCSC riêng.

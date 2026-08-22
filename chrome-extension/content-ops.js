@@ -1,10 +1,14 @@
 /**
- * Bridge Ops page ↔ extension (không cần Extension ID cố định).
- * Ops: window.postMessage({ channel: 'tecsops-tcs-ext', direction: 'to-ext', id, type, payload })
- * Ext → Ops: { channel, direction: 'from-ext', id, ...result }
+ * DEPRECATED — legacy Ext kho TECS-TCS.
+ * Chuẩn mới: chrome-extension-tcs (TCS) + chrome-extension-scsc (SCSC).
+ * Giữ bridge để cài sẵn vẫn PING được; không tải từ menu Ops.
+ *
+ * Handshake giống docs/ops-ext-protocol.md — channel: tecsops-tcs-ext
  */
 
 const CHANNEL = "tecsops-tcs-ext";
+const PORTAL_WAREHOUSE = "TECS-TCS";
+const EXT_LABEL = "TECS-TCS";
 
 function extAlive() {
   try {
@@ -39,6 +43,7 @@ function announceReady() {
         type: "EXT_READY",
         ok: true,
         version: chrome.runtime.getManifest().version,
+        portalWarehouse: PORTAL_WAREHOUSE,
       },
       OPS_ORIGIN
     );
@@ -60,7 +65,8 @@ window.addEventListener("message", (event) => {
     replyToOps(data.id, {
       ok: false,
       error: "EXT_CONTEXT_INVALIDATED",
-      message: "Extension đã Reload — hãy F5 trang Ops rồi bấm Đồng bộ lại.",
+      message: `Extension ${EXT_LABEL} đã Reload — hãy F5 trang Ops rồi thử lại.`,
+      portalWarehouse: PORTAL_WAREHOUSE,
     });
     return;
   }
@@ -72,17 +78,18 @@ window.addEventListener("message", (event) => {
         payload: data.payload,
       },
       (response) => {
-        // Doc lastError ngay — tranh Chrome ghi Unchecked runtime.lastError tren trang quan ly Ext
         const err = chrome.runtime.lastError;
         if (err) {
           const msg = String(err.message || "");
-          const invalidated = /context invalidated|receiving end does not exist/i.test(msg);
+          const invalidated =
+            /context invalidated|receiving end does not exist/i.test(msg);
           replyToOps(data.id, {
             ok: false,
-            error: invalidated ? "EXT_CONTEXT_INVALIDATED" : "EXT_RUNTIME",
+            error: invalidated ? "EXT_CONTEXT_INVALIDATED" : "EXT_SEND_FAILED",
             message: invalidated
-              ? "Extension đã Reload — hãy F5 trang Ops rồi thử lại."
-              : msg || "Extension runtime error",
+              ? `Extension ${EXT_LABEL} đã Reload — F5 Ops rồi thử lại.`
+              : msg || `Không gửi được lệnh tới extension ${EXT_LABEL}.`,
+            portalWarehouse: PORTAL_WAREHOUSE,
           });
           return;
         }
@@ -90,8 +97,9 @@ window.addEventListener("message", (event) => {
           data.id,
           response || {
             ok: false,
-            error: "NO_RESPONSE",
-            message: "Extension không trả lời",
+            error: "EMPTY_RESPONSE",
+            message: `Extension ${EXT_LABEL} không trả lời.`,
+            portalWarehouse: PORTAL_WAREHOUSE,
           }
         );
       }
@@ -99,11 +107,12 @@ window.addEventListener("message", (event) => {
   } catch (err) {
     replyToOps(data.id, {
       ok: false,
-      error: "EXT_CONTEXT_INVALIDATED",
+      error: "EXT_THROW",
       message:
         err instanceof Error
           ? err.message
           : "Extension context lỗi — F5 trang Ops sau khi Reload Ext.",
+      portalWarehouse: PORTAL_WAREHOUSE,
     });
   }
 });

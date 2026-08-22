@@ -34,7 +34,7 @@ const PACKS: ExtPack[] = [
   {
     dir: "chrome-extension-tcs",
     warehouse: "TCS",
-    version: "1.5.1",
+    version: "1.5.2",
     scriptVersion: "2.0.29",
     mustHaveDownloadPdf: true,
     requiredFiles: [
@@ -101,5 +101,26 @@ describe("chrome extension packaging invariants", () => {
     );
     const matches = script.match(/print-frame\.html/g) || [];
     expect(matches.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("content-ops chuẩn: EXT_READY + portalWarehouse đúng kho", () => {
+    const tcsOps = readFileSync(
+      path.join(ROOT, "chrome-extension-tcs/content-ops.js"),
+      "utf8"
+    );
+    const scscOps = readFileSync(
+      path.join(ROOT, "chrome-extension-scsc/content-ops.js"),
+      "utf8"
+    );
+    const legacyOps = readFileSync(
+      path.join(ROOT, "chrome-extension/content-ops.js"),
+      "utf8"
+    );
+    expect(tcsOps).toContain('type: "EXT_READY"');
+    expect(tcsOps).toContain('PORTAL_WAREHOUSE = "TCS"');
+    expect(scscOps).toContain('PORTAL_WAREHOUSE = "SCSC"');
+    expect(scscOps).not.toContain('portalWarehouse: "TCS"');
+    expect(legacyOps).toMatch(/DEPRECATED|deprecated/i);
+    expect(legacyOps).toContain('PORTAL_WAREHOUSE = "TECS-TCS"');
   });
 });

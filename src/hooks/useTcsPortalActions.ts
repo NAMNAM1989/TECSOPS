@@ -44,6 +44,7 @@ import {
   openTcsExtensionTab,
   pingTcsExtension,
   scanTcsExtensionDate,
+  subscribeTcsExtensionReady,
   type TcsExtensionWorkspace,
   type TcsExtResult,
 } from "../utils/tcsChromeExtension";
@@ -321,6 +322,17 @@ export function useTcsPortalActions({
     const timer = window.setInterval(() => void refreshExtension(), 10_000);
     return () => window.clearInterval(timer);
   }, [active, refreshExtension]);
+
+  /** EXT_READY từ content-ops → ping ngay, không chờ poll 10s. */
+  useEffect(() => {
+    if (!active) return;
+    return subscribeTcsExtensionReady((info) => {
+      if (info.portalWarehouse && info.portalWarehouse !== portalWarehouse) {
+        return;
+      }
+      void refreshExtension();
+    });
+  }, [active, portalWarehouse, refreshExtension]);
 
   /** @deprecated Không còn portal-worker / máy kho từ xa. */
   const refreshPortalWorker = useCallback(async () => null, []);
@@ -1281,7 +1293,7 @@ export function useTcsPortalActions({
     sessionLabel,
     results,
     downloadedCount,
-    /** Đăng Nhập TCS agent cloud (Railway) — đường chính khi online. */
+    /** Đăng Nhập TCS agent cloud (Railway) — fallback khi không có Ext / mobile. */
     login,
     loginWithExtension,
     scanReceptionWithExtension,

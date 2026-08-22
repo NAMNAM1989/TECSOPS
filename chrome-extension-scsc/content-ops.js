@@ -1,9 +1,24 @@
 /**
- * Bridge Ops ↔ Ext kho SCSC eCargo (channel riêng).
- * Ops: window.postMessage({ channel: 'tecsops-scsc-ecargo-ext', direction: 'to-ext', id, type, payload })
+ * Bridge Ops ↔ Ext kho SCSC eCargo — handshake chuẩn TECSOPS Ops↔Ext.
+ *
+ * Envelope:
+ *   Ops → Ext: { channel, direction: 'to-ext', id, type, payload? }
+ *   Ext → Ops: { channel, direction: 'from-ext', id?, type?, ok?, error?, message?, ... }
+ *
+ * Message types:
+ *   EXT_READY  — Ext announce khi content-script load (không có id)
+ *   PING       — Ops kiểm tra sống → PONG (+ workspace)
+ *   (job)      — ECARGO_OPEN / FILL_ECARGO_VCT / REGISTER_ECARGO_VCT / …
+ *   result     — trả về cùng `id`, `ok: true|false`
+ *   error      — `ok: false` + `error` code
+ *
+ * Channel: tecsops-scsc-ecargo-ext
+ * @see docs/ops-ext-protocol.md
  */
 
 const CHANNEL = "tecsops-scsc-ecargo-ext";
+const PORTAL_WAREHOUSE = "SCSC";
+const EXT_LABEL = "SCSC eCargo";
 
 function extAlive() {
   try {
@@ -37,7 +52,7 @@ function announceReady() {
         type: "EXT_READY",
         ok: true,
         version: chrome.runtime.getManifest().version,
-        portalWarehouse: "TCS",
+        portalWarehouse: PORTAL_WAREHOUSE,
       },
       OPS_ORIGIN
     );
@@ -59,8 +74,8 @@ window.addEventListener("message", (event) => {
     replyToOps(data.id, {
       ok: false,
       error: "EXT_CONTEXT_INVALIDATED",
-      message:
-        "Extension kho TCS đã Reload — hãy F5 trang Ops rồi bấm Đồng bộ lại.",
+      message: `Extension ${EXT_LABEL} đã Reload — hãy F5 trang Ops rồi thử lại.`,
+      portalWarehouse: PORTAL_WAREHOUSE,
     });
     return;
   }
@@ -75,19 +90,27 @@ window.addEventListener("message", (event) => {
         const err = chrome.runtime.lastError;
         if (err) {
           const msg = String(err.message || "");
-          const invalidated = /context invalidated|receiving end does not exist/i.test(
-            msg
-          );
+          const invalidated =
+            /context invalidated|receiving end does not exist/i.test(msg);
           replyToOps(data.id, {
             ok: false,
             error: invalidated ? "EXT_CONTEXT_INVALIDATED" : "EXT_SEND_FAILED",
             message: invalidated
-              ? "Extension kho TCS đã Reload — F5 Ops rồi thử lại."
-              : msg || "Không gửi được lệnh tới extension kho TCS.",
+              ? `Extension ${EXT_LABEL} đã Reload — F5 Ops rồi thử lại.`
+              : msg || `Không gửi được lệnh tới extension ${EXT_LABEL}.`,
+            portalWarehouse: PORTAL_WAREHOUSE,
           });
           return;
         }
-        replyToOps(data.id, response || { ok: false, error: "EMPTY_RESPONSE" });
+        replyToOps(
+          data.id,
+          response || {
+            ok: false,
+            error: "EMPTY_RESPONSE",
+            message: `Extension ${EXT_LABEL} không trả lời.`,
+            portalWarehouse: PORTAL_WAREHOUSE,
+          }
+        );
       }
     );
   } catch (e) {
@@ -95,6 +118,7 @@ window.addEventListener("message", (event) => {
       ok: false,
       error: "EXT_THROW",
       message: e instanceof Error ? e.message : String(e),
+      portalWarehouse: PORTAL_WAREHOUSE,
     });
   }
 });

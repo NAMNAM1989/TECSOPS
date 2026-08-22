@@ -72,7 +72,7 @@ type Props = {
 
 type WarehouseFilter = SheetWarehouseFilter;
 
-function rowWarehouse(row: SheetBookSyncRow): Warehouse {
+function rowWarehouse(row: { warehouse?: string }): Warehouse {
   return normalizeWarehouse(row.warehouse);
 }
 

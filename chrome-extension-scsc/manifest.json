@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TECSOPS — Kho SCSC eCargo",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Đăng ký eCargo SCSC VCT 1-click (điền + Tạo phiếu + OTP + QR) — độc lập với Ext ESID.",
   "permissions": [
     "tabs",

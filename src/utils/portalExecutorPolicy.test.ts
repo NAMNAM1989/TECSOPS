@@ -89,7 +89,7 @@ describe("resolvePortalExecutorOrder", () => {
     ).toBe(true);
   });
 
-  it("trực quan nhưng không có Ext: vẫn Ext→agent", () => {
+  it("trực quan + Ext offline: vẫn chỉ Ext (không fallback Railway)", () => {
     expect(
       resolvePortalExecutorOrder("scan", {
         policy: "auto",
@@ -97,14 +97,25 @@ describe("resolvePortalExecutorOrder", () => {
         visualControl: true,
         extensionOnline: false,
       })
-    ).toEqual(["extension", "agent"]);
+    ).toEqual(["extension"]);
     expect(
       shouldLockToExtensionVisual({
         isMobile: false,
         visualControl: true,
         extensionOnline: false,
       })
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  it("tắt trực quan: mới cho Ext → agent fallback", () => {
+    expect(
+      resolvePortalExecutorOrder("scan", {
+        policy: "auto",
+        isMobile: false,
+        visualControl: false,
+        extensionOnline: false,
+      })
+    ).toEqual(["extension", "agent"]);
   });
 
   it("ext-only / agent-only / remote-only", () => {

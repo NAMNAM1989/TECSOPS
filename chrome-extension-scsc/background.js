@@ -115,6 +115,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  /**
+   * Stub / hook Ext-first: Ops (hoặc Gmail mapping sau này trên PC) đưa sẵn
+   * `{ code, verifyUrl }` → Ext mở link + Xác Thực. Không chứa credential Gmail.
+   */
+  if (msg.type === "ECARGO_OTP_PROVIDE") {
+    void withServiceWorkerKeepAlive(ecargoOtpProvide(msg.payload || msg))
+      .then(reply)
+      .catch((err) => reply(errorResult("OTP_PROVIDE_FAILED", err)));
+    return true;
+  }
+
   if (msg.type === "ECARGO_RESULT_FROM_MAIL") {
     void withServiceWorkerKeepAlive(ecargoResultFromMail(msg.payload || msg))
       .then(reply)
@@ -674,6 +685,108 @@ async function registerEcargoOnTab(payload) {
     otpSubject: otpRes.subject,
     workspace,
     version: EXT_VERSION,
+  };
+}
+
+/**
+ * Nhận mã + URL xác thực đã map sẵn (từ Ops hoặc reader Gmail trên PC sau này).
+ * Không đọc IMAP / không lưu credential — chỉ điền trên tab eCargo.
+ */
+async function ecargoOtpProvide(msg) {
+  const code = String(msg.code || msg.otp || "").trim();
+  const verifyUrl = String(msg.verifyUrl || "").trim();
+  const apiBase = String(msg.apiBase || "").replace(/\/$/, "");
+  if (!code && !verifyUrl) {
+    return {
+      ok: false,
+      error: "OTP_PROVIDE_EMPTY",
+      message:
+        "ECARGO_OTP_PROVIDE cần code và/hoặc verifyUrl (hook Gmail mapping trên Ext PC).",
+      version: EXT_VERSION,
+      portalWarehouse: PORTAL_WAREHOUSE,
+    };
+  }
+
+  const tabId = await findOrOpenEcargoTab({ active: true, pinned: true });
+  if (verifyUrl) {
+    setWorkspace({
+      phase: "FILLING",
+      message: "eCargo: mở link xác thực (OTP provide)…",
+      error: "",
+    });
+    await chrome.tabs.update(tabId, { url: verifyUrl, active: true });
+    await waitTabComplete(tabId, 45_000);
+  }
+
+  await ensureEcargoContentReady(tabId);
+  setWorkspace({
+    phase: "FILLING",
+    message: code
+      ? "eCargo: điền mã xác thực (OTP provide)…"
+      : "eCargo: Xác Thực (OTP provide)…",
+    error: "",
+  });
+
+  let submitRes;
+  try {
+    submitRes = await sendToEcargoContent(tabId, {
+      type: "ECARGO_CONFIRM_VERIFY",
+      payload: {
+        code,
+        otp: code,
+        vctCode: String(msg.vctCode || ""),
+        apiBase,
+        email: String(msg.email || ""),
+        sinceIso: String(msg.sinceIso || ""),
+        awbHint: String(msg.awbHint || ""),
+      },
+    });
+  } catch (err) {
+    try {
+      await waitTabComplete(tabId, 20_000);
+      await ensureEcargoContentReady(tabId);
+      const check = await chrome.tabs.sendMessage(tabId, {
+        type: "ECARGO_CHECK_VERIFIED",
+        payload: { vctCode: String(msg.vctCode || "") },
+      });
+      if (check?.ok || check?.verified) {
+        submitRes = {
+          ok: true,
+          verified: true,
+          warnings: [
+            `Kênh content đứt sau Xác Thực — trang đã xác thực (${
+              err instanceof Error ? err.message : String(err)
+            }).`,
+          ],
+        };
+      } else {
+        throw err;
+      }
+    } catch {
+      throw err;
+    }
+  }
+
+  const finalOk = Boolean(submitRes?.ok || submitRes?.verified);
+  setWorkspace({
+    phase: finalOk ? "READY" : "ERROR",
+    message: finalOk
+      ? "eCargo: đã Xác Thực qua OTP provide"
+      : submitRes?.message || "OTP provide thất bại",
+    error: finalOk ? "" : submitRes?.message || "OTP_PROVIDE_FAILED",
+  });
+  return {
+    ok: finalOk,
+    error: finalOk ? undefined : submitRes?.error || "OTP_PROVIDE_FAILED",
+    message: submitRes?.message,
+    code: code || undefined,
+    verifyUrl: verifyUrl || undefined,
+    phase: "otp_provide",
+    source: "ecargo-otp-provide",
+    warnings: submitRes?.warnings || [],
+    workspace,
+    version: EXT_VERSION,
+    portalWarehouse: PORTAL_WAREHOUSE,
   };
 }
 

@@ -1,18 +1,42 @@
-# Portal TCS online trên Railway (không máy kho)
+# Portal TCS — Ext PC kho (chính) · Railway agent (fallback)
 
-Ops dùng **Playwright headless trong container Railway** qua same-origin `/tcs-agent`.
-Không cần PC kho / `portal:worker`. Chrome Ext chỉ là fallback desktop tuỳ chọn.
+## Mô hình bắt buộc
+
+**Bấm trên Ops (web) → Chrome Ext trên PC kho thực thi** (`chrome-extension-tcs` / `chrome-extension-scsc`).
+
+Không dùng Playwright trong container Railway / dual-agent / web automation server-side để thay Ext khi làm việc tại kho.
+
+```
+Ops UI (click)
+  → postMessage content-ops.js
+  → Ext background trên PC kho
+  → tab tcs.com.vn / ecargo.scsc.vn
+```
+
+Handshake: `docs/ops-ext-protocol.md` (`EXT_READY` / job / result / error).  
+Chip **Ext · offline|sẵn sàng|đã login** trên bar Ops.
+
+## Railway agent — chỉ fallback
+
+Same-origin `/tcs-agent` + `TCS_AGENT_*` + volume `browser_profile` giữ cho:
+
+- Điện thoại (không có Ext)
+- Khi **tắt** «Trực quan» có chủ đích
+- Policy `agent-only` (QA / sự cố)
+
+Không xây tính năng mới phụ thuộc agent server.
 
 ## Kiến trúc
 
 ```
-Phone / laptop → Ops (Railway HTTPS)
-                 → /tcs-agent  (Express proxy)
-                 → agent :8765 (TECS-TCS; :8766 chỉ khi TCS_AGENT_DUAL=1)
-                 → Chromium on-demand (Đăng Nhập TCS / Quét), cookie volume
+PC kho + Ext  → Ops postMessage → Ext (đường chính)
+
+Phone / fallback → Ops → /tcs-agent → Playwright :8765/:8766 (phụ)
 ```
 
-Policy mặc định `auto` = **desktop Ext → agent**; **phone agent-only** (Quét/PDF).
+Policy mặc định: «Trực quan» bật → desktop **chỉ Ext** (kể cả khi Ext offline — UI báo cài, không lặng lẽ headless).
+
+Chrome Ext chuẩn: **TCS + SCSC**. Legacy `chrome-extension/` (TECS-TCS) deprecated — ẩn menu «Tải Ext».
 
 ## Railway Variables (bắt buộc)
 

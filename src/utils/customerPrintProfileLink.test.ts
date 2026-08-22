@@ -36,6 +36,13 @@ describe("formatSavedGoods — tên hàng từ hồ sơ KH", () => {
     expect(patch.goodsDescriptionPrint).toBe("SEAFOOD FROZEN");
   });
 
+  it("patch lô fallback label khi thiếu goodsDescription", () => {
+    const patch = buildShipmentPatchForSavedGoods(
+      goods({ id: "g-label", label: "CLOTHES PANTS", goodsDescription: "" }),
+    );
+    expect(patch.goodsDescriptionPrint).toBe("CLOTHES PANTS");
+  });
+
   it("bỏ mục trống khỏi droplist", () => {
     expect(isSavedGoodsSelectable(goods())).toBe(false);
     expect(isSavedGoodsSelectable(goods({ goodsDescription: "A" }))).toBe(true);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   dimEntryAddMeasuredFromCombo,
+  dimEntryHasMergeableDuplicates,
   dimEntryMergeLines,
   dimEntryRandomFill,
   dimEntrySeed,
@@ -27,6 +28,47 @@ describe("snapshotDimEntry", () => {
 });
 
 describe("dimEntryAddMeasuredFromCombo", () => {
+  it("đủ kiện đo thì không tự sinh ảo dù bật thenRandomFill", () => {
+    const lot55 = { shipmentId: "s55", declaredPcs: 55, declaredKg: 800 };
+    const r = dimEntryAddMeasuredFromCombo([], "50×40×30×55", lot55, {
+      thenRandomFill: true,
+      randomFillParams: {
+        declaredPcs: 55,
+        declaredKg: 800,
+        divisor: 6000,
+        dimCtx: TR_CTX,
+        seed: 1,
+      },
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.lines.every((l) => !l.estimated)).toBe(true);
+      expect(r.lines.reduce((s, l) => s + l.pcs, 0)).toBe(55);
+    }
+  });
+
+  it("gộp dòng cùng kích thước khi thêm / dán trùng", () => {
+    const lot = { shipmentId: "s-merge", declaredPcs: 80, declaredKg: 900 };
+    const first = dimEntryAddMeasuredFromCombo([], "50×40×30×10\n50x40x30x5", lot);
+    expect(first.ok).toBe(true);
+    if (first.ok) {
+      expect(first.lines).toHaveLength(1);
+      expect(first.lines[0]?.pcs).toBe(15);
+      expect(first.note).toContain("gộp");
+    }
+
+    const second = dimEntryAddMeasuredFromCombo(
+      [{ lCm: 50, wCm: 40, hCm: 30, pcs: 15 }],
+      "40x50x30x8",
+      lot
+    );
+    expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.lines).toHaveLength(1);
+      expect(second.lines[0]?.pcs).toBe(23);
+    }
+  });
+
   it("xóa ước tính cũ khi thêm mẫu đo mới", () => {
     const prev = [
       { lCm: 50, wCm: 40, hCm: 30, pcs: 10 },
@@ -77,6 +119,41 @@ describe("dimEntryValidateSave", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("cho lưu khi đã đo đủ kiện lô — không cần dòng ước tính", () => {
+    const lot55 = { shipmentId: "s55", declaredPcs: 55, declaredKg: 800 };
+    const r = dimEntryValidateSave(
+      [{ lCm: 50, wCm: 40, hCm: 30, pcs: 55 }],
+      lot55,
+      6000,
+      TR_CTX
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.lines.every((l) => !l.estimated)).toBe(true);
+      const snap = snapshotDimEntry(r.lines, lot55, 6000, TR_CTX);
+      expect(snap.pcsMatch).toBe(true);
+      expect(snap.canSave).toBe(true);
+    }
+  });
+
+  it("cho lưu kiện đo thật thiếu so với lô — không bắt sinh ảo", () => {
+    const lot80 = { shipmentId: "s80", declaredPcs: 80, declaredKg: 900 };
+    const r = dimEntryValidateSave(
+      [{ lCm: 55, wCm: 45, hCm: 35, pcs: 55 }],
+      lot80,
+      6000,
+      TR_CTX
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const snap = snapshotDimEntry(r.lines, lot80, 6000, TR_CTX);
+      expect(snap.pcsShort).toBe(true);
+      expect(snap.sumDimPcs).toBe(55);
+      expect(snap.canSave).toBe(true);
+      expect(snap.estimatedLineCount).toBe(0);
+    }
+  });
+
   it("cho lưu khi DIM volumetric lớn hơn cân lô", () => {
     const lines = [{ lCm: 120, wCm: 80, hCm: 70, pcs: 96 }];
     const r = dimEntryValidateSave(lines, LOT, 6000, TR_CTX);
@@ -96,7 +173,25 @@ describe("dimEntryMergeLines", () => {
       { lCm: 40, wCm: 50, hCm: 30, pcs: 3 },
     ]);
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.lines).toHaveLength(1);
+    if (r.ok) {
+      expect(r.lines).toHaveLength(1);
+      expect(r.lines[0]?.pcs).toBe(5);
+      expect(r.note).toContain("gộp");
+    }
+  });
+
+  it("không gộp khi mọi dòng khác size", () => {
+    const r = dimEntryMergeLines([
+      { lCm: 50, wCm: 40, hCm: 30, pcs: 2 },
+      { lCm: 60, wCm: 40, hCm: 30, pcs: 3 },
+    ]);
+    expect(r.ok).toBe(false);
+    expect(
+      dimEntryHasMergeableDuplicates([
+        { lCm: 50, wCm: 40, hCm: 30, pcs: 2 },
+        { lCm: 50, wCm: 40, hCm: 30, pcs: 3 },
+      ])
+    ).toBe(true);
   });
 });
 

@@ -1,12 +1,20 @@
+import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import {
   normalizeWarehouse,
   opsTeamOf,
   type OpsTeam,
 } from "../constants/warehouses";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment, Warehouse } from "../types/shipment";
 import { awbDigitsKey, formatAwb } from "./awbFormat";
+import {
+  findCustomerEntry,
+  resolveSavedGoodsForBooking,
+} from "./customerBookingResolve";
+import { savedGoodsPrintText } from "./customerPrintProfileLink";
 import { loadLastCsdTransfer, saveLastCsdTransfer } from "./csdPrintPrefs";
+import { clipScscGoodsDescriptionPrint } from "./scscPrintContent";
 
 /** Thêm hãng mới: mở rộng union + thêm entry trong CSD_CARRIER_PROFILES + PDF mẫu. */
 export type CsdCarrier = "FD" | "TH";
@@ -94,7 +102,38 @@ export type PrintCsdOptions = {
   origin?: string;
   /** Modal đã xác nhận — bỏ window.confirm tên hàng trống. */
   allowEmptyGoods?: boolean;
+  /** Hồ sơ khách — lấy tên hàng đã chọn nếu lô chưa có goodsDescriptionPrint. */
+  customerDirectory?: readonly CustomerDirectoryEntry[];
 };
+
+const CSD_FONT_BOLD_URL = "/fonts/NotoSans-Bold.ttf";
+
+export type CsdPdfAssets = {
+  bold?: ArrayBuffer | Uint8Array;
+};
+
+/**
+ * Tên hàng in CSD (Contents):
+ * 1) mô tả in trên lô
+ * 2) tên hàng đã chọn / mặc định trong hồ sơ khách
+ */
+export function resolveCsdGoodsText(
+  s: Pick<
+    Shipment,
+    | "goodsDescriptionPrint"
+    | "customerGoodsId"
+    | "customerId"
+    | "customerCode"
+    | "customer"
+  >,
+  directory: readonly CustomerDirectoryEntry[] = []
+): string {
+  const fromPrint = clipScscGoodsDescriptionPrint(s.goodsDescriptionPrint || "");
+  if (fromPrint) return fromPrint;
+  const customer = findCustomerEntry(s as Shipment, directory);
+  const saved = resolveSavedGoodsForBooking(s as Shipment, customer);
+  return saved ? savedGoodsPrintText(saved) : "";
+}
 
 /** Chuyến FD… → Thai AirAsia CSD. */
 export function isCsdFdFlight(flight: string | undefined | null): boolean {
@@ -191,16 +230,26 @@ export function wrapCsdGoodsLines(text: string, maxChars = 72): string[] {
 }
 
 export function buildCsdFields(
-  s: Pick<Shipment, "awb" | "dest" | "goodsDescriptionPrint" | "warehouse">,
+  s: Pick<
+    Shipment,
+    | "awb"
+    | "dest"
+    | "goodsDescriptionPrint"
+    | "warehouse"
+    | "customerGoodsId"
+    | "customerId"
+    | "customerCode"
+    | "customer"
+  >,
   carrier: CsdCarrier,
-  overrides?: Pick<PrintCsdOptions, "transfer" | "origin">
+  overrides?: Pick<PrintCsdOptions, "transfer" | "origin" | "customerDirectory">
 ): CsdFillFields {
   const profile = getCsdCarrierProfile(carrier);
   const ra = csdRaForWarehouse(s.warehouse);
   const digits = awbDigitsKey(s.awb);
   const base: CsdFillFields = {
     awb: digits.length === 11 ? formatAwb(digits) : (s.awb || "").trim(),
-    goods: (s.goodsDescriptionPrint || "").trim(),
+    goods: resolveCsdGoodsText(s, overrides?.customerDirectory),
     dest: (s.dest || "").trim().toUpperCase().slice(0, 3),
     raCode: ra.raCode,
     opsTeam: ra.opsTeam,
@@ -221,9 +270,34 @@ export function buildCsdFields(
 
 /** @deprecated */
 export function buildCsdFdFields(
-  s: Pick<Shipment, "awb" | "dest" | "goodsDescriptionPrint" | "warehouse">
+  s: Pick<
+    Shipment,
+    | "awb"
+    | "dest"
+    | "goodsDescriptionPrint"
+    | "warehouse"
+    | "customerGoodsId"
+    | "customerId"
+    | "customerCode"
+    | "customer"
+  >
 ): CsdFillFields & { origin: string } {
   return buildCsdFields(s, "FD") as CsdFillFields & { origin: string };
+}
+
+async function embedCsdBoldFont(
+  pdf: PDFDocument,
+  assets?: CsdPdfAssets
+): Promise<Awaited<ReturnType<PDFDocument["embedFont"]>>> {
+  const bytes =
+    assets?.bold ??
+    (await (async () => {
+      const res = await fetch(CSD_FONT_BOLD_URL, { cache: "force-cache" });
+      if (!res.ok) throw new Error(`Không tải được font CSD (${res.status}).`);
+      return res.arrayBuffer();
+    })());
+  pdf.registerFontkit(fontkit);
+  return pdf.embedFont(bytes);
 }
 
 function lineYToPdfLibBaseline(lineY: number): number {
@@ -302,13 +376,19 @@ function wipeRect(
 export async function fillCsdPdfBytes(
   carrier: CsdCarrier,
   fields: CsdFillFields,
-  templateBytes?: ArrayBuffer
+  templateBytes?: ArrayBuffer | Uint8Array,
+  assets?: CsdPdfAssets
 ): Promise<Uint8Array> {
   const raw = templateBytes ?? (await loadTemplate(carrier));
   const pdf = await PDFDocument.load(raw);
   const page = pdf.getPages()[0];
   if (!page) throw new Error(`Mẫu CSD ${carrier} không có trang.`);
-  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  let fontBold;
+  try {
+    fontBold = await embedCsdBoldFont(pdf, assets);
+  } catch {
+    fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  }
   const ink = rgb(0, 0, 0);
   const raCode = (fields.raCode || "").trim();
 
@@ -416,9 +496,10 @@ export async function fillCsdPdfBytes(
 /** @deprecated */
 export async function fillCsdFdPdfBytes(
   fields: CsdFillFields,
-  templateBytes?: ArrayBuffer
+  templateBytes?: ArrayBuffer,
+  assets?: CsdPdfAssets
 ): Promise<Uint8Array> {
-  return fillCsdPdfBytes("FD", fields, templateBytes);
+  return fillCsdPdfBytes("FD", fields, templateBytes, assets);
 }
 
 /** Tên file tải về — theo kho + hãng + AWB. */

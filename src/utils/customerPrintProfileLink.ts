@@ -40,6 +40,11 @@ export function buildShipmentPatchForSavedShipper(
   };
 }
 
+/** Tên hàng đưa lên lô / phiếu in: mô tả chính, thiếu thì alias. */
+export function savedGoodsPrintText(g: CustomerSavedGoods): string {
+  return clipScscGoodsDescriptionPrint(g.goodsDescription.trim() || g.label.trim());
+}
+
 export function buildShipmentPatchForSavedGoods(
   g: CustomerSavedGoods | undefined
 ): Partial<Shipment> {
@@ -51,8 +56,8 @@ export function buildShipmentPatchForSavedGoods(
   }
   return {
     customerGoodsId: g.id,
-    // Nguồn sự thật = goodsDescription (tab Tên hàng / cột Loại hàng trong hồ sơ KH).
-    goodsDescriptionPrint: clipScscGoodsDescriptionPrint(g.goodsDescription),
+    // Nguồn sự thật = goodsDescription (tab Tên hàng); thiếu thì label.
+    goodsDescriptionPrint: savedGoodsPrintText(g),
   };
 }
 

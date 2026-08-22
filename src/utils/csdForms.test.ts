@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   buildCsdFields,
@@ -5,11 +7,13 @@ import {
   csdCarrierForShipment,
   csdDownloadFilename,
   csdRaForWarehouse,
+  fillCsdPdfBytes,
   getCsdCarrierProfile,
   isCsdFdFlight,
   isCsdThFlight,
   normalizeCsdTransfer,
   suggestCsdTransfer,
+  resolveCsdGoodsText,
   wrapCsdGoodsLines,
 } from "./csdForms";
 
@@ -103,5 +107,68 @@ describe("csdForms", () => {
 
   it("wrap tên hàng", () => {
     expect(wrapCsdGoodsLines("CLOTHES")).toEqual(["CLOTHES"]);
+  });
+
+  it("tên hàng CSD lấy từ hồ sơ khách khi lô chưa có goodsDescriptionPrint", () => {
+    const shipment = {
+      awb: "21712345675",
+      dest: "BKK",
+      goodsDescriptionPrint: "",
+      warehouse: "TCS" as const,
+      customerGoodsId: "g-clothes",
+      customerCode: "PCS",
+      customer: "PCS",
+    };
+    const directory = [
+      {
+        id: "c1",
+        code: "PCS",
+        name: "PCS",
+        savedGoods: [
+          { id: "g-clothes", label: "", goodsDescription: "CLOTHES PANTS" },
+        ],
+        savedShippers: [],
+        savedConsignees: [],
+        savedVehicles: [],
+        parties: [],
+      },
+    ];
+    expect(resolveCsdGoodsText(shipment, directory)).toBe("CLOTHES PANTS");
+    expect(buildCsdFields(shipment, "FD", { customerDirectory: directory }).goods).toBe(
+      "CLOTHES PANTS"
+    );
+    expect(buildCsdFields(shipment, "FD").goods).toBe("");
+  });
+
+  it("tên hàng CSD ưu tiên mô tả in trên lô", () => {
+    expect(
+      resolveCsdGoodsText({
+        goodsDescriptionPrint: "SEAFOOD FROZEN",
+        customerGoodsId: "g-other",
+        customerCode: "X",
+        customer: "X",
+      })
+    ).toBe("SEAFOOD FROZEN");
+  });
+
+  it("ghi tên hàng Unicode lên PDF CSD", async () => {
+    const template = new Uint8Array(
+      readFileSync(resolve("public/templates/csd/CSD-FD.pdf"))
+    );
+    const bold = new Uint8Array(
+      readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
+    );
+    const bytes = await fillCsdPdfBytes(
+      "FD",
+      {
+        awb: "217-12345675",
+        goods: "QUẦN ÁO / GARMENTS",
+        dest: "BKK",
+        origin: "SGN",
+      },
+      template,
+      { bold }
+    );
+    expect(bytes.byteLength).toBeGreaterThan(1000);
   });
 });

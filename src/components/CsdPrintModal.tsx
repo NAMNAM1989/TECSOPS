@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
 import { OPS } from "../styles/opsModalStyles";
 import { Button } from "../ui";
@@ -19,10 +20,16 @@ import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 type Props = {
   open: boolean;
   shipment: Shipment | null;
+  customerDirectory?: readonly CustomerDirectoryEntry[];
   onClose: () => void;
 };
 
-export function CsdPrintModal({ open, shipment, onClose }: Props) {
+export function CsdPrintModal({
+  open,
+  shipment,
+  customerDirectory = [],
+  onClose,
+}: Props) {
   const titleId = useId();
   const carrier = shipment ? csdCarrierForShipment(shipment) : null;
   const profile = carrier ? getCsdCarrierProfile(carrier) : null;
@@ -55,6 +62,7 @@ export function CsdPrintModal({ open, shipment, onClose }: Props) {
   const preview = buildCsdFields(shipment, carrier, {
     transfer,
     origin: profile.showOrigin ? origin : undefined,
+    customerDirectory,
   });
 
   const onPrint = async () => {
@@ -67,6 +75,7 @@ export function CsdPrintModal({ open, shipment, onClose }: Props) {
         transfer: normTransfer,
         origin: profile.showOrigin ? origin : undefined,
         allowEmptyGoods: true,
+        customerDirectory,
       });
       trackAiEvent("csd.print.ok", {
         carrier,

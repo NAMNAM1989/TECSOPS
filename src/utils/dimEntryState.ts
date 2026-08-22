@@ -12,7 +12,14 @@ import {
 import type { DimDivisor, DimPieceLine, ScscDimRoundContext } from "./volumetricDim";
 import { totalDimKgFromLines, tryParseDimPieceLinesFromComboText } from "./volumetricDim";
 
-/** Ngữ cảnh lô hàng khi nhập DIM. */
+/**
+ * Logic nhập DIM:
+ * 1. Dòng đo thật là nguồn sự thật. Dán/thêm không tự sinh ảo.
+ * 2. Lưu được khi có ≥1 dòng hợp lệ, tổng DIM hữu hạn, không dư kiện lô.
+ * 3. Đủ kiện đo (vd. 55/55) → lưu ngay, không bắt dòng ước tính hay 13–17 dòng.
+ * 4. Thiếu kiện (vd. 55/80) → vẫn lưu phần đã đo; sinh ảo chỉ khi user bấm Bù/Sinh.
+ * 5. Chặn duy nhất: dư kiện (tổng kiện DIM > kiện lô).
+ */
 export type DimEntryLotContext = {
   shipmentId: string;
   declaredPcs: number | null;
@@ -39,6 +46,11 @@ export type DimEntrySnapshot = {
   pcsExcess: boolean;
   pcsShort: boolean;
   pcsMatch: boolean;
+  /**
+   * Được lưu khi có dòng hợp lệ và không dư kiện.
+   * Không bắt đủ kiện lô, không bắt dòng ước tính / 13–17 dòng.
+   */
+  canSave: boolean;
   /** true khi tổng DIM < kg lô (chargeable theo cân); false = chargeable theo DIM. */
   dimBelowGross: boolean | null;
   workflowStep: DimEntryWorkflowStep;
@@ -77,6 +89,9 @@ export function snapshotDimEntry(
     lot.declaredPcs != null && lines.length > 0
       ? Math.max(0, lot.declaredPcs - sumDimPcs)
       : preview.remainingPcs;
+
+  const canSave =
+    lines.length > 0 && totalDim != null && Number.isFinite(totalDim) && !pcsExcess;
 
   let dimBelowGross: boolean | null = null;
   if (totalDim != null && lot.declaredKg != null && lot.declaredKg > 0) {
@@ -118,6 +133,7 @@ export function snapshotDimEntry(
     pcsExcess,
     pcsShort,
     pcsMatch,
+    canSave,
     dimBelowGross,
     workflowStep,
     targetLineCount,
@@ -148,24 +164,43 @@ export function dimEntryAddMeasuredFromCombo(
     };
   }
 
-  const measuredOnly = [
+  const measuredOnly = consolidateDimPieceLines([
     ...lines.filter((l) => !l.estimated || l.locked),
     ...parsed,
-  ];
+  ]);
+  const rawCount =
+    lines.filter((l) => !l.estimated || l.locked).length + parsed.length;
+  const mergeNote =
+    measuredOnly.length < rawCount
+      ? ` Đã gộp dòng cùng kích thước (${rawCount} → ${measuredOnly.length}).`
+      : "";
 
-  if (opts?.thenRandomFill && opts.randomFillParams) {
+  const remainingAfterAdd =
+    lot.declaredPcs != null ? Math.max(0, lot.declaredPcs - nextMeasuredPcs) : 0;
+  if (
+    opts?.thenRandomFill &&
+    opts.randomFillParams &&
+    remainingAfterAdd > 0
+  ) {
     const fill = dimEntryRandomFill(measuredOnly, lot, opts.randomFillParams);
     if (!fill.ok) return fill;
-    return { ok: true, lines: fill.lines, note: fill.note };
+    return {
+      ok: true,
+      lines: fill.lines,
+      note: `${fill.note ?? ""}${mergeNote}`.trim() || undefined,
+    };
   }
+
+  const clearedEstimated = lines.filter((l) => l.estimated && !l.locked).length > 0;
+  const parts = [
+    clearedEstimated ? "Đã xóa kiện ước tính chưa khóa cũ." : "",
+    mergeNote.trim(),
+  ].filter(Boolean);
 
   return {
     ok: true,
     lines: measuredOnly,
-    note:
-      lines.filter((l) => l.estimated && !l.locked).length > 0
-        ? "Đã xóa kiện ước tính chưa khóa cũ — bấm Ngẫu nhiên để sinh lại."
-        : undefined,
+    note: parts.length > 0 ? parts.join(" ") : undefined,
   };
 }
 
@@ -232,7 +267,19 @@ export function dimEntryMergeLines(lines: DimPieceLine[]): DimEntryMutation {
   if (lines.length < 2) {
     return { ok: false, error: "Cần ít nhất 2 dòng để gộp." };
   }
-  return { ok: true, lines: consolidateDimPieceLines(lines) };
+  const next = consolidateDimPieceLines(lines);
+  if (next.length === lines.length) {
+    return { ok: false, error: "Không có dòng cùng kích thước để gộp." };
+  }
+  return {
+    ok: true,
+    lines: next,
+    note: `Đã gộp dòng cùng kích thước (${lines.length} → ${next.length}).`,
+  };
+}
+
+export function dimEntryHasMergeableDuplicates(lines: DimPieceLine[]): boolean {
+  return lines.length > 1 && consolidateDimPieceLines(lines).length < lines.length;
 }
 
 export function dimEntryClearEstimated(lines: DimPieceLine[]): DimPieceLine[] {
@@ -250,14 +297,17 @@ export function dimEntryValidateSave(
   dimCtx: ScscDimRoundContext
 ): DimEntryMutation {
   const snap = snapshotDimEntry(lines, lot, divisor, dimCtx);
-  if (lines.length === 0 || snap.totalDim == null) {
-    return { ok: false, error: "Thêm ít nhất một dòng D×R×C×kiện." };
-  }
-  if (snap.pcsExcess) {
-    return {
-      ok: false,
-      error: `Dư kiện: tổng kiện DIM (${snap.sumDimPcs}) lớn hơn kiện lô (${lot.declaredPcs}).`,
-    };
+  if (!snap.canSave) {
+    if (lines.length === 0 || snap.totalDim == null) {
+      return { ok: false, error: "Thêm ít nhất một dòng D×R×C×kiện." };
+    }
+    if (snap.pcsExcess) {
+      return {
+        ok: false,
+        error: `Dư kiện: tổng kiện DIM (${snap.sumDimPcs}) lớn hơn kiện lô (${lot.declaredPcs}).`,
+      };
+    }
+    return { ok: false, error: "Chưa lưu được — kiểm tra dòng D×R×C." };
   }
   return { ok: true, lines: consolidateDimPieceLines(lines) };
 }

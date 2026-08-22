@@ -179,7 +179,7 @@ function menuPositionFromTrigger(btn: HTMLElement): CSSProperties {
 
 export function ShipmentRowActionsMenu({
   row,
-  customerDirectory: _customerDirectory,
+  customerDirectory,
   onPrint,
   onDelete,
   compact = false,
@@ -472,6 +472,7 @@ export function ShipmentRowActionsMenu({
           <CsdPrintModal
             open
             shipment={row}
+            customerDirectory={customerDirectory}
             onClose={() => setCsdOpen(false)}
           />
         </Suspense>

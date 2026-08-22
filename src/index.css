@@ -8,24 +8,34 @@
     color-scheme: light;
   }
   body {
-    /* Light mode chính thức — không gắn class dark. */
-    @apply min-h-screen bg-ui-background text-ui-text antialiased font-sans;
+    /* Operational Signal R2 — canvas lạnh + chiều sâu nhẹ, không flat đơn sắc. */
+    @apply min-h-screen text-ui-text antialiased font-sans;
+    background-color: #e4ebf3;
+    background-image:
+      radial-gradient(ellipse 120% 80% at 0% -20%, rgba(15, 118, 110, 0.07), transparent 55%),
+      radial-gradient(ellipse 90% 60% at 100% 0%, rgba(3, 105, 161, 0.05), transparent 50%),
+      linear-gradient(180deg, #e8eef5 0%, #e4ebf3 40%, #dde5ef 100%);
+    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Plus Jakarta Sans hơi chặt — nới nhẹ để chữ bớt dính. */
-    letter-spacing: 0.015em;
+    letter-spacing: 0.012em;
   }
 
   h1,
   h2,
   h3 {
-    letter-spacing: 0.01em;
+    letter-spacing: 0.005em;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(15, 118, 110, 0.45);
+    outline-offset: 2px;
   }
 
   /** Surface phẳng (thay glass blur). */
   .glass-panel {
     background: #ffffff;
-    border: 1px solid rgba(15, 23, 42, 0.1);
+    border: 1px solid rgba(15, 23, 42, 0.09);
   }
 }
 
@@ -35,7 +45,7 @@
       "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
       Consolas, monospace;
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.015em;
   }
 
   .tabular-nums-data {
@@ -61,6 +71,25 @@
 
   .ops-grid-note.ops-grid-placeholder {
     @apply italic font-semibold text-red-800/85;
+  }
+
+  /** AWB mono — contrast cao Round 2. */
+  .ops-awb {
+    @apply font-shipment-data font-extrabold tracking-tight tabular-nums text-ui-awb;
+  }
+
+  /** Zebra hàng bảng Ops — xen kẽ nhẹ, không cạnh tranh status accent. */
+  .ops-row-zebra-odd {
+    background-color: #ffffff;
+  }
+  .ops-row-zebra-even {
+    background-color: #f7fafc;
+  }
+
+  /** Sticky table header — nền đặc + viền dưới rõ. */
+  .ops-table-head {
+    background: linear-gradient(180deg, #f1f5f9 0%, #e8eef5 100%);
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.08);
   }
 }
 

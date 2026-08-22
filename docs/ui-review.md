@@ -1,27 +1,37 @@
 # TECSOPS UI Review — Ops / Customers / Stats redesign
 
-> Cập nhật: 2026-08-22 · PR redesign Operational Signal
+> Cập nhật: 2026-08-22 · Round 2 Operational Signal (sau PR #39)
 
-## P0 đã xử lý
+## Round 2 — nâng cấp hình ảnh
+
+| Mục tiêu | Thay đổi |
+| --- | --- |
+| Token / hierarchy | Canvas lạnh + radial nhẹ; primary `#0F766E`; AWB `ui-awb`; shadow `ui-sm/md/lg`; zebra + sticky header bảng |
+| Ops mobile | Sticky header thấp hơn; KPI / copy chip gọn; kho chip viền trái màu; card lô shadow + AWB contrast |
+| Ops desktop | Bảng zebra sạch, hover teal nhẹ, header sticky gradient, pill status bo tròn |
+| Khách hàng | Directory accent trái; form card nâng; danger zone rõ hơn; empty rõ ràng |
+| Thống kê | KPI card gradient tone; chart/table đồng bộ token Ops |
+| A11y | `:focus-visible` global; focus ring giữ trên control chính |
+
+## P0 từ #39 (giữ nguyên)
 
 | Finding | Fix |
 | --- | --- |
-| `window.alert` chặn UI khi portal / AWB / Ext / ngày bay | Toast non-blocking (`TcsPortalInlineBar`, `InlineAwbEdit`, `ChromeExtensionsDownloadMenu`, `DesktopShipmentTable`) |
-| Mobile ẩn CTA khi agent fail | Hiện «Đăng Nhập TCS» / «Thử Đăng Nhập TCS» khi chưa login, kể cả agent offline |
-| Copy user-visible dùng «ĐN» | Đổi thành «Đăng Nhập TCS» trên bar + message hook portal |
+| `window.alert` chặn UI | Toast non-blocking |
+| Mobile ẩn CTA khi agent fail | Hiện «Đăng Nhập TCS» / «Thử Đăng Nhập TCS» |
+| Copy user-visible dùng «ĐN» | Luôn «Đăng Nhập TCS» |
 
-## P1 đã xử lý
+## P1 từ #39 (giữ nguyên)
 
 | Finding | Fix |
 | --- | --- |
-| 3 lớp nhãn status lệch (filter / select / compact) | Một nguồn `statusLabel`; compact cùng gốc từ vựng; dense filter dùng compact |
-| Khách / Thống kê khó tìm trên phone | `BottomNav` Ops · Khách · Thống kê |
-| Dirty confirm Customers dùng `window.confirm` | `ConfirmDialog` |
-| Design system thiếu | Thêm `Badge`, `Card`, `Input`, `BottomNav`, `ConfirmDialog` |
-| Stats / mobile cards / KPI | Làm phẳng, bỏ blur/gradient thừa, card lô bo góc + shadow nhẹ |
+| 3 lớp nhãn status lệch | Một nguồn `statusLabel` + compact cùng gốc |
+| Khách / Thống kê trên phone | `BottomNav` Ops · Khách · Thống kê |
+| Dirty confirm Customers | `ConfirmDialog` |
 
-## Không đụng trong PR này
+## Không đụng
 
-- Xóa credential / rewrite Railway / Playwright stack
-- Đổi workflow enum / migration status lịch sử
+- Xóa credential / rewrite Railway / Playwright
+- Đổi workflow enum / migration status
 - Print tem CSS `@page` / mm
+- Schema / API migration

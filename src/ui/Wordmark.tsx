@@ -1,4 +1,4 @@
-/** Wordmark TECS (navy) + OPS (teal) — Operational Signal. */
+/** Wordmark TECS (navy) + OPS (teal) — Operational Signal Round 2. */
 export function Wordmark({
   className = "",
   size = "md",
@@ -8,13 +8,13 @@ export function Wordmark({
 }) {
   const cls =
     size === "sm"
-      ? "text-sm"
+      ? "text-[13px] tracking-tight"
       : size === "lg"
-        ? "text-2xl sm:text-3xl"
-        : "text-xl sm:text-2xl";
+        ? "text-2xl tracking-tight sm:text-3xl"
+        : "text-xl tracking-tight sm:text-2xl";
   return (
     <span
-      className={`inline-flex font-extrabold tracking-normal text-ui-navy ${cls} ${className}`}
+      className={`inline-flex font-extrabold text-ui-navy ${cls} ${className}`}
       aria-label="TECSOPS"
     >
       TECS<span className="text-ui-primary">OPS</span>

@@ -65,8 +65,8 @@ interface Props {
 
 function MiniKpi({ label, value }: { label: string; value: string | number }) {
   return (
-    <span className="inline-flex items-baseline gap-0.5 rounded-md bg-ui-surface px-1.5 py-0.5 ring-1 ring-ui-border">
-      <span className="text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">{label}</span>
+    <span className="inline-flex items-baseline gap-0.5 rounded-lg bg-ui-surface px-1.5 py-0.5 shadow-ui-sm ring-1 ring-ui-border/80">
+      <span className="text-[8px] font-bold uppercase tracking-wider text-ui-text-muted">{label}</span>
       <span className="font-mono text-[12px] font-extrabold tabular-nums text-ui-navy">{value}</span>
     </span>
   );
@@ -134,10 +134,13 @@ export function OpsMobileStickyHeader({
     return { lotCount: rows.length, totalPcs: pcs, totalKg: kg };
   }, [filteredViewRows]);
 
+  const copyChip =
+    "inline-flex min-h-9 min-w-[2.75rem] touch-manipulation items-center justify-center rounded-lg px-1.5 text-[9px] font-extrabold uppercase tracking-wide text-white shadow-ui-sm disabled:cursor-not-allowed disabled:opacity-45";
+
   return (
-    <div className="space-y-1" data-testid="ops-mobile-sticky-header">
-      {/* Hàng 1: brand · Live · cụm CTA icon (không chồng/che nhau) */}
-      <div className="flex min-w-0 items-center gap-1.5">
+    <div className="space-y-0.5" data-testid="ops-mobile-sticky-header">
+      {/* Hàng 1: brand · sync · ngày · CTA — gộp để header thấp hơn Round 2 */}
+      <div className="flex min-w-0 items-center gap-1">
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <h1 className="m-0 leading-none">
             <Wordmark size="sm" />
@@ -149,7 +152,7 @@ export function OpsMobileStickyHeader({
             </span>
           ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1">
           <NewBookingButton iconOnly activeWarehouse={activeWarehouse} onAdd={onAddBooking} />
           <OpsSheetImportButton
             compact
@@ -174,7 +177,6 @@ export function OpsMobileStickyHeader({
         </div>
       </div>
 
-      {/* Hàng 1b: ngày phiên full-width — không bị icon bên phải đè */}
       <div className="min-w-0">
         <OpsDatePicker
           compact
@@ -187,7 +189,7 @@ export function OpsMobileStickyHeader({
         />
       </div>
 
-      {/* Hàng 2: KPI + Vantage / Tecs / TCS / SCSC */}
+      {/* Hàng KPI + copy ảnh — nút thấp hơn để nhường chỗ danh sách */}
       <div className="flex items-center gap-1">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
           <MiniKpi label="Lô" value={lotCount} />
@@ -195,7 +197,7 @@ export function OpsMobileStickyHeader({
           <MiniKpi label="Kg" value={formatKgTotal(totalKg)} />
         </div>
         {onCopyCargoDayReport ? (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-0.5">
             <button
               type="button"
               disabled={
@@ -204,9 +206,9 @@ export function OpsMobileStickyHeader({
               }
               title="Vantage — kho TECS (TECS-TCS+TECS-SCSC), không gồm kho TCS/SCSC · ẩn khách"
               onClick={() => onCopyCargoDayReport("vantage")}
-              className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg bg-emerald-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
+              className={`${copyChip} bg-emerald-600 hover:bg-emerald-700`}
             >
-              {cargoReportCopying ? "…" : "Vantage"}
+              {cargoReportCopying ? "…" : "Vant"}
             </button>
             <button
               type="button"
@@ -216,7 +218,7 @@ export function OpsMobileStickyHeader({
               }
               title="Tecs — kho TECS (TECS-TCS+TECS-SCSC), không gồm kho TCS/SCSC"
               onClick={() => onCopyCargoDayReport("tecs")}
-              className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg bg-teal-700 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-45"
+              className={`${copyChip} bg-teal-700 hover:bg-teal-800`}
             >
               {cargoReportCopying ? "…" : "Tecs"}
             </button>
@@ -228,7 +230,7 @@ export function OpsMobileStickyHeader({
               }
               title="TCS — chỉ kho TCS (không gồm TECS-TCS)"
               onClick={() => onCopyCargoDayReport("tcs")}
-              className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg bg-sky-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-45"
+              className={`${copyChip} bg-sky-600 hover:bg-sky-700`}
             >
               {cargoReportCopying ? "…" : "TCS"}
             </button>
@@ -240,7 +242,7 @@ export function OpsMobileStickyHeader({
               }
               title="SCSC — chỉ kho SCSC (không gồm TECS-SCSC)"
               onClick={() => onCopyCargoDayReport("scsc")}
-              className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg bg-violet-600 px-1.5 text-[10px] font-bold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45"
+              className={`${copyChip} bg-violet-600 hover:bg-violet-700`}
             >
               {cargoReportCopying ? "…" : "SCSC"}
             </button>

@@ -44,10 +44,10 @@ function ChartCard({
 }) {
   return (
     <section
-      className={`flex min-h-[280px] flex-col rounded-2xl border border-ui-border/80 bg-ui-surface p-3 shadow-ui-sm sm:p-4 ${className}`}
+      className={`flex min-h-[280px] flex-col rounded-2xl border border-ui-border/90 bg-ui-surface p-3 shadow-ui-md sm:p-4 ${className}`}
     >
       <header className="mb-2 shrink-0">
-        <h3 className="m-0 text-sm font-bold text-ui-text">{title}</h3>
+        <h3 className="m-0 text-sm font-extrabold tracking-tight text-ui-navy">{title}</h3>
         {subtitle ? <p className="m-0 mt-0.5 text-[11px] text-ui-text-muted">{subtitle}</p> : null}
       </header>
       <div className="min-h-0 flex-1">{children}</div>

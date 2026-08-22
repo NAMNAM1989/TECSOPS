@@ -65,7 +65,7 @@ const DETAIL_TABS: { id: DetailTab; label: string }[] = [
 ];
 
 const FIELD =
-  "min-h-9 rounded-lg border border-ui-border bg-white/90 px-2.5 py-1.5 text-sm text-ui-text outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus";
+  "min-h-9 rounded-xl border border-ui-border/90 bg-ui-surface px-2.5 py-1.5 text-sm text-ui-text shadow-ui-sm outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus";
 
 function warehouseFilterLabel(w: WarehouseLayoutFilter): string {
   return w === "ALL" ? "Tất cả kho" : warehouseLabel[w];
@@ -84,16 +84,16 @@ function KpiCard({
 }) {
   const toneClass =
     tone === "amber"
-      ? "border-amber-200 bg-amber-50/80"
+      ? "border-amber-300/80 bg-gradient-to-br from-amber-50 to-white"
       : tone === "teal"
-        ? "border-teal-200 bg-teal-50/70"
+        ? "border-teal-300/70 bg-gradient-to-br from-teal-50/90 to-white"
         : tone === "sky"
-          ? "border-sky-200 bg-sky-50/70"
-          : "border-ui-border bg-ui-surface";
+          ? "border-sky-300/70 bg-gradient-to-br from-sky-50/90 to-white"
+          : "border-ui-border/90 bg-ui-surface";
 
   return (
     <div
-      className={`min-w-[7.5rem] flex-1 rounded-2xl border px-3.5 py-3 shadow-ui-sm ${toneClass}`}
+      className={`min-w-[7.5rem] flex-1 rounded-2xl border px-3.5 py-3 shadow-ui-md ${toneClass}`}
       title={hint}
     >
       <p className="m-0 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
@@ -122,15 +122,15 @@ function AggTable({
     <div className="overflow-x-auto">
       <table className="min-w-full border-collapse text-left text-sm">
         <thead>
-          <tr className="border-b border-ui-border bg-slate-50/90 text-[11px] uppercase tracking-wide text-ui-text-muted">
-            <th className="px-3 py-2.5 font-semibold">{keyLabel}</th>
-            <th className="px-3 py-2.5 text-right font-semibold">Lô</th>
-            <th className="px-3 py-2.5 text-right font-semibold">Kiện</th>
-            <th className="px-3 py-2.5 text-right font-semibold">Kg thực</th>
-            <th className="px-3 py-2.5 text-right font-semibold">DIM</th>
-            <th className="px-3 py-2.5 text-right font-semibold">CW</th>
-            <th className="px-3 py-2.5 text-right font-semibold">Δ</th>
-            <th className="px-3 py-2.5 text-right font-semibold">Chưa DIM</th>
+          <tr className="ops-table-head border-b border-ui-border text-[11px] uppercase tracking-wider text-ui-text-muted">
+            <th className="px-3 py-2.5 font-bold">{keyLabel}</th>
+            <th className="px-3 py-2.5 text-right font-bold">Lô</th>
+            <th className="px-3 py-2.5 text-right font-bold">Kiện</th>
+            <th className="px-3 py-2.5 text-right font-bold">Kg thực</th>
+            <th className="px-3 py-2.5 text-right font-bold">DIM</th>
+            <th className="px-3 py-2.5 text-right font-bold">CW</th>
+            <th className="px-3 py-2.5 text-right font-bold">Δ</th>
+            <th className="px-3 py-2.5 text-right font-bold">Chưa DIM</th>
           </tr>
         </thead>
         <tbody>
@@ -181,19 +181,19 @@ function LotsDetailTable({ lots }: { lots: readonly OpsStatsLotRow[] }) {
     <div className="overflow-x-auto">
       <table className="min-w-full border-collapse text-left text-[13px]">
         <thead>
-          <tr className="border-b border-ui-border bg-slate-50/90 text-[10px] uppercase tracking-wide text-ui-text-muted">
-            <th className="sticky left-0 z-[1] bg-slate-50 px-3 py-2.5 font-semibold">Ngày</th>
-            <th className="px-3 py-2.5 font-semibold">Kho</th>
-            <th className="px-3 py-2.5 font-semibold">MAWB</th>
-            <th className="px-3 py-2.5 font-semibold">Dest</th>
-            <th className="px-3 py-2.5 font-semibold">Chuyến</th>
-            <th className="px-3 py-2.5 font-semibold">Khách</th>
-            <th className="px-3 py-2.5 text-right font-semibold">Kiện</th>
-            <th className="px-3 py-2.5 text-right font-semibold">Kg</th>
-            <th className="px-3 py-2.5 text-right font-semibold">DIM</th>
-            <th className="px-3 py-2.5 text-right font-semibold">CW</th>
-            <th className="px-3 py-2.5 text-right font-semibold">Δ</th>
-            <th className="px-3 py-2.5 font-semibold">TT</th>
+          <tr className="ops-table-head border-b border-ui-border text-[10px] uppercase tracking-wider text-ui-text-muted">
+            <th className="sticky left-0 z-[1] ops-table-head px-3 py-2.5 font-bold">Ngày</th>
+            <th className="px-3 py-2.5 font-bold">Kho</th>
+            <th className="px-3 py-2.5 font-bold">MAWB</th>
+            <th className="px-3 py-2.5 font-bold">Dest</th>
+            <th className="px-3 py-2.5 font-bold">Chuyến</th>
+            <th className="px-3 py-2.5 font-bold">Khách</th>
+            <th className="px-3 py-2.5 text-right font-bold">Kiện</th>
+            <th className="px-3 py-2.5 text-right font-bold">Kg</th>
+            <th className="px-3 py-2.5 text-right font-bold">DIM</th>
+            <th className="px-3 py-2.5 text-right font-bold">CW</th>
+            <th className="px-3 py-2.5 text-right font-bold">Δ</th>
+            <th className="px-3 py-2.5 font-bold">TT</th>
           </tr>
         </thead>
         <tbody>
@@ -210,7 +210,7 @@ function LotsDetailTable({ lots }: { lots: readonly OpsStatsLotRow[] }) {
                 <td className="px-3 py-1.5 text-[12px] text-ui-text-muted">
                   {s.warehouse.replace("TECS-", "")}
                 </td>
-                <td className="px-3 py-1.5 font-mono text-[12px]">{s.awb || "—"}</td>
+                <td className="px-3 py-1.5 font-shipment-data text-[12px] font-bold text-ui-awb">{s.awb || "—"}</td>
                 <td className="px-3 py-1.5 font-semibold">{s.dest || "—"}</td>
                 <td className="px-3 py-1.5 text-ui-text-muted">{s.flight || "—"}</td>
                 <td className="max-w-[10rem] truncate px-3 py-1.5" title={s.customer}>
@@ -443,7 +443,7 @@ export function OpsStatsPage({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-ui-border bg-ui-surface p-3 shadow-ui-sm">
+            <div className="rounded-2xl border border-ui-border/90 bg-ui-surface p-3 shadow-ui-md">
               <div
                 aria-label="Bộ lọc thống kê"
                 className="mb-2.5 flex flex-wrap items-center gap-1.5"
@@ -458,10 +458,10 @@ export function OpsStatsPage({
                       role="tab"
                       aria-selected={active}
                       onClick={() => setMode(p.id)}
-                      className={`min-h-9 rounded-full px-3.5 text-[12px] font-semibold transition ${
+                      className={`min-h-9 rounded-full px-3.5 text-[12px] font-bold transition ${
                         active
-                          ? "bg-ui-navy text-white shadow-sm"
-                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          ? "bg-ui-navy text-white shadow-ui-sm"
+                          : "bg-slate-100 text-slate-700 ring-1 ring-ui-border/70 hover:bg-slate-200"
                       }`}
                     >
                       {p.label}
@@ -658,8 +658,8 @@ export function OpsStatsPage({
                   <OpsStatsWarehouseKgChart rows={stats.byWarehouse} />
                 </div>
 
-                <section className="overflow-hidden rounded-2xl border border-ui-border/80 bg-white shadow-ui-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ui-border bg-slate-50/80 px-3 py-2.5">
+                <section className="overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ui-border/80 bg-gradient-to-r from-slate-50 to-white px-3 py-2.5">
                     <div className="flex flex-wrap gap-1" role="tablist" aria-label="Bảng chi tiết">
                       {DETAIL_TABS.map((tab) => {
                         const active = detailTab === tab.id;
@@ -678,10 +678,10 @@ export function OpsStatsPage({
                             role="tab"
                             aria-selected={active}
                             onClick={() => setDetailTab(tab.id)}
-                            className={`min-h-9 rounded-full px-3 text-[12px] font-semibold transition ${
+                            className={`min-h-9 rounded-full px-3 text-[12px] font-bold transition ${
                               active
-                                ? "bg-ui-primary text-white"
-                                : "bg-white text-ui-text ring-1 ring-ui-border hover:bg-slate-100"
+                                ? "bg-ui-primary text-white shadow-ui-sm"
+                                : "bg-white text-ui-text ring-1 ring-ui-border/80 hover:bg-slate-100"
                             }`}
                           >
                             {tab.label}

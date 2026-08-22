@@ -22,6 +22,20 @@ const CARD_ACCENT: Record<Warehouse, string> = {
   SCSC: "border-l-fuchsia-500",
 };
 
+const CHIP_ACTIVE: Record<Warehouse, string> = {
+  "TECS-TCS": "bg-sky-600 text-white ring-sky-700/40",
+  "TECS-SCSC": "bg-violet-600 text-white ring-violet-700/40",
+  TCS: "bg-cyan-600 text-white ring-cyan-700/40",
+  SCSC: "bg-fuchsia-600 text-white ring-fuchsia-700/40",
+};
+
+const CHIP_IDLE: Record<Warehouse, string> = {
+  "TECS-TCS": "bg-sky-50 text-sky-950 ring-sky-200/90",
+  "TECS-SCSC": "bg-violet-50 text-violet-950 ring-violet-200/90",
+  TCS: "bg-cyan-50 text-cyan-950 ring-cyan-200/90",
+  SCSC: "bg-fuchsia-50 text-fuchsia-950 ring-fuchsia-200/90",
+};
+
 const TEAM_CHIP: Record<OpsTeam, { label: string; className: string }> = {
   TECS: {
     label: "TECS",
@@ -45,12 +59,16 @@ interface Props {
   highlightWarehouses?: readonly Warehouse[];
   /** Mobile 2×2 — desktop mặc định 1 hàng 4 thẻ siêu gọn. */
   compact?: boolean;
+  /**
+   * Round 3 mobile: 1 hàng chip cuộn ngang (tên + số lô) — không ăn nửa màn hình như lưới 2×2.
+   */
+  chips?: boolean;
   hideAddButton?: boolean;
   className?: string;
 }
 
 /**
- * Chọn kho — desktop: 1 hàng metric ngang (thấp); mobile: lưới 2×2.
+ * Chọn kho — desktop: 1 hàng metric ngang (thấp); mobile chips: hàng cuộn; compact: lưới 2×2.
  */
 export function WarehouseGridPicker({
   rows,
@@ -59,10 +77,53 @@ export function WarehouseGridPicker({
   onAddRow,
   highlightWarehouses = [],
   compact = false,
+  chips = false,
   hideAddButton = false,
   className = "",
 }: Props) {
   const metrics = computeWarehouseMetrics(rows);
+
+  if (chips) {
+    return (
+      <div
+        className={`flex min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] ${className}`}
+        role="tablist"
+        aria-label="Chọn kho"
+        data-testid="warehouse-chips"
+      >
+        {WAREHOUSE_ORDER.map((wh) => {
+          const m = metrics[wh];
+          const isActive = active === wh;
+          const hasSearchHit = highlightWarehouses.includes(wh);
+          const kg = formatKgTotal(m.kg);
+          return (
+            <button
+              key={wh}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              title={`${warehouseLabel[wh]} · Lô ${m.lots} · Kiện ${m.pcs} · Kg ${kg}`}
+              onClick={() => onSelect(wh)}
+              className={`inline-flex min-h-11 shrink-0 touch-manipulation items-center gap-1.5 rounded-xl px-2.5 text-left ring-1 transition active:scale-[0.98] ${
+                isActive ? CHIP_ACTIVE[wh] : CHIP_IDLE[wh]
+              } ${hasSearchHit && !isActive ? "ring-2 ring-ui-primary/50" : ""}`}
+            >
+              <span className="text-[11px] font-extrabold tracking-tight">
+                {warehouseLabel[wh]}
+              </span>
+              <span
+                className={`rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums ${
+                  isActive ? "bg-white/20" : "bg-white/80"
+                }`}
+              >
+                {m.lots}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div

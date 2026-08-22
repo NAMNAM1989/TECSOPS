@@ -11,6 +11,7 @@ import {
   type EsidDeclareRegistrantFields,
 } from "./esidDeclareFields";
 import { awbForFilename, downloadXlsxBuffer } from "./downloadXlsx";
+import { notifyError, notifyWarning } from "../ui/notify";
 
 type EsidAgentForExcel = EsidDeclareAgentFields;
 
@@ -274,7 +275,7 @@ export async function downloadEsidDeclareExcel(
 }> {
   const list = (Array.isArray(shipments) ? shipments : [shipments]).filter(canExportEsidDeclare);
   if (list.length === 0) {
-    window.alert("Chỉ áp dụng kho TECS-TCS và lô đã có AWB.");
+    notifyWarning("Chỉ áp dụng kho TECS-TCS và lô đã có AWB.", "Xuất ESID");
     return { count: 0, readiness: [] };
   }
   const registrant = getActiveEsidRegistrant();
@@ -303,7 +304,7 @@ export async function downloadEsidDeclareExcel(
     return { count: list.length, readiness };
   } catch (e) {
     console.error("[downloadEsidDeclareExcel]", e);
-    window.alert(e instanceof Error ? e.message : "Không tạo được file Excel.");
+    notifyError(e instanceof Error ? e.message : "Không tạo được file Excel.", "Xuất ESID");
     return { count: 0, readiness };
   }
 }

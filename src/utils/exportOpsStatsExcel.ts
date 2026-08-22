@@ -9,19 +9,7 @@ import type {
 import { downloadXlsxBuffer } from "./downloadXlsx";
 import { formatStatsPeriodLabel, type StatsPeriodMode } from "./opsStatsPeriod";
 import { warehouseLabel } from "../constants/warehouses";
-import type { ShipmentStatus } from "../types/shipment";
-
-const STATUS_LABEL: Record<ShipmentStatus, string> = {
-  PENDING: "Booking",
-  RECEIVED: "Nhận hàng",
-  VOLUME_DONE: "Đã đo Volume",
-  CUSTOMS: "Hải quan",
-  SECURITY: "An ninh",
-  OLA_PULL: "Kéo OLA",
-  RECEPTION_COMPLETED: "Hoàn thành tiếp nhận",
-  WEIGH_SLIP: "Nộp tờ cân",
-  COMPLETED: "Hoàn thành",
-};
+import { statusLabel } from "../components/statusStyles";
 
 const HEADER_FILL: Fill = {
   type: "pattern",
@@ -196,7 +184,7 @@ function addLotsSheet(wb: Workbook, lots: readonly OpsStatsLotRow[]): void {
       lot.dimKg,
       lot.chargeableKg,
       lot.deltaKg,
-      STATUS_LABEL[s.status] ?? s.status,
+      statusLabel[s.status] ?? s.status,
       s.note,
     ]);
     row.eachCell((cell, col) => {

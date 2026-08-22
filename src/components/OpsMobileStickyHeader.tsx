@@ -50,6 +50,12 @@ interface Props {
   showDimScsc?: boolean;
   /** Thanh Cổng TCS dưới ô tìm kiếm (TECS-TCS) */
   tcsPortalBar?: ReactNode;
+  /** CTA «Đăng Nhập TCS» khi cổng thu gọn / agent-ext fail — không ẩn trên mobile */
+  portalLoginCta?: {
+    label: string;
+    busy?: boolean;
+    onClick: () => void;
+  } | null;
   /** Thanh đăng ký eCargo — chỉ khi đang xem kho SCSC trực tiếp */
   ecargoBar?: ReactNode;
   filteredViewRows: readonly Shipment[];
@@ -110,6 +116,7 @@ export function OpsMobileStickyHeader({
   cargoReportCopying,
   showDimScsc,
   tcsPortalBar,
+  portalLoginCta,
   ecargoBar,
   filteredViewRows,
   viewRows,
@@ -311,18 +318,37 @@ export function OpsMobileStickyHeader({
           </div>
           {hasPortalSlot ? (
             <div className="space-y-1">
-              <button
-                type="button"
-                onClick={() => setPortalExpanded((v) => !v)}
-                className="inline-flex min-h-11 w-full touch-manipulation items-center justify-between gap-2 rounded-xl border border-ui-border/80 bg-ui-surface px-2.5 text-left text-[11px] font-bold text-ui-text-muted"
-                aria-expanded={portalExpanded}
-              >
-                <span>
-                  {tcsPortalBar ? "Cổng TCS / ESID" : "eCargo SCSC"}
-                  {portalExpanded ? "" : " · chạm để mở"}
-                </span>
-                <span aria-hidden>{portalExpanded ? "▴" : "▾"}</span>
-              </button>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPortalExpanded((v) => !v)}
+                  className="inline-flex min-h-11 min-w-0 flex-1 touch-manipulation items-center justify-between gap-2 rounded-xl border border-ui-border/80 bg-ui-surface px-2.5 text-left text-[11px] font-bold text-ui-text-muted"
+                  aria-expanded={portalExpanded}
+                >
+                  <span className="min-w-0 truncate">
+                    {tcsPortalBar ? "Cổng TCS / ESID" : "eCargo SCSC"}
+                    {portalExpanded
+                      ? ""
+                      : portalLoginCta
+                        ? " · cần Đăng Nhập TCS"
+                        : " · chạm để mở"}
+                  </span>
+                  <span aria-hidden>{portalExpanded ? "▴" : "▾"}</span>
+                </button>
+                {!portalExpanded && portalLoginCta ? (
+                  <button
+                    type="button"
+                    disabled={portalLoginCta.busy}
+                    onClick={() => {
+                      setPortalExpanded(true);
+                      portalLoginCta.onClick();
+                    }}
+                    className="inline-flex min-h-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-ui-primary px-2.5 text-[10px] font-bold text-white shadow-sm hover:bg-ui-primary-hover disabled:opacity-45"
+                  >
+                    {portalLoginCta.label}
+                  </button>
+                ) : null}
+              </div>
               {portalExpanded ? (
                 <div className="min-w-0 space-y-1">
                   {tcsPortalBar}

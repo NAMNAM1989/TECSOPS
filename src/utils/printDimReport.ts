@@ -1,5 +1,6 @@
 import type { Shipment } from "../types/shipment";
 import { isScscWarehouse } from "../constants/warehouses";
+import { notifyWarning } from "../ui/notify";
 import { buildScscDimListModel } from "./scscDimListReport";
 import { escapeHtml, printHtmlViaHiddenIframe } from "./printHtmlViaHiddenIframe";
 import { formatLineDimKgDisplay } from "./volumetricDim";
@@ -19,19 +20,23 @@ export function canPrintDimScscReport(s: Shipment): boolean {
  */
 export function printDimReport(s: Shipment): void {
   if (!canPrintDimReport(s)) {
-    window.alert("Chưa có chi tiết DIM (D×R×C×kiện). Hãy nhập DIM trên điện thoại trước.");
+    notifyWarning(
+      "Chưa có chi tiết DIM (D×R×C×kiện). Hãy nhập DIM trên điện thoại trước.",
+      "In DIM SCSC"
+    );
     return;
   }
   if (!isScscWarehouse(s.warehouse)) {
-    window.alert(
-      "Form in DIM SCSC chỉ dùng cho family SCSC (TECS-SCSC hoặc SCSC). Kho TCS dùng Tải PDF DIM TCS (QF/ED/49)."
+    notifyWarning(
+      "Form in DIM SCSC chỉ dùng cho family SCSC (TECS-SCSC hoặc SCSC). Kho TCS dùng Tải PDF DIM TCS (QF/ED/49).",
+      "In DIM SCSC"
     );
     return;
   }
 
   const model = buildScscDimListModel(s);
   if (!model) {
-    window.alert("Không đọc được dữ liệu DIM.");
+    notifyWarning("Không đọc được dữ liệu DIM.", "In DIM SCSC");
     return;
   }
 

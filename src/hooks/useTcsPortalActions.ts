@@ -60,6 +60,7 @@ import {
 } from "../utils/portalPlaywrightLocal";
 import { extensionOcrBaseUrl } from "../utils/tcsOcrAgentEndpoints";
 import { portalBusyUserMessage } from "../utils/tcsPortalScanGate";
+import { notifyError, notifySuccess } from "../ui/notify";
 import {
   isTcsAgentHealthStopError,
   shouldPollTcsAgentHealth,
@@ -598,9 +599,9 @@ export function useTcsPortalActions({
       const extPing = await pingTcsExtension({ warehouse: portalWarehouse });
       setExtension(extPing);
       if (!extPing.ok) {
-        setError(
-          `PW local: cần ${tcsExtLabel(portalWarehouse)} online để nối agent headed. Reload Ext rồi thử lại.`
-        );
+        const msg = `PW local: cần ${tcsExtLabel(portalWarehouse)} online để nối agent headed. Reload Ext rồi thử lại.`;
+        setError(msg);
+        notifyError(msg, "Không Đăng Nhập TCS được");
         return;
       }
     } else {
@@ -616,13 +617,14 @@ export function useTcsPortalActions({
       const tryAgent = order.includes("agent");
 
       if (!tryAgent) {
-        setError(
+        const msg =
           visualControl && extPing.ok
             ? `Chế độ trực quan: Đăng Nhập TCS bằng ${tcsExtLabel(portalWarehouse)} (tab Chrome). ` +
-                "Điền user/pass trên form Ext — không dùng agent ẩn."
+              "Điền user/pass trên form Ext — không dùng agent ẩn."
             : `Cần Chrome Ext kho ${portalWarehouse} (${tcsExtLabel(portalWarehouse)}). ` +
-                "Bấm «Tải Ext» trên toolbar, mở đúng profile Chrome, rồi Đăng Nhập TCS lại."
-        );
+              "Bấm «Tải Ext» trên toolbar, mở đúng profile Chrome, rồi Đăng Nhập TCS lại.";
+        setError(msg);
+        notifyError(msg, "Không Đăng Nhập TCS được");
         return;
       }
     }
@@ -637,7 +639,9 @@ export function useTcsPortalActions({
       const online = await pingTcsAgent(3500, agentOpts);
       setHealth(online);
       if (!online?.ok) {
-        setError(agentOfflineHint(getTcsAgentBaseUrl()));
+        const msg = agentOfflineHint(getTcsAgentBaseUrl());
+        setError(msg);
+        notifyError(msg, "Không Đăng Nhập TCS được");
         return;
       }
       const wantVisible = playwrightLocal || online.headless === false;
@@ -648,20 +652,21 @@ export function useTcsPortalActions({
       setSession(opened);
       if (!opened?.open || !opened?.logged_in) {
         const headless = !playwrightLocal && online.headless !== false;
-        setError(
+        const msg =
           opened?.message ||
-            (headless
-              ? "Agent cloud chưa login — OCR CAPTCHA thất bại hoặc hết session. " +
-                "Kiểm tra TCS_USERNAME(_TCS)/password + volume browser_profile trên Railway, rồi Đăng Nhập TCS lại."
-              : "Agent chưa login — nhập CAPTCHA trên cửa sổ Chrome agent rồi thử lại.")
-        );
+          (headless
+            ? "Agent cloud chưa login — OCR CAPTCHA thất bại hoặc hết session. " +
+              "Kiểm tra TCS_USERNAME(_TCS)/password + volume browser_profile trên Railway, rồi Đăng Nhập TCS lại."
+            : "Agent chưa login — nhập CAPTCHA trên cửa sổ Chrome agent rồi thử lại.");
+        setError(msg);
+        notifyError(msg, "Không Đăng Nhập TCS được");
         return;
       }
-      setMessage(
-        playwrightLocal
-          ? `Playwright local đã đăng nhập (${portalWarehouse}) — xem cửa sổ Chromium.`
-          : `Agent cloud đã đăng nhập (${portalWarehouse}) — bấm Quét tiếp nhận khi cần.`
-      );
+      const okMsg = playwrightLocal
+        ? `Playwright local đã đăng nhập (${portalWarehouse}) — xem cửa sổ Chromium.`
+        : `Agent cloud đã đăng nhập (${portalWarehouse}) — bấm Quét tiếp nhận khi cần.`;
+      setMessage(okMsg);
+      notifySuccess(okMsg, "Đăng Nhập TCS");
       await refreshHealth();
     } finally {
       setBusy(false);

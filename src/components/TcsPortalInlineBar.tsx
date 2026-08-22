@@ -14,6 +14,7 @@ import {
   shouldOpenExtLoginAfterScanFailure,
   shouldPromptExtLoginBeforeScan,
 } from "../utils/tcsPortalScanGate";
+import { tcsLoginCtaLabel } from "../utils/tcsLoginCtaLabel";
 
 type Props = {
   tcs: TcsPortalActions;
@@ -406,7 +407,7 @@ export function TcsPortalInlineBar({
                 : "Đăng Nhập TCS (Ext trên PC ưu tiên; agent fallback)."
             }
           >
-            {isMobile && !agentOk ? "Thử Đăng Nhập TCS" : "Đăng Nhập TCS"}
+            {tcsLoginCtaLabel({ retry: isMobile && !agentOk })}
           </button>
         ) : null}
 

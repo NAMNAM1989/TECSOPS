@@ -34,6 +34,7 @@ import {
   warehouseLabel,
 } from "../constants/warehouses";
 import { asTcsPortalWarehouse } from "../utils/tcsPortalJob";
+import { tcsLoginCtaLabel } from "../utils/tcsLoginCtaLabel";
 import {
   probeInlineTcsAgent,
   shouldPreferRemotePortal,
@@ -780,6 +781,18 @@ export function AirCargoTracking({
           <TcsPortalInlineBar compact isMobile tcs={tcsPortal} />
         ) : null
       }
+      portalLoginCta={
+        isTcsWarehouse(activeWarehouse) &&
+        !(tcsPortal.session?.logged_in || tcsPortal.health?.session?.logged_in)
+          ? {
+              label: tcsLoginCtaLabel({ retry: !tcsPortal.health?.ok }),
+              busy: tcsPortal.busy,
+              onClick: () => {
+                void tcsPortal.login();
+              },
+            }
+          : null
+      }
       ecargoBar={
         isEcargoScscWarehouse(activeWarehouse) ? (
           <EcargoScscInlineBar compact preferredShipmentId={selectedId} />
@@ -1007,12 +1020,14 @@ export function AirCargoTracking({
       ) : null}
 
       {viewRows.length > 0 && filteredViewRows.length === 0 ? (
-        <p className="mb-2 text-center text-xs text-ui-text-muted">
-          Không có lô khớp bộ lọc.{" "}
-          <button type="button" onClick={clearViewFilters} className="font-semibold text-ui-primary hover:underline">
-            Xóa lọc
-          </button>
-        </p>
+        <div className="mb-3">
+          <EmptyState
+            title="Không có lô khớp bộ lọc"
+            description="Thử xóa lọc trạng thái, ngày bay hoặc từ khóa tìm kiếm."
+            actionLabel="Xóa lọc"
+            onAction={clearViewFilters}
+          />
+        </div>
       ) : null}
 
       {/* Chỉ dựng một cây bảng — trước đây cả hai cùng mount và chỉ ẩn bằng CSS. */}

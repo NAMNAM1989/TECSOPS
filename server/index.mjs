@@ -22,6 +22,12 @@ import { registerEcargoVctRoutes } from "./ecargoVctRoutes.mjs";
 import { registerAiRoutes } from "./ai/aiRoutes.mjs";
 import { recordMutationEventSafe } from "./ai/opsAiEventsStore.mjs";
 import {
+  registerErrorMonitor,
+  reportExpressError,
+  reportHealthFailure,
+  getErrorMonitorAgent,
+} from "./errorMonitor/index.mjs";
+import {
   applySecurityHeaders,
   createRateLimit,
   createMutationRateLimit,
@@ -93,6 +99,8 @@ app.get("/api/health", async (_req, res) => {
     });
   } catch (e) {
     console.error("[api/health]", e?.message ?? e);
+    const monitor = getErrorMonitorAgent();
+    if (monitor) reportHealthFailure(monitor, e);
     res.status(503).json({
       ok: false,
       service: "tecsops",
@@ -345,6 +353,12 @@ app.use("/api/ai", aiRateLimit);
 registerAiRoutes(app, { loadState });
 console.info("[api] ai (Gemini improvement report)");
 
+try {
+  registerErrorMonitor(app, { requireAuth: appAuth.requireAuth });
+} catch (e) {
+  console.warn("[errorMonitor] skip — app continues:", e?.message || e);
+}
+
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);
   console.info("[api] lookup (Postgres)");
@@ -378,8 +392,10 @@ app.get("*", (req, res, next) => {
   });
 });
 
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
   console.error("[http]", err);
+  const monitor = getErrorMonitorAgent();
+  if (monitor) reportExpressError(monitor, err, req);
   const status = Number(err?.statusCode || err?.status) || 500;
   const safe = isProduction
     ? err?.type === "entity.parse.failed"

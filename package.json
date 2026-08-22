@@ -36,6 +36,8 @@
     "lint:server": "eslint server",
     "ci": "npm run lint && npm run lint:server && npm run build && npm test && npm run deploy:check",
     "test": "vitest run",
+    "error-monitor": "tsx scripts/error-monitor-agent.ts",
+    "bugfix:agent": "tsx scripts/bug-fix-agent.ts",
     "sample:day-report": "tsx scripts/generate-sample-day-report.ts",
     "preview": "vite preview",
     "start": "node server/index.mjs",

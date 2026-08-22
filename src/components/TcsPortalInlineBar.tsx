@@ -386,8 +386,8 @@ export function TcsPortalInlineBar({
             disabled={tcs.busy}
             title={
               visualControl
-                ? "Trực quan BẬT: Quét/Điền trên tab Chrome Ext — không fallback agent ẩn. Bấm để tắt."
-                : "Trực quan TẮT: có thể fallback agent cloud headless (không thấy cửa sổ). Bấm để bật."
+                ? "App-click → Ext PC: bấm trên Ops, Ext trên máy kho thực thi (không Playwright Railway). Bấm để tắt."
+                : "Trực quan TẮT: cho phép fallback agent Railway headless (phụ). Bấm để bật lại Ext-first."
             }
             onClick={() => tcs.setVisualControl(!visualControl)}
           >
@@ -444,7 +444,7 @@ export function TcsPortalInlineBar({
                 ? agentOk
                   ? "Đăng Nhập TCS qua agent cloud (OCR / credential Railway)."
                   : "Agent offline — bấm để thử Đăng Nhập TCS lại."
-                : "Đăng Nhập TCS (Ext trên PC ưu tiên; agent fallback)."
+                : "Đăng Nhập TCS — Ext trên PC kho thực thi (App-click → Ext)."
             }
           >
             {tcsLoginCtaLabel({ retry: isMobile && !agentOk })}
@@ -492,17 +492,19 @@ export function TcsPortalInlineBar({
 
       {!compact && !canOperate && !tcs.busy ? (
         <p className="px-1 text-[9px] leading-snug text-ui-text-muted">
-          {usesAgent
-            ? `Agent cloud offline — bấm «Đăng Nhập TCS» để thử lại. Trên Railway kiểm tra service + credential kho ${portalWh}.`
-            : `Offline: cài ${extLabel} hoặc bật policy auto/agent-only để dùng Playwright cloud.`}
+          {extOk
+            ? `Ext sẵn sàng — bấm «Đăng Nhập TCS».`
+            : `Cần ${extLabel} trên PC kho (menu «Tải Ext»). Bấm trên Ops → Ext thực thi; không dùng Playwright Railway khi «Trực quan» bật.`}
         </p>
       ) : null}
 
       {!compact && canOperate && !tcs.busy ? (
         <p className="px-1 text-[9px] leading-snug text-ui-text-muted">
-          {usesAgent
-            ? "Online: Đăng Nhập TCS → menu ⋮ → Điền (tạo phiếu ESID) / Tải PDF. Quét chỉ cập nhật HT trên Ops — tách riêng."
-            : "Ext: Đăng Nhập TCS → menu ⋮ → Điền (tạo phiếu ESID) → HOÀN TẤT trên TCS. Quét chỉ cập nhật HT Ops."}
+          {extOk || visualControl
+            ? "App → Ext PC: Đăng Nhập TCS → menu ⋮ → Điền / Tải PDF. Quét chỉ cập nhật HT Ops."
+            : usesAgent
+              ? "Fallback agent Railway: Đăng Nhập TCS → menu ⋮ → Điền / Tải PDF."
+              : "Cài Ext TCS từ «Tải Ext» rồi F5 Ops."}
         </p>
       ) : null}
 

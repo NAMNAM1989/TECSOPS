@@ -119,8 +119,18 @@ describe("chrome extension packaging invariants", () => {
     expect(tcsOps).toContain('type: "EXT_READY"');
     expect(tcsOps).toContain('PORTAL_WAREHOUSE = "TCS"');
     expect(scscOps).toContain('PORTAL_WAREHOUSE = "SCSC"');
+    expect(scscOps).toContain("ECARGO_OTP_PROVIDE");
     expect(scscOps).not.toContain('portalWarehouse: "TCS"');
     expect(legacyOps).toMatch(/DEPRECATED|deprecated/i);
     expect(legacyOps).toContain('PORTAL_WAREHOUSE = "TECS-TCS"');
+  });
+
+  it("SCSC background có ECARGO_OTP_PROVIDE (hook Gmail mapping PC)", () => {
+    const bg = readFileSync(
+      path.join(ROOT, "chrome-extension-scsc/background.js"),
+      "utf8"
+    );
+    expect(bg).toContain('msg.type === "ECARGO_OTP_PROVIDE"');
+    expect(bg).toContain("ecargoOtpProvide");
   });
 });

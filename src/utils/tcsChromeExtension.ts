@@ -115,7 +115,9 @@ type ExtensionCommand =
   | "FILL_ECARGO_VCT"
   | "REGISTER_ECARGO_VCT"
   | "ECARGO_LOOKUP_AGENT"
-  | "ECARGO_OPEN";
+  | "ECARGO_OPEN"
+  /** Hook: đưa sẵn code/verifyUrl — Ext điền (Gmail mapping PC sau này). */
+  | "ECARGO_OTP_PROVIDE";
 
 type Pending = {
   resolve: (value: TcsExtResult) => void;
@@ -468,6 +470,28 @@ export function registerEcargoVctViaExtension(
 
 export function openEcargoExtensionTab(): Promise<TcsExtResult> {
   return request<TcsExtResult>("ECARGO_OPEN", undefined, 20_000, "SCSC");
+}
+
+/**
+ * Hook Ext-first: Ops (hoặc mapper Gmail trên PC sau này) gửi sẵn mã + URL
+ * → Ext SCSC mở link / điền «Xác Thực». Không gửi credential Gmail.
+ */
+export function provideEcargoOtpViaExtension(payload: {
+  code?: string;
+  otp?: string;
+  verifyUrl?: string;
+  vctCode?: string;
+  email?: string;
+  sinceIso?: string;
+  awbHint?: string;
+  apiBase?: string;
+}): Promise<TcsExtFillResult> {
+  return request<TcsExtFillResult>(
+    "ECARGO_OTP_PROVIDE",
+    payload,
+    120_000,
+    "SCSC"
+  );
 }
 
 /** Tra cứu đại lý trên eCargo (API Customer/Agent). */

@@ -14,11 +14,15 @@ Khảo sát form Create + pattern ASP.NET eCargo. Cập nhật khi SCSC đổi D
 Luồng thật của SCSC (không phải OTP 6 số trên form Create):
 
 1. `ECARGO_FILL_AND_CREATE` — khớp `item.name` / preset AgentIdent; modal AWB + `addAWB` jQuery; `#btnCreate` jQuery + Turnstile; ≥90 phút trước giờ hàng vào; biển OTO 7–9 ký tự
-2. Background — `POST /api/ecargo/otp/wait` lấy **mã alphanumeric** + **URL** từ link «đây» (IMAP 1 connection, poll ~800ms, chọn mail mới nhất, UID đã dùng bị bỏ)
+2. Background — hiện tại `POST /api/ecargo/otp/wait` (IMAP server) lấy **mã alphanumeric** + **URL** từ link «đây»
 3. Mở URL trên tab eCargo
-4. `ECARGO_CONFIRM_VERIFY` — ô «Mã xác thực» + bấm **Xác Thực**; success chỉ khi trang báo hoàn thành (`ECARGO_CHECK_VERIFIED` nếu kênh đứt sau POST)
+4. `ECARGO_CONFIRM_VERIFY` — ô «Mã xác thực» + bấm **Xác Thực**
 
-Mail mẫu: subject `[eCargo] Mã xác thực phiếu… số 80ZWUGWM`, body `Mã xác thực : QSSMB88636480ZWUGWM`, link «Bấm vào đây để tiến hành xác thực.»
+### Hook Ext-first: `ECARGO_OTP_PROVIDE`
+
+Ops helper `provideEcargoOtpViaExtension({ code, verifyUrl })` — đưa sẵn mã + URL để Ext điền.
+Dùng cho **Gmail mapping trên PC** sau này (Ext đọc mail local) — **không** invent / không nhúng credential Gmail trong payload.
+IMAP server (`ECARGO_IMAP_*`) vẫn là cầu tạm cho `REGISTER_ECARGO_VCT` cho đến khi mapper PC sẵn sàng.
 
 ## Trang xác thực (sau khi mở link mail)
 

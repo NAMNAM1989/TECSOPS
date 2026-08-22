@@ -1,13 +1,12 @@
 /**
- * Policy chọn đường portal TCS — đồng loạt TECS-TCS & TCS.
- * Mặc định auto:
- * - Desktop: Ext-first → agent Railway fallback (nhìn được trên PC có Ext)
- * - Mobile: agent-only cho Quét/PDF (không gọi Ext)
- * Không còn máy kho / portal-worker.
+ * Policy chọn đường portal TCS — mô hình App-click → Ext trên PC kho.
  *
- * Chế độ trực quan (`tecsops-portal-visual-control`):
- * - Bật + desktop + Ext online → chỉ Ext (không fallback headless ẩn).
- * - Tắt → giữ auto Ext→agent.
+ * Mặc định auto + «Trực quan» (bật):
+ * - Desktop: chỉ Chrome Ext (`chrome-extension-tcs` / SCSC) thực thi — không Playwright Railway.
+ * - Ext offline → UI báo cài Ext; không lặng lẽ sang agent headless.
+ * - Mobile: agent-only (phone không có Ext) — đường phụ.
+ *
+ * Tắt «Trực quan» hoặc policy `agent-only` → mới dùng Railway `TCS_AGENT_*` / browser_profile.
  */
 
 export type PortalExecutorPolicy =
@@ -33,7 +32,7 @@ function normalizePolicy(raw: string | undefined | null): PortalExecutorPolicy |
   return null;
 }
 
-/** Mặc định auto (desktop Ext→agent; mobile agent-only). Ghi đè: VITE_ / localStorage. */
+/** Mặc định auto (desktop Ext-first; mobile agent phụ). Ghi đè: VITE_ / localStorage. */
 export function getPortalExecutorPolicy(): PortalExecutorPolicy {
   try {
     const fromLs = normalizePolicy(localStorage.getItem(LS_KEY));
@@ -65,8 +64,8 @@ export function setPortalExecutorPolicy(policy: PortalExecutorPolicy | ""): void
 }
 
 /**
- * Chế độ trực quan: khi có Ext trên desktop, không chạy agent headless ẩn.
- * Mặc định bật — máy kiểm soát thấy tab TCS. Tắt nếu muốn fallback cloud.
+ * Chế độ trực quan = App-click → tab Chrome Ext trên PC kho.
+ * Mặc định bật. Tắt chỉ khi cố ý dùng agent Railway headless (fallback).
  */
 export function getPortalVisualControl(): boolean {
   try {
@@ -89,7 +88,7 @@ export function setPortalVisualControl(on: boolean): void {
   }
 }
 
-/** Policy có dùng Playwright agent (Railway/local) không. */
+/** Policy có dùng Playwright agent (Railway/local) không — đường phụ. */
 export function portalPolicyUsesAgent(
   policy: PortalExecutorPolicy = getPortalExecutorPolicy()
 ): boolean {
@@ -97,15 +96,17 @@ export function portalPolicyUsesAgent(
 }
 
 /**
- * Khi bật trực quan + desktop + Ext đã ping được → chỉ đi Ext.
- * (Ext cài rồi nhưng chưa ĐN vẫn không được lặng lẽ sang headless.)
+ * Desktop + Trực quan (mặc định): khóa chỉ Ext — kể cả khi Ext offline
+ * (UI hiện chip «Ext · offline», không fallback Playwright Railway).
  */
 export function shouldLockToExtensionVisual(opts: {
   isMobile?: boolean;
   visualControl?: boolean;
+  /** Giữ tham số tương thích; không còn điều kiện khóa. */
   extensionOnline?: boolean;
   policy?: PortalExecutorPolicy;
 }): boolean {
+  void opts.extensionOnline;
   if (opts.isMobile) return false;
   const policy = opts.policy || getPortalExecutorPolicy();
   if (policy === "agent-only" || policy === "remote-only") return false;
@@ -114,16 +115,15 @@ export function shouldLockToExtensionVisual(opts: {
     opts.visualControl === undefined
       ? getPortalVisualControl()
       : opts.visualControl;
-  return Boolean(visual && opts.extensionOnline);
+  return Boolean(visual);
 }
 
 /**
- * Thứ tự thử executor.
- * - auto + desktop: Ext → agent
- * - auto + mobile: chỉ agent (Quét/PDF trên phone)
+ * Thứ tự thử executor — App-click → PC Ext là đường chính.
+ * - auto + desktop + Trực quan: chỉ Ext
+ * - auto + desktop + tắt Trực quan: Ext → agent (fallback có chủ đích)
+ * - auto + mobile: chỉ agent (phone)
  * - ext-only / agent-only / remote-only: như tên
- * - visualControl + extensionOnline + desktop: chỉ Ext
- * - preferRemote: deprecated — bỏ qua
  */
 export function resolvePortalExecutorOrder(
   action: PortalAction,
@@ -161,7 +161,7 @@ export function resolvePortalExecutorOrder(
 }
 
 export function portalExecutorLabel(ex: PortalExecutor): string {
-  if (ex === "extension") return "Ext";
-  if (ex === "agent") return "Agent cloud";
+  if (ex === "extension") return "Ext PC";
+  if (ex === "agent") return "Agent Railway (fallback)";
   return "Máy kho từ xa (deprecated)";
 }

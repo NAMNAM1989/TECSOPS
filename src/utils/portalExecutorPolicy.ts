@@ -1,7 +1,7 @@
 /**
  * Policy chọn đường portal TCS — đồng loạt TECS-TCS & TCS.
  * Mặc định auto:
- * - Desktop: Ext → agent (nhìn được trên PC có Ext)
+ * - Desktop: Ext-first → agent Railway fallback (nhìn được trên PC có Ext)
  * - Mobile: agent-only cho Quét/PDF (không gọi Ext)
  * Không còn máy kho / portal-worker.
  *

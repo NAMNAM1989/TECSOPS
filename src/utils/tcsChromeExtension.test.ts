@@ -6,6 +6,9 @@ import {
   fillEsidViaExtension,
   isPortalBusyExtError,
   pingTcsExtension,
+  subscribeTcsExtensionReady,
+  tcsExtPresence,
+  tcsExtPresenceLabel,
   TCS_EXT_CHANNEL,
   TCS_EXT_CHANNEL_DIRECT,
   TCS_EXT_CHANNEL_SCSC,
@@ -233,6 +236,48 @@ describe("tcsChromeExtension bridge", () => {
   it("isPortalBusyExtError nhận PORTAL_BUSY", () => {
     expect(isPortalBusyExtError({ error: "PORTAL_BUSY" })).toBe(true);
     expect(isPortalBusyExtError({ error: "WRONG_USER" })).toBe(false);
+  });
+
+  it("tcsExtPresence / label cho chip Ops bar", () => {
+    expect(tcsExtPresence(null)).toBe("offline");
+    expect(tcsExtPresence({ ok: false })).toBe("offline");
+    expect(tcsExtPresence({ ok: true })).toBe("ready");
+    expect(
+      tcsExtPresence({ ok: true, workspace: { logged_in: true } })
+    ).toBe("logged_in");
+    expect(tcsExtPresenceLabel({ ok: true })).toBe("Ext · sẵn sàng");
+    expect(tcsExtPresenceLabel({ ok: false }, { compact: true })).toBe(
+      "Ext · off"
+    );
+  });
+
+  it("subscribeTcsExtensionReady nhận EXT_READY", async () => {
+    const seen: Array<{ channel: string; portalWarehouse?: string }> = [];
+    const unsub = subscribeTcsExtensionReady((info) => {
+      seen.push({
+        channel: info.channel,
+        portalWarehouse: info.portalWarehouse,
+      });
+    });
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: window,
+        origin: window.location.origin,
+        data: {
+          channel: TCS_EXT_CHANNEL_DIRECT,
+          direction: "from-ext",
+          type: "EXT_READY",
+          ok: true,
+          version: "1.5.2",
+          portalWarehouse: "TCS",
+        },
+      })
+    );
+    await Promise.resolve();
+    expect(seen).toEqual([
+      { channel: TCS_EXT_CHANNEL_DIRECT, portalWarehouse: "TCS" },
+    ]);
+    unsub();
   });
 
   it("lệnh eCargo không bị gắn expected_username", async () => {

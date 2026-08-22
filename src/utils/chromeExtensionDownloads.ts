@@ -11,6 +11,8 @@ export type ChromeExtensionPackInfo = {
   download_url?: string;
   error?: string;
   install?: string[];
+  /** Soft-deprecate: ẩn khỏi menu tải Ops (vẫn có trong API catalog). */
+  deprecated?: boolean;
 };
 
 export type ChromeExtensionsCatalog = {
@@ -21,6 +23,13 @@ export type ChromeExtensionsCatalog = {
   extensions: ChromeExtensionPackInfo[];
   error?: string;
 };
+
+/** Chỉ Ext chuẩn TCS + SCSC — ẩn legacy TECS-TCS. */
+export function recommendedChromeExtensionPacks(
+  packs: ChromeExtensionPackInfo[]
+): ChromeExtensionPackInfo[] {
+  return packs.filter((p) => !p.deprecated && p.id !== "tecs-tcs");
+}
 
 export async function fetchChromeExtensionsCatalog(): Promise<ChromeExtensionsCatalog> {
   const res = await fetch("/api/chrome-extensions", { cache: "no-store" });

@@ -3,6 +3,7 @@ import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
 import { useToast } from "../ui";
 import {
   fetchChromeExtensionsCatalog,
+  recommendedChromeExtensionPacks,
   triggerChromeExtensionDownload,
   type ChromeExtensionPackInfo,
 } from "../utils/chromeExtensionDownloads";
@@ -12,8 +13,8 @@ type Props = {
 };
 
 /**
- * Nút tải chung 3 Chrome Ext (TECS-TCS / TCS / SCSC).
- * ZIP do `npm run prebuild` đóng từ manifest — mỗi bump version + deploy là có bản mới.
+ * Nút tải Chrome Ext chuẩn: TCS + SCSC.
+ * Legacy TECS-TCS (`chrome-extension/`) soft-deprecate — ẩn khỏi menu.
  */
 export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
   const toast = useToast();
@@ -24,7 +25,7 @@ export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
   const refresh = useCallback(async () => {
     try {
       const catalog = await fetchChromeExtensionsCatalog();
-      setPacks(catalog.extensions);
+      setPacks(recommendedChromeExtensionPacks(catalog.extensions));
       setLoadError(
         catalog.ok
           ? null
@@ -46,10 +47,11 @@ export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
       let target = pack;
       if (!target.ok || !target.download_url) {
         const catalog = await fetchChromeExtensionsCatalog();
-        setPacks(catalog.extensions);
+        const recommended = recommendedChromeExtensionPacks(catalog.extensions);
+        setPacks(recommended);
         target =
-          catalog.extensions.find((x) => x.id === pack.id) ||
-          catalog.extensions.find((x) => x.label === pack.label) ||
+          recommended.find((x) => x.id === pack.id) ||
+          recommended.find((x) => x.label === pack.label) ||
           pack;
       }
       triggerChromeExtensionDownload(target);
@@ -67,7 +69,6 @@ export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
     const list = packs?.length
       ? packs
       : ([
-          { ok: false, id: "tecs-tcs", label: "TECS-TCS" },
           { ok: false, id: "tcs", label: "TCS" },
           { ok: false, id: "scsc", label: "SCSC" },
         ] satisfies ChromeExtensionPackInfo[]);

@@ -126,6 +126,60 @@ type Pending = {
 const pending = new Map<string, Pending>();
 let listenerBound = false;
 
+/** Ext vừa announce EXT_READY (content-script load). */
+export type TcsExtReadyInfo = {
+  channel: string;
+  version?: string;
+  portalWarehouse?: TcsExtChannelTarget;
+  extensionId?: string;
+};
+
+type ExtReadyListener = (info: TcsExtReadyInfo) => void;
+const readyListeners = new Set<ExtReadyListener>();
+
+export function subscribeTcsExtensionReady(
+  listener: ExtReadyListener
+): () => void {
+  ensureListener();
+  readyListeners.add(listener);
+  return () => {
+    readyListeners.delete(listener);
+  };
+}
+
+/** Chip trạng thái Ext trên Ops bar — không lẫn với agent. */
+export type TcsExtPresence = "offline" | "ready" | "logged_in";
+
+export function tcsExtPresence(ext: TcsExtResult | null | undefined): TcsExtPresence {
+  if (!ext?.ok) return "offline";
+  if (ext.workspace?.logged_in) return "logged_in";
+  return "ready";
+}
+
+export function tcsExtPresenceLabel(
+  ext: TcsExtResult | null | undefined,
+  opts?: { compact?: boolean }
+): string {
+  const presence = tcsExtPresence(ext);
+  if (opts?.compact) {
+    if (presence === "logged_in") return "Ext · login";
+    if (presence === "ready") return "Ext · OK";
+    return "Ext · off";
+  }
+  if (presence === "logged_in") return "Ext · đã login";
+  if (presence === "ready") return "Ext · sẵn sàng";
+  return "Ext · offline";
+}
+
+export function tcsExtChannelToWarehouse(
+  channel: string | undefined
+): TcsExtChannelTarget | null {
+  if (channel === TCS_EXT_CHANNEL_DIRECT) return "TCS";
+  if (channel === TCS_EXT_CHANNEL_SCSC) return "SCSC";
+  if (channel === TCS_EXT_CHANNEL) return "TECS-TCS";
+  return null;
+}
+
 /**
  * Lệnh chạy trên portal TCS — bắt buộc kèm user kỳ vọng của kho.
  * Cookie tcs.com.vn dùng chung 2 Ext nên Ext phải tự chặn khi session lệch user.
@@ -178,6 +232,22 @@ function ensureListener() {
       return;
     }
     if (data.type === "EXT_READY") {
+      const warehouse =
+        (data.portalWarehouse as TcsExtChannelTarget | undefined) ||
+        tcsExtChannelToWarehouse(data.channel);
+      const info: TcsExtReadyInfo = {
+        channel: data.channel,
+        version: data.version,
+        portalWarehouse: warehouse || undefined,
+        extensionId: data.extensionId,
+      };
+      readyListeners.forEach((fn) => {
+        try {
+          fn(info);
+        } catch {
+          /* listener lỗi không được làm hỏng bridge */
+        }
+      });
       return;
     }
     if (!data.id) return;

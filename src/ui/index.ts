@@ -2,7 +2,13 @@ export { Button, IconButton, type ButtonProps, type IconButtonProps } from "./Bu
 export { Skeleton, PageSkeleton } from "./Skeleton";
 export { Banner, InlineError, type BannerTone } from "./Banner";
 export { EmptyState, ErrorState } from "./EmptyState";
-export { ToastProvider, useToast, type ToastInput, type ToastTone } from "./Toast";
+export {
+  ToastProvider,
+  useToast,
+  TOAST_DURATION_MS,
+  type ToastInput,
+  type ToastTone,
+} from "./Toast";
 export {
   notify,
   notifyError,

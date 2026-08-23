@@ -4,7 +4,6 @@ import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
 import { OPS } from "../styles/opsModalStyles";
 import { Button } from "../ui";
-import { trackAiEvent } from "../utils/aiOpsClient";
 import { opsTeamLabel } from "../constants/warehouses";
 import {
   buildCsdFields,
@@ -50,12 +49,7 @@ export function CsdPrintModal({
     setBusy(false);
     setTransfer(suggestCsdTransfer(shipment.dest, carrier));
     setOrigin(profile.defaultOrigin || "SGN");
-    trackAiEvent("csd.modal.open", {
-      carrier,
-      opsTeam: ra?.opsTeam,
-      dest: (shipment.dest || "").slice(0, 3),
-    });
-  }, [open, shipment, carrier, profile, ra?.opsTeam]);
+  }, [open, shipment, carrier, profile]);
 
   if (!open || !shipment || !carrier || !profile) return null;
 
@@ -77,21 +71,10 @@ export function CsdPrintModal({
         allowEmptyGoods: true,
         customerDirectory,
       });
-      trackAiEvent("csd.print.ok", {
-        carrier,
-        opsTeam: ra?.opsTeam,
-        raCode: ra?.raCode,
-        hasTransfer: Boolean(normTransfer),
-        transfer: normTransfer.slice(0, 16),
-      });
       onClose();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "In CSD thất bại";
       setError(msg);
-      trackAiEvent("csd.print.fail", {
-        carrier,
-        error: msg.slice(0, 80),
-      });
     } finally {
       setBusy(false);
     }

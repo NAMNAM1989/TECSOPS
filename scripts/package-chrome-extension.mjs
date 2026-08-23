@@ -167,7 +167,7 @@ packageExt({
   installText: (v) => `TECSOPS — Kho TECS-TCS ESID v${v}
 
 Ext riêng ESID kho TECS-TCS (tcs.com.vn).
-OCR CAPTCHA offline trong Ext (không cần agent cho ĐN PC).
+OCR CAPTCHA offline trong Ext (không cần agent cho Đăng Nhập TCS trên PC).
 eCargo → Ext SCSC riêng. Kho TCS → Ext TCS trên Chrome profile khác.
 
 1. Giải nén ZIP vào thư mục cố định.
@@ -196,7 +196,7 @@ packageExt({
   installText: (v) => `TECSOPS — Kho TCS ESID v${v}
 
 Ext riêng ESID kho TCS. BẮT BUỘC Chrome profile riêng với Ext TECS-TCS.
-OCR CAPTCHA offline trong Ext (không cần agent cho ĐN PC).
+OCR CAPTCHA offline trong Ext (không cần agent cho Đăng Nhập TCS trên PC).
 
 1. Giải nén ZIP vào thư mục cố định.
 2. chrome://extensions → Load unpacked.

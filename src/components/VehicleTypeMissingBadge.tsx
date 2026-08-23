@@ -6,7 +6,6 @@ import type {
 } from "../types/customerDirectory";
 import { findCustomerEntry } from "../utils/customerBookingResolve";
 import type { Shipment } from "../types/shipment";
-import { trackAiEvent } from "../utils/aiOpsClient";
 
 const VEHICLE_TYPES: { value: CustomerVehicleType; label: string }[] = [
   { value: "OTO", label: "Ô tô" },
@@ -56,9 +55,6 @@ export function VehicleTypeMissingBadge({
       });
       const ok = await onUpdateCustomers(next);
       if (ok !== false) {
-        trackAiEvent("vehicle.type.quick_update.ok", {
-          vehicleType: type,
-        });
         setOpen(false);
       }
     } finally {

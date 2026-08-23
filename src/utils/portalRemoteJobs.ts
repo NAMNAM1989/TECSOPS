@@ -125,7 +125,7 @@ export async function waitPortalJob(
     opts.onTick?.(job);
     if (job.status === "done" || job.status === "error") return job;
     if (Date.now() - started > timeoutMs) {
-      throw new Error("Hết thời gian chờ máy kho — kiểm tra portal:worker còn chạy?");
+      throw new Error("Hết thời gian chờ máy kho — dùng Ext hoặc agent cloud (portal-worker đã gỡ).");
     }
     await new Promise((r) => window.setTimeout(r, intervalMs));
   }

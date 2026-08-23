@@ -9,7 +9,6 @@ import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
 import { statusLabel, statusLabelCompact } from "./statusStyles";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { NewBookingButton } from "./NewBookingButton";
-import { OpsSheetImportButton } from "./OpsSheetImportButton";
 import { OpsToolsMenu } from "./OpsToolsMenu";
 import { ChromeExtensionsDownloadMenu } from "./ChromeExtensionsDownloadMenu";
 import { WarehouseGridPicker } from "./WarehouseGridPicker";
@@ -34,8 +33,6 @@ interface Props {
   syncRefreshing?: boolean;
   activeWarehouse: Warehouse;
   onAddBooking: (wh: Warehouse) => void;
-  onOpenSheetImport: () => void;
-  onPrefetchSheetImport?: () => void;
   onNavigateCustomers: () => void;
   onPrefetchCustomers?: () => void;
   onNavigateStats?: () => void;
@@ -43,7 +40,6 @@ interface Props {
   onOpenAirlineLabels: () => void;
   onDownloadDayExcel: () => void;
   onDownloadScscDim?: () => void;
-  onOpenAiImprove?: () => void;
   onCopyCargoDayReport?: (kind?: CargoDayReportCopyKind) => void;
   excelExporting?: boolean;
   scscDimExporting?: boolean;
@@ -101,8 +97,6 @@ export function OpsMobileStickyHeader({
   syncRefreshing = false,
   activeWarehouse,
   onAddBooking,
-  onOpenSheetImport,
-  onPrefetchSheetImport,
   onNavigateCustomers,
   onPrefetchCustomers,
   onNavigateStats,
@@ -110,7 +104,6 @@ export function OpsMobileStickyHeader({
   onOpenAirlineLabels,
   onDownloadDayExcel,
   onDownloadScscDim,
-  onOpenAiImprove,
   onCopyCargoDayReport,
   excelExporting,
   scscDimExporting,
@@ -207,11 +200,6 @@ export function OpsMobileStickyHeader({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <NewBookingButton iconOnly activeWarehouse={activeWarehouse} onAdd={onAddBooking} />
-          <OpsSheetImportButton
-            compact
-            onOpenSheetImport={onOpenSheetImport}
-            onPrefetchSheetImport={onPrefetchSheetImport}
-          />
           {cargoReportItems.length > 0 ? (
             <OverflowMenu
               compact
@@ -235,7 +223,6 @@ export function OpsMobileStickyHeader({
             onOpenAirlineLabels={onOpenAirlineLabels}
             onDownloadDayExcel={onDownloadDayExcel}
             onDownloadScscDim={onDownloadScscDim}
-            onOpenAiImprove={onOpenAiImprove}
           />
         </div>
       </div>

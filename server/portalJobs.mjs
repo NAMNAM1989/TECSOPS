@@ -387,7 +387,7 @@ export async function getPortalWorkerStatus(warehouse = "TCS") {
       online: false,
       logged_in: false,
       message: portalWorkerConfigured()
-        ? "Chưa có worker máy kho — chạy npm run portal:worker"
+        ? "Chưa có worker máy kho — đường remote đã gỡ; dùng Ext hoặc agent cloud."
         : "Chưa cấu hình PORTAL_WORKER_SECRET trên server",
       updated_at: null,
       worker_configured: portalWorkerConfigured(),

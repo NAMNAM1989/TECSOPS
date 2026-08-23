@@ -1,4 +1,4 @@
-# Kho TCS: agent :8766 + worker PORTAL_WAREHOUSE=TCS
+# Kho TCS: agent :8766 (dual-agent local). Không còn portal-worker.
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\portal-env.ps1"
 
@@ -27,5 +27,4 @@ try {
   Start-Sleep -Seconds 4
 }
 
-Start-PortalWorkerWindow -Warehouse "TCS" -AgentUrl "http://127.0.0.1:8766"
-Write-Host "[tcs] Worker TCS window opened. Phone: warehouse TCS -> DN / Scan / PDF." -ForegroundColor Cyan
+Write-Host "[tcs] Agent TCS :8766 sẵn sàng. Đăng Nhập TCS / Quét / PDF qua Ext hoặc agent." -ForegroundColor Cyan

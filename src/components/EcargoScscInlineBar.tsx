@@ -21,7 +21,6 @@ import {
   ecargoScscProfileIsComplete,
   getActiveEcargoScscProfile,
 } from "../utils/ecargoScscProfile";
-import { trackAiEvent } from "../utils/aiOpsClient";
 
 type HostProps = {
   shipments: Shipment[];
@@ -52,17 +51,12 @@ function EcargoScscModalBridge({
     setPreferredShipmentId(shipmentId);
     setSingleShipmentMode(true);
     setOpen(true);
-    trackAiEvent("ecargo.modal.open", { mode: "single", shipmentId });
   }, []);
 
   const openRegister = useCallback((preferred?: string | null) => {
     setPreferredShipmentId(preferred ?? null);
     setSingleShipmentMode(false);
     setOpen(true);
-    trackAiEvent("ecargo.modal.open", {
-      mode: "multi",
-      preferred: preferred || null,
-    });
   }, []);
 
   useEffect(() => {
@@ -76,7 +70,6 @@ function EcargoScscModalBridge({
     <EcargoVctRegisterModal
       open={open}
       onClose={() => {
-        trackAiEvent("ecargo.modal.close");
         setOpen(false);
       }}
       shipments={scscShipments}

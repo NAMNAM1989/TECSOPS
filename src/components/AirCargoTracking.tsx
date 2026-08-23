@@ -32,7 +32,6 @@ import {
   isScscWarehouse,
   isTcsWarehouse,
   isTecsHub,
-  warehouseLabel,
 } from "../constants/warehouses";
 import { asTcsPortalWarehouse } from "../utils/tcsPortalJob";
 import { tcsLoginCtaLabel } from "../utils/tcsLoginCtaLabel";
@@ -43,7 +42,6 @@ import {
 import { NewBookingButton } from "./NewBookingButton";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { OpsMobileStickyHeader } from "./OpsMobileStickyHeader";
-import { OpsSheetImportButton } from "./OpsSheetImportButton";
 import { OpsToolsMenu } from "./OpsToolsMenu";
 import { firstWarehouseWithLots } from "../utils/warehouseMetrics";
 import { statusOrderForFilter } from "../utils/shipmentWorkflowStatus";
@@ -71,26 +69,9 @@ import {
   type ShipmentSearchMatch,
 } from "../utils/shipmentSearch";
 import { DayExcelExportDialog } from "./DayExcelExportDialog";
-import { trackAiEvent } from "../utils/aiOpsClient";
-import type {
-  AiBookingDraft,
-  AiDimDraft,
-  AiProfileDraft,
-} from "./AiOpsWorkbenchModal";
-import { awbDigitsKey } from "../utils/awbFormat";
-import { totalDimKgFromLines } from "../utils/volumetricDim";
 
-const GoogleSheetImportModal = lazy(() =>
-  import("./GoogleSheetImportModal").then((m) => ({ default: m.GoogleSheetImportModal }))
-);
 const AirlineLabelSettingsModal = lazy(() =>
   import("./AirlineLabelSettingsModal").then((m) => ({ default: m.AirlineLabelSettingsModal }))
-);
-const AiImprovementReportModal = lazy(() =>
-  import("./AiImprovementReportModal").then((m) => ({ default: m.AiImprovementReportModal }))
-);
-const AiOpsWorkbenchModal = lazy(() =>
-  import("./AiOpsWorkbenchModal").then((m) => ({ default: m.AiOpsWorkbenchModal }))
 );
 
 type SyncApi = ReturnType<typeof useShipmentSync>;
@@ -134,7 +115,6 @@ export function AirCargoTracking({
     socketConnected,
     pendingOfflineCount,
     refreshState,
-    applyRemoteState,
   } = sync;
   const toast = useToast();
   const [syncRefreshing, setSyncRefreshing] = useState(false);
@@ -158,12 +138,9 @@ export function AirCargoTracking({
   const [excelExporting, setExcelExporting] = useState(false);
   const [scscDimExporting, setScscDimExporting] = useState(false);
   const [cargoReportCopying, setCargoReportCopying] = useState(false);
-  const [sheetImportOpen, setSheetImportOpen] = useState(false);
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
-  const [aiImproveOpen, setAiImproveOpen] = useState(false);
-  const [aiWorkbenchOpen, setAiWorkbenchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
   /** null = chưa probe; true = /tcs-agent OK (Railway/local all-in-one). */
@@ -235,7 +212,7 @@ export function AirCargoTracking({
       const hasInActive = filteredViewRows.some((r) => r.warehouse === prev);
       if (hasInActive) return prev;
       // Giữ kho đang chọn khi ngày/lọc trống (vd. SCSC chưa có lô) —
-      // không ép về TCS, để vẫn bấm Sheet / Booking trên đúng trang kho.
+      // không ép về TCS, để vẫn bấm Booking trên đúng trang kho.
       if (filteredViewRows.length === 0) return prev;
       return firstWarehouseWithLots(filteredViewRows);
     });
@@ -243,7 +220,6 @@ export function AirCargoTracking({
 
   const handleActiveWarehouseChange = useCallback(
     (wh: Warehouse) => {
-      trackAiEvent("ops.quick_filter.change", { kind: "warehouse", value: wh });
       setActiveWarehouse(wh);
       setStatusFilter((prev) => {
         if (prev === "ALL") return prev;
@@ -308,14 +284,8 @@ export function AirCargoTracking({
     async (id: string, patch: Partial<Shipment>) => {
       const fields = Object.keys(patch);
       if (fields.length === 0) return true;
-      trackAiEvent("ops.inline_edit.start", { fields });
       const result = await runMutate({ action: "UPDATE", id, patch });
-      if (result) {
-        trackAiEvent("ops.inline_edit.ok", { fields });
-        return true;
-      }
-      trackAiEvent("ops.inline_edit.fail", { fields });
-      return false;
+      return Boolean(result);
     },
     [runMutate]
   );
@@ -609,126 +579,6 @@ export function AirCargoTracking({
 
   const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
 
-  const createAiBooking = useCallback(
-    async (draft: AiBookingDraft) => {
-      if (awbDigitsKey(draft.awb).length !== 11) {
-        throw new Error("AWB phải đủ 11 số trước khi tạo booking AI.");
-      }
-      const warehouse = draft.warehouse || activeWarehouse;
-      await mutate({
-        action: "ADD",
-        shipment: {
-          ...blankShipmentDraft(selectedYmd, warehouse),
-          awb: draft.awb,
-          hawb: draft.hawb,
-          flight: draft.flight,
-          flightDate: draft.flightDate,
-          cutoff: draft.cutoff,
-          dest: draft.dest,
-          pcs: draft.pcs,
-          kg: draft.kg,
-          customer: draft.customer,
-          note: draft.note,
-        },
-      });
-      toast.success("Đã tạo đúng 1 booking từ draft AI.");
-    },
-    [activeWarehouse, mutate, selectedYmd, toast],
-  );
-
-  const saveAiProfile = useCallback(
-    async (draft: AiProfileDraft) => {
-      const code = String(draft.code || "").trim().toUpperCase();
-      const name = String(draft.name || "").trim();
-      if (!/^[A-Z]{2,5}$/.test(code)) {
-        throw new Error("Customer Code AI phải gồm 2–5 chữ A–Z.");
-      }
-      if (!name) throw new Error("Draft AI thiếu tên khách.");
-      const customers = state?.customers ?? [];
-      if (customers.some((customer) => customer.code.trim().toUpperCase() === code)) {
-        throw new Error(`Customer Code ${code} đã tồn tại.`);
-      }
-      const id = crypto.randomUUID();
-      const shipperName = String(draft.shipper?.name || "").trim();
-      const consigneeName = String(draft.consignee?.name || "").trim();
-      const goodsDescription = String(draft.goodsDescription || "").trim();
-      const customer: CustomerDirectoryEntry = {
-        id,
-        code,
-        name,
-        taxCode: draft.taxCode,
-        address: draft.address,
-        phone: draft.phone,
-        email: draft.email,
-        savedShippers: shipperName
-          ? [{
-              id: `${id}-shipper-1`,
-              label: shipperName,
-              shipperName,
-              shipperAddress: String(draft.shipper?.address || ""),
-              shipperPhone: String(draft.shipper?.phone || ""),
-              shipperEmail: String(draft.shipper?.email || ""),
-              taxCode: String(draft.shipper?.taxCode || ""),
-            }]
-          : [],
-        savedConsignees: consigneeName
-          ? [{
-              id: `${id}-consignee-1`,
-              label: consigneeName,
-              consigneeName,
-              consigneeAddress: String(draft.consignee?.address || ""),
-              consigneePhone: String(draft.consignee?.phone || ""),
-              consigneeEmail: String(draft.consignee?.email || ""),
-              notifyName: "",
-            }]
-          : [],
-        savedGoods: goodsDescription
-          ? [{ id: `${id}-goods-1`, label: goodsDescription, goodsDescription }]
-          : [],
-        savedVehicles: [],
-        savedDimTemplates: [],
-        parties: [],
-      };
-      await mutate({ action: "SET_CUSTOMERS", customers: [...customers, customer] });
-      toast.success(`Đã lưu khách ${code} từ draft AI.`);
-    },
-    [mutate, state?.customers, toast],
-  );
-
-  const applyAiDim = useCallback(
-    async (draft: AiDimDraft) => {
-      if (!selected) throw new Error("Hãy chọn lô trước khi áp dụng DIM.");
-      if (!draft.lines.length) throw new Error("Draft DIM không có dòng hợp lệ.");
-      const dimWeightKg = totalDimKgFromLines(draft.lines, draft.divisor);
-      await mutate({
-        action: "UPDATE",
-        id: selected.id,
-        patch: {
-          dimLines: draft.lines,
-          dimDivisor: draft.divisor,
-          dimWeightKg,
-        },
-      });
-      toast.success("Đã áp dụng DIM AI sau bước xác nhận.");
-    },
-    [mutate, selected, toast],
-  );
-
-  const applyAiEsidDraft = useCallback(
-    async (draft: string) => {
-      if (!selected) throw new Error("Hãy chọn lô trước khi áp dụng draft eSID.");
-      const value = draft.trim();
-      if (!value) throw new Error("Draft eSID đang trống.");
-      await mutate({
-        action: "UPDATE",
-        id: selected.id,
-        patch: { otherRequirementsPrint: value },
-      });
-      toast.success("Đã lưu draft Other Request vào lô; hãy kiểm tra trước khi Fill.");
-    },
-    [mutate, selected, toast],
-  );
-
   // Phải gọi hook trước mọi early return — nếu không, loading → live sẽ React #310.
   const scscShipmentsForEcargo = useMemo(
     () => filteredViewRows.filter((r) => isEcargoScscWarehouse(r.warehouse)),
@@ -750,8 +600,6 @@ export function AirCargoTracking({
     onOpenAirlineLabels: () => setAirlineLabelSettingsOpen(true),
     onDownloadDayExcel: () => setExcelRangeOpen(true),
     onDownloadScscDim: () => void onDownloadScscDimDay(),
-    onOpenAiImprove: () => setAiImproveOpen(true),
-    onOpenAiWorkbench: () => setAiWorkbenchOpen(true),
   };
 
   const chrome = isMobile ? (
@@ -783,7 +631,6 @@ export function AirCargoTracking({
       }}
       activeWarehouse={activeWarehouse}
       onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
-      onOpenSheetImport={() => setSheetImportOpen(true)}
       onCopyCargoDayReport={(kind) => void onCopyCargoDayReport(kind ?? "vantage")}
       cargoReportCopying={cargoReportCopying}
       {...toolsProps}
@@ -858,7 +705,6 @@ export function AirCargoTracking({
           activeWarehouse={activeWarehouse}
           onAdd={(wh) => void addBlankRowForWarehouse(wh)}
         />
-        <OpsSheetImportButton onOpenSheetImport={() => setSheetImportOpen(true)} />
         {onNavigateStats ? (
           <Button
             variant="secondary"
@@ -1023,7 +869,7 @@ export function AirCargoTracking({
         <div className="mb-3">
           <EmptyState
             title="Chưa có lô trong ngày này"
-            description="Tạo booking mới hoặc bấm «Nhập Sheet» để kéo từ Google Sheet."
+            description="Tạo booking mới bằng nút + Booking."
             actionLabel="+ Booking"
             onAction={() => void addBlankRowForWarehouse(activeWarehouse)}
           />
@@ -1119,50 +965,6 @@ export function AirCargoTracking({
             onSave={saveAirlineLabelOverrides}
           />
         ) : null}
-        {sheetImportOpen ? (
-          <GoogleSheetImportModal
-            open={sheetImportOpen}
-            sessionYmd={selectedYmd}
-            activeWarehouse={activeWarehouse}
-            onClose={() => setSheetImportOpen(false)}
-            onApplied={(count, serverState, meta) => {
-              const removedN = meta?.removedCount ?? 0;
-              const reorderedN = meta?.reorderedCount ?? 0;
-              if (serverState) {
-                if (!applyRemoteState(serverState, { force: true })) void refreshState();
-              } else if (count > 0 || removedN > 0 || reorderedN > 0) {
-                void refreshState();
-              }
-              if (meta?.preferredWarehouse) {
-                setActiveWarehouse(meta.preferredWarehouse);
-              }
-              const errN = meta?.errorCount ?? 0;
-              if ((count > 0 || removedN > 0 || reorderedN > 0) && errN === 0) {
-                const parts = WAREHOUSE_ORDER.map((wh) => {
-                  const n = meta?.appliedByWarehouse?.[wh] ?? 0;
-                  return n > 0 ? `${warehouseLabel[wh]} ${n}` : null;
-                }).filter(Boolean);
-                const detail = parts.length ? ` (${parts.join(" · ")})` : "";
-                const removeHint = removedN > 0 ? ` · xóa ${removedN} lô thừa` : "";
-                const orderHint = reorderedN > 0 ? ` · STT ${reorderedN} lô theo Sheet` : "";
-                toast.success(
-                  count > 0
-                    ? `Đã đồng bộ ${count} lô từ Google Sheet${detail}${removeHint}${orderHint}.`
-                    : removedN > 0
-                      ? `Đã xóa ${removedN} lô không còn trên Sheet${orderHint}.`
-                      : `Đã sắp ${reorderedN} lô theo thứ tự Sheet.`,
-                  "Nhập Sheet"
-                );
-                setSheetImportOpen(false);
-              } else if (count > 0 && errN > 0) {
-                toast.warning(
-                  `Nhập ${count} lô · ${errN} lỗi. Xem chi tiết trong modal.`,
-                  "Nhập một phần"
-                );
-              }
-            }}
-          />
-        ) : null}
       </Suspense>
 
       <DayExcelExportDialog
@@ -1172,27 +974,6 @@ export function AirCargoTracking({
         onClose={() => setExcelRangeOpen(false)}
         onExport={(from, to) => void onDownloadDayExcelRange(from, to)}
       />
-
-      <Suspense fallback={null}>
-        {aiImproveOpen ? (
-          <AiImprovementReportModal
-            open={aiImproveOpen}
-            onClose={() => setAiImproveOpen(false)}
-          />
-        ) : null}
-        {aiWorkbenchOpen ? (
-          <AiOpsWorkbenchModal
-            open
-            sessionDate={selectedYmd}
-            selectedShipment={selected}
-            onClose={() => setAiWorkbenchOpen(false)}
-            onCreateBooking={createAiBooking}
-            onSaveProfile={saveAiProfile}
-            onApplyDim={applyAiDim}
-            onApplyEsidDraft={applyAiEsidDraft}
-          />
-        ) : null}
-      </Suspense>
     </AppShell>
     </TcsPortalActionsProvider>
     </EcargoScscProvider>

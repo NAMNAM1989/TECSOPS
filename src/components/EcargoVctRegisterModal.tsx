@@ -35,7 +35,6 @@ import {
   isVehicleNoMissingError,
   normalizeEcargoPlateForSubmit,
 } from "../utils/ecargoVehicleValidation";
-import { trackAiEvent } from "../utils/aiOpsClient";
 import {
   fillEcargoVctViaExtension,
   pingTcsExtension,
@@ -400,10 +399,6 @@ export function EcargoVctRegisterModal({
   const focusPlateAndBlock = (msg: string) => {
     setPlateFieldError(msg);
     setStatus(msg);
-    trackAiEvent("ecargo.validation.fail", {
-      error: "VEHICLE_NO_MISSING",
-      message: msg.slice(0, 80),
-    });
     queueMicrotask(() => {
       if (vehicleMode === "saved") setVehicleMode("oneshot");
       plateInputRef.current?.focus();
@@ -447,9 +442,6 @@ export function EcargoVctRegisterModal({
     }
     const gateErr = getEcargoVehicleGateError(vehicle);
     if (gateErr) {
-      trackAiEvent("ecargo.validation.fail", {
-        error: gateErr.slice(0, 80),
-      });
       return { error: gateErr };
     }
     const fromFlights = resolveEcargoArrivalDateFromShipments(selectedShipments);
@@ -516,12 +508,6 @@ export function EcargoVctRegisterModal({
       const res = await fillEcargoVctViaExtension(prepared.payload!);
       if (!res.ok) {
         const errCode = String(res.error || res.message || "fail");
-        trackAiEvent("ecargo.fill.fail", {
-          error: isVehicleNoMissingError(errCode)
-            ? "VEHICLE_NO_MISSING"
-            : errCode.slice(0, 80),
-          awbCount: selectedIds.length,
-        });
         if (isVehicleNoMissingError(errCode)) {
           focusPlateAndBlock(ECARGO_PLATE_REQUIRED_MSG);
           return;
@@ -529,19 +515,12 @@ export function EcargoVctRegisterModal({
         setStatus(res.message || "Điền eCargo thất bại");
         return;
       }
-      trackAiEvent("ecargo.fill.ok", {
-        awbCount: selectedIds.length,
-        vehicleType: prepared.payload?.header?.vehicleType,
-      });
       const warn =
         (prepared.warnings?.length ?? 0) > 0
           ? `\n${prepared.warnings!.slice(0, 3).join("\n")}`
           : "";
       setStatus(`${res.message || "Đã điền eCargo."}${warn}`);
     } catch (e) {
-      trackAiEvent("ecargo.fill.fail", {
-        error: e instanceof Error ? e.message.slice(0, 80) : "unknown",
-      });
       setStatus(e instanceof Error ? e.message : "Lỗi không xác định khi điền eCargo.");
     } finally {
       setBusy(false);
@@ -608,9 +587,6 @@ export function EcargoVctRegisterModal({
     }
     if (liveVehicleGateError) {
       setStatus(liveVehicleGateError);
-      trackAiEvent("ecargo.validation.fail", {
-        error: liveVehicleGateError.slice(0, 80),
-      });
       return;
     }
     if (!canRegisterWithOtp) {
@@ -655,12 +631,6 @@ export function EcargoVctRegisterModal({
       });
       if (!res.ok) {
         const errCode = String(res.error || res.message || "fail");
-        trackAiEvent("ecargo.register.fail", {
-          error: isVehicleNoMissingError(errCode)
-            ? "VEHICLE_NO_MISSING"
-            : errCode.slice(0, 80),
-          awbCount: selectedIds.length,
-        });
         if (isVehicleNoMissingError(errCode)) {
           focusPlateAndBlock(ECARGO_PLATE_REQUIRED_MSG);
           return;
@@ -668,11 +638,6 @@ export function EcargoVctRegisterModal({
         setStatus(res.message || "Đăng ký eCargo thất bại");
         return;
       }
-      trackAiEvent("ecargo.register.ok", {
-        awbCount: selectedIds.length,
-        hasVct: Boolean(res.vctCode),
-        vehicleType: prepared.payload?.header?.vehicleType,
-      });
       if (res.vctCode || res.qrDataUrl) {
         setLastQr({
           vctCode: res.vctCode || "",
@@ -685,9 +650,6 @@ export function EcargoVctRegisterModal({
           : "";
       setStatus(`${res.message || "Đã đăng ký eCargo."}${warn}`);
     } catch (e) {
-      trackAiEvent("ecargo.register.fail", {
-        error: e instanceof Error ? e.message.slice(0, 80) : "unknown",
-      });
       setStatus(
         e instanceof Error ? e.message : "Lỗi không xác định khi đăng ký eCargo.",
       );

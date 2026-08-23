@@ -15,15 +15,11 @@ import {
 import { createPostgresStateStore } from "./postgresStateStore.mjs";
 import { registerLookupRoutes } from "./lookupRoutes.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
-import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
 import { registerTcsAgentProxy } from "./tcsAgentProxy.mjs";
 import { registerPortalJobRoutes } from "./portalJobs.mjs";
 import { registerEcargoVctRoutes } from "./ecargoVctRoutes.mjs";
-import { registerAiRoutes } from "./ai/aiRoutes.mjs";
-import { recordMutationEventSafe } from "./ai/opsAiEventsStore.mjs";
 import {
   applySecurityHeaders,
-  createRateLimit,
   createMutationRateLimit,
   mutationErrorPayload,
 } from "./httpSecurity.mjs";
@@ -310,16 +306,6 @@ app.get("/api/sync-meta", appAuth.requireAuth, async (_req, res) => {
 });
 
 const mutationRateLimit = createMutationRateLimit();
-const aiRateLimit = createRateLimit({
-  max: Number(process.env.AI_RATE_LIMIT_MAX) > 0
-    ? Number(process.env.AI_RATE_LIMIT_MAX)
-    : 60,
-  windowMs: Number(process.env.AI_RATE_LIMIT_WINDOW_MS) > 0
-    ? Number(process.env.AI_RATE_LIMIT_WINDOW_MS)
-    : 60_000,
-  error: "Quá nhiều yêu cầu AI. Vui lòng thử lại sau.",
-  code: "AI_RATE_LIMITED",
-});
 
 app.post("/api/mutation", appAuth.requireAuth, mutationRateLimit, async (req, res) => {
   try {
@@ -329,7 +315,6 @@ app.post("/api/mutation", appAuth.requireAuth, mutationRateLimit, async (req, re
       return;
     }
     const next = await runMutation(body);
-    recordMutationEventSafe(body);
     const forClient = await attachDbSyncedAt(next);
     await emitScopedSync(io, forClient);
     res.json(projectAppState(forClient, resolveRequestStateScope(req)));
@@ -360,7 +345,6 @@ app.post("/api/mutations", appAuth.requireAuth, mutationRateLimit, async (req, r
       return;
     }
     const next = await runBatchMutations(list);
-    for (const m of list) recordMutationEventSafe(m);
     const forClient = await attachDbSyncedAt(next);
     await emitScopedSync(io, forClient);
     res.json(projectAppState(forClient, resolveRequestStateScope(req)));
@@ -375,12 +359,8 @@ app.post("/api/mutations", appAuth.requireAuth, mutationRateLimit, async (req, r
   }
 });
 
-registerSheetsRoutes(app, { io });
 registerEcargoVctRoutes(app, { runMutation, loadState, io });
-app.use("/api/ai", appAuth.requireAuth);
-app.use("/api/ai", aiRateLimit);
-registerAiRoutes(app, { loadState });
-console.info("[api] ai (Gemini improvement report)");
+// Gemini /api/ai + Google Sheet /api/sheets đã gỡ (A3). Railway có thể xóa GEMINI_*.
 
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);

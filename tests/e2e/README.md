@@ -9,15 +9,6 @@ $env:BASE_URL="https://<service>.up.railway.app"; npm run test:e2e
 
 L1 được phép chạy trên Railway production: chỉ đọc health/UI, không mutation.
 
-## AI mock — không bill, không ghi DB
-
-```powershell
-npm run test:e2e:ai
-```
-
-Playwright chặn route Gemini và `/api/mutation` ngay trong browser, xác nhận luồng
-preview → Confirm gọi mutation đúng một lần nhưng không ghi Postgres.
-
 ## L2 — mutation
 
 Chỉ chạy trên Postgres test/local clone:

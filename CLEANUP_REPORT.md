@@ -8,6 +8,49 @@ Hard no-touch: Ext TCS/SCSC, Docker OCR, eCargo, print/CSD logic, auth, DB / `.e
 
 ---
 
+## Bug_fix review (PR #61) — 4 tiêu chí
+
+KEEP > DELETE. Xóa **chỉ** khi đủ điều kiện dưới; không đủ thì giữ.
+
+### 1) Docs — xóa ONLY nếu 0 link từ TOOLS.md / skills / AGENTS.md / live docs
+
+| Path | TOOLS.md | skills | AGENTS.md | live docs (`docs/*` còn lại) | Quyết định |
+|---|---|---|---|---|---|
+| `TECSOPS-UPGRADE-PROPOSALS-2026-08-12.md` | 0 | 0 | 0 | 0 (`memory/` không tính) | **SAFE — đã xóa** |
+| `TECSOPS-MASTER-UPGRADE-BLUEPRINT-2026-08-12.md` | 0 | 0 | 0 | 0 | **SAFE — đã xóa** |
+| `CURSOR_PLAYWRIGHT_MCP_COMPREHENSIVE_AUDIT_PROMPT.md` | 0 (TOOLS trỏ `playwright-mcp-ops-qa.md`) | 0 | 0 | 0 | **SAFE — đã xóa** |
+| `TECSOPS_CURSOR_REDESIGN_UPGRADE_SPEC.md` | 0 | 0 | 0 | self-ref only | **KEEP** — SoT 50 hạng mục / kit §4.4; `ui-review.md` không thay hết. Link-gate đạt nhưng KEEP > DELETE. |
+| `tecsops-ui-redesign-checklist.html` | 0 | 0 | 0 | 0 | **KEEP** — companion spec; A2 cố ý giữ HTML. |
+| `ext_tcs-analysis.md` | 0 | 0 | 0 | 0 (SoT live = `ops-ext-protocol.md`) | **KEEP** — research cookie/OCR/mutex; chưa chứng minh overlap 100%. |
+
+Skills đã quét: `.agents/skills/*`, `.cursor/skills/*` (chỉ `tecsops-railway-state-persistence` trỏ `docs/railway-safe-deploy.md`).
+
+### 2) UI kit — xóa ONLY nếu barrel **không còn** export cho live feature **và** 0 consumer
+
+Barrel `src/ui/index.ts` **vẫn export**: `Card`, `Badge`, `Input`/`TextArea`/`Select`, `KpiStat`, `ErrorState`.
+
+Live import từ barrel (`AirCargoTracking`, `CustomersPage`, `OpsStatsPage`, `AppAuthGate`, …) dùng `AppShell` / `EmptyState` / `Button` / Toast — **không** import Card/Badge/Input/KpiStat/ErrorState.
+
+**Không xóa.** Tiêu chí 2 chặn: barrel còn export. Không gỡ export chỉ để được xóa.
+
+### 3) `public/downloads` TCS* — xóa ONLY nếu 0 link Ops/print
+
+| Nguồn | Kết quả |
+|---|---|
+| `src/` href / `window.open` / string `tai-so-do` / `ESID-Automation` | 0 |
+| `PrintShippingLabel.tsx` + `print-label.css` | chỉ `docs/air-cargo-label-100x80-100x50.html` (KEEP, print) |
+| `server/index.mjs` `/downloads/` | chỉ ZIP Ext (`tecsops-chrome-extension-*.zip`) |
+| Tests | chỉ ZIP Ext trong `chromeExtensionDownloads.test.ts` |
+
+TCS HTML + PDF companion: **SAFE — đã xóa**.  
+`public/downloads/air-cargo-label-*.html`: **KEEP** (print / no-touch).
+
+### 4) KEEP always (không đụng)
+
+Ext TCS/SCSC, OCR Docker #54, eCargo, print/CSD, auth, DB / `.env` / migrations — nguyên. CTA «Đăng Nhập TCS».
+
+---
+
 ## Phase 1–2 — Re-classify (sau #57)
 
 ### SAFE TO DELETE (mới xác nhận)
@@ -28,7 +71,7 @@ Hard no-touch: Ext TCS/SCSC, Docker OCR, eCargo, print/CSD logic, auth, DB / `.e
 | `docs/TECSOPS_CURSOR_REDESIGN_UPGRADE_SPEC.md` | Spec 50 hạng mục / kit bắt buộc (`Input`, `Badge`, `ErrorState`…). `docs/ui-review.md` là nhật ký Round 3, không thay toàn bộ spec. |
 | `docs/tecsops-ui-redesign-checklist.html` | Checklist in được; A2 cố ý giữ HTML sau khi xóa PDF. Companion spec. |
 | `docs/ext_tcs-analysis.md` | Research Ext (#47). Header đã ghi A2, nhưng còn chi tiết cookie/OCR/mutex. SoT live = `docs/ops-ext-protocol.md` — chưa chứng minh overlap 100%. |
-| `src/ui/Card.tsx`, `Badge.tsx`, `Input.tsx` (`Input`/`TextArea`/`Select`) | 0 consumer ngoài barrel — **đúng**. Spec §4.4 vẫn liệt kê kit. Không phải leftover agent. Xóa = cắt surface kit khi spec còn. |
+| `src/ui/Card.tsx`, `Badge.tsx`, `Input.tsx` (`Input`/`TextArea`/`Select`) | Bug_fix #2: barrel **vẫn export**. 0 consumer live, nhưng không xóa khi barrel còn export. Spec §4.4 vẫn liệt kê. |
 | `KpiStat` (`AppShell.tsx`), `ErrorState` (`EmptyState.tsx`) | Cùng lý do. `AppShell` + `EmptyState` **đang dùng** — chỉ hàm phụ chưa có caller. |
 | `public/downloads/air-cargo-label-100x80-100x50.html` | Tem in. Khác `docs/air-cargo-label-*.html`. `PrintShippingLabel.tsx` khớp bản `docs/`. Public copy có thể là URL in kho — **print = no-touch**. |
 | `docs/air-cargo-label-100x80-100x50.html` | SoT comment trong `PrintShippingLabel.tsx`. KEEP. |

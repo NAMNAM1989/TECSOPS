@@ -20,7 +20,7 @@ Tab tcs.com.vn / ecargo.scsc.vn trên máy đó
 | **TCS ESID** | `chrome-extension-tcs` | `tecsops-tcs-direct-ext` | TCS |
 | **SCSC eCargo** | `chrome-extension-scsc` | `tecsops-scsc-ecargo-ext` | SCSC |
 
-`chrome-extension/` (channel `tecsops-tcs-ext`, kho TECS-TCS) **deprecated** — vẫn hiểu protocol nếu đã cài, nhưng **không** hiện trong menu «Tải Ext».
+Không còn gói / thư mục `chrome-extension/` (legacy TECS-TCS). Cài **TCS + SCSC**. Channel `tecsops-tcs-ext` chỉ còn để máy đã cài Ext cũ không gãy handshake.
 
 ## Envelope
 
@@ -60,7 +60,7 @@ Không chứa / không yêu cầu credential Gmail trong payload. IMAP server hi
 |---|---|
 | Trạng thái Ext lẫn với agent trong 1 pill | Chip **Ext · offline / sẵn sàng / đã login** luôn hiện |
 | Ext offline + Trực quan → vẫn fallback Railway | Chỉ Ext; chip báo offline — cài từ «Tải Ext» |
-| Menu tải 3 Ext | Chỉ **TCS + SCSC**; TECS-TCS soft-deprecate |
+| Menu tải 3 Ext | Chỉ **TCS + SCSC** |
 
 ## eSID / eCargo
 

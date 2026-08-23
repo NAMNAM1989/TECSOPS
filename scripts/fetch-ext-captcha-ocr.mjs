@@ -11,10 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const targets = [
-  path.join(root, "chrome-extension-tcs", "ocr"),
-  path.join(root, "chrome-extension", "ocr"),
-];
+const targets = [path.join(root, "chrome-extension-tcs", "ocr")];
 const primary = targets[0];
 
 function copyFile(src, dest) {

@@ -1,6 +1,0 @@
-DEPRECATED — Kho TECS-TCS ESID (chrome-extension)
-
-Không cài mới. Dùng Ext TCS + Ext SCSC từ menu «Tải Ext» trên Ops.
-Thư mục / ZIP này chỉ để cài sẵn hoặc rollback.
-
-Channel legacy: tecsops-tcs-ext (vẫn PING được nếu đã cài).

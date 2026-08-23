@@ -23,7 +23,7 @@
     "test:e2e:a11y": "node tests/e2e/accessibility.mjs",
     "test:e2e:mutation": "node tests/e2e/mutation.mjs",
     "e2e:cleanup": "node scripts/cleanup-e2e-records.mjs",
-    "ext:verify": "node chrome-extension/scripts/cdp-load-and-verify.mjs",
+    "ext:verify": "node chrome-extension-tcs/scripts/cdp-load-and-verify.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "eslint src",

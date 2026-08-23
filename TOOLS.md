@@ -10,7 +10,8 @@
 
 ## Chrome Ext (tuỳ chọn desktop)
 
-- `chrome-extension/` (TECS-TCS) · `chrome-extension-tcs/` (TCS).
+- `chrome-extension-tcs/` (TCS ESID) · `chrome-extension-scsc/` (SCSC eCargo).
+- Protocol: [docs/ops-ext-protocol.md](docs/ops-ext-protocol.md).
 - Dùng khi muốn thao tác trên Chrome local; không bắt buộc khi online Railway.
 
 ## Local agent (dev)

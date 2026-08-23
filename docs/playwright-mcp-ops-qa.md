@@ -6,7 +6,7 @@ Playwright MCP trong Cursor dùng để **test và debug**, không thay Chrome E
 
 | Công cụ | Dùng khi |
 |---|---|
-| Chrome Ext (TECS-TCS / TCS) | Đăng Nhập TCS, Quét, Điền, Tải PDF trên máy có Chrome |
+| Chrome Ext (TCS + SCSC) | Đăng Nhập TCS, Quét, Điền, Tải PDF trên máy có Chrome |
 | Playwright MCP (Cursor) | Agent chat: mở Ops/portal, tái hiện lỗi, kiểm locator |
 | OCR agent `:8765`/`:8766` | Tuỳ chọn — Ext có thể nhập CAPTCHA tay nếu OCR offline |
 

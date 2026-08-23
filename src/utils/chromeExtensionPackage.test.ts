@@ -6,7 +6,7 @@ const ROOT = path.resolve(__dirname, "../..");
 
 type ExtPack = {
   dir: string;
-  warehouse: "TECS-TCS" | "TCS";
+  warehouse: "TCS";
   requiredFiles: string[];
   version: string;
   scriptVersion: string;
@@ -14,23 +14,6 @@ type ExtPack = {
 };
 
 const PACKS: ExtPack[] = [
-  {
-    dir: "chrome-extension",
-    warehouse: "TECS-TCS",
-    version: "2.6.1",
-    scriptVersion: "2.0.26",
-    mustHaveDownloadPdf: true,
-    requiredFiles: [
-      "manifest.json",
-      "background.js",
-      "content-ops.js",
-      "content-tcs.js",
-      "popup.html",
-      "popup.js",
-      "locators.json",
-      "print-frame.html",
-    ],
-  },
   {
     dir: "chrome-extension-tcs",
     warehouse: "TCS",
@@ -94,13 +77,17 @@ describe("chrome extension packaging invariants", () => {
     expect(content).toContain(`SCRIPT_VERSION = "${pack.scriptVersion}"`);
   });
 
-  it("package script gồm print-frame cho cả 2 Ext ESID", () => {
+  it("package script chỉ đóng gói Ext TCS + SCSC", () => {
     const script = readFileSync(
       path.join(ROOT, "scripts/package-chrome-extension.mjs"),
       "utf8"
     );
+    expect(script).toContain('dirName: "chrome-extension-tcs"');
+    expect(script).toContain('dirName: "chrome-extension-scsc"');
+    expect(script).not.toContain('dirName: "chrome-extension"');
+    expect(script).not.toContain("extension:package:tecs-tcs");
     const matches = script.match(/print-frame\.html/g) || [];
-    expect(matches.length).toBeGreaterThanOrEqual(2);
+    expect(matches.length).toBeGreaterThanOrEqual(1);
   });
 
   it("content-ops chuẩn: EXT_READY + portalWarehouse đúng kho", () => {
@@ -112,17 +99,12 @@ describe("chrome extension packaging invariants", () => {
       path.join(ROOT, "chrome-extension-scsc/content-ops.js"),
       "utf8"
     );
-    const legacyOps = readFileSync(
-      path.join(ROOT, "chrome-extension/content-ops.js"),
-      "utf8"
-    );
     expect(tcsOps).toContain('type: "EXT_READY"');
     expect(tcsOps).toContain('PORTAL_WAREHOUSE = "TCS"');
     expect(scscOps).toContain('PORTAL_WAREHOUSE = "SCSC"');
     expect(scscOps).toContain("ECARGO_OTP_PROVIDE");
     expect(scscOps).not.toContain('portalWarehouse: "TCS"');
-    expect(legacyOps).toMatch(/DEPRECATED|deprecated/i);
-    expect(legacyOps).toContain('PORTAL_WAREHOUSE = "TECS-TCS"');
+    expect(existsSync(path.join(ROOT, "chrome-extension"))).toBe(false);
   });
 
   it("SCSC background có ECARGO_OTP_PROVIDE (hook Gmail mapping PC)", () => {

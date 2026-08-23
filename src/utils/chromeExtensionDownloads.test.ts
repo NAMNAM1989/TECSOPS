@@ -18,16 +18,9 @@ describe("chromeExtensionDownloads", () => {
         ok: true,
         json: async () => ({
           ok: true,
-          count: 3,
-          total: 3,
+          count: 2,
+          total: 2,
           extensions: [
-            {
-              ok: true,
-              id: "tecs-tcs",
-              label: "TECS-TCS",
-              version: "2.6.1",
-              deprecated: true,
-            },
             { ok: true, id: "tcs", label: "TCS", version: "1.5.2" },
             { ok: true, id: "scsc", label: "SCSC", version: "1.0.1" },
           ],
@@ -36,11 +29,11 @@ describe("chromeExtensionDownloads", () => {
     );
     const catalog = await fetchChromeExtensionsCatalog();
     expect(catalog.ok).toBe(true);
-    expect(catalog.extensions).toHaveLength(3);
-    expect(catalog.extensions[0]?.label).toBe("TECS-TCS");
+    expect(catalog.extensions).toHaveLength(2);
+    expect(catalog.extensions.map((p) => p.id)).toEqual(["tcs", "scsc"]);
   });
 
-  it("recommendedChromeExtensionPacks ẩn legacy TECS-TCS", () => {
+  it("recommendedChromeExtensionPacks chỉ TCS + SCSC (bỏ sót TECS-TCS)", () => {
     const recommended = recommendedChromeExtensionPacks([
       { ok: true, id: "tecs-tcs", label: "TECS-TCS", deprecated: true },
       { ok: true, id: "tcs", label: "TCS" },

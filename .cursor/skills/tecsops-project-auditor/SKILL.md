@@ -17,7 +17,7 @@ Sử dụng skill này để thực hiện rà soát chuyên sâu (Comprehensive
 - **Frontend**: React 18 + Vite + TypeScript + TailwindCSS + Lucide Icons.
 - **Backend / Real-time Sync**: Node.js Express + WebSockets + Persistence (Postgres / JSON Fallback).
 - **Automation Agent**: Python Playwright Worker (`tcs-awb-automation`) phục vụ đăng nhập TCS, quét eSID, tải PDF.
-- **Client Automation**: Chrome Extension Manifest V3 (`chrome-extension/`) điều khiển điền eSID trực quan trên `www.tcs.com.vn/Esid/Export`.
+- **Client Automation**: Chrome Extension Manifest V3 (`chrome-extension-tcs/` + `chrome-extension-scsc/`) điều khiển eSID / eCargo trên PC kho.
 
 ### 📁 Sơ Đồ Cấu Trúc File Trọng Yếu
 ```
@@ -32,7 +32,8 @@ TECSOPS/
 │       ├── customerDirectoryCore.ts, customerFullProfileExcel.ts (Danh bạ & Excel Import 9/22 cột)
 │       ├── resolveShipmentForEsidDeclare.ts, buildEsidDeclareFillPayload.ts (eSID Payload)
 │       └── tcsChromeExtension.ts, tcsPortalAgentApi.ts (Client Extension & Agent API)
-├── chrome-extension/     # Extension điền eSID (content-tcs.js, background.js, locators.json)
+├── chrome-extension-tcs/ # Ext ESID kho TCS
+├── chrome-extension-scsc/ # Ext eCargo kho SCSC
 ├── tcs-awb-automation/   # Automation Worker Python Playwright
 ├── server/               # WebSocket & State Server Express/Node.js
 └── shared/               # Module dùng chung (customerProfileLimits.mjs)

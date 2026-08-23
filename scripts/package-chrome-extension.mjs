@@ -145,35 +145,7 @@ function warnIfOcrIncomplete(dirName) {
   }
 }
 
-warnIfOcrIncomplete("chrome-extension");
 warnIfOcrIncomplete("chrome-extension-tcs");
-
-packageExt({
-  dirName: "chrome-extension",
-  files: [
-    "manifest.json",
-    "background.js",
-    "content-ops.js",
-    "content-tcs.js",
-    "popup.html",
-    "popup.js",
-    "locators.json",
-    "print-frame.html",
-    ...listOcrFiles(path.join(root, "chrome-extension")),
-  ],
-  stableZipName: "tecsops-chrome-extension.zip",
-  versionedPrefix: "tecsops-chrome-extension",
-  logTag: "extension:package:tecs-tcs",
-  installText: (v) => `TECSOPS — Kho TECS-TCS ESID v${v} (DEPRECATED)
-
-Không cài mới. Dùng Ext TCS (chrome-extension-tcs) + Ext SCSC.
-ZIP này chỉ để cài sẵn / rollback.
-
-1. Giải nén ZIP vào thư mục cố định.
-2. chrome://extensions → Load unpacked.
-3. F5 Ops → chọn kho TECS-TCS → Đăng Nhập TCS / Quét / Điền.
-`,
-});
 
 packageExt({
   dirName: "chrome-extension-tcs",

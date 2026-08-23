@@ -18,10 +18,7 @@ function loadAccountMatcher(file: string): (raw: unknown) => string {
   ) => string;
 }
 
-const EXT_CONTENT_SCRIPTS = [
-  "chrome-extension/content-tcs.js",
-  "chrome-extension-tcs/content-tcs.js",
-];
+const EXT_CONTENT_SCRIPTS = ["chrome-extension-tcs/content-tcs.js"];
 
 describe.each(EXT_CONTENT_SCRIPTS)("nhận diện user portal — %s", (file) => {
   const looksLikePortalAccount = loadAccountMatcher(file);

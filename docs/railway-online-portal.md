@@ -36,7 +36,7 @@ Phone / fallback → Ops → /tcs-agent → Playwright :8765/:8766 (phụ)
 
 Policy mặc định: «Trực quan» bật → desktop **chỉ Ext** (kể cả khi Ext offline — UI báo cài, không lặng lẽ headless).
 
-Chrome Ext chuẩn: **TCS + SCSC**. Legacy `chrome-extension/` (TECS-TCS) deprecated — ẩn menu «Tải Ext».
+Chrome Ext chuẩn: **TCS + SCSC** (`docs/ops-ext-protocol.md`). Không còn gói TECS-TCS.
 
 ## Railway Variables (bắt buộc)
 
@@ -88,7 +88,7 @@ Quét agent dùng `POST /workspace/scan` (nhẹ — không prefetch PDF).
 - **PC + Chrome Ext (ưu tiên):** OCR **trong Ext** (ONNX / ddddocr `common.onnx`, offscreen MV3) — không cần agent/cloud để Đăng Nhập TCS.
   - ZIP tải từ Ops phải **≥ ~60MB** (có `ocr/ort.min.js` + `ocr/common.onnx`). ZIP ~200KB = thiếu OCR (build cũ) → Đăng Nhập TCS lỗi / CAPTCHA tay.
   - Local: `npm run ext:fetch-ocr` rồi load unpacked / `npm run ext:package`.
-  - Ext TCS **≥1.5.1** / TECS-TCS **≥2.6.1** → Reload.
+  - Ext TCS **≥1.5.1** + Ext SCSC → Reload.
   - Fallback: agent localhost `/captcha/solve` → nhập tay trên tab TCS.
 - **Phone / headless Railway:** vẫn phụ thuộc `TCS_CAPTCHA_OCR` + session volume (không có cửa sổ nhập tay).
 - Nếu Đăng Nhập TCS fail trên cloud: kiểm tra password Variables, OCR trong image, hoặc refresh volume profile.
@@ -103,7 +103,7 @@ Quét agent dùng `POST /workspace/scan` (nhẹ — không prefetch PDF).
 
 Giữ Ops trên Railway HTTPS; chạy Playwright **headed trên máy đó** qua cầu Chrome Ext (localhost).
 
-1. `git pull` + `npm run ext:fetch-ocr` + Reload Ext đúng kho (TCS **1.5.0** / TECS-TCS **2.6.0**).
+1. `git pull` + `npm run ext:fetch-ocr` + Reload Ext TCS + Ext SCSC.
 2. Trên máy kiểm soát: `npm run portal:headed:local` (mở Chromium headed `:8765` / `:8766`).
 3. Mở Ops Railway **trên cùng Chrome** đã cài Ext.
 4. Bật nút **PW local** trên thanh TCS.

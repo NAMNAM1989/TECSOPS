@@ -3,7 +3,7 @@ import type { EcargoVctFillPayload } from "./buildEcargoVctFillPayload";
 import type { TcsEsidScanItem } from "./tcsPortalAgentApi";
 import { loadTcsExtLoginPrefs } from "./tcsExtLoginPrefs";
 
-/** Ext TECS-TCS ESID. */
+/** Channel legacy (máy còn Ext cũ). Ext chuẩn ESID = TCS_EXT_CHANNEL_DIRECT. */
 export const TCS_EXT_CHANNEL = "tecsops-tcs-ext";
 /** Ext kho TCS ESID — tài khoản / session độc lập. */
 export const TCS_EXT_CHANNEL_DIRECT = "tecsops-tcs-direct-ext";
@@ -269,7 +269,7 @@ function extTimeoutMessage(target: TcsExtChannelTarget): string {
   if (target === "SCSC") {
     return "Không nhận được phản hồi từ Chrome extension SCSC eCargo. Cài Ext «TECSOPS — Kho SCSC eCargo», Reload rồi F5 Ops.";
   }
-  return "Không nhận được phản hồi từ Chrome extension TECS-TCS ESID. Hãy Reload extension và F5 trang Ops.";
+  return "Không nhận được phản hồi từ Chrome extension. Cài Ext «TECSOPS — Kho TCS ESID» + Ext SCSC (docs/ops-ext-protocol.md), Reload rồi F5 Ops.";
 }
 
 function request<T extends TcsExtResult>(

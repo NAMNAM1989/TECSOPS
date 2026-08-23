@@ -109,44 +109,50 @@ export function OpsDesktopCommandBar({
 
   return (
     <header className="space-y-1" data-testid="ops-desktop-command-bar">
-      <div className="flex min-w-0 flex-nowrap items-center gap-x-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="flex min-w-0 shrink-0 items-center gap-1.5">
-          <h1 className="m-0 leading-none">
-            <Wordmark size="sm" />
-          </h1>
-          <span className="rounded-full bg-ui-navy px-2 py-px text-[9px] font-bold uppercase tracking-wide text-white shadow-ui-sm">
-            OPS
-          </span>
-          <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
-          {daysWithData > 0 ? (
-            <span className="hidden text-[10px] text-ui-text-muted lg:inline">
-              {totalLots}/{daysWithData}d
+      <div
+        data-testid="ops-desktop-command-row"
+        className="flex min-w-0 items-center gap-x-2 overflow-visible"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-x-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex min-w-0 shrink-0 items-center gap-1.5">
+            <h1 className="m-0 leading-none">
+              <Wordmark size="sm" />
+            </h1>
+            <span className="rounded-full bg-ui-navy px-2 py-px text-[9px] font-bold uppercase tracking-wide text-white shadow-ui-sm">
+              OPS
             </span>
-          ) : null}
+            <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
+            {daysWithData > 0 ? (
+              <span className="hidden text-[10px] text-ui-text-muted lg:inline">
+                {totalLots}/{daysWithData}d
+              </span>
+            ) : null}
+          </div>
+
+          <div className="flex min-w-0 shrink-0 items-center gap-1">
+            <OpsDatePicker
+              value={selectedYmd}
+              onChange={onDateChange}
+              onPrev={onPrevDay}
+              onNext={onNextDay}
+              onToday={onToday}
+              isViewingToday={isViewingToday}
+            />
+            {!isViewingToday ? (
+              <span
+                className="rounded bg-ui-warning/15 px-1.5 py-px text-[8px] font-bold uppercase text-ui-navy"
+                title="Vẫn sửa / thêm lô được"
+              >
+                Ngày khác
+              </span>
+            ) : null}
+          </div>
         </div>
 
-        <div className="flex min-w-0 shrink-0 items-center gap-1">
-          <OpsDatePicker
-            value={selectedYmd}
-            onChange={onDateChange}
-            onPrev={onPrevDay}
-            onNext={onNextDay}
-            onToday={onToday}
-            isViewingToday={isViewingToday}
-          />
-          {!isViewingToday ? (
-            <span
-              className="rounded bg-ui-warning/15 px-1.5 py-px text-[8px] font-bold uppercase text-ui-navy"
-              title="Vẫn sửa / thêm lô được"
-            >
-              Ngày khác
-            </span>
-          ) : null}
-        </div>
-
-        <span className="mx-0.5 hidden h-4 w-px shrink-0 bg-ui-border sm:inline-block" aria-hidden />
-
-        <div className="ml-auto flex min-w-0 items-center justify-end gap-1.5">
+        <div
+          data-testid="ops-desktop-command-actions"
+          className="flex shrink-0 items-center justify-end gap-1.5 overflow-visible"
+        >
           <NewBookingButton activeWarehouse={activeWarehouse} onAdd={onAddBooking} />
           {onNavigateStats ? (
             <Button

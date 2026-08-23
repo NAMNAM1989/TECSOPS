@@ -73,4 +73,17 @@ describe("OpsDesktopCommandBar", () => {
     expect(html).toContain("opacity-0");
     expect(html).not.toContain("23-AUG-2026</option>");
   });
+
+  it("không clip OverflowMenu: overflow-x-auto chỉ ở cụm identity, không bọc Báo cáo/Ext/Công cụ", () => {
+    const html = renderBar();
+    const rowOpen = html.match(/data-testid="ops-desktop-command-row"[^>]*>/)?.[0] ?? "";
+    const actionsOpen = html.match(/data-testid="ops-desktop-command-actions"[^>]*>/)?.[0] ?? "";
+    expect(rowOpen).toContain("overflow-visible");
+    expect(rowOpen).not.toContain("overflow-x-auto");
+    expect(actionsOpen).toContain("overflow-visible");
+    expect(actionsOpen).not.toContain("overflow-x-auto");
+    expect(html).toContain("Báo cáo");
+    expect(html).toContain("Tải Ext");
+    expect(html).toContain("Công cụ");
+  });
 });

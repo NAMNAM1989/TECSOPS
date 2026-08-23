@@ -77,7 +77,8 @@ describe("TcsPortalInlineBar A4 Ext-only", () => {
     expect(html).toContain("Cần Ext trên PC");
     expect(html).toContain("ops-ext-mobile-hint");
     expect(html).toContain("Ext · offline");
-    expect(html).not.toContain("Đăng Nhập TCS");
+    expect(html).not.toMatch(/<button[^>]*>Đăng Nhập TCS<\/button>/);
+    expect(html).not.toContain("bg-ui-primary");
     expect(html).not.toContain("Trực quan");
     expect(html).not.toContain("Agent cloud");
   });

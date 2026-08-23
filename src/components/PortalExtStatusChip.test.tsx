@@ -23,11 +23,11 @@ describe("PortalExtStatusChip", () => {
       />
     );
 
-    expect(offline).toContain("Ext · offline");
-    expect(ready).toContain("Ext · sẵn sàng");
-    expect(logged).toContain("Ext · đã login");
-    expect(offline).not.toContain("Ext · off");
-    expect(ready).not.toContain("Ext · OK");
+    expect(offline).toContain(">Ext · offline<");
+    expect(ready).toContain(">Ext · sẵn sàng<");
+    expect(logged).toContain(">Ext · đã login<");
+    expect(offline).not.toContain(">Ext · off<");
+    expect(ready).not.toContain(">Ext · OK<");
     expect(offline).toContain('data-ext-presence="offline"');
     expect(logged).toContain('data-ext-presence="logged_in"');
   });

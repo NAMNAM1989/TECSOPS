@@ -2,13 +2,22 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { OpsMobileStickyHeader } from "./OpsMobileStickyHeader";
 import type { Shipment } from "../types/shipment";
+import { ToastProvider } from "../ui";
+import { blankShipmentDraft } from "../utils/blankShipment";
 
 const emptySearch = {
   customers: [],
 };
 
 function renderHeader(portal: "tcs" | "scsc" | "none") {
+  const warehouse = portal === "scsc" ? "SCSC" : "TCS";
+  const row = {
+    ...blankShipmentDraft("2026-08-23", warehouse),
+    id: "s1",
+    stt: 1,
+  } as Shipment;
   return renderToStaticMarkup(
+    <ToastProvider>
     <OpsMobileStickyHeader
       selectedYmd="2026-08-23"
       onDateChange={() => undefined}
@@ -18,26 +27,27 @@ function renderHeader(portal: "tcs" | "scsc" | "none") {
       isViewingToday
       syncStatus="live"
       socketConnected
-      activeWarehouse={portal === "scsc" ? "SCSC" : "TCS"}
+      activeWarehouse={warehouse}
       onAddBooking={() => undefined}
       onNavigateCustomers={() => undefined}
       onOpenAirlineLabels={() => undefined}
       onDownloadDayExcel={() => undefined}
       tcsPortalBar={portal === "tcs" ? <span>bar-tcs</span> : null}
       ecargoBar={portal === "scsc" ? <span>bar-scsc</span> : null}
-      filteredViewRows={[] as Shipment[]}
-      viewRows={[] as Shipment[]}
+      filteredViewRows={[row]}
+      viewRows={[row]}
       onWarehouseChange={() => undefined}
       searchHighlightWarehouses={[]}
       searchQuery=""
       onSearchChange={() => undefined}
-      statusFilteredRows={[] as Shipment[]}
+      statusFilteredRows={[row]}
       searchContext={emptySearch}
       onSelectSearchMatch={() => undefined}
       statusFilter="ALL"
       onStatusFilterChange={() => undefined}
       onClearFilters={() => undefined}
     />
+    </ToastProvider>
   );
 }
 

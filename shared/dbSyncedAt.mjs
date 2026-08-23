@@ -67,6 +67,9 @@ export function lotSyncMatchKey(awb, warehouse, sessionDate) {
 /**
  * max(synced_at) các lô trong một kho (và tùy chọn ngày phiên).
  * Không đụng ops_customers.
+ * @param {readonly object[] | null | undefined} lots
+ * @param {{ warehouse?: string, sessionDate?: string }} [opts]
+ * @returns {number | null}
  */
 export function maxLotSyncedAtMs(lots, opts = {}) {
   if (!Array.isArray(lots)) return null;
@@ -85,7 +88,11 @@ export function maxLotSyncedAtMs(lots, opts = {}) {
   return maxSyncedAtMs(values);
 }
 
-/** max(synced_at) danh bạ — không đụng lots. */
+/**
+ * max(synced_at) danh bạ — không đụng lots.
+ * @param {readonly object[] | null | undefined} customers
+ * @returns {number | null}
+ */
 export function maxCustomerSyncedAtMs(customers) {
   if (!Array.isArray(customers)) return null;
   return maxSyncedAtMs(customers.map((c) => (c && typeof c === "object" ? c.syncedAt ?? c.synced_at : null)));
@@ -171,6 +178,13 @@ export function mergeCustomerSyncedAt(customers, opsCustomers) {
 /**
  * Ops: chỉ lots. Ưu tiên max trên lô đang xem (kho + ngày phiên),
  * rồi max theo kho từ snapshot namnamlogistics. Không dùng customers.
+ * @param {{
+ *   lots?: readonly object[],
+ *   warehouse?: string,
+ *   sessionDate?: string,
+ *   warehouseMaxSyncedAt?: unknown,
+ * }} [opts]
+ * @returns {number | null}
  */
 export function resolveOpsLotSyncedAtMs({
   lots = [],
@@ -183,7 +197,11 @@ export function resolveOpsLotSyncedAtMs({
   return parseSyncedAtMs(warehouseMaxSyncedAt);
 }
 
-/** Customers: chỉ ops_customers / directory.syncedAt. Không dùng lots. */
+/**
+ * Customers: chỉ ops_customers / directory.syncedAt. Không dùng lots.
+ * @param {{ customers?: readonly object[], customersMaxSyncedAt?: unknown }} [opts]
+ * @returns {number | null}
+ */
 export function resolveCustomersSyncedAtMs({ customers = [], customersMaxSyncedAt } = {}) {
   const fromRows = maxCustomerSyncedAtMs(customers);
   if (fromRows != null) return fromRows;

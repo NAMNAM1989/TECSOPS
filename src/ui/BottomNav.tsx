@@ -52,12 +52,12 @@ export function BottomNav({
               }}
               className={`flex min-h-12 min-w-[4.5rem] flex-1 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-[10px] font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
                 isActive
-                  ? "bg-teal-600/12 text-teal-900 ring-1 ring-inset ring-teal-600/25"
+                  ? "bg-ui-primary/10 text-ui-navy ring-1 ring-inset ring-ui-primary/25"
                   : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
               }`}
             >
               <span
-                className={`text-[15px] leading-none ${isActive ? "text-teal-700" : ""}`}
+                className={`text-[15px] leading-none ${isActive ? "text-ui-primary" : ""}`}
                 aria-hidden
               >
                 {item.icon}

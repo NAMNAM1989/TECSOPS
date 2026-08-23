@@ -267,7 +267,7 @@ export function SmartSearchBar({
 
   const inputClass = `w-full rounded-lg border border-ui-border bg-ui-surface font-medium text-ui-text shadow-ui-sm placeholder:font-normal placeholder:text-ui-text-muted focus:border-ui-primary/40 focus:outline-none focus:ring-2 focus:ring-ui-focus ${
     compact
-      ? "h-9 touch-manipulation py-1 pl-8 pr-8 text-[13px]"
+      ? "min-h-11 touch-manipulation py-1 pl-8 pr-8 text-[13px]"
       : "h-8 py-1 pl-8 pr-8 text-[12px]"
   }`;
 

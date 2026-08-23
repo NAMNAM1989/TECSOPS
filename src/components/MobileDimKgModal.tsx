@@ -1364,12 +1364,13 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
         </div>
 
         <div
-          className="shrink-0 border-t border-ui-border bg-ui-surface px-3 pt-2.5"
+          data-testid="dim-footer"
+          className="relative z-20 shrink-0 overflow-visible border-t border-ui-border bg-ui-surface px-3 pt-2.5"
           style={{
             paddingBottom: `max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + ${keyboardInset}px))`,
           }}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-visible">
             <Button
               type="button"
               size="lg"
@@ -1384,6 +1385,7 @@ export function MobileDimKgModal({ row, onClose, onSave }: MobileDimKgModalProps
             <OverflowMenu
               compact
               align="right"
+              placement="up"
               label="Thêm"
               triggerClassName="inline-flex h-12 w-12 min-h-12 min-w-12 touch-manipulation items-center justify-center rounded-2xl border border-ui-border bg-ui-surface text-lg font-bold text-ui-text shadow-ui-sm"
               items={[

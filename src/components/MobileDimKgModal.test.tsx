@@ -101,6 +101,13 @@ describe("MobileDimKgModal UX", () => {
     expect(html).not.toContain(">Nhanh<");
   });
 
+  it("footer ⋯ mở lên (placement=up), overflow-visible — không clip trong sheet", () => {
+    const html = renderModal();
+    expect(html).toContain("dim-footer");
+    expect(html).toContain("overflow-visible");
+    expect(html).toContain('data-placement="up"');
+  });
+
   it("một banner trạng thái + totals chargeable; CTA Lưu ≥44px", () => {
     const html = renderModal({
       ...baseRow,

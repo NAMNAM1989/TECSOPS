@@ -78,13 +78,11 @@ Mọi mục REVIEW + KEEP ở trên. Không xóa khi không chắc.
 
 ## Phase 8–9 — Validation
 
-- [ ] `npm run lint`
-- [ ] `npm run lint:server`
-- [ ] `npm run typecheck`
-- [ ] `npm test`
-- [ ] `npm run deploy:check`
-
-(Điền sau khi chạy — vòng pre-test / post-test.)
+- [x] `npm run lint` — PASS
+- [x] `npm run lint:server` — PASS
+- [x] `npm run typecheck` — PASS
+- [x] `npm test` — PASS **81 files / 489 tests** (`csdForms` 12/12, `tcsLoginCtaLabel` 2/2)
+- [x] `npm run deploy:check` — PASS
 
 Không revert; không sửa logic nghiệp vụ ngoài cleanup.
 
@@ -117,7 +115,7 @@ REMOVE only — không đổi contract API, không đổi schema, không đổi 
 - App / Ext / OCR / eCargo / print / CSD / auth / DB nguyên.
 - CTA vẫn «Đăng Nhập TCS».
 - Public downloads còn: tem `air-cargo-label-*.html` + ZIP Ext (gitignore `*.zip`, đóng lúc `prebuild`).
-- PR: _(điền sau khi mở)_
+- PR: https://github.com/NAMNAM1989/TECSOPS/pull/61
 
 ### Follow-up (không làm)
 

@@ -1,83 +1,121 @@
 # TECSOPS — Safe Dead Code & Unused Feature Cleanup
 
 **Protocol:** Phase 1–12 (ANALYZE + CLASSIFY trước khi xóa; KEEP > DELETE khi không chắc).  
-**Base:** `main` @ `249af1a` (B1 #56+).  
-**Ưu tiên:** B2 docs/mcp remnants sau Plan A, rồi leftover unused feature SAFE.
+**Đợt này:** REVIEW follow-up sau SAFE cleanup **#57** (`main` @ `f82b1a9`).  
+**Base:** latest `main` @ `f82b1a9`.
 
-Hard no-touch: DB schema/data/migrations, `.env` / secrets, auth, live API Ops/Ext, production config, deploy.
-
-KEEP bắt buộc: `chrome-extension-tcs` + `chrome-extension-scsc`, Docker OCR (#54), eCargo / print / CSD (logic thật), mã kho `TECS-TCS` / `TECS-SCSC`, CTA «Đăng Nhập TCS».
+Hard no-touch: Ext TCS/SCSC, Docker OCR, eCargo, print/CSD logic, auth, DB / `.env` / migrations, live API contracts. CTA luôn «Đăng Nhập TCS».
 
 ---
 
-## Phase 1–2 — ANALYZE + CLASSIFY
+## Bug_fix review (PR #61) — 4 tiêu chí
 
-### SAFE TO DELETE
+KEEP > DELETE. Xóa **chỉ** khi đủ điều kiện dưới; không đủ thì giữ.
 
-| Path | Loại | Lý do SAFE |
-|---|---|---|
-| `docs/TECSOPS-PLAYWRIGHT-AUDIT-2026-08-12.md` | dead docs | Audit 12/08 — `/tcs-agent`, Gemini/Sheet, pytest agent. Pattern `TECSOPS-*-AUDIT*`. |
-| `docs/TECSOPS-REDESIGN-AUDIT.md` | dead docs | Audit 26/07 — `tcs-awb-automation`, Sheet, baseline PNG đã xóa A2. |
-| `scripts/generate-ui-redesign-checklist-pdf.mjs` | unused tooling | Không npm/CI script. PDF đã xóa A2. |
-| `mcp/tecsops-deploy/*` | unused tooling | 0 reference repo/CI/`package.json`. Deploy = `npm run deploy:ship`. |
-| `src/utils/portalExecutorPolicy.ts` + test | leftover B1 | Không import production; stub luôn Ext-only. |
-| `src/utils/csdFdForm.ts` | unused barrel | `@deprecated` re-export `csdForms`. CSD thật ở `csdForms.ts` + PDF `public/templates/csd/`. |
-| `src/components/InlineCneeCell.tsx` | unused feature | 0 import. Lưới live dùng `CneeDetailPopover` + `InlineCustomerInfoCell`. |
-| `src/components/InlineConsigneeSelect.tsx` | unused feature | Chỉ được `InlineCneeCell` import — orphan sau khi cell chết. |
+### 1) Docs — xóa ONLY nếu 0 link từ TOOLS.md / skills / AGENTS.md / live docs
 
-### REVIEW — không xóa
+| Path | TOOLS.md | skills | AGENTS.md | live docs (`docs/*` còn lại) | Quyết định |
+|---|---|---|---|---|---|
+| `TECSOPS-UPGRADE-PROPOSALS-2026-08-12.md` | 0 | 0 | 0 | 0 (`memory/` không tính) | **SAFE — đã xóa** |
+| `TECSOPS-MASTER-UPGRADE-BLUEPRINT-2026-08-12.md` | 0 | 0 | 0 | 0 | **SAFE — đã xóa** |
+| `CURSOR_PLAYWRIGHT_MCP_COMPREHENSIVE_AUDIT_PROMPT.md` | 0 (TOOLS trỏ `playwright-mcp-ops-qa.md`) | 0 | 0 | 0 | **SAFE — đã xóa** |
+| `TECSOPS_CURSOR_REDESIGN_UPGRADE_SPEC.md` | 0 | 0 | 0 | self-ref only | **KEEP** — SoT 50 hạng mục / kit §4.4; `ui-review.md` không thay hết. Link-gate đạt nhưng KEEP > DELETE. |
+| `tecsops-ui-redesign-checklist.html` | 0 | 0 | 0 | 0 | **KEEP** — companion spec; A2 cố ý giữ HTML. |
+| `ext_tcs-analysis.md` | 0 | 0 | 0 | 0 (SoT live = `ops-ext-protocol.md`) | **KEEP** — research cookie/OCR/mutex; chưa chứng minh overlap 100%. |
 
-| Path | Vì sao REVIEW |
+Skills đã quét: `.agents/skills/*`, `.cursor/skills/*` (chỉ `tecsops-railway-state-persistence` trỏ `docs/railway-safe-deploy.md`).
+
+### 2) UI kit — xóa ONLY nếu barrel **không còn** export cho live feature **và** 0 consumer
+
+Barrel `src/ui/index.ts` **vẫn export**: `Card`, `Badge`, `Input`/`TextArea`/`Select`, `KpiStat`, `ErrorState`.
+
+Live import từ barrel (`AirCargoTracking`, `CustomersPage`, `OpsStatsPage`, `AppAuthGate`, …) dùng `AppShell` / `EmptyState` / `Button` / Toast — **không** import Card/Badge/Input/KpiStat/ErrorState.
+
+**Không xóa.** Tiêu chí 2 chặn: barrel còn export. Không gỡ export chỉ để được xóa.
+
+### 3) `public/downloads` TCS* — xóa ONLY nếu 0 link Ops/print
+
+| Nguồn | Kết quả |
 |---|---|
-| `docs/TECSOPS-UPGRADE-PROPOSALS-2026-08-12.md` | Companion 12/08; không khớp `*-AUDIT*`. |
-| `docs/TECSOPS-MASTER-UPGRADE-BLUEPRINT-2026-08-12.md` | Nhật ký G0–G5. |
-| `docs/CURSOR_PLAYWRIGHT_MCP_COMPREHENSIVE_AUDIT_PROMPT.md` | Prompt cũ; QA live = `playwright-mcp-ops-qa.md`. |
-| `docs/TECSOPS_CURSOR_REDESIGN_UPGRADE_SPEC.md` | Spec redesign. |
-| `docs/tecsops-ui-redesign-checklist.html` | A2 giữ HTML. |
-| `docs/ext_tcs-analysis.md` | Research protocol Ext. |
-| `docs/playwright-mcp-ops-qa.md` | `TOOLS.md` trỏ tới. |
-| `docs/air-cargo-label-100x80-100x50.html` | Khớp `PrintShippingLabel.tsx`. |
-| `src/ui/Card.tsx`, `Badge`, `Input`/`TextArea`/`Select`, `KpiStat`, `ErrorState` | Kit chưa có consumer ngoài barrel — không leftover agent. |
-| `public/downloads/*TCS*.html` | Trang tĩnh public; cần ops xác nhận. |
-| `src/utils/tcsPortalAgentApi.ts` | **KEEP** types + `pickEsidScanReadyItems`. |
-| `useTcsPortalActions` union `"playwright"` | Live hook — đổi type = rewrite. |
-| Unused npm deps | Không có dep SAFE: `onnxruntime-web` (OCR Ext), `imapflow`/`mailparser` (eCargo), `recharts` (Stats), `tsx` (`sample:day-report`). |
+| `src/` href / `window.open` / string `tai-so-do` / `ESID-Automation` | 0 |
+| `PrintShippingLabel.tsx` + `print-label.css` | chỉ `docs/air-cargo-label-100x80-100x50.html` (KEEP, print) |
+| `server/index.mjs` `/downloads/` | chỉ ZIP Ext (`tecsops-chrome-extension-*.zip`) |
+| Tests | chỉ ZIP Ext trong `chromeExtensionDownloads.test.ts` |
 
-### KEEP
+TCS HTML + PDF companion: **SAFE — đã xóa**.  
+`public/downloads/air-cargo-label-*.html`: **KEEP** (print / no-touch).
 
-Ext TCS/SCSC + OCR, Docker multi-stage, eCargo/IMAP/VCT, print/CSD (`csdForms.ts` + templates), mã kho, `tcsLoginCtaLabel`, auth, Postgres, `.env.example`, live docs railway/ops-ext/otp.
+### 4) KEEP always (không đụng)
 
-Không có thư mục rỗng trackable. `samples/*.xlsx` dùng bởi `sample:day-report`. `start-fullstack.mjs` = Docker/Railway CMD.
+Ext TCS/SCSC, OCR Docker #54, eCargo, print/CSD, auth, DB / `.env` / migrations — nguyên. CTA «Đăng Nhập TCS».
+
+---
+
+## Phase 1–2 — Re-classify (sau #57)
+
+### SAFE TO DELETE (mới xác nhận)
+
+| Path | Loại | Bằng chứng SAFE |
+|---|---|---|
+| `docs/TECSOPS-UPGRADE-PROPOSALS-2026-08-12.md` | dead docs | Companion audit 12/08. Nội dung `/tcs-agent`, `tcs-awb-automation`, pytest, Gemini — đã teardown A3. AUDIT cặp đã xóa ở #57 → orphan. 0 ref ngoài `memory/` + chính nó. |
+| `docs/TECSOPS-MASTER-UPGRADE-BLUEPRINT-2026-08-12.md` | dead docs | Nhật ký G0–G5 (đã xong). Trỏ AUDIT đã xóa + AI/Gemini/`/tcs-agent`. Snapshot lịch sử, không phải SoT live (`docs/railway-*.md`, `ops-ext-protocol.md`). |
+| `docs/CURSOR_PLAYWRIGHT_MCP_COMPREHENSIVE_AUDIT_PROMPT.md` | dead docs | Prompt one-shot 12/08. QA live = `docs/playwright-mcp-ops-qa.md` (`TOOLS.md`). Prompt cũ bảo `TCS_AGENT_AUTO=0` / Python agent — lệch Ext-only. |
+| `public/downloads/tai-so-do-tcs.html` | leftover static | Landing «Sơ đồ tự động hóa TECS-TCS». 0 href từ app / CI / scripts / tests. Chỉ trỏ one-pager Agent/Playwright. |
+| `public/downloads/TECSOPS-TCS-ESID-Automation-1page.html` | leftover static | One-pager mô tả `/tcs-agent`, Playwright PDF, Agent fallback, `TCS_HEADLESS`, Sheet — kiến trúc đã gỡ A3. Lệch protocol Ext-only. |
+| `public/downloads/TECSOPS-TCS-ESID-Automation-1page.pdf` | leftover static | PDF cùng nội dung; HTML chỉ tồn tại để tải file này. 0 link từ app. |
+
+### REVIEW — giữ (không đủ bằng chứng SAFE)
+
+| Path | Vì sao vẫn REVIEW |
+|---|---|
+| `docs/TECSOPS_CURSOR_REDESIGN_UPGRADE_SPEC.md` | Spec 50 hạng mục / kit bắt buộc (`Input`, `Badge`, `ErrorState`…). `docs/ui-review.md` là nhật ký Round 3, không thay toàn bộ spec. |
+| `docs/tecsops-ui-redesign-checklist.html` | Checklist in được; A2 cố ý giữ HTML sau khi xóa PDF. Companion spec. |
+| `docs/ext_tcs-analysis.md` | Research Ext (#47). Header đã ghi A2, nhưng còn chi tiết cookie/OCR/mutex. SoT live = `docs/ops-ext-protocol.md` — chưa chứng minh overlap 100%. |
+| `src/ui/Card.tsx`, `Badge.tsx`, `Input.tsx` (`Input`/`TextArea`/`Select`) | Bug_fix #2: barrel **vẫn export**. 0 consumer live, nhưng không xóa khi barrel còn export. Spec §4.4 vẫn liệt kê. |
+| `KpiStat` (`AppShell.tsx`), `ErrorState` (`EmptyState.tsx`) | Cùng lý do. `AppShell` + `EmptyState` **đang dùng** — chỉ hàm phụ chưa có caller. |
+| `public/downloads/air-cargo-label-100x80-100x50.html` | Tem in. Khác `docs/air-cargo-label-*.html`. `PrintShippingLabel.tsx` khớp bản `docs/`. Public copy có thể là URL in kho — **print = no-touch**. |
+| `docs/air-cargo-label-100x80-100x50.html` | SoT comment trong `PrintShippingLabel.tsx`. KEEP. |
+| `docs/playwright-mcp-ops-qa.md` | `TOOLS.md` trỏ tới. KEEP. |
+
+### KEEP (không đụng)
+
+Ext TCS/SCSC + OCR ONNX, Docker multi-stage #54, eCargo/IMAP/VCT, print/CSD (`csdForms.ts` + `public/templates/csd/`), mã kho `TECS-TCS` / `TECS-SCSC`, `tcsLoginCtaLabel`, auth, Postgres, `.env.example`, live docs railway / ops-ext / otp.
+
+`src/utils/tcsPortalAgentApi.ts` — KEEP (types + `pickEsidScanReadyItems`).  
+Union `"playwright"` trên `useTcsPortalActions` — live hook, không rewrite.  
+npm deps: `onnxruntime-web` (OCR), `imapflow`/`mailparser` (eCargo), `recharts` (Stats), `tsx` (`sample:day-report`).
 
 ---
 
 ## Phase 3 — Indirect usage (trước mỗi path SAFE)
 
-Kiểm tra: static import, `import()`, route registration, CI (`.github/workflows/ci.yml` → `npm run ci`), `package.json` scripts, tests, string path, webhook.
+Kiểm tra: static import, `import()`, route, CI (`.github/workflows/ci.yml` → `npm run ci`), `package.json` scripts, tests, string path, webhook, href từ app.
 
-| Path | import() | routes | CI/scripts | tests | string/webhook |
+| Path | import() | routes / app href | CI / scripts | tests | string / webhook |
 |---|---|---|---|---|---|
-| AUDIT md ×2 | không | không | không | không | chỉ docs REVIEW + `memory/` |
-| PDF checklist script | không | không | không | không | không |
-| `mcp/tecsops-deploy` | không | không | không | không | 0 grep ngoài chính nó |
-| `portalExecutorPolicy` | không | không | không | chỉ self-test | `docs/ext_tcs-analysis` (REVIEW) |
-| `csdFdForm.ts` | không | không | không | test import `csdForms` | `CSD_FD_TEMPLATE_URL` chỉ tự file |
-| `InlineCneeCell` / `InlineConsigneeSelect` | không | không | không | không | 0 |
+| Proposals 12/08 | không | không | không | không | chỉ `memory/` + blueprint (cũng xóa) |
+| Blueprint 12/08 | không | không | không | không | chỉ `memory/` + self-ref |
+| Audit prompt 12/08 | không | không | không | không | `TOOLS.md` trỏ `playwright-mcp-ops-qa.md`, không file này |
+| `tai-so-do-tcs.html` | không | không | không | không | chỉ self + one-pager |
+| `*ESID-Automation-1page.html` | không | không | không | không | chỉ landing + PDF cùng thư mục |
+| `*ESID-Automation-1page.pdf` | không | không (ngoài HTML xóa) | không | không | 0 |
+
+`server/index.mjs` chỉ serve `/downloads/*.zip` Ext. Vite copy `public/` → dist; xóa HTML/PDF = hết URL tĩnh leftover, không đổi catalog Ext.
 
 ---
 
-## Phase 4–7 — Removed (chỉ SAFE)
+## Phase 4–7 — Removed (chỉ SAFE mới)
 
-Đã `git rm` các path SAFE ở bảng trên. **Không** rewrite architecture. **Không** sửa business logic ngoài cleanup.
+Đã `git rm` 6 path bảng SAFE. **Không** rewrite architecture. **Không** sửa business logic.
 
-CSD: xóa barrel deprecated, giữ `csdForms.ts` + `CSD-FD.pdf` / `CSD-TH.pdf`.  
-CNEE: xóa wrapper chết, giữ `CneeDetailPopover` + `InlineCustomerInfoCell` trên lưới.
+Giữ `public/downloads/air-cargo-label-100x80-100x50.html` (print).  
+Giữ toàn bộ `src/ui/*` đang dùng (`Button`, `AppShell`, `EmptyState`, Toast, …).
 
 ---
 
 ## Preserved
 
-Mọi mục REVIEW + KEEP. Không xóa khi không chắc.
+Mọi mục REVIEW + KEEP ở trên. Không xóa khi không chắc.
 
 ---
 
@@ -86,9 +124,9 @@ Mọi mục REVIEW + KEEP. Không xóa khi không chắc.
 - [x] `npm run lint` — PASS
 - [x] `npm run lint:server` — PASS
 - [x] `npm run typecheck` — PASS
-- [x] `npm test` — vòng 2 PASS **81 files / 489 tests** (`csdForms.test.ts` 12/12)
+- [x] `npm test` — PASS **81 files / 489 tests** (`csdForms` 12/12, `tcsLoginCtaLabel` 2/2)
 - [x] `npm run deploy:check` — PASS
-- [x] `npm run build` — PASS vòng 1 (`tsc -b && vite build`; ZIP Ext TCS 1.5.3 / SCSC 1.0.3)
+- [x] GitHub CI (`ff1a5d6`) — **success** (2 checks)
 
 Không revert; không sửa logic nghiệp vụ ngoài cleanup.
 
@@ -100,33 +138,40 @@ REMOVE only — không đổi contract API, không đổi schema, không đổi 
 
 ---
 
-## Phase 11 — Metrics
-
-| Đợt | Files | LOC (`wc -l`) | Bytes |
-|---|---:|---:|---:|
-| B2 docs/mcp/policy | 8 | 2 808 | 121 149 |
-| Unused feature (CSD barrel + CNEE orphan) | 3 | 162 | 4 915 |
-| **Tổng** | **11** | **2 970** | **126 064** (~123 KiB) |
-
-Chi tiết đợt 2:
+## Phase 11 — Metrics (delta đợt này vs #57)
 
 | File | Lines | Bytes |
 |---|---:|---:|
-| `src/utils/csdFdForm.ts` | 22 | 487 |
-| `src/components/InlineCneeCell.tsx` | 86 | 2 659 |
-| `src/components/InlineConsigneeSelect.tsx` | 54 | 1 769 |
+| `docs/TECSOPS-UPGRADE-PROPOSALS-2026-08-12.md` | 168 | 6 961 |
+| `docs/TECSOPS-MASTER-UPGRADE-BLUEPRINT-2026-08-12.md` | 349 | 14 438 |
+| `docs/CURSOR_PLAYWRIGHT_MCP_COMPREHENSIVE_AUDIT_PROMPT.md` | 267 | 21 028 |
+| `public/downloads/tai-so-do-tcs.html` | 43 | 1 693 |
+| `public/downloads/TECSOPS-TCS-ESID-Automation-1page.html` | 235 | 10 331 |
+| `public/downloads/TECSOPS-TCS-ESID-Automation-1page.pdf` | — (binary) | 131 234 |
+| **Tổng đợt này** | **1 062 text** | **185 685** (~181 KiB) |
+
+#57 đã gỡ 11 files / 2 970 LOC / ~123 KiB. Cộng dồn (nếu merge): **17 files** / **4 032 text LOC** + 1 PDF.
 
 ---
 
 ## Phase 12 — Result
 
-- App vẫn build; Ext/OCR/eCargo/print/CSD/auth/DB nguyên.
-- CTA vẫn «Đăng Nhập TCS» (`tcsLoginCtaLabel` + test).
-- GitHub CI vòng 1 (`54af291`) **success**. Vòng 2 local lint/typecheck/test/deploy:check PASS.
-- PR: https://github.com/NAMNAM1989/TECSOPS/pull/57
+- App / Ext / OCR / eCargo / print / CSD / auth / DB nguyên.
+- CTA vẫn «Đăng Nhập TCS».
+- Public downloads còn: tem `air-cargo-label-*.html` + ZIP Ext (gitignore `*.zip`, đóng lúc `prebuild`).
+- GitHub CI `ff1a5d6` **success**.
+- PR: https://github.com/NAMNAM1989/TECSOPS/pull/61
 
 ### Follow-up (không làm)
 
 - Railway: gỡ `TCS_AGENT_*` / `GEMINI_*` + volume `browser_profile`.
-- Nếu Cursor Desktop trỏ `mcp/tecsops-deploy` — xóa entry.
-- Quyết định sau: 4 docs 12/08 + spec; UI kit chưa dùng; HTML downloads TCS.
+- Quyết định sau: spec redesign + checklist HTML; UI kit chưa dùng; `ext_tcs-analysis` vs `ops-ext-protocol`; public tem HTML.
+
+---
+
+## Appendix — #57 baseline (đã merge)
+
+Base lúc đó: `main` @ `249af1a`. Removed: `TECSOPS-*-AUDIT*`, PDF checklist script, `mcp/tecsops-deploy/`, `portalExecutorPolicy`, `csdFdForm.ts`, `InlineCneeCell` + `InlineConsigneeSelect`.
+
+Validation #57: lint / typecheck / 81 files · 489 tests / deploy:check / build PASS.  
+PR: https://github.com/NAMNAM1989/TECSOPS/pull/57

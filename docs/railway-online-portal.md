@@ -21,11 +21,28 @@ Mã **SCSC** dùng Ext SCSC. Không đổi mã trong DB / `warehouses.ts`.
 
 Điện thoại: không Đăng Nhập TCS / Quét / Điền — UI báo **«cần Ext trên PC»**.
 
-## Railway — image lean Node
+## Railway — image lean Node + OCR build-stage
 
-Dockerfile chỉ cài Node + build Vite. `start-fullstack` chỉ chạy `server/index.mjs`.
+Dockerfile **multi-stage**:
+
+1. **ocr** — `python:3.12-slim` + `pip download ddddocr==1.5.6 --no-deps` → extract `common.onnx` (~54MB, gitignored). Không cài Playwright / không chạy agent.
+2. **builder** — `node:20-bookworm-slim` + `npm run ext:fetch-ocr && npm run build`. `ext:fetch-ocr` bỏ qua Python khi đã có onnx; copy ORT WASM; `prebuild` đóng ZIP Ext TCS+SCSC vào `dist/downloads`.
+3. **runtime** — Node slim: `dist` + `server` + `shared` + manifest Ext. `start-fullstack` chỉ `server/index.mjs`.
 
 `/tcs-agent/*` trả **410 AGENT_GONE** (stub, tránh 500 / HTML SPA).
+
+Không commit `common.onnx` vào git. Fallback local/CI: `EXT_OCR_ONNX_URL` hoặc PyPI wheel (script `scripts/fetch-ext-captcha-ocr.mjs`).
+
+### Rebuild trên Railway (hotfix #53 Dockerfile Node-only)
+
+Deploy `93549ee` (#53) fail vì image Node không có Python/`ddddocr` trong lúc `ext:fetch-ocr`. Sau khi merge hotfix này:
+
+1. Railway service app: **builder = Dockerfile** (`railway.toml` đã set). Không đổi sang Nixpacks.
+2. Merge vào `main` → Railway tự rebuild. Hoặc Railway → service → **Deploy** / **Redeploy** commit hotfix (không Redeploy `93549ee`).
+3. Log build phải thấy stage `ocr` extract onnx, rồi `[ext:fetch-ocr] Đã có common.onnx` và `[chrome-extension-tcs] OCR OK`.
+4. Health: `GET /api/health` → `{ ok: true, storage: { postgres: true } }`.
+5. Catalog: `GET /api/chrome-extensions` → Ext TCS + SCSC `ok: true`. ZIP TCS tải từ Ops **≥ ~60MB**.
+6. **Giữ `DATABASE_URL` / Postgres.** Đừng xóa volume/env `TCS_AGENT_*` cho đến khi deploy hotfix **green** (prod đang A2 `f6f7e56`). Sau green mới gỡ follow-up A3.
 
 ## Railway Variables (bắt buộc cho app)
 

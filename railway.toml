@@ -1,5 +1,6 @@
-# Dockerfile: Node Ops only. Chrome Ext TCS/SCSC trên PC thực thi eSID/eCargo.
-# Không Playwright/Python. Gỡ TCS_AGENT_* + volume browser_profile là ops follow-up.
+# Dockerfile multi-stage: Python CHỈ lấy common.onnx lúc build; runtime Node slim.
+# Chrome Ext TCS/SCSC trên PC thực thi eSID/eCargo. Không Playwright / dual-agent.
+# Gỡ TCS_AGENT_* + volume browser_profile là ops follow-up SAU khi deploy green.
 # Docs: docs/railway-online-portal.md
 #
 # Build: Dockerfile · start: node scripts/start-fullstack.mjs

@@ -1,7 +1,7 @@
 /**
  * Load unpacked TECSOPS extension via CDP (Chrome 137+) and verify PING + Ops bridge.
  *
- * Usage: node chrome-extension/scripts/cdp-load-and-verify.mjs
+ * Usage: node chrome-extension-tcs/scripts/cdp-load-and-verify.mjs
  */
 import { spawn } from "node:child_process";
 import http from "node:http";

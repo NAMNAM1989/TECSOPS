@@ -46,7 +46,6 @@ describe("tcsOcrAgentEndpoints", () => {
 
 describe("background Ext — buildOcrAgentCandidates đồng bộ", () => {
   const files = [
-    ["chrome-extension/background.js", "TECS-TCS", 8765],
     ["chrome-extension-tcs/background.js", "TCS", 8766],
   ] as const;
 

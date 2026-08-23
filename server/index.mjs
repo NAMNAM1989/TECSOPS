@@ -109,20 +109,6 @@ app.get("/api/health", async (_req, res) => {
 
 const CHROME_EXTENSION_PACKAGES = [
   {
-    id: "tecs-tcs",
-    label: "TECS-TCS",
-    title: "TECSOPS — Kho TECS-TCS ESID (deprecated)",
-    warehouse: "TECS-TCS",
-    deprecated: true,
-    manifestRel: path.join("chrome-extension", "manifest.json"),
-    stableZipName: "tecsops-chrome-extension.zip",
-    versionedPrefix: "tecsops-chrome-extension",
-    installExtra: [
-      "DEPRECATED — không cài mới. Dùng Ext TCS + Ext SCSC.",
-      "Giữ ZIP để cài sẵn / rollback; menu Ops đã ẩn gói này.",
-    ],
-  },
-  {
     id: "tcs",
     label: "TCS",
     title: "TECSOPS — Kho TCS ESID",
@@ -134,6 +120,7 @@ const CHROME_EXTENSION_PACKAGES = [
     installExtra: [
       "Ext chuẩn ESID kho TCS — cùng cặp với Ext SCSC",
       "Trên Ops chọn kho TCS → Đăng Nhập TCS / Quét / Điền",
+      "Protocol: docs/ops-ext-protocol.md",
     ],
   },
   {
@@ -148,9 +135,14 @@ const CHROME_EXTENSION_PACKAGES = [
     installExtra: [
       "Ext chuẩn eCargo SCSC (VCT / OTP / QR)",
       "Trên Ops chọn kho SCSC → Đăng ký eCargo",
+      "Protocol: docs/ops-ext-protocol.md",
     ],
   },
 ];
+
+function chromeExtensionPackById(id) {
+  return CHROME_EXTENSION_PACKAGES.find((pack) => pack.id === id);
+}
 
 function extensionDownloadsDirs() {
   return [
@@ -223,6 +215,10 @@ function resolveChromeExtensionPackage({
 }
 
 function respondChromeExtensionPackage(res, pack) {
+  if (!pack) {
+    res.status(404).json({ ok: false, error: "Extension package unavailable" });
+    return;
+  }
   try {
     const payload = resolveChromeExtensionPackage(pack);
     if (!payload.ok) {
@@ -236,7 +232,7 @@ function respondChromeExtensionPackage(res, pack) {
   }
 }
 
-/** Catalog Ext — khuyến nghị TCS + SCSC; TECS-TCS đánh dấu deprecated. */
+/** Catalog Ext chuẩn: TCS + SCSC. */
 app.get("/api/chrome-extensions", (_req, res) => {
   try {
     const extensions = CHROME_EXTENSION_PACKAGES.map((pack) =>
@@ -251,7 +247,7 @@ app.get("/api/chrome-extensions", (_req, res) => {
       total: extensions.length,
       extensions,
       tip:
-        "Chuẩn: Ext TCS + Ext SCSC. Legacy TECS-TCS deprecated (ẩn menu tải). Protocol: docs/ops-ext-protocol.md.",
+        "Chuẩn: Ext TCS + Ext SCSC. Protocol: docs/ops-ext-protocol.md.",
     });
   } catch (error) {
     console.error("[api/chrome-extensions]", error);
@@ -259,18 +255,19 @@ app.get("/api/chrome-extensions", (_req, res) => {
   }
 });
 
+/** Alias cũ — giờ trả Ext TCS (không còn gói TECS-TCS). */
 app.get("/api/tcs-extension", (_req, res) => {
-  respondChromeExtensionPackage(res, CHROME_EXTENSION_PACKAGES[0]);
+  respondChromeExtensionPackage(res, chromeExtensionPackById("tcs"));
 });
 
 /** Ext riêng kho TCS — tài khoản portal độc lập. */
 app.get("/api/tcs-extension-direct", (_req, res) => {
-  respondChromeExtensionPackage(res, CHROME_EXTENSION_PACKAGES[1]);
+  respondChromeExtensionPackage(res, chromeExtensionPackById("tcs"));
 });
 
 /** Ext riêng kho SCSC eCargo. */
 app.get("/api/ecargo-extension", (_req, res) => {
-  respondChromeExtensionPackage(res, CHROME_EXTENSION_PACKAGES[2]);
+  respondChromeExtensionPackage(res, chromeExtensionPackById("scsc"));
 });
 
 app.get("/api/state", appAuth.requireAuth, async (req, res) => {

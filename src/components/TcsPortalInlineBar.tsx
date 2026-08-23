@@ -347,7 +347,7 @@ export function TcsPortalInlineBar({
           title={
             portalWh === "TCS"
               ? "Kho TCS — Ext-first; agent Railway fallback"
-              : "Kho TECS-TCS — Ext legacy tuỳ chọn; agent Railway fallback"
+              : "Kho TECS-TCS — Ext chuẩn TCS + SCSC; agent Railway fallback"
           }
         >
           {portalWh === "TCS" ? "Kho TCS" : "TECS-TCS"}

@@ -150,7 +150,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       ok: false,
       error: "WRONG_EXTENSION",
       message:
-        "Ext SCSC eCargo không hỗ trợ ESID — dùng Ext «TECSOPS — Kho TECS-TCS ESID» hoặc «Kho TCS ESID».",
+        "Ext SCSC eCargo không hỗ trợ ESID — dùng Ext «TECSOPS — Kho TCS ESID».",
       version: EXT_VERSION,
       portalWarehouse: PORTAL_WAREHOUSE,
       workspace,

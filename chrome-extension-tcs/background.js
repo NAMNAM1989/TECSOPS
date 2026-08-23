@@ -1,6 +1,6 @@
 /**
  * TECSOPS — Kho TCS ESID (độc lập).
- * Session / credential / tab tách hẳn Ext TECS-TCS. eCargo → Ext SCSC.
+ * Ext chuẩn ESID — cặp với Ext SCSC. eCargo → Ext SCSC.
  */
 
 const LOGIN_URL = "https://www.tcs.com.vn/AwbLogin";

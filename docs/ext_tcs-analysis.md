@@ -1,8 +1,10 @@
 # Phân tích Ext TCS (`chrome-extension-tcs`) — App-click → PC
 
-**Phạm vi:** research-only, không refactor.  
+> **A2 (sau #42):** thư mục `chrome-extension/` (legacy TECS-TCS) đã gỡ. Ext chuẩn = **TCS + SCSC**. Xem `docs/ops-ext-protocol.md`.
+
+**Phạm vi:** research-only (thời điểm #47), không refactor.  
 **Baseline:** `main` @ `dd1de48` (sau PR #45, 2026-08-22).  
-**Đối chiếu protocol:** PR draft [#42](https://github.com/NAMNAM1989/TECSOPS/pull/42) — nhánh `cursor/ext-ops-protocol-status-ef32` (base `main` lúc đó là `6ea79e6`, **trước** #41/#45).  
+**Đối chiếu protocol:** [#42](https://github.com/NAMNAM1989/TECSOPS/pull/42) đã merge.  
 **Copy rule:** mọi chuỗi UI phải dùng **«Đăng Nhập TCS»**, không «ĐN».
 
 Không xoá credential. Không đề xuất xóa mật khẩu đã lưu.
@@ -325,8 +327,8 @@ Nhánh `cursor/ext-ops-protocol-status-ef32` (~755+/140−, 29 files), draft:
 ## Phụ lục C — File đọc chính
 
 - `chrome-extension-tcs/manifest.json`, `background.js`, `content-ops.js`, `content-tcs.js`, `ocr/*`
-- `chrome-extension/` (đối chiếu legacy)
+- `chrome-extension/` — đã gỡ (A2, sau #42)
 - `src/utils/tcsChromeExtension.ts`, `portalExecutorPolicy.ts`, `tcsExtLoginPrefs.ts`, `tcsLoginCtaLabel.ts`
 - `src/hooks/useTcsPortalActions.ts`, `src/components/TcsPortalInlineBar.tsx`, `ChromeExtensionsDownloadMenu.tsx`
-- `server/index.mjs` (catalog 3 Ext)
-- PR #42 `docs/ops-ext-protocol.md` (không có trên `main`)
+- `server/index.mjs` (catalog Ext TCS + SCSC)
+- `docs/ops-ext-protocol.md` (#42 đã merge)

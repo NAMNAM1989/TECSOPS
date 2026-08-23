@@ -4,4 +4,4 @@ Channel: `tecsops-tcs-direct-ext`. Một trong **hai** Ext chuẩn (cùng `chrom
 
 Protocol Ops↔Ext: xem `docs/ops-ext-protocol.md` (`EXT_READY` / `PING`→`PONG` / job / result / error).
 
-**Quan trọng:** dùng Chrome profile (hoặc máy) riêng nếu còn cài legacy Ext TECS-TCS (`chrome-extension/` — deprecated).
+Cặp với Ext SCSC. Nếu còn Ext TECS-TCS cũ trên máy — gỡ unpacked đó, chỉ giữ Ext TCS + Ext SCSC.

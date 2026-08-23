@@ -123,7 +123,7 @@ export type TcsPortalActionsOpts = {
   active?: boolean;
   /**
    * Kho portal đang thao tác trên Ops — quyết định Ext/channel + phạm vi bootstrap.
-   * Mặc định TECS-TCS (Ext hub).
+   * Mặc định TECS-TCS (kho dữ liệu). Ext chuẩn = TCS + SCSC.
    */
   portalWarehouse?: Warehouse;
   /**

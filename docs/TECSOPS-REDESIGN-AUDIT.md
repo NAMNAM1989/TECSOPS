@@ -14,7 +14,7 @@
 | --------------- | ------------------------------------------------------------------------- |
 | Frontend        | React 18.3, TypeScript ~5.6, Vite 5.4, Tailwind 3.4                       |
 | Backend         | Express 4.21, `pg` (Postgres), Socket.IO, exceljs                         |
-| Sidecar         | Chrome extension (`chrome-extension/`), TCS agent (`tcs-awb-automation/`) |
+| Sidecar         | Chrome Ext (`chrome-extension-tcs/`, `chrome-extension-scsc/`), TCS agent (`tcs-awb-automation/`) |
 | Test            | Vitest, Playwright (QA smoke / extension)                                 |
 | Deploy          | Railway / Docker; static `dist/` + API cùng process                       |
 | Node            | `>=20` (máy audit: Node **v24.13.1**, npm **11.8.0**)                     |

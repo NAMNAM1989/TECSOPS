@@ -14,7 +14,6 @@ type Props = {
 
 /**
  * Nút tải Chrome Ext chuẩn: TCS + SCSC.
- * Legacy TECS-TCS (`chrome-extension/`) soft-deprecate — ẩn khỏi menu.
  */
 export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
   const toast = useToast();

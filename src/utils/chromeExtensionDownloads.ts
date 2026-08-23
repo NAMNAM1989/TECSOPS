@@ -1,4 +1,4 @@
-export type ChromeExtensionPackId = "tecs-tcs" | "tcs" | "scsc";
+export type ChromeExtensionPackId = "tcs" | "scsc";
 
 export type ChromeExtensionPackInfo = {
   ok: boolean;
@@ -24,7 +24,7 @@ export type ChromeExtensionsCatalog = {
   error?: string;
 };
 
-/** Chỉ Ext chuẩn TCS + SCSC — ẩn legacy TECS-TCS. */
+/** Chỉ Ext chuẩn TCS + SCSC — bỏ gói legacy / deprecated nếu catalog còn sót. */
 export function recommendedChromeExtensionPacks(
   packs: ChromeExtensionPackInfo[]
 ): ChromeExtensionPackInfo[] {

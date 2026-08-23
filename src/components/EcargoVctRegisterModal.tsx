@@ -41,6 +41,7 @@ import {
   registerEcargoVctViaExtension,
 } from "../utils/tcsChromeExtension";
 import { formatAwbLabel } from "../utils/awbFormat";
+import { credFetch, fetchAuthBridgeSession } from "../apiFetch";
 
 type Props = {
   open: boolean;
@@ -182,7 +183,7 @@ export function EcargoVctRegisterModal({
     if (!open) return;
     let cancelled = false;
     setImapStatusLoading(true);
-    void fetch("/api/ecargo/otp/status")
+    void fetch("/api/ecargo/otp/status", { ...credFetch, cache: "no-store" })
       .then(async (res) => {
         const data = (await res.json().catch(() => ({}))) as Partial<EcargoImapStatus> & {
           ok?: boolean;
@@ -532,7 +533,7 @@ export function EcargoVctRegisterModal({
     setImapTestBusy(true);
     setImapTestMsg("");
     try {
-      const res = await fetch("/api/ecargo/otp/test", { method: "POST" });
+      const res = await fetch("/api/ecargo/otp/test", { ...credFetch, method: "POST" });
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         message?: string;
@@ -545,7 +546,7 @@ export function EcargoVctRegisterModal({
         setImapTestMsg(data.message || "Kiểm tra IMAP thất bại");
         // Làm mới badge từ /status (biến env có thể đã set nhưng auth fail)
         try {
-          const st = await fetch("/api/ecargo/otp/status");
+          const st = await fetch("/api/ecargo/otp/status", { ...credFetch, cache: "no-store" });
           const stData = (await st.json().catch(() => ({}))) as Partial<EcargoImapStatus>;
           setImapStatus({
             imapConfigured: Boolean(stData.imapConfigured),
@@ -623,10 +624,12 @@ export function EcargoVctRegisterModal({
         `Đang gửi lệnh đăng ký qua Ext v${ping.version || "?"}… Điền đúng «${agentName || "hồ sơ"}».`,
       );
       setPhaseLabel("Điền → Tạo phiếu → OTP → QR…");
+      const session = await fetchAuthBridgeSession();
       const res = await registerEcargoVctViaExtension({
         ...prepared.payload!,
         submit: true,
         apiBase: window.location.origin,
+        session,
         shipmentIds: selectedIds,
       });
       if (!res.ok) {

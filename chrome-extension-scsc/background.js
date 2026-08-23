@@ -31,6 +31,13 @@ chrome.runtime.onInstalled.addListener(() => {
   console.info("[tecsops-ext-scsc] installed", EXT_VERSION);
 });
 
+/** Phiên Ops — cookie SameSite không đi kèm fetch từ background Ext. */
+function opsAuthHeaders(msg) {
+  const session = String(msg?.session || msg?.authSession || "").trim();
+  if (!session) return {};
+  return { "x-tecsops-session": session };
+}
+
 function replyOnce(sendResponse) {
   let done = false;
   return (payload) => {
@@ -408,6 +415,7 @@ async function registerEcargoOnTab(payload) {
   }
 
   const apiBase = String(payload.apiBase || "").replace(/\/$/, "");
+  const session = String(payload.session || "").trim();
   const email = String(payload.header?.email || "").trim();
   const awbHint = payload.awbs?.[0]?.awb || "";
   const shipmentIds = Array.isArray(payload.shipmentIds)
@@ -500,6 +508,7 @@ async function registerEcargoOnTab(payload) {
   });
   const otpRes = await ecargoOtpWait({
     apiBase,
+    session,
     email,
     sinceIso,
     awbHint,
@@ -659,6 +668,7 @@ async function registerEcargoOnTab(payload) {
   if (shipmentIds.length) {
     await ecargoSaveResult({
       apiBase,
+      session,
       shipmentIds,
       status: finalOk ? "done" : "error",
       vctCode,
@@ -800,7 +810,7 @@ async function ecargoOtpWait(msg) {
   try {
     const res = await fetch(`${apiBase}/api/ecargo/otp/wait`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...opsAuthHeaders(msg) },
       body: JSON.stringify({
         email: msg.email,
         sinceIso: msg.sinceIso,
@@ -830,7 +840,7 @@ async function ecargoResultFromMail(msg) {
   }
   const res = await fetch(`${apiBase}/api/ecargo/result-from-mail`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...opsAuthHeaders(msg) },
     body: JSON.stringify({
       email: msg.email,
       sinceIso: msg.sinceIso,
@@ -854,7 +864,7 @@ async function ecargoSaveResult(msg) {
   }
   const res = await fetch(`${apiBase}/api/ecargo/vct-result`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...opsAuthHeaders(msg) },
     body: JSON.stringify({
       shipmentIds: msg.shipmentIds,
       status: msg.status,

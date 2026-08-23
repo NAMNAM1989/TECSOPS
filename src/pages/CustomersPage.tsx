@@ -20,12 +20,15 @@ import { CustomerDefaultDataEditor } from "../components/customerDirectory/Custo
 import { CustomerDeleteConfirmModal } from "../components/customerDirectory/CustomerDeleteConfirmModal";
 import { CustomerEsidQuickFillModal } from "../components/customerDirectory/CustomerEsidQuickFillModal";
 import {
+  Badge,
   Banner,
   Button,
   ConfirmDialog,
   EmptyState,
+  Input,
   OverflowMenu,
   PageSkeleton,
+  Select,
   SyncStatusPill,
   useToast,
 } from "../ui";
@@ -85,9 +88,6 @@ type TypeFilter = "ALL" | CustomerType;
 type ProfileTab = "info" | "defaults";
 type MobilePane = "list" | "detail";
 type SaveStatus = "idle" | "saved" | "error";
-
-const FIELD =
-  "w-full min-h-11 touch-manipulation rounded-xl border border-ui-border/90 bg-ui-surface px-2.5 py-2 text-base text-ui-text shadow-ui-sm outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus sm:min-h-0 sm:px-2 sm:py-1.5 sm:text-xs";
 
 function newId(prefix: string): string {
   if (
@@ -220,6 +220,7 @@ export function CustomersPage({
   const [confirmLeave, setConfirmLeave] = useState<"back" | "discard" | null>(
     null,
   );
+  const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const detailTopRef = useRef<HTMLDivElement>(null);
@@ -319,17 +320,7 @@ export function CustomersPage({
     );
   }
 
-  function selectCustomer(id: string) {
-    if (id === selectedId) {
-      if (isMobile) setMobilePane("detail");
-      return;
-    }
-    if (
-      dirty &&
-      !window.confirm("Có thay đổi chưa lưu. Đổi khách sẽ hủy thay đổi?")
-    ) {
-      return;
-    }
+  function applySelectCustomer(id: string) {
     setSelectedId(id);
     setValidationErrors([]);
     setSaveStatus("idle");
@@ -347,6 +338,18 @@ export function CustomersPage({
       queueMicrotask(() => setBaseline(JSON.stringify(next)));
       return next;
     });
+  }
+
+  function selectCustomer(id: string) {
+    if (id === selectedId) {
+      if (isMobile) setMobilePane("detail");
+      return;
+    }
+    if (dirty) {
+      setPendingSwitchId(id);
+      return;
+    }
+    applySelectCustomer(id);
   }
 
   function addCustomer() {
@@ -708,7 +711,7 @@ export function CustomersPage({
 
   return (
     <div className="flex min-h-screen flex-col bg-ui-background text-ui-text">
-      <header className="sticky top-0 z-30 border-b border-ui-border/90 bg-ui-surface/95 pt-[env(safe-area-inset-top)] shadow-ui-sm backdrop-blur-[6px]">
+      <header className="sticky top-0 z-30 border-b border-ui-border bg-ui-surface pt-[env(safe-area-inset-top)] shadow-ui-sm">
         <div className="mx-auto flex max-w-[1400px] items-center gap-2 px-3 py-2.5 sm:px-4">
           {isMobile && mobilePane === "detail" ? (
             <Button
@@ -829,12 +832,11 @@ export function CustomersPage({
         {showList ? (
           <aside className="flex min-h-0 w-full flex-1 flex-col border-ui-border bg-ui-surface sm:max-h-none sm:w-[17.5rem] sm:flex-none sm:border-r lg:w-72">
             <div className="space-y-1.5 border-b border-ui-border/90 bg-gradient-to-b from-slate-50/80 to-white p-2.5">
-              <input
+              <Input
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Tìm mã / tên / SĐT…"
-                className={FIELD}
               />
               <div className="flex flex-wrap gap-1">
                 {(
@@ -889,13 +891,13 @@ export function CustomersPage({
                       <span className="font-mono text-[10px] font-semibold uppercase text-ui-text-muted">
                         {customerDirectoryListCode(c)}
                       </span>
-                      <span className="rounded-full bg-ui-surface-muted px-1.5 py-px text-[9px] font-bold text-ui-text-muted">
+                      <Badge tone="neutral" className="normal-case tracking-normal">
                         {typeLabel(c.customerType)}
-                      </span>
+                      </Badge>
                       {badge ? (
-                        <span className="rounded-full bg-teal-50 px-1.5 py-px text-[9px] font-bold text-teal-800 ring-1 ring-teal-200/80">
+                        <Badge tone="primary" className="normal-case tracking-normal">
                           {badge}
-                        </span>
+                        </Badge>
                       ) : null}
                     </span>
                     {phone ? (
@@ -977,7 +979,7 @@ export function CustomersPage({
                             <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
                               Customer Code
                             </span>
-                            <input
+                            <Input
                               value={selected.code}
                               onChange={(e) =>
                                 updateCustomer(selected.id, {
@@ -989,7 +991,7 @@ export function CustomersPage({
                                   code: normalizeAgentCode(e.target.value),
                                 })
                               }
-                              className={`${FIELD} font-mono font-bold uppercase`}
+                              className="font-mono font-bold uppercase"
                               placeholder="GLO"
                               maxLength={40}
                               spellCheck={false}
@@ -1006,7 +1008,7 @@ export function CustomersPage({
                             <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
                               Short
                             </span>
-                            <input
+                            <Input
                               value={selected.shortCode ?? ""}
                               onChange={(e) =>
                                 updateCustomer(selected.id, {
@@ -1018,7 +1020,7 @@ export function CustomersPage({
                                   shortCode: normalizeCustomerShortCode(e.target.value),
                                 })
                               }
-                              className={`${FIELD} font-mono font-bold uppercase`}
+                              className="font-mono font-bold uppercase"
                               maxLength={10}
                               spellCheck={false}
                               placeholder="VD: CÔNG CHÚA"
@@ -1028,27 +1030,26 @@ export function CustomersPage({
                             <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
                               Loại
                             </span>
-                            <select
+                            <Select
                               value={selected.customerType ?? "DIRECT_SHIPPER"}
                               onChange={(e) =>
                                 updateCustomer(selected.id, {
                                   customerType: normalizeCustomerType(e.target.value),
                                 })
                               }
-                              className={FIELD}
                             >
                               {CUSTOMER_TYPES.map((t) => (
                                 <option key={t} value={t}>
                                   {typeLabel(t)}
                                 </option>
                               ))}
-                            </select>
+                            </Select>
                           </label>
                           <label className="col-span-2 block">
                             <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
                               Tên khách
                             </span>
-                            <input
+                            <Input
                               ref={nameInputRef}
                               value={selected.name}
                               onChange={(e) =>
@@ -1061,7 +1062,7 @@ export function CustomersPage({
                                   name: normalizeCustomerNameInput(selected.name),
                                 })
                               }
-                              className={`${FIELD} text-sm font-semibold uppercase`}
+                              className="text-sm font-semibold uppercase"
                               placeholder="Tên công ty / đại lý"
                               data-customer-invalid={
                                 validationErrors.some(
@@ -1076,14 +1077,14 @@ export function CustomersPage({
                             <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
                               Đơn giá (VND/kg)
                             </span>
-                            <input
+                            <Input
                               value={formatDefaultRate(selected.defaultRate)}
                               onChange={(e) =>
                                 updateCustomer(selected.id, {
                                   defaultRate: parseDefaultRate(e.target.value),
                                 })
                               }
-                              className={`${FIELD} font-mono`}
+                              className="font-mono"
                               inputMode="decimal"
                             />
                           </label>
@@ -1228,6 +1229,20 @@ export function CustomersPage({
         onConfirm={() => {
           setConfirmLeave(null);
           syncFromInitial(initial);
+        }}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingSwitchId)}
+        title="Chưa lưu thay đổi"
+        message="Có thay đổi chưa lưu. Đổi khách sẽ hủy thay đổi?"
+        confirmLabel="Đổi khách"
+        cancelLabel="Ở lại"
+        danger
+        onCancel={() => setPendingSwitchId(null)}
+        onConfirm={() => {
+          const id = pendingSwitchId;
+          setPendingSwitchId(null);
+          if (id) applySelectCustomer(id);
         }}
       />
     </div>

@@ -48,13 +48,13 @@ export function ConfirmDialog({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-sm animate-ui-toast-in rounded-2xl border border-ui-border bg-ui-surface p-4 shadow-dashboard-card"
+        className="w-full max-w-sm animate-ui-toast-in rounded-2xl border border-ui-border bg-ui-surface p-4 shadow-ui-md"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id={titleId} className="m-0 text-base font-bold text-ui-navy">
           {title}
         </h2>
-        <p className="mt-2 text-sm leading-relaxed text-ui-text-muted">{message}</p>
+        <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ui-text-muted">{message}</p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             ref={cancelRef}

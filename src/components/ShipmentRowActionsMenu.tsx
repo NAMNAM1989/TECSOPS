@@ -19,6 +19,7 @@ import {
 } from "../utils/exportTcsAttachedDimsExcel";
 import { awbDigitsKey } from "../utils/awbFormat";
 import { isEcargoScscWarehouse, isTcsWarehouse } from "../constants/warehouses";
+import { ConfirmDialog } from "../ui";
 import { OPS } from "../styles/opsModalStyles";
 import { useEcargoRegisterActions } from "./EcargoRegisterActionsContext";
 import { useTcsPortalActionsContext } from "./TcsPortalActionsContext";
@@ -40,19 +41,19 @@ function lightweightCsdCarrier(row: Pick<Shipment, "flight" | "awb">): "FD" | "T
   return null;
 }
 
-function confirmPortalChecklist(row: Shipment): boolean {
-  const warnings = [
+function portalChecklistWarnings(row: Shipment): string[] {
+  return [
     !String(row.flight || "").trim() ? "Thiếu chuyến bay" : "",
     !String(row.dest || "").trim() ? "Thiếu điểm đến" : "",
     !(Number(row.pcs) > 0) ? "PCS chưa hợp lệ" : "",
     !(Number(row.kg) > 0) ? "KG chưa hợp lệ" : "",
     !String(row.customerCode || "").trim() ? "Chưa gắn Customer Code" : "",
   ].filter(Boolean);
-  if (!warnings.length) return true;
-  return window.confirm(
-    `Checklist trước Fill/Register:\n• ${warnings.join("\n• ")}\n\nTiếp tục mở form để kiểm tra thủ công?`,
-  );
 }
+
+type PendingRowConfirm =
+  | { kind: "checklist"; action: "fill" | "ecargo"; warnings: string[] }
+  | { kind: "delete" };
 
 type Props = {
   row: Shipment;
@@ -217,6 +218,7 @@ export function ShipmentRowActionsMenu({
   const showCsdInline = showCsd && !compact;
   const csdAirline = csdCarrier ? CSD_AIRLINE[csdCarrier] : "";
   const [csdOpen, setCsdOpen] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingRowConfirm | null>(null);
   const menuExtras =
     (showDim ? 1 : 0) +
     (showTcsDim ? 2 : 0) +
@@ -228,7 +230,25 @@ export function ShipmentRowActionsMenu({
     1;
 
   const confirmDelete = () => {
-    if (confirm(`Xóa lô AWB ${row.awb || "(chưa có AWB)"}?`)) onDelete(row.id);
+    setPendingConfirm({ kind: "delete" });
+  };
+
+  const runAfterChecklist = (action: "fill" | "ecargo") => {
+    if (action === "fill") {
+      if (tcs?.busy) return;
+      void tcs?.fillEsidDeclareFor(row);
+      return;
+    }
+    ecargo?.openForShipment(row.id);
+  };
+
+  const requestChecklistAction = (action: "fill" | "ecargo") => {
+    const warnings = portalChecklistWarnings(row);
+    if (!warnings.length) {
+      runAfterChecklist(action);
+      return;
+    }
+    setPendingConfirm({ kind: "checklist", action, warnings });
   };
 
   const openMenu = () => {
@@ -322,7 +342,7 @@ export function ShipmentRowActionsMenu({
           ? menuItem(
               "Đăng ký eCargo",
               () => {
-                if (confirmPortalChecklist(row)) ecargo?.openForShipment(row.id);
+                requestChecklistAction("ecargo");
               },
               undefined,
               `row-ecargo-${row.id}`,
@@ -350,8 +370,7 @@ export function ShipmentRowActionsMenu({
           ? menuItem(
               "Điền",
               () => {
-                if (tcs?.busy) return;
-                if (confirmPortalChecklist(row)) void tcs?.fillEsidDeclareFor(row);
+                requestChecklistAction("fill");
               },
               undefined,
               `row-fill-esid-${row.id}`,
@@ -427,7 +446,7 @@ export function ShipmentRowActionsMenu({
           data-testid={`row-ecargo-${row.id}`}
           onClick={(e) => {
             e.stopPropagation();
-            if (confirmPortalChecklist(row)) ecargo?.openForShipment(row.id);
+            requestChecklistAction("ecargo");
           }}
           className="inline-flex h-7 items-center rounded-md border border-emerald-500/35 bg-emerald-50 px-1.5 text-[10px] font-bold text-emerald-900 hover:bg-emerald-100"
         >
@@ -484,6 +503,36 @@ export function ShipmentRowActionsMenu({
           />
         </Suspense>
       ) : null}
+      <ConfirmDialog
+        open={pendingConfirm?.kind === "checklist"}
+        title="Checklist trước Fill/Register"
+        message={
+          pendingConfirm?.kind === "checklist"
+            ? `Checklist trước Fill/Register:\n• ${pendingConfirm.warnings.join("\n• ")}\n\nTiếp tục mở form để kiểm tra thủ công?`
+            : ""
+        }
+        confirmLabel="Tiếp tục"
+        cancelLabel="Hủy"
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          const next = pendingConfirm;
+          setPendingConfirm(null);
+          if (next?.kind === "checklist") runAfterChecklist(next.action);
+        }}
+      />
+      <ConfirmDialog
+        open={pendingConfirm?.kind === "delete"}
+        title="Xóa lô"
+        message={`Xóa lô AWB ${row.awb || "(chưa có AWB)"}?`}
+        confirmLabel="Xóa lô"
+        cancelLabel="Hủy"
+        danger
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          setPendingConfirm(null);
+          onDelete(row.id);
+        }}
+      />
     </div>
   );
 }

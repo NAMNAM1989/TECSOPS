@@ -557,10 +557,11 @@ export async function printCsdForShipment(
     return;
   }
   if (!fields.goods && !opts.allowEmptyGoods) {
-    const ok = window.confirm(
-      "Lô chưa có tên hàng (mô tả hàng in ấn). Vẫn in CSD với Contents trống?"
+    notifyWarning(
+      "Lô chưa có tên hàng (mô tả hàng in ấn). Xác nhận trong hộp thoại In CSD.",
+      "In CSD",
     );
-    if (!ok) return;
+    return;
   }
 
   if (fields.transfer) {

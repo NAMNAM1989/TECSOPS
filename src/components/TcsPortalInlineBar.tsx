@@ -4,7 +4,7 @@ import { PortalExtStatusChip } from "./PortalExtStatusChip";
 import { NEED_EXT_PC, PORTAL_BAR_UI } from "./portalBarUi";
 import type { TcsPortalActions } from "../hooks/useTcsPortalActions";
 import type { Shipment } from "../types/shipment";
-import { useToast } from "../ui";
+import { ConfirmDialog, useToast } from "../ui";
 import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
 import { awbDigitsKey } from "../utils/awbFormat";
 import { isTcsWarehouse } from "../constants/warehouses";
@@ -63,6 +63,7 @@ export function TcsPortalInlineBar({
   const [tcsUsername, setTcsUsername] = useState("");
   const [tcsPassword, setTcsPassword] = useState("");
   const [rememberTcs, setRememberTcs] = useState(true);
+  const [confirmHoanTat, setConfirmHoanTat] = useState(false);
 
   useEffect(() => {
     const prefs = loadTcsExtLoginPrefs(portalWh);
@@ -170,15 +171,8 @@ export function TcsPortalInlineBar({
   };
 
   const confirmSubmit = () => {
-    const p = tcs.lastDeclarePreview;
-    if (!p) return;
-    const ok = window.confirm(
-      `Gửi HOÀN TẤT lên TCS cho AWB ${p.awb}?\n\n` +
-        "Kiểm tra form trên tab Chrome Ext rồi xác nhận.\n" +
-        "Không hoàn tác từ Ops."
-    );
-    if (!ok) return;
-    void tcs.submitEsidDeclare(p);
+    if (!tcs.lastDeclarePreview) return;
+    setConfirmHoanTat(true);
   };
 
   const presence = tcsExtPresence(tcs.extension);
@@ -424,6 +418,25 @@ export function TcsPortalInlineBar({
           </button>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmHoanTat}
+        title="HOÀN TẤT eSID"
+        message={
+          tcs.lastDeclarePreview
+            ? `Gửi HOÀN TẤT lên TCS cho AWB ${tcs.lastDeclarePreview.awb}?\n\nKiểm tra form trên tab Chrome Ext rồi xác nhận.\nKhông hoàn tác từ Ops.`
+            : ""
+        }
+        confirmLabel="HOÀN TẤT"
+        cancelLabel="Hủy"
+        danger
+        onCancel={() => setConfirmHoanTat(false)}
+        onConfirm={() => {
+          const p = tcs.lastDeclarePreview;
+          setConfirmHoanTat(false);
+          if (p) void tcs.submitEsidDeclare(p);
+        }}
+      />
     </div>
   );
 }

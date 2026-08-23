@@ -111,7 +111,7 @@ describe("chrome extension packaging invariants", () => {
     const scscManifest = JSON.parse(
       readFileSync(path.join(ROOT, "chrome-extension-scsc/manifest.json"), "utf8")
     ) as { version: string; host_permissions: string[] };
-    expect(scscManifest.version).toBe("1.0.3");
+    expect(scscManifest.version).toBe("1.0.4");
     expect(scscManifest.host_permissions.join("\n")).not.toMatch(/8765|8766/);
   });
 
@@ -122,5 +122,6 @@ describe("chrome extension packaging invariants", () => {
     );
     expect(bg).toContain('msg.type === "ECARGO_OTP_PROVIDE"');
     expect(bg).toContain("ecargoOtpProvide");
+    expect(bg).toContain("x-tecsops-session");
   });
 });

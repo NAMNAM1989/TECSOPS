@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
 import { OPS } from "../styles/opsModalStyles";
-import { Button } from "../ui";
+import { Button, ConfirmDialog } from "../ui";
 import { opsTeamLabel } from "../constants/warehouses";
 import {
   buildCsdFields,
@@ -38,6 +38,7 @@ export function CsdPrintModal({
   const [origin, setOrigin] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmEmptyGoods, setConfirmEmptyGoods] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   useModalFocusTrap(open, dialogRef, () => {
     if (!busy) onClose();
@@ -59,7 +60,7 @@ export function CsdPrintModal({
     customerDirectory,
   });
 
-  const onPrint = async () => {
+  const runPrint = async () => {
     if (busy) return;
     setBusy(true);
     setError(null);
@@ -78,6 +79,15 @@ export function CsdPrintModal({
     } finally {
       setBusy(false);
     }
+  };
+
+  const onPrint = () => {
+    if (busy) return;
+    if (!preview.goods) {
+      setConfirmEmptyGoods(true);
+      return;
+    }
+    void runPrint();
   };
 
   return createPortal(
@@ -206,8 +216,8 @@ export function CsdPrintModal({
                       onClick={() => setTransfer(code)}
                       className={`rounded-full px-2.5 py-1 text-[11px] font-bold tabular-nums ring-1 transition ${
                         active
-                          ? "bg-apple-blue text-white ring-apple-blue"
-                          : "bg-white text-apple-label ring-black/10 hover:bg-apple-blue/5"
+                          ? "bg-ui-primary text-white ring-ui-primary"
+                          : "bg-ui-surface text-ui-text ring-ui-border hover:bg-ui-primary/5"
                       }`}
                     >
                       {code}
@@ -219,7 +229,7 @@ export function CsdPrintModal({
                     type="button"
                     disabled={busy}
                     onClick={() => setTransfer("")}
-                    className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-apple-tertiary ring-1 ring-black/10 hover:bg-black/[0.03]"
+                    className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-ui-text-muted ring-1 ring-ui-border hover:bg-ui-surface-muted"
                   >
                     Xóa
                   </button>
@@ -251,11 +261,23 @@ export function CsdPrintModal({
           <Button type="button" variant="ghost" disabled={busy} onClick={onClose}>
             Hủy
           </Button>
-          <Button type="button" disabled={busy || !preview.dest} onClick={() => void onPrint()}>
+          <Button type="button" disabled={busy || !preview.dest} onClick={onPrint}>
             {busy ? "Đang tạo PDF…" : "Tải & In CSD"}
           </Button>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmEmptyGoods}
+        title="In CSD"
+        message="Lô chưa có tên hàng (mô tả hàng in ấn). Vẫn in CSD với Contents trống?"
+        confirmLabel="Vẫn in"
+        cancelLabel="Hủy"
+        onCancel={() => setConfirmEmptyGoods(false)}
+        onConfirm={() => {
+          setConfirmEmptyGoods(false);
+          void runPrint();
+        }}
+      />
     </div>,
     document.body
   );

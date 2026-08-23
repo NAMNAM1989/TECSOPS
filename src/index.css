@@ -53,15 +53,15 @@
   }
 
   .ops-grid-cell {
-    @apply text-apple-label;
+    @apply text-ui-text;
   }
 
   .ops-grid-cell-muted {
-    @apply text-apple-secondary;
+    @apply text-ui-text-muted;
   }
 
   .ops-grid-placeholder {
-    @apply italic text-apple-tertiary;
+    @apply italic text-ui-text-muted;
   }
 
   /** Desktop inline edit — hover cho thấy ô có thể sửa. */

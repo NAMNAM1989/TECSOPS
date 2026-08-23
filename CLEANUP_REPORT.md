@@ -126,6 +126,7 @@ Mọi mục REVIEW + KEEP ở trên. Không xóa khi không chắc.
 - [x] `npm run typecheck` — PASS
 - [x] `npm test` — PASS **81 files / 489 tests** (`csdForms` 12/12, `tcsLoginCtaLabel` 2/2)
 - [x] `npm run deploy:check` — PASS
+- [x] GitHub CI (`ff1a5d6`) — **success** (2 checks)
 
 Không revert; không sửa logic nghiệp vụ ngoài cleanup.
 
@@ -158,6 +159,7 @@ REMOVE only — không đổi contract API, không đổi schema, không đổi 
 - App / Ext / OCR / eCargo / print / CSD / auth / DB nguyên.
 - CTA vẫn «Đăng Nhập TCS».
 - Public downloads còn: tem `air-cargo-label-*.html` + ZIP Ext (gitignore `*.zip`, đóng lúc `prebuild`).
+- GitHub CI `ff1a5d6` **success**.
 - PR: https://github.com/NAMNAM1989/TECSOPS/pull/61
 
 ### Follow-up (không làm)

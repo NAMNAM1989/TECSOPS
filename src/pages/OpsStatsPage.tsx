@@ -8,6 +8,8 @@ import {
   Button,
   EmptyState,
   IconButton,
+  Input,
+  Select,
   SyncStatusPill,
   Wordmark,
   useToast,
@@ -69,9 +71,6 @@ const DETAIL_TABS: { id: DetailTab; label: string }[] = [
   { id: "warehouse", label: "Theo kho" },
   { id: "dest", label: "Theo dest" },
 ];
-
-const FIELD =
-  "min-h-9 rounded-xl border border-ui-border/90 bg-ui-surface px-2.5 py-1.5 text-sm text-ui-text shadow-ui-sm outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus";
 
 function warehouseFilterLabel(w: WarehouseLayoutFilter): string {
   return w === "ALL" ? "Tất cả kho" : warehouseLabel[w];
@@ -456,9 +455,8 @@ export function OpsStatsPage({
                 {mode === "day" ? (
                   <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
                     Ngày
-                    <input
+                    <Input
                       type="date"
-                      className={FIELD}
                       value={dayYmd}
                       onChange={(e) => setDayYmd(e.target.value || today)}
                     />
@@ -522,9 +520,8 @@ export function OpsStatsPage({
                 {mode === "month" ? (
                   <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
                     Tháng
-                    <input
+                    <Input
                       type="month"
-                      className={FIELD}
                       value={monthYm}
                       onChange={(e) => setMonthYm(e.target.value || currentMonthYm())}
                     />
@@ -533,9 +530,9 @@ export function OpsStatsPage({
                 {mode === "year" ? (
                   <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
                     Năm
-                    <input
+                    <Input
                       type="number"
-                      className={`${FIELD} w-24`}
+                      className="w-24"
                       min={2000}
                       max={2100}
                       value={year}
@@ -550,18 +547,16 @@ export function OpsStatsPage({
                   <>
                     <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
                       Từ ngày
-                      <input
+                      <Input
                         type="date"
-                        className={FIELD}
                         value={rangeFrom}
                         onChange={(e) => setRangeFrom(e.target.value || today)}
                       />
                     </label>
                     <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
                       Đến ngày
-                      <input
+                      <Input
                         type="date"
-                        className={FIELD}
                         value={rangeTo}
                         onChange={(e) => setRangeTo(e.target.value || today)}
                       />
@@ -571,8 +566,7 @@ export function OpsStatsPage({
 
                 <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
                   Kho
-                  <select
-                    className={FIELD}
+                  <Select
                     value={warehouse}
                     onChange={(e) => {
                       setWarehouse(e.target.value as WarehouseLayoutFilter);
@@ -585,13 +579,13 @@ export function OpsStatsPage({
                         {warehouseLabel[w]}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
 
                 <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
                   Dest
-                  <select
-                    className={`${FIELD} min-w-[7rem]`}
+                  <Select
+                    className="min-w-[7rem]"
                     value={dest}
                     onChange={(e) => setDest(e.target.value === "ALL" ? "ALL" : e.target.value)}
                   >
@@ -601,7 +595,7 @@ export function OpsStatsPage({
                         {d}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
 
                 <p className="pb-1.5 text-[12px] text-ui-text-muted">
@@ -721,9 +715,9 @@ export function OpsStatsPage({
                       })}
                     </div>
                     {detailTab === "lots" ? (
-                      <input
+                      <Input
                         type="search"
-                        className={`${FIELD} w-full max-w-xs`}
+                        className="w-full max-w-xs"
                         placeholder="Tìm AWB / dest / khách…"
                         value={lotSearch}
                         onChange={(e) => setLotSearch(e.target.value)}

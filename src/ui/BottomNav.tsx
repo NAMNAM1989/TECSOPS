@@ -29,7 +29,7 @@ export function BottomNav({
 }: Props) {
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-[500] border-t border-ui-border/90 bg-ui-surface/95 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1 shadow-[0_-6px_20px_rgba(11,18,32,0.07)] backdrop-blur-[8px] md:hidden [[data-ops-mobile-overlay=sheet]_&]:pointer-events-none [[data-ops-mobile-overlay=sheet]_&]:invisible"
+      className="fixed inset-x-0 bottom-0 z-[500] border-t border-ui-border bg-ui-surface pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1 shadow-[0_-6px_20px_rgba(11,18,32,0.07)] md:hidden [[data-ops-mobile-overlay=sheet]_&]:pointer-events-none [[data-ops-mobile-overlay=sheet]_&]:invisible"
       aria-label="Điều hướng chính"
       data-testid="bottom-nav"
     >

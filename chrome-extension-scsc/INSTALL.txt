@@ -1,8 +1,8 @@
-TECSOPS — Kho SCSC eCargo v1.0.0
+TECSOPS — Kho SCSC eCargo (chrome-extension-scsc)
 
-Ext riêng cho đăng ký eCargo SCSC (VCT 1-click OTP+QR).
-Không dùng chung với Ext ESID TECS-TCS / kho TCS.
+Ext chuẩn eCargo SCSC — cặp với Ext TCS.
+Protocol: docs/ops-ext-protocol.md
 
 1. Giải nén ZIP vào thư mục cố định.
-2. chrome://extensions → Load unpacked → chọn thư mục này.
+2. chrome://extensions → Load unpacked.
 3. F5 Ops → chọn kho SCSC → Đăng ký eCargo.

@@ -164,15 +164,14 @@ packageExt({
   stableZipName: "tecsops-chrome-extension.zip",
   versionedPrefix: "tecsops-chrome-extension",
   logTag: "extension:package:tecs-tcs",
-  installText: (v) => `TECSOPS — Kho TECS-TCS ESID v${v}
+  installText: (v) => `TECSOPS — Kho TECS-TCS ESID v${v} (DEPRECATED)
 
-Ext riêng ESID kho TECS-TCS (tcs.com.vn).
-OCR CAPTCHA offline trong Ext (không cần agent cho Đăng Nhập TCS trên PC).
-eCargo → Ext SCSC riêng. Kho TCS → Ext TCS trên Chrome profile khác.
+Không cài mới. Dùng Ext TCS (chrome-extension-tcs) + Ext SCSC.
+ZIP này chỉ để cài sẵn / rollback.
 
 1. Giải nén ZIP vào thư mục cố định.
 2. chrome://extensions → Load unpacked.
-3. F5 Ops → chọn kho TECS-TCS → Đăng nhập / Quét / Điền.
+3. F5 Ops → chọn kho TECS-TCS → Đăng Nhập TCS / Quét / Điền.
 `,
 });
 
@@ -195,12 +194,13 @@ packageExt({
   logTag: "extension:package:tcs",
   installText: (v) => `TECSOPS — Kho TCS ESID v${v}
 
-Ext riêng ESID kho TCS. BẮT BUỘC Chrome profile riêng với Ext TECS-TCS.
+Ext chuẩn ESID kho TCS (cặp với Ext SCSC).
 OCR CAPTCHA offline trong Ext (không cần agent cho Đăng Nhập TCS trên PC).
+Protocol: EXT_READY / PING / job / result — docs/ops-ext-protocol.md.
 
 1. Giải nén ZIP vào thư mục cố định.
 2. chrome://extensions → Load unpacked.
-3. F5 Ops → chọn kho TCS → Đăng nhập / Quét / Điền.
+3. F5 Ops → chọn kho TCS → Đăng Nhập TCS / Quét / Điền.
 eCargo → Ext SCSC riêng.
 `,
 });
@@ -221,7 +221,8 @@ packageExt({
   logTag: "extension:package:scsc",
   installText: (v) => `TECSOPS — Kho SCSC eCargo v${v}
 
-Ext riêng đăng ký eCargo SCSC (VCT 1-click OTP+QR).
+Ext chuẩn đăng ký eCargo SCSC (VCT 1-click OTP+QR).
+Protocol: EXT_READY / PING / job / result — docs/ops-ext-protocol.md.
 
 1. Giải nén ZIP vào thư mục cố định.
 2. chrome://extensions → Load unpacked.

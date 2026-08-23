@@ -21,6 +21,13 @@ import {
   ecargoScscProfileIsComplete,
   getActiveEcargoScscProfile,
 } from "../utils/ecargoScscProfile";
+import {
+  pingTcsExtension,
+  subscribeTcsExtensionReady,
+  tcsExtPresence,
+  tcsExtPresenceLabel,
+  type TcsExtResult,
+} from "../utils/tcsChromeExtension";
 
 type HostProps = {
   shipments: Shipment[];
@@ -116,6 +123,7 @@ export function EcargoScscInlineBar({ preferredShipmentId, compact = false }: Ba
   const [complete, setComplete] = useState(() =>
     ecargoScscProfileIsComplete(getActiveEcargoScscProfile()),
   );
+  const [extension, setExtension] = useState<TcsExtResult | null>(null);
 
   useEffect(() => {
     const sync = () => setComplete(ecargoScscProfileIsComplete(getActiveEcargoScscProfile()));
@@ -123,11 +131,47 @@ export function EcargoScscInlineBar({ preferredShipmentId, compact = false }: Ba
     return () => window.removeEventListener(ECARGO_SCSC_CHANGED_EVENT, sync);
   }, []);
 
+  const refreshExt = useCallback(async () => {
+    const result = await pingTcsExtension(2_500, { warehouse: "SCSC" });
+    setExtension(result);
+  }, []);
+
+  useEffect(() => {
+    void refreshExt();
+    const timer = window.setInterval(() => void refreshExt(), 10_000);
+    const unsub = subscribeTcsExtensionReady((info) => {
+      if (info.portalWarehouse && info.portalWarehouse !== "SCSC") return;
+      void refreshExt();
+    });
+    return () => {
+      window.clearInterval(timer);
+      unsub();
+    };
+  }, [refreshExt]);
+
+  const presence = tcsExtPresence(extension);
+  const extChipClass =
+    presence === "logged_in" || presence === "ready"
+      ? "bg-sky-500/15 text-sky-900"
+      : "bg-slate-500/15 text-slate-600";
+
   const btn =
     "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition active:scale-[0.98] border border-emerald-500/30 bg-emerald-50 text-emerald-900 hover:bg-emerald-100";
 
   return (
     <span className="inline-flex shrink-0 items-center gap-1">
+      <span
+        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${extChipClass}`}
+        title={
+          presence === "offline"
+            ? "Chưa thấy Ext «TECSOPS — Kho SCSC eCargo». Cài từ «Tải Ext», Reload, F5 Ops."
+            : "Ext SCSC eCargo online"
+        }
+        data-testid="ops-scsc-ext-status"
+        data-ext-presence={presence}
+      >
+        {tcsExtPresenceLabel(extension, { compact: true })}
+      </span>
       <button
         type="button"
         className={btn}

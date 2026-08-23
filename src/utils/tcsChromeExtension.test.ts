@@ -6,6 +6,9 @@ import {
   fillEsidViaExtension,
   isPortalBusyExtError,
   pingTcsExtension,
+  subscribeTcsExtensionReady,
+  tcsExtPresence,
+  tcsExtPresenceLabel,
   TCS_EXT_CHANNEL,
   TCS_EXT_CHANNEL_DIRECT,
   TCS_EXT_CHANNEL_SCSC,
@@ -235,6 +238,48 @@ describe("tcsChromeExtension bridge", () => {
     expect(isPortalBusyExtError({ error: "WRONG_USER" })).toBe(false);
   });
 
+  it("tcsExtPresence / label cho chip Ops bar", () => {
+    expect(tcsExtPresence(null)).toBe("offline");
+    expect(tcsExtPresence({ ok: false })).toBe("offline");
+    expect(tcsExtPresence({ ok: true })).toBe("ready");
+    expect(
+      tcsExtPresence({ ok: true, workspace: { logged_in: true } })
+    ).toBe("logged_in");
+    expect(tcsExtPresenceLabel({ ok: true })).toBe("Ext · sẵn sàng");
+    expect(tcsExtPresenceLabel({ ok: false }, { compact: true })).toBe(
+      "Ext · off"
+    );
+  });
+
+  it("subscribeTcsExtensionReady nhận EXT_READY", async () => {
+    const seen: Array<{ channel: string; portalWarehouse?: string }> = [];
+    const unsub = subscribeTcsExtensionReady((info) => {
+      seen.push({
+        channel: info.channel,
+        portalWarehouse: info.portalWarehouse,
+      });
+    });
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: window,
+        origin: window.location.origin,
+        data: {
+          channel: TCS_EXT_CHANNEL_DIRECT,
+          direction: "from-ext",
+          type: "EXT_READY",
+          ok: true,
+          version: "1.5.2",
+          portalWarehouse: "TCS",
+        },
+      })
+    );
+    await Promise.resolve();
+    expect(seen).toEqual([
+      { channel: TCS_EXT_CHANNEL_DIRECT, portalWarehouse: "TCS" },
+    ]);
+    unsub();
+  });
+
   it("lệnh eCargo không bị gắn expected_username", async () => {
     saveTcsExtLoginPrefs("TCS", { username: "namnam8012", remember: true });
     const spy = answerNext({ ok: true }, TCS_EXT_CHANNEL_SCSC);
@@ -246,5 +291,28 @@ describe("tcsChromeExtension bridge", () => {
       }),
       window.location.origin
     );
+  });
+
+  it("ECARGO_OTP_PROVIDE gửi code+verifyUrl qua channel SCSC (không credential)", async () => {
+    const { provideEcargoOtpViaExtension } = await import("./tcsChromeExtension");
+    const spy = answerNext({ ok: true, phase: "otp_provide" }, TCS_EXT_CHANNEL_SCSC);
+    const result = await provideEcargoOtpViaExtension({
+      code: "QSSMB88636480ZWUGWM",
+      verifyUrl: "https://ecargo.scsc.vn/Export/VCTOrder/Verify?x=1",
+    });
+    expect(result.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: TCS_EXT_CHANNEL_SCSC,
+        type: "ECARGO_OTP_PROVIDE",
+        payload: expect.objectContaining({
+          code: "QSSMB88636480ZWUGWM",
+          verifyUrl: expect.stringContaining("ecargo.scsc.vn"),
+        }),
+      }),
+      window.location.origin
+    );
+    const sent = spy.mock.calls[0]?.[0] as { payload?: Record<string, unknown> };
+    expect(JSON.stringify(sent.payload || {})).not.toMatch(/password|imap|credential/i);
   });
 });

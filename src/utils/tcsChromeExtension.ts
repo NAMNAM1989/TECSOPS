@@ -115,7 +115,9 @@ type ExtensionCommand =
   | "FILL_ECARGO_VCT"
   | "REGISTER_ECARGO_VCT"
   | "ECARGO_LOOKUP_AGENT"
-  | "ECARGO_OPEN";
+  | "ECARGO_OPEN"
+  /** Hook: đưa sẵn code/verifyUrl — Ext điền (Gmail mapping PC sau này). */
+  | "ECARGO_OTP_PROVIDE";
 
 type Pending = {
   resolve: (value: TcsExtResult) => void;
@@ -125,6 +127,60 @@ type Pending = {
 
 const pending = new Map<string, Pending>();
 let listenerBound = false;
+
+/** Ext vừa announce EXT_READY (content-script load). */
+export type TcsExtReadyInfo = {
+  channel: string;
+  version?: string;
+  portalWarehouse?: TcsExtChannelTarget;
+  extensionId?: string;
+};
+
+type ExtReadyListener = (info: TcsExtReadyInfo) => void;
+const readyListeners = new Set<ExtReadyListener>();
+
+export function subscribeTcsExtensionReady(
+  listener: ExtReadyListener
+): () => void {
+  ensureListener();
+  readyListeners.add(listener);
+  return () => {
+    readyListeners.delete(listener);
+  };
+}
+
+/** Chip trạng thái Ext trên Ops bar — không lẫn với agent. */
+export type TcsExtPresence = "offline" | "ready" | "logged_in";
+
+export function tcsExtPresence(ext: TcsExtResult | null | undefined): TcsExtPresence {
+  if (!ext?.ok) return "offline";
+  if (ext.workspace?.logged_in) return "logged_in";
+  return "ready";
+}
+
+export function tcsExtPresenceLabel(
+  ext: TcsExtResult | null | undefined,
+  opts?: { compact?: boolean }
+): string {
+  const presence = tcsExtPresence(ext);
+  if (opts?.compact) {
+    if (presence === "logged_in") return "Ext · login";
+    if (presence === "ready") return "Ext · OK";
+    return "Ext · off";
+  }
+  if (presence === "logged_in") return "Ext · đã login";
+  if (presence === "ready") return "Ext · sẵn sàng";
+  return "Ext · offline";
+}
+
+export function tcsExtChannelToWarehouse(
+  channel: string | undefined
+): TcsExtChannelTarget | null {
+  if (channel === TCS_EXT_CHANNEL_DIRECT) return "TCS";
+  if (channel === TCS_EXT_CHANNEL_SCSC) return "SCSC";
+  if (channel === TCS_EXT_CHANNEL) return "TECS-TCS";
+  return null;
+}
 
 /**
  * Lệnh chạy trên portal TCS — bắt buộc kèm user kỳ vọng của kho.
@@ -178,6 +234,22 @@ function ensureListener() {
       return;
     }
     if (data.type === "EXT_READY") {
+      const warehouse =
+        (data.portalWarehouse as TcsExtChannelTarget | undefined) ||
+        tcsExtChannelToWarehouse(data.channel);
+      const info: TcsExtReadyInfo = {
+        channel: data.channel,
+        version: data.version,
+        portalWarehouse: warehouse || undefined,
+        extensionId: data.extensionId,
+      };
+      readyListeners.forEach((fn) => {
+        try {
+          fn(info);
+        } catch {
+          /* listener lỗi không được làm hỏng bridge */
+        }
+      });
       return;
     }
     if (!data.id) return;
@@ -398,6 +470,28 @@ export function registerEcargoVctViaExtension(
 
 export function openEcargoExtensionTab(): Promise<TcsExtResult> {
   return request<TcsExtResult>("ECARGO_OPEN", undefined, 20_000, "SCSC");
+}
+
+/**
+ * Hook Ext-first: Ops (hoặc mapper Gmail trên PC sau này) gửi sẵn mã + URL
+ * → Ext SCSC mở link / điền «Xác Thực». Không gửi credential Gmail.
+ */
+export function provideEcargoOtpViaExtension(payload: {
+  code?: string;
+  otp?: string;
+  verifyUrl?: string;
+  vctCode?: string;
+  email?: string;
+  sinceIso?: string;
+  awbHint?: string;
+  apiBase?: string;
+}): Promise<TcsExtFillResult> {
+  return request<TcsExtFillResult>(
+    "ECARGO_OTP_PROVIDE",
+    payload,
+    120_000,
+    "SCSC"
+  );
 }
 
 /** Tra cứu đại lý trên eCargo (API Customer/Agent). */

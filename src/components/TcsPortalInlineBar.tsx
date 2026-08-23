@@ -282,13 +282,13 @@ export function TcsPortalInlineBar({
     : extLoggedIn
       ? `${extLabel} đã login`
       : agentLoggedIn
-        ? "Agent cloud đã login"
+        ? "Agent cloud đã login (fallback)"
         : agentOk
           ? "Agent cloud — cần Đăng Nhập TCS"
           : extOk
             ? `${extLabel} — cần Đăng Nhập TCS`
             : usesAgent
-              ? "Agent cloud offline"
+              ? "Agent cloud offline (fallback)"
               : "Cần Chrome Ext";
 
   const shortStatus = loggedIn
@@ -298,6 +298,38 @@ export function TcsPortalInlineBar({
         ? "Chờ session"
         : "Chờ Đăng Nhập TCS"
       : "Offline";
+
+  const extPresence: "offline" | "ready" | "logged_in" = !extOk
+    ? "offline"
+    : extLoggedIn
+      ? "logged_in"
+      : "ready";
+  const extChipLabel =
+    extPresence === "logged_in"
+      ? compact
+        ? "Ext · login"
+        : "Ext · đã login"
+      : extPresence === "ready"
+        ? compact
+          ? "Ext · OK"
+          : "Ext · sẵn sàng"
+        : compact
+          ? "Ext · off"
+          : "Ext · offline";
+  const extChipClass =
+    extPresence === "logged_in"
+      ? "bg-emerald-500/15 text-emerald-800"
+      : extPresence === "ready"
+        ? "bg-sky-500/15 text-sky-900"
+        : "bg-slate-500/15 text-slate-600";
+  const extChipTitle =
+    extPresence === "logged_in"
+      ? `${extLabel} online · đã Đăng Nhập TCS`
+      : extPresence === "ready"
+        ? `${extLabel} online · chưa Đăng Nhập TCS — bấm «Đăng Nhập TCS»`
+        : isMobile
+          ? "Chrome Ext chỉ trên PC — điện thoại dùng agent cloud"
+          : `Chưa thấy ${extLabel}. Cài từ «Tải Ext» (TCS + SCSC), Reload Ext, F5 Ops.`;
 
   return (
     <div className={`flex min-w-0 flex-col ${compact ? "gap-0.5" : "gap-1"}`}>
@@ -314,11 +346,19 @@ export function TcsPortalInlineBar({
           className="shrink-0 rounded-full bg-slate-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-700"
           title={
             portalWh === "TCS"
-              ? "Kho TCS — agent cloud :8766 / Ext tuỳ chọn"
-              : "Kho TECS-TCS — agent cloud :8765 / Ext tuỳ chọn"
+              ? "Kho TCS — Ext-first; agent Railway fallback"
+              : "Kho TECS-TCS — Ext legacy tuỳ chọn; agent Railway fallback"
           }
         >
           {portalWh === "TCS" ? "Kho TCS" : "TECS-TCS"}
+        </span>
+        <span
+          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${extChipClass}`}
+          title={extChipTitle}
+          data-testid="ops-ext-status"
+          data-ext-presence={extPresence}
+        >
+          {extChipLabel}
         </span>
         <span
           className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
@@ -346,8 +386,8 @@ export function TcsPortalInlineBar({
             disabled={tcs.busy}
             title={
               visualControl
-                ? "Trực quan BẬT: Quét/Điền trên tab Chrome Ext — không fallback agent ẩn. Bấm để tắt."
-                : "Trực quan TẮT: có thể fallback agent cloud headless (không thấy cửa sổ). Bấm để bật."
+                ? "App-click → Ext PC: bấm trên Ops, Ext trên máy kho thực thi (không Playwright Railway). Bấm để tắt."
+                : "Trực quan TẮT: cho phép fallback agent Railway headless (phụ). Bấm để bật lại Ext-first."
             }
             onClick={() => tcs.setVisualControl(!visualControl)}
           >
@@ -404,7 +444,7 @@ export function TcsPortalInlineBar({
                 ? agentOk
                   ? "Đăng Nhập TCS qua agent cloud (OCR / credential Railway)."
                   : "Agent offline — bấm để thử Đăng Nhập TCS lại."
-                : "Đăng Nhập TCS (Ext trên PC ưu tiên; agent fallback)."
+                : "Đăng Nhập TCS — Ext trên PC kho thực thi (App-click → Ext)."
             }
           >
             {tcsLoginCtaLabel({ retry: isMobile && !agentOk })}
@@ -452,17 +492,19 @@ export function TcsPortalInlineBar({
 
       {!compact && !canOperate && !tcs.busy ? (
         <p className="px-1 text-[9px] leading-snug text-ui-text-muted">
-          {usesAgent
-            ? `Agent cloud offline — bấm «Đăng Nhập TCS» để thử lại. Trên Railway kiểm tra service + credential kho ${portalWh}.`
-            : `Offline: cài ${extLabel} hoặc bật policy auto/agent-only để dùng Playwright cloud.`}
+          {extOk
+            ? `Ext sẵn sàng — bấm «Đăng Nhập TCS».`
+            : `Cần ${extLabel} trên PC kho (menu «Tải Ext»). Bấm trên Ops → Ext thực thi; không dùng Playwright Railway khi «Trực quan» bật.`}
         </p>
       ) : null}
 
       {!compact && canOperate && !tcs.busy ? (
         <p className="px-1 text-[9px] leading-snug text-ui-text-muted">
-          {usesAgent
-            ? "Online: Đăng Nhập TCS → menu ⋮ → Điền (tạo phiếu ESID) / Tải PDF. Quét chỉ cập nhật HT trên Ops — tách riêng."
-            : "Ext: Đăng Nhập TCS → menu ⋮ → Điền (tạo phiếu ESID) → HOÀN TẤT trên TCS. Quét chỉ cập nhật HT Ops."}
+          {extOk || visualControl
+            ? "App → Ext PC: Đăng Nhập TCS → menu ⋮ → Điền / Tải PDF. Quét chỉ cập nhật HT Ops."
+            : usesAgent
+              ? "Fallback agent Railway: Đăng Nhập TCS → menu ⋮ → Điền / Tải PDF."
+              : "Cài Ext TCS từ «Tải Ext» rồi F5 Ops."}
         </p>
       ) : null}
 

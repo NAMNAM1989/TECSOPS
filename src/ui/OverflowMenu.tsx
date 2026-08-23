@@ -19,6 +19,8 @@ export type OverflowMenuItem = {
 type Props = {
   label?: string;
   align?: "left" | "right";
+  /** `up` — mở lên trên (footer sheet / mép dưới). Mặc định `down`. */
+  placement?: "up" | "down";
   items: OverflowMenuItem[];
   /** Nút kích hoạt tùy chỉnh */
   triggerClassName?: string;
@@ -27,10 +29,15 @@ type Props = {
   children?: ReactNode;
 };
 
+export function overflowMenuPanelPositionClass(placement: "up" | "down" = "down"): string {
+  return placement === "up" ? "bottom-[calc(100%+4px)]" : "top-[calc(100%+4px)]";
+}
+
 /** Menu ⋯ / Công cụ — đóng khi click ngoài hoặc Escape. */
 export function OverflowMenu({
   label = "Công cụ",
   align = "right",
+  placement = "down",
   items,
   triggerClassName = "",
   compact = false,
@@ -57,7 +64,7 @@ export function OverflowMenu({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative shrink-0">
+    <div ref={rootRef} className="relative shrink-0" data-placement={placement}>
       <button
         type="button"
         aria-haspopup="menu"
@@ -92,7 +99,7 @@ export function OverflowMenu({
         <div
           id={menuId}
           role="menu"
-          className={`absolute top-[calc(100%+4px)] z-[80] min-w-[11.5rem] overflow-hidden rounded-xl border border-ui-border bg-ui-surface py-1 shadow-ui-md ${
+          className={`absolute z-[80] min-w-[11.5rem] overflow-hidden rounded-xl border border-ui-border bg-ui-surface py-1 shadow-ui-md ${overflowMenuPanelPositionClass(placement)} ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >

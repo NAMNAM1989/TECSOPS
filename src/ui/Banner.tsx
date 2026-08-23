@@ -3,10 +3,10 @@ import type { ReactNode } from "react";
 export type BannerTone = "info" | "success" | "warning" | "danger";
 
 const TONE: Record<BannerTone, string> = {
-  info: "border-sky-200 bg-sky-50 text-sky-950",
-  success: "border-emerald-200 bg-emerald-50 text-emerald-950",
-  warning: "border-amber-200 bg-amber-50 text-amber-950",
-  danger: "border-red-200 bg-red-50 text-red-950",
+  info: "border-ui-info/30 bg-ui-info/10 text-ui-navy",
+  success: "border-ui-success/30 bg-ui-success/10 text-ui-navy",
+  warning: "border-ui-warning/30 bg-ui-warning/10 text-ui-navy",
+  danger: "border-ui-danger/30 bg-ui-danger/10 text-ui-navy",
 };
 
 export function Banner({

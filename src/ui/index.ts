@@ -20,7 +20,11 @@ export {
   type NotifyTone,
 } from "./notify";
 export { Wordmark } from "./Wordmark";
-export { OverflowMenu, type OverflowMenuItem } from "./OverflowMenu";
+export {
+  OverflowMenu,
+  overflowMenuPanelPositionClass,
+  type OverflowMenuItem,
+} from "./OverflowMenu";
 export { SyncStatusPill } from "./SyncStatusPill";
 export { AppShell, KpiStat } from "./AppShell";
 export { Badge, type BadgeTone } from "./Badge";

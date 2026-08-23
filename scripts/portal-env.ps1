@@ -21,39 +21,6 @@ function Read-DotEnvFile([string]$Path) {
   return $map
 }
 
-function Get-PortalSecret {
-  $fromLocal = Read-DotEnvFile (Join-Path $Root ".env.local")
-  if ($fromLocal["PORTAL_WORKER_SECRET"]) { return $fromLocal["PORTAL_WORKER_SECRET"] }
-  $secretFile = Join-Path $Root "scripts\.portal-secret.local"
-  if (Test-Path $secretFile) { return (Get-Content $secretFile -Raw).Trim() }
-  throw "Missing PORTAL_WORKER_SECRET in .env.local"
-}
-
-function Get-OpsApiBase {
-  $fromLocal = Read-DotEnvFile (Join-Path $Root ".env.local")
-  if ($fromLocal["OPS_API_BASE"]) { return $fromLocal["OPS_API_BASE"].TrimEnd("/") }
-  if ($fromLocal["TECSOPS_VERIFY_URL"]) { return $fromLocal["TECSOPS_VERIFY_URL"].TrimEnd("/") }
-  return "https://ops-production-b405.up.railway.app"
-}
-
-function Start-PortalWorkerWindow([string]$Warehouse, [string]$AgentUrl) {
-  $secret = Get-PortalSecret
-  $ops = Get-OpsApiBase
-  $cmd = @"
-`$env:OPS_API_BASE='$ops'
-`$env:PORTAL_WORKER_SECRET='$secret'
-`$env:TCS_AGENT_URL='$AgentUrl'
-`$env:PORTAL_WAREHOUSE='$Warehouse'
-`$env:PORTAL_CLOSE_AFTER_PDF='1'
-`$env:PORTAL_BROWSER_IDLE_MS='15000'
-Set-Location '$Root'
-Write-Host '[portal-worker]' '$Warehouse' '->' `$env:OPS_API_BASE 'agent' `$env:TCS_AGENT_URL -ForegroundColor Cyan
-Write-Host '[portal-worker] close Chrome after PDF (idle 15s)' -ForegroundColor DarkCyan
-npm run portal:worker
-"@
-  Start-Process powershell -ArgumentList @("-NoExit", "-Command", $cmd) -WorkingDirectory $Root
-}
-
 function Start-AgentFromEnvFile([string]$EnvFile, [string]$Title, [hashtable]$ForceEnv = @{}) {
   if (-not (Test-Path $EnvFile)) { throw "Missing $EnvFile" }
   $map = Read-DotEnvFile $EnvFile

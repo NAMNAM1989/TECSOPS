@@ -60,7 +60,7 @@ async function main() {
     }
 
     // Thanh TCS
-    const tcsLogin = page.getByRole("button", { name: /^(Login|ĐN|Đăng nhập)$/i });
+    const tcsLogin = page.getByRole("button", { name: /Đăng Nhập TCS/i });
     if (await tcsLogin.count()) ok("TCS-01", "Thanh Cổng TCS hiện");
     else fail("TCS-01", "Không thấy nút đăng nhập TCS");
 

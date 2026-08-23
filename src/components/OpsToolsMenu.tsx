@@ -14,15 +14,11 @@ type Props = {
   onOpenAirlineLabels: () => void;
   onDownloadDayExcel: () => void;
   onDownloadScscDim?: () => void;
-  /** Báo cáo đề xuất nâng cấp qua Gemini */
-  onOpenAiImprove?: () => void;
-  /** AI-1…AI-9: draft/gợi ý Ops có bước xác nhận. */
-  onOpenAiWorkbench?: () => void;
 };
 
 /**
  * Menu Công cụ — chỉ action thứ cấp chưa có nút riêng ngoài toolbar.
- * (Vantage/Tecs/TCS/SCSC, Nhập Sheet, Thống kê desktop → nút riêng.)
+ * (Vantage/Tecs/TCS/SCSC, Thống kê desktop → nút riêng.)
  */
 export function OpsToolsMenu({
   compact = false,
@@ -36,8 +32,6 @@ export function OpsToolsMenu({
   onOpenAirlineLabels,
   onDownloadDayExcel,
   onDownloadScscDim,
-  onOpenAiImprove,
-  onOpenAiWorkbench,
 }: Props) {
   const items = useMemo(() => {
     const list: OverflowMenuItem[] = [];
@@ -73,22 +67,6 @@ export function OpsToolsMenu({
         disabled: excelExporting,
       },
     );
-    if (onOpenAiImprove) {
-      list.push({
-        id: "ai-improve",
-        label: "Đề xuất AI",
-        description: "Gemini · phân tích thao tác → gợi ý nâng cấp",
-        onSelect: onOpenAiImprove,
-      });
-    }
-    if (onOpenAiWorkbench) {
-      list.push({
-        id: "ai-workbench",
-        label: "Trợ lý AI Ops",
-        description: "Booking · hồ sơ · Sheet · eSID · DIM · Ask",
-        onSelect: onOpenAiWorkbench,
-      });
-    }
     if (showDimScsc && onDownloadScscDim) {
       list.push({
         id: "dim-scsc",
@@ -109,8 +87,6 @@ export function OpsToolsMenu({
     onOpenAirlineLabels,
     onPrefetchCustomers,
     onPrefetchStats,
-    onOpenAiImprove,
-    onOpenAiWorkbench,
     scscDimExporting,
     showDimScsc,
   ]);

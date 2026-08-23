@@ -26,7 +26,7 @@ import {
   normalizeEcargoVctResultsStore,
 } from "../shared/ecargoVctResultsNormalize.mjs";
 import { formatAwb } from "../shared/awbFormat.mjs";
-import { applySessionIdOrder } from "./sheets/sheetRowReconcile.mjs";
+import { applySessionIdOrder } from "./sessionOrder.mjs";
 
 const WAREHOUSE_ORDER = ["TECS-TCS", "TECS-SCSC", "TCS", "SCSC"];
 const WAREHOUSE_SET = new Set(WAREHOUSE_ORDER);

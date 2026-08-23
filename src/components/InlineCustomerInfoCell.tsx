@@ -335,7 +335,7 @@ export function InlineCustomerInfoCell({
         title="Click để chọn / sửa Shipper · CNEE · Hàng"
         onClick={() => setOpen((v) => !v)}
         className={`flex w-full max-w-full flex-col gap-0 rounded-md px-1 py-0.5 text-left transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
-          open ? "bg-ui-primary/8 ring-1 ring-ui-primary/30" : ""
+          open ? "bg-ui-primary/10 ring-1 ring-ui-primary/30" : ""
         }`}
       >
         <SummaryLine label="Ship" value={shipperText} empty={!shipperText} />

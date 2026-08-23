@@ -92,7 +92,9 @@ describe("OpsMobileBookingFab", () => {
     expect(html).toContain("+ Booking");
     expect(html).toContain("min-h-11");
     expect(html).toContain("bottom-[calc(4.25rem+env(safe-area-inset-bottom))]");
-    expect(html).toContain("[[data-ops-mobile-overlay=sheet]_&]:invisible");
+    expect(html).toContain(
+      "[[data-ops-mobile-overlay=sheet]_&amp;]:invisible",
+    );
     expect(html).not.toContain("sticky-mobile-actions");
     expect(html).not.toContain("shadow-apple-md");
     expect(html).not.toContain("Sửa lô");

@@ -78,6 +78,7 @@ function AuthenticatedApp() {
               ready={sync.state != null && sync.status !== "loading"}
               syncStatus={sync.status}
               socketConnected={sync.socketConnected}
+              customersMaxSyncedAt={sync.state?.syncMeta?.customersMaxSyncedAt ?? null}
               onSave={async (customers) => {
                 await sync.mutate({ action: "SET_CUSTOMERS", customers });
               }}

@@ -42,6 +42,13 @@ export type AppState = {
   ecargoScscStore?: EcargoScscStoreV1;
   /** Kết quả đăng ký VCT + QR theo shipmentId */
   ecargoVctResultsStore?: EcargoVctResultsStoreV1;
+  /** Overlay namnamlogistics — lots và customers tách nguồn. */
+  syncMeta?: {
+    source: "namnamlogistics-rest" | "postgres-lots" | "state-rows" | null;
+    lotsMaxSyncedAt: string | null;
+    lotsMaxSyncedAtByWarehouse: Record<string, string | null>;
+    customersMaxSyncedAt: string | null;
+  };
 };
 
 export type ShipmentMutation =

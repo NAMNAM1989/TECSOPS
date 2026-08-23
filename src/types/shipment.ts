@@ -80,6 +80,11 @@ export interface Shipment {
   consigneeEmailPrint?: string;
   notifyNamePrint?: string;
   status: ShipmentStatus;
+  /**
+   * SoT DB `lots.synced_at` (timestamptz) — ISO. Null/thiếu = ẩn timestamp trên Ops strip.
+   * Không dùng làm đồng hồ Customers.
+   */
+  syncedAt?: string | null;
 }
 
 export type ShipmentField = keyof Omit<Shipment, "id" | "status" | "stt" | "sessionDate">;

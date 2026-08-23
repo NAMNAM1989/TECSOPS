@@ -1,48 +1,34 @@
 import { useEffect, useState } from "react";
 import type { SyncStatus } from "../hooks/useShipmentSync";
+import { formatRelativeSync, formatSyncClockIct, parseSyncedAtMs } from "../utils/dbSyncedAt";
 
 type Props = {
   status: SyncStatus;
   socketConnected: boolean;
-  lastSyncAt: number | null;
+  /** SoT `lots.synced_at` (epoch ms). Null/thiếu → ẩn timestamp, không hiện epoch. */
+  lotSyncedAt: number | null;
   pendingOfflineCount?: number;
   onRefresh?: () => void | Promise<void>;
   refreshing?: boolean;
 };
 
-function formatRelativeSync(at: number | null, now: number): string {
-  if (at == null) return "chưa đồng bộ";
-  const sec = Math.max(0, Math.floor((now - at) / 1000));
-  if (sec < 15) return "vừa xong";
-  if (sec < 60) return `${sec}s trước`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} phút trước`;
-  const hr = Math.floor(min / 60);
-  return `${hr} giờ trước`;
-}
-
-function formatClock(at: number | null): string {
-  if (at == null) return "";
-  try {
-    return new Date(at).toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
-  } catch {
-    return "";
-  }
+function lotsSyncedPhrase(at: number | null, now: number): string {
+  const ms = parseSyncedAtMs(at);
+  if (ms == null) return "";
+  const clock = formatSyncClockIct(ms);
+  if (!clock) return "";
+  const relative = formatRelativeSync(ms, now);
+  return relative ? `đã sync lúc ${clock} (${relative})` : `đã sync lúc ${clock}`;
 }
 
 /**
- * Thanh Đồng bộ mobile — luôn thấy idle / syncing / last sync / lỗi / offline + CTA.
+ * Thanh Đồng bộ Ops — chỉ lots. Không trộn ops_customers.synced_at.
  * Live: 1 hàng gọn. Hạn chế/Offline: 2 hàng + CTA rõ.
  */
 export function OpsMobileSyncBar({
   status,
   socketConnected,
-  lastSyncAt,
+  lotSyncedAt,
   pendingOfflineCount = 0,
   onRefresh,
   refreshing = false,
@@ -59,19 +45,15 @@ export function OpsMobileSyncBar({
   const offline = status === "offline";
   const degraded = !live && !offline && !loading;
 
-  const relative = formatRelativeSync(lastSyncAt, now);
-  const clock = formatClock(lastSyncAt);
-  const pendingLabel =
-    pendingOfflineCount > 0 ? ` · ${pendingOfflineCount} chờ gửi` : "";
-  const syncedPhrase = clock
-    ? `đã sync lúc ${clock} (${relative})`
-    : relative;
+  const syncedPhrase = lotsSyncedPhrase(lotSyncedAt, now);
+  const pendingBit = pendingOfflineCount > 0 ? `${pendingOfflineCount} chờ gửi` : "";
+  const timeBit = syncedPhrase;
 
   let toneClass =
     "border-emerald-200/90 bg-emerald-50 text-emerald-950 ring-emerald-200/70";
   let dotClass = "bg-emerald-500 animate-pulse";
   let title = "Live";
-  let detail = syncedPhrase + pendingLabel;
+  let detail = [timeBit, pendingBit].filter(Boolean).join(" · ");
   let ctaLabel: string | null = null;
 
   if (loading) {
@@ -84,13 +66,13 @@ export function OpsMobileSyncBar({
     toneClass = "border-slate-300 bg-slate-100 text-slate-800 ring-slate-300/80";
     dotClass = "bg-slate-500";
     title = "Offline";
-    detail = `Chỉ máy này · ${syncedPhrase}${pendingLabel}`;
+    detail = ["Chỉ máy này", timeBit, pendingBit].filter(Boolean).join(" · ");
     ctaLabel = "Thử lại";
   } else if (degraded) {
     toneClass = "border-amber-200/90 bg-amber-50 text-amber-950 ring-amber-200/80";
     dotClass = "bg-amber-500";
     title = "Hạn chế";
-    detail = `Đồng bộ hạn chế · ${syncedPhrase}${pendingLabel}`;
+    detail = ["Đồng bộ hạn chế", timeBit, pendingBit].filter(Boolean).join(" · ");
     ctaLabel = "Làm mới";
   }
 
@@ -109,7 +91,7 @@ export function OpsMobileSyncBar({
       {compactLive ? (
         <p className="min-w-0 flex-1 truncate text-[10px] font-bold leading-tight">
           <span className="font-extrabold">{title}</span>
-          <span className="font-semibold opacity-80"> · {detail}</span>
+          {detail ? <span className="font-semibold opacity-80"> · {detail}</span> : null}
         </p>
       ) : (
         <div className="min-w-0 flex-1 leading-tight">

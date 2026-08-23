@@ -68,12 +68,15 @@ import {
   parseCustomerFullProfileWorkbook,
 } from "../utils/customerFullProfileExcel";
 import type { SyncStatus } from "../hooks/useShipmentSync";
+import { formatSyncedPhrase, resolveCustomersSyncedAtMs } from "../utils/dbSyncedAt";
 
 type Props = {
   initial: readonly CustomerDirectoryEntry[];
   ready: boolean;
   syncStatus: SyncStatus;
   socketConnected: boolean;
+  /** max(ops_customers.synced_at) — không lấy lots. */
+  customersMaxSyncedAt?: string | null;
   onSave: (customers: CustomerDirectoryEntry[]) => Promise<void>;
   onBack: () => void;
 };
@@ -191,6 +194,7 @@ export function CustomersPage({
   ready,
   syncStatus,
   socketConnected,
+  customersMaxSyncedAt = null,
   onSave,
   onBack,
 }: Props) {
@@ -240,6 +244,15 @@ export function CustomersPage({
     () => JSON.stringify(draft) !== baseline,
     [draft, baseline],
   );
+
+  /** Chỉ ops_customers — ẩn nếu thiếu/null, không trộn lots. */
+  const customersSyncPhrase = useMemo(() => {
+    const at = resolveCustomersSyncedAtMs({
+      customers: initial,
+      customersMaxSyncedAt,
+    });
+    return formatSyncedPhrase(at);
+  }, [initial, customersMaxSyncedAt]);
 
   useEffect(() => {
     if (!ready) return;
@@ -725,6 +738,15 @@ export function CustomersPage({
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ui-text-muted">
               <span className="font-medium">{countLabel}</span>
               <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
+              {customersSyncPhrase ? (
+                <span
+                  className="font-semibold text-ui-text-muted"
+                  data-testid="customers-sync-stamp"
+                  title="ops_customers.synced_at · Asia/Saigon"
+                >
+                  {customersSyncPhrase}
+                </span>
+              ) : null}
               {headerStatus ? (
                 <span
                   className={

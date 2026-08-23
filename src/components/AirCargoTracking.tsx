@@ -14,6 +14,7 @@ import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentE
 import { buildCargoDayReport } from "../utils/cargoDayReport";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
+import { resolveOpsLotSyncedAtMs } from "../utils/dbSyncedAt";
 import {
   filterShipmentsBySessionYmd,
   filterShipmentsBySessionYmdRange,
@@ -131,7 +132,6 @@ export function AirCargoTracking({
     mutate,
     mutateBatch,
     socketConnected,
-    lastSyncAt,
     pendingOfflineCount,
     refreshState,
     applyRemoteState,
@@ -177,6 +177,17 @@ export function AirCargoTracking({
     () => filterShipmentsBySessionYmd(allRows, selectedYmd),
     [allRows, selectedYmd]
   );
+
+  /** max(lots.synced_at) kho đang xem + ngày phiên; fallback max theo kho. Không dùng customers / lastSyncAt. */
+  const lotSyncedAt = useMemo(() => {
+    const warehouseLots = viewRows.filter((r) => r.warehouse === activeWarehouse);
+    return resolveOpsLotSyncedAtMs({
+      lots: warehouseLots,
+      warehouse: activeWarehouse,
+      sessionDate: selectedYmd,
+      warehouseMaxSyncedAt: state?.syncMeta?.lotsMaxSyncedAtByWarehouse?.[activeWarehouse],
+    });
+  }, [viewRows, activeWarehouse, selectedYmd, state?.syncMeta?.lotsMaxSyncedAtByWarehouse]);
 
   const searchContext = useMemo(
     (): ShipmentSearchContext => ({
@@ -753,7 +764,7 @@ export function AirCargoTracking({
       isViewingToday={isViewingToday}
       syncStatus={status}
       socketConnected={socketConnected}
-      lastSyncAt={lastSyncAt ?? null}
+      lotSyncedAt={lotSyncedAt}
       pendingOfflineCount={pendingOfflineCount ?? 0}
       syncRefreshing={syncRefreshing}
       onSyncRefresh={async () => {

@@ -189,6 +189,12 @@ export type CustomerDirectoryEntry = {
 
   parties: CustomerParty[];
 
+  /**
+   * SoT DB `ops_customers.synced_at` (timestamptz) — ISO.
+   * Null/thiếu = ẩn timestamp trên strip Customers. Không trộn với lots.
+   */
+  syncedAt?: string | null;
+
 };
 
 

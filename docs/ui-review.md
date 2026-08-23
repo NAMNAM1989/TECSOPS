@@ -40,9 +40,12 @@ Follow-up: `notify` → Toast dùng `TOAST_DURATION_MS` theo tone (warning 5600 
 
 ### Sync source of truth
 
-- Client **không** có `lots.synced_at` / `ops_customers.synced_at` trong types/API hiện tại.
-- Round 3 dùng best-effort `lastSyncAt` từ socket/API client (`useShipmentSync`).
-- TODO (ngoài PR): thin view/API Supabase `synced_at` nếu cần SoT DB.
+- SoT namnamlogistics: `lots.synced_at` + `ops_customers.synced_at` (timestamptz, 0 null tại thời điểm wire).
+- API: `/api/state` overlay + `GET /api/sync-meta` SELECT cả hai bảng. Không migration.
+- **Ops strip ≠ Customers strip** — không gộp max lots với customers.
+- Ops: `max(synced_at)` lô **kho đang xem + ngày phiên**; nếu không có field trên row → `syncMeta.lotsMaxSyncedAtByWarehouse[kho]`. Không `lastSyncAt` client.
+- Customers: `max(ops_customers.synced_at)` / `customers.syncedAt` thôi.
+- Format `Asia/Saigon` «đã sync lúc HH:mm:ss». Null/thiếu → ẩn timestamp (không epoch / Invalid Date).
 
 ### eCargo / Đình Chỉ
 

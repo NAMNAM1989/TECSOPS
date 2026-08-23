@@ -11,5 +11,6 @@ Nguồn sự thật cho logic dùng chung giữa Node (`server/`) và Vite (`src
 - `primitiveNormalize.mjs` — `clamp` / `str` / `num` (printer profiles)
 - `shipmentWorkflowStatus.mjs` — derive / migrate / patch trạng thái lô
 - `customerProfileLimits.mjs` — giới hạn độ dài danh bạ khách (server validate + client clamp)
+- `dbSyncedAt.mjs` — parse/format `lots.synced_at` / `ops_customers.synced_at` (Asia/Saigon)
 
 `server/*` và `src/*` chỉ re-export (typed wrapper phía TS). Sửa quy tắc tại đây, không nhân bản.

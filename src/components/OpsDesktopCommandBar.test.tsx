@@ -9,6 +9,8 @@ const row = {
   ...blankShipmentDraft("2026-08-23", "TCS"),
   id: "s1",
   stt: 1,
+  pcs: 2,
+  kg: 10,
 } as Shipment;
 
 function renderBar() {
@@ -37,8 +39,7 @@ function renderBar() {
           onDownloadDayExcel: () => undefined,
         }}
         filteredViewRows={[row]}
-        totalPcs={2}
-        totalKg={10}
+        onWarehouseChange={() => undefined}
         searchQuery=""
         onSearchChange={() => undefined}
         flightDateFilter=""
@@ -55,16 +56,25 @@ function renderBar() {
 }
 
 describe("OpsDesktopCommandBar", () => {
-  it("chrome 2 hàng: Booking là CTA chính, báo cáo trong overflow", () => {
+  it("Booking/Search ngoài menu; DayPulse + 4 kho; báo cáo trong overflow", () => {
     const html = renderBar();
     expect(html).toContain("ops-desktop-command-bar");
     expect(html).toContain("+ Booking");
     expect(html).toContain("Thống kê");
     expect(html).toContain("Báo cáo");
     expect(html).toContain("23-AUG-2026");
-    expect(html).not.toContain("bg-emerald-600");
-    expect(html).not.toContain("bg-sky-600");
-    expect(html).not.toContain("bg-violet-600");
+    expect(html).toContain("ops-day-overview");
+    expect(html).toContain("ops-day-pulse");
+    expect(html).toContain("Tổng ngày");
+    expect(html).toContain('aria-label="Chọn kho"');
+    expect(html).toContain("TECS-TCS");
+    expect(html).toContain("SCSC");
+    const actions = html.match(
+      /data-testid="ops-desktop-command-actions"[\s\S]*?(?=<div data-testid="ops-day-overview"|$)/,
+    )?.[0] ?? "";
+    expect(actions).toContain("+ Booking");
+    expect(actions).not.toContain("bg-emerald-600");
+    expect(actions).not.toContain("Vantage");
   });
 
   it("không lộ format ngày locale của input type=date", () => {

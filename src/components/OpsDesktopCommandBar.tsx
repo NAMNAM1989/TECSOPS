@@ -2,7 +2,6 @@ import type { ReactNode, RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
-import { formatKgTotal } from "../utils/formatKgTotal";
 import {
   Button,
   SyncStatusPill,
@@ -13,6 +12,7 @@ import { ChromeExtensionsDownloadMenu } from "./ChromeExtensionsDownloadMenu";
 import { NewBookingButton } from "./NewBookingButton";
 import { OpsCargoReportMenu } from "./OpsCargoReportMenu";
 import { OpsDatePicker } from "./OpsDatePicker";
+import { OpsDayOverviewStrip } from "./OpsDayOverviewStrip";
 import { OpsToolsMenu } from "./OpsToolsMenu";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
@@ -50,8 +50,8 @@ type Props = {
   onCopyCargoDayReport: (kind: CargoDayReportCopyKind) => void;
   toolsProps: ToolsProps;
   filteredViewRows: readonly Shipment[];
-  totalPcs: number;
-  totalKg: number;
+  onWarehouseChange: (wh: Warehouse) => void;
+  searchHighlightWarehouses?: readonly Warehouse[];
   searchQuery: string;
   onSearchChange: (q: string) => void;
   flightDateFilter: string;
@@ -67,7 +67,7 @@ type Props = {
   ecargoBar?: ReactNode;
 };
 
-/** Chrome desktop Ops — tối đa 2 hàng: lệnh + lọc. */
+/** Chrome desktop Ops: lệnh + DayPulse/kho + lọc. Booking/Search ngoài menu. */
 export function OpsDesktopCommandBar({
   selectedYmd,
   onDateChange,
@@ -88,8 +88,8 @@ export function OpsDesktopCommandBar({
   onCopyCargoDayReport,
   toolsProps,
   filteredViewRows,
-  totalPcs,
-  totalKg,
+  onWarehouseChange,
+  searchHighlightWarehouses = [],
   searchQuery,
   onSearchChange,
   flightDateFilter,
@@ -176,27 +176,18 @@ export function OpsDesktopCommandBar({
         </div>
       </div>
 
+      <OpsDayOverviewStrip
+        variant="desktop"
+        selectedYmd={selectedYmd}
+        rows={filteredViewRows}
+        activeWarehouse={activeWarehouse}
+        onSelectWarehouse={onWarehouseChange}
+        highlightWarehouses={searchHighlightWarehouses}
+        filtersActive={filtersActive}
+      />
+
       {viewRows.length > 0 ? (
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-          <span
-            className="inline-flex shrink-0 items-baseline gap-x-2 rounded-xl border border-ui-border/80 bg-ui-surface px-2.5 py-1 font-mono text-[11px] tabular-nums text-ui-navy shadow-ui-sm"
-            title="Lô · Kiện · Kg (sau lọc)"
-          >
-            <span>
-              <span className="text-[9px] font-semibold text-ui-text-muted">Lô</span>{" "}
-              <span className="font-bold">{filteredViewRows.length}</span>
-            </span>
-            <span className="text-ui-border">·</span>
-            <span>
-              <span className="text-[9px] font-semibold text-ui-text-muted">Kiện</span>{" "}
-              <span className="font-bold">{totalPcs}</span>
-            </span>
-            <span className="text-ui-border">·</span>
-            <span>
-              <span className="text-[9px] font-semibold text-ui-text-muted">Kg</span>{" "}
-              <span className="font-bold">{formatKgTotal(totalKg)}</span>
-            </span>
-          </span>
           <SmartSearchBar
             value={searchQuery}
             onChange={onSearchChange}

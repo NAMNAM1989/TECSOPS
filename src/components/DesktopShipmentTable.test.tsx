@@ -41,8 +41,6 @@ function renderTable(rows: Shipment[] = [row]) {
         rows={rows}
         allRows={rows}
         activeWarehouse="TCS"
-        onActiveWarehouseChange={() => undefined}
-        metricRows={rows}
         onUpdate={() => undefined}
         onDelete={() => undefined}
         onPrint={() => undefined}

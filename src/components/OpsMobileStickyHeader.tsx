@@ -11,9 +11,8 @@ import { OpsDatePicker } from "./OpsDatePicker";
 import { useChromeExtensionMenuItems } from "./ChromeExtensionsDownloadMenu";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
-import { WAREHOUSE_ORDER, warehouseLabel } from "../constants/warehouses";
-import { computeWarehouseMetrics } from "../utils/warehouseMetrics";
 import type { SyncStatus } from "../hooks/useShipmentSync";
+import { OpsDayOverviewStrip } from "./OpsDayOverviewStrip";
 
 interface Props {
   selectedYmd: string;
@@ -67,7 +66,7 @@ interface Props {
 }
 
 /**
- * Chrome mobile Ops — 2 hàng: identity (Wordmark/OPS/Live + ngày + sync) + lọc.
+ * Chrome mobile Ops: identity + DayPulse/chip kho + lọc.
  * + Booking là FAB ngoài header. Báo cáo / Tải Ext / Công cụ trong một overflow.
  */
 export function OpsMobileStickyHeader({
@@ -133,26 +132,6 @@ export function OpsMobileStickyHeader({
     const pending = pendingOfflineCount > 0 ? `${pendingOfflineCount} chờ gửi` : "";
     return [phrase, pending].filter(Boolean).join(" · ");
   }, [lotSyncedAt, pendingOfflineCount]);
-
-  const warehouseMetrics = useMemo(
-    () => computeWarehouseMetrics(filteredViewRows),
-    [filteredViewRows],
-  );
-
-  const warehouseItems = useMemo(
-    (): OverflowMenuItem[] =>
-      WAREHOUSE_ORDER.map((wh) => {
-        const m = warehouseMetrics[wh];
-        const hit = searchHighlightWarehouses.includes(wh);
-        return {
-          id: wh,
-          label: warehouseLabel[wh],
-          description: `${m.lots} lô${hit ? " · khớp tìm" : ""}`,
-          onSelect: () => onWarehouseChange(wh),
-        };
-      }),
-    [onWarehouseChange, searchHighlightWarehouses, warehouseMetrics],
-  );
 
   const cargoReportItems = useMemo(
     () =>
@@ -293,20 +272,20 @@ export function OpsMobileStickyHeader({
         </div>
       </div>
 
+      <OpsDayOverviewStrip
+        variant="mobile"
+        selectedYmd={selectedYmd}
+        rows={filteredViewRows}
+        activeWarehouse={activeWarehouse}
+        onSelectWarehouse={onWarehouseChange}
+        highlightWarehouses={searchHighlightWarehouses}
+        filtersActive={filtersActive}
+      />
+
       <div
         data-testid="ops-mobile-filter-row"
         className="flex min-w-0 items-center gap-1.5"
       >
-        <OverflowMenu
-          compact
-          align="left"
-          label="Chọn kho"
-          items={warehouseItems}
-          triggerClassName="inline-flex min-h-11 max-w-[6.5rem] shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface px-2 text-[11px] font-extrabold text-ui-navy shadow-ui-sm"
-        >
-          <span className="truncate">{warehouseLabel[activeWarehouse]}</span>
-        </OverflowMenu>
-
         {viewRows.length > 0 ? (
           <div className="min-w-0 flex-1">
             <SmartSearchBar

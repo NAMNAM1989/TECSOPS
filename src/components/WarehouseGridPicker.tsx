@@ -104,19 +104,23 @@ export function WarehouseGridPicker({
               aria-selected={isActive}
               title={`${warehouseLabel[wh]} · Lô ${m.lots} · Kiện ${m.pcs} · Kg ${kg}`}
               onClick={() => onSelect(wh)}
-              className={`inline-flex min-h-11 shrink-0 touch-manipulation items-center gap-1.5 rounded-xl px-2.5 text-left ring-1 transition active:scale-[0.98] ${
+              className={`inline-flex min-h-11 shrink-0 touch-manipulation flex-col justify-center rounded-xl px-2.5 py-1 text-left ring-1 transition active:scale-[0.98] ${
                 isActive ? CHIP_ACTIVE[wh] : CHIP_IDLE[wh]
               } ${hasSearchHit && !isActive ? "ring-2 ring-ui-primary/50" : ""}`}
             >
               <span className="text-[11px] font-extrabold tracking-tight">
                 {warehouseLabel[wh]}
               </span>
-              <span
-                className={`rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums ${
-                  isActive ? "bg-white/20" : "bg-white/80"
-                }`}
-              >
-                {m.lots}
+              <span className="font-mono text-[10px] font-bold tabular-nums leading-tight">
+                Lô {m.lots}
+                <span className={isActive ? "mx-0.5 text-white/50" : "mx-0.5 text-ui-border"}>
+                  ·
+                </span>
+                Kiện {m.pcs}
+                <span className={isActive ? "mx-0.5 text-white/50" : "mx-0.5 text-ui-border"}>
+                  ·
+                </span>
+                Kg {kg}
               </span>
             </button>
           );

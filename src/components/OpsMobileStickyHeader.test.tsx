@@ -21,6 +21,8 @@ function renderHeader(opts: {
     id: "s1",
     stt: 1,
     awb: "17612345675",
+    pcs: 2,
+    kg: 10,
   } as Shipment;
   const rows = opts.empty ? [] : [row];
   return renderToStaticMarkup(
@@ -61,30 +63,32 @@ function renderHeader(opts: {
 }
 
 describe("OpsMobileStickyHeader chrome", () => {
-  it("2 hàng: identity + lọc; Booking không ở header; công cụ trong overflow", () => {
+  it("identity + lọc; DayPulse + chip kho; Booking không ở header; công cụ overflow", () => {
     const html = renderHeader({ portal: "tcs" });
     expect(html).toContain("ops-mobile-sticky-header");
     expect(html).toContain("ops-mobile-identity-row");
     expect(html).toContain("ops-mobile-filter-row");
+    expect(html).toContain("ops-day-overview");
+    expect(html).toContain("ops-day-pulse");
+    expect(html).toContain("Tổng ngày");
+    expect(html).toContain("warehouse-chips");
     expect(html).toContain("23-AUG-2026");
     expect(html).toContain("Live");
     expect(html).toContain("OPS");
     expect(html).toContain("Báo cáo, Tải Ext, Công cụ");
     expect(html).not.toContain("+ Booking");
     expect(html).not.toContain("ops-mobile-sync-bar");
-    expect(html).not.toContain("warehouse-chips");
+    expect(html).not.toContain("Chọn kho</span>");
     expect(html).not.toContain("bg-emerald-600");
-    expect(html).not.toContain("bg-sky-600");
-    expect(html).not.toContain("bg-violet-600");
-    expect(html).not.toContain("bg-fuchsia-600");
+    expect(html).not.toContain("Vantage");
   });
 
-  it("vùng chạm sticky ≥44px trên overflow / kho / ngày / ST", () => {
+  it("vùng chạm sticky ≥44px trên overflow / chip kho / ngày / ST", () => {
     const html = renderHeader({});
     expect(html).toContain("min-h-11");
     expect(html).toContain("Ngày trước");
     expect(html).toContain("Ngày sau");
-    expect(html).toContain("Chọn kho");
+    expect(html).toContain("warehouse-chips");
     expect(html).toContain("Lọc trạng thái");
   });
 

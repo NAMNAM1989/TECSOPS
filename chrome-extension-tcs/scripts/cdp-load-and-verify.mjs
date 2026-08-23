@@ -629,14 +629,14 @@ async function main() {
         const timer = setTimeout(() => resolve({ ok:false, error:'TIMEOUT' }), 3000);
         function onMsg(e) {
           const d = e.data;
-          if (!d || d.channel !== 'tecsops-tcs-ext' || d.direction !== 'from-ext') return;
+          if (!d || d.channel !== 'tecsops-tcs-direct-ext' || d.direction !== 'from-ext') return;
           if (d.id !== id) return;
           clearTimeout(timer);
           window.removeEventListener('message', onMsg);
           resolve(d);
         }
         window.addEventListener('message', onMsg);
-        window.postMessage({ channel:'tecsops-tcs-ext', direction:'to-ext', id, type:'PING' }, '*');
+        window.postMessage({ channel:'tecsops-tcs-direct-ext', direction:'to-ext', id, type:'PING' }, '*');
       })`,
       awaitPromise: true,
       returnByValue: true,

@@ -3,9 +3,12 @@ import type { EcargoVctFillPayload } from "./buildEcargoVctFillPayload";
 import type { TcsEsidScanItem } from "./tcsPortalAgentApi";
 import { loadTcsExtLoginPrefs } from "./tcsExtLoginPrefs";
 
-/** Channel legacy (máy còn Ext cũ). Ext chuẩn ESID = TCS_EXT_CHANNEL_DIRECT. */
+/**
+ * Channel legacy (máy còn Ext cũ unpacked). Không gửi lệnh mới qua đây —
+ * mã kho dữ liệu TECS-TCS dùng Ext TCS (`TCS_EXT_CHANNEL_DIRECT`).
+ */
 export const TCS_EXT_CHANNEL = "tecsops-tcs-ext";
-/** Ext kho TCS ESID — tài khoản / session độc lập. */
+/** Ext kho TCS ESID — kênh chuẩn cho mã kho TCS và TECS-TCS. */
 export const TCS_EXT_CHANNEL_DIRECT = "tecsops-tcs-direct-ext";
 /** Ext kho SCSC eCargo VCT. */
 export const TCS_EXT_CHANNEL_SCSC = "tecsops-scsc-ecargo-ext";
@@ -18,12 +21,27 @@ export type TcsPortalExtWarehouse = "TECS-TCS" | "TCS";
 /** Mục tiêu channel Ops → Ext (ESID + eCargo). */
 export type TcsExtChannelTarget = TcsPortalExtWarehouse | "SCSC";
 
+/**
+ * Mã kho dữ liệu TECS-TCS / TCS cùng Ext TCS (`chrome-extension-tcs`).
+ * Không còn thư mục `chrome-extension/` (legacy tecsops-tcs-ext).
+ */
 export function tcsExtChannelForWarehouse(
   warehouse: TcsExtChannelTarget = "TECS-TCS"
 ): string {
-  if (warehouse === "TCS") return TCS_EXT_CHANNEL_DIRECT;
   if (warehouse === "SCSC") return TCS_EXT_CHANNEL_SCSC;
-  return TCS_EXT_CHANNEL;
+  return TCS_EXT_CHANNEL_DIRECT;
+}
+
+/** Ext TCS phục vụ cả mã kho dữ liệu TECS-TCS và TCS. */
+export function tcsEsidExtServesWarehouse(
+  announced: TcsExtChannelTarget | undefined,
+  current: TcsExtChannelTarget
+): boolean {
+  if (!announced) return true;
+  if (announced === current) return true;
+  const announcedTcs = announced === "TCS" || announced === "TECS-TCS";
+  const currentTcs = current === "TCS" || current === "TECS-TCS";
+  return announcedTcs && currentTcs;
 }
 
 export type TcsExtensionWorkspace = {
@@ -178,7 +196,7 @@ export function tcsExtChannelToWarehouse(
 ): TcsExtChannelTarget | null {
   if (channel === TCS_EXT_CHANNEL_DIRECT) return "TCS";
   if (channel === TCS_EXT_CHANNEL_SCSC) return "SCSC";
-  if (channel === TCS_EXT_CHANNEL) return "TECS-TCS";
+  if (channel === TCS_EXT_CHANNEL) return "TCS";
   return null;
 }
 

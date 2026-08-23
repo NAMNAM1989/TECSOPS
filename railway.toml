@@ -1,8 +1,6 @@
-# Dockerfile: Node + Playwright — portal online, không máy kho.
-# Mặc định TCS_AUTO_OPEN=0, TCS_AGENT_DUAL=0: không mở Chromium lúc boot.
-# Chrome on-demand khi Đăng Nhập TCS / Quét. Dual :8766 chỉ khi TCS_AGENT_DUAL=1.
-# Variables: TCS_USERNAME(_TCS) / TCS_PASSWORD(_TCS). Docs: docs/railway-online-portal.md
-# Region: asia-southeast1. Mount volume browser_profile_hub + browser_profile_tcs.
+# Dockerfile: Node Ops only. Chrome Ext TCS/SCSC trên PC thực thi eSID/eCargo.
+# Không Playwright/Python. Gỡ TCS_AGENT_* + volume browser_profile là ops follow-up.
+# Docs: docs/railway-online-portal.md
 #
 # Build: Dockerfile · start: node scripts/start-fullstack.mjs
 

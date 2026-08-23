@@ -8,9 +8,9 @@ Playwright MCP trong Cursor dùng để **test và debug**, không thay Chrome E
 |---|---|
 | Chrome Ext (TCS + SCSC) | Đăng Nhập TCS, Quét, Điền, Tải PDF trên máy có Chrome |
 | Playwright MCP (Cursor) | Agent chat: mở Ops/portal, tái hiện lỗi, kiểm locator |
-| OCR agent `:8765`/`:8766` | Tuỳ chọn — Ext có thể nhập CAPTCHA tay nếu OCR offline |
+| OCR trong Ext | ONNX trên Ext TCS — nhập tay trên tab TCS nếu CAPTCHA fail |
 
-**Không** wire Playwright MCP vào production Ops API. Script `portal:worker` / `portal:start:warehouse` đã gỡ (A3).
+**Không** wire Playwright MCP vào production Ops API. Agent Python / dual-agent đã gỡ (A3).
 
 ## Prompt mẫu (Cursor + Playwright MCP)
 
@@ -33,12 +33,11 @@ Không gọi API agent PDF/fill — chỉ quan sát UI.
 ## Khi tái hiện bug portal
 
 - Dùng MCP mở `https://www.tcs.com.vn` (hoặc URL login hiện tại) để đọc DOM/locator.
-- Sửa locator trong Ext / `tcs-awb-automation` rồi verify lại bằng Ext trên Chrome user.
+- Sửa locator trong Ext rồi verify lại bằng Ext trên Chrome user.
 - Không dùng MCP làm đường ĐN/Quét/Điền/PDF thay Ext trong sản xuất.
 
 ## Scripts đã gỡ (A3)
 
-- `portal:worker` / `portal:start:warehouse` / `portal-worker.mjs` — không còn trong package.
-- Dual-agent local vẫn dùng `portal:start:hub` / `portal:start:tcs` / `portal:headed:local`.
-
-Giữ `tcs-awb-automation` / `npm run tcs:agent:real` chỉ khi cần OCR nội bộ hoặc tooling debug (`VITE_PORTAL_EXECUTOR_POLICY=agent-only`).
+- `tcs-awb-automation/` + `tcs:agent*` + `portal:start:*` + `portal:headed:local`
+- `portal:worker` / `portal-worker.mjs` (gỡ trước)
+- `/tcs-agent` stub 410 — không còn Playwright trong container

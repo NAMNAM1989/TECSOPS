@@ -1,12 +1,8 @@
 /**
- * Policy chọn đường portal TCS — mô hình App-click → Ext trên PC kho.
+ * Policy chọn đường portal TCS — chỉ Chrome Ext trên PC kho.
  *
- * Mặc định auto + «Trực quan» (bật):
- * - Desktop: chỉ Chrome Ext (`chrome-extension-tcs` / SCSC) thực thi — không Playwright Railway.
- * - Ext offline → UI báo cài Ext; không lặng lẽ sang agent headless.
- * - Mobile: agent-only (phone không có Ext) — đường phụ.
- *
- * Tắt «Trực quan» hoặc policy `agent-only` → mới dùng Railway `TCS_AGENT_*` / browser_profile.
+ * Agent Python / Railway Playwright đã gỡ (A3). `agent-only` / `remote-only`
+ * còn đọc được từ localStorage cũ nhưng luôn rơi về Ext.
  */
 
 export type PortalExecutorPolicy =
@@ -32,7 +28,7 @@ function normalizePolicy(raw: string | undefined | null): PortalExecutorPolicy |
   return null;
 }
 
-/** Mặc định auto (desktop Ext-first; mobile agent phụ). Ghi đè: VITE_ / localStorage. */
+/** Mặc định auto = Ext PC. Ghi đè: VITE_ / localStorage (agent/remote bị bỏ qua). */
 export function getPortalExecutorPolicy(): PortalExecutorPolicy {
   try {
     const fromLs = normalizePolicy(localStorage.getItem(LS_KEY));
@@ -65,7 +61,7 @@ export function setPortalExecutorPolicy(policy: PortalExecutorPolicy | ""): void
 
 /**
  * Chế độ trực quan = App-click → tab Chrome Ext trên PC kho.
- * Mặc định bật. Tắt chỉ khi cố ý dùng agent Railway headless (fallback).
+ * Mặc định bật. Không còn fallback agent khi tắt.
  */
 export function getPortalVisualControl(): boolean {
   try {
@@ -88,80 +84,49 @@ export function setPortalVisualControl(on: boolean): void {
   }
 }
 
-/** Policy có dùng Playwright agent (Railway/local) không — đường phụ. */
+/** Agent Python đã gỡ — luôn false. */
 export function portalPolicyUsesAgent(
-  policy: PortalExecutorPolicy = getPortalExecutorPolicy()
+  _policy: PortalExecutorPolicy = getPortalExecutorPolicy()
 ): boolean {
-  return policy === "auto" || policy === "agent-only";
+  return false;
 }
 
 /**
- * Desktop + Trực quan (mặc định): khóa chỉ Ext — kể cả khi Ext offline
- * (UI hiện chip «Ext · offline», không fallback Playwright Railway).
+ * Desktop: luôn khóa Ext (không còn agent Railway).
+ * Mobile: không khóa — UI báo «cần Ext trên PC».
  */
 export function shouldLockToExtensionVisual(opts: {
   isMobile?: boolean;
   visualControl?: boolean;
-  /** Giữ tham số tương thích; không còn điều kiện khóa. */
   extensionOnline?: boolean;
   policy?: PortalExecutorPolicy;
 }): boolean {
+  void opts.visualControl;
   void opts.extensionOnline;
-  if (opts.isMobile) return false;
-  const policy = opts.policy || getPortalExecutorPolicy();
-  if (policy === "agent-only" || policy === "remote-only") return false;
-  if (policy === "ext-only") return true;
-  const visual =
-    opts.visualControl === undefined
-      ? getPortalVisualControl()
-      : opts.visualControl;
-  return Boolean(visual);
+  void opts.policy;
+  return !opts.isMobile;
 }
 
 /**
- * Thứ tự thử executor — App-click → PC Ext là đường chính.
- * - auto + desktop + Trực quan: chỉ Ext
- * - auto + desktop + tắt Trực quan: Ext → agent (fallback có chủ đích)
- * - auto + mobile: chỉ agent (phone)
- * - ext-only / agent-only / remote-only: như tên
+ * Thứ tự executor — chỉ Ext. Policy agent/remote legacy bị bỏ qua.
  */
 export function resolvePortalExecutorOrder(
   action: PortalAction,
   opts: {
     policy?: PortalExecutorPolicy;
     preferRemote?: boolean;
-    /** Viewport ≤767 — phone: agent-only khi auto */
     isMobile?: boolean;
-    /** Chế độ trực quan (mặc định đọc localStorage) */
     visualControl?: boolean;
-    /** Ext đã ping ok trên máy này */
     extensionOnline?: boolean;
   } = {}
 ): PortalExecutor[] {
   void action;
-  void opts.preferRemote;
-  const policy = opts.policy || getPortalExecutorPolicy();
-
-  if (policy === "agent-only") return ["agent"];
-  if (policy === "remote-only") return ["remote"];
-  if (policy === "ext-only") return ["extension"];
-  // auto
-  if (opts.isMobile) return ["agent"];
-  if (
-    shouldLockToExtensionVisual({
-      isMobile: false,
-      visualControl: opts.visualControl,
-      extensionOnline: opts.extensionOnline,
-      policy,
-    })
-  ) {
-    return ["extension"];
-  }
-  return ["extension", "agent"];
+  void opts;
+  return ["extension"];
 }
 
 export function portalExecutorLabel(ex: PortalExecutor): string {
   if (ex === "extension") return "Ext PC";
-  if (ex === "agent") return "Agent Railway (fallback)";
-  return "Máy kho từ xa (deprecated)";
+  if (ex === "agent") return "Agent (đã gỡ)";
+  return "Máy kho từ xa (đã gỡ)";
 }

@@ -17,11 +17,7 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
-      /**
-       * Không route thẳng :8765/:8766 từ Vite — `router` theo header hay bị
-       * bỏ qua / sticky target → Quét kho TCS chạy nhầm agent TECS-TCS.
-       * Ủy quyền cho Express `tcsAgentProxy` (đã dual-port đúng header).
-       */
+      /** Stub 410 AGENT_GONE trên Express — client cũ không dính SPA HTML. */
       "/tcs-agent": { target: apiTarget, changeOrigin: true },
     },
   },

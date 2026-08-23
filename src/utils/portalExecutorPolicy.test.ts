@@ -8,131 +8,58 @@ import {
 } from "./portalExecutorPolicy";
 
 describe("resolvePortalExecutorOrder", () => {
-  it("auto desktop: Ext trước, agent sau", () => {
+  it("mọi policy / viewport: chỉ Ext (agent đã gỡ)", () => {
     expect(
       resolvePortalExecutorOrder("login", {
         policy: "auto",
         isMobile: false,
         visualControl: false,
       })
-    ).toEqual(["extension", "agent"]);
+    ).toEqual(["extension"]);
     expect(
       resolvePortalExecutorOrder("scan", {
-        policy: "auto",
-        isMobile: false,
-        visualControl: false,
-      })
-    ).toEqual(["extension", "agent"]);
-    expect(
-      resolvePortalExecutorOrder("fill", {
-        policy: "auto",
-        isMobile: false,
-        visualControl: false,
-      })
-    ).toEqual(["extension", "agent"]);
-    expect(
-      resolvePortalExecutorOrder("pdf", {
-        policy: "auto",
-        isMobile: false,
-        visualControl: false,
-      })
-    ).toEqual(["extension", "agent"]);
-  });
-
-  it("auto không truyền isMobile: coi như desktop Ext→agent", () => {
-    expect(
-      resolvePortalExecutorOrder("scan", {
-        policy: "auto",
-        visualControl: false,
-      })
-    ).toEqual(["extension", "agent"]);
-  });
-
-  it("auto mobile: chỉ agent", () => {
-    expect(
-      resolvePortalExecutorOrder("scan", { policy: "auto", isMobile: true })
-    ).toEqual(["agent"]);
-    expect(
-      resolvePortalExecutorOrder("pdf", { policy: "auto", isMobile: true })
-    ).toEqual(["agent"]);
-    expect(
-      resolvePortalExecutorOrder("login", { policy: "auto", isMobile: true })
-    ).toEqual(["agent"]);
-  });
-
-  it("preferRemote bị bỏ qua — vẫn Ext → agent trên desktop", () => {
-    expect(
-      resolvePortalExecutorOrder("scan", {
-        policy: "auto",
-        preferRemote: true,
-        isMobile: false,
-        visualControl: false,
-      })
-    ).toEqual(["extension", "agent"]);
-  });
-
-  it("trực quan + Ext online: chỉ Ext", () => {
-    expect(
-      resolvePortalExecutorOrder("fill", {
         policy: "auto",
         isMobile: false,
         visualControl: true,
-        extensionOnline: true,
       })
     ).toEqual(["extension"]);
     expect(
-      shouldLockToExtensionVisual({
-        isMobile: false,
-        visualControl: true,
-        extensionOnline: true,
-      })
-    ).toBe(true);
-  });
-
-  it("trực quan + Ext offline: vẫn chỉ Ext (không fallback Railway)", () => {
-    expect(
-      resolvePortalExecutorOrder("scan", {
+      resolvePortalExecutorOrder("fill", {
         policy: "auto",
-        isMobile: false,
-        visualControl: true,
-        extensionOnline: false,
+        isMobile: true,
       })
     ).toEqual(["extension"]);
     expect(
-      shouldLockToExtensionVisual({
-        isMobile: false,
-        visualControl: true,
-        extensionOnline: false,
-      })
-    ).toBe(true);
+      resolvePortalExecutorOrder("pdf", { policy: "agent-only" })
+    ).toEqual(["extension"]);
+    expect(
+      resolvePortalExecutorOrder("login", { policy: "remote-only" })
+    ).toEqual(["extension"]);
+    expect(
+      resolvePortalExecutorOrder("scan", { policy: "ext-only" })
+    ).toEqual(["extension"]);
   });
 
-  it("tắt trực quan: mới cho Ext → agent fallback", () => {
+  it("desktop luôn khóa Ext; mobile không khóa (UI báo cần Ext trên PC)", () => {
     expect(
-      resolvePortalExecutorOrder("scan", {
-        policy: "auto",
+      shouldLockToExtensionVisual({
         isMobile: false,
         visualControl: false,
         extensionOnline: false,
       })
-    ).toEqual(["extension", "agent"]);
+    ).toBe(true);
+    expect(
+      shouldLockToExtensionVisual({
+        isMobile: true,
+        visualControl: true,
+        extensionOnline: false,
+      })
+    ).toBe(false);
   });
 
-  it("ext-only / agent-only / remote-only", () => {
-    expect(resolvePortalExecutorOrder("login", { policy: "ext-only" })).toEqual([
-      "extension",
-    ]);
-    expect(resolvePortalExecutorOrder("pdf", { policy: "agent-only" })).toEqual([
-      "agent",
-    ]);
-    expect(resolvePortalExecutorOrder("fill", { policy: "remote-only" })).toEqual([
-      "remote",
-    ]);
-  });
-
-  it("portalPolicyUsesAgent", () => {
-    expect(portalPolicyUsesAgent("auto")).toBe(true);
-    expect(portalPolicyUsesAgent("agent-only")).toBe(true);
+  it("portalPolicyUsesAgent luôn false", () => {
+    expect(portalPolicyUsesAgent("auto")).toBe(false);
+    expect(portalPolicyUsesAgent("agent-only")).toBe(false);
     expect(portalPolicyUsesAgent("ext-only")).toBe(false);
   });
 });

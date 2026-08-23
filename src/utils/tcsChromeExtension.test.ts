@@ -13,6 +13,7 @@ import {
   TCS_EXT_CHANNEL_DIRECT,
   TCS_EXT_CHANNEL_SCSC,
   tcsExtChannelForWarehouse,
+  tcsEsidExtServesWarehouse,
 } from "./tcsChromeExtension";
 import { saveTcsExtLoginPrefs } from "./tcsExtLoginPrefs";
 
@@ -104,10 +105,13 @@ describe("tcsChromeExtension bridge", () => {
     expect(result.error).toBe("TIMEOUT");
   });
 
-  it("route channel theo kho TECS-TCS / TCS / SCSC", () => {
-    expect(tcsExtChannelForWarehouse("TECS-TCS")).toBe(TCS_EXT_CHANNEL);
+  it("route channel: TECS-TCS + TCS → Ext TCS; SCSC → Ext SCSC", () => {
+    expect(tcsExtChannelForWarehouse("TECS-TCS")).toBe(TCS_EXT_CHANNEL_DIRECT);
     expect(tcsExtChannelForWarehouse("TCS")).toBe(TCS_EXT_CHANNEL_DIRECT);
     expect(tcsExtChannelForWarehouse("SCSC")).toBe(TCS_EXT_CHANNEL_SCSC);
+    expect(tcsEsidExtServesWarehouse("TCS", "TECS-TCS")).toBe(true);
+    expect(tcsEsidExtServesWarehouse("TECS-TCS", "TCS")).toBe(true);
+    expect(tcsEsidExtServesWarehouse("SCSC", "TCS")).toBe(false);
   });
 
   it("ping Ext kho TCS qua channel direct", async () => {
@@ -186,7 +190,7 @@ describe("tcsChromeExtension bridge", () => {
     expect(result.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith(
       expect.objectContaining({
-        channel: TCS_EXT_CHANNEL,
+        channel: TCS_EXT_CHANNEL_DIRECT,
         type: "DOWNLOAD_ESID_PDF",
       }),
       window.location.origin
@@ -207,11 +211,11 @@ describe("tcsChromeExtension bridge", () => {
     );
     vi.restoreAllMocks();
 
-    const fillSpy = answerNext({ ok: true });
+    const fillSpy = answerNext({ ok: true }, TCS_EXT_CHANNEL_DIRECT);
     await fillEsidViaExtension({ warehouse: "TECS-TCS" } as never);
     expect(fillSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        channel: TCS_EXT_CHANNEL,
+        channel: TCS_EXT_CHANNEL_DIRECT,
         payload: expect.objectContaining({ expected_username: "hanam7195" }),
       }),
       window.location.origin

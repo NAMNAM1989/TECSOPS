@@ -70,13 +70,13 @@ Xem bảng REVIEW + KEEP. Mọi mục REVIEW-only giữ nguyên trên `main` lin
 
 Chạy trên nhánh này sau khi xóa:
 
-- [ ] `npm run lint`
-- [ ] `npm run lint:server`
-- [ ] `npm run typecheck`
-- [ ] `npm test`
-- [ ] `npm run deploy:check`
+- [x] `npm run lint` — PASS (`eslint src`)
+- [x] `npm run lint:server` — PASS (`eslint server`)
+- [x] `npm run typecheck` — PASS (`tsc -b`)
+- [x] `npm test` — PASS **81 files / 489 tests** (B1 #56: 82 / 492; −1 file policy leftover)
+- [x] `npm run deploy:check` — PASS (`[check-deploy-safe] OK`)
 
-Kết quả điền sau khi CI local xong.
+Không đụng Ext TCS/SCSC, Dockerfile OCR, eCargo, print/CSD, mã kho, CTA «Đăng Nhập TCS».
 
 ---
 

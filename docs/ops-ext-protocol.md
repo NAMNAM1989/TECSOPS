@@ -5,7 +5,7 @@
 ```
 Người dùng bấm nút trên Ops (web)
         ↓  postMessage (content-ops.js)
-Chrome Ext trên PC kho (ext_tcs / ext_scsc)
+Chrome Ext trên PC kho (chrome-extension-tcs / chrome-extension-scsc)
         ↓
 Tab tcs.com.vn / ecargo.scsc.vn trên máy đó
 ```

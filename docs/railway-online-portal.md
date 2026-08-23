@@ -77,8 +77,8 @@ Region khuyến nghị: `asia-southeast1`.
 
 1. Mở Ops bằng URL Railway (không dùng `127.0.0.1`).
 2. Chọn kho TECS-TCS hoặc TCS + ngày phiên.
-3. **Phone:** không nút Đăng Nhập TCS/Điền — bấm **Quét** để mở Chrome on-demand; menu ⋮ **Tải PDF**.
-4. **PC:** Đăng Nhập TCS Ext (nhìn được) → Quét / Điền / PDF; fallback agent nếu không có Ext.
+3. **Phone:** bấm «Đăng Nhập TCS» / **Quét** qua agent cloud (không có Ext trên điện thoại); menu ⋮ **Tải PDF**. Không Điền ESID trên phone.
+4. **PC:** «Đăng Nhập TCS» → Ext trên máy kho thực thi. «Trực quan» bật (mặc định) → không fallback Railway khi Ext offline. Tắt «Trực quan» nếu muốn agent.
 5. **HOÀN TẤT** trên Ops (PC) khi agent/Ext đã điền form.
 
 Quét agent dùng `POST /workspace/scan` (nhẹ — không prefetch PDF).

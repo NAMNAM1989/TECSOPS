@@ -3,7 +3,8 @@
 > Giai đoạn 0 của `docs/TECSOPS_CURSOR_REDESIGN_UPGRADE_SPEC.md`.  
 > **Chỉ khảo sát.** Không sửa UI, schema, API, Ext, print layout, auth, hay nghiệp vụ.  
 > Base: `main` @ `04a5f43` (`feat(ui): modal DIM — Đo nhanh mặc định, Nâng cao thu gọn` #68).  
-> Ngày audit: 2026-08-23.
+> Ngày audit: 2026-08-23.  
+> Phương án gỡ/sửa (chọn gói A/B/C): `docs/TECSOPS-REDESIGN-OPTIONS.md`.
 
 ---
 

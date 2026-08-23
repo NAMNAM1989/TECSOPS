@@ -21,7 +21,7 @@ export function EsidSettingsMenu({ disabled, compact }: Props) {
         type="button"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex shrink-0 items-center justify-center gap-1 rounded-full border border-ui-border bg-ui-surface px-2.5 py-1 text-[10px] font-bold text-ui-text transition hover:bg-ui-surface-muted disabled:opacity-45"
+        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1 rounded-xl border border-ui-border bg-ui-surface px-3 text-[12px] font-semibold text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:opacity-45 touch-manipulation"
         title="Cài đặt hồ sơ ESID (Người khai · Agent)"
         aria-expanded={open}
       >

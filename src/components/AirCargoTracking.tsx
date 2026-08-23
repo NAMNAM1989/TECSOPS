@@ -33,7 +33,6 @@ import {
   isTcsWarehouse,
   isTecsHub,
 } from "../constants/warehouses";
-import { tcsLoginCtaLabel } from "../utils/tcsLoginCtaLabel";
 import { NewBookingButton } from "./NewBookingButton";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { OpsMobileStickyHeader } from "./OpsMobileStickyHeader";
@@ -604,20 +603,13 @@ export function AirCargoTracking({
       {...toolsProps}
       tcsPortalBar={
         isTcsWarehouse(activeWarehouse) ? (
-          <TcsPortalInlineBar compact isMobile tcs={tcsPortal} />
+          <TcsPortalInlineBar
+            compact
+            isMobile
+            tcs={tcsPortal}
+            preferredShipment={selected}
+          />
         ) : null
-      }
-      portalLoginCta={
-        isTcsWarehouse(activeWarehouse) &&
-        !tcsPortal.extension?.workspace?.logged_in
-          ? {
-              label: tcsLoginCtaLabel(),
-              busy: tcsPortal.busy,
-              onClick: () => {
-                void tcsPortal.login();
-              },
-            }
-          : null
       }
       ecargoBar={
         isEcargoScscWarehouse(activeWarehouse) ? (
@@ -805,7 +797,12 @@ export function AirCargoTracking({
           ) : null}
           {isTcsWarehouse(activeWarehouse) ? (
             <div className="min-w-0 shrink-0">
-              <TcsPortalInlineBar compact isMobile={false} tcs={tcsPortal} />
+              <TcsPortalInlineBar
+                compact
+                isMobile={false}
+                tcs={tcsPortal}
+                preferredShipment={selected}
+              />
             </div>
           ) : null}
           {isEcargoScscWarehouse(activeWarehouse) ? (

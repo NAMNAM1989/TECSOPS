@@ -45,14 +45,8 @@ interface Props {
   scscDimExporting?: boolean;
   cargoReportCopying?: boolean;
   showDimScsc?: boolean;
-  /** Thanh Cổng TCS dưới ô tìm kiếm (TECS-TCS) */
+  /** Thanh Cổng TCS dưới ô tìm kiếm (TECS-TCS / TCS) */
   tcsPortalBar?: ReactNode;
-  /** CTA «Đăng Nhập TCS» khi cổng thu gọn / agent-ext fail — không ẩn trên mobile */
-  portalLoginCta?: {
-    label: string;
-    busy?: boolean;
-    onClick: () => void;
-  } | null;
   /** Thanh đăng ký eCargo — chỉ khi đang xem kho SCSC trực tiếp */
   ecargoBar?: ReactNode;
   filteredViewRows: readonly Shipment[];
@@ -110,7 +104,6 @@ export function OpsMobileStickyHeader({
   cargoReportCopying,
   showDimScsc,
   tcsPortalBar,
-  portalLoginCta,
   ecargoBar,
   filteredViewRows,
   viewRows,
@@ -315,27 +308,10 @@ export function OpsMobileStickyHeader({
                 >
                   <span className="min-w-0 truncate">
                     {tcsPortalBar ? "Cổng TCS / ESID" : "eCargo SCSC"}
-                    {portalExpanded
-                      ? ""
-                      : portalLoginCta
-                        ? " · cần Đăng Nhập TCS"
-                        : " · chạm để mở"}
+                    {portalExpanded ? "" : " · cần Ext trên PC"}
                   </span>
                   <span aria-hidden>{portalExpanded ? "▴" : "▾"}</span>
                 </button>
-                {!portalExpanded && portalLoginCta ? (
-                  <button
-                    type="button"
-                    disabled={portalLoginCta.busy}
-                    onClick={() => {
-                      setPortalExpanded(true);
-                      portalLoginCta.onClick();
-                    }}
-                    className="inline-flex min-h-11 shrink-0 touch-manipulation items-center justify-center rounded-full bg-ui-primary px-2.5 text-[10px] font-bold text-white shadow-sm hover:bg-ui-primary-hover disabled:opacity-45"
-                  >
-                    {portalLoginCta.label}
-                  </button>
-                ) : null}
               </div>
               {portalExpanded ? (
                 <div className="min-w-0 space-y-1">

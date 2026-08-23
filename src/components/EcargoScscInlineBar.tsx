@@ -25,9 +25,10 @@ import {
   pingTcsExtension,
   subscribeTcsExtensionReady,
   tcsExtPresence,
-  tcsExtPresenceLabel,
   type TcsExtResult,
 } from "../utils/tcsChromeExtension";
+import { PortalExtStatusChip } from "./PortalExtStatusChip";
+import { PORTAL_BAR_UI } from "./portalBarUi";
 
 type HostProps = {
   shipments: Shipment[];
@@ -150,41 +151,37 @@ export function EcargoScscInlineBar({ preferredShipmentId, compact = false }: Ba
   }, [refreshExt]);
 
   const presence = tcsExtPresence(extension);
-  const extChipClass =
-    presence === "logged_in" || presence === "ready"
-      ? "bg-sky-500/15 text-sky-900"
-      : "bg-slate-500/15 text-slate-600";
-
-  const btn =
-    "inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition active:scale-[0.98] border border-emerald-500/30 bg-emerald-50 text-emerald-900 hover:bg-emerald-100";
+  const extTitle =
+    presence === "offline"
+      ? "Chưa thấy Ext «TECSOPS — Kho SCSC eCargo». Cài từ «Tải Ext», Reload, F5 Ops."
+      : presence === "logged_in"
+        ? "Ext SCSC eCargo online · đã login"
+        : "Ext SCSC eCargo online · sẵn sàng";
 
   return (
-    <span className="inline-flex shrink-0 items-center gap-1">
-      <span
-        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${extChipClass}`}
-        title={
-          presence === "offline"
-            ? "Chưa thấy Ext «TECSOPS — Kho SCSC eCargo». Cài từ «Tải Ext», Reload, F5 Ops."
-            : "Ext SCSC eCargo online"
-        }
-        data-testid="ops-scsc-ext-status"
-        data-ext-presence={presence}
-      >
-        {tcsExtPresenceLabel(extension, { compact: true })}
-      </span>
+    <span className={`${PORTAL_BAR_UI.toolbar} shrink-0`}>
+      <PortalExtStatusChip
+        presence={presence}
+        title={extTitle}
+        testId="ops-scsc-ext-status"
+      />
       <button
         type="button"
-        className={btn}
+        className={`${PORTAL_BAR_UI.btnBase} ${PORTAL_BAR_UI.btnAccent}`}
         title={
           complete
-            ? "Đăng ký eCargo — chọn lô kho SCSC"
-            : "Đăng ký eCargo SCSC — cần lưu hồ sơ đại lý lần đầu (Ext SCSC: nút «Tải Ext»)"
+            ? "Đăng ký eCargo — chọn lô kho SCSC (Ext SCSC trên PC)"
+            : "Đăng ký eCargo SCSC — cần lưu hồ sơ đại lý lần đầu (Ext SCSC: menu «Tải Ext»)"
         }
         onClick={() => api?.openRegister(preferredShipmentId)}
         disabled={!api}
       >
         {compact ? "eCargo" : "Đăng ký eCargo"}
-        {!complete ? <span className="text-amber-600">·</span> : null}
+        {!complete ? (
+          <span className="text-amber-800" aria-hidden>
+            ·
+          </span>
+        ) : null}
       </button>
     </span>
   );

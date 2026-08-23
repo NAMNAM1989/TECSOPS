@@ -1,19 +1,29 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { Button, Wordmark } from "../ui";
+import { Button, ErrorState, PageSkeleton, Wordmark } from "../ui";
 
-type AuthStatus = {
+export type AuthStatus = {
   required: boolean;
   authenticated: boolean;
+  allowUnauthenticated?: boolean;
 };
+
+/** Gate chỉ khi status đã load, auth bắt buộc, và chưa đăng nhập. */
+export function shouldShowAuthGate(status: AuthStatus | null | undefined): boolean {
+  if (!status) return false;
+  if (status.allowUnauthenticated || status.required === false) return false;
+  return !status.authenticated;
+}
 
 export function AppAuthGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus | null>(null);
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [statusRetry, setStatusRetry] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setError("");
     void fetch("/api/auth/status", {
       credentials: "include",
       cache: "no-store",
@@ -33,7 +43,7 @@ export function AppAuthGate({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [statusRetry]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -55,7 +65,7 @@ export function AppAuthGate({ children }: { children: ReactNode }) {
         throw new Error(body.error || "Không thể xác thực.");
       }
       setToken("");
-      setStatus({ required: true, authenticated: true });
+      setStatus({ required: true, authenticated: true, allowUnauthenticated: false });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể xác thực.");
     } finally {
@@ -63,7 +73,25 @@ export function AppAuthGate({ children }: { children: ReactNode }) {
     }
   }
 
-  if (status?.authenticated || status?.required === false) return children;
+  if (!status) {
+    if (error) {
+      return (
+        <main className="flex min-h-screen items-center justify-center bg-ui-background p-4">
+          <ErrorState
+            title="Không kiểm tra được phiên truy cập."
+            description={error}
+            onRetry={() => {
+              setStatus(null);
+              setStatusRetry((n) => n + 1);
+            }}
+          />
+        </main>
+      );
+    }
+    return <PageSkeleton />;
+  }
+
+  if (!shouldShowAuthGate(status)) return children;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-ui-background p-4">

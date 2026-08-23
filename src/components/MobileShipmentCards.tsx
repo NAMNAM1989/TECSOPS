@@ -185,7 +185,7 @@ const MobileShipmentCard = memo(
         id={`mobile-shipment-${row.id}`}
         style={{
           contentVisibility: "auto",
-          containIntrinsicSize: "0 64px",
+          containIntrinsicSize: "0 56px",
         }}
         className={`${MOBILE.card} scroll-mt-2 scroll-mb-[calc(6.5rem+env(safe-area-inset-bottom))] ${rowAccent} ${rowSurface} ${
           selected ? "ring-2 ring-ui-primary/40" : ""
@@ -193,11 +193,11 @@ const MobileShipmentCard = memo(
           flightMeta.flightDateUrgent ? "ring-1 ring-red-300/80" : ""
         }`}
       >
-        <div className={`${MOBILE.cardInner} !py-1.5`}>
-          <div className="flex min-w-0 items-center gap-1.5">
+        <div className={MOBILE.cardInner}>
+          <div className="flex min-w-0 items-center gap-1">
             <button
               type="button"
-              className="min-w-0 flex-1 py-0.5 text-left active:opacity-90"
+              className="min-w-0 flex-1 py-0 text-left active:opacity-90"
               onClick={() => onOpenEdit(row)}
               aria-label={awbTrim ? `Sửa lô ${awbTrim}` : "Thêm AWB"}
             >
@@ -238,7 +238,7 @@ const MobileShipmentCard = memo(
 
           <button
             type="button"
-            className="mt-0.5 flex min-w-0 w-full items-center gap-1 py-0.5 text-left active:opacity-90"
+            className="mt-px flex min-w-0 w-full items-center gap-1 py-0 text-left active:opacity-90"
             onClick={() => onOpenEdit(row)}
             title={[customerTitle, flightMeta.plain, cneeSummary].filter(Boolean).join(" · ") || undefined}
           >
@@ -344,7 +344,7 @@ export function MobileShipmentCards({
 
   return (
     <div
-      className={`space-y-1 pb-[calc(6.5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(6.5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
+      className={`space-y-0.5 pb-[calc(6.5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(6.5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
       data-testid="mobile-shipment-list"
     >
       {searchActive
@@ -356,7 +356,7 @@ export function MobileShipmentCards({
               <section
                 key={wh}
                 id={`warehouse-section-${wh}`}
-                className="space-y-1"
+                className="space-y-0.5"
               >
                 <button
                   type="button"

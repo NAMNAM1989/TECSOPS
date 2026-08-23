@@ -56,6 +56,31 @@ describe("MobileShipmentCards", () => {
     expect(html).not.toContain("CNEE");
     expect(html).toContain("row-actions-menu-s1");
   });
+
+  it("densify padding/gap, AWB 15px, status/menu ≥44px, clearance FAB", () => {
+    const html = renderToStaticMarkup(
+      <MobileShipmentCards
+        rows={[row]}
+        selectedId={null}
+        onSelect={() => undefined}
+        onUpdate={() => undefined}
+        onDelete={() => undefined}
+        onPrint={() => undefined}
+        activeWarehouse="TCS"
+        viewSessionYmd="2026-08-23"
+      />,
+    );
+    expect(html).toContain("space-y-0.5");
+    expect(html).toContain("px-2 py-1");
+    expect(html).not.toContain("px-2.5 py-1.5");
+    expect(html).not.toContain("!py-1.5");
+    expect(html).toContain("ops-awb");
+    expect(html).toContain("text-[15px]");
+    expect(html).toContain("h-11 w-full min-h-11");
+    expect(html).toContain("min-h-11 min-w-11");
+    expect(html).toContain("pb-[calc(6.5rem+env(safe-area-inset-bottom))]");
+    expect(html).toContain("scroll-mb-[calc(6.5rem+env(safe-area-inset-bottom))]");
+  });
 });
 
 describe("OpsMobileBookingFab", () => {
@@ -66,6 +91,10 @@ describe("OpsMobileBookingFab", () => {
     expect(html).toContain("ops-mobile-booking-fab");
     expect(html).toContain("+ Booking");
     expect(html).toContain("min-h-11");
+    expect(html).toContain("bottom-[calc(4.25rem+env(safe-area-inset-bottom))]");
+    expect(html).toContain(
+      "[[data-ops-mobile-overlay=sheet]_&amp;]:invisible",
+    );
     expect(html).not.toContain("sticky-mobile-actions");
     expect(html).not.toContain("shadow-apple-md");
     expect(html).not.toContain("Sửa lô");

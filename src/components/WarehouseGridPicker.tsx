@@ -129,8 +129,8 @@ export function WarehouseGridPicker({
     <div
       className={
         compact
-          ? `grid grid-cols-2 gap-1.5 ${className}`
-          : `grid grid-cols-2 gap-1.5 sm:grid-cols-4 ${className}`
+          ? `grid grid-cols-2 gap-1 ${className}`
+          : `grid grid-cols-2 gap-1 sm:grid-cols-4 ${className}`
       }
       role="tablist"
       aria-label="Chọn kho"
@@ -149,7 +149,7 @@ export function WarehouseGridPicker({
             role="tab"
             aria-selected={isActive}
             className={`group relative min-w-0 overflow-hidden rounded-xl border-l-[3px] text-left transition-all duration-150 ${CARD_ACCENT[wh]} ${
-              compact ? "px-1.5 py-1" : "px-2 py-1.5"
+              compact ? "px-1.5 py-1" : "px-2 py-1"
             } ${
               isActive
                 ? `bg-ui-surface shadow-ui-md ring-2 ${CARD_RING[wh]}`
@@ -185,7 +185,7 @@ export function WarehouseGridPicker({
                 </p>
               </div>
               <p
-                className={`mt-0.5 truncate font-mono tabular-nums text-ui-navy ${
+                className={`mt-px truncate font-mono tabular-nums text-ui-navy ${
                   isActive ? "text-[11px] font-extrabold" : "text-[10px] font-semibold"
                 } ${compact || !hideAddButton ? "pr-5" : ""}`}
                 title={`Lô ${m.lots} · Kiện ${m.pcs} · Kg ${kg}`}

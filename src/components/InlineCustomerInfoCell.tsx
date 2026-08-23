@@ -44,7 +44,7 @@ const selectCls =
   "box-border h-7 min-w-0 w-full max-w-full cursor-pointer truncate rounded-md border border-ui-border bg-ui-surface px-1.5 py-0 text-[11px] font-semibold leading-none text-ui-text focus:outline-none focus:ring-1 focus:ring-ui-focus disabled:cursor-default disabled:opacity-45";
 
 const LINE =
-  "block h-[1.125rem] w-full truncate text-left text-[10px] font-semibold leading-[1.125rem] text-ui-text";
+  "block h-3.5 w-full truncate text-left text-[10px] font-semibold leading-[0.875rem] text-ui-text";
 
 /** Chỉ cắt rất dài (option/select); ô tóm tắt dùng CSS truncate theo cột. */
 function clipLabel(s: string, max = 48): string {
@@ -334,7 +334,7 @@ export function InlineCustomerInfoCell({
         aria-controls={open ? panelId : undefined}
         title="Click để chọn / sửa Shipper · CNEE · Hàng"
         onClick={() => setOpen((v) => !v)}
-        className={`flex w-full max-w-full flex-col gap-0 rounded-md px-1 py-0.5 text-left transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+        className={`flex w-full max-w-full flex-col gap-0 rounded-md px-0.5 py-0 text-left transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
           open ? "bg-ui-primary/10 ring-1 ring-ui-primary/30" : ""
         }`}
       >

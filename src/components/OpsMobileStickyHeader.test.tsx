@@ -9,61 +9,111 @@ const emptySearch = {
   customers: [],
 };
 
-function renderHeader(portal: "tcs" | "scsc" | "none") {
+function renderHeader(opts: {
+  portal?: "tcs" | "scsc" | "none";
+  selected?: boolean;
+  empty?: boolean;
+}) {
+  const portal = opts.portal ?? "none";
   const warehouse = portal === "scsc" ? "SCSC" : "TCS";
   const row = {
     ...blankShipmentDraft("2026-08-23", warehouse),
     id: "s1",
     stt: 1,
+    awb: "17612345675",
   } as Shipment;
+  const rows = opts.empty ? [] : [row];
   return renderToStaticMarkup(
     <ToastProvider>
-    <OpsMobileStickyHeader
-      selectedYmd="2026-08-23"
-      onDateChange={() => undefined}
-      onPrevDay={() => undefined}
-      onNextDay={() => undefined}
-      onToday={() => undefined}
-      isViewingToday
-      syncStatus="live"
-      socketConnected
-      activeWarehouse={warehouse}
-      onAddBooking={() => undefined}
-      onNavigateCustomers={() => undefined}
-      onOpenAirlineLabels={() => undefined}
-      onDownloadDayExcel={() => undefined}
-      tcsPortalBar={portal === "tcs" ? <span>bar-tcs</span> : null}
-      ecargoBar={portal === "scsc" ? <span>bar-scsc</span> : null}
-      filteredViewRows={[row]}
-      viewRows={[row]}
-      onWarehouseChange={() => undefined}
-      searchHighlightWarehouses={[]}
-      searchQuery=""
-      onSearchChange={() => undefined}
-      statusFilteredRows={[row]}
-      searchContext={emptySearch}
-      onSelectSearchMatch={() => undefined}
-      statusFilter="ALL"
-      onStatusFilterChange={() => undefined}
-      onClearFilters={() => undefined}
-    />
-    </ToastProvider>
+      <OpsMobileStickyHeader
+        selectedYmd="2026-08-23"
+        onDateChange={() => undefined}
+        onPrevDay={() => undefined}
+        onNextDay={() => undefined}
+        onToday={() => undefined}
+        isViewingToday
+        syncStatus="live"
+        socketConnected
+        activeWarehouse={warehouse}
+        onAddBooking={() => undefined}
+        onNavigateCustomers={() => undefined}
+        onOpenAirlineLabels={() => undefined}
+        onDownloadDayExcel={() => undefined}
+        onCopyCargoDayReport={() => undefined}
+        selectedShipment={opts.selected ? row : null}
+        tcsPortalBar={portal === "tcs" ? <span>bar-tcs</span> : null}
+        ecargoBar={portal === "scsc" ? <span>bar-scsc</span> : null}
+        filteredViewRows={rows}
+        viewRows={rows}
+        onWarehouseChange={() => undefined}
+        searchHighlightWarehouses={[]}
+        searchQuery=""
+        onSearchChange={() => undefined}
+        statusFilteredRows={rows}
+        searchContext={emptySearch}
+        onSelectSearchMatch={() => undefined}
+        statusFilter="ALL"
+        onStatusFilterChange={() => undefined}
+        onClearFilters={() => undefined}
+      />
+    </ToastProvider>,
   );
 }
 
-describe("OpsMobileStickyHeader portal slot", () => {
-  it("cổng thu gọn: cần Ext trên PC — không CTA Đăng Nhập TCS giả", () => {
-    const html = renderHeader("tcs");
-    expect(html).toContain("Cổng TCS / ESID");
-    expect(html).toContain("cần Ext trên PC");
+describe("OpsMobileStickyHeader chrome", () => {
+  it("2 hàng: identity + lọc; Booking không ở header; công cụ trong overflow", () => {
+    const html = renderHeader({ portal: "tcs" });
+    expect(html).toContain("ops-mobile-sticky-header");
+    expect(html).toContain("ops-mobile-identity-row");
+    expect(html).toContain("ops-mobile-filter-row");
+    expect(html).toContain("23-AUG-2026");
+    expect(html).toContain("Live");
+    expect(html).toContain("OPS");
+    expect(html).toContain("Báo cáo, Tải Ext, Công cụ");
+    expect(html).not.toContain("+ Booking");
+    expect(html).not.toContain("ops-mobile-sync-bar");
+    expect(html).not.toContain("warehouse-chips");
+    expect(html).not.toContain("bg-emerald-600");
+    expect(html).not.toContain("bg-sky-600");
+    expect(html).not.toContain("bg-violet-600");
+    expect(html).not.toContain("bg-fuchsia-600");
+  });
+
+  it("vùng chạm sticky ≥44px trên overflow / kho / ngày / ST", () => {
+    const html = renderHeader({});
+    expect(html).toContain("min-h-11");
+    expect(html).toContain("Ngày trước");
+    expect(html).toContain("Ngày sau");
+    expect(html).toContain("Chọn kho");
+    expect(html).toContain("Lọc trạng thái");
+  });
+
+  it("portal ẩn khi chưa chọn lô — không CTA Đăng Nhập TCS giả", () => {
+    const html = renderHeader({ portal: "tcs", selected: false });
+    expect(html).not.toContain("ops-mobile-portal-slot");
+    expect(html).not.toContain("bar-tcs");
+    expect(html).not.toContain("Cổng TCS / ESID");
     expect(html).not.toContain("Đăng Nhập TCS");
     expect(html).not.toContain("cần Đăng Nhập TCS");
   });
 
-  it("eCargo thu gọn cũng báo cần Ext trên PC", () => {
-    const html = renderHeader("scsc");
-    expect(html).toContain("eCargo SCSC");
-    expect(html).toContain("cần Ext trên PC");
+  it("TCS + lô chọn: hiện cổng, vẫn không CTA Đăng Nhập TCS giả", () => {
+    const html = renderHeader({ portal: "tcs", selected: true });
+    expect(html).toContain("ops-mobile-portal-slot");
+    expect(html).toContain("bar-tcs");
     expect(html).not.toContain("Đăng Nhập TCS");
+  });
+
+  it("SCSC + lô chọn: hiện eCargo, không Đăng Nhập TCS", () => {
+    const html = renderHeader({ portal: "scsc", selected: true });
+    expect(html).toContain("bar-scsc");
+    expect(html).not.toContain("Đăng Nhập TCS");
+  });
+
+  it("ngày phiên overlay, không lộ locale input date", () => {
+    const html = renderHeader({});
+    expect(html).toContain('type="date"');
+    expect(html).toContain("opacity-0");
+    expect(html).toContain("23-AUG-2026");
   });
 });

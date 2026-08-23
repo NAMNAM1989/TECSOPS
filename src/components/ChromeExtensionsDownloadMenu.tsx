@@ -12,10 +12,8 @@ type Props = {
   compact?: boolean;
 };
 
-/**
- * Nút tải Chrome Ext chuẩn: TCS + SCSC.
- */
-export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
+/** Items overflow «Tải Ext» — dùng chung desktop menu và mobile chrome ⋯. */
+export function useChromeExtensionMenuItems(): OverflowMenuItem[] {
   const toast = useToast();
   const [packs, setPacks] = useState<ChromeExtensionPackInfo[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -94,7 +92,15 @@ export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
     });
   }, [busyId, downloadPack, loadError, packs, refresh]);
 
-  // Mobile: icon-only để không chèn/che toolbar. Desktop dùng OverflowMenu mặc định (không cạnh tranh Booking).
+  return items;
+}
+
+/**
+ * Nút tải Chrome Ext chuẩn: TCS + SCSC.
+ */
+export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
+  const items = useChromeExtensionMenuItems();
+
   return (
     <OverflowMenu
       label="Tải Ext"
@@ -103,7 +109,7 @@ export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
       items={items}
       triggerClassName={
         compact
-          ? "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-sky-500/35 bg-sky-50 text-sky-900 shadow-ui-sm transition hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus touch-manipulation"
+          ? "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-navy shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus touch-manipulation"
           : undefined
       }
     >

@@ -9,7 +9,7 @@ import {
 } from "../utils/sessionDate";
 import type { useShipmentSync } from "../hooks/useShipmentSync";
 import { DesktopShipmentTable } from "./DesktopShipmentTable";
-import { MobileShipmentCards, StickyMobileActions } from "./MobileShipmentCards";
+import { MobileShipmentCards, OpsMobileBookingFab } from "./MobileShipmentCards";
 import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentEditSheet";
 import { buildCargoDayReport } from "../utils/cargoDayReport";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
@@ -580,6 +580,7 @@ export function AirCargoTracking({
       onCopyCargoDayReport={(kind) => void onCopyCargoDayReport(kind ?? "vantage")}
       cargoReportCopying={cargoReportCopying}
       {...toolsProps}
+      selectedShipment={selected}
       tcsPortalBar={
         isTcsWarehouse(activeWarehouse) ? (
           <TcsPortalInlineBar
@@ -741,13 +742,10 @@ export function AirCargoTracking({
         />
       )}
 
-      <StickyMobileActions
-        selected={selected}
+      <OpsMobileBookingFab
         activeWarehouse={activeWarehouse}
         hidden={mobileEditShipment != null}
-        onDelete={() => selected && onDelete(selected.id)}
         onAdd={() => void addBlankRowForWarehouse(activeWarehouse)}
-        onQuickEdit={() => selected && openMobileEdit(selected)}
       />
 
       <MobileShipmentEditSheet

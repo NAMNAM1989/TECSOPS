@@ -1,8 +1,9 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo } from "react";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { StatusSelect } from "./StatusBadge";
-import { InlineNumberEdit } from "./InlineNumberEdit";
+import { Button } from "../ui";
+import { formatKgTotal } from "../utils/formatKgTotal";
 import {
   statusRowAccent,
   statusRowBg,
@@ -32,11 +33,6 @@ import { formatAwb } from "../utils/awbFormat";
 import {
   formatShipmentCneeReadonlySummary,
 } from "../utils/shipmentCneeCopyBlock";
-import {
-  findCustomerEntry,
-  resolveSavedConsigneeForBooking,
-} from "../utils/customerBookingResolve";
-import { formatSavedConsigneeDetailTitle } from "../utils/customerConsigneeShipmentPatch";
 import type { EcargoVctResult } from "../utils/ecargoVctResultsStore";
 
 type MobileFlightMeta = {
@@ -129,32 +125,15 @@ function MobileEcargoBadges({
   return null;
 }
 
-function MobileQuickNumber({
-  label,
-  value,
-  onCommit,
-}: {
-  label: string;
-  value: number | null;
-  onCommit: (v: number | null) => void;
-}) {
-  return (
-    <span
-      className="inline-flex min-h-11 min-w-[3rem] shrink-0 touch-manipulation items-center gap-0.5 rounded-lg bg-ui-surface-muted px-1.5"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <span className="text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">
-        {label}
-      </span>
-      <InlineNumberEdit
-        value={value}
-        compact
-        placeholder="—"
-        className="min-h-[28px] min-w-[1.5rem] px-0.5 font-shipment-data text-[13px] font-bold tabular-nums text-ui-text"
-        onCommit={onCommit}
-      />
-    </span>
-  );
+function buildMobileMetaLine(
+  customerLabel: string,
+  flightPlain: string,
+  row: Shipment,
+): string {
+  const pcs = row.pcs != null ? `${row.pcs}K` : "";
+  const kg = row.kg != null ? `${formatKgTotal(row.kg)}kg` : "";
+  const qty = [pcs, kg].filter(Boolean).join("/");
+  return [customerLabel, flightPlain, qty].filter(Boolean).join(" · ");
 }
 
 const MobileShipmentCard = memo(
@@ -181,12 +160,10 @@ const MobileShipmentCard = memo(
     onDelete: (id: string) => void;
     onPrint: (s: Shipment) => void;
   }) {
-    const [cneeOpen, setCneeOpen] = useState(false);
     const rowAccent = statusRowAccent[row.status];
     const rowSurface = selected ? statusRowSelected : statusRowBg;
     const awbTrim = (row.awb ?? "").trim();
     const hawbTrim = (row.hawb ?? "").trim();
-    const noteTrim = (row.note ?? "").trim();
 
     const flightMeta = buildMobileFlightMeta(row, sessionYmd);
     const shortCode = resolveCargoReportCustomerShortCode(
@@ -200,31 +177,23 @@ const MobileShipmentCard = memo(
     const customerTitle = [shortCode !== "—" ? shortCode : "", row.customer?.trim()]
       .filter(Boolean)
       .join(" · ");
-
+    const metaLine = buildMobileMetaLine(customerLabel, flightMeta.plain, row);
     const cneeSummary = formatShipmentCneeReadonlySummary(row, customerDirectory);
-    const customer = findCustomerEntry(row, customerDirectory);
-    const saved = resolveSavedConsigneeForBooking(row, customer);
-    const cneeDetail = saved
-      ? formatSavedConsigneeDetailTitle(saved)
-      : (row.consigneeNamePrint ?? "").trim() || cneeSummary;
-    const cneeAddress = (row.consigneeAddressPrint ?? saved?.consigneeAddress ?? "").trim();
-    const hasCnee = Boolean(cneeSummary || cneeDetail || cneeAddress);
 
     return (
       <Box
         id={`mobile-shipment-${row.id}`}
         style={{
           contentVisibility: "auto",
-          containIntrinsicSize: cneeOpen ? "0 140px" : "0 78px",
+          containIntrinsicSize: "0 64px",
         }}
-        className={`${MOBILE.card} scroll-mt-2 scroll-mb-[calc(10.5rem+env(safe-area-inset-bottom))] ${rowAccent} ${rowSurface} ${
+        className={`${MOBILE.card} scroll-mt-2 scroll-mb-[calc(6.5rem+env(safe-area-inset-bottom))] ${rowAccent} ${rowSurface} ${
           selected ? "ring-2 ring-ui-primary/40" : ""
         } ${highlighted ? "ring-2 ring-amber-400/70" : ""} ${
           flightMeta.flightDateUrgent ? "ring-1 ring-red-300/80" : ""
         }`}
       >
         <div className={`${MOBILE.cardInner} !py-1.5`}>
-          {/* Hàng 1: AWB · status · menu — scannable */}
           <div className="flex min-w-0 items-center gap-1.5">
             <button
               type="button"
@@ -267,84 +236,21 @@ const MobileShipmentCard = memo(
             </div>
           </div>
 
-          {/* Hàng 2: khách · chuyến/DEST · K/Kg */}
-          <div className="mt-0.5 flex min-w-0 items-center gap-1">
-            <button
-              type="button"
-              className="min-w-0 flex-1 truncate py-0.5 text-left active:opacity-90"
-              onClick={() => onOpenEdit(row)}
-              title={
-                [customerTitle, flightMeta.plain].filter(Boolean).join(" · ") ||
-                undefined
-              }
+          <button
+            type="button"
+            className="mt-0.5 flex min-w-0 w-full items-center gap-1 py-0.5 text-left active:opacity-90"
+            onClick={() => onOpenEdit(row)}
+            title={[customerTitle, flightMeta.plain, cneeSummary].filter(Boolean).join(" · ") || undefined}
+          >
+            <span
+              className={`min-w-0 flex-1 truncate ${MOBILE.cardMeta} ${
+                flightMeta.flightDateUrgent ? "!text-red-600 !font-extrabold" : ""
+              }`}
             >
-              <span className={`mr-1 ${MOBILE.customerName}`}>{customerLabel}</span>
-              {flightMeta.plain ? (
-                <span
-                  className={`${MOBILE.cardMeta} ${
-                    flightMeta.flightDateUrgent ? "!text-red-600 !font-extrabold" : ""
-                  }`}
-                >
-                  · {flightMeta.plain}
-                </span>
-              ) : null}
-            </button>
-            <div
-              className="flex shrink-0 items-center gap-0.5"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MobileQuickNumber
-                label="K"
-                value={row.pcs}
-                onCommit={(v) => onUpdate(row.id, { pcs: v })}
-              />
-              <MobileQuickNumber
-                label="Kg"
-                value={row.kg}
-                onCommit={(v) => onUpdate(row.id, { kg: v })}
-              />
-            </div>
-          </div>
-
-          {/* Hàng 3: eCargo badges + CNEE expand + note */}
-          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1">
+              {metaLine || "—"}
+            </span>
             <MobileEcargoBadges warehouse={row.warehouse} ecargoVct={ecargoVct} />
-            {hasCnee ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCneeOpen((v) => !v);
-                }}
-                className="inline-flex min-h-9 touch-manipulation items-center gap-1 rounded-lg px-1.5 text-[10px] font-bold text-ui-primary"
-                aria-expanded={cneeOpen}
-              >
-                CNEE {cneeOpen ? "▴" : "▾"}
-                {!cneeOpen && cneeSummary ? (
-                  <span className="max-w-[9rem] truncate font-semibold text-ui-text-muted">
-                    {cneeSummary}
-                  </span>
-                ) : null}
-              </button>
-            ) : null}
-            {noteTrim && !cneeOpen ? (
-              <span className="truncate text-[10px] text-ui-text-muted" title={noteTrim}>
-                · {noteTrim}
-              </span>
-            ) : null}
-          </div>
-
-          {cneeOpen && hasCnee ? (
-            <div className="mt-1 rounded-lg bg-ui-surface-muted/80 px-2 py-1.5 text-[11px] leading-snug text-ui-text">
-              <p className="font-bold">{cneeDetail || cneeSummary || "—"}</p>
-              {cneeAddress ? (
-                <p className="mt-0.5 whitespace-pre-wrap text-ui-text-muted">{cneeAddress}</p>
-              ) : null}
-              {noteTrim ? (
-                <p className="mt-1 text-[10px] text-ui-text-muted">Ghi chú: {noteTrim}</p>
-              ) : null}
-            </div>
-          ) : null}
+          </button>
         </div>
       </Box>
     );
@@ -438,7 +344,7 @@ export function MobileShipmentCards({
 
   return (
     <div
-      className={`space-y-1 pb-[calc(10.5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(10.5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
+      className={`space-y-1 pb-[calc(6.5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(6.5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
       data-testid="mobile-shipment-list"
     >
       {searchActive
@@ -474,88 +380,41 @@ export function MobileShipmentCards({
   );
 }
 
-interface StickyMobileActionsProps {
-  selected: Shipment | null;
+interface OpsMobileBookingFabProps {
   activeWarehouse: Warehouse;
-  onDelete: () => void;
   onAdd: () => void;
-  onQuickEdit: () => void;
   /** Ẩn khi edit sheet / modal mở */
   hidden?: boolean;
 }
 
-/** FAB booking/sửa — nằm trên BottomNav, không che card cuối. */
-export function StickyMobileActions({
-  selected,
+/**
+ * CTA chính mobile — FAB góc phải, trên BottomNav, không thanh full-width.
+ * Sửa/xóa lô nằm trên card (tap + overflow), không đấu BottomNav.
+ */
+export function OpsMobileBookingFab({
   activeWarehouse,
-  onDelete,
   onAdd,
-  onQuickEdit,
   hidden = false,
-}: StickyMobileActionsProps) {
+}: OpsMobileBookingFabProps) {
   const isMobile = useIsMobile();
-  const [moreOpen, setMoreOpen] = useState(false);
 
   if (hidden) return null;
 
   return (
-    <Box
-      className={`no-print fixed bottom-[calc(3.85rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[calc(100%-1.5rem)] max-w-[440px] -translate-x-1/2 [[data-ops-mobile-overlay=sheet]_&]:pointer-events-none [[data-ops-mobile-overlay=sheet]_&]:invisible ${mobileOnlyVisibility(isMobile)}`}
-      data-testid="sticky-mobile-actions"
+    <div
+      className={`no-print fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-3 z-40 [[data-ops-mobile-overlay=sheet]_&]:pointer-events-none [[data-ops-mobile-overlay=sheet]_&]:invisible ${mobileOnlyVisibility(isMobile)}`}
+      data-testid="ops-mobile-booking-fab"
     >
-      <Box className="rounded-2xl border border-ui-border bg-ui-surface p-1.5 shadow-apple-md">
-        {selected ? (
-          <Box className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={onQuickEdit}
-              className={`min-w-0 flex-1 ${MOBILE.primaryBtn}`}
-            >
-              Sửa lô
-            </button>
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                aria-expanded={moreOpen}
-                aria-haspopup="menu"
-                onClick={() => setMoreOpen((v) => !v)}
-                className={`min-h-11 min-w-11 ${MOBILE.secondaryBtn} px-0 text-lg font-semibold leading-none`}
-                title="Thêm"
-              >
-                ⋯
-              </button>
-              {moreOpen ? (
-                <Box className="absolute bottom-full right-0 z-50 mb-2 min-w-[9.5rem] overflow-hidden rounded-xl border border-ui-border bg-ui-surface py-1 shadow-apple-md">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMoreOpen(false);
-                      if (
-                        confirm(
-                          `Xóa ${(selected.awb ?? "").trim() || "lô này"}?`,
-                        )
-                      )
-                        onDelete();
-                    }}
-                    className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-ui-danger hover:bg-red-50"
-                  >
-                    Xóa lô
-                  </button>
-                </Box>
-              ) : null}
-            </div>
-          </Box>
-        ) : (
-          <button
-            type="button"
-            onClick={onAdd}
-            className={`w-full ${MOBILE.primaryBtn}`}
-          >
-            + Booking · {warehouseLabel[activeWarehouse]}
-          </button>
-        )}
-      </Box>
-    </Box>
+      <Button
+        variant="primary"
+        size="md"
+        onClick={onAdd}
+        title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (phím N)`}
+        className="min-h-11 px-4 font-bold shadow-ui-md"
+      >
+        + Booking
+      </Button>
+    </div>
   );
 }
 

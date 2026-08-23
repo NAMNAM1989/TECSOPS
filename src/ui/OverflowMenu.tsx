@@ -92,7 +92,7 @@ export function OverflowMenu({
         <div
           id={menuId}
           role="menu"
-          className={`absolute top-[calc(100%+4px)] z-[80] min-w-[11.5rem] overflow-hidden rounded-xl border border-ui-border bg-ui-surface py-1 shadow-apple-md ${
+          className={`absolute top-[calc(100%+4px)] z-[80] min-w-[11.5rem] overflow-hidden rounded-xl border border-ui-border bg-ui-surface py-1 shadow-ui-md ${
             align === "right" ? "right-0" : "left-0"
           }`}
         >

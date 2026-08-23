@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TECSOPS — Kho SCSC eCargo",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Đăng ký eCargo SCSC VCT 1-click (điền + Tạo phiếu + OTP + QR) — độc lập với Ext ESID.",
   "permissions": [
     "tabs",
@@ -10,8 +10,6 @@
   ],
   "host_permissions": [
     "https://ecargo.scsc.vn/*",
-    "http://127.0.0.1:8765/*",
-    "http://localhost:8765/*",
     "http://localhost:5173/*",
     "http://127.0.0.1:5173/*",
     "http://localhost:3001/*",

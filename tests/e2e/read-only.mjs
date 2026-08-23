@@ -142,16 +142,8 @@ async function main() {
       `375px scroll=${mobileSize.scrollWidth} client=${mobileSize.clientWidth}`,
     );
 
-    const onlyExpectedAgentFailures =
-      failedResponses.length > 0 &&
-      failedResponses.every(
-        (response) =>
-          response.status === 502 && response.url.includes("/tcs-agent/health"),
-      );
     const seriousConsoleErrors = consoleErrors.filter(
-      (message) =>
-        !/favicon|Download the React DevTools/i.test(message) &&
-        !(onlyExpectedAgentFailures && /Failed to load resource.*502/i.test(message)),
+      (message) => !/favicon|Download the React DevTools/i.test(message),
     );
     record(
       "N-CONSOLE",

@@ -17,8 +17,6 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
-      /** Stub 410 AGENT_GONE trên Express — client cũ không dính SPA HTML. */
-      "/tcs-agent": { target: apiTarget, changeOrigin: true },
     },
   },
   build: {

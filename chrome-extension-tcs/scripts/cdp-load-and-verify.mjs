@@ -16,9 +16,10 @@ const ROOT = path.resolve(__dirname, "../..");
 const USER_DATA = path.join(ROOT, ".tmp-chrome-ext-test");
 const PORT = 9223;
 const BRIDGE_PORT = 5173;
-const OCR_PROBE_BASE = String(
-  process.env.TCS_OCR_BASE || "http://127.0.0.1:8765"
-).replace(/\/+$/, "");
+const OCR_PROBE_BASE = String(process.env.TCS_OCR_BASE || "").replace(
+  /\/+$/,
+  ""
+);
 const CHROME =
   process.env.CHROME_PATH ||
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
@@ -275,7 +276,11 @@ async function main() {
     });
     tcsPageSmoke = pageSmoke.result?.value;
     console.log("tcs_page_smoke=", JSON.stringify(tcsPageSmoke));
-    if (process.env.TCS_OCR_PROBE === "1" && tcsPageSmoke?.tabId) {
+    if (
+      process.env.TCS_OCR_PROBE === "1" &&
+      OCR_PROBE_BASE &&
+      tcsPageSmoke?.tabId
+    ) {
       const captchaProbe = await page.send("Runtime.evaluate", {
         expression: `new Promise((resolve) => {
           chrome.tabs.sendMessage(

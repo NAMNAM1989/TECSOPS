@@ -35,6 +35,6 @@ export function formatQuickFillError(
   return (
     result.message ||
     result.error ||
-    "Điền eSID thất bại. Đảm bảo đã mở tab TCS và Đăng nhập đúng kho."
+    "Điền eSID thất bại. Đảm bảo đã Đăng Nhập TCS đúng kho trên Chrome Ext."
   );
 }

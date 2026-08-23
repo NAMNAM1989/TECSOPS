@@ -331,7 +331,6 @@ export function AirCargoTracking({
     onReceptionScanDone,
     active: isTcsWarehouse(activeWarehouse),
     portalWarehouse: activeWarehouse,
-    preferRemotePortal: false,
     isMobile,
   });
 

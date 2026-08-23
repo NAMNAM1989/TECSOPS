@@ -15,8 +15,6 @@ import {
 import { createPostgresStateStore } from "./postgresStateStore.mjs";
 import { registerLookupRoutes } from "./lookupRoutes.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
-import { registerTcsAgentProxy } from "./tcsAgentProxy.mjs";
-import { registerPortalJobRoutes } from "./portalJobs.mjs";
 import { registerEcargoVctRoutes } from "./ecargoVctRoutes.mjs";
 import {
   applySecurityHeaders,
@@ -78,13 +76,8 @@ const io = new Server(httpServer, {
 });
 io.use(appAuth.socketMiddleware);
 
-// Proxy agent TRƯỚC express.json — giữ raw body cho POST /jobs, /esid/*
-registerTcsAgentProxy(app);
-
-// PDF base64 từ worker portal (~0.5–2MB) — nới limit
 app.use(express.json({ limit: "12mb" }));
 appAuth.registerRoutes(app);
-registerPortalJobRoutes(app);
 
 /** Healthcheck Railway / load balancer — xác nhận cả process và Postgres. */
 app.get("/api/health", async (_req, res) => {
@@ -390,8 +383,7 @@ app.use(
 app.get("*", (req, res, next) => {
   if (
     req.path.startsWith("/api") ||
-    req.path.startsWith("/socket.io") ||
-    req.path.startsWith("/tcs-agent")
+    req.path.startsWith("/socket.io")
   ) {
     return next();
   }

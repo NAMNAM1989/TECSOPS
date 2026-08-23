@@ -66,9 +66,11 @@ describe("OpsDayOverviewStrip", () => {
     expect(html).toContain("ops-day-pulse");
     expect(html).toContain("warehouse-chips");
     expect(html).toContain("min-h-11");
-    expect(html).toContain("Lô 2");
-    expect(html).toContain("Kiện 3");
-    expect(html).toContain("Kg 8");
+    expect(html).toContain("Kiện</span> 10");
+    expect(html).toContain("Kg</span> 28");
+    expect(html).toContain("TCS · Lô 1 · Kiện 2 · Kg 10");
+    expect(html).toContain("SCSC · Lô 1 · Kiện 3 · Kg 6");
+    expect(html).toContain("TECS-SCSC · Lô 1 · Kiện 4 · Kg 8");
     expect(html).toContain("overflow-x-auto");
   });
 

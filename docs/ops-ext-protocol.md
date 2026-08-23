@@ -10,17 +10,19 @@ Chrome Ext trên PC kho (chrome-extension-tcs / chrome-extension-scsc)
 Tab tcs.com.vn / ecargo.scsc.vn trên máy đó
 ```
 
-**Không** dùng Playwright server / Railway dual-agent / automation trong container để thay Ext khi làm việc trên PC kho.
-`TCS_AGENT_*` + `browser_profile` chỉ là **fallback** (tắt «Trực quan» hoặc mobile không có Ext).
+**Không** dùng Playwright server / Railway dual-agent / Python `tcs-awb-automation`.
+`TCS_AGENT_*` + volume `browser_profile` là ops follow-up (gỡ trên Railway, không trong code).
 
 ## Hai Ext chuẩn
 
-| Ext | Thư mục | Channel | Kho |
+| Ext | Thư mục | Channel | Mã kho dữ liệu |
 |---|---|---|---|
-| **TCS ESID** | `chrome-extension-tcs` | `tecsops-tcs-direct-ext` | TCS |
+| **TCS ESID** | `chrome-extension-tcs` | `tecsops-tcs-direct-ext` | **TCS** và **TECS-TCS** |
 | **SCSC eCargo** | `chrome-extension-scsc` | `tecsops-scsc-ecargo-ext` | SCSC |
 
-Không còn gói / thư mục `chrome-extension/` (legacy TECS-TCS). Cài **TCS + SCSC**. Channel `tecsops-tcs-ext` chỉ còn để máy đã cài Ext cũ không gãy handshake.
+Không còn gói / thư mục `chrome-extension/` (legacy). Cài **TCS + SCSC**.  
+Mã kho **TECS-TCS** giữ trong DB / `warehouses.ts` — Ops gửi lệnh qua channel Ext TCS, không qua `tecsops-tcs-ext`.  
+Channel `tecsops-tcs-ext` chỉ còn lắng nghe (máy còn Ext cũ unpacked) — không gửi lệnh mới.
 
 ## Envelope
 
@@ -59,7 +61,7 @@ Không chứa / không yêu cầu credential Gmail trong payload. IMAP server hi
 | Trước | Sau |
 |---|---|
 | Trạng thái Ext lẫn với agent trong 1 pill | Chip **Ext · offline / sẵn sàng / đã login** luôn hiện |
-| Ext offline + Trực quan → vẫn fallback Railway | Chỉ Ext; chip báo offline — cài từ «Tải Ext» |
+| Ext offline + Trực quan → fallback Railway | Chỉ Ext; mobile báo «cần Ext trên PC» |
 | Menu tải 3 Ext | Chỉ **TCS + SCSC** |
 
 ## eSID / eCargo

@@ -23,8 +23,7 @@ Vì vậy:
 | **`POSTGRES_STATE_KEY`** | Tùy chọn — mặc định `tecsops:state`. |
 | **`PORT`** | Railway inject sẵn. |
 | **`NODE_ENV`** | `production` khi build Nixpacks. |
-| **`TCS_USERNAME` / `TCS_PASSWORD`** | Portal TECS-TCS (Playwright cloud). |
-| **`TCS_USERNAME_TCS` / `TCS_PASSWORD_TCS`** | Portal kho TCS + `TCS_AGENT_DUAL=1`. |
+| **`TCS_AGENT_*` / `TCS_USERNAME*`** | Đã gỡ khỏi app (A3). Ops follow-up: xóa biến + volume `browser_profile` trên Railway. |
 
 Socket.IO chạy **in-memory** — khuyến nghị **1 replica**.
 

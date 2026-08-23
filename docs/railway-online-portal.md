@@ -1,10 +1,10 @@
-# Portal TCS — Ext PC kho (chính) · Railway agent (fallback)
+# Portal TCS / SCSC — Ext trên PC kho
 
 ## Mô hình bắt buộc
 
 **Bấm trên Ops (web) → Chrome Ext trên PC kho thực thi** (`chrome-extension-tcs` / `chrome-extension-scsc`).
 
-Không dùng Playwright trong container Railway / dual-agent / web automation server-side để thay Ext khi làm việc tại kho.
+Không dùng Playwright trong container Railway / dual-agent / Python `tcs-awb-automation`.
 
 ```
 Ops UI (click)
@@ -16,103 +16,54 @@ Ops UI (click)
 Handshake: `docs/ops-ext-protocol.md` (`EXT_READY` / job / result / error).  
 Chip **Ext · offline|sẵn sàng|đã login** trên bar Ops.
 
-## Railway agent — chỉ fallback
+Mã kho dữ liệu **TECS-TCS** và **TCS** cùng Ext TCS (`tecsops-tcs-direct-ext`).  
+Mã **SCSC** dùng Ext SCSC. Không đổi mã trong DB / `warehouses.ts`.
 
-Same-origin `/tcs-agent` + `TCS_AGENT_*` + volume `browser_profile` giữ cho:
+Điện thoại: không Đăng Nhập TCS / Quét / Điền — UI báo **«cần Ext trên PC»**.
 
-- Điện thoại (không có Ext)
-- Khi **tắt** «Trực quan» có chủ đích
-- Policy `agent-only` (QA / sự cố)
+## Railway — image lean Node
 
-Không xây tính năng mới phụ thuộc agent server.
+Dockerfile chỉ cài Node + build Vite. `start-fullstack` chỉ chạy `server/index.mjs`.
 
-## Kiến trúc
+`/tcs-agent/*` trả **410 AGENT_GONE** (stub, tránh 500 / HTML SPA).
 
-```
-PC kho + Ext  → Ops postMessage → Ext (đường chính)
-
-Phone / fallback → Ops → /tcs-agent → Playwright :8765/:8766 (phụ)
-```
-
-Policy mặc định: «Trực quan» bật → desktop **chỉ Ext** (kể cả khi Ext offline — UI báo cài, không lặng lẽ headless).
-
-Chrome Ext chuẩn: **TCS + SCSC** (`docs/ops-ext-protocol.md`). Không còn gói TECS-TCS.
-
-## Railway Variables (bắt buộc)
+## Railway Variables (bắt buộc cho app)
 
 | Biến | Ý nghĩa |
 |---|---|
 | `DATABASE_URL` | Postgres (đã có) |
-| `TCS_USERNAME` / `TCS_PASSWORD` | Tài khoản portal kho TECS-TCS |
-| `TCS_USERNAME_TCS` / `TCS_PASSWORD_TCS` | Tài khoản portal kho TCS |
-| `TCS_AGENT_DUAL=0` | Mặc định tắt. Chỉ `1` mới spawn agent :8766 — không tự bật vì có user/pass TCS |
-| `TCS_AGENT_ENABLED=1` | Mặc định bật HTTP agent. `0` = không spawn Python; `/tcs-agent` trả `AGENT_OFF` |
-| `TCS_AGENT_PROXY=1` | Bật proxy `/tcs-agent` (Dockerfile đã set) |
-| `TCS_HEADLESS=1` | Headless (Dockerfile đã set) |
-| `TCS_CAPTCHA_OCR=1` | OCR CAPTCHA khi Đăng Nhập TCS (Dockerfile đã set) |
-| `TCS_AUTO_OPEN=0` | Mặc định tắt. Không mở Chromium lúc boot — chỉ khi Đăng Nhập TCS / Quét / `POST /session/open` |
-| `TCS_PREFER_SESSION=1` | Ưu tiên cookie trong profile |
-| `TCS_PDF_CACHE_TTL_S` | TTL tái dùng PDF (mặc định 28800 = 8h) |
-| `TCS_PDF_PREFETCH_N` | Prefetch sau Quét (mặc định **0** = tắt) |
-| `TCS_DOCS_RETENTION_S` | Prune docs già hơn N giây (mặc định 172800 = 48h) |
-| `TCS_PRUNE_ON_START` | Prune docs lúc boot agent (mặc định 1) |
+| `TECSOPS_APP_TOKEN` | Auth web/API (xem `.env.example`) |
 
-## Volumes (giữ session sau redeploy)
+eCargo OTP (Ext SCSC): `ECARGO_IMAP_*` nếu còn dùng IMAP trên server.
 
-Một volume app mount:
+## Follow-up ops (không làm trong PR A3) — @Railways
 
-`/app/tcs-awb-automation/browser_profile`
+Gỡ trên Railway service sau khi merge:
 
-| Subdir | Env |
-|---|---|
-| `…/browser_profile/hub` | `TCS_BROWSER_PROFILE` |
-| `…/browser_profile/tcs` | `TCS_BROWSER_PROFILE_TCS` |
-| `…/browser_profile/output` | `TCS_OUTPUT_DIR` |
+- Biến `TCS_AGENT_*` (`TCS_AGENT_DUAL`, `TCS_AGENT_ENABLED`, `TCS_AGENT_PROXY`, `TCS_AGENT_URL`, `TCS_AGENT_URL_TCS`, …)
+- `TCS_USERNAME` / `TCS_PASSWORD` / `TCS_USERNAME_TCS` / `TCS_PASSWORD_TCS` (chỉ dùng cho agent đã gỡ; credential Đăng Nhập TCS nhập trên form Ext)
+- `TCS_BROWSER_PROFILE*` / `TCS_OUTPUT_DIR` / `TCS_HEADLESS` / `TCS_CAPTCHA_OCR` / `TCS_AUTO_OPEN` / `TCS_PREFER_SESSION`
+- Volume `browser_profile` (`/app/tcs-awb-automation/browser_profile`)
 
-Script thiết lập: `node scripts/railway-setup-online-portal.mjs`
-
-Region khuyến nghị: `asia-southeast1`.
-
-## Quy trình dùng trên điện thoại / máy bất kỳ
-
-1. Mở Ops bằng URL Railway (không dùng `127.0.0.1`).
-2. Chọn kho TECS-TCS hoặc TCS + ngày phiên.
-3. **Phone:** bấm «Đăng Nhập TCS» / **Quét** qua agent cloud (không có Ext trên điện thoại); menu ⋮ **Tải PDF**. Không Điền ESID trên phone.
-4. **PC:** «Đăng Nhập TCS» → Ext trên máy kho thực thi. «Trực quan» bật (mặc định) → không fallback Railway khi Ext offline. Tắt «Trực quan» nếu muốn agent.
-5. **HOÀN TẤT** trên Ops (PC) khi agent/Ext đã điền form.
-
-Quét agent dùng `POST /workspace/scan` (nhẹ — không prefetch PDF).
+Không xóa Postgres / `DATABASE_URL`.
 
 ## CAPTCHA
 
-- **PC + Chrome Ext (ưu tiên):** OCR **trong Ext** (ONNX / ddddocr `common.onnx`, offscreen MV3) — không cần agent/cloud để Đăng Nhập TCS.
-  - ZIP tải từ Ops phải **≥ ~60MB** (có `ocr/ort.min.js` + `ocr/common.onnx`). ZIP ~200KB = thiếu OCR (build cũ) → Đăng Nhập TCS lỗi / CAPTCHA tay.
+- **PC + Chrome Ext:** OCR **trong Ext** (ONNX / ddddocr `common.onnx`, offscreen MV3).
+  - ZIP tải từ Ops phải **≥ ~60MB** (có `ocr/ort.min.js` + `ocr/common.onnx`).
   - Local: `npm run ext:fetch-ocr` rồi load unpacked / `npm run ext:package`.
   - Ext TCS **≥1.5.1** + Ext SCSC → Reload.
-  - Fallback: agent localhost `/captcha/solve` → nhập tay trên tab TCS.
-- **Phone / headless Railway:** vẫn phụ thuộc `TCS_CAPTCHA_OCR` + session volume (không có cửa sổ nhập tay).
-- Nếu Đăng Nhập TCS fail trên cloud: kiểm tra password Variables, OCR trong image, hoặc refresh volume profile.
 
 ## Local (dev)
 
-- `npm run portal:start:both` hoặc `tcs:agent:real` — agent local headed.
-- Policy `ext-only` nếu muốn chỉ Chrome Ext trên máy dev.
+- `npm run dev` — Node API + Vite. Không spawn Python.
+- Policy mặc định Ext-only. Cài Ext TCS + SCSC trên Chrome cùng profile với Ops.
 - OCR Ext: `npm run ext:fetch-ocr` rồi load unpacked.
-
-## Máy kiểm soát — Playwright headed (nhìn thấy cửa sổ)
-
-Giữ Ops trên Railway HTTPS; chạy Playwright **headed trên máy đó** qua cầu Chrome Ext (localhost).
-
-1. `git pull` + `npm run ext:fetch-ocr` + Reload Ext TCS + Ext SCSC.
-2. Trên máy kiểm soát: `npm run portal:headed:local` (mở Chromium headed `:8765` / `:8766`).
-3. Mở Ops Railway **trên cùng Chrome** đã cài Ext.
-4. Bật nút **PW local** trên thanh TCS.
-5. **Đăng Nhập TCS** → **Quét** / **Điền** — theo dõi cửa sổ Chromium trên máy này.
-
-Tắt **PW local** để về agent cloud headless / Ext content-script như trước.
 
 ## Không dùng nữa
 
-- `portal:worker` / `portal:start:warehouse` / `portal-worker.mjs` — đã xóa (A3).
-- Gemini AI (`GEMINI_*`) và nhập lô Google Sheet — đã xóa (A3). Railway có thể xóa `GEMINI_*`.
-- Mở Ops qua IP máy kho.
+- `tcs-awb-automation/` + `npm run tcs:agent*` + `portal:start:*` + `portal:headed:local`
+- `scripts/railway-setup-online-portal.mjs`
+- Playwright headed local / PW local toggle
+- `portal:worker` / `portal-worker.mjs` (đã xóa trước)
+- Gemini AI / nhập lô Google Sheet (đã xóa trước)

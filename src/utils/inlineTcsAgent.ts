@@ -1,8 +1,6 @@
 /**
- * Probe agent nội bộ (legacy). Vận hành mặc định chỉ Chrome Ext —
- * không ưu tiên remote máy kho / portal-worker.
+ * Probe agent nội bộ — đã gỡ (A3). Giữ chữ ký để không phá test / import cũ.
  */
-import { pingTcsAgent } from "./tcsPortalAgentApi";
 import type { TcsPortalWarehouse } from "./tcsPortalJob";
 
 export type InlineAgentProbe = {
@@ -11,17 +9,12 @@ export type InlineAgentProbe = {
   warehouse: TcsPortalWarehouse;
 };
 
-/** Probe nhanh agent nội bộ theo kho (header X-Portal-Warehouse). */
+/** Agent Python đã gỡ — luôn offline. */
 export async function probeInlineTcsAgent(
   warehouse: TcsPortalWarehouse,
-  timeoutMs = 2500
+  _timeoutMs = 2500
 ): Promise<InlineAgentProbe> {
-  const h = await pingTcsAgent(timeoutMs, { warehouse });
-  return {
-    ok: Boolean(h?.ok),
-    loggedIn: Boolean(h?.session?.logged_in),
-    warehouse,
-  };
+  return { ok: false, loggedIn: false, warehouse };
 }
 
 /**

@@ -12,12 +12,6 @@
     "prebuild": "node scripts/package-chrome-extension.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:db": "docker compose up -d",
-    "tcs:agent": "node scripts/tcs-agent.mjs",
-    "tcs:agent:real": "node scripts/tcs-agent.mjs --real",
-    "portal:start:hub": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-hub.ps1",
-    "portal:start:tcs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-tcs.ps1",
-    "portal:start:both": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-portal-both.ps1",
-    "portal:headed:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-headed-agents.ps1",
     "qa:smoke": "node scripts/qa-smoke-e2e.mjs",
     "test:e2e": "node tests/e2e/read-only.mjs",
     "test:e2e:a11y": "node tests/e2e/accessibility.mjs",
@@ -43,8 +37,7 @@
     "backup:postgres-state": "node scripts/postgres-backup-state.mjs",
     "restore:postgres-state": "node scripts/postgres-restore-state.mjs",
     "railway:check": "node scripts/railway-check-token.mjs",
-    "railway:up": "node scripts/railway-up.mjs",
-    "railway:setup-portal": "node scripts/railway-setup-online-portal.mjs"
+    "railway:up": "node scripts/railway-up.mjs"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",

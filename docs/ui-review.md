@@ -57,7 +57,7 @@ Follow-up: `notify` → Toast dùng `TOAST_DURATION_MS` theo tone (warning 5600 
 Chờ keep/delete list từ inventory GitHub. Ứng viên cleanup (follow-up PR):
 
 - `TcsPortalInlineBar` / `useTcsPortalActions` / agent·ext·PW controls trên mobile
-- Chrome Ext TCS + SCSC + routes `/tcs-agent` UI surface trong Ops header
+- Chrome Ext TCS + SCSC trên PC (không `/tcs-agent` / Playwright)
 - Menu ESID / Quét / Đăng Nhập TCS nếu kho TCS bị sunset
 - `docs/ecargo-vct-otp-flow.md` tách khỏi TCS portal (eCargo = SCSC)
 

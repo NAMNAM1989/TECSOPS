@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "sync_with": "tcs-awb-automation/app/browser/locators.py → esid_declare",
+  "sync_with": "chrome-extension-tcs content-tcs.js → esid_declare",
   "esid_declare": {
     "home_url": "https://www.tcs.com.vn/Esid/Export",
     "tab_text": "KHAI BÁO ESID",

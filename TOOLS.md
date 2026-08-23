@@ -1,23 +1,21 @@
 # TOOLS.md - Local Notes
 
-## TCS — vận hành online (Railway Playwright)
+## TCS / SCSC — Ext trên PC kho
 
-- Đường chính: Ops trên Railway → `/tcs-agent` → Playwright headless (không máy kho).
+- Đường chính: Ops (Railway hoặc local) → Chrome Ext TCS + SCSC trên PC.
 - Docs: [docs/railway-online-portal.md](docs/railway-online-portal.md)
-- Policy mặc định `auto` = agent cloud → Ext (tuỳ chọn desktop).
-- Variables: `TCS_USERNAME` / `TCS_PASSWORD` + `TCS_USERNAME_TCS` / `TCS_PASSWORD_TCS` + `TCS_AGENT_DUAL=1`.
-- Volume: `browser_profile_hub` + `browser_profile_tcs` để giữ session.
+- Protocol: [docs/ops-ext-protocol.md](docs/ops-ext-protocol.md)
+- Mã kho dữ liệu TECS-TCS dùng Ext TCS (không còn agent Railway / Python).
+- Điện thoại: UI báo «cần Ext trên PC».
 
-## Chrome Ext (tuỳ chọn desktop)
+## Chrome Ext
 
-- `chrome-extension-tcs/` (TCS ESID) · `chrome-extension-scsc/` (SCSC eCargo).
-- Protocol: [docs/ops-ext-protocol.md](docs/ops-ext-protocol.md).
-- Dùng khi muốn thao tác trên Chrome local; không bắt buộc khi online Railway.
+- `chrome-extension-tcs/` (TCS ESID, cả mã kho TECS-TCS) · `chrome-extension-scsc/` (SCSC eCargo).
+- Local: `npm run ext:fetch-ocr` rồi load unpacked / `npm run ext:package`.
 
-## Local agent (dev)
+## Railway follow-up (ops, không trong repo)
 
-- `npm run tcs:agent:real` hoặc `portal:start:both`.
-- `VITE_PORTAL_EXECUTOR_POLICY=ext-only` nếu chỉ test Ext.
+- Gỡ `TCS_AGENT_*` + volume `browser_profile` trên service Railway.
 
 ## Playwright MCP (Cursor)
 

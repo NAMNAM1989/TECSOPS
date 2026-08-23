@@ -33,12 +33,7 @@ import {
   isTcsWarehouse,
   isTecsHub,
 } from "../constants/warehouses";
-import { asTcsPortalWarehouse } from "../utils/tcsPortalJob";
 import { tcsLoginCtaLabel } from "../utils/tcsLoginCtaLabel";
-import {
-  probeInlineTcsAgent,
-  shouldPreferRemotePortal,
-} from "../utils/inlineTcsAgent";
 import { NewBookingButton } from "./NewBookingButton";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { OpsMobileStickyHeader } from "./OpsMobileStickyHeader";
@@ -143,9 +138,6 @@ export function AirCargoTracking({
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
-  /** null = chưa probe; true = /tcs-agent OK (Railway/local all-in-one). */
-  const [inlineAgentOk, setInlineAgentOk] = useState<boolean | null>(null);
-
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
   const isViewingToday = selectedYmd === todayYmd;
 
@@ -332,26 +324,6 @@ export function AirCargoTracking({
     []
   );
 
-  const portalWh = asTcsPortalWarehouse(activeWarehouse);
-
-  useEffect(() => {
-    if (!isTcsWarehouse(activeWarehouse) || !portalWh) {
-      setInlineAgentOk(null);
-      return;
-    }
-    let cancelled = false;
-    const run = async () => {
-      const probe = await probeInlineTcsAgent(portalWh);
-      if (!cancelled) setInlineAgentOk(probe.ok);
-    };
-    void run();
-    const timer = window.setInterval(() => void run(), 20_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [activeWarehouse, portalWh]);
-
   const tcsPortal = useTcsPortalActions({
     sessionYmd: selectedYmd,
     rows: viewRows,
@@ -360,11 +332,7 @@ export function AirCargoTracking({
     onReceptionScanDone,
     active: isTcsWarehouse(activeWarehouse),
     portalWarehouse: activeWarehouse,
-    /**
-     * Phone: remote worker chỉ khi không có agent nội bộ (Railway/local).
-     * Có /tcs-agent → đường nóng same-origin (nhanh, không poll PC).
-     */
-    preferRemotePortal: shouldPreferRemotePortal(isMobile, inlineAgentOk),
+    preferRemotePortal: false,
     isMobile,
   });
 
@@ -641,9 +609,9 @@ export function AirCargoTracking({
       }
       portalLoginCta={
         isTcsWarehouse(activeWarehouse) &&
-        !(tcsPortal.session?.logged_in || tcsPortal.health?.session?.logged_in)
+        !tcsPortal.extension?.workspace?.logged_in
           ? {
-              label: tcsLoginCtaLabel({ retry: !tcsPortal.health?.ok }),
+              label: tcsLoginCtaLabel(),
               busy: tcsPortal.busy,
               onClick: () => {
                 void tcsPortal.login();

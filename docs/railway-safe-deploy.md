@@ -27,7 +27,7 @@ Vì vậy:
 
 Socket.IO chạy **in-memory** — khuyến nghị **1 replica**.
 
-Portal online (không máy kho): xem [railway-online-portal.md](./railway-online-portal.md).
+Portal / Ext OCR trên Railway: xem [railway-online-portal.md](./railway-online-portal.md) (Dockerfile multi-stage: Python chỉ extract `common.onnx`, runtime Node).
 
 ---
 

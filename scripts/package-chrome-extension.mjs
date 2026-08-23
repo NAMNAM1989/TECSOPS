@@ -135,9 +135,11 @@ function warnIfOcrIncomplete(dirName) {
   const hasOnnx = fs.existsSync(onnx) && fs.statSync(onnx).size > 1_000_000;
   const hasOrt = fs.existsSync(ort);
   if (!hasOnnx || !hasOrt) {
-    console.warn(
-      `[${dirName}] OCR binary thiếu — ZIP không đủ OCR offline. Chạy: npm run ext:fetch-ocr`
-    );
+    const msg = `[${dirName}] OCR binary thiếu — ZIP không đủ OCR offline. Chạy: npm run ext:fetch-ocr`;
+    if (process.env.EXT_OCR_REQUIRED === "1") {
+      throw new Error(msg);
+    }
+    console.warn(msg);
   } else {
     console.info(
       `[${dirName}] OCR OK · onnx=${fs.statSync(onnx).size} · ort=${fs.statSync(ort).size}`

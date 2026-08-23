@@ -28,6 +28,30 @@ describe("app auth", () => {
     ).toThrow(/bắt buộc TECSOPS_APP_TOKEN/i);
   });
 
+  it("status báo required false + allowUnauthenticated khi disableLoginGate", async () => {
+    const auth = createAppAuth({
+      token: "test-token-at-least-24-characters",
+      isProduction: true,
+      allowUnauthenticated: true,
+      disableLoginGate: true,
+    });
+    const app = express();
+    auth.registerRoutes(app);
+    const http = await listen(app);
+    try {
+      const response = await fetch(`${http.baseUrl}/api/auth/status`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        ok: true,
+        required: false,
+        authenticated: true,
+        allowUnauthenticated: true,
+      });
+    } finally {
+      await http.close();
+    }
+  });
+
   it("disableLoginGate tắt gate dù còn token", async () => {
     const token = "test-token-at-least-24-characters";
     const auth = createAppAuth({

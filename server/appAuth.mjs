@@ -106,6 +106,7 @@ export function createAppAuth({
         ok: true,
         required,
         authenticated: isAuthenticatedRequest(req),
+        allowUnauthenticated: !required,
       });
     });
 

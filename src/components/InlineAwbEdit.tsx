@@ -93,7 +93,7 @@ export function InlineAwbEdit({
           e.stopPropagation();
           setEditing(true);
         }}
-        className={`${btnBase} hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
+        className={`${btnBase} focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
           !value || rawAwbDigits(value).length === 0
             ? "ops-grid-placeholder"
             : "text-ui-awb"

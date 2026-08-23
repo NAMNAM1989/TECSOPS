@@ -145,7 +145,7 @@ export function InlineCustomerEdit({
     ? { "data-grid-row": gridNav.rowId, "data-grid-field": gridNav.field }
     : {};
 
-  const btnBase = "w-full rounded px-1 py-0.5 text-left";
+  const btnBase = "ops-inline-edit w-full rounded px-1 py-0.5 text-left";
 
   const displayValue = value !== "" ? normalizeCustomerNameInput(value) : "";
 
@@ -154,7 +154,8 @@ export function InlineCustomerEdit({
       <button
         type="button"
         {...gridProps}
-        title={displayValue !== "" ? displayValue : "Click để chọn / sửa khách"}
+        aria-label="Sửa khách"
+        title={displayValue !== "" ? `${displayValue} — click để sửa` : "Click để chọn / sửa khách"}
         onFocus={(e) => {
           e.stopPropagation();
           setEditing(true);
@@ -163,7 +164,7 @@ export function InlineCustomerEdit({
           e.stopPropagation();
           setEditing(true);
         }}
-        className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 ${className} ${
+        className={`${btnBase} focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
           displayValue === "" ? "ops-grid-placeholder" : ""
         }`}
       >

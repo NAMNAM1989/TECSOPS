@@ -1,3 +1,6 @@
+import { Button } from "../ui";
+import { formatOpsWorkDateYmd } from "../utils/opsDateFormat";
+
 interface Props {
   value: string;
   onChange: (ymd: string) => void;
@@ -5,11 +8,11 @@ interface Props {
   onNext: () => void;
   onToday: () => void;
   isViewingToday: boolean;
-  /** Gọn — mobile header */
+  /** Gọn — mobile header (vùng chạm ≥44px). Desktop mặc định slim. */
   compact?: boolean;
 }
 
-/** Bộ chọn ngày phiên — pill segmented control. */
+/** Bộ chọn ngày phiên — luôn hiện `23-AUG-2026`, không lộ locale US của input date. */
 export function OpsDatePicker({
   value,
   onChange,
@@ -19,70 +22,61 @@ export function OpsDatePicker({
   isViewingToday,
   compact = false,
 }: Props) {
+  const opsLabel = formatOpsWorkDateYmd(value);
+  const stepBtn = compact
+    ? "inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-full px-1 text-[14px] font-semibold text-ui-primary hover:bg-ui-surface-muted"
+    : "inline-flex h-8 w-8 items-center justify-center rounded-lg text-[14px] font-semibold text-ui-primary hover:bg-ui-surface-muted";
+
   return (
     <div
       className={`inline-flex min-w-0 items-center ${compact ? "w-full gap-1" : "gap-1"}`}
     >
       <div
-        className={`inline-flex min-w-0 flex-1 items-center rounded-full border border-black/[0.05] bg-white shadow-dashboard-card ${
-          compact ? "p-0.5" : "p-0.5"
+        className={`inline-flex min-w-0 flex-1 items-center border border-ui-border bg-ui-surface shadow-ui-sm ${
+          compact ? "rounded-full p-0.5" : "rounded-xl p-0.5"
         }`}
       >
-        <button
-          type="button"
-          onClick={onPrev}
-          className={`rounded-full font-semibold text-dashboard-primary hover:bg-black/[0.04] ${
-            compact
-              ? "inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center px-1 text-[14px]"
-              : "px-2 py-1 text-xs"
-          }`}
-          aria-label="Ngày trước"
-        >
+        <button type="button" onClick={onPrev} className={stepBtn} aria-label="Ngày trước">
           ‹
         </button>
-        <input
-          aria-label="Ngày phiên Ops"
-          type="date"
-          value={value}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v) onChange(v);
-          }}
-          className={`min-w-0 flex-1 border-0 bg-transparent px-0.5 font-mono font-semibold text-dashboard-primary focus:outline-none focus:ring-1 focus:ring-apple-blue/30 ${
-            compact ? "py-1 text-[11px]" : "w-[7.25rem] py-1 text-[11px]"
-          }`}
-        />
-        <button
-          type="button"
-          onClick={onNext}
-          className={`rounded-full font-semibold text-dashboard-primary hover:bg-black/[0.04] ${
-            compact
-              ? "inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center px-1 text-[14px]"
-              : "px-2 py-1 text-xs"
-          }`}
-          aria-label="Ngày sau"
-        >
+        <div className={`relative min-w-0 ${compact ? "flex-1" : "w-[7.75rem]"}`}>
+          <span
+            className={`pointer-events-none block truncate text-center font-mono font-semibold tabular-nums text-ui-navy ${
+              compact ? "py-1 text-[11px]" : "py-0.5 text-[12px]"
+            }`}
+            aria-hidden
+          >
+            {opsLabel}
+          </span>
+          <input
+            aria-label="Ngày phiên Ops"
+            type="date"
+            value={value}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v) onChange(v);
+            }}
+            className="absolute inset-0 cursor-pointer opacity-0"
+          />
+        </div>
+        <button type="button" onClick={onNext} className={stepBtn} aria-label="Ngày sau">
           ›
         </button>
       </div>
-      <button
-        type="button"
-        onClick={onToday}
-        disabled={isViewingToday}
-        className={`shrink-0 rounded-full bg-apple-blue font-semibold text-white shadow-[0_4px_12px_rgba(0,113,227,0.28)] hover:bg-apple-blue-hover disabled:cursor-not-allowed disabled:opacity-45 ${
-          compact ? "hidden" : "px-2.5 py-1.5 text-[11px]"
-        }`}
-      >
-        Hôm nay
-      </button>
-      {compact && !isViewingToday ? (
-        <button
-          type="button"
-          onClick={onToday}
-          className="inline-flex min-h-11 shrink-0 touch-manipulation items-center rounded-full bg-apple-blue px-2.5 text-[11px] font-semibold text-white shadow-[0_4px_12px_rgba(0,113,227,0.28)] hover:bg-apple-blue-hover"
-        >
-          Nay
-        </button>
+      {compact ? (
+        !isViewingToday ? (
+          <button
+            type="button"
+            onClick={onToday}
+            className="inline-flex min-h-11 shrink-0 touch-manipulation items-center rounded-full bg-ui-primary px-2.5 text-[11px] font-semibold text-white shadow-ui-sm hover:bg-ui-primary-hover"
+          >
+            Nay
+          </button>
+        ) : null
+      ) : !isViewingToday ? (
+        <Button variant="secondary" size="sm" onClick={onToday} className="px-2 text-[11px]">
+          Hôm nay
+        </Button>
       ) : null}
     </div>
   );

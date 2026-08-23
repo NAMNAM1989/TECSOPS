@@ -92,10 +92,10 @@ export function InlineNumberEdit({
 
   const btnBase =
     variant === "grid"
-      ? "inline-flex min-w-[2rem] justify-end rounded px-0.5 py-0 text-right leading-none"
+      ? "ops-inline-edit inline-flex min-w-[2rem] justify-end rounded px-0.5 py-0 text-right leading-none"
       : compact
-        ? "inline-flex min-w-[2rem] max-w-[4rem] justify-end rounded px-0.5 py-0 text-[11px] leading-none font-bold tabular-nums"
-        : "w-full rounded px-1 py-0.5 text-right";
+        ? "ops-inline-edit inline-flex min-w-[2rem] max-w-[4rem] justify-end rounded px-0.5 py-0 text-[11px] leading-none font-bold tabular-nums"
+        : "ops-inline-edit w-full rounded px-1 py-0.5 text-right";
 
   const emptyLabel = placeholder || "\u00a0";
 
@@ -104,6 +104,7 @@ export function InlineNumberEdit({
       <button
         type="button"
         {...gridProps}
+        aria-label={title || "Sửa"}
         title={title || "Click để sửa"}
         onFocus={(e) => {
           e.stopPropagation();
@@ -117,7 +118,7 @@ export function InlineNumberEdit({
           e.stopPropagation();
           setEditing(true);
         }}
-        className={`${btnBase} hover:bg-black/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/30 ${className} ${
+        className={`${btnBase} focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
           value === null ? "ops-grid-placeholder" : ""
         } ${saving ? "opacity-60" : ""}`}
       >

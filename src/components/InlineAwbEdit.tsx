@@ -69,7 +69,8 @@ export function InlineAwbEdit({
     return true;
   };
 
-  const btnBase = "w-full rounded px-1 py-0.5 text-left font-mono text-sm font-semibold tracking-tight";
+  const btnBase =
+    "ops-inline-edit w-full rounded px-1 py-0.5 text-left font-mono text-sm font-semibold tracking-tight";
 
   if (!editing) {
     const shown =
@@ -78,9 +79,10 @@ export function InlineAwbEdit({
       <button
         type="button"
         {...gridProps}
+        aria-label="Sửa AWB"
         title={
           value && rawAwbDigits(value).length > 0
-            ? `AWB: ${value}`
+            ? `AWB: ${value} — click để sửa`
             : "Click để nhập AWB"
         }
         onFocus={(e) => {

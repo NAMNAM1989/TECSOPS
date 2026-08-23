@@ -69,11 +69,13 @@ const iconCls = "h-3.5 w-3.5";
 
 function ActionIconBtn({
   label,
+  shortLabel,
   onClick,
   active,
   children,
 }: {
   label: string;
+  shortLabel?: string;
   onClick: () => void;
   active?: boolean;
   children: ReactNode;
@@ -87,9 +89,14 @@ function ActionIconBtn({
         e.stopPropagation();
         onClick();
       }}
-      className={`${OPS.actionIcon} ${active ? OPS.actionIconOpen : ""}`}
+      className={`${OPS.actionIcon} ${shortLabel ? "w-auto gap-0.5 px-1.5" : ""} ${
+        active ? OPS.actionIconOpen : ""
+      }`}
     >
       {children}
+      {shortLabel ? (
+        <span className="text-[10px] font-semibold leading-none">{shortLabel}</span>
+      ) : null}
     </button>
   );
 }
@@ -390,7 +397,7 @@ export function ShipmentRowActionsMenu({
     >
       {!compact ? (
         <>
-          <ActionIconBtn label="In nhãn vận chuyển" onClick={() => onPrint(row)}>
+          <ActionIconBtn label="In nhãn vận chuyển" shortLabel="In" onClick={() => onPrint(row)}>
             <IconPrintLabel />
           </ActionIconBtn>
           {showDim ? (
@@ -447,8 +454,8 @@ export function ShipmentRowActionsMenu({
       <button
         ref={triggerRef}
         type="button"
-        title={`Thêm (${menuExtras})`}
-        aria-label="Menu thao tác lô hàng"
+        title="Menu thao tác lô hàng"
+        aria-label="Menu"
         aria-expanded={menuOpen}
         aria-haspopup="menu"
         aria-controls={menuOpen ? menuId : undefined}

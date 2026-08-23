@@ -64,6 +64,11 @@
     @apply italic text-apple-tertiary;
   }
 
+  /** Desktop inline edit — hover cho thấy ô có thể sửa. */
+  .ops-inline-edit {
+    @apply rounded-md transition hover:bg-ui-primary/8 hover:ring-1 hover:ring-inset hover:ring-ui-primary/30;
+  }
+
   /** Ghi chú lô — đỏ đậm để ops nhận nhanh trên lưới. */
   .ops-grid-note {
     @apply font-semibold text-red-800;

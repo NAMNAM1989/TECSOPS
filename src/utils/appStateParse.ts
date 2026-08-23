@@ -6,6 +6,35 @@ import { clampPrinterProfilesCatalog } from "../printing/printerProfilesCore";
 import { normalizeEsidRegistrantStore } from "./esidRegistrantProfile";
 import { normalizeEsidAgentStore } from "./esidAgentProfile";
 import { normalizeEcargoScscStore } from "./ecargoScscProfile";
+import { toSyncedAtIso } from "./dbSyncedAt";
+
+function parseSyncMeta(raw: unknown): AppState["syncMeta"] | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  const byWh =
+    o.lotsMaxSyncedAtByWarehouse && typeof o.lotsMaxSyncedAtByWarehouse === "object"
+      ? (o.lotsMaxSyncedAtByWarehouse as Record<string, string | null>)
+      : {};
+  return {
+    source:
+      o.source === "namnamlogistics-rest" ||
+      o.source === "postgres-lots" ||
+      o.source === "state-rows"
+        ? o.source
+        : null,
+    lotsMaxSyncedAt: toSyncedAtIso(o.lotsMaxSyncedAt),
+    lotsMaxSyncedAtByWarehouse: byWh,
+    customersMaxSyncedAt: toSyncedAtIso(o.customersMaxSyncedAt),
+  };
+}
+
+function mapRowSyncedAt(row: Shipment): Shipment {
+  if (!row || typeof row !== "object") return row;
+  const raw = row as Shipment & { synced_at?: unknown };
+  const syncedAt = toSyncedAtIso(raw.syncedAt ?? raw.synced_at);
+  if (syncedAt == null && raw.syncedAt == null && raw.synced_at == null) return row;
+  return { ...row, syncedAt };
+}
 
 export function parseAppState(raw: unknown): AppState | null {
   if (!raw || typeof raw !== "object") return null;
@@ -31,12 +60,13 @@ export function parseAppState(raw: unknown): AppState | null {
 
   return {
     version: o.version,
-    rows: o.rows as Shipment[],
+    rows: (o.rows as Shipment[]).map(mapRowSyncedAt),
     customers,
     airlineLabelOverrides,
     printerProfiles,
     esidRegistrantStore,
     esidAgentStore,
     ecargoScscStore,
+    syncMeta: parseSyncMeta(o.syncMeta),
   };
 }

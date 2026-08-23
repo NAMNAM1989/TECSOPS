@@ -283,6 +283,37 @@ function jsonOrNull(v) {
   return v == null ? null : JSON.stringify(v);
 }
 
+function timestampIsoOrNull(v) {
+  if (v == null) return null;
+  if (v instanceof Date) {
+    const t = v.getTime();
+    return Number.isFinite(t) && t >= Date.UTC(2000, 0, 1) ? v.toISOString() : null;
+  }
+  if (typeof v === "string") {
+    const t = Date.parse(v);
+    return Number.isFinite(t) && t >= Date.UTC(2000, 0, 1) ? new Date(t).toISOString() : null;
+  }
+  return null;
+}
+
+/** @type {boolean | null} */
+let customersHasSyncedAtColumn = null;
+
+async function customersTableHasSyncedAt(client) {
+  if (customersHasSyncedAtColumn != null) return customersHasSyncedAtColumn;
+  const res = await client.query(
+    `
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'synced_at'
+    LIMIT 1
+    `,
+    [CUSTOMERS_TABLE]
+  );
+  customersHasSyncedAtColumn = res.rows.length > 0;
+  return customersHasSyncedAtColumn;
+}
+
 /** HQ khai báo — gộp cột relational + blob JSON (migration dữ liệu cũ). */
 function hqFieldsFromBlobRow(row) {
   if (!row || typeof row !== "object") return {};
@@ -357,6 +388,7 @@ function partyFromRow(row) {
 }
 
 function customerProfileFromRow(row, savedShippers = [], savedConsignees = [], parties = []) {
+  const syncedAt = timestampIsoOrNull(row.synced_at);
   return {
     id: row.id,
     code: row.code,
@@ -364,6 +396,7 @@ function customerProfileFromRow(row, savedShippers = [], savedConsignees = [], p
     savedShippers,
     savedConsignees,
     parties,
+    ...(syncedAt != null ? { syncedAt } : {}),
   };
 }
 
@@ -405,6 +438,9 @@ function mergeCustomerBlobProfile(base, fromBlob) {
       : {}),
     ...(typeof fromBlob.otherRequirementsPrint === "string"
       ? { otherRequirementsPrint: fromBlob.otherRequirementsPrint }
+      : {}),
+    ...(fromBlob.syncedAt != null || fromBlob.synced_at != null
+      ? { syncedAt: timestampIsoOrNull(fromBlob.syncedAt ?? fromBlob.synced_at) }
       : {}),
   };
 }
@@ -454,6 +490,9 @@ function shipmentFromRow(row) {
     consigneeEmailPrint: row.consignee_email_print || "",
     notifyNamePrint: row.notify_name_print || "",
     status: row.status,
+    ...(timestampIsoOrNull(row.synced_at) != null
+      ? { syncedAt: timestampIsoOrNull(row.synced_at) }
+      : {}),
     ...shipmentHqFromRow(row),
   };
 }
@@ -461,8 +500,10 @@ function shipmentFromRow(row) {
 async function loadRelationalSnapshot(client, key) {
   // `pg` không hỗ trợ chạy nhiều query đồng thời trên cùng một client.
   // Chạy tuần tự để tránh hàng đợi nội bộ/deprecation và giữ đúng transaction hiện tại.
+  const includeCustomerSyncedAt = await customersTableHasSyncedAt(client);
+  const customerSyncedSelect = includeCustomerSyncedAt ? ", c.synced_at" : "";
   const customerRes = await client.query(`
-      SELECT c.id, c.code, c.name,
+      SELECT c.id, c.code, c.name${customerSyncedSelect},
              p.shipper_name, p.shipper_address, p.shipper_phone, p.shipper_email, p.shipper_vat_code,
              p.agent_name, p.agent_address, p.agent_phone, p.agent_email, p.agent_vat_code,
              p.consignee_name, p.consignee_address, p.consignee_phone, p.consignee_email, p.notify_name

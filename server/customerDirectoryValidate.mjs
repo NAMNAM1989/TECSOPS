@@ -336,6 +336,9 @@ export function parseCustomersLoose(raw) {
       savedDimTemplates,
       parties: parsePartiesLoose(item),
       otherRequirementsPrint: sliceStr(item.otherRequirementsPrint, L.otherRequirementsPrint).trim(),
+      ...(item.syncedAt != null || item.synced_at != null
+        ? { syncedAt: item.syncedAt ?? item.synced_at ?? null }
+        : {}),
       ...normalizeDefaultProfileIds(
         item,
         savedShippers,
@@ -478,6 +481,9 @@ export function validateCustomerDirectoryPayload(raw) {
       savedDimTemplates,
       parties: parsePartiesLoose(item),
       otherRequirementsPrint: sliceStr(item.otherRequirementsPrint, L.otherRequirementsPrint).trim(),
+      ...(item.syncedAt != null || item.synced_at != null
+        ? { syncedAt: item.syncedAt ?? item.synced_at ?? null }
+        : {}),
       ...normalizeDefaultProfileIds(
         item,
         savedShippers,

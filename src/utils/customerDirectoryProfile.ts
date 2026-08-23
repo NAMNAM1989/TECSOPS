@@ -387,6 +387,9 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
     savedDimTemplates,
     otherRequirementsPrint: clip(migrated.otherRequirementsPrint, L.otherRequirementsPrint).trim() || undefined,
     parties,
+    ...(typeof migrated.syncedAt === "string" && migrated.syncedAt
+      ? { syncedAt: migrated.syncedAt }
+      : {}),
   };
 
 }

@@ -14,6 +14,7 @@ import {
   clampCustomerSavedVehicle,
   normalizeCustomerPartyType,
 } from "./customerDirectoryProfile";
+import { toSyncedAtIso } from "./dbSyncedAt";
 
 function trimStr(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
@@ -199,6 +200,7 @@ export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntr
     const code = trimStr(o.code);
     const name = trimStr(o.name);
     if (!id || !code || !name) continue;
+    const syncedAt = toSyncedAtIso(o.syncedAt ?? o.synced_at);
     out.push(
       clampCustomerDirectoryEntry({
         id,
@@ -232,6 +234,7 @@ export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntr
         consigneeEmail: trimStr(o.consigneeEmail),
         notifyName: trimStr(o.notifyName),
         otherRequirementsPrint: trimStr(o.otherRequirementsPrint),
+        ...(syncedAt ? { syncedAt } : {}),
       } as CustomerDirectoryEntry & {
         consigneeName?: string;
         consigneeAddress?: string;

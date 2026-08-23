@@ -34,6 +34,11 @@ import {
   parseStateScopeFromQuery,
   projectAppState,
 } from "./stateScope.mjs";
+import {
+  attachDbSyncedAt,
+  buildSyncMeta,
+  loadNamnamlogisticsSyncedAtSnapshot,
+} from "./namnamlogisticsSyncedAt.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
@@ -43,6 +48,11 @@ function resolveRequestStateScope(req) {
   const fromQuery = parseStateScopeFromQuery(req.query || {});
   if (fromQuery.full || fromQuery.sessionDate) return fromQuery;
   return parseStateScopeFromHeaders(req.headers || {});
+}
+
+async function projectStateForClient(state, req) {
+  const withSync = await attachDbSyncedAt(state);
+  return projectAppState(withSync, resolveRequestStateScope(req));
 }
 
 const app = express();
@@ -262,12 +272,39 @@ app.get("/api/ecargo-extension", (_req, res) => {
 app.get("/api/state", appAuth.requireAuth, async (req, res) => {
   try {
     const full = await loadState();
-    const scope = resolveRequestStateScope(req);
-    res.json(projectAppState(full, scope));
+    res.json(await projectStateForClient(full, req));
   } catch (e) {
     console.error("[api/state]", e);
     res.status(500).json({
       error: isProduction ? "Failed to load state" : String(e?.message ?? e),
+    });
+  }
+});
+
+/** Thin SoT: SELECT lots.synced_at + ops_customers.synced_at (namnamlogistics). */
+app.get("/api/sync-meta", appAuth.requireAuth, async (_req, res) => {
+  try {
+    const snapshot = await loadNamnamlogisticsSyncedAtSnapshot();
+    res.json({
+      ok: true,
+      ...buildSyncMeta(snapshot),
+      lots: (snapshot.lots ?? []).map((l) => ({
+        awb: l.awb ?? null,
+        awb_norm: l.awb_norm ?? null,
+        warehouse: l.warehouse ?? null,
+        session_date: l.session_date ?? l.sessionDate ?? null,
+        synced_at: l.synced_at ?? l.syncedAt ?? null,
+      })),
+      customers: (snapshot.customers ?? []).map((c) => ({
+        code: c.code ?? null,
+        synced_at: c.synced_at ?? c.syncedAt ?? null,
+      })),
+    });
+  } catch (e) {
+    console.error("[api/sync-meta]", e);
+    res.status(500).json({
+      ok: false,
+      error: isProduction ? "Failed to load sync meta" : String(e?.message ?? e),
     });
   }
 });
@@ -293,9 +330,9 @@ app.post("/api/mutation", appAuth.requireAuth, mutationRateLimit, async (req, re
     }
     const next = await runMutation(body);
     recordMutationEventSafe(body);
-    await emitScopedSync(io, next);
-    const scope = resolveRequestStateScope(req);
-    res.json(projectAppState(next, scope));
+    const forClient = await attachDbSyncedAt(next);
+    await emitScopedSync(io, forClient);
+    res.json(projectAppState(forClient, resolveRequestStateScope(req)));
   } catch (e) {
     console.error("[api/mutation]", e);
     res.status(400).json(
@@ -324,9 +361,9 @@ app.post("/api/mutations", appAuth.requireAuth, mutationRateLimit, async (req, r
     }
     const next = await runBatchMutations(list);
     for (const m of list) recordMutationEventSafe(m);
-    await emitScopedSync(io, next);
-    const scope = resolveRequestStateScope(req);
-    res.json(projectAppState(next, scope));
+    const forClient = await attachDbSyncedAt(next);
+    await emitScopedSync(io, forClient);
+    res.json(projectAppState(forClient, resolveRequestStateScope(req)));
   } catch (e) {
     console.error("[api/mutations]", e);
     res.status(400).json(

@@ -521,7 +521,7 @@ export function useShipmentSync(
     mutate,
     mutateBatch,
     socketConnected,
-    /** Epoch ms lần nhận state / socket sync gần nhất (client). Không có lots.synced_at trong API. */
+    /** Epoch ms lần nhận /api/state · socket (client). Ops strip dùng lots.syncedAt / syncMeta, không field này. */
     lastSyncAt,
     pendingOfflineCount,
     refreshState,

@@ -27,7 +27,8 @@ interface Props {
   isViewingToday: boolean;
   syncStatus: SyncStatus;
   socketConnected: boolean;
-  lastSyncAt?: number | null;
+  /** SoT lots.synced_at — không dùng lastSyncAt client / customers. */
+  lotSyncedAt?: number | null;
   pendingOfflineCount?: number;
   onSyncRefresh?: () => void | Promise<void>;
   syncRefreshing?: boolean;
@@ -94,7 +95,7 @@ export function OpsMobileStickyHeader({
   isViewingToday,
   syncStatus,
   socketConnected,
-  lastSyncAt = null,
+  lotSyncedAt = null,
   pendingOfflineCount = 0,
   onSyncRefresh,
   syncRefreshing = false,
@@ -243,7 +244,7 @@ export function OpsMobileStickyHeader({
       <OpsMobileSyncBar
         status={syncStatus}
         socketConnected={socketConnected}
-        lastSyncAt={lastSyncAt}
+        lotSyncedAt={lotSyncedAt}
         pendingOfflineCount={pendingOfflineCount}
         onRefresh={onSyncRefresh}
         refreshing={syncRefreshing}

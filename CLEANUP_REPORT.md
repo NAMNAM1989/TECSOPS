@@ -86,8 +86,8 @@ Mọi mục REVIEW + KEEP. Không xóa khi không chắc.
 - [x] `npm run lint` — PASS
 - [x] `npm run lint:server` — PASS
 - [x] `npm run typecheck` — PASS
-- [ ] `npm test` — vòng 2 (sau khi gỡ 3 file unused feature)
-- [x] `npm run deploy:check` — PASS vòng 1
+- [x] `npm test` — vòng 2 PASS **81 files / 489 tests** (`csdForms.test.ts` 12/12)
+- [x] `npm run deploy:check` — PASS
 - [x] `npm run build` — PASS vòng 1 (`tsc -b && vite build`; ZIP Ext TCS 1.5.3 / SCSC 1.0.3)
 
 Không revert; không sửa logic nghiệp vụ ngoài cleanup.
@@ -122,7 +122,7 @@ Chi tiết đợt 2:
 
 - App vẫn build; Ext/OCR/eCargo/print/CSD/auth/DB nguyên.
 - CTA vẫn «Đăng Nhập TCS» (`tcsLoginCtaLabel` + test).
-- GitHub CI vòng 1 (`54af291`) **success**.
+- GitHub CI vòng 1 (`54af291`) **success**. Vòng 2 local lint/typecheck/test/deploy:check PASS.
 - PR: https://github.com/NAMNAM1989/TECSOPS/pull/57
 
 ### Follow-up (không làm)

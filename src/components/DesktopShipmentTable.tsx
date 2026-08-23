@@ -462,7 +462,7 @@ function ShipmentTableRowImpl({
               e.stopPropagation();
               onOpenDimModal(row);
             }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-ui-primary/35 bg-ui-primary/8 text-ui-primary hover:bg-ui-primary/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-ui-primary/35 bg-ui-primary/10 text-ui-primary hover:bg-ui-primary/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
           >
             <svg
               className="h-3.5 w-3.5"

@@ -33,6 +33,7 @@ import { downloadOpsStatsExcel } from "../utils/exportOpsStatsExcel";
 import {
   currentMonthYm,
   formatStatsPeriodLabel,
+  formatWeekEmptyCopy,
   formatWeekRangeLabel,
   resolveStatsPeriodRange,
   shiftStatsPeriodAnchor,
@@ -650,12 +651,12 @@ export function OpsStatsPage({
 
             {t.lots === 0 ? (
               <EmptyState
-                title={mode === "week" ? `Không có lô tuần ${weekLabel}` : "Không có lô trong kỳ"}
-                description={
-                  mode === "week"
-                    ? "Tuần này trống — chuyển tuần trước/sau, lọc kho (một số tuần có kg lệch), hoặc nhập liệu trên Ops rồi quay lại."
-                    : "Đổi kỳ / kho / dest, hoặc nhập liệu trên Ops rồi quay lại."
-                }
+                {...(mode === "week"
+                  ? formatWeekEmptyCopy(weekLabel)
+                  : {
+                      title: "Không có lô trong kỳ",
+                      description: "Đổi kỳ / kho / dest, hoặc nhập liệu trên Ops rồi quay lại.",
+                    })}
                 actionLabel="Về Ops"
                 onAction={onNavigateOps}
               />

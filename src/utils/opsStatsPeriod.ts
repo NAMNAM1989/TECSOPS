@@ -116,6 +116,20 @@ export function formatWeekRangeLabel(fromYmd: string, toYmd: string): string {
   return `${a.getDate()} ${OPS_MONTHS[a.getMonth()]} ${a.getFullYear()} – ${b.getDate()} ${OPS_MONTHS[b.getMonth()]} ${b.getFullYear()}`;
 }
 
+/**
+ * Empty-state khi tuần đã chọn không có lô.
+ * Luôn nhắc **khoảng tuần đang xem** — không dùng «Tuần này trống»
+ * (tránh lẫn với CTA điều hướng «Tuần này»).
+ */
+export function formatWeekEmptyCopy(weekLabel: string): { title: string; description: string } {
+  const range = weekLabel.trim() || "đã chọn";
+  return {
+    title: `Tuần ${range} trống`,
+    description:
+      "Không có lô trong tuần đã chọn — chuyển tuần trước/sau, lọc kho (một số tuần có kg lệch), hoặc nhập liệu trên Ops rồi quay lại.",
+  };
+}
+
 /** Tháng hiện tại `YYYY-MM`. */
 export function currentMonthYm(now = new Date()): string {
   return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatStatsPeriodLabel,
+  formatWeekEmptyCopy,
   formatWeekRangeLabel,
   resolveStatsPeriodRange,
   shiftStatsPeriodAnchor,
@@ -125,6 +126,19 @@ describe("formatWeekRangeLabel", () => {
     expect(
       formatStatsPeriodLabel({ fromYmd: "2026-08-17", toYmd: "2026-08-23" }, "week")
     ).toBe("T2–CN · 17–23 AUG 2026");
+  });
+});
+
+describe("formatWeekEmptyCopy", () => {
+  it("nhắc khoảng tuần đã chọn, không nói «Tuần này trống»", () => {
+    const other = formatWeekEmptyCopy("10–16 AUG 2026");
+    expect(other.title).toBe("Tuần 10–16 AUG 2026 trống");
+    expect(other.title).not.toMatch(/Tuần này/);
+    expect(other.description).not.toMatch(/Tuần này trống/);
+
+    const current = formatWeekEmptyCopy("17–23 AUG 2026");
+    expect(current.title).toBe("Tuần 17–23 AUG 2026 trống");
+    expect(current.description).toContain("tuần đã chọn");
   });
 });
 

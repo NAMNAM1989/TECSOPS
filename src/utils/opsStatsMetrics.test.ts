@@ -153,6 +153,37 @@ describe("computeOpsStats", () => {
     expect(r.totals.missingDimLots).toBe(0);
   });
 
+  it("khoảng tuần Monday–Sunday inclusive trên sessionDate (DATE thuần)", () => {
+    const weekRows: Shipment[] = [
+      sample({ id: "sun-prev", sessionDate: "2026-08-16", pcs: 1, kg: 1 }),
+      sample({ id: "mon", sessionDate: "2026-08-17", pcs: 2, kg: 10 }),
+      sample({ id: "wed", sessionDate: "2026-08-19", pcs: 3, kg: 20 }),
+      sample({ id: "sun", sessionDate: "2026-08-23", pcs: 4, kg: 30 }),
+      sample({ id: "mon-next", sessionDate: "2026-08-24", pcs: 5, kg: 40 }),
+    ];
+    const week = computeOpsStats(weekRows, {
+      fromYmd: "2026-08-17",
+      toYmd: "2026-08-23",
+    });
+    expect(week.totals.lots).toBe(3);
+    expect(week.totals.pcs).toBe(9);
+    expect(week.totals.actualKg).toBe(60);
+    expect(week.lots.map((l) => l.shipment.sessionDate)).toEqual([
+      "2026-08-17",
+      "2026-08-19",
+      "2026-08-23",
+    ]);
+    expect(week.byDay).toHaveLength(3);
+
+    const empty = computeOpsStats(weekRows, {
+      fromYmd: "2026-08-31",
+      toYmd: "2026-09-06",
+    });
+    expect(empty.totals.lots).toBe(0);
+    expect(empty.lots).toEqual([]);
+    expect(empty.byDay).toEqual([]);
+  });
+
   it("gom theo dest + lọc dest", () => {
     const withDest: Shipment[] = [
       sample({

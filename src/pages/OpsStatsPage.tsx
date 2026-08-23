@@ -7,6 +7,7 @@ import {
   AppShell,
   Button,
   EmptyState,
+  IconButton,
   SyncStatusPill,
   Wordmark,
   useToast,
@@ -32,8 +33,13 @@ import { downloadOpsStatsExcel } from "../utils/exportOpsStatsExcel";
 import {
   currentMonthYm,
   formatStatsPeriodLabel,
+  formatWeekEmptyCopy,
+  formatWeekRangeLabel,
   resolveStatsPeriodRange,
+  shiftStatsPeriodAnchor,
   todaySessionYmd,
+  todayYmdAsiaSaigon,
+  weekStartYmd,
   type StatsPeriodMode,
 } from "../utils/opsStatsPeriod";
 
@@ -51,6 +57,7 @@ type DetailTab = "lots" | "day" | "warehouse" | "dest";
 const PERIOD_MODES: { id: StatsPeriodMode; label: string }[] = [
   { id: "today", label: "Hôm nay" },
   { id: "day", label: "Ngày" },
+  { id: "week", label: "Tuần" },
   { id: "month", label: "Tháng" },
   { id: "year", label: "Năm" },
   { id: "range", label: "Khoảng" },
@@ -266,9 +273,11 @@ export function OpsStatsPage({
 }: Props) {
   const toast = useToast();
   const today = todaySessionYmd();
+  const todaySaigon = todayYmdAsiaSaigon();
 
   const [mode, setMode] = useState<StatsPeriodMode>("today");
   const [dayYmd, setDayYmd] = useState(today);
+  const [weekYmd, setWeekYmd] = useState(todaySaigon);
   const [monthYm, setMonthYm] = useState(currentMonthYm());
   const [year, setYear] = useState(Number(today.slice(0, 4)));
   const [rangeFrom, setRangeFrom] = useState(today);
@@ -284,13 +293,14 @@ export function OpsStatsPage({
       resolveStatsPeriodRange({
         mode,
         dayYmd,
+        weekYmd,
         monthYm,
         year,
         rangeFromYmd: rangeFrom,
         rangeToYmd: rangeTo,
-        todayYmd: today,
+        todayYmd: mode === "week" ? todaySaigon : today,
       }),
-    [mode, dayYmd, monthYm, year, rangeFrom, rangeTo, today]
+    [mode, dayYmd, weekYmd, monthYm, year, rangeFrom, rangeTo, today, todaySaigon]
   );
 
   const destOptions = useMemo(
@@ -315,6 +325,9 @@ export function OpsStatsPage({
   );
 
   const periodLabel = formatStatsPeriodLabel(range, mode);
+  const weekLabel = formatWeekRangeLabel(range.fromYmd, range.toYmd);
+  const isCurrentWeek =
+    mode === "week" && weekStartYmd(weekYmd) === weekStartYmd(todaySaigon);
 
   const filteredLots = useMemo(() => {
     const q = lotSearch.trim().toLowerCase();
@@ -451,6 +464,61 @@ export function OpsStatsPage({
                     />
                   </label>
                 ) : null}
+                {mode === "week" ? (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
+                      Tuần T2–CN
+                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="inline-flex items-center rounded-xl border border-ui-border bg-ui-surface p-0.5 shadow-ui-sm">
+                        <IconButton
+                          label="Tuần trước"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setWeekYmd((w) => shiftStatsPeriodAnchor("week", w, -1))}
+                        >
+                          ‹
+                        </IconButton>
+                        <div className="relative min-w-[10.5rem] px-1 sm:min-w-[12rem]">
+                          <span
+                            className="pointer-events-none block truncate py-1 text-center font-mono text-[12px] font-semibold tabular-nums text-ui-navy"
+                            aria-hidden
+                          >
+                            {weekLabel}
+                          </span>
+                          <input
+                            aria-label="Chọn ngày trong tuần"
+                            type="date"
+                            value={weekStartYmd(weekYmd) ?? weekYmd}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              if (v) setWeekYmd(weekStartYmd(v) ?? v);
+                            }}
+                            className="absolute inset-0 cursor-pointer opacity-0"
+                          />
+                        </div>
+                        <IconButton
+                          label="Tuần sau"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setWeekYmd((w) => shiftStatsPeriodAnchor("week", w, 1))}
+                        >
+                          ›
+                        </IconButton>
+                      </div>
+                      {!isCurrentWeek ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="px-2.5 text-[11px]"
+                          onClick={() => setWeekYmd(todaySaigon)}
+                        >
+                          Tuần này
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
                 {mode === "month" ? (
                   <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
                     Tháng
@@ -583,8 +651,12 @@ export function OpsStatsPage({
 
             {t.lots === 0 ? (
               <EmptyState
-                title="Không có lô trong kỳ"
-                description="Đổi kỳ / kho / dest, hoặc nhập liệu trên Ops rồi quay lại."
+                {...(mode === "week"
+                  ? formatWeekEmptyCopy(weekLabel)
+                  : {
+                      title: "Không có lô trong kỳ",
+                      description: "Đổi kỳ / kho / dest, hoặc nhập liệu trên Ops rồi quay lại.",
+                    })}
                 actionLabel="Về Ops"
                 onAction={onNavigateOps}
               />

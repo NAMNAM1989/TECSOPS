@@ -1,7 +1,8 @@
 # TECSOPS — Yêu cầu Cursor nghiên cứu, thiết kế lại và nâng cấp dự án hiện hữu
 
 > Tài liệu giao việc cho Cursor Agent.  
-> Nguồn yêu cầu: `TECSOPS_bang_ghi_nhan_sua_doi_UI(1).xlsx` — 50 hạng mục thuộc 9 nhóm.
+> Nguồn yêu cầu: `TECSOPS_bang_ghi_nhan_sua_doi_UI(1).xlsx` — 50 hạng mục thuộc 9 nhóm.  
+> **Phase 0 (2026-08-23):** khảo sát xong — `docs/TECSOPS-REDESIGN-AUDIT.md`. Không bắt đầu Đợt A-finish trước khi duyệt audit.
 
 ## 1. Vai trò và mục tiêu
 

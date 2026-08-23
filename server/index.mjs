@@ -357,11 +357,16 @@ app.post("/api/mutations", appAuth.requireAuth, mutationRateLimit, async (req, r
   }
 });
 
-registerEcargoVctRoutes(app, { runMutation, loadState, io });
+registerEcargoVctRoutes(app, {
+  runMutation,
+  loadState,
+  io,
+  requireAuth: appAuth.requireAuth,
+});
 // Gemini /api/ai + Google Sheet /api/sheets đã gỡ (A3). Railway có thể xóa GEMINI_*.
 
 if (isDatabaseConfigured()) {
-  registerLookupRoutes(app);
+  registerLookupRoutes(app, { requireAuth: appAuth.requireAuth });
   console.info("[api] lookup (Postgres)");
 }
 

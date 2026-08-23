@@ -63,10 +63,18 @@ export function createAppAuth({
     );
   }
 
+  function sessionFromRequest(req) {
+    return String(req.get?.("x-tecsops-session") || "").trim();
+  }
+
   function isAuthenticatedRequest(req) {
     if (!required) return true;
     const direct = tokenFromRequest(req);
     if (direct && safeEqual(direct, token)) return true;
+    const sessionHeader = sessionFromRequest(req);
+    if (sessionValue && sessionHeader && safeEqual(sessionHeader, sessionValue)) {
+      return true;
+    }
     const cookies = parseCookies(req.headers?.cookie);
     return Boolean(cookies[COOKIE_NAME] && safeEqual(cookies[COOKIE_NAME], sessionValue));
   }
@@ -133,6 +141,25 @@ export function createAppAuth({
       ].join("; ");
       res.setHeader("Set-Cookie", cookie);
       res.json({ ok: true, required: true, authenticated: true });
+    });
+
+    /**
+     * Phiên cho Chrome Ext (background không gửi cookie SameSite).
+     * Chỉ trả session digest khi đã đăng nhập — Ext gửi lại `x-tecsops-session`.
+     */
+    app.get("/api/auth/bridge", (req, res) => {
+      if (!required) {
+        res.json({ ok: true, required: false, session: "" });
+        return;
+      }
+      if (!isAuthenticatedRequest(req)) {
+        res.status(401).json({
+          error: "Phiên TECSOPS chưa được xác thực.",
+          code: "AUTH_REQUIRED",
+        });
+        return;
+      }
+      res.json({ ok: true, required: true, session: sessionValue });
     });
 
     app.post("/api/auth/logout", (_req, res) => {

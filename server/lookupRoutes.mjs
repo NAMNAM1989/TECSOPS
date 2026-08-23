@@ -13,8 +13,8 @@ function parseLimit(raw, fallback = 40) {
   return Math.min(Math.max(Math.trunc(n), 1), 100);
 }
 
-export function registerLookupRoutes(app) {
-  app.get("/api/lookup/airports", async (req, res, next) => {
+export function registerLookupRoutes(app, { requireAuth = (_req, _res, next) => next() } = {}) {
+  app.get("/api/lookup/airports", requireAuth, async (req, res, next) => {
     try {
       const rows = await withDbClient(async (client) => {
         await ensureLookupReady(client);
@@ -32,7 +32,7 @@ export function registerLookupRoutes(app) {
     }
   });
 
-  app.get("/api/lookup/customers", async (req, res, next) => {
+  app.get("/api/lookup/customers", requireAuth, async (req, res, next) => {
     try {
       const items = await withDbClient(async (client) => {
         await ensureLookupReady(client);
@@ -44,7 +44,7 @@ export function registerLookupRoutes(app) {
     }
   });
 
-  app.get("/api/lookup/customers/:customerId/consignees", async (req, res, next) => {
+  app.get("/api/lookup/customers/:customerId/consignees", requireAuth, async (req, res, next) => {
     try {
       const items = await withDbClient(async (client) => {
         await ensureLookupReady(client);
@@ -56,7 +56,7 @@ export function registerLookupRoutes(app) {
     }
   });
 
-  app.get("/api/lookup/customers/:customerId/agents", async (req, res, next) => {
+  app.get("/api/lookup/customers/:customerId/agents", requireAuth, async (req, res, next) => {
     try {
       const items = await withDbClient(async (client) => {
         await ensureLookupReady(client);

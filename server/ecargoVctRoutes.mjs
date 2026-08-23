@@ -25,8 +25,11 @@ function rateKey(email) {
     .slice(0, 120);
 }
 
-export function registerEcargoVctRoutes(app, { runMutation, loadState, io }) {
-  app.get("/api/ecargo/otp/status", (_req, res) => {
+export function registerEcargoVctRoutes(
+  app,
+  { runMutation, loadState, io, requireAuth = (_req, _res, next) => next() },
+) {
+  app.get("/api/ecargo/otp/status", requireAuth, (_req, res) => {
     res.json({
       ok: true,
       ...getEcargoImapStatus(),
@@ -34,7 +37,7 @@ export function registerEcargoVctRoutes(app, { runMutation, loadState, io }) {
   });
 
   /** Connect IMAP + mở mailbox — không đọc/trả OTP hay body mail. */
-  app.post("/api/ecargo/otp/test", async (_req, res) => {
+  app.post("/api/ecargo/otp/test", requireAuth, async (_req, res) => {
     try {
       if (!ecargoImapConfigured()) {
         res.status(503).json({
@@ -66,7 +69,7 @@ export function registerEcargoVctRoutes(app, { runMutation, loadState, io }) {
     }
   });
 
-  app.post("/api/ecargo/otp/wait", async (req, res) => {
+  app.post("/api/ecargo/otp/wait", requireAuth, async (req, res) => {
     try {
       if (!ecargoImapConfigured()) {
         res.status(503).json({
@@ -132,7 +135,7 @@ export function registerEcargoVctRoutes(app, { runMutation, loadState, io }) {
     }
   });
 
-  app.post("/api/ecargo/result-from-mail", async (req, res) => {
+  app.post("/api/ecargo/result-from-mail", requireAuth, async (req, res) => {
     try {
       if (!ecargoImapConfigured()) {
         res.status(503).json({
@@ -168,7 +171,7 @@ export function registerEcargoVctRoutes(app, { runMutation, loadState, io }) {
     }
   });
 
-  app.post("/api/ecargo/vct-result", async (req, res) => {
+  app.post("/api/ecargo/vct-result", requireAuth, async (req, res) => {
     try {
       const body = req.body || {};
       const shipmentIds = Array.isArray(body.shipmentIds)
@@ -246,7 +249,7 @@ export function registerEcargoVctRoutes(app, { runMutation, loadState, io }) {
     }
   });
 
-  app.get("/api/ecargo/vct-result/:shipmentId", async (req, res) => {
+  app.get("/api/ecargo/vct-result/:shipmentId", requireAuth, async (req, res) => {
     try {
       const id = String(req.params.shipmentId || "").trim();
       const state = await loadState();

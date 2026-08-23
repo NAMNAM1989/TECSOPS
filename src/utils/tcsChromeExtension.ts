@@ -471,6 +471,8 @@ export function registerEcargoVctViaExtension(
   payload: EcargoVctFillPayload & {
     apiBase: string;
     shipmentIds: string[];
+    /** Digest phiên Ops — Ext gửi `x-tecsops-session` khi gọi IMAP/VCT. */
+    session?: string;
   }
 ): Promise<TcsExtFillResult> {
   return request<TcsExtFillResult>(
@@ -498,6 +500,7 @@ export function provideEcargoOtpViaExtension(payload: {
   sinceIso?: string;
   awbHint?: string;
   apiBase?: string;
+  session?: string;
 }): Promise<TcsExtFillResult> {
   return request<TcsExtFillResult>(
     "ECARGO_OTP_PROVIDE",

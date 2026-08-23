@@ -4,10 +4,10 @@ export const MOBILE = {
     "flex w-full max-h-[min(92vh,92dvh)] max-w-[100vw] flex-col rounded-t-[28px] border border-ui-border bg-ui-surface shadow-ui-lg animate-cnee-slide-up",
   sheetBackdrop:
     "fixed inset-0 z-[560] flex flex-col justify-end bg-black/40 md:hidden",
-  /** Card lô Round 3 — denser, AWB scannable */
-  card: "relative overflow-hidden rounded-xl border border-ui-border/90 bg-ui-surface shadow-ui-sm",
-  cardInner: "relative z-10 bg-transparent px-2.5 py-1.5",
-  cardMeta: "truncate font-shipment-data text-[11px] font-medium leading-snug text-ui-text-muted",
+  /** Card lô day-board — denser, AWB scannable, 2 dòng */
+  card: "relative overflow-hidden rounded-lg border border-ui-border/90 bg-ui-surface shadow-ui-sm",
+  cardInner: "relative z-10 bg-transparent px-2 py-1",
+  cardMeta: "truncate font-shipment-data text-[11px] font-medium leading-tight text-ui-text-muted",
   customerName: "truncate text-[12px] font-semibold leading-snug tracking-tight text-ui-navy",
   awb: "ops-awb text-[15px] leading-tight whitespace-nowrap",
   awbEmpty: "text-[13px] font-semibold leading-tight text-ui-primary hover:text-ui-primary-hover",

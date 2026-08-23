@@ -12,12 +12,15 @@ interface StatusSelectProps {
   onChange: (s: ShipmentStatus) => void;
   /** Kho của lô — quyết định option hợp lệ. */
   warehouse: Warehouse;
+  /** Mobile — vùng chạm ≥44px. */
   compact?: boolean;
+  /** Desktop bảng ngày — thấp hơn compact, nhãn vẫn ≥10px. */
+  dense?: boolean;
 }
 
-export function StatusSelect({ value, onChange, warehouse, compact }: StatusSelectProps) {
+export function StatusSelect({ value, onChange, warehouse, compact, dense }: StatusSelectProps) {
   const options = selectableStatusesForShipment(warehouse, value);
-  const labels = compact ? statusLabelCompact : statusLabel;
+  const labels = compact || dense ? statusLabelCompact : statusLabel;
 
   const select = (
     <select
@@ -27,9 +30,11 @@ export function StatusSelect({ value, onChange, warehouse, compact }: StatusSele
       aria-label={`Trạng thái · ${statusLabel[value]}`}
       title={`${statusIcon[value]} ${statusLabel[value]}`}
       className={`cursor-pointer rounded-full border font-bold shadow-ui-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ui-focus ${statusSelectSurface[value]} ${
-        compact
-          ? "h-11 w-full min-h-11 min-w-0 touch-manipulation truncate px-1.5 text-[10px] leading-none"
-          : "px-2.5 py-1 text-xs"
+        dense
+          ? "h-7 w-full min-w-0 truncate px-1.5 text-[10px] leading-none"
+          : compact
+            ? "h-11 w-full min-h-11 min-w-0 touch-manipulation truncate px-1.5 text-[10px] leading-none"
+            : "px-2.5 py-1 text-xs"
       }`}
     >
       {options.map((st) => (
@@ -40,7 +45,7 @@ export function StatusSelect({ value, onChange, warehouse, compact }: StatusSele
     </select>
   );
 
-  if (!compact) return select;
+  if (!compact && !dense) return select;
   return (
     <div className="w-[4.75rem] max-w-[4.75rem] shrink-0 overflow-hidden">
       {select}

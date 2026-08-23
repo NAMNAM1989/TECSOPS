@@ -123,7 +123,10 @@ export function DesktopShipmentTable({
 
   return (
     <>
-      <div className={isMobile ? "hidden" : "hidden md:block space-y-1.5"}>
+      <div
+        className={isMobile ? "hidden" : "hidden md:block space-y-1"}
+        data-testid="ops-desktop-shipment-table"
+      >
         <WarehouseGridPicker
           rows={metricRows}
           active={activeWarehouse}
@@ -134,31 +137,31 @@ export function DesktopShipmentTable({
 
         <section
           id={`warehouse-section-${activeWarehouse}`}
-          className="overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md"
+          className="overflow-hidden rounded-xl border border-ui-border/90 bg-ui-surface shadow-ui-md"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-ui-border/80 bg-gradient-to-r from-ui-surface-muted to-ui-surface px-3 py-2">
+          <div className="flex items-center justify-between gap-2 border-b border-ui-border/80 bg-gradient-to-r from-ui-surface-muted to-ui-surface px-2.5 py-1">
             <div className="min-w-0">
-              <h2 className="text-[13px] font-extrabold leading-tight tracking-tight text-ui-navy">
+              <h2 className="text-[12px] font-extrabold leading-tight tracking-tight text-ui-navy">
                 {warehouseLabel[activeWarehouse]}
-                <span className="ml-1.5 text-[11px] font-semibold text-ui-text-muted">
+                <span className="ml-1.5 text-[10px] font-semibold text-ui-text-muted">
                   · {group.length} lô
                 </span>
               </h2>
             </div>
           </div>
           <div
-            className={`overflow-auto px-1.5 py-1 ${
-              group.length > 4 ? "max-h-[min(82vh,820px)]" : ""
+            className={`overflow-auto px-1 py-0.5 ${
+              group.length > 4 ? "max-h-[min(86vh,860px)]" : ""
             }`}
           >
-            <table className="w-full border-separate border-spacing-x-0 border-spacing-y-0 text-left text-[13px] leading-snug">
+            <table className="w-full border-separate border-spacing-x-0 border-spacing-y-0 text-left text-[13px] leading-tight">
               <thead className="sticky top-0 z-20">
                 <tr className="ops-table-head">
                   {COL_HEADERS.map((c) => (
                     <th
                       key={c.key}
                       title={c.title}
-                      className={`box-border px-1.5 py-2 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted ${
+                      className={`box-border px-1 py-1 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted ${
                         c.key === "customerInfo" || c.key === "status"
                           ? "truncate"
                           : "whitespace-nowrap"
@@ -279,7 +282,7 @@ function ShipmentTableRowImpl({
         : "";
     return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} border-b border-ui-border/50 group-hover/row:bg-ui-primary/5 ${
       part === "first" ? "border-l border-ui-border/60" : ""
-    } ${part === "last" ? "border-r border-ui-border/60" : ""} px-1.5 py-1.5 ${extra}`.trim();
+    } ${part === "last" ? "border-r border-ui-border/60" : ""} px-1 py-0.5 ${extra}`.trim();
   };
 
   const hasNextRow = rowIdx < groupRowIds.length - 1;
@@ -329,7 +332,7 @@ function ShipmentTableRowImpl({
             rowId={row.id}
             value={row.awb}
             allRows={allRows}
-            className="ops-awb text-[14px] leading-tight"
+            className="ops-awb !py-0 text-[14px] leading-tight"
             onCommit={(awb) => onUpdate(row.id, { awb })}
             onEnterNavigateDown={() => focusShipmentGridCell(row.id, "hawb")}
           />
@@ -337,7 +340,7 @@ function ShipmentTableRowImpl({
             value={row.hawb ?? ""}
             placeholder="HAWB"
             title={row.hawb?.trim() ? `HAWB: ${row.hawb}` : undefined}
-            className="font-shipment-data text-[11px] font-semibold ops-grid-cell-muted"
+            className="font-shipment-data !py-0 text-[11px] font-semibold ops-grid-cell-muted"
             maxLength={32}
             gridNav={{ rowId: row.id, field: "hawb" }}
             onCommit={(v) => onUpdate(row.id, { hawb: v.slice(0, 32) })}
@@ -368,7 +371,7 @@ function ShipmentTableRowImpl({
             value={row.flight}
             placeholder="Chuyến"
             title={row.flight?.trim() ? `Chuyến: ${row.flight}` : undefined}
-            className={`font-shipment-data text-[13px] font-bold ${flightNumberAccent} ops-grid-cell`}
+            className={`font-shipment-data !py-0 text-[13px] font-bold ${flightNumberAccent} ops-grid-cell`}
             uppercase
             maxLength={12}
             gridNav={{ rowId: row.id, field: "flight" }}
@@ -381,7 +384,7 @@ function ShipmentTableRowImpl({
             value={row.flightDate}
             placeholder="15APR"
             title={row.flightDate?.trim() ? `Ngày: ${row.flightDate}` : undefined}
-            className="font-shipment-data text-[11px] font-medium ops-grid-cell-muted"
+            className="font-shipment-data !py-0 text-[11px] font-medium ops-grid-cell-muted"
             uppercase
             maxLength={16}
             gridNav={{ rowId: row.id, field: "flightDate" }}
@@ -394,7 +397,7 @@ function ShipmentTableRowImpl({
         <InlineTextEdit
           value={row.dest}
           placeholder="DEST"
-          className="font-shipment-data text-center text-[13px] font-semibold ops-grid-cell"
+          className="font-shipment-data !py-0 text-center text-[13px] font-semibold ops-grid-cell"
           uppercase
           maxLength={3}
           gridNav={{ rowId: row.id, field: "dest" }}
@@ -409,7 +412,7 @@ function ShipmentTableRowImpl({
           value={row.pcs}
           variant="grid"
           title="Click để sửa số kiện"
-          className="font-shipment-data text-right text-[13px] font-bold tabular-nums text-ui-text"
+          className="font-shipment-data !py-0 text-right text-[13px] font-bold tabular-nums text-ui-text"
           gridNav={{ rowId: row.id, field: "pcs" }}
           validate={validateInlinePcs}
           onCommit={(v) => onUpdate(row.id, { pcs: v })}
@@ -421,7 +424,7 @@ function ShipmentTableRowImpl({
           value={row.kg}
           variant="grid"
           title="Click để sửa kg"
-          className="font-shipment-data text-right text-[13px] font-bold tabular-nums text-ui-text"
+          className="font-shipment-data !py-0 text-right text-[13px] font-bold tabular-nums text-ui-text"
           gridNav={{ rowId: row.id, field: "kg" }}
           validate={validateInlineKg}
           onCommit={(v) => onUpdate(row.id, { kg: v })}
@@ -462,7 +465,7 @@ function ShipmentTableRowImpl({
               e.stopPropagation();
               onOpenDimModal(row);
             }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-ui-primary/35 bg-ui-primary/10 text-ui-primary hover:bg-ui-primary/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-ui-primary/35 bg-ui-primary/10 text-ui-primary hover:bg-ui-primary/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
           >
             <svg
               className="h-3.5 w-3.5"
@@ -490,7 +493,7 @@ function ShipmentTableRowImpl({
               profileSelection={row}
               customerDirectory={customerDirectory}
               placeholder="Khách"
-              className="min-w-0 whitespace-normal break-words text-[12px] font-semibold leading-snug line-clamp-2 ops-grid-cell"
+              className="min-w-0 whitespace-normal break-words text-[12px] font-semibold leading-tight line-clamp-2 ops-grid-cell"
               maxLength={120}
               gridNav={{ rowId: row.id, field: "customer" }}
               onCommit={(patch) => onUpdate(row.id, patch)}
@@ -534,7 +537,7 @@ function ShipmentTableRowImpl({
         <StatusSelect
           value={row.status}
           warehouse={row.warehouse}
-          compact
+          dense
           onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
         />
       </td>

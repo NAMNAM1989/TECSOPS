@@ -17,8 +17,8 @@ type Props = {
 };
 
 /**
- * Menu Công cụ — chỉ action thứ cấp chưa có nút riêng ngoài toolbar.
- * (Vantage/Tecs/TCS/SCSC, Thống kê desktop → nút riêng.)
+ * Menu Công cụ — action thứ cấp (Khách, tên hãng, Excel).
+ * Desktop: Thống kê + Báo cáo là nút/menu riêng ngoài toolbar.
  */
 export function OpsToolsMenu({
   compact = false,

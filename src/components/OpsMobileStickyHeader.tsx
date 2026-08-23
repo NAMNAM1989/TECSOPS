@@ -3,9 +3,9 @@ import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
 import { formatKgTotal } from "../utils/formatKgTotal";
-import { isTecsHub } from "../constants/warehouses";
 import { Wordmark } from "../ui";
-import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
+import { OverflowMenu } from "../ui/OverflowMenu";
+import { buildOpsCargoReportItems } from "./opsCargoReportItems";
 import { statusLabel, statusLabelCompact } from "./statusStyles";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { NewBookingButton } from "./NewBookingButton";
@@ -141,41 +141,17 @@ export function OpsMobileStickyHeader({
     return { lotCount: source.length, totalPcs: pcs, totalKg: kg };
   }, [activeWarehouse, filteredViewRows]);
 
-  const cargoReportItems = useMemo((): OverflowMenuItem[] => {
-    if (!onCopyCargoDayReport) return [];
-    return [
-      {
-        id: "vantage",
-        label: cargoReportCopying ? "Đang copy…" : "Vantage",
-        description: "TECS hub · ẩn khách",
-        disabled:
-          cargoReportCopying || !viewRows.some((r) => isTecsHub(r.warehouse)),
-        onSelect: () => onCopyCargoDayReport("vantage"),
-      },
-      {
-        id: "tecs",
-        label: cargoReportCopying ? "Đang copy…" : "Tecs",
-        description: "TECS hub · short code",
-        disabled:
-          cargoReportCopying || !viewRows.some((r) => isTecsHub(r.warehouse)),
-        onSelect: () => onCopyCargoDayReport("tecs"),
-      },
-      {
-        id: "tcs",
-        label: cargoReportCopying ? "Đang copy…" : "TCS",
-        description: "Chỉ kho TCS",
-        disabled: cargoReportCopying || !viewRows.some((r) => r.warehouse === "TCS"),
-        onSelect: () => onCopyCargoDayReport("tcs"),
-      },
-      {
-        id: "scsc",
-        label: cargoReportCopying ? "Đang copy…" : "SCSC",
-        description: "Chỉ kho SCSC",
-        disabled: cargoReportCopying || !viewRows.some((r) => r.warehouse === "SCSC"),
-        onSelect: () => onCopyCargoDayReport("scsc"),
-      },
-    ];
-  }, [cargoReportCopying, onCopyCargoDayReport, viewRows]);
+  const cargoReportItems = useMemo(
+    () =>
+      onCopyCargoDayReport
+        ? buildOpsCargoReportItems({
+            viewRows,
+            copying: cargoReportCopying,
+            onCopy: onCopyCargoDayReport,
+          })
+        : [],
+    [cargoReportCopying, onCopyCargoDayReport, viewRows],
+  );
 
   return (
     <div className="space-y-0.5" data-testid="ops-mobile-sticky-header">

@@ -87,15 +87,17 @@ export function InlineTextEdit({
     : {};
 
   const btnBase =
-    "block w-full max-w-full truncate whitespace-nowrap rounded px-1 py-0.5 text-left";
+    "ops-inline-edit block w-full max-w-full truncate whitespace-nowrap rounded px-1 py-0.5 text-left";
   const shown = (displayValue ?? value).trim();
+  const editLabel = title || (placeholder && placeholder !== "—" ? `Sửa ${placeholder}` : "Sửa");
 
   if (!editing) {
     return (
       <button
         type="button"
         {...gridProps}
-        title={title || (value ? value : "Click hoặc double-click để sửa")}
+        aria-label={editLabel}
+        title={title || (value ? `${value} — click để sửa` : "Click để sửa")}
         onFocus={(e) => {
           e.stopPropagation();
           setEditing(true);
@@ -108,7 +110,7 @@ export function InlineTextEdit({
           e.stopPropagation();
           setEditing(true);
         }}
-        className={`${btnBase} hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
+        className={`${btnBase} focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
           value === "" ? "ops-grid-placeholder" : ""
         } ${saving ? "opacity-60" : ""}`}
       >

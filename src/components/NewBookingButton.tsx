@@ -1,5 +1,6 @@
 import type { Warehouse } from "../types/shipment";
 import { warehouseLabel } from "../constants/warehouses";
+import { Button, IconButton } from "../ui";
 
 interface Props {
   activeWarehouse: Warehouse;
@@ -10,36 +11,42 @@ interface Props {
 
 /** CTA chính Ops — luôn ngoài menu Công cụ. */
 export function NewBookingButton({ activeWarehouse, onAdd, iconOnly = false }: Props) {
+  const plusIcon = (
+    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  );
+
   if (iconOnly) {
     return (
-      <button
-        type="button"
+      <IconButton
+        label={`Thêm booking ${warehouseLabel[activeWarehouse]}`}
+        variant="primary"
+        size="md"
         onClick={() => onAdd(activeWarehouse)}
-        className="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl bg-ui-primary text-white shadow-ui-sm transition hover:bg-ui-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus active:scale-[0.98]"
         title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (phím N)`}
-        aria-label={`Thêm booking ${warehouseLabel[activeWarehouse]}`}
+        className="shrink-0"
       >
         <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
         </svg>
-      </button>
+      </IconButton>
     );
   }
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="primary"
+      size="sm"
       onClick={() => onAdd(activeWarehouse)}
-      className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-ui-primary px-3.5 py-1.5 text-[12px] font-bold text-white shadow-ui-sm transition hover:bg-ui-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus active:scale-[0.98]"
       title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (phím N)`}
+      className="px-3.5 font-bold"
     >
-      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-      </svg>
+      {plusIcon}
       + Booking
       <span className="hidden max-w-[5.5rem] truncate font-semibold opacity-90 sm:inline">
         · {warehouseLabel[activeWarehouse]}
       </span>
-    </button>
+    </Button>
   );
 }

@@ -88,7 +88,7 @@ const COL_HEADERS: ColHeader[] = [
     w: "min-w-[6.5rem] max-w-[7.5rem]",
     title: "Trạng thái lô",
   },
-  { key: "actions", label: "", w: "min-w-[6.5rem]", title: "Ghi chú & thao tác" },
+  { key: "actions", label: "THAO TÁC", w: "min-w-[7.25rem]", title: "Ghi chú, in & menu" },
 ];
 
 export function DesktopShipmentTable({
@@ -136,7 +136,7 @@ export function DesktopShipmentTable({
           id={`warehouse-section-${activeWarehouse}`}
           className="overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-ui-border/80 bg-gradient-to-r from-slate-50 to-white px-3 py-2">
+          <div className="flex items-center justify-between gap-2 border-b border-ui-border/80 bg-gradient-to-r from-ui-surface-muted to-ui-surface px-3 py-2">
             <div className="min-w-0">
               <h2 className="text-[13px] font-extrabold leading-tight tracking-tight text-ui-navy">
                 {warehouseLabel[activeWarehouse]}
@@ -277,7 +277,7 @@ function ShipmentTableRowImpl({
       part === "awb"
         ? "sticky left-0 z-[1] shadow-[2px_0_0_rgba(11,18,32,0.06)]"
         : "";
-    return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} border-b border-ui-border/50 group-hover/row:bg-teal-50/35 ${
+    return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} border-b border-ui-border/50 group-hover/row:bg-ui-primary/5 ${
       part === "first" ? "border-l border-ui-border/60" : ""
     } ${part === "last" ? "border-r border-ui-border/60" : ""} px-1.5 py-1.5 ${extra}`.trim();
   };
@@ -456,8 +456,8 @@ function ShipmentTableRowImpl({
           )}
           <button
             type="button"
-            aria-label="Nhập DIM D×R×C"
-            title="D×R×C"
+            aria-label="Sửa DIM"
+            title="Sửa DIM (D×R×C)"
             onClick={(e) => {
               e.stopPropagation();
               onOpenDimModal(row);

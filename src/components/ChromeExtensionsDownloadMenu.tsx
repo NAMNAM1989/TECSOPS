@@ -94,7 +94,7 @@ export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
     });
   }, [busyId, downloadPack, loadError, packs, refresh]);
 
-  // Mobile: icon-only để không chèn/che toolbar; desktop vẫn hiện chữ «Tải Ext».
+  // Mobile: icon-only để không chèn/che toolbar. Desktop dùng OverflowMenu mặc định (không cạnh tranh Booking).
   return (
     <OverflowMenu
       label="Tải Ext"
@@ -104,7 +104,7 @@ export function ChromeExtensionsDownloadMenu({ compact = false }: Props) {
       triggerClassName={
         compact
           ? "inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-sky-500/35 bg-sky-50 text-sky-900 shadow-ui-sm transition hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus touch-manipulation"
-          : "inline-flex min-h-9 items-center gap-1 rounded-xl border border-sky-500/35 bg-sky-50 px-2.5 text-[12px] font-bold text-sky-900 shadow-ui-sm transition hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+          : undefined
       }
     >
       {compact ? (

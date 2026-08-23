@@ -251,7 +251,10 @@ describe("tcsChromeExtension bridge", () => {
     ).toBe("logged_in");
     expect(tcsExtPresenceLabel({ ok: true })).toBe("Ext · sẵn sàng");
     expect(tcsExtPresenceLabel({ ok: false }, { compact: true })).toBe(
-      "Ext · off"
+      "Ext · offline"
+    );
+    expect(tcsExtPresenceLabel({ ok: true, workspace: { logged_in: true } })).toBe(
+      "Ext · đã login"
     );
   });
 

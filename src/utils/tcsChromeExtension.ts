@@ -178,14 +178,9 @@ export function tcsExtPresence(ext: TcsExtResult | null | undefined): TcsExtPres
 
 export function tcsExtPresenceLabel(
   ext: TcsExtResult | null | undefined,
-  opts?: { compact?: boolean }
+  _opts?: { compact?: boolean }
 ): string {
   const presence = tcsExtPresence(ext);
-  if (opts?.compact) {
-    if (presence === "logged_in") return "Ext · login";
-    if (presence === "ready") return "Ext · OK";
-    return "Ext · off";
-  }
   if (presence === "logged_in") return "Ext · đã login";
   if (presence === "ready") return "Ext · sẵn sàng";
   return "Ext · offline";

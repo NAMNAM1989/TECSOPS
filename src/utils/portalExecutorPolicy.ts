@@ -1,8 +1,6 @@
 /**
- * Policy chọn đường portal TCS — chỉ Chrome Ext trên PC kho.
- *
- * Agent Python / Railway Playwright đã gỡ (A3). `agent-only` / `remote-only`
- * còn đọc được từ localStorage cũ nhưng luôn rơi về Ext.
+ * Policy portal TCS — chỉ Chrome Ext trên PC kho.
+ * Agent Python / Railway Playwright / portal-worker đã gỡ (A3 + B1).
  */
 
 export type PortalExecutorPolicy =
@@ -16,7 +14,6 @@ export type PortalAction = "login" | "scan" | "fill" | "pdf";
 export type PortalExecutor = "extension" | "agent" | "remote";
 
 const LS_KEY = "tecsops-portal-executor-policy";
-const VISUAL_LS_KEY = "tecsops-portal-visual-control";
 
 function normalizePolicy(raw: string | undefined | null): PortalExecutorPolicy | null {
   const t = String(raw || "")
@@ -28,7 +25,7 @@ function normalizePolicy(raw: string | undefined | null): PortalExecutorPolicy |
   return null;
 }
 
-/** Mặc định auto = Ext PC. Ghi đè: VITE_ / localStorage (agent/remote bị bỏ qua). */
+/** Mặc định auto = Ext PC. Ghi đè localStorage/env (agent/remote bị bỏ qua). */
 export function getPortalExecutorPolicy(): PortalExecutorPolicy {
   try {
     const fromLs = normalizePolicy(localStorage.getItem(LS_KEY));
@@ -59,31 +56,6 @@ export function setPortalExecutorPolicy(policy: PortalExecutorPolicy | ""): void
   }
 }
 
-/**
- * Chế độ trực quan = App-click → tab Chrome Ext trên PC kho.
- * Mặc định bật. Không còn fallback agent khi tắt.
- */
-export function getPortalVisualControl(): boolean {
-  try {
-    const v = String(localStorage.getItem(VISUAL_LS_KEY) || "")
-      .trim()
-      .toLowerCase();
-    if (v === "0" || v === "false" || v === "off") return false;
-    if (v === "1" || v === "true" || v === "on") return true;
-  } catch {
-    /* ignore */
-  }
-  return true;
-}
-
-export function setPortalVisualControl(on: boolean): void {
-  try {
-    localStorage.setItem(VISUAL_LS_KEY, on ? "1" : "0");
-  } catch {
-    /* ignore */
-  }
-}
-
 /** Agent Python đã gỡ — luôn false. */
 export function portalPolicyUsesAgent(
   _policy: PortalExecutorPolicy = getPortalExecutorPolicy()
@@ -92,31 +64,26 @@ export function portalPolicyUsesAgent(
 }
 
 /**
- * Desktop: luôn khóa Ext (không còn agent Railway).
+ * Desktop: luôn khóa Ext.
  * Mobile: không khóa — UI báo «cần Ext trên PC».
  */
 export function shouldLockToExtensionVisual(opts: {
   isMobile?: boolean;
-  visualControl?: boolean;
   extensionOnline?: boolean;
   policy?: PortalExecutorPolicy;
 }): boolean {
-  void opts.visualControl;
   void opts.extensionOnline;
   void opts.policy;
   return !opts.isMobile;
 }
 
-/**
- * Thứ tự executor — chỉ Ext. Policy agent/remote legacy bị bỏ qua.
- */
+/** Thứ tự executor — chỉ Ext. Policy agent/remote legacy bị bỏ qua. */
 export function resolvePortalExecutorOrder(
   action: PortalAction,
   opts: {
     policy?: PortalExecutorPolicy;
     preferRemote?: boolean;
     isMobile?: boolean;
-    visualControl?: boolean;
     extensionOnline?: boolean;
   } = {}
 ): PortalExecutor[] {

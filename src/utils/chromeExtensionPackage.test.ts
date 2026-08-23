@@ -17,7 +17,7 @@ const PACKS: ExtPack[] = [
   {
     dir: "chrome-extension-tcs",
     warehouse: "TCS",
-    version: "1.5.2",
+    version: "1.5.3",
     scriptVersion: "2.0.29",
     mustHaveDownloadPdf: true,
     requiredFiles: [
@@ -52,15 +52,16 @@ describe("chrome extension packaging invariants", () => {
     expect(manifest.permissions).toEqual(
       expect.arrayContaining(["cookies", "downloads", "debugger"])
     );
+    expect(manifest.host_permissions.join("\n")).not.toMatch(/8765|8766/);
     expect(manifest.host_permissions).toEqual(
       expect.arrayContaining([
-        "http://127.0.0.1:8765/*",
-        "http://127.0.0.1:8766/*",
+        "https://www.tcs.com.vn/*",
+        "https://*.up.railway.app/*",
       ])
     );
   });
 
-  it.each(PACKS)("$dir hỗ trợ DOWNLOAD_ESID_PDF + OCR dual-port", (pack) => {
+  it.each(PACKS)("$dir hỗ trợ DOWNLOAD_ESID_PDF + OCR trong Ext", (pack) => {
     const bg = readFileSync(
       path.join(ROOT, pack.dir, "background.js"),
       "utf8"
@@ -70,7 +71,9 @@ describe("chrome extension packaging invariants", () => {
       "utf8"
     );
     expect(bg).toContain('msg.type === "DOWNLOAD_ESID_PDF"');
-    expect(bg).toContain("buildOcrAgentCandidates");
+    expect(bg).toContain("solveCaptchaInExtension");
+    expect(bg).not.toContain("buildOcrAgentCandidates");
+    expect(bg).not.toMatch(/127\.0\.0\.1:876[56]/);
     expect(bg).toContain(`PORTAL_WAREHOUSE = "${pack.warehouse}"`);
     expect(content).toContain('msg.type === "DOWNLOAD_ESID_PDF"');
     expect(content).toContain("runDownloadPdf");
@@ -105,6 +108,11 @@ describe("chrome extension packaging invariants", () => {
     expect(scscOps).toContain("ECARGO_OTP_PROVIDE");
     expect(scscOps).not.toContain('portalWarehouse: "TCS"');
     expect(existsSync(path.join(ROOT, "chrome-extension"))).toBe(false);
+    const scscManifest = JSON.parse(
+      readFileSync(path.join(ROOT, "chrome-extension-scsc/manifest.json"), "utf8")
+    ) as { version: string; host_permissions: string[] };
+    expect(scscManifest.version).toBe("1.0.3");
+    expect(scscManifest.host_permissions.join("\n")).not.toMatch(/8765|8766/);
   });
 
   it("SCSC background có ECARGO_OTP_PROVIDE (hook Gmail mapping PC)", () => {

@@ -20,7 +20,6 @@ import {
   pingTcsExtension,
   type TcsPortalExtWarehouse,
 } from "../../utils/tcsChromeExtension";
-import { declareFillTcsEsid } from "../../utils/tcsPortalAgentApi";
 
 type Props = {
   open: boolean;
@@ -160,16 +159,17 @@ export function CustomerEsidQuickFillModal({
       const extOpts = { warehouse };
       setStatusMsg(`Đang điền qua kho ${warehouse}…`);
       const ext = await pingTcsExtension(extOpts);
+      if (!ext.ok) {
+        setErrorMsg(
+          "Cần Chrome Ext TCS trên PC. Bấm «Tải Ext», Reload Ext, rồi Đăng Nhập TCS trước khi Điền."
+        );
+        return;
+      }
 
-      let res;
-      if (ext.ok) {
-        res = await fillEsidViaExtension(payload, extOpts);
-        if (isPortalBusyExtError(res)) {
-          setErrorMsg(formatQuickFillError(res));
-          return;
-        }
-      } else {
-        res = await declareFillTcsEsid(payload, { warehouse });
+      const res = await fillEsidViaExtension(payload, extOpts);
+      if (isPortalBusyExtError(res)) {
+        setErrorMsg(formatQuickFillError(res));
+        return;
       }
 
       if (res.ok) {
@@ -284,7 +284,7 @@ export function CustomerEsidQuickFillModal({
             </span>
             <div>
               <label className="text-xs text-slate-400 block mb-1">
-                Kho portal (Ext / Agent):
+                Kho portal (Ext TCS):
               </label>
               <select
                 value={portalWarehouse}
@@ -295,8 +295,8 @@ export function CustomerEsidQuickFillModal({
                 }
                 className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-amber-500 focus:outline-none"
               >
-                <option value="TECS-TCS">TECS-TCS (Ext TCS · agent :8765)</option>
-                <option value="TCS">TCS (Ext kho TCS · agent :8766)</option>
+                <option value="TECS-TCS">TECS-TCS (Ext TCS)</option>
+                <option value="TCS">TCS (Ext kho TCS)</option>
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">

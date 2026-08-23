@@ -11,9 +11,7 @@ import {
 } from "../utils/tcsPortalJob";
 import { loadTcsExtLoginPrefs, tcsExtLabel } from "../utils/tcsExtLoginPrefs";
 import type {
-  TcsAgentHealth,
   TcsAgentJobResultRow,
-  TcsAgentSession,
   TcsEsidScanItem,
 } from "../utils/tcsPortalAgentApi";
 import { buildEsidDeclareFillPayload } from "../utils/buildEsidDeclareFillPayload";
@@ -37,11 +35,6 @@ import {
   type TcsExtensionWorkspace,
   type TcsExtResult,
 } from "../utils/tcsChromeExtension";
-import {
-  getPortalExecutorPolicy,
-  getPortalVisualControl,
-  setPortalVisualControl,
-} from "../utils/portalExecutorPolicy";
 import { portalBusyUserMessage } from "../utils/tcsPortalScanGate";
 import { notifyError, notifySuccess } from "../ui/notify";
 
@@ -103,8 +96,6 @@ export type TcsPortalActionsOpts = {
    * Mã kho dữ liệu TECS-TCS dùng Ext TCS (không còn chrome-extension/ legacy).
    */
   portalWarehouse?: Warehouse;
-  /** @deprecated Không còn portal-worker / agent. */
-  preferRemotePortal?: boolean;
   /** Viewport ≤767 — UI báo cần Ext trên PC. */
   isMobile?: boolean;
 };
@@ -117,24 +108,14 @@ export function useTcsPortalActions({
   onReceptionScanDone,
   active = true,
   portalWarehouse: portalWarehouseProp = "TECS-TCS",
-  preferRemotePortal = false,
   isMobile = false,
 }: TcsPortalActionsOpts) {
-  void preferRemotePortal;
   const portalWarehouse: TcsPortalWarehouse =
     asTcsPortalWarehouse(portalWarehouseProp) || "TECS-TCS";
   const extOpts = useMemo(
     () => ({ warehouse: portalWarehouse }),
     [portalWarehouse]
   );
-  const executorPolicy = getPortalExecutorPolicy();
-  const [visualControl, setVisualControlState] = useState(() =>
-    getPortalVisualControl()
-  );
-  const setVisualControl = useCallback((on: boolean) => {
-    setPortalVisualControl(on);
-    setVisualControlState(on);
-  }, []);
   const [extension, setExtension] = useState<TcsExtResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
@@ -203,9 +184,6 @@ export function useTcsPortalActions({
       void refreshExtension();
     });
   }, [active, portalWarehouse, refreshExtension]);
-
-  const refreshPortalWorker = useCallback(async () => null, []);
-  const refreshHealth = useCallback(async () => undefined, []);
 
   const applyReadyItemsToOps = useCallback(
     async (ready: TcsEsidScanItem[]) => {
@@ -390,16 +368,6 @@ export function useTcsPortalActions({
         "Bấm «Tải Ext» trên toolbar, mở đúng profile Chrome, rồi Đăng Nhập TCS lại.";
     setError(msg);
     notifyError(msg, "Không Đăng Nhập TCS được");
-  }, [isMobile, portalWarehouse]);
-
-  const scanReceptionWithAgent = useCallback(async () => {
-    setError("");
-    setMessage("");
-    const msg = isMobile
-      ? NEED_EXT_PC
-      : `Cần Chrome Ext kho ${portalWarehouse} để Quét. Bấm «Tải Ext» rồi Đăng Nhập TCS trước.`;
-    setError(msg);
-    notifyError(msg, "Không Quét được");
   }, [isMobile, portalWarehouse]);
 
   const downloadEsidFor = useCallback(
@@ -650,28 +618,20 @@ export function useTcsPortalActions({
     extension?.workspace?.logged_in === true ||
     Boolean(extension?.workspace?.phase && extension.workspace.phase !== "IDLE");
 
-  const health: TcsAgentHealth | null = null;
-  const session: TcsAgentSession | null = null;
-
   return {
     busy,
     busyLabel,
     message,
     error,
-    health,
     extension,
-    portalWorker: null as null,
-    session,
     sessionLabel,
     results,
     downloadedCount,
     login,
     loginWithExtension,
     scanReceptionWithExtension,
-    scanReceptionWithAgent,
     pendingReceptionCount: pendingReception.length,
     refreshExtension,
-    refreshPortalWorker,
     downloadEsidFor,
     fillEsidDeclareFor,
     submitEsidDeclare,
@@ -679,17 +639,9 @@ export function useTcsPortalActions({
     clearDeclarePreview,
     portalWarehouse,
     extLabel: tcsExtLabel(portalWarehouse),
-    executorPolicy,
-    visualControl,
-    setVisualControl,
-    playwrightLocal: false,
-    setPlaywrightLocal: (_on: boolean) => undefined,
-    preferRemotePortal: false,
-    agentHeadless: undefined as boolean | undefined,
     workspace: extensionWorkspaceActive
       ? (extension?.workspace as TcsExtensionWorkspace | undefined) ?? null
       : null,
-    refreshHealth,
   };
 }
 

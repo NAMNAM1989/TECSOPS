@@ -12,7 +12,6 @@ export default defineConfig({
       ["src/utils/chromeExtensionPackage.test.ts", "node"],
       ["src/utils/portalSessionIdentity.test.ts", "node"],
       ["src/utils/tcsDimRecordForm.test.ts", "node"],
-      ["src/utils/tcsOcrAgentEndpoints.test.ts", "node"],
     ],
     include: [
       "src/**/*.test.ts",

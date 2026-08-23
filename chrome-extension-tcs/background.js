@@ -171,9 +171,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "AGENT_FETCH") {
-    void withServiceWorkerKeepAlive(agentFetchLocal(msg.payload || {}))
-      .then(reply)
-      .catch((err) => reply(errorResult("AGENT_FETCH_FAILED", err)));
+    reply({
+      ok: false,
+      error: "AGENT_GONE",
+      message:
+        "Agent Python/Playwright đã gỡ. Đăng Nhập TCS / Quét / Điền / PDF chỉ qua Chrome Ext trên PC.",
+      version: EXT_VERSION,
+      portalWarehouse: PORTAL_WAREHOUSE,
+      workspace,
+    });
     return true;
   }
 
@@ -410,118 +416,7 @@ function pickBestCaptchaCandidate(candidates, expectedLength = 5) {
   return exact[0] || null;
 }
 
-/** Port agent local theo kho — TCS :8766, TECS-TCS :8765. */
-function localAgentPortForWarehouse() {
-  return PORTAL_WAREHOUSE === "TCS" ? 8766 : 8765;
-}
-
-/**
- * Proxy Ops (Railway HTTPS) → Playwright agent headed trên máy này.
- * payload: { path, method?, body?, timeoutMs?, agentBaseUrl? }
- */
-async function agentFetchLocal(payload) {
-  const pathRaw = String(payload.path || "/health");
-  const path = pathRaw.startsWith("/") ? pathRaw : `/${pathRaw}`;
-  const method = String(payload.method || "GET").toUpperCase();
-  const timeoutMs = Math.max(
-    3_000,
-    Math.min(360_000, Number(payload.timeoutMs) || 60_000)
-  );
-  const primary = localAgentPortForWarehouse();
-  const bases = [
-    String(payload.agentBaseUrl || "").trim().replace(/\/+$/, ""),
-    `http://127.0.0.1:${primary}`,
-    `http://localhost:${primary}`,
-  ].filter(Boolean);
-  const uniqueBases = [...new Set(bases)];
-  let lastErr = "AGENT_OFFLINE";
-  for (const base of uniqueBases) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const init = {
-        method,
-        signal: ctrl.signal,
-        headers: {
-          Accept: "application/json",
-          "X-Portal-Warehouse": PORTAL_WAREHOUSE,
-        },
-      };
-      if (method !== "GET" && method !== "HEAD") {
-        init.headers["Content-Type"] = "application/json";
-        init.body = JSON.stringify(
-          payload.body == null ? {} : payload.body
-        );
-      }
-      const res = await fetch(`${base}${path}`, init);
-      let data = null;
-      try {
-        data = await res.json();
-      } catch {
-        data = {
-          ok: false,
-          error: "BAD_RESPONSE",
-          message: `Agent trả về không phải JSON (HTTP ${res.status})`,
-        };
-      }
-      if (!res.ok && data && typeof data === "object" && data.ok !== true) {
-        return {
-          ok: false,
-          error: data.error || `HTTP_${res.status}`,
-          message: data.message || `Agent HTTP ${res.status}`,
-          status: res.status,
-          agentBase: base,
-          data,
-          version: EXT_VERSION,
-          portalWarehouse: PORTAL_WAREHOUSE,
-        };
-      }
-      return {
-        ok: data?.ok !== false,
-        status: res.status,
-        agentBase: base,
-        data: data && typeof data === "object" ? data : { ok: true, value: data },
-        version: EXT_VERSION,
-        portalWarehouse: PORTAL_WAREHOUSE,
-        ...(data && typeof data === "object" ? data : {}),
-      };
-    } catch (err) {
-      lastErr = err?.name === "AbortError" ? "AGENT_PROXY_TIMEOUT" : String(err?.message || err);
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  return {
-    ok: false,
-    error: lastErr === "AGENT_PROXY_TIMEOUT" ? "AGENT_PROXY_TIMEOUT" : "AGENT_OFFLINE",
-    message:
-      lastErr === "AGENT_PROXY_TIMEOUT"
-        ? `Agent local timeout sau ${Math.round(timeoutMs / 1000)}s (${path})`
-        : `Agent headed local offline (${path}). Chạy: npm run portal:headed:local`,
-    version: EXT_VERSION,
-    portalWarehouse: PORTAL_WAREHOUSE,
-  };
-}
-
-/**
- * Danh sách endpoint OCR: ưu tiên port đúng kho, rồi port kia, rồi URL Ops truyền vào.
- * Mọi request gửi kèm X-Portal-Warehouse để proxy dual-agent không nhầm.
- */
-function buildOcrAgentCandidates(agentBaseUrl) {
-  const primary = localAgentPortForWarehouse();
-  const secondary = primary === 8766 ? 8765 : 8766;
-  const candidates = [
-    `http://127.0.0.1:${primary}`,
-    `http://localhost:${primary}`,
-    `http://127.0.0.1:${secondary}`,
-    `http://localhost:${secondary}`,
-  ];
-  const explicit = String(agentBaseUrl || "").trim().replace(/\/+$/, "");
-  if (explicit) candidates.unshift(explicit);
-  return [...new Set(candidates)];
-}
-
-/** Offscreen + ONNX (ddddocr) — OCR CAPTCHA không cần agent/cloud. */
+/** Offscreen + ONNX (ddddocr) — OCR CAPTCHA không cần agent localhost. */
 async function extOcrAssetsReady() {
   // Chỉ check file nhỏ — ZIP thiếu OCR thường mất ort.min.js (Railway build cũ).
   // Không fetch common.onnx (~54MB) chỉ để kiểm tra.
@@ -633,94 +528,13 @@ async function solveCaptchaInExtension(dataUrl, opts = {}) {
   };
 }
 
-async function solveCaptcha(dataUrl, agentBaseUrl, opts = {}) {
+async function solveCaptcha(dataUrl, _agentBaseUrl, opts = {}) {
   if (!dataUrl) {
     return { ok: false, error: "CAPTCHA_IMAGE_EMPTY", text: "", confidence: 0 };
   }
   const minConfidence = Number(opts.minConfidence ?? 0.4);
-
-  // Hướng 5: OCR trong Ext trước — PC không cần agent/cloud cho CAPTCHA.
-  const localOcr = await solveCaptchaInExtension(dataUrl, { minConfidence });
-  if (localOcr.ok) return localOcr;
-
-  const candidates = buildOcrAgentCandidates(agentBaseUrl);
-  let lastHardError = null;
-  let lastSoft =
-    localOcr.error === "OCR_LOW_CONFIDENCE" || localOcr.error === "OCR_EMPTY"
-      ? localOcr
-      : null;
-  const lastExtHard =
-    localOcr.error === "OCR_EXT_FAILED" ? localOcr : null;
-  for (const base of candidates) {
-    try {
-      const response = await fetch(`${base}/captcha/solve`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Portal-Warehouse": PORTAL_WAREHOUSE,
-        },
-        body: JSON.stringify({
-          image: dataUrl,
-          expected_length: 5,
-          min_confidence: minConfidence,
-          mode: "auto",
-        }),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (response.ok && body?.ok && body.text) {
-        return {
-          ok: true,
-          text: String(body.text).trim().toUpperCase(),
-          confidence: Number(body.confidence || 0),
-          candidates: Array.isArray(body.candidates) ? body.candidates : [],
-          agentBase: base,
-        };
-      }
-      if (response.status === 422) {
-        // Agent từ chối theo ngưỡng — vẫn thử ứng viên 5 ký tự có ≥2 phiếu.
-        const best = pickBestCaptchaCandidate(body?.candidates, 5);
-        if (best && best.votes >= 2) {
-          return {
-            ok: true,
-            text: best.text,
-            confidence: Math.max(Number(body?.confidence || 0), best.votes / 3),
-            candidates: Array.isArray(body.candidates) ? body.candidates : [],
-            agentBase: base,
-            rescued: true,
-          };
-        }
-        lastSoft = {
-          ok: false,
-          error: String(body?.error || "OCR_LOW_CONFIDENCE"),
-          text: best?.text || "",
-          confidence: Number(body?.confidence || 0),
-          candidates: Array.isArray(body?.candidates) ? body.candidates : [],
-          agentBase: base,
-        };
-        // Local đã trả lời 422 — không cần thử remote cùng ảnh.
-        return lastSoft;
-      }
-      // Agent trả lời nhưng OCR hỏng (thiếu ddddocr, v.v.) — không giả là "offline"
-      if (body?.error === "OCR_FAILED" || response.status >= 500) {
-        lastHardError = {
-          ok: false,
-          error: "OCR_FAILED",
-          text: "",
-          confidence: 0,
-          message: String(body?.message || body?.error || `HTTP ${response.status}`),
-          agentBase: base,
-        };
-        // Thử candidate kế tiếp (vd. local fail → remote)
-        continue;
-      }
-    } catch {
-      // Thử endpoint kế tiếp.
-    }
-  }
-  if (lastHardError) return lastHardError;
-  if (lastSoft) return lastSoft;
-  if (lastExtHard) return lastExtHard;
-  return { ok: false, error: "OCR_AGENT_UNAVAILABLE", text: "", confidence: 0 };
+  // OCR trong Ext (ONNX) — không còn fallback agent :8765/:8766.
+  return solveCaptchaInExtension(dataUrl, { minConfidence });
 }
 
 async function waitForCaptchaChange(tabId, previousDataUrl, timeoutMs = 1_600) {

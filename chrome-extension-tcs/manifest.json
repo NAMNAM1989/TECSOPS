@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TECSOPS — Kho TCS ESID",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Đăng nhập / Quét / Điền / Tải PDF ESID cho kho TCS (tài khoản độc lập). OCR CAPTCHA offline trong Ext.",
   "permissions": [
     "tabs",
@@ -15,10 +15,6 @@
   "host_permissions": [
     "https://www.tcs.com.vn/*",
     "https://tcs.com.vn/*",
-    "http://127.0.0.1:8765/*",
-    "http://localhost:8765/*",
-    "http://127.0.0.1:8766/*",
-    "http://localhost:8766/*",
     "http://localhost:5173/*",
     "http://127.0.0.1:5173/*",
     "http://localhost:3001/*",

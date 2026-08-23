@@ -1,9 +1,7 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  getPortalVisualControl,
   portalPolicyUsesAgent,
   resolvePortalExecutorOrder,
-  setPortalVisualControl,
   shouldLockToExtensionVisual,
 } from "./portalExecutorPolicy";
 
@@ -13,14 +11,12 @@ describe("resolvePortalExecutorOrder", () => {
       resolvePortalExecutorOrder("login", {
         policy: "auto",
         isMobile: false,
-        visualControl: false,
       })
     ).toEqual(["extension"]);
     expect(
       resolvePortalExecutorOrder("scan", {
         policy: "auto",
         isMobile: false,
-        visualControl: true,
       })
     ).toEqual(["extension"]);
     expect(
@@ -44,14 +40,12 @@ describe("resolvePortalExecutorOrder", () => {
     expect(
       shouldLockToExtensionVisual({
         isMobile: false,
-        visualControl: false,
         extensionOnline: false,
       })
     ).toBe(true);
     expect(
       shouldLockToExtensionVisual({
         isMobile: true,
-        visualControl: true,
         extensionOnline: false,
       })
     ).toBe(false);
@@ -61,22 +55,5 @@ describe("resolvePortalExecutorOrder", () => {
     expect(portalPolicyUsesAgent("auto")).toBe(false);
     expect(portalPolicyUsesAgent("agent-only")).toBe(false);
     expect(portalPolicyUsesAgent("ext-only")).toBe(false);
-  });
-});
-
-describe("portal visual control storage", () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
-  afterEach(() => {
-    localStorage.clear();
-  });
-
-  it("mặc định bật; tắt/bật qua setter", () => {
-    expect(getPortalVisualControl()).toBe(true);
-    setPortalVisualControl(false);
-    expect(getPortalVisualControl()).toBe(false);
-    setPortalVisualControl(true);
-    expect(getPortalVisualControl()).toBe(true);
   });
 });

@@ -395,16 +395,6 @@ export function AirCargoTracking({
     }
   };
 
-  const { totalPcs, totalKg } = useMemo(() => {
-    let pcs = 0;
-    let kg = 0;
-    for (const r of filteredViewRows) {
-      pcs += r.pcs ?? 0;
-      kg += r.kg ?? 0;
-    }
-    return { totalPcs: pcs, totalKg: kg };
-  }, [filteredViewRows]);
-
   const goPrevDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, -1)));
   const goNextDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, 1)));
   const goToday = () => setSelectedViewDate(startOfLocalDay(new Date()));
@@ -633,8 +623,8 @@ export function AirCargoTracking({
       onCopyCargoDayReport={(kind) => void onCopyCargoDayReport(kind)}
       toolsProps={toolsProps}
       filteredViewRows={filteredViewRows}
-      totalPcs={totalPcs}
-      totalKg={totalKg}
+      onWarehouseChange={handleActiveWarehouseChange}
+      searchHighlightWarehouses={searchHighlightWarehouses}
       searchQuery={searchQuery}
       onSearchChange={setSearchQuery}
       flightDateFilter={flightDateFilter}
@@ -726,9 +716,6 @@ export function AirCargoTracking({
           allRows={allRows}
           customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
           activeWarehouse={activeWarehouse}
-          onActiveWarehouseChange={handleActiveWarehouseChange}
-          metricRows={filteredViewRows}
-          searchHighlightWarehouses={searchHighlightWarehouses}
           highlightedShipmentId={highlightedShipmentId}
           selectedRowId={selectedId}
           onSelectRow={setSelectedId}

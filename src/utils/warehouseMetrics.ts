@@ -17,8 +17,8 @@ export function computeWarehouseMetrics(
     const bucket = out[wh];
     if (!bucket) continue;
     bucket.lots += 1;
-    bucket.pcs += row.pcs ?? 0;
-    bucket.kg += row.kg ?? 0;
+    bucket.pcs += row.pcs != null && Number.isFinite(row.pcs) ? Math.max(0, row.pcs) : 0;
+    bucket.kg += row.kg != null && Number.isFinite(row.kg) ? Math.max(0, row.kg) : 0;
   }
   return out;
 }

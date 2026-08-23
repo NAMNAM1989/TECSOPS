@@ -2,7 +2,6 @@ import { memo, useMemo, useState } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { StatusSelect } from "./StatusBadge";
-import { WarehouseGridPicker } from "./WarehouseGridPicker";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { InlineTextEdit } from "./InlineTextEdit";
 import { InlineCustomerEdit } from "./InlineCustomerEdit";
@@ -39,13 +38,10 @@ interface Props {
   allRows: Shipment[];
   customerDirectory?: readonly CustomerDirectoryEntry[];
   activeWarehouse: Warehouse;
-  onActiveWarehouseChange: (wh: Warehouse) => void;
-  metricRows: Shipment[];
   onUpdate: (id: string, patch: Partial<Shipment>) => void | Promise<boolean | void>;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   viewSessionYmd: string;
-  searchHighlightWarehouses?: readonly Warehouse[];
   highlightedShipmentId?: string | null;
   selectedRowId?: string | null;
   onSelectRow?: (id: string | null) => void;
@@ -96,9 +92,6 @@ export function DesktopShipmentTable({
   allRows,
   customerDirectory = [],
   activeWarehouse,
-  onActiveWarehouseChange,
-  metricRows,
-  searchHighlightWarehouses,
   highlightedShipmentId,
   selectedRowId,
   onSelectRow,
@@ -127,14 +120,6 @@ export function DesktopShipmentTable({
         className={isMobile ? "hidden" : "hidden md:block space-y-1"}
         data-testid="ops-desktop-shipment-table"
       >
-        <WarehouseGridPicker
-          rows={metricRows}
-          active={activeWarehouse}
-          onSelect={onActiveWarehouseChange}
-          onAddRow={onAddBlankRow}
-          highlightWarehouses={searchHighlightWarehouses}
-        />
-
         <section
           id={`warehouse-section-${activeWarehouse}`}
           className="overflow-hidden rounded-xl border border-ui-border/90 bg-ui-surface shadow-ui-md"

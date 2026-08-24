@@ -40,3 +40,10 @@ chrome-extension-tcs/ocr/common.onnx
 chrome-extension-tcs/ocr/ort.min.js
 chrome-extension-tcs/ocr/ort-wasm*.wasm
 chrome-extension-tcs/ocr/ort-wasm*.mjs
+
+# Local scratch / leftover OCR dump
+.trash/
+
+# Local TCS automation workspace (không ship trong app Ops)
+tcs-awb-automation/
+

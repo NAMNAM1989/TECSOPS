@@ -73,7 +73,7 @@ describe("app auth", () => {
 
   it("bảo vệ route bằng bearer token", async () => {
     const token = "test-token-at-least-24-characters";
-    const auth = createAppAuth({ token, isProduction: false });
+    const auth = createAppAuth({ token, isProduction: false, disableLoginGate: false });
     const app = express();
     app.get("/private", auth.requireAuth, (_req, res) => res.json({ ok: true }));
     const http = await listen(app);
@@ -95,6 +95,7 @@ describe("app auth", () => {
     const auth = createAppAuth({
       token: "another-test-token-24-characters",
       isProduction: false,
+      disableLoginGate: false,
     });
     const app = express();
     app.use(express.json());

@@ -16,6 +16,7 @@ import { createPostgresStateStore } from "./postgresStateStore.mjs";
 import { registerLookupRoutes } from "./lookupRoutes.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import { registerEcargoVctRoutes } from "./ecargoVctRoutes.mjs";
+import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
 import {
   applySecurityHeaders,
   createMutationRateLimit,
@@ -358,7 +359,9 @@ app.post("/api/mutations", appAuth.requireAuth, mutationRateLimit, async (req, r
 });
 
 registerEcargoVctRoutes(app, { runMutation, loadState, io });
-// Gemini /api/ai + Google Sheet /api/sheets đã gỡ (A3). Railway có thể xóa GEMINI_*.
+registerSheetsRoutes(app, { io });
+console.info("[api] sheets (BOOK Hằng Ngày)");
+// Gemini /api/ai đã gỡ (A3). Railway có thể xóa GEMINI_*.
 
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app);

@@ -38,6 +38,7 @@ function renderHeader(opts: {
         socketConnected
         activeWarehouse={warehouse}
         onAddBooking={() => undefined}
+        onOpenSheetImport={() => undefined}
         onNavigateCustomers={() => undefined}
         onOpenAirlineLabels={() => undefined}
         onDownloadDayExcel={() => undefined}

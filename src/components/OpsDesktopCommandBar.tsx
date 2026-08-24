@@ -13,6 +13,7 @@ import { NewBookingButton } from "./NewBookingButton";
 import { OpsCargoReportMenu } from "./OpsCargoReportMenu";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { OpsDayOverviewStrip } from "./OpsDayOverviewStrip";
+import { OpsSheetImportButton } from "./OpsSheetImportButton";
 import { OpsToolsMenu } from "./OpsToolsMenu";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
@@ -43,6 +44,8 @@ type Props = {
   totalLots: number;
   activeWarehouse: Warehouse;
   onAddBooking: (wh: Warehouse) => void;
+  onOpenSheetImport: () => void;
+  onPrefetchSheetImport?: () => void;
   onNavigateStats?: () => void;
   onPrefetchStats?: () => void;
   viewRows: readonly Shipment[];
@@ -81,6 +84,8 @@ export function OpsDesktopCommandBar({
   totalLots,
   activeWarehouse,
   onAddBooking,
+  onOpenSheetImport,
+  onPrefetchSheetImport,
   onNavigateStats,
   onPrefetchStats,
   viewRows,
@@ -154,6 +159,10 @@ export function OpsDesktopCommandBar({
           className="flex shrink-0 items-center justify-end gap-1.5 overflow-visible"
         >
           <NewBookingButton activeWarehouse={activeWarehouse} onAdd={onAddBooking} />
+          <OpsSheetImportButton
+            onOpenSheetImport={onOpenSheetImport}
+            onPrefetchSheetImport={onPrefetchSheetImport}
+          />
           {onNavigateStats ? (
             <Button
               variant="secondary"

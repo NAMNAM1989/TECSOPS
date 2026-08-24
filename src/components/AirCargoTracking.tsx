@@ -29,6 +29,7 @@ import {
   isEcargoScscWarehouse,
   isScscWarehouse,
   isTcsWarehouse,
+  warehouseLabel,
 } from "../constants/warehouses";
 import { OpsDesktopCommandBar } from "./OpsDesktopCommandBar";
 import { OpsMobileStickyHeader } from "./OpsMobileStickyHeader";
@@ -55,6 +56,9 @@ import {
 } from "../utils/shipmentSearch";
 import { DayExcelExportDialog } from "./DayExcelExportDialog";
 
+const GoogleSheetImportModal = lazy(() =>
+  import("./GoogleSheetImportModal").then((m) => ({ default: m.GoogleSheetImportModal }))
+);
 const AirlineLabelSettingsModal = lazy(() =>
   import("./AirlineLabelSettingsModal").then((m) => ({ default: m.AirlineLabelSettingsModal }))
 );
@@ -91,6 +95,7 @@ export function AirCargoTracking({
     socketConnected,
     pendingOfflineCount,
     refreshState,
+    applyRemoteState,
   } = sync;
   const toast = useToast();
   const [syncRefreshing, setSyncRefreshing] = useState(false);
@@ -114,6 +119,7 @@ export function AirCargoTracking({
   const [excelExporting, setExcelExporting] = useState(false);
   const [scscDimExporting, setScscDimExporting] = useState(false);
   const [cargoReportCopying, setCargoReportCopying] = useState(false);
+  const [sheetImportOpen, setSheetImportOpen] = useState(false);
   const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
   const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
@@ -185,7 +191,7 @@ export function AirCargoTracking({
       const hasInActive = filteredViewRows.some((r) => r.warehouse === prev);
       if (hasInActive) return prev;
       // Giữ kho đang chọn khi ngày/lọc trống (vd. SCSC chưa có lô) —
-      // không ép về TCS, để vẫn bấm Booking trên đúng trang kho.
+      // không ép về TCS, để vẫn bấm Sheet / Booking trên đúng trang kho.
       if (filteredViewRows.length === 0) return prev;
       return firstWarehouseWithLots(filteredViewRows);
     });
@@ -567,6 +573,7 @@ export function AirCargoTracking({
       }}
       activeWarehouse={activeWarehouse}
       onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
+      onOpenSheetImport={() => setSheetImportOpen(true)}
       onCopyCargoDayReport={(kind) => void onCopyCargoDayReport(kind ?? "vantage")}
       cargoReportCopying={cargoReportCopying}
       {...toolsProps}
@@ -616,6 +623,7 @@ export function AirCargoTracking({
       totalLots={allRows.length}
       activeWarehouse={activeWarehouse}
       onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
+      onOpenSheetImport={() => setSheetImportOpen(true)}
       onNavigateStats={onNavigateStats}
       onPrefetchStats={onPrefetchStats}
       viewRows={viewRows}
@@ -673,10 +681,19 @@ export function AirCargoTracking({
         <div className="mb-3">
           <EmptyState
             title="Chưa có lô trong ngày này"
-            description="Tạo booking mới bằng nút + Booking."
+            description="Tạo booking mới hoặc bấm «Nhập Sheet» để kéo từ Google Sheet."
             actionLabel="+ Booking"
             onAction={() => void addBlankRowForWarehouse(activeWarehouse)}
           />
+          <div className="mt-2 flex justify-center md:hidden">
+            <button
+              type="button"
+              className="text-[13px] font-bold text-emerald-700 underline-offset-2 hover:underline"
+              onClick={() => setSheetImportOpen(true)}
+            >
+              Nhập Sheet
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -761,6 +778,50 @@ export function AirCargoTracking({
             flightSamples={allRows.map((r) => r.flight)}
             saving={airlineLabelSaving}
             onSave={saveAirlineLabelOverrides}
+          />
+        ) : null}
+        {sheetImportOpen ? (
+          <GoogleSheetImportModal
+            open={sheetImportOpen}
+            sessionYmd={selectedYmd}
+            activeWarehouse={activeWarehouse}
+            onClose={() => setSheetImportOpen(false)}
+            onApplied={(count, serverState, meta) => {
+              const removedN = meta?.removedCount ?? 0;
+              const reorderedN = meta?.reorderedCount ?? 0;
+              if (serverState) {
+                if (!applyRemoteState(serverState, { force: true })) void refreshState();
+              } else if (count > 0 || removedN > 0 || reorderedN > 0) {
+                void refreshState();
+              }
+              if (meta?.preferredWarehouse) {
+                setActiveWarehouse(meta.preferredWarehouse);
+              }
+              const errN = meta?.errorCount ?? 0;
+              if ((count > 0 || removedN > 0 || reorderedN > 0) && errN === 0) {
+                const parts = WAREHOUSE_ORDER.map((wh) => {
+                  const n = meta?.appliedByWarehouse?.[wh] ?? 0;
+                  return n > 0 ? `${warehouseLabel[wh]} ${n}` : null;
+                }).filter(Boolean);
+                const detail = parts.length ? ` (${parts.join(" · ")})` : "";
+                const removeHint = removedN > 0 ? ` · xóa ${removedN} lô thừa` : "";
+                const orderHint = reorderedN > 0 ? ` · STT ${reorderedN} lô theo Sheet` : "";
+                toast.success(
+                  count > 0
+                    ? `Đã đồng bộ ${count} lô từ Google Sheet${detail}${removeHint}${orderHint}.`
+                    : removedN > 0
+                      ? `Đã xóa ${removedN} lô không còn trên Sheet${orderHint}.`
+                      : `Đã sắp ${reorderedN} lô theo thứ tự Sheet.`,
+                  "Nhập Sheet",
+                );
+                setSheetImportOpen(false);
+              } else if (count > 0 && errN > 0) {
+                toast.warning(
+                  `Nhập ${count} lô · ${errN} lỗi. Xem chi tiết trong modal.`,
+                  "Nhập một phần",
+                );
+              }
+            }}
           />
         ) : null}
       </Suspense>

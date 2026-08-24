@@ -30,6 +30,8 @@ interface Props {
   syncRefreshing?: boolean;
   activeWarehouse: Warehouse;
   onAddBooking: (wh: Warehouse) => void;
+  onOpenSheetImport: () => void;
+  onPrefetchSheetImport?: () => void;
   onNavigateCustomers: () => void;
   onPrefetchCustomers?: () => void;
   onNavigateStats?: () => void;
@@ -84,6 +86,8 @@ export function OpsMobileStickyHeader({
   syncRefreshing = false,
   activeWarehouse,
   onAddBooking: _onAddBooking,
+  onOpenSheetImport,
+  onPrefetchSheetImport,
   onNavigateCustomers,
   onPrefetchCustomers,
   onNavigateStats,
@@ -154,7 +158,15 @@ export function OpsMobileStickyHeader({
   const extItems = useChromeExtensionMenuItems();
 
   const toolItems = useMemo((): OverflowMenuItem[] => {
-    const list: OverflowMenuItem[] = [];
+    const list: OverflowMenuItem[] = [
+      {
+        id: "sheet-import",
+        label: "Nhập Sheet",
+        description: "Google Sheet BOOK HẰNG NGÀY",
+        onSelect: onOpenSheetImport,
+        onPrefetch: onPrefetchSheetImport,
+      },
+    ];
     if (onNavigateStats) {
       list.push({
         id: "stats",
@@ -203,7 +215,9 @@ export function OpsMobileStickyHeader({
     onNavigateCustomers,
     onNavigateStats,
     onOpenAirlineLabels,
+    onOpenSheetImport,
     onPrefetchCustomers,
+    onPrefetchSheetImport,
     onPrefetchStats,
     scscDimExporting,
     showDimScsc,

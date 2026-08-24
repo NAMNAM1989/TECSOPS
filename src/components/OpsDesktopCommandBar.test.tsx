@@ -29,6 +29,7 @@ function renderBar() {
         totalLots={1}
         activeWarehouse="TCS"
         onAddBooking={() => undefined}
+        onOpenSheetImport={() => undefined}
         onNavigateStats={() => undefined}
         viewRows={[row]}
         cargoReportCopying={false}
@@ -73,6 +74,7 @@ describe("OpsDesktopCommandBar", () => {
       /data-testid="ops-desktop-command-actions"[\s\S]*?(?=<div data-testid="ops-day-overview"|$)/,
     )?.[0] ?? "";
     expect(actions).toContain("+ Booking");
+    expect(actions).toContain("Nhập Sheet");
     expect(actions).not.toContain("bg-emerald-600");
     expect(actions).not.toContain("Vantage");
   });

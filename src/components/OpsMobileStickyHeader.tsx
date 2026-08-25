@@ -5,7 +5,7 @@ import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipme
 import { formatSyncedPhrase } from "../utils/dbSyncedAt";
 import { Button, SyncStatusPill, Wordmark } from "../ui";
 import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
-import { buildOpsCargoReportItems } from "./opsCargoReportItems";
+import { OpsCargoReportToolbar } from "./OpsCargoReportToolbar";
 import { statusLabel, statusLabelCompact } from "./statusStyles";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { useChromeExtensionMenuItems } from "./ChromeExtensionsDownloadMenu";
@@ -68,8 +68,8 @@ interface Props {
 }
 
 /**
- * Chrome mobile Ops: identity + DayPulse/chip kho + lọc.
- * + Booking là FAB ngoài header. Báo cáo / Tải Ext / Công cụ trong một overflow.
+ * Chrome mobile Ops: identity + DayPulse/chip kho + ảnh báo cáo + lọc.
+ * + Booking là FAB ngoài header. Tải Ext / Công cụ trong ⋯.
  */
 export function OpsMobileStickyHeader({
   selectedYmd,
@@ -136,24 +136,6 @@ export function OpsMobileStickyHeader({
     const pending = pendingOfflineCount > 0 ? `${pendingOfflineCount} chờ gửi` : "";
     return [phrase, pending].filter(Boolean).join(" · ");
   }, [lotSyncedAt, pendingOfflineCount]);
-
-  const cargoReportItems = useMemo(
-    () =>
-      onCopyCargoDayReport
-        ? buildOpsCargoReportItems({
-            viewRows,
-            copying: cargoReportCopying,
-            onCopy: onCopyCargoDayReport,
-          }).map((item) => ({
-            ...item,
-            id: `report-${item.id}`,
-            description: item.description
-              ? `Báo cáo · ${item.description}`
-              : "Báo cáo ngày",
-          }))
-        : [],
-    [cargoReportCopying, onCopyCargoDayReport, viewRows],
-  );
 
   const extItems = useChromeExtensionMenuItems();
 
@@ -224,8 +206,8 @@ export function OpsMobileStickyHeader({
   ]);
 
   const overflowItems = useMemo(
-    () => [...cargoReportItems, ...extItems, ...toolItems],
-    [cargoReportItems, extItems, toolItems],
+    () => [...extItems, ...toolItems],
+    [extItems, toolItems],
   );
 
   const syncCta =
@@ -280,7 +262,7 @@ export function OpsMobileStickyHeader({
           <OverflowMenu
             compact
             align="right"
-            label="Báo cáo, Tải Ext, Công cụ"
+            label="Tải Ext, Công cụ"
             items={overflowItems}
           />
         </div>
@@ -295,6 +277,15 @@ export function OpsMobileStickyHeader({
         highlightWarehouses={searchHighlightWarehouses}
         filtersActive={filtersActive}
       />
+
+      {onCopyCargoDayReport ? (
+        <OpsCargoReportToolbar
+          variant="mobile"
+          viewRows={viewRows}
+          copying={cargoReportCopying}
+          onCopy={onCopyCargoDayReport}
+        />
+      ) : null}
 
       <div
         data-testid="ops-mobile-filter-row"

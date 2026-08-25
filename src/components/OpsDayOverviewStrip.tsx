@@ -20,7 +20,7 @@ type Props = {
 
 /**
  * Overview Ops `#/`: DayPulse (Tổng ngày) + 4 chip/tile kho luôn hiện.
- * Không đụng CTA Booking / Search / overflow Báo cáo·Ext·Công cụ.
+ * Không đụng CTA Booking / Search / thanh Ảnh báo cáo / overflow Ext·Công cụ.
  */
 export function OpsDayOverviewStrip({
   selectedYmd,

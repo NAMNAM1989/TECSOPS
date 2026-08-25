@@ -57,12 +57,13 @@ function renderBar() {
 }
 
 describe("OpsDesktopCommandBar", () => {
-  it("Booking/Search ngoài menu; DayPulse + 4 kho; báo cáo trong overflow", () => {
+  it("Booking/Search ngoài menu; DayPulse + 4 kho; Ảnh báo cáo là nút toolbar", () => {
     const html = renderBar();
     expect(html).toContain("ops-desktop-command-bar");
     expect(html).toContain("+ Booking");
     expect(html).toContain("Thống kê");
-    expect(html).toContain("Báo cáo");
+    expect(html).toContain("ops-cargo-report-toolbar");
+    expect(html).toContain("Vantage");
     expect(html).toContain("23-AUG-2026");
     expect(html).toContain("ops-day-overview");
     expect(html).toContain("ops-day-pulse");
@@ -71,12 +72,13 @@ describe("OpsDesktopCommandBar", () => {
     expect(html).toContain("TECS-TCS");
     expect(html).toContain("SCSC");
     const actions = html.match(
-      /data-testid="ops-desktop-command-actions"[\s\S]*?(?=<div data-testid="ops-day-overview"|$)/,
+      /data-testid="ops-desktop-command-actions"[\s\S]*?(?=data-testid="ops-cargo-report-toolbar"|$)/,
     )?.[0] ?? "";
     expect(actions).toContain("+ Booking");
     expect(actions).toContain("Nhập Sheet");
     expect(actions).not.toContain("bg-emerald-600");
     expect(actions).not.toContain("Vantage");
+    expect(html).not.toContain(">Báo cáo</span>");
   });
 
   it("không lộ format ngày locale của input type=date", () => {
@@ -86,7 +88,7 @@ describe("OpsDesktopCommandBar", () => {
     expect(html).not.toContain("23-AUG-2026</option>");
   });
 
-  it("không clip OverflowMenu: overflow-x-auto chỉ ở cụm identity, không bọc Báo cáo/Ext/Công cụ", () => {
+  it("không clip OverflowMenu: overflow-x-auto chỉ ở cụm identity, không bọc Ext/Công cụ", () => {
     const html = renderBar();
     const rowOpen = html.match(/data-testid="ops-desktop-command-row"[^>]*>/)?.[0] ?? "";
     const actionsOpen = html.match(/data-testid="ops-desktop-command-actions"[^>]*>/)?.[0] ?? "";
@@ -94,7 +96,7 @@ describe("OpsDesktopCommandBar", () => {
     expect(rowOpen).not.toContain("overflow-x-auto");
     expect(actionsOpen).toContain("overflow-visible");
     expect(actionsOpen).not.toContain("overflow-x-auto");
-    expect(html).toContain("Báo cáo");
+    expect(html).toContain("Ảnh báo cáo lô hàng");
     expect(html).toContain("Tải Ext");
     expect(html).toContain("Công cụ");
   });

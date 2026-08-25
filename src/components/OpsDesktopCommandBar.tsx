@@ -10,7 +10,7 @@ import {
 import type { SyncStatus } from "../hooks/useShipmentSync";
 import { ChromeExtensionsDownloadMenu } from "./ChromeExtensionsDownloadMenu";
 import { NewBookingButton } from "./NewBookingButton";
-import { OpsCargoReportMenu } from "./OpsCargoReportMenu";
+import { OpsCargoReportToolbar } from "./OpsCargoReportToolbar";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { OpsDayOverviewStrip } from "./OpsDayOverviewStrip";
 import { OpsSheetImportButton } from "./OpsSheetImportButton";
@@ -70,7 +70,7 @@ type Props = {
   ecargoBar?: ReactNode;
 };
 
-/** Chrome desktop Ops: lệnh + DayPulse/kho + lọc. Booking/Search ngoài menu. */
+/** Chrome desktop Ops: lệnh + Ảnh báo cáo + DayPulse/kho + lọc. Booking/Search ngoài menu. */
 export function OpsDesktopCommandBar({
   selectedYmd,
   onDateChange,
@@ -175,15 +175,17 @@ export function OpsDesktopCommandBar({
               Thống kê
             </Button>
           ) : null}
-          <OpsCargoReportMenu
-            viewRows={viewRows}
-            copying={cargoReportCopying}
-            onCopy={onCopyCargoDayReport}
-          />
           <ChromeExtensionsDownloadMenu />
           <OpsToolsMenu {...toolsProps} />
         </div>
       </div>
+
+      <OpsCargoReportToolbar
+        variant="desktop"
+        viewRows={viewRows}
+        copying={cargoReportCopying}
+        onCopy={onCopyCargoDayReport}
+      />
 
       <OpsDayOverviewStrip
         variant="desktop"

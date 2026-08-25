@@ -76,12 +76,14 @@ describe("OpsMobileStickyHeader chrome", () => {
     expect(html).toContain("23-AUG-2026");
     expect(html).toContain("Live");
     expect(html).toContain("OPS");
-    expect(html).toContain("Báo cáo, Tải Ext, Công cụ");
+    expect(html).toContain("Tải Ext, Công cụ");
+    expect(html).not.toContain("Báo cáo, Tải Ext, Công cụ");
+    expect(html).toContain("ops-cargo-report-toolbar");
+    expect(html).toContain("Vantage");
     expect(html).not.toContain("+ Booking");
     expect(html).not.toContain("ops-mobile-sync-bar");
     expect(html).not.toContain("Chọn kho</span>");
     expect(html).not.toContain("bg-emerald-600");
-    expect(html).not.toContain("Vantage");
   });
 
   it("vùng chạm sticky ≥44px trên overflow / chip kho / ngày / ST", () => {
@@ -91,6 +93,7 @@ describe("OpsMobileStickyHeader chrome", () => {
     expect(html).toContain("Ngày sau");
     expect(html).toContain("warehouse-chips");
     expect(html).toContain("Lọc trạng thái");
+    expect(html).toContain("ops-cargo-report-toolbar");
   });
 
   it("portal ẩn khi chưa chọn lô — không CTA Đăng Nhập TCS giả", () => {

@@ -18,7 +18,7 @@ type Props = {
 
 /**
  * Menu Công cụ — action thứ cấp (Khách, tên hãng, Excel).
- * Desktop: Thống kê + Báo cáo là nút/menu riêng ngoài toolbar.
+ * Desktop: Thống kê + Ảnh báo cáo là nút riêng ngoài menu này.
  */
 export function OpsToolsMenu({
   compact = false,

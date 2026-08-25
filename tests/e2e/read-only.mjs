@@ -109,7 +109,7 @@ async function main() {
     if ((await scscMenus.count()) > 0) {
       await scscMenus.first().click();
       const text = await page.locator("body").innerText();
-      record("D-ECARGO-SCSC", !/eCargo|VCT|đăng ký xe/i.test(text), "SCSC không còn hành động eCargo");
+      record("D-ECARGO-SCSC", /eCargo|VCT|đăng ký xe/i.test(text), "SCSC có hành động eCargo");
       await page.keyboard.press("Escape");
     } else {
       record("D-ECARGO-SCSC", false, "ngày hiện tại không có row SCSC để kiểm tra");

@@ -18,6 +18,7 @@ import type {
 } from "../types/customerDirectory";
 import { CustomerDefaultDataEditor } from "../components/customerDirectory/CustomerSavedProfilesEditor";
 import { CustomerDeleteConfirmModal } from "../components/customerDirectory/CustomerDeleteConfirmModal";
+import { CustomerEsidQuickFillModal } from "../components/customerDirectory/CustomerEsidQuickFillModal";
 import {
   Banner,
   Button,
@@ -212,6 +213,8 @@ export function CustomersPage({
     CustomerFieldError[]
   >([]);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [quickFillCustomer, setQuickFillCustomer] =
+    useState<CustomerDirectoryEntry | null>(null);
   const [importing, setImporting] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState<"back" | "discard" | null>(
@@ -961,6 +964,13 @@ export function CustomersPage({
                           <p className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
                             Thông tin
                           </p>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setQuickFillCustomer(selected)}
+                          >
+                            Điền eSID TCS
+                          </Button>
                         </div>
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                           <label className="col-span-1 block">
@@ -1186,6 +1196,12 @@ export function CustomersPage({
           setSelectedId(next[0]?.id ?? null);
           setDeleteModalOpen(false);
         }}
+      />
+
+      <CustomerEsidQuickFillModal
+        open={Boolean(quickFillCustomer)}
+        customer={quickFillCustomer}
+        onClose={() => setQuickFillCustomer(null)}
       />
 
       <ConfirmDialog

@@ -9,12 +9,12 @@ export type WarehouseLayoutFilter = Warehouse | "ALL";
  * - TCS: kho riêng — chỉ mã `TCS` (không gồm `TECS-TCS`)
  * - SCSC: kho riêng — chỉ mã `SCSC` (không gồm `TECS-SCSC`)
  *
- * Không dùng WarehouseFamily để lọc báo cáo OPS — family chỉ cho DIM/workflow.
+ * Không dùng WarehouseFamily để lọc báo cáo OPS — family chỉ cho portal/DIM.
  */
 export type OpsTeam = "TECS" | "TCS" | "SCSC";
 
 /**
- * Family công cụ (DIM / workflow) — khác OpsTeam.
+ * Family công cụ (DIM / portal / workflow) — khác OpsTeam.
  * `TECS-TCS`+`TCS` → family TCS; `TECS-SCSC`+`SCSC` → family SCSC.
  * Không dùng để quyết định phạm vi ảnh báo cáo 3 kho.
  */
@@ -25,7 +25,9 @@ export type WarehouseRole = "tecs_hub" | "direct";
 
 export type WarehouseCapability =
   | "dimScscRules"
-  | "dimTcsTemplate";
+  | "dimTcsTemplate"
+  | "tcsPortal"
+  | "vehicleRegistration";
 
 export type WarehouseCapabilities = Readonly<Record<WarehouseCapability, boolean>>;
 
@@ -40,21 +42,29 @@ export type WarehouseMeta = {
 const TCS_HUB_CAPS: WarehouseCapabilities = {
   dimScscRules: false,
   dimTcsTemplate: true,
+  tcsPortal: true,
+  vehicleRegistration: false,
 };
 
 const SCSC_HUB_CAPS: WarehouseCapabilities = {
   dimScscRules: true,
   dimTcsTemplate: false,
+  tcsPortal: false,
+  vehicleRegistration: false,
 };
 
 const TCS_DIRECT_CAPS: WarehouseCapabilities = {
   dimScscRules: false,
   dimTcsTemplate: true,
+  tcsPortal: true,
+  vehicleRegistration: true,
 };
 
 const SCSC_DIRECT_CAPS: WarehouseCapabilities = {
   dimScscRules: true,
   dimTcsTemplate: false,
+  tcsPortal: false,
+  vehicleRegistration: true,
 };
 
 /**
@@ -147,7 +157,7 @@ export function isScscFamily(w: Warehouse): boolean {
   return warehouseFamily(w) === "SCSC";
 }
 
-/** Family TCS — mẫu DIM TCS (TECS-TCS + TCS). */
+/** Family TCS — mẫu DIM TCS / portal (TECS-TCS + TCS). */
 export function isTcsFamily(w: Warehouse): boolean {
   return warehouseFamily(w) === "TCS";
 }
@@ -157,7 +167,7 @@ export function isScscWarehouse(w: Warehouse): boolean {
   return isScscFamily(w);
 }
 
-/** Alias tương thích — family TCS (DIM). Không dùng để phân đội OPS. */
+/** Alias tương thích — family TCS (portal/DIM). Không dùng để phân đội OPS. */
 export function isTcsWarehouse(w: Warehouse): boolean {
   return isTcsFamily(w);
 }
@@ -173,6 +183,14 @@ export function isTecsHub(w: Warehouse): boolean {
 /** Mã lô thuộc kho riêng TCS hoặc SCSC (không phải mã trong kho TECS). */
 export function isDirectOpsWarehouse(w: Warehouse): boolean {
   return warehouseRole(w) === "direct";
+}
+
+/**
+ * eCargo VCT (ecargo.scsc.vn) — chỉ kho SCSC trực tiếp.
+ * Không gồm TECS-SCSC (mã trong kho TECS) và không gồm TCS.
+ */
+export function isEcargoScscWarehouse(w: Warehouse): boolean {
+  return w === "SCSC";
 }
 
 /** Kho hoạt động (OpsTeam) phụ trách mã lô này. */

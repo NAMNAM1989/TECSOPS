@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
@@ -8,7 +8,7 @@ import {
   Wordmark,
 } from "../ui";
 import type { SyncStatus } from "../hooks/useShipmentSync";
-import { EsidSettingsMenu } from "./EsidSettingsMenu";
+import { ChromeExtensionsDownloadMenu } from "./ChromeExtensionsDownloadMenu";
 import { NewBookingButton } from "./NewBookingButton";
 import { OpsCargoReportToolbar } from "./OpsCargoReportToolbar";
 import { OpsDatePicker } from "./OpsDatePicker";
@@ -66,6 +66,8 @@ type Props = {
   statusFilter: StatusFilterValue;
   onStatusFilterChange: (v: StatusFilterValue) => void;
   onClearFilters: () => void;
+  tcsPortalBar?: ReactNode;
+  ecargoBar?: ReactNode;
 };
 
 /** Chrome desktop Ops: lệnh + Ảnh báo cáo + DayPulse/kho + lọc. Booking/Search ngoài menu. */
@@ -104,6 +106,8 @@ export function OpsDesktopCommandBar({
   statusFilter,
   onStatusFilterChange,
   onClearFilters,
+  tcsPortalBar,
+  ecargoBar,
 }: Props) {
   const filtersActive =
     statusFilter !== "ALL" || Boolean(searchQuery.trim()) || Boolean(flightDateFilter);
@@ -171,7 +175,7 @@ export function OpsDesktopCommandBar({
               Thống kê
             </Button>
           ) : null}
-          <EsidSettingsMenu compact />
+          <ChromeExtensionsDownloadMenu />
           <OpsToolsMenu {...toolsProps} />
         </div>
       </div>
@@ -226,6 +230,8 @@ export function OpsDesktopCommandBar({
               Xóa
             </Button>
           ) : null}
+          {tcsPortalBar ? <div className="min-w-0 shrink-0">{tcsPortalBar}</div> : null}
+          {ecargoBar ? <div className="min-w-0 shrink-0">{ecargoBar}</div> : null}
         </div>
       ) : null}
     </header>

@@ -52,10 +52,10 @@ export type CustomerSavedDimTemplate = {
   isDefault?: boolean;
 };
 
-/** Loại xe (hồ sơ khách). */
+/** Loại xe eCargo SCSC. */
 export type CustomerVehicleType = "OTO" | "XEMAY" | "BAGAC" | "DIBO";
 
-/** Loại giấy tờ tài xế (hồ sơ khách). */
+/** Loại giấy tờ tài xế eCargo. */
 export type CustomerDriverIdType = "CCCD" | "PP" | "GPLX";
 
 /** Xe / tài xế lưu sẵn theo khách. */

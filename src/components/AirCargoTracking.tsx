@@ -20,9 +20,15 @@ import {
   filterShipmentsBySessionYmdRange,
 } from "../utils/filterShipmentsBySessionYmd";
 import { type StatusFilterValue } from "./StatusFilterBar";
+import { TcsPortalInlineBar } from "./TcsPortalInlineBar";
+import { EcargoScscInlineBar, EcargoScscProvider } from "./EcargoScscInlineBar";
+import { TcsPortalActionsProvider } from "./TcsPortalActionsContext";
+import { useTcsPortalActions } from "../hooks/useTcsPortalActions";
 import {
   WAREHOUSE_ORDER,
+  isEcargoScscWarehouse,
   isScscWarehouse,
+  isTcsWarehouse,
   warehouseLabel,
 } from "../constants/warehouses";
 import { OpsDesktopCommandBar } from "./OpsDesktopCommandBar";
@@ -85,6 +91,7 @@ export function AirCargoTracking({
     status,
     state,
     mutate,
+    mutateBatch,
     socketConnected,
     pendingOfflineCount,
     refreshState,
@@ -269,6 +276,51 @@ export function AirCargoTracking({
     },
     [runMutate]
   );
+
+  const onMarkReceptionCompleted = useCallback(
+    async (shipmentIds: string[]) => {
+      if (shipmentIds.length === 0) return;
+      try {
+        await mutateBatch(
+          shipmentIds.map((id) => ({
+            action: "UPDATE" as const,
+            id,
+            patch: { status: "RECEPTION_COMPLETED" as const },
+          }))
+        );
+      } catch (e) {
+        debugError("ui:mutate-batch", e);
+        toast.error(
+          e instanceof Error ? e.message : "Không gửi được thay đổi lên máy chủ.",
+          "Đồng bộ thất bại"
+        );
+      }
+    },
+    [mutateBatch, toast]
+  );
+
+  /** Sau Quét ESID: hiện các lô vừa gán HOÀN THÀNH TIẾP NHẬN trên bảng Ops */
+  const onReceptionScanDone = useCallback(
+    (info: { readyCount: number; updatedCount: number }) => {
+      if (info.readyCount <= 0 && info.updatedCount <= 0) return;
+      setStatusFilter("RECEPTION_COMPLETED");
+      setSearchQuery("");
+      setFlightDateFilter("");
+      // Giữ kho đang thao tác (TECS-TCS hoặc TCS) — không nhảy sang kho kia.
+    },
+    []
+  );
+
+  const tcsPortal = useTcsPortalActions({
+    sessionYmd: selectedYmd,
+    rows: viewRows,
+    customerDirectory: state?.customers ?? EMPTY_CUSTOMERS_DIR,
+    onMarkReceptionCompleted,
+    onReceptionScanDone,
+    active: isTcsWarehouse(activeWarehouse),
+    portalWarehouse: activeWarehouse,
+    isMobile,
+  });
 
   const onDelete = useCallback(
     (id: string) => {
@@ -467,6 +519,14 @@ export function AirCargoTracking({
     [activeWarehouse, selectedYmd, state?.customers, toast, viewRows],
   );
 
+  const selected = filteredViewRows.find((r) => r.id === selectedId) ?? null;
+
+  // Phải gọi hook trước mọi early return — nếu không, loading → live sẽ React #310.
+  const scscShipmentsForEcargo = useMemo(
+    () => filteredViewRows.filter((r) => isEcargoScscWarehouse(r.warehouse)),
+    [filteredViewRows],
+  );
+
   if (status === "loading" || !state) {
     return <PageSkeleton variant="ops" />;
   }
@@ -517,6 +577,22 @@ export function AirCargoTracking({
       onCopyCargoDayReport={(kind) => void onCopyCargoDayReport(kind ?? "vantage")}
       cargoReportCopying={cargoReportCopying}
       {...toolsProps}
+      selectedShipment={selected}
+      tcsPortalBar={
+        isTcsWarehouse(activeWarehouse) ? (
+          <TcsPortalInlineBar
+            compact
+            isMobile
+            tcs={tcsPortal}
+            preferredShipment={selected}
+          />
+        ) : null
+      }
+      ecargoBar={
+        isEcargoScscWarehouse(activeWarehouse) ? (
+          <EcargoScscInlineBar compact preferredShipmentId={selectedId} />
+        ) : null
+      }
       filteredViewRows={filteredViewRows}
       viewRows={viewRows}
       onWarehouseChange={handleActiveWarehouseChange}
@@ -568,10 +644,30 @@ export function AirCargoTracking({
       statusFilter={statusFilter}
       onStatusFilterChange={setStatusFilter}
       onClearFilters={clearViewFilters}
+      tcsPortalBar={
+        isTcsWarehouse(activeWarehouse) ? (
+          <TcsPortalInlineBar
+            compact
+            isMobile={false}
+            tcs={tcsPortal}
+            preferredShipment={selected}
+          />
+        ) : null
+      }
+      ecargoBar={
+        isEcargoScscWarehouse(activeWarehouse) ? (
+          <EcargoScscInlineBar compact preferredShipmentId={selectedId} />
+        ) : null
+      }
     />
   );
 
   return (
+    <EcargoScscProvider
+      shipments={scscShipmentsForEcargo}
+      customers={state?.customers ?? []}
+    >
+    <TcsPortalActionsProvider value={tcsPortal}>
     <AppShell chrome={chrome}>
       {status === "offline" ? (
         <div className="mb-2 md:block hidden">
@@ -629,6 +725,7 @@ export function AirCargoTracking({
           viewSessionYmd={selectedYmd}
           onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
           onQuickEdit={(row) => openMobileEdit(row)}
+          ecargoVctById={state?.ecargoVctResultsStore?.byShipmentId}
         />
       ) : (
         <DesktopShipmentTable
@@ -645,6 +742,7 @@ export function AirCargoTracking({
           onDelete={onDelete}
           onPrint={requestPrintLabel}
           viewSessionYmd={selectedYmd}
+          ecargoVctById={state?.ecargoVctResultsStore?.byShipmentId}
         />
       )}
 
@@ -736,5 +834,7 @@ export function AirCargoTracking({
         onExport={(from, to) => void onDownloadDayExcelRange(from, to)}
       />
     </AppShell>
+    </TcsPortalActionsProvider>
+    </EcargoScscProvider>
   );
 }

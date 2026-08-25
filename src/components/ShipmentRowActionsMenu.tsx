@@ -18,8 +18,10 @@ import {
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
 import { awbDigitsKey } from "../utils/awbFormat";
-import { isTcsWarehouse } from "../constants/warehouses";
+import { isEcargoScscWarehouse, isTcsWarehouse } from "../constants/warehouses";
 import { OPS } from "../styles/opsModalStyles";
+import { useEcargoRegisterActions } from "./EcargoRegisterActionsContext";
+import { useTcsPortalActionsContext } from "./TcsPortalActionsContext";
 
 const CsdPrintModal = lazy(() =>
   import("./CsdPrintModal").then((module) => ({ default: module.CsdPrintModal })),
@@ -38,6 +40,20 @@ function lightweightCsdCarrier(row: Pick<Shipment, "flight" | "awb">): "FD" | "T
   return null;
 }
 
+function confirmPortalChecklist(row: Shipment): boolean {
+  const warnings = [
+    !String(row.flight || "").trim() ? "Thiếu chuyến bay" : "",
+    !String(row.dest || "").trim() ? "Thiếu điểm đến" : "",
+    !(Number(row.pcs) > 0) ? "PCS chưa hợp lệ" : "",
+    !(Number(row.kg) > 0) ? "KG chưa hợp lệ" : "",
+    !String(row.customerCode || "").trim() ? "Chưa gắn Customer Code" : "",
+  ].filter(Boolean);
+  if (!warnings.length) return true;
+  return window.confirm(
+    `Checklist trước Fill/Register:\n• ${warnings.join("\n• ")}\n\nTiếp tục mở form để kiểm tra thủ công?`,
+  );
+}
+
 type Props = {
   row: Shipment;
   customerDirectory: readonly CustomerDirectoryEntry[];
@@ -45,6 +61,8 @@ type Props = {
   onDelete: (id: string) => void;
   onUpdate?: (id: string, patch: Partial<Shipment>) => void;
   compact?: boolean;
+  /** Viewport ≤767 — ẩn Điền; giữ PDF */
+  isMobile?: boolean;
 };
 
 const iconCls = "h-3.5 w-3.5";
@@ -125,6 +143,18 @@ function IconKebabVertical() {
   );
 }
 
+function IconEcargo() {
+  return (
+    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8 7h12M8 12h12M8 17h8M4 7h.01M4 12h.01M4 17h.01"
+      />
+    </svg>
+  );
+}
+
 function IconCsd() {
   return (
     <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
@@ -160,6 +190,7 @@ export function ShipmentRowActionsMenu({
   onPrint,
   onDelete,
   compact = false,
+  isMobile = false,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
@@ -167,12 +198,22 @@ export function ShipmentRowActionsMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const tcs = useTcsPortalActionsContext();
+  const ecargo = useEcargoRegisterActions();
+
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   /** Form QF/ED/49 — family TCS (TCS / TECS-TCS), cùng chỗ LIST DIM. */
   const showTcsDimPdf = isTcsWarehouse(row.warehouse) && (row.dimLines?.length ?? 0) > 0;
+  const showTcsEsid = isTcsWarehouse(row.warehouse) && Boolean(tcs);
+  /** Điền ESID: chỉ PC — phone dùng Quét + PDF qua agent. */
+  const showFillEsid =
+    showTcsEsid && !isMobile && awbDigitsKey(row.awb).length === 11;
+  const showEcargo = isEcargoScscWarehouse(row.warehouse) && Boolean(ecargo);
   const csdCarrier = lightweightCsdCarrier(row);
   const showCsd = csdCarrier != null;
+  /** Mobile card: eC / CSD vào menu ⋮ — tránh che AWB và nút nhỏ khó bấm. */
+  const showEcargoInline = showEcargo && !compact;
   const showCsdInline = showCsd && !compact;
   const csdAirline = csdCarrier ? CSD_AIRLINE[csdCarrier] : "";
   const [csdOpen, setCsdOpen] = useState(false);
@@ -180,7 +221,10 @@ export function ShipmentRowActionsMenu({
     (showDim ? 1 : 0) +
     (showTcsDim ? 2 : 0) +
     (showTcsDimPdf ? 1 : 0) +
+    (showTcsEsid ? 1 : 0) +
+    (showFillEsid ? 1 : 0) +
     (showCsd ? 1 : 0) +
+    (compact && showEcargo ? 1 : 0) +
     1;
 
   const confirmDelete = () => {
@@ -191,6 +235,7 @@ export function ShipmentRowActionsMenu({
     const btn = triggerRef.current;
     if (btn) setMenuStyle(menuPositionFromTrigger(btn));
     setMenuOpen(true);
+    // Không pre-warm tìm AWB khi mở ⋮ (tránh gõ vào ô tìm danh sách trước «Điền»).
   };
 
   const closeMenu = () => {
@@ -273,6 +318,16 @@ export function ShipmentRowActionsMenu({
         className={OPS.dropdown}
       >
         {compact ? menuItem("In nhãn", () => onPrint(row)) : null}
+        {compact && showEcargo
+          ? menuItem(
+              "Đăng ký eCargo",
+              () => {
+                if (confirmPortalChecklist(row)) ecargo?.openForShipment(row.id);
+              },
+              undefined,
+              `row-ecargo-${row.id}`,
+            )
+          : null}
         {showDim
           ? menuItem("Excel LIST DIM", () => {
               void import("../utils/exportScscDimListExcel").then((m) =>
@@ -290,6 +345,29 @@ export function ShipmentRowActionsMenu({
                 module.downloadTcsDimRecordPdf(row),
               );
             })
+          : null}
+        {showFillEsid
+          ? menuItem(
+              "Điền",
+              () => {
+                if (tcs?.busy) return;
+                if (confirmPortalChecklist(row)) void tcs?.fillEsidDeclareFor(row);
+              },
+              undefined,
+              `row-fill-esid-${row.id}`,
+              "Điền = tạo phiếu khai báo ESID trên TCS (đúng kho đang chọn). Không phụ thuộc Quét HT. Kiểm tra form rồi HOÀN TẤT."
+            )
+          : null}
+        {showTcsEsid
+          ? menuItem(
+              "Tải PDF ESID",
+              () => {
+                if (tcs?.busy) return;
+                void tcs?.downloadEsidFor(row);
+              },
+              undefined,
+              `row-pdf-esid-${row.id}`
+            )
           : null}
         {showCsd && csdCarrier
           ? menuItem(
@@ -340,6 +418,22 @@ export function ShipmentRowActionsMenu({
             </ActionIconBtn>
           ) : null}
         </>
+      ) : null}
+      {showEcargoInline ? (
+        <button
+          type="button"
+          title="Đăng ký eCargo lô này"
+          aria-label="Đăng ký eCargo lô này"
+          data-testid={`row-ecargo-${row.id}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (confirmPortalChecklist(row)) ecargo?.openForShipment(row.id);
+          }}
+          className="inline-flex h-7 items-center rounded-md border border-emerald-500/35 bg-emerald-50 px-1.5 text-[10px] font-bold text-emerald-900 hover:bg-emerald-100"
+        >
+          <IconEcargo />
+          <span className="ml-0.5">eCargo</span>
+        </button>
       ) : null}
       {showCsdInline && csdCarrier ? (
         <button

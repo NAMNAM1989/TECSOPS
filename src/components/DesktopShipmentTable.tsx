@@ -25,6 +25,7 @@ import { InlineCustomerInfoCell } from "./InlineCustomerInfoCell";
 import { CneeDetailPopover } from "./CneeDetailPopover";
 import { VehicleTypeMissingBadge } from "./VehicleTypeMissingBadge";
 import { useIsMobile } from "../hooks/useIsMobile";
+import type { EcargoVctResult } from "../utils/ecargoVctResultsStore";
 import {
   validateInlineDimWeightKg,
   validateInlineKg,
@@ -45,6 +46,8 @@ interface Props {
   selectedRowId?: string | null;
   onSelectRow?: (id: string | null) => void;
   onAddBlankRow?: (warehouse: Warehouse) => void;
+  /** Kết quả eCargo VCT theo shipmentId */
+  ecargoVctById?: Record<string, EcargoVctResult>;
   onUpdateCustomers?: (
     customers: CustomerDirectoryEntry[]
   ) => Promise<boolean | void>;
@@ -97,6 +100,7 @@ export function DesktopShipmentTable({
   onDelete,
   onPrint,
   viewSessionYmd,
+  ecargoVctById,
   onUpdateCustomers,
 }: Props) {
   const isMobile = useIsMobile();
@@ -187,6 +191,7 @@ export function DesktopShipmentTable({
                       onDelete={onDelete}
                       onPrint={onPrint}
                       onOpenDimModal={setDimModalRow}
+                      ecargoVct={ecargoVctById?.[row.id]}
                     />
                   ))
                 )}
@@ -226,6 +231,7 @@ function ShipmentTableRowImpl({
   onDelete,
   onPrint,
   onOpenDimModal,
+  ecargoVct,
 }: {
   row: Shipment;
   rowIdx: number;
@@ -243,6 +249,7 @@ function ShipmentTableRowImpl({
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
+  ecargoVct?: EcargoVctResult;
 }) {
   const toast = useToast();
   const zebra = rowIdx % 2 === 0 ? "ops-row-zebra-odd" : "ops-row-zebra-even";
@@ -324,6 +331,23 @@ function ShipmentTableRowImpl({
             onCommit={(v) => onUpdate(row.id, { hawb: v.slice(0, 32) })}
             onEnterNavigateDown={() => focusShipmentGridCell(row.id, "flight")}
           />
+          {row.warehouse === "SCSC" && ecargoVct?.status === "done" ? (
+            <span
+              className="mt-0.5 inline-flex w-fit rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800"
+              title={ecargoVct.vctCode || "eCargo OK"}
+            >
+              eCargo {ecargoVct.vctCode ? ecargoVct.vctCode.slice(0, 12) : "OK"}
+            </span>
+          ) : row.warehouse === "SCSC" && ecargoVct?.status === "error" ? (
+            <span className="mt-0.5 inline-flex w-fit rounded bg-rose-100 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-800">
+              eCargo lỗi
+            </span>
+          ) : row.warehouse === "SCSC" &&
+            (ecargoVct?.status === "otp" || ecargoVct?.status === "pending") ? (
+            <span className="mt-0.5 inline-flex w-fit rounded bg-amber-100 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-900">
+              eCargo…
+            </span>
+          ) : null}
         </div>
       </td>
       <td className={cell("mid", `box-border ${FLIGHT_W} align-top`)}>

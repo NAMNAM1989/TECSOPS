@@ -3,7 +3,7 @@
  * Tránh lỗi proxy ECONNREFUSED khi Vite start trước server.
  *
  * Cần DATABASE_URL trong .env.local (Postgres). Local: `docker compose up -d`
- * Không spawn Playwright/Python.
+ * Không spawn Playwright/Python — eSID/eCargo qua Chrome Ext trên PC.
  */
 import { spawn } from "node:child_process";
 import { execFileSync, execSync } from "node:child_process";

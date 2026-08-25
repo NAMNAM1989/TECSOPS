@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type RefObject } from "react";
+import { useEffect, useMemo, useState, type RefObject, type ReactNode } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
@@ -7,8 +7,8 @@ import { Button, SyncStatusPill, Wordmark } from "../ui";
 import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
 import { OpsCargoReportToolbar } from "./OpsCargoReportToolbar";
 import { statusLabel, statusLabelCompact } from "./statusStyles";
-import { EsidSettingsMenu } from "./EsidSettingsMenu";
 import { OpsDatePicker } from "./OpsDatePicker";
+import { useChromeExtensionMenuItems } from "./ChromeExtensionsDownloadMenu";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
 import type { SyncStatus } from "../hooks/useShipmentSync";
@@ -44,6 +44,12 @@ interface Props {
   scscDimExporting?: boolean;
   cargoReportCopying?: boolean;
   showDimScsc?: boolean;
+  /** Thanh Cổng TCS — chỉ mount khi TCS context */
+  tcsPortalBar?: ReactNode;
+  /** Thanh eCargo — chỉ khi kho SCSC trực tiếp */
+  ecargoBar?: ReactNode;
+  /** Lô đang chọn — portal chỉ hiện khi relevant */
+  selectedShipment?: Shipment | null;
   filteredViewRows: readonly Shipment[];
   viewRows: readonly Shipment[];
   onWarehouseChange: (wh: Warehouse) => void;
@@ -63,7 +69,7 @@ interface Props {
 
 /**
  * Chrome mobile Ops: identity + DayPulse/chip kho + ảnh báo cáo + lọc.
- * + Booking là FAB ngoài header. Công cụ / ESID trong ⋯.
+ * + Booking là FAB ngoài header. Tải Ext / Công cụ trong ⋯.
  */
 export function OpsMobileStickyHeader({
   selectedYmd,
@@ -94,6 +100,9 @@ export function OpsMobileStickyHeader({
   scscDimExporting,
   cargoReportCopying,
   showDimScsc,
+  tcsPortalBar,
+  ecargoBar,
+  selectedShipment = null,
   filteredViewRows,
   viewRows,
   onWarehouseChange,
@@ -119,6 +128,7 @@ export function OpsMobileStickyHeader({
   }, [statusFilter]);
 
   const showStatusBar = viewRows.length > 0 && (statusExpanded || statusFilter !== "ALL");
+  const portalRelevant = Boolean(selectedShipment && (tcsPortalBar || ecargoBar));
 
   const live = syncStatus === "live" && socketConnected;
   const syncTitle = useMemo(() => {
@@ -126,6 +136,8 @@ export function OpsMobileStickyHeader({
     const pending = pendingOfflineCount > 0 ? `${pendingOfflineCount} chờ gửi` : "";
     return [phrase, pending].filter(Boolean).join(" · ");
   }, [lotSyncedAt, pendingOfflineCount]);
+
+  const extItems = useChromeExtensionMenuItems();
 
   const toolItems = useMemo((): OverflowMenuItem[] => {
     const list: OverflowMenuItem[] = [
@@ -193,7 +205,10 @@ export function OpsMobileStickyHeader({
     showDimScsc,
   ]);
 
-  const overflowItems = toolItems;
+  const overflowItems = useMemo(
+    () => [...extItems, ...toolItems],
+    [extItems, toolItems],
+  );
 
   const syncCta =
     !live && !syncRefreshing && onSyncRefresh
@@ -243,12 +258,11 @@ export function OpsMobileStickyHeader({
           />
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 overflow-visible" data-testid="ops-mobile-overflow">
-          <EsidSettingsMenu compact />
+        <div className="shrink-0 overflow-visible" data-testid="ops-mobile-overflow">
           <OverflowMenu
             compact
             align="right"
-            label="Công cụ"
+            label="Tải Ext, Công cụ"
             items={overflowItems}
           />
         </div>
@@ -320,6 +334,13 @@ export function OpsMobileStickyHeader({
           </Button>
         ) : null}
       </div>
+
+      {portalRelevant ? (
+        <div className="min-w-0 space-y-1" data-testid="ops-mobile-portal-slot">
+          {tcsPortalBar}
+          {ecargoBar}
+        </div>
+      ) : null}
 
       {showStatusBar ? (
         <div className="flex min-w-0 items-center gap-1">

@@ -27,8 +27,8 @@ describe("OpsCargoReportToolbar", () => {
     expect(html).toContain("Tecs");
     expect(html).toContain("TCS");
     expect(html).toContain("SCSC");
-    expect(html).toMatch(/data-testid="ops-cargo-report-vantage"[^>]*disabled/);
-    expect(html).not.toMatch(/data-testid="ops-cargo-report-tcs"[^>]*disabled/);
+    expect(html).toMatch(/data-testid="ops-cargo-report-vantage"[^>]*disabled=""/);
+    expect(html).not.toMatch(/data-testid="ops-cargo-report-tcs"[^>]*disabled=""/);
   });
 
   it("mobile: chip ≥44px, copying hiện Đang copy…", () => {

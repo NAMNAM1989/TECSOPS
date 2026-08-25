@@ -59,9 +59,10 @@ async function main() {
       fail("DATE-01", "Không thấy input type=date");
     }
 
+    // Thanh TCS
     const tcsLogin = page.getByRole("button", { name: /Đăng Nhập TCS/i });
-    if ((await tcsLogin.count()) === 0) ok("TCS-01", "Đã gỡ Đăng Nhập TCS");
-    else fail("TCS-01", "Vẫn còn nút Đăng Nhập TCS — cần gỡ");
+    if (await tcsLogin.count()) ok("TCS-01", "Thanh Cổng TCS hiện");
+    else fail("TCS-01", "Không thấy nút đăng nhập TCS");
 
     const pdfBar = page.getByRole("button", { name: /^PDF ESID/ });
     if ((await pdfBar.count()) === 0) ok("TCS-02", "Toolbar không còn PDF ESID hàng loạt (đúng)");
@@ -79,8 +80,8 @@ async function main() {
       await page.waitForTimeout(200);
       const pdfItem = page.getByRole("menuitem", { name: /Tải PDF ESID|PDF ESID/ });
       const printItem = page.getByRole("menuitem", { name: "In ESID" });
-      if ((await pdfItem.count()) === 0) ok("MENU-02", "Menu dòng đã bỏ Tải PDF ESID");
-      else fail("MENU-02", "Menu dòng vẫn còn Tải PDF ESID — cần gỡ");
+      if (await pdfItem.count()) ok("MENU-02", "Menu dòng có Tải PDF ESID");
+      else fail("MENU-02", "Menu dòng không có Tải PDF ESID");
       if ((await printItem.count()) === 0) ok("MENU-03", "Menu dòng đã bỏ In ESID (đúng)");
       else fail("MENU-03", "Menu dòng vẫn còn In ESID — cần gỡ");
       await page.keyboard.press("Escape");

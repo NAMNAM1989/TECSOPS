@@ -7,6 +7,9 @@
     "node": ">=20"
   },
   "scripts": {
+    "ext:package": "node scripts/fetch-ext-captcha-ocr.mjs && node scripts/package-chrome-extension.mjs",
+    "ext:fetch-ocr": "node scripts/fetch-ext-captcha-ocr.mjs",
+    "prebuild": "node scripts/package-chrome-extension.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:db": "docker compose up -d",
     "qa:smoke": "node scripts/qa-smoke-e2e.mjs",
@@ -14,6 +17,7 @@
     "test:e2e:a11y": "node tests/e2e/accessibility.mjs",
     "test:e2e:mutation": "node tests/e2e/mutation.mjs",
     "e2e:cleanup": "node scripts/cleanup-e2e-records.mjs",
+    "ext:verify": "node chrome-extension-tcs/scripts/cdp-load-and-verify.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "eslint src",
@@ -40,13 +44,16 @@
     "compression": "^1.8.1",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
+    "imapflow": "^1.6.5",
+    "mailparser": "^3.9.14",
     "pdf-lib": "^1.17.1",
     "pg": "^8.20.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.15.0",
     "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "onnxruntime-web": "1.21.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

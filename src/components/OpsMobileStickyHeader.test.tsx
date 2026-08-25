@@ -14,7 +14,8 @@ function renderHeader(opts: {
   selected?: boolean;
   empty?: boolean;
 }) {
-  const warehouse = opts.portal === "scsc" ? "SCSC" : "TCS";
+  const portal = opts.portal ?? "none";
+  const warehouse = portal === "scsc" ? "SCSC" : "TCS";
   const row = {
     ...blankShipmentDraft("2026-08-23", warehouse),
     id: "s1",
@@ -42,6 +43,9 @@ function renderHeader(opts: {
         onOpenAirlineLabels={() => undefined}
         onDownloadDayExcel={() => undefined}
         onCopyCargoDayReport={() => undefined}
+        selectedShipment={opts.selected ? row : null}
+        tcsPortalBar={portal === "tcs" ? <span>bar-tcs</span> : null}
+        ecargoBar={portal === "scsc" ? <span>bar-scsc</span> : null}
         filteredViewRows={rows}
         viewRows={rows}
         onWarehouseChange={() => undefined}
@@ -72,8 +76,8 @@ describe("OpsMobileStickyHeader chrome", () => {
     expect(html).toContain("23-AUG-2026");
     expect(html).toContain("Live");
     expect(html).toContain("OPS");
-    expect(html).toContain("Công cụ");
-    expect(html).not.toContain("Tải Ext");
+    expect(html).toContain("Tải Ext, Công cụ");
+    expect(html).not.toContain("Báo cáo, Tải Ext, Công cụ");
     expect(html).toContain("ops-cargo-report-toolbar");
     expect(html).toContain("Vantage");
     expect(html).not.toContain("+ Booking");
@@ -92,13 +96,26 @@ describe("OpsMobileStickyHeader chrome", () => {
     expect(html).toContain("ops-cargo-report-toolbar");
   });
 
-  it("không còn portal TCS / eCargo / Đăng Nhập TCS", () => {
-    const html = renderHeader({ portal: "tcs", selected: true });
+  it("portal ẩn khi chưa chọn lô — không CTA Đăng Nhập TCS giả", () => {
+    const html = renderHeader({ portal: "tcs", selected: false });
     expect(html).not.toContain("ops-mobile-portal-slot");
     expect(html).not.toContain("bar-tcs");
-    expect(html).not.toContain("bar-scsc");
+    expect(html).not.toContain("Cổng TCS / ESID");
     expect(html).not.toContain("Đăng Nhập TCS");
-    expect(html).not.toContain("Tải Ext");
+    expect(html).not.toContain("cần Đăng Nhập TCS");
+  });
+
+  it("TCS + lô chọn: hiện cổng, vẫn không CTA Đăng Nhập TCS giả", () => {
+    const html = renderHeader({ portal: "tcs", selected: true });
+    expect(html).toContain("ops-mobile-portal-slot");
+    expect(html).toContain("bar-tcs");
+    expect(html).not.toContain("Đăng Nhập TCS");
+  });
+
+  it("SCSC + lô chọn: hiện eCargo, không Đăng Nhập TCS", () => {
+    const html = renderHeader({ portal: "scsc", selected: true });
+    expect(html).toContain("bar-scsc");
+    expect(html).not.toContain("Đăng Nhập TCS");
   });
 
   it("ngày phiên overlay, không lộ locale input date", () => {

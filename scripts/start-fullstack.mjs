@@ -1,6 +1,6 @@
 /**
  * Railway/Docker: chỉ Node Ops (Express + static + /api + socket.io).
- * Không spawn Playwright / Python.
+ * Không spawn Playwright / Python. eSID / eCargo chạy qua Chrome Ext trên PC.
  */
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";

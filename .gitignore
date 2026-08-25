@@ -33,6 +33,14 @@ outputs/
 output/
 .openclaw/
 
+public/downloads/*.zip
+
+# Chrome Ext OCR binaries (lấy bằng npm run ext:fetch-ocr)
+chrome-extension-tcs/ocr/common.onnx
+chrome-extension-tcs/ocr/ort.min.js
+chrome-extension-tcs/ocr/ort-wasm*.wasm
+chrome-extension-tcs/ocr/ort-wasm*.mjs
+
 # Local scratch / leftover OCR dump
 .trash/
 

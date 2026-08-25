@@ -9,12 +9,12 @@ export type WarehouseLayoutFilter = Warehouse | "ALL";
  * - TCS: kho riêng — chỉ mã `TCS` (không gồm `TECS-TCS`)
  * - SCSC: kho riêng — chỉ mã `SCSC` (không gồm `TECS-SCSC`)
  *
- * Không dùng WarehouseFamily để lọc báo cáo OPS — family chỉ cho DIM/workflow.
+ * Không dùng WarehouseFamily để lọc báo cáo OPS — family chỉ cho portal/DIM.
  */
 export type OpsTeam = "TECS" | "TCS" | "SCSC";
 
 /**
- * Family công cụ (DIM / workflow) — khác OpsTeam.
+ * Family công cụ (DIM / portal / workflow) — khác OpsTeam.
  * `TECS-TCS`+`TCS` → family TCS; `TECS-SCSC`+`SCSC` → family SCSC.
  * Không dùng để quyết định phạm vi ảnh báo cáo 3 kho.
  */
@@ -147,7 +147,7 @@ export function isScscFamily(w: Warehouse): boolean {
   return warehouseFamily(w) === "SCSC";
 }
 
-/** Family TCS — mẫu DIM TCS (TECS-TCS + TCS). */
+/** Family TCS — mẫu DIM TCS / portal (TECS-TCS + TCS). */
 export function isTcsFamily(w: Warehouse): boolean {
   return warehouseFamily(w) === "TCS";
 }

@@ -45,7 +45,7 @@ Trước khi triển khai, hãy đọc:
 
 Tìm và lập bản đồ các dấu vết sau nếu tồn tại:
 
-`useHashRoute`, `App.tsx`, `AirCargoTracking`, `OpsMobileStickyHeader`, `StatInline`, `OpsDatePicker`, `SmartSearchBar`, `WarehouseGridPicker`, `NewBookingButton`, `DesktopShipmentTable`, `MobileShipmentCards`, `MobileShipmentEditSheet`, `StickyMobileActions`, `HoverMagnifyText`, `SelectableTextWithCopyPopover`, `ShipmentRowActionsMenu`, `CustomerPicker`, `SuggestDropdown`, `StatusFilterBar`, `StatusBadge`, `StatusSelect`, `MobileDimKgModal`, `GoogleSheetImportModal`, `PrintShippingLabel`, `AirlineLabelSettingsModal`, `EsidSettingsMenu`, `CustomersPage`, `CustomerSavedProfilesEditor`, `CustomerDeleteConfirmModal`, `opsModalStyles`, `mobileOpsStyles`.
+`useHashRoute`, `App.tsx`, `AirCargoTracking`, `OpsMobileStickyHeader`, `StatInline`, `OpsDatePicker`, `SmartSearchBar`, `WarehouseGridPicker`, `NewBookingButton`, `DesktopShipmentTable`, `MobileShipmentCards`, `MobileShipmentEditSheet`, `StickyMobileActions`, `HoverMagnifyText`, `SelectableTextWithCopyPopover`, `ShipmentRowActionsMenu`, `CustomerPicker`, `SuggestDropdown`, `StatusFilterBar`, `StatusBadge`, `StatusSelect`, `MobileDimKgModal`, `GoogleSheetImportModal`, `PrintShippingLabel`, `AirlineLabelSettingsModal`, `TcsPortalInlineBar`, `CustomerEsidQuickFillModal`, `CustomersPage`, `CustomerSavedProfilesEditor`, `CustomerDeleteConfirmModal`, `opsModalStyles`, `mobileOpsStyles`.
 
 Chạy baseline bằng đúng package manager của dự án:
 
@@ -257,12 +257,13 @@ Yêu cầu triển khai:
 - Chuyển `AirlineLabelSettingsModal` vào khu vực Settings chung nếu không làm tăng bước thao tác vận hành.
 - Viết visual/regression test hoặc snapshot phù hợp cho output in.
 
-### 5.10. ESID local (không Ext / portal / eCargo)
+### 5.10. TCS, ESID và Chrome extension
 
-- Tải Ext, Đăng Nhập TCS, eCargo và Chrome extension đã gỡ — không đưa lại.
-- Hồ sơ Người khai / Agent sửa qua `EsidSettingsMenu` trên thanh công cụ Ops.
-- Excel eSID local (`exportEsidDeclareExcel` / `buildEsidDeclareFillPayload`) giữ nếu còn dùng nội bộ.
-- Không bridge Chrome, không điền portal, không VCT/OTP.
+- Giữ `TcsPortalInlineBar` nếu cổng TCS còn được dùng; làm gọn.
+- Gom profile/agent/registrant vào một mục “Cài đặt ESID”.
+- `CustomerEsidQuickFillModal`: giữ trong giai đoạn đầu, đo/đánh giá sau dùng thử; không tự gỡ.
+- Giữ trạng thái kết nối Chrome extension bridge, nhưng ẩn ID/log/chi tiết kỹ thuật khỏi người dùng thường.
+- Luồng mất kết nối phải có hướng dẫn khôi phục ngắn gọn.
 
 ### 5.11. Quản lý khách hàng
 
@@ -486,4 +487,4 @@ Khi hoàn tất audit, dừng lại và báo cáo kết quả để tôi duyệt
 - **P0:** OPS day board, mobile OPS, booking, bảng/card lô, inline edit, workflow theo kho, KPI, tìm AWB, chọn kho, lưu dữ liệu.
 - **P1:** Design system, header, import/export, CustomersPage, DIM, print preview/regression, trạng thái kết nối.
 - **P2:** Logo/favicon, gom settings/ESID, tinh chỉnh preset và action thứ cấp.
-- **P3/đánh giá sau:** Dark mode. Không đưa lại Ext / portal TCS / eCargo.
+- **P3/đánh giá sau:** Dark mode, auth mới nếu chưa có, `CustomerEsidQuickFillModal` sau dùng thử.

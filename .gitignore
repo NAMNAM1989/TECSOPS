@@ -17,7 +17,7 @@ server/data/*.tmp
 .env.*
 !.env.example
 
-# Backup state (có th? ch?a d? li?u th?t ? không commit nh?m)
+# Backup state (cÃ³ thá»ƒ chá»©a dá»¯ liá»‡u tháº­t â€” khÃ´ng commit nháº§m)
 backups/
 tecsops-state-*.json
 **/tecsops-state-*.json
@@ -26,17 +26,14 @@ tecsops-postgres-state-*.json
 tecsops-prod-state-*.json
 **/tecsops-prod-state-*.json
 
-# Debug / scratch (không commit)
+# Debug / scratch (khÃ´ng commit)
 tmp/
 .tmp-*
 outputs/
 output/
 .openclaw/
 
-# Leftover extension ZIPs ? không ship (T?i Ext ?ã g?)
-public/downloads/*.zip
-
-# Local scratch
+# Local scratch / leftover OCR dump
 .trash/
 
 # Local TCS automation workspace (không ship trong app Ops)

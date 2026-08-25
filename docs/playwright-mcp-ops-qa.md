@@ -1,43 +1,37 @@
-# Playwright MCP — checklist QA Ops / portal TCS
+# Playwright MCP — checklist QA Ops
 
-Playwright MCP trong Cursor dùng để **test và debug**, không thay Chrome Ext cho vận hành ngày.
+Playwright MCP trong Cursor dùng để **test và debug UI Ops**. Không còn Chrome Ext / cổng TCS / eCargo.
 
 ## Vai trò
 
 | Công cụ | Dùng khi |
 |---|---|
-| Chrome Ext (TCS + SCSC) | Đăng Nhập TCS, Quét, Điền, Tải PDF trên máy có Chrome |
-| Playwright MCP (Cursor) | Agent chat: mở Ops/portal, tái hiện lỗi, kiểm locator |
-| OCR trong Ext | ONNX trên Ext TCS — nhập tay trên tab TCS nếu CAPTCHA fail |
+| Playwright MCP (Cursor) | Agent chat: mở Ops, tái hiện lỗi layout/lọc/DIM/in |
+| App login (`AppAuthGate`) | Gate web — không liên quan portal TCS |
 
-**Không** wire Playwright MCP vào production Ops API. Agent Python / dual-agent đã gỡ (A3).
+**Không** wire Playwright MCP vào production Ops API.
 
 ## Prompt mẫu (Cursor + Playwright MCP)
 
 ```
 Mở Ops local (http://127.0.0.1:5173), đăng nhập nếu cần.
 Vào Air Cargo / phiên ngày hôm nay.
-Chụp thanh TCS: trạng thái Ext (Đã Đăng Nhập TCS / cần Đăng Nhập TCS / Offline).
-Không gọi API agent PDF/fill — chỉ quan sát UI.
+Xác nhận thanh công cụ: Booking, Nhập Sheet, Thống kê, Ảnh báo cáo, DayPulse, 4 chip kho.
+Không còn nút Tải Ext, Đăng Nhập TCS, hay eCargo.
 ```
 
 ## Checklist smoke
 
-1. **Ext ping** — Ops hiện badge Ext (không «máy kho» / worker). Offline → hướng dẫn «Tải Ext» + đúng Chrome profile kho.
-2. **ĐN** — form user/pass → tab TCS; nếu CAPTCHA không OCR được → nhập tay trên tab portal, không bắt buộc agent headed.
-3. **Quét** — chỉ khi Ext đã ĐN; cập nhật lô chưa HT tiếp nhận đúng kho đang chọn.
-4. **Điền dry-run** — menu ⋮ → Điền trên Ext; kiểm form trên tab TCS; không submit nếu đang dry-run.
-5. **Tải PDF** — menu ⋮ → Tải PDF qua Ext (không chờ prefetch agent).
-6. **Đổi kho** — TECS-TCS ↔ TCS: bắt ĐN lại đúng user; không dùng chung session giả định.
+1. **Ops load** — page + sync Live / Hạn chế; không 404 vì UI không gọi API Ext/eCargo.
+2. **Không leftover UI** — không «Tải Ext», không «Đăng Nhập TCS», không «eCargo».
+3. **4 mã kho** — chip TECS-TCS / TECS-SCSC / TCS / SCSC + DayPulse.
+4. **Ảnh báo cáo** — Vantage / Tecs / TCS / SCSC trên toolbar (không chôn trong ⋯).
+5. **DIM / in / CSD** — modal DIM, in tem, CSD vẫn mở từ hàng lô.
+6. **Công cụ** — Sheet, Thống kê, Khách, Excel; `EsidSettingsMenu` (Người khai / Agent) trên thanh công cụ.
 
-## Khi tái hiện bug portal
+## Scripts đã gỡ
 
-- Dùng MCP mở `https://www.tcs.com.vn` (hoặc URL login hiện tại) để đọc DOM/locator.
-- Sửa locator trong Ext rồi verify lại bằng Ext trên Chrome user.
-- Không dùng MCP làm đường ĐN/Quét/Điền/PDF thay Ext trong sản xuất.
-
-## Scripts đã gỡ (A3)
-
+- Chrome Ext TCS/SCSC, menu Tải Ext, `/api/chrome-extensions`, `/api/tcs-extension*`, `/api/ecargo*`
 - `tcs-awb-automation/` + `tcs:agent*` + `portal:start:*` + `portal:headed:local`
-- `portal:worker` / `portal-worker.mjs` (gỡ trước)
+- `portal:worker` / `portal-worker.mjs`
 - `/tcs-agent` stub 410 — không còn Playwright trong container

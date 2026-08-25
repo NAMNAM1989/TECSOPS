@@ -16,7 +16,7 @@ Sử dụng skill này để thực hiện rà soát chuyên sâu (Comprehensive
 ### 🏗️ Công Nghệ Nền Tảng (Tech Stack)
 - **Frontend**: React 18 + Vite + TypeScript + TailwindCSS + Lucide Icons.
 - **Backend / Real-time Sync**: Node.js Express + WebSockets + Persistence (Postgres / JSON Fallback).
-- **Client Automation**: Chrome Extension Manifest V3 (`chrome-extension-tcs/` + `chrome-extension-scsc/`) — Đăng Nhập TCS / eSID / eCargo trên PC kho. Không còn Python Playwright agent.
+- **Ops**: Web React + Express. Không còn Chrome Ext / Đăng Nhập TCS / eCargo.
 
 ### 📁 Sơ Đồ Cấu Trúc File Trọng Yếu
 ```
@@ -24,15 +24,12 @@ TECSOPS/
 ├── src/
 │   ├── components/       # Component UI (MobileDimKgModal, PrintShippingLabel, customerDirectory/...)
 │   ├── pages/            # CustomersPage, Ops Dashboard
-│   ├── hooks/            # useShipmentSync, useTcsPortalActions
+│   ├── hooks/            # useShipmentSync
 │   ├── types/            # shipment.ts, customerDirectory.ts, warehouse.ts
 │   └── utils/            # Logic nghiệp vụ lõi:
 │       ├── volumetricDim.ts, scscChargeableWeight.ts (Tính DIM, Divisor 6000/5000, Rounding)
 │       ├── customerDirectoryCore.ts, customerFullProfileExcel.ts (Danh bạ & Excel Import 9/22 cột)
-│       ├── resolveShipmentForEsidDeclare.ts, buildEsidDeclareFillPayload.ts (eSID Payload)
-│       └── tcsChromeExtension.ts (Ops ↔ Ext TCS/SCSC)
-├── chrome-extension-tcs/ # Ext ESID — mã kho TCS + TECS-TCS
-├── chrome-extension-scsc/ # Ext eCargo kho SCSC
+│       └── resolveShipmentForEsidDeclare.ts, buildEsidDeclareFillPayload.ts (eSID Excel)
 ├── server/               # WebSocket & State Server Express/Node.js
 └── shared/               # Module dùng chung (customerProfileLimits.mjs)
 ```

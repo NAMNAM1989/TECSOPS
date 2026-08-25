@@ -1,8 +1,0 @@
-TECSOPS — Kho SCSC eCargo (chrome-extension-scsc)
-
-Ext chuẩn eCargo SCSC — cặp với Ext TCS.
-Protocol: docs/ops-ext-protocol.md
-
-1. Giải nén ZIP vào thư mục cố định.
-2. chrome://extensions → Load unpacked.
-3. F5 Ops → chọn kho SCSC → Đăng ký eCargo.

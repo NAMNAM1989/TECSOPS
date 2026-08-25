@@ -4,7 +4,6 @@ import {
   emptyWarehouseRecord,
   hasWarehouseCapability,
   isDirectOpsWarehouse,
-  isEcargoScscWarehouse,
   isScscFamily,
   isTecsHub,
   isTcsFamily,
@@ -56,19 +55,8 @@ describe("warehouse registry", () => {
     expect(warehouseRole("SCSC")).toBe("direct");
     expect(isTcsFamily("TCS")).toBe(true);
     expect(isScscFamily("SCSC")).toBe(true);
-    expect(hasWarehouseCapability("TCS", "vehicleRegistration")).toBe(true);
-    expect(hasWarehouseCapability("SCSC", "vehicleRegistration")).toBe(true);
-    expect(hasWarehouseCapability("TECS-TCS", "vehicleRegistration")).toBe(false);
-    expect(hasWarehouseCapability("TECS-SCSC", "vehicleRegistration")).toBe(false);
-    expect(hasWarehouseCapability("TCS", "tcsPortal")).toBe(true);
+    expect(hasWarehouseCapability("TCS", "dimTcsTemplate")).toBe(true);
     expect(hasWarehouseCapability("SCSC", "dimScscRules")).toBe(true);
-  });
-
-  it("eCargo chỉ kho SCSC trực tiếp — không TECS-SCSC / TCS", () => {
-    expect(isEcargoScscWarehouse("SCSC")).toBe(true);
-    expect(isEcargoScscWarehouse("TECS-SCSC")).toBe(false);
-    expect(isEcargoScscWarehouse("TCS")).toBe(false);
-    expect(isEcargoScscWarehouse("TECS-TCS")).toBe(false);
   });
 
   it("emptyWarehouseRecord đủ 4 kho", () => {

@@ -88,7 +88,7 @@ describe("OpsDesktopCommandBar", () => {
     expect(html).not.toContain("23-AUG-2026</option>");
   });
 
-  it("không clip OverflowMenu: overflow-x-auto chỉ ở cụm identity, không bọc Ext/Công cụ", () => {
+  it("không clip OverflowMenu: overflow-x-auto chỉ ở cụm identity, không bọc Công cụ", () => {
     const html = renderBar();
     const rowOpen = html.match(/data-testid="ops-desktop-command-row"[^>]*>/)?.[0] ?? "";
     const actionsOpen = html.match(/data-testid="ops-desktop-command-actions"[^>]*>/)?.[0] ?? "";
@@ -97,7 +97,6 @@ describe("OpsDesktopCommandBar", () => {
     expect(actionsOpen).toContain("overflow-visible");
     expect(actionsOpen).not.toContain("overflow-x-auto");
     expect(html).toContain("Ảnh báo cáo lô hàng");
-    expect(html).toContain("Tải Ext");
     expect(html).toContain("Công cụ");
   });
 });

@@ -33,8 +33,6 @@ import { formatAwb } from "../utils/awbFormat";
 import {
   formatShipmentCneeReadonlySummary,
 } from "../utils/shipmentCneeCopyBlock";
-import type { EcargoVctResult } from "../utils/ecargoVctResultsStore";
-
 type MobileFlightMeta = {
   flight: string;
   flightDate: string;
@@ -76,55 +74,6 @@ function buildMobileFlightMeta(
   };
 }
 
-/** Badge eCargo từ store hiện có — không invent Đình Chỉ nếu chưa có field. */
-function MobileEcargoBadges({
-  warehouse,
-  ecargoVct,
-}: {
-  warehouse: Warehouse;
-  ecargoVct?: EcargoVctResult | null;
-}) {
-  if (warehouse !== "SCSC" && warehouse !== "TECS-SCSC") return null;
-  if (!ecargoVct) return null;
-
-  if (ecargoVct.status === "done") {
-    const code = (ecargoVct.vctCode || "").trim();
-    return (
-      <span className="inline-flex max-w-full items-center gap-1 truncate rounded-md bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-900">
-        <span>Đã Cấp VCT</span>
-        {code ? (
-          <span className="font-mono normal-case tracking-tight">{code.slice(0, 10)}</span>
-        ) : null}
-      </span>
-    );
-  }
-  if (ecargoVct.status === "otp") {
-    return (
-      <span className="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-950">
-        Mã xác thực
-      </span>
-    );
-  }
-  if (ecargoVct.status === "pending") {
-    return (
-      <span className="inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-900">
-        eCargo…
-      </span>
-    );
-  }
-  if (ecargoVct.status === "error") {
-    return (
-      <span
-        className="inline-flex rounded-md bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-900"
-        title={ecargoVct.error || "eCargo lỗi"}
-      >
-        eCargo lỗi
-      </span>
-    );
-  }
-  return null;
-}
-
 function buildMobileMetaLine(
   customerLabel: string,
   flightPlain: string,
@@ -143,7 +92,6 @@ const MobileShipmentCard = memo(
     highlighted,
     customerDirectory,
     sessionYmd,
-    ecargoVct,
     onOpenEdit,
     onUpdate,
     onDelete,
@@ -154,7 +102,6 @@ const MobileShipmentCard = memo(
     highlighted: boolean;
     customerDirectory: readonly CustomerDirectoryEntry[];
     sessionYmd: string;
-    ecargoVct?: EcargoVctResult | null;
     onOpenEdit: (row: Shipment) => void;
     onUpdate: (id: string, patch: Partial<Shipment>) => void;
     onDelete: (id: string) => void;
@@ -249,7 +196,6 @@ const MobileShipmentCard = memo(
             >
               {metaLine || "—"}
             </span>
-            <MobileEcargoBadges warehouse={row.warehouse} ecargoVct={ecargoVct} />
           </button>
         </div>
       </Box>
@@ -260,8 +206,7 @@ const MobileShipmentCard = memo(
     prev.selected === next.selected &&
     prev.highlighted === next.highlighted &&
     prev.customerDirectory === next.customerDirectory &&
-    prev.sessionYmd === next.sessionYmd &&
-    prev.ecargoVct === next.ecargoVct,
+    prev.sessionYmd === next.sessionYmd,
 );
 
 interface MobileShipmentCardsProps {
@@ -279,7 +224,6 @@ interface MobileShipmentCardsProps {
   pinnedOpenWarehouses?: readonly Warehouse[];
   highlightedShipmentId?: string | null;
   onAddBlankRow?: (warehouse: Warehouse) => void;
-  ecargoVctById?: Record<string, EcargoVctResult>;
 }
 
 export function MobileShipmentCards({
@@ -297,7 +241,6 @@ export function MobileShipmentCards({
   pinnedOpenWarehouses = [],
   highlightedShipmentId = null,
   onAddBlankRow: _onAddBlankRow,
-  ecargoVctById,
 }: MobileShipmentCardsProps) {
   const isMobile = useIsMobile();
   const rowsByWarehouse = useMemo(
@@ -334,7 +277,6 @@ export function MobileShipmentCards({
       highlighted={highlightedShipmentId === row.id}
       customerDirectory={customerDirectory}
       sessionYmd={viewSessionYmd}
-      ecargoVct={ecargoVctById?.[row.id]}
       onOpenEdit={handleOpenEdit}
       onUpdate={onUpdate}
       onDelete={onDelete}

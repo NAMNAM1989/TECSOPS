@@ -68,24 +68,6 @@ export function baseContractState() {
         },
       ],
     },
-    ecargoScscStore: {
-      version: 1,
-      activeId: "ecargo-1",
-      profiles: [
-        {
-          id: "ecargo-1",
-          name: "",
-          agentPicName: "",
-          agentPicIdType: "CCCD",
-          agentPicId: "",
-          email: "",
-          mobilePhone: "",
-          defaultArrivalSlot: "8",
-          defaultVehicleType: "OTO",
-          updatedAt: "",
-        },
-      ],
-    },
   };
 }
 
@@ -105,6 +87,5 @@ export function normalizeStateForContract(state) {
     printerProfiles,
     esidRegistrantStore: state.esidRegistrantStore,
     esidAgentStore: state.esidAgentStore,
-    ecargoScscStore: state.ecargoScscStore,
   };
 }

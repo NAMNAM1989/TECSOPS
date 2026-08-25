@@ -127,7 +127,7 @@ describe("MobileDimKgModal UX", () => {
     expect(html).not.toContain("bg-emerald-50");
   });
 
-  it("dư kiện → banner danger; không đổi nhãn Đăng Nhập TCS", () => {
+  it("dư kiện → banner danger; không lẫn CTA portal đã gỡ", () => {
     const html = renderModal({
       ...baseRow,
       pcs: 1,

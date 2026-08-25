@@ -17,7 +17,7 @@ server/data/*.tmp
 .env.*
 !.env.example
 
-# Backup state (cÃ³ thá»ƒ chá»©a dá»¯ liá»‡u tháº­t â€” khÃ´ng commit nháº§m)
+# Backup state (có th? ch?a d? li?u th?t — không commit nh?m)
 backups/
 tecsops-state-*.json
 **/tecsops-state-*.json
@@ -26,22 +26,17 @@ tecsops-postgres-state-*.json
 tecsops-prod-state-*.json
 **/tecsops-prod-state-*.json
 
-# Debug / scratch (khÃ´ng commit)
+# Debug / scratch (không commit)
 tmp/
 .tmp-*
 outputs/
 output/
 .openclaw/
 
+# Leftover extension ZIPs — không ship (T?i Ext ?ã g?)
 public/downloads/*.zip
 
-# Chrome Ext OCR binaries (láº¥y báº±ng npm run ext:fetch-ocr)
-chrome-extension-tcs/ocr/common.onnx
-chrome-extension-tcs/ocr/ort.min.js
-chrome-extension-tcs/ocr/ort-wasm*.wasm
-chrome-extension-tcs/ocr/ort-wasm*.mjs
-
-# Local scratch / leftover OCR dump
+# Local scratch
 .trash/
 
 # Local TCS automation workspace (không ship trong app Ops)

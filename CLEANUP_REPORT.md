@@ -1,10 +1,12 @@
 # TECSOPS — Safe Dead Code & Unused Feature Cleanup
 
+**Cập nhật 2026-08-25:** Tải Ext / Đăng Nhập TCS / eCargo **đã gỡ** (PR mới, không reopen #72).  
+Hard no-touch còn lại: 4 mã kho, DayPulse, DIM, print/CSD, ảnh báo cáo #71, Sheet, ESID local, auth, DB / `.env` / migrations.  
+Phần KEEP Ext/OCR/eCargo bên dưới là **snapshot lịch sử #57/#61** — không đưa các cây đó trở lại.
+
 **Protocol:** Phase 1–12 (ANALYZE + CLASSIFY trước khi xóa; KEEP > DELETE khi không chắc).  
 **Đợt này:** REVIEW follow-up sau SAFE cleanup **#57** (`main` @ `f82b1a9`).  
-**Base:** latest `main` @ `f82b1a9`.
-
-Hard no-touch: Ext TCS/SCSC, Docker OCR, eCargo, print/CSD logic, auth, DB / `.env` / migrations, live API contracts. CTA luôn «Đăng Nhập TCS».
+**Base lịch sử:** `f82b1a9` (báo cáo dưới đây là snapshot — đừng đưa Ext/eCargo trở lại từ mục KEEP cũ).
 
 ---
 
@@ -39,15 +41,16 @@ Live import từ barrel (`AirCargoTracking`, `CustomersPage`, `OpsStatsPage`, `A
 |---|---|
 | `src/` href / `window.open` / string `tai-so-do` / `ESID-Automation` | 0 |
 | `PrintShippingLabel.tsx` + `print-label.css` | chỉ `docs/air-cargo-label-100x80-100x50.html` (KEEP, print) |
-| `server/index.mjs` `/downloads/` | chỉ ZIP Ext (`tecsops-chrome-extension-*.zip`) |
-| Tests | chỉ ZIP Ext trong `chromeExtensionDownloads.test.ts` |
+| `server/index.mjs` `/downloads/` | tem print; **không** còn ZIP Ext |
+| Tests | ZIP Ext / catalog đã gỡ cùng feature |
 
 TCS HTML + PDF companion: **SAFE — đã xóa**.  
 `public/downloads/air-cargo-label-*.html`: **KEEP** (print / no-touch).
 
 ### 4) KEEP always (không đụng)
 
-Ext TCS/SCSC, OCR Docker #54, eCargo, print/CSD, auth, DB / `.env` / migrations — nguyên. CTA «Đăng Nhập TCS».
+**Cũ (trước khi gỡ 2026-08-25):** Ext/OCR/eCargo từng no-touch. Hiện đã gỡ.  
+Còn no-touch: print/CSD, auth, DB / `.env` / migrations, 4 mã kho, DIM, ảnh báo cáo.
 
 ---
 
@@ -79,11 +82,9 @@ Ext TCS/SCSC, OCR Docker #54, eCargo, print/CSD, auth, DB / `.env` / migrations 
 
 ### KEEP (không đụng)
 
-Ext TCS/SCSC + OCR ONNX, Docker multi-stage #54, eCargo/IMAP/VCT, print/CSD (`csdForms.ts` + `public/templates/csd/`), mã kho `TECS-TCS` / `TECS-SCSC`, `tcsLoginCtaLabel`, auth, Postgres, `.env.example`, live docs railway / ops-ext / otp.
-
-`src/utils/tcsPortalAgentApi.ts` — KEEP (types + `pickEsidScanReadyItems`).  
-Union `"playwright"` trên `useTcsPortalActions` — live hook, không rewrite.  
-npm deps: `onnxruntime-web` (OCR), `imapflow`/`mailparser` (eCargo), `recharts` (Stats), `tsx` (`sample:day-report`).
+**Cũ:** Ext/OCR/eCargo/`tcsLoginCtaLabel` từng KEEP. **2026-08-25 đã gỡ** cùng `tcsPortalAgentApi`, IMAP, ONNX.  
+Còn KEEP: print/CSD, 4 mã kho, DIM, ảnh báo cáo, ESID local, auth, Postgres, `.env.example`.  
+npm deps còn: `recharts` (Stats), `tsx` (`sample:day-report`).
 
 ---
 
@@ -156,9 +157,8 @@ REMOVE only — không đổi contract API, không đổi schema, không đổi 
 
 ## Phase 12 — Result
 
-- App / Ext / OCR / eCargo / print / CSD / auth / DB nguyên.
-- CTA vẫn «Đăng Nhập TCS».
-- Public downloads còn: tem `air-cargo-label-*.html` + ZIP Ext (gitignore `*.zip`, đóng lúc `prebuild`).
+- Snapshot #61: app / print / CSD / auth / DB nguyên. Ext/OCR/eCargo + CTA portal **đã gỡ sau này**.
+- Public downloads còn: tem `air-cargo-label-*.html` (không ZIP Ext).
 - GitHub CI `ff1a5d6` **success**.
 - PR: https://github.com/NAMNAM1989/TECSOPS/pull/61
 

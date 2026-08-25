@@ -17,13 +17,6 @@ import {
 } from "./esidRegistrantProfile";
 import type { EsidAgentStoreV1 } from "./esidAgentProfile";
 import { emptyAgentStore, normalizeEsidAgentStore } from "./esidAgentProfile";
-import type { EcargoScscStoreV1 } from "./ecargoScscProfile";
-import { emptyEcargoStore, normalizeEcargoScscStore } from "./ecargoScscProfile";
-import type { EcargoVctResultsStoreV1 } from "./ecargoVctResultsStore";
-import {
-  emptyEcargoVctResultsStore,
-  normalizeEcargoVctResultsStore,
-} from "./ecargoVctResultsStore";
 
 export type AppState = {
   version: number;
@@ -38,10 +31,6 @@ export type AppState = {
   esidRegistrantStore?: EsidRegistrantStoreV1;
   /** Hồ sơ Agent ESID — dùng chung mọi máy */
   esidAgentStore?: EsidAgentStoreV1;
-  /** Hồ sơ đại lý eCargo SCSC — dùng chung mọi máy */
-  ecargoScscStore?: EcargoScscStoreV1;
-  /** Kết quả đăng ký VCT + QR theo shipmentId */
-  ecargoVctResultsStore?: EcargoVctResultsStoreV1;
   /** Overlay namnamlogistics — lots và customers tách nguồn. */
   syncMeta?: {
     source: "namnamlogistics-rest" | "postgres-lots" | "state-rows" | null;
@@ -60,9 +49,7 @@ export type ShipmentMutation =
   | { action: "SET_AIRLINE_LABEL_OVERRIDES"; overrides: AirlineLabelOverrides }
   | { action: "SET_PRINTER_PROFILES"; catalog: PrinterProfilesCatalog }
   | { action: "SET_ESID_REGISTRANT_STORE"; store: EsidRegistrantStoreV1 }
-  | { action: "SET_ESID_AGENT_STORE"; store: EsidAgentStoreV1 }
-  | { action: "SET_ECARGO_SCSC_STORE"; store: EcargoScscStoreV1 }
-  | { action: "SET_ECARGO_VCT_RESULTS_STORE"; store: EcargoVctResultsStoreV1 };
+  | { action: "SET_ESID_AGENT_STORE"; store: EsidAgentStoreV1 };
 
 function assertAwbUnique(rows: Shipment[], awb: string, exceptId?: string) {
   const d = awbDigitsKey(awb);
@@ -123,16 +110,6 @@ function resolvedEsidAgent(s: AppState): EsidAgentStoreV1 {
   return normalizeEsidAgentStore(s.esidAgentStore ?? emptyAgentStore());
 }
 
-function resolvedEcargoScsc(s: AppState): EcargoScscStoreV1 {
-  return normalizeEcargoScscStore(s.ecargoScscStore ?? emptyEcargoStore());
-}
-
-function resolvedEcargoVctResults(s: AppState): EcargoVctResultsStoreV1 {
-  return normalizeEcargoVctResultsStore(
-    s.ecargoVctResultsStore ?? emptyEcargoVctResultsStore()
-  ) as EcargoVctResultsStoreV1;
-}
-
 function nextState(
   state: AppState,
   rows: Shipment[],
@@ -146,9 +123,6 @@ function nextState(
     printerProfiles: extras.printerProfiles ?? resolvedPrinterCatalog(state),
     esidRegistrantStore: extras.esidRegistrantStore ?? resolvedEsidRegistrant(state),
     esidAgentStore: extras.esidAgentStore ?? resolvedEsidAgent(state),
-    ecargoScscStore: extras.ecargoScscStore ?? resolvedEcargoScsc(state),
-    ecargoVctResultsStore:
-      extras.ecargoVctResultsStore ?? resolvedEcargoVctResults(state),
   };
 }
 
@@ -183,18 +157,6 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
     case "SET_ESID_AGENT_STORE": {
       return nextState(state, rows, {
         esidAgentStore: normalizeEsidAgentStore(mutation.store),
-      });
-    }
-    case "SET_ECARGO_SCSC_STORE": {
-      return nextState(state, rows, {
-        ecargoScscStore: normalizeEcargoScscStore(mutation.store),
-      });
-    }
-    case "SET_ECARGO_VCT_RESULTS_STORE": {
-      return nextState(state, rows, {
-        ecargoVctResultsStore: normalizeEcargoVctResultsStore(
-          mutation.store
-        ) as EcargoVctResultsStoreV1,
       });
     }
     case "UPDATE": {

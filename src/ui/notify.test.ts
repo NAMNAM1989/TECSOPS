@@ -17,7 +17,7 @@ describe("notify", () => {
     const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
     registerNotifySink(sink);
     notifyWarning("AWB phải đủ 11 chữ số.", "AWB");
-    notifyError("Agent cloud offline", "Không Đăng Nhập TCS được");
+    notifyError("Không kết nối được máy chủ.", "Đồng bộ");
     expect(sink).toHaveBeenCalledTimes(2);
     expect(sink).toHaveBeenNthCalledWith(1, {
       message: "AWB phải đủ 11 chữ số.",
@@ -25,8 +25,8 @@ describe("notify", () => {
       tone: "warning",
     });
     expect(sink).toHaveBeenNthCalledWith(2, {
-      message: "Agent cloud offline",
-      title: "Không Đăng Nhập TCS được",
+      message: "Không kết nối được máy chủ.",
+      title: "Đồng bộ",
       tone: "danger",
     });
     expect(alert).not.toHaveBeenCalled();

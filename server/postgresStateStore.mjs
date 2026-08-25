@@ -5,7 +5,6 @@ import {
   normalizeEsidAgentStoreLoose,
   normalizeEsidRegistrantStoreLoose,
 } from "./esidProfilesNormalize.mjs";
-import { normalizeEcargoScscStoreLoose } from "./ecargoScscProfilesNormalize.mjs";
 import { postgresSslOption } from "./postgresSsl.mjs";
 import {
   ensureAirlineCatalogSchema,
@@ -57,6 +56,8 @@ function stripLegacyStateKeys(state) {
   delete next.globalAgents;
   delete next.scscWeighPrintSettings;
   delete next.ecargoKhoScsc;
+  delete next.ecargoScscStore;
+  delete next.ecargoVctResultsStore;
   delete next.invoiceCatalog;
   return next;
 }
@@ -549,11 +550,6 @@ async function loadRelationalSnapshot(client, key) {
   const esidAgentStore = normalizeEsidAgentStoreLoose(
     blob && typeof blob === "object" ? blob.esidAgentStore : undefined
   );
-  const ecargoScscStore = normalizeEcargoScscStoreLoose(
-    blob && typeof blob === "object" ? blob.ecargoScscStore : undefined
-  );
-  const ecargoVctResultsStore =
-    blob && typeof blob === "object" ? blob.ecargoVctResultsStore : undefined;
   const consigneeByCustomer = new Map();
   for (const r of consigneeRes.rows) {
     const cid = str(r.customer_id).trim();
@@ -608,8 +604,6 @@ async function loadRelationalSnapshot(client, key) {
     printerProfiles,
     esidRegistrantStore,
     esidAgentStore,
-    ecargoScscStore,
-    ecargoVctResultsStore,
   };
 }
 

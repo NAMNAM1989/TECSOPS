@@ -1,14 +1,14 @@
 # TECSOPS UI Review — Ops / Customers / Stats redesign
 
-> Cập nhật: 2026-08-22 · Round 3.2 alert→Toast + CTA Đăng Nhập TCS
+> Cập nhật: 2026-08-25 · gỡ Tải Ext / Đăng Nhập TCS / eCargo. Round 3.2 trở về trước là nhật ký — CTA portal không còn trên Ops.
 
 ## Round 3.2 — Alert → Toast + CTA login
 
 | Finding (#39 P0) | Fix |
 | --- | --- |
 | `window.alert` chặn UI (portal / AWB / export / in) | `src/ui/notify.ts` → Toast; export/print/CSD/DIM không còn `window.alert` |
-| Mobile ẩn CTA khi agent/ext fail (cổng thu gọn) | Header collapsed vẫn hiện «Đăng Nhập TCS» / «Thử Đăng Nhập TCS»; login fail Toast |
-| Copy «ĐN» | `tcsLoginCtaLabel` — luôn cụm đầy đủ |
+| Mobile ẩn CTA khi agent/ext fail (cổng thu gọn) | **Đã gỡ 2026-08-25** — không còn thanh cổng / CTA portal |
+| Copy «ĐN» | Không viết tắt ĐN. Không còn CTA portal trên Ops. |
 
 P1 lite: EmptyState khi lọc không khớp; Excel thống kê dùng `statusLabel`.
 
@@ -34,9 +34,9 @@ Follow-up: `notify` → Toast dùng `TOAST_DURATION_MS` theo tone (warning 5600 
 | Lot density | Card denser: AWB+status · khách/chuyến/DEST · K/Kg; expand CNEE; `contentVisibility` |
 | Safe area | FAB trên BottomNav; padding list `8.25rem + safe-area` |
 | Touch | Status filter / status select / kho chip ≥44px |
-| eCargo | Badge từ `ecargoVctResultsStore` (Đã Cấp VCT / Mã xác thực) — không mở rộng portal |
-| Portal TCS | **Không** mở rộng agent/ext/PW; thanh cổng **thu gọn mặc định** trên mobile (giảm chrome) |
-| Copy | Nếu CTA login còn hiện: «Đăng Nhập TCS» — không «ĐN» |
+| eCargo | **Đã gỡ 2026-08-25** — không badge VCT / modal đăng ký |
+| Portal TCS | **Đã gỡ 2026-08-25** — không thanh cổng, không Quét/Điền/PDF qua Ext |
+| Copy | Không viết tắt ĐN. Không còn CTA portal. |
 
 ### Sync source of truth
 
@@ -47,19 +47,10 @@ Follow-up: `notify` → Toast dùng `TOAST_DURATION_MS` theo tone (warning 5600 
 - Customers: `max(ops_customers.synced_at)` / `customers.syncedAt` thôi.
 - Format `Asia/Saigon` «đã sync lúc HH:mm:ss». Null/thiếu → ẩn timestamp (không epoch / Invalid Date).
 
-### eCargo / Đình Chỉ
+### eCargo / portal TCS — đã gỡ (2026-08-25)
 
-- Có field VCT status/code trong store → badge compact.
-- Không có field «Đình Chỉ» trên lot model → không fake badge (TODO nếu Gmail ops cần).
-
-### TCS / TECS-TCS — không xóa trong Round 3
-
-Chờ keep/delete list từ inventory GitHub. Ứng viên cleanup (follow-up PR):
-
-- `TcsPortalInlineBar` / `useTcsPortalActions` / agent·ext·PW controls trên mobile
-- Chrome Ext TCS + SCSC trên PC (không `/tcs-agent` / Playwright)
-- Menu ESID / Quét / Đăng Nhập TCS nếu kho TCS bị sunset
-- `docs/ecargo-vct-otp-flow.md` tách khỏi TCS portal (eCargo = SCSC)
+- Không badge VCT, không modal eCargo, không Tải Ext, không thanh Đăng Nhập TCS.
+- 4 mã kho + DIM / in / CSD / ảnh báo cáo / ESID local (`EsidSettingsMenu`) giữ nguyên.
 
 ## Round 2 — nâng cấp hình ảnh
 
@@ -77,8 +68,8 @@ Chờ keep/delete list từ inventory GitHub. Ứng viên cleanup (follow-up PR)
 | Finding | Fix |
 | --- | --- |
 | `window.alert` chặn UI | Toast non-blocking (`notify` + ToastProvider) |
-| Mobile ẩn CTA khi agent fail | Hiện «Đăng Nhập TCS» / «Thử Đăng Nhập TCS» cả khi cổng thu gọn |
-| Copy user-visible dùng «ĐN» | Luôn «Đăng Nhập TCS» (`tcsLoginCtaLabel`) |
+| Mobile ẩn CTA khi agent fail | **Đã gỡ** thanh cổng / CTA portal |
+| Copy user-visible dùng «ĐN» | Không viết tắt ĐN; không còn CTA portal |
 
 ## Không đụng
 

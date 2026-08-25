@@ -1,9 +1,0 @@
-TECSOPS — Kho TCS ESID (chrome-extension-tcs)
-
-Ext chuẩn ESID kho TCS — cặp với Ext SCSC.
-Protocol: docs/ops-ext-protocol.md
-
-1. Giải nén ZIP vào thư mục cố định.
-2. chrome://extensions → Load unpacked.
-3. F5 Ops → chọn kho TCS → Đăng Nhập TCS / Quét / Điền.
-eCargo → Ext SCSC riêng.

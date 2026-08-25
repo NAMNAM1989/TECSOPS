@@ -9,8 +9,6 @@ export default defineConfig({
       ["server/**", "node"],
       ["scripts/**", "node"],
       // Tests đọc file/path Node — không chạy dưới jsdom (fs bị externalize).
-      ["src/utils/chromeExtensionPackage.test.ts", "node"],
-      ["src/utils/portalSessionIdentity.test.ts", "node"],
       ["src/utils/tcsDimRecordForm.test.ts", "node"],
     ],
     include: [

@@ -23,11 +23,11 @@ Vì vậy:
 | **`POSTGRES_STATE_KEY`** | Tùy chọn — mặc định `tecsops:state`. |
 | **`PORT`** | Railway inject sẵn. |
 | **`NODE_ENV`** | `production` khi build Nixpacks. |
-| **`TCS_AGENT_*` / `TCS_USERNAME*`** | Đã gỡ khỏi app (A3). Ops follow-up: xóa biến + volume `browser_profile` trên Railway. |
+| **`TCS_AGENT_*` / `TCS_USERNAME*` / `ECARGO_IMAP_*`** | Đã gỡ khỏi app. Ops follow-up: xóa biến + volume `browser_profile` trên Railway nếu còn. |
 
 Socket.IO chạy **in-memory** — khuyến nghị **1 replica**.
 
-Portal / Ext OCR trên Railway: xem [railway-online-portal.md](./railway-online-portal.md) (Dockerfile multi-stage: Python chỉ extract `common.onnx`, runtime Node).
+Dockerfile là Node-only (builder + runtime). Không còn stage Python OCR / `ext:fetch-ocr` / `common.onnx`.
 
 ---
 

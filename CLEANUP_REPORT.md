@@ -1,10 +1,11 @@
 # TECSOPS — Safe Dead Code & Unused Feature Cleanup
 
+**Cập nhật 2026-08-25:** Tải Ext / Đăng Nhập TCS / eCargo **đã gỡ**. Không KEEP các cây đó nữa.  
+Hard no-touch còn lại: 4 mã kho, DIM, print/CSD, auth, DB / `.env` / migrations.
+
 **Protocol:** Phase 1–12 (ANALYZE + CLASSIFY trước khi xóa; KEEP > DELETE khi không chắc).  
 **Đợt này:** REVIEW follow-up sau SAFE cleanup **#57** (`main` @ `f82b1a9`).  
-**Base:** latest `main` @ `f82b1a9`.
-
-Hard no-touch: Ext TCS/SCSC, Docker OCR, eCargo, print/CSD logic, auth, DB / `.env` / migrations, live API contracts. CTA luôn «Đăng Nhập TCS».
+**Base lịch sử:** `f82b1a9` (báo cáo dưới đây là snapshot — đừng đưa Ext/eCargo trở lại từ mục KEEP cũ).
 
 ---
 

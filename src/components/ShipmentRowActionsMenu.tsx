@@ -45,8 +45,6 @@ type Props = {
   onDelete: (id: string) => void;
   onUpdate?: (id: string, patch: Partial<Shipment>) => void;
   compact?: boolean;
-  /** Viewport ≤767 — ẩn Điền; giữ PDF */
-  isMobile?: boolean;
 };
 
 const iconCls = "h-3.5 w-3.5";
@@ -193,7 +191,6 @@ export function ShipmentRowActionsMenu({
     const btn = triggerRef.current;
     if (btn) setMenuStyle(menuPositionFromTrigger(btn));
     setMenuOpen(true);
-    // Không pre-warm tìm AWB khi mở ⋮ (tránh gõ vào ô tìm danh sách trước «Điền»).
   };
 
   const closeMenu = () => {

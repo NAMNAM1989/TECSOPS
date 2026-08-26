@@ -342,7 +342,11 @@ export function registerSheetsRoutes(app, deps) {
         }
       }
 
-      const { grid, sheetTab } = await loadBookGridForSession(
+      const {
+        grid,
+        sheetTab,
+        gid: resolvedGid,
+      } = await loadBookGridForSession(
         spreadsheetId,
         sessionDate,
         preferredTab,
@@ -361,6 +365,12 @@ export function registerSheetsRoutes(app, deps) {
       const sheetTabMismatch = Boolean(
         sheetTab && !tabTitleMatchesSession(sheetTab, sessionDate)
       );
+      // Chỉ trả gid tab đã khớp ngày phiên — không echo gid request (URL/localStorage
+      // hay giữ tab hôm trước; client từng lưu lại gid lệch và kéo nhầm ngày).
+      const clientSheetGid =
+        !sheetTabMismatch && String(resolvedGid || "").trim()
+          ? String(resolvedGid).trim()
+          : undefined;
       const state = await loadState();
       const customers = Array.isArray(state.customers) ? state.customers : [];
       const customerLookups = buildCustomerLookups(customers);
@@ -396,7 +406,7 @@ export function registerSheetsRoutes(app, deps) {
         sheetTab,
         expectedSheetTab: expectedSheetTab || undefined,
         sheetTabMismatch,
-        sheetGid: sheetGid || undefined,
+        sheetGid: clientSheetGid,
         spreadsheetId,
         syncedAt: new Date().toISOString(),
         totalInTab: parsed.length,
@@ -524,9 +534,8 @@ export function registerSheetsRoutes(app, deps) {
       const wantReorder = body?.reorder !== false;
 
       let spreadsheetId;
-      let sheetGid;
       try {
-        ({ spreadsheetId, sheetGid } = resolveSheetLinkFromRequest(
+        ({ spreadsheetId } = resolveSheetLinkFromRequest(
           body?.spreadsheetId,
           body?.gid ?? body?.sheetGid
         ));
@@ -539,7 +548,8 @@ export function registerSheetsRoutes(app, deps) {
         sessionDate,
         preferredTab,
         false,
-        sheetGid
+        // Không dùng gid URL/body — resolve tab theo ngày phiên Ops (+ tên tab đã sync).
+        ""
       );
       const parsed = assignSheetSttByWarehouse(parseBookHangNgayGrid(grid, sessionDate));
       const pickSet = new Set(indices.filter((n) => Number.isInteger(n) && n >= 0));

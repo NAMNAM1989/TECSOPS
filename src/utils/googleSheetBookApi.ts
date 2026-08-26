@@ -19,10 +19,17 @@ export async function fetchBookSheetConfig(): Promise<SheetBookConfig> {
 
 export async function syncBookGoogleSheet(
   sessionDate: string,
-  opts: { spreadsheetId: string; sheetGid?: string; refresh?: boolean }
+  opts: {
+    spreadsheetId: string;
+    /** Chỉ gửi khi đã biết gid khớp ngày phiên — đừng gửi gid từ URL/localStorage cũ. */
+    sheetGid?: string;
+    refresh?: boolean;
+  }
 ): Promise<SheetBookSyncResult> {
   const q = new URLSearchParams({ sessionDate, spreadsheetId: opts.spreadsheetId });
-  if (opts.sheetGid) q.set("gid", opts.sheetGid);
+  // Không gửi gid lệch ngày: server chọn tab theo sessionDate (ngày phiên Ops).
+  const gid = String(opts.sheetGid ?? "").trim();
+  if (gid) q.set("gid", gid);
   if (opts.refresh) q.set("refresh", "1");
   const res = await fetch(`/api/sheets/book/sync?${q}`, { ...credFetch });
   const data = await res.json().catch(() => ({}));
@@ -30,6 +37,17 @@ export async function syncBookGoogleSheet(
     throw new Error(typeof data?.error === "string" ? data.error : "Không đồng bộ được Google Sheet.");
   }
   return data as SheetBookSyncResult;
+}
+
+/** URL Sheet sạch theo spreadsheet (+ gid tab đã khớp ngày phiên nếu có). */
+export function buildSheetBookEditUrl(spreadsheetId: string, sheetGid?: string): string {
+  const id = String(spreadsheetId ?? "").trim();
+  if (!id) return "";
+  const gid = String(sheetGid ?? "").trim();
+  if (gid) {
+    return `https://docs.google.com/spreadsheets/d/${id}/edit?gid=${gid}#gid=${gid}`;
+  }
+  return `https://docs.google.com/spreadsheets/d/${id}/edit`;
 }
 
 export async function syncBookLocalCsv(

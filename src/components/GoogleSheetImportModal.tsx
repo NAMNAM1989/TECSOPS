@@ -15,6 +15,7 @@ import {
 } from "../types/googleSheetBook";
 import {
   applyBookGoogleSheetRows,
+  buildSheetBookEditUrl,
   fetchBookSheetConfig,
   syncBookGoogleSheet,
   syncBookLocalCsv,
@@ -177,15 +178,16 @@ export function GoogleSheetImportModal({
       try {
         const result = await syncBookGoogleSheet(sessionYmd, {
           spreadsheetId: parsed.spreadsheetId,
-          sheetGid: parsed.sheetGid,
+          // Không gửi gid từ URL/localStorage — luôn chọn tab theo ngày phiên Ops.
           refresh,
         });
-        // Chuẩn hóa URL theo tab đã resolve (bỏ gid tab ngày khác lưu trong localStorage).
+        // Lưu URL theo tab đã resolve (đúng ngày phiên); bỏ gid nếu tab lệch.
         if (result.spreadsheetId) {
-          const resolvedGid = String(result.sheetGid || "").trim();
-          const cleanUrl = resolvedGid
-            ? `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/edit?gid=${resolvedGid}#gid=${resolvedGid}`
-            : `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/edit`;
+          const resolvedGid =
+            !result.sheetTabMismatch && String(result.sheetGid || "").trim()
+              ? String(result.sheetGid).trim()
+              : "";
+          const cleanUrl = buildSheetBookEditUrl(result.spreadsheetId, resolvedGid);
           setSheetUrl(cleanUrl);
           saveSheetBookUrl(cleanUrl);
         }
@@ -397,7 +399,8 @@ export function GoogleSheetImportModal({
         [...selected],
         sync.sheetTab,
         sync.spreadsheetId,
-        sync.sheetGid,
+        // Chỉ gửi gid khi tab sync đã khớp ngày phiên.
+        !sync.sheetTabMismatch ? sync.sheetGid : undefined,
         [...selectedOrphans]
       );
       const touched = [...(result.applied ?? []), ...(result.updated ?? [])];

@@ -75,7 +75,7 @@ describe("fetchBookHangNgayGridForSession", () => {
     expect(result.grid).toBe(fakeGrid);
   });
 
-  it("gid lệch ngày phiên → fallback tab đúng ngày Ops", async () => {
+  it("gid lệch ngày phiên → fallback tab đúng ngày Ops và trả gid đã resolve", async () => {
     const wrongDayGrid = Array.from({ length: 10 }, (_, i) => ({
       rowIndex: i,
       cells:
@@ -109,6 +109,7 @@ describe("fetchBookHangNgayGridForSession", () => {
     });
     expect(result.sheetTab).toBe("NGÀY 27 JUL");
     expect(result.gid).toBe("27");
+    expect(result.grid).toBe(sessionGrid);
   });
 
   it("nhận tab không header khi kéo theo gid (layout data từ dòng 1)", async () => {

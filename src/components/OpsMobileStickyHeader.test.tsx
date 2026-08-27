@@ -9,14 +9,9 @@ const emptySearch = {
   customers: [],
 };
 
-function renderHeader(opts: {
-  portal?: "tcs" | "scsc" | "none";
-  selected?: boolean;
-  empty?: boolean;
-}) {
-  const warehouse = opts.portal === "scsc" ? "SCSC" : "TCS";
+function renderHeader(opts: { empty?: boolean } = {}) {
   const row = {
-    ...blankShipmentDraft("2026-08-23", warehouse),
+    ...blankShipmentDraft("2026-08-23", "TCS"),
     id: "s1",
     stt: 1,
     awb: "17612345675",
@@ -35,7 +30,7 @@ function renderHeader(opts: {
         isViewingToday
         syncStatus="live"
         socketConnected
-        activeWarehouse={warehouse}
+        activeWarehouse="TCS"
         onAddBooking={() => undefined}
         onOpenSheetImport={() => undefined}
         onNavigateCustomers={() => undefined}
@@ -61,7 +56,7 @@ function renderHeader(opts: {
 
 describe("OpsMobileStickyHeader chrome", () => {
   it("identity + lọc; DayPulse + chip kho; Booking không ở header; công cụ overflow", () => {
-    const html = renderHeader({ portal: "tcs" });
+    const html = renderHeader();
     expect(html).toContain("ops-mobile-sticky-header");
     expect(html).toContain("ops-mobile-identity-row");
     expect(html).toContain("ops-mobile-filter-row");
@@ -72,37 +67,26 @@ describe("OpsMobileStickyHeader chrome", () => {
     expect(html).toContain("23-AUG-2026");
     expect(html).toContain("Live");
     expect(html).toContain("OPS");
-    expect(html).toContain("Công cụ");
-    expect(html).not.toContain("Tải Ext");
-    expect(html).toContain("ops-cargo-report-toolbar");
-    expect(html).toContain("Vantage");
+    expect(html).toContain("Báo cáo &amp; Công cụ");
     expect(html).not.toContain("+ Booking");
     expect(html).not.toContain("ops-mobile-sync-bar");
     expect(html).not.toContain("Chọn kho</span>");
     expect(html).not.toContain("bg-emerald-600");
+    expect(html).not.toContain("Vantage");
+    expect(html).not.toContain("ops-mobile-portal-slot");
   });
 
   it("vùng chạm sticky ≥44px trên overflow / chip kho / ngày / ST", () => {
-    const html = renderHeader({});
+    const html = renderHeader();
     expect(html).toContain("min-h-11");
     expect(html).toContain("Ngày trước");
     expect(html).toContain("Ngày sau");
     expect(html).toContain("warehouse-chips");
     expect(html).toContain("Lọc trạng thái");
-    expect(html).toContain("ops-cargo-report-toolbar");
-  });
-
-  it("không còn portal TCS / eCargo / Đăng Nhập TCS", () => {
-    const html = renderHeader({ portal: "tcs", selected: true });
-    expect(html).not.toContain("ops-mobile-portal-slot");
-    expect(html).not.toContain("bar-tcs");
-    expect(html).not.toContain("bar-scsc");
-    expect(html).not.toContain("Đăng Nhập TCS");
-    expect(html).not.toContain("Tải Ext");
   });
 
   it("ngày phiên overlay, không lộ locale input date", () => {
-    const html = renderHeader({});
+    const html = renderHeader();
     expect(html).toContain('type="date"');
     expect(html).toContain("opacity-0");
     expect(html).toContain("23-AUG-2026");

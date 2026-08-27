@@ -5,9 +5,8 @@ import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipme
 import { formatSyncedPhrase } from "../utils/dbSyncedAt";
 import { Button, SyncStatusPill, Wordmark } from "../ui";
 import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
-import { OpsCargoReportToolbar } from "./OpsCargoReportToolbar";
+import { buildOpsCargoReportItems } from "./opsCargoReportItems";
 import { statusLabel, statusLabelCompact } from "./statusStyles";
-import { EsidSettingsMenu } from "./EsidSettingsMenu";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { SmartSearchBar } from "./SmartSearchBar";
 import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
@@ -62,8 +61,8 @@ interface Props {
 }
 
 /**
- * Chrome mobile Ops: identity + DayPulse/chip kho + ảnh báo cáo + lọc.
- * + Booking là FAB ngoài header. Công cụ / ESID trong ⋯.
+ * Chrome mobile Ops: identity + DayPulse/chip kho + lọc.
+ * + Booking là FAB ngoài header. Báo cáo & Công cụ trong một overflow.
  */
 export function OpsMobileStickyHeader({
   selectedYmd,
@@ -126,6 +125,24 @@ export function OpsMobileStickyHeader({
     const pending = pendingOfflineCount > 0 ? `${pendingOfflineCount} chờ gửi` : "";
     return [phrase, pending].filter(Boolean).join(" · ");
   }, [lotSyncedAt, pendingOfflineCount]);
+
+  const cargoReportItems = useMemo(
+    () =>
+      onCopyCargoDayReport
+        ? buildOpsCargoReportItems({
+            viewRows,
+            copying: cargoReportCopying,
+            onCopy: onCopyCargoDayReport,
+          }).map((item) => ({
+            ...item,
+            id: `report-${item.id}`,
+            description: item.description
+              ? `Báo cáo · ${item.description}`
+              : "Báo cáo ngày",
+          }))
+        : [],
+    [cargoReportCopying, onCopyCargoDayReport, viewRows],
+  );
 
   const toolItems = useMemo((): OverflowMenuItem[] => {
     const list: OverflowMenuItem[] = [
@@ -193,7 +210,10 @@ export function OpsMobileStickyHeader({
     showDimScsc,
   ]);
 
-  const overflowItems = toolItems;
+  const overflowItems = useMemo(
+    () => [...cargoReportItems, ...toolItems],
+    [cargoReportItems, toolItems],
+  );
 
   const syncCta =
     !live && !syncRefreshing && onSyncRefresh
@@ -243,12 +263,11 @@ export function OpsMobileStickyHeader({
           />
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 overflow-visible" data-testid="ops-mobile-overflow">
-          <EsidSettingsMenu compact />
+        <div className="shrink-0 overflow-visible" data-testid="ops-mobile-overflow">
           <OverflowMenu
             compact
             align="right"
-            label="Công cụ"
+            label="Báo cáo & Công cụ"
             items={overflowItems}
           />
         </div>
@@ -263,15 +282,6 @@ export function OpsMobileStickyHeader({
         highlightWarehouses={searchHighlightWarehouses}
         filtersActive={filtersActive}
       />
-
-      {onCopyCargoDayReport ? (
-        <OpsCargoReportToolbar
-          variant="mobile"
-          viewRows={viewRows}
-          copying={cargoReportCopying}
-          onCopy={onCopyCargoDayReport}
-        />
-      ) : null}
 
       <div
         data-testid="ops-mobile-filter-row"

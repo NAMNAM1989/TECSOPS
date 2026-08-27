@@ -2,6 +2,13 @@ import { formatLocalSessionDate } from "./sessionDate";
 
 const MONTHS3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
 
+/** "05APR" + session YYYY-MM-DD → YYYY-MM-DD */
+export function flightDateToYmd(flightDate: string, sessionDate: string): string {
+  const year = Number((sessionDate || "").slice(0, 4));
+  if (!year || !flightDate.trim()) return "";
+  return parseFlightDateDisplayToYmd(flightDate, year);
+}
+
 /** "05APR" + năm → YYYY-MM-DD cho input type=date */
 export function parseFlightDateDisplayToYmd(flightDateStr: string, year: number): string {
   const m = /^(\d{1,2})([A-Za-z]{3})$/.exec(flightDateStr.trim().replace(/\s/g, ""));

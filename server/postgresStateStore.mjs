@@ -1,10 +1,6 @@
 import pg from "pg";
 import { normalizeAirlineLabelOverridesLoose } from "./airlineLabelOverridesNormalize.mjs";
 import { normalizePrinterProfilesCatalogLoose } from "./printerProfilesNormalize.mjs";
-import {
-  normalizeEsidAgentStoreLoose,
-  normalizeEsidRegistrantStoreLoose,
-} from "./esidProfilesNormalize.mjs";
 import { postgresSslOption } from "./postgresSsl.mjs";
 import {
   ensureAirlineCatalogSchema,
@@ -56,8 +52,6 @@ function stripLegacyStateKeys(state) {
   delete next.globalAgents;
   delete next.scscWeighPrintSettings;
   delete next.ecargoKhoScsc;
-  delete next.ecargoScscStore;
-  delete next.ecargoVctResultsStore;
   delete next.invoiceCatalog;
   return next;
 }
@@ -544,12 +538,6 @@ async function loadRelationalSnapshot(client, key) {
   const printerProfiles = normalizePrinterProfilesCatalogLoose(
     blob && typeof blob === "object" ? blob.printerProfiles : undefined
   );
-  const esidRegistrantStore = normalizeEsidRegistrantStoreLoose(
-    blob && typeof blob === "object" ? blob.esidRegistrantStore : undefined
-  );
-  const esidAgentStore = normalizeEsidAgentStoreLoose(
-    blob && typeof blob === "object" ? blob.esidAgentStore : undefined
-  );
   const consigneeByCustomer = new Map();
   for (const r of consigneeRes.rows) {
     const cid = str(r.customer_id).trim();
@@ -602,8 +590,6 @@ async function loadRelationalSnapshot(client, key) {
     }),
     airlineLabelOverrides,
     printerProfiles,
-    esidRegistrantStore,
-    esidAgentStore,
   };
 }
 

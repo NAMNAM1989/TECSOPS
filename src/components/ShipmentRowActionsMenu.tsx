@@ -30,14 +30,6 @@ const CSD_AIRLINE: Record<"FD" | "TH", string> = {
   TH: "Thai Airways",
 };
 
-function lightweightCsdCarrier(row: Pick<Shipment, "flight" | "awb">): "FD" | "TH" | null {
-  if (awbDigitsKey(row.awb).length !== 11) return null;
-  const flight = String(row.flight || "").trim().toUpperCase().replace(/\s+/g, "");
-  if (flight.startsWith("FD")) return "FD";
-  if (flight.startsWith("TH")) return "TH";
-  return null;
-}
-
 type Props = {
   row: Shipment;
   customerDirectory: readonly CustomerDirectoryEntry[];
@@ -45,9 +37,18 @@ type Props = {
   onDelete: (id: string) => void;
   onUpdate?: (id: string, patch: Partial<Shipment>) => void;
   compact?: boolean;
+  isMobile?: boolean;
 };
 
 const iconCls = "h-3.5 w-3.5";
+
+function lightweightCsdCarrier(row: Pick<Shipment, "flight" | "awb">): "FD" | "TH" | null {
+  if (awbDigitsKey(row.awb).length !== 11) return null;
+  const flight = String(row.flight || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (flight.startsWith("FD")) return "FD";
+  if (flight.startsWith("TH")) return "TH";
+  return null;
+}
 
 function ActionIconBtn({
   label,
@@ -167,9 +168,9 @@ export function ShipmentRowActionsMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
-  /** Form QF/ED/49 — family TCS (TCS / TECS-TCS), cùng chỗ LIST DIM. */
   const showTcsDimPdf = isTcsWarehouse(row.warehouse) && (row.dimLines?.length ?? 0) > 0;
   const csdCarrier = lightweightCsdCarrier(row);
   const showCsd = csdCarrier != null;
@@ -177,11 +178,7 @@ export function ShipmentRowActionsMenu({
   const csdAirline = csdCarrier ? CSD_AIRLINE[csdCarrier] : "";
   const [csdOpen, setCsdOpen] = useState(false);
   const menuExtras =
-    (showDim ? 1 : 0) +
-    (showTcsDim ? 2 : 0) +
-    (showTcsDimPdf ? 1 : 0) +
-    (showCsd ? 1 : 0) +
-    1;
+    (showDim ? 1 : 0) + (showTcsDim ? 2 : 0) + (showTcsDimPdf ? 1 : 0) + (showCsd ? 1 : 0) + 1;
 
   const confirmDelete = () => {
     if (confirm(`Xóa lô AWB ${row.awb || "(chưa có AWB)"}?`)) onDelete(row.id);
@@ -311,11 +308,7 @@ export function ShipmentRowActionsMenu({
   return (
     <div
       ref={wrapRef}
-      className={
-        compact
-          ? "inline-flex shrink-0 items-center"
-          : OPS.actionToolbar
-      }
+      className={compact ? "inline-flex shrink-0 items-center" : OPS.actionToolbar}
     >
       {!compact ? (
         <>

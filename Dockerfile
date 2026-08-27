@@ -1,4 +1,5 @@
 # TECSOPS — Node Ops runtime (Express + static + /api + socket.io).
+#
 # Railway: builder=DOCKERFILE. Rebuild: merge main → Railway redeploy image này.
 
 FROM node:20-bookworm-slim AS builder

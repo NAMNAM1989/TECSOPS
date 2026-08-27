@@ -18,8 +18,6 @@ import {
   loadAirlineLabelOverridesFromStorage,
   saveAirlineLabelOverridesToStorage,
 } from "../utils/airlineLabelOverridesStorage";
-import { hydrateEsidProfilesFromAppState } from "../utils/esidProfilesSync";
-
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
 export type StateSyncScope = {
@@ -217,7 +215,6 @@ export function useShipmentSync(
     if (force || picked === next) {
       saveRows(picked.rows);
       saveCustomerDirectoryToStorage(picked.customers);
-      hydrateEsidProfilesFromAppState(picked);
       if (picked.airlineLabelOverrides) {
         saveAirlineLabelOverridesToStorage(picked.airlineLabelOverrides);
       }
@@ -294,7 +291,6 @@ export function useShipmentSync(
       setState(live);
       saveRows(live.rows);
       saveCustomerDirectoryToStorage(live.customers);
-      hydrateEsidProfilesFromAppState(live);
       if (live.airlineLabelOverrides) {
         saveAirlineLabelOverridesToStorage(live.airlineLabelOverrides);
       }
@@ -419,14 +415,6 @@ export function useShipmentSync(
           }
           if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
             saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
-          }
-          if (
-            mutation.action === "SET_ESID_REGISTRANT_STORE" ||
-            mutation.action === "SET_ESID_AGENT_STORE" ||
-            next.esidRegistrantStore ||
-            next.esidAgentStore
-          ) {
-            hydrateEsidProfilesFromAppState(next);
           }
         }
         return applied;

@@ -33,6 +33,7 @@ import { formatAwb } from "../utils/awbFormat";
 import {
   formatShipmentCneeReadonlySummary,
 } from "../utils/shipmentCneeCopyBlock";
+
 type MobileFlightMeta = {
   flight: string;
   flightDate: string;
@@ -173,6 +174,7 @@ const MobileShipmentCard = memo(
               />
               <ShipmentRowActionsMenu
                 compact
+                isMobile
                 row={row}
                 customerDirectory={customerDirectory}
                 onPrint={onPrint}

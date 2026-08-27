@@ -8,7 +8,6 @@ import {
   Wordmark,
 } from "../ui";
 import type { SyncStatus } from "../hooks/useShipmentSync";
-import { EsidSettingsMenu } from "./EsidSettingsMenu";
 import { NewBookingButton } from "./NewBookingButton";
 import { OpsCargoReportToolbar } from "./OpsCargoReportToolbar";
 import { OpsDatePicker } from "./OpsDatePicker";
@@ -68,7 +67,7 @@ type Props = {
   onClearFilters: () => void;
 };
 
-/** Chrome desktop Ops: lệnh + Ảnh báo cáo + DayPulse/kho + lọc. Booking/Search ngoài menu. */
+/** Chrome desktop Ops: lệnh + DayPulse/kho + lọc. Booking/Search ngoài menu. */
 export function OpsDesktopCommandBar({
   selectedYmd,
   onDateChange,
@@ -171,7 +170,6 @@ export function OpsDesktopCommandBar({
               Thống kê
             </Button>
           ) : null}
-          <EsidSettingsMenu compact />
           <OpsToolsMenu {...toolsProps} />
         </div>
       </div>

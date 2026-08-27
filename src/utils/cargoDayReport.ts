@@ -15,7 +15,7 @@ import {
   normalizeCustomerSyncCode,
 } from "./customerCodeOps";
 import { normalizeAgentCode } from "./customerProfileInputFormat";
-import { flightDateToYmd } from "./esidDeclareFields";
+import { flightDateToYmd } from "./bookingDateParse";
 import { filterShipmentsBySessionYmd } from "./filterShipmentsBySessionYmd";
 import { formatKgTotal } from "./formatKgTotal";
 import { partitionShipmentsByWarehouse } from "./partitionShipmentsByWarehouse";

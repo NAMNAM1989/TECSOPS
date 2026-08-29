@@ -23,6 +23,8 @@ import {
 import { createAppAuth } from "./appAuth.mjs";
 import {
   emitScopedSync,
+  mutationsTouchCustomers,
+  mutationTouchesCustomers,
   parseStateScopeFromHeaders,
   parseStateScopeFromQuery,
   projectAppState,
@@ -101,7 +103,13 @@ app.get("/api/health", async (_req, res) => {
 
 app.get("/api/state", appAuth.requireAuth, async (req, res) => {
   try {
-    const full = await loadState();
+    const scope = resolveRequestStateScope(req);
+    const full =
+      scope.full
+        ? await loadState()
+        : await loadState({
+            sessionDate: scope.sessionDate || undefined,
+          });
     res.json(await projectStateForClient(full, req));
   } catch (e) {
     console.error("[api/state]", e);
@@ -150,7 +158,9 @@ app.post("/api/mutation", appAuth.requireAuth, mutationRateLimit, async (req, re
     }
     const next = await runMutation(body);
     const forClient = await attachDbSyncedAt(next);
-    await emitScopedSync(io, forClient);
+    await emitScopedSync(io, forClient, {
+      omitCustomers: !mutationTouchesCustomers(body),
+    });
     res.json(projectAppState(forClient, resolveRequestStateScope(req)));
   } catch (e) {
     console.error("[api/mutation]", e);
@@ -179,7 +189,9 @@ app.post("/api/mutations", appAuth.requireAuth, mutationRateLimit, async (req, r
     }
     const next = await runBatchMutations(list);
     const forClient = await attachDbSyncedAt(next);
-    await emitScopedSync(io, forClient);
+    await emitScopedSync(io, forClient, {
+      omitCustomers: !mutationsTouchCustomers(list),
+    });
     res.json(projectAppState(forClient, resolveRequestStateScope(req)));
   } catch (e) {
     console.error("[api/mutations]", e);

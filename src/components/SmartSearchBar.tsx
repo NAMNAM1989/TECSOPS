@@ -187,14 +187,17 @@ export function SmartSearchBar({
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [draftValue, setDraftValue] = useState(value);
+  const [matchQuery, setMatchQuery] = useState(value.trim());
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setDraftValue(value);
+    setMatchQuery(value.trim());
   }, [value]);
 
   const emitChange = (next: string) => {
     onChange(next);
+    setMatchQuery(next.trim());
   };
 
   const queueFilterChange = (next: string) => {
@@ -225,8 +228,8 @@ export function SmartSearchBar({
   );
 
   const suggestions = useMemo(
-    () => buildShipmentSearchMatches(searchableRows, trimmed, searchContext, 8),
-    [searchableRows, trimmed, searchContext],
+    () => buildShipmentSearchMatches(searchableRows, matchQuery, searchContext, 8),
+    [searchableRows, matchQuery, searchContext],
   );
 
   const warehouseCounts = useMemo(

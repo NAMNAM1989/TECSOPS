@@ -6,7 +6,8 @@
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function normalizeSessionDateParam(raw) {
-  const s = String(raw ?? "").trim();
+  const s = String(raw ?? "")
+    .trim();
   return YMD_RE.test(s) ? s : null;
 }
 
@@ -34,31 +35,60 @@ export function parseStateScopeFromHeaders(headers = {}) {
 /**
  * @param {object} state
  * @param {{ full?: boolean, sessionDate?: string | null }} scope
+ * @param {{ omitCustomers?: boolean }} options
  */
-export function projectAppState(state, scope = {}) {
+export function projectAppState(state, scope = {}, options = {}) {
   if (!state || typeof state !== "object") return state;
+  const omitCustomers = Boolean(options.omitCustomers);
+
   if (scope.full || !scope.sessionDate) {
-    return {
+    const projected = {
       ...state,
       stateScope: scope.full ? "full" : "all",
     };
+    if (omitCustomers && !scope.full) {
+      const { customers: _c, ...rest } = projected;
+      return { ...rest, customersOmitted: true };
+    }
+    return projected;
   }
   const key = scope.sessionDate;
   const rows = Array.isArray(state.rows)
     ? state.rows.filter((r) => String(r?.sessionDate || "").trim() === key)
     : [];
-  return {
+  const projected = {
     ...state,
     rows,
     stateScope: key,
   };
+  if (omitCustomers) {
+    const { customers: _c, ...rest } = projected;
+    return { ...rest, customersOmitted: true };
+  }
+  return projected;
 }
 
 /** Emit sync đã project theo scope từng socket. */
-export async function emitScopedSync(io, state) {
+export async function emitScopedSync(io, state, options = {}) {
   const sockets = await io.fetchSockets();
+  const omitCustomersDefault = Boolean(options.omitCustomers);
   for (const socket of sockets) {
     const scope = socket.data?.stateScope || { full: false, sessionDate: null };
-    socket.emit("sync", projectAppState(state, scope));
+    const omitCustomers =
+      omitCustomersDefault && !scope.full && Boolean(scope.sessionDate);
+    socket.emit(
+      "sync",
+      projectAppState(state, scope, { omitCustomers })
+    );
   }
+}
+
+export function mutationTouchesCustomers(mutation) {
+  const action = String(mutation?.action ?? "").trim();
+  return action === "SET_CUSTOMERS" || action === "RESET_TRIAL_DATA";
+}
+
+export function mutationsTouchCustomers(mutations) {
+  if (!Array.isArray(mutations)) return false;
+  return mutations.some((m) => mutationTouchesCustomers(m));
 }

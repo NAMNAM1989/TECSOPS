@@ -7,10 +7,6 @@ import {
   emptyAirlineLabelOverrides,
   normalizeAirlineLabelOverridesLoose,
 } from "./airlineLabelOverridesNormalize.mjs";
-import {
-  emptyPrinterProfilesCatalog,
-  normalizePrinterProfilesCatalogLoose,
-} from "./printerProfilesNormalize.mjs";
 import { formatAwb } from "../shared/awbFormat.mjs";
 import { applySessionIdOrder } from "./sessionOrder.mjs";
 
@@ -39,7 +35,6 @@ function emptyInitialState() {
     rows: [],
     customers: [],
     airlineLabelOverrides: emptyAirlineLabelOverrides(),
-    printerProfiles: emptyPrinterProfilesCatalog(),
   };
 }
 
@@ -155,7 +150,6 @@ function finishState(state, rows, extras = {}) {
     customers: extras.customers ?? state.customers ?? [],
     airlineLabelOverrides:
       extras.airlineLabelOverrides ?? normalizeAirlineLabelOverridesLoose(state.airlineLabelOverrides),
-    printerProfiles: extras.printerProfiles ?? normalizePrinterProfilesCatalogLoose(state.printerProfiles),
   };
 }
 
@@ -176,7 +170,6 @@ function normalizeState(raw) {
     rows: renumberSttForAll(merged),
     customers,
     airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(raw.airlineLabelOverrides),
-    printerProfiles: normalizePrinterProfilesCatalogLoose(raw.printerProfiles),
   };
 }
 
@@ -187,11 +180,11 @@ function normalizeOrThrow(raw, source) {
 }
 
 /** @returns {Promise<object>} */
-export async function loadState() {
+export async function loadState(scope = {}) {
   if (!postgresStateStore) {
     throw new Error("[state] Postgres chưa cấu hình (DATABASE_URL).");
   }
-  const raw = await postgresStateStore.loadRawState();
+  const raw = await postgresStateStore.loadRawState(scope);
   if (raw) return normalizeOrThrow(raw, `Postgres (${postgresStateStore.key})`);
   const fresh = emptyInitialState();
   await postgresStateStore.saveState(fresh);
@@ -246,11 +239,6 @@ export function applyMutation(state, mutation) {
         airlineLabelOverrides: normalizeAirlineLabelOverridesLoose(mutation?.overrides),
       });
     }
-    case "SET_PRINTER_PROFILES": {
-      return finishState(state, rows, {
-        printerProfiles: normalizePrinterProfilesCatalogLoose(mutation?.catalog),
-      });
-    }
     case "UPDATE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
       if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
@@ -300,7 +288,7 @@ export function applyMutation(state, mutation) {
     }
     default:
       throw new Error(
-        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: RESET_TRIAL_DATA, SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, SET_PRINTER_PROFILES, UPDATE, DELETE, ADD, REORDER_SESSION.`
+        `Unknown action: ${action || "(thiếu)"}. Hỗ trợ: RESET_TRIAL_DATA, SET_CUSTOMERS, SET_AIRLINE_LABEL_OVERRIDES, UPDATE, DELETE, ADD, REORDER_SESSION.`
       );
   }
 

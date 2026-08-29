@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import type { Shipment } from "../types/shipment";
-import { saveRows, scheduleSaveRows, flushScheduledSaveRows } from "../utils/shipmentStorage";
+import { saveRows, scheduleSaveRows, flushScheduledSaveRows, loadSessionRows } from "../utils/shipmentStorage";
 import { credFetch } from "../apiFetch";
-import { parseAppState } from "../utils/appStateParse";
+import { parseAppState, mergeAppStateFromWire } from "../utils/appStateParse";
 import {
   loadCustomerDirectoryFromStorage,
   saveCustomerDirectoryToStorage,
@@ -56,10 +56,16 @@ function pickNewerState(prev: AppState | null, next: AppState): AppState {
   return !prev || next.version >= prev.version ? next : prev;
 }
 
-function offlineBootstrapState(rows: Shipment[]): AppState {
+function offlineBootstrapState(rows: Shipment[], sessionDate?: string): AppState {
+  const bootRows =
+    rows.length > 0
+      ? rows
+      : sessionDate && /^\d{4}-\d{2}-\d{2}$/.test(sessionDate)
+        ? loadSessionRows(sessionDate)
+        : [];
   return {
     version: 0,
-    rows,
+    rows: bootRows,
     customers: loadCustomerDirectoryFromStorage() ?? [],
     airlineLabelOverrides: loadAirlineLabelOverridesFromStorage() ?? undefined,
   };
@@ -210,17 +216,27 @@ export function useShipmentSync(
     setPendingOfflineCount(offlineQueueRef.current.length);
   }, []);
 
-  const persistIfApplied = useCallback((prev: AppState | null, next: AppState, force: boolean) => {
-    const picked = force ? next : pickNewerState(prev, next);
-    if (force || picked === next) {
-      scheduleSaveRows(picked.rows);
-      saveCustomerDirectoryToStorage(picked.customers);
-      if (picked.airlineLabelOverrides) {
-        saveAirlineLabelOverridesToStorage(picked.airlineLabelOverrides);
+  const persistIfApplied = useCallback(
+    (
+      prev: AppState | null,
+      next: AppState,
+      force: boolean,
+      options?: { skipCustomerPersist?: boolean }
+    ) => {
+      const picked = force ? next : pickNewerState(prev, next);
+      if (force || picked === next) {
+        scheduleSaveRows(picked.rows);
+        if (!options?.skipCustomerPersist) {
+          saveCustomerDirectoryToStorage(picked.customers);
+        }
+        if (picked.airlineLabelOverrides) {
+          saveAirlineLabelOverridesToStorage(picked.airlineLabelOverrides);
+        }
       }
-    }
-    return picked;
-  }, []);
+      return picked;
+    },
+    []
+  );
 
   const connectSocket = useCallback((version: number, scope: StateSyncScope) => {
     if (cancelledRef.current) return;
@@ -239,16 +255,23 @@ export function useShipmentSync(
     });
     socketRef.current = socket;
 
-    const mergeIfNewer = (next: AppState) => {
+    const mergeIfNewer = (payload: unknown, skipCustomerPersist = false) => {
       if (cancelledRef.current) return;
-      setState((prev) => persistIfApplied(prev, next, false));
+      setState((prev) => {
+        const next = mergeAppStateFromWire(prev, payload);
+        if (!next) return prev;
+        return persistIfApplied(prev, next, false, { skipCustomerPersist });
+      });
       markSynced();
     };
 
     const onSync = (payload: unknown) => {
       if (cancelledRef.current) return;
-      const next = parseAppState(payload);
-      if (next) mergeIfNewer(next);
+      const customersOmitted =
+        payload != null &&
+        typeof payload === "object" &&
+        (payload as Record<string, unknown>).customersOmitted === true;
+      mergeIfNewer(payload, customersOmitted);
     };
 
     socket.on("connect", () => {
@@ -315,7 +338,7 @@ export function useShipmentSync(
         debugWarn("sync:/api/state", e);
         apiOkRef.current = false;
         setSocketConnected(false);
-        setState(offlineBootstrapState(fallbackRef.current.rows));
+        setState(offlineBootstrapState(fallbackRef.current.rows, syncScopeRef.current.sessionDate));
         setStatus("offline");
       }
     })();
@@ -385,7 +408,7 @@ export function useShipmentSync(
       offlineQueueRef.current.push(queued);
       syncPendingCount();
       scheduleSaveRows(next.rows);
-      if (mutation.action === "SET_CUSTOMERS" || mutation.action === "RESET_TRIAL_DATA") {
+      if (mutation.action === "SET_CUSTOMERS") {
         saveCustomerDirectoryToStorage(next.customers);
       }
       if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
@@ -418,7 +441,7 @@ export function useShipmentSync(
         applied = pickNewerState(prev, next);
         if (applied === next) {
           scheduleSaveRows(next.rows);
-          if (mutation.action === "SET_CUSTOMERS" || mutation.action === "RESET_TRIAL_DATA") {
+          if (mutation.action === "SET_CUSTOMERS") {
             saveCustomerDirectoryToStorage(next.customers);
           }
           if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {

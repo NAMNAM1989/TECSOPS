@@ -2,7 +2,7 @@ import type { DimPieceLine, Shipment, ShipmentStatus, Warehouse } from "../types
 import { WAREHOUSE_ORDER } from "../constants/warehouses";
 import { formatLocalSessionDate, startOfLocalDay } from "./sessionDate";
 import { SHIPMENT_STATUS_ORDER, migrateShipmentStatus } from "./shipmentWorkflowStatus";
-import { normalizeDimLineEdges } from "./dimBulkFill";
+import { normalizeDimLineEdges } from "./dimLineNormalize";
 import { dimDivisorFromFlight, totalDimKgFromLines } from "./volumetricDim";
 
 const ROWS_KEY = "tecsops-shipments-v1";
@@ -121,6 +121,93 @@ function legacySessionFallback(): string {
   return formatLocalSessionDate(startOfLocalDay(new Date()));
 }
 
+function shipmentFromStorageItem(
+  item: Omit<Shipment, "sessionDate"> & { sessionDate?: string },
+  sd: string
+): Shipment {
+  const dimDivisor =
+    item.dimDivisor === 5000 || item.dimDivisor === 6000 ? item.dimDivisor : null;
+  const dimLines = normalizeDimLines(item.dimLines);
+  let dimWeightKg =
+    item.dimWeightKg === null || typeof item.dimWeightKg === "number" ? item.dimWeightKg : null;
+  if ((dimWeightKg == null || !Number.isFinite(dimWeightKg)) && dimLines?.length) {
+    const flight = typeof item.flight === "string" ? item.flight : "";
+    const awb = typeof item.awb === "string" ? item.awb : "";
+    const div =
+      dimDivisor === 5000 || dimDivisor === 6000 ? dimDivisor : dimDivisorFromFlight(flight);
+    dimWeightKg = totalDimKgFromLines(dimLines, div, { flight, awb });
+  }
+  const base: Shipment = {
+    ...(item as Shipment),
+    sessionDate: sd,
+    note: typeof item.note === "string" ? item.note : "",
+    customerCode: typeof item.customerCode === "string" ? item.customerCode : "",
+    customerId: typeof item.customerId === "string" ? item.customerId : "",
+    globalAgentId:
+      typeof item.globalAgentId === "string"
+        ? item.globalAgentId
+        : typeof item.customerAgentId === "string"
+          ? item.customerAgentId
+          : "",
+    customerGoodsId: typeof item.customerGoodsId === "string" ? item.customerGoodsId : "",
+    goodsDescriptionPrint:
+      typeof item.goodsDescriptionPrint === "string" ? item.goodsDescriptionPrint : "",
+    otherRequirementsPrint:
+      typeof item.otherRequirementsPrint === "string" ? item.otherRequirementsPrint : "",
+    customerShipperId: typeof item.customerShipperId === "string" ? item.customerShipperId : "",
+    customerConsigneeId:
+      typeof item.customerConsigneeId === "string" ? item.customerConsigneeId : "",
+    shipperNamePrint: typeof item.shipperNamePrint === "string" ? item.shipperNamePrint : "",
+    shipperAddressPrint: typeof item.shipperAddressPrint === "string" ? item.shipperAddressPrint : "",
+    shipperPhonePrint: typeof item.shipperPhonePrint === "string" ? item.shipperPhonePrint : "",
+    shipperEmailPrint: typeof item.shipperEmailPrint === "string" ? item.shipperEmailPrint : "",
+    taxCodePrint: typeof item.taxCodePrint === "string" ? item.taxCodePrint : "",
+    agentNamePrint: typeof item.agentNamePrint === "string" ? item.agentNamePrint : "",
+    agentAddressPrint: typeof item.agentAddressPrint === "string" ? item.agentAddressPrint : "",
+    agentPhonePrint: typeof item.agentPhonePrint === "string" ? item.agentPhonePrint : "",
+    agentEmailPrint: typeof item.agentEmailPrint === "string" ? item.agentEmailPrint : "",
+    agentTaxCodePrint: typeof item.agentTaxCodePrint === "string" ? item.agentTaxCodePrint : "",
+    consigneeNamePrint: typeof item.consigneeNamePrint === "string" ? item.consigneeNamePrint : "",
+    consigneeAddressPrint: typeof item.consigneeAddressPrint === "string" ? item.consigneeAddressPrint : "",
+    consigneePhonePrint: typeof item.consigneePhonePrint === "string" ? item.consigneePhonePrint : "",
+    consigneeEmailPrint: typeof item.consigneeEmailPrint === "string" ? item.consigneeEmailPrint : "",
+    notifyNamePrint: typeof item.notifyNamePrint === "string" ? item.notifyNamePrint : "",
+    dimWeightKg,
+    dimLines,
+    dimDivisor,
+    status: item.status as ShipmentStatus,
+  };
+  return {
+    ...base,
+    status: migrateShipmentStatus(base),
+  };
+}
+
+/** Đọc cache local — chỉ lô một ngày phiên (offline). */
+export function loadSessionRows(sessionDate: string): Shipment[] {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) return [];
+  try {
+    const raw = localStorage.getItem(ROWS_KEY);
+    if (raw === null) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const fb = legacySessionFallback();
+    const rows: Shipment[] = [];
+    for (const item of parsed) {
+      if (!isShipmentShape(item)) continue;
+      const sd =
+        typeof item.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.sessionDate)
+          ? item.sessionDate
+          : fb;
+      if (sd !== sessionDate) continue;
+      rows.push(shipmentFromStorageItem(item, sd));
+    }
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
 /** null = chưa từng lưu → dùng dữ liệu mặc định app */
 export function loadRows(): Shipment[] | null {
   try {
@@ -136,63 +223,7 @@ export function loadRows(): Shipment[] | null {
         typeof item.sessionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.sessionDate)
           ? item.sessionDate
           : fb;
-      const dimDivisor =
-        item.dimDivisor === 5000 || item.dimDivisor === 6000 ? item.dimDivisor : null;
-      const dimLines = normalizeDimLines(item.dimLines);
-      let dimWeightKg =
-        item.dimWeightKg === null || typeof item.dimWeightKg === "number" ? item.dimWeightKg : null;
-      if ((dimWeightKg == null || !Number.isFinite(dimWeightKg)) && dimLines?.length) {
-        const flight = typeof item.flight === "string" ? item.flight : "";
-        const awb = typeof item.awb === "string" ? item.awb : "";
-        const div =
-          dimDivisor === 5000 || dimDivisor === 6000 ? dimDivisor : dimDivisorFromFlight(flight);
-        dimWeightKg = totalDimKgFromLines(dimLines, div, { flight, awb });
-      }
-      const base: Shipment = {
-        ...(item as Shipment),
-        sessionDate: sd,
-        note: typeof item.note === "string" ? item.note : "",
-        customerCode: typeof item.customerCode === "string" ? item.customerCode : "",
-        customerId: typeof item.customerId === "string" ? item.customerId : "",
-        globalAgentId:
-          typeof item.globalAgentId === "string"
-            ? item.globalAgentId
-            : typeof item.customerAgentId === "string"
-              ? item.customerAgentId
-              : "",
-        customerGoodsId: typeof item.customerGoodsId === "string" ? item.customerGoodsId : "",
-        goodsDescriptionPrint:
-          typeof item.goodsDescriptionPrint === "string" ? item.goodsDescriptionPrint : "",
-        otherRequirementsPrint:
-          typeof item.otherRequirementsPrint === "string" ? item.otherRequirementsPrint : "",
-        customerShipperId:
-          typeof item.customerShipperId === "string" ? item.customerShipperId : "",
-        customerConsigneeId:
-          typeof item.customerConsigneeId === "string" ? item.customerConsigneeId : "",
-        shipperNamePrint: typeof item.shipperNamePrint === "string" ? item.shipperNamePrint : "",
-        shipperAddressPrint: typeof item.shipperAddressPrint === "string" ? item.shipperAddressPrint : "",
-        shipperPhonePrint: typeof item.shipperPhonePrint === "string" ? item.shipperPhonePrint : "",
-        shipperEmailPrint: typeof item.shipperEmailPrint === "string" ? item.shipperEmailPrint : "",
-        taxCodePrint: typeof item.taxCodePrint === "string" ? item.taxCodePrint : "",
-        agentNamePrint: typeof item.agentNamePrint === "string" ? item.agentNamePrint : "",
-        agentAddressPrint: typeof item.agentAddressPrint === "string" ? item.agentAddressPrint : "",
-        agentPhonePrint: typeof item.agentPhonePrint === "string" ? item.agentPhonePrint : "",
-        agentEmailPrint: typeof item.agentEmailPrint === "string" ? item.agentEmailPrint : "",
-        agentTaxCodePrint: typeof item.agentTaxCodePrint === "string" ? item.agentTaxCodePrint : "",
-        consigneeNamePrint: typeof item.consigneeNamePrint === "string" ? item.consigneeNamePrint : "",
-        consigneeAddressPrint: typeof item.consigneeAddressPrint === "string" ? item.consigneeAddressPrint : "",
-        consigneePhonePrint: typeof item.consigneePhonePrint === "string" ? item.consigneePhonePrint : "",
-        consigneeEmailPrint: typeof item.consigneeEmailPrint === "string" ? item.consigneeEmailPrint : "",
-        notifyNamePrint: typeof item.notifyNamePrint === "string" ? item.notifyNamePrint : "",
-        dimWeightKg,
-        dimLines,
-        dimDivisor,
-        status: item.status as ShipmentStatus,
-      };
-      rows.push({
-        ...base,
-        status: migrateShipmentStatus(base),
-      });
+      rows.push(shipmentFromStorageItem(item, sd));
     }
     return rows;
   } catch {

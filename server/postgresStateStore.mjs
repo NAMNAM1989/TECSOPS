@@ -1,6 +1,5 @@
 import pg from "pg";
 import { normalizeAirlineLabelOverridesLoose } from "./airlineLabelOverridesNormalize.mjs";
-import { normalizePrinterProfilesCatalogLoose } from "./printerProfilesNormalize.mjs";
 import { postgresSslOption } from "./postgresSsl.mjs";
 import {
   ensureAirlineCatalogSchema,
@@ -57,6 +56,7 @@ function stripLegacyStateKeys(state) {
   delete next.esidRegistrantStore;
   delete next.esidAgentStore;
   delete next.invoiceCatalog;
+  delete next.printerProfiles;
   return next;
 }
 
@@ -496,7 +496,11 @@ function shipmentFromRow(row) {
   };
 }
 
-async function loadRelationalSnapshot(client, key) {
+async function loadRelationalSnapshot(client, key, options = {}) {
+  const sessionDate =
+    options.sessionDate && /^\d{4}-\d{2}-\d{2}$/.test(String(options.sessionDate))
+      ? String(options.sessionDate)
+      : null;
   // `pg` không hỗ trợ chạy nhiều query đồng thời trên cùng một client.
   // Chạy tuần tự để tránh hàng đợi nội bộ/deprecation và giữ đúng transaction hiện tại.
   const includeCustomerSyncedAt = await customersTableHasSyncedAt(client);
@@ -519,9 +523,14 @@ async function loadRelationalSnapshot(client, key) {
   const partyRes = await client.query(
     `SELECT * FROM ${CUSTOMER_PARTIES_TABLE} ORDER BY customer_id ASC, sort_order ASC, id ASC`
   );
-  const shipmentRes = await client.query(
-    `SELECT * FROM ${SHIPMENTS_TABLE} ORDER BY session_date ASC, warehouse ASC, stt ASC, id ASC`
-  );
+  const shipmentRes = sessionDate
+    ? await client.query(
+        `SELECT * FROM ${SHIPMENTS_TABLE} WHERE session_date = $1 ORDER BY warehouse ASC, stt ASC, id ASC`,
+        [sessionDate]
+      )
+    : await client.query(
+        `SELECT * FROM ${SHIPMENTS_TABLE} ORDER BY session_date ASC, warehouse ASC, stt ASC, id ASC`
+      );
   const metaRes = await client.query(`SELECT version FROM ${STATE_META_TABLE} WHERE id = $1`, [key]);
   const jsonRes = await client.query(`SELECT state FROM ${TABLE_NAME} WHERE id = $1`, [key]);
   const blob = jsonRes.rows[0]?.state;
@@ -539,9 +548,6 @@ async function loadRelationalSnapshot(client, key) {
     blob && typeof blob === "object" ? blob.airlineLabelOverrides : undefined;
   await migrateAirlineOverridesFromBlob(client, blobOverrides);
   const airlineLabelOverrides = await loadAirlineDisplayOverrides(client);
-  const printerProfiles = normalizePrinterProfilesCatalogLoose(
-    blob && typeof blob === "object" ? blob.printerProfiles : undefined
-  );
   const consigneeByCustomer = new Map();
   for (const r of consigneeRes.rows) {
     const cid = str(r.customer_id).trim();
@@ -593,7 +599,6 @@ async function loadRelationalSnapshot(client, key) {
       return mergeCustomerBlobProfile(base, blobCustomersById.get(cid));
     }),
     airlineLabelOverrides,
-    printerProfiles,
   };
 }
 
@@ -841,9 +846,9 @@ export function createPostgresStateStore(databaseUrl) {
         return Number(res.rows[0]?.version ?? 0);
       });
     },
-    async loadRawState() {
+    async loadRawState(options = {}) {
       return withClient(async (client) => {
-        const relational = await loadRelationalSnapshot(client, key);
+        const relational = await loadRelationalSnapshot(client, key, options);
         if (relational) return relational;
         const res = await client.query(`SELECT state FROM ${TABLE_NAME} WHERE id = $1`, [key]);
         return res.rows[0]?.state ?? null;

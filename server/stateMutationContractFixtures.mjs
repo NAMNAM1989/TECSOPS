@@ -46,23 +46,15 @@ export function baseContractState() {
       },
     ],
     airlineLabelOverrides: { byAwbPrefix: {}, byFlightPrefix: {} },
-    printerProfiles: { version: 1, profiles: [] },
   };
 }
 
 /** Bỏ trường thay đổi theo thời gian — so sánh contract ổn định. */
 export function normalizeStateForContract(state) {
-  const printerProfiles = state.printerProfiles
-    ? (() => {
-        const { updatedAt: _t, ...rest } = state.printerProfiles;
-        return rest;
-      })()
-    : state.printerProfiles;
   return {
     version: state.version,
     rows: state.rows.map((r) => ({ ...r })),
     customers: state.customers,
     airlineLabelOverrides: state.airlineLabelOverrides,
-    printerProfiles,
   };
 }

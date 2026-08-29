@@ -29,7 +29,7 @@ describe("stateScope", () => {
         { id: "a", sessionDate: "2026-08-12" },
         { id: "b", sessionDate: "2026-08-11" },
       ],
-      customers: [],
+      customers: [{ id: "c1", code: "ABC", name: "Test" }],
     };
     const projected = projectAppState(state, {
       full: false,
@@ -39,5 +39,20 @@ describe("stateScope", () => {
     expect(projected.rows[0].id).toBe("a");
     expect(projected.stateScope).toBe("2026-08-12");
     expect(projectAppState(state, { full: true }).rows).toHaveLength(2);
+  });
+
+  it("projectAppState omitCustomers", () => {
+    const state = {
+      version: 1,
+      rows: [{ id: "a", sessionDate: "2026-08-12" }],
+      customers: [{ id: "c1", code: "ABC", name: "Test" }],
+    };
+    const projected = projectAppState(state, {
+      full: false,
+      sessionDate: "2026-08-12",
+    }, { omitCustomers: true });
+    expect(projected.customersOmitted).toBe(true);
+    expect(projected.customers).toBeUndefined();
+    expect(projected.rows).toHaveLength(1);
   });
 });

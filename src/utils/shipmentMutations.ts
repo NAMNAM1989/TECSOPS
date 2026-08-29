@@ -8,8 +8,6 @@ import { assertCustomerDirectoryValid } from "./customerDirectoryCore";
 import { clampCustomerDirectoryEntry } from "./customerDirectoryProfile";
 import type { AirlineLabelOverrides } from "./airlineLabelOverridesCore";
 import { clampAirlineLabelOverrides, EMPTY_AIRLINE_LABEL_OVERRIDES } from "./airlineLabelOverridesCore";
-import type { PrinterProfilesCatalog } from "../printing/printerProfilesCore";
-import { clampPrinterProfilesCatalog, EMPTY_PRINTER_PROFILES_CATALOG } from "../printing/printerProfilesCore";
 
 export type AppState = {
   version: number;
@@ -18,8 +16,6 @@ export type AppState = {
   customers: CustomerDirectoryEntry[];
   /** Ghi đè tên hãng trên tem (ưu tiên hơn bản mặc định trong code) */
   airlineLabelOverrides?: AirlineLabelOverrides;
-  /** Danh mục profile máy in (dùng chung trên server; active id vẫn lưu local từng máy). */
-  printerProfiles?: PrinterProfilesCatalog;
   /** Overlay namnamlogistics — lots và customers tách nguồn. */
   syncMeta?: {
     source: "namnamlogistics-rest" | "postgres-lots" | "state-rows" | null;
@@ -34,9 +30,7 @@ export type ShipmentMutation =
   | { action: "DELETE"; id: string }
   | { action: "ADD"; shipment: Omit<Shipment, "id" | "stt"> }
   | { action: "SET_CUSTOMERS"; customers: CustomerDirectoryEntry[] }
-  | { action: "RESET_TRIAL_DATA" }
-  | { action: "SET_AIRLINE_LABEL_OVERRIDES"; overrides: AirlineLabelOverrides }
-  | { action: "SET_PRINTER_PROFILES"; catalog: PrinterProfilesCatalog };
+  | { action: "SET_AIRLINE_LABEL_OVERRIDES"; overrides: AirlineLabelOverrides };
 
 function assertAwbUnique(rows: Shipment[], awb: string, exceptId?: string) {
   const d = awbDigitsKey(awb);
@@ -81,10 +75,6 @@ function resolvedAirlineOverrides(s: AppState): AirlineLabelOverrides {
   return clampAirlineLabelOverrides(s.airlineLabelOverrides ?? EMPTY_AIRLINE_LABEL_OVERRIDES);
 }
 
-function resolvedPrinterCatalog(s: AppState): PrinterProfilesCatalog {
-  return clampPrinterProfilesCatalog(s.printerProfiles ?? EMPTY_PRINTER_PROFILES_CATALOG);
-}
-
 function nextState(
   state: AppState,
   rows: Shipment[],
@@ -95,7 +85,6 @@ function nextState(
     rows: renumberSttForAll(rows),
     customers: extras.customers ?? state.customers,
     airlineLabelOverrides: extras.airlineLabelOverrides ?? resolvedAirlineOverrides(state),
-    printerProfiles: extras.printerProfiles ?? resolvedPrinterCatalog(state),
     syncMeta: extras.syncMeta ?? state.syncMeta,
   };
 }
@@ -110,17 +99,9 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
         customers: mutation.customers.map((e) => clampCustomerDirectoryEntry(e)),
       });
     }
-    case "RESET_TRIAL_DATA": {
-      return nextState(state, [], { customers: [] });
-    }
     case "SET_AIRLINE_LABEL_OVERRIDES": {
       return nextState(state, rows, {
         airlineLabelOverrides: clampAirlineLabelOverrides(mutation.overrides),
-      });
-    }
-    case "SET_PRINTER_PROFILES": {
-      return nextState(state, rows, {
-        printerProfiles: clampPrinterProfilesCatalog(mutation.catalog),
       });
     }
     case "UPDATE": {

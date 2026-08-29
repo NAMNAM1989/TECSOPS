@@ -1,9 +1,8 @@
 import type { Shipment } from "../types/shipment";
-import type { AppState } from "./shipmentMutations";
 import { parseCustomerDirectoryLoose } from "./customerDirectoryCore";
 import { clampAirlineLabelOverrides } from "./airlineLabelOverridesCore";
-import { clampPrinterProfilesCatalog } from "../printing/printerProfilesCore";
 import { toSyncedAtIso } from "./dbSyncedAt";
+import type { AppState } from "./shipmentMutations";
 
 function parseSyncMeta(raw: unknown): AppState["syncMeta"] | undefined {
   if (!raw || typeof raw !== "object") return undefined;
@@ -37,13 +36,15 @@ export function parseAppState(raw: unknown): AppState | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   if (typeof o.version !== "number" || !Array.isArray(o.rows)) return null;
-  const customersUnknown = "customers" in o ? o.customers : undefined;
+  const customersOmitted = o.customersOmitted === true;
+  const customersUnknown = customersOmitted
+    ? undefined
+    : "customers" in o
+      ? o.customers
+      : undefined;
   const customers = parseCustomerDirectoryLoose(customersUnknown);
   const airlineLabelOverrides = clampAirlineLabelOverrides(
     "airlineLabelOverrides" in o ? o.airlineLabelOverrides : undefined
-  );
-  const printerProfiles = clampPrinterProfilesCatalog(
-    "printerProfiles" in o ? o.printerProfiles : undefined
   );
 
   return {
@@ -51,7 +52,18 @@ export function parseAppState(raw: unknown): AppState | null {
     rows: (o.rows as Shipment[]).map(mapRowSyncedAt),
     customers,
     airlineLabelOverrides,
-    printerProfiles,
     syncMeta: parseSyncMeta(o.syncMeta),
   };
+}
+
+/** Gộp payload sync khi server bỏ customers (Ops realtime). */
+export function mergeAppStateFromWire(prev: AppState | null, raw: unknown): AppState | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const next = parseAppState(raw);
+  if (!next) return null;
+  if (o.customersOmitted === true && prev) {
+    return { ...next, customers: prev.customers };
+  }
+  return next;
 }

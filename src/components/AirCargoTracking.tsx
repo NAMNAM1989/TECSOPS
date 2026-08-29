@@ -8,11 +8,9 @@ import {
   startOfLocalDay,
 } from "../utils/sessionDate";
 import type { useShipmentSync } from "../hooks/useShipmentSync";
-import { DesktopShipmentTable } from "./DesktopShipmentTable";
-import { MobileShipmentCards, OpsMobileBookingFab } from "./MobileShipmentCards";
-import { MobileShipmentEditSheet, type MobileEditFocus } from "./MobileShipmentEditSheet";
 import { buildCargoDayReport } from "../utils/cargoDayReport";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
+import type { MobileEditFocus } from "./MobileShipmentEditSheet";
 import { fetchAppStateSnapshot } from "../utils/fetchAppStateRows";
 import { resolveOpsLotSyncedAtMs } from "../utils/dbSyncedAt";
 import {
@@ -55,6 +53,18 @@ const GoogleSheetImportModal = lazy(() =>
 );
 const AirlineLabelSettingsModal = lazy(() =>
   import("./AirlineLabelSettingsModal").then((m) => ({ default: m.AirlineLabelSettingsModal }))
+);
+const DesktopShipmentTable = lazy(() =>
+  import("./DesktopShipmentTable").then((m) => ({ default: m.DesktopShipmentTable }))
+);
+const MobileShipmentCards = lazy(() =>
+  import("./MobileShipmentCards").then((m) => ({ default: m.MobileShipmentCards }))
+);
+const OpsMobileBookingFab = lazy(() =>
+  import("./MobileShipmentCards").then((m) => ({ default: m.OpsMobileBookingFab }))
+);
+const MobileShipmentEditSheet = lazy(() =>
+  import("./MobileShipmentEditSheet").then((m) => ({ default: m.MobileShipmentEditSheet }))
 );
 
 type SyncApi = ReturnType<typeof useShipmentSync>;
@@ -614,62 +624,74 @@ export function AirCargoTracking({
 
       {/* Chỉ dựng một cây bảng — trước đây cả hai cùng mount và chỉ ẩn bằng CSS. */}
       {isMobile ? (
-        <MobileShipmentCards
-          rows={filteredViewRows}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onUpdate={onUpdate}
-          onDelete={onDelete}
-          onPrint={requestPrintLabel}
-          customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
-          activeWarehouse={activeWarehouse}
-          searchActive={searchActive}
-          pinnedOpenWarehouses={searchHighlightWarehouses}
-          highlightedShipmentId={highlightedShipmentId}
-          viewSessionYmd={selectedYmd}
-          onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
-          onQuickEdit={(row) => openMobileEdit(row)}
-        />
+        <Suspense fallback={<PageSkeleton variant="ops" />}>
+          <MobileShipmentCards
+            rows={filteredViewRows}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onUpdate={onUpdate}
+            onDelete={onDelete}
+            onPrint={requestPrintLabel}
+            customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
+            activeWarehouse={activeWarehouse}
+            searchActive={searchActive}
+            pinnedOpenWarehouses={searchHighlightWarehouses}
+            highlightedShipmentId={highlightedShipmentId}
+            viewSessionYmd={selectedYmd}
+            onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
+            onQuickEdit={(row) => openMobileEdit(row)}
+          />
+        </Suspense>
       ) : (
-        <DesktopShipmentTable
-          rows={filteredViewRows}
-          allRows={allRows}
-          customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
-          activeWarehouse={activeWarehouse}
-          highlightedShipmentId={highlightedShipmentId}
-          selectedRowId={selectedId}
-          onSelectRow={setSelectedId}
-          onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
-          onUpdate={onUpdate}
-          onUpdateCustomers={onUpdateCustomers}
-          onDelete={onDelete}
-          onPrint={requestPrintLabel}
-          viewSessionYmd={selectedYmd}
-        />
+        <Suspense fallback={<PageSkeleton variant="ops" />}>
+          <DesktopShipmentTable
+            rows={filteredViewRows}
+            allRows={allRows}
+            customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
+            activeWarehouse={activeWarehouse}
+            highlightedShipmentId={highlightedShipmentId}
+            selectedRowId={selectedId}
+            onSelectRow={setSelectedId}
+            onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
+            onUpdate={onUpdate}
+            onUpdateCustomers={onUpdateCustomers}
+            onDelete={onDelete}
+            onPrint={requestPrintLabel}
+            viewSessionYmd={selectedYmd}
+          />
+        </Suspense>
       )}
 
-      <OpsMobileBookingFab
-        activeWarehouse={activeWarehouse}
-        hidden={mobileEditShipment != null}
-        onAdd={() => void addBlankRowForWarehouse(activeWarehouse)}
-      />
+      {isMobile ? (
+        <Suspense fallback={null}>
+          <OpsMobileBookingFab
+            activeWarehouse={activeWarehouse}
+            hidden={mobileEditShipment != null}
+            onAdd={() => void addBlankRowForWarehouse(activeWarehouse)}
+          />
+        </Suspense>
+      ) : null}
 
-      <MobileShipmentEditSheet
-        open={mobileEditShipment != null}
-        shipment={mobileEditShipment}
-        initialTab={mobileEditInitialTab}
-        focusField={mobileEditFocus}
-        sessionDateYmd={selectedYmd}
-        customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
-        onClose={() => {
-          setMobileEditShipment(null);
-          setMobileEditFocus(null);
-        }}
-        onSave={(patch) => {
-          if (mobileEditShipment) onUpdate(mobileEditShipment.id, patch);
-          setMobileEditShipment(null);
-        }}
-      />
+      {isMobile ? (
+        <Suspense fallback={null}>
+          <MobileShipmentEditSheet
+            open={mobileEditShipment != null}
+            shipment={mobileEditShipment}
+            initialTab={mobileEditInitialTab}
+            focusField={mobileEditFocus}
+            sessionDateYmd={selectedYmd}
+            customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
+            onClose={() => {
+              setMobileEditShipment(null);
+              setMobileEditFocus(null);
+            }}
+            onSave={(patch) => {
+              if (mobileEditShipment) onUpdate(mobileEditShipment.id, patch);
+              setMobileEditShipment(null);
+            }}
+          />
+        </Suspense>
+      ) : null}
 
       <Suspense fallback={null}>
         {airlineLabelSettingsOpen ? (

@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { Shipment } from "./types/shipment";
 import type { CustomerDirectoryEntry } from "./types/customerDirectory";
-import { loadRows } from "./utils/shipmentStorage";
 import { useShipmentSync } from "./hooks/useShipmentSync";
 import { useHashRoute } from "./hooks/useHashRoute";
 import type { AirlineLabelOverrides } from "./utils/airlineLabelOverridesCore";
@@ -29,8 +28,8 @@ type PrintJob = { shipment: Shipment; airlineLabelOverrides?: AirlineLabelOverri
 const EMPTY_CUSTOMERS: CustomerDirectoryEntry[] = [];
 
 function AuthenticatedApp() {
-  const fallback = useMemo(() => ({ rows: loadRows() ?? [] }), []);
   const todayYmd = formatLocalSessionDate(new Date());
+  const fallback = useMemo(() => ({ rows: [] as Shipment[] }), []);
   const sync = useShipmentSync(fallback, { sessionDate: todayYmd });
   const { route, navigate } = useHashRoute();
   const isMobile = useIsMobile();

@@ -1,4 +1,4 @@
-/** Wordmark TECS (navy) + OPS (teal) — Operational Signal Round 2. */
+/** Wordmark AirCargo (navy) + _OPS (teal). */
 export function Wordmark({
   className = "",
   size = "md",
@@ -15,9 +15,9 @@ export function Wordmark({
   return (
     <span
       className={`inline-flex font-extrabold text-ui-navy ${cls} ${className}`}
-      aria-label="TECSOPS"
+      aria-label="AirCargo_OPS"
     >
-      TECS<span className="text-ui-primary">OPS</span>
+      AirCargo<span className="text-ui-primary">_OPS</span>
     </span>
   );
 }

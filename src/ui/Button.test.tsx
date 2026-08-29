@@ -11,10 +11,11 @@ describe("ui primitives (Đợt A)", () => {
     expect(html).toContain("bg-ui-primary");
   });
 
-  it("Wordmark tách TECS / OPS", () => {
+  it("Wordmark tách AirCargo / _OPS", () => {
     const html = renderToStaticMarkup(<Wordmark />);
-    expect(html).toContain("TECS");
-    expect(html).toContain("OPS");
+    expect(html).toContain("AirCargo");
+    expect(html).toContain("_OPS");
+    expect(html).toContain('aria-label="AirCargo_OPS"');
     expect(html).toContain("text-ui-primary");
   });
 });

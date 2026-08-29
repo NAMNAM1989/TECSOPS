@@ -40,10 +40,11 @@ export function NewBookingButton({ activeWarehouse, onAdd, iconOnly = false }: P
       size="sm"
       onClick={() => onAdd(activeWarehouse)}
       title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (phím N)`}
-      className="px-3.5 font-bold"
+      aria-label={`+ Booking ${warehouseLabel[activeWarehouse]}`}
+      className="px-3 font-bold"
     >
       {plusIcon}
-      + Booking
+      Booking
       <span className="hidden max-w-[5.5rem] truncate font-semibold opacity-90 sm:inline">
         · {warehouseLabel[activeWarehouse]}
       </span>

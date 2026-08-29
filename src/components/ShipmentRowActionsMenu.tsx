@@ -35,9 +35,7 @@ type Props = {
   customerDirectory: readonly CustomerDirectoryEntry[];
   onPrint: (s: Shipment) => void;
   onDelete: (id: string) => void;
-  onUpdate?: (id: string, patch: Partial<Shipment>) => void;
   compact?: boolean;
-  isMobile?: boolean;
 };
 
 const iconCls = "h-3.5 w-3.5";

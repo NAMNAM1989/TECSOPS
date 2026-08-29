@@ -3,19 +3,14 @@ import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
 import {
-  Button,
   SyncStatusPill,
   Wordmark,
 } from "../ui";
 import type { SyncStatus } from "../hooks/useShipmentSync";
-import { NewBookingButton } from "./NewBookingButton";
-import { OpsCargoReportToolbar } from "./OpsCargoReportToolbar";
+import { OpsActionToolbar } from "./OpsActionToolbar";
 import { OpsDatePicker } from "./OpsDatePicker";
-import { OpsDayOverviewStrip } from "./OpsDayOverviewStrip";
-import { OpsSheetImportButton } from "./OpsSheetImportButton";
-import { OpsToolsMenu } from "./OpsToolsMenu";
-import { SmartSearchBar } from "./SmartSearchBar";
-import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
+import { OpsContextStrip } from "./OpsContextStrip";
+import type { StatusFilterValue } from "./StatusFilterBar";
 
 type ToolsProps = {
   showDimScsc?: boolean;
@@ -67,7 +62,7 @@ type Props = {
   onClearFilters: () => void;
 };
 
-/** Chrome desktop Ops: lệnh + DayPulse/kho + lọc. Booking/Search ngoài menu. */
+/** Chrome desktop Ops — card gọn: identity · thao tác · kho · lọc. */
 export function OpsDesktopCommandBar({
   selectedYmd,
   onDateChange,
@@ -108,28 +103,28 @@ export function OpsDesktopCommandBar({
     statusFilter !== "ALL" || Boolean(searchQuery.trim()) || Boolean(flightDateFilter);
 
   return (
-    <header className="space-y-1" data-testid="ops-desktop-command-bar">
-      <div
-        data-testid="ops-desktop-command-row"
-        className="flex min-w-0 items-center gap-x-2 overflow-visible"
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-x-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <div className="flex min-w-0 shrink-0 items-center gap-1.5">
-            <h1 className="m-0 leading-none">
+    <header className="space-y-0" data-testid="ops-desktop-command-bar">
+      <div className="space-y-1 rounded-2xl border border-ui-border/70 bg-ui-surface/95 p-1.5 shadow-ui-sm">
+        <div
+          data-testid="ops-desktop-top-row"
+          className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+        >
+          <div
+            data-testid="ops-desktop-identity-row"
+            className="flex shrink-0 items-center gap-1.5"
+          >
+            <h1 className="m-0 shrink-0 leading-none">
               <Wordmark size="sm" />
             </h1>
-            <span className="rounded-full bg-ui-navy px-2 py-px text-[9px] font-bold uppercase tracking-wide text-white shadow-ui-sm">
+            <span className="shrink-0 rounded-full bg-ui-navy px-2 py-px text-[9px] font-bold uppercase tracking-wide text-white">
               OPS
             </span>
             <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
             {daysWithData > 0 ? (
-              <span className="hidden text-[10px] text-ui-text-muted lg:inline">
+              <span className="hidden shrink-0 text-[10px] text-ui-text-muted xl:inline">
                 {totalLots}/{daysWithData}d
               </span>
             ) : null}
-          </div>
-
-          <div className="flex min-w-0 shrink-0 items-center gap-1">
             <OpsDatePicker
               value={selectedYmd}
               onChange={onDateChange}
@@ -140,92 +135,58 @@ export function OpsDesktopCommandBar({
             />
             {!isViewingToday ? (
               <span
-                className="rounded bg-ui-warning/15 px-1.5 py-px text-[8px] font-bold uppercase text-ui-navy"
+                className="shrink-0 rounded-full bg-ui-warning/15 px-2 py-0.5 text-[8px] font-bold uppercase text-ui-navy"
                 title="Vẫn sửa / thêm lô được"
               >
                 Ngày khác
               </span>
             ) : null}
           </div>
+
+          <span className="h-7 w-px shrink-0 bg-ui-border/70" aria-hidden />
+
+          <div data-testid="ops-desktop-command-actions" className="shrink-0">
+            <OpsActionToolbar
+              variant="desktop"
+              embedded
+              activeWarehouse={activeWarehouse}
+              onAddBooking={onAddBooking}
+              includeBooking
+              includeSheet
+              onOpenSheetImport={onOpenSheetImport}
+              onPrefetchSheetImport={onPrefetchSheetImport}
+              onNavigateStats={onNavigateStats}
+              onPrefetchStats={onPrefetchStats}
+              onCopyCargoDayReport={onCopyCargoDayReport}
+              cargoReportCopying={cargoReportCopying}
+              viewRows={viewRows}
+              {...toolsProps}
+            />
+          </div>
         </div>
 
-        <div
-          data-testid="ops-desktop-command-actions"
-          className="flex shrink-0 items-center justify-end gap-1.5 overflow-visible"
-        >
-          <NewBookingButton activeWarehouse={activeWarehouse} onAdd={onAddBooking} />
-          <OpsSheetImportButton
-            onOpenSheetImport={onOpenSheetImport}
-            onPrefetchSheetImport={onPrefetchSheetImport}
-          />
-          {onNavigateStats ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              title="Thống kê Lô · Kg · DIM · Chargeable"
-              onClick={onNavigateStats}
-              onMouseEnter={onPrefetchStats}
-              onFocus={onPrefetchStats}
-            >
-              Thống kê
-            </Button>
-          ) : null}
-          <OpsToolsMenu {...toolsProps} />
-        </div>
+        <OpsContextStrip
+          variant="desktop"
+          selectedYmd={selectedYmd}
+          filteredViewRows={filteredViewRows}
+          viewRows={viewRows}
+          activeWarehouse={activeWarehouse}
+          onWarehouseChange={onWarehouseChange}
+          searchHighlightWarehouses={searchHighlightWarehouses}
+          filtersActive={filtersActive}
+          searchQuery={searchQuery}
+          onSearchChange={onSearchChange}
+          flightDateFilter={flightDateFilter}
+          onFlightDateChange={onFlightDateChange}
+          statusFilteredRows={statusFilteredRows}
+          searchContext={searchContext}
+          searchInputRef={searchInputRef}
+          onSelectSearchMatch={onSelectSearchMatch}
+          statusFilter={statusFilter}
+          onStatusFilterChange={onStatusFilterChange}
+          onClearFilters={onClearFilters}
+        />
       </div>
-
-      <OpsCargoReportToolbar
-        variant="desktop"
-        viewRows={viewRows}
-        copying={cargoReportCopying}
-        onCopy={onCopyCargoDayReport}
-      />
-
-      <OpsDayOverviewStrip
-        variant="desktop"
-        selectedYmd={selectedYmd}
-        rows={filteredViewRows}
-        activeWarehouse={activeWarehouse}
-        onSelectWarehouse={onWarehouseChange}
-        highlightWarehouses={searchHighlightWarehouses}
-        filtersActive={filtersActive}
-      />
-
-      {viewRows.length > 0 ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-          <SmartSearchBar
-            value={searchQuery}
-            onChange={onSearchChange}
-            flightDateFilter={flightDateFilter}
-            onFlightDateChange={onFlightDateChange}
-            searchableRows={statusFilteredRows}
-            matchedRows={filteredViewRows}
-            searchContext={searchContext}
-            inputRef={searchInputRef}
-            onSelectMatch={onSelectSearchMatch}
-            inlineFacets
-          />
-          <StatusFilterBar
-            compact
-            dense
-            hideEmpty
-            warehouse={activeWarehouse}
-            dayRows={viewRows}
-            value={statusFilter}
-            onChange={onStatusFilterChange}
-          />
-          {filtersActive ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClearFilters}
-              className="shrink-0 px-1.5 text-[10px] text-ui-primary hover:bg-ui-primary/10"
-            >
-              Xóa
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
     </header>
   );
 }

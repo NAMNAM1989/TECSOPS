@@ -165,7 +165,6 @@ app.post("/api/mutation", appAuth.requireAuth, mutationRateLimit, async (req, re
 
 /**
  * Nhiều mutation trong một request — một lần khóa Postgres, một lần broadcast.
- * Dùng cho thao tác hàng loạt (quét eSID) thay vì N round-trip.
  */
 app.post("/api/mutations", appAuth.requireAuth, mutationRateLimit, async (req, res) => {
   try {

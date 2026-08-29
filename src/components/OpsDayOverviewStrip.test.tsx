@@ -40,45 +40,38 @@ function renderStrip(variant: "desktop" | "mobile", filtered = rows) {
 }
 
 describe("OpsDayOverviewStrip", () => {
-  it("desktop: DayPulse Tổng ngày + 4 tile kho, không nút báo cáo màu", () => {
+  it("desktop: tổng gọn một dòng + chip kho cuộn ngang", () => {
     const html = renderStrip("desktop");
     expect(html).toContain("ops-day-overview");
     expect(html).toContain("ops-day-pulse");
-    expect(html).toContain("21-AUG-2026");
-    expect(html).toContain("Tổng ngày");
-    expect(html).toContain("Ops");
-    expect(html).toContain("Lô");
-    expect(html).toContain("Kiện");
-    expect(html).toContain("Kg");
-    expect(html).toContain(">10<");
+    expect(html).toContain("Tổng");
+    expect(html).toContain("4");
+    expect(html).toContain("10");
+    expect(html).toContain("28");
+    expect(html).toContain("warehouse-chips");
     expect(html).toContain("TECS-TCS");
-    expect(html).toContain("TECS-SCSC");
-    expect(html).toContain("TCS");
     expect(html).toContain("SCSC");
     expect(html).toContain('aria-label="Chọn kho"');
-    expect(html).not.toContain("warehouse-chips");
+    expect(html).not.toContain("21-AUG-2026");
     expect(html).not.toContain("bg-emerald-600");
     expect(html).not.toContain("Vantage");
   });
 
-  it("mobile: chip cuộn min-h-11, mỗi kho Lô · Kiện · Kg", () => {
+  it("mobile: chip cuộn min-h-10, mỗi kho Lô · Kiện · Kg", () => {
     const html = renderStrip("mobile");
     expect(html).toContain("ops-day-pulse");
     expect(html).toContain("warehouse-chips");
-    expect(html).toContain("min-h-11");
-    expect(html).toContain("Kiện</span> 10");
-    expect(html).toContain("Kg</span> 28");
-    expect(html).toContain("TCS · Lô 1 · Kiện 2 · Kg 10");
-    expect(html).toContain("SCSC · Lô 1 · Kiện 3 · Kg 6");
-    expect(html).toContain("TECS-SCSC · Lô 1 · Kiện 4 · Kg 8");
+    expect(html).toContain("min-h-10");
+    expect(html).toContain("TCS");
+    expect(html).toContain("Lô 1");
     expect(html).toContain("overflow-x-auto");
   });
 
   it("lọc text/status: pulse + chip theo rows đã lọc", () => {
     const html = renderStrip("desktop", [rows[0]!]);
+    expect(html).toContain("Tổng*");
     expect(html).toContain("sau lọc");
-    expect(html).toContain(">2<");
-    expect(html).toContain(">10<");
+    expect(html).toContain("1");
     expect(html).toContain("Lô 0");
   });
 });

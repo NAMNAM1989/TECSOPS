@@ -18,6 +18,8 @@ interface StatusFilterBarProps {
   hideEmpty?: boolean;
   /** Siêu gọn — mobile header */
   dense?: boolean;
+  /** Hàng lọc desktop — segment h-8, không khung dày */
+  tight?: boolean;
 }
 
 export function StatusFilterBar({
@@ -28,6 +30,7 @@ export function StatusFilterBar({
   compact,
   hideEmpty,
   dense,
+  tight,
 }: StatusFilterBarProps) {
   const statusOrder = useMemo(() => statusOrderForFilter(warehouse), [warehouse]);
 
@@ -45,8 +48,8 @@ export function StatusFilterBar({
 
   const segments = (
     <div
-      className={`inline-flex min-w-0 items-center rounded-full border border-ui-border/90 bg-ui-surface p-0.5 shadow-ui-sm ${
-        compact ? "gap-0.5" : "gap-1 p-1"
+      className={`inline-flex min-w-0 items-center rounded-full border border-ui-border/90 bg-ui-surface shadow-ui-sm ${
+        tight ? "gap-0 p-0.5" : compact ? "gap-0.5 p-0.5" : "gap-1 p-1"
       }`}
       role="tablist"
       aria-label="Lọc trạng thái"
@@ -54,6 +57,7 @@ export function StatusFilterBar({
       <FilterSegment
         compact={compact}
         dense={dense}
+        tight={tight}
         active={value === "ALL"}
         onClick={() => {
           onChange("ALL");
@@ -70,6 +74,7 @@ export function StatusFilterBar({
             key={st}
             compact={compact}
             dense={dense}
+            tight={tight}
             active={value === st}
             onClick={() => {
               onChange(st);
@@ -140,6 +145,7 @@ function FilterSegment({
   count,
   compact,
   dense,
+  tight,
 }: {
   active: boolean;
   onClick: () => void;
@@ -148,6 +154,7 @@ function FilterSegment({
   count: number;
   compact?: boolean;
   dense?: boolean;
+  tight?: boolean;
 }) {
   const isEmpty = count === 0;
 
@@ -158,11 +165,13 @@ function FilterSegment({
       aria-selected={active}
       onClick={onClick}
       className={`relative shrink-0 whitespace-nowrap rounded-full font-semibold leading-tight transition-colors touch-manipulation ${
-        dense
-          ? "inline-flex min-h-11 items-center px-2.5 py-1 text-[11px]"
-          : compact
-            ? "px-2.5 py-1 text-[10px]"
-            : "px-3 py-1.5 text-[11px] sm:text-xs"
+        tight
+          ? "inline-flex h-8 items-center px-2 text-[10px]"
+          : dense
+            ? "inline-flex min-h-11 items-center px-2.5 py-1 text-[11px]"
+            : compact
+              ? "px-2.5 py-1 text-[10px]"
+              : "px-3 py-1.5 text-[11px] sm:text-xs"
       } ${isEmpty && !active ? "opacity-40" : "opacity-100"} ${
         active
           ? "bg-ui-primary text-white shadow-ui-sm"

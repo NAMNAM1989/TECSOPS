@@ -46,16 +46,20 @@ interface SmartSearchBarProps {
    * compact/mobile vẫn stack.
    */
   inlineFacets?: boolean;
+  /** Chip ngày bay thấp hơn — hàng lọc desktop gọn */
+  tightFacets?: boolean;
 }
 
 function FlightDateChips({
   facets,
   activeDate,
   onPick,
+  tight = false,
 }: {
   facets: ReturnType<typeof listFlightDateFacets>;
   activeDate: string;
   onPick: (date: string) => void;
+  tight?: boolean;
 }) {
   if (!facets.length) return null;
   return (
@@ -72,7 +76,11 @@ function FlightDateChips({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onPick(active ? "" : f.date)}
-            className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-0.5 rounded-md px-1.5 text-[10px] font-bold tabular-nums ring-1 transition active:scale-[0.98] ${
+            className={`inline-flex shrink-0 items-center justify-center gap-0.5 ring-1 transition active:scale-[0.98] ${
+              tight
+                ? "h-8 rounded-lg px-2 text-[10px] font-bold tabular-nums"
+                : "min-h-11 min-w-11 rounded-md px-1.5 text-[10px] font-bold tabular-nums"
+            } ${
               active
                 ? "bg-ui-primary text-white ring-ui-primary"
                 : "bg-ui-surface text-ui-text ring-ui-border hover:bg-emerald-50 hover:ring-emerald-300/70"
@@ -166,6 +174,7 @@ export function SmartSearchBar({
   onSelectMatch,
   compact = false,
   inlineFacets = false,
+  tightFacets = false,
 }: SmartSearchBarProps) {
   const localRef = useRef<HTMLInputElement>(null);
   const overlayInputRef = useRef<HTMLInputElement>(null);
@@ -371,6 +380,7 @@ export function SmartSearchBar({
                   facets={flightFacets}
                   activeDate={activeFlightDate}
                   onPick={pickFlightDate}
+                  tight={tightFacets}
                 />
               </div>
               {hasFilterSummary ? <div className="mt-2">{filterSummary}</div> : null}
@@ -459,6 +469,7 @@ export function SmartSearchBar({
           pickFlightDate(date);
           if (compact) setOpen(false);
         }}
+        tight={tightFacets}
       />
     ) : null;
 
@@ -470,7 +481,7 @@ export function SmartSearchBar({
       }`}
     >
       {useInline ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-1">
+        <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {searchField}
           {flightChips}
           {hasFilterSummary ? filterSummary : null}

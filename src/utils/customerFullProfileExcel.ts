@@ -52,7 +52,7 @@ const FULL_PROFILE_GUIDE_LINES = [
   "2. Mã KH: khóa đồng bộ (2–5 chữ A–Z, VD: CITYLINK). Mã đã có → hợp nhất; chưa có → tạo mới.",
   "3. Một khách có thể nhiều dòng (nhiều CNEE / DEST / loại hàng / xe).",
   "4. Người gửi: Họ tên, Địa chỉ, Email, ĐT, MST — đồng bộ tab Người gửi & điền OPS.",
-  "5. Người nhận + Notify Party — đồng bộ tab CNEE & notify_name khi điền eSID.",
+  "5. Người nhận + Notify Party — đồng bộ tab CNEE & notify_name trên OPS.",
   "6. Loại hàng — tab Tên hàng / Nature of Goods.",
   "7. Xe/TX: Biển số, Tên TX, Số giấy tờ, Nhãn xe, Loại xe (OTO/XEMAY/BAGAC/DIBO), Loại GT (CCCD/PP/GPLX).",
   "8. Tải mẫu → điền → Import. Export xuất đúng cùng cột để chỉnh rồi Import lại. File cũ 18 cột vẫn đọc được.",

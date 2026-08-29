@@ -35,7 +35,7 @@ describe("notify", () => {
   it("không có sink thì console.warn — vẫn không alert", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
-    notify({ message: "Không tạo được file Excel.", title: "Xuất ESID", tone: "danger" });
+    notify({ message: "Không tạo được file Excel.", title: "Xuất Excel", tone: "danger" });
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining("Không tạo được file Excel.")
     );

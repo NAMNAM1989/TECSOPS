@@ -430,47 +430,6 @@ export function useShipmentSync(
     }
   }, [markSynced, state, syncPendingCount]);
 
-  /**
-   * Nhiều mutation trong một request — tránh N round-trip + N lần broadcast full state.
-   * Offline thì rơi về áp tuần tự cục bộ qua `mutate`.
-   */
-  const mutateBatch = useCallback(
-    async (mutations: ShipmentMutation[]): Promise<AppState | null> => {
-      if (mutations.length === 0) return null;
-      if (!apiOkRef.current) {
-        let last: AppState | null = null;
-        for (const m of mutations) last = await mutate(m);
-        return last;
-      }
-      const res = await fetch("/api/mutations", {
-        ...credFetch,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...scopeHeaders(syncScopeRef.current),
-        },
-        body: JSON.stringify(mutations),
-      });
-      const body: unknown = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
-        const msg = typeof o.error === "string" ? o.error : res.statusText;
-        debugWarn("sync:mutations", res.status, msg);
-        throw new Error(msg);
-      }
-      const next = parseAppState(body);
-      if (!next) throw new Error("Phản hồi máy chủ không hợp lệ sau khi lưu.");
-      let applied: AppState = next;
-      setState((prev) => {
-        applied = persistIfApplied(prev, next, false);
-        return applied;
-      });
-      markSynced();
-      return applied;
-    },
-    [markSynced, mutate, persistIfApplied]
-  );
-
   const refreshState = useCallback(async (): Promise<void> => {
     try {
       const parsed = await fetchAppStateWithRetry(syncScopeRef.current);
@@ -501,7 +460,6 @@ export function useShipmentSync(
     status,
     state,
     mutate,
-    mutateBatch,
     socketConnected,
     /** Epoch ms lần nhận /api/state · socket (client). Ops strip dùng lots.syncedAt / syncMeta, không field này. */
     lastSyncAt,

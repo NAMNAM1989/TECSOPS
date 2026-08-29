@@ -57,49 +57,37 @@ function renderBar() {
 }
 
 describe("OpsDesktopCommandBar", () => {
-  it("Booking/Search ngoài menu; DayPulse + 4 kho; Ảnh báo cáo là nút toolbar", () => {
+  it("một hàng top: identity + toolbar embedded, chip kho", () => {
     const html = renderBar();
     expect(html).toContain("ops-desktop-command-bar");
-    expect(html).toContain("+ Booking");
+    expect(html).toContain("ops-desktop-top-row");
+    expect(html).toContain("ops-action-toolbar");
+    expect(html).toContain('data-embedded="true"');
+    expect(html).toContain('aria-label="+ Booking TCS"');
+    expect(html).toContain("Nhập Sheet");
     expect(html).toContain("Thống kê");
-    expect(html).toContain("ops-cargo-report-toolbar");
     expect(html).toContain("Vantage");
     expect(html).toContain("23-AUG-2026");
     expect(html).toContain("ops-day-overview");
-    expect(html).toContain("ops-day-pulse");
-    expect(html).toContain("Tổng ngày");
-    expect(html).toContain('aria-label="Chọn kho"');
-    expect(html).toContain("TECS-TCS");
-    expect(html).toContain("SCSC");
-    const actions = html.match(
-      /data-testid="ops-desktop-command-actions"[\s\S]*?(?=data-testid="ops-cargo-report-toolbar"|$)/,
-    )?.[0] ?? "";
-    expect(actions).toContain("+ Booking");
-    expect(actions).toContain("Nhập Sheet");
-    expect(actions).not.toContain("bg-emerald-600");
-    expect(actions).not.toContain("Vantage");
-    expect(html).not.toContain(">Báo cáo</span>");
-    expect(html).not.toContain("Tải Ext");
-    expect(html).not.toContain("Đăng Nhập TCS");
-    expect(html).not.toContain("eCargo");
+    expect(html).toContain("ops-context-strip");
+    const top = html.match(/data-testid="ops-desktop-top-row"[\s\S]*?(?=data-testid="ops-context-strip")/)?.[0] ?? "";
+    expect(top).toContain("ops-desktop-identity-row");
+    expect(top).toContain("ops-desktop-command-actions");
+    expect(top).toContain("Nhập Sheet");
+    expect(top).toContain("Vantage");
+    expect(html).not.toContain("OverflowMenu");
   });
 
   it("không lộ format ngày locale của input type=date", () => {
     const html = renderBar();
     expect(html).toContain('type="date"');
     expect(html).toContain("opacity-0");
-    expect(html).not.toContain("23-AUG-2026</option>");
   });
 
-  it("không clip OverflowMenu: overflow-x-auto chỉ ở cụm identity, không bọc Công cụ", () => {
+  it("top row cuộn ngang một lần", () => {
     const html = renderBar();
-    const rowOpen = html.match(/data-testid="ops-desktop-command-row"[^>]*>/)?.[0] ?? "";
-    const actionsOpen = html.match(/data-testid="ops-desktop-command-actions"[^>]*>/)?.[0] ?? "";
-    expect(rowOpen).toContain("overflow-visible");
-    expect(rowOpen).not.toContain("overflow-x-auto");
-    expect(actionsOpen).toContain("overflow-visible");
-    expect(actionsOpen).not.toContain("overflow-x-auto");
+    const top = html.match(/data-testid="ops-desktop-top-row"[^>]*>/)?.[0] ?? "";
+    expect(top).toContain("overflow-x-auto");
     expect(html).toContain("Ảnh báo cáo lô hàng");
-    expect(html).toContain("Công cụ");
   });
 });

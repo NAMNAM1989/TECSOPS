@@ -514,7 +514,6 @@ function ShipmentTableRowImpl({
             customerDirectory={customerDirectory}
             onPrint={onPrint}
             onDelete={onDelete}
-            onUpdate={onUpdate}
           />
         </div>
       </td>

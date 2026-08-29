@@ -174,12 +174,10 @@ const MobileShipmentCard = memo(
               />
               <ShipmentRowActionsMenu
                 compact
-                isMobile
                 row={row}
                 customerDirectory={customerDirectory}
                 onPrint={onPrint}
                 onDelete={onDelete}
-                onUpdate={onUpdate}
               />
             </div>
           </div>

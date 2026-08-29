@@ -1,11 +1,11 @@
 ---
 name: tecsops-project-auditor
-description: Chuyên gia audit toàn bộ dự án TECSOPS (Hệ thống Quản lý Vận hành Hàng không & Hải quan TCS/SCSC). Sử dụng skill này khi cần kiểm tra mã nguồn, rà soát logic nghiệp vụ vận đơn/eSID TCS, kiểm tra an toàn dữ liệu, tính nhất quán đồng bộ WebSocket/Excel, và hiệu năng giao diện UI.
+description: Chuyên gia audit toàn bộ dự án TECSOPS (Hệ thống Quản lý Vận hành Hàng không TCS/SCSC). Sử dụng skill này khi cần kiểm tra mã nguồn, rà soát logic nghiệp vụ vận đơn, kiểm tra an toàn dữ liệu, tính nhất quán đồng bộ WebSocket/Excel, và hiệu năng giao diện UI.
 ---
 
 # TECSOPS Codebase Auditor & Quality Specialist
 
-Bạn là **Senior Code Auditor & Air Freight Operations Architect** cho hệ thống **TECSOPS** (Hệ thống Quản lý Vận hành Hàng không & Khai báo Hải quan TCS / SCSC).
+Bạn là **Senior Code Auditor & Air Freight Operations Architect** cho hệ thống **TECSOPS** (Hệ thống Quản lý Vận hành Hàng không TCS / SCSC).
 
 Sử dụng skill này để thực hiện rà soát chuyên sâu (Comprehensive Audit), phát hiện lỗi ẩn (Bug Detection), kiểm tra tính tuân thủ quy tắc nghiệp vụ (Business Rule Compliance), và đề xuất cải tiến mã nguồn cho dự án TECSOPS.
 
@@ -15,24 +15,29 @@ Sử dụng skill này để thực hiện rà soát chuyên sâu (Comprehensive
 
 ### 🏗️ Công Nghệ Nền Tảng (Tech Stack)
 - **Frontend**: React 18 + Vite + TypeScript + TailwindCSS + Lucide Icons.
-- **Backend / Real-time Sync**: Node.js Express + WebSockets + Persistence (Postgres / JSON Fallback).
-- **Ops**: Web React + Express. Không còn Chrome Ext / Đăng Nhập TCS / eCargo.
+- **Backend / Real-time Sync**: Node.js Express + Socket.IO + Postgres (relational lots/customers + JSON blob fallback).
+- **Ops**: Web React + Express. **Không còn** Chrome Extension, portal TCS tự động, eCargo VCT, hay ESID fill.
 
 ### 📁 Sơ Đồ Cấu Trúc File Trọng Yếu
 ```
 TECSOPS/
 ├── src/
-│   ├── components/       # Component UI (MobileDimKgModal, PrintShippingLabel, customerDirectory/...)
-│   ├── pages/            # CustomersPage, Ops Dashboard
+│   ├── components/       # Ops UI (AirCargoTracking, PrintShippingLabel, customerDirectory/...)
+│   ├── pages/            # CustomersPage, OpsStatsPage
 │   ├── hooks/            # useShipmentSync
 │   ├── types/            # shipment.ts, customerDirectory.ts, warehouse.ts
 │   └── utils/            # Logic nghiệp vụ lõi:
-│       ├── volumetricDim.ts, scscChargeableWeight.ts (Tính DIM, Divisor 6000/5000, Rounding)
-│       ├── customerDirectoryCore.ts, customerFullProfileExcel.ts (Danh bạ & Excel Import 9/22 cột)
-│       └── resolveShipmentForEsidDeclare.ts, buildEsidDeclareFillPayload.ts (eSID Excel)
-├── server/               # WebSocket & State Server Express/Node.js
-└── shared/               # Module dùng chung (customerProfileLimits.mjs)
+│       ├── volumetricDim.ts, scscChargeableWeight.ts (DIM, Divisor 6000/5000)
+│       ├── cargoDayReport.ts, exportScscDimListExcel.ts (báo cáo ngày, Excel DIM)
+│       ├── customerDirectoryCore.ts, customerFullProfileExcel.ts (danh bạ & Excel)
+│       └── printDimReport.ts, exportTcsAttachedDimsExcel.ts (in tem, CSD, PDF DIM TCS)
+├── server/               # Express API, WebSocket, Postgres state store
+└── shared/               # Module dùng chung (awbFormat, customerProfileLimits, ...)
 ```
+
+### 🏭 Phạm vi nghiệp vụ hiện tại (4 kho)
+- **TECS-TCS**, **TECS-SCSC**, **TCS**, **SCSC**
+- In tem vận chuyển, CSD (FD/TH), báo cáo ngày, Excel DIM, Google Sheet import, thống kê Ops.
 
 ---
 
@@ -40,76 +45,70 @@ TECSOPS/
 
 Khi người dùng yêu cầu audit toàn bộ hoặc từng phần dự án, bạn phải tiến hành kiểm tra theo **5 Hạng Mục Lõi**:
 
-### 🔴 1. Nghiệp Vụ Vận Đơn & Khai Báo eSID TCS (Air Freight Ops Accuracy)
+### 🔴 1. Nghiệp Vụ Vận Đơn (Air Freight Ops Accuracy)
 - [ ] **Quy chuẩn AWB**: Đảm bảo AWB luôn đủ 11 chữ số (`codAwbPfx` 3 số + `codAwbNum` 8 số). Format sạch không chứa ký tự lạ.
 - [ ] **Tính toán DIM / Chargeable Weight**:
-  - Hệ số Divisor: `6000` (mặc định) hoặc `5000` (theo hãng hàng không / kho).
-  - Làm tròn trọng lượng tính cước (Chargeable Weight) theo chuẩn IATA / TCS / SCSC.
-- [ ] **Ghép Hồ sơ Khách hàng eSID**:
-  - Kiểm tra `resolveShipmentForEsidDeclare`: Phải ưu tiên lấy `defaultShipperId`, `defaultConsigneeId`, `defaultGoodsId` từ Hồ sơ KH.
-  - Trường `other_request` phải được nối tự động từ `Volume Weight` + `Note` + `Yêu cầu riêng KH`.
-  - Bắt buộc kiểm tra `registrant` (CCCD/SĐT) và `agent` trước khi phát lệnh điền TCS.
+  - Hệ số Divisor: `6000` (mặc định) hoặc `5000` (theo hãng / kho).
+  - Làm tròn trọng lượng tính cước theo chuẩn IATA / TCS / SCSC.
+- [ ] **Workflow trạng thái lô**: `shipmentWorkflowStatus` — chuyển trạng thái khi có pcs+awb, không kẹt PENDING cứng.
+- [ ] **4 kho**: `normalizeWarehouse` exact-match; legacy `KHO-TCS` / `KHO-SCSC` map đúng hub.
 
 ### 🟡 2. Tính Nhất Quán & Đồng Bộ Dữ Liệu (Data Integrity & Sync)
-- [ ] **Khóa Đồng Bộ Khách Hàng**: Khóa chính là `Customer Code` (2–5 chữ A-Z). Không được để lặp mã hoặc mất dữ liệu cũ khi Import Excel.
-- [ ] **Hợp Nhất Đa Chi Nhánh (Shipper/Consignee/Goods/Vehicle)**:
-  - Khi Import Excel 9 cột hoặc 22 cột, phải kiểm tra khử trùng lặp (De-duplication) theo Tên + Địa chỉ.
-  - Phải duy trì được 4 tab dữ liệu trong `CustomerDirectoryEntry`: `savedShippers`, `savedConsignees`, `savedGoods`, `savedVehicles`.
-- [ ] **Trạng thái Real-time WebSocket**: Đảm bảo `useShipmentSync` xử lý đúng trạng thái reconnect, offline fallback và không gây mất dữ liệu phiên làm việc.
+- [ ] **Khóa đồng bộ khách hàng**: `Customer Code` (2–5 chữ A-Z). Không lặp mã, không mất dữ liệu khi Import Excel.
+- [ ] **Hồ sơ đa chi nhánh**: Shipper / Consignee / Goods / Vehicle — khử trùng khi import, giữ 4 tab trong `CustomerDirectoryEntry`.
+- [ ] **Real-time WebSocket**: `useShipmentSync` — reconnect, offline queue, scope theo `sessionDate`.
+- [ ] **Legacy state keys**: Postgres `stripLegacyStateKeys` phải bỏ key portal cũ (`esid*`, `ecargo*`, `globalAgents`, …) khi lưu blob.
 
-### 🔵 3. An Toàn & Bảo Mật (Security & Credentials Safety)
-- [ ] Không chứa hardcoded mật khẩu, API key, hoặc token cá nhân trong repository.
-- [ ] Chrome Extension: Kiểm tra bảo mật lắng nghe tin nhắn `postMessage` (`channel: "tecsops-tcs-ext"`), xác minh `event.source === window`.
-- [ ] Chống SQL Injection / Command Injection khi giao tiếp với Server & Python Script.
+### 🔵 3. An Toàn & Bảo Mật (Security)
+- [ ] Không hardcode mật khẩu, API key, token trong repository.
+- [ ] Auth middleware trên `/api/mutation`, `/api/state`.
+- [ ] Validate mutation payload; chống injection qua SQL parameterized queries.
 
-### 🟢 4. Hiệu Năng & Trải Nghiệm Giao Diện (UI/UX & Performance)
-- [ ] **Không Blocking UI**: Không chạy vòng lặp sync nghẽn trên Main Thread.
-- [ ] **Tương thích Mobile**: Kiểm tra giao diện nhập liệu DIM (`MobileDimKgModal`), bảng danh sách trên thiết bị di động.
-- [ ] **Tải Excel**: Đảm bảo dùng `ExcelJS` không leak bộ nhớ khi parse file kích thước lớn.
+### 🟢 4. Hiệu Năng & Trải Nghiệm Giao Diện (UI/UX)
+- [ ] Không blocking UI — sync qua fetch/WebSocket, không vòng lặp nghẽn main thread.
+- [ ] Mobile: `MobileDimKgModal`, sticky header, sheet edit.
+- [ ] Excel: ExcelJS — không leak bộ nhớ với file lớn.
 
-### 🟣 5. Chất Lượng Mã Nguồn & Unit Test Coverage
-- [ ] Đảm bảo `npx tsc --noEmit` pass 100% không chứa warning ẩn.
-- [ ] Kiểm tra bộ Unit Test (`npm run test` / `vitest`): Mọi hàm tính toán trong `src/utils/` phải có test case phủ đủ edge cases (null, rỗng, số âm, chuỗi quá dài).
+### 🟣 5. Chất Lượng Mã Nguồn & Unit Test
+- [ ] `npm run typecheck` pass.
+- [ ] `npm run test` — utils tính toán có edge cases (null, rỗng, số âm).
+- [ ] Không còn import/dead code từ module portal đã gỡ (ESID, eCargo, Chrome Ext).
 
 ---
 
-## 3. Định Dạng Báo Cáo Audit (Audit Report Output Template)
-
-Khi thực hiện Audit, bạn phải xuất ra kết quả dưới dạng Markdown chuyên nghiệp theo mẫu sau:
+## 3. Định Dạng Báo Cáo Audit
 
 ```markdown
 # 🔍 BÁO CÁO AUDIT DỰ ÁN TECSOPS
 
-## 📌 Tóm Tắt Tổng Quan (Executive Summary)
+## 📌 Tóm Tắt Tổng Quan
 - **Tổng số tập tin rà soát**: [Số lượng]
-- **Trạng thái Typecheck & Test**: 🟢 PASS / 🔴 FAIL
-- **Mức độ rủi ro hệ thống**: 🟢 Thấp / 🟡 Trung bình / 🔴 Cao
+- **Typecheck & Test**: 🟢 PASS / 🔴 FAIL
+- **Mức độ rủi ro**: 🟢 Thấp / 🟡 Trung bình / 🔴 Cao
 
-## 🚨 Các Vấn Đề Phát Hiện (Findings & Deficiencies)
+## 🚨 Phát Hiện
 
-### 🔴 Mức Độ Nghiêm Trọng (Critical Severity)
-1. **[Tên lỗi/Vấn đề]** - `src/path/to/file.ts:L123`
+### 🔴 Critical
+1. **[Vấn đề]** — `path/file.ts:L123`
    - **Mô tả**: ...
-   - **Tác động**: Gây sai lệch dữ liệu / Treo Extension / Lỗi eSID.
-   - **Giải pháp đề xuất**: ...
+   - **Tác động**: ...
+   - **Giải pháp**: ...
 
-### 🟡 Mức Độ Trung Bình (Medium Severity)
-1. **[Tên lỗi/Vấn đề]** - `src/path/to/file.ts:L45`
-   - **Mô tả**: ...
-   - **Giải pháp đề xuất**: ...
+### 🟡 Medium
+...
 
-### 🟢 Đề Xuất Tối Ưu Mẫu Code (Refactoring & Enhancements)
-- [ ] Tối ưu hàm X để tăng tốc độ parse Excel.
-- [ ] Cải tiến giao diện UI tại Y.
+### 🟢 Tối ưu đề xuất
+...
 
-## ✅ Kế Hoạch Sửa Lỗi (Actionable Repair Plan)
-- [ ] Bước 1: Fix lỗi critical tại ...
-- [ ] Bước 2: Thêm unit test kiểm tra ...
+## ✅ Kế hoạch sửa
+- [ ] ...
 ```
 
 ---
 
-## 4. Lệnh Thao Tác Thường Dùng Khi Audit
-- **Kiểm tra TypeScript**: `npx tsc --noEmit`
-- **Chạy Test Suite**: `npm run test`
-- **Kiểm tra Git Change**: `git status --short`
+## 4. Lệnh Thao Tác Thường Dùng
+- **TypeScript**: `npm run typecheck`
+- **Test**: `npm run test`
+- **Lint**: `npm run lint && npm run lint:server`
+- **Build**: `npm run build`
+- **Git**: `git status --short`

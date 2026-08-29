@@ -52,6 +52,10 @@ function stripLegacyStateKeys(state) {
   delete next.globalAgents;
   delete next.scscWeighPrintSettings;
   delete next.ecargoKhoScsc;
+  delete next.ecargoScscStore;
+  delete next.ecargoVctResultsStore;
+  delete next.esidRegistrantStore;
+  delete next.esidAgentStore;
   delete next.invoiceCatalog;
   return next;
 }

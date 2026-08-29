@@ -55,30 +55,30 @@ function renderHeader(opts: { empty?: boolean } = {}) {
 }
 
 describe("OpsMobileStickyHeader chrome", () => {
-  it("identity + lọc; DayPulse + chip kho; Booking không ở header; công cụ overflow", () => {
+  it("card gọn: toolbar inline + chip kho, không overflow menu", () => {
     const html = renderHeader();
     expect(html).toContain("ops-mobile-sticky-header");
+    expect(html).toContain("ops-mobile-top-row");
     expect(html).toContain("ops-mobile-identity-row");
+    expect(html).toContain("ops-mobile-action-row");
+    expect(html).toContain("ops-action-toolbar");
+    expect(html).toContain("ops-context-strip");
     expect(html).toContain("ops-mobile-filter-row");
     expect(html).toContain("ops-day-overview");
-    expect(html).toContain("ops-day-pulse");
-    expect(html).toContain("Tổng ngày");
     expect(html).toContain("warehouse-chips");
     expect(html).toContain("23-AUG-2026");
     expect(html).toContain("Live");
     expect(html).toContain("OPS");
-    expect(html).toContain("Báo cáo &amp; Công cụ");
+    expect(html).toContain("Khách");
+    expect(html).toContain("Vantage");
+    expect(html).not.toContain("Báo cáo &amp; Công cụ");
     expect(html).not.toContain("+ Booking");
     expect(html).not.toContain("ops-mobile-sync-bar");
-    expect(html).not.toContain("Chọn kho</span>");
-    expect(html).not.toContain("bg-emerald-600");
-    expect(html).not.toContain("Vantage");
-    expect(html).not.toContain("ops-mobile-portal-slot");
   });
 
-  it("vùng chạm sticky ≥44px trên overflow / chip kho / ngày / ST", () => {
+  it("vùng chạm ≥40px trên toolbar / chip kho / ngày / ST", () => {
     const html = renderHeader();
-    expect(html).toContain("min-h-11");
+    expect(html).toContain("min-h-10");
     expect(html).toContain("Ngày trước");
     expect(html).toContain("Ngày sau");
     expect(html).toContain("warehouse-chips");

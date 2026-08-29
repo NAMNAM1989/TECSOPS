@@ -63,6 +63,10 @@ interface Props {
    * Round 3 mobile: 1 hàng chip cuộn ngang (tên + số lô) — không ăn nửa màn hình như lưới 2×2.
    */
   chips?: boolean;
+  /** Chip thấp hơn — desktop overview. */
+  denseChips?: boolean;
+  /** Mobile — giữ vùng chạm ≥40px */
+  touchTargets?: boolean;
   hideAddButton?: boolean;
   className?: string;
 }
@@ -78,6 +82,8 @@ export function WarehouseGridPicker({
   highlightWarehouses = [],
   compact = false,
   chips = false,
+  denseChips = false,
+  touchTargets = false,
   hideAddButton = false,
   className = "",
 }: Props) {
@@ -104,24 +110,48 @@ export function WarehouseGridPicker({
               aria-selected={isActive}
               title={`${warehouseLabel[wh]} · Lô ${m.lots} · Kiện ${m.pcs} · Kg ${kg}`}
               onClick={() => onSelect(wh)}
-              className={`inline-flex min-h-11 shrink-0 touch-manipulation flex-col justify-center rounded-xl px-2.5 py-1 text-left ring-1 transition active:scale-[0.98] ${
+              className={`inline-flex shrink-0 touch-manipulation items-center text-left ring-1 transition active:scale-[0.98] ${
+                denseChips
+                  ? touchTargets
+                    ? "min-h-10 flex-col justify-center gap-0 rounded-xl px-2.5 py-1"
+                    : "h-8 gap-1.5 rounded-lg px-2"
+                  : "min-h-11 flex-col justify-center rounded-xl px-2.5 py-1"
+              } ${
                 isActive ? CHIP_ACTIVE[wh] : CHIP_IDLE[wh]
               } ${hasSearchHit && !isActive ? "ring-2 ring-ui-primary/50" : ""}`}
             >
-              <span className="text-[11px] font-extrabold tracking-tight">
+              <span
+                className={`font-extrabold tracking-tight ${
+                  denseChips && !touchTargets ? "text-[10px]" : "text-[11px]"
+                }`}
+              >
                 {warehouseLabel[wh]}
               </span>
-              <span className="font-mono text-[10px] font-bold tabular-nums leading-tight">
-                Lô {m.lots}
-                <span className={isActive ? "mx-0.5 text-white/50" : "mx-0.5 text-ui-border"}>
-                  ·
+              {denseChips && !touchTargets ? (
+                <span className="font-mono text-[9px] font-bold tabular-nums leading-none">
+                  {m.lots}
+                  <span className={isActive ? "mx-0.5 text-white/50" : "mx-0.5 text-ui-border"}>
+                    ·
+                  </span>
+                  {m.pcs}
+                  <span className={isActive ? "mx-0.5 text-white/50" : "mx-0.5 text-ui-border"}>
+                    ·
+                  </span>
+                  {kg}
                 </span>
-                Kiện {m.pcs}
-                <span className={isActive ? "mx-0.5 text-white/50" : "mx-0.5 text-ui-border"}>
-                  ·
+              ) : (
+                <span className="font-mono text-[10px] font-bold tabular-nums leading-tight">
+                  Lô {m.lots}
+                  <span className={isActive ? "mx-0.5 text-white/50" : "mx-0.5 text-ui-border"}>
+                    ·
+                  </span>
+                  Kiện {m.pcs}
+                  <span className={isActive ? "mx-0.5 text-white/50" : "mx-0.5 text-ui-border"}>
+                    ·
+                  </span>
+                  Kg {kg}
                 </span>
-                Kg {kg}
-              </span>
+              )}
             </button>
           );
         })}

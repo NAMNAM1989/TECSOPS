@@ -1,6 +1,7 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+import { findAwbDigitsConflict } from "../utils/awbUnique";
 import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { InlineTextEdit } from "./InlineTextEdit";
@@ -101,6 +102,11 @@ export function DesktopShipmentTable({
 }: Props) {
   const isMobile = useIsMobile();
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
+  const allRowsRef = useRef(allRows);
+  allRowsRef.current = allRows;
+  const findAwbConflict = useCallback((digits: string, exceptId: string) => {
+    return findAwbDigitsConflict(allRowsRef.current, digits, exceptId);
+  }, []);
   const group = useMemo(
     () =>
       rows
@@ -180,7 +186,7 @@ export function DesktopShipmentTable({
                       highlighted={highlightedShipmentId === row.id}
                       selected={selectedRowId === row.id}
                       onSelectRow={onSelectRow}
-                      allRows={allRows}
+                      findAwbConflict={findAwbConflict}
                       customerDirectory={customerDirectory}
                       onUpdate={onUpdate}
                       onUpdateCustomers={onUpdateCustomers}
@@ -219,7 +225,7 @@ function ShipmentTableRowImpl({
   highlighted = false,
   selected = false,
   onSelectRow,
-  allRows,
+  findAwbConflict,
   customerDirectory,
   onUpdate,
   onUpdateCustomers,
@@ -234,7 +240,7 @@ function ShipmentTableRowImpl({
   highlighted?: boolean;
   selected?: boolean;
   onSelectRow?: (id: string | null) => void;
-  allRows: Shipment[];
+  findAwbConflict: (digits: string, exceptId: string) => Shipment | null;
   customerDirectory: readonly CustomerDirectoryEntry[];
   onUpdate: (id: string, patch: Partial<Shipment>) => void | Promise<boolean | void>;
   onUpdateCustomers?: (
@@ -309,7 +315,7 @@ function ShipmentTableRowImpl({
           <InlineAwbEdit
             rowId={row.id}
             value={row.awb}
-            allRows={allRows}
+            findAwbConflict={findAwbConflict}
             className="ops-awb !py-0 text-[14px] leading-tight"
             onCommit={(awb) => onUpdate(row.id, { awb })}
             onEnterNavigateDown={() => focusShipmentGridCell(row.id, "hawb")}
@@ -521,15 +527,31 @@ function ShipmentTableRowImpl({
   );
 }
 
+function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
+  return (
+    a.awb === b.awb &&
+    a.flight === b.flight &&
+    a.flightDate === b.flightDate &&
+    a.dest === b.dest &&
+    a.customer === b.customer &&
+    a.pcs === b.pcs &&
+    a.kg === b.kg &&
+    a.dimWeightKg === b.dimWeightKg &&
+    a.status === b.status &&
+    a.note === b.note &&
+    a.stt === b.stt
+  );
+}
+
 const ShipmentTableRow = memo(ShipmentTableRowImpl, (prev, next) => {
   return (
-    prev.row === next.row &&
+    (prev.row === next.row || shipmentRowRenderEqual(prev.row, next.row)) &&
     prev.rowIdx === next.rowIdx &&
     prev.highlighted === next.highlighted &&
     prev.selected === next.selected &&
     prev.viewSessionYmd === next.viewSessionYmd &&
     prev.customerDirectory === next.customerDirectory &&
-    prev.allRows === next.allRows &&
+    prev.findAwbConflict === next.findAwbConflict &&
     prev.groupRowIds === next.groupRowIds
   );
 });

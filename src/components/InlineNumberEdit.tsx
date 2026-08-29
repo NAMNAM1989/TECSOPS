@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { runInlineAsyncCommit } from "../utils/inlineCommitAsync";
 
 interface Props {
   value: number | null;
@@ -69,21 +70,14 @@ export function InlineNumberEdit({
       return;
     }
     const result = onCommit(next);
-    if (result && typeof (result as Promise<unknown>).then === "function") {
-      setSaving(true);
-      void (result as Promise<boolean | void>)
-        .then((ok) => {
-          if (ok === false) {
-            setDraft(value !== null ? String(value) : "");
-            setError("Không lưu được — thử lại.");
-            return;
-          }
-          setEditing(false);
-        })
-        .finally(() => setSaving(false));
-      return;
-    }
-    setEditing(false);
+    runInlineAsyncCommit(result, {
+      setEditing,
+      setSaving,
+      onReject: () => {
+        setDraft(value !== null ? String(value) : "");
+        setError("Không lưu được — thử lại.");
+      },
+    });
   };
 
   const gridProps = gridNav

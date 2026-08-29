@@ -208,3 +208,25 @@ export function saveRows(rows: Shipment[]): void {
   }
 }
 
+let saveRowsTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSaveRows: Shipment[] | null = null;
+
+/** Gom nhiều mutation liên tiếp — tránh JSON.stringify 700+ lô mỗi ô. */
+export function scheduleSaveRows(rows: Shipment[], delayMs = 280): void {
+  pendingSaveRows = rows;
+  if (saveRowsTimer) clearTimeout(saveRowsTimer);
+  saveRowsTimer = setTimeout(() => {
+    saveRowsTimer = null;
+    if (pendingSaveRows) saveRows(pendingSaveRows);
+    pendingSaveRows = null;
+  }, delayMs);
+}
+
+export function flushScheduledSaveRows(rows?: Shipment[]): void {
+  if (saveRowsTimer) clearTimeout(saveRowsTimer);
+  saveRowsTimer = null;
+  const toSave = rows ?? pendingSaveRows;
+  pendingSaveRows = null;
+  if (toSave) saveRows(toSave);
+}
+

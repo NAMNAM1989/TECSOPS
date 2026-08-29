@@ -48,6 +48,8 @@ interface SmartSearchBarProps {
   inlineFacets?: boolean;
   /** Chip ngày bay thấp hơn — hàng lọc desktop gọn */
   tightFacets?: boolean;
+  /** Trì hoãn onChange (ms) — giảm re-filter khi gõ tìm kiếm */
+  debounceMs?: number;
 }
 
 function FlightDateChips({
@@ -175,6 +177,7 @@ export function SmartSearchBar({
   compact = false,
   inlineFacets = false,
   tightFacets = false,
+  debounceMs = 0,
 }: SmartSearchBarProps) {
   const localRef = useRef<HTMLInputElement>(null);
   const overlayInputRef = useRef<HTMLInputElement>(null);
@@ -183,8 +186,37 @@ export function SmartSearchBar({
   const listboxId = useId();
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [draftValue, setDraftValue] = useState(value);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const trimmed = value.trim();
+  useEffect(() => {
+    setDraftValue(value);
+  }, [value]);
+
+  const emitChange = (next: string) => {
+    onChange(next);
+  };
+
+  const queueFilterChange = (next: string) => {
+    setDraftValue(next);
+    if (debounceMs <= 0) {
+      emitChange(next);
+      return;
+    }
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      emitChange(next);
+    }, debounceMs);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, []);
+
+  const trimmed = draftValue.trim();
   const activeFlightDate =
     flightDateFilter || normalizeFlightDateToken(trimmed);
   const flightFacets = useMemo(
@@ -419,9 +451,14 @@ export function SmartSearchBar({
       <input
         ref={mergedRef}
         type="search"
-        value={value}
+        value={compact && open ? value : draftValue}
         onChange={(e) => {
-          onChange(e.target.value);
+          const next = e.target.value;
+          if (compact && open) {
+            onChange(next);
+          } else {
+            queueFilterChange(next);
+          }
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
@@ -440,7 +477,8 @@ export function SmartSearchBar({
         <button
           type="button"
           onClick={() => {
-            onChange("");
+            if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+            queueFilterChange("");
             setOpen(false);
             mergedRef.current?.focus();
           }}

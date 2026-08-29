@@ -108,6 +108,7 @@ export function OpsContextStrip({
               inputRef={searchInputRef}
               onSelectMatch={onSelectSearchMatch}
               inlineFacets={!isMobile}
+              debounceMs={200}
             />
           </div>
 

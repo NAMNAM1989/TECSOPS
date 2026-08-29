@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import type { Shipment } from "../types/shipment";
-import { saveRows } from "../utils/shipmentStorage";
+import { saveRows, scheduleSaveRows, flushScheduledSaveRows } from "../utils/shipmentStorage";
 import { credFetch } from "../apiFetch";
 import { parseAppState } from "../utils/appStateParse";
 import {
@@ -213,7 +213,7 @@ export function useShipmentSync(
   const persistIfApplied = useCallback((prev: AppState | null, next: AppState, force: boolean) => {
     const picked = force ? next : pickNewerState(prev, next);
     if (force || picked === next) {
-      saveRows(picked.rows);
+      scheduleSaveRows(picked.rows);
       saveCustomerDirectoryToStorage(picked.customers);
       if (picked.airlineLabelOverrides) {
         saveAirlineLabelOverridesToStorage(picked.airlineLabelOverrides);
@@ -343,6 +343,14 @@ export function useShipmentSync(
     };
   }, [goLiveFromParsed]);
 
+  useEffect(() => {
+    const flush = () => {
+      if (state?.rows) flushScheduledSaveRows(state.rows);
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => window.removeEventListener("beforeunload", flush);
+  }, [state?.rows]);
+
   const setSyncScope = useCallback(
     async (nextScope: StateSyncScope) => {
       const prev = syncScopeRef.current;
@@ -376,7 +384,7 @@ export function useShipmentSync(
       // Enqueue trước khi hiển thị/persist local: không bao giờ apply-without-enqueue.
       offlineQueueRef.current.push(queued);
       syncPendingCount();
-      saveRows(next.rows);
+      scheduleSaveRows(next.rows);
       if (mutation.action === "SET_CUSTOMERS" || mutation.action === "RESET_TRIAL_DATA") {
         saveCustomerDirectoryToStorage(next.customers);
       }
@@ -387,20 +395,20 @@ export function useShipmentSync(
       return next;
     }
 
-    /** Xóa lô: cập nhật UI ngay để AWB được giải phóng trước khi server phản hồi. */
     const rollbackRef: { current: AppState | null } = { current: null };
-    if (mutation.action === "DELETE") {
-      setState((prev) => {
-        if (!prev) return prev;
-        rollbackRef.current = prev;
-        try {
-          const next = applyShipmentMutation(prev, mutation);
-          saveRows(next.rows);
-          return next;
-        } catch {
-          return prev;
-        }
-      });
+    const optimisticActions = new Set<ShipmentMutation["action"]>(["UPDATE", "DELETE", "ADD"]);
+
+    if (optimisticActions.has(mutation.action)) {
+      if (!state) return null;
+      rollbackRef.current = state;
+      try {
+        const optimistic = applyShipmentMutation(state, mutation);
+        setState(optimistic);
+        scheduleSaveRows(optimistic.rows);
+      } catch (e) {
+        rollbackRef.current = null;
+        throw e;
+      }
     }
 
     try {
@@ -409,7 +417,7 @@ export function useShipmentSync(
       setState((prev) => {
         applied = pickNewerState(prev, next);
         if (applied === next) {
-          saveRows(next.rows);
+          scheduleSaveRows(next.rows);
           if (mutation.action === "SET_CUSTOMERS" || mutation.action === "RESET_TRIAL_DATA") {
             saveCustomerDirectoryToStorage(next.customers);
           }
@@ -424,7 +432,7 @@ export function useShipmentSync(
     } catch (e) {
       if (rollbackRef.current) {
         setState(rollbackRef.current);
-        saveRows(rollbackRef.current.rows);
+        scheduleSaveRows(rollbackRef.current.rows);
       }
       throw e;
     }

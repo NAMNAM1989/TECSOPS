@@ -7,7 +7,10 @@ import { useToast } from "../ui";
 interface Props {
   rowId: string;
   value: string;
-  allRows: Shipment[];
+  /** Tra AWB trùng — ổn định ref để không re-render cả bảng. */
+  findAwbConflict?: (digits: string, exceptId: string) => Shipment | null;
+  /** Fallback khi chưa có findAwbConflict */
+  allRows?: Shipment[];
   onCommit: (awbDisplay: string) => void;
   className?: string;
   onEnterNavigateDown?: () => void;
@@ -16,7 +19,8 @@ interface Props {
 export function InlineAwbEdit({
   rowId,
   value,
-  allRows,
+  findAwbConflict,
+  allRows = [],
   onCommit,
   className = "",
   onEnterNavigateDown,
@@ -57,7 +61,9 @@ export function InlineAwbEdit({
       setEditing(false);
       return false;
     }
-    const conflict = findAwbDigitsConflict(allRows, d, rowId);
+    const conflict = findAwbConflict
+      ? findAwbConflict(d, rowId)
+      : findAwbDigitsConflict(allRows, d, rowId);
     if (conflict) {
       toast.error(awbConflictMessage(conflict), "AWB trùng");
       setEditing(false);

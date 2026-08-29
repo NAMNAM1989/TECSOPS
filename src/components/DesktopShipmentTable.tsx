@@ -12,7 +12,7 @@ import {
 } from "../utils/bookingDateParse";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { InlineAwbEdit } from "./InlineAwbEdit";
-import { MobileDimKgModal } from "./MobileDimKgModal";
+import { LazyMobileDimKgModal } from "./LazyMobileDimKgModal";
 import {
   statusRowAccent,
   statusRowSelected,
@@ -196,7 +196,7 @@ export function DesktopShipmentTable({
         </section>
       </div>
       {dimModalRow ? (
-        <MobileDimKgModal
+        <LazyMobileDimKgModal
           key={dimModalRow.id}
           row={dimModalRow}
           customerDirectory={customerDirectory}

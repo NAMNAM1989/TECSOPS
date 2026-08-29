@@ -24,9 +24,9 @@ import {
 } from "../utils/bookingDateParse";
 import { StatusSelect } from "./StatusBadge";
 import {
-  MobileDimKgModal,
+  LazyMobileDimKgModal,
   type MobileDimSavePayload,
-} from "./MobileDimKgModal";
+} from "./LazyMobileDimKgModal";
 import {
   formatShipmentDimWeightDisplay,
   resolveShipmentDimWeightKg,
@@ -612,7 +612,7 @@ export function MobileShipmentEditSheet({
       </div>
 
       {dimOpen ? (
-        <MobileDimKgModal
+        <LazyMobileDimKgModal
           row={{ ...shipment, dimWeightKg, dimLines }}
           customerDirectory={customerDirectory}
           onClose={() => setDimOpen(false)}

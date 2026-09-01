@@ -25,6 +25,7 @@ describe("sheets + lookup auth gate", () => {
       token: "test-token-at-least-24-characters",
       isProduction: true,
       allowUnauthenticated: false,
+      disableLoginGate: false,
     });
     const app = express();
     app.use(express.json());

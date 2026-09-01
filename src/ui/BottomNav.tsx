@@ -47,7 +47,7 @@ const ITEMS: {
 ];
 
 /**
- * Thanh điều hướng dưới — mobile polish v4.
+ * Thanh điều hướng dưới — 52px + Safari safe-area.
  * Ẩn khi `html[data-ops-mobile-overlay=sheet]` (edit sheet / modal) để không che Lưu/Hủy.
  */
 export function BottomNav({
@@ -58,11 +58,11 @@ export function BottomNav({
 }: Props) {
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-[500] border-t border-ui-border bg-ui-surface pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1 shadow-[0_-4px_16px_rgba(11,18,32,0.06)] md:hidden [[data-ops-mobile-overlay=sheet]_&]:pointer-events-none [[data-ops-mobile-overlay=sheet]_&]:invisible"
+      className="fixed inset-x-0 bottom-0 z-[500] border-t border-ui-border bg-ui-surface pb-[max(12px,env(safe-area-inset-bottom))] pt-0 shadow-[0_-4px_16px_rgba(11,18,32,0.06)] md:hidden [[data-ops-mobile-overlay=sheet]_&]:pointer-events-none [[data-ops-mobile-overlay=sheet]_&]:invisible"
       aria-label="Điều hướng chính"
       data-testid="bottom-nav"
     >
-      <div className="mx-auto flex max-w-lg items-stretch justify-around gap-1 px-2">
+      <div className="mx-auto flex h-[52px] max-w-lg items-stretch justify-around gap-1 px-2">
         {ITEMS.map((item) => {
           const isActive = active === item.id;
           const Icon = item.Icon;
@@ -80,19 +80,13 @@ export function BottomNav({
                 if (item.id === "customers") onPrefetchCustomers?.();
                 if (item.id === "stats") onPrefetchStats?.();
               }}
-              className={`relative flex min-h-12 min-w-[4.5rem] flex-1 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-[10px] font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+              className={`flex min-h-11 min-w-[4.5rem] flex-1 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-ui-md px-2 text-[12px] font-semibold leading-4 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
                 isActive
-                  ? "bg-teal-500/12 text-ui-primary-hover"
+                  ? "text-ui-primary"
                   : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
               }`}
             >
-              {isActive ? (
-                <span
-                  className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-ui-accent"
-                  aria-hidden
-                />
-              ) : null}
-              <Icon className={`h-5 w-5 ${isActive ? "text-ui-accent" : ""}`} />
+              <Icon className={`h-5 w-5 ${isActive ? "text-ui-primary" : ""}`} />
               <span>{item.label}</span>
             </button>
           );

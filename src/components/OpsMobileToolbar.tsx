@@ -1,11 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import { statusOrderForFilter } from "../utils/shipmentWorkflowStatus";
-import { statusLabel, statusLabelCompact } from "./statusStyles";
+import { statusLabel } from "./statusStyles";
 import type { StatusFilterValue } from "./StatusFilterBar";
-import { OverflowMenu, type OverflowMenuItem } from "../ui/OverflowMenu";
+import type { OverflowMenuItem } from "../ui/OverflowMenu";
 import { buildOpsCargoReportItems } from "./opsCargoReportItems";
+import { MOBILE, mobileSheetBackdrop } from "../styles/mobileOpsStyles";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { useOpsMobileOverlayLock } from "../hooks/useOpsMobileOverlayLock";
+
+type SheetId = "filter" | "tools" | null;
 
 type Props = {
   activeWarehouse: Warehouse;
@@ -28,7 +33,54 @@ type Props = {
   onCopyCargoDayReport: (kind: CargoDayReportCopyKind) => void;
 };
 
-/** Thanh sticky mobile: lọc trạng thái + menu overflow (Sheet, Excel, ảnh, …). */
+function OpsChromeSheet({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const isMobile = useIsMobile();
+  useOpsMobileOverlayLock(open);
+  if (!open) return null;
+  return (
+    <div
+      className={mobileSheetBackdrop(isMobile)}
+      role="presentation"
+      data-testid="ops-mobile-chrome-sheet"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className={MOBILE.sheet}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-ui-border px-4 py-3">
+          <h2 className="text-base font-semibold leading-6 text-ui-text">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-ui-md text-[13px] font-semibold text-ui-text-muted hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+            aria-label="Đóng"
+          >
+            Đóng
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 pb-[max(12px,env(safe-area-inset-bottom))]">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Chip lọc + ⋯ — sheet đáy, không thanh cao thứ hai. */
 export function OpsMobileToolbar({
   activeWarehouse,
   viewRows,
@@ -49,6 +101,8 @@ export function OpsMobileToolbar({
   cargoReportCopying = false,
   onCopyCargoDayReport,
 }: Props) {
+  const [sheet, setSheet] = useState<SheetId>(null);
+
   const statusOrder = useMemo(
     () => statusOrderForFilter(activeWarehouse),
     [activeWarehouse],
@@ -136,44 +190,120 @@ export function OpsMobileToolbar({
     viewRows,
   ]);
 
-  if (viewRows.length === 0) return null;
+  const filterActive = statusFilter !== "ALL";
+  const filterChipLabel = filterActive
+    ? statusLabel[statusFilter as ShipmentStatus]
+    : "Tất cả";
 
   return (
-    <div
-      data-testid="ops-mobile-toolbar"
-      className="flex items-center gap-2 border-t border-ui-border/70 bg-ui-surface px-3 py-2"
-    >
-      <label className="min-w-0 flex-1">
-        <span className="sr-only">Lọc trạng thái</span>
-        <select
-          value={statusFilter}
-          onChange={(e) => onStatusFilterChange(e.target.value as StatusFilterValue)}
-          className="box-border w-full min-h-11 touch-manipulation rounded-xl border border-ui-border/90 bg-ui-surface px-3 text-[13px] font-semibold text-ui-text shadow-ui-sm outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus"
-          aria-label="Lọc trạng thái"
-        >
-          <option value="ALL">Tất cả · {viewRows.length}</option>
+    <div data-testid="ops-mobile-toolbar" className="flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        data-testid="ops-mobile-filter-chip"
+        onClick={() => setSheet("filter")}
+        aria-label={`Lọc trạng thái · ${filterChipLabel}`}
+        className={`inline-flex h-7 min-h-11 touch-manipulation items-center rounded-full px-3 text-[13px] font-semibold leading-[18px] focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+          filterActive
+            ? "bg-ui-primary text-white"
+            : "bg-ui-surface-muted text-ui-text-muted"
+        }`}
+      >
+        <span className="whitespace-nowrap">{filterChipLabel}</span>
+      </button>
+      <button
+        type="button"
+        data-testid="ops-mobile-tools-overflow"
+        onClick={() => {
+          overflowItems.forEach((item) => item.onPrefetch?.());
+          setSheet("tools");
+        }}
+        aria-label="Thêm thao tác"
+        className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-ui-md text-lg font-bold leading-none text-ui-text hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+      >
+        ⋯
+      </button>
+
+      <OpsChromeSheet
+        open={sheet === "filter"}
+        title="Lọc trạng thái"
+        onClose={() => setSheet(null)}
+      >
+        <ul className="space-y-1" aria-label="Lọc trạng thái">
+          <li>
+            <button
+              type="button"
+              onClick={() => {
+                onStatusFilterChange("ALL");
+                setSheet(null);
+              }}
+              className={`flex min-h-11 w-full touch-manipulation items-center justify-between rounded-ui-md px-3 text-left text-[16px] leading-6 ${
+                statusFilter === "ALL"
+                  ? "bg-ui-primary text-white"
+                  : "bg-ui-surface-muted text-ui-text"
+              }`}
+            >
+              <span className="font-semibold">Tất cả</span>
+              <span className="font-mono tabular-nums">{viewRows.length}</span>
+            </button>
+          </li>
           {statusOrder.map((st) => {
             const count = statusCounts.get(st) ?? 0;
             if (count === 0 && statusFilter !== st) return null;
-            const label =
-              statusLabelCompact[st as keyof typeof statusLabelCompact] ??
-              statusLabel[st as keyof typeof statusLabel];
+            const selected = statusFilter === st;
             return (
-              <option key={st} value={st}>
-                {label} · {count}
-              </option>
+              <li key={st}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onStatusFilterChange(st);
+                    setSheet(null);
+                  }}
+                  className={`flex min-h-11 w-full touch-manipulation items-center justify-between rounded-ui-md px-3 text-left text-[16px] leading-6 ${
+                    selected
+                      ? "bg-ui-primary text-white"
+                      : "bg-ui-surface-muted text-ui-text"
+                  }`}
+                >
+                  <span className="font-semibold">{statusLabel[st]}</span>
+                  <span className="font-mono tabular-nums">{count}</span>
+                </button>
+              </li>
             );
           })}
-        </select>
-      </label>
-      <OverflowMenu
-        label="Thêm thao tác"
-        items={overflowItems}
-        compact
-        triggerClassName="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border/90 bg-ui-surface px-3 text-[13px] font-bold text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+        </ul>
+      </OpsChromeSheet>
+
+      <OpsChromeSheet
+        open={sheet === "tools"}
+        title="Thao tác"
+        onClose={() => setSheet(null)}
       >
-        Thêm ▾
-      </OverflowMenu>
+        <ul className="space-y-1">
+          {overflowItems.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                disabled={item.disabled}
+                onClick={() => {
+                  if (item.disabled) return;
+                  setSheet(null);
+                  item.onSelect();
+                }}
+                className="flex min-h-11 w-full touch-manipulation flex-col justify-center rounded-ui-md bg-ui-surface-muted px-3 py-2 text-left disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <span className="text-[16px] font-semibold leading-6 text-ui-text">
+                  {item.label}
+                </span>
+                {item.description ? (
+                  <span className="text-[13px] leading-[18px] text-ui-text-muted">
+                    {item.description}
+                  </span>
+                ) : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </OpsChromeSheet>
     </div>
   );
 }

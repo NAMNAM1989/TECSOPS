@@ -34,7 +34,7 @@ const row = {
 } as Shipment;
 
 describe("MobileShipmentCards", () => {
-  it("card 2 dòng: AWB mono + status + một meta; không editor K/Kg", () => {
+  it("card 3 dòng: MAWB · DEST · ⋯; flight · pcs/kg; khách — không dropdown Volume/Nhận", () => {
     const html = renderToStaticMarkup(
       <MobileShipmentCards
         rows={[row]}
@@ -49,15 +49,21 @@ describe("MobileShipmentCards", () => {
     );
     expect(html).toContain("mobile-shipment-list");
     expect(html).toContain("176-1234 5675");
+    expect(html).toContain("SGN");
     expect(html).toContain("NAMNAM");
-    expect(html).toContain("2K");
-    expect(html).toContain("12.5kg");
+    expect(html).toContain("VN623/23AUG");
+    expect(html).toContain("2 / 12.5 kg");
+    expect(html).toContain("border-l-[3px]");
+    expect(html).toContain("border-l-cyan-500");
     expect(html).not.toContain(">K<");
     expect(html).not.toContain("CNEE");
+    expect(html).not.toContain("Trạng thái ·");
+    expect(html).not.toContain("h-11 w-full min-h-11");
     expect(html).toContain("row-actions-menu-s1");
+    expect(html).toContain("min-h-11 min-w-11");
   });
 
-  it("densify padding/gap, AWB 15px, status/menu ≥44px, clearance FAB", () => {
+  it("pad 12 / gap 8 / MAWB 15/600 / clearance FAB + 24", () => {
     const html = renderToStaticMarkup(
       <MobileShipmentCards
         rows={[row]}
@@ -70,27 +76,28 @@ describe("MobileShipmentCards", () => {
         viewSessionYmd="2026-08-23"
       />,
     );
-    expect(html).toContain("space-y-0.5");
-    expect(html).toContain("px-2.5 py-2");
-    expect(html).not.toContain("px-2 py-1");
-    expect(html).toContain("ops-awb");
+    expect(html).toContain("space-y-2");
+    expect(html).toContain("px-3 py-3");
+    expect(html).toContain("rounded-ui-md");
+    expect(html).toContain("shadow-ui-sm");
     expect(html).toContain("text-[15px]");
-    expect(html).toContain("h-11 w-full min-h-11");
-    expect(html).toContain("min-h-11 min-w-11");
-    expect(html).toContain("pb-[calc(6.5rem+env(safe-area-inset-bottom))]");
-    expect(html).toContain("scroll-mb-[calc(6.5rem+env(safe-area-inset-bottom))]");
+    expect(html).toContain("font-semibold");
+    expect(html).toContain("text-ui-awb");
+    expect(html).toContain("pb-[calc(148px+max(12px,env(safe-area-inset-bottom)))]");
+    expect(html).toContain("scroll-mb-[calc(148px+max(12px,env(safe-area-inset-bottom)))]");
   });
 });
 
 describe("OpsMobileBookingFab", () => {
-  it("FAB tròn +, vùng chạm ≥56px, không thanh full-width", () => {
+  it("FAB tròn +, 56px, right 16, trên nav+safe-area+16", () => {
     const html = renderToStaticMarkup(
       <OpsMobileBookingFab activeWarehouse="TCS" onAdd={() => undefined} />,
     );
     expect(html).toContain("ops-mobile-booking-fab");
     expect(html).toContain("rounded-full");
     expect(html).toContain("min-h-14");
-    expect(html).toContain("bottom-[calc(4.25rem+env(safe-area-inset-bottom))]");
+    expect(html).toContain("right-4");
+    expect(html).toContain("bottom-[calc(52px+max(12px,env(safe-area-inset-bottom))+16px)]");
     expect(html).toContain(
       "[[data-ops-mobile-overlay=sheet]_&amp;]:invisible",
     );

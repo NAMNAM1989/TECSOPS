@@ -5,7 +5,6 @@ import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipme
 import { formatSyncedPhrase } from "../utils/dbSyncedAt";
 import { formatKgTotal } from "../utils/formatKgTotal";
 import { computeOpsDayOverview } from "../utils/opsDayOverview";
-import { SyncStatusPill } from "../ui";
 import type { SyncStatus } from "../hooks/useShipmentSync";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { SmartSearchBar } from "./SmartSearchBar";
@@ -76,7 +75,43 @@ function SearchIcon({ className }: { className?: string }) {
   );
 }
 
-/** Chrome mobile Ops — header 2 tầng, KPI scroll, toolbar lọc + overflow. */
+function LiveDot({
+  live,
+  title,
+  cta,
+  onRefresh,
+}: {
+  live: boolean;
+  title: string;
+  cta: string | null;
+  onRefresh?: () => void;
+}) {
+  const tone = live
+    ? "bg-emerald-500"
+    : cta
+      ? "bg-amber-400"
+      : "bg-slate-400";
+  return (
+    <button
+      type="button"
+      data-testid="ops-mobile-live-dot"
+      disabled={!cta}
+      onClick={() => {
+        if (cta) onRefresh?.();
+      }}
+      title={title || (live ? "Live" : cta ?? "Đồng bộ")}
+      aria-label={cta ?? (live ? "Live" : "Đồng bộ")}
+      className="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-default"
+    >
+      <span
+        className={`h-2 w-2 rounded-full ${tone} ${live ? "animate-pulse" : ""}`}
+        aria-hidden
+      />
+    </button>
+  );
+}
+
+/** Chrome mobile Ops — Ngày (44) → Kho (44) → Summary (28) + 1 CTA list. */
 export function OpsMobileStickyHeader({
   selectedYmd,
   onDateChange,
@@ -147,11 +182,11 @@ export function OpsMobileStickyHeader({
   const filterHint = filtersActive ? "*" : "";
 
   return (
-    <header className="space-y-0" data-testid="ops-mobile-sticky-header">
-      <div className="overflow-hidden rounded-none border-b border-ui-border/80 bg-ui-background">
+    <header className="space-y-0 bg-ui-surface" data-testid="ops-mobile-sticky-header">
+      <div className="border-b border-ui-border bg-ui-surface">
         <div
           data-testid="ops-mobile-top-row"
-          className="flex min-h-[52px] items-center gap-2 px-3 py-2"
+          className="flex h-11 items-center gap-1 px-2"
         >
           <div className="min-w-0 flex-1">
             <OpsDatePicker
@@ -165,28 +200,17 @@ export function OpsMobileStickyHeader({
               isViewingToday={isViewingToday}
             />
           </div>
-          {syncCta ? (
-            <button
-              type="button"
-              onClick={() => void onSyncRefresh?.()}
-              className="inline-flex min-h-10 shrink-0 touch-manipulation items-center gap-1 rounded-full px-1"
-              title={syncTitle || syncCta}
-              aria-label={syncCta}
-            >
-              <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
-              <span className="text-[10px] font-bold text-ui-navy">{syncCta}</span>
-            </button>
-          ) : (
-            <span title={syncTitle || "Live sync"} className="inline-flex shrink-0 items-center gap-1">
-              <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
-              <span className="text-[11px] font-bold text-emerald-700">Live</span>
-            </span>
-          )}
+          <LiveDot
+            live={live}
+            title={syncTitle || (live ? "Live" : syncCta ?? "Đồng bộ")}
+            cta={syncCta}
+            onRefresh={() => void onSyncRefresh?.()}
+          />
           <button
             type="button"
             data-testid="ops-mobile-search-toggle"
             onClick={() => setSearchExpanded((v) => !v)}
-            className="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border/80 bg-ui-surface text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+            className="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-ui-md text-ui-text transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
             aria-label={searchExpanded ? "Đóng tìm kiếm" : "Mở tìm kiếm"}
             aria-expanded={searchExpanded}
           >
@@ -197,7 +221,7 @@ export function OpsMobileStickyHeader({
         {searchExpanded ? (
           <div
             data-testid="ops-mobile-search-expand"
-            className="border-t border-ui-border/60 px-3 py-2"
+            className="border-t border-ui-border px-3 py-2"
           >
             <SmartSearchBar
               compact
@@ -218,7 +242,7 @@ export function OpsMobileStickyHeader({
               <button
                 type="button"
                 onClick={onClearFilters}
-                className="mt-1.5 text-[11px] font-semibold text-ui-primary"
+                className="mt-1.5 min-h-11 text-[13px] font-semibold text-ui-primary"
               >
                 Xóa bộ lọc
               </button>
@@ -228,74 +252,61 @@ export function OpsMobileStickyHeader({
 
         <div
           data-testid="ops-mobile-wh-row"
-          className="flex gap-1.5 overflow-x-auto overscroll-x-contain border-t border-ui-border/60 px-3 py-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+          className="h-11 overflow-x-auto overscroll-x-contain border-t border-ui-border [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
         >
-          <div data-testid="warehouse-chips" className="min-w-0 shrink-0">
-            <WarehouseGridPicker
-              rows={viewRows}
-              active={activeWarehouse}
-              onSelect={onWarehouseChange}
-              highlightWarehouses={searchHighlightWarehouses}
-              chips
-              denseChips
-              touchTargets
-              hideAddButton
-            />
-          </div>
+          <WarehouseGridPicker
+            rows={viewRows}
+            active={activeWarehouse}
+            onSelect={onWarehouseChange}
+            highlightWarehouses={searchHighlightWarehouses}
+            chips
+            labelOnly
+            touchTargets
+            hideAddButton
+            className="h-11 min-w-max px-3"
+          />
         </div>
 
         {viewRows.length > 0 ? (
           <div
-            data-testid="ops-day-overview"
-            className="flex gap-2 overflow-x-auto overscroll-x-contain border-t border-ui-border/60 px-3 py-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+            data-testid="ops-mobile-summary-row"
+            className="flex h-7 items-center gap-2 overflow-visible border-t border-ui-border px-3"
           >
-            <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-ui-border/80 bg-ui-surface px-3 shadow-ui-sm">
-              <span className="text-[9px] font-extrabold uppercase tracking-wide text-ui-text-muted">
-                Lô{filterHint}
-              </span>
-              <span className="font-mono text-[13px] font-bold tabular-nums text-ui-navy">
-                {totals.lots}
-              </span>
-            </span>
-            <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-ui-border/80 bg-ui-surface px-3 shadow-ui-sm">
-              <span className="text-[9px] font-extrabold uppercase tracking-wide text-ui-text-muted">
-                PCS
-              </span>
-              <span className="font-mono text-[13px] font-bold tabular-nums text-ui-navy">
-                {totals.pcs}
-              </span>
-            </span>
-            <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-ui-border/80 bg-ui-surface px-3 shadow-ui-sm">
-              <span className="text-[9px] font-extrabold uppercase tracking-wide text-ui-text-muted">
-                KG
-              </span>
-              <span className="font-mono text-[13px] font-bold tabular-nums text-ui-navy">
-                {kgLabel}
-              </span>
-            </span>
+            <p
+              data-testid="ops-day-overview"
+              className="min-w-0 flex-1 truncate text-[13px] font-medium leading-[18px] text-ui-text-muted"
+              title={`Lô${filterHint} · PCS · KG`}
+            >
+              Lô{filterHint} {totals.lots}
+              <span className="mx-1 text-ui-border">·</span>
+              PCS {totals.pcs}
+              <span className="mx-1 text-ui-border">·</span>
+              KG {kgLabel}
+            </p>
+            <div className="-my-2">
+              <OpsMobileToolbar
+                activeWarehouse={activeWarehouse}
+                viewRows={viewRows}
+                statusFilter={statusFilter}
+                onStatusFilterChange={onStatusFilterChange}
+                onOpenSheetImport={onOpenSheetImport}
+                onPrefetchSheetImport={onPrefetchSheetImport}
+                onNavigateStats={onNavigateStats}
+                onPrefetchStats={onPrefetchStats}
+                onNavigateCustomers={onNavigateCustomers}
+                onPrefetchCustomers={onPrefetchCustomers}
+                onOpenAirlineLabels={onOpenAirlineLabels}
+                onDownloadDayExcel={onDownloadDayExcel}
+                onDownloadScscDim={onDownloadScscDim}
+                excelExporting={excelExporting}
+                scscDimExporting={scscDimExporting}
+                showDimScsc={showDimScsc}
+                cargoReportCopying={cargoReportCopying}
+                onCopyCargoDayReport={(kind) => onCopyCargoDayReport?.(kind)}
+              />
+            </div>
           </div>
         ) : null}
-
-        <OpsMobileToolbar
-          activeWarehouse={activeWarehouse}
-          viewRows={viewRows}
-          statusFilter={statusFilter}
-          onStatusFilterChange={onStatusFilterChange}
-          onOpenSheetImport={onOpenSheetImport}
-          onPrefetchSheetImport={onPrefetchSheetImport}
-          onNavigateStats={onNavigateStats}
-          onPrefetchStats={onPrefetchStats}
-          onNavigateCustomers={onNavigateCustomers}
-          onPrefetchCustomers={onPrefetchCustomers}
-          onOpenAirlineLabels={onOpenAirlineLabels}
-          onDownloadDayExcel={onDownloadDayExcel}
-          onDownloadScscDim={onDownloadScscDim}
-          excelExporting={excelExporting}
-          scscDimExporting={scscDimExporting}
-          showDimScsc={showDimScsc}
-          cargoReportCopying={cargoReportCopying}
-          onCopyCargoDayReport={(kind) => onCopyCargoDayReport?.(kind)}
-        />
       </div>
     </header>
   );

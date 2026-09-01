@@ -1,7 +1,7 @@
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { WAREHOUSE_ORDER, normalizeWarehouse } from "../constants/warehouses";
-import { awbDigitsKey } from "./awbFormat";
+import { awbDigitsKey, formatAwb } from "./awbFormat";
 import { awbConflictMessage, findAwbDigitsConflict } from "./awbUnique";
 import { migrateShipmentStatus, workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus";
 import { assertCustomerDirectoryValid } from "./customerDirectoryCore";
@@ -111,8 +111,12 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
         assertAwbUnique(rows, mutation.patch.awb, mutation.id);
       }
       const prev = rows[i];
-      const merged = { ...prev, ...mutation.patch };
-      const statusExtra = workflowStatusPatchFromDataEdit(prev, mutation.patch, merged);
+      const patch =
+        mutation.patch.awb === undefined
+          ? mutation.patch
+          : { ...mutation.patch, awb: formatAwb(mutation.patch.awb) };
+      const merged = { ...prev, ...patch };
+      const statusExtra = workflowStatusPatchFromDataEdit(prev, patch, merged);
       rows[i] = { ...merged, ...statusExtra };
       break;
     }
@@ -126,11 +130,11 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
     case "ADD": {
       const s = mutation.shipment;
       if (!s.sessionDate || !/^\d{4}-\d{2}-\d{2}$/.test(s.sessionDate)) {
-        throw new Error("ADD requires sessionDate");
+        throw new Error("ADD requires shipment.sessionDate (YYYY-MM-DD)");
       }
       assertAwbUnique(rows, s.awb);
       const id = nextNewId(rows);
-      const withId = { ...s, id } as Shipment;
+      const withId = { ...s, awb: formatAwb(s.awb), id } as Shipment;
       rows.push({ ...withId, status: migrateShipmentStatus(withId) });
       break;
     }

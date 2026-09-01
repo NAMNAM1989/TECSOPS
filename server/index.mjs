@@ -204,12 +204,12 @@ app.post("/api/mutations", appAuth.requireAuth, mutationRateLimit, async (req, r
   }
 });
 
-registerSheetsRoutes(app, { io });
+registerSheetsRoutes(app, { io, requireAuth: appAuth.requireAuth });
 console.info("[api] sheets (BOOK Hằng Ngày)");
 // Gemini /api/ai đã gỡ (A3). Railway có thể xóa GEMINI_*.
 
 if (isDatabaseConfigured()) {
-  registerLookupRoutes(app);
+  registerLookupRoutes(app, { requireAuth: appAuth.requireAuth });
   console.info("[api] lookup (Postgres)");
 }
 

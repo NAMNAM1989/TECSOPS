@@ -201,6 +201,9 @@ export function useShipmentSync(
   const [syncScope, setSyncScopeState] = useState<StateSyncScope>(initialScope);
   const syncScopeRef = useRef(syncScope);
   syncScopeRef.current = syncScope;
+  const stateRef = useRef<AppState | null>(state);
+  stateRef.current = state;
+  const mutateChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const apiOkRef = useRef(false);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const cancelledRef = useRef(false);
@@ -396,70 +399,84 @@ export function useShipmentSync(
   );
 
   const mutate = useCallback(async (mutation: ShipmentMutation): Promise<AppState | null> => {
-    if (!apiOkRef.current) {
-      assertOfflineQueueCapacity(offlineQueueRef.current.length);
-      if (!state) return null;
-      const next = applyShipmentMutation(state, mutation);
-      const queued: QueuedMutation = {
-        mutation,
-        localId: mutation.action === "ADD" ? (addedRowId(state, next) ?? undefined) : undefined,
-      };
-      // Enqueue trước khi hiển thị/persist local: không bao giờ apply-without-enqueue.
-      offlineQueueRef.current.push(queued);
-      syncPendingCount();
-      scheduleSaveRows(next.rows);
-      if (mutation.action === "SET_CUSTOMERS") {
-        saveCustomerDirectoryToStorage(next.customers);
+    const run = async (): Promise<AppState | null> => {
+      const base = stateRef.current;
+      if (!apiOkRef.current) {
+        assertOfflineQueueCapacity(offlineQueueRef.current.length);
+        if (!base) return null;
+        const next = applyShipmentMutation(base, mutation);
+        const queued: QueuedMutation = {
+          mutation,
+          localId: mutation.action === "ADD" ? (addedRowId(base, next) ?? undefined) : undefined,
+        };
+        // Enqueue trước khi hiển thị/persist local: không bao giờ apply-without-enqueue.
+        offlineQueueRef.current.push(queued);
+        syncPendingCount();
+        scheduleSaveRows(next.rows);
+        if (mutation.action === "SET_CUSTOMERS") {
+          saveCustomerDirectoryToStorage(next.customers);
+        }
+        if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
+          saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
+        }
+        stateRef.current = next;
+        setState(next);
+        return next;
       }
-      if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
-        saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
+
+      const rollbackRef: { current: AppState | null } = { current: null };
+      const optimisticActions = new Set<ShipmentMutation["action"]>(["UPDATE", "DELETE", "ADD"]);
+
+      if (optimisticActions.has(mutation.action)) {
+        if (!base) return null;
+        rollbackRef.current = base;
+        try {
+          const optimistic = applyShipmentMutation(base, mutation);
+          stateRef.current = optimistic;
+          setState(optimistic);
+          scheduleSaveRows(optimistic.rows);
+        } catch (e) {
+          rollbackRef.current = null;
+          throw e;
+        }
       }
-      setState(next);
-      return next;
-    }
 
-    const rollbackRef: { current: AppState | null } = { current: null };
-    const optimisticActions = new Set<ShipmentMutation["action"]>(["UPDATE", "DELETE", "ADD"]);
-
-    if (optimisticActions.has(mutation.action)) {
-      if (!state) return null;
-      rollbackRef.current = state;
       try {
-        const optimistic = applyShipmentMutation(state, mutation);
-        setState(optimistic);
-        scheduleSaveRows(optimistic.rows);
+        const next = await postMutation(mutation, syncScopeRef.current);
+        let applied: AppState = next;
+        setState((prev) => {
+          applied = pickNewerState(prev, next);
+          if (applied === next) {
+            scheduleSaveRows(next.rows);
+            if (mutation.action === "SET_CUSTOMERS") {
+              saveCustomerDirectoryToStorage(next.customers);
+            }
+            if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
+              saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
+            }
+          }
+          stateRef.current = applied;
+          return applied;
+        });
+        markSynced();
+        return applied;
       } catch (e) {
-        rollbackRef.current = null;
+        if (rollbackRef.current) {
+          stateRef.current = rollbackRef.current;
+          setState(rollbackRef.current);
+          scheduleSaveRows(rollbackRef.current.rows);
+        }
         throw e;
       }
-    }
+    };
 
-    try {
-      const next = await postMutation(mutation, syncScopeRef.current);
-      let applied: AppState = next;
-      setState((prev) => {
-        applied = pickNewerState(prev, next);
-        if (applied === next) {
-          scheduleSaveRows(next.rows);
-          if (mutation.action === "SET_CUSTOMERS") {
-            saveCustomerDirectoryToStorage(next.customers);
-          }
-          if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
-            saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
-          }
-        }
-        return applied;
-      });
-      markSynced();
-      return applied;
-    } catch (e) {
-      if (rollbackRef.current) {
-        setState(rollbackRef.current);
-        scheduleSaveRows(rollbackRef.current.rows);
-      }
-      throw e;
-    }
-  }, [markSynced, state, syncPendingCount]);
+    const queued = mutateChainRef.current.then(run, run);
+    mutateChainRef.current = queued.then(
+      () => undefined,
+      () => undefined
+    );
+    return queued;
+  }, [markSynced, syncPendingCount]);
 
   const refreshState = useCallback(async (): Promise<void> => {
     try {

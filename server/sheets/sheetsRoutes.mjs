@@ -29,6 +29,8 @@ import {
   sheetRowToUpdatePatch,
 } from "./sheetRowReconcile.mjs";
 import { loadState, peekStateVersion, runBatchMutations } from "../stateStore.mjs";
+import { attachDbSyncedAt } from "../namnamlogisticsSyncedAt.mjs";
+import { emitScopedSync, projectAppState } from "../stateScope.mjs";
 
 function buildAwbIndexes(rows, sessionDate) {
   /** @type {Map<string, object>} */
@@ -292,7 +294,9 @@ function csvTextToGrid(text) {
 }
 
 export function registerSheetsRoutes(app, deps) {
-  app.get("/api/sheets/book/config", (_req, res) => {
+  const requireAuth = deps.requireAuth || ((_req, _res, next) => next());
+
+  app.get("/api/sheets/book/config", requireAuth, (_req, res) => {
     const spreadsheetId = getBookSpreadsheetId();
     res.json({
       spreadsheetId,
@@ -306,7 +310,7 @@ export function registerSheetsRoutes(app, deps) {
     });
   });
 
-  app.get("/api/sheets/book/sync", async (req, res) => {
+  app.get("/api/sheets/book/sync", requireAuth, async (req, res) => {
     try {
       const sessionDate = String(req.query.sessionDate ?? "").trim();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) {
@@ -422,7 +426,7 @@ export function registerSheetsRoutes(app, deps) {
   });
 
   /** Sync từ CSV/TSV local (kéo-thả file) — cùng schema preview với Google Sheet. */
-  app.post("/api/sheets/book/sync-local", async (req, res) => {
+  app.post("/api/sheets/book/sync-local", requireAuth, async (req, res) => {
     try {
       const sessionDate = String(req.body?.sessionDate ?? "").trim();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) {
@@ -507,7 +511,7 @@ export function registerSheetsRoutes(app, deps) {
     }
   });
 
-  app.post("/api/sheets/book/apply", async (req, res) => {
+  app.post("/api/sheets/book/apply", requireAuth, async (req, res) => {
     try {
       const body = req.body;
       const sessionDate = String(body?.sessionDate ?? "").trim();
@@ -689,7 +693,9 @@ export function registerSheetsRoutes(app, deps) {
       }
 
       if (pendingMutations.length || reorderedCount > 0) {
-        deps.io?.emit("sync", state);
+        const forClient = await attachDbSyncedAt(state);
+        await emitScopedSync(deps.io, forClient, { omitCustomers: true });
+        state = forClient;
       }
 
       res.json({
@@ -705,7 +711,7 @@ export function registerSheetsRoutes(app, deps) {
         removed,
         skipped,
         errors,
-        state,
+        state: projectAppState(state, { sessionDate }),
       });
     } catch (e) {
       console.error("[api/sheets/book/apply]", e);

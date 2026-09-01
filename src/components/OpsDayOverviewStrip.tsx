@@ -15,7 +15,34 @@ type Props = {
   embedded?: boolean;
 };
 
-/** Tổng ngày + chip kho — một hàng cuộn ngang. */
+function KpiChip({
+  label,
+  value,
+  active = false,
+}: {
+  label: string;
+  value: string | number;
+  active?: boolean;
+}) {
+  return (
+    <span
+      className={`inline-flex min-w-[5.5rem] shrink-0 flex-col rounded-xl border px-4 py-2.5 text-left shadow-ui-sm transition ${
+        active
+          ? "border-teal-500/45 bg-teal-500/10 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.12)]"
+          : "border-ui-border/90 bg-ui-surface hover:border-teal-500/30 hover:shadow-ui-md"
+      }`}
+    >
+      <span className="font-mono text-lg font-semibold tabular-nums leading-tight text-ui-navy">
+        {value}
+      </span>
+      <span className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
+        {label}
+      </span>
+    </span>
+  );
+}
+
+/** KPI ngày + chip kho — desktop: 3 KPI cards + chips. */
 export function OpsDayOverviewStrip({
   rows,
   activeWarehouse,
@@ -29,6 +56,30 @@ export function OpsDayOverviewStrip({
   const isMobile = variant === "mobile";
   const kgLabel = formatKgTotal(totals.kg);
   const filterHint = filtersActive ? "*" : "";
+
+  if (!isMobile && embedded) {
+    return (
+      <div
+        data-testid="ops-day-overview"
+        className="flex min-w-0 flex-wrap items-center gap-2"
+      >
+        <KpiChip label={`Lô${filterHint}`} value={totals.lots} active={filtersActive} />
+        <KpiChip label="PCS" value={totals.pcs} />
+        <KpiChip label="KG" value={kgLabel} />
+        <WarehouseGridPicker
+          rows={rows}
+          active={activeWarehouse}
+          onSelect={onSelectWarehouse}
+          highlightWarehouses={highlightWarehouses}
+          chips
+          denseChips
+          touchTargets={false}
+          hideAddButton
+          className="min-w-0 shrink-0"
+        />
+      </div>
+    );
+  }
 
   return (
     <div

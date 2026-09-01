@@ -81,33 +81,46 @@ function KpiCard({
   label,
   value,
   hint,
+  delta,
   tone = "default",
 }: {
   label: string;
   value: string | number;
   hint?: string;
+  delta?: { text: string; neutral?: boolean };
   tone?: "default" | "amber" | "teal" | "sky";
 }) {
   const toneClass =
     tone === "amber"
-      ? "border-amber-300/80 bg-gradient-to-br from-amber-50 to-white"
+      ? "border-amber-300/70 bg-ui-surface"
       : tone === "teal"
-        ? "border-teal-300/70 bg-gradient-to-br from-teal-50/90 to-white"
+        ? "border-teal-400/40 bg-ui-surface"
         : tone === "sky"
-          ? "border-sky-300/70 bg-gradient-to-br from-sky-50/90 to-white"
+          ? "border-sky-300/60 bg-ui-surface"
           : "border-ui-border/90 bg-ui-surface";
 
   return (
     <div
-      className={`min-w-[7.5rem] flex-1 rounded-2xl border px-3.5 py-3 shadow-ui-md ${toneClass}`}
+      className={`min-w-[8.5rem] flex-1 rounded-2xl border px-4 py-3.5 shadow-ui-sm transition hover:-translate-y-px hover:shadow-ui-md ${toneClass}`}
       title={hint}
     >
       <p className="m-0 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
         {label}
       </p>
-      <p className="m-0 mt-1 font-mono text-xl font-extrabold tabular-nums tracking-tight text-ui-navy sm:text-2xl">
+      <p className="m-0 mt-1.5 font-mono text-xl font-semibold tabular-nums tracking-tight text-ui-navy sm:text-2xl">
         {value}
       </p>
+      {delta ? (
+        <p
+          className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
+            delta.neutral
+              ? "bg-ui-surface-muted text-ui-text-muted"
+              : "bg-emerald-500/12 text-emerald-800"
+          }`}
+        >
+          {delta.text}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -408,10 +421,10 @@ export function OpsStatsPage({
                 <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
-                <Button variant="secondary" size="sm" onClick={onNavigateOps}>
+                <Button variant="secondary" size="sm" className="md:hidden" onClick={onNavigateOps}>
                   ← Ops
                 </Button>
-                <Button variant="ghost" size="sm" onClick={onNavigateCustomers}>
+                <Button variant="ghost" size="sm" className="md:hidden" onClick={onNavigateCustomers}>
                   Khách
                 </Button>
                 <Button
@@ -620,8 +633,8 @@ export function OpsStatsPage({
           <p className="text-sm text-ui-text-muted">Đang tải dữ liệu…</p>
         ) : (
           <div className="space-y-4 pb-8">
-            <div className="flex flex-wrap gap-2.5">
-              <KpiCard label="Lô" value={t.lots} tone="teal" />
+            <div className="flex flex-wrap gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] md:overflow-visible [&::-webkit-scrollbar]:hidden">
+              <KpiCard label="Lô" value={t.lots} tone="teal" delta={{ text: periodLabel, neutral: true }} />
               <KpiCard label="Kiện" value={t.pcs} />
               <KpiCard label="Kg thực" value={formatKgTotal(t.actualKg)} tone="sky" />
               <KpiCard label="DIM" value={formatKgTotal(t.dimKg)} tone="sky" />

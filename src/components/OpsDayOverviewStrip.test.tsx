@@ -40,6 +40,23 @@ function renderStrip(variant: "desktop" | "mobile", filtered = rows) {
 }
 
 describe("OpsDayOverviewStrip", () => {
+  it("desktop embedded: KPI cards Lô/PCS/KG + chip kho", () => {
+    const html = renderToStaticMarkup(
+      <OpsDayOverviewStrip
+        variant="desktop"
+        embedded
+        selectedYmd="2026-08-21"
+        rows={rows}
+        activeWarehouse="TCS"
+        onSelectWarehouse={() => undefined}
+      />,
+    );
+    expect(html).toContain("ops-day-overview");
+    expect(html).toContain("PCS");
+    expect(html).toContain("warehouse-chips");
+    expect(html).not.toContain("ops-day-pulse");
+  });
+
   it("desktop: tổng gọn một dòng + chip kho cuộn ngang", () => {
     const html = renderStrip("desktop");
     expect(html).toContain("ops-day-overview");

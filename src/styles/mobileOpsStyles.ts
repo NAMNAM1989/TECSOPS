@@ -6,7 +6,12 @@ export const MOBILE = {
     "fixed inset-0 z-[560] flex flex-col justify-end bg-black/40 md:hidden",
   /** Card lô day-board — denser, AWB scannable, 2 dòng */
   card: "relative overflow-hidden rounded-lg border border-ui-border/90 bg-ui-surface shadow-ui-sm",
-  cardInner: "relative z-10 bg-transparent px-2 py-1",
+  cardInner: "relative z-10 bg-transparent px-2.5 py-2",
+  destBadge:
+    "inline-flex shrink-0 items-center rounded-md bg-ui-navy/10 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wide text-ui-navy",
+  cardFlight:
+    "truncate font-shipment-data text-[11px] font-semibold leading-tight text-ui-text-muted",
+  cardQty: "font-mono text-[11px] font-bold tabular-nums text-ui-text-muted",
   cardMeta: "truncate font-shipment-data text-[11px] font-medium leading-tight text-ui-text-muted",
   customerName: "truncate text-[12px] font-semibold leading-snug tracking-tight text-ui-navy",
   awb: "ops-awb text-[15px] leading-tight whitespace-nowrap",

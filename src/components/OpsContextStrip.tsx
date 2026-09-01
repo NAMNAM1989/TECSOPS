@@ -70,20 +70,39 @@ export function OpsContextStrip({
     <div
       data-testid="ops-context-strip"
       data-variant={variant}
-      className="overflow-hidden rounded-xl bg-gradient-to-b from-ui-background/90 to-ui-surface/50 ring-1 ring-ui-border/45"
+      className={
+        isMobile
+          ? "overflow-hidden rounded-xl bg-gradient-to-b from-ui-background/90 to-ui-surface/50 ring-1 ring-ui-border/45"
+          : "border-t border-ui-border/80 bg-ui-background"
+      }
     >
-      <div className="border-b border-ui-border/35 px-1 py-0.5">
-        <OpsDayOverviewStrip
-          variant={variant}
-          embedded
-          selectedYmd={selectedYmd}
-          rows={filteredViewRows}
-          activeWarehouse={activeWarehouse}
-          onSelectWarehouse={onWarehouseChange}
-          highlightWarehouses={searchHighlightWarehouses}
-          filtersActive={filtersActive}
-        />
-      </div>
+      {isMobile ? (
+        <div className="border-b border-ui-border/35 px-1 py-0.5">
+          <OpsDayOverviewStrip
+            variant={variant}
+            embedded
+            selectedYmd={selectedYmd}
+            rows={filteredViewRows}
+            activeWarehouse={activeWarehouse}
+            onSelectWarehouse={onWarehouseChange}
+            highlightWarehouses={searchHighlightWarehouses}
+            filtersActive={filtersActive}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2 border-b border-ui-border/70 px-5 py-3">
+          <OpsDayOverviewStrip
+            variant={variant}
+            embedded
+            selectedYmd={selectedYmd}
+            rows={filteredViewRows}
+            activeWarehouse={activeWarehouse}
+            onSelectWarehouse={onWarehouseChange}
+            highlightWarehouses={searchHighlightWarehouses}
+            filtersActive={filtersActive}
+          />
+        </div>
+      )}
 
       {hasRows ? (
         <div
@@ -91,7 +110,7 @@ export function OpsContextStrip({
           className={
             isMobile
               ? "flex min-w-0 items-center gap-1 px-1 py-0.5"
-              : "flex min-w-0 items-center gap-1 overflow-x-auto overscroll-x-contain px-1 py-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+              : "flex min-w-0 flex-wrap items-center gap-2 px-5 py-2.5"
           }
         >
           <div className={isMobile ? "min-w-0 flex-1" : "shrink-0"}>

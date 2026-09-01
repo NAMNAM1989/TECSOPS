@@ -71,9 +71,8 @@ describe("MobileShipmentCards", () => {
       />,
     );
     expect(html).toContain("space-y-0.5");
-    expect(html).toContain("px-2 py-1");
-    expect(html).not.toContain("px-2.5 py-1.5");
-    expect(html).not.toContain("!py-1.5");
+    expect(html).toContain("px-2.5 py-2");
+    expect(html).not.toContain("px-2 py-1");
     expect(html).toContain("ops-awb");
     expect(html).toContain("text-[15px]");
     expect(html).toContain("h-11 w-full min-h-11");
@@ -84,19 +83,18 @@ describe("MobileShipmentCards", () => {
 });
 
 describe("OpsMobileBookingFab", () => {
-  it("một CTA + Booking, vùng chạm ≥44px, không thanh full-width", () => {
+  it("FAB tròn +, vùng chạm ≥56px, không thanh full-width", () => {
     const html = renderToStaticMarkup(
       <OpsMobileBookingFab activeWarehouse="TCS" onAdd={() => undefined} />,
     );
     expect(html).toContain("ops-mobile-booking-fab");
-    expect(html).toContain("+ Booking");
-    expect(html).toContain("min-h-11");
+    expect(html).toContain("rounded-full");
+    expect(html).toContain("min-h-14");
     expect(html).toContain("bottom-[calc(4.25rem+env(safe-area-inset-bottom))]");
     expect(html).toContain(
       "[[data-ops-mobile-overlay=sheet]_&amp;]:invisible",
     );
     expect(html).not.toContain("sticky-mobile-actions");
-    expect(html).not.toContain("shadow-apple-md");
-    expect(html).not.toContain("Sửa lô");
+    expect(html).not.toContain("+ Booking");
   });
 });

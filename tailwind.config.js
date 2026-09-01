@@ -30,15 +30,16 @@ export default {
       colors: {
         /** Semantic tokens — Operational Signal Round 2. Legacy dashboard/apple/ops giữ tương thích. */
         ui: {
-          background: "#E4EBF3",
+          background: "#E8EEF4",
           surface: "#FFFFFF",
           "surface-muted": "#F0F4F8",
           text: "#0B1220",
           "text-muted": "#5B6B7C",
           border: "rgba(15,23,42,0.09)",
-          primary: "#0F766E",
-          "primary-hover": "#115E59",
-          focus: "rgba(15,118,110,0.38)",
+          accent: "#0D9488",
+          primary: "#0D9488",
+          "primary-hover": "#0F766E",
+          focus: "rgba(13,148,136,0.45)",
           success: "#059669",
           warning: "#D97706",
           danger: "#B91C1C",
@@ -47,7 +48,7 @@ export default {
           awb: "#9F1239",
         },
         dashboard: {
-          canvas: "#E4EBF3",
+          canvas: "#E8EEF4",
           "canvas-dark": "#070B14",
           surface: "#FFFFFF",
           "surface-dark": "#0F172A",
@@ -55,8 +56,8 @@ export default {
           "primary-dark": "#F8FAFC",
           muted: "#5B6B7C",
           "muted-dark": "#94A3B8",
-          accent: "#0F766E",
-          "accent-hover": "#115E59",
+          accent: "#0D9488",
+          "accent-hover": "#0F766E",
           ink: "#0B1220",
         },
         apple: {

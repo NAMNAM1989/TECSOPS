@@ -26,6 +26,7 @@ import {
   OverflowMenu,
   PageSkeleton,
   SyncStatusPill,
+  Wordmark,
   useToast,
 } from "../ui";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -703,164 +704,272 @@ export function CustomersPage({
     },
   ];
 
+  const syncBadgeLabel = saving
+    ? "Đang lưu…"
+    : dirty
+      ? "Chưa lưu"
+      : saveStatus === "saved"
+        ? "Đã lưu"
+        : saveStatus === "error"
+          ? "Lỗi lưu"
+          : "Đã đồng bộ";
+
+  const typeChipItems = (
+    [
+      ["ALL", "Tất cả"],
+      ["DIRECT_SHIPPER", "Direct"],
+      ["FORWARDER", "FWDR"],
+      ["AGENT", "Agent"],
+      ["OTHER", "Khác"],
+    ] as const
+  );
+
   return (
-    <div className="flex min-h-screen flex-col bg-ui-background text-ui-text">
-      <header className="sticky top-0 z-30 border-b border-ui-border/90 bg-ui-surface/95 pt-[env(safe-area-inset-top)] shadow-ui-sm backdrop-blur-[6px]">
-        <div className="mx-auto flex max-w-[1400px] items-center gap-2 px-3 py-2.5 sm:px-4">
-          {isMobile && mobilePane === "detail" ? (
+    <div
+      className="flex min-h-screen flex-col bg-ui-background text-ui-text"
+      data-testid="customers-page"
+      data-mobile-pane={isMobile ? mobilePane : undefined}
+    >
+      <header className="sticky top-0 z-30 border-b border-ui-border/90 bg-ui-surface pt-[env(safe-area-inset-top)] shadow-ui-sm">
+        {isMobile && mobilePane === "detail" ? (
+          <div className="flex items-center gap-2 px-3 py-2.5">
             <Button
               variant="secondary"
               size="sm"
-              className="shrink-0"
+              className="min-h-11 shrink-0 touch-manipulation"
+              data-testid="cust-back"
               onClick={() => setMobilePane("list")}
             >
-              ← DS
+              ← Quay lại
             </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              className="shrink-0"
-              onClick={handleBack}
-            >
-              ← Ops
-            </Button>
-          )}
-          <div className="min-w-0 flex-1">
-            <h1 className="m-0 truncate text-base font-extrabold tracking-tight text-ui-navy sm:text-lg">
-              {isMobile && mobilePane === "detail" && selected
-                ? normalizeCustomerNameInput(selected.name) || "Khách hàng"
-                : "Khách hàng"}
-            </h1>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ui-text-muted">
-              <span className="font-medium">{countLabel}</span>
-              <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
-              {customersSyncPhrase ? (
-                <span
-                  className="font-semibold text-ui-text-muted"
-                  data-testid="customers-sync-stamp"
-                  title="ops_customers.synced_at · Asia/Saigon"
-                >
-                  {customersSyncPhrase}
-                </span>
+            <div className="min-w-0 flex-1">
+              <h1 className="m-0 truncate text-base font-extrabold text-ui-navy">
+                {selected
+                  ? normalizeCustomerNameInput(selected.name) || "Khách hàng"
+                  : "Khách hàng"}
+              </h1>
+              {selected ? (
+                <p className="mt-0.5 truncate font-mono text-[11px] font-semibold text-ui-text-muted">
+                  {customerDirectoryListCode(selected)}
+                </p>
               ) : null}
-              {headerStatus ? (
-                <span
-                  className={
-                    dirty || saveStatus === "error"
-                      ? "font-semibold text-amber-700"
-                      : "font-semibold text-emerald-700"
-                  }
-                >
-                  {headerStatus}
-                </span>
-              ) : null}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {isMobile ? (
-              <OverflowMenu
-                label="Excel"
-                items={excelToolItems}
-                compact
-              />
-            ) : (
-              <>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  title="Tải mẫu Hồ sơ KH cố định"
-                  onClick={() => void downloadCustomerFullProfileTemplate()}
-                >
-                  Mẫu
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={importing}
-                  title="Import đúng mẫu Hồ sơ KH"
-                  onClick={() => importInputRef.current?.click()}
-                >
-                  {importing ? "…" : "Import"}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  title="Export đúng mẫu Hồ sơ KH"
-                  onClick={() => void downloadCustomerFullProfileExport(draft)}
-                >
-                  Export
-                </Button>
-              </>
-            )}
-            <div className="hidden items-center gap-1.5 sm:flex">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!dirty || saving}
-                onClick={handleDiscard}
-              >
-                Hủy
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!dirty || saving}
-                onClick={() => void persistDraft()}
-              >
-                {saving ? "Đang lưu…" : "Lưu"}
-              </Button>
             </div>
+            <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
           </div>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            className="hidden"
-            onChange={(e) => void onImportFile(e.target.files?.[0] ?? null)}
-          />
-        </div>
-      </header>
-
-      <div className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1 flex-col overflow-hidden sm:flex-row">
-        {showList ? (
-          <aside className="flex min-h-0 w-full flex-1 flex-col border-ui-border bg-ui-surface sm:max-h-none sm:w-[17.5rem] sm:flex-none sm:border-r lg:w-72">
-            <div className="space-y-1.5 border-b border-ui-border/90 bg-gradient-to-b from-slate-50/80 to-white p-2.5">
+        ) : isMobile ? (
+          <>
+            <div className="flex items-center gap-2 px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <h1 className="m-0 flex items-center gap-1.5 text-base font-extrabold tracking-tight text-ui-navy">
+                  <Wordmark size="sm" />
+                  <span className="text-ui-text-muted">·</span>
+                  <span>Khách hàng</span>
+                </h1>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-ui-text-muted">
+                  <span className="font-medium">{countLabel}</span>
+                  <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
+                  {customersSyncPhrase ? (
+                    <span data-testid="customers-sync-stamp">{customersSyncPhrase}</span>
+                  ) : null}
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-ui-border/70 px-3 pb-2.5">
               <input
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Tìm mã / tên / SĐT…"
+                placeholder="Tìm mã KH, tên, SĐT…"
                 className={FIELD}
+                aria-label="Tìm khách hàng"
               />
-              <div className="flex flex-wrap gap-1">
-                {(
-                  [
-                    ["ALL", "Tất cả"],
-                    ["DIRECT_SHIPPER", "Direct"],
-                    ["FORWARDER", "FWDR"],
-                    ["AGENT", "Agent"],
-                    ["OTHER", "Khác"],
-                  ] as const
-                ).map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setTypeFilter(id)}
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold transition ${
-                      typeFilter === id
-                        ? "bg-ui-primary text-white shadow-ui-sm"
-                        : "bg-ui-surface-muted text-ui-text-muted ring-1 ring-ui-border/80 hover:text-ui-text"
-                    }`}
-                  >
-                    {label} {typeCounts[id]}
-                  </button>
-                ))}
-              </div>
-              <Button variant="primary" size="sm" className="w-full" onClick={addCustomer}>
-                + Thêm khách
-              </Button>
             </div>
+          </>
+        ) : (
+          <div className="mx-auto flex max-w-[1400px] items-center gap-2 px-3 py-2.5 sm:px-4">
+            <Button variant="secondary" size="sm" className="shrink-0 md:hidden" onClick={handleBack}>
+              ← Ops
+            </Button>
+            <div className="min-w-0 flex-1">
+              <h1 className="m-0 truncate text-base font-extrabold tracking-tight text-ui-navy sm:text-lg">
+                Khách hàng
+              </h1>
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ui-text-muted">
+                <span className="font-medium">{countLabel}</span>
+                <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
+                {customersSyncPhrase ? (
+                  <span
+                    className="font-semibold text-ui-text-muted"
+                    data-testid="customers-sync-stamp"
+                    title="ops_customers.synced_at · Asia/Saigon"
+                  >
+                    {customersSyncPhrase}
+                  </span>
+                ) : null}
+                {headerStatus ? (
+                  <span
+                    className={
+                      dirty || saveStatus === "error"
+                        ? "font-semibold text-amber-700"
+                        : "font-semibold text-emerald-700"
+                    }
+                  >
+                    {headerStatus}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Button
+                variant="secondary"
+                size="sm"
+                title="Tải mẫu Hồ sơ KH cố định"
+                onClick={() => void downloadCustomerFullProfileTemplate()}
+              >
+                Mẫu
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={importing}
+                title="Import đúng mẫu Hồ sơ KH"
+                onClick={() => importInputRef.current?.click()}
+              >
+                {importing ? "…" : "Import"}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                title="Export đúng mẫu Hồ sơ KH"
+                onClick={() => void downloadCustomerFullProfileExport(draft)}
+              >
+                Export
+              </Button>
+              <div className="hidden items-center gap-1.5 sm:flex">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!dirty || saving}
+                  onClick={handleDiscard}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={!dirty || saving}
+                  onClick={() => void persistDraft()}
+                >
+                  {saving ? "Đang lưu…" : "Lưu"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          className="hidden"
+          onChange={(e) => void onImportFile(e.target.files?.[0] ?? null)}
+        />
+      </header>
+
+      {isMobile && mobilePane === "list" ? (
+        <div
+          data-testid="cust-toolbar"
+          className="sticky top-[calc(52px+env(safe-area-inset-top))] z-[25] flex items-center gap-2 overflow-x-auto border-b border-ui-border/80 bg-ui-surface px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <div className="flex shrink-0 items-center gap-1" data-testid="cust-type-filter">
+            {typeChipItems.map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTypeFilter(id)}
+                className={`inline-flex min-h-9 shrink-0 touch-manipulation items-center rounded-full px-3 text-[11px] font-bold transition ${
+                  typeFilter === id
+                    ? "bg-ui-primary text-white shadow-ui-sm"
+                    : "bg-ui-surface-muted text-ui-text-muted ring-1 ring-ui-border/80"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-1" data-testid="cust-actions-bar">
+            <span
+              className={`hidden text-[10px] font-bold sm:inline ${
+                dirty ? "text-amber-700" : "text-emerald-700"
+              }`}
+              data-testid="sync-status"
+            >
+              ● {syncBadgeLabel}
+            </span>
+            <Button
+              variant="primary"
+              size="sm"
+              className="min-h-11 min-w-11 px-2.5"
+              data-testid="btn-add-customer"
+              onClick={addCustomer}
+              title="Thêm khách hàng"
+            >
+              +
+            </Button>
+            <OverflowMenu label="Excel" items={excelToolItems} compact />
+            <Button
+              variant="secondary"
+              size="sm"
+              className="min-h-11 min-w-11 px-2.5"
+              data-testid="btn-save-cust"
+              disabled={!dirty || saving}
+              onClick={() => void persistDraft()}
+              title="Lưu danh bạ"
+            >
+              💾
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      <div
+        className={`mx-auto flex min-h-0 w-full max-w-[1400px] flex-1 flex-col overflow-hidden sm:flex-row ${
+          isMobile && mobilePane === "detail"
+            ? "fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] top-[calc(3.25rem+env(safe-area-inset-top))] z-20 max-w-none bg-ui-background"
+            : ""
+        }`}
+      >
+        {showList ? (
+          <aside className="flex min-h-0 w-full flex-1 flex-col border-ui-border bg-ui-surface sm:max-h-none sm:w-[17.5rem] sm:flex-none sm:border-r lg:w-72">
+            {!isMobile ? (
+              <div className="space-y-1.5 border-b border-ui-border/90 bg-gradient-to-b from-slate-50/80 to-white p-2.5">
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Tìm mã / tên / SĐT…"
+                  className={FIELD}
+                />
+                <div className="flex flex-wrap gap-1">
+                  {typeChipItems.map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setTypeFilter(id)}
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold transition ${
+                        typeFilter === id
+                          ? "bg-ui-primary text-white shadow-ui-sm"
+                          : "bg-ui-surface-muted text-ui-text-muted ring-1 ring-ui-border/80 hover:text-ui-text"
+                      }`}
+                    >
+                      {label} {typeCounts[id]}
+                    </button>
+                  ))}
+                </div>
+                <Button variant="primary" size="sm" className="w-full" onClick={addCustomer}>
+                  + Thêm khách
+                </Button>
+              </div>
+            ) : null}
 
             <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
               {filtered.map((c) => {
@@ -873,7 +982,7 @@ export function CustomersPage({
                     type="button"
                     data-customer-id={c.id}
                     onClick={() => selectCustomer(c.id)}
-                    className={`mb-1 w-full touch-manipulation rounded-xl border-l-[3px] px-2.5 py-2.5 text-left transition sm:py-2 ${
+                    className={`mb-1 w-full touch-manipulation rounded-xl border-l-[3px] px-2.5 py-3 text-left transition sm:py-2 ${
                       active
                         ? "border-l-teal-600 bg-teal-500/10 shadow-ui-sm ring-1 ring-teal-500/30"
                         : "border-l-transparent hover:border-l-slate-300 hover:bg-ui-surface-muted"
@@ -913,7 +1022,7 @@ export function CustomersPage({
         ) : null}
 
         {showDetail ? (
-          <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {selected ? (
               <>
                 <div

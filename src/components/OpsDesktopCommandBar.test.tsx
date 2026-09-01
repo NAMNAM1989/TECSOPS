@@ -69,12 +69,7 @@ describe("OpsDesktopCommandBar", () => {
     expect(html).toContain("Vantage");
     expect(html).toContain("23-AUG-2026");
     expect(html).toContain("ops-day-overview");
-    expect(html).toContain("ops-context-strip");
-    const top = html.match(/data-testid="ops-desktop-top-row"[\s\S]*?(?=data-testid="ops-context-strip")/)?.[0] ?? "";
-    expect(top).toContain("ops-desktop-identity-row");
-    expect(top).toContain("ops-desktop-command-actions");
-    expect(top).toContain("Nhập Sheet");
-    expect(top).toContain("Vantage");
+    expect(html).toContain("PCS");
     expect(html).not.toContain("OverflowMenu");
   });
 

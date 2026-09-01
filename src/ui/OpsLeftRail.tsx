@@ -43,44 +43,50 @@ const ITEMS: {
 }[] = [
   { id: "ops", label: "Ops", Icon: IconOps },
   { id: "customers", label: "Khách", Icon: IconCustomers },
-  { id: "stats", label: "TK", Icon: IconStats },
+  { id: "stats", label: "Thống kê", Icon: IconStats },
 ];
 
-/**
- * Thanh điều hướng dưới — mobile polish v4.
- * Ẩn khi `html[data-ops-mobile-overlay=sheet]` (edit sheet / modal) để không che Lưu/Hủy.
- */
-export function BottomNav({
+/** Rail trái desktop — polish v4 Operational Signal. */
+export function OpsLeftRail({
   active,
   onNavigate,
   onPrefetchCustomers,
   onPrefetchStats,
 }: Props) {
   return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-[500] border-t border-ui-border bg-ui-surface pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1 shadow-[0_-4px_16px_rgba(11,18,32,0.06)] md:hidden [[data-ops-mobile-overlay=sheet]_&]:pointer-events-none [[data-ops-mobile-overlay=sheet]_&]:invisible"
+    <aside
+      className="hidden w-[72px] shrink-0 flex-col items-center gap-2 border-r border-ui-border bg-ui-surface px-2 py-4 shadow-[1px_0_0_rgba(15,23,42,0.04)] md:flex"
       aria-label="Điều hướng chính"
-      data-testid="bottom-nav"
+      data-testid="ops-left-rail"
     >
-      <div className="mx-auto flex max-w-lg items-stretch justify-around gap-1 px-2">
-        {ITEMS.map((item) => {
-          const isActive = active === item.id;
-          const Icon = item.Icon;
+      <div
+        className="grid h-12 w-12 place-items-center rounded-xl bg-ui-navy text-center text-[10px] font-bold leading-tight tracking-wide text-white shadow-[inset_0_-2px_0_#0D9488]"
+        title="AirCargo_OPS"
+        data-testid="brand-mark"
+      >
+        AC
+        <br />
+        OPS
+      </div>
+      <nav className="mt-3 flex w-full flex-col gap-1">
+        {ITEMS.map(({ id, label, Icon }) => {
+          const isActive = active === id;
           return (
             <button
-              key={item.id}
+              key={id}
               type="button"
+              data-testid={`nav-${id}`}
               aria-current={isActive ? "page" : undefined}
-              onClick={() => onNavigate(item.id)}
+              onClick={() => onNavigate(id)}
               onMouseEnter={() => {
-                if (item.id === "customers") onPrefetchCustomers?.();
-                if (item.id === "stats") onPrefetchStats?.();
+                if (id === "customers") onPrefetchCustomers?.();
+                if (id === "stats") onPrefetchStats?.();
               }}
               onFocus={() => {
-                if (item.id === "customers") onPrefetchCustomers?.();
-                if (item.id === "stats") onPrefetchStats?.();
+                if (id === "customers") onPrefetchCustomers?.();
+                if (id === "stats") onPrefetchStats?.();
               }}
-              className={`relative flex min-h-12 min-w-[4.5rem] flex-1 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-[10px] font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+              className={`relative flex min-h-11 w-full touch-manipulation flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
                 isActive
                   ? "bg-teal-500/12 text-ui-primary-hover"
                   : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
@@ -88,16 +94,16 @@ export function BottomNav({
             >
               {isActive ? (
                 <span
-                  className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-ui-accent"
+                  className="absolute left-0 top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-r-sm bg-ui-accent"
                   aria-hidden
                 />
               ) : null}
-              <Icon className={`h-5 w-5 ${isActive ? "text-ui-accent" : ""}`} />
-              <span>{item.label}</span>
+              <Icon className="h-5 w-5 shrink-0" />
+              <span>{label}</span>
             </button>
           );
         })}
-      </div>
-    </nav>
+      </nav>
+    </aside>
   );
 }

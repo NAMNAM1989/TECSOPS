@@ -103,12 +103,14 @@ export function OpsDesktopCommandBar({
     statusFilter !== "ALL" || Boolean(searchQuery.trim()) || Boolean(flightDateFilter);
 
   return (
-    <header className="space-y-0" data-testid="ops-desktop-command-bar">
-      <div className="space-y-1 rounded-2xl border border-ui-border/70 bg-ui-surface/95 p-1.5 shadow-ui-sm">
-        <div
-          data-testid="ops-desktop-top-row"
-          className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
-        >
+    <header
+      className="overflow-hidden border-b border-ui-border bg-ui-surface"
+      data-testid="ops-desktop-command-bar"
+    >
+      <div
+        data-testid="ops-desktop-top-row"
+        className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain px-5 py-3.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+      >
           <div
             data-testid="ops-desktop-identity-row"
             className="flex shrink-0 items-center gap-1.5"
@@ -165,28 +167,27 @@ export function OpsDesktopCommandBar({
           </div>
         </div>
 
-        <OpsContextStrip
-          variant="desktop"
-          selectedYmd={selectedYmd}
-          filteredViewRows={filteredViewRows}
-          viewRows={viewRows}
-          activeWarehouse={activeWarehouse}
-          onWarehouseChange={onWarehouseChange}
-          searchHighlightWarehouses={searchHighlightWarehouses}
-          filtersActive={filtersActive}
-          searchQuery={searchQuery}
-          onSearchChange={onSearchChange}
-          flightDateFilter={flightDateFilter}
-          onFlightDateChange={onFlightDateChange}
-          statusFilteredRows={statusFilteredRows}
-          searchContext={searchContext}
-          searchInputRef={searchInputRef}
-          onSelectSearchMatch={onSelectSearchMatch}
-          statusFilter={statusFilter}
-          onStatusFilterChange={onStatusFilterChange}
-          onClearFilters={onClearFilters}
-        />
-      </div>
+      <OpsContextStrip
+        variant="desktop"
+        selectedYmd={selectedYmd}
+        filteredViewRows={filteredViewRows}
+        viewRows={viewRows}
+        activeWarehouse={activeWarehouse}
+        onWarehouseChange={onWarehouseChange}
+        searchHighlightWarehouses={searchHighlightWarehouses}
+        filtersActive={filtersActive}
+        searchQuery={searchQuery}
+        onSearchChange={onSearchChange}
+        flightDateFilter={flightDateFilter}
+        onFlightDateChange={onFlightDateChange}
+        statusFilteredRows={statusFilteredRows}
+        searchContext={searchContext}
+        searchInputRef={searchInputRef}
+        onSelectSearchMatch={onSelectSearchMatch}
+        statusFilter={statusFilter}
+        onStatusFilterChange={onStatusFilterChange}
+        onClearFilters={onClearFilters}
+      />
     </header>
   );
 }

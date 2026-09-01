@@ -12,7 +12,7 @@ export function AppShell({
 }) {
   return (
     <div className={`mx-auto min-w-0 ${maxWidthClass} px-2.5 py-0.5 sm:px-3 sm:py-1.5 lg:px-4`}>
-      <div className="sticky top-0 z-40 -mx-2.5 mb-0.5 min-w-0 border-b border-ui-border/70 bg-ui-background/95 px-2.5 pb-0.5 pt-[max(0.1rem,env(safe-area-inset-top))] backdrop-blur-[6px] sm:-mx-3 sm:mb-1.5 sm:px-3 sm:pb-1.5 sm:pt-1 lg:-mx-4 lg:px-4">
+      <div className="sticky top-0 z-40 -mx-2.5 mb-0.5 min-w-0 border-b border-ui-border/70 bg-ui-background px-2.5 pb-0.5 pt-[max(0.1rem,env(safe-area-inset-top))] sm:-mx-3 sm:mb-1.5 sm:bg-ui-background/95 sm:px-3 sm:pb-1.5 sm:pt-1 sm:backdrop-blur-[6px] lg:-mx-4 lg:px-4">
         {chrome}
       </div>
       <div className="min-w-0">{children}</div>

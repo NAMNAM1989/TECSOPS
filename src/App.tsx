@@ -4,7 +4,7 @@ import type { CustomerDirectoryEntry } from "./types/customerDirectory";
 import { useShipmentSync } from "./hooks/useShipmentSync";
 import { useHashRoute } from "./hooks/useHashRoute";
 import type { AirlineLabelOverrides } from "./utils/airlineLabelOverridesCore";
-import { BottomNav, PageSkeleton } from "./ui";
+import { BottomNav, OpsLeftRail, PageSkeleton } from "./ui";
 import { AppAuthGate } from "./components/AppAuthGate";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { formatLocalSessionDate } from "./utils/sessionDate";
@@ -67,11 +67,24 @@ function AuthenticatedApp() {
   return (
     <>
       <div
-        className={`no-print min-h-screen bg-ui-background ${
-          isMobile ? "pb-[calc(3.75rem+env(safe-area-inset-bottom))]" : ""
+        className={`no-print grid min-h-screen bg-ui-background ${
+          isMobile ? "" : "md:grid-cols-[72px_1fr]"
         }`}
       >
-        <Suspense fallback={<PageSkeleton variant={skeletonVariant} />}>
+        {!isMobile ? (
+          <OpsLeftRail
+            active={route}
+            onNavigate={navigate}
+            onPrefetchCustomers={prefetchCustomers}
+            onPrefetchStats={prefetchStats}
+          />
+        ) : null}
+        <div
+          className={`min-w-0 ${
+            isMobile ? "pb-[calc(3.75rem+env(safe-area-inset-bottom))]" : ""
+          }`}
+        >
+          <Suspense fallback={<PageSkeleton variant={skeletonVariant} />}>
           {route === "customers" ? (
             <CustomersPage
               initial={sync.state?.customers ?? EMPTY_CUSTOMERS}
@@ -105,6 +118,7 @@ function AuthenticatedApp() {
             />
           )}
         </Suspense>
+        </div>
       </div>
       {isMobile ? (
         <BottomNav

@@ -31,7 +31,6 @@ function renderHeader(opts: { empty?: boolean } = {}) {
         syncStatus="live"
         socketConnected
         activeWarehouse="TCS"
-        onAddBooking={() => undefined}
         onOpenSheetImport={() => undefined}
         onNavigateCustomers={() => undefined}
         onOpenAirlineLabels={() => undefined}
@@ -55,33 +54,26 @@ function renderHeader(opts: { empty?: boolean } = {}) {
 }
 
 describe("OpsMobileStickyHeader chrome", () => {
-  it("card gọn: toolbar inline + chip kho, không overflow menu", () => {
+  it("header 2 tầng: ngày + Live + tìm kiếm; chip kho; toolbar overflow", () => {
     const html = renderHeader();
     expect(html).toContain("ops-mobile-sticky-header");
     expect(html).toContain("ops-mobile-top-row");
-    expect(html).toContain("ops-mobile-identity-row");
-    expect(html).toContain("ops-mobile-action-row");
-    expect(html).toContain("ops-action-toolbar");
-    expect(html).toContain("ops-context-strip");
-    expect(html).toContain("ops-mobile-filter-row");
-    expect(html).toContain("ops-day-overview");
+    expect(html).toContain("ops-mobile-wh-row");
     expect(html).toContain("warehouse-chips");
+    expect(html).toContain("ops-mobile-toolbar");
+    expect(html).toContain("ops-mobile-search-toggle");
     expect(html).toContain("23-AUG-2026");
     expect(html).toContain("Live");
-    expect(html).toContain("OPS");
-    expect(html).toContain("Khách");
-    expect(html).toContain("Vantage");
-    expect(html).not.toContain("Báo cáo &amp; Công cụ");
+    expect(html).toContain("Thêm ▾");
+    expect(html).not.toContain("ops-action-toolbar");
     expect(html).not.toContain("+ Booking");
-    expect(html).not.toContain("ops-mobile-sync-bar");
   });
 
-  it("vùng chạm ≥40px trên toolbar / chip kho / ngày / ST", () => {
+  it("vùng chạm ≥44px trên chip kho / ngày / toolbar", () => {
     const html = renderHeader();
-    expect(html).toContain("min-h-10");
+    expect(html).toContain("min-h-11");
     expect(html).toContain("Ngày trước");
     expect(html).toContain("Ngày sau");
-    expect(html).toContain("warehouse-chips");
     expect(html).toContain("Lọc trạng thái");
   });
 

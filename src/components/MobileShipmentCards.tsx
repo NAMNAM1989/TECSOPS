@@ -75,17 +75,6 @@ function buildMobileFlightMeta(
   };
 }
 
-function buildMobileMetaLine(
-  customerLabel: string,
-  flightPlain: string,
-  row: Shipment,
-): string {
-  const pcs = row.pcs != null ? `${row.pcs}K` : "";
-  const kg = row.kg != null ? `${formatKgTotal(row.kg)}kg` : "";
-  const qty = [pcs, kg].filter(Boolean).join("/");
-  return [customerLabel, flightPlain, qty].filter(Boolean).join(" · ");
-}
-
 const MobileShipmentCard = memo(
   function MobileShipmentCard({
     row,
@@ -125,15 +114,26 @@ const MobileShipmentCard = memo(
     const customerTitle = [shortCode !== "—" ? shortCode : "", row.customer?.trim()]
       .filter(Boolean)
       .join(" · ");
-    const metaLine = buildMobileMetaLine(customerLabel, flightMeta.plain, row);
     const cneeSummary = formatShipmentCneeReadonlySummary(row, customerDirectory);
+
+    const flightLine = [
+      flightMeta.flight && flightMeta.flightDate
+        ? `${flightMeta.flight}/${flightMeta.flightDate}`
+        : flightMeta.flight || flightMeta.flightDate,
+      flightMeta.dimLabel,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const pcs = row.pcs != null ? `${row.pcs}K` : "";
+    const kg = row.kg != null ? `${formatKgTotal(row.kg)}kg` : "";
+    const qtyLine = [pcs, kg].filter(Boolean).join(" / ");
 
     return (
       <Box
         id={`mobile-shipment-${row.id}`}
         style={{
           contentVisibility: "auto",
-          containIntrinsicSize: "0 56px",
+          containIntrinsicSize: "0 72px",
         }}
         className={`${MOBILE.card} scroll-mt-2 scroll-mb-[calc(6.5rem+env(safe-area-inset-bottom))] ${rowAccent} ${rowSurface} ${
           selected ? "ring-2 ring-ui-primary/40" : ""
@@ -142,7 +142,7 @@ const MobileShipmentCard = memo(
         }`}
       >
         <div className={MOBILE.cardInner}>
-          <div className="flex min-w-0 items-center gap-1">
+          <div className="flex min-w-0 items-start gap-2">
             <button
               type="button"
               className="min-w-0 flex-1 py-0 text-left active:opacity-90"
@@ -157,11 +157,16 @@ const MobileShipmentCard = memo(
                 <span className={MOBILE.awbEmpty}>+ AWB</span>
               )}
               {hawbTrim ? (
-                <span className="mt-px block truncate font-shipment-data text-[9px] font-bold text-ui-text-muted">
+                <span className="mt-0.5 block truncate font-shipment-data text-[9px] font-bold text-ui-text-muted">
                   HAWB {hawbTrim}
                 </span>
               ) : null}
             </button>
+            {flightMeta.dest ? (
+              <span className={MOBILE.destBadge} title={`DEST ${flightMeta.dest}`}>
+                {flightMeta.dest}
+              </span>
+            ) : null}
             <div
               className="flex shrink-0 items-center gap-1"
               onClick={(e) => e.stopPropagation()}
@@ -182,19 +187,34 @@ const MobileShipmentCard = memo(
             </div>
           </div>
 
+          {flightLine ? (
+            <button
+              type="button"
+              className="mt-1 flex min-w-0 w-full py-0 text-left active:opacity-90"
+              onClick={() => onOpenEdit(row)}
+            >
+              <span
+                className={`min-w-0 flex-1 truncate ${MOBILE.cardFlight} ${
+                  flightMeta.flightDateUrgent ? "!font-extrabold !text-red-600" : ""
+                }`}
+              >
+                {flightLine}
+              </span>
+            </button>
+          ) : null}
+
           <button
             type="button"
-            className="mt-px flex min-w-0 w-full items-center gap-1 py-0 text-left active:opacity-90"
+            className="mt-1 flex min-w-0 w-full items-center gap-2 py-0 text-left active:opacity-90"
             onClick={() => onOpenEdit(row)}
-            title={[customerTitle, flightMeta.plain, cneeSummary].filter(Boolean).join(" · ") || undefined}
+            title={[customerTitle, cneeSummary].filter(Boolean).join(" · ") || undefined}
           >
-            <span
-              className={`min-w-0 flex-1 truncate ${MOBILE.cardMeta} ${
-                flightMeta.flightDateUrgent ? "!text-red-600 !font-extrabold" : ""
-              }`}
-            >
-              {metaLine || "—"}
+            <span className={`min-w-0 flex-1 truncate ${MOBILE.customerName}`}>
+              {customerLabel}
             </span>
+            {qtyLine ? (
+              <span className={`shrink-0 ${MOBILE.cardQty}`}>{qtyLine}</span>
+            ) : null}
           </button>
         </div>
       </Box>
@@ -351,9 +371,10 @@ export function OpsMobileBookingFab({
         size="md"
         onClick={onAdd}
         title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (phím N)`}
-        className="min-h-11 px-4 font-bold shadow-ui-md"
+        aria-label={`Thêm booking ${warehouseLabel[activeWarehouse]}`}
+        className="h-14 min-h-14 w-14 min-w-14 rounded-full p-0 text-2xl font-light shadow-ui-md"
       >
-        + Booking
+        +
       </Button>
     </div>
   );

@@ -124,9 +124,9 @@ export function DesktopShipmentTable({
       >
         <section
           id={`warehouse-section-${activeWarehouse}`}
-          className="overflow-hidden rounded-xl border border-ui-border/90 bg-ui-surface shadow-ui-md"
+          className="mx-0 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md md:mx-5 md:mt-4"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-ui-border/80 bg-gradient-to-r from-ui-surface-muted to-ui-surface px-2.5 py-1">
+          <div className="flex items-center justify-between gap-2 border-b border-ui-border/80 bg-ui-surface px-4 py-2.5">
             <div className="min-w-0">
               <h2 className="text-[12px] font-extrabold leading-tight tracking-tight text-ui-navy">
                 {warehouseLabel[activeWarehouse]}

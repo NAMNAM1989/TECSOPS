@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState, type RefObject } from "react";
+import { useMemo, useState, type RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
 import { formatSyncedPhrase } from "../utils/dbSyncedAt";
-import { SyncStatusPill, Wordmark } from "../ui";
+import { formatKgTotal } from "../utils/formatKgTotal";
+import { computeOpsDayOverview } from "../utils/opsDayOverview";
+import { SyncStatusPill } from "../ui";
 import type { SyncStatus } from "../hooks/useShipmentSync";
-import { statusLabel, statusLabelCompact } from "./statusStyles";
-import { OpsActionToolbar } from "./OpsActionToolbar";
 import { OpsDatePicker } from "./OpsDatePicker";
-import { OpsContextStrip } from "./OpsContextStrip";
+import { SmartSearchBar } from "./SmartSearchBar";
+import { WarehouseGridPicker } from "./WarehouseGridPicker";
 import type { StatusFilterValue } from "./StatusFilterBar";
+import { OpsMobileToolbar } from "./OpsMobileToolbar";
 
 interface Props {
   selectedYmd: string;
@@ -25,7 +27,6 @@ interface Props {
   onSyncRefresh?: () => void | Promise<void>;
   syncRefreshing?: boolean;
   activeWarehouse: Warehouse;
-  onAddBooking: (wh: Warehouse) => void;
   onOpenSheetImport: () => void;
   onPrefetchSheetImport?: () => void;
   onNavigateCustomers: () => void;
@@ -57,7 +58,25 @@ interface Props {
   onClearFilters: () => void;
 }
 
-/** Chrome mobile Ops — card gọn, FAB Booking ngoài header. */
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width={20}
+      height={20}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3-3" />
+    </svg>
+  );
+}
+
+/** Chrome mobile Ops — header 2 tầng, KPI scroll, toolbar lọc + overflow. */
 export function OpsMobileStickyHeader({
   selectedYmd,
   onDateChange,
@@ -72,7 +91,6 @@ export function OpsMobileStickyHeader({
   onSyncRefresh,
   syncRefreshing = false,
   activeWarehouse,
-  onAddBooking,
   onOpenSheetImport,
   onPrefetchSheetImport,
   onNavigateCustomers,
@@ -103,15 +121,12 @@ export function OpsMobileStickyHeader({
   onStatusFilterChange,
   onClearFilters,
 }: Props) {
+  const [searchExpanded, setSearchExpanded] = useState(
+    () => searchQuery.trim().length > 0 || Boolean(flightDateFilter),
+  );
+
   const filtersActive =
     statusFilter !== "ALL" || searchQuery.trim().length > 0 || Boolean(flightDateFilter);
-  const [statusExpanded, setStatusExpanded] = useState(false);
-
-  useEffect(() => {
-    if (statusFilter !== "ALL") setStatusExpanded(true);
-  }, [statusFilter]);
-
-  const showStatusBar = viewRows.length > 0 && (statusExpanded || statusFilter !== "ALL");
 
   const live = syncStatus === "live" && socketConnected;
   const syncTitle = useMemo(() => {
@@ -127,39 +142,18 @@ export function OpsMobileStickyHeader({
         : "Làm mới"
       : null;
 
+  const { totals } = useMemo(() => computeOpsDayOverview(filteredViewRows), [filteredViewRows]);
+  const kgLabel = formatKgTotal(totals.kg);
+  const filterHint = filtersActive ? "*" : "";
+
   return (
     <header className="space-y-0" data-testid="ops-mobile-sticky-header">
-      <div className="space-y-1 rounded-2xl border border-ui-border/70 bg-ui-surface/95 p-1.5 shadow-ui-sm">
+      <div className="overflow-hidden rounded-none border-b border-ui-border/80 bg-ui-background">
         <div
           data-testid="ops-mobile-top-row"
-          className="flex min-w-0 items-center gap-1.5 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden touch-pan-x"
+          className="flex min-h-[52px] items-center gap-2 px-3 py-2"
         >
-          <div
-            data-testid="ops-mobile-identity-row"
-            className="flex shrink-0 items-center gap-1"
-          >
-            <h1 className="m-0 shrink-0 leading-none">
-              <Wordmark size="sm" />
-            </h1>
-            <span className="shrink-0 rounded-full bg-ui-navy px-1.5 py-px text-[8px] font-bold uppercase tracking-wide text-white">
-              OPS
-            </span>
-            {syncCta ? (
-              <button
-                type="button"
-                onClick={() => void onSyncRefresh?.()}
-                className="inline-flex min-h-9 shrink-0 touch-manipulation items-center gap-1 rounded-full px-1"
-                title={syncTitle || syncCta}
-                aria-label={syncCta}
-              >
-                <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
-                <span className="text-[10px] font-bold text-ui-navy">{syncCta}</span>
-              </button>
-            ) : (
-              <span title={syncTitle || undefined} className="shrink-0">
-                <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
-              </span>
-            )}
+          <div className="min-w-0 flex-1">
             <OpsDatePicker
               compact
               inline
@@ -171,82 +165,136 @@ export function OpsMobileStickyHeader({
               isViewingToday={isViewingToday}
             />
           </div>
+          {syncCta ? (
+            <button
+              type="button"
+              onClick={() => void onSyncRefresh?.()}
+              className="inline-flex min-h-10 shrink-0 touch-manipulation items-center gap-1 rounded-full px-1"
+              title={syncTitle || syncCta}
+              aria-label={syncCta}
+            >
+              <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
+              <span className="text-[10px] font-bold text-ui-navy">{syncCta}</span>
+            </button>
+          ) : (
+            <span title={syncTitle || "Live sync"} className="inline-flex shrink-0 items-center gap-1">
+              <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
+              <span className="text-[11px] font-bold text-emerald-700">Live</span>
+            </span>
+          )}
+          <button
+            type="button"
+            data-testid="ops-mobile-search-toggle"
+            onClick={() => setSearchExpanded((v) => !v)}
+            className="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border/80 bg-ui-surface text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+            aria-label={searchExpanded ? "Đóng tìm kiếm" : "Mở tìm kiếm"}
+            aria-expanded={searchExpanded}
+          >
+            <SearchIcon />
+          </button>
+        </div>
 
-          <span className="h-7 w-px shrink-0 bg-ui-border/70" aria-hidden />
+        {searchExpanded ? (
+          <div
+            data-testid="ops-mobile-search-expand"
+            className="border-t border-ui-border/60 px-3 py-2"
+          >
+            <SmartSearchBar
+              compact
+              tightFacets
+              value={searchQuery}
+              onChange={onSearchChange}
+              flightDateFilter={flightDateFilter}
+              onFlightDateChange={onFlightDateChange}
+              searchableRows={statusFilteredRows}
+              matchedRows={filteredViewRows}
+              searchContext={searchContext}
+              inputRef={searchInputRef}
+              onSelectMatch={onSelectSearchMatch}
+              inlineFacets={false}
+              debounceMs={200}
+            />
+            {filtersActive ? (
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="mt-1.5 text-[11px] font-semibold text-ui-primary"
+              >
+                Xóa bộ lọc
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
-          <div data-testid="ops-mobile-action-row" className="shrink-0">
-            <OpsActionToolbar
-              variant="mobile"
-              embedded
-              activeWarehouse={activeWarehouse}
-              onAddBooking={onAddBooking}
-              includeBooking={false}
-              includeSheet
-              onOpenSheetImport={onOpenSheetImport}
-              onPrefetchSheetImport={onPrefetchSheetImport}
-              onNavigateStats={onNavigateStats}
-              onPrefetchStats={onPrefetchStats}
-              onNavigateCustomers={onNavigateCustomers}
-              onPrefetchCustomers={onPrefetchCustomers}
-              onOpenAirlineLabels={onOpenAirlineLabels}
-              onDownloadDayExcel={onDownloadDayExcel}
-              onDownloadScscDim={onDownloadScscDim}
-              excelExporting={excelExporting}
-              scscDimExporting={scscDimExporting}
-              showDimScsc={showDimScsc}
-              viewRows={viewRows}
-              cargoReportCopying={cargoReportCopying}
-              onCopyCargoDayReport={(kind) => onCopyCargoDayReport?.(kind)}
+        <div
+          data-testid="ops-mobile-wh-row"
+          className="flex gap-1.5 overflow-x-auto overscroll-x-contain border-t border-ui-border/60 px-3 py-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+        >
+          <div data-testid="warehouse-chips" className="min-w-0 shrink-0">
+            <WarehouseGridPicker
+              rows={viewRows}
+              active={activeWarehouse}
+              onSelect={onWarehouseChange}
+              highlightWarehouses={searchHighlightWarehouses}
+              chips
+              denseChips
+              touchTargets
+              hideAddButton
             />
           </div>
         </div>
 
-        <OpsContextStrip
-          variant="mobile"
-          selectedYmd={selectedYmd}
-          filteredViewRows={filteredViewRows}
-          viewRows={viewRows}
+        {viewRows.length > 0 ? (
+          <div
+            data-testid="ops-day-overview"
+            className="flex gap-2 overflow-x-auto overscroll-x-contain border-t border-ui-border/60 px-3 py-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+          >
+            <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-ui-border/80 bg-ui-surface px-3 shadow-ui-sm">
+              <span className="text-[9px] font-extrabold uppercase tracking-wide text-ui-text-muted">
+                Lô{filterHint}
+              </span>
+              <span className="font-mono text-[13px] font-bold tabular-nums text-ui-navy">
+                {totals.lots}
+              </span>
+            </span>
+            <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-ui-border/80 bg-ui-surface px-3 shadow-ui-sm">
+              <span className="text-[9px] font-extrabold uppercase tracking-wide text-ui-text-muted">
+                PCS
+              </span>
+              <span className="font-mono text-[13px] font-bold tabular-nums text-ui-navy">
+                {totals.pcs}
+              </span>
+            </span>
+            <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-ui-border/80 bg-ui-surface px-3 shadow-ui-sm">
+              <span className="text-[9px] font-extrabold uppercase tracking-wide text-ui-text-muted">
+                KG
+              </span>
+              <span className="font-mono text-[13px] font-bold tabular-nums text-ui-navy">
+                {kgLabel}
+              </span>
+            </span>
+          </div>
+        ) : null}
+
+        <OpsMobileToolbar
           activeWarehouse={activeWarehouse}
-          onWarehouseChange={onWarehouseChange}
-          searchHighlightWarehouses={searchHighlightWarehouses}
-          filtersActive={filtersActive}
-          searchQuery={searchQuery}
-          onSearchChange={onSearchChange}
-          flightDateFilter={flightDateFilter}
-          onFlightDateChange={onFlightDateChange}
-          statusFilteredRows={statusFilteredRows}
-          searchContext={searchContext}
-          searchInputRef={searchInputRef}
-          onSelectSearchMatch={onSelectSearchMatch}
+          viewRows={viewRows}
           statusFilter={statusFilter}
           onStatusFilterChange={onStatusFilterChange}
-          onClearFilters={onClearFilters}
-          showMobileStatusBar={showStatusBar}
-          onExpandMobileStatus={() => setStatusExpanded(true)}
-          mobileStatusTrailing={
-            showStatusBar ? (
-              statusFilter === "ALL" ? (
-                <button
-                  type="button"
-                  onClick={() => setStatusExpanded(false)}
-                  className="inline-flex min-h-10 min-w-10 shrink-0 touch-manipulation items-center justify-center rounded-lg text-[11px] font-semibold text-ui-text-muted"
-                  aria-label="Thu gọn lọc trạng thái"
-                >
-                  ▲
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onStatusFilterChange("ALL")}
-                  className="inline-flex min-h-10 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-ui-navy/10 px-2 text-[10px] font-semibold text-ui-navy"
-                >
-                  {statusLabelCompact[statusFilter as keyof typeof statusLabelCompact] ??
-                    statusLabel[statusFilter as keyof typeof statusLabel]}{" "}
-                  ×
-                </button>
-              )
-            ) : null
-          }
+          onOpenSheetImport={onOpenSheetImport}
+          onPrefetchSheetImport={onPrefetchSheetImport}
+          onNavigateStats={onNavigateStats}
+          onPrefetchStats={onPrefetchStats}
+          onNavigateCustomers={onNavigateCustomers}
+          onPrefetchCustomers={onPrefetchCustomers}
+          onOpenAirlineLabels={onOpenAirlineLabels}
+          onDownloadDayExcel={onDownloadDayExcel}
+          onDownloadScscDim={onDownloadScscDim}
+          excelExporting={excelExporting}
+          scscDimExporting={scscDimExporting}
+          showDimScsc={showDimScsc}
+          cargoReportCopying={cargoReportCopying}
+          onCopyCargoDayReport={(kind) => onCopyCargoDayReport?.(kind)}
         />
       </div>
     </header>

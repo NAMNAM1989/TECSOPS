@@ -522,7 +522,6 @@ export function AirCargoTracking({
         }
       }}
       activeWarehouse={activeWarehouse}
-      onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
       onOpenSheetImport={() => setSheetImportOpen(true)}
       onCopyCargoDayReport={(kind) => void onCopyCargoDayReport(kind ?? "vantage")}
       cargoReportCopying={cargoReportCopying}

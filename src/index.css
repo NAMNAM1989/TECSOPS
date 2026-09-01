@@ -10,11 +10,10 @@
   body {
     /* Operational Signal R2 — canvas lạnh + chiều sâu nhẹ, không flat đơn sắc. */
     @apply min-h-screen text-ui-text antialiased font-sans;
-    background-color: #e4ebf3;
+    background-color: #e8eef4;
     background-image:
-      radial-gradient(ellipse 120% 80% at 0% -20%, rgba(15, 118, 110, 0.07), transparent 55%),
-      radial-gradient(ellipse 90% 60% at 100% 0%, rgba(3, 105, 161, 0.05), transparent 50%),
-      linear-gradient(180deg, #e8eef5 0%, #e4ebf3 40%, #dde5ef 100%);
+      radial-gradient(ellipse 80% 60% at 10% 0%, rgba(148, 163, 184, 0.22), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 95% 100%, rgba(13, 148, 136, 0.12), transparent 50%);
     background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

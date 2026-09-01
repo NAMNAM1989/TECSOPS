@@ -15,12 +15,15 @@ const CARD_RING: Record<Warehouse, string> = {
   SCSC: "ring-fuchsia-500/60",
 };
 
-const CARD_ACCENT: Record<Warehouse, string> = {
+/** Accent 3px card mobile / desktop — TECS-TCS blue, SCSC purple. */
+export const WAREHOUSE_CARD_ACCENT: Record<Warehouse, string> = {
   "TECS-TCS": "border-l-sky-500",
   "TECS-SCSC": "border-l-violet-500",
   TCS: "border-l-cyan-500",
   SCSC: "border-l-fuchsia-500",
 };
+
+const CARD_ACCENT = WAREHOUSE_CARD_ACCENT;
 
 const CHIP_ACTIVE: Record<Warehouse, string> = {
   "TECS-TCS": "bg-sky-600 text-white ring-sky-700/40",
@@ -67,6 +70,8 @@ interface Props {
   denseChips?: boolean;
   /** Mobile — giữ vùng chạm ≥40px */
   touchTargets?: boolean;
+  /** Tab kho: chỉ nhãn ngắn, không Lô/PCS/KG trong tab. */
+  labelOnly?: boolean;
   hideAddButton?: boolean;
   className?: string;
 }
@@ -84,6 +89,7 @@ export function WarehouseGridPicker({
   chips = false,
   denseChips = false,
   touchTargets = false,
+  labelOnly = false,
   hideAddButton = false,
   className = "",
 }: Props) {
@@ -92,16 +98,38 @@ export function WarehouseGridPicker({
   if (chips) {
     return (
       <div
-        className={`flex min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] ${className}`}
+        className={`flex min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] ${
+          labelOnly ? "h-11 items-center" : "pb-0.5"
+        } ${className}`}
         role="tablist"
         aria-label="Chọn kho"
         data-testid="warehouse-chips"
+        data-label-only={labelOnly ? "true" : undefined}
       >
         {WAREHOUSE_ORDER.map((wh) => {
           const m = metrics[wh];
           const isActive = active === wh;
           const hasSearchHit = highlightWarehouses.includes(wh);
           const kg = formatKgTotal(m.kg);
+          if (labelOnly) {
+            return (
+              <button
+                key={wh}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                title={`${warehouseLabel[wh]} · Lô ${m.lots} · PCS ${m.pcs} · KG ${kg}`}
+                onClick={() => onSelect(wh)}
+                className={`inline-flex h-11 min-h-11 shrink-0 touch-manipulation items-center justify-center rounded-ui-md px-3 text-[13px] font-semibold leading-[18px] transition active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+                  isActive
+                    ? "bg-ui-primary text-white"
+                    : "bg-ui-surface-muted text-ui-text-muted"
+                } ${hasSearchHit && !isActive ? "ring-2 ring-ui-primary/50" : ""}`}
+              >
+                {warehouseLabel[wh]}
+              </button>
+            );
+          }
           return (
             <button
               key={wh}

@@ -81,7 +81,7 @@ function AuthenticatedApp() {
         ) : null}
         <div
           className={`min-w-0 ${
-            isMobile ? "pb-[calc(3.75rem+env(safe-area-inset-bottom))]" : ""
+            isMobile ? "pb-[calc(52px+max(12px,env(safe-area-inset-bottom)))]" : ""
           }`}
         >
           <Suspense fallback={<PageSkeleton variant={skeletonVariant} />}>

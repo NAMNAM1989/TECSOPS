@@ -45,7 +45,7 @@ export function OpsDatePicker({
         <div className={`relative min-w-0 ${compact && !inline ? "flex-1" : "w-[7.75rem]"}`}>
           <span
             className={`pointer-events-none block truncate text-center font-mono font-semibold tabular-nums text-ui-navy ${
-              compact ? "py-1 text-[11px]" : "py-0.5 text-[12px]"
+              compact ? "py-1 text-[13px] leading-[18px]" : "py-0.5 text-[12px]"
             }`}
             aria-hidden
           >
@@ -67,15 +67,19 @@ export function OpsDatePicker({
         </button>
       </div>
       {compact ? (
-        !isViewingToday ? (
-          <button
-            type="button"
-            onClick={onToday}
-            className="inline-flex min-h-11 shrink-0 touch-manipulation items-center rounded-full bg-ui-primary px-2.5 text-[11px] font-semibold text-white shadow-ui-sm hover:bg-ui-primary-hover"
-          >
-            Nay
-          </button>
-        ) : null
+        <button
+          type="button"
+          onClick={onToday}
+          disabled={isViewingToday}
+          aria-current={isViewingToday ? "date" : undefined}
+          className={`inline-flex h-7 min-h-11 shrink-0 touch-manipulation items-center rounded-full px-3 text-[13px] font-semibold leading-[18px] focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+            isViewingToday
+              ? "bg-ui-primary text-white"
+              : "bg-ui-surface-muted text-ui-text-muted hover:bg-ui-primary hover:text-white"
+          }`}
+        >
+          Nay
+        </button>
       ) : !isViewingToday ? (
         <Button variant="secondary" size="sm" onClick={onToday} className="px-2 text-[11px]">
           Hôm nay

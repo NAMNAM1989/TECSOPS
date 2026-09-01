@@ -118,7 +118,8 @@ export function applyShipmentMutation(state: AppState, mutation: ShipmentMutatio
     }
     case "DELETE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
-      if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
+      /** Khớp server: xóa id đã mất là no-op (tránh toast khi race). */
+      if (i === -1) return state;
       rows.splice(i, 1);
       break;
     }

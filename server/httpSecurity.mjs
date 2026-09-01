@@ -103,16 +103,31 @@ export function createMutationRateLimit({
   });
 }
 
+/** Thông báo validation an toàn để toast client (không lộ path/internal). */
+function isSafeMutationClientMessage(detail) {
+  return (
+    detail.startsWith("AWB đã tồn tại") ||
+    detail.startsWith("ADD requires") ||
+    detail.startsWith("Shipment not found") ||
+    detail.startsWith("REORDER_SESSION requires") ||
+    detail.startsWith("Unknown action") ||
+    detail.startsWith("RESET_TRIAL_DATA") ||
+    detail.startsWith("Body phải là") ||
+    detail.startsWith("Invalid JSON") ||
+    detail.startsWith("Tối đa ")
+  );
+}
+
 export function mutationErrorPayload(
   error,
   { isProduction = false, fallback = "Mutation failed" } = {},
 ) {
-  if (isProduction) {
-    return { error: fallback, code: "MUTATION_REJECTED" };
-  }
   const detail =
     error && typeof error === "object" && "message" in error
       ? String(error.message)
       : String(error);
+  if (isProduction && !isSafeMutationClientMessage(detail)) {
+    return { error: fallback, code: "MUTATION_REJECTED" };
+  }
   return { error: detail || fallback, code: "MUTATION_REJECTED" };
 }

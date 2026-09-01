@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../ui";
+import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 
 type Props = {
   open: boolean;
@@ -19,6 +20,10 @@ export function DayExcelExportDialog({
 }: Props) {
   const [fromYmd, setFromYmd] = useState(defaultYmd);
   const [toYmd, setToYmd] = useState(defaultYmd);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocusTrap(open, dialogRef, () => {
+    if (!exporting) onClose();
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -31,11 +36,16 @@ export function DayExcelExportDialog({
   return (
     <div
       className="fixed inset-0 z-[490] flex items-end justify-center bg-black/40 p-3 sm:items-center"
-      onClick={onClose}
+      role="presentation"
+      onClick={() => {
+        if (!exporting) onClose();
+      }}
     >
       <div
+        ref={dialogRef}
         className="w-full max-w-sm rounded-xl border border-ui-border bg-ui-surface p-4 shadow-md"
         role="dialog"
+        aria-modal="true"
         aria-labelledby="excel-range-title"
         onClick={(e) => e.stopPropagation()}
       >

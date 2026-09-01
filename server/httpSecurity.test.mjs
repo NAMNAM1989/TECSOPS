@@ -77,4 +77,16 @@ describe("HTTP security", () => {
       }).error,
     ).toContain("/internal/private/path");
   });
+
+  it("production vẫn trả thông báo validation an toàn cho toast", () => {
+    const awb = new Error(
+      "AWB đã tồn tại ở phiên 2026-08-29 (TECS-TCS, STT 1). Xóa lô đó trước khi dùng lại số AWB này.",
+    );
+    expect(
+      mutationErrorPayload(awb, {
+        isProduction: true,
+        fallback: "Không thể cập nhật dữ liệu.",
+      }).error,
+    ).toMatch(/^AWB đã tồn tại/);
+  });
 });

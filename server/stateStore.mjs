@@ -257,7 +257,8 @@ export function applyMutation(state, mutation) {
     }
     case "DELETE": {
       const i = rows.findIndex((r) => r.id === mutation.id);
-      if (i === -1) throw new Error(`Shipment not found: ${mutation.id}`);
+      /** Idempotent: xóa id đã mất (race optimistic / double-delete) → no-op, không 400. */
+      if (i === -1) return state;
       rows.splice(i, 1);
       break;
     }

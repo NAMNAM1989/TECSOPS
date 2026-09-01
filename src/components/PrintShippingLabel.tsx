@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import type { Shipment } from "../types/shipment";
 import {
   loadLabelSheetFormat,
@@ -15,6 +14,7 @@ import {
   thermalPageMm,
 } from "../utils/printThermalLabelIframe";
 import { labelSheetFormatLabel } from "../printing/thermalLabelFormat";
+import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 
 export type LabelSheetVariant = "standard" | "compact";
 
@@ -172,7 +172,11 @@ export function PrintShippingLabel({
   const [printMsg, setPrintMsg] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const printHostRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [copiesInput, setCopiesInput] = useState("");
+  useModalFocusTrap(true, dialogRef, () => {
+    if (!printing) onClose();
+  });
   const pageMm = useMemo(() => thermalPageMm(format, "xp470b"), [format]);
   const labelData = useMemo(
     () => mapShipmentToAirCargoLabelData(shipment, airlineLabelOverrides),
@@ -237,15 +241,27 @@ export function PrintShippingLabel({
     <>
       <div
         className="no-print fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-4"
-        role="dialog"
-        aria-modal="true"
+        role="presentation"
+        onClick={() => {
+          if (!printing) onClose();
+        }}
       >
         <div
+          ref={dialogRef}
           className={`flex max-h-[calc(100dvh-1rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-ui-border shadow-md ${OPS.modal}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="print-shipping-label-title"
+          onClick={(e) => e.stopPropagation()}
         >
           <div className={`flex shrink-0 items-center justify-between border-b px-5 py-4 ${OPS.border}`}>
             <div className="min-w-0">
-              <h2 className={`truncate text-lg font-semibold ${OPS.title}`}>In nhãn vận chuyển</h2>
+              <h2
+                id="print-shipping-label-title"
+                className={`truncate text-lg font-semibold ${OPS.title}`}
+              >
+                In nhãn vận chuyển
+              </h2>
               <p className={`text-xs ${OPS.secondary}`}>
                 {shipment.awb || "Chưa có AWB"} · {labelSheetFormatLabel(format)} · XP-470B
                 {hasValidCopies ? ` · ${copies} tem` : ""}
@@ -379,22 +395,18 @@ export function PrintShippingLabel({
         </div>
       </div>
 
-      {typeof document !== "undefined"
-        ? createPortal(
-            <div ref={printHostRef} className="print-label-host" aria-hidden>
-              <div className="print-label-page">
-                <div className="print-label-spin">
-                  <LabelContent
-                    s={shipment}
-                    airlineLabelOverrides={airlineLabelOverrides}
-                    sheetVariant={format === "100x50" ? "compact" : "standard"}
-                  />
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+      {/* Host in nằm trong cùng cây React — tránh createPortal(document.body) gây insertBefore khi unmount. */}
+      <div ref={printHostRef} className="print-label-host" aria-hidden>
+        <div className="print-label-page">
+          <div className="print-label-spin">
+            <LabelContent
+              s={shipment}
+              airlineLabelOverrides={airlineLabelOverrides}
+              sheetVariant={format === "100x50" ? "compact" : "standard"}
+            />
+          </div>
+        </div>
+      </div>
     </>
   );
 }

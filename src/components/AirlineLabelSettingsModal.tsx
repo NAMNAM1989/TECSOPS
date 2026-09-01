@@ -7,6 +7,7 @@ import {
 } from "../utils/airlineLabelOverridesCore";
 import { DEFAULT_AIRLINE_BY_FLIGHT_PREFIX } from "../constants/airlineLabelDefaults";
 import { OPS } from "../styles/opsModalStyles";
+import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 
 type Props = {
   open: boolean;
@@ -59,6 +60,10 @@ export function AirlineLabelSettingsModal({
   const wasOpen = useRef(false);
   /** Giữ ghi đè AWB cũ (không còn chỉnh trên UI) để không mất khi Lưu. */
   const preservedAwbRef = useRef<Record<string, string>>({});
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocusTrap(open, dialogRef, () => {
+    if (!saving) onClose();
+  });
 
   useEffect(() => {
     if (open) {
@@ -96,12 +101,18 @@ export function AirlineLabelSettingsModal({
   return (
     <div
       className="fixed inset-0 z-[120] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-6"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="airline-label-settings-title"
+      role="presentation"
+      onClick={() => {
+        if (!saving) onClose();
+      }}
     >
       <div
+        ref={dialogRef}
         className={`max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-[28px] border shadow-apple-md ${OPS.modal} ${OPS.border}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="airline-label-settings-title"
+        onClick={(e) => e.stopPropagation()}
       >
         <div
           className={`flex items-start justify-between border-b px-5 py-4 ${OPS.border}`}

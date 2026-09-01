@@ -6,6 +6,7 @@ import { useHashRoute } from "./hooks/useHashRoute";
 import type { AirlineLabelOverrides } from "./utils/airlineLabelOverridesCore";
 import { BottomNav, PageSkeleton } from "./ui";
 import { AppAuthGate } from "./components/AppAuthGate";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { formatLocalSessionDate } from "./utils/sessionDate";
 import { useIsMobile } from "./hooks/useIsMobile";
 
@@ -114,15 +115,39 @@ function AuthenticatedApp() {
         />
       ) : null}
       {printJob ? (
-        <Suspense fallback={null}>
-          <PrintShippingLabel
-            shipment={printJob.shipment}
-            airlineLabelOverrides={
-              sync.state?.airlineLabelOverrides ?? printJob.airlineLabelOverrides
-            }
-            onClose={() => setPrintJob(null)}
-          />
-        </Suspense>
+        <AppErrorBoundary
+          key={printJob.shipment.id}
+          onError={() => setPrintJob(null)}
+          fallback={
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-2xl border border-ui-border bg-ui-surface p-5 shadow-md">
+                <h2 className="text-base font-semibold text-ui-text">Không mở được bản in</h2>
+                <p className="mt-2 text-sm text-ui-text-muted">
+                  Đã đóng cửa sổ in để Ops tiếp tục. Thử lại In tem trên cùng lô.
+                </p>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setPrintJob(null)}
+                    className="rounded-full bg-apple-blue px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+        >
+          <Suspense fallback={null}>
+            <PrintShippingLabel
+              shipment={printJob.shipment}
+              airlineLabelOverrides={
+                sync.state?.airlineLabelOverrides ?? printJob.airlineLabelOverrides
+              }
+              onClose={() => setPrintJob(null)}
+            />
+          </Suspense>
+        </AppErrorBoundary>
       ) : null}
     </>
   );

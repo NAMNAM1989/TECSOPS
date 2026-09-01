@@ -29,6 +29,7 @@ import {
 import type { Warehouse } from "../types/shipment";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useOpsMobileOverlayLock } from "../hooks/useOpsMobileOverlayLock";
+import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 import { MOBILE } from "../styles/mobileOpsStyles";
 import { Banner, Button } from "../ui";
 import {
@@ -135,6 +136,10 @@ export function GoogleSheetImportModal({
   const [mappingWarn, setMappingWarn] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastDropTokenRef = useRef("");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocusTrap(open, dialogRef, () => {
+    if (!loading && !applying) onClose();
+  });
 
   /** Luôn chọn mọi dòng nhập được (cả TCS + SCSC) — không giới hạn theo chip lọc xem. */
   const selectAllImportable = useCallback((result: SheetBookSyncResult) => {
@@ -445,8 +450,10 @@ export function GoogleSheetImportModal({
       onClick={handleClose}
     >
       <div
+        ref={dialogRef}
         className={shellClass}
         role="dialog"
+        aria-modal="true"
         aria-labelledby="sheet-import-title"
         onClick={(e) => e.stopPropagation()}
       >

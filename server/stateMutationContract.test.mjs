@@ -37,6 +37,9 @@ describe("state mutation contract (server)", () => {
     const afterDel = applyMutation(afterAdd, { action: "DELETE", id: newId });
     expect(afterDel.rows).toHaveLength(1);
     expect(afterDel.rows[0]?.id).toBe("c-1");
+    const afterDelAgain = applyMutation(afterDel, { action: "DELETE", id: newId });
+    expect(afterDelAgain).toBe(afterDel);
+    expect(afterDelAgain.version).toBe(afterDel.version);
   });
 
   it("canonicalize AWB hoàn chỉnh ở server khi ADD/UPDATE", () => {

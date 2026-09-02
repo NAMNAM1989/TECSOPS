@@ -4,17 +4,18 @@ export const MOBILE = {
     "flex w-full max-h-[min(92vh,92dvh)] max-w-[100vw] flex-col rounded-t-[28px] border border-ui-border bg-ui-surface shadow-ui-lg animate-cnee-slide-up",
   sheetBackdrop:
     "fixed inset-0 z-[560] flex flex-col justify-end bg-black/40 md:hidden",
-  /** Card lô day-board — denser, AWB scannable, 2 dòng */
+  /** Card lô day-board — denser 2 dòng */
   card: "relative overflow-hidden rounded-lg border border-ui-border/90 bg-ui-surface shadow-ui-sm",
-  cardInner: "relative z-10 bg-transparent px-2.5 py-2",
+  cardInner: "relative z-10 bg-transparent px-2 py-1.5",
   destBadge:
-    "inline-flex shrink-0 items-center rounded-md bg-ui-navy/10 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wide text-ui-navy",
+    "inline-flex shrink-0 items-center rounded-md bg-ui-navy/10 px-1 py-px font-mono text-[10px] font-extrabold uppercase tracking-wide text-ui-awb",
   cardFlight:
-    "truncate font-shipment-data text-[11px] font-semibold leading-tight text-ui-text-muted",
-  cardQty: "font-mono text-[11px] font-bold tabular-nums text-ui-text-muted",
+    "truncate font-shipment-data text-[10px] font-semibold leading-none text-ui-text-muted",
+  cardQty: "font-mono text-[11px] font-bold tabular-nums text-ui-navy",
   cardMeta: "truncate font-shipment-data text-[11px] font-medium leading-tight text-ui-text-muted",
-  customerName: "truncate text-[12px] font-semibold leading-snug tracking-tight text-ui-navy",
-  awb: "ops-awb text-[15px] leading-tight whitespace-nowrap",
+  customerName:
+    "font-vi truncate font-sans text-[12px] font-bold leading-snug tracking-normal text-ui-navy",
+  awb: "font-shipment-data text-[14px] font-extrabold leading-none tracking-tight tabular-nums text-ui-navy whitespace-nowrap",
   awbEmpty: "text-[13px] font-semibold leading-tight text-ui-primary hover:text-ui-primary-hover",
   chip: "inline-flex items-center rounded-md bg-ui-surface-muted px-1.5 py-px text-[9px] font-bold uppercase tracking-wide tabular-nums text-ui-text",
   chipCutoff:

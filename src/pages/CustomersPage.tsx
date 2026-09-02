@@ -934,7 +934,7 @@ export function CustomersPage({
       <div
         className={`mx-auto flex min-h-0 w-full max-w-[1400px] flex-1 flex-col overflow-hidden sm:flex-row ${
           isMobile && mobilePane === "detail"
-            ? "fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] top-[calc(3.25rem+env(safe-area-inset-top))] z-20 max-w-none bg-ui-background"
+            ? "fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] top-[calc(3.25rem+env(safe-area-inset-top))] z-20 max-w-none bg-ui-background"
             : ""
         }`}
       >

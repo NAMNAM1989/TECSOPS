@@ -5,6 +5,7 @@ import { useShipmentSync } from "./hooks/useShipmentSync";
 import { useHashRoute } from "./hooks/useHashRoute";
 import type { AirlineLabelOverrides } from "./utils/airlineLabelOverridesCore";
 import { BottomNav, OpsLeftRail, PageSkeleton } from "./ui";
+import type { MobileCargoCopyApi } from "./ui/BottomNav";
 import { AppAuthGate } from "./components/AppAuthGate";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { formatLocalSessionDate } from "./utils/sessionDate";
@@ -39,6 +40,7 @@ function AuthenticatedApp() {
   const isMobile = useIsMobile();
   const [printJob, setPrintJob] = useState<PrintJob | null>(null);
   const [opsSessionYmd, setOpsSessionYmd] = useState(todayYmd);
+  const [cargoCopyApi, setCargoCopyApi] = useState<MobileCargoCopyApi | null>(null);
 
   useEffect(() => {
     if (route === "stats") {
@@ -95,7 +97,7 @@ function AuthenticatedApp() {
         ) : null}
         <div
           className={`min-w-0 ${
-            isMobile ? "pb-[calc(3.75rem+env(safe-area-inset-bottom))]" : ""
+            isMobile ? "pb-[calc(5rem+env(safe-area-inset-bottom))]" : ""
           }`}
         >
           <Suspense fallback={<PageSkeleton variant={skeletonVariant} />}>
@@ -137,6 +139,7 @@ function AuthenticatedApp() {
               sync={sync}
               onSessionDateChange={setOpsSessionYmd}
               onRequestPrint={onRequestPrint}
+              onCargoCopyApiChange={setCargoCopyApi}
             />
           )}
         </Suspense>
@@ -149,6 +152,7 @@ function AuthenticatedApp() {
           onPrefetchCustomers={prefetchCustomers}
           onPrefetchStats={prefetchStats}
           onPrefetchAirlines={prefetchAirlines}
+          cargoCopy={route === "ops" ? cargoCopyApi : null}
         />
       ) : null}
       {printJob ? (

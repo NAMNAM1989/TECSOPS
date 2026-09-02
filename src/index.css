@@ -39,6 +39,20 @@
 }
 
 @layer utilities {
+  /**
+   * Chữ UI tiếng Việt — chỉ weight đã nạp subset (400/600/700).
+   * Tránh extrabold(800): thiếu glyph → fallback sai dấu.
+   */
+  .font-vi {
+    font-family:
+      "Plus Jakarta Sans",
+      "Segoe UI",
+      "Helvetica Neue",
+      Arial,
+      sans-serif;
+    font-synthesis: none;
+  }
+
   .font-shipment-data {
     font-family:
       "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,

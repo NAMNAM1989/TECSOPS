@@ -67,6 +67,8 @@ interface Props {
   denseChips?: boolean;
   /** Mobile — giữ vùng chạm ≥40px */
   touchTargets?: boolean;
+  /** 4 kho cố định 1 hàng — không cuộn ngang (mobile sticky). */
+  fitRow?: boolean;
   hideAddButton?: boolean;
   className?: string;
 }
@@ -84,6 +86,7 @@ export function WarehouseGridPicker({
   chips = false,
   denseChips = false,
   touchTargets = false,
+  fitRow = false,
   hideAddButton = false,
   className = "",
 }: Props) {
@@ -92,7 +95,11 @@ export function WarehouseGridPicker({
   if (chips) {
     return (
       <div
-        className={`flex min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] ${className}`}
+        className={
+          fitRow
+            ? `grid w-full min-w-0 grid-cols-4 gap-1 ${className}`
+            : `flex min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch] ${className}`
+        }
         role="tablist"
         aria-label="Chọn kho"
         data-testid="warehouse-chips"
@@ -110,24 +117,36 @@ export function WarehouseGridPicker({
               aria-selected={isActive}
               title={`${warehouseLabel[wh]} · Lô ${m.lots} · Kiện ${m.pcs} · Kg ${kg}`}
               onClick={() => onSelect(wh)}
-              className={`inline-flex shrink-0 touch-manipulation flex-col items-start justify-center text-left ring-1 transition active:scale-[0.98] ${
-                denseChips
-                  ? touchTargets
-                    ? "min-h-10 gap-0.5 rounded-xl px-2.5 py-1"
-                    : "min-h-9 gap-0.5 rounded-lg px-2 py-1"
-                  : "min-h-11 gap-0.5 rounded-xl px-2.5 py-1"
+              className={`touch-manipulation ring-1 transition active:scale-[0.98] ${
+                fitRow
+                  ? "inline-flex min-h-8 min-w-0 w-full flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 py-1 text-center"
+                  : `inline-flex shrink-0 flex-col items-start justify-center text-left ${
+                      denseChips
+                        ? touchTargets
+                          ? "min-h-10 gap-0.5 rounded-xl px-2.5 py-1"
+                          : "min-h-9 gap-0.5 rounded-lg px-2 py-1"
+                        : "min-h-11 gap-0.5 rounded-xl px-2.5 py-1"
+                    }`
               } ${
                 isActive ? CHIP_ACTIVE[wh] : CHIP_IDLE[wh]
               } ${hasSearchHit && !isActive ? "ring-2 ring-ui-primary/50" : ""}`}
             >
               <span
-                className={`font-extrabold leading-none tracking-tight ${
-                  denseChips && !touchTargets ? "text-[9px]" : "text-[11px]"
+                className={`w-full truncate font-extrabold leading-none tracking-tight ${
+                  fitRow
+                    ? "text-[8px]"
+                    : denseChips && !touchTargets
+                      ? "text-[9px]"
+                      : "text-[11px]"
                 }`}
               >
                 {warehouseLabel[wh]}
               </span>
-              {denseChips && !touchTargets ? (
+              {fitRow ? (
+                <span className="font-mono text-[11px] font-bold tabular-nums leading-none">
+                  {m.lots}
+                </span>
+              ) : denseChips && !touchTargets ? (
                 <span className="mt-0.5 flex items-end gap-2">
                   {(
                     [

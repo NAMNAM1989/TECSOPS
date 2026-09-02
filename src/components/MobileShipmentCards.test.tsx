@@ -34,7 +34,7 @@ const row = {
 } as Shipment;
 
 describe("MobileShipmentCards", () => {
-  it("card 2 dòng: AWB mono + status + một meta; không editor K/Kg", () => {
+  it("card 2 dòng denser: AWB+DST+chuyến · khách+kg; không editor K/Kg", () => {
     const html = renderToStaticMarkup(
       <MobileShipmentCards
         rows={[row]}
@@ -49,15 +49,19 @@ describe("MobileShipmentCards", () => {
     );
     expect(html).toContain("mobile-shipment-list");
     expect(html).toContain("176-1234 5675");
+    expect(html).toContain("SGN");
+    expect(html).toContain("VN623/23AUG");
     expect(html).toContain("NAMNAM");
     expect(html).toContain("2K");
     expect(html).toContain("12.5kg");
+    expect(html).toContain("font-extrabold");
+    expect(html).toContain("text-ui-navy");
     expect(html).not.toContain(">K<");
     expect(html).not.toContain("CNEE");
     expect(html).toContain("row-actions-menu-s1");
   });
 
-  it("densify padding/gap, AWB 15px, status/menu ≥44px, clearance FAB", () => {
+  it("densify: padding py-1.5, status/menu dense, clearance FAB", () => {
     const html = renderToStaticMarkup(
       <MobileShipmentCards
         rows={[row]}
@@ -71,14 +75,14 @@ describe("MobileShipmentCards", () => {
       />,
     );
     expect(html).toContain("space-y-0.5");
-    expect(html).toContain("px-2.5 py-2");
-    expect(html).not.toContain("px-2 py-1");
-    expect(html).toContain("ops-awb");
-    expect(html).toContain("text-[15px]");
-    expect(html).toContain("h-11 w-full min-h-11");
-    expect(html).toContain("min-h-11 min-w-11");
-    expect(html).toContain("pb-[calc(6.5rem+env(safe-area-inset-bottom))]");
-    expect(html).toContain("scroll-mb-[calc(6.5rem+env(safe-area-inset-bottom))]");
+    expect(html).toContain("px-2 py-1.5");
+    expect(html).toContain("text-ui-navy");
+    expect(html).toContain("text-[14px]");
+    expect(html).toContain("h-7 w-full");
+    expect(html).toContain("h-8 w-8");
+    expect(html).not.toContain("h-11 w-full min-h-11");
+    expect(html).toContain("pb-[calc(5rem+env(safe-area-inset-bottom))]");
+    expect(html).toContain("scroll-mb-[calc(5rem+env(safe-area-inset-bottom))]");
   });
 });
 
@@ -90,7 +94,7 @@ describe("OpsMobileBookingFab", () => {
     expect(html).toContain("ops-mobile-booking-fab");
     expect(html).toContain("rounded-full");
     expect(html).toContain("min-h-14");
-    expect(html).toContain("bottom-[calc(4.25rem+env(safe-area-inset-bottom))]");
+    expect(html).toContain("bottom-[max(0.75rem,env(safe-area-inset-bottom))]");
     expect(html).toContain(
       "[[data-ops-mobile-overlay=sheet]_&amp;]:invisible",
     );

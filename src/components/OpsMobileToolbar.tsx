@@ -18,9 +18,11 @@ type Props = {
   excelExporting?: boolean;
   cargoReportCopying?: boolean;
   onCopyCargoDayReport: (kind: CargoDayReportCopyKind) => void;
+  /** Nằm trong panel 🔍 — không border hàng sticky riêng. */
+  embedded?: boolean;
 };
 
-/** Thanh sticky mobile: lọc trạng thái + overflow (Sync, Excel, ảnh). Nav ở BottomNav. */
+/** Lọc trạng thái + overflow (Sync, Excel, ảnh). Mobile: thường gộp trong panel tìm kiếm. */
 export function OpsMobileToolbar({
   activeWarehouse,
   viewRows,
@@ -32,6 +34,7 @@ export function OpsMobileToolbar({
   excelExporting = false,
   cargoReportCopying = false,
   onCopyCargoDayReport,
+  embedded = false,
 }: Props) {
   const statusOrder = useMemo(
     () => statusOrderForFilter(activeWarehouse),
@@ -84,17 +87,26 @@ export function OpsMobileToolbar({
 
   if (viewRows.length === 0) return null;
 
+  const controlH = embedded
+    ? "min-h-9 rounded-lg px-2.5 text-[12px]"
+    : "min-h-11 rounded-xl px-3 text-[13px] shadow-ui-sm";
+
   return (
     <div
       data-testid="ops-mobile-toolbar"
-      className="flex items-center gap-2 border-t border-ui-border/70 bg-ui-surface px-3 py-2"
+      data-embedded={embedded ? "true" : undefined}
+      className={
+        embedded
+          ? "mt-1.5 flex items-center gap-1.5"
+          : "flex items-center gap-2 border-t border-ui-border/70 bg-ui-surface px-2.5 py-1.5"
+      }
     >
       <label className="min-w-0 flex-1">
         <span className="sr-only">Lọc trạng thái</span>
         <select
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value as StatusFilterValue)}
-          className="box-border w-full min-h-11 touch-manipulation rounded-xl border border-ui-border/90 bg-ui-surface px-3 text-[13px] font-semibold text-ui-text shadow-ui-sm outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus"
+          className={`box-border w-full touch-manipulation border border-ui-border/90 bg-ui-surface font-semibold text-ui-text outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus ${controlH}`}
           aria-label="Lọc trạng thái"
         >
           <option value="ALL">Tất cả · {viewRows.length}</option>
@@ -116,7 +128,9 @@ export function OpsMobileToolbar({
         label="Thêm thao tác"
         items={overflowItems}
         compact
-        triggerClassName="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border/90 bg-ui-surface px-3 text-[13px] font-bold text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+        triggerClassName={`inline-flex shrink-0 touch-manipulation items-center justify-center border border-ui-border/90 bg-ui-surface font-bold text-ui-text transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+          embedded ? "min-h-9 min-w-9 rounded-lg px-2 text-[11px]" : "min-h-11 min-w-11 rounded-xl px-3 text-[13px] shadow-ui-sm"
+        }`}
       >
         Thêm ▾
       </OverflowMenu>

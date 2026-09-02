@@ -134,52 +134,63 @@ const MobileShipmentCard = memo(
         id={`mobile-shipment-${row.id}`}
         style={{
           contentVisibility: "auto",
-          containIntrinsicSize: "0 72px",
+          containIntrinsicSize: "0 58px",
         }}
-        className={`${MOBILE.card} scroll-mt-2 scroll-mb-[calc(6.5rem+env(safe-area-inset-bottom))] ${rowAccent} ${rowSurface} ${
+        className={`${MOBILE.card} scroll-mt-2 scroll-mb-[calc(5rem+env(safe-area-inset-bottom))] ${rowAccent} ${rowSurface} ${
           selected ? "ring-2 ring-ui-primary/40" : ""
         } ${highlighted ? "ring-2 ring-amber-400/70" : ""} ${
           flightMeta.flightDateUrgent ? "ring-1 ring-red-300/80" : ""
         }`}
       >
         <div className={MOBILE.cardInner}>
-          <div className="flex min-w-0 items-start gap-2">
+          {/* Dòng 1: AWB · DST · chuyến | status · menu */}
+          <div className="flex min-w-0 items-center gap-1.5">
             <button
               type="button"
-              className="min-w-0 flex-1 py-0 text-left active:opacity-90"
+              className="flex min-w-0 flex-1 items-center gap-1.5 py-0 text-left active:opacity-90"
               onClick={() => onOpenEdit(row)}
               aria-label={awbTrim ? `Sửa lô ${awbTrim}` : "Thêm AWB"}
+              title={
+                [awbTrim, hawbTrim ? `HAWB ${hawbTrim}` : "", flightLine]
+                  .filter(Boolean)
+                  .join(" · ") || undefined
+              }
             >
               {awbTrim ? (
-                <span className={`block ${MOBILE.awb} !text-[15px]`} title={awbTrim}>
+                <span className={`min-w-0 truncate ${MOBILE.awb}`} title={awbTrim}>
                   {formatAwb(awbTrim)}
                 </span>
               ) : (
                 <span className={MOBILE.awbEmpty}>+ AWB</span>
               )}
-              {hawbTrim ? (
-                <span className="mt-0.5 block truncate font-shipment-data text-[9px] font-bold text-ui-text-muted">
-                  HAWB {hawbTrim}
+              {flightMeta.dest ? (
+                <span className={MOBILE.destBadge} title={`DEST ${flightMeta.dest}`}>
+                  {flightMeta.dest}
+                </span>
+              ) : null}
+              {flightLine ? (
+                <span
+                  className={`min-w-0 flex-1 truncate ${MOBILE.cardFlight} ${
+                    flightMeta.flightDateUrgent ? "!font-extrabold !text-red-600" : ""
+                  }`}
+                >
+                  {flightLine}
                 </span>
               ) : null}
             </button>
-            {flightMeta.dest ? (
-              <span className={MOBILE.destBadge} title={`DEST ${flightMeta.dest}`}>
-                {flightMeta.dest}
-              </span>
-            ) : null}
             <div
               className="flex shrink-0 items-center gap-1"
               onClick={(e) => e.stopPropagation()}
             >
               <StatusSelect
-                compact
+                dense
                 warehouse={row.warehouse}
                 value={row.status}
                 onChange={(s) => onUpdate(row.id, { status: s })}
               />
               <ShipmentRowActionsMenu
                 compact
+                dense
                 row={row}
                 customerDirectory={customerDirectory}
                 onPrint={onPrint}
@@ -188,22 +199,7 @@ const MobileShipmentCard = memo(
             </div>
           </div>
 
-          {flightLine ? (
-            <button
-              type="button"
-              className="mt-1 flex min-w-0 w-full py-0 text-left active:opacity-90"
-              onClick={() => onOpenEdit(row)}
-            >
-              <span
-                className={`min-w-0 flex-1 truncate ${MOBILE.cardFlight} ${
-                  flightMeta.flightDateUrgent ? "!font-extrabold !text-red-600" : ""
-                }`}
-              >
-                {flightLine}
-              </span>
-            </button>
-          ) : null}
-
+          {/* Dòng 2: khách | kiện/kg */}
           <button
             type="button"
             className="mt-1 flex min-w-0 w-full items-center gap-2 py-0 text-left active:opacity-90"
@@ -310,30 +306,9 @@ export function MobileShipmentCards({
 
   return (
     <div
-      className={`space-y-0.5 pb-[calc(6.5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(6.5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
+      className={`space-y-0.5 pb-[calc(5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
       data-testid="mobile-shipment-list"
     >
-      {!searchActive && onDownloadScscDim && isScscWarehouse(activeWarehouse) ? (
-        <div className="mb-1 flex items-center justify-between gap-2 rounded-xl border border-ui-border/80 bg-ui-surface px-3 py-2">
-          <span className="text-[11px] font-bold text-ui-navy">
-            {warehouseLabel[activeWarehouse]}
-            <span className="ml-1 font-semibold text-ui-text-muted">
-              · {(rowsByWarehouse[activeWarehouse] ?? []).length} lô
-            </span>
-          </span>
-          <button
-            type="button"
-            data-testid="warehouse-dim-scsc"
-            title="Excel LIST DIM SCSC theo ngày phiên"
-            aria-label="DIM SCSC"
-            disabled={scscDimExporting}
-            onClick={onDownloadScscDim}
-            className="inline-flex min-h-9 shrink-0 touch-manipulation items-center gap-1 rounded-lg px-2.5 text-[11px] font-semibold text-ui-text hover:bg-ui-surface-muted disabled:opacity-40"
-          >
-            {scscDimExporting ? "DIM…" : "DIM SCSC"}
-          </button>
-        </div>
-      ) : null}
       {searchActive
         ? warehouseSections.map((wh) => {
             const group = rowsByWarehouse[wh];
@@ -390,8 +365,8 @@ interface OpsMobileBookingFabProps {
 }
 
 /**
- * CTA chính mobile — FAB góc phải, trên BottomNav, không thanh full-width.
- * Sửa/xóa lô nằm trên card (tap + overflow), không đấu BottomNav.
+ * CTA chính mobile — FAB góc phải (nav gọn góc trái), không thanh full-width.
+ * Sửa/xóa lô nằm trên card (tap + overflow).
  */
 export function OpsMobileBookingFab({
   activeWarehouse,
@@ -404,7 +379,7 @@ export function OpsMobileBookingFab({
 
   return (
     <div
-      className={`no-print fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-3 z-40 [[data-ops-mobile-overlay=sheet]_&]:pointer-events-none [[data-ops-mobile-overlay=sheet]_&]:invisible ${mobileOnlyVisibility(isMobile)}`}
+      className={`no-print fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-3 z-40 [[data-ops-mobile-overlay=sheet]_&]:pointer-events-none [[data-ops-mobile-overlay=sheet]_&]:invisible ${mobileOnlyVisibility(isMobile)}`}
       data-testid="ops-mobile-booking-fab"
     >
       <Button

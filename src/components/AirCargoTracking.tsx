@@ -73,12 +73,21 @@ interface AirCargoTrackingProps {
   sync: SyncApi;
   onSessionDateChange?: (ymd: string) => void;
   onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
+  /** Mobile BottomNav — đăng ký API copy ảnh báo cáo. */
+  onCargoCopyApiChange?: (
+    api: {
+      viewRows: readonly Shipment[];
+      copying: boolean;
+      onCopy: (kind: CargoDayReportCopyKind) => void;
+    } | null,
+  ) => void;
 }
 
 export function AirCargoTracking({
   sync,
   onSessionDateChange,
   onRequestPrint,
+  onCargoCopyApiChange,
 }: AirCargoTrackingProps) {
   const {
     status,
@@ -453,6 +462,18 @@ export function AirCargoTracking({
     },
     [activeWarehouse, selectedYmd, state?.customers, toast, viewRows],
   );
+
+  useEffect(() => {
+    if (!onCargoCopyApiChange) return;
+    onCargoCopyApiChange({
+      viewRows,
+      copying: cargoReportCopying,
+      onCopy: (kind) => {
+        void onCopyCargoDayReport(kind);
+      },
+    });
+    return () => onCargoCopyApiChange(null);
+  }, [cargoReportCopying, onCargoCopyApiChange, onCopyCargoDayReport, viewRows]);
 
   if (status === "loading" || !state) {
     return <PageSkeleton variant="ops" />;

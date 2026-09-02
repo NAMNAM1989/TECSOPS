@@ -3,8 +3,6 @@ import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
 import { formatSyncedPhrase } from "../utils/dbSyncedAt";
-import { formatKgTotal } from "../utils/formatKgTotal";
-import { computeOpsDayOverview } from "../utils/opsDayOverview";
 import { SyncStatusPill } from "../ui";
 import type { SyncStatus } from "../hooks/useShipmentSync";
 import { OpsDatePicker } from "./OpsDatePicker";
@@ -54,8 +52,8 @@ function SearchIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
-      width={20}
-      height={20}
+      width={16}
+      height={16}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -68,7 +66,7 @@ function SearchIcon({ className }: { className?: string }) {
   );
 }
 
-/** Chrome mobile Ops — header 2 tầng, KPI scroll, toolbar lọc + overflow. */
+/** Chrome mobile Ops — ngày · chip kho; tìm/lọc/thao tác trong panel 🔍. */
 export function OpsMobileStickyHeader({
   selectedYmd,
   onDateChange,
@@ -105,8 +103,11 @@ export function OpsMobileStickyHeader({
   onStatusFilterChange,
   onClearFilters,
 }: Props) {
-  const [searchExpanded, setSearchExpanded] = useState(
-    () => searchQuery.trim().length > 0 || Boolean(flightDateFilter),
+  const [toolsExpanded, setToolsExpanded] = useState(
+    () =>
+      searchQuery.trim().length > 0 ||
+      Boolean(flightDateFilter) ||
+      statusFilter !== "ALL",
   );
 
   const filtersActive =
@@ -126,18 +127,14 @@ export function OpsMobileStickyHeader({
         : "Làm mới"
       : null;
 
-  const { totals } = useMemo(() => computeOpsDayOverview(filteredViewRows), [filteredViewRows]);
-  const kgLabel = formatKgTotal(totals.kg);
-  const filterHint = filtersActive ? "*" : "";
-
   return (
     <header className="space-y-0" data-testid="ops-mobile-sticky-header">
       <div className="overflow-hidden rounded-none border-b border-ui-border/80 bg-ui-background">
         <div
           data-testid="ops-mobile-top-row"
-          className="flex min-h-[52px] items-center gap-2 px-3 py-2"
+          className="flex h-9 items-center gap-1 px-2 py-0"
         >
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 shrink-0">
             <OpsDatePicker
               compact
               inline
@@ -149,39 +146,50 @@ export function OpsMobileStickyHeader({
               isViewingToday={isViewingToday}
             />
           </div>
+          <div className="min-w-0 flex-1" aria-hidden />
           {syncCta ? (
             <button
               type="button"
               onClick={() => void onSyncRefresh?.()}
-              className="inline-flex min-h-10 shrink-0 touch-manipulation items-center gap-1 rounded-full px-1"
+              className="inline-flex h-8 shrink-0 touch-manipulation items-center gap-1 rounded-full px-0.5"
               title={syncTitle || syncCta}
               aria-label={syncCta}
             >
               <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
-              <span className="text-[10px] font-bold text-ui-navy">{syncCta}</span>
+              <span className="text-[9px] font-bold text-ui-navy">{syncCta}</span>
             </button>
           ) : (
-            <span title={syncTitle || "Live sync"} className="inline-flex shrink-0 items-center gap-1">
+            <span title={syncTitle || "Live sync"} className="inline-flex shrink-0 scale-90 origin-right">
               <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
-              <span className="text-[11px] font-bold text-emerald-700">Live</span>
             </span>
           )}
           <button
             type="button"
             data-testid="ops-mobile-search-toggle"
-            onClick={() => setSearchExpanded((v) => !v)}
-            className="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border/80 bg-ui-surface text-ui-text shadow-ui-sm transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
-            aria-label={searchExpanded ? "Đóng tìm kiếm" : "Mở tìm kiếm"}
-            aria-expanded={searchExpanded}
+            onClick={() => setToolsExpanded((v) => !v)}
+            className={`relative inline-flex h-8 w-8 shrink-0 touch-manipulation items-center justify-center rounded-lg border text-ui-text transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+              toolsExpanded || filtersActive
+                ? "border-ui-primary/50 bg-ui-primary/10 text-ui-primary"
+                : "border-ui-border/70 bg-ui-surface hover:bg-ui-surface-muted"
+            }`}
+            aria-label={toolsExpanded ? "Đóng tìm & lọc" : "Tìm kiếm, lọc & thao tác"}
+            aria-expanded={toolsExpanded}
+            title="Tìm · lọc trạng thái · Sync / Excel"
           >
             <SearchIcon />
+            {filtersActive && !toolsExpanded ? (
+              <span
+                className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-ui-primary"
+                aria-hidden
+              />
+            ) : null}
           </button>
         </div>
 
-        {searchExpanded ? (
+        {toolsExpanded ? (
           <div
             data-testid="ops-mobile-search-expand"
-            className="border-t border-ui-border/60 px-3 py-2"
+            className="border-t border-ui-border/60 px-2 py-1.5"
           >
             <SmartSearchBar
               compact
@@ -198,6 +206,19 @@ export function OpsMobileStickyHeader({
               inlineFacets={false}
               debounceMs={200}
             />
+            <OpsMobileToolbar
+              embedded
+              activeWarehouse={activeWarehouse}
+              viewRows={viewRows}
+              statusFilter={statusFilter}
+              onStatusFilterChange={onStatusFilterChange}
+              onOpenSheetImport={onOpenSheetImport}
+              onPrefetchSheetImport={onPrefetchSheetImport}
+              onDownloadDayExcel={onDownloadDayExcel}
+              excelExporting={excelExporting}
+              cargoReportCopying={cargoReportCopying}
+              onCopyCargoDayReport={(kind) => onCopyCargoDayReport?.(kind)}
+            />
             {filtersActive ? (
               <button
                 type="button"
@@ -212,66 +233,20 @@ export function OpsMobileStickyHeader({
 
         <div
           data-testid="ops-mobile-wh-row"
-          className="flex gap-1.5 overflow-x-auto overscroll-x-contain border-t border-ui-border/60 px-3 py-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+          className="border-t border-ui-border/60 px-2 py-1"
         >
-          <div data-testid="warehouse-chips" className="min-w-0 shrink-0">
-            <WarehouseGridPicker
-              rows={viewRows}
-              active={activeWarehouse}
-              onSelect={onWarehouseChange}
-              highlightWarehouses={searchHighlightWarehouses}
-              chips
-              denseChips
-              touchTargets
-              hideAddButton
-            />
-          </div>
+          <WarehouseGridPicker
+            rows={viewRows}
+            active={activeWarehouse}
+            onSelect={onWarehouseChange}
+            highlightWarehouses={searchHighlightWarehouses}
+            chips
+            denseChips
+            fitRow
+            hideAddButton
+            className="w-full"
+          />
         </div>
-
-        {viewRows.length > 0 ? (
-          <div
-            data-testid="ops-day-overview"
-            className="flex gap-2 overflow-x-auto overscroll-x-contain border-t border-ui-border/60 px-3 py-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
-          >
-            <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-ui-border/80 bg-ui-surface px-3 shadow-ui-sm">
-              <span className="text-[9px] font-extrabold uppercase tracking-wide text-ui-text-muted">
-                Lô{filterHint}
-              </span>
-              <span className="font-mono text-[13px] font-bold tabular-nums text-ui-navy">
-                {totals.lots}
-              </span>
-            </span>
-            <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-ui-border/80 bg-ui-surface px-3 shadow-ui-sm">
-              <span className="text-[9px] font-extrabold uppercase tracking-wide text-ui-text-muted">
-                PCS
-              </span>
-              <span className="font-mono text-[13px] font-bold tabular-nums text-ui-navy">
-                {totals.pcs}
-              </span>
-            </span>
-            <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-ui-border/80 bg-ui-surface px-3 shadow-ui-sm">
-              <span className="text-[9px] font-extrabold uppercase tracking-wide text-ui-text-muted">
-                KG
-              </span>
-              <span className="font-mono text-[13px] font-bold tabular-nums text-ui-navy">
-                {kgLabel}
-              </span>
-            </span>
-          </div>
-        ) : null}
-
-        <OpsMobileToolbar
-          activeWarehouse={activeWarehouse}
-          viewRows={viewRows}
-          statusFilter={statusFilter}
-          onStatusFilterChange={onStatusFilterChange}
-          onOpenSheetImport={onOpenSheetImport}
-          onPrefetchSheetImport={onPrefetchSheetImport}
-          onDownloadDayExcel={onDownloadDayExcel}
-          excelExporting={excelExporting}
-          cargoReportCopying={cargoReportCopying}
-          onCopyCargoDayReport={(kind) => onCopyCargoDayReport?.(kind)}
-        />
       </div>
     </header>
   );

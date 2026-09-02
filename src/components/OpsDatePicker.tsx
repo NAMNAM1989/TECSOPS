@@ -9,9 +9,9 @@ interface Props {
   onNext: () => void;
   onToday: () => void;
   isViewingToday: boolean;
-  /** Gọn — mobile header (vùng chạm ≥44px). Desktop mặc định slim. */
+  /** Gọn — mobile header. Desktop mặc định slim. */
   compact?: boolean;
-  /** Không stretch full-width — nằm trong hàng identity mobile. */
+  /** Không stretch full-width — nằm trong hàng identity mobile (dense ~32px). */
   inline?: boolean;
 }
 
@@ -28,9 +28,13 @@ export function OpsDatePicker({
 }: Props) {
   const dateInputRef = useRef<HTMLInputElement>(null);
   const opsLabel = formatOpsWorkDateYmd(value);
-  const stepBtn = compact
-    ? "inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-full px-1 text-[14px] font-semibold text-ui-primary hover:bg-ui-surface-muted"
-    : "inline-flex h-8 w-8 items-center justify-center rounded-lg text-[14px] font-semibold text-ui-primary hover:bg-ui-surface-muted";
+  /** compact+inline = chrome sticky mobile — thấp hơn full compact. */
+  const dense = compact && inline;
+  const stepBtn = dense
+    ? "inline-flex h-8 w-7 touch-manipulation items-center justify-center rounded-md text-[13px] font-semibold text-ui-primary hover:bg-ui-surface-muted"
+    : compact
+      ? "inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-full px-1 text-[14px] font-semibold text-ui-primary hover:bg-ui-surface-muted"
+      : "inline-flex h-8 w-8 items-center justify-center rounded-lg text-[14px] font-semibold text-ui-primary hover:bg-ui-surface-muted";
 
   const openCalendar = () => {
     const el = dateInputRef.current;
@@ -52,9 +56,11 @@ export function OpsDatePicker({
       className={`inline-flex min-w-0 items-center ${compact && !inline ? "w-full gap-1" : "gap-0.5"}`}
     >
       <div
-        className={`inline-flex min-w-0 items-center border border-ui-border bg-ui-surface shadow-ui-sm ${
-          compact && !inline ? "flex-1" : ""
-        } ${compact ? "rounded-full p-0.5" : "rounded-xl p-0.5"}`}
+        className={`inline-flex min-w-0 items-center border border-ui-border bg-ui-surface ${
+          dense ? "shadow-none" : "shadow-ui-sm"
+        } ${compact && !inline ? "flex-1" : ""} ${
+          dense ? "rounded-lg p-0" : compact ? "rounded-full p-0.5" : "rounded-xl p-0.5"
+        }`}
       >
         <button type="button" onClick={onPrev} className={stepBtn} aria-label="Ngày trước">
           ‹
@@ -62,15 +68,15 @@ export function OpsDatePicker({
         <button
           type="button"
           onClick={openCalendar}
-          className={`relative min-w-0 cursor-pointer rounded-lg hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
-            compact && !inline ? "flex-1" : "w-[7.75rem]"
-          }`}
+          className={`relative min-w-0 cursor-pointer hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+            dense ? "rounded-md" : "rounded-lg"
+          } ${compact && !inline ? "flex-1" : dense ? "w-[6.75rem]" : "w-[7.75rem]"}`}
           aria-label={`Ngày phiên Ops ${opsLabel}. Bấm để chọn ngày`}
           title="Chọn ngày phiên"
         >
           <span
             className={`pointer-events-none block truncate text-center font-mono font-semibold tabular-nums text-ui-navy ${
-              compact ? "py-1 text-[11px]" : "py-0.5 text-[12px]"
+              dense ? "py-1 text-[11px] leading-none" : compact ? "py-1 text-[11px]" : "py-0.5 text-[12px]"
             }`}
             aria-hidden
           >
@@ -99,7 +105,11 @@ export function OpsDatePicker({
           <button
             type="button"
             onClick={onToday}
-            className="inline-flex min-h-11 shrink-0 touch-manipulation items-center rounded-full bg-ui-primary px-2.5 text-[11px] font-semibold text-white shadow-ui-sm hover:bg-ui-primary-hover"
+            className={`inline-flex shrink-0 touch-manipulation items-center rounded-full bg-ui-primary font-semibold text-white hover:bg-ui-primary-hover ${
+              dense
+                ? "h-8 px-2 text-[10px]"
+                : "min-h-11 px-2.5 text-[11px] shadow-ui-sm"
+            }`}
           >
             Nay
           </button>

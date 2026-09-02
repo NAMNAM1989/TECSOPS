@@ -36,6 +36,8 @@ type Props = {
   onPrint: (s: Shipment) => void;
   onDelete: (id: string) => void;
   compact?: boolean;
+  /** Card mobile denser — nút menu ~32px. */
+  dense?: boolean;
 };
 
 const iconCls = "h-3.5 w-3.5";
@@ -159,6 +161,7 @@ export function ShipmentRowActionsMenu({
   onPrint,
   onDelete,
   compact = false,
+  dense = false,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
@@ -363,9 +366,11 @@ export function ShipmentRowActionsMenu({
           else openMenu();
         }}
         className={`${
-          compact
-            ? "inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-text shadow-sm transition-colors hover:bg-ui-surface-muted focus:outline-none focus:ring-2 focus:ring-ui-focus"
-            : OPS.actionIcon
+          dense
+            ? "inline-flex h-8 w-8 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-ui-border/80 bg-ui-surface text-ui-text transition-colors hover:bg-ui-surface-muted focus:outline-none focus:ring-2 focus:ring-ui-focus"
+            : compact
+              ? "inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface text-ui-text shadow-sm transition-colors hover:bg-ui-surface-muted focus:outline-none focus:ring-2 focus:ring-ui-focus"
+              : OPS.actionIcon
         } ${menuOpen ? OPS.actionIconOpen : ""}`}
       >
         <IconKebabVertical />

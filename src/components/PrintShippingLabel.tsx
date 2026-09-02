@@ -46,8 +46,8 @@ export function LabelContent({
   const originMm = fitRouteCodeFontMm(d.origin, { compact, relScale: 0.92 });
   const destMm = fitRouteCodeFontMm(d.dest, { compact });
   const piecesLabMm = compact ? 1.9 : 2.3;
-  /* Nhường chiều cao cho AWB/DEST — pieces vẫn đủ lớn */
-  const piecesValMm = compact ? 10.5 : 18;
+  /* Số kiện nổi hơn — caption sát mép trên ô pieces */
+  const piecesValMm = compact ? 12 : 20;
 
   const sheetClass = [
     "label",
@@ -152,11 +152,6 @@ function LabelPreviewSimple({
   );
 }
 
-function clampInt(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, Math.round(value)));
-}
-
 interface PrintShippingLabelProps {
   shipment: Shipment;
   airlineLabelOverrides?: AirlineLabelOverrides | null;
@@ -173,7 +168,6 @@ export function PrintShippingLabel({
   const [printing, setPrinting] = useState(false);
   const printHostRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const [copiesInput, setCopiesInput] = useState("");
   useModalFocusTrap(true, dialogRef, () => {
     if (!printing) onClose();
   });
@@ -182,8 +176,6 @@ export function PrintShippingLabel({
     () => mapShipmentToAirCargoLabelData(shipment, airlineLabelOverrides),
     [shipment, airlineLabelOverrides]
   );
-  const copies = Number(copiesInput);
-  const hasValidCopies = Number.isInteger(copies) && copies >= 1 && copies <= 999;
   const warnings = useMemo(() => {
     const next: string[] = [];
     if (labelData.mawbDigits.length !== 11) next.push("MAWB chưa đủ 11 số");
@@ -193,14 +185,8 @@ export function PrintShippingLabel({
     return next;
   }, [labelData, shipment.pcs]);
 
-  const handlePrint = async (requestedCopies?: number) => {
+  const handlePrint = async () => {
     if (printing) return;
-    if (requestedCopies == null && !hasValidCopies) {
-      setPrintMsg("Hãy nhập số tem cần in từ 1 đến 999.");
-      return;
-    }
-    const requested = requestedCopies ?? copies;
-    const copiesToPrint = clampInt(requested, 1, 999);
     setPrintMsg(null);
     setPrinting(true);
     const { wMm, hMm } = pageMm;
@@ -222,7 +208,7 @@ export function PrintShippingLabel({
         format,
         host: printHostRef.current,
         mode: "xp470b",
-        copies: copiesToPrint,
+        copies: 1,
         printWindow,
       });
       if (!res.ok) {
@@ -260,12 +246,8 @@ export function PrintShippingLabel({
                 id="print-shipping-label-title"
                 className={`truncate text-lg font-semibold ${OPS.title}`}
               >
-                In nhãn vận chuyển
+                PRINT LABEL
               </h2>
-              <p className={`text-xs ${OPS.secondary}`}>
-                {shipment.awb || "Chưa có AWB"} · {labelSheetFormatLabel(format)} · XP-470B
-                {hasValidCopies ? ` · ${copies} tem` : ""}
-              </p>
             </div>
             <button
               type="button"
@@ -309,40 +291,6 @@ export function PrintShippingLabel({
                   );
                 })}
               </div>
-              <p className={`mt-2 text-center text-[11px] ${OPS.secondary}`}>
-                Trang in{" "}
-                <span className="font-semibold tabular-nums">
-                  {pageMm.wMm}×{pageMm.hMm} mm
-                </span>{" "}
-                · đúng tem, không xoay
-              </p>
-            </div>
-
-            <div className={`rounded-2xl border px-4 py-3 ${OPS.border}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className={`text-xs font-bold uppercase tracking-wide ${OPS.secondary}`}>
-                    Số tem
-                  </p>
-                  <p className={`text-[11px] ${OPS.muted}`}>Nhập tay — không tự lấy theo kiện</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    max={999}
-                    inputMode="numeric"
-                    value={copiesInput}
-                    onChange={(e) =>
-                      setCopiesInput(e.target.value.replace(/\D/g, "").slice(0, 3))
-                    }
-                    placeholder="Nhập"
-                    className={`${OPS.printStepperInput} !w-20 !py-1.5 !text-sm`}
-                    aria-label="Số lượng tem"
-                  />
-                  <span className={`text-xs font-semibold ${OPS.secondary}`}>tem</span>
-                </div>
-              </div>
             </div>
 
             {warnings.length ? (
@@ -357,11 +305,8 @@ export function PrintShippingLabel({
           </div>
 
           <div
-            className={`flex shrink-0 flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center ${OPS.footer}`}
+            className={`flex shrink-0 flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-end ${OPS.footer}`}
           >
-            <p className={`min-w-0 flex-1 text-[11px] ${OPS.muted}`}>
-              Scale 100% · Margins None trong hộp thoại in.
-            </p>
             <div className="flex shrink-0 gap-2">
               <button
                 type="button"
@@ -372,23 +317,11 @@ export function PrintShippingLabel({
               </button>
               <button
                 type="button"
-                onClick={() => void handlePrint(1)}
-                disabled={printing}
-                className={`rounded-full border px-4 py-2.5 text-sm font-semibold ${OPS.border} ${OPS.title}`}
-              >
-                In thử 1
-              </button>
-              <button
-                type="button"
                 onClick={() => void handlePrint()}
-                disabled={printing || !hasValidCopies}
+                disabled={printing}
                 className="rounded-full bg-apple-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-apple-blue-hover disabled:opacity-60"
               >
-                {printing
-                  ? "Đang chuẩn bị…"
-                  : hasValidCopies
-                    ? `In ${copies} tem`
-                    : "Nhập số tem để in"}
+                {printing ? "Đang chuẩn bị…" : "PRINT"}
               </button>
             </div>
           </div>

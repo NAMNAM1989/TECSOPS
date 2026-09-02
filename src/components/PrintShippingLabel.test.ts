@@ -86,7 +86,7 @@ describe("LabelContent — mẫu 4 hàng", () => {
 });
 
 describe("PrintShippingLabel modal", () => {
-  it("chỉ 2 khổ chuẩn; số tem nhập tay; không theo kiện", () => {
+  it("tiêu đề PRINT LABEL; 2 khổ; một nút PRINT; không ô số tem", () => {
     const currentDocument = globalThis.document;
     Object.defineProperty(globalThis, "document", {
       configurable: true,
@@ -107,14 +107,16 @@ describe("PrintShippingLabel modal", () => {
       });
     }
 
-    expect(html).toContain('aria-label="Số lượng tem"');
-    expect(html).toContain('placeholder="Nhập"');
-    expect(html).toContain("Nhập số tem để in");
+    expect(html).toContain("PRINT LABEL");
+    expect(html).toContain(">PRINT<");
     expect(html).toContain("100×80 mm");
     expect(html).toContain("100×50 mm");
-    expect(html).not.toContain("Cuộn 80mm");
+    expect(html).not.toContain("Số lượng tem");
+    expect(html).not.toContain("Nhập số tem để in");
+    expect(html).not.toContain("In thử 1");
+    expect(html).not.toContain("Trang in");
+    expect(html).not.toContain("Scale 100%");
+    expect(html).not.toContain("XP-470B");
     expect(html).not.toContain("Theo kiện");
-    expect(html).not.toContain("Hiện cảnh báo xử lý");
-    expect(html).not.toContain("Tỷ lệ chữ");
   });
 });

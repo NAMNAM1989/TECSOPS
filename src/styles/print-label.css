@@ -184,12 +184,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0.5mm;
+  justify-content: flex-start;
+  gap: 0.35mm;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 1mm 1.5mm;
+  padding: 0.4mm 1.5mm 0.8mm;
   text-align: center;
 }
 
@@ -261,8 +261,8 @@
 }
 
 .lbl-sheet--compact .lbl-pieces-cell {
-  padding: 0.5mm 1mm;
-  gap: 0.3mm;
+  padding: 0.2mm 1mm 0.4mm;
+  gap: 0.2mm;
 }
 
 .print-label-host {

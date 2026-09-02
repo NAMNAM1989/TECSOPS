@@ -1,15 +1,23 @@
 # Thiết kế nền tảng in tem nâng cao TECSOPS
 
 Ngày thiết kế: 2026-07-23  
+Cập nhật hiện trạng: 2026-09-02  
 Phạm vi: hiệu chuẩn máy in, trình thiết kế kéo-thả và in tem theo từng HAWB.
 
 ### Quyết định nghiệp vụ đã khóa
 
 - Chỉ hỗ trợ hai khổ tem: **100×80 mm** và **100×50 mm**. Không cho tạo khổ tùy ý.
 - Origin luôn là **SGN** và không hiển thị ô chỉnh sửa khi in.
-- Khi lô có HAWB, renderer tự động chuyển sang tem House và làm nổi bật HAWB; người dùng không cần bật/tắt.
+- Tem **Master** (đang production): không in HAWB, không barcode, không banner xử lý — 4 hàng Airline · MAWB · Origin/Dest · TOTAL PIECES.
+- Tem **House** (giai đoạn sau): khi lô có house đã xác nhận, renderer House làm nổi bật HAWB; không cần bật/tắt tay. Master vẫn giữ layout không HAWB.
 - Số tem in luôn do người vận hành nhập tay cho từng lệnh in. Không mặc định, không tự lấy theo master PCS hoặc house PCS và không có nút “Theo kiện”.
 - Số kiện vẫn là dữ liệu được in trên tem và dùng để đối soát, nhưng không quyết định số bản in.
+
+### Giai đoạn triển khai đã chốt tiếp theo
+
+**Giai đoạn 1 — Data foundation** (xem [label-print-foundation-impl.md](./label-print-foundation-impl.md)).
+
+Không redesign modal browser đang ổn (`PrintShippingLabel`). Xây schema/template/printer + model House trước khi TSPL bridge / designer / in theo HAWB.
 
 ## 1. Kết luận kiến trúc
 
@@ -41,25 +49,38 @@ Nguyên tắc tách trách nhiệm:
 - **Print job** là snapshot bất biến của lần in: dữ liệu, template version, printer profile, số bản.
 - Không lưu offset máy in vào template và không sửa tọa độ từng trường để bù sai lệch vật lý.
 
-## 2. Hiện trạng dự án
+## 2. Hiện trạng dự án (cập nhật 2026-09-02)
+
+### Luồng production đang chạy
+
+| Thành phần | Vai trò |
+|---|---|
+| `src/components/PrintShippingLabel.tsx` | Modal Ops: preview, chọn khổ 100×80/100×50, nhập số tem tay, In thử 1 / In N tem |
+| `LabelContent` | Renderer tem Master 4 hàng; **cố ý không** render HAWB / barcode / special |
+| `src/utils/mapShipmentToAirCargoLabelData.ts` | Map `Shipment` → dữ liệu tem (vẫn tính `hasHawb`/`hawbNo` cho tương lai) |
+| `src/utils/printThermalLabelIframe.ts` | In browser qua iframe/cửa sổ + `@page` đúng mm; mặc định XP-470B (không xoay) |
+| `src/styles/print-label.css` | Layout tem theo mm |
+| `docs/air-cargo-label-100x80-100x50.html` | SoT mẫu HTML tem |
+| `src/pages/AirlinesLabelsPage.tsx` | Cấu hình tên hãng trên tem (`#/airlines`) |
+| Điểm vào UI | Ops → “In nhãn” → `AirCargoTracking.requestPrintLabel` → `App.printJob` → lazy `PrintShippingLabel` |
 
 ### Thành phần có thể tái sử dụng
 
-- `ThermalLabelPrinterProfile` đã có `dpi`, `gapMm`, `rotation`, `offsetXmm`, `offsetYmm`, `speed`, `density`, kết nối TCP/USB và khổ tem.
-- Catalog máy in đã có mutation `SET_PRINTER_PROFILES` và đồng bộ server.
+- `ThermalLabelPrinterProfile` (`src/printing/printTypes.ts`) đã có `dpi`, `gapMm`, `rotation`, `offsetXmm`, `offsetYmm`, `speed`, `density`, kết nối TCP/USB và khổ tem.
+- `src/printing/printerProfilesCore.ts` + `server/printerProfilesNormalize.mjs` normalize catalog; **chưa** có mutation/UI đồng bộ production — `postgresStateStore` còn `delete next.printerProfiles` khỏi blob state.
 - `ThermalFieldOverride` đã định hình tọa độ/font cho từng trường.
-- Migration `20260521_print_templates.sql` đã có template, profile và tọa độ theo mm.
-- Luồng browser print đã xử lý đúng khổ 100×80/100×50, xoay tem và số bản.
-- `LabelContent` đã là một renderer tem cụ thể có thể dùng làm template mặc định.
+- Migration `20260521_print_templates.sql` là **legacy** (trộn layout với profile máy) — **không** dùng làm SoT; schema mới ở `20260902_label_print_foundation.sql`.
+- Luồng browser print đã xử lý đúng khổ 100×80/100×50, mode XP-470B / narrow80, số bản nhập tay.
+- `LabelContent` là renderer tem Master mặc định (ứng viên template publish sẵn).
 
 ### Khoảng trống
 
-- Chưa có màn hình quản lý printer profile.
-- Chưa có TSPL generator và local print bridge dù type/comment đã dự kiến.
+- Chưa có màn hình quản lý / cân chỉnh printer profile.
+- Chưa có TSPL generator và local print bridge runtime (chỉ type/comment dự kiến).
 - Browser print không thể áp trực tiếp `SPEED`, `DENSITY`, `GAP` lên phần cứng.
-- Migration template chưa được nối vào API/state và đang trộn “profile bố cục” với “profile máy”.
+- Schema template/printer mới (foundation) chưa nối API/state.
 - Chưa có scene graph dùng chung cho editor và renderer.
-- Shipment chỉ có một chuỗi `hawb`; chưa biểu diễn nhiều HAWB và số kiện riêng.
+- Shipment chỉ có một chuỗi `hawb`; chưa biểu diễn nhiều HAWB và số kiện riêng (`ShipmentHouse` — foundation).
 - Google Sheet parser hiện chủ động bỏ phần HAWB trong ô AWB.
 
 ## 3. Chức năng 1 — Trình cân chỉnh máy in
@@ -453,10 +474,12 @@ Audit giúp:
 
 ### Giai đoạn 1 — Data foundation
 
-- Tách schema template/printer.
-- Thêm `ShipmentHouse`.
-- Migration HAWB cũ ở trạng thái cần xác nhận.
-- Validation và test model.
+Chi tiết file/API/test: [label-print-foundation-impl.md](./label-print-foundation-impl.md).
+
+- Tách schema template/printer (`20260902_label_print_foundation.sql`).
+- Thêm model `ShipmentHouse` + validation + migrate từ `shipment.hawb`.
+- Không chạy `20260521_print_templates.sql` vào production như SoT.
+- Validation và test model (pure functions trước khi nối API/state).
 
 ### Giai đoạn 2 — Calibration + TSPL bridge
 
@@ -523,6 +546,7 @@ Audit giúp:
 
 ## 11. Tài liệu tham khảo
 
+- Chi tiết Giai đoạn 1 (file/API/test): [label-print-foundation-impl.md](./label-print-foundation-impl.md)
 - TSC, TSPL/TSPL2 Programming Manual:  
   https://fs.tscprinters.com/system/files/31-0000001-00_tspl_tspl2_programming_3_0.pdf
 - Xprinter XP-470B product specification:  

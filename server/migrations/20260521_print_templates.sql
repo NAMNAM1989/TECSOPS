@@ -1,5 +1,10 @@
--- Print template system: master forms + per-device profiles + mm field coordinates.
--- Run once on Postgres (Railway): psql $DATABASE_URL -f server/migrations/20260521_print_templates.sql
+-- LEGACY — DO NOT apply as source of truth for label printing.
+-- Trộn “profile bố cục” với “profile máy”; schema SoT mới:
+--   server/migrations/20260902_label_print_foundation.sql
+-- Xem docs/label-print-platform-design.md §2 và docs/label-print-foundation-impl.md.
+--
+-- Historical note: Print template system (master forms + per-device profiles + mm fields).
+-- Do not run on production unless auditing old experiments.
 
 CREATE TABLE IF NOT EXISTS print_templates (
   id text PRIMARY KEY,

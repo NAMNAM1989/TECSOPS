@@ -36,6 +36,7 @@ export function OpsDatePicker({
       ? "inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-full px-1 text-[14px] font-semibold text-ui-primary hover:bg-ui-surface-muted"
       : "inline-flex h-8 w-8 items-center justify-center rounded-lg text-[14px] font-semibold text-ui-primary hover:bg-ui-surface-muted";
 
+  /** Desktop: showPicker khi chạm vùng nhãn; mobile: input nhận touch trực tiếp (ổn định hơn). */
   const openCalendar = () => {
     const el = dateInputRef.current;
     if (!el) return;
@@ -45,7 +46,7 @@ export function OpsDatePicker({
         return;
       }
     } catch {
-      /* showPicker có thể bị chặn nếu không từ user gesture — fallback focus/click */
+      /* fall through */
     }
     el.focus();
     el.click();
@@ -65,37 +66,52 @@ export function OpsDatePicker({
         <button type="button" onClick={onPrev} className={stepBtn} aria-label="Ngày trước">
           ‹
         </button>
-        <button
-          type="button"
-          onClick={openCalendar}
-          className={`relative min-w-0 cursor-pointer hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
-            dense ? "rounded-md" : "rounded-lg"
-          } ${compact && !inline ? "flex-1" : dense ? "w-[6.75rem]" : "w-[7.75rem]"}`}
-          aria-label={`Ngày phiên Ops ${opsLabel}. Bấm để chọn ngày`}
-          title="Chọn ngày phiên"
+        <div
+          className={`relative min-w-0 ${
+            compact && !inline ? "flex-1" : dense ? "w-[6.75rem]" : "w-[7.75rem]"
+          }`}
         >
           <span
             className={`pointer-events-none block truncate text-center font-mono font-semibold tabular-nums text-ui-navy ${
-              dense ? "py-1 text-[11px] leading-none" : compact ? "py-1 text-[11px]" : "py-0.5 text-[12px]"
+              dense
+                ? "py-1 text-[11px] leading-none"
+                : compact
+                  ? "py-1 text-[11px]"
+                  : "py-0.5 text-[12px]"
             }`}
             aria-hidden
           >
             {opsLabel}
           </span>
+          {/*
+            Không bọc input trong <button> (HTML invalid + mobile thường không mở picker).
+            Input phủ vùng nhãn, opacity-0 nhưng nhận touch/click → native date UI.
+          */}
           <input
             ref={dateInputRef}
-            aria-hidden
-            tabIndex={-1}
             type="date"
             value={value}
+            aria-label={`Ngày phiên Ops ${opsLabel}. Bấm để chọn ngày`}
+            title="Chọn ngày phiên"
             onChange={(e) => {
               const v = e.target.value;
               if (v) onChange(v);
             }}
-            onClick={(e) => e.stopPropagation()}
-            className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
+            onClick={(e) => {
+              /* Desktop Chromium: ưu tiên showPicker sau gesture */
+              if (!dense && typeof e.currentTarget.showPicker === "function") {
+                try {
+                  e.currentTarget.showPicker();
+                } catch {
+                  openCalendar();
+                }
+              }
+            }}
+            className={`absolute inset-0 h-full w-full cursor-pointer opacity-0 ${
+              dense ? "touch-manipulation" : ""
+            }`}
           />
-        </button>
+        </div>
         <button type="button" onClick={onNext} className={stepBtn} aria-label="Ngày sau">
           ›
         </button>

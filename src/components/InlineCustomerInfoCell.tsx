@@ -41,10 +41,13 @@ const stopRowClick = {
 };
 
 const selectCls =
-  "box-border h-7 min-w-0 w-full max-w-full cursor-pointer truncate rounded-md border border-ui-border bg-ui-surface px-1.5 py-0 text-[11px] font-semibold leading-none text-ui-text focus:outline-none focus:ring-1 focus:ring-ui-focus disabled:cursor-default disabled:opacity-45";
+  "box-border h-7 min-w-0 w-full max-w-full cursor-pointer truncate rounded-lg border border-ui-border bg-ui-surface px-2 py-0 text-[11px] font-semibold leading-none text-ui-text focus:outline-none focus:ring-1 focus:ring-ui-focus disabled:cursor-default disabled:opacity-45";
 
 const LINE =
   "block h-3.5 w-full truncate text-left text-[10px] font-semibold leading-[0.875rem] text-ui-text";
+
+const FIELD_LABEL =
+  "w-[3.25rem] shrink-0 pt-1.5 text-[10px] font-semibold leading-none text-ui-text-muted";
 
 /** Chỉ cắt rất dài (option/select); ô tóm tắt dùng CSS truncate theo cột. */
 function clipLabel(s: string, max = 48): string {
@@ -54,11 +57,7 @@ function clipLabel(s: string, max = 48): string {
 }
 
 function shortShipperLabel(sc: CustomerSavedShipper): string {
-  return (
-    sc.shipperName.trim() ||
-    sc.label.trim() ||
-    sc.id
-  );
+  return sc.shipperName.trim() || sc.label.trim() || sc.id;
 }
 
 function shipperTitle(sc: CustomerSavedShipper): string {
@@ -73,7 +72,7 @@ function shipperTitle(sc: CustomerSavedShipper): string {
 function MiniSelect({
   ariaLabel,
   value,
-  placeholder,
+  emptyLabel,
   disabled,
   title,
   children,
@@ -81,7 +80,7 @@ function MiniSelect({
 }: {
   ariaLabel: string;
   value: string;
-  placeholder: string;
+  emptyLabel: string;
   disabled?: boolean;
   title?: string;
   children: React.ReactNode;
@@ -98,9 +97,24 @@ function MiniSelect({
       className={selectCls}
       style={{ width: "100%", maxWidth: "100%" }}
     >
-      <option value="">{placeholder}</option>
+      <option value="">{emptyLabel}</option>
       {children}
     </select>
+  );
+}
+
+function FieldRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 items-start gap-2">
+      <span className={FIELD_LABEL}>{label}</span>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
   );
 }
 
@@ -126,7 +140,7 @@ function SummaryLine({
 }
 
 /**
- * Ô INFO KH: mặc định 3 dòng tóm tắt; click → panel chỉnh Shipper/CNEE/CNEE in ấn/Hàng.
+ * Ô INFO KH: mặc định 3 dòng tóm tắt; click → panel chỉnh Shipper / CNEE (+ tên in) / Hàng.
  */
 export function InlineCustomerInfoCell({
   shipment,
@@ -162,12 +176,21 @@ export function InlineCustomerInfoCell({
     ? formatSavedGoodsShortLabel(selectedGoods).trim()
     : "";
 
+  const cneePrint = (shipment.consigneeNamePrint ?? "").trim();
+  const cneeProfileName = selectedConsignee
+    ? formatSavedConsigneeShortLabel(selectedConsignee).trim()
+    : "";
+  const printDiffers =
+    Boolean(cneePrint) &&
+    Boolean(cneeProfileName) &&
+    cneePrint.toUpperCase() !== cneeProfileName.toUpperCase();
+
   const place = useCallback(() => {
     const el = btnRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const width = 248;
-    const estH = 280;
+    const width = 272;
+    const estH = 220;
     let left = r.left;
     if (left + width > window.innerWidth - 12) {
       left = window.innerWidth - width - 12;
@@ -205,15 +228,12 @@ export function InlineCustomerInfoCell({
   }, [open, place]);
 
   const editors = (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <label className="block">
-        <span className="mb-0.5 block text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">
-          Shipper
-        </span>
+    <div className="flex min-w-0 flex-col gap-2">
+      <FieldRow label="Shipper">
         <MiniSelect
           ariaLabel="Chọn Shipper lưu sẵn"
           value={shipperId}
-          placeholder="Shipper"
+          emptyLabel={shippers.length ? "— Chọn —" : "— Chưa có —"}
           disabled={shippers.length === 0}
           title={
             selectedShipper
@@ -233,75 +253,76 @@ export function InlineCustomerInfoCell({
             </option>
           ))}
         </MiniSelect>
-      </label>
+      </FieldRow>
 
-      <label className="block">
-        <span className="mb-0.5 block text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">
-          CNEE
-        </span>
-        <MiniSelect
-          ariaLabel="Chọn CNEE lưu sẵn"
-          value={consigneeId}
-          placeholder="CNEE"
-          disabled={consignees.length === 0}
-          title={
-            selectedConsignee
-              ? formatSavedConsigneeDetailTitle(selectedConsignee)
-              : "Chọn CNEE từ hồ sơ khách"
-          }
-          onChange={(id) => {
-            const sc = consignees.find((x) => x.id === id) as
-              | CustomerSavedConsignee
-              | undefined;
-            void onUpdate(
-              buildShipmentPatchForSavedConsignee(id ? sc : undefined)
-            );
-          }}
-        >
-          {consignees.map((sc) => (
-            <option
-              key={sc.id}
-              value={sc.id}
-              title={formatSavedConsigneeDetailTitle(sc)}
-            >
-              {clipLabel(formatSavedConsigneeShortLabel(sc), 28)}
-            </option>
-          ))}
-        </MiniSelect>
-      </label>
-
-      <div className="min-w-0">
-        <span className="mb-0.5 block text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">
-          CNEE in ấn
-        </span>
-        <div className="min-w-0 overflow-hidden rounded-md border border-ui-border bg-white px-1 [&_input]:h-7 [&_input]:text-[11px]">
-          <InlineTextEdit
-            value={shipment.consigneeNamePrint ?? ""}
-            placeholder="Tên CNEE in ấn"
+      <div className="flex min-w-0 flex-col gap-1">
+        <FieldRow label="CNEE">
+          <MiniSelect
+            ariaLabel="Chọn CNEE lưu sẵn"
+            value={consigneeId}
+            emptyLabel={consignees.length ? "— Chọn —" : "— Chưa có —"}
+            disabled={consignees.length === 0}
             title={
-              shipment.consigneeNamePrint?.trim()
-                ? `CNEE in ấn: ${shipment.consigneeNamePrint}`
-                : "Sửa tên CNEE in ấn"
+              selectedConsignee
+                ? formatSavedConsigneeDetailTitle(selectedConsignee)
+                : "Chọn CNEE từ hồ sơ khách"
             }
-            className="h-7 text-[11px] font-semibold text-ui-text"
-            maxLength={CNEE_PRINT_MAX_LEN}
-            gridNav={{ rowId: shipment.id, field: "cneePrint" }}
-            validate={validateInlineCneePrint}
-            onCommit={(v) =>
-              onUpdate({ consigneeNamePrint: normalizeInlineCneePrint(v) })
-            }
-          />
+            onChange={(id) => {
+              const sc = consignees.find((x) => x.id === id) as
+                | CustomerSavedConsignee
+                | undefined;
+              void onUpdate(
+                buildShipmentPatchForSavedConsignee(id ? sc : undefined)
+              );
+            }}
+          >
+            {consignees.map((sc) => (
+              <option
+                key={sc.id}
+                value={sc.id}
+                title={formatSavedConsigneeDetailTitle(sc)}
+              >
+                {clipLabel(formatSavedConsigneeShortLabel(sc), 28)}
+              </option>
+            ))}
+          </MiniSelect>
+        </FieldRow>
+
+        <div className="ml-[3.25rem] flex min-w-0 items-center gap-1.5 pl-2">
+          <span
+            className={`shrink-0 text-[9px] font-medium ${
+              printDiffers ? "text-amber-700" : "text-ui-text-muted"
+            }`}
+            title="Tên CNEE trên phiếu in (có thể khác hồ sơ đã chọn)"
+          >
+            Tên in
+          </span>
+          <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-dashed border-ui-border/80 bg-ui-surface-muted/40 px-1.5 [&_input]:h-6 [&_input]:text-[10px]">
+            <InlineTextEdit
+              value={shipment.consigneeNamePrint ?? ""}
+              placeholder="Theo hồ sơ CNEE"
+              title={
+                cneePrint
+                  ? `Tên in: ${cneePrint}`
+                  : "Sửa tên CNEE trên phiếu in"
+              }
+              className="h-6 text-[10px] font-medium text-ui-text"
+              maxLength={CNEE_PRINT_MAX_LEN}
+              gridNav={{ rowId: shipment.id, field: "cneePrint" }}
+              validate={validateInlineCneePrint}
+              onCommit={(v) =>
+                onUpdate({ consigneeNamePrint: normalizeInlineCneePrint(v) })
+              }
+            />
+          </div>
         </div>
       </div>
 
-      <label className="block">
-        <span className="mb-0.5 block text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">
-          Hàng
-        </span>
+      <FieldRow label="Hàng">
         <MiniSelect
           ariaLabel="Chọn tên hàng lưu sẵn trong hồ sơ khách"
           value={goodsId}
-          placeholder="Hàng"
+          emptyLabel={goods.length ? "— Chọn —" : "— Chưa có —"}
           disabled={goods.length === 0}
           title={
             selectedGoods
@@ -321,7 +342,7 @@ export function InlineCustomerInfoCell({
             </option>
           ))}
         </MiniSelect>
-      </label>
+      </FieldRow>
     </div>
   );
 
@@ -349,21 +370,20 @@ export function InlineCustomerInfoCell({
               ref={panelRef}
               id={panelId}
               role="dialog"
-              aria-label="Thông tin khách — chỉnh Shipper CNEE Hàng"
-              className="fixed z-[640] w-[15.5rem] rounded-xl border border-ui-border bg-ui-surface p-2.5 shadow-lg shadow-slate-900/15"
+              aria-label="Chỉnh Shipper, CNEE và Hàng"
+              className="fixed z-[640] w-[17rem] rounded-xl border border-ui-border bg-ui-surface p-2.5 shadow-lg shadow-slate-900/15"
               style={{ top: pos.top, left: pos.left }}
               onMouseDown={(e) => e.stopPropagation()}
             >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
-                  Thông tin KH
-                </p>
+              <div className="mb-2 flex items-center justify-between gap-2 border-b border-ui-border/70 pb-1.5">
+                <p className="text-[11px] font-semibold text-ui-text">Hồ sơ KH</p>
                 <button
                   type="button"
-                  className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-ui-text-muted transition hover:bg-ui-surface-muted hover:text-ui-text"
                   onClick={() => setOpen(false)}
+                  aria-label="Đóng"
                 >
-                  Đóng
+                  ✕
                 </button>
               </div>
               {editors}

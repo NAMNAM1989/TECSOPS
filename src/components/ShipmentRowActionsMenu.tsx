@@ -25,9 +25,10 @@ const CsdPrintModal = lazy(() =>
   import("./CsdPrintModal").then((module) => ({ default: module.CsdPrintModal })),
 );
 
-const CSD_AIRLINE: Record<"FD" | "TG", string> = {
+const CSD_AIRLINE: Record<"FD" | "TG" | "MH", string> = {
   FD: "Thai AirAsia",
   TG: "Thai Airways",
+  MH: "Malaysia Airlines",
 };
 
 type Props = {
@@ -42,11 +43,12 @@ type Props = {
 
 const iconCls = "h-3.5 w-3.5";
 
-function lightweightCsdCarrier(row: Pick<Shipment, "flight" | "awb">): "FD" | "TG" | null {
+function lightweightCsdCarrier(row: Pick<Shipment, "flight" | "awb">): "FD" | "TG" | "MH" | null {
   if (awbDigitsKey(row.awb).length !== 11) return null;
   const flight = String(row.flight || "").trim().toUpperCase().replace(/\s+/g, "");
   if (flight.startsWith("FD")) return "FD";
   if (flight.startsWith("TG")) return "TG";
+  if (flight.startsWith("MH")) return "MH";
   return null;
 }
 

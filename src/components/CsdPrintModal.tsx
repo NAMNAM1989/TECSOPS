@@ -165,7 +165,11 @@ export function CsdPrintModal({
                 }
               />
             </label>
-          ) : null}
+          ) : (
+            <p className={`text-[11px] ${OPS.muted}`}>
+              Origin trên mẫu đã in sẵn <span className="font-semibold">SGN</span>.
+            </p>
+          )}
 
           {profile.showTransfer ? (
             <div>

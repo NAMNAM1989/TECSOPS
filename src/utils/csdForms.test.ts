@@ -8,8 +8,10 @@ import {
   csdDownloadFilename,
   csdRaForWarehouse,
   fillCsdPdfBytes,
+  formatCsdMhRaCode,
   getCsdCarrierProfile,
   isCsdFdFlight,
+  isCsdMhFlight,
   isCsdTgFlight,
   normalizeCsdTransfer,
   suggestCsdTransfer,
@@ -22,19 +24,22 @@ describe("csdForms", () => {
     localStorage.clear();
   });
 
-  it("nhận diện chuyến FD / TG qua registry", () => {
+  it("nhận diện chuyến FD / TG / MH qua registry", () => {
     expect(isCsdFdFlight("FD301")).toBe(true);
     expect(isCsdTgFlight("TG621")).toBe(true);
     expect(isCsdTgFlight("tg 621")).toBe(true);
+    expect(isCsdMhFlight("MH751")).toBe(true);
     expect(csdCarrierForShipment({ flight: "VN123" })).toBeNull();
     expect(csdCarrierForShipment({ flight: "TH621" })).toBeNull();
     expect(getCsdCarrierProfile("FD").showTransfer).toBe(true);
     expect(getCsdCarrierProfile("TG").showOrigin).toBe(true);
+    expect(getCsdCarrierProfile("MH").showOrigin).toBe(false);
   });
 
-  it("canPrintCsd cần FD|TG + AWB 11 số", () => {
+  it("canPrintCsd cần FD|TG|MH + AWB 11 số", () => {
     expect(canPrintCsd({ flight: "FD301", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "217-12345675" })).toBe(true);
+    expect(canPrintCsd({ flight: "MH751", awb: "232-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "123" })).toBe(false);
   });
 
@@ -87,9 +92,11 @@ describe("csdForms", () => {
     expect(normalizeCsdTransfer("xx")).toBe("");
   });
 
-  it("suggestCsdTransfer: DEST khác BKK/DMK → BKK; nhớ lần trước", () => {
+  it("suggestCsdTransfer: DEST khác BKK/DMK → BKK; MH → KUL; nhớ lần trước", () => {
     expect(suggestCsdTransfer("HKT", "FD")).toBe("BKK");
     expect(suggestCsdTransfer("BKK", "FD")).toBe("");
+    expect(suggestCsdTransfer("PEN", "MH")).toBe("KUL");
+    expect(suggestCsdTransfer("KUL", "MH")).toBe("");
     localStorage.setItem(
       "tecsops.csd.lastTransfer.v1",
       JSON.stringify({ FD: "DMK" })
@@ -104,6 +111,32 @@ describe("csdForms", () => {
     expect(csdDownloadFilename("FD", "21712345675", "TECS")).toBe(
       "CSD-TECS-FD-217-12345675.pdf"
     );
+    expect(csdDownloadFilename("MH", "232-12345675", "TCS")).toBe(
+      "CSD-TCS-MH-232-12345675.pdf"
+    );
+  });
+
+  it("format mã RA MH dùng gạch ngang sau RA3", () => {
+    expect(formatCsdMhRaCode("VN/RA3/00013-01")).toBe("VN/RA3-00013-01");
+    expect(formatCsdMhRaCode("VN/RA3-00010-01")).toBe("VN/RA3-00010-01");
+  });
+
+  it("build MH: không ép origin; transfer + RA theo kho", () => {
+    const f = buildCsdFields(
+      {
+        awb: "23212345675",
+        dest: "pen",
+        goodsDescriptionPrint: "ELECTRONICS",
+        warehouse: "TCS",
+      },
+      "MH",
+      { transfer: "kul" }
+    );
+    expect(f.origin).toBeUndefined();
+    expect(f.dest).toBe("PEN");
+    expect(f.transfer).toBe("KUL");
+    expect(f.raCode).toBe("VN/RA3/00010-01");
+    expect(f.opsTeam).toBe("TCS");
   });
 
   it("wrap tên hàng", () => {
@@ -188,6 +221,29 @@ describe("csdForms", () => {
         dest: "BKK",
         origin: "SGN",
         transfer: "CNX",
+        raCode: "VN/RA3/00013-01",
+        opsTeam: "TECS",
+      },
+      template,
+      { bold }
+    );
+    expect(bytes.byteLength).toBeGreaterThan(1000);
+  });
+
+  it("điền PDF CSD MH: AWB + Contents + RA + DEST/Transfer", async () => {
+    const template = new Uint8Array(
+      readFileSync(resolve("public/templates/csd/CSD-MH.pdf"))
+    );
+    const bold = new Uint8Array(
+      readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
+    );
+    const bytes = await fillCsdPdfBytes(
+      "MH",
+      {
+        awb: "232-12345675",
+        goods: "ELECTRONICS PARTS",
+        dest: "PEN",
+        transfer: "KUL",
         raCode: "VN/RA3/00013-01",
         opsTeam: "TECS",
       },

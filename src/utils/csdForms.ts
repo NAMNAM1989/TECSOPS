@@ -18,14 +18,14 @@ import { clipScscGoodsDescriptionPrint } from "./scscPrintContent";
 import { notifyInfo, notifyWarning } from "../ui/notify";
 
 /** Thêm hãng mới: mở rộng union + thêm entry trong CSD_CARRIER_PROFILES + PDF mẫu. */
-export type CsdCarrier = "FD" | "TG";
+export type CsdCarrier = "FD" | "TG" | "MH";
 
 export type CsdCarrierProfile = {
   id: CsdCarrier;
   label: string;
   airlineName: string;
   templateUrl: string;
-  /** Prefix mã chuyến (FD301 → FD, TG621 → TG). */
+  /** Prefix mã chuyến (FD301 → FD, TG621 → TG, MH751 → MH). */
   flightPrefixes: readonly string[];
   showOrigin: boolean;
   showTransfer: boolean;
@@ -79,11 +79,24 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     defaultOrigin: CSD_DEFAULT_ORIGIN,
     transferPresets: ["BKK", "HKT", "CNX", "USM"],
   },
+  MH: {
+    id: "MH",
+    label: "MH",
+    airlineName: "Malaysia Airlines",
+    /** ?v= — bust cache khi đổi file mẫu (tránh dán đè lên PDF cũ). */
+    templateUrl: "/templates/csd/CSD-MH.pdf?v=20260902b",
+    flightPrefixes: ["MH"],
+    /** Origin SGN đã in sẵn trên mẫu maskargo. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["KUL", "PEN", "BKI", "KCH"],
+  },
 };
 
 export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   FD: CSD_CARRIER_PROFILES.FD.templateUrl,
   TG: CSD_CARRIER_PROFILES.TG.templateUrl,
+  MH: CSD_CARRIER_PROFILES.MH.templateUrl,
 };
 
 export type CsdFillFields = {
@@ -146,9 +159,21 @@ export function isCsdTgFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "TG";
 }
 
+/** Chuyến MH… → Malaysia Airlines (maskargo) CSD. */
+export function isCsdMhFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "MH";
+}
+
 /** @deprecated dùng isCsdTgFlight */
 export function isCsdThFlight(flight: string | undefined | null): boolean {
   return isCsdTgFlight(flight);
+}
+
+/** Mẫu MH in sẵn dạng VN/RA3-00010-01 (gạch ngang sau RA3). */
+export function formatCsdMhRaCode(raCode: string): string {
+  return String(raCode || "")
+    .trim()
+    .replace(/^(VN\/RA3)\//i, "$1-");
 }
 
 export function getCsdCarrierProfile(
@@ -200,7 +225,8 @@ export function normalizeCsdTransfer(raw: string | undefined | null): string {
 }
 
 /**
- * Gợi ý Transit: nhớ lần trước theo hãng; không thì BKK khi DEST không phải hub BKK/DMK.
+ * Gợi ý Transit: nhớ lần trước theo hãng;
+ * MH → KUL khi DEST khác KUL; FD/TG → BKK khi DEST khác BKK/DMK.
  */
 export function suggestCsdTransfer(
   dest: string | undefined | null,
@@ -212,6 +238,10 @@ export function suggestCsdTransfer(
     .trim()
     .toUpperCase()
     .slice(0, 3);
+  if (carrier === "MH") {
+    if (d && d !== "KUL") return "KUL";
+    return "";
+  }
   if (d && d !== "BKK" && d !== "DMK") return "BKK";
   return "";
 }
@@ -356,9 +386,23 @@ const LAYOUT_TG = {
   footerRa: { x: 35, yTop: 678, size: 10 },
 } as const;
 
+/**
+ * Layout MH — A4 ~595×842 (maskargo).
+ * Baseline yTop căn với Origin SGN (~325); Contents dưới nhãn, trên Consolidation.
+ */
+const LAYOUT_MH = {
+  ra: { x: 54, yTop: 212, size: 11 },
+  awb: { x: 350, yTop: 178, size: 13 },
+  goods: { x: 54, yTop: 252, size: 11 },
+  goodsMaxChars: 70,
+  dest: { x: 270, yTop: 325, size: 14 },
+  transfer: { x: 430, yTop: 325, size: 13 },
+} as const;
+
 async function loadTemplate(carrier: CsdCarrier): Promise<ArrayBuffer> {
   const url = getCsdCarrierProfile(carrier).templateUrl;
-  const res = await fetch(url, { cache: "force-cache" });
+  /** no-cache: tránh giữ PDF mẫu cũ trong HTTP cache trình duyệt. */
+  const res = await fetch(url, { cache: "no-cache" });
   if (!res.ok) {
     throw new Error(
       `Không tải được mẫu CSD ${carrier} (${res.status}). Kiểm tra ${url}.`
@@ -443,6 +487,48 @@ export async function fillCsdPdfBytes(
         LAYOUT_FD.transfer.x,
         topYToPdfLibBaseline(pageH, LAYOUT_FD.transfer.yTop),
         LAYOUT_FD.transfer.size
+      );
+    }
+  } else if (carrier === "MH") {
+    /* maskargo A4 — ô trống: ghi RA + AWB + Contents + DEST + Transfer */
+    const mhRa = formatCsdMhRaCode(raCode);
+    if (mhRa) {
+      draw(
+        mhRa,
+        LAYOUT_MH.ra.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_MH.ra.yTop),
+        LAYOUT_MH.ra.size
+      );
+    }
+    draw(
+      fields.awb,
+      LAYOUT_MH.awb.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_MH.awb.yTop),
+      LAYOUT_MH.awb.size
+    );
+    const goodsLine =
+      wrapCsdGoodsLines(fields.goods, LAYOUT_MH.goodsMaxChars)[0] ||
+      fields.goods;
+    draw(
+      goodsLine,
+      LAYOUT_MH.goods.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_MH.goods.yTop),
+      LAYOUT_MH.goods.size
+    );
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        LAYOUT_MH.dest.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_MH.dest.yTop),
+        LAYOUT_MH.dest.size
+      );
+    }
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        LAYOUT_MH.transfer.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_MH.transfer.yTop),
+        LAYOUT_MH.transfer.size
       );
     }
   } else {

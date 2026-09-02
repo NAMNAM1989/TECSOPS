@@ -3,23 +3,31 @@
 | File | Hãng | Chuyến | Registry |
 |------|------|--------|----------|
 | `CSD-FD.pdf` | Thai AirAsia | mã **FD**… | `CSD_CARRIER_PROFILES.FD` |
-| `CSD-TH.pdf` | Thai Airways | mã **TH**… | `CSD_CARRIER_PROFILES.TH` |
+| `CSD-TG.pdf` | Thai Airways | mã **TG**… | `CSD_CARRIER_PROFILES.TG` |
 
 Logic điền + tải PDF: `src/utils/csdForms.ts`  
-Popup nhập Transfer/Transit: `src/components/CsdPrintModal.tsx`
+Popup nhập Origin / Transfer: `src/components/CsdPrintModal.tsx`
 
-Tên file tải về: `CSD-{TECS|TCS|SCSC}-{FD|TH}-{AWB}.pdf`.
+Tên file tải về: `CSD-{TECS|TCS|SCSC}-{FD|TG}-{AWB}.pdf`.
 
-## Mã RA theo kho (overlay §1)
+## Ô điền theo mẫu
+
+### FD (Letter)
+- §1 tick Regulated Agent + mã RA
+- AWB, Contents (3 dòng), Origin, DEST, Transfer
+
+### TG (A4 — TG Cargo/AVSEC F008)
+- §1 `RA {mã}` · §2 AWB · §3 Contents (2 dòng)
+- §4 Origin (mặc định SGN) · §5 DEST · §6 Transfer
+- §14 `RA {mã}` (footer)
+
+## Mã RA theo kho (overlay §1 / §14)
 
 | Kho hoạt động | Mã lô Ops | Mã RA |
 |---------------|-----------|-------|
 | TECS | `TECS-TCS`, `TECS-SCSC` | `VN/RA3/00013-01` |
 | SCSC | `SCSC` | `VN/RA3/00009-01` |
 | TCS | `TCS` | `VN/RA3/00010-01` |
-
-FD: tick Regulated Agent + ghi mã RA.  
-TH: chỉ phủ/ghi lại dòng mã RA (giữ nguyên tên entity trên mẫu; cập nhật cả footer).
 
 ## Thêm hãng mới
 

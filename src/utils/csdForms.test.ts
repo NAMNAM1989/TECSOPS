@@ -10,7 +10,7 @@ import {
   fillCsdPdfBytes,
   getCsdCarrierProfile,
   isCsdFdFlight,
-  isCsdThFlight,
+  isCsdTgFlight,
   normalizeCsdTransfer,
   suggestCsdTransfer,
   resolveCsdGoodsText,
@@ -22,19 +22,20 @@ describe("csdForms", () => {
     localStorage.clear();
   });
 
-  it("nhận diện chuyến FD / TH qua registry", () => {
+  it("nhận diện chuyến FD / TG qua registry", () => {
     expect(isCsdFdFlight("FD301")).toBe(true);
-    expect(isCsdThFlight("TH621")).toBe(true);
-    expect(isCsdThFlight("th 621")).toBe(true);
+    expect(isCsdTgFlight("TG621")).toBe(true);
+    expect(isCsdTgFlight("tg 621")).toBe(true);
     expect(csdCarrierForShipment({ flight: "VN123" })).toBeNull();
+    expect(csdCarrierForShipment({ flight: "TH621" })).toBeNull();
     expect(getCsdCarrierProfile("FD").showTransfer).toBe(true);
-    expect(getCsdCarrierProfile("TH").showOrigin).toBe(false);
+    expect(getCsdCarrierProfile("TG").showOrigin).toBe(true);
   });
 
-  it("canPrintCsd cần FD|TH + AWB 11 số", () => {
+  it("canPrintCsd cần FD|TG + AWB 11 số", () => {
     expect(canPrintCsd({ flight: "FD301", awb: "217-12345675" })).toBe(true);
-    expect(canPrintCsd({ flight: "TH621", awb: "217-12345675" })).toBe(true);
-    expect(canPrintCsd({ flight: "TH621", awb: "123" })).toBe(false);
+    expect(canPrintCsd({ flight: "TG621", awb: "217-12345675" })).toBe(true);
+    expect(canPrintCsd({ flight: "TG621", awb: "123" })).toBe(false);
   });
 
   it("map mã RA theo 3 kho hoạt động", () => {
@@ -44,7 +45,7 @@ describe("csdForms", () => {
     expect(csdRaForWarehouse("TCS").raCode).toBe("VN/RA3/00010-01");
   });
 
-  it("build TH: awb + dest + goods + transfer + RA; không ép origin", () => {
+  it("build TG: awb + dest + goods + origin + transfer + RA", () => {
     const f = buildCsdFields(
       {
         awb: "21712345675",
@@ -52,13 +53,13 @@ describe("csdForms", () => {
         goodsDescriptionPrint: "CLOTHES PANTS",
         warehouse: "SCSC",
       },
-      "TH",
+      "TG",
       { transfer: "cnx" }
     );
     expect(f.awb.replace(/\D/g, "")).toBe("21712345675");
     expect(f.dest).toBe("BKK");
     expect(f.goods).toBe("CLOTHES PANTS");
-    expect(f.origin).toBeUndefined();
+    expect(f.origin).toBe("SGN");
     expect(f.transfer).toBe("CNX");
     expect(f.raCode).toBe("VN/RA3/00009-01");
     expect(f.opsTeam).toBe("SCSC");
@@ -97,8 +98,8 @@ describe("csdForms", () => {
   });
 
   it("tên file tải về theo kho + hãng + AWB", () => {
-    expect(csdDownloadFilename("TH", "217-12345675", "SCSC")).toBe(
-      "CSD-SCSC-TH-217-12345675.pdf"
+    expect(csdDownloadFilename("TG", "217-12345675", "SCSC")).toBe(
+      "CSD-SCSC-TG-217-12345675.pdf"
     );
     expect(csdDownloadFilename("FD", "21712345675", "TECS")).toBe(
       "CSD-TECS-FD-217-12345675.pdf"
@@ -151,7 +152,7 @@ describe("csdForms", () => {
     ).toBe("SEAFOOD FROZEN");
   });
 
-  it("ghi tên hàng Unicode lên PDF CSD", async () => {
+  it("ghi tên hàng Unicode lên PDF CSD FD", async () => {
     const template = new Uint8Array(
       readFileSync(resolve("public/templates/csd/CSD-FD.pdf"))
     );
@@ -165,6 +166,30 @@ describe("csdForms", () => {
         goods: "QUẦN ÁO / GARMENTS",
         dest: "BKK",
         origin: "SGN",
+      },
+      template,
+      { bold }
+    );
+    expect(bytes.byteLength).toBeGreaterThan(1000);
+  });
+
+  it("điền PDF CSD TG vào đúng ô §1–§6 + §14", async () => {
+    const template = new Uint8Array(
+      readFileSync(resolve("public/templates/csd/CSD-TG.pdf"))
+    );
+    const bold = new Uint8Array(
+      readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
+    );
+    const bytes = await fillCsdPdfBytes(
+      "TG",
+      {
+        awb: "217-12345675",
+        goods: "CLOTHES PANTS",
+        dest: "BKK",
+        origin: "SGN",
+        transfer: "CNX",
+        raCode: "VN/RA3/00013-01",
+        opsTeam: "TECS",
       },
       template,
       { bold }

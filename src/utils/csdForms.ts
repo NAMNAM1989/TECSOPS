@@ -18,14 +18,14 @@ import { clipScscGoodsDescriptionPrint } from "./scscPrintContent";
 import { notifyInfo, notifyWarning } from "../ui/notify";
 
 /** Thêm hãng mới: mở rộng union + thêm entry trong CSD_CARRIER_PROFILES + PDF mẫu. */
-export type CsdCarrier = "FD" | "TH";
+export type CsdCarrier = "FD" | "TG";
 
 export type CsdCarrierProfile = {
   id: CsdCarrier;
   label: string;
   airlineName: string;
   templateUrl: string;
-  /** Prefix mã chuyến (FD301 → FD). */
+  /** Prefix mã chuyến (FD301 → FD, TG621 → TG). */
   flightPrefixes: readonly string[];
   showOrigin: boolean;
   showTransfer: boolean;
@@ -52,8 +52,9 @@ export function csdRaForWarehouse(
   return CSD_RA_BY_OPS_TEAM[team];
 }
 
-/** Origin mặc định CSD FD (form TH đã in sẵn SGN). */
+/** Origin mặc định CSD (FD / TG form để trống ô Origin). */
 export const CSD_FD_DEFAULT_ORIGIN = "SGN";
+export const CSD_DEFAULT_ORIGIN = CSD_FD_DEFAULT_ORIGIN;
 
 export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
   FD: {
@@ -64,27 +65,26 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     flightPrefixes: ["FD"],
     showOrigin: true,
     showTransfer: true,
-    defaultOrigin: CSD_FD_DEFAULT_ORIGIN,
+    defaultOrigin: CSD_DEFAULT_ORIGIN,
     transferPresets: ["BKK", "DMK", "CNX", "HKT"],
   },
-  TH: {
-    id: "TH",
-    label: "TH",
+  TG: {
+    id: "TG",
+    label: "TG",
     airlineName: "Thai Airways",
-    templateUrl: "/templates/csd/CSD-TH.pdf",
-    flightPrefixes: ["TH"],
-    showOrigin: false,
+    templateUrl: "/templates/csd/CSD-TG.pdf",
+    flightPrefixes: ["TG"],
+    showOrigin: true,
     showTransfer: true,
+    defaultOrigin: CSD_DEFAULT_ORIGIN,
     transferPresets: ["BKK", "HKT", "CNX", "USM"],
   },
 };
 
 export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   FD: CSD_CARRIER_PROFILES.FD.templateUrl,
-  TH: CSD_CARRIER_PROFILES.TH.templateUrl,
+  TG: CSD_CARRIER_PROFILES.TG.templateUrl,
 };
-
-const PAGE_H = 792;
 
 export type CsdFillFields = {
   awb: string;
@@ -141,9 +141,14 @@ export function isCsdFdFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "FD";
 }
 
-/** Chuyến TH… → Thai Airways CSD. */
+/** Chuyến TG… → Thai Airways CSD. */
+export function isCsdTgFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "TG";
+}
+
+/** @deprecated dùng isCsdTgFlight */
 export function isCsdThFlight(flight: string | undefined | null): boolean {
-  return flightCarrierPrefix(flight) === "TH";
+  return isCsdTgFlight(flight);
 }
 
 export function getCsdCarrierProfile(
@@ -259,7 +264,7 @@ export function buildCsdFields(
     const origin =
       normalizeCsdTransfer(overrides?.origin || "").split("/")[0] ||
       profile.defaultOrigin ||
-      CSD_FD_DEFAULT_ORIGIN;
+      CSD_DEFAULT_ORIGIN;
     base.origin = origin.slice(0, 3);
   }
   if (profile.showTransfer) {
@@ -301,15 +306,15 @@ async function embedCsdBoldFont(
   return pdf.embedFont(bytes);
 }
 
-function lineYToPdfLibBaseline(lineY: number): number {
-  return PAGE_H - (lineY - 2.5);
+function lineYToPdfLibBaseline(pageH: number, lineY: number): number {
+  return pageH - (lineY - 2.5);
 }
 
-function topYToPdfLibBaseline(yTop: number): number {
-  return PAGE_H - yTop;
+function topYToPdfLibBaseline(pageH: number, yTop: number): number {
+  return pageH - yTop;
 }
 
-/** Layout FD — chữ đậm + size lớn để dễ đọc khi in. */
+/** Layout FD — Letter 612×792; chữ đậm + size lớn để dễ đọc khi in. */
 const LAYOUT_FD = {
   awb: { x: 414, lineY: 152, size: 13 },
   goodsLines: [
@@ -327,17 +332,28 @@ const LAYOUT_FD = {
   raCode: { x: 175, yTop: 155, size: 9 },
 } as const;
 
-/** Layout TH — AirWaybill No / Contents / Destination / Transfer + RA overlay. */
-const LAYOUT_TH = {
-  awb: { x: 375, yTop: 144, size: 13 },
-  goods: { x: 80, yTop: 230, size: 12 },
-  dest: { x: 255, yTop: 300, size: 14 },
-  transfer: { x: 340, yTop: 300, size: 13 },
-  /** Chỉ phủ/ghi lại dòng mã RA (giữ nguyên tên entity trên mẫu). */
-  raWipe: { x: 78, yTop: 178, w: 100, h: 16 },
-  raCode: { x: 79.2, yTop: 188, size: 9 },
-  footerWipe: { x: 78, yTop: 575, w: 100, h: 20 },
-  footerRa: { x: 79.2, yTop: 588, size: 9 },
+/**
+ * Layout TG — A4 ~595×842 (TG Cargo/AVSEC F008).
+ * yTop = khoảng cách từ mép trên trang (giống tọa độ PyMuPDF).
+ */
+const LAYOUT_TG = {
+  /** §1 Regulated Entity — ghi "RA {mã}". */
+  ra: { x: 40, yTop: 120, size: 11 },
+  /** §2 Unique Consignment Identifier (AWB). */
+  awb: { x: 330, yTop: 120, size: 13 },
+  /** §3 Contents — 2 dòng trên đường chấm (y≈199 / 220). */
+  goodsLines: [
+    { x: 35, yTop: 196 },
+    { x: 35, yTop: 217 },
+  ] as const,
+  goodsSize: 11,
+  goodsMaxChars: 72,
+  /** §4 Origin / §5 Destination / §6 Transfer. */
+  origin: { x: 55, yTop: 278, size: 14 },
+  dest: { x: 220, yTop: 278, size: 14 },
+  transfer: { x: 410, yTop: 278, size: 13 },
+  /** §14 Regulated Entity (footer). */
+  footerRa: { x: 35, yTop: 678, size: 10 },
 } as const;
 
 async function loadTemplate(carrier: CsdCarrier): Promise<ArrayBuffer> {
@@ -351,29 +367,6 @@ async function loadTemplate(carrier: CsdCarrier): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
-function wipeRect(
-  page: {
-    drawRectangle: (opts: {
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-      color: ReturnType<typeof rgb>;
-      borderWidth: number;
-    }) => void;
-  },
-  box: { x: number; yTop: number; w: number; h: number }
-) {
-  page.drawRectangle({
-    x: box.x,
-    y: PAGE_H - box.yTop - box.h,
-    width: box.w,
-    height: box.h,
-    color: rgb(1, 1, 1),
-    borderWidth: 0,
-  });
-}
-
 export async function fillCsdPdfBytes(
   carrier: CsdCarrier,
   fields: CsdFillFields,
@@ -384,6 +377,7 @@ export async function fillCsdPdfBytes(
   const pdf = await PDFDocument.load(raw);
   const page = pdf.getPages()[0];
   if (!page) throw new Error(`Mẫu CSD ${carrier} không có trang.`);
+  const pageH = page.getHeight();
   let fontBold;
   try {
     fontBold = await embedCsdBoldFont(pdf, assets);
@@ -392,6 +386,7 @@ export async function fillCsdPdfBytes(
   }
   const ink = rgb(0, 0, 0);
   const raCode = (fields.raCode || "").trim();
+  const raLabel = raCode ? `RA ${raCode}` : "";
 
   const draw = (text: string, x: number, y: number, size: number) => {
     const t = text.trim();
@@ -404,89 +399,104 @@ export async function fillCsdPdfBytes(
       draw(
         "X",
         LAYOUT_FD.raCheck.x,
-        topYToPdfLibBaseline(LAYOUT_FD.raCheck.yTop),
+        topYToPdfLibBaseline(pageH, LAYOUT_FD.raCheck.yTop),
         LAYOUT_FD.raCheck.size
       );
       draw(
         raCode,
         LAYOUT_FD.raCode.x,
-        topYToPdfLibBaseline(LAYOUT_FD.raCode.yTop),
+        topYToPdfLibBaseline(pageH, LAYOUT_FD.raCode.yTop),
         LAYOUT_FD.raCode.size
       );
     }
     draw(
       fields.awb,
       LAYOUT_FD.awb.x,
-      lineYToPdfLibBaseline(LAYOUT_FD.awb.lineY),
+      lineYToPdfLibBaseline(pageH, LAYOUT_FD.awb.lineY),
       LAYOUT_FD.awb.size
     );
     wrapCsdGoodsLines(fields.goods, 58).forEach((line, i) => {
       const slot = LAYOUT_FD.goodsLines[i];
       if (!slot) return;
-      draw(line, slot.x, lineYToPdfLibBaseline(slot.lineY), LAYOUT_FD.goodsSize);
+      draw(
+        line,
+        slot.x,
+        lineYToPdfLibBaseline(pageH, slot.lineY),
+        LAYOUT_FD.goodsSize
+      );
     });
     draw(
-      fields.origin || CSD_FD_DEFAULT_ORIGIN,
+      fields.origin || CSD_DEFAULT_ORIGIN,
       LAYOUT_FD.origin.x,
-      topYToPdfLibBaseline(LAYOUT_FD.origin.yTop),
+      topYToPdfLibBaseline(pageH, LAYOUT_FD.origin.yTop),
       LAYOUT_FD.origin.size
     );
     draw(
       fields.dest,
       LAYOUT_FD.dest.x,
-      topYToPdfLibBaseline(LAYOUT_FD.dest.yTop),
+      topYToPdfLibBaseline(pageH, LAYOUT_FD.dest.yTop),
       LAYOUT_FD.dest.size
     );
     if (fields.transfer) {
       draw(
         fields.transfer,
         LAYOUT_FD.transfer.x,
-        topYToPdfLibBaseline(LAYOUT_FD.transfer.yTop),
+        topYToPdfLibBaseline(pageH, LAYOUT_FD.transfer.yTop),
         LAYOUT_FD.transfer.size
       );
     }
   } else {
-    if (raCode) {
-      wipeRect(page, LAYOUT_TH.raWipe);
+    /* TG — mẫu A4 trống: ghi §1 RA, §2 AWB, §3 Contents, §4–6, §14 RA */
+    if (raLabel) {
       draw(
-        raCode,
-        LAYOUT_TH.raCode.x,
-        topYToPdfLibBaseline(LAYOUT_TH.raCode.yTop),
-        LAYOUT_TH.raCode.size
+        raLabel,
+        LAYOUT_TG.ra.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_TG.ra.yTop),
+        LAYOUT_TG.ra.size
       );
-      wipeRect(page, LAYOUT_TH.footerWipe);
       draw(
-        raCode,
-        LAYOUT_TH.footerRa.x,
-        topYToPdfLibBaseline(LAYOUT_TH.footerRa.yTop),
-        LAYOUT_TH.footerRa.size
+        raLabel,
+        LAYOUT_TG.footerRa.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_TG.footerRa.yTop),
+        LAYOUT_TG.footerRa.size
       );
     }
     draw(
       fields.awb,
-      LAYOUT_TH.awb.x,
-      topYToPdfLibBaseline(LAYOUT_TH.awb.yTop),
-      LAYOUT_TH.awb.size
+      LAYOUT_TG.awb.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_TG.awb.yTop),
+      LAYOUT_TG.awb.size
     );
-    const goodsLine = wrapCsdGoodsLines(fields.goods, 62)[0] || fields.goods;
+    wrapCsdGoodsLines(fields.goods, LAYOUT_TG.goodsMaxChars).forEach(
+      (line, i) => {
+        const slot = LAYOUT_TG.goodsLines[i];
+        if (!slot) return;
+        draw(
+          line,
+          slot.x,
+          topYToPdfLibBaseline(pageH, slot.yTop),
+          LAYOUT_TG.goodsSize
+        );
+      }
+    );
     draw(
-      goodsLine,
-      LAYOUT_TH.goods.x,
-      topYToPdfLibBaseline(LAYOUT_TH.goods.yTop),
-      LAYOUT_TH.goods.size
+      fields.origin || CSD_DEFAULT_ORIGIN,
+      LAYOUT_TG.origin.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_TG.origin.yTop),
+      LAYOUT_TG.origin.size
     );
     draw(
       fields.dest,
-      LAYOUT_TH.dest.x,
-      topYToPdfLibBaseline(LAYOUT_TH.dest.yTop),
-      LAYOUT_TH.dest.size
+      LAYOUT_TG.dest.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_TG.dest.yTop),
+      LAYOUT_TG.dest.size
     );
     if (fields.transfer) {
       draw(
         fields.transfer,
-        LAYOUT_TH.transfer.x,
-        topYToPdfLibBaseline(LAYOUT_TH.transfer.yTop),
-        LAYOUT_TH.transfer.size
+        LAYOUT_TG.transfer.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_TG.transfer.yTop),
+        LAYOUT_TG.transfer.size
       );
     }
   }

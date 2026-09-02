@@ -1048,13 +1048,6 @@ export function MobileDimKgModal({
     applyMutation(r.lines, r.note ?? "Đã gộp dòng cùng kích thước.");
   };
 
-  const openAdvanced = () => {
-    setShowAdvanced(true);
-    window.requestAnimationFrame(() => {
-      advancedRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
-  };
-
   /** Copy chuỗi format terminal hệ thống hàng không */
   const handleCopyFormatString = async (format: "scsc" | "tcs" | "cargospot") => {
     if (!lines.length) return;

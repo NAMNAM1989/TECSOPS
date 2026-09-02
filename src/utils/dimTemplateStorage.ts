@@ -135,3 +135,117 @@ export function renameDimTemplate(id: string, newName: string): DimTemplate[] {
   }
   return nextList;
 }
+
+const CUSTOMER_RECENT_DIMS_STORAGE_KEY = "tecsops_customer_recent_dims_v1";
+const MAX_CUSTOMER_RECENT_DIMS = 6;
+
+export type CustomerRecentDimSize = {
+  lCm: number;
+  wCm: number;
+  hCm: number;
+  label?: string;
+  updatedAt: number;
+};
+
+function normalizeCustomerKey(key: string): string {
+  return key.trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+/** Tải danh sách kích thước thường dùng / gần nhất theo khách hàng */
+export function loadCustomerRecentDims(customerKey: string): CustomerRecentDimSize[] {
+  const normKey = normalizeCustomerKey(customerKey);
+  if (!normKey || typeof window === "undefined" || !window.localStorage) return [];
+  try {
+    const raw = window.localStorage.getItem(CUSTOMER_RECENT_DIMS_STORAGE_KEY);
+    if (!raw) return [];
+    const map = JSON.parse(raw);
+    if (!map || typeof map !== "object") return [];
+    const list = map[normKey];
+    if (!Array.isArray(list)) return [];
+    return list.filter(
+      (item): item is CustomerRecentDimSize =>
+        Boolean(
+          item &&
+            typeof item === "object" &&
+            Number(item.lCm) > 0 &&
+            Number(item.wCm) > 0 &&
+            Number(item.hCm) > 0,
+        ),
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** Tự động ghi nhớ các kích thước vừa đo/lưu cho khách hàng */
+export function recordCustomerRecentDims(
+  customerKey: string,
+  lines: Array<{ lCm: number; wCm: number; hCm: number; label?: string }>,
+): void {
+  const normKey = normalizeCustomerKey(customerKey);
+  if (!normKey || !lines.length || typeof window === "undefined" || !window.localStorage) return;
+  try {
+    const raw = window.localStorage.getItem(CUSTOMER_RECENT_DIMS_STORAGE_KEY);
+    const map: Record<string, CustomerRecentDimSize[]> = raw ? JSON.parse(raw) || {} : {};
+    const existing = Array.isArray(map[normKey]) ? map[normKey]! : [];
+
+    const now = Date.now();
+    const uniqueSizes = new Map<string, CustomerRecentDimSize>();
+
+    // Đưa các dòng mới lên đầu
+    for (const l of lines) {
+      const lCm = Math.round(Number(l.lCm));
+      const wCm = Math.round(Number(l.wCm));
+      const hCm = Math.round(Number(l.hCm));
+      if (lCm <= 0 || wCm <= 0 || hCm <= 0) continue;
+      const key = `${lCm}x${wCm}x${hCm}`;
+      if (!uniqueSizes.has(key)) {
+        uniqueSizes.set(key, {
+          lCm,
+          wCm,
+          hCm,
+          label: l.label?.trim() || undefined,
+          updatedAt: now,
+        });
+      }
+    }
+
+    // Giữ các dòng cũ chưa bị trùng
+    for (const item of existing) {
+      const key = `${item.lCm}x${item.wCm}x${item.hCm}`;
+      if (!uniqueSizes.has(key)) {
+        uniqueSizes.set(key, item);
+      }
+    }
+
+    const updatedList = Array.from(uniqueSizes.values()).slice(0, MAX_CUSTOMER_RECENT_DIMS);
+    map[normKey] = updatedList;
+    window.localStorage.setItem(CUSTOMER_RECENT_DIMS_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+/** Xóa 1 kích thước khỏi danh sách gần đây của khách */
+export function deleteCustomerRecentDim(
+  customerKey: string,
+  size: { lCm: number; wCm: number; hCm: number },
+): CustomerRecentDimSize[] {
+  const normKey = normalizeCustomerKey(customerKey);
+  if (!normKey || typeof window === "undefined" || !window.localStorage) return [];
+  try {
+    const raw = window.localStorage.getItem(CUSTOMER_RECENT_DIMS_STORAGE_KEY);
+    if (!raw) return [];
+    const map: Record<string, CustomerRecentDimSize[]> = JSON.parse(raw) || {};
+    const existing = Array.isArray(map[normKey]) ? map[normKey]! : [];
+    const filtered = existing.filter(
+      (item) => !(item.lCm === size.lCm && item.wCm === size.wCm && item.hCm === size.hCm),
+    );
+    map[normKey] = filtered;
+    window.localStorage.setItem(CUSTOMER_RECENT_DIMS_STORAGE_KEY, JSON.stringify(map));
+    return filtered;
+  } catch {
+    return [];
+  }
+}
+

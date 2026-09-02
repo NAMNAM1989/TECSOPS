@@ -101,11 +101,14 @@ describe("MobileDimKgModal UX", () => {
     expect(html).not.toContain(">Nhanh<");
   });
 
-  it("footer ⋯ mở lên (placement=up), overflow-visible — không clip trong sheet", () => {
+  it("footer hiển thị trực quan các nút công cụ (Hủy, Làm lại, Nâng cao, Lưu) và overflow-visible", () => {
     const html = renderModal();
     expect(html).toContain("dim-footer");
     expect(html).toContain("overflow-visible");
-    expect(html).toContain('data-placement="up"');
+    expect(html).toContain("Hủy");
+    expect(html).toContain("Làm lại");
+    expect(html).toContain("Nâng cao");
+    expect(html).toContain("dim-save");
   });
 
   it("một banner trạng thái + totals chargeable; CTA Lưu ≥44px", () => {
@@ -147,5 +150,30 @@ describe("MobileDimKgModal UX", () => {
     });
     expect(html).toContain("dim-chargeable");
     expect(html).toContain("· DIM");
+  });
+
+  it("hiển thị preset quy cách theo khách hàng khi có customerCode", () => {
+    const html = renderToStaticMarkup(
+      <MobileDimKgModal
+        row={{ ...baseRow, customerCode: "AGL" }}
+        customerDirectory={[
+          {
+            id: "c1",
+            code: "AGL",
+            name: "AIR GLOBAL",
+            parties: [],
+            savedDimTemplates: [
+              { id: "t1", label: "Thùng Áo", lCm: 60, wCm: 40, hCm: 40 },
+            ],
+          },
+        ]}
+        onClose={() => undefined}
+        onSave={() => undefined}
+      />,
+    );
+    expect(html).toContain("Quy cách khách");
+    expect(html).toContain("AGL");
+    expect(html).toContain("+ Lưu mẫu khách");
+    expect(html).toContain("60×40×40");
   });
 });

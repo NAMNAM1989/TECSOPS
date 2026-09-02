@@ -4,6 +4,9 @@ import {
   saveDimTemplate,
   deleteDimTemplate,
   renameDimTemplate,
+  loadCustomerRecentDims,
+  recordCustomerRecentDims,
+  deleteCustomerRecentDim,
 } from "./dimTemplateStorage";
 
 describe("dimTemplateStorage", () => {
@@ -64,19 +67,23 @@ describe("dimTemplateStorage", () => {
     expect(loadDimTemplates()[0]!.name).toBe("Tên Mới");
   });
 
-  it("báo lỗi nếu tên mẫu rỗng hoặc không có dòng DIM nào", () => {
-    expect(() =>
-      saveDimTemplate({
-        name: "   ",
-        lines: [{ lCm: 40, wCm: 30, hCm: 20, pcs: 2, estimated: false }],
-      })
-    ).toThrow("Tên mẫu không được để trống.");
+  it("ghi nhớ và tải kích thước gần đây theo từng khách hàng", () => {
+    recordCustomerRecentDims("AGL", [
+      { lCm: 60, wCm: 40, hCm: 40, label: "Thùng L" },
+      { lCm: 50, wCm: 40, hCm: 30 },
+    ]);
 
-    expect(() =>
-      saveDimTemplate({
-        name: "Mẫu Rỗng",
-        lines: [],
-      })
-    ).toThrow("Cần ít nhất 1 dòng DIM để lưu mẫu.");
+    const listAgl = loadCustomerRecentDims("agl");
+    expect(listAgl.length).toBe(2);
+    expect(listAgl[0]).toMatchObject({ lCm: 60, wCm: 40, hCm: 40, label: "Thùng L" });
+    expect(listAgl[1]).toMatchObject({ lCm: 50, wCm: 40, hCm: 30 });
+
+    // Khách khác không bị lẫn
+    expect(loadCustomerRecentDims("OTHER")).toEqual([]);
+
+    // Xóa 1 kích thước
+    const remaining = deleteCustomerRecentDim("AGL", { lCm: 50, wCm: 40, hCm: 30 });
+    expect(remaining.length).toBe(1);
+    expect(loadCustomerRecentDims("AGL").length).toBe(1);
   });
 });

@@ -29,18 +29,10 @@ interface Props {
   activeWarehouse: Warehouse;
   onOpenSheetImport: () => void;
   onPrefetchSheetImport?: () => void;
-  onNavigateCustomers: () => void;
-  onPrefetchCustomers?: () => void;
-  onNavigateStats?: () => void;
-  onPrefetchStats?: () => void;
-  onOpenAirlineLabels: () => void;
   onDownloadDayExcel: () => void;
-  onDownloadScscDim?: () => void;
   onCopyCargoDayReport?: (kind?: CargoDayReportCopyKind) => void;
   excelExporting?: boolean;
-  scscDimExporting?: boolean;
   cargoReportCopying?: boolean;
-  showDimScsc?: boolean;
   filteredViewRows: readonly Shipment[];
   viewRows: readonly Shipment[];
   onWarehouseChange: (wh: Warehouse) => void;
@@ -93,18 +85,10 @@ export function OpsMobileStickyHeader({
   activeWarehouse,
   onOpenSheetImport,
   onPrefetchSheetImport,
-  onNavigateCustomers,
-  onPrefetchCustomers,
-  onNavigateStats,
-  onPrefetchStats,
-  onOpenAirlineLabels,
   onDownloadDayExcel,
-  onDownloadScscDim,
   onCopyCargoDayReport,
   excelExporting,
-  scscDimExporting,
   cargoReportCopying,
-  showDimScsc,
   filteredViewRows,
   viewRows,
   onWarehouseChange,
@@ -283,16 +267,8 @@ export function OpsMobileStickyHeader({
           onStatusFilterChange={onStatusFilterChange}
           onOpenSheetImport={onOpenSheetImport}
           onPrefetchSheetImport={onPrefetchSheetImport}
-          onNavigateStats={onNavigateStats}
-          onPrefetchStats={onPrefetchStats}
-          onNavigateCustomers={onNavigateCustomers}
-          onPrefetchCustomers={onPrefetchCustomers}
-          onOpenAirlineLabels={onOpenAirlineLabels}
           onDownloadDayExcel={onDownloadDayExcel}
-          onDownloadScscDim={onDownloadScscDim}
           excelExporting={excelExporting}
-          scscDimExporting={scscDimExporting}
-          showDimScsc={showDimScsc}
           cargoReportCopying={cargoReportCopying}
           onCopyCargoDayReport={(kind) => onCopyCargoDayReport?.(kind)}
         />

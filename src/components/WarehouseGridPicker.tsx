@@ -110,34 +110,45 @@ export function WarehouseGridPicker({
               aria-selected={isActive}
               title={`${warehouseLabel[wh]} · Lô ${m.lots} · Kiện ${m.pcs} · Kg ${kg}`}
               onClick={() => onSelect(wh)}
-              className={`inline-flex shrink-0 touch-manipulation items-center text-left ring-1 transition active:scale-[0.98] ${
+              className={`inline-flex shrink-0 touch-manipulation flex-col items-start justify-center text-left ring-1 transition active:scale-[0.98] ${
                 denseChips
                   ? touchTargets
-                    ? "min-h-10 flex-col justify-center gap-0 rounded-xl px-2.5 py-1"
-                    : "h-8 gap-1.5 rounded-lg px-2"
-                  : "min-h-11 flex-col justify-center rounded-xl px-2.5 py-1"
+                    ? "min-h-10 gap-0.5 rounded-xl px-2.5 py-1"
+                    : "min-h-9 gap-0.5 rounded-lg px-2 py-1"
+                  : "min-h-11 gap-0.5 rounded-xl px-2.5 py-1"
               } ${
                 isActive ? CHIP_ACTIVE[wh] : CHIP_IDLE[wh]
               } ${hasSearchHit && !isActive ? "ring-2 ring-ui-primary/50" : ""}`}
             >
               <span
-                className={`font-extrabold tracking-tight ${
-                  denseChips && !touchTargets ? "text-[10px]" : "text-[11px]"
+                className={`font-extrabold leading-none tracking-tight ${
+                  denseChips && !touchTargets ? "text-[9px]" : "text-[11px]"
                 }`}
               >
                 {warehouseLabel[wh]}
               </span>
               {denseChips && !touchTargets ? (
-                <span className="font-mono text-[9px] font-bold tabular-nums leading-none">
-                  {m.lots}
-                  <span className={isActive ? "mx-0.5 text-white/50" : "mx-0.5 text-ui-border"}>
-                    ·
-                  </span>
-                  {m.pcs}
-                  <span className={isActive ? "mx-0.5 text-white/50" : "mx-0.5 text-ui-border"}>
-                    ·
-                  </span>
-                  {kg}
+                <span className="mt-0.5 flex items-end gap-2">
+                  {(
+                    [
+                      ["Lô", m.lots],
+                      ["PCS", m.pcs],
+                      ["KG", kg],
+                    ] as const
+                  ).map(([metricLabel, metricValue]) => (
+                    <span key={metricLabel} className="inline-flex flex-col items-center gap-0.5">
+                      <span
+                        className={`text-[7px] font-bold uppercase leading-none tracking-wide ${
+                          isActive ? "text-white/70" : "text-ui-text-muted"
+                        }`}
+                      >
+                        {metricLabel}
+                      </span>
+                      <span className="font-mono text-[10px] font-bold tabular-nums leading-none">
+                        {metricValue}
+                      </span>
+                    </span>
+                  ))}
                 </span>
               ) : (
                 <span className="font-mono text-[10px] font-bold tabular-nums leading-tight">

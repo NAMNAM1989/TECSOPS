@@ -51,9 +51,6 @@ import { DayExcelExportDialog } from "./DayExcelExportDialog";
 const GoogleSheetImportModal = lazy(() =>
   import("./GoogleSheetImportModal").then((m) => ({ default: m.GoogleSheetImportModal }))
 );
-const AirlineLabelSettingsModal = lazy(() =>
-  import("./AirlineLabelSettingsModal").then((m) => ({ default: m.AirlineLabelSettingsModal }))
-);
 const DesktopShipmentTable = lazy(() =>
   import("./DesktopShipmentTable").then((m) => ({ default: m.DesktopShipmentTable }))
 );
@@ -75,20 +72,12 @@ const EMPTY_CUSTOMERS_DIR: CustomerDirectoryEntry[] = [];
 interface AirCargoTrackingProps {
   sync: SyncApi;
   onSessionDateChange?: (ymd: string) => void;
-  onNavigateCustomers: () => void;
-  onPrefetchCustomers?: () => void;
-  onNavigateStats?: () => void;
-  onPrefetchStats?: () => void;
   onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
 }
 
 export function AirCargoTracking({
   sync,
   onSessionDateChange,
-  onNavigateCustomers,
-  onPrefetchCustomers,
-  onNavigateStats,
-  onPrefetchStats,
   onRequestPrint,
 }: AirCargoTrackingProps) {
   const {
@@ -123,8 +112,6 @@ export function AirCargoTracking({
   const [scscDimExporting, setScscDimExporting] = useState(false);
   const [cargoReportCopying, setCargoReportCopying] = useState(false);
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
-  const [airlineLabelSettingsOpen, setAirlineLabelSettingsOpen] = useState(false);
-  const [airlineLabelSaving, setAirlineLabelSaving] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
@@ -349,16 +336,6 @@ export function AirCargoTracking({
     [onRequestPrint]
   );
 
-  const saveAirlineLabelOverrides = async (next: AirlineLabelOverrides) => {
-    setAirlineLabelSaving(true);
-    try {
-      const out = await runMutate({ action: "SET_AIRLINE_LABEL_OVERRIDES", overrides: next });
-      if (out) setAirlineLabelSettingsOpen(false);
-    } finally {
-      setAirlineLabelSaving(false);
-    }
-  };
-
   const goPrevDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, -1)));
   const goNextDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, 1)));
   const goToday = () => setSelectedViewDate(startOfLocalDay(new Date()));
@@ -482,16 +459,8 @@ export function AirCargoTracking({
   }
 
   const toolsProps = {
-    showDimScsc: isScscWarehouse(activeWarehouse),
     excelExporting,
-    scscDimExporting,
-    onNavigateCustomers,
-    onPrefetchCustomers,
-    onNavigateStats,
-    onPrefetchStats,
-    onOpenAirlineLabels: () => setAirlineLabelSettingsOpen(true),
     onDownloadDayExcel: () => setExcelRangeOpen(true),
-    onDownloadScscDim: () => void onDownloadScscDimDay(),
   };
 
   const chrome = isMobile ? (
@@ -557,8 +526,6 @@ export function AirCargoTracking({
       activeWarehouse={activeWarehouse}
       onAddBooking={(wh) => void addBlankRowForWarehouse(wh)}
       onOpenSheetImport={() => setSheetImportOpen(true)}
-      onNavigateStats={onNavigateStats}
-      onPrefetchStats={onPrefetchStats}
       viewRows={viewRows}
       cargoReportCopying={cargoReportCopying}
       onCopyCargoDayReport={(kind) => void onCopyCargoDayReport(kind)}
@@ -594,7 +561,7 @@ export function AirCargoTracking({
         <div className="mb-3">
           <EmptyState
             title="Chưa có lô trong ngày này"
-            description="Tạo booking mới hoặc bấm «Nhập Sheet» để kéo từ Google Sheet."
+            description="Tạo booking mới hoặc bấm «Sync» để kéo từ Google Sheet."
             actionLabel="+ Booking"
             onAction={() => void addBlankRowForWarehouse(activeWarehouse)}
           />
@@ -604,7 +571,7 @@ export function AirCargoTracking({
               className="text-[13px] font-bold text-emerald-700 underline-offset-2 hover:underline"
               onClick={() => setSheetImportOpen(true)}
             >
-              Nhập Sheet
+              Sync
             </button>
           </div>
         </div>
@@ -639,6 +606,8 @@ export function AirCargoTracking({
             viewSessionYmd={selectedYmd}
             onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
             onQuickEdit={(row) => openMobileEdit(row)}
+            onDownloadScscDim={() => void onDownloadScscDimDay()}
+            scscDimExporting={scscDimExporting}
           />
         </Suspense>
       ) : (
@@ -652,6 +621,8 @@ export function AirCargoTracking({
             selectedRowId={selectedId}
             onSelectRow={setSelectedId}
             onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
+            onDownloadScscDim={() => void onDownloadScscDimDay()}
+            scscDimExporting={scscDimExporting}
             onUpdate={onUpdate}
             onUpdateCustomers={onUpdateCustomers}
             onDelete={onDelete}
@@ -693,16 +664,6 @@ export function AirCargoTracking({
       ) : null}
 
       <Suspense fallback={null}>
-        {airlineLabelSettingsOpen ? (
-          <AirlineLabelSettingsModal
-            open={airlineLabelSettingsOpen}
-            onClose={() => setAirlineLabelSettingsOpen(false)}
-            value={state?.airlineLabelOverrides}
-            flightSamples={allRows.map((r) => r.flight)}
-            saving={airlineLabelSaving}
-            onSave={saveAirlineLabelOverrides}
-          />
-        ) : null}
         {sheetImportOpen ? (
           <GoogleSheetImportModal
             open={sheetImportOpen}
@@ -735,7 +696,7 @@ export function AirCargoTracking({
                     : removedN > 0
                       ? `Đã xóa ${removedN} lô không còn trên Sheet${orderHint}.`
                       : `Đã sắp ${reorderedN} lô theo thứ tự Sheet.`,
-                  "Nhập Sheet",
+                  "Sync",
                 );
                 setSheetImportOpen(false);
               } else if (count > 0 && errN > 0) {

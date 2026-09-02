@@ -82,12 +82,32 @@
     @apply font-shipment-data font-extrabold tracking-tight tabular-nums text-ui-awb;
   }
 
-  /** Zebra hàng bảng Ops — xen kẽ nhẹ, không cạnh tranh status accent. */
+  /** Zebra hàng bảng Ops — xen kẽ nhẹ (mobile / legacy). */
   .ops-row-zebra-odd {
     background-color: #ffffff;
   }
   .ops-row-zebra-even {
     background-color: #f7fafc;
+  }
+
+  /**
+   * Mỗi lô = một vùng màu riêng (xoay 5 tint).
+   * Nền đặc — sticky AWB và border-spacing card đọc được.
+   */
+  .ops-lot-surface-0 {
+    background-color: #ffffff;
+  }
+  .ops-lot-surface-1 {
+    background-color: #eef6ff;
+  }
+  .ops-lot-surface-2 {
+    background-color: #f3f0ff;
+  }
+  .ops-lot-surface-3 {
+    background-color: #ecfdf5;
+  }
+  .ops-lot-surface-4 {
+    background-color: #fff7ed;
   }
 
   /** Sticky table header — nền đặc + viền dưới rõ. */

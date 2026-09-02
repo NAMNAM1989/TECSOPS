@@ -5,7 +5,7 @@ interface Props {
   compact?: boolean;
 }
 
-/** CTA kéo Google Sheet — luôn hiện ngoài menu Công cụ (desktop + mobile). */
+/** CTA Sync Google Sheet — luôn hiện ngoài menu Công cụ (desktop + mobile). */
 export function OpsSheetImportButton({
   onOpenSheetImport,
   onPrefetchSheetImport,
@@ -32,8 +32,8 @@ export function OpsSheetImportButton({
     return (
       <button
         type="button"
-        title="Nhập lô từ Google Sheet"
-        aria-label="Nhập Sheet"
+        title="Sync lô từ Google Sheet"
+        aria-label="Sync"
         onPointerDown={() => onPrefetchSheetImport?.()}
         onClick={onOpenSheetImport}
         className="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface font-semibold text-ui-text shadow-ui-sm transition hover:border-emerald-500/40 hover:bg-emerald-50/80 active:scale-[0.98]"
@@ -46,14 +46,14 @@ export function OpsSheetImportButton({
   return (
     <button
       type="button"
-      title="Nhập lô từ Google Sheet BOOK HẰNG NGÀY"
-      aria-label="Nhập Sheet"
+      title="Sync lô từ Google Sheet BOOK HẰNG NGÀY"
+      aria-label="Sync"
       onPointerDown={() => onPrefetchSheetImport?.()}
       onClick={onOpenSheetImport}
       className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-ui-border bg-ui-surface px-3 py-1.5 text-[12px] font-bold text-ui-text shadow-ui-sm transition hover:border-emerald-500/40 hover:bg-emerald-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus active:scale-[0.98]"
     >
       {icon}
-      Nhập Sheet
+      Sync
     </button>
   );
 }

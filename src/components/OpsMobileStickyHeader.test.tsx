@@ -32,8 +32,6 @@ function renderHeader(opts: { empty?: boolean } = {}) {
         socketConnected
         activeWarehouse="TCS"
         onOpenSheetImport={() => undefined}
-        onNavigateCustomers={() => undefined}
-        onOpenAirlineLabels={() => undefined}
         onDownloadDayExcel={() => undefined}
         onCopyCargoDayReport={() => undefined}
         filteredViewRows={rows}

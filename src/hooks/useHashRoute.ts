@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type AppRoute = "ops" | "customers" | "stats";
+export type AppRoute = "ops" | "customers" | "stats" | "airlines";
 
 function parseHashRoute(): AppRoute {
   const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
   if (raw === "customers" || raw.startsWith("customers/")) return "customers";
   if (raw === "stats" || raw.startsWith("stats/")) return "stats";
+  if (raw === "airlines" || raw.startsWith("airlines/") || raw === "hang" || raw.startsWith("hang/")) {
+    return "airlines";
+  }
   return "ops";
 }
 
 function hashFor(route: AppRoute): string {
   if (route === "customers") return "#/customers";
   if (route === "stats") return "#/stats";
+  if (route === "airlines") return "#/airlines";
   return "#/";
 }
 

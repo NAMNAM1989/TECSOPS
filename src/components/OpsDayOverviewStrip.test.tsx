@@ -40,7 +40,7 @@ function renderStrip(variant: "desktop" | "mobile", filtered = rows) {
 }
 
 describe("OpsDayOverviewStrip", () => {
-  it("desktop embedded: KPI cards Lô/PCS/KG + chip kho", () => {
+  it("desktop embedded: KPI gọn Lô/PCS/KG + chip kho cùng hàng", () => {
     const html = renderToStaticMarkup(
       <OpsDayOverviewStrip
         variant="desktop"
@@ -54,7 +54,10 @@ describe("OpsDayOverviewStrip", () => {
     expect(html).toContain("ops-day-overview");
     expect(html).toContain("PCS");
     expect(html).toContain("warehouse-chips");
+    expect(html).toContain("flex-col");
+    expect(html).toContain("min-h-9");
     expect(html).not.toContain("ops-day-pulse");
+    expect(html).not.toContain("min-w-[5.5rem]");
   });
 
   it("desktop: tổng gọn một dòng + chip kho cuộn ngang", () => {

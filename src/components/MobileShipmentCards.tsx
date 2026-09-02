@@ -11,6 +11,7 @@ import {
 } from "./statusStyles";
 import {
   emptyWarehouseRecord,
+  isScscWarehouse,
   warehouseLabel,
   warehouseSectionsForLayout,
   WAREHOUSE_ORDER,
@@ -243,6 +244,8 @@ interface MobileShipmentCardsProps {
   pinnedOpenWarehouses?: readonly Warehouse[];
   highlightedShipmentId?: string | null;
   onAddBlankRow?: (warehouse: Warehouse) => void;
+  onDownloadScscDim?: () => void;
+  scscDimExporting?: boolean;
 }
 
 export function MobileShipmentCards({
@@ -260,6 +263,8 @@ export function MobileShipmentCards({
   pinnedOpenWarehouses = [],
   highlightedShipmentId = null,
   onAddBlankRow: _onAddBlankRow,
+  onDownloadScscDim,
+  scscDimExporting = false,
 }: MobileShipmentCardsProps) {
   const isMobile = useIsMobile();
   const rowsByWarehouse = useMemo(
@@ -308,6 +313,27 @@ export function MobileShipmentCards({
       className={`space-y-0.5 pb-[calc(6.5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(6.5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
       data-testid="mobile-shipment-list"
     >
+      {!searchActive && onDownloadScscDim && isScscWarehouse(activeWarehouse) ? (
+        <div className="mb-1 flex items-center justify-between gap-2 rounded-xl border border-ui-border/80 bg-ui-surface px-3 py-2">
+          <span className="text-[11px] font-bold text-ui-navy">
+            {warehouseLabel[activeWarehouse]}
+            <span className="ml-1 font-semibold text-ui-text-muted">
+              · {(rowsByWarehouse[activeWarehouse] ?? []).length} lô
+            </span>
+          </span>
+          <button
+            type="button"
+            data-testid="warehouse-dim-scsc"
+            title="Excel LIST DIM SCSC theo ngày phiên"
+            aria-label="DIM SCSC"
+            disabled={scscDimExporting}
+            onClick={onDownloadScscDim}
+            className="inline-flex min-h-9 shrink-0 touch-manipulation items-center gap-1 rounded-lg px-2.5 text-[11px] font-semibold text-ui-text hover:bg-ui-surface-muted disabled:opacity-40"
+          >
+            {scscDimExporting ? "DIM…" : "DIM SCSC"}
+          </button>
+        </div>
+      ) : null}
       {searchActive
         ? warehouseSections.map((wh) => {
             const group = rowsByWarehouse[wh];
@@ -319,19 +345,34 @@ export function MobileShipmentCards({
                 id={`warehouse-section-${wh}`}
                 className="space-y-0.5"
               >
-                <button
-                  type="button"
-                  onClick={() => toggle(wh)}
-                  className="flex min-h-11 w-full touch-manipulation items-center gap-1.5 px-0.5 py-0.5 text-left"
-                >
-                  <Chevron collapsed={collapsed} />
-                  <span className="text-[11px] font-bold text-dashboard-primary">
-                    {warehouseLabel[wh]}
-                  </span>
-                  <span className="text-[10px] text-dashboard-muted">
-                    {group.length}
-                  </span>
-                </button>
+                <div className="flex min-h-11 w-full items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => toggle(wh)}
+                    className="flex min-h-11 min-w-0 flex-1 touch-manipulation items-center gap-1.5 px-0.5 py-0.5 text-left"
+                  >
+                    <Chevron collapsed={collapsed} />
+                    <span className="text-[11px] font-bold text-dashboard-primary">
+                      {warehouseLabel[wh]}
+                    </span>
+                    <span className="text-[10px] text-dashboard-muted">
+                      {group.length}
+                    </span>
+                  </button>
+                  {onDownloadScscDim && isScscWarehouse(wh) ? (
+                    <button
+                      type="button"
+                      data-testid={`warehouse-dim-scsc-${wh}`}
+                      title="Excel LIST DIM SCSC theo ngày phiên"
+                      aria-label="DIM SCSC"
+                      disabled={scscDimExporting}
+                      onClick={onDownloadScscDim}
+                      className="inline-flex min-h-9 shrink-0 touch-manipulation items-center rounded-lg px-2 text-[11px] font-semibold text-ui-text hover:bg-ui-surface-muted disabled:opacity-40"
+                    >
+                      {scscDimExporting ? "DIM…" : "DIM"}
+                    </button>
+                  ) : null}
+                </div>
                 {!collapsed ? group.map(renderCard) : null}
               </section>
             );

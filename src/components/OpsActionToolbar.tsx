@@ -15,16 +15,8 @@ type Props = {
   includeSheet?: boolean;
   onOpenSheetImport: () => void;
   onPrefetchSheetImport?: () => void;
-  onNavigateStats?: () => void;
-  onPrefetchStats?: () => void;
-  onNavigateCustomers: () => void;
-  onPrefetchCustomers?: () => void;
-  onOpenAirlineLabels: () => void;
   onDownloadDayExcel: () => void;
-  onDownloadScscDim?: () => void;
   excelExporting?: boolean;
-  scscDimExporting?: boolean;
-  showDimScsc?: boolean;
   viewRows: readonly Shipment[];
   cargoReportCopying?: boolean;
   onCopyCargoDayReport: (kind: CargoDayReportCopyKind) => void;
@@ -123,42 +115,10 @@ function ToolChip({
   );
 }
 
-function IconUsers({ className }: { className: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-    </svg>
-  );
-}
-
-function IconTag({ className }: { className: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M3 11l8.5 8.5a2 2 0 002.828 0l6.172-6.172a2 2 0 000-2.828L12.5 2.5 3 11z" />
-    </svg>
-  );
-}
-
 function IconSheet({ className }: { className: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6M7 4h7l3 3v13a1 1 0 01-1 1H7a1 1 0 01-1-1V5a1 1 0 011-1z" />
-    </svg>
-  );
-}
-
-function IconBox({ className }: { className: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h10M8 7v10" />
-    </svg>
-  );
-}
-
-function IconChart({ className }: { className: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 19h16M7 16V9m5 7V5m5 11v-4" />
     </svg>
   );
 }
@@ -176,7 +136,7 @@ function IconCamera({ className }: { className: string }) {
   );
 }
 
-/** Thanh thao tác Ops — nhóm Lệnh / Công cụ / Ảnh, cuộn ngang trên màn hẹp. */
+/** Thanh thao tác Ops — Lệnh / Xuất / Ảnh. Nav (Khách·Hãng·Thống kê) ở rail / bottom nav. */
 export function OpsActionToolbar({
   variant,
   activeWarehouse,
@@ -185,16 +145,8 @@ export function OpsActionToolbar({
   includeSheet = true,
   onOpenSheetImport,
   onPrefetchSheetImport,
-  onNavigateStats,
-  onPrefetchStats,
-  onNavigateCustomers,
-  onPrefetchCustomers,
-  onOpenAirlineLabels,
   onDownloadDayExcel,
-  onDownloadScscDim,
   excelExporting = false,
-  scscDimExporting = false,
-  showDimScsc = false,
   viewRows,
   cargoReportCopying = false,
   onCopyCargoDayReport,
@@ -243,36 +195,7 @@ export function OpsActionToolbar({
         </ToolbarSegment>
       ) : null}
 
-      <ToolbarSegment label="Công cụ" mobile={isMobile} embedded={embedded}>
-        {onNavigateStats ? (
-          <ToolChip
-            mobile={isMobile}
-            title="Thống kê Lô · Kg · DIM · Chargeable"
-            label="Thống kê"
-            shortLabel="TK"
-            onClick={onNavigateStats}
-            onPrefetch={onPrefetchStats}
-          >
-            <IconChart className={iconCls} />
-          </ToolChip>
-        ) : null}
-        <ToolChip
-          mobile={isMobile}
-          title="Danh bạ khách & hồ sơ in"
-          label="Khách"
-          onClick={onNavigateCustomers}
-          onPrefetch={onPrefetchCustomers}
-        >
-          <IconUsers className={iconCls} />
-        </ToolChip>
-        <ToolChip
-          mobile={isMobile}
-          title="Tên hãng in trên tem"
-          label={isMobile ? "Hãng" : "Tên hãng"}
-          onClick={onOpenAirlineLabels}
-        >
-          <IconTag className={iconCls} />
-        </ToolChip>
+      <ToolbarSegment label="Xuất" mobile={isMobile} embedded={embedded}>
         <ToolChip
           mobile={isMobile}
           title="Xuất Excel ngày hoặc khoảng ngày"
@@ -283,17 +206,6 @@ export function OpsActionToolbar({
         >
           <IconSheet className={iconCls} />
         </ToolChip>
-        {showDimScsc && onDownloadScscDim ? (
-          <ToolChip
-            mobile={isMobile}
-            title="Excel LIST DIM SCSC theo ngày phiên"
-            label={scscDimExporting ? "DIM…" : isMobile ? "DIM" : "DIM SCSC"}
-            disabled={scscDimExporting}
-            onClick={onDownloadScscDim}
-          >
-            <IconBox className={iconCls} />
-          </ToolChip>
-        ) : null}
       </ToolbarSegment>
 
       <ToolbarSegment label="Ảnh" mobile={isMobile} embedded={embedded}>

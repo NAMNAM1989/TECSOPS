@@ -14,12 +14,15 @@ const loadCustomersPage = () =>
   import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage }));
 const loadOpsStatsPage = () =>
   import("./pages/OpsStatsPage").then((m) => ({ default: m.OpsStatsPage }));
+const loadAirlinesLabelsPage = () =>
+  import("./pages/AirlinesLabelsPage").then((m) => ({ default: m.AirlinesLabelsPage }));
 
 const AirCargoTracking = lazy(() =>
   import("./components/AirCargoTracking").then((m) => ({ default: m.AirCargoTracking }))
 );
 const CustomersPage = lazy(loadCustomersPage);
 const OpsStatsPage = lazy(loadOpsStatsPage);
+const AirlinesLabelsPage = lazy(loadAirlinesLabelsPage);
 const PrintShippingLabel = lazy(() =>
   import("./components/PrintShippingLabel").then((m) => ({ default: m.PrintShippingLabel }))
 );
@@ -54,6 +57,10 @@ function AuthenticatedApp() {
     void loadOpsStatsPage();
   }, []);
 
+  const prefetchAirlines = useCallback(() => {
+    void loadAirlinesLabelsPage();
+  }, []);
+
   const onRequestPrint = useCallback(
     (shipment: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => {
       setPrintJob({ shipment, airlineLabelOverrides });
@@ -62,7 +69,13 @@ function AuthenticatedApp() {
   );
 
   const skeletonVariant =
-    route === "customers" ? "customers" : route === "stats" ? "stats" : "ops";
+    route === "customers"
+      ? "customers"
+      : route === "stats"
+        ? "stats"
+        : route === "airlines"
+          ? "ops"
+          : "ops";
 
   return (
     <>
@@ -77,6 +90,7 @@ function AuthenticatedApp() {
             onNavigate={navigate}
             onPrefetchCustomers={prefetchCustomers}
             onPrefetchStats={prefetchStats}
+            onPrefetchAirlines={prefetchAirlines}
           />
         ) : null}
         <div
@@ -106,14 +120,22 @@ function AuthenticatedApp() {
               onNavigateOps={() => navigate("ops")}
               onNavigateCustomers={() => navigate("customers")}
             />
+          ) : route === "airlines" ? (
+            <AirlinesLabelsPage
+              value={sync.state?.airlineLabelOverrides}
+              flightSamples={(sync.state?.rows ?? fallback.rows).map((r) => r.flight)}
+              ready={sync.state != null && sync.status !== "loading"}
+              syncStatus={sync.status}
+              socketConnected={sync.socketConnected}
+              onSave={async (overrides) => {
+                await sync.mutate({ action: "SET_AIRLINE_LABEL_OVERRIDES", overrides });
+              }}
+              onBack={() => navigate("ops")}
+            />
           ) : (
             <AirCargoTracking
               sync={sync}
               onSessionDateChange={setOpsSessionYmd}
-              onNavigateCustomers={() => navigate("customers")}
-              onPrefetchCustomers={prefetchCustomers}
-              onNavigateStats={() => navigate("stats")}
-              onPrefetchStats={prefetchStats}
               onRequestPrint={onRequestPrint}
             />
           )}
@@ -126,6 +148,7 @@ function AuthenticatedApp() {
           onNavigate={navigate}
           onPrefetchCustomers={prefetchCustomers}
           onPrefetchStats={prefetchStats}
+          onPrefetchAirlines={prefetchAirlines}
         />
       ) : null}
       {printJob ? (

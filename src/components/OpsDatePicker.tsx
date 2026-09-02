@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Button } from "../ui";
 import { formatOpsWorkDateYmd } from "../utils/opsDateFormat";
 
@@ -25,10 +26,26 @@ export function OpsDatePicker({
   compact = false,
   inline = false,
 }: Props) {
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const opsLabel = formatOpsWorkDateYmd(value);
   const stepBtn = compact
     ? "inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-full px-1 text-[14px] font-semibold text-ui-primary hover:bg-ui-surface-muted"
     : "inline-flex h-8 w-8 items-center justify-center rounded-lg text-[14px] font-semibold text-ui-primary hover:bg-ui-surface-muted";
+
+  const openCalendar = () => {
+    const el = dateInputRef.current;
+    if (!el) return;
+    try {
+      if (typeof el.showPicker === "function") {
+        el.showPicker();
+        return;
+      }
+    } catch {
+      /* showPicker có thể bị chặn nếu không từ user gesture — fallback focus/click */
+    }
+    el.focus();
+    el.click();
+  };
 
   return (
     <div
@@ -42,7 +59,15 @@ export function OpsDatePicker({
         <button type="button" onClick={onPrev} className={stepBtn} aria-label="Ngày trước">
           ‹
         </button>
-        <div className={`relative min-w-0 ${compact && !inline ? "flex-1" : "w-[7.75rem]"}`}>
+        <button
+          type="button"
+          onClick={openCalendar}
+          className={`relative min-w-0 cursor-pointer rounded-lg hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+            compact && !inline ? "flex-1" : "w-[7.75rem]"
+          }`}
+          aria-label={`Ngày phiên Ops ${opsLabel}. Bấm để chọn ngày`}
+          title="Chọn ngày phiên"
+        >
           <span
             className={`pointer-events-none block truncate text-center font-mono font-semibold tabular-nums text-ui-navy ${
               compact ? "py-1 text-[11px]" : "py-0.5 text-[12px]"
@@ -52,16 +77,19 @@ export function OpsDatePicker({
             {opsLabel}
           </span>
           <input
-            aria-label="Ngày phiên Ops"
+            ref={dateInputRef}
+            aria-hidden
+            tabIndex={-1}
             type="date"
             value={value}
             onChange={(e) => {
               const v = e.target.value;
               if (v) onChange(v);
             }}
-            className="absolute inset-0 cursor-pointer opacity-0"
+            onClick={(e) => e.stopPropagation()}
+            className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
           />
-        </div>
+        </button>
         <button type="button" onClick={onNext} className={stepBtn} aria-label="Ngày sau">
           ›
         </button>

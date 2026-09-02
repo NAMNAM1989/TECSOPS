@@ -5,6 +5,7 @@ type Props = {
   onNavigate: (route: AppRoute) => void;
   onPrefetchCustomers?: () => void;
   onPrefetchStats?: () => void;
+  onPrefetchAirlines?: () => void;
 };
 
 function IconOps({ className }: { className?: string }) {
@@ -36,6 +37,14 @@ function IconStats({ className }: { className?: string }) {
   );
 }
 
+function IconAirline({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+      <path d="M7 7h.01M3 11l8.5 8.5a2 2 0 002.828 0l6.172-6.172a2 2 0 000-2.828L12.5 2.5 3 11z" />
+    </svg>
+  );
+}
+
 const ITEMS: {
   id: AppRoute;
   label: string;
@@ -43,6 +52,7 @@ const ITEMS: {
 }[] = [
   { id: "ops", label: "Ops", Icon: IconOps },
   { id: "customers", label: "Khách", Icon: IconCustomers },
+  { id: "airlines", label: "Hãng", Icon: IconAirline },
   { id: "stats", label: "Thống kê", Icon: IconStats },
 ];
 
@@ -52,6 +62,7 @@ export function OpsLeftRail({
   onNavigate,
   onPrefetchCustomers,
   onPrefetchStats,
+  onPrefetchAirlines,
 }: Props) {
   return (
     <aside
@@ -81,10 +92,12 @@ export function OpsLeftRail({
               onMouseEnter={() => {
                 if (id === "customers") onPrefetchCustomers?.();
                 if (id === "stats") onPrefetchStats?.();
+                if (id === "airlines") onPrefetchAirlines?.();
               }}
               onFocus={() => {
                 if (id === "customers") onPrefetchCustomers?.();
                 if (id === "stats") onPrefetchStats?.();
+                if (id === "airlines") onPrefetchAirlines?.();
               }}
               className={`relative flex min-h-11 w-full touch-manipulation flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
                 isActive

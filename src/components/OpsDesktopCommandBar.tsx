@@ -13,16 +13,8 @@ import { OpsContextStrip } from "./OpsContextStrip";
 import type { StatusFilterValue } from "./StatusFilterBar";
 
 type ToolsProps = {
-  showDimScsc?: boolean;
   excelExporting?: boolean;
-  scscDimExporting?: boolean;
-  onNavigateCustomers: () => void;
-  onPrefetchCustomers?: () => void;
-  onNavigateStats?: () => void;
-  onPrefetchStats?: () => void;
-  onOpenAirlineLabels: () => void;
   onDownloadDayExcel: () => void;
-  onDownloadScscDim?: () => void;
 };
 
 type Props = {
@@ -40,8 +32,6 @@ type Props = {
   onAddBooking: (wh: Warehouse) => void;
   onOpenSheetImport: () => void;
   onPrefetchSheetImport?: () => void;
-  onNavigateStats?: () => void;
-  onPrefetchStats?: () => void;
   viewRows: readonly Shipment[];
   cargoReportCopying: boolean;
   onCopyCargoDayReport: (kind: CargoDayReportCopyKind) => void;
@@ -62,7 +52,7 @@ type Props = {
   onClearFilters: () => void;
 };
 
-/** Chrome desktop Ops — card gọn: identity · thao tác · kho · lọc. */
+/** Chrome desktop Ops — card gọn: thao tác (trái) · identity (phải) · kho · lọc. */
 export function OpsDesktopCommandBar({
   selectedYmd,
   onDateChange,
@@ -78,8 +68,6 @@ export function OpsDesktopCommandBar({
   onAddBooking,
   onOpenSheetImport,
   onPrefetchSheetImport,
-  onNavigateStats,
-  onPrefetchStats,
   viewRows,
   cargoReportCopying,
   onCopyCargoDayReport,
@@ -112,21 +100,9 @@ export function OpsDesktopCommandBar({
         className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain px-5 py-3.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
       >
           <div
-            data-testid="ops-desktop-identity-row"
-            className="flex shrink-0 items-center gap-1.5"
+            data-testid="ops-desktop-command-actions"
+            className="flex min-w-0 shrink-0 items-center gap-2"
           >
-            <h1 className="m-0 shrink-0 leading-none">
-              <Wordmark size="sm" />
-            </h1>
-            <span className="shrink-0 rounded-full bg-ui-navy px-2 py-px text-[9px] font-bold uppercase tracking-wide text-white">
-              OPS
-            </span>
-            <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
-            {daysWithData > 0 ? (
-              <span className="hidden shrink-0 text-[10px] text-ui-text-muted xl:inline">
-                {totalLots}/{daysWithData}d
-              </span>
-            ) : null}
             <OpsDatePicker
               value={selectedYmd}
               onChange={onDateChange}
@@ -143,27 +119,39 @@ export function OpsDesktopCommandBar({
                 Ngày khác
               </span>
             ) : null}
-          </div>
-
-          <span className="h-7 w-px shrink-0 bg-ui-border/70" aria-hidden />
-
-          <div data-testid="ops-desktop-command-actions" className="shrink-0">
+            <span className="h-7 w-px shrink-0 bg-ui-border/70" aria-hidden />
             <OpsActionToolbar
               variant="desktop"
               embedded
               activeWarehouse={activeWarehouse}
               onAddBooking={onAddBooking}
-              includeBooking
+              includeBooking={false}
               includeSheet
               onOpenSheetImport={onOpenSheetImport}
               onPrefetchSheetImport={onPrefetchSheetImport}
-              onNavigateStats={onNavigateStats}
-              onPrefetchStats={onPrefetchStats}
               onCopyCargoDayReport={onCopyCargoDayReport}
               cargoReportCopying={cargoReportCopying}
               viewRows={viewRows}
               {...toolsProps}
             />
+          </div>
+
+          <div
+            data-testid="ops-desktop-identity-row"
+            className="ml-auto flex shrink-0 items-center gap-1.5 pl-2"
+          >
+            <h1 className="m-0 shrink-0 leading-none">
+              <Wordmark size="sm" />
+            </h1>
+            <span className="shrink-0 rounded-full bg-ui-navy px-2 py-px text-[9px] font-bold uppercase tracking-wide text-white">
+              OPS
+            </span>
+            <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
+            {daysWithData > 0 ? (
+              <span className="hidden shrink-0 text-[10px] text-ui-text-muted xl:inline">
+                {totalLots}/{daysWithData}d
+              </span>
+            ) : null}
           </div>
         </div>
 

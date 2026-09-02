@@ -33,13 +33,14 @@ const baseProps = {
 };
 
 describe("OpsContextStrip", () => {
-  it("desktop: gom kho + lọc một khối, hàng lọc cuộn ngang", () => {
+  it("desktop: KPI + kho + tìm + lọc cùng một hàng", () => {
     const html = renderToStaticMarkup(
       <OpsContextStrip variant="desktop" {...baseProps} />,
     );
     expect(html).toContain("ops-context-strip");
     expect(html).toContain('data-variant="desktop"');
     expect(html).toContain("ops-day-overview");
+    expect(html).toContain("ops-desktop-context-row");
     expect(html).toContain("ops-desktop-filter-row");
     expect(html).toContain("Lọc trạng thái");
     expect(html).toContain("MAWB · xe · DEST");

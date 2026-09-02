@@ -14,21 +14,13 @@ type Props = {
   onStatusFilterChange: (v: StatusFilterValue) => void;
   onOpenSheetImport: () => void;
   onPrefetchSheetImport?: () => void;
-  onNavigateStats?: () => void;
-  onPrefetchStats?: () => void;
-  onNavigateCustomers: () => void;
-  onPrefetchCustomers?: () => void;
-  onOpenAirlineLabels: () => void;
   onDownloadDayExcel: () => void;
-  onDownloadScscDim?: () => void;
   excelExporting?: boolean;
-  scscDimExporting?: boolean;
-  showDimScsc?: boolean;
   cargoReportCopying?: boolean;
   onCopyCargoDayReport: (kind: CargoDayReportCopyKind) => void;
 };
 
-/** Thanh sticky mobile: lọc trạng thái + menu overflow (Sheet, Excel, ảnh, …). */
+/** Thanh sticky mobile: lọc trạng thái + overflow (Sync, Excel, ảnh). Nav ở BottomNav. */
 export function OpsMobileToolbar({
   activeWarehouse,
   viewRows,
@@ -36,16 +28,8 @@ export function OpsMobileToolbar({
   onStatusFilterChange,
   onOpenSheetImport,
   onPrefetchSheetImport,
-  onNavigateStats,
-  onPrefetchStats,
-  onNavigateCustomers,
-  onPrefetchCustomers,
-  onOpenAirlineLabels,
   onDownloadDayExcel,
-  onDownloadScscDim,
   excelExporting = false,
-  scscDimExporting = false,
-  showDimScsc = false,
   cargoReportCopying = false,
   onCopyCargoDayReport,
 }: Props) {
@@ -67,7 +51,7 @@ export function OpsMobileToolbar({
     const items: OverflowMenuItem[] = [
       {
         id: "sheet",
-        label: "Nhập Sheet",
+        label: "Sync",
         description: "Google Sheet phiên ngày",
         onSelect: onOpenSheetImport,
         onPrefetch: onPrefetchSheetImport,
@@ -80,15 +64,6 @@ export function OpsMobileToolbar({
         onSelect: onDownloadDayExcel,
       },
     ];
-    if (showDimScsc && onDownloadScscDim) {
-      items.push({
-        id: "scsc-dim",
-        label: scscDimExporting ? "Đang xuất DIM…" : "DIM SCSC",
-        description: "Excel LIST DIM theo ngày phiên",
-        disabled: scscDimExporting,
-        onSelect: onDownloadScscDim,
-      });
-    }
     items.push(
       ...buildOpsCargoReportItems({
         viewRows,
@@ -96,43 +71,14 @@ export function OpsMobileToolbar({
         onCopy: onCopyCargoDayReport,
       }),
     );
-    items.push(
-      {
-        id: "airline-labels",
-        label: "Tên hãng in tem",
-        onSelect: onOpenAirlineLabels,
-      },
-      {
-        id: "customers",
-        label: "Danh bạ khách",
-        onSelect: onNavigateCustomers,
-        onPrefetch: onPrefetchCustomers,
-      },
-    );
-    if (onNavigateStats) {
-      items.push({
-        id: "stats",
-        label: "Thống kê",
-        onSelect: onNavigateStats,
-        onPrefetch: onPrefetchStats,
-      });
-    }
     return items;
   }, [
     cargoReportCopying,
     excelExporting,
     onCopyCargoDayReport,
     onDownloadDayExcel,
-    onDownloadScscDim,
-    onNavigateCustomers,
-    onNavigateStats,
-    onOpenAirlineLabels,
     onOpenSheetImport,
-    onPrefetchCustomers,
     onPrefetchSheetImport,
-    onPrefetchStats,
-    scscDimExporting,
-    showDimScsc,
     viewRows,
   ]);
 

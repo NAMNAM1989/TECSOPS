@@ -52,16 +52,15 @@ function renderTable(rows: Shipment[] = [row]) {
 }
 
 describe("DesktopShipmentTable density", () => {
-  it("giữ cột ops + AWB mono 14px sticky; thead/cell/gap dày hơn", () => {
+  it("giữ cột ops + AWB mono 14px sticky; mỗi lô là card màu riêng", () => {
     const html = renderTable();
     expect(html).toContain("ops-desktop-shipment-table");
     expect(html).toContain("space-y-1");
-    expect(html).not.toContain("space-y-1.5");
     expect(html).toContain("ops-table-head");
+    expect(html).toContain("border-spacing-y-1.5");
+    expect(html).toContain('data-testid="ops-lot-card"');
+    expect(html).toContain("ops-lot-surface-0");
     expect(html).toContain("px-1 py-1");
-    expect(html).toContain("px-1 py-0.5");
-    expect(html).not.toContain("px-1.5 py-1.5");
-    expect(html).not.toContain("px-1.5 py-2");
     expect(html).toContain("ops-awb");
     expect(html).toContain("text-[14px]");
     expect(html).toContain("sticky left-0");
@@ -71,6 +70,24 @@ describe("DesktopShipmentTable density", () => {
     expect(html).toContain("STATUS");
     expect(html).toContain("THAO TÁC");
     expect(html).toContain("176");
+  });
+
+  it("nhiều lô xoay tint bề mặt khác nhau", () => {
+    const rows = [1, 2, 3].map(
+      (n) =>
+        ({
+          ...row,
+          id: `s${n}`,
+          stt: n,
+          awb: `1761234567${n}`,
+        }) as Shipment,
+    );
+    const html = renderTable(rows);
+    expect(html).toContain("ops-lot-surface-0");
+    expect(html).toContain("ops-lot-surface-1");
+    expect(html).toContain("ops-lot-surface-2");
+    expect(html).toContain('data-lot-tone="0"');
+    expect(html).toContain('data-lot-tone="1"');
   });
 
   it("status desktop dense h-7, không min-h-11; overflow-visible menu", () => {
@@ -85,5 +102,35 @@ describe("DesktopShipmentTable density", () => {
     const html = renderTable([]);
     expect(html).toContain("+ Booking");
     expect(html).toContain("min-h-11");
+  });
+
+  it("DIM SCSC trên header kho family SCSC, không trên TCS", () => {
+    const tcsHtml = renderTable();
+    expect(tcsHtml).not.toContain("warehouse-dim-scsc");
+    expect(tcsHtml).toContain('aria-label="+ Booking TCS"');
+
+    const scscRow = {
+      ...blankShipmentDraft("2026-08-23", "SCSC"),
+      id: "s2",
+      stt: 1,
+    } as Shipment;
+    const scscHtml = renderToStaticMarkup(
+      <ToastProvider>
+        <DesktopShipmentTable
+          rows={[scscRow]}
+          allRows={[scscRow]}
+          activeWarehouse="SCSC"
+          onUpdate={() => undefined}
+          onDelete={() => undefined}
+          onPrint={() => undefined}
+          onAddBlankRow={() => undefined}
+          viewSessionYmd="2026-08-23"
+          onDownloadScscDim={() => undefined}
+        />
+      </ToastProvider>,
+    );
+    expect(scscHtml).toContain("warehouse-dim-scsc");
+    expect(scscHtml).toContain("DIM SCSC");
+    expect(scscHtml).toContain('aria-label="+ Booking SCSC"');
   });
 });

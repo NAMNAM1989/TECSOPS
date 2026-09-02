@@ -15,7 +15,7 @@ type Props = {
   embedded?: boolean;
 };
 
-function KpiChip({
+function CompactKpi({
   label,
   value,
   active = false,
@@ -26,17 +26,18 @@ function KpiChip({
 }) {
   return (
     <span
-      className={`inline-flex min-w-[5.5rem] shrink-0 flex-col rounded-xl border px-4 py-2.5 text-left shadow-ui-sm transition ${
+      className={`inline-flex min-h-9 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-2.5 py-1 text-center transition ${
         active
-          ? "border-teal-500/45 bg-teal-500/10 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.12)]"
-          : "border-ui-border/90 bg-ui-surface hover:border-teal-500/30 hover:shadow-ui-md"
+          ? "border-teal-500/45 bg-teal-500/10"
+          : "border-ui-border/80 bg-ui-surface hover:border-teal-500/30"
       }`}
+      title={`${label}: ${value}`}
     >
-      <span className="font-mono text-lg font-semibold tabular-nums leading-tight text-ui-navy">
-        {value}
-      </span>
-      <span className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
+      <span className="text-[8px] font-bold uppercase leading-none tracking-wide text-ui-text-muted">
         {label}
+      </span>
+      <span className="font-mono text-[13px] font-semibold tabular-nums leading-none text-ui-navy">
+        {value}
       </span>
     </span>
   );
@@ -61,11 +62,12 @@ export function OpsDayOverviewStrip({
     return (
       <div
         data-testid="ops-day-overview"
-        className="flex min-w-0 flex-wrap items-center gap-2"
+        className="flex min-w-0 shrink-0 items-center gap-1.5"
       >
-        <KpiChip label={`Lô${filterHint}`} value={totals.lots} active={filtersActive} />
-        <KpiChip label="PCS" value={totals.pcs} />
-        <KpiChip label="KG" value={kgLabel} />
+        <CompactKpi label={`Lô${filterHint}`} value={totals.lots} active={filtersActive} />
+        <CompactKpi label="PCS" value={totals.pcs} />
+        <CompactKpi label="KG" value={kgLabel} />
+        <span className="mx-0.5 h-5 w-px shrink-0 bg-ui-border/70" aria-hidden />
         <WarehouseGridPicker
           rows={rows}
           active={activeWarehouse}

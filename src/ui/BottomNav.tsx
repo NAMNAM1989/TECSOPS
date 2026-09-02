@@ -5,6 +5,7 @@ type Props = {
   onNavigate: (route: AppRoute) => void;
   onPrefetchCustomers?: () => void;
   onPrefetchStats?: () => void;
+  onPrefetchAirlines?: () => void;
 };
 
 function IconOps({ className }: { className?: string }) {
@@ -36,6 +37,14 @@ function IconStats({ className }: { className?: string }) {
   );
 }
 
+function IconAirline({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+      <path d="M7 7h.01M3 11l8.5 8.5a2 2 0 002.828 0l6.172-6.172a2 2 0 000-2.828L12.5 2.5 3 11z" />
+    </svg>
+  );
+}
+
 const ITEMS: {
   id: AppRoute;
   label: string;
@@ -43,6 +52,7 @@ const ITEMS: {
 }[] = [
   { id: "ops", label: "Ops", Icon: IconOps },
   { id: "customers", label: "Khách", Icon: IconCustomers },
+  { id: "airlines", label: "Hãng", Icon: IconAirline },
   { id: "stats", label: "TK", Icon: IconStats },
 ];
 
@@ -55,6 +65,7 @@ export function BottomNav({
   onNavigate,
   onPrefetchCustomers,
   onPrefetchStats,
+  onPrefetchAirlines,
 }: Props) {
   return (
     <nav
@@ -62,7 +73,7 @@ export function BottomNav({
       aria-label="Điều hướng chính"
       data-testid="bottom-nav"
     >
-      <div className="mx-auto flex max-w-lg items-stretch justify-around gap-1 px-2">
+      <div className="mx-auto flex max-w-lg items-stretch justify-around gap-0.5 px-1.5">
         {ITEMS.map((item) => {
           const isActive = active === item.id;
           const Icon = item.Icon;
@@ -70,17 +81,20 @@ export function BottomNav({
             <button
               key={item.id}
               type="button"
+              data-testid={`bottom-nav-${item.id}`}
               aria-current={isActive ? "page" : undefined}
               onClick={() => onNavigate(item.id)}
               onMouseEnter={() => {
                 if (item.id === "customers") onPrefetchCustomers?.();
                 if (item.id === "stats") onPrefetchStats?.();
+                if (item.id === "airlines") onPrefetchAirlines?.();
               }}
               onFocus={() => {
                 if (item.id === "customers") onPrefetchCustomers?.();
                 if (item.id === "stats") onPrefetchStats?.();
+                if (item.id === "airlines") onPrefetchAirlines?.();
               }}
-              className={`relative flex min-h-12 min-w-[4.5rem] flex-1 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-[10px] font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+              className={`relative flex min-h-12 min-w-0 flex-1 touch-manipulation flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[10px] font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
                 isActive
                   ? "bg-teal-500/12 text-ui-primary-hover"
                   : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
@@ -88,7 +102,7 @@ export function BottomNav({
             >
               {isActive ? (
                 <span
-                  className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-ui-accent"
+                  className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-ui-accent"
                   aria-hidden
                 />
               ) : null}

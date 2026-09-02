@@ -20,7 +20,7 @@ import {
   flightNumberAccent,
 } from "./statusStyles";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
-import { normalizeWarehouse, warehouseLabel } from "../constants/warehouses";
+import { normalizeWarehouse, warehouseLabel, isScscWarehouse } from "../constants/warehouses";
 import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
 import { InlineCustomerInfoCell } from "./InlineCustomerInfoCell";
 import { CneeDetailPopover } from "./CneeDetailPopover";
@@ -32,6 +32,7 @@ import {
   validateInlinePcs,
 } from "../utils/inlineShipmentFieldValidation";
 import { useToast } from "../ui";
+import { NewBookingButton } from "./NewBookingButton";
 
 interface Props {
   rows: Shipment[];
@@ -46,6 +47,9 @@ interface Props {
   selectedRowId?: string | null;
   onSelectRow?: (id: string | null) => void;
   onAddBlankRow?: (warehouse: Warehouse) => void;
+  /** Xuất LIST DIM — hiện trên header khi kho family SCSC. */
+  onDownloadScscDim?: () => void;
+  scscDimExporting?: boolean;
   onUpdateCustomers?: (
     customers: CustomerDirectoryEntry[]
   ) => Promise<boolean | void>;
@@ -58,7 +62,7 @@ const INFO_KH_W = "w-[12.5rem] max-w-[12.5rem]";
 /** Vừa đủ nội dung thật — không truncate AWB/chuyến; KHÁCH tối đa 2 dòng. */
 const AWB_W = "w-[9rem] max-w-[9rem]";
 const FLIGHT_W = "w-[5rem] max-w-[5rem]";
-const CUSTOMER_W = "w-[6.5rem] max-w-[6.5rem]";
+const CUSTOMER_W = "w-[8.75rem] max-w-[8.75rem]";
 
 const COL_HEADERS: ColHeader[] = [
   { key: "stt", label: "#", w: "w-9" },
@@ -94,6 +98,8 @@ export function DesktopShipmentTable({
   selectedRowId,
   onSelectRow,
   onAddBlankRow,
+  onDownloadScscDim,
+  scscDimExporting = false,
   onUpdate,
   onDelete,
   onPrint,
@@ -115,6 +121,7 @@ export function DesktopShipmentTable({
     [rows, activeWarehouse],
   );
   const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);
+  const showScscDim = Boolean(onDownloadScscDim) && isScscWarehouse(activeWarehouse);
 
   return (
     <>
@@ -127,28 +134,59 @@ export function DesktopShipmentTable({
           className="mx-0 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md md:mx-5 md:mt-4"
         >
           <div className="flex items-center justify-between gap-2 border-b border-ui-border/80 bg-ui-surface px-4 py-2.5">
-            <div className="min-w-0">
-              <h2 className="text-[12px] font-extrabold leading-tight tracking-tight text-ui-navy">
-                {warehouseLabel[activeWarehouse]}
-                <span className="ml-1.5 text-[10px] font-semibold text-ui-text-muted">
-                  · {group.length} lô
-                </span>
-              </h2>
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              <div className="min-w-0">
+                <h2 className="text-[12px] font-extrabold leading-tight tracking-tight text-ui-navy">
+                  {warehouseLabel[activeWarehouse]}
+                  <span className="ml-1.5 text-[10px] font-semibold text-ui-text-muted">
+                    · {group.length} lô
+                  </span>
+                </h2>
+              </div>
+              {onAddBlankRow ? (
+                <NewBookingButton
+                  activeWarehouse={activeWarehouse}
+                  onAdd={onAddBlankRow}
+                />
+              ) : null}
             </div>
+            {showScscDim ? (
+              <button
+                type="button"
+                data-testid="warehouse-dim-scsc"
+                title="Excel LIST DIM SCSC theo ngày phiên"
+                aria-label="DIM SCSC"
+                disabled={scscDimExporting}
+                onClick={onDownloadScscDim}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <svg
+                  className="h-3.5 w-3.5 shrink-0 text-ui-text-muted"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  viewBox="0 0 24 24"
+                  aria-hidden
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h10M8 7v10" />
+                </svg>
+                {scscDimExporting ? "DIM…" : "DIM SCSC"}
+              </button>
+            ) : null}
           </div>
           <div
             className={`overflow-auto px-1 py-0.5 ${
               group.length > 4 ? "max-h-[min(86vh,860px)]" : ""
             }`}
           >
-            <table className="w-full border-separate border-spacing-x-0 border-spacing-y-0 text-left text-[13px] leading-tight">
+            <table className="w-full border-separate border-spacing-x-0 border-spacing-y-1.5 text-left text-[13px] leading-tight">
               <thead className="sticky top-0 z-20">
                 <tr className="ops-table-head">
                   {COL_HEADERS.map((c) => (
                     <th
                       key={c.key}
                       title={c.title}
-                      className={`box-border px-1 py-1 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted ${
+                      className={`box-border px-1 py-1.5 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted ${
                         c.key === "customerInfo" || c.key === "status"
                           ? "truncate"
                           : "whitespace-nowrap"
@@ -251,12 +289,13 @@ function ShipmentTableRowImpl({
   onOpenDimModal: (s: Shipment) => void;
 }) {
   const toast = useToast();
-  const zebra = rowIdx % 2 === 0 ? "ops-row-zebra-odd" : "ops-row-zebra-even";
-  const bg = selected ? statusRowSelected : zebra;
+  /** Mỗi lô một tint — 5 màu xoay, dễ tách khi nhiều hàng. */
+  const lotSurface = `ops-lot-surface-${rowIdx % 5}`;
+  const bg = selected ? statusRowSelected : lotSurface;
   const accent = statusRowAccent[row.status];
   const cell = (part: "first" | "mid" | "last" | "awb", extra = "") => {
     const round =
-      part === "first" ? "rounded-l-lg" : part === "last" ? "rounded-r-lg" : "";
+      part === "first" ? "rounded-l-xl" : part === "last" ? "rounded-r-xl" : "";
     const accentCls = part === "first" ? accent : "";
     const hl = highlighted ? "ring-2 ring-inset ring-ui-primary/45" : "";
     const surface = selected ? statusRowSelected : bg;
@@ -264,9 +303,11 @@ function ShipmentTableRowImpl({
       part === "awb"
         ? "sticky left-0 z-[1] shadow-[2px_0_0_rgba(11,18,32,0.06)]"
         : "";
-    return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} border-b border-ui-border/50 group-hover/row:bg-ui-primary/5 ${
-      part === "first" ? "border-l border-ui-border/60" : ""
-    } ${part === "last" ? "border-r border-ui-border/60" : ""} px-1 py-0.5 ${extra}`.trim();
+    const cardEdge =
+      "border-y border-ui-border/70 shadow-[0_1px_0_rgba(15,23,42,0.04)]";
+    return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} ${cardEdge} group-hover/row:shadow-[inset_0_0_0_9999px_rgba(13,148,136,0.05)] ${
+      part === "first" ? "border-l border-ui-border/80" : ""
+    } ${part === "last" ? "border-r border-ui-border/80" : ""} px-1 py-1 ${extra}`.trim();
   };
 
   const hasNextRow = rowIdx < groupRowIds.length - 1;
@@ -299,6 +340,8 @@ function ShipmentTableRowImpl({
   return (
     <tr
       id={`shipment-row-${row.id}`}
+      data-testid="ops-lot-card"
+      data-lot-tone={rowIdx % 5}
       onClick={() => onSelectRow?.(row.id)}
       className={`group/row cursor-pointer ${selected ? "relative z-[1]" : ""}`}
     >
@@ -364,7 +407,7 @@ function ShipmentTableRowImpl({
         <InlineTextEdit
           value={row.dest}
           placeholder="DEST"
-          className="font-shipment-data !py-0 text-center text-[13px] font-semibold ops-grid-cell"
+          className="font-shipment-data !py-0 text-center text-[13px] font-extrabold text-ui-awb"
           uppercase
           maxLength={3}
           gridNav={{ rowId: row.id, field: "dest" }}
@@ -460,7 +503,7 @@ function ShipmentTableRowImpl({
               profileSelection={row}
               customerDirectory={customerDirectory}
               placeholder="Khách"
-              className="min-w-0 whitespace-normal break-words text-[12px] font-semibold leading-tight line-clamp-2 ops-grid-cell"
+              className="min-w-0 whitespace-normal break-words text-[12px] font-extrabold leading-tight text-ui-awb line-clamp-2"
               maxLength={120}
               gridNav={{ rowId: row.id, field: "customer" }}
               onCommit={(patch) => onUpdate(row.id, patch)}

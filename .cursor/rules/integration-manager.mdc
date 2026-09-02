@@ -1,0 +1,123 @@
+---
+description: Worktree Integration Manager — quy tắc an toàn khi hoàn thành worktree và merge vào main
+alwaysApply: true
+---
+
+# Worktree Integration Manager
+
+Rule này áp dụng khi agent hoàn thành nhiệm vụ trong Git Worktree và chuẩn bị integration vào MAIN.
+
+## Main Protection
+
+MAIN là protected integration baseline. Agent **KHÔNG ĐƯỢC**:
+
+- `git push --force` hoặc force push lên main
+- `git reset --hard main` hoặc reset --hard trên main
+- Bỏ qua failing tests hoặc quality gates
+- Tự ý xóa unrelated changes của user
+- Tự ý thay đổi architecture chỉ để merge cho xong
+- Tự resolve merge conflict phức tạp khi không chắc chắn
+- Merge khi quality gate thất bại
+- Merge khi MAIN có uncommitted changes không giải thích được
+
+## Worktree Completion Checklist
+
+Trước khi chạy integration pipeline, agent phải:
+
+1. `git status` — xác nhận trạng thái sạch hoặc chỉ có changes thuộc task
+2. `git diff` — review toàn bộ thay đổi
+3. Review changed files — liệt kê và xác nhận scope
+4. Phát hiện unrelated changes — flag nếu có file ngoài scope task
+5. Phát hiện debug code — `console.log`, `debugger`, `TODO: remove`, `FIXME: temp`
+6. Phát hiện temporary code — commented-out blocks lớn, test stubs
+7. Phát hiện dead code mới — unused exports, unreachable code
+8. Phát hiện dependency thay đổi bất thường — package.json changes ngoài scope
+9. Phát hiện secret/hardcoded credential — API keys, passwords, tokens
+10. Xác nhận task scope — thay đổi phải khớp mô tả task
+
+## Safe Auto Fix Policy
+
+**Được phép tự động sửa:**
+
+- Formatting (nếu project có formatter)
+- Lint auto-fix (`eslint --fix`)
+- Unused imports (qua lint fix)
+- Obvious syntax problems
+- Trivial TypeScript problems
+- Debug statements do task hiện tại tạo ra
+
+**KHÔNG tự động thực hiện:**
+
+- Architecture rewrite
+- Database migration
+- Dependency replacement hoặc major upgrade
+- Authentication rewrite
+- API contract rewrite
+- Destructive database operation
+- Large unrelated refactor
+
+Sau mỗi auto-fix phải chạy validation lại.
+
+## Quality Gates
+
+Pipeline sử dụng commands thực tế của project (phát hiện từ `package.json`):
+
+| Gate | Command |
+|------|---------|
+| Lint (src) | `npm run lint` |
+| Lint (server) | `npm run lint:server` |
+| Typecheck | `npm run typecheck` |
+| Unit Test | `npm run test` |
+| Build | `npm run build` |
+| Deploy Check | `npm run deploy:check` |
+| E2E Quick | `npm run qa:smoke` |
+| E2E Deep | `npm run test:e2e` + `npm run test:e2e:a11y` |
+
+Nếu gate không được cấu hình: report `NOT CONFIGURED`, không coi là FAIL.
+
+Nếu required gate FAIL: **STOP**, không merge MAIN.
+
+## Performance Gate
+
+Kiểm tra static trên changed files:
+
+- Debug statements, unnecessary rerenders patterns
+- Duplicate fetch/request patterns
+- Timers/listeners without cleanup
+- Heavy client-side imports
+- Unnecessary polling
+
+Chỉ auto-optimize nếu: SAFE + LOCAL + BEHAVIOR-PRESERVING.
+
+Optimization lớn → report recommendation, không tự thực hiện.
+
+## Integration Commands
+
+User chạy integration qua Cursor Task:
+
+- **VERIFY & MERGE TO MAIN** — Quick mode (smoke E2E)
+- **DEEP AUDIT & MERGE TO MAIN** — Deep mode (full E2E suite)
+
+Script: `scripts/integration/verify-and-merge.ps1`
+
+Agent **KHÔNG** tự chạy merge pipeline trừ khi user yêu cầu rõ ràng.
+
+## Concurrency
+
+Chỉ một worktree được merge MAIN tại một thời điểm (integration lock).
+
+Nếu lock active: report `INTEGRATION LOCKED` và STOP.
+
+## Merge Conflict
+
+Nếu conflict: STOP, không tự resolve. Report `MERGE CONFLICT` + danh sách files.
+
+Abort merge an toàn nếu merge đã bắt đầu nhưng không hoàn thành được.
+
+## Post-Merge Failure
+
+Nếu worktree PASS nhưng MAIN FAIL sau merge:
+
+- STOP pipeline
+- Report failing command, tests, affected files
+- KHÔNG tự động rollback destructive

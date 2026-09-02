@@ -663,17 +663,6 @@ export function CustomersPage({
     ? `${filtered.length} / ${draft.length} khách`
     : `${draft.length} khách`;
 
-  const headerStatus =
-    saving
-      ? "Đang lưu…"
-      : dirty
-        ? "Chưa lưu"
-        : saveStatus === "saved"
-          ? "Đã lưu"
-          : saveStatus === "error"
-            ? "Lỗi"
-            : "";
-
   const showList = !isMobile || mobilePane === "list";
   const showDetail = !isMobile || mobilePane === "detail";
 
@@ -791,77 +780,31 @@ export function CustomersPage({
               ← Ops
             </Button>
             <div className="min-w-0 flex-1">
-              <h1 className="m-0 truncate text-base font-extrabold tracking-tight text-ui-navy sm:text-lg">
-                Khách hàng
+              <h1 className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-extrabold tracking-tight text-ui-navy sm:text-lg">
+                <span>Khách hàng</span>
+                <span className="text-[12px] font-semibold text-ui-text-muted sm:text-[13px]">
+                  · {countLabel}
+                </span>
               </h1>
               <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ui-text-muted">
-                <span className="font-medium">{countLabel}</span>
                 <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
                 {customersSyncPhrase ? (
                   <span
-                    className="font-semibold text-ui-text-muted"
+                    className="sr-only"
                     data-testid="customers-sync-stamp"
                     title="ops_customers.synced_at · Asia/Saigon"
                   >
                     {customersSyncPhrase}
                   </span>
                 ) : null}
-                {headerStatus ? (
-                  <span
-                    className={
-                      dirty || saveStatus === "error"
-                        ? "font-semibold text-amber-700"
-                        : "font-semibold text-emerald-700"
-                    }
-                  >
-                    {headerStatus}
-                  </span>
-                ) : null}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <Button
-                variant="secondary"
-                size="sm"
-                title="Tải mẫu Hồ sơ KH cố định"
-                onClick={() => void downloadCustomerFullProfileTemplate()}
-              >
-                Mẫu
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={importing}
-                title="Import đúng mẫu Hồ sơ KH"
-                onClick={() => importInputRef.current?.click()}
-              >
-                {importing ? "…" : "Import"}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                title="Export đúng mẫu Hồ sơ KH"
-                onClick={() => void downloadCustomerFullProfileExport(draft)}
-              >
-                Export
-              </Button>
-              <div className="hidden items-center gap-1.5 sm:flex">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!dirty || saving}
-                  onClick={handleDiscard}
-                >
-                  Hủy
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled={!dirty || saving}
-                  onClick={() => void persistDraft()}
-                >
-                  {saving ? "Đang lưu…" : "Lưu"}
-                </Button>
+              <div data-testid="customers-excel-menu">
+                <OverflowMenu
+                  label={importing ? "Excel…" : "Excel"}
+                  items={excelToolItems}
+                />
               </div>
             </div>
           </div>
@@ -874,6 +817,43 @@ export function CustomersPage({
           onChange={(e) => void onImportFile(e.target.files?.[0] ?? null)}
         />
       </header>
+
+      {!isMobile && (dirty || saving) ? (
+        <div
+          data-testid="customers-dirty-bar"
+          className="sticky top-[calc(3.25rem+env(safe-area-inset-top))] z-20 border-b border-amber-200/90 bg-amber-50/95 shadow-ui-sm backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="mx-auto flex max-w-[1400px] items-center gap-2 px-3 py-2 sm:px-4">
+            <p className="min-w-0 flex-1 text-[12px] font-semibold text-amber-950">
+              {saving
+                ? "Đang lưu danh bạ…"
+                : saveStatus === "error"
+                  ? "Chưa lưu — có lỗi, kiểm tra lại rồi Lưu"
+                  : "Có thay đổi chưa lưu"}
+            </p>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={saving}
+                onClick={handleDiscard}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={saving}
+                onClick={() => void persistDraft()}
+              >
+                {saving ? "Đang lưu…" : "Lưu"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isMobile && mobilePane === "list" ? (
         <div
@@ -916,17 +896,19 @@ export function CustomersPage({
               +
             </Button>
             <OverflowMenu label="Excel" items={excelToolItems} compact />
-            <Button
-              variant="secondary"
-              size="sm"
-              className="min-h-11 min-w-11 px-2.5"
-              data-testid="btn-save-cust"
-              disabled={!dirty || saving}
-              onClick={() => void persistDraft()}
-              title="Lưu danh bạ"
-            >
-              💾
-            </Button>
+            {dirty || saving ? (
+              <Button
+                variant="primary"
+                size="sm"
+                className="min-h-11 min-w-11 px-2.5"
+                data-testid="btn-save-cust"
+                disabled={saving}
+                onClick={() => void persistDraft()}
+                title="Lưu danh bạ"
+              >
+                💾
+              </Button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -1029,7 +1011,7 @@ export function CustomersPage({
                   ref={detailTopRef}
                   className="min-h-0 flex-1 overflow-y-auto px-3 py-3 pb-24 sm:px-4 sm:pb-4"
                 >
-                  <div className="mx-auto max-w-2xl space-y-3">
+                  <div className="mx-auto max-w-3xl space-y-3">
                     <div
                       className="flex gap-1 rounded-xl border border-ui-border/90 bg-ui-surface p-1 shadow-ui-sm"
                       role="tablist"
@@ -1065,130 +1047,226 @@ export function CustomersPage({
                     ) : null}
 
                     {profileTab === "info" ? (
-                      <section className="rounded-2xl border border-ui-border/90 bg-ui-surface p-3.5 shadow-ui-md sm:p-4">
-                        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
-                            Thông tin
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                          <label className="col-span-1 block">
-                            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
-                              Customer Code
-                            </span>
-                            <input
-                              value={selected.code}
-                              onChange={(e) =>
-                                updateCustomer(selected.id, {
-                                  code: e.target.value.toUpperCase(),
-                                })
-                              }
-                              onBlur={(e) =>
-                                updateCustomer(selected.id, {
-                                  code: normalizeAgentCode(e.target.value),
-                                })
-                              }
-                              className={`${FIELD} font-mono font-bold uppercase`}
-                              placeholder="GLO"
-                              maxLength={40}
-                              spellCheck={false}
-                              data-customer-invalid={
-                                validationErrors.some(
-                                  (e) => e.section === "identity" && e.field === "code",
-                                )
-                                  ? "true"
-                                  : undefined
-                              }
-                            />
-                          </label>
-                          <label className="block">
-                            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
-                              Short
-                            </span>
-                            <input
-                              value={selected.shortCode ?? ""}
-                              onChange={(e) =>
-                                updateCustomer(selected.id, {
-                                  shortCode: shortCodeWhileTyping(e.target.value),
-                                })
-                              }
-                              onBlur={(e) =>
-                                updateCustomer(selected.id, {
-                                  shortCode: normalizeCustomerShortCode(e.target.value),
-                                })
-                              }
-                              className={`${FIELD} font-mono font-bold uppercase`}
-                              maxLength={10}
-                              spellCheck={false}
-                              placeholder="VD: CÔNG CHÚA"
-                            />
-                          </label>
-                          <label className="col-span-2 block sm:col-span-1">
-                            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
-                              Loại
-                            </span>
-                            <select
-                              value={selected.customerType ?? "DIRECT_SHIPPER"}
-                              onChange={(e) =>
-                                updateCustomer(selected.id, {
-                                  customerType: normalizeCustomerType(e.target.value),
-                                })
-                              }
-                              className={FIELD}
-                            >
-                              {CUSTOMER_TYPES.map((t) => (
-                                <option key={t} value={t}>
-                                  {typeLabel(t)}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="col-span-2 block">
-                            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
-                              Tên khách
-                            </span>
-                            <input
-                              ref={nameInputRef}
-                              value={selected.name}
-                              onChange={(e) =>
-                                updateCustomer(selected.id, {
-                                  name: customerNameWhileTyping(e.target.value),
-                                })
-                              }
-                              onBlur={() =>
-                                updateCustomer(selected.id, {
-                                  name: normalizeCustomerNameInput(selected.name),
-                                })
-                              }
-                              className={`${FIELD} text-sm font-semibold uppercase`}
-                              placeholder="Tên công ty / đại lý"
-                              data-customer-invalid={
-                                validationErrors.some(
-                                  (e) => e.section === "identity" && e.field === "name",
-                                )
-                                  ? "true"
-                                  : undefined
-                              }
-                            />
-                          </label>
-                          <label className="col-span-2 block sm:col-span-1">
-                            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
-                              Đơn giá (VND/kg)
-                            </span>
-                            <input
-                              value={formatDefaultRate(selected.defaultRate)}
-                              onChange={(e) =>
-                                updateCustomer(selected.id, {
-                                  defaultRate: parseDefaultRate(e.target.value),
-                                })
-                              }
-                              className={`${FIELD} font-mono`}
-                              inputMode="decimal"
-                            />
-                          </label>
-                        </div>
+                      <>
+                        <section className="rounded-2xl border border-ui-border/90 bg-ui-surface p-3.5 shadow-ui-md sm:p-4">
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            <label className="col-span-1 block">
+                              <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                Mã khách
+                              </span>
+                              <input
+                                value={selected.code}
+                                onChange={(e) =>
+                                  updateCustomer(selected.id, {
+                                    code: e.target.value.toUpperCase(),
+                                  })
+                                }
+                                onBlur={(e) =>
+                                  updateCustomer(selected.id, {
+                                    code: normalizeAgentCode(e.target.value),
+                                  })
+                                }
+                                className={`${FIELD} font-mono font-bold uppercase`}
+                                placeholder="GLO"
+                                maxLength={40}
+                                spellCheck={false}
+                                data-customer-invalid={
+                                  validationErrors.some(
+                                    (e) => e.section === "identity" && e.field === "code",
+                                  )
+                                    ? "true"
+                                    : undefined
+                                }
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                Tên tắt
+                              </span>
+                              <input
+                                value={selected.shortCode ?? ""}
+                                onChange={(e) =>
+                                  updateCustomer(selected.id, {
+                                    shortCode: shortCodeWhileTyping(e.target.value),
+                                  })
+                                }
+                                onBlur={(e) =>
+                                  updateCustomer(selected.id, {
+                                    shortCode: normalizeCustomerShortCode(e.target.value),
+                                  })
+                                }
+                                className={`${FIELD} font-mono font-bold uppercase`}
+                                maxLength={10}
+                                spellCheck={false}
+                                placeholder="VD: CÔNG CHÚA"
+                              />
+                            </label>
+                            <label className="col-span-2 block sm:col-span-1">
+                              <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                Loại
+                              </span>
+                              <select
+                                value={selected.customerType ?? "DIRECT_SHIPPER"}
+                                onChange={(e) =>
+                                  updateCustomer(selected.id, {
+                                    customerType: normalizeCustomerType(e.target.value),
+                                  })
+                                }
+                                className={FIELD}
+                              >
+                                {CUSTOMER_TYPES.map((t) => (
+                                  <option key={t} value={t}>
+                                    {typeLabel(t)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="col-span-2 block sm:col-span-3">
+                              <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                Tên khách
+                              </span>
+                              <input
+                                ref={nameInputRef}
+                                value={selected.name}
+                                onChange={(e) =>
+                                  updateCustomer(selected.id, {
+                                    name: customerNameWhileTyping(e.target.value),
+                                  })
+                                }
+                                onBlur={() =>
+                                  updateCustomer(selected.id, {
+                                    name: normalizeCustomerNameInput(selected.name),
+                                  })
+                                }
+                                className={`${FIELD} text-sm font-semibold uppercase`}
+                                placeholder="Tên công ty / đại lý"
+                                data-customer-invalid={
+                                  validationErrors.some(
+                                    (e) => e.section === "identity" && e.field === "name",
+                                  )
+                                    ? "true"
+                                    : undefined
+                                }
+                              />
+                            </label>
+                            <label className="col-span-2 block sm:col-span-1">
+                              <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                Đơn giá (VND/kg)
+                              </span>
+                              <input
+                                value={formatDefaultRate(selected.defaultRate)}
+                                onChange={(e) =>
+                                  updateCustomer(selected.id, {
+                                    defaultRate: parseDefaultRate(e.target.value),
+                                  })
+                                }
+                                className={`${FIELD} font-mono`}
+                                inputMode="decimal"
+                              />
+                            </label>
+                          </div>
 
-                        <div className="mt-5 rounded-xl border border-red-300/80 bg-gradient-to-br from-red-50 to-rose-50/80 p-3.5 shadow-ui-sm">
+                          <div className="mt-3 border-t border-ui-border/70 pt-3">
+                            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+                              Liên hệ
+                            </p>
+                            <p className="mb-2 text-[10px] leading-snug text-ui-text-muted">
+                              Đồng bộ với Người gửi mặc định · dùng tìm kiếm &amp; điền OPS
+                            </p>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                              <label className="col-span-2 block sm:col-span-1">
+                                <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                  SĐT
+                                </span>
+                                <input
+                                  value={contactOf(selected).phone}
+                                  onChange={(e) =>
+                                    updateCustomer(selected.id, {
+                                      phone: e.target.value,
+                                    })
+                                  }
+                                  onBlur={(e) =>
+                                    updateCustomer(selected.id, {
+                                      phone: e.target.value.trim(),
+                                    })
+                                  }
+                                  className={`${FIELD} tabular-nums`}
+                                  inputMode="tel"
+                                  placeholder="+84…"
+                                  data-testid="cust-info-phone"
+                                />
+                              </label>
+                              <label className="col-span-2 block sm:col-span-1">
+                                <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                  Email
+                                </span>
+                                <input
+                                  value={contactOf(selected).email}
+                                  onChange={(e) =>
+                                    updateCustomer(selected.id, {
+                                      email: e.target.value,
+                                    })
+                                  }
+                                  onBlur={(e) =>
+                                    updateCustomer(selected.id, {
+                                      email: e.target.value.trim(),
+                                    })
+                                  }
+                                  className={FIELD}
+                                  type="email"
+                                  autoComplete="off"
+                                  data-testid="cust-info-email"
+                                />
+                              </label>
+                              <label className="col-span-2 block sm:col-span-1">
+                                <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                  MST
+                                </span>
+                                <input
+                                  value={contactOf(selected).taxCode}
+                                  onChange={(e) =>
+                                    updateCustomer(selected.id, {
+                                      taxCode: e.target.value,
+                                    })
+                                  }
+                                  onBlur={(e) =>
+                                    updateCustomer(selected.id, {
+                                      taxCode: e.target.value.trim(),
+                                    })
+                                  }
+                                  className={`${FIELD} font-mono`}
+                                  data-testid="cust-info-tax"
+                                />
+                              </label>
+                              <label className="col-span-2 block sm:col-span-3">
+                                <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                  Địa chỉ
+                                </span>
+                                <textarea
+                                  value={contactOf(selected).address}
+                                  onChange={(e) =>
+                                    updateCustomer(selected.id, {
+                                      address: e.target.value,
+                                    })
+                                  }
+                                  onBlur={(e) =>
+                                    updateCustomer(selected.id, {
+                                      address: e.target.value.trim(),
+                                    })
+                                  }
+                                  rows={2}
+                                  className={`${FIELD} min-h-[2.75rem] resize-y`}
+                                  data-testid="cust-info-address"
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        </section>
+
+                        <section
+                          className="rounded-xl border border-red-300/80 bg-gradient-to-br from-red-50 to-rose-50/80 p-3.5 shadow-ui-sm"
+                          data-testid="cust-danger-zone"
+                        >
                           <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-900">
                             Vùng nguy hiểm
                           </p>
@@ -1203,8 +1281,8 @@ export function CustomersPage({
                           >
                             Xóa khách
                           </Button>
-                        </div>
-                      </section>
+                        </section>
+                      </>
                     ) : null}
 
                     {profileTab === "defaults" ? (
@@ -1245,28 +1323,36 @@ export function CustomersPage({
                   </div>
                 </div>
 
-                <div className="sticky bottom-0 z-20 border-t border-ui-border bg-ui-surface px-3 py-2.5 pb-[max(0.65rem,calc(4.25rem+env(safe-area-inset-bottom)))] sm:hidden">
-                  <div className="flex gap-2">
-                    <Button
-                      variant="secondary"
-                      size="md"
-                      className="min-h-11 flex-1 touch-manipulation"
-                      disabled={!dirty || saving}
-                      onClick={handleDiscard}
-                    >
-                      Hủy
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="md"
-                      className="min-h-11 flex-1 touch-manipulation"
-                      disabled={!dirty || saving}
-                      onClick={() => void persistDraft()}
-                    >
-                      {saving ? "Đang lưu…" : "Lưu"}
-                    </Button>
+                {dirty || saving ? (
+                  <div
+                    className="sticky bottom-0 z-20 border-t border-amber-200/90 bg-amber-50/95 px-3 py-2.5 pb-[max(0.65rem,calc(4.25rem+env(safe-area-inset-bottom)))] sm:hidden"
+                    data-testid="customers-dirty-footer"
+                  >
+                    <p className="mb-1.5 text-[11px] font-semibold text-amber-950">
+                      {saving ? "Đang lưu…" : "Có thay đổi chưa lưu"}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="secondary"
+                        size="md"
+                        className="min-h-11 flex-1 touch-manipulation"
+                        disabled={saving}
+                        onClick={handleDiscard}
+                      >
+                        Hủy
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="md"
+                        className="min-h-11 flex-1 touch-manipulation"
+                        disabled={saving}
+                        onClick={() => void persistDraft()}
+                      >
+                        {saving ? "Đang lưu…" : "Lưu"}
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </>
             ) : (
               <div className="flex flex-1 items-center justify-center p-6">

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { SyncStatus } from "../hooks/useShipmentSync";
 import type { Shipment } from "../types/shipment";
 import type { WarehouseLayoutFilter } from "../constants/warehouses";
@@ -71,57 +71,61 @@ const DETAIL_TABS: { id: DetailTab; label: string }[] = [
 ];
 
 const FIELD =
-  "min-h-9 rounded-xl border border-ui-border/90 bg-ui-surface px-2.5 py-1.5 text-sm text-ui-text shadow-ui-sm outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus";
+  "min-h-9 rounded-lg border border-ui-border/80 bg-ui-surface px-2.5 py-1.5 text-sm text-ui-text outline-none transition focus:border-ui-primary/45 focus:ring-2 focus:ring-ui-focus/80";
 
 function warehouseFilterLabel(w: WarehouseLayoutFilter): string {
   return w === "ALL" ? "Tất cả kho" : warehouseLabel[w];
 }
 
-function KpiCard({
-  label,
-  value,
-  hint,
-  delta,
-  tone = "default",
+function KpiStrip({
+  items,
 }: {
-  label: string;
-  value: string | number;
-  hint?: string;
-  delta?: { text: string; neutral?: boolean };
-  tone?: "default" | "amber" | "teal" | "sky";
+  items: {
+    label: string;
+    value: string | number;
+    hint?: string;
+    accent?: boolean;
+  }[];
 }) {
-  const toneClass =
-    tone === "amber"
-      ? "border-amber-300/70 bg-ui-surface"
-      : tone === "teal"
-        ? "border-teal-400/40 bg-ui-surface"
-        : tone === "sky"
-          ? "border-sky-300/60 bg-ui-surface"
-          : "border-ui-border/90 bg-ui-surface";
-
   return (
     <div
-      className={`min-w-[8.5rem] flex-1 rounded-2xl border px-4 py-3.5 shadow-ui-sm transition hover:-translate-y-px hover:shadow-ui-md ${toneClass}`}
-      title={hint}
+      className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm"
+      data-testid="stats-kpi-strip"
     >
-      <p className="m-0 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
-        {label}
-      </p>
-      <p className="m-0 mt-1.5 font-mono text-xl font-semibold tabular-nums tracking-tight text-ui-navy sm:text-2xl">
-        {value}
-      </p>
-      {delta ? (
-        <p
-          className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
-            delta.neutral
-              ? "bg-ui-surface-muted text-ui-text-muted"
-              : "bg-emerald-500/12 text-emerald-800"
-          }`}
-        >
-          {delta.text}
-        </p>
-      ) : null}
+      <div className="grid grid-cols-2 divide-x divide-y divide-ui-border/60 sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
+        {items.map((item) => (
+          <div key={item.label} title={item.hint} className="px-3.5 py-3.5 sm:px-4">
+            <p className="m-0 text-[10px] font-bold uppercase tracking-[0.08em] text-ui-text-muted">
+              {item.label}
+            </p>
+            <p
+              className={`m-0 mt-1.5 font-mono text-xl font-semibold tabular-nums tracking-tight sm:text-[1.35rem] ${
+                item.accent ? "text-amber-800" : "text-ui-navy"
+              }`}
+            >
+              {item.value}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
+  );
+}
+
+function FilterField({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+        {label}
+      </span>
+      {children}
+    </label>
   );
 }
 
@@ -135,21 +139,23 @@ function AggTable({
   getKey?: (r: OpsStatsTotals & { _key: string }) => string;
 }) {
   if (rows.length === 0) {
-    return <p className="px-3 py-6 text-center text-sm text-ui-text-muted">Không có dòng</p>;
+    return (
+      <p className="px-4 py-10 text-center text-sm text-ui-text-muted">Không có dòng</p>
+    );
   }
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full border-collapse text-left text-sm">
         <thead>
-          <tr className="ops-table-head border-b border-ui-border text-[11px] uppercase tracking-wider text-ui-text-muted">
-            <th className="px-3 py-2.5 font-bold">{keyLabel}</th>
-            <th className="px-3 py-2.5 text-right font-bold">Lô</th>
-            <th className="px-3 py-2.5 text-right font-bold">Kiện</th>
-            <th className="px-3 py-2.5 text-right font-bold">Kg thực</th>
-            <th className="px-3 py-2.5 text-right font-bold">DIM</th>
-            <th className="px-3 py-2.5 text-right font-bold">CW</th>
-            <th className="px-3 py-2.5 text-right font-bold">Δ</th>
-            <th className="px-3 py-2.5 text-right font-bold">Chưa DIM</th>
+          <tr className="border-b border-ui-border/80 bg-slate-50/80 text-[10px] uppercase tracking-wider text-ui-text-muted">
+            <th className="px-3.5 py-2.5 font-bold">{keyLabel}</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">Lô</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">Kiện</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">Kg thực</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">DIM</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">CW</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">Δ</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">Chưa DIM</th>
           </tr>
         </thead>
         <tbody>
@@ -158,29 +164,29 @@ function AggTable({
             return (
               <tr
                 key={key}
-                className="border-b border-ui-border/70 last:border-0 hover:bg-teal-50/40"
+                className="border-b border-ui-border/50 transition last:border-0 hover:bg-teal-500/[0.04]"
               >
-                <td className="px-3 py-2 font-medium tabular-nums">{r._key}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{r.lots}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{r.pcs}</td>
-                <td className="px-3 py-2 text-right font-mono tabular-nums">
+                <td className="px-3.5 py-2 font-medium tabular-nums text-ui-navy">{r._key}</td>
+                <td className="px-3.5 py-2 text-right tabular-nums">{r.lots}</td>
+                <td className="px-3.5 py-2 text-right tabular-nums">{r.pcs}</td>
+                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
                   {formatKgTotal(r.actualKg)}
                 </td>
-                <td className="px-3 py-2 text-right font-mono tabular-nums">
+                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
                   {formatKgTotal(r.dimKg)}
                 </td>
-                <td className="px-3 py-2 text-right font-mono tabular-nums">
+                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
                   {formatKgTotal(r.chargeableKg)}
                 </td>
                 <td
-                  className={`px-3 py-2 text-right font-mono tabular-nums ${
+                  className={`px-3.5 py-2 text-right font-mono tabular-nums ${
                     r.deltaKg > 0 ? "font-semibold text-amber-800" : ""
                   }`}
                 >
                   {r.deltaKg > 0 ? "+" : ""}
                   {formatKgTotal(r.deltaKg)}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums">
+                <td className="px-3.5 py-2 text-right tabular-nums text-ui-text-muted">
                   {r.missingDimLots > 0 ? r.missingDimLots : "—"}
                 </td>
               </tr>
@@ -194,25 +200,29 @@ function AggTable({
 
 function LotsDetailTable({ lots }: { lots: readonly OpsStatsLotRow[] }) {
   if (lots.length === 0) {
-    return <p className="px-3 py-6 text-center text-sm text-ui-text-muted">Không có lô</p>;
+    return (
+      <p className="px-4 py-10 text-center text-sm text-ui-text-muted">Không có lô</p>
+    );
   }
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full border-collapse text-left text-[13px]">
         <thead>
-          <tr className="ops-table-head border-b border-ui-border text-[10px] uppercase tracking-wider text-ui-text-muted">
-            <th className="sticky left-0 z-[1] ops-table-head px-3 py-2.5 font-bold">Ngày</th>
-            <th className="px-3 py-2.5 font-bold">Kho</th>
-            <th className="px-3 py-2.5 font-bold">MAWB</th>
-            <th className="px-3 py-2.5 font-bold">Dest</th>
-            <th className="px-3 py-2.5 font-bold">Chuyến</th>
-            <th className="px-3 py-2.5 font-bold">Khách</th>
-            <th className="px-3 py-2.5 text-right font-bold">Kiện</th>
-            <th className="px-3 py-2.5 text-right font-bold">Kg</th>
-            <th className="px-3 py-2.5 text-right font-bold">DIM</th>
-            <th className="px-3 py-2.5 text-right font-bold">CW</th>
-            <th className="px-3 py-2.5 text-right font-bold">Δ</th>
-            <th className="px-3 py-2.5 font-bold">TT</th>
+          <tr className="border-b border-ui-border/80 bg-slate-50/80 text-[10px] uppercase tracking-wider text-ui-text-muted">
+            <th className="sticky left-0 z-[1] bg-slate-50/95 px-3.5 py-2.5 font-bold backdrop-blur-sm">
+              Ngày
+            </th>
+            <th className="px-3.5 py-2.5 font-bold">Kho</th>
+            <th className="px-3.5 py-2.5 font-bold">MAWB</th>
+            <th className="px-3.5 py-2.5 font-bold">Dest</th>
+            <th className="px-3.5 py-2.5 font-bold">Chuyến</th>
+            <th className="px-3.5 py-2.5 font-bold">Khách</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">Kiện</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">Kg</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">DIM</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">CW</th>
+            <th className="px-3.5 py-2.5 text-right font-bold">Δ</th>
+            <th className="px-3.5 py-2.5 font-bold">TT</th>
           </tr>
         </thead>
         <tbody>
@@ -221,18 +231,20 @@ function LotsDetailTable({ lots }: { lots: readonly OpsStatsLotRow[] }) {
             return (
               <tr
                 key={s.id}
-                className="border-b border-ui-border/60 hover:bg-teal-50/35"
+                className="border-b border-ui-border/45 transition hover:bg-teal-500/[0.04]"
               >
-                <td className="sticky left-0 z-[1] bg-ui-surface px-3 py-1.5 font-medium tabular-nums">
+                <td className="sticky left-0 z-[1] bg-ui-surface/95 px-3.5 py-2 font-medium tabular-nums backdrop-blur-sm">
                   {(s.sessionDate || "").trim()}
                 </td>
-                <td className="px-3 py-1.5 text-[12px] text-ui-text-muted">
+                <td className="px-3.5 py-2 text-[12px] text-ui-text-muted">
                   {s.warehouse.replace("TECS-", "")}
                 </td>
-                <td className="px-3 py-1.5 font-shipment-data text-[12px] font-bold text-ui-awb">{s.awb || "—"}</td>
-                <td className="px-3 py-1.5 font-semibold">{s.dest || "—"}</td>
-                <td className="px-3 py-1.5 text-ui-text-muted">{s.flight || "—"}</td>
-                <td className="max-w-[10rem] truncate px-3 py-1.5" title={s.customer}>
+                <td className="px-3.5 py-2 font-shipment-data text-[12px] font-bold text-ui-awb">
+                  {s.awb || "—"}
+                </td>
+                <td className="px-3.5 py-2 font-semibold text-ui-navy">{s.dest || "—"}</td>
+                <td className="px-3.5 py-2 text-ui-text-muted">{s.flight || "—"}</td>
+                <td className="max-w-[10rem] truncate px-3.5 py-2" title={s.customer}>
                   {s.customerCode ? (
                     <span className="mr-1 rounded bg-slate-100 px-1 text-[10px] font-bold text-slate-700">
                       {s.customerCode}
@@ -240,18 +252,18 @@ function LotsDetailTable({ lots }: { lots: readonly OpsStatsLotRow[] }) {
                   ) : null}
                   {s.customer || "—"}
                 </td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{lot.pcs || "—"}</td>
-                <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                <td className="px-3.5 py-2 text-right tabular-nums">{lot.pcs || "—"}</td>
+                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
                   {formatKgTotal(lot.actualKg)}
                 </td>
-                <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
                   {lot.hasDim ? formatKgTotal(lot.dimKg) : "—"}
                 </td>
-                <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
                   {formatKgTotal(lot.chargeableKg)}
                 </td>
                 <td
-                  className={`px-3 py-1.5 text-right font-mono tabular-nums ${
+                  className={`px-3.5 py-2 text-right font-mono tabular-nums ${
                     lot.deltaKg > 0 ? "font-semibold text-amber-800" : ""
                   }`}
                 >
@@ -264,7 +276,7 @@ function LotsDetailTable({ lots }: { lots: readonly OpsStatsLotRow[] }) {
                     <span className="text-[10px] text-slate-500">chưa DIM</span>
                   )}
                 </td>
-                <td className="px-3 py-1.5 text-[11px] text-ui-text-muted">
+                <td className="px-3.5 py-2 text-[11px] text-ui-text-muted">
                   {statusLabel[s.status] ?? s.status}
                 </td>
               </tr>
@@ -313,7 +325,7 @@ export function OpsStatsPage({
         rangeToYmd: rangeTo,
         todayYmd: mode === "week" ? todaySaigon : today,
       }),
-    [mode, dayYmd, weekYmd, monthYm, year, rangeFrom, rangeTo, today, todaySaigon]
+    [mode, dayYmd, weekYmd, monthYm, year, rangeFrom, rangeTo, today, todaySaigon],
   );
 
   const destOptions = useMemo(
@@ -323,7 +335,7 @@ export function OpsStatsPage({
         toYmd: range.toYmd,
         warehouse,
       }),
-    [rows, range.fromYmd, range.toYmd, warehouse]
+    [rows, range.fromYmd, range.toYmd, warehouse],
   );
 
   const stats = useMemo(
@@ -334,7 +346,7 @@ export function OpsStatsPage({
         warehouse,
         dest,
       }),
-    [rows, range.fromYmd, range.toYmd, warehouse, dest]
+    [rows, range.fromYmd, range.toYmd, warehouse, dest],
   );
 
   const periodLabel = formatStatsPeriodLabel(range, mode);
@@ -365,18 +377,18 @@ export function OpsStatsPage({
 
   const dayAggRows = useMemo(
     () => stats.byDay.map((r: OpsStatsDayRow) => ({ ...r, _key: r.sessionDate })),
-    [stats.byDay]
+    [stats.byDay],
   );
   const whAggRows = useMemo(
     () =>
       stats.byWarehouse
         .filter((r) => r.lots > 0)
         .map((r: OpsStatsWarehouseRow) => ({ ...r, _key: r.label })),
-    [stats.byWarehouse]
+    [stats.byWarehouse],
   );
   const destAggRows = useMemo(
     () => stats.byDest.map((r: OpsStatsDestRow) => ({ ...r, _key: r.dest })),
-    [stats.byDest]
+    [stats.byDest],
   );
 
   const onExport = useCallback(async () => {
@@ -406,25 +418,36 @@ export function OpsStatsPage({
   const deltaPositive = t.deltaKg > 0;
 
   return (
-    <div className="min-h-screen bg-ui-background">
+    <div className="min-h-screen bg-ui-background" data-testid="ops-stats-page">
       <AppShell
         chrome={
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <h1 className="m-0 leading-none">
                   <Wordmark size="md" />
                 </h1>
-                <span className="rounded-full bg-ui-navy px-2.5 py-0.5 text-[11px] font-bold text-white shadow-ui-sm">
+                <span className="text-ui-text-muted">·</span>
+                <span className="text-[13px] font-extrabold tracking-tight text-ui-navy">
                   Thống kê
                 </span>
                 <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
-                <Button variant="secondary" size="sm" className="md:hidden" onClick={onNavigateOps}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="md:hidden"
+                  onClick={onNavigateOps}
+                >
                   ← Ops
                 </Button>
-                <Button variant="ghost" size="sm" className="md:hidden" onClick={onNavigateCustomers}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="md:hidden"
+                  onClick={onNavigateCustomers}
+                >
                   Khách
                 </Button>
                 <Button
@@ -438,10 +461,10 @@ export function OpsStatsPage({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-ui-border/90 bg-ui-surface p-3 shadow-ui-md">
+            <div className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
               <div
-                aria-label="Bộ lọc thống kê"
-                className="mb-2.5 flex flex-wrap items-center gap-1.5"
+                aria-label="Bộ lọc kỳ"
+                className="flex gap-0.5 overflow-x-auto border-b border-ui-border/70 bg-slate-50/70 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 role="tablist"
               >
                 {PERIOD_MODES.map((p) => {
@@ -453,10 +476,10 @@ export function OpsStatsPage({
                       role="tab"
                       aria-selected={active}
                       onClick={() => setMode(p.id)}
-                      className={`min-h-9 rounded-full px-3.5 text-[12px] font-bold transition ${
+                      className={`min-h-9 shrink-0 rounded-xl px-3 text-[12px] font-bold transition ${
                         active
                           ? "bg-ui-navy text-white shadow-ui-sm"
-                          : "bg-slate-100 text-slate-700 ring-1 ring-ui-border/70 hover:bg-slate-200"
+                          : "text-ui-text-muted hover:bg-white hover:text-ui-text"
                       }`}
                     >
                       {p.label}
@@ -465,30 +488,31 @@ export function OpsStatsPage({
                 })}
               </div>
 
-              <div className="flex flex-wrap items-end gap-2">
+              <div className="flex flex-wrap items-end gap-x-3 gap-y-2.5 px-3 py-3 sm:px-3.5">
                 {mode === "day" ? (
-                  <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
-                    Ngày
+                  <FilterField label="Ngày">
                     <input
                       type="date"
                       className={FIELD}
                       value={dayYmd}
                       onChange={(e) => setDayYmd(e.target.value || today)}
                     />
-                  </label>
+                  </FilterField>
                 ) : null}
                 {mode === "week" ? (
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
                       Tuần T2–CN
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <div className="inline-flex items-center rounded-xl border border-ui-border bg-ui-surface p-0.5 shadow-ui-sm">
+                      <div className="inline-flex items-center rounded-lg border border-ui-border/80 bg-ui-surface p-0.5">
                         <IconButton
                           label="Tuần trước"
                           size="sm"
                           variant="ghost"
-                          onClick={() => setWeekYmd((w) => shiftStatsPeriodAnchor("week", w, -1))}
+                          onClick={() =>
+                            setWeekYmd((w) => shiftStatsPeriodAnchor("week", w, -1))
+                          }
                         >
                           ‹
                         </IconButton>
@@ -514,7 +538,9 @@ export function OpsStatsPage({
                           label="Tuần sau"
                           size="sm"
                           variant="ghost"
-                          onClick={() => setWeekYmd((w) => shiftStatsPeriodAnchor("week", w, 1))}
+                          onClick={() =>
+                            setWeekYmd((w) => shiftStatsPeriodAnchor("week", w, 1))
+                          }
                         >
                           ›
                         </IconButton>
@@ -533,19 +559,17 @@ export function OpsStatsPage({
                   </div>
                 ) : null}
                 {mode === "month" ? (
-                  <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
-                    Tháng
+                  <FilterField label="Tháng">
                     <input
                       type="month"
                       className={FIELD}
                       value={monthYm}
                       onChange={(e) => setMonthYm(e.target.value || currentMonthYm())}
                     />
-                  </label>
+                  </FilterField>
                 ) : null}
                 {mode === "year" ? (
-                  <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
-                    Năm
+                  <FilterField label="Năm">
                     <input
                       type="number"
                       className={`${FIELD} w-24`}
@@ -557,33 +581,30 @@ export function OpsStatsPage({
                         if (Number.isFinite(n)) setYear(n);
                       }}
                     />
-                  </label>
+                  </FilterField>
                 ) : null}
                 {mode === "range" ? (
                   <>
-                    <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
-                      Từ ngày
+                    <FilterField label="Từ ngày">
                       <input
                         type="date"
                         className={FIELD}
                         value={rangeFrom}
                         onChange={(e) => setRangeFrom(e.target.value || today)}
                       />
-                    </label>
-                    <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
-                      Đến ngày
+                    </FilterField>
+                    <FilterField label="Đến ngày">
                       <input
                         type="date"
                         className={FIELD}
                         value={rangeTo}
                         onChange={(e) => setRangeTo(e.target.value || today)}
                       />
-                    </label>
+                    </FilterField>
                   </>
                 ) : null}
 
-                <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
-                  Kho
+                <FilterField label="Kho">
                   <select
                     className={FIELD}
                     value={warehouse}
@@ -599,14 +620,15 @@ export function OpsStatsPage({
                       </option>
                     ))}
                   </select>
-                </label>
+                </FilterField>
 
-                <label className="flex flex-col gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ui-text-muted">
-                  Dest
+                <FilterField label="Dest">
                   <select
                     className={`${FIELD} min-w-[7rem]`}
                     value={dest}
-                    onChange={(e) => setDest(e.target.value === "ALL" ? "ALL" : e.target.value)}
+                    onChange={(e) =>
+                      setDest(e.target.value === "ALL" ? "ALL" : e.target.value)
+                    }
                   >
                     <option value="ALL">Tất cả</option>
                     {destOptions.map((d) => (
@@ -615,14 +637,13 @@ export function OpsStatsPage({
                       </option>
                     ))}
                   </select>
-                </label>
+                </FilterField>
 
-                <p className="pb-1.5 text-[12px] text-ui-text-muted">
+                <p className="ml-auto pb-1.5 text-[12px] text-ui-text-muted">
                   Kỳ{" "}
-                  <span className="font-bold text-ui-navy">{periodLabel}</span>
+                  <span className="font-bold tabular-nums text-ui-navy">{periodLabel}</span>
                   <span className="mx-1.5 text-slate-300">·</span>
                   <span className="font-semibold text-teal-800">{t.lots} lô</span>
-                  {" trong bộ lọc"}
                 </p>
               </div>
             </div>
@@ -632,28 +653,30 @@ export function OpsStatsPage({
         {!ready ? (
           <p className="text-sm text-ui-text-muted">Đang tải dữ liệu…</p>
         ) : (
-          <div className="space-y-4 pb-8">
-            <div className="flex flex-wrap gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] md:overflow-visible [&::-webkit-scrollbar]:hidden">
-              <KpiCard label="Lô" value={t.lots} tone="teal" delta={{ text: periodLabel, neutral: true }} />
-              <KpiCard label="Kiện" value={t.pcs} />
-              <KpiCard label="Kg thực" value={formatKgTotal(t.actualKg)} tone="sky" />
-              <KpiCard label="DIM" value={formatKgTotal(t.dimKg)} tone="sky" />
-              <KpiCard label="Chargeable" value={formatKgTotal(t.chargeableKg)} tone="teal" />
-              <KpiCard
-                label="Δ (CW−Kg)"
-                value={`${deltaPositive ? "+" : ""}${formatKgTotal(t.deltaKg)}`}
-                hint="Chênh lệch dùng ước tính phí kho bãi"
-                tone="amber"
-              />
-            </div>
+          <div className="space-y-3.5 pb-8">
+            <KpiStrip
+              items={[
+                { label: "Lô", value: t.lots, hint: periodLabel },
+                { label: "Kiện", value: t.pcs },
+                { label: "Kg thực", value: formatKgTotal(t.actualKg) },
+                { label: "DIM", value: formatKgTotal(t.dimKg) },
+                { label: "Chargeable", value: formatKgTotal(t.chargeableKg) },
+                {
+                  label: "Δ (CW−Kg)",
+                  value: `${deltaPositive ? "+" : ""}${formatKgTotal(t.deltaKg)}`,
+                  hint: "Chênh lệch dùng ước tính phí kho bãi",
+                  accent: deltaPositive,
+                },
+              ]}
+            />
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 px-0.5">
               {t.missingDimLots > 0 ? (
-                <span className="inline-flex items-center rounded-full bg-slate-800 px-3 py-1 text-[11px] font-semibold text-white">
+                <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-950 ring-1 ring-amber-200/80">
                   {t.missingDimLots} lô chưa đo DIM
                 </span>
               ) : (
-                <span className="inline-flex items-center rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white">
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-200/80">
                   Đủ DIM
                 </span>
               )}
@@ -668,14 +691,15 @@ export function OpsStatsPage({
                   ? formatWeekEmptyCopy(weekLabel)
                   : {
                       title: "Không có lô trong kỳ",
-                      description: "Đổi kỳ / kho / dest, hoặc nhập liệu trên Ops rồi quay lại.",
+                      description:
+                        "Đổi kỳ / kho / dest, hoặc nhập liệu trên Ops rồi quay lại.",
                     })}
                 actionLabel="Về Ops"
                 onAction={onNavigateOps}
               />
             ) : (
               <>
-                <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-3 lg:grid-cols-3">
                   <OpsStatsDayTrendChart rows={stats.byDay} />
                   <OpsStatsWarehouseChart
                     rows={stats.byWarehouse}
@@ -695,9 +719,13 @@ export function OpsStatsPage({
                   <OpsStatsWarehouseKgChart rows={stats.byWarehouse} />
                 </div>
 
-                <section className="overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ui-border/80 bg-gradient-to-r from-slate-50 to-white px-3 py-2.5">
-                    <div className="flex flex-wrap gap-1" role="tablist" aria-label="Bảng chi tiết">
+                <section className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
+                  <div className="flex flex-wrap items-end justify-between gap-2 border-b border-ui-border/70 px-3 pt-2 sm:px-4">
+                    <div
+                      className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      role="tablist"
+                      aria-label="Bảng chi tiết"
+                    >
                       {DETAIL_TABS.map((tab) => {
                         const active = detailTab === tab.id;
                         const count =
@@ -715,20 +743,23 @@ export function OpsStatsPage({
                             role="tab"
                             aria-selected={active}
                             onClick={() => setDetailTab(tab.id)}
-                            className={`min-h-9 rounded-full px-3 text-[12px] font-bold transition ${
+                            className={`relative min-h-10 shrink-0 px-3 text-[12px] font-bold transition ${
                               active
-                                ? "bg-ui-primary text-white shadow-ui-sm"
-                                : "bg-white text-ui-text ring-1 ring-ui-border/80 hover:bg-slate-100"
+                                ? "text-ui-navy"
+                                : "text-ui-text-muted hover:text-ui-text"
                             }`}
                           >
                             {tab.label}
                             <span
                               className={`ml-1.5 tabular-nums ${
-                                active ? "text-white/80" : "text-ui-text-muted"
+                                active ? "text-teal-700" : "text-ui-text-muted/80"
                               }`}
                             >
                               {count}
                             </span>
+                            {active ? (
+                              <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-ui-primary" />
+                            ) : null}
                           </button>
                         );
                       })}
@@ -736,17 +767,17 @@ export function OpsStatsPage({
                     {detailTab === "lots" ? (
                       <input
                         type="search"
-                        className={`${FIELD} w-full max-w-xs`}
+                        className={`${FIELD} mb-2 w-full max-w-xs`}
                         placeholder="Tìm AWB / dest / khách…"
                         value={lotSearch}
                         onChange={(e) => setLotSearch(e.target.value)}
                       />
-                    ) : null}
+                    ) : (
+                      <div className="mb-2 hidden sm:block sm:h-9" />
+                    )}
                   </div>
 
-                  {detailTab === "lots" ? (
-                    <LotsDetailTable lots={filteredLots} />
-                  ) : null}
+                  {detailTab === "lots" ? <LotsDetailTable lots={filteredLots} /> : null}
                   {detailTab === "day" ? (
                     <AggTable rows={dayAggRows} keyLabel="Ngày phiên" />
                   ) : null}

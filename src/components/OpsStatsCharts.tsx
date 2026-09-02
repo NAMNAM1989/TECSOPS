@@ -44,13 +44,17 @@ function ChartCard({
 }) {
   return (
     <section
-      className={`flex min-h-[280px] flex-col rounded-2xl border border-ui-border/90 bg-ui-surface p-3 shadow-ui-md sm:p-4 ${className}`}
+      className={`flex min-h-[260px] flex-col overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm ${className}`}
     >
-      <header className="mb-2 shrink-0">
-        <h3 className="m-0 text-sm font-extrabold tracking-tight text-ui-navy">{title}</h3>
-        {subtitle ? <p className="m-0 mt-0.5 text-[11px] text-ui-text-muted">{subtitle}</p> : null}
+      <header className="shrink-0 border-b border-ui-border/60 bg-gradient-to-b from-slate-50/80 to-transparent px-3.5 py-2.5 sm:px-4">
+        <h3 className="m-0 text-[13px] font-extrabold tracking-tight text-ui-navy">
+          {title}
+        </h3>
+        {subtitle ? (
+          <p className="m-0 mt-0.5 text-[11px] text-ui-text-muted">{subtitle}</p>
+        ) : null}
       </header>
-      <div className="min-h-0 flex-1">{children}</div>
+      <div className="min-h-0 flex-1 p-2.5 sm:p-3">{children}</div>
     </section>
   );
 }
@@ -77,8 +81,12 @@ export function OpsStatsDayTrendChart({ rows }: { rows: readonly OpsStatsDayRow[
 
   if (data.length === 0) {
     return (
-      <ChartCard title="Xu hướng theo ngày" subtitle="Kg thực · DIM · Chargeable">
-        <p className="flex h-full items-center justify-center text-sm text-ui-text-muted">
+      <ChartCard
+        title="Xu hướng theo ngày"
+        subtitle="Kg thực · DIM · Chargeable"
+        className="lg:col-span-2"
+      >
+        <p className="flex h-full min-h-[200px] items-center justify-center text-sm text-ui-text-muted">
           Chưa có dữ liệu
         </p>
       </ChartCard>
@@ -89,14 +97,20 @@ export function OpsStatsDayTrendChart({ rows }: { rows: readonly OpsStatsDayRow[
     <ChartCard
       title="Xu hướng theo ngày"
       subtitle="Kg thực · DIM · Chargeable"
-      className="sm:col-span-2"
+      className="lg:col-span-2"
     >
-      <ResponsiveContainer width="100%" height={240}>
+      <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} width={48} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+          <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: "#64748b" }} width={44} axisLine={false} tickLine={false} />
           <Tooltip
+            contentStyle={{
+              borderRadius: 12,
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
+              fontSize: 12,
+            }}
             formatter={(value: number, name: string) => {
               if (name === "lots") return [value, "Lô"];
               const labels: Record<string, string> = {
@@ -124,16 +138,16 @@ export function OpsStatsDayTrendChart({ rows }: { rows: readonly OpsStatsDayRow[
             type="monotone"
             dataKey="actualKg"
             stroke={COLORS.actual}
-            strokeWidth={2}
-            dot={{ r: 3 }}
-            activeDot={{ r: 5 }}
+            strokeWidth={2.25}
+            dot={false}
+            activeDot={{ r: 4 }}
           />
           <Line
             type="monotone"
             dataKey="dimKg"
             stroke={COLORS.dim}
             strokeWidth={2}
-            dot={{ r: 3 }}
+            dot={false}
           />
           <Line
             type="monotone"
@@ -141,7 +155,7 @@ export function OpsStatsDayTrendChart({ rows }: { rows: readonly OpsStatsDayRow[
             stroke={COLORS.chargeable}
             strokeWidth={2}
             strokeDasharray="4 3"
-            dot={{ r: 3 }}
+            dot={false}
           />
         </LineChart>
       </ResponsiveContainer>
@@ -179,7 +193,7 @@ export function OpsStatsWarehouseChart({
           Chưa có dữ liệu
         </p>
       ) : (
-        <ResponsiveContainer width="100%" height={240}>
+        <ResponsiveContainer width="100%" height={220}>
           <PieChart>
             <Pie
               data={data}
@@ -187,9 +201,10 @@ export function OpsStatsWarehouseChart({
               nameKey="name"
               cx="50%"
               cy="50%"
-              innerRadius={48}
-              outerRadius={78}
-              paddingAngle={2}
+              innerRadius={52}
+              outerRadius={76}
+              paddingAngle={3}
+              stroke="none"
               onClick={(entry) => {
                 const wh = (entry as { warehouse?: string })?.warehouse;
                 if (wh && onSelect) onSelect(wh);
@@ -201,6 +216,12 @@ export function OpsStatsWarehouseChart({
               ))}
             </Pie>
             <Tooltip
+              contentStyle={{
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
+                fontSize: 12,
+              }}
               formatter={(value: number, name: string, item) => {
                 if (name === "lots") {
                   const p = item?.payload as {
@@ -253,16 +274,22 @@ export function OpsStatsDestChart({
           Chưa có dữ liệu
         </p>
       ) : (
-        <ResponsiveContainer width="100%" height={240}>
+        <ResponsiveContainer width="100%" height={220}>
           <BarChart
             layout="vertical"
             data={data}
             margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
-            <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-            <YAxis type="category" dataKey="dest" width={56} tick={{ fontSize: 11 }} />
+            <XAxis type="number" tick={{ fontSize: 11, fill: "#64748b" }} allowDecimals={false} axisLine={false} tickLine={false} />
+            <YAxis type="category" dataKey="dest" width={52} tick={{ fontSize: 11, fill: "#334155" }} axisLine={false} tickLine={false} />
             <Tooltip
+              contentStyle={{
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
+                fontSize: 12,
+              }}
               formatter={(value: number, name: string, item) => {
                 if (name === "lots") {
                   const p = item?.payload as {
@@ -312,18 +339,33 @@ export function OpsStatsWarehouseKgChart({ rows }: { rows: readonly OpsStatsWare
   );
 
   return (
-    <ChartCard title="Kg theo kho" subtitle="Kg thực vs Chargeable · Δ phí kho">
+    <ChartCard
+      title="Kg theo kho"
+      subtitle="Kg thực vs Chargeable · Δ phí kho"
+      className="lg:col-span-2"
+    >
       {data.every((d) => d.actualKg === 0 && d.chargeableKg === 0) ? (
-        <p className="flex h-full items-center justify-center text-sm text-ui-text-muted">
+        <p className="flex h-full min-h-[200px] items-center justify-center text-sm text-ui-text-muted">
           Chưa có dữ liệu
         </p>
       ) : (
-        <ResponsiveContainer width="100%" height={240}>
+        <ResponsiveContainer width="100%" height={220}>
           <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} width={48} />
-            <Tooltip formatter={(v: number, name: string) => [kgTip(v), name === "actualKg" ? "Kg thực" : name === "chargeableKg" ? "Chargeable" : "Δ"]} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: "#64748b" }} width={44} axisLine={false} tickLine={false} />
+            <Tooltip
+              contentStyle={{
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
+                fontSize: 12,
+              }}
+              formatter={(v: number, name: string) => [
+                kgTip(v),
+                name === "actualKg" ? "Kg thực" : name === "chargeableKg" ? "Chargeable" : "Δ",
+              ]}
+            />
             <Legend
               wrapperStyle={{ fontSize: 12 }}
               formatter={(v) =>

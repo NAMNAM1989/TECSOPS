@@ -52,7 +52,7 @@ type Props = {
   onAddVehicle: () => void;
 };
 
-/** Nhãn tab khớp mẫu Excel Hồ sơ KH / điền OPS. */
+/** Nhãn section khớp mẫu Excel Hồ sơ KH / điền OPS. */
 const TAB_LABELS: { id: ProfileTab; label: string }[] = [
   { id: "shipper", label: "Người gửi" },
   { id: "consignee", label: "CNEE" },
@@ -143,6 +143,77 @@ function resolveDefaultConsigneeIndex(
  * Tab « Dữ liệu mặc định » — field theo mẫu Excel Hồ sơ KH
  * (Người gửi / CNEE+Notify / Loại hàng / Xe·TX) để đồng bộ điền OPS.
  */
+function AccordionSection({
+  id,
+  label,
+  count,
+  open,
+  onToggle,
+  onAdd,
+  errors,
+  children,
+}: {
+  id: ProfileTab;
+  label: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  onAdd: () => void;
+  errors: CustomerFieldError[];
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="overflow-hidden rounded-xl border border-ui-border/90 bg-ui-surface shadow-ui-sm"
+      data-profile-section={id}
+    >
+      <div className="flex items-center gap-1 border-b border-ui-border/80 bg-ui-surface-muted/40 px-1.5 py-1">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex min-h-10 min-w-0 flex-1 touch-manipulation items-center gap-2 rounded-lg px-2 text-left transition hover:bg-ui-surface sm:min-h-9"
+        >
+          <span
+            className={`text-[11px] font-bold text-ui-text-muted transition ${open ? "rotate-90" : ""}`}
+            aria-hidden
+          >
+            ›
+          </span>
+          <span className="truncate text-[12px] font-bold text-ui-navy sm:text-[11px]">
+            {label}
+            {count > 0 ? (
+              <span className="ml-1 font-semibold text-ui-text-muted">
+                ({count})
+              </span>
+            ) : null}
+          </span>
+          <SectionErrorHint errors={errors} section={id} />
+        </button>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="shrink-0 touch-manipulation rounded-full border border-ui-border px-2.5 py-1.5 text-[11px] font-semibold text-ui-primary hover:bg-ui-primary/10 sm:py-1 sm:text-[10px]"
+        >
+          + Thêm
+        </button>
+      </div>
+      {open ? (
+        <div className="p-2">
+          <CustomerValidationBanner
+            errors={errors.filter((e) => e.section === id)}
+          />
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Tab « Hồ sơ mặc định » — section xếp chồng (không nested tab),
+ * field theo mẫu Excel Hồ sơ KH để đồng bộ điền OPS.
+ */
 export function CustomerDefaultDataEditor({
   entry,
   errors,
@@ -160,13 +231,35 @@ export function CustomerDefaultDataEditor({
   onRemoveVehicle,
   onAddVehicle,
 }: Props) {
-  const [tab, setTab] = useState<ProfileTab>("shipper");
+  const [openSections, setOpenSections] = useState<ReadonlySet<ProfileTab>>(
+    () => new Set<ProfileTab>(["shipper"]),
+  );
   const [ocrHint, setOcrHint] = useState<string | null>(null);
 
   useEffect(() => {
-    setTab("shipper");
+    setOpenSections(new Set<ProfileTab>(["shipper"]));
     setOcrHint(null);
   }, [entry.id]);
+
+  useEffect(() => {
+    const hit = new Set<ProfileTab>();
+    for (const e of errors) {
+      if (
+        e.section === "shipper" ||
+        e.section === "consignee" ||
+        e.section === "goods" ||
+        e.section === "vehicle"
+      ) {
+        hit.add(e.section);
+      }
+    }
+    if (hit.size === 0) return;
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      for (const id of hit) next.add(id);
+      return next;
+    });
+  }, [errors]);
 
   const shippers = entry.savedShippers ?? [];
   const consignees = entry.savedConsignees ?? [];
@@ -182,6 +275,15 @@ export function CustomerDefaultDataEditor({
     consignee: consignees.length,
     goods: goods.length,
     vehicle: vehicles.length,
+  };
+
+  const toggleSection = (id: ProfileTab) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const applyOcrPaste = async (idx: number) => {
@@ -227,7 +329,7 @@ export function CustomerDefaultDataEditor({
     });
   };
 
-  const tabAdd: Record<ProfileTab, () => void> = {
+  const sectionAdd: Record<ProfileTab, () => void> = {
     shipper: onAddShipper,
     consignee: onAddConsignee,
     goods: onAddGoods,
@@ -238,17 +340,10 @@ export function CustomerDefaultDataEditor({
     getFieldValidationError(errors, section, field, itemId);
 
   return (
-    <section className="space-y-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
-        <span className="sm:hidden">Hồ sơ mặc định</span>
-        <span className="hidden sm:inline">
-          Dữ liệu mặc định · mẫu Excel Hồ sơ KH
-        </span>
-      </p>
-
-      <div className="rounded-lg border border-ui-border bg-ui-surface p-2 sm:p-2.5">
-        <span className="mb-1.5 block text-[10px] font-bold uppercase text-ui-text-muted">
-          Notify party
+    <section className="space-y-2.5" data-testid="cust-defaults-editor">
+      <div className="rounded-xl border border-ui-border/90 bg-ui-surface p-2.5 shadow-ui-sm sm:p-3">
+        <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+          Notify (mặc định)
         </span>
         <textarea
           value={defaultNotify}
@@ -258,52 +353,22 @@ export function CustomerDefaultDataEditor({
           placeholder="VD: NOTIFY GLOBAL LOGISTICS…"
         />
         <p className={`mt-1 text-[10px] leading-snug ${OPS.muted}`}>
-          Đồng bộ CNEE mặc định · điền OPS / eSID
+          Gắn CNEE mặc định · điền OPS / eSID
         </p>
       </div>
 
-      <div className="rounded-lg border border-ui-border bg-ui-surface">
-        <div className="flex items-center gap-1 border-b border-ui-border px-1 py-1 sm:px-1.5">
-          <div
-            className="-mx-0.5 flex min-w-0 flex-1 gap-0.5 overflow-x-auto px-0.5 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            role="tablist"
-            aria-label="Nhóm hồ sơ mặc định"
-          >
-            {TAB_LABELS.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={tab === id}
-                onClick={() => setTab(id)}
-                className={`shrink-0 touch-manipulation rounded-md px-2.5 py-2 text-[12px] font-semibold transition sm:px-2 sm:py-1.5 sm:text-[11px] ${
-                  tab === id
-                    ? "bg-ui-surface shadow-sm ring-1 ring-ui-primary/30"
-                    : "text-ui-text-muted hover:bg-ui-surface-muted"
-                }`}
-              >
-                {label}
-                {counts[id] > 0 ? ` (${counts[id]})` : ""}
-              </button>
-            ))}
-          </div>
-          <div className="flex shrink-0 items-center gap-1 pl-0.5">
-            <SectionErrorHint errors={errors} section={tab} />
-            <button
-              type="button"
-              onClick={tabAdd[tab]}
-              className="touch-manipulation rounded-full border border-ui-border px-2.5 py-1.5 text-[11px] font-semibold text-ui-primary hover:bg-ui-primary/10 sm:py-1 sm:text-[10px]"
-            >
-              + Thêm
-            </button>
-          </div>
-        </div>
-
-        <div className="p-2">
-          <CustomerValidationBanner
-            errors={errors.filter((e) => e.section === tab)}
-          />
-          {tab === "shipper" ? (
+      {TAB_LABELS.map(({ id, label }) => (
+        <AccordionSection
+          key={id}
+          id={id}
+          label={label}
+          count={counts[id]}
+          open={openSections.has(id)}
+          onToggle={() => toggleSection(id)}
+          onAdd={sectionAdd[id]}
+          errors={errors}
+        >
+          {id === "shipper" ? (
             shippers.length === 0 ? (
               <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
                 Chưa có người gửi.
@@ -445,10 +510,10 @@ export function CustomerDefaultDataEditor({
             )
           ) : null}
 
-          {tab === "consignee" ? (
+          {id === "consignee" ? (
             consignees.length === 0 ? (
               <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
-                Chưa có CNEE — có thể bỏ qua hoặc nhập Notify party phía trên.
+                Chưa có CNEE — có thể bỏ qua hoặc nhập Notify phía trên.
               </p>
             ) : (
               consignees.map((c, idx) => (
@@ -547,7 +612,7 @@ export function CustomerDefaultDataEditor({
                       />
                     </label>
                     <label className="sm:col-span-2">
-                      <FieldLabel>Notify party</FieldLabel>
+                      <FieldLabel>Notify (CNEE này)</FieldLabel>
                       <textarea
                         className={`${inputCls} min-h-[2.25rem] resize-y`}
                         rows={2}
@@ -576,7 +641,7 @@ export function CustomerDefaultDataEditor({
             )
           ) : null}
 
-          {tab === "goods" ? (
+          {id === "goods" ? (
             goods.length === 0 ? (
               <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
                 Chưa có loại hàng (Nature of Goods).
@@ -627,7 +692,7 @@ export function CustomerDefaultDataEditor({
             )
           ) : null}
 
-          {tab === "vehicle" ? (
+          {id === "vehicle" ? (
             vehicles.length === 0 ? (
               <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
                 Chưa có xe — thêm biển số / tài xế nếu cần.
@@ -736,7 +801,10 @@ export function CustomerDefaultDataEditor({
                                 : v.driverId
                                     .replace(/[^A-Za-z0-9]/g, "")
                                     .toUpperCase();
-                            onPatchVehicle(idx, { driverIdType, driverId: nextId });
+                            onPatchVehicle(idx, {
+                              driverIdType,
+                              driverId: nextId,
+                            });
                           }}
                         >
                           <option value="CCCD">CCCD</option>
@@ -758,7 +826,9 @@ export function CustomerDefaultDataEditor({
                               driverId:
                                 idType === "CCCD"
                                   ? raw.replace(/\D/g, "")
-                                  : raw.replace(/[^A-Za-z0-9]/g, "").toUpperCase(),
+                                  : raw
+                                      .replace(/[^A-Za-z0-9]/g, "")
+                                      .toUpperCase(),
                             });
                           }}
                         />
@@ -772,8 +842,8 @@ export function CustomerDefaultDataEditor({
               ))
             )
           ) : null}
-        </div>
-      </div>
+        </AccordionSection>
+      ))}
     </section>
   );
 }

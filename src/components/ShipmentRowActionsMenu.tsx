@@ -297,7 +297,13 @@ export function ShipmentRowActionsMenu({
         {compact ? menuItem("In nhãn", () => onPrint(row)) : null}
         {showInvoice
           ? menuItem(
-              `Invoice H21${row.invoiceItems?.length ? ` (${row.invoiceItems.length})` : ""}`,
+              `Invoice H21${
+                row.invoiceDeclarations?.length
+                  ? ` (${row.invoiceDeclarations.length} tờ)`
+                  : row.invoiceItems?.length
+                    ? ` (${row.invoiceItems.length})`
+                    : ""
+              }`,
               () => onInvoice?.(row),
               undefined,
               `row-invoice-h21-${row.id}`
@@ -352,7 +358,7 @@ export function ShipmentRowActionsMenu({
             <ActionIconBtn
               label="Invoice H21 SCSC"
               shortLabel="H21"
-              active={Boolean(row.invoiceItems?.length)}
+              active={Boolean(row.invoiceDeclarations?.length || row.invoiceItems?.length)}
               onClick={() => onInvoice?.(row)}
             >
               <IconInvoice />

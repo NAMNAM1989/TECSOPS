@@ -3,7 +3,12 @@ import { io } from "socket.io-client";
 import type { Shipment } from "../types/shipment";
 import { saveRows, scheduleSaveRows, flushScheduledSaveRows, loadSessionRows } from "../utils/shipmentStorage";
 import { credFetch } from "../apiFetch";
-import { parseAppState, mergeAppStateFromWire } from "../utils/appStateParse";
+import {
+  parseAppState,
+  parseAppStateFetchResult,
+  mergeAppStateFromWire,
+  type AppStateFetchResult,
+} from "../utils/appStateParse";
 import {
   loadCustomerDirectoryFromStorage,
   saveCustomerDirectoryToStorage,
@@ -75,10 +80,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchAppState(scope: StateSyncScope = {}): Promise<AppState> {
+type FetchAppStateOpts = {
+  /** Nếu có và khớp server → `{ unchanged: true }` (không tải rows). */
+  sinceVersion?: number;
+};
+
+async function fetchAppState(
+  scope: StateSyncScope = {},
+  opts: FetchAppStateOpts = {}
+): Promise<AppStateFetchResult> {
   const q = new URLSearchParams();
   if (scope.full) q.set("full", "1");
   else if (scope.sessionDate) q.set("sessionDate", scope.sessionDate);
+  const since =
+    opts.sinceVersion != null && opts.sinceVersion > 0
+      ? Math.trunc(opts.sinceVersion)
+      : null;
+  if (since != null) q.set("sinceVersion", String(since));
   const qs = q.toString();
   const res = await fetch(`/api/state${qs ? `?${qs}` : ""}`, {
     ...credFetch,
@@ -86,28 +104,37 @@ async function fetchAppState(scope: StateSyncScope = {}): Promise<AppState> {
     headers: {
       ...(credFetch.headers || {}),
       ...scopeHeaders(scope),
+      ...(since != null ? { "X-TECSOPS-Since-Version": String(since) } : {}),
     },
   });
   if (!res.ok) throw new Error(String(res.status));
-  const parsed = parseAppState(await res.json());
+  const parsed = parseAppStateFetchResult(await res.json());
   if (!parsed) throw new Error("Invalid state");
   return parsed;
 }
 
 async function fetchAppStateWithRetry(
   scope: StateSyncScope = {},
-  attempts = STATE_FETCH_ATTEMPTS
-): Promise<AppState> {
+  attempts = STATE_FETCH_ATTEMPTS,
+  opts: FetchAppStateOpts = {}
+): Promise<AppStateFetchResult> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
-      return await fetchAppState(scope);
+      return await fetchAppState(scope, opts);
     } catch (e) {
       lastErr = e;
       if (i < attempts - 1) await sleep(STATE_FETCH_RETRY_MS * (i + 1));
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
+function requireFullState(result: AppStateFetchResult): AppState {
+  if (result.kind !== "full") {
+    throw new Error("Expected full state snapshot");
+  }
+  return result.state;
 }
 
 function scopeHeaders(scope: StateSyncScope): Record<string, string> {
@@ -333,9 +360,9 @@ export function useShipmentSync(
 
     (async () => {
       try {
-        const parsed = await fetchAppStateWithRetry(syncScopeRef.current);
+        const result = await fetchAppStateWithRetry(syncScopeRef.current);
         if (cancelledRef.current) return;
-        await goLiveFromParsed(parsed);
+        await goLiveFromParsed(requireFullState(result));
       } catch (e) {
         if (cancelledRef.current) return;
         debugWarn("sync:/api/state", e);
@@ -350,9 +377,9 @@ export function useShipmentSync(
       if (cancelledRef.current || apiOkRef.current) return;
       void (async () => {
         try {
-          const parsed = await fetchAppStateWithRetry(syncScopeRef.current);
+          const result = await fetchAppStateWithRetry(syncScopeRef.current);
           if (cancelledRef.current) return;
-          await goLiveFromParsed(parsed);
+          await goLiveFromParsed(requireFullState(result));
         } catch (e) {
           debugWarn("sync:online-retry", e);
         }
@@ -387,8 +414,9 @@ export function useShipmentSync(
       syncScopeRef.current = nextScope;
       if (same || !apiOkRef.current) return;
       try {
-        const parsed = await fetchAppState(nextScope);
+        const result = await fetchAppState(nextScope);
         if (cancelledRef.current) return;
+        const parsed = requireFullState(result);
         setState((p) => persistIfApplied(p, parsed, true));
         connectSocket(parsed.version, nextScope);
       } catch (e) {
@@ -480,9 +508,22 @@ export function useShipmentSync(
 
   const refreshState = useCallback(async (): Promise<void> => {
     try {
-      const parsed = await fetchAppStateWithRetry(syncScopeRef.current);
+      const localVersion = stateRef.current?.version;
+      const result = await fetchAppStateWithRetry(syncScopeRef.current, STATE_FETCH_ATTEMPTS, {
+        sinceVersion: localVersion && localVersion > 0 ? localVersion : undefined,
+      });
       if (cancelledRef.current) return;
-      await goLiveFromParsed(parsed);
+      if (result.kind === "unchanged") {
+        apiOkRef.current = true;
+        markSynced();
+        if (!socketRef.current?.connected) {
+          connectSocket(result.version, syncScopeRef.current);
+        } else {
+          setStatus((s) => (s === "offline" ? "degraded" : s === "loading" ? "degraded" : s));
+        }
+        return;
+      }
+      await goLiveFromParsed(result.state);
     } catch (e) {
       debugWarn("sync:refresh", e);
       if (!apiOkRef.current) {
@@ -491,7 +532,7 @@ export function useShipmentSync(
       }
       throw e;
     }
-  }, [goLiveFromParsed]);
+  }, [connectSocket, goLiveFromParsed, markSynced]);
 
   const applyRemoteState = useCallback(
     (raw: unknown, opts?: { force?: boolean }): boolean => {

@@ -1,5 +1,5 @@
+import type { ScscH21InvoiceDeclaration, ScscH21InvoiceLine } from "./scscH21Catalog";
 import type { DimDivisor, DimPieceLine } from "../utils/volumetricDim";
-import type { ScscH21InvoiceLine } from "./scscH21Catalog";
 
 /** Trạng thái nghiệp vụ — 3 bước đầu bám AWB / kiện / DIM, sau đó NV chọn thủ công. */
 export type ShipmentStatus =
@@ -80,7 +80,15 @@ export interface Shipment {
   consigneePhonePrint?: string;
   consigneeEmailPrint?: string;
   notifyNamePrint?: string;
+  /** Shipper tờ khai H21 — chỉ kho SCSC, dropdown cột 「Tờ khai」. */
+  h21DeclarationShipperId?: string;
+  /**
+   * Dòng hàng invoice H21 (compat).
+   * Khi có nhiều tờ khai, ưu tiên `invoiceDeclarations`; field này = tờ đang làm / tờ 1.
+   */
   invoiceItems?: ScscH21InvoiceLine[];
+  /** Nhiều tờ khai H21 trên cùng lô (KG + dòng hàng + nhóm). */
+  invoiceDeclarations?: ScscH21InvoiceDeclaration[];
   status: ShipmentStatus;
   /**
    * SoT DB `lots.synced_at` (timestamptz) — ISO. Null/thiếu = ẩn timestamp trên Ops strip.

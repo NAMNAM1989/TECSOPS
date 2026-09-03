@@ -13,8 +13,9 @@ import {
   ensureScscH21CatalogSchema,
   seedScscH21CatalogIfEmpty,
 } from "./scscH21Catalog.mjs";
-import { clampScscH21InvoiceLines } from "../shared/scscH21CatalogNormalize.mjs";
+import { clampScscH21InvoiceDeclarations, clampScscH21InvoiceLines } from "../shared/scscH21CatalogNormalize.mjs";
 import { parseCustomersLoose } from "./customerDirectoryValidate.mjs";
+import { planRelationalPersist } from "./postgresStateDiff.mjs";
 
 const { Pool } = pg;
 
@@ -265,6 +266,10 @@ async function ensureSchema(client) {
     ALTER TABLE ${SHIPMENTS_TABLE}
     ADD COLUMN IF NOT EXISTS invoice_declarations jsonb NULL
   `);
+  await client.query(`
+    ALTER TABLE ${SHIPMENTS_TABLE}
+    ADD COLUMN IF NOT EXISTS h21_declaration_shipper_id text NULL
+  `);
   await ensureAirlineCatalogSchema(client);
   await ensureAirportSchema(client);
   await seedAirlineCatalogIfEmpty(client);
@@ -495,6 +500,7 @@ function shipmentFromRow(row) {
     consigneePhonePrint: row.consignee_phone_print || "",
     consigneeEmailPrint: row.consignee_email_print || "",
     notifyNamePrint: row.notify_name_print || "",
+    h21DeclarationShipperId: row.h21_declaration_shipper_id || "",
     status: row.status,
     ...(timestampIsoOrNull(row.synced_at) != null
       ? { syncedAt: timestampIsoOrNull(row.synced_at) }
@@ -624,6 +630,150 @@ async function replaceRelationalSnapshot(client, key, state) {
     normalizeAirlineLabelOverridesLoose(state.airlineLabelOverrides)
   );
 
+  await insertCustomersSnapshot(client, customers);
+
+  for (const s of rows) {
+    await upsertShipmentRow(client, s);
+  }
+
+  await writeMetaAndBlob(client, key, state);
+}
+
+/** @param {object} s */
+function shipmentInsertParams(s) {
+  return [
+    str(s.id),
+    intOrNull(s.stt) ?? 0,
+    str(s.sessionDate),
+    str(s.awb),
+    str(s.hawb),
+    str(s.flight),
+    str(s.flightDate),
+    str(s.cutoff),
+    str(s.cutoffNote),
+    str(s.note),
+    str(s.dest),
+    str(s.warehouse),
+    intOrNull(s.pcs),
+    numOrNull(s.kg),
+    numOrNull(s.dimWeightKg),
+    jsonOrNull(s.dimLines),
+    intOrNull(s.dimDivisor),
+    str(s.customer),
+    str(s.customerCode),
+    str(s.customerId) || null,
+    str(s.customerShipperId) || null,
+    str(s.customerConsigneeId) || null,
+    str(s.customerAgentId) || null,
+    str(s.globalAgentId) || str(s.customerAgentId) || "",
+    str(s.customerGoodsId) || "",
+    str(s.goodsDescriptionPrint) || "",
+    str(s.otherRequirementsPrint) || "",
+    str(s.shipperNamePrint),
+    str(s.shipperAddressPrint),
+    str(s.shipperPhonePrint),
+    str(s.shipperEmailPrint),
+    str(s.taxCodePrint),
+    str(s.agentNamePrint),
+    str(s.agentAddressPrint),
+    str(s.agentPhonePrint),
+    str(s.agentEmailPrint),
+    str(s.agentTaxCodePrint),
+    str(s.consigneeNamePrint),
+    str(s.consigneeAddressPrint),
+    str(s.consigneePhonePrint),
+    str(s.consigneeEmailPrint),
+    str(s.notifyNamePrint),
+    str(s.h21DeclarationShipperId) || null,
+    str(s.status),
+    (() => {
+      const lines = clampScscH21InvoiceLines(s.invoiceItems);
+      return lines.length ? jsonOrNull(lines) : null;
+    })(),
+    (() => {
+      const decls = clampScscH21InvoiceDeclarations(s.invoiceDeclarations);
+      return decls.length ? jsonOrNull(decls) : null;
+    })(),
+  ];
+}
+
+async function upsertShipmentRow(client, s) {
+  const id = str(s.id).trim();
+  if (!id) return;
+  await client.query(
+    `
+    INSERT INTO ${SHIPMENTS_TABLE} (
+      id, stt, session_date, awb, hawb, flight, flight_date, cutoff, cutoff_note, note, dest, warehouse,
+      pcs, kg, dim_weight_kg, dim_lines, dim_divisor,
+      customer, customer_code, customer_id, customer_shipper_id, customer_consignee_id, customer_agent_id,
+      global_agent_id, customer_goods_id, goods_description_print, other_requirements_print,
+      shipper_name_print, shipper_address_print, shipper_phone_print, shipper_email_print, tax_code_print,
+      agent_name_print, agent_address_print, agent_phone_print, agent_email_print, agent_tax_code_print,
+      consignee_name_print, consignee_address_print, consignee_phone_print, consignee_email_print, notify_name_print,
+      h21_declaration_shipper_id,
+      status, invoice_items, invoice_declarations
+    ) VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
+      $13,$14,$15,$16::jsonb,$17,
+      $18,$19,$20,$21,$22,$23,
+      $24,$25,$26,$27,
+      $28,$29,$30,$31,$32,
+      $33,$34,$35,$36,$37,
+      $38,$39,$40,$41,$42,
+      $43,$44,$45::jsonb,$46::jsonb
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      stt = EXCLUDED.stt,
+      session_date = EXCLUDED.session_date,
+      awb = EXCLUDED.awb,
+      hawb = EXCLUDED.hawb,
+      flight = EXCLUDED.flight,
+      flight_date = EXCLUDED.flight_date,
+      cutoff = EXCLUDED.cutoff,
+      cutoff_note = EXCLUDED.cutoff_note,
+      note = EXCLUDED.note,
+      dest = EXCLUDED.dest,
+      warehouse = EXCLUDED.warehouse,
+      pcs = EXCLUDED.pcs,
+      kg = EXCLUDED.kg,
+      dim_weight_kg = EXCLUDED.dim_weight_kg,
+      dim_lines = EXCLUDED.dim_lines,
+      dim_divisor = EXCLUDED.dim_divisor,
+      customer = EXCLUDED.customer,
+      customer_code = EXCLUDED.customer_code,
+      customer_id = EXCLUDED.customer_id,
+      customer_shipper_id = EXCLUDED.customer_shipper_id,
+      customer_consignee_id = EXCLUDED.customer_consignee_id,
+      customer_agent_id = EXCLUDED.customer_agent_id,
+      global_agent_id = EXCLUDED.global_agent_id,
+      customer_goods_id = EXCLUDED.customer_goods_id,
+      goods_description_print = EXCLUDED.goods_description_print,
+      other_requirements_print = EXCLUDED.other_requirements_print,
+      shipper_name_print = EXCLUDED.shipper_name_print,
+      shipper_address_print = EXCLUDED.shipper_address_print,
+      shipper_phone_print = EXCLUDED.shipper_phone_print,
+      shipper_email_print = EXCLUDED.shipper_email_print,
+      tax_code_print = EXCLUDED.tax_code_print,
+      agent_name_print = EXCLUDED.agent_name_print,
+      agent_address_print = EXCLUDED.agent_address_print,
+      agent_phone_print = EXCLUDED.agent_phone_print,
+      agent_email_print = EXCLUDED.agent_email_print,
+      agent_tax_code_print = EXCLUDED.agent_tax_code_print,
+      consignee_name_print = EXCLUDED.consignee_name_print,
+      consignee_address_print = EXCLUDED.consignee_address_print,
+      consignee_phone_print = EXCLUDED.consignee_phone_print,
+      consignee_email_print = EXCLUDED.consignee_email_print,
+      notify_name_print = EXCLUDED.notify_name_print,
+      h21_declaration_shipper_id = EXCLUDED.h21_declaration_shipper_id,
+      status = EXCLUDED.status,
+      invoice_items = EXCLUDED.invoice_items,
+      invoice_declarations = EXCLUDED.invoice_declarations
+    `,
+    shipmentInsertParams(s)
+  );
+}
+
+async function insertCustomersSnapshot(client, customers) {
   for (const c of customers) {
     const customerId = str(c.id).trim();
     if (!customerId) continue;
@@ -735,82 +885,18 @@ async function replaceRelationalSnapshot(client, key, state) {
       );
     }
   }
+}
 
-  for (const s of rows) {
-    await client.query(
-      `
-      INSERT INTO ${SHIPMENTS_TABLE} (
-        id, stt, session_date, awb, hawb, flight, flight_date, cutoff, cutoff_note, note, dest, warehouse,
-        pcs, kg, dim_weight_kg, dim_lines, dim_divisor,
-        customer, customer_code, customer_id, customer_shipper_id, customer_consignee_id, customer_agent_id,
-        global_agent_id, customer_goods_id, goods_description_print, other_requirements_print,
-        shipper_name_print, shipper_address_print, shipper_phone_print, shipper_email_print, tax_code_print,
-        agent_name_print, agent_address_print, agent_phone_print, agent_email_print, agent_tax_code_print,
-        consignee_name_print, consignee_address_print, consignee_phone_print, consignee_email_print, notify_name_print,
-        status, invoice_items
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
-        $13,$14,$15,$16::jsonb,$17,
-        $18,$19,$20,$21,$22,$23,
-        $24,$25,$26,$27,
-        $28,$29,$30,$31,$32,
-        $33,$34,$35,$36,$37,
-        $38,$39,$40,$41,$42,
-        $43,$44::jsonb
-      )
-      `,
-      [
-        str(s.id),
-        intOrNull(s.stt) ?? 0,
-        str(s.sessionDate),
-        str(s.awb),
-        str(s.hawb),
-        str(s.flight),
-        str(s.flightDate),
-        str(s.cutoff),
-        str(s.cutoffNote),
-        str(s.note),
-        str(s.dest),
-        str(s.warehouse),
-        intOrNull(s.pcs),
-        numOrNull(s.kg),
-        numOrNull(s.dimWeightKg),
-        jsonOrNull(s.dimLines),
-        intOrNull(s.dimDivisor),
-        str(s.customer),
-        str(s.customerCode),
-        str(s.customerId) || null,
-        str(s.customerShipperId) || null,
-        str(s.customerConsigneeId) || null,
-        str(s.customerAgentId) || null,
-        str(s.globalAgentId) || str(s.customerAgentId) || "",
-        str(s.customerGoodsId) || "",
-        str(s.goodsDescriptionPrint) || "",
-        str(s.otherRequirementsPrint) || "",
-        str(s.shipperNamePrint),
-        str(s.shipperAddressPrint),
-        str(s.shipperPhonePrint),
-        str(s.shipperEmailPrint),
-        str(s.taxCodePrint),
-        str(s.agentNamePrint),
-        str(s.agentAddressPrint),
-        str(s.agentPhonePrint),
-        str(s.agentEmailPrint),
-        str(s.agentTaxCodePrint),
-        str(s.consigneeNamePrint),
-        str(s.consigneeAddressPrint),
-        str(s.consigneePhonePrint),
-        str(s.consigneeEmailPrint),
-        str(s.notifyNamePrint),
-        str(s.status),
-        (() => {
-          const lines = clampScscH21InvoiceLines(s.invoiceItems);
-          return lines.length ? jsonOrNull(lines) : null;
-        })(),
-      ]
-    );
-  }
+async function replaceCustomersSnapshot(client, customers) {
+  await client.query(`DELETE FROM ${CUSTOMER_CONSIGNEES_TABLE}`);
+  await client.query(`DELETE FROM ${CUSTOMER_SHIPPERS_TABLE}`);
+  await client.query(`DELETE FROM ${CUSTOMER_PARTIES_TABLE}`);
+  await client.query(`DELETE FROM ${CUSTOMER_PROFILES_TABLE}`);
+  await client.query(`DELETE FROM ${CUSTOMERS_TABLE}`);
+  await insertCustomersSnapshot(client, Array.isArray(customers) ? customers : []);
+}
 
+async function writeMetaAndBlob(client, key, state) {
   const blobState = stripLegacyStateKeys(state);
   await client.query(
     `
@@ -829,6 +915,60 @@ async function replaceRelationalSnapshot(client, key, state) {
     `,
     [key, JSON.stringify(blobState)]
   );
+}
+
+/**
+ * Ghi incremental theo diff prev→next. Fallback full replace khi chưa có prev.
+ * @param {import('pg').PoolClient} client
+ * @param {string} key
+ * @param {object | null | undefined} prev
+ * @param {object} next
+ */
+async function persistRelationalDiff(client, key, prev, next) {
+  const plan = planRelationalPersist(prev, next);
+  if (plan.mode === "skip") return { mode: "skip" };
+  if (plan.mode === "full") {
+    await replaceRelationalSnapshot(client, key, next);
+    return { mode: "full" };
+  }
+
+  if (plan.replaceAirlineOverrides) {
+    await saveAirlineDisplayOverrides(
+      client,
+      normalizeAirlineLabelOverridesLoose(next.airlineLabelOverrides)
+    );
+  }
+
+  for (const id of plan.shipments.toDelete) {
+    await client.query(`DELETE FROM ${SHIPMENTS_TABLE} WHERE id = $1`, [id]);
+  }
+
+  // Xóa/tạo lại customer children có thể SET NULL FK trên shipments → upsert lại lô sau.
+  if (plan.replaceCustomers) {
+    await replaceCustomersSnapshot(client, next.customers);
+  }
+
+  const upserts = plan.replaceCustomers
+    ? Array.isArray(next.rows)
+      ? next.rows
+      : []
+    : plan.shipments.toUpsert;
+  for (const s of upserts) {
+    await upsertShipmentRow(client, s);
+  }
+
+  await writeMetaAndBlob(client, key, next);
+
+  if (process.env.TECSOPS_DEV === "1" || process.env.NODE_ENV !== "production") {
+    console.info(
+      `[postgres] incremental upserts=${upserts.length} deletes=${plan.shipments.toDelete.length} customers=${plan.replaceCustomers ? 1 : 0} airline=${plan.replaceAirlineOverrides ? 1 : 0}`
+    );
+  }
+  return {
+    mode: "diff",
+    upserts: upserts.length,
+    deletes: plan.shipments.toDelete.length,
+  };
 }
 
 export function createPostgresStateStore(databaseUrl) {
@@ -885,8 +1025,19 @@ export function createPostgresStateStore(databaseUrl) {
           await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [key]);
           await client.query(`SELECT version FROM ${STATE_META_TABLE} WHERE id = $1 FOR UPDATE`, [key]);
           const currentRaw = await loadRelationalSnapshot(client, key);
-          const next = await fn(currentRaw);
-          await replaceRelationalSnapshot(client, key, next);
+          const outcome = await fn(currentRaw);
+          let prev = null;
+          let next = outcome;
+          if (
+            outcome &&
+            typeof outcome === "object" &&
+            outcome.__tecsopsPersistDiff === true &&
+            outcome.next
+          ) {
+            prev = outcome.prev ?? null;
+            next = outcome.next;
+          }
+          await persistRelationalDiff(client, key, prev, next);
           await client.query("COMMIT");
           return next;
         } catch (e) {

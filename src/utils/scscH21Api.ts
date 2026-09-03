@@ -17,10 +17,14 @@ async function readJson(res: Response): Promise<unknown> {
   }
 }
 
-function errMessage(body: unknown, fallback: string): string {
+function errMessage(body: unknown, fallback: string, res?: Response): string {
   if (body && typeof body === "object" && "error" in body) {
     const e = (body as { error?: unknown }).error;
     if (typeof e === "string" && e.trim()) return e;
+  }
+  if (res && !res.ok) {
+    if (res.status === 404) return "API chưa hỗ trợ thao tác này — hãy khởi động lại server (npm run dev).";
+    return `${fallback} (HTTP ${res.status})`;
   }
   return fallback;
 }
@@ -97,9 +101,47 @@ export async function importScscH21Goods(
 export async function fetchScscH21Stamps(): Promise<ScscH21StampId[]> {
   const res = await fetch("/api/scsc-h21/stamps", credFetch);
   const body = await readJson(res);
-  if (!res.ok) throw new Error(errMessage(body, "Không tải được stamp ID"));
+  if (!res.ok) throw new Error(errMessage(body, "Không tải được shipper tờ khai", res));
   const items = (body as { items?: ScscH21StampId[] })?.items;
   return Array.isArray(items) ? items : [];
+}
+
+export async function createScscH21Stamp(
+  item: Partial<ScscH21StampId>
+): Promise<ScscH21StampId> {
+  const res = await fetch("/api/scsc-h21/stamps", {
+    ...credFetch,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(item),
+  });
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(errMessage(body, "Không tạo được shipper tờ khai", res));
+  return (body as { item: ScscH21StampId }).item;
+}
+
+export async function updateScscH21Stamp(
+  id: string,
+  patch: Partial<ScscH21StampId>
+): Promise<ScscH21StampId> {
+  const res = await fetch(`/api/scsc-h21/stamps/${encodeURIComponent(id)}`, {
+    ...credFetch,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(errMessage(body, "Không cập nhật được shipper tờ khai", res));
+  return (body as { item: ScscH21StampId }).item;
+}
+
+export async function deleteScscH21Stamp(id: string): Promise<void> {
+  const res = await fetch(`/api/scsc-h21/stamps/${encodeURIComponent(id)}`, {
+    ...credFetch,
+    method: "DELETE",
+  });
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(errMessage(body, "Không xóa được shipper tờ khai", res));
 }
 
 /** Parse workbook Excel (sheet đầu) → catalog items. */

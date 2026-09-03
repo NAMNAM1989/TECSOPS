@@ -34,4 +34,13 @@ export function normalizeScscH21InvoiceLine(raw: unknown): ScscH21InvoiceLine | 
 
 export function clampScscH21InvoiceLines(list: unknown): ScscH21InvoiceLine[];
 
+export function normalizeScscH21InvoiceDeclaration(
+  raw: unknown,
+  seqFallback?: number
+): import("../src/types/scscH21Catalog").ScscH21InvoiceDeclaration | null;
+
+export function clampScscH21InvoiceDeclarations(
+  list: unknown
+): import("../src/types/scscH21Catalog").ScscH21InvoiceDeclaration[];
+
 export type { ScscH21CatalogItem, ScscH21InvoiceLine, ScscH21StampId };

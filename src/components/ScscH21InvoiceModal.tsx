@@ -1,34 +1,269 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
+import type { ScscH21CatalogItem, ScscH21InvoiceDeclaration, ScscH21InvoiceLine, ScscH21StampId } from "../types/scscH21Catalog";
 import type { Shipment } from "../types/shipment";
-import type { ScscH21CatalogItem, ScscH21InvoiceLine } from "../types/scscH21Catalog";
 import { isScscH21Warehouse } from "../types/scscH21Catalog";
 import {
-  clampInvoiceItemsForShipment,
   fetchScscH21Goods,
-  pickInvoiceLinesFromCatalog,
 } from "../utils/scscH21Api";
 import {
   clampScscH21InvoiceLines,
   invoiceLineFromCatalogItem,
 } from "../../shared/scscH21CatalogNormalize.mjs";
+import {
+  computeH21InvoiceFooter,
+  generateRandomH21InvoiceLines,
+} from "../../shared/scscH21InvoiceCore.mjs";
+import {
+  buildH21InvoiceForShipment,
+  validateH21InvoiceForShipment,
+} from "../utils/scscH21InvoiceResolve";
+import {
+  downloadScscH21InvoiceExcel,
+  printScscH21InvoicePdf,
+} from "../utils/exportScscH21Invoice";
+import { buildH21InvoiceNo } from "../../shared/scscH21InvoiceCore.mjs";
+import { findCustomerEntry } from "../utils/customerBookingResolve";
+import {
+  labelForH21CargoFamily,
+  resolveH21CargoFamilyForShipment,
+  resolveShipmentGoodsTextForH21,
+} from "../utils/scscH21InvoiceCargoFamily";
+import type { H21CargoFamilyId } from "../utils/scscH21InvoiceCargoFamily";
+import { countCatalogInH21Family, filterCatalogByH21Family } from "../../shared/scscH21InvoiceGroups.mjs";
+import {
+  createDeclSplit,
+  declarationsReadyToSave,
+  fingerprintH21Splits,
+  hydrateSplitsFromShipment,
+  normalizeLineCountDraft,
+  parseAllocateKgFromDraft,
+  parseLineCountFromDraft,
+  roundH21Kg,
+  sumAllocatedKg,
+  type H21CargoFamilyMode,
+  type H21DeclSplit,
+} from "../utils/scscH21InvoiceSplits";
+import { importH21GoodsListToInvoiceLines } from "../utils/scscH21GoodsListImport";
+import { useOpsMobileOverlayLock } from "../hooks/useOpsMobileOverlayLock";
+import { formatH21InvoiceCneeDisplay } from "../utils/h21InvoiceCneeFormat";
+import { H21CargoFamilyKanban } from "./H21CargoFamilyKanban";
+import { ScscH21InvoiceDeclTabs } from "./ScscH21InvoiceDeclTabs";
+import { ScscH21InvoiceReview } from "./ScscH21InvoiceReview";
 import { OPS } from "../styles/opsModalStyles";
-import { Button, useToast } from "../ui";
+import { Button, ConfirmDialog, useToast } from "../ui";
+
+export type ScscH21InvoiceSavePayload = {
+  invoiceItems: ScscH21InvoiceLine[];
+  invoiceDeclarations: ScscH21InvoiceDeclaration[];
+  h21DeclarationShipperId: string;
+};
 
 type Props = {
   shipment: Shipment;
-  onSave: (invoiceItems: ScscH21InvoiceLine[]) => void | Promise<void>;
+  customerDirectory: readonly CustomerDirectoryEntry[];
+  stamps: readonly ScscH21StampId[];
+  onSave: (payload: ScscH21InvoiceSavePayload) => void | Promise<void>;
   onClose: () => void;
 };
 
-/** Modal lập dòng hàng invoice từ catalog H21 — chỉ lô SCSC. */
-export function ScscH21InvoiceModal({ shipment, onSave, onClose }: Props) {
+type MobilePane = "setup" | "review";
+type CargoFamilyMode = H21CargoFamilyMode;
+
+function parseIntDraft(raw: string): number {
+  const t = raw.trim();
+  if (!t) return 0;
+  const n = parseInt(t, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseDecimalDraft(raw: string): number {
+  const t = raw.trim().replace(",", ".");
+  if (!t) return 0;
+  const n = parseFloat(t);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Ô số trong dòng invoice — draft khi focus, commit khi blur (tránh lỗi type=number). */
+function H21LineNumericInput({
+  value,
+  onCommit,
+  decimal = false,
+  title,
+  className,
+}: {
+  value: number;
+  onCommit: (n: number) => void;
+  decimal?: boolean;
+  title?: string;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState(() => String(value));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setDraft(String(value));
+  }, [value, focused]);
+
+  return (
+    <input
+      type="text"
+      inputMode={decimal ? "decimal" : "numeric"}
+      className={className}
+      title={title}
+      value={focused ? draft : String(value)}
+      onFocus={() => {
+        setFocused(true);
+        setDraft(String(value));
+      }}
+      onChange={(e) => {
+        const v = decimal
+          ? e.target.value.replace(/[^\d.,]/g, "")
+          : e.target.value.replace(/\D/g, "");
+        setDraft(v);
+      }}
+      onBlur={() => {
+        setFocused(false);
+        onCommit(decimal ? parseDecimalDraft(draft) : parseIntDraft(draft));
+      }}
+    />
+  );
+}
+
+/** Full-screen invoice H21 — chọn shipper tờ khai + review + chỉnh dòng hàng. */
+export function ScscH21InvoiceModal({
+  shipment,
+  customerDirectory,
+  stamps,
+  onSave,
+  onClose,
+}: Props) {
   const toast = useToast();
   const [catalog, setCatalog] = useState<ScscH21CatalogItem[]>([]);
-  const [lines, setLines] = useState<ScscH21InvoiceLine[]>([]);
+  const [shipperId, setShipperId] = useState(shipment.h21DeclarationShipperId?.trim() ?? "");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [splits, setSplits] = useState<H21DeclSplit[]>(() => hydrateSplitsFromShipment(shipment));
+  const [activeSplitId, setActiveSplitId] = useState(() => splits[0]?.id ?? "");
+  const [mobilePane, setMobilePane] = useState<MobilePane>("setup");
+  const [savedFingerprint, setSavedFingerprint] = useState(() =>
+    fingerprintH21Splits(
+      hydrateSplitsFromShipment(shipment),
+      shipment.h21DeclarationShipperId?.trim() ?? ""
+    )
+  );
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const [removeSplitId, setRemoveSplitId] = useState<string | null>(null);
+  const [importingList, setImportingList] = useState(false);
+  const [pendingGoodsListFile, setPendingGoodsListFile] = useState<File | null>(null);
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  const goodsListFileRef = useRef<HTMLInputElement>(null);
+
+  const lotKg = shipment.kg ?? 0;
+  const lotPcs = shipment.pcs ?? 0;
+
+  const activeSplit = useMemo(
+    () => splits.find((s) => s.id === activeSplitId) ?? splits[0],
+    [splits, activeSplitId]
+  );
+  const lineCountDraft = activeSplit?.lineCountDraft ?? "15";
+  const allocateKgDraft = activeSplit?.kgDraft ?? "";
+  const cargoFamilyMode = activeSplit?.cargoFamilyMode ?? "auto";
+  const lines = activeSplit?.lines ?? [];
+  const invoiceSeq = Math.max(1, splits.findIndex((s) => s.id === activeSplit?.id) + 1);
+  const invoiceSeqTotal = splits.length;
+
+  const patchActiveSplit = (patch: Partial<H21DeclSplit>) => {
+    const id = activeSplit?.id;
+    if (!id) return;
+    setSplits((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  };
+
+  const setLineCountDraft = (v: string | ((prev: string) => string)) => {
+    const next = typeof v === "function" ? v(lineCountDraft) : v;
+    patchActiveSplit({ lineCountDraft: next });
+  };
+  const setCargoFamilyMode = (v: CargoFamilyMode) => patchActiveSplit({ cargoFamilyMode: v });
+  const setLines = (
+    v: ScscH21InvoiceLine[] | ((prev: ScscH21InvoiceLine[]) => ScscH21InvoiceLine[])
+  ) => {
+    const next = typeof v === "function" ? v(lines) : v;
+    patchActiveSplit({ lines: next });
+  };
+
+  const lineCount = useMemo(
+    () => parseLineCountFromDraft(lineCountDraft),
+    [lineCountDraft]
+  );
+  const allocateKg = useMemo(
+    () => parseAllocateKgFromDraft(allocateKgDraft, lotKg),
+    [allocateKgDraft, lotKg]
+  );
+
+  const allocatedKgSum = useMemo(() => sumAllocatedKg(splits, lotKg), [splits, lotKg]);
+  const remainLotKg = lotKg > 0 ? roundH21Kg(lotKg - allocatedKgSum) : 0;
+  const filledSplitCount = useMemo(
+    () => splits.filter((s) => s.lines.length > 0).length,
+    [splits]
+  );
+  const isDirty = useMemo(
+    () => fingerprintH21Splits(splits, shipperId) !== savedFingerprint,
+    [splits, shipperId, savedFingerprint]
+  );
+
+  useOpsMobileOverlayLock(true);
+
+  useEffect(() => {
+    const next = hydrateSplitsFromShipment(shipment);
+    const sid = shipment.h21DeclarationShipperId?.trim() ?? "";
+    setSplits(next);
+    setActiveSplitId(next[0]?.id ?? "");
+    setShipperId(sid);
+    setSavedFingerprint(fingerprintH21Splits(next, sid));
+  }, [shipment.id]);
+
+  useEffect(() => {
+    setShipperId(shipment.h21DeclarationShipperId?.trim() ?? "");
+  }, [shipment.h21DeclarationShipperId]);
+
+  useEffect(() => {
+    const el = tabsScrollRef.current?.querySelector<HTMLElement>(
+      `[data-split-id="${activeSplitId}"]`
+    );
+    el?.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+  }, [activeSplitId]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (closeConfirmOpen || removeSplitId) return;
+        e.preventDefault();
+        if (isDirty) setCloseConfirmOpen(true);
+        else onClose();
+        return;
+      }
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const n = Number(e.key);
+        if (n >= 1 && n <= 9 && n <= splits.length) {
+          e.preventDefault();
+          setActiveSplitId(splits[n - 1]!.id);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [closeConfirmOpen, removeSplitId, isDirty, onClose, splits]);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isScscH21Warehouse(shipment.warehouse)) return;
@@ -39,11 +274,6 @@ export function ScscH21InvoiceModal({ shipment, onSave, onClose }: Props) {
         const items = await fetchScscH21Goods({ activeOnly: true });
         if (cancelled) return;
         setCatalog(items);
-        const existing = clampInvoiceItemsForShipment(
-          shipment.warehouse,
-          shipment.invoiceItems
-        );
-        setLines(existing ?? []);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Không tải catalog");
       } finally {
@@ -53,16 +283,104 @@ export function ScscH21InvoiceModal({ shipment, onSave, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [shipment.id, shipment.warehouse, shipment.invoiceItems, toast]);
+  }, [shipment.id, shipment.warehouse, toast]);
+
+  const activeStamps = useMemo(
+    () => stamps.filter((s) => s.active !== false),
+    [stamps]
+  );
+
+  const customerEntry = useMemo(
+    () => findCustomerEntry(shipment, customerDirectory),
+    [shipment, customerDirectory]
+  );
+
+  const invoiceNo = useMemo(
+    () =>
+      buildH21InvoiceNo(shipment, customerEntry, {
+        seq: invoiceSeq,
+        total: invoiceSeqTotal,
+      }),
+    [shipment, customerEntry, invoiceSeq, invoiceSeqTotal]
+  );
+
+  const goodsTextForFamily = useMemo(
+    () => resolveShipmentGoodsTextForH21(shipment, customerDirectory),
+    [shipment, customerDirectory]
+  );
+
+  const detectedCargoFamily = useMemo(
+    () => resolveH21CargoFamilyForShipment(shipment, customerDirectory),
+    [shipment, customerDirectory]
+  );
+
+  const effectiveCargoFamily = useMemo(
+    (): H21CargoFamilyId =>
+      cargoFamilyMode === "auto" ? detectedCargoFamily : cargoFamilyMode,
+    [cargoFamilyMode, detectedCargoFamily]
+  );
+
+  useEffect(() => {
+    setCategoryFilter("");
+  }, [effectiveCargoFamily]);
+
+  const cargoFamilyCounts = useMemo(() => {
+    const ids: H21CargoFamilyId[] = ["frozen", "fruit", "food", "garment", "general"];
+    const counts: Partial<Record<H21CargoFamilyId, number>> = {};
+    for (const id of ids) counts[id] = countCatalogInH21Family(catalog, id);
+    return counts;
+  }, [catalog]);
+
+  const footer = useMemo(
+    () => computeH21InvoiceFooter(shipment, lines, { declarationKg: allocateKg }),
+    [shipment, lines, allocateKg]
+  );
+
+  const invoiceDoc = useMemo(
+    () =>
+      buildH21InvoiceForShipment({
+        shipment,
+        directory: customerDirectory,
+        stamps,
+        lines,
+        shipperId,
+        declarationKg: allocateKg,
+        invoiceSeq,
+        invoiceSeqTotal,
+      }),
+    [shipment, customerDirectory, stamps, lines, shipperId, allocateKg, invoiceSeq, invoiceSeqTotal]
+  );
+
+  const cneeDisplay = useMemo(
+    () => formatH21InvoiceCneeDisplay(invoiceDoc.cnee),
+    [invoiceDoc.cnee]
+  );
+
+  const validationErrors = useMemo(
+    () =>
+      validateH21InvoiceForShipment({
+        shipment,
+        directory: customerDirectory,
+        stamps,
+        lines,
+        shipperId,
+      }),
+    [shipment, customerDirectory, stamps, lines, shipperId]
+  );
+
+  const familyCatalog = useMemo(() => {
+    if (effectiveCargoFamily === "general") return catalog;
+    return filterCatalogByH21Family(catalog, effectiveCargoFamily, 1) as ScscH21CatalogItem[];
+  }, [catalog, effectiveCargoFamily]);
 
   const categories = useMemo(() => {
-    const s = new Set(catalog.map((c) => c.category).filter(Boolean));
+    const s = new Set(familyCatalog.map((c) => c.category).filter(Boolean));
     return [...s].sort((a, b) => a.localeCompare(b, "vi"));
-  }, [catalog]);
+  }, [familyCatalog]);
 
   const filteredCatalog = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return catalog.filter((c) => {
+    return familyCatalog.filter((c) => {
       if (categoryFilter && c.category !== categoryFilter) return false;
       if (!needle) return true;
       return (
@@ -71,22 +389,39 @@ export function ScscH21InvoiceModal({ shipment, onSave, onClose }: Props) {
         c.hsCode.includes(needle)
       );
     });
-  }, [catalog, q, categoryFilter]);
+  }, [familyCatalog, q, categoryFilter]);
 
-  const totals = useMemo(() => {
-    let amount = 0;
-    let weight = 0;
-    for (const l of lines) {
-      amount += l.amount || 0;
-      weight += l.weightKg || 0;
-    }
-    return { amount: Math.round(amount * 100) / 100, weight: Math.round(weight * 1000) / 1000 };
-  }, [lines]);
+  const catalogById = useMemo(() => new Map(catalog.map((c) => [c.id, c])), [catalog]);
+
+  const handleExport = useCallback(
+    async (kind: "excel" | "pdf") => {
+      if (validationErrors.length) {
+        toast.error(validationErrors[0] ?? "Chưa đủ dữ liệu xuất invoice");
+        return;
+      }
+      setExporting(true);
+      try {
+        if (kind === "excel") {
+          await downloadScscH21InvoiceExcel(invoiceDoc, shipment.awb);
+          toast.success("Đã tải file Excel invoice");
+        } else {
+          const ok = printScscH21InvoicePdf(invoiceDoc);
+          if (ok) toast.success("Mở hộp thoại in — chọn Lưu PDF");
+          else toast.error("Không mở được in PDF");
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Xuất invoice thất bại");
+      } finally {
+        setExporting(false);
+      }
+    },
+    [validationErrors, invoiceDoc, shipment.awb, toast]
+  );
 
   if (!isScscH21Warehouse(shipment.warehouse)) {
     return (
-      <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/40 p-4">
-        <div className={`${OPS.modal} max-w-md rounded-2xl p-5 shadow-lg`}>
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+        <div className="max-w-md rounded-2xl bg-ui-surface p-5 shadow-lg">
           <h2 className="text-base font-bold">Invoice H21 chỉ cho kho SCSC</h2>
           <p className="mt-2 text-sm text-ui-text-muted">
             Lô này đang ở kho {shipment.warehouse}. Đổi kho sang SCSC để dùng catalog H21.
@@ -112,7 +447,20 @@ export function ScscH21InvoiceModal({ shipment, onSave, onClose }: Props) {
       prev.map((l) => {
         if (l.id !== id) return l;
         const next = { ...l, ...patch };
+        const cat = next.catalogItemId ? catalogById.get(next.catalogItemId) : undefined;
+        if (patch.quantity != null && cat?.unitFactor) {
+          next.weightKg =
+            Math.round((next.quantity || 0) * cat.unitFactor * 1000) / 1000;
+        }
         if (patch.quantity != null || patch.unitPrice != null) {
+          next.amount =
+            Math.round((next.quantity || 0) * (next.unitPrice || 0) * 10000) / 10000;
+        }
+        if (patch.weightKg != null && patch.quantity == null && cat?.unitFactor) {
+          next.quantity = Math.max(
+            1,
+            Math.round((next.weightKg || 0) / cat.unitFactor)
+          );
           next.amount =
             Math.round((next.quantity || 0) * (next.unitPrice || 0) * 10000) / 10000;
         }
@@ -121,13 +469,159 @@ export function ScscH21InvoiceModal({ shipment, onSave, onClose }: Props) {
     );
   };
 
+  const handleRandomGenerate = () => {
+    const kg = allocateKg;
+    if (kg == null || kg <= 0) {
+      toast.error("Nhập KG tờ khai (> 0) trước khi tạo ngẫu nhiên");
+      return;
+    }
+    const othersKg = roundH21Kg(
+      splits
+        .filter((s) => s.id !== activeSplit?.id)
+        .reduce((sum, s) => sum + parseAllocateKgFromDraft(s.kgDraft, lotKg), 0)
+    );
+    if (lotKg > 0 && roundH21Kg(othersKg + kg) > lotKg) {
+      toast.error(`Tổng KG các tờ khai không được vượt KG lô (${lotKg})`);
+      return;
+    }
+    try {
+      const generated = generateRandomH21InvoiceLines({
+        catalog,
+        lineCount,
+        grossKg: kg,
+        cargoFamily: effectiveCargoFamily,
+      }) as ScscH21InvoiceLine[];
+      setLines(generated);
+      setLineCountDraft(String(generated.length));
+      toast.success(
+        `Đã tạo ${generated.length} dòng · ${invoiceNo || "INV"} · ${labelForH21CargoFamily(effectiveCargoFamily)} · ${kg} kg`
+      );
+      setMobilePane("review");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Tạo ngẫu nhiên thất bại");
+    }
+  };
+
+  const runGoodsListImport = async (file: File) => {
+    const kg = allocateKg;
+    if (kg == null || kg <= 0) {
+      toast.error("Nhập KG tờ khai (> 0) trước khi upload list hàng");
+      return;
+    }
+    if (!catalog.length) {
+      toast.error("Catalog H21 chưa tải xong — thử lại sau");
+      return;
+    }
+    setImportingList(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const result = await importH21GoodsListToInvoiceLines({
+        buf,
+        fileName: file.name,
+        catalog,
+        grossKg: kg,
+        cargoFamily: effectiveCargoFamily,
+      });
+      setLines(result.lines);
+      setLineCountDraft(String(result.lines.length));
+      const miss = result.unmatched.length;
+      toast.success(
+        miss > 0
+          ? `Khớp ${result.matches.length}/${result.queries.length} mặt hàng → ${result.lines.length} dòng · bỏ ${miss} không khớp`
+          : `Khớp ${result.matches.length} mặt hàng → ${result.lines.length} dòng invoice`
+      );
+      setMobilePane("review");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload list hàng thất bại");
+    } finally {
+      setImportingList(false);
+      if (goodsListFileRef.current) goodsListFileRef.current.value = "";
+    }
+  };
+
+  const handleGoodsListFile = (file: File | null) => {
+    if (!file) return;
+    if (allocateKg <= 0) {
+      toast.error("Nhập KG tờ khai (> 0) trước khi upload list hàng");
+      if (goodsListFileRef.current) goodsListFileRef.current.value = "";
+      return;
+    }
+    if (lines.length > 0) {
+      setPendingGoodsListFile(file);
+      return;
+    }
+    void runGoodsListImport(file);
+  };
+
+  const handleAddSplit = () => {
+    const remain = remainLotKg;
+    if (lotKg > 0 && remain <= 0) {
+      toast.error("Hạ KG tờ khai hiện tại trước khi thêm tờ khai tiếp theo");
+      return;
+    }
+    const next = createDeclSplit(remain > 0 ? String(remain) : "");
+    setSplits((prev) => [...prev, next]);
+    setActiveSplitId(next.id);
+  };
+
+  const handleRemoveSplit = (id: string) => {
+    if (splits.length <= 1) return;
+    const target = splits.find((s) => s.id === id);
+    if (target && target.lines.length > 0) {
+      setRemoveSplitId(id);
+      return;
+    }
+    const next = splits.filter((s) => s.id !== id);
+    setSplits(next);
+    if (activeSplitId === id) setActiveSplitId(next[0]?.id ?? "");
+  };
+
+  const confirmRemoveSplit = () => {
+    const id = removeSplitId;
+    setRemoveSplitId(null);
+    if (!id || splits.length <= 1) return;
+    const next = splits.filter((s) => s.id !== id);
+    setSplits(next);
+    if (activeSplitId === id) setActiveSplitId(next[0]?.id ?? "");
+  };
+
+  const requestClose = () => {
+    if (isDirty) setCloseConfirmOpen(true);
+    else onClose();
+  };
+
   const handleSave = async () => {
+    if (!shipperId) {
+      toast.error("Chọn shipper tờ khai trước khi lưu");
+      return;
+    }
+    if (filledSplitCount === 0) {
+      toast.error("Chưa có dòng hàng trên tờ khai nào — tạo ngẫu nhiên hoặc thêm từ catalog");
+      return;
+    }
     setSaving(true);
     try {
-      const clamped = clampScscH21InvoiceLines(lines) as ScscH21InvoiceLine[];
-      await onSave(clamped);
-      toast.success(`Đã lưu ${clamped.length} dòng invoice`);
-      onClose();
+      const { declarations, skippedEmpty } = declarationsReadyToSave(splits, lotKg);
+      if (!declarations.length) {
+        toast.error("Chưa có tờ khai hợp lệ để lưu");
+        setSaving(false);
+        return;
+      }
+      const activeLines =
+        (declarations.find((d) => d.id === activeSplit?.id)?.lines as
+          | ScscH21InvoiceLine[]
+          | undefined) ?? declarations[0]!.lines;
+      await onSave({
+        invoiceItems: clampScscH21InvoiceLines(activeLines) as ScscH21InvoiceLine[],
+        invoiceDeclarations: declarations,
+        h21DeclarationShipperId: shipperId,
+      });
+      setSavedFingerprint(fingerprintH21Splits(splits, shipperId));
+      toast.success(
+        skippedEmpty > 0
+          ? `Đã lưu ${declarations.length} tờ khai · bỏ qua ${skippedEmpty} tab trống · cửa sổ vẫn mở`
+          : `Đã lưu ${declarations.length} tờ khai · cửa sổ vẫn mở để chỉnh tiếp`
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Lưu invoice thất bại");
     } finally {
@@ -135,188 +629,419 @@ export function ScscH21InvoiceModal({ shipment, onSave, onClose }: Props) {
     }
   };
 
+  const setupPane = (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Shipper tờ khai */}
+      <section className="shrink-0 border-b border-ui-border/80 bg-ui-surface px-4 py-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="text-xs font-extrabold uppercase tracking-wide text-ui-navy">
+            Shipper tờ khai
+          </h3>
+          {!shipperId ? (
+            <span className="text-[10px] font-semibold text-amber-700">Bắt buộc chọn</span>
+          ) : null}
+        </div>
+        {activeStamps.length === 0 ? (
+          <p className="text-xs text-ui-text-muted">
+            Chưa có shipper — thêm tại trang H21 (menu trái).
+          </p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {activeStamps.map((s) => {
+              const selected = s.id === shipperId;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                    selected
+                      ? "border-indigo-500 bg-indigo-50 ring-2 ring-indigo-400/60"
+                      : "border-ui-border/80 bg-ui-surface hover:border-indigo-300 hover:bg-indigo-50/40"
+                  }`}
+                  onClick={() => setShipperId(s.id)}
+                >
+                  <div className="line-clamp-2 text-xs font-bold text-ui-navy">{s.shipperName}</div>
+                  {s.shipperAddress ? (
+                    <div className="mt-0.5 line-clamp-2 text-[10px] text-ui-text-muted">
+                      {s.shipperAddress}
+                    </div>
+                  ) : null}
+                  <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-ui-text-muted">
+                    {s.shipperPhone ? <span>{s.shipperPhone}</span> : null}
+                    {s.stampId ? (
+                      <span className="font-mono font-semibold text-indigo-700">{s.stampId}</span>
+                    ) : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* CNEE + meta */}
+      <section className="grid shrink-0 gap-2 border-b border-ui-border/60 bg-ui-surface-muted/30 px-4 py-2 text-xs sm:grid-cols-2">
+        <div>
+          <div className="font-bold text-ui-text-muted">CNEE (INFO KH)</div>
+          <div className="font-semibold">{cneeDisplay.nameLine || "— Chưa chọn CNEE"}</div>
+          {cneeDisplay.addressLines.map((line) => (
+            <div key={line} className="text-ui-text-muted">
+              {line}
+            </div>
+          ))}
+          {cneeDisplay.phoneLine ? (
+            <div className="text-ui-text-muted">{cneeDisplay.phoneLine}</div>
+          ) : null}
+          {cneeDisplay.emailLine ? (
+            <div className="text-ui-text-muted">{cneeDisplay.emailLine}</div>
+          ) : null}
+        </div>
+        <div className="sm:text-right">
+          <div>
+            <span className="font-bold text-ui-text-muted">INV NO: </span>
+            {invoiceNo || "—"}
+            {invoiceSeqTotal > 1 ? (
+              <span className="ml-1 text-indigo-700">
+                ({invoiceSeq}/{invoiceSeqTotal})
+              </span>
+            ) : null}
+          </div>
+          <div>
+            <span className="font-bold text-ui-text-muted">KG lô: </span>
+            {lotKg || "—"} · Kiện: {lotPcs || "—"}
+            {lotKg > 0 && allocatedKgSum > 0 && allocatedKgSum < lotKg ? (
+              <span className="ml-1 text-indigo-700">
+                (đã tách {allocatedKgSum}/{lotKg} kg)
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      {/* Tabs tờ khai — chuyển nhanh, lưu không đóng */}
+      <ScscH21InvoiceDeclTabs
+        shipment={shipment}
+        customerEntry={customerEntry}
+        splits={splits}
+        activeSplitId={activeSplit?.id}
+        tabsScrollRef={tabsScrollRef}
+        goodsListFileRef={goodsListFileRef}
+        isDirty={isDirty}
+        filledSplitCount={filledSplitCount}
+        invoiceSeq={invoiceSeq}
+        invoiceSeqTotal={invoiceSeqTotal}
+        lotKg={lotKg}
+        lotPcs={lotPcs}
+        remainLotKg={remainLotKg}
+        allocateKgDraft={allocateKgDraft}
+        lineCountDraft={lineCountDraft}
+        linesLength={lines.length}
+        footer={footer}
+        effectiveCargoFamily={effectiveCargoFamily}
+        importingList={importingList}
+        loading={loading}
+        onSelectSplit={setActiveSplitId}
+        onRemoveSplit={handleRemoveSplit}
+        onAddSplit={handleAddSplit}
+        onAllocateKgChange={(v) => {
+          const id = activeSplit?.id;
+          if (!id) return;
+          setSplits((prev) => prev.map((x) => (x.id === id ? { ...x, kgDraft: v } : x)));
+        }}
+        onAllocateKgBlur={() => {
+          const id = activeSplit?.id;
+          if (!id) return;
+          const n = parseAllocateKgFromDraft(allocateKgDraft, lotKg);
+          if (n > 0) {
+            setSplits((prev) =>
+              prev.map((x) => (x.id === id ? { ...x, kgDraft: String(n) } : x))
+            );
+          }
+        }}
+        onLineCountChange={(v) => setLineCountDraft(v)}
+        onLineCountBlur={() => setLineCountDraft(normalizeLineCountDraft(lineCountDraft))}
+        onRandomGenerate={handleRandomGenerate}
+        onGoodsListFile={(file) => void handleGoodsListFile(file)}
+        onUploadListClick={() => goodsListFileRef.current?.click()}
+      />
+
+      <div className="shrink-0 border-b border-ui-border/60 px-4 py-2">
+        <H21CargoFamilyKanban
+          value={cargoFamilyMode}
+          onChange={setCargoFamilyMode}
+          detectedFamily={detectedCargoFamily}
+          goodsText={goodsTextForFamily}
+          counts={cargoFamilyCounts}
+        />
+      </div>
+
+      {validationErrors.length > 0 ? (
+        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] text-amber-900">
+          {validationErrors.join(" · ")}
+        </div>
+      ) : null}
+
+      {/* Catalog + lines */}
+      <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-2">
+        <aside className="flex min-h-0 flex-col border-b border-ui-border/60 md:border-b-0 md:border-r">
+          <div className="flex flex-wrap gap-2 border-b border-black/[0.06] p-2">
+            <input
+              className={`${OPS.input} min-w-[100px] flex-1 text-xs`}
+              placeholder="Tìm catalog…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <select
+              className={`${OPS.input} text-xs`}
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+            >
+              <option value="">Tất cả</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            {loading ? (
+              <p className="p-2 text-xs text-ui-text-muted">Đang tải catalog…</p>
+            ) : (
+              filteredCatalog.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={OPS.pickItem}
+                  onClick={() => addFromCatalog(item)}
+                >
+                  <div className="min-w-0 flex-1 text-left">
+                    <div className="text-[10px] font-bold text-indigo-700">{item.category}</div>
+                    <div className="line-clamp-2 text-xs font-medium">{item.description}</div>
+                  </div>
+                  <span className="shrink-0 text-lg font-bold text-apple-blue">+</span>
+                </button>
+              ))
+            )}
+          </div>
+        </aside>
+
+        <section className="flex min-h-0 flex-col">
+          <div className="flex items-center justify-between border-b border-black/[0.06] px-3 py-1.5">
+            <span className="text-xs font-semibold">Dòng invoice</span>
+            <button
+              type="button"
+              className="text-[10px] font-semibold text-red-700"
+              onClick={() => setLines([])}
+            >
+              Xóa hết
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            {lines.length === 0 ? (
+              <div className={`${OPS.empty} text-xs`}>Chưa có dòng hàng.</div>
+            ) : (
+              lines.map((line, idx) => (
+                <div key={line.id} className={`${OPS.card} mb-1.5 p-2`}>
+                  <div className="mb-1 flex justify-between">
+                    <span className="text-[10px] font-bold text-ui-text-muted">#{idx + 1}</span>
+                    <button
+                      type="button"
+                      className="text-[10px] text-red-700"
+                      onClick={() => setLines((prev) => prev.filter((x) => x.id !== line.id))}
+                    >
+                      Xóa
+                    </button>
+                  </div>
+                  <p className="mb-1 line-clamp-2 text-[11px] font-medium">{line.description}</p>
+                  <div className="grid grid-cols-4 gap-1">
+                    <H21LineNumericInput
+                      className={`${OPS.input} text-[10px]`}
+                      title="SL"
+                      value={line.quantity ?? 0}
+                      onCommit={(quantity) => patchLine(line.id, { quantity })}
+                    />
+                    <input
+                      className={`${OPS.input} text-[10px]`}
+                      title="ĐVT"
+                      value={line.uom}
+                      onChange={(e) => patchLine(line.id, { uom: e.target.value })}
+                    />
+                    <H21LineNumericInput
+                      className={`${OPS.input} text-[10px]`}
+                      title="Kg"
+                      decimal
+                      value={line.weightKg ?? 0}
+                      onCommit={(weightKg) => patchLine(line.id, { weightKg })}
+                    />
+                    <H21LineNumericInput
+                      className={`${OPS.input} text-[10px]`}
+                      title="Đ.giá"
+                      decimal
+                      value={line.unitPrice ?? 0}
+                      onCommit={(unitPrice) => patchLine(line.id, { unitPrice })}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+
+  const reviewPane = (
+    <div className="flex min-h-0 flex-1 flex-col bg-neutral-100/80">
+      <div className="shrink-0 border-b border-ui-border/60 bg-ui-surface px-4 py-2">
+        <h3 className="text-xs font-extrabold uppercase tracking-wide text-ui-navy">
+          Xem trước invoice
+        </h3>
+        <p className="text-[10px] text-ui-text-muted">
+          Cập nhật realtime khi đổi shipper hoặc dòng hàng
+        </p>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+        <ScscH21InvoiceReview doc={invoiceDoc} />
+      </div>
+    </div>
+  );
+
   return (
     <div
-      className="fixed inset-0 z-[180] flex items-end justify-center bg-black/40 p-2 sm:items-center sm:p-4"
-      role="presentation"
-      onClick={onClose}
+      className="fixed inset-0 z-[200] flex flex-col bg-ui-background"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Invoice H21 SCSC"
       data-testid="scsc-h21-invoice-modal"
     >
-      <div
-        className={`${OPS.modal} flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl shadow-xl`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Invoice H21 SCSC"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="flex flex-wrap items-center gap-2 border-b border-black/[0.08] px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base font-bold">Invoice H21 · SCSC</h2>
-            <p className="text-xs text-ui-text-muted">
-              AWB {shipment.awb || "—"} · {shipment.flight || "—"} · chọn từ danh mục kho SCSC
-            </p>
-          </div>
-          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-800">
-            {lines.length} dòng · ${totals.amount} · {totals.weight} kg
-          </span>
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Đóng
-          </Button>
-          <Button type="button" disabled={saving} onClick={() => void handleSave()}>
-            Lưu vào lô
-          </Button>
-        </header>
-
-        <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-2">
-          <aside className="flex min-h-0 flex-col border-b border-black/[0.08] md:border-b-0 md:border-r">
-            <div className="flex flex-wrap gap-2 border-b border-black/[0.06] p-3">
-              <input
-                className={`${OPS.input} min-w-[140px] flex-1`}
-                placeholder="Tìm catalog…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-              <select
-                className={OPS.input}
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-              >
-                <option value="">Tất cả loại</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {loading ? (
-                <p className="p-3 text-xs text-ui-text-muted">Đang tải catalog…</p>
-              ) : filteredCatalog.length === 0 ? (
-                <p className="p-3 text-xs text-ui-text-muted">Không có mặt hàng khớp.</p>
-              ) : (
-                filteredCatalog.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={OPS.pickItem}
-                    onClick={() => addFromCatalog(item)}
-                  >
-                    <div className="min-w-0 flex-1 text-left">
-                      <div className="text-[10px] font-bold text-indigo-700">{item.category}</div>
-                      <div className="line-clamp-2 text-xs font-medium">{item.description}</div>
-                      <div className="mt-0.5 font-mono text-[10px] text-ui-text-muted">
-                        HS {item.hsCode || "—"} · {item.qty1} {item.uom1} · ${item.unitPrice}
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-lg font-bold text-apple-blue">+</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </aside>
-
-          <section className="flex min-h-0 flex-col">
-            <div className="flex items-center justify-between border-b border-black/[0.06] px-3 py-2">
-              <span className="text-xs font-semibold">Dòng trên lô</span>
-              <button
-                type="button"
-                className="text-[11px] font-semibold text-red-700 hover:underline"
-                onClick={() => setLines([])}
-              >
-                Xóa hết
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {lines.length === 0 ? (
-                <div className={OPS.empty}>Chọn mặt hàng bên trái để thêm vào invoice.</div>
-              ) : (
-                lines.map((line, idx) => (
-                  <div key={line.id} className={`${OPS.card} mb-2 p-2`}>
-                    <div className="mb-1 flex items-start justify-between gap-2">
-                      <span className="text-[10px] font-bold text-ui-text-muted">#{idx + 1}</span>
-                      <button
-                        type="button"
-                        className="text-[10px] font-semibold text-red-700"
-                        onClick={() => setLines((prev) => prev.filter((x) => x.id !== line.id))}
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                    <p className="mb-2 line-clamp-2 text-xs font-medium">{line.description}</p>
-                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                      <label className="text-[10px] text-ui-text-muted">
-                        SL
-                        <input
-                          type="number"
-                          className={`${OPS.input} mt-0.5 w-full`}
-                          value={line.quantity}
-                          onChange={(e) =>
-                            patchLine(line.id, { quantity: Number(e.target.value) || 0 })
-                          }
-                        />
-                      </label>
-                      <label className="text-[10px] text-ui-text-muted">
-                        ĐVT
-                        <input
-                          className={`${OPS.input} mt-0.5 w-full`}
-                          value={line.uom}
-                          onChange={(e) => patchLine(line.id, { uom: e.target.value })}
-                        />
-                      </label>
-                      <label className="text-[10px] text-ui-text-muted">
-                        Kg
-                        <input
-                          type="number"
-                          className={`${OPS.input} mt-0.5 w-full`}
-                          value={line.weightKg}
-                          onChange={(e) =>
-                            patchLine(line.id, { weightKg: Number(e.target.value) || 0 })
-                          }
-                        />
-                      </label>
-                      <label className="text-[10px] text-ui-text-muted">
-                        Đ.giá $
-                        <input
-                          type="number"
-                          step="0.01"
-                          className={`${OPS.input} mt-0.5 w-full`}
-                          value={line.unitPrice}
-                          onChange={(e) =>
-                            patchLine(line.id, { unitPrice: Number(e.target.value) || 0 })
-                          }
-                        />
-                      </label>
-                    </div>
-                    <div className="mt-1 flex justify-between text-[10px] text-ui-text-muted">
-                      <span className="font-mono">HS {line.hsCode || "—"}</span>
-                      <span className="font-semibold text-ui-text">${line.amount}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            <footer className={`${OPS.footer} flex flex-wrap gap-2 px-3 py-2`}>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!filteredCatalog.length}
-                onClick={() =>
-                  setLines((prev) => [
-                    ...prev,
-                    ...pickInvoiceLinesFromCatalog(filteredCatalog.slice(0, 5)),
-                  ])
-                }
-              >
-                + 5 đầu lọc
-              </Button>
-              <span className="ml-auto self-center text-xs font-semibold">
-                Tổng ${totals.amount} · {totals.weight} kg hàng
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ui-border/90 bg-ui-surface px-4 py-3 shadow-ui-sm">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-extrabold text-ui-navy sm:text-base">
+            Invoice H21 · Phi mậu dịch
+            {isDirty ? (
+              <span className="ml-2 align-middle text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                • chưa lưu
               </span>
-            </footer>
-          </section>
+            ) : null}
+          </h2>
+          <p className="text-[11px] text-ui-text-muted">
+            AWB {shipment.awb || "—"} · {shipment.flight || "—"}/{shipment.flightDate || "—"}
+          </p>
+        </div>
+
+        <div className="flex gap-1 lg:hidden">
+          <button
+            type="button"
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+              mobilePane === "setup"
+                ? "bg-indigo-600 text-white"
+                : "bg-ui-surface-muted text-ui-text"
+            }`}
+            onClick={() => setMobilePane("setup")}
+          >
+            Thiết lập
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+              mobilePane === "review"
+                ? "bg-indigo-600 text-white"
+                : "bg-ui-surface-muted text-ui-text"
+            }`}
+            onClick={() => setMobilePane("review")}
+          >
+            Review
+          </button>
+        </div>
+
+        <Button type="button" size="sm" disabled={saving || !isDirty} onClick={() => void handleSave()}>
+          {saving
+            ? "Đang lưu…"
+            : filledSplitCount > 0
+              ? `Lưu ${filledSplitCount} tờ khai`
+              : "Lưu tờ khai"}
+        </Button>
+        <Button type="button" variant="secondary" size="sm" onClick={requestClose}>
+          Đóng
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={exporting}
+          onClick={() => void handleExport("excel")}
+        >
+          Excel
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={exporting}
+          onClick={() => void handleExport("pdf")}
+        >
+          PDF
+        </Button>
+      </header>
+
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div
+          className={`flex min-h-0 flex-col lg:w-[54%] lg:border-r lg:border-ui-border/80 ${
+            mobilePane === "review" ? "hidden lg:flex" : "flex flex-1"
+          }`}
+        >
+          {setupPane}
+        </div>
+        <div
+          className={`min-h-0 flex-col lg:flex lg:w-[46%] ${
+            mobilePane === "setup" ? "hidden lg:flex" : "flex flex-1"
+          }`}
+        >
+          {reviewPane}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={closeConfirmOpen}
+        title="Đóng khi chưa lưu?"
+        message="Có thay đổi chưa lưu trên tờ khai. Đóng sẽ mất các chỉnh sửa kể từ lần lưu gần nhất."
+        confirmLabel="Đóng không lưu"
+        cancelLabel="Tiếp tục sửa"
+        danger
+        onConfirm={() => {
+          setCloseConfirmOpen(false);
+          onClose();
+        }}
+        onCancel={() => setCloseConfirmOpen(false)}
+      />
+      <ConfirmDialog
+        open={removeSplitId != null}
+        title="Xóa tờ khai này?"
+        message="Tờ khai đang có dòng hàng. Xóa sẽ mất dữ liệu tab đó (chưa lưu thì không còn trên DB)."
+        confirmLabel="Xóa tờ khai"
+        cancelLabel="Giữ lại"
+        danger
+        onConfirm={confirmRemoveSplit}
+        onCancel={() => setRemoveSplitId(null)}
+      />
+      <ConfirmDialog
+        open={pendingGoodsListFile != null}
+        title="Thay dòng bằng list hàng?"
+        message={`TK ${invoiceSeq} đang có ${lines.length} dòng. Upload list sẽ thay toàn bộ dòng hiện tại bằng mặt hàng khớp từ file.`}
+        confirmLabel="Upload & thay"
+        cancelLabel="Hủy"
+        danger
+        onConfirm={() => {
+          const f = pendingGoodsListFile;
+          setPendingGoodsListFile(null);
+          if (f) void runGoodsListImport(f);
+        }}
+        onCancel={() => {
+          setPendingGoodsListFile(null);
+          if (goodsListFileRef.current) goodsListFileRef.current.value = "";
+        }}
+      />
     </div>
   );
 }

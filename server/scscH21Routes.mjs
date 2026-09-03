@@ -1,7 +1,9 @@
 import { withDbClient } from "./dbPool.mjs";
 import {
   createScscH21Goods,
+  createScscH21Stamp,
   deleteScscH21Goods,
+  deleteScscH21Stamp,
   ensureScscH21CatalogSchema,
   getScscH21Goods,
   listScscH21Goods,
@@ -9,6 +11,7 @@ import {
   replaceAllScscH21Goods,
   seedScscH21CatalogIfEmpty,
   updateScscH21Goods,
+  updateScscH21Stamp,
   upsertScscH21GoodsBulk,
 } from "./scscH21Catalog.mjs";
 import {
@@ -28,7 +31,7 @@ function sendError(res, e) {
   const status = Number(e?.statusCode) || 500;
   res.status(status).json({
     error: String(e?.message || e || "Lỗi catalog SCSC H21"),
-    code: "SCSC_H21_CATALOG_ERROR",
+    code: e?.code || "SCSC_H21_CATALOG_ERROR",
   });
 }
 
@@ -125,6 +128,35 @@ export function registerScscH21Routes(app, deps = {}) {
     try {
       const items = await withCatalog((client) => listScscH21Stamps(client));
       res.json({ warehouseScope: "SCSC", items });
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  app.post("/api/scsc-h21/stamps", requireAuth, async (req, res) => {
+    try {
+      const item = await withCatalog((client) => createScscH21Stamp(client, req.body || {}));
+      res.status(201).json({ item });
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  app.patch("/api/scsc-h21/stamps/:id", requireAuth, async (req, res) => {
+    try {
+      const item = await withCatalog((client) =>
+        updateScscH21Stamp(client, req.params.id, req.body || {})
+      );
+      res.json({ item });
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  app.delete("/api/scsc-h21/stamps/:id", requireAuth, async (req, res) => {
+    try {
+      const result = await withCatalog((client) => deleteScscH21Stamp(client, req.params.id));
+      res.json({ ok: true, ...result });
     } catch (e) {
       sendError(res, e);
     }

@@ -35,7 +35,12 @@ function mapRowSyncedAt(row: Shipment): Shipment {
 export function parseAppState(raw: unknown): AppState | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  if (typeof o.version !== "number" || !Array.isArray(o.rows)) return null;
+  if (typeof o.version !== "number") return null;
+  /** Delta sync: server báo đã cùng version — không có rows. */
+  if (o.unchanged === true) {
+    return null;
+  }
+  if (!Array.isArray(o.rows)) return null;
   const customersOmitted = o.customersOmitted === true;
   const customersUnknown = customersOmitted
     ? undefined
@@ -54,6 +59,23 @@ export function parseAppState(raw: unknown): AppState | null {
     airlineLabelOverrides,
     syncMeta: parseSyncMeta(o.syncMeta),
   };
+}
+
+/** Kết quả GET /api/state — full hoặc unchanged (P3 delta). */
+export type AppStateFetchResult =
+  | { kind: "full"; state: AppState }
+  | { kind: "unchanged"; version: number };
+
+export function parseAppStateFetchResult(raw: unknown): AppStateFetchResult | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.version !== "number") return null;
+  if (o.unchanged === true) {
+    return { kind: "unchanged", version: o.version };
+  }
+  const state = parseAppState(raw);
+  if (!state) return null;
+  return { kind: "full", state };
 }
 
 /** Gộp payload sync khi server bỏ customers (Ops realtime). */

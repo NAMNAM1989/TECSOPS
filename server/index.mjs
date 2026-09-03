@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
 import {
   loadState,
+  peekStateVersion,
   runBatchMutations,
   runMutation,
   setPostgresStateStore,
@@ -44,6 +45,18 @@ function resolveRequestStateScope(req) {
   const fromQuery = parseStateScopeFromQuery(req.query || {});
   if (fromQuery.full || fromQuery.sessionDate) return fromQuery;
   return parseStateScopeFromHeaders(req.headers || {});
+}
+
+/** Client gửi version đang có — nếu khớp, bỏ qua load full snapshot. */
+function resolveSinceVersion(req) {
+  const raw =
+    req.query?.sinceVersion ??
+    req.query?.since_version ??
+    req.headers?.["x-tecsops-since-version"] ??
+    req.headers?.["X-TECSOPS-Since-Version"];
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
 }
 
 async function projectStateForClient(state, req) {
@@ -104,6 +117,18 @@ app.get("/api/health", async (_req, res) => {
 
 app.get("/api/state", appAuth.requireAuth, async (req, res) => {
   try {
+    const sinceVersion = resolveSinceVersion(req);
+    if (sinceVersion != null) {
+      try {
+        const current = await peekStateVersion();
+        if (current === sinceVersion) {
+          res.json({ version: current, unchanged: true });
+          return;
+        }
+      } catch {
+        /* peek thất bại → load đầy đủ */
+      }
+    }
     const scope = resolveRequestStateScope(req);
     const full =
       scope.full

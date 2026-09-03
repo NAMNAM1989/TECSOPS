@@ -3,6 +3,8 @@ import {
   clampScscH21Catalog,
   clampScscH21InvoiceLines,
   catalogItemFromExcelRow,
+  findDuplicateScscH21Descriptions,
+  findScscH21DescriptionConflict,
   invoiceLineFromCatalogItem,
   normalizeScscH21CatalogItem,
 } from "../../shared/scscH21CatalogNormalize.mjs";
@@ -79,6 +81,33 @@ describe("scscH21CatalogNormalize", () => {
     expect(
       clampScscH21InvoiceLines([{ description: "OK", quantity: 1, unitPrice: 2 }])
     ).toHaveLength(1);
+  });
+
+  it("phát hiện mô tả trùng (không phân biệt hoa thường / khoảng trắng)", () => {
+    const dups = findDuplicateScscH21Descriptions([
+      { id: "1", description: "Bánh mì Staff" },
+      { id: "2", description: "  bánh   mì  staff " },
+      { id: "3", description: "Khác" },
+    ]);
+    expect(dups).toHaveLength(1);
+    expect(dups[0].ids).toEqual(["1", "2"]);
+    expect(
+      findScscH21DescriptionConflict(
+        [
+          { id: "1", description: "Cà phê 247" },
+          { id: "2", description: "Mì Hảo Hảo" },
+        ],
+        "cà  phê 247",
+        { exceptId: "x" }
+      )?.id
+    ).toBe("1");
+    expect(
+      findScscH21DescriptionConflict(
+        [{ id: "1", description: "Cà phê 247" }],
+        "Cà phê 247",
+        { exceptId: "1" }
+      )
+    ).toBeNull();
   });
 });
 

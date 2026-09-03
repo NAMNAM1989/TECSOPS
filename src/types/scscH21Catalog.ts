@@ -27,12 +27,20 @@ export type ScscH21CatalogItem = {
   updatedAt?: string | null;
 };
 
-/** Shipper → Stamp ID (mẫu H21 SCSC). */
+/** Shipper tờ khai H21 SCSC — độc lập hồ sơ khách. */
 export type ScscH21StampId = {
   id: string;
   shipperName: string;
+  shipperAddress: string;
+  shipperPhone: string;
   stampId: string;
   warehouseScope: ScscH21WarehouseScope;
+  active?: boolean;
+  /**
+   * Ảnh con dấu (data URL image/png|jpeg|webp) — hiện cuối invoice.
+   * `null`/thiếu = chưa upload.
+   */
+  sealImageData?: string | null;
 };
 
 /**
@@ -50,6 +58,16 @@ export type ScscH21InvoiceLine = {
   weightKg: number;
   unitPrice: number;
   amount: number;
+};
+
+/** Một tờ khai H21 trên lô (có thể nhiều tờ / INV -1, -2…). */
+export type ScscH21InvoiceDeclaration = {
+  id: string;
+  /** Số thứ tự INV (1-based). */
+  seq: number;
+  declarationKg: number;
+  cargoFamilyMode: "auto" | "frozen" | "fruit" | "food" | "garment" | "general";
+  lines: ScscH21InvoiceLine[];
 };
 
 export function isScscH21Warehouse(warehouse: unknown): boolean {

@@ -75,13 +75,37 @@ export async function ensureScscH21CatalogSchema(client) {
       ON ${SCSC_H21_GOODS_TABLE}(active, sort_order, description)
   `);
   await client.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_scsc_h21_goods_description_ci
+      ON ${SCSC_H21_GOODS_TABLE} (lower(btrim(description)))
+      WHERE warehouse_scope = 'SCSC'
+  `);
+  await client.query(`
     CREATE TABLE IF NOT EXISTS ${SCSC_H21_STAMPS_TABLE} (
       id text PRIMARY KEY,
       shipper_name text NOT NULL DEFAULT '',
+      shipper_address text NOT NULL DEFAULT '',
+      shipper_phone text NOT NULL DEFAULT '',
       stamp_id text NOT NULL DEFAULT '',
+      active boolean NOT NULL DEFAULT true,
       warehouse_scope text NOT NULL DEFAULT 'SCSC',
       CONSTRAINT scsc_h21_stamps_scope_chk CHECK (warehouse_scope = 'SCSC')
     )
+  `);
+  await client.query(`
+    ALTER TABLE ${SCSC_H21_STAMPS_TABLE}
+    ADD COLUMN IF NOT EXISTS shipper_address text NOT NULL DEFAULT ''
+  `);
+  await client.query(`
+    ALTER TABLE ${SCSC_H21_STAMPS_TABLE}
+    ADD COLUMN IF NOT EXISTS shipper_phone text NOT NULL DEFAULT ''
+  `);
+  await client.query(`
+    ALTER TABLE ${SCSC_H21_STAMPS_TABLE}
+    ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true
+  `);
+  await client.query(`
+    ALTER TABLE ${SCSC_H21_STAMPS_TABLE}
+    ADD COLUMN IF NOT EXISTS seal_image_data text NULL
   `);
 }
 
@@ -111,15 +135,17 @@ export async function seedScscH21CatalogIfEmpty(client) {
     for (const s of stamps) {
       const id = String(s.id || "").trim();
       const shipperName = String(s.shipperName || "").trim();
+      const shipperAddress = String(s.shipperAddress || "").trim();
+      const shipperPhone = String(s.shipperPhone || "").trim();
       const stampId = String(s.stampId || "").trim().toUpperCase();
       if (!id || !stampId) continue;
       await client.query(
         `
-        INSERT INTO ${SCSC_H21_STAMPS_TABLE} (id, shipper_name, stamp_id, warehouse_scope)
-        VALUES ($1,$2,$3,'SCSC')
+        INSERT INTO ${SCSC_H21_STAMPS_TABLE} (id, shipper_name, shipper_address, shipper_phone, stamp_id, warehouse_scope, active)
+        VALUES ($1,$2,$3,$4,$5,'SCSC',true)
         ON CONFLICT (id) DO NOTHING
         `,
-        [id, shipperName, stampId]
+        [id, shipperName, shipperAddress, shipperPhone, stampId]
       );
     }
   }
@@ -212,6 +238,50 @@ export async function getScscH21Goods(client, id) {
   return rowToItem(res.rows[0]);
 }
 
+async function assertDescriptionUnique(client, description, exceptId = "") {
+  const key = scscH21DescriptionKey(description);
+  if (!key) {
+    const err = new Error("Mô tả hàng không được để trống");
+    err.statusCode = 400;
+    err.code = "SCSC_H21_DESC_REQUIRED";
+    throw err;
+  }
+  const params = [key];
+  let sql = `
+    SELECT id, description FROM ${SCSC_H21_GOODS_TABLE}
+    WHERE warehouse_scope = 'SCSC'
+      AND lower(btrim(description)) = $1
+  `;
+  if (exceptId) {
+    params.push(String(exceptId));
+    sql += ` AND id <> $${params.length}`;
+  }
+  sql += ` LIMIT 1`;
+  const res = await client.query(sql, params);
+  if (res.rows[0]) {
+    const err = new Error(
+      `Mô tả đã tồn tại — không được trùng: «${res.rows[0].description}»`
+    );
+    err.statusCode = 409;
+    err.code = "SCSC_H21_DESC_DUPLICATE";
+    err.conflictId = res.rows[0].id;
+    throw err;
+  }
+}
+
+function duplicateError(description, sampleList = []) {
+  const sample = sampleList.slice(0, 3).join("; ");
+  const more = sampleList.length > 3 ? ` …(+${sampleList.length - 3})` : "";
+  const err = new Error(
+    sample
+      ? `File/danh sách có mô tả trùng — không cho nhập: ${sample}${more}`
+      : `Mô tả trùng — không cho nhập: «${description}»`
+  );
+  err.statusCode = 409;
+  err.code = "SCSC_H21_DESC_DUPLICATE";
+  return err;
+}
+
 export async function createScscH21Goods(client, raw) {
   const item = normalizeScscH21CatalogItem(raw, { keepId: Boolean(raw?.id) });
   if (!item) {
@@ -219,11 +289,19 @@ export async function createScscH21Goods(client, raw) {
     err.statusCode = 400;
     throw err;
   }
+  await assertDescriptionUnique(client, item.description);
   const maxSort = await client.query(
     `SELECT COALESCE(MAX(sort_order), -1)::int AS m FROM ${SCSC_H21_GOODS_TABLE}`
   );
   item.sortOrder = (maxSort.rows[0]?.m ?? -1) + 1;
-  await insertGoods(client, item);
+  try {
+    await insertGoods(client, item);
+  } catch (e) {
+    if (e?.code === "23505") {
+      throw duplicateError(item.description);
+    }
+    throw e;
+  }
   return getScscH21Goods(client, item.id);
 }
 
@@ -243,7 +321,15 @@ export async function updateScscH21Goods(client, id, patch) {
     err.statusCode = 400;
     throw err;
   }
-  await insertGoods(client, next);
+  await assertDescriptionUnique(client, next.description, current.id);
+  try {
+    await insertGoods(client, next);
+  } catch (e) {
+    if (e?.code === "23505") {
+      throw duplicateError(next.description);
+    }
+    throw e;
+  }
   return getScscH21Goods(client, current.id);
 }
 
@@ -261,20 +347,29 @@ export async function deleteScscH21Goods(client, id) {
 }
 
 /**
- * Import/merge danh sách (Excel hoặc JSON). Trùng mô tả (không phân biệt hoa thường) → cập nhật.
+ * Import/merge danh sách (Excel hoặc JSON).
+ * - Trùng mô tả trong file → từ chối toàn bộ (409).
+ * - Trùng mô tả với DB → cập nhật bản ghi đó (không tạo dòng thứ hai).
  * @returns {{ created: number, updated: number, items: object[] }}
  */
 export async function upsertScscH21GoodsBulk(client, rawList) {
   const incoming = clampScscH21Catalog(rawList);
+  const fileDups = findDuplicateScscH21Descriptions(incoming);
+  if (fileDups.length) {
+    throw duplicateError(
+      "",
+      fileDups.map((d) => `«${d.description}» (×${d.ids.length})`)
+    );
+  }
   const existing = await listScscH21Goods(client, { activeOnly: false, limit: 2000 });
   const byDesc = new Map(
-    existing.map((x) => [x.description.toLowerCase().replace(/\s+/g, " "), x])
+    existing.map((x) => [scscH21DescriptionKey(x.description), x])
   );
   let created = 0;
   let updated = 0;
   const out = [];
   for (const item of incoming) {
-    const key = item.description.toLowerCase().replace(/\s+/g, " ");
+    const key = scscH21DescriptionKey(item.description);
     const prev = byDesc.get(key);
     if (prev) {
       const saved = await updateScscH21Goods(client, prev.id, {
@@ -296,24 +391,172 @@ export async function upsertScscH21GoodsBulk(client, rawList) {
 
 export async function listScscH21Stamps(client) {
   const res = await client.query(
-    `SELECT id, shipper_name, stamp_id FROM ${SCSC_H21_STAMPS_TABLE}
+    `SELECT id, shipper_name, shipper_address, shipper_phone, stamp_id, active, seal_image_data
+     FROM ${SCSC_H21_STAMPS_TABLE}
      WHERE warehouse_scope = 'SCSC' ORDER BY shipper_name ASC`
   );
-  return res.rows.map((r) => ({
-    id: r.id,
-    shipperName: r.shipper_name || "",
-    stampId: r.stamp_id || "",
+  return res.rows.map((r) => rowToStamp(r));
+}
+
+function rowToStamp(row) {
+  return normalizeScscH21Stamp({
+    id: row.id,
+    shipperName: row.shipper_name,
+    shipperAddress: row.shipper_address,
+    shipperPhone: row.shipper_phone,
+    stampId: row.stamp_id,
+    active: row.active,
+    sealImageData: row.seal_image_data ?? null,
     warehouseScope: SCSC_H21_WAREHOUSE_SCOPE,
-  }));
+  });
+}
+
+function stampId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return `stamp-${crypto.randomUUID()}`;
+  return `stamp-${Date.now().toString(36)}`;
+}
+
+/** @param {unknown} v */
+export function normalizeScscH21SealImageData(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  if (!/^data:image\/(png|jpe?g|webp);base64,/i.test(s)) return null;
+  if (s.length > 900_000) return null;
+  return s;
+}
+
+export function normalizeScscH21Stamp(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const o = /** @type {Record<string, unknown>} */ (raw);
+  const shipperName = String(o.shipperName ?? o.shipper_name ?? "").trim();
+  const stamp = String(o.stampId ?? o.stamp_id ?? "").trim().toUpperCase();
+  if (!shipperName && !stamp) return null;
+  const id = String(o.id ?? "").trim() || stampId();
+  const active = o.active === false || o.active === 0 || o.active === "0" ? false : true;
+  const sealImageData = normalizeScscH21SealImageData(o.sealImageData ?? o.seal_image_data);
+  return {
+    id,
+    shipperName,
+    shipperAddress: String(o.shipperAddress ?? o.shipper_address ?? "").trim(),
+    shipperPhone: String(o.shipperPhone ?? o.shipper_phone ?? "").trim(),
+    stampId: stamp,
+    active,
+    warehouseScope: SCSC_H21_WAREHOUSE_SCOPE,
+    sealImageData,
+  };
+}
+
+export async function createScscH21Stamp(client, raw) {
+  const item = normalizeScscH21Stamp(raw);
+  if (!item || !item.shipperName || !item.stampId) {
+    const err = new Error("Shipper tờ khai cần tên và Stamp ID");
+    err.statusCode = 400;
+    throw err;
+  }
+  await client.query(
+    `
+    INSERT INTO ${SCSC_H21_STAMPS_TABLE}
+      (id, shipper_name, shipper_address, shipper_phone, stamp_id, warehouse_scope, active, seal_image_data)
+    VALUES ($1,$2,$3,$4,$5,'SCSC',$6,$7)
+    `,
+    [
+      item.id,
+      item.shipperName,
+      item.shipperAddress,
+      item.shipperPhone,
+      item.stampId,
+      item.active,
+      item.sealImageData ?? null,
+    ]
+  );
+  return item;
+}
+
+export async function updateScscH21Stamp(client, id, patch) {
+  const current = await getScscH21Stamp(client, id);
+  if (!current) {
+    const err = new Error("Không tìm thấy shipper tờ khai");
+    err.statusCode = 404;
+    throw err;
+  }
+  const patchObj = patch && typeof patch === "object" ? patch : {};
+  const sealInPatch =
+    Object.prototype.hasOwnProperty.call(patchObj, "sealImageData") ||
+    Object.prototype.hasOwnProperty.call(patchObj, "seal_image_data");
+  const next = normalizeScscH21Stamp({
+    ...current,
+    ...patchObj,
+    id: current.id,
+    sealImageData: sealInPatch
+      ? patchObj.sealImageData ?? patchObj.seal_image_data ?? null
+      : current.sealImageData ?? null,
+  });
+  if (!next) {
+    const err = new Error("Dữ liệu shipper không hợp lệ");
+    err.statusCode = 400;
+    throw err;
+  }
+  await client.query(
+    `
+    UPDATE ${SCSC_H21_STAMPS_TABLE}
+    SET shipper_name=$2, shipper_address=$3, shipper_phone=$4, stamp_id=$5, active=$6, seal_image_data=$7
+    WHERE id=$1 AND warehouse_scope='SCSC'
+    `,
+    [
+      next.id,
+      next.shipperName,
+      next.shipperAddress,
+      next.shipperPhone,
+      next.stampId,
+      next.active,
+      next.sealImageData ?? null,
+    ]
+  );
+  return next;
+}
+
+export async function getScscH21Stamp(client, id) {
+  const res = await client.query(
+    `SELECT id, shipper_name, shipper_address, shipper_phone, stamp_id, active, seal_image_data
+     FROM ${SCSC_H21_STAMPS_TABLE} WHERE id=$1 AND warehouse_scope='SCSC' LIMIT 1`,
+    [String(id)]
+  );
+  return res.rows[0] ? rowToStamp(res.rows[0]) : null;
+}
+
+export async function deleteScscH21Stamp(client, id) {
+  const res = await client.query(
+    `DELETE FROM ${SCSC_H21_STAMPS_TABLE} WHERE id=$1 AND warehouse_scope='SCSC' RETURNING id`,
+    [String(id)]
+  );
+  if (!res.rows[0]) {
+    const err = new Error("Không tìm thấy shipper tờ khai");
+    err.statusCode = 404;
+    throw err;
+  }
+  return { id: res.rows[0].id };
 }
 
 export async function replaceAllScscH21Goods(client, rawList) {
   const items = clampScscH21Catalog(rawList);
+  const fileDups = findDuplicateScscH21Descriptions(items);
+  if (fileDups.length) {
+    throw duplicateError(
+      "",
+      fileDups.map((d) => `«${d.description}» (×${d.ids.length})`)
+    );
+  }
   await client.query(`DELETE FROM ${SCSC_H21_GOODS_TABLE} WHERE warehouse_scope = 'SCSC'`);
   let i = 0;
   for (const item of items) {
     item.sortOrder = i++;
-    await insertGoods(client, item);
+    try {
+      await insertGoods(client, item);
+    } catch (e) {
+      if (e?.code === "23505") throw duplicateError(item.description);
+      throw e;
+    }
   }
   return listScscH21Goods(client, { activeOnly: false, limit: 2000 });
 }

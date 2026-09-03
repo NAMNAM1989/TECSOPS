@@ -255,3 +255,46 @@ export function clampScscH21InvoiceLines(list) {
   }
   return out;
 }
+
+const CARGO_FAMILY_MODES = new Set([
+  "auto",
+  "frozen",
+  "fruit",
+  "food",
+  "garment",
+  "general",
+]);
+
+/**
+ * @param {unknown} raw
+ * @param {number} [seqFallback]
+ */
+export function normalizeScscH21InvoiceDeclaration(raw, seqFallback = 1) {
+  if (!raw || typeof raw !== "object") return null;
+  const o = /** @type {Record<string, unknown>} */ (raw);
+  const lines = clampScscH21InvoiceLines(o.lines ?? o.items);
+  const modeRaw = str(o.cargoFamilyMode ?? o.cargo_family_mode ?? o.cargoFamily, 24).toLowerCase();
+  const cargoFamilyMode = CARGO_FAMILY_MODES.has(modeRaw) ? modeRaw : "auto";
+  const declarationKg = Math.max(0, num(o.declarationKg ?? o.declaration_kg ?? o.kg, 0));
+  const seq = Math.max(1, Math.trunc(num(o.seq, seqFallback)) || seqFallback);
+  return {
+    id: str(o.id, 64) || newId(),
+    seq,
+    declarationKg,
+    cargoFamilyMode,
+    lines,
+  };
+}
+
+/**
+ * @param {unknown} list
+ */
+export function clampScscH21InvoiceDeclarations(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    const d = normalizeScscH21InvoiceDeclaration(list[i], i + 1);
+    if (d) out.push(d);
+  }
+  return out.map((d, i) => ({ ...d, seq: i + 1 }));
+}

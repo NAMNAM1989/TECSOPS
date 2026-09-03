@@ -47,6 +47,8 @@ import {
   type ShipmentSearchMatch,
 } from "../utils/shipmentSearch";
 import { DayExcelExportDialog } from "./DayExcelExportDialog";
+import type { ScscH21StampId } from "../types/scscH21Catalog";
+import { fetchScscH21Stamps } from "../utils/scscH21Api";
 
 const GoogleSheetImportModal = lazy(() =>
   import("./GoogleSheetImportModal").then((m) => ({ default: m.GoogleSheetImportModal }))
@@ -126,6 +128,7 @@ export function AirCargoTracking({
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
   const [invoiceShipment, setInvoiceShipment] = useState<Shipment | null>(null);
+  const [h21Stamps, setH21Stamps] = useState<ScscH21StampId[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -349,14 +352,38 @@ export function AirCargoTracking({
     [onRequestPrint]
   );
 
+  useEffect(() => {
+    if (!isScscWarehouse(activeWarehouse)) return;
+    let cancelled = false;
+    void fetchScscH21Stamps()
+      .then((items) => {
+        if (!cancelled) setH21Stamps(items);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWarehouse]);
+
   const openInvoiceH21 = useCallback((s: Shipment) => {
     setInvoiceShipment(s);
+    void fetchScscH21Stamps()
+      .then(setH21Stamps)
+      .catch(() => {});
   }, []);
 
   const saveInvoiceH21 = useCallback(
-    async (invoiceItems: NonNullable<Shipment["invoiceItems"]>) => {
+    async (payload: {
+      invoiceItems: NonNullable<Shipment["invoiceItems"]>;
+      invoiceDeclarations: NonNullable<Shipment["invoiceDeclarations"]>;
+      h21DeclarationShipperId: string;
+    }) => {
       if (!invoiceShipment) return;
-      await onUpdate(invoiceShipment.id, { invoiceItems });
+      await onUpdate(invoiceShipment.id, {
+        invoiceItems: payload.invoiceItems,
+        invoiceDeclarations: payload.invoiceDeclarations,
+        h21DeclarationShipperId: payload.h21DeclarationShipperId,
+      });
     },
     [invoiceShipment, onUpdate]
   );
@@ -666,6 +693,7 @@ export function AirCargoTracking({
             onDelete={onDelete}
             onPrint={requestPrintLabel}
             onInvoice={openInvoiceH21}
+            h21Stamps={h21Stamps}
             viewSessionYmd={selectedYmd}
           />
         </Suspense>
@@ -763,6 +791,8 @@ export function AirCargoTracking({
             shipment={
               allRows.find((r) => r.id === invoiceShipment.id) ?? invoiceShipment
             }
+            customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
+            stamps={h21Stamps}
             onSave={saveInvoiceH21}
             onClose={() => setInvoiceShipment(null)}
           />

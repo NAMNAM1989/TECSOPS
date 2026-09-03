@@ -8,8 +8,13 @@ import {
   parseScscH21CatalogExcel,
   updateScscH21Goods,
 } from "../utils/scscH21Api";
+import {
+  findDuplicateScscH21Descriptions,
+  findScscH21DescriptionConflict,
+} from "../../shared/scscH21CatalogNormalize.mjs";
 import { OPS } from "../styles/opsModalStyles";
 import { Button, ConfirmDialog, IconButton, Input, TextArea, Wordmark, useToast } from "../ui";
+import { ScscH21ShipperSection } from "../components/ScscH21ShipperSection";
 
 type Draft = ScscH21CatalogItem & { _isNew?: boolean };
 
@@ -155,6 +160,13 @@ export function ScscH21CatalogPage({ onBack }: Props) {
       toast.error("Nhập mô tả hàng");
       return;
     }
+    const conflict = findScscH21DescriptionConflict(items, row.description, {
+      exceptId: row.id,
+    });
+    if (conflict) {
+      toast.error(`Mô tả trùng — không cho lưu: «${conflict.description}»`);
+      return;
+    }
     setSavingId(row.id);
     try {
       if (row._isNew) {
@@ -200,6 +212,19 @@ export function ScscH21CatalogPage({ onBack }: Props) {
       const parsed = await parseScscH21CatalogExcel(buf);
       if (!parsed.length) {
         toast.error("File không có dòng hàng hợp lệ");
+        return;
+      }
+      const fileDups = findDuplicateScscH21Descriptions(parsed);
+      if (fileDups.length) {
+        const sample = fileDups
+          .slice(0, 3)
+          .map((d) => `«${d.description}»`)
+          .join("; ");
+        toast.error(
+          `File có mô tả trùng — không cho nhập: ${sample}${
+            fileDups.length > 3 ? ` …(+${fileDups.length - 3})` : ""
+          }`
+        );
         return;
       }
       const result = await importScscH21Goods(parsed);
@@ -261,6 +286,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
       </header>
 
       <main className="mx-auto max-w-7xl space-y-3 px-4 py-4">
+        <ScscH21ShipperSection />
         {/* Toolbar */}
         <section className="rounded-2xl border border-ui-border/80 bg-ui-surface p-3 shadow-ui-sm sm:p-3.5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -442,6 +468,11 @@ export function ScscH21CatalogPage({ onBack }: Props) {
                 <tbody>
                   {filtered.map((row) => {
                     const editing = editingId === row.id;
+                    const descConflict = editing
+                      ? findScscH21DescriptionConflict(items, row.description, {
+                          exceptId: row.id,
+                        })
+                      : null;
                     return (
                       <tr
                         key={row.id}
@@ -469,12 +500,24 @@ export function ScscH21CatalogPage({ onBack }: Props) {
                         </td>
                         <td className="px-3 py-2.5 align-top">
                           {editing ? (
-                            <TextArea
-                              className="min-h-[4.5rem] text-sm"
-                              value={row.description}
-                              onChange={(e) => patchLocal(row.id, { description: e.target.value })}
-                              placeholder="Mô tả hàng hóa…"
-                            />
+                            <div className="space-y-1">
+                              <TextArea
+                                className={`min-h-[4.5rem] text-sm ${
+                                  descConflict ? "border-red-400 ring-1 ring-red-300" : ""
+                                }`}
+                                value={row.description}
+                                onChange={(e) =>
+                                  patchLocal(row.id, { description: e.target.value })
+                                }
+                                placeholder="Mô tả hàng hóa…"
+                                aria-invalid={Boolean(descConflict)}
+                              />
+                              {descConflict ? (
+                                <p className="text-[11px] font-semibold text-red-700">
+                                  Mô tả trùng với bản ghi khác — không cho lưu.
+                                </p>
+                              ) : null}
+                            </div>
                           ) : (
                             <span className="line-clamp-3 text-[13px] leading-snug text-ui-text">
                               {row.description}
@@ -629,7 +672,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
                                 <Button
                                   type="button"
                                   size="sm"
-                                  disabled={savingId === row.id}
+                                  disabled={savingId === row.id || Boolean(descConflict)}
                                   onClick={() => void handleSave(row)}
                                   className="min-h-9 px-2.5"
                                 >

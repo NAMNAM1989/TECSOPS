@@ -23,6 +23,8 @@ import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 import { normalizeWarehouse, warehouseLabel, isScscWarehouse } from "../constants/warehouses";
 import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
 import { InlineCustomerInfoCell } from "./InlineCustomerInfoCell";
+import { H21DeclarationShipperCell } from "./H21DeclarationShipperCell";
+import type { ScscH21StampId } from "../types/scscH21Catalog";
 import { CneeDetailPopover } from "./CneeDetailPopover";
 import { VehicleTypeMissingBadge } from "./VehicleTypeMissingBadge";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -55,18 +57,21 @@ interface Props {
   onUpdateCustomers?: (
     customers: CustomerDirectoryEntry[]
   ) => Promise<boolean | void>;
+  /** Shipper tờ khai H21 — dropdown cột 「Tờ khai」 (SCSC). */
+  h21Stamps?: readonly ScscH21StampId[];
 }
 
 type ColHeader = { key: string; label: string; w: string; title?: string };
 
 /** ~200px — đủ đọc tên Shipper/CNEE, vẫn gọn cạnh STATUS. */
 const INFO_KH_W = "w-[12.5rem] max-w-[12.5rem]";
+const H21_DECL_W = "w-[7.5rem] max-w-[7.5rem]";
 /** Vừa đủ nội dung thật — không truncate AWB/chuyến; KHÁCH tối đa 2 dòng. */
 const AWB_W = "w-[9rem] max-w-[9rem]";
 const FLIGHT_W = "w-[5rem] max-w-[5rem]";
 const CUSTOMER_W = "w-[8.75rem] max-w-[8.75rem]";
 
-const COL_HEADERS: ColHeader[] = [
+const BASE_COL_HEADERS: ColHeader[] = [
   { key: "stt", label: "#", w: "w-9" },
   { key: "awb", label: "AWB / HAWB", w: `${AWB_W} sticky left-0 z-[1]` },
   { key: "flight", label: "CHUYẾN", w: FLIGHT_W },
@@ -78,10 +83,19 @@ const COL_HEADERS: ColHeader[] = [
   {
     key: "customerInfo",
     label: "INFO KH",
-    /** Cố định bề rộng — tránh <select> option dài kéo cột. */
     w: INFO_KH_W,
     title: "Shipper · CNEE · Tên hàng · CNEE in ấn",
   },
+];
+
+const H21_DECL_COL: ColHeader = {
+  key: "h21Decl",
+  label: "TỜ KHAI",
+  w: H21_DECL_W,
+  title: "Shipper trên invoice H21 phi mậu dịch",
+};
+
+const TAIL_COL_HEADERS: ColHeader[] = [
   {
     key: "status",
     label: "STATUS",
@@ -108,8 +122,17 @@ export function DesktopShipmentTable({
   onInvoice,
   viewSessionYmd,
   onUpdateCustomers,
+  h21Stamps = [],
 }: Props) {
   const isMobile = useIsMobile();
+  const showH21DeclCol = isScscWarehouse(activeWarehouse);
+  const colHeaders = useMemo(
+    () =>
+      showH21DeclCol
+        ? [...BASE_COL_HEADERS, H21_DECL_COL, ...TAIL_COL_HEADERS]
+        : [...BASE_COL_HEADERS, ...TAIL_COL_HEADERS],
+    [showH21DeclCol]
+  );
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
   const allRowsRef = useRef(allRows);
   allRowsRef.current = allRows;
@@ -185,7 +208,7 @@ export function DesktopShipmentTable({
             <table className="w-full border-separate border-spacing-x-0 border-spacing-y-1.5 text-left text-[13px] leading-tight">
               <thead className="sticky top-0 z-20">
                 <tr className="ops-table-head">
-                  {COL_HEADERS.map((c) => (
+                  {colHeaders.map((c) => (
                     <th
                       key={c.key}
                       title={c.title}
@@ -204,7 +227,7 @@ export function DesktopShipmentTable({
                 {group.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={COL_HEADERS.length}
+                      colSpan={colHeaders.length}
                       className="px-3 py-8 text-center"
                     >
                       <button
@@ -234,6 +257,8 @@ export function DesktopShipmentTable({
                       onDelete={onDelete}
                       onPrint={onPrint}
                       onInvoice={onInvoice}
+                      showH21DeclCol={showH21DeclCol}
+                      h21Stamps={h21Stamps}
                       onOpenDimModal={setDimModalRow}
                     />
                   ))
@@ -274,6 +299,8 @@ function ShipmentTableRowImpl({
   onDelete,
   onPrint,
   onInvoice,
+  showH21DeclCol = false,
+  h21Stamps = [],
   onOpenDimModal,
 }: {
   row: Shipment;
@@ -292,6 +319,8 @@ function ShipmentTableRowImpl({
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   onInvoice?: (s: Shipment) => void;
+  showH21DeclCol?: boolean;
+  h21Stamps?: readonly ScscH21StampId[];
   onOpenDimModal: (s: Shipment) => void;
 }) {
   const toast = useToast();
@@ -549,6 +578,15 @@ function ShipmentTableRowImpl({
           />
         </div>
       </td>
+      {showH21DeclCol ? (
+        <td className={cell("mid", `box-border ${H21_DECL_W} align-middle`)}>
+          <H21DeclarationShipperCell
+            shipment={row}
+            stamps={h21Stamps}
+            onUpdate={(patch) => onUpdate(row.id, patch)}
+          />
+        </td>
+      ) : null}
       <td className={cell("mid", "align-middle")}>
         <StatusSelect
           value={row.status}
@@ -590,7 +628,9 @@ function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
     a.status === b.status &&
     a.note === b.note &&
     a.stt === b.stt &&
-    (a.invoiceItems?.length ?? 0) === (b.invoiceItems?.length ?? 0)
+    (a.invoiceItems?.length ?? 0) === (b.invoiceItems?.length ?? 0) &&
+    (a.invoiceDeclarations?.length ?? 0) === (b.invoiceDeclarations?.length ?? 0) &&
+    (a.h21DeclarationShipperId ?? "") === (b.h21DeclarationShipperId ?? "")
   );
 }
 
@@ -603,6 +643,9 @@ const ShipmentTableRow = memo(ShipmentTableRowImpl, (prev, next) => {
     prev.viewSessionYmd === next.viewSessionYmd &&
     prev.customerDirectory === next.customerDirectory &&
     prev.findAwbConflict === next.findAwbConflict &&
-    prev.groupRowIds === next.groupRowIds
+    prev.groupRowIds === next.groupRowIds &&
+    prev.showH21DeclCol === next.showH21DeclCol &&
+    prev.h21Stamps === next.h21Stamps &&
+    prev.onInvoice === next.onInvoice
   );
 });

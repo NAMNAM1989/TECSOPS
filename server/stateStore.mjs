@@ -307,7 +307,8 @@ export function runMutation(mutation) {
       const current = currentRaw
         ? normalizeOrThrow(currentRaw, `Postgres (${postgresStateStore.key})`)
         : emptyInitialState();
-      return applyMutation(current, mutation);
+      const next = applyMutation(current, mutation);
+      return { __tecsopsPersistDiff: true, prev: current, next };
     });
   });
   tail = result.catch(async (err) => {
@@ -328,13 +329,14 @@ export function runBatchMutations(mutations) {
       throw new Error("[state] Postgres chưa cấu hình (DATABASE_URL).");
     }
     return postgresStateStore.runLocked(async (currentRaw) => {
-      let state = currentRaw
+      const current = currentRaw
         ? normalizeOrThrow(currentRaw, `Postgres (${postgresStateStore.key})`)
         : emptyInitialState();
+      let state = current;
       for (const mutation of list) {
         state = applyMutation(state, mutation);
       }
-      return state;
+      return { __tecsopsPersistDiff: true, prev: current, next: state };
     });
   });
   tail = result.catch(async (err) => {

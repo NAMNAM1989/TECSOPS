@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type AppRoute = "ops" | "customers" | "stats" | "airlines";
+export type AppRoute = "ops" | "customers" | "stats" | "airlines" | "scsc-h21";
 
 function parseHashRoute(): AppRoute {
   const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
@@ -9,6 +9,16 @@ function parseHashRoute(): AppRoute {
   if (raw === "airlines" || raw.startsWith("airlines/") || raw === "hang" || raw.startsWith("hang/")) {
     return "airlines";
   }
+  if (
+    raw === "scsc-h21" ||
+    raw.startsWith("scsc-h21/") ||
+    raw === "h21" ||
+    raw.startsWith("h21/") ||
+    raw === "scsc-goods" ||
+    raw.startsWith("scsc-goods/")
+  ) {
+    return "scsc-h21";
+  }
   return "ops";
 }
 
@@ -16,6 +26,7 @@ function hashFor(route: AppRoute): string {
   if (route === "customers") return "#/customers";
   if (route === "stats") return "#/stats";
   if (route === "airlines") return "#/airlines";
+  if (route === "scsc-h21") return "#/scsc-h21";
   return "#/";
 }
 

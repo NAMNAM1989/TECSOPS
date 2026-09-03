@@ -1,4 +1,5 @@
 import type { DimDivisor, DimPieceLine } from "../utils/volumetricDim";
+import type { ScscH21InvoiceLine } from "./scscH21Catalog";
 
 /** Trạng thái nghiệp vụ — 3 bước đầu bám AWB / kiện / DIM, sau đó NV chọn thủ công. */
 export type ShipmentStatus =
@@ -79,6 +80,7 @@ export interface Shipment {
   consigneePhonePrint?: string;
   consigneeEmailPrint?: string;
   notifyNamePrint?: string;
+  invoiceItems?: ScscH21InvoiceLine[];
   status: ShipmentStatus;
   /**
    * SoT DB `lots.synced_at` (timestamptz) — ISO. Null/thiếu = ẩn timestamp trên Ops strip.

@@ -19,6 +19,7 @@ import {
 } from "../utils/exportTcsAttachedDimsExcel";
 import { awbDigitsKey } from "../utils/awbFormat";
 import { isTcsWarehouse } from "../constants/warehouses";
+import { isScscH21Warehouse } from "../types/scscH21Catalog";
 import { OPS } from "../styles/opsModalStyles";
 
 const CsdPrintModal = lazy(() =>
@@ -36,6 +37,8 @@ type Props = {
   customerDirectory: readonly CustomerDirectoryEntry[];
   onPrint: (s: Shipment) => void;
   onDelete: (id: string) => void;
+  /** Lập invoice H21 từ catalog SCSC — chỉ truyền khi kho SCSC. */
+  onInvoice?: (s: Shipment) => void;
   compact?: boolean;
   /** Card mobile denser — nút menu ~32px. */
   dense?: boolean;
@@ -128,6 +131,18 @@ function IconKebabVertical() {
   );
 }
 
+function IconInvoice() {
+  return (
+    <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 5h6M7 3h10a1 1 0 011 1v16l-3-1.5L12 20l-3-1.5L6 20V4a1 1 0 011-1zM9 10h6M9 14h4"
+      />
+    </svg>
+  );
+}
+
 function IconCsd() {
   return (
     <svg className={iconCls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
@@ -162,6 +177,7 @@ export function ShipmentRowActionsMenu({
   customerDirectory,
   onPrint,
   onDelete,
+  onInvoice,
   compact = false,
   dense = false,
 }: Props) {
@@ -175,13 +191,19 @@ export function ShipmentRowActionsMenu({
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   const showTcsDimPdf = isTcsWarehouse(row.warehouse) && (row.dimLines?.length ?? 0) > 0;
+  const showInvoice = Boolean(onInvoice) && isScscH21Warehouse(row.warehouse);
   const csdCarrier = lightweightCsdCarrier(row);
   const showCsd = csdCarrier != null;
   const showCsdInline = showCsd && !compact;
   const csdAirline = csdCarrier ? CSD_AIRLINE[csdCarrier] : "";
   const [csdOpen, setCsdOpen] = useState(false);
   const menuExtras =
-    (showDim ? 1 : 0) + (showTcsDim ? 2 : 0) + (showTcsDimPdf ? 1 : 0) + (showCsd ? 1 : 0) + 1;
+    (showDim ? 1 : 0) +
+    (showTcsDim ? 2 : 0) +
+    (showTcsDimPdf ? 1 : 0) +
+    (showCsd ? 1 : 0) +
+    (showInvoice ? 1 : 0) +
+    1;
 
   const confirmDelete = () => {
     if (confirm(`Xóa lô AWB ${row.awb || "(chưa có AWB)"}?`)) onDelete(row.id);
@@ -273,6 +295,14 @@ export function ShipmentRowActionsMenu({
         className={OPS.dropdown}
       >
         {compact ? menuItem("In nhãn", () => onPrint(row)) : null}
+        {showInvoice
+          ? menuItem(
+              `Invoice H21${row.invoiceItems?.length ? ` (${row.invoiceItems.length})` : ""}`,
+              () => onInvoice?.(row),
+              undefined,
+              `row-invoice-h21-${row.id}`
+            )
+          : null}
         {showDim
           ? menuItem("Excel LIST DIM", () => {
               void import("../utils/exportScscDimListExcel").then((m) =>
@@ -318,6 +348,16 @@ export function ShipmentRowActionsMenu({
           <ActionIconBtn label="In nhãn vận chuyển" shortLabel="In" onClick={() => onPrint(row)}>
             <IconPrintLabel />
           </ActionIconBtn>
+          {showInvoice ? (
+            <ActionIconBtn
+              label="Invoice H21 SCSC"
+              shortLabel="H21"
+              active={Boolean(row.invoiceItems?.length)}
+              onClick={() => onInvoice?.(row)}
+            >
+              <IconInvoice />
+            </ActionIconBtn>
+          ) : null}
           {showDim ? (
             <ActionIconBtn label="In LIST DIM SCSC" onClick={() => printDimReport(row)}>
               <IconDimReport />

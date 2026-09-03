@@ -9,6 +9,11 @@ import {
   seedAirlineCatalogIfEmpty,
 } from "./airlineCatalog.mjs";
 import { ensureAirportSchema, seedAirportsIfEmpty } from "./airportCatalog.mjs";
+import {
+  ensureScscH21CatalogSchema,
+  seedScscH21CatalogIfEmpty,
+} from "./scscH21Catalog.mjs";
+import { clampScscH21InvoiceLines } from "../shared/scscH21CatalogNormalize.mjs";
 import { parseCustomersLoose } from "./customerDirectoryValidate.mjs";
 
 const { Pool } = pg;
@@ -264,6 +269,8 @@ async function ensureSchema(client) {
   await ensureAirportSchema(client);
   await seedAirlineCatalogIfEmpty(client);
   await seedAirportsIfEmpty(client);
+  await ensureScscH21CatalogSchema(client);
+  await seedScscH21CatalogIfEmpty(client);
 }
 
 function str(v) {
@@ -740,7 +747,7 @@ async function replaceRelationalSnapshot(client, key, state) {
         shipper_name_print, shipper_address_print, shipper_phone_print, shipper_email_print, tax_code_print,
         agent_name_print, agent_address_print, agent_phone_print, agent_email_print, agent_tax_code_print,
         consignee_name_print, consignee_address_print, consignee_phone_print, consignee_email_print, notify_name_print,
-        status
+        status, invoice_items
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         $13,$14,$15,$16::jsonb,$17,
@@ -749,7 +756,7 @@ async function replaceRelationalSnapshot(client, key, state) {
         $28,$29,$30,$31,$32,
         $33,$34,$35,$36,$37,
         $38,$39,$40,$41,$42,
-        $43
+        $43,$44::jsonb
       )
       `,
       [
@@ -796,6 +803,10 @@ async function replaceRelationalSnapshot(client, key, state) {
         str(s.consigneeEmailPrint),
         str(s.notifyNamePrint),
         str(s.status),
+        (() => {
+          const lines = clampScscH21InvoiceLines(s.invoiceItems);
+          return lines.length ? jsonOrNull(lines) : null;
+        })(),
       ]
     );
   }

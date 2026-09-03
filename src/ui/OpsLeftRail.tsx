@@ -6,6 +6,7 @@ type Props = {
   onPrefetchCustomers?: () => void;
   onPrefetchStats?: () => void;
   onPrefetchAirlines?: () => void;
+  onPrefetchScscH21?: () => void;
 };
 
 function IconOps({ className }: { className?: string }) {
@@ -45,6 +46,14 @@ function IconAirline({ className }: { className?: string }) {
   );
 }
 
+function IconH21({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+      <path d="M9 5h6M7 3h10a1 1 0 011 1v16l-3-1.5L12 20l-3-1.5L6 20V4a1 1 0 011-1zM9 10h6M9 14h4" />
+    </svg>
+  );
+}
+
 const ITEMS: {
   id: AppRoute;
   label: string;
@@ -53,6 +62,7 @@ const ITEMS: {
   { id: "ops", label: "Ops", Icon: IconOps },
   { id: "customers", label: "Khách", Icon: IconCustomers },
   { id: "airlines", label: "Hãng", Icon: IconAirline },
+  { id: "scsc-h21", label: "H21 SCSC", Icon: IconH21 },
   { id: "stats", label: "Thống kê", Icon: IconStats },
 ];
 
@@ -63,6 +73,7 @@ export function OpsLeftRail({
   onPrefetchCustomers,
   onPrefetchStats,
   onPrefetchAirlines,
+  onPrefetchScscH21,
 }: Props) {
   return (
     <aside
@@ -93,11 +104,13 @@ export function OpsLeftRail({
                 if (id === "customers") onPrefetchCustomers?.();
                 if (id === "stats") onPrefetchStats?.();
                 if (id === "airlines") onPrefetchAirlines?.();
+                if (id === "scsc-h21") onPrefetchScscH21?.();
               }}
               onFocus={() => {
                 if (id === "customers") onPrefetchCustomers?.();
                 if (id === "stats") onPrefetchStats?.();
                 if (id === "airlines") onPrefetchAirlines?.();
+                if (id === "scsc-h21") onPrefetchScscH21?.();
               }}
               className={`relative flex min-h-11 w-full touch-manipulation flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
                 isActive
@@ -112,7 +125,7 @@ export function OpsLeftRail({
                 />
               ) : null}
               <Icon className="h-5 w-5 shrink-0" />
-              <span>{label}</span>
+              <span className="max-w-full text-center leading-tight">{label}</span>
             </button>
           );
         })}

@@ -1,0 +1,96 @@
+import { describe, expect, it } from "vitest";
+import {
+  clampScscH21Catalog,
+  clampScscH21InvoiceLines,
+  catalogItemFromExcelRow,
+  invoiceLineFromCatalogItem,
+  normalizeScscH21CatalogItem,
+} from "../../shared/scscH21CatalogNormalize.mjs";
+import { isScscH21Warehouse } from "../types/scscH21Catalog";
+import { clampInvoiceItemsForShipment } from "./scscH21Api";
+
+describe("scscH21CatalogNormalize", () => {
+  it("normalize item + scope SCSC", () => {
+    const item = normalizeScscH21CatalogItem({
+      category: "cà phê",
+      description: "Cà phê hòa tan 247",
+      hsCode: "21011119",
+      qty1: 65,
+      uom1: "BAG",
+      unitPrice: 0.4,
+    });
+    expect(item).toMatchObject({
+      category: "CÀ PHÊ",
+      warehouseScope: "SCSC",
+      hsCode: "21011119",
+      amount: 26,
+      uom1: "BAG",
+    });
+  });
+
+  it("map UOM lạ UNK → BAG", () => {
+    const item = normalizeScscH21CatalogItem({
+      description: "Bánh test",
+      uom1: "UNK",
+    });
+    expect(item?.uom1).toBe("BAG");
+  });
+
+  it("parse excel row tiếng Việt", () => {
+    const item = catalogItemFromExcelRow({
+      "LOẠI HÀNG": "ÁO",
+      "Tên hàng": "Áo thun nam",
+      "Mã HS": 61099020,
+      "LƯỢNG 1": 50,
+      "DVT 1": "PCE",
+      "ĐƠN GIÁ": 0.4,
+    });
+    expect(item?.hsCode).toBe("61099020");
+    expect(item?.category).toBe("ÁO");
+  });
+
+  it("dedupe clamp by id", () => {
+    const list = clampScscH21Catalog([
+      { id: "a", description: "One" },
+      { id: "a", description: "One again" },
+      { id: "b", description: "Two" },
+    ]);
+    expect(list).toHaveLength(2);
+  });
+
+  it("invoice line from catalog", () => {
+    const line = invoiceLineFromCatalogItem({
+      id: "cat-1",
+      description: "Mì Hảo Hảo",
+      hsCode: "19023040",
+      qty1: 35,
+      uom1: "BAG",
+      qty2: 2.975,
+      uom2: "KGM",
+      unitPrice: 0.45,
+    });
+    expect(line?.catalogItemId).toBe("cat-1");
+    expect(line?.weightKg).toBe(2.975);
+    expect(line?.amount).toBe(15.75);
+  });
+
+  it("invoice lines clamp", () => {
+    expect(clampScscH21InvoiceLines([{ description: "" }])).toHaveLength(0);
+    expect(
+      clampScscH21InvoiceLines([{ description: "OK", quantity: 1, unitPrice: 2 }])
+    ).toHaveLength(1);
+  });
+});
+
+describe("scsc H21 warehouse gate", () => {
+  it("chỉ SCSC", () => {
+    expect(isScscH21Warehouse("SCSC")).toBe(true);
+    expect(isScscH21Warehouse("TECS-SCSC")).toBe(false);
+    expect(isScscH21Warehouse("TCS")).toBe(false);
+  });
+
+  it("clampInvoiceItemsForShipment chỉ SCSC", () => {
+    expect(clampInvoiceItemsForShipment("TCS", [{ description: "X", quantity: 1 }])).toBeUndefined();
+    expect(clampInvoiceItemsForShipment("SCSC", [{ description: "X", quantity: 1 }])?.length).toBe(1);
+  });
+});

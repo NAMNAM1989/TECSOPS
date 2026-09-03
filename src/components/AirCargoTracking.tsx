@@ -63,6 +63,9 @@ const OpsMobileBookingFab = lazy(() =>
 const MobileShipmentEditSheet = lazy(() =>
   import("./MobileShipmentEditSheet").then((m) => ({ default: m.MobileShipmentEditSheet }))
 );
+const ScscH21InvoiceModal = lazy(() =>
+  import("./ScscH21InvoiceModal").then((m) => ({ default: m.ScscH21InvoiceModal }))
+);
 
 type SyncApi = ReturnType<typeof useShipmentSync>;
 
@@ -122,6 +125,7 @@ export function AirCargoTracking({
   const [cargoReportCopying, setCargoReportCopying] = useState(false);
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
+  const [invoiceShipment, setInvoiceShipment] = useState<Shipment | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -343,6 +347,18 @@ export function AirCargoTracking({
     // Chỉ [onRequestPrint]: state đổi liên tục qua Socket — đưa airlineLabelOverrides vào deps gây loop (#310).
     // Đọc overrides qua closure tại lúc gọi in.
     [onRequestPrint]
+  );
+
+  const openInvoiceH21 = useCallback((s: Shipment) => {
+    setInvoiceShipment(s);
+  }, []);
+
+  const saveInvoiceH21 = useCallback(
+    async (invoiceItems: NonNullable<Shipment["invoiceItems"]>) => {
+      if (!invoiceShipment) return;
+      await onUpdate(invoiceShipment.id, { invoiceItems });
+    },
+    [invoiceShipment, onUpdate]
   );
 
   const goPrevDay = () => setSelectedViewDate((d) => startOfLocalDay(addLocalDays(d, -1)));
@@ -619,6 +635,7 @@ export function AirCargoTracking({
             onUpdate={onUpdate}
             onDelete={onDelete}
             onPrint={requestPrintLabel}
+            onInvoice={openInvoiceH21}
             customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
             activeWarehouse={activeWarehouse}
             searchActive={searchActive}
@@ -648,6 +665,7 @@ export function AirCargoTracking({
             onUpdateCustomers={onUpdateCustomers}
             onDelete={onDelete}
             onPrint={requestPrintLabel}
+            onInvoice={openInvoiceH21}
             viewSessionYmd={selectedYmd}
           />
         </Suspense>
@@ -738,6 +756,18 @@ export function AirCargoTracking({
         onClose={() => setExcelRangeOpen(false)}
         onExport={(from, to) => void onDownloadDayExcelRange(from, to)}
       />
+
+      {invoiceShipment ? (
+        <Suspense fallback={null}>
+          <ScscH21InvoiceModal
+            shipment={
+              allRows.find((r) => r.id === invoiceShipment.id) ?? invoiceShipment
+            }
+            onSave={saveInvoiceH21}
+            onClose={() => setInvoiceShipment(null)}
+          />
+        </Suspense>
+      ) : null}
     </AppShell>
   );
 }

@@ -30,6 +30,8 @@
     "migrate:postgres-state": "node scripts/postgres-migrate-state.mjs",
     "migrate:postgres-catalog": "node scripts/postgres-migrate-master-catalog.mjs",
     "migrate:customer-relations": "node scripts/migrate-customer-relations.mjs",
+    "seed:scsc-h21": "python scripts/gen-scsc-h21-seed.py",
+    "migrate:scsc-h21": "node scripts/postgres-migrate-scsc-h21.mjs",
     "backup:postgres-state": "node scripts/postgres-backup-state.mjs",
     "restore:postgres-state": "node scripts/postgres-restore-state.mjs",
     "railway:check": "node scripts/railway-check-token.mjs",

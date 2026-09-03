@@ -16,6 +16,7 @@ type Props = {
   onPrefetchCustomers?: () => void;
   onPrefetchStats?: () => void;
   onPrefetchAirlines?: () => void;
+  onPrefetchScscH21?: () => void;
   /** Ops mobile — copy ảnh báo cáo trong cùng menu nav. */
   cargoCopy?: MobileCargoCopyApi | null;
   /** Test-only: mở menu ngay khi render. */
@@ -59,6 +60,14 @@ function IconAirline({ className }: { className?: string }) {
   );
 }
 
+function IconH21({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+      <path d="M9 5h6M7 3h10a1 1 0 011 1v16l-3-1.5L12 20l-3-1.5L6 20V4a1 1 0 011-1zM9 10h6M9 14h4" />
+    </svg>
+  );
+}
+
 function IconMenu({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
@@ -93,6 +102,7 @@ const ITEMS: {
   { id: "ops", label: "Ops", Icon: IconOps },
   { id: "customers", label: "Khách", Icon: IconCustomers },
   { id: "airlines", label: "Hãng", Icon: IconAirline },
+  { id: "scsc-h21", label: "H21 SCSC", Icon: IconH21 },
   { id: "stats", label: "TK", Icon: IconStats },
 ];
 
@@ -106,6 +116,7 @@ export function BottomNav({
   onPrefetchCustomers,
   onPrefetchStats,
   onPrefetchAirlines,
+  onPrefetchScscH21,
   cargoCopy = null,
   defaultOpen = false,
 }: Props) {
@@ -150,6 +161,7 @@ export function BottomNav({
     if (id === "customers") onPrefetchCustomers?.();
     if (id === "stats") onPrefetchStats?.();
     if (id === "airlines") onPrefetchAirlines?.();
+    if (id === "scsc-h21") onPrefetchScscH21?.();
   };
 
   return (

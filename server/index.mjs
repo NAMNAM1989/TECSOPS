@@ -13,6 +13,7 @@ import {
 } from "./stateStore.mjs";
 import { createPostgresStateStore } from "./postgresStateStore.mjs";
 import { registerLookupRoutes } from "./lookupRoutes.mjs";
+import { registerScscH21Routes } from "./scscH21Routes.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
 import {
@@ -207,6 +208,9 @@ app.post("/api/mutations", appAuth.requireAuth, mutationRateLimit, async (req, r
 registerSheetsRoutes(app, { io, requireAuth: appAuth.requireAuth });
 console.info("[api] sheets (BOOK Hằng Ngày)");
 // Gemini /api/ai đã gỡ (A3). Railway có thể xóa GEMINI_*.
+
+registerScscH21Routes(app, { requireAuth: appAuth.requireAuth });
+console.info("[api] scsc-h21 catalog");
 
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app, { requireAuth: appAuth.requireAuth });

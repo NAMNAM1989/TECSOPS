@@ -42,6 +42,8 @@ interface Props {
   onUpdate: (id: string, patch: Partial<Shipment>) => void | Promise<boolean | void>;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
+  /** Invoice H21 — chỉ kho SCSC. */
+  onInvoice?: (s: Shipment) => void;
   viewSessionYmd: string;
   highlightedShipmentId?: string | null;
   selectedRowId?: string | null;
@@ -103,6 +105,7 @@ export function DesktopShipmentTable({
   onUpdate,
   onDelete,
   onPrint,
+  onInvoice,
   viewSessionYmd,
   onUpdateCustomers,
 }: Props) {
@@ -230,6 +233,7 @@ export function DesktopShipmentTable({
                       onUpdateCustomers={onUpdateCustomers}
                       onDelete={onDelete}
                       onPrint={onPrint}
+                      onInvoice={onInvoice}
                       onOpenDimModal={setDimModalRow}
                     />
                   ))
@@ -269,6 +273,7 @@ function ShipmentTableRowImpl({
   onUpdateCustomers,
   onDelete,
   onPrint,
+  onInvoice,
   onOpenDimModal,
 }: {
   row: Shipment;
@@ -286,6 +291,7 @@ function ShipmentTableRowImpl({
   ) => Promise<boolean | void>;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
+  onInvoice?: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
 }) {
   const toast = useToast();
@@ -563,6 +569,7 @@ function ShipmentTableRowImpl({
             customerDirectory={customerDirectory}
             onPrint={onPrint}
             onDelete={onDelete}
+            onInvoice={onInvoice}
           />
         </div>
       </td>
@@ -582,7 +589,8 @@ function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
     a.dimWeightKg === b.dimWeightKg &&
     a.status === b.status &&
     a.note === b.note &&
-    a.stt === b.stt
+    a.stt === b.stt &&
+    (a.invoiceItems?.length ?? 0) === (b.invoiceItems?.length ?? 0)
   );
 }
 

@@ -87,6 +87,7 @@ const MobileShipmentCard = memo(
     onUpdate,
     onDelete,
     onPrint,
+    onInvoice,
   }: {
     row: Shipment;
     selected: boolean;
@@ -97,6 +98,7 @@ const MobileShipmentCard = memo(
     onUpdate: (id: string, patch: Partial<Shipment>) => void;
     onDelete: (id: string) => void;
     onPrint: (s: Shipment) => void;
+    onInvoice?: (s: Shipment) => void;
   }) {
     const rowAccent = statusRowAccent[row.status];
     const rowSurface = selected ? statusRowSelected : statusRowBg;
@@ -195,6 +197,7 @@ const MobileShipmentCard = memo(
                 customerDirectory={customerDirectory}
                 onPrint={onPrint}
                 onDelete={onDelete}
+                onInvoice={onInvoice}
               />
             </div>
           </div>
@@ -232,6 +235,7 @@ interface MobileShipmentCardsProps {
   onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
+  onInvoice?: (s: Shipment) => void;
   onQuickEdit?: (row: Shipment) => void;
   customerDirectory?: readonly CustomerDirectoryEntry[];
   activeWarehouse?: Warehouse;
@@ -251,6 +255,7 @@ export function MobileShipmentCards({
   onUpdate,
   onDelete,
   onPrint,
+  onInvoice,
   onQuickEdit,
   customerDirectory = [],
   activeWarehouse = "TECS-TCS",
@@ -301,6 +306,7 @@ export function MobileShipmentCards({
       onUpdate={onUpdate}
       onDelete={onDelete}
       onPrint={onPrint}
+      onInvoice={onInvoice}
     />
   );
 

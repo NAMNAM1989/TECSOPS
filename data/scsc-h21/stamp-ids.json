@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "warehouseScope": "SCSC",
+  "items": [
+    {
+      "id": "stamp-namnam",
+      "shipperName": "CÔNG TY TNHH NAM NAM LOGISTICS",
+      "stampId": "NAMNAM",
+      "warehouseScope": "SCSC"
+    },
+    {
+      "id": "stamp-dongnam",
+      "shipperName": "CÔNG TY TNHH VẬN TẢI QUỐC TẾ ĐÔNG NAM",
+      "stampId": "DONGNAM",
+      "warehouseScope": "SCSC"
+    },
+    {
+      "id": "stamp-minhkhang",
+      "shipperName": "CÔNG TY TNHH MINH KHANG FASHION",
+      "stampId": "MINHKHANG",
+      "warehouseScope": "SCSC"
+    },
+    {
+      "id": "stamp-lotus",
+      "shipperName": "CÔNG TY TNHH DỊCH VỤ HOA SEN VÀNG",
+      "stampId": "LOTUS",
+      "warehouseScope": "SCSC"
+    },
+    {
+      "id": "stamp-trucnguyen",
+      "shipperName": "CÔNG TY TNHH TRÚC NGUYÊN LOGISTICS",
+      "stampId": "TRUCNGUYEN",
+      "warehouseScope": "SCSC"
+    }
+  ]
+}

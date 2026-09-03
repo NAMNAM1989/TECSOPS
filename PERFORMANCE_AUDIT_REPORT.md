@@ -96,27 +96,33 @@ Không đổi schema/migration (NON-DESTRUCTIVE gate: N/A).
 
 ```text
 Branch: main
-Commit: (điền sau khi commit)
+Commit: 5fb5451157674cee35390ab9fe7412e7ed79ec37 (perf)
+Follow-up: 466f1de (test e2e Stats aria-label)
 Remote: origin https://github.com/NAMNAM1989/TECSOPS.git
 ```
 
 ## Railway Deployment
 
 ```text
-Project: TECSOPS (Railway Dockerfile)
+Project: chic-nurturing (Railway)
 Service: ops / production
 Environment: production
 Deployment: auto từ push main + healthcheck /api/health
-Status: (điền sau deploy)
+Status: SUCCESS — GitHub commit status success
+URL: https://ops-production-b405.up.railway.app
 ```
 
 ## Production Verification
 
 ```text
 Production URL: https://ops-production-b405.up.railway.app
-Health: (điền sau)
-Smoke Test: (điền sau)
-Performance: (điền sau)
+Health: PASS — HTTP 200 { ok:true, postgres:true }
+Smoke Test:
+  - Homepage 200, vendor-react + index assets mới, không page-print CSS critical
+  - Browser: Ops → Khách → Stats (charts Recharts lazy OK) → Ops (A→B→C→A)
+  - E2E read-only: R-HEALTH, A-OPS, A-LIVE, A-CUSTOMERS, A-STATS, A-INVALID PASS
+  - E2E D-WH-* FAIL: selector cũ "TECS TECS-TCS" không khớp UI hiện tại (pre-existing, không do perf)
+Performance: Critical CSS ~79 KB; print CSS tách; fonts 700/Mono deferred; Stats charts tách vendor-recharts
 ```
 
 ## Rollback Point

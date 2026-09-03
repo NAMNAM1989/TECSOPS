@@ -119,7 +119,7 @@ export function ScscH21InvoiceReview({ doc }: Props) {
         </table>
       </div>
 
-      <div className="mt-3 space-y-0.5">
+      <div className="mt-2 space-y-0.5">
         <div>
           1. Total carton: {doc.footer.totalCartonPkgs} PKGS
           {doc.footer.linesKg > 0 ? (
@@ -131,14 +131,14 @@ export function ScscH21InvoiceReview({ doc }: Props) {
         </div>
         <div>2. Total gross weight: {doc.footer.grossKg} KGM</div>
       </div>
-      <p className="mt-3 italic text-neutral-600">{doc.customsNote}</p>
+      <p className="mt-1.5 italic text-neutral-600">{doc.customsNote}</p>
 
       {doc.shipper.sealImageData ? (
-        <div className="mt-6 flex flex-col items-end">
+        <div className="mt-1 flex flex-col items-end">
           <img
             src={doc.shipper.sealImageData}
             alt=""
-            className="h-28 w-auto max-w-[200px] object-contain"
+            className="h-24 w-auto max-w-[170px] object-contain object-top"
           />
         </div>
       ) : null}

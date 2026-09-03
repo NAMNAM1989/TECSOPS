@@ -263,7 +263,7 @@ export async function buildScscH21InvoiceExcelBuffer(doc: H21InvoiceDocument): P
   ws.mergeCells(`A${row}:H${row}`);
   ws.getCell(`A${row}`).value = doc.customsNote;
   ws.getCell(`A${row}`).font = font({ italic: true, size: 8, color: "FF6B7280" });
-  row += 2;
+  row += 1;
 
   const seal = parseH21SealDataUrl(doc.shipper.sealImageData);
   if (seal && seal.extension !== "webp") {
@@ -272,11 +272,11 @@ export async function buildScscH21InvoiceExcelBuffer(doc: H21InvoiceDocument): P
       extension: seal.extension,
     });
     ws.addImage(imageId, {
-      tl: { col: 5.2, row: row - 1 },
-      ext: { width: 140, height: 140 },
+      tl: { col: 5.4, row: row - 0.15 },
+      ext: { width: 120, height: 95 },
       editAs: "oneCell",
     });
-    row += 8;
+    row += 5;
   }
 
   ws.pageSetup.printArea = `A1:H${row}`;
@@ -314,19 +314,19 @@ export function buildScscH21InvoiceHtml(doc: H21InvoiceDocument): string {
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${escapeHtml(doc.invoiceNo)}</title>
 <style>
-  @page { size: A4 portrait; margin: 12mm; }
-  body { font-family: Arial, sans-serif; font-size: 10pt; color: #111; }
-  h1 { font-size: 14pt; margin: 0 0 12px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 12px; }
+  @page { size: A4 portrait; margin: 10mm; }
+  body { font-family: Arial, sans-serif; font-size: 9.5pt; color: #111; }
+  h1 { font-size: 13pt; margin: 0 0 8px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; margin-bottom: 8px; }
   .label { font-weight: bold; }
-  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-  th, td { border: 1px solid #333; padding: 4px 6px; vertical-align: top; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  th, td { border: 1px solid #333; padding: 3px 5px; vertical-align: top; }
   th { background: #f3f3f3; }
   .num { text-align: right; white-space: nowrap; }
-  .note { margin-top: 10px; font-style: italic; }
-  .footer { margin-top: 8px; }
-  .seal-wrap { margin-top: 24px; text-align: right; }
-  .seal-wrap img { max-width: 160px; max-height: 160px; object-fit: contain; }
+  .note { margin-top: 4px; margin-bottom: 0; font-style: italic; font-size: 8.5pt; }
+  .footer { margin-top: 4px; }
+  .seal-wrap { margin-top: 4px; text-align: right; line-height: 0; }
+  .seal-wrap img { max-width: 130px; max-height: 100px; object-fit: contain; object-position: top right; }
 </style></head><body>
 <h1>${escapeHtml(doc.title)}</h1>
 <div class="grid">

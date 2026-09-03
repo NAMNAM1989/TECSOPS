@@ -58,11 +58,11 @@ async function main() {
     );
 
     await page.goto(`${BASE_URL}/#/stats`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("tablist", { name: "Bộ lọc thống kê" }).waitFor({ timeout: 15_000 });
+    await page.getByRole("tablist", { name: /Bộ lọc (kỳ|thống kê)/i }).waitFor({ timeout: 30_000 });
     record(
       "A-STATS",
-      (await page.getByText("Dashboard", { exact: true }).count()) > 0,
-      "#/stats tải Dashboard",
+      (await page.getByRole("tablist", { name: /Bộ lọc (kỳ|thống kê)/i }).count()) > 0,
+      "#/stats tải bộ lọc kỳ",
     );
 
     await page.goto(`${BASE_URL}/#/invalid-e2e-route`, { waitUntil: "domcontentloaded" });

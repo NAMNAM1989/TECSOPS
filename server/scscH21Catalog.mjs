@@ -412,7 +412,9 @@ function rowToStamp(row) {
 }
 
 function stampId() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return `stamp-${crypto.randomUUID()}`;
+  if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.randomUUID) {
+    return `stamp-${globalThis.crypto.randomUUID()}`;
+  }
   return `stamp-${Date.now().toString(36)}`;
 }
 

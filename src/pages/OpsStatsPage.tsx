@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState, type ReactNode } from "react";
 import type { SyncStatus } from "../hooks/useShipmentSync";
 import type { Shipment } from "../types/shipment";
 import type { WarehouseLayoutFilter } from "../constants/warehouses";
@@ -13,12 +13,6 @@ import {
   useToast,
 } from "../ui";
 import { statusLabel } from "../components/statusStyles";
-import {
-  OpsStatsDayTrendChart,
-  OpsStatsDestChart,
-  OpsStatsWarehouseChart,
-  OpsStatsWarehouseKgChart,
-} from "../components/OpsStatsCharts";
 import { formatKgTotal } from "../utils/formatKgTotal";
 import {
   computeOpsStats,
@@ -29,7 +23,6 @@ import {
   type OpsStatsTotals,
   type OpsStatsWarehouseRow,
 } from "../utils/opsStatsMetrics";
-import { downloadOpsStatsExcel } from "../utils/exportOpsStatsExcel";
 import {
   currentMonthYm,
   formatStatsPeriodLabel,
@@ -42,6 +35,12 @@ import {
   weekStartYmd,
   type StatsPeriodMode,
 } from "../utils/opsStatsPeriod";
+
+const OpsStatsChartsPanel = lazy(() =>
+  import("../components/OpsStatsChartsPanel").then((m) => ({
+    default: m.OpsStatsChartsPanel,
+  }))
+);
 
 type Props = {
   rows: readonly Shipment[];
@@ -394,6 +393,7 @@ export function OpsStatsPage({
   const onExport = useCallback(async () => {
     setExporting(true);
     try {
+      const { downloadOpsStatsExcel } = await import("../utils/exportOpsStatsExcel");
       await downloadOpsStatsExcel({
         fromYmd: range.fromYmd,
         toYmd: range.toYmd,
@@ -699,25 +699,28 @@ export function OpsStatsPage({
               />
             ) : (
               <>
-                <div className="grid gap-3 lg:grid-cols-3">
-                  <OpsStatsDayTrendChart rows={stats.byDay} />
-                  <OpsStatsWarehouseChart
-                    rows={stats.byWarehouse}
-                    onSelect={(wh) => {
-                      setWarehouse(wh as WarehouseLayoutFilter);
+                <Suspense
+                  fallback={
+                    <div className="grid min-h-[12rem] place-items-center rounded-2xl border border-ui-border/60 bg-ui-surface-muted/40 text-sm text-ui-text-muted">
+                      Đang tải biểu đồ…
+                    </div>
+                  }
+                >
+                  <OpsStatsChartsPanel
+                    byDay={stats.byDay}
+                    byWarehouse={stats.byWarehouse}
+                    byDest={stats.byDest}
+                    onSelectWarehouse={(wh) => {
+                      setWarehouse(wh);
                       setDest("ALL");
                       setDetailTab("lots");
                     }}
-                  />
-                  <OpsStatsDestChart
-                    rows={stats.byDest}
-                    onSelect={(d) => {
+                    onSelectDest={(d) => {
                       setDest(d);
                       setDetailTab("lots");
                     }}
                   />
-                  <OpsStatsWarehouseKgChart rows={stats.byWarehouse} />
-                </div>
+                </Suspense>
 
                 <section className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
                   <div className="flex flex-wrap items-end justify-between gap-2 border-b border-ui-border/70 px-3 pt-2 sm:px-4">

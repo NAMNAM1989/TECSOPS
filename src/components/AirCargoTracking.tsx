@@ -411,10 +411,17 @@ export function AirCargoTracking({
       try {
         let sourceRows = allRows;
         let customersForExport = state?.customers ?? [];
-        const snap = await fetchAppStateSnapshot();
-        if (snap) {
-          sourceRows = snap.rows;
-          customersForExport = snap.customers;
+        // Cùng ngày phiên đã sync — đủ dữ liệu, khỏi tải full snapshot.
+        const sameSyncedDay =
+          fromYmd === toYmd &&
+          fromYmd === selectedYmd &&
+          Array.isArray(state?.customers);
+        if (!sameSyncedDay) {
+          const snap = await fetchAppStateSnapshot();
+          if (snap) {
+            sourceRows = snap.rows;
+            customersForExport = snap.customers;
+          }
         }
         const rowsForExport = filterShipmentsBySessionYmdRange(
           sourceRows,
@@ -441,21 +448,16 @@ export function AirCargoTracking({
         setExcelExporting(false);
       }
     },
-    [allRows, state, toast]
+    [allRows, selectedYmd, state, toast]
   );
 
   const onDownloadScscDimDay = useCallback(async () => {
     setScscDimExporting(true);
     try {
-      let rows = filterShipmentsBySessionYmd(allRows, selectedYmd).filter((r) =>
+      // Ngày phiên đã sync trong `allRows` — không cần GET full=1.
+      const rows = filterShipmentsBySessionYmd(allRows, selectedYmd).filter((r) =>
         isScscWarehouse(r.warehouse)
       );
-      const snap = await fetchAppStateSnapshot();
-      if (snap) {
-        rows = filterShipmentsBySessionYmd(snap.rows, selectedYmd).filter((r) =>
-          isScscWarehouse(r.warehouse)
-        );
-      }
       const { downloadScscDimDayExcel } = await import("../utils/exportScscDimListExcel");
       await downloadScscDimDayExcel(rows, selectedYmd);
     } catch (e) {

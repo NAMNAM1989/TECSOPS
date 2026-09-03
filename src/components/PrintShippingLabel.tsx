@@ -15,6 +15,8 @@ import {
 } from "../utils/printThermalLabelIframe";
 import { labelSheetFormatLabel } from "../printing/thermalLabelFormat";
 import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
+/** Chỉ load khi mở modal in — không nhồi vào first paint. */
+import "../styles/print-label.css";
 
 export type LabelSheetVariant = "standard" | "compact";
 

@@ -17,6 +17,7 @@ type Props = {
   onPrefetchStats?: () => void;
   onPrefetchAirlines?: () => void;
   onPrefetchScscH21?: () => void;
+  onPrefetchTcsH21?: () => void;
   /** Ops mobile — copy ảnh báo cáo trong cùng menu nav. */
   cargoCopy?: MobileCargoCopyApi | null;
   /** Test-only: mở menu ngay khi render. */
@@ -62,8 +63,32 @@ function IconAirline({ className }: { className?: string }) {
 
 function IconH21({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
-      <path d="M9 5h6M7 3h10a1 1 0 011 1v16l-3-1.5L12 20l-3-1.5L6 20V4a1 1 0 011-1zM9 10h6M9 14h4" />
+    <svg className={className} viewBox="0 0 24 24" aria-hidden>
+      <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="currentColor" opacity="0.16" />
+      <path
+        d="M8 4.75h8a1.75 1.75 0 0 1 1.75 1.75v12.2l-2.35-1.15L12 18.95l-3.4-1.4L6.25 18.7V6.5A1.75 1.75 0 0 1 8 4.75Z"
+        fill="currentColor"
+        opacity="0.22"
+      />
+      <path
+        d="M8 4.75h8a1.75 1.75 0 0 1 1.75 1.75v12.2l-2.35-1.15L12 18.95l-3.4-1.4L6.25 18.7V6.5A1.75 1.75 0 0 1 8 4.75Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <text
+        x="12"
+        y="13.2"
+        textAnchor="middle"
+        fill="currentColor"
+        fontSize="7.2"
+        fontWeight="800"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+        letterSpacing="-0.04em"
+      >
+        H21
+      </text>
     </svg>
   );
 }
@@ -103,6 +128,7 @@ const ITEMS: {
   { id: "customers", label: "Khách", Icon: IconCustomers },
   { id: "airlines", label: "Hãng", Icon: IconAirline },
   { id: "scsc-h21", label: "H21 SCSC", Icon: IconH21 },
+  { id: "tcs-h21", label: "H21 TCS", Icon: IconH21 },
   { id: "stats", label: "TK", Icon: IconStats },
 ];
 
@@ -117,6 +143,7 @@ export function BottomNav({
   onPrefetchStats,
   onPrefetchAirlines,
   onPrefetchScscH21,
+  onPrefetchTcsH21,
   cargoCopy = null,
   defaultOpen = false,
 }: Props) {
@@ -162,6 +189,7 @@ export function BottomNav({
     if (id === "stats") onPrefetchStats?.();
     if (id === "airlines") onPrefetchAirlines?.();
     if (id === "scsc-h21") onPrefetchScscH21?.();
+    if (id === "tcs-h21") onPrefetchTcsH21?.();
   };
 
   return (
@@ -231,11 +259,35 @@ export function BottomNav({
                 onFocus={() => prefetch(item.id)}
                 className={`flex w-full touch-manipulation items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ui-focus ${
                   isActive
-                    ? "bg-teal-500/12 text-ui-primary-hover"
-                    : "text-ui-text hover:bg-ui-surface-muted"
+                    ? item.id === "scsc-h21" || item.id === "tcs-h21"
+                      ? "bg-teal-500/18 text-teal-800"
+                      : "bg-teal-500/12 text-ui-primary-hover"
+                    : item.id === "scsc-h21" || item.id === "tcs-h21"
+                      ? "text-teal-800 hover:bg-teal-500/10"
+                      : "text-ui-text hover:bg-ui-surface-muted"
                 }`}
               >
-                <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-ui-accent" : "text-ui-text-muted"}`} />
+                <span
+                  className={
+                    item.id === "scsc-h21" || item.id === "tcs-h21"
+                      ? `grid h-8 w-8 shrink-0 place-items-center rounded-xl ${
+                          isActive
+                            ? "bg-teal-600 text-white shadow-sm"
+                            : "bg-teal-500/15 text-teal-700 ring-1 ring-teal-500/35"
+                        }`
+                      : undefined
+                  }
+                >
+                  <Icon
+                    className={`h-5 w-5 shrink-0 ${
+                      item.id === "scsc-h21" || item.id === "tcs-h21"
+                        ? ""
+                        : isActive
+                          ? "text-ui-accent"
+                          : "text-ui-text-muted"
+                    }`}
+                  />
+                </span>
                 <span>{item.label}</span>
               </button>
             );

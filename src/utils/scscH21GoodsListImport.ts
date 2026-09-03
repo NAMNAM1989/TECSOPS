@@ -1,8 +1,28 @@
-import type { ScscH21CatalogItem, ScscH21InvoiceLine } from "../types/scscH21Catalog";
+import type { ScscH21InvoiceLine } from "../types/scscH21Catalog";
 import { scscH21DescriptionKey } from "../../shared/scscH21CatalogNormalize.mjs";
 import { allocateH21InvoiceLinesFromItems } from "../../shared/scscH21InvoiceCore.mjs";
 import { filterCatalogByH21Family } from "../../shared/scscH21InvoiceGroups.mjs";
 import type { H21CargoFamilyId } from "./scscH21InvoiceCargoFamily";
+
+/** Catalog H21 tối thiểu — dùng chung SCSC / TCS. */
+export type H21CatalogGoodsLike = {
+  id: string;
+  category: string;
+  description: string;
+  hsCode: string;
+  origin: string;
+  qty1: number;
+  uom1: string;
+  qty2: number;
+  uom2: string;
+  unitPrice: number;
+  amount: number;
+  unitFactor: number;
+  sortOrder: number;
+  active: boolean;
+  updatedAt?: string | null;
+  warehouseScope?: string;
+};
 
 const DESC_HEADER_RE =
   /^(ten\s*hang|tên\s*hàng|tenhang|description|goods|product|item|mat\s*hang|mặt\s*hàng|hang\s*hoa|hàng\s*hóa|noi\s*dung|nội\s*dung|desc|commodity|ten\s*sp|tên\s*sp)$/i;
@@ -15,7 +35,7 @@ const NOISE_LINE_RE =
 
 export type H21GoodsListMatch = {
   query: string;
-  catalogItem: ScscH21CatalogItem;
+  catalogItem: H21CatalogGoodsLike;
   score: number;
 };
 
@@ -207,7 +227,7 @@ export async function parseH21GoodsListFile(
  */
 export function matchH21GoodsListToCatalog(
   queries: readonly string[],
-  catalog: readonly ScscH21CatalogItem[],
+  catalog: readonly H21CatalogGoodsLike[],
   opts?: {
     minScore?: number;
     cargoFamily?: H21CargoFamilyId;
@@ -220,7 +240,7 @@ export function matchH21GoodsListToCatalog(
   const pool =
     family === "general"
       ? [...catalog]
-      : (filterCatalogByH21Family([...catalog], family, 1) as ScscH21CatalogItem[]);
+      : (filterCatalogByH21Family([...catalog], family, 1) as H21CatalogGoodsLike[]);
 
   const usable = pool.filter((c) => c.active !== false && (c.unitFactor ?? 0) > 0);
   const matches: H21GoodsListMatch[] = [];
@@ -252,7 +272,7 @@ export function matchH21GoodsListToCatalog(
 /** Pipeline: queries + catalog + KG → dòng invoice. */
 export function buildH21InvoiceLinesFromGoodsList(opts: {
   queries: readonly string[];
-  catalog: readonly ScscH21CatalogItem[];
+  catalog: readonly H21CatalogGoodsLike[];
   grossKg: number;
   cargoFamily?: H21CargoFamilyId;
   minScore?: number;
@@ -289,7 +309,7 @@ export function buildH21InvoiceLinesFromGoodsList(opts: {
 export async function importH21GoodsListToInvoiceLines(opts: {
   buf: ArrayBuffer;
   fileName: string;
-  catalog: readonly ScscH21CatalogItem[];
+  catalog: readonly H21CatalogGoodsLike[];
   grossKg: number;
   cargoFamily?: H21CargoFamilyId;
 }): Promise<H21GoodsListImportResult> {

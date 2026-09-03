@@ -13,7 +13,12 @@ import {
   ensureScscH21CatalogSchema,
   seedScscH21CatalogIfEmpty,
 } from "./scscH21Catalog.mjs";
+import {
+  ensureTcsH21CatalogSchema,
+  seedTcsH21CatalogIfEmpty,
+} from "./tcsH21Catalog.mjs";
 import { clampScscH21InvoiceDeclarations, clampScscH21InvoiceLines } from "../shared/scscH21CatalogNormalize.mjs";
+import { clampTcsH21InvoiceDeclarations, clampTcsH21InvoiceLines } from "../shared/tcsH21CatalogNormalize.mjs";
 import { parseCustomersLoose } from "./customerDirectoryValidate.mjs";
 import { planRelationalPersist } from "./postgresStateDiff.mjs";
 
@@ -276,6 +281,8 @@ async function ensureSchema(client) {
   await seedAirportsIfEmpty(client);
   await ensureScscH21CatalogSchema(client);
   await seedScscH21CatalogIfEmpty(client);
+  await ensureTcsH21CatalogSchema(client);
+  await seedTcsH21CatalogIfEmpty(client);
 }
 
 function str(v) {
@@ -687,11 +694,19 @@ function shipmentInsertParams(s) {
     str(s.h21DeclarationShipperId) || null,
     str(s.status),
     (() => {
-      const lines = clampScscH21InvoiceLines(s.invoiceItems);
+      const wh = String(s.warehouse ?? "").trim().toUpperCase();
+      const lines =
+        wh === "TCS"
+          ? clampTcsH21InvoiceLines(s.invoiceItems)
+          : clampScscH21InvoiceLines(s.invoiceItems);
       return lines.length ? jsonOrNull(lines) : null;
     })(),
     (() => {
-      const decls = clampScscH21InvoiceDeclarations(s.invoiceDeclarations);
+      const wh = String(s.warehouse ?? "").trim().toUpperCase();
+      const decls =
+        wh === "TCS"
+          ? clampTcsH21InvoiceDeclarations(s.invoiceDeclarations)
+          : clampScscH21InvoiceDeclarations(s.invoiceDeclarations);
       return decls.length ? jsonOrNull(decls) : null;
     })(),
   ];

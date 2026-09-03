@@ -19,6 +19,8 @@ const loadAirlinesLabelsPage = () =>
   import("./pages/AirlinesLabelsPage").then((m) => ({ default: m.AirlinesLabelsPage }));
 const loadScscH21CatalogPage = () =>
   import("./pages/ScscH21CatalogPage").then((m) => ({ default: m.ScscH21CatalogPage }));
+const loadTcsH21CatalogPage = () =>
+  import("./pages/TcsH21CatalogPage").then((m) => ({ default: m.TcsH21CatalogPage }));
 
 const AirCargoTracking = lazy(() =>
   import("./components/AirCargoTracking").then((m) => ({ default: m.AirCargoTracking }))
@@ -27,6 +29,7 @@ const CustomersPage = lazy(loadCustomersPage);
 const OpsStatsPage = lazy(loadOpsStatsPage);
 const AirlinesLabelsPage = lazy(loadAirlinesLabelsPage);
 const ScscH21CatalogPage = lazy(loadScscH21CatalogPage);
+const TcsH21CatalogPage = lazy(loadTcsH21CatalogPage);
 const PrintShippingLabel = lazy(() =>
   import("./components/PrintShippingLabel").then((m) => ({ default: m.PrintShippingLabel }))
 );
@@ -70,6 +73,10 @@ function AuthenticatedApp() {
     void loadScscH21CatalogPage();
   }, []);
 
+  const prefetchTcsH21 = useCallback(() => {
+    void loadTcsH21CatalogPage();
+  }, []);
+
   const onRequestPrint = useCallback(
     (shipment: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => {
       setPrintJob({ shipment, airlineLabelOverrides });
@@ -82,7 +89,7 @@ function AuthenticatedApp() {
       ? "customers"
       : route === "stats"
         ? "stats"
-        : route === "airlines" || route === "scsc-h21"
+        : route === "airlines" || route === "scsc-h21" || route === "tcs-h21"
           ? "ops"
           : "ops";
 
@@ -101,6 +108,7 @@ function AuthenticatedApp() {
             onPrefetchStats={prefetchStats}
             onPrefetchAirlines={prefetchAirlines}
             onPrefetchScscH21={prefetchScscH21}
+            onPrefetchTcsH21={prefetchTcsH21}
           />
         ) : null}
         <div
@@ -144,6 +152,8 @@ function AuthenticatedApp() {
             />
           ) : route === "scsc-h21" ? (
             <ScscH21CatalogPage onBack={() => navigate("ops")} />
+          ) : route === "tcs-h21" ? (
+            <TcsH21CatalogPage onBack={() => navigate("ops")} />
           ) : (
             <AirCargoTracking
               sync={sync}
@@ -163,6 +173,7 @@ function AuthenticatedApp() {
           onPrefetchStats={prefetchStats}
           onPrefetchAirlines={prefetchAirlines}
           onPrefetchScscH21={prefetchScscH21}
+          onPrefetchTcsH21={prefetchTcsH21}
           cargoCopy={route === "ops" ? cargoCopyApi : null}
         />
       ) : null}

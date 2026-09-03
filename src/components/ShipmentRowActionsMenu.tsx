@@ -20,6 +20,7 @@ import {
 import { awbDigitsKey } from "../utils/awbFormat";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { isScscH21Warehouse } from "../types/scscH21Catalog";
+import { isTcsH21Warehouse } from "../types/tcsH21Catalog";
 import { OPS } from "../styles/opsModalStyles";
 
 const CsdPrintModal = lazy(() =>
@@ -191,7 +192,12 @@ export function ShipmentRowActionsMenu({
   const showDim = canPrintDimScscReport(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   const showTcsDimPdf = isTcsWarehouse(row.warehouse) && (row.dimLines?.length ?? 0) > 0;
-  const showInvoice = Boolean(onInvoice) && isScscH21Warehouse(row.warehouse);
+  const showInvoice =
+    Boolean(onInvoice) &&
+    (isScscH21Warehouse(row.warehouse) || isTcsH21Warehouse(row.warehouse));
+  const invoiceLabel = isTcsH21Warehouse(row.warehouse)
+    ? "Invoice H21 TCS"
+    : "Invoice H21 SCSC";
   const csdCarrier = lightweightCsdCarrier(row);
   const showCsd = csdCarrier != null;
   const showCsdInline = showCsd && !compact;
@@ -356,7 +362,7 @@ export function ShipmentRowActionsMenu({
           </ActionIconBtn>
           {showInvoice ? (
             <ActionIconBtn
-              label="Invoice H21 SCSC"
+              label={invoiceLabel}
               shortLabel="H21"
               active={Boolean(row.invoiceDeclarations?.length || row.invoiceItems?.length)}
               onClick={() => onInvoice?.(row)}

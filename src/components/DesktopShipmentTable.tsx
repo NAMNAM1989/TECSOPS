@@ -25,6 +25,9 @@ import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
 import { InlineCustomerInfoCell } from "./InlineCustomerInfoCell";
 import { H21DeclarationShipperCell } from "./H21DeclarationShipperCell";
 import type { ScscH21StampId } from "../types/scscH21Catalog";
+import { isScscH21Warehouse } from "../types/scscH21Catalog";
+import type { TcsH21StampId } from "../types/tcsH21Catalog";
+import { isTcsH21Warehouse } from "../types/tcsH21Catalog";
 import { CneeDetailPopover } from "./CneeDetailPopover";
 import { VehicleTypeMissingBadge } from "./VehicleTypeMissingBadge";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -44,7 +47,7 @@ interface Props {
   onUpdate: (id: string, patch: Partial<Shipment>) => void | Promise<boolean | void>;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
-  /** Invoice H21 — chỉ kho SCSC. */
+  /** Invoice H21 — kho SCSC hoặc TCS. */
   onInvoice?: (s: Shipment) => void;
   viewSessionYmd: string;
   highlightedShipmentId?: string | null;
@@ -57,8 +60,8 @@ interface Props {
   onUpdateCustomers?: (
     customers: CustomerDirectoryEntry[]
   ) => Promise<boolean | void>;
-  /** Shipper tờ khai H21 — dropdown cột 「Tờ khai」 (SCSC). */
-  h21Stamps?: readonly ScscH21StampId[];
+  /** Shipper tờ khai H21 — dropdown cột 「Tờ khai」 (SCSC / TCS). */
+  h21Stamps?: readonly (ScscH21StampId | TcsH21StampId)[];
 }
 
 type ColHeader = { key: string; label: string; w: string; title?: string };
@@ -125,7 +128,10 @@ export function DesktopShipmentTable({
   h21Stamps = [],
 }: Props) {
   const isMobile = useIsMobile();
-  const showH21DeclCol = isScscWarehouse(activeWarehouse);
+  const showH21DeclCol =
+    isScscH21Warehouse(activeWarehouse) ||
+    isTcsH21Warehouse(activeWarehouse) ||
+    isScscWarehouse(activeWarehouse);
   const colHeaders = useMemo(
     () =>
       showH21DeclCol
@@ -320,7 +326,7 @@ function ShipmentTableRowImpl({
   onPrint: (s: Shipment) => void;
   onInvoice?: (s: Shipment) => void;
   showH21DeclCol?: boolean;
-  h21Stamps?: readonly ScscH21StampId[];
+  h21Stamps?: readonly (ScscH21StampId | TcsH21StampId)[];
   onOpenDimModal: (s: Shipment) => void;
 }) {
   const toast = useToast();

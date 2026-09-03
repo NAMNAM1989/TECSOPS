@@ -1,22 +1,25 @@
 import type { ScscH21StampId } from "../types/scscH21Catalog";
+import type { TcsH21StampId } from "../types/tcsH21Catalog";
 import type { Shipment } from "../types/shipment";
+
+type H21StampOption = ScscH21StampId | TcsH21StampId;
 
 type Props = {
   shipment: Shipment;
-  stamps: readonly ScscH21StampId[];
+  stamps: readonly H21StampOption[];
   onUpdate: (patch: Partial<Shipment>) => void | Promise<boolean | void>;
 };
 
 const selectCls =
   "box-border h-7 min-w-0 w-full max-w-full cursor-pointer truncate rounded-lg border border-ui-border bg-ui-surface px-1.5 py-0 text-[10px] font-semibold leading-none text-ui-text focus:outline-none focus:ring-1 focus:ring-ui-focus disabled:cursor-default disabled:opacity-45";
 
-function shortLabel(s: ScscH21StampId): string {
+function shortLabel(s: H21StampOption): string {
   const name = s.shipperName.trim();
   if (name.length <= 28) return name;
   return `${name.slice(0, 26)}…`;
 }
 
-/** Dropdown shipper tờ khai H21 — cột 「Tờ khai」 trên bảng SCSC. */
+/** Dropdown shipper tờ khai H21 — cột 「Tờ khai」 trên bảng SCSC/TCS. */
 export function H21DeclarationShipperCell({ shipment, stamps, onUpdate }: Props) {
   const active = stamps.filter((s) => s.active !== false);
   const value = shipment.h21DeclarationShipperId?.trim() ?? "";

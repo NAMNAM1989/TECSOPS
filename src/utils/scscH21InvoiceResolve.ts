@@ -1,5 +1,4 @@
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import type { ScscH21StampId } from "../types/scscH21Catalog";
 import type { Shipment } from "../types/shipment";
 import { findCustomerEntry } from "./customerBookingResolve";
 import { buildShipmentCneePartyBlock } from "./shipmentCneeCopyBlock";
@@ -11,10 +10,21 @@ import type { H21InvoiceDocument } from "../../shared/scscH21InvoiceCore.d.ts";
 import { clampScscH21InvoiceLines } from "../../shared/scscH21CatalogNormalize.mjs";
 import type { ScscH21InvoiceLine } from "../types/scscH21Catalog";
 
+/** Shipper tờ khai H21 — dùng chung SCSC / TCS (không khóa warehouseScope). */
+export type H21StampLike = {
+  id: string;
+  shipperName: string;
+  shipperAddress: string;
+  shipperPhone: string;
+  stampId: string;
+  active?: boolean;
+  sealImageData?: string | null;
+};
+
 export function resolveH21DeclarationShipper(
   shipperId: string | undefined,
-  stamps: readonly ScscH21StampId[]
-): ScscH21StampId | undefined {
+  stamps: readonly H21StampLike[]
+): H21StampLike | undefined {
   const id = shipperId?.trim();
   if (!id) return undefined;
   return stamps.find((s) => s.id === id && s.active !== false);
@@ -46,7 +56,7 @@ export function resolveH21InvoiceCnee(
 export function buildH21InvoiceForShipment(opts: {
   shipment: Shipment;
   directory: readonly CustomerDirectoryEntry[];
-  stamps: readonly ScscH21StampId[];
+  stamps: readonly H21StampLike[];
   lines?: ScscH21InvoiceLine[];
   /** Ghi đè shipper đang chọn trong modal (chưa lưu lô). */
   shipperId?: string;
@@ -75,7 +85,7 @@ export function buildH21InvoiceForShipment(opts: {
 export function validateH21InvoiceForShipment(opts: {
   shipment: Shipment;
   directory: readonly CustomerDirectoryEntry[];
-  stamps: readonly ScscH21StampId[];
+  stamps: readonly H21StampLike[];
   lines?: ScscH21InvoiceLine[];
   shipperId?: string;
 }): string[] {

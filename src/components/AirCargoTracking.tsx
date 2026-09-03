@@ -48,7 +48,11 @@ import {
 } from "../utils/shipmentSearch";
 import { DayExcelExportDialog } from "./DayExcelExportDialog";
 import type { ScscH21StampId } from "../types/scscH21Catalog";
+import { isScscH21Warehouse } from "../types/scscH21Catalog";
+import type { TcsH21StampId } from "../types/tcsH21Catalog";
+import { isTcsH21Warehouse } from "../types/tcsH21Catalog";
 import { fetchScscH21Stamps } from "../utils/scscH21Api";
+import { fetchTcsH21Stamps } from "../utils/tcsH21Api";
 
 const GoogleSheetImportModal = lazy(() =>
   import("./GoogleSheetImportModal").then((m) => ({ default: m.GoogleSheetImportModal }))
@@ -67,6 +71,9 @@ const MobileShipmentEditSheet = lazy(() =>
 );
 const ScscH21InvoiceModal = lazy(() =>
   import("./ScscH21InvoiceModal").then((m) => ({ default: m.ScscH21InvoiceModal }))
+);
+const TcsH21InvoiceModal = lazy(() =>
+  import("./TcsH21InvoiceModal").then((m) => ({ default: m.TcsH21InvoiceModal }))
 );
 
 type SyncApi = ReturnType<typeof useShipmentSync>;
@@ -128,7 +135,7 @@ export function AirCargoTracking({
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
   const [invoiceShipment, setInvoiceShipment] = useState<Shipment | null>(null);
-  const [h21Stamps, setH21Stamps] = useState<ScscH21StampId[]>([]);
+  const [h21Stamps, setH21Stamps] = useState<readonly (ScscH21StampId | TcsH21StampId)[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -353,9 +360,12 @@ export function AirCargoTracking({
   );
 
   useEffect(() => {
-    if (!isScscWarehouse(activeWarehouse)) return;
+    const loadScsc = isScscH21Warehouse(activeWarehouse) || isScscWarehouse(activeWarehouse);
+    const loadTcs = isTcsH21Warehouse(activeWarehouse);
+    if (!loadScsc && !loadTcs) return;
     let cancelled = false;
-    void fetchScscH21Stamps()
+    const fetchStamps = loadTcs ? fetchTcsH21Stamps : fetchScscH21Stamps;
+    void fetchStamps()
       .then((items) => {
         if (!cancelled) setH21Stamps(items);
       })
@@ -367,7 +377,10 @@ export function AirCargoTracking({
 
   const openInvoiceH21 = useCallback((s: Shipment) => {
     setInvoiceShipment(s);
-    void fetchScscH21Stamps()
+    const fetchStamps = isTcsH21Warehouse(s.warehouse)
+      ? fetchTcsH21Stamps
+      : fetchScscH21Stamps;
+    void fetchStamps()
       .then(setH21Stamps)
       .catch(() => {});
   }, []);
@@ -787,15 +800,27 @@ export function AirCargoTracking({
 
       {invoiceShipment ? (
         <Suspense fallback={null}>
-          <ScscH21InvoiceModal
-            shipment={
-              allRows.find((r) => r.id === invoiceShipment.id) ?? invoiceShipment
-            }
-            customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
-            stamps={h21Stamps}
-            onSave={saveInvoiceH21}
-            onClose={() => setInvoiceShipment(null)}
-          />
+          {isTcsH21Warehouse(invoiceShipment.warehouse) ? (
+            <TcsH21InvoiceModal
+              shipment={
+                allRows.find((r) => r.id === invoiceShipment.id) ?? invoiceShipment
+              }
+              customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
+              stamps={h21Stamps as readonly TcsH21StampId[]}
+              onSave={saveInvoiceH21}
+              onClose={() => setInvoiceShipment(null)}
+            />
+          ) : (
+            <ScscH21InvoiceModal
+              shipment={
+                allRows.find((r) => r.id === invoiceShipment.id) ?? invoiceShipment
+              }
+              customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
+              stamps={h21Stamps as readonly ScscH21StampId[]}
+              onSave={saveInvoiceH21}
+              onClose={() => setInvoiceShipment(null)}
+            />
+          )}
         </Suspense>
       ) : null}
     </AppShell>

@@ -50,6 +50,33 @@ function newId() {
   return `tcs-h21-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** @param {unknown} description */
+export function parsePackWeightKgFromDescription(description) {
+  const s = String(description ?? "");
+  const m = s.match(
+    /\(\s*(\d+(?:[.,]\d+)?)\s*(kg|kgs|g|gr|gram|grams)\s*\/[^)]+\)/i
+  );
+  if (!m) return null;
+  const n = Number(String(m[1]).replace(",", "."));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const unit = String(m[2]).toLowerCase();
+  if (unit === "kg" || unit === "kgs") return Math.round(n * 1000) / 1000;
+  return Math.round((n / 1000) * 1000) / 1000;
+}
+
+/** @param {{ description?: unknown, unitFactor?: unknown, qty1?: unknown, qty2?: unknown } | null | undefined} item */
+export function resolveH21UnitFactorKg(item) {
+  if (!item || typeof item !== "object") return 0;
+  const fromDesc = parsePackWeightKgFromDescription(item.description);
+  if (fromDesc != null && fromDesc > 0) return fromDesc;
+  const f = num(item.unitFactor, 0);
+  if (f > 0) return f;
+  const q1 = num(item.qty1, 0);
+  const q2 = num(item.qty2, 0);
+  if (q1 > 0 && q2 > 0) return Math.round((q2 / q1) * 1000000) / 1000000;
+  return 0;
+}
+
 /**
  * @param {unknown} raw
  * @param {{ keepId?: boolean, sortOrder?: number }} [opts]
@@ -65,6 +92,15 @@ export function normalizeTcsH21CatalogItem(raw, opts = {}) {
   let amount = Math.max(0, num(o.amount, 0));
   if (!amount && qty1 && unitPrice) amount = Math.round(qty1 * unitPrice * 10000) / 10000;
   const active = o.active === false || o.active === 0 || o.active === "0" ? false : true;
+  const fromDesc = parsePackWeightKgFromDescription(description);
+  let unitFactor =
+    fromDesc != null && fromDesc > 0
+      ? fromDesc
+      : Math.max(0, num(o.unitFactor ?? o.unit_factor ?? o.quyCach, 0));
+  let qty2 = Math.max(0, num(o.qty2, 0));
+  if (unitFactor > 0 && qty1 > 0) {
+    qty2 = Math.round(qty1 * unitFactor * 1000) / 1000;
+  }
   return {
     id,
     category: str(o.category ?? o.loaiHang, 80).toUpperCase(),
@@ -73,11 +109,11 @@ export function normalizeTcsH21CatalogItem(raw, opts = {}) {
     origin: str(o.origin ?? o.xuatXu, 40).toUpperCase() || "VIETNAM",
     qty1,
     uom1: normUom(o.uom1 ?? o.dvt1, "PCE"),
-    qty2: Math.max(0, num(o.qty2, 0)),
+    qty2,
     uom2: normUom(o.uom2 ?? o.dvt2, "KGM"),
     unitPrice,
     amount,
-    unitFactor: Math.max(0, num(o.unitFactor ?? o.unit_factor ?? o.quyCach, 0)),
+    unitFactor,
     sortOrder:
       typeof opts.sortOrder === "number"
         ? opts.sortOrder
@@ -191,12 +227,13 @@ export function catalogItemFromExcelRow(row) {
 export function invoiceLineFromCatalogItem(catalogItem) {
   const item = normalizeTcsH21CatalogItem(catalogItem, { keepId: true });
   if (!item) return null;
+  const factor = resolveH21UnitFactorKg(item);
   const quantity = item.qty1 > 0 ? item.qty1 : 1;
   const weightKg =
-    item.uom2 === "KGM" && item.qty2 > 0
-      ? item.qty2
-      : item.unitFactor > 0
-        ? Math.round(quantity * item.unitFactor * 1000) / 1000
+    factor > 0
+      ? Math.round(quantity * factor * 1000) / 1000
+      : item.uom2 === "KGM" && item.qty2 > 0
+        ? item.qty2
         : 0;
   const unitPrice = item.unitPrice;
   const amount =

@@ -15,6 +15,15 @@ export function clampScscH21Catalog(list: unknown): ScscH21CatalogItem[];
 
 export function scscH21DescriptionKey(description: unknown): string;
 
+export function parsePackWeightKgFromDescription(description: unknown): number | null;
+
+export function resolveH21UnitFactorKg(item: {
+  description?: unknown;
+  unitFactor?: unknown;
+  qty1?: unknown;
+  qty2?: unknown;
+} | null | undefined): number;
+
 export function findDuplicateScscH21Descriptions(
   list: unknown,
   opts?: { exceptId?: string }

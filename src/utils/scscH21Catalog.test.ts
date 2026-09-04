@@ -7,6 +7,7 @@ import {
   findScscH21DescriptionConflict,
   invoiceLineFromCatalogItem,
   normalizeScscH21CatalogItem,
+  parsePackWeightKgFromDescription,
 } from "../../shared/scscH21CatalogNormalize.mjs";
 import { isScscH21Warehouse } from "../types/scscH21Catalog";
 import { clampInvoiceItemsForShipment } from "./scscH21Api";
@@ -70,10 +71,36 @@ describe("scscH21CatalogNormalize", () => {
       qty2: 2.975,
       uom2: "KGM",
       unitPrice: 0.45,
+      unitFactor: 0.085,
     });
     expect(line?.catalogItemId).toBe("cat-1");
     expect(line?.weightKg).toBe(2.975);
     expect(line?.amount).toBe(15.75);
+  });
+
+  it("ưu tiên (250g/bag) trong mô tả — không lấy qty2 lệch", () => {
+    const item = normalizeScscH21CatalogItem({
+      id: "anan",
+      description: "Bánh gạo An An, hàng mới 100% (250g/bag)",
+      qty1: 150,
+      uom1: "BAG",
+      qty2: 16.65,
+      uom2: "KGM",
+      unitPrice: 0.7,
+      unitFactor: 0.25,
+    });
+    expect(item?.unitFactor).toBe(0.25);
+    expect(item?.qty2).toBe(37.5);
+    const line = invoiceLineFromCatalogItem(item);
+    expect(line?.quantity).toBe(150);
+    expect(line?.weightKg).toBe(37.5);
+    expect(line?.amount).toBe(105);
+  });
+
+  it("parsePackWeightKgFromDescription", () => {
+    expect(parsePackWeightKgFromDescription("X (250g/bag)")).toBe(0.25);
+    expect(parsePackWeightKgFromDescription("Y (1kg/túi)")).toBe(1);
+    expect(parsePackWeightKgFromDescription("Z no pack")).toBeNull();
   });
 
   it("invoice lines clamp", () => {

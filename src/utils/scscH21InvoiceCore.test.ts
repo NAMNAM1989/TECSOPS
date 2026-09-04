@@ -113,4 +113,37 @@ describe("scscH21InvoiceCore", () => {
     expect(sum).toBeLessThan(1000);
     expect(sum).toBeGreaterThan(0);
   });
+
+  it("random An An (250g/bag): weight = quantity × 0.25, không dùng qty2 lệch", () => {
+    const catalog = [
+      {
+        id: "anan",
+        description: "Bánh gạo An An, NSX: t7/2026, HSD: t7/2027 hàng mới 100% (250g/bag)",
+        category: "BÁNH",
+        hsCode: "19059090",
+        origin: "VIETNAM",
+        qty1: 150,
+        uom1: "BAG",
+        qty2: 16.65,
+        uom2: "KGM",
+        unitPrice: 0.7,
+        amount: 105,
+        unitFactor: 0.25,
+        sortOrder: 0,
+        warehouseScope: "SCSC",
+        active: true,
+      },
+    ];
+    const lines = generateRandomH21InvoiceLines({
+      catalog,
+      lineCount: 1,
+      grossKg: 100,
+      rng: createSeededRng(7),
+      cargoFamily: "food",
+    });
+    expect(lines).toHaveLength(1);
+    const line = lines[0];
+    expect(line.weightKg).toBeCloseTo(line.quantity * 0.25, 5);
+    expect(line.weightKg).not.toBe(16.65);
+  });
 });

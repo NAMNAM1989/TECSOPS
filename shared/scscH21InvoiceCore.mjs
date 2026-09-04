@@ -1,7 +1,7 @@
 /**
  * Invoice H21 SCSC — sinh dòng ngẫu nhiên, số INV, footer, validate (shared client/server).
  */
-import { invoiceLineFromCatalogItem, normalizeScscH21CatalogItem } from "./scscH21CatalogNormalize.mjs";
+import { invoiceLineFromCatalogItem, normalizeScscH21CatalogItem, resolveH21UnitFactorKg } from "./scscH21CatalogNormalize.mjs";
 import {
   filterCatalogByH21Family,
   pickCatalogItemsGrouped,
@@ -69,7 +69,7 @@ export function buildH21InvoiceNo(shipment, customerEntry, seqOrOpts) {
 function shufflePick(catalog, count, rng, cargoFamily = "general") {
   const valid = catalog.filter((c) => {
     const item = normalizeScscH21CatalogItem(c, { keepId: true });
-    return item && item.active !== false && item.unitFactor > 0;
+    return item && item.active !== false && resolveH21UnitFactorKg(item) > 0;
   });
   if (!valid.length) return [];
   const pool = filterCatalogByH21Family(valid, cargoFamily, Math.min(3, count));
@@ -102,7 +102,7 @@ export function allocateH21InvoiceLinesFromItems(opts) {
   const seen = new Set();
   for (const raw of items || []) {
     const item = normalizeScscH21CatalogItem(raw, { keepId: true });
-    if (!item || item.active === false || !(item.unitFactor > 0)) continue;
+    if (!item || item.active === false || !(resolveH21UnitFactorKg(item) > 0)) continue;
     if (seen.has(item.id)) continue;
     seen.add(item.id);
     selected.push(item);
@@ -123,9 +123,10 @@ export function allocateH21InvoiceLinesFromItems(opts) {
   const lines = [];
   for (let i = 0; i < selected.length; i++) {
     const item = selected[i];
+    const factor = resolveH21UnitFactorKg(item);
     const share = budget * (weights[i] / sumW);
-    const quantity = Math.max(1, Math.round(share / item.unitFactor));
-    const weightKg = Math.round(quantity * item.unitFactor * 1000) / 1000;
+    const quantity = Math.max(1, Math.round(share / factor));
+    const weightKg = Math.round(quantity * factor * 1000) / 1000;
     const unitPrice = item.unitPrice;
     const amount = Math.round(quantity * unitPrice * 10000) / 10000;
     const base = invoiceLineFromCatalogItem(item);

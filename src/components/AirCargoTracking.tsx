@@ -709,7 +709,6 @@ export function AirCargoTracking({
             onDelete={onDelete}
             onPrint={requestPrintLabel}
             onInvoice={openInvoiceH21}
-            h21Stamps={h21Stamps}
             viewSessionYmd={selectedYmd}
           />
         </Suspense>

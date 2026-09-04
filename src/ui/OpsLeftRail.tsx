@@ -111,7 +111,7 @@ export function OpsLeftRail({
       data-testid="ops-left-rail"
     >
       <div
-        className="grid h-12 w-12 place-items-center rounded-xl bg-ui-navy text-center text-[10px] font-bold leading-tight tracking-wide text-white shadow-[inset_0_-2px_0_#0D9488]"
+        className="grid h-12 w-12 select-none place-items-center rounded-xl bg-ui-navy text-center text-[10px] font-bold leading-tight tracking-wide text-white shadow-[inset_0_-2px_0_#0D9488] transition-transform duration-300 ease-fluid hover:scale-105"
         title="AirCargo_OPS"
         data-testid="brand-mark"
       >
@@ -143,20 +143,20 @@ export function OpsLeftRail({
                 if (id === "scsc-h21") onPrefetchScscH21?.();
                 if (id === "tcs-h21") onPrefetchTcsH21?.();
               }}
-              className={`relative flex min-h-11 w-full touch-manipulation flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[10px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+              className={`group btn-kinetic relative flex min-h-11 w-full select-none touch-manipulation flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
                 isActive
                   ? emphasize
-                    ? "bg-teal-500/18 text-teal-800 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.28)]"
-                    : "bg-teal-500/12 text-ui-primary-hover"
+                    ? "bg-teal-500/18 text-teal-800 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.32)]"
+                    : "bg-teal-500/12 text-ui-primary-hover shadow-sm"
                   : emphasize
-                    ? "text-teal-700 hover:bg-teal-500/10 hover:text-teal-800"
-                    : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
+                    ? "text-teal-700 hover:bg-teal-500/10 hover:text-teal-800 hover:-translate-y-0.5"
+                    : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text hover:-translate-y-0.5"
               }`}
             >
               {isActive ? (
                 <span
-                  className={`absolute left-0 top-1/2 -translate-y-1/2 rounded-r-sm bg-ui-accent ${
-                    emphasize ? "h-8 w-[3.5px]" : "h-7 w-[3px]"
+                  className={`absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full bg-ui-accent shadow-[0_0_8px_rgba(13,148,136,0.6)] transition-all duration-200 ease-fluid ${
+                    emphasize ? "h-8 w-[4px]" : "h-7 w-[3.5px]"
                   }`}
                   aria-hidden
                 />
@@ -164,18 +164,18 @@ export function OpsLeftRail({
               <span
                 className={
                   emphasize
-                    ? `grid place-items-center rounded-xl transition ${
+                    ? `grid place-items-center rounded-xl transition-all duration-200 ease-fluid group-hover:scale-110 ${
                         isActive
                           ? "h-8 w-8 bg-teal-600 text-white shadow-sm shadow-teal-700/25"
                           : "h-8 w-8 bg-teal-500/15 text-teal-700 ring-1 ring-teal-500/35"
                       }`
-                    : undefined
+                    : "transition-transform duration-200 ease-fluid group-hover:scale-110 group-active:scale-95"
                 }
               >
                 <Icon className={emphasize ? "h-[1.35rem] w-[1.35rem] shrink-0" : "h-5 w-5 shrink-0"} />
               </span>
               <span
-                className={`max-w-full text-center leading-tight ${
+                className={`max-w-full text-center leading-tight transition-colors duration-150 ${
                   emphasize ? "font-extrabold tracking-tight" : ""
                 }`}
               >

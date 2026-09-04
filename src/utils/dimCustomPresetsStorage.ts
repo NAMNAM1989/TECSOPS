@@ -1,7 +1,13 @@
 import type { DimPresetSize } from "./dimBulkFill";
 
+/**
+ * @deprecated Preset tùy chỉnh local (v1). UI chính dùng recent dims + profile templates.
+ * Vẫn đọc được trong modal DIM nếu còn dữ liệu trong localStorage; không thêm UI ghi mới.
+ * Ưu tiên `dimTemplateStorage` (recent) và `dimHistoryStorage` (bulk fill).
+ */
 const CUSTOM_PRESETS_STORAGE_KEY = "tecsops_custom_dim_presets_v1";
 
+/** @deprecated Xem note file — chỉ giữ để migrate / hiển thị legacy. */
 export function loadCustomDimPresets(): DimPresetSize[] {
   if (typeof window === "undefined" || !window.localStorage) return [];
   try {
@@ -29,6 +35,7 @@ export function loadCustomDimPresets(): DimPresetSize[] {
   }
 }
 
+/** @deprecated Không gọi từ UI mới — dùng recordCustomerRecentDims. */
 export function saveCustomDimPreset(preset: Omit<DimPresetSize, "id" | "description"> & { id?: string; description?: string }): DimPresetSize[] {
   const current = loadCustomDimPresets();
   const id = preset.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -53,6 +60,7 @@ export function saveCustomDimPreset(preset: Omit<DimPresetSize, "id" | "descript
   return nextList;
 }
 
+/** @deprecated */
 export function removeCustomDimPreset(id: string): DimPresetSize[] {
   const current = loadCustomDimPresets();
   const nextList = current.filter((p) => p.id !== id);

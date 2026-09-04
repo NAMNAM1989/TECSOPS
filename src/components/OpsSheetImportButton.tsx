@@ -13,7 +13,7 @@ export function OpsSheetImportButton({
 }: Props) {
   const icon = (
     <svg
-      className={compact ? "h-4 w-4 text-emerald-600" : "h-3.5 w-3.5 text-emerald-600"}
+      className={`${compact ? "h-4 w-4" : "h-3.5 w-3.5"} text-emerald-600 transition-transform duration-200 ease-fluid group-hover:-translate-y-0.5 group-hover:scale-110`}
       fill="none"
       stroke="currentColor"
       strokeWidth={2}
@@ -36,7 +36,7 @@ export function OpsSheetImportButton({
         aria-label="Sync"
         onPointerDown={() => onPrefetchSheetImport?.()}
         onClick={onOpenSheetImport}
-        className="inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface font-semibold text-ui-text shadow-ui-sm transition hover:border-emerald-500/40 hover:bg-emerald-50/80 active:scale-[0.98]"
+        className="group btn-kinetic inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation items-center justify-center rounded-xl border border-ui-border bg-ui-surface font-semibold text-ui-text shadow-ui-sm hover:border-emerald-500/50 hover:bg-emerald-50/80 hover:shadow-ui-md"
       >
         {icon}
       </button>
@@ -50,7 +50,7 @@ export function OpsSheetImportButton({
       aria-label="Sync"
       onPointerDown={() => onPrefetchSheetImport?.()}
       onClick={onOpenSheetImport}
-      className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-ui-border bg-ui-surface px-3 py-1.5 text-[12px] font-bold text-ui-text shadow-ui-sm transition hover:border-emerald-500/40 hover:bg-emerald-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus active:scale-[0.98]"
+      className="group btn-kinetic inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-ui-border bg-ui-surface px-3 py-1.5 text-[12px] font-bold text-ui-text shadow-ui-sm hover:border-emerald-500/50 hover:bg-emerald-50/80 hover:shadow-ui-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
     >
       {icon}
       Sync

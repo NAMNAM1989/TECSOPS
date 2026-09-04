@@ -164,7 +164,7 @@ function FilterSegment({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`relative shrink-0 whitespace-nowrap rounded-full font-semibold leading-tight transition-colors touch-manipulation ${
+      className={`btn-kinetic glide-pill relative shrink-0 select-none whitespace-nowrap rounded-full font-semibold leading-tight touch-manipulation ${
         tight
           ? "inline-flex h-8 items-center px-2 text-[10px]"
           : dense
@@ -174,15 +174,19 @@ function FilterSegment({
               : "px-3 py-1.5 text-[11px] sm:text-xs"
       } ${isEmpty && !active ? "opacity-40" : "opacity-100"} ${
         active
-          ? "bg-ui-primary text-white shadow-ui-sm"
-          : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
+          ? "bg-ui-primary text-white shadow-[0_2px_8px_rgba(13,148,136,0.35)] scale-[1.02]"
+          : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text hover:-translate-y-0.5"
       }`}
     >
       <span className="mr-0.5 opacity-80" aria-hidden>
         {icon}
       </span>
       <span>{label}</span>
-      <span className={`ml-1 tabular-nums ${active ? "text-white/85" : "text-ui-text-muted"}`}>
+      <span
+        className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold tabular-nums transition-colors duration-200 ${
+          active ? "bg-white/25 text-white" : "bg-black/5 text-ui-text-muted"
+        }`}
+      >
         {count}
       </span>
     </button>

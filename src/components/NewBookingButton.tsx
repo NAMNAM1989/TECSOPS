@@ -12,7 +12,7 @@ interface Props {
 /** CTA chính Ops — luôn ngoài menu Công cụ. */
 export function NewBookingButton({ activeWarehouse, onAdd, iconOnly = false }: Props) {
   const plusIcon = (
-    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden>
+    <svg className="h-3.5 w-3.5 transition-transform duration-200 ease-fluid group-hover:rotate-90 group-hover:scale-110" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
     </svg>
   );
@@ -25,9 +25,9 @@ export function NewBookingButton({ activeWarehouse, onAdd, iconOnly = false }: P
         size="md"
         onClick={() => onAdd(activeWarehouse)}
         title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (phím N)`}
-        className="shrink-0"
+        className="group shrink-0 shadow-ui-sm hover:shadow-ui-md"
       >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden>
+        <svg className="h-4 w-4 transition-transform duration-200 ease-fluid group-hover:rotate-90 group-hover:scale-110" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
         </svg>
       </IconButton>
@@ -41,7 +41,7 @@ export function NewBookingButton({ activeWarehouse, onAdd, iconOnly = false }: P
       onClick={() => onAdd(activeWarehouse)}
       title={`Thêm lô vào ${warehouseLabel[activeWarehouse]} (phím N)`}
       aria-label={`+ Booking ${warehouseLabel[activeWarehouse]}`}
-      className="px-3 font-bold"
+      className="group px-3 font-bold shadow-ui-sm hover:shadow-ui-md"
     >
       {plusIcon}
       Booking

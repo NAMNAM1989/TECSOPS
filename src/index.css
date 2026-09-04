@@ -129,6 +129,30 @@
     background: linear-gradient(180deg, #f1f5f9 0%, #e8eef5 100%);
     box-shadow: 0 1px 0 rgba(15, 23, 42, 0.08);
   }
+
+  /** Micro-interaction: Nút bấm đàn hồi (tactile spring press) */
+  .btn-kinetic {
+    @apply transition-all duration-200 ease-fluid active:scale-[0.96] active:duration-75;
+    will-change: transform;
+  }
+
+  /** Nổi nhẹ khi hover (lift) */
+  .btn-lift {
+    @apply transition-all duration-200 ease-fluid hover:-translate-y-[1px] hover:shadow-ui-md active:translate-y-0;
+  }
+
+  /** Trượt lướt mượt mà cho các tab / segment / chips */
+  .glide-pill {
+    @apply transition-all duration-200 ease-fluid;
+  }
+}
+
+.ease-fluid {
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ease-spring {
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes cnee-slide-up-in {

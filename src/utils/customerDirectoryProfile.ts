@@ -197,9 +197,36 @@ function newSavedDimTemplateId(): string {
 
 export function clampCustomerSavedDimTemplate(t: CustomerSavedDimTemplate): CustomerSavedDimTemplate {
   const L = CUSTOMER_PROFILE_LIMITS;
-  const lCm = Number.isFinite(t.lCm) && t.lCm > 0 ? Math.round(t.lCm) : 30;
-  const wCm = Number.isFinite(t.wCm) && t.wCm > 0 ? Math.round(t.wCm) : 20;
-  const hCm = Number.isFinite(t.hCm) && t.hCm > 0 ? Math.round(t.hCm) : 20;
+  const parsedLines =
+    Array.isArray(t.lines) && t.lines.length > 0
+      ? t.lines
+          .map((line) => {
+            const lCm = Number(line.lCm);
+            const wCm = Number(line.wCm);
+            const hCm = Number(line.hCm);
+            const pcs = Number(line.pcs);
+            if (![lCm, wCm, hCm, pcs].every((n) => Number.isFinite(n) && n > 0)) return null;
+            return {
+              lCm: Math.round(lCm),
+              wCm: Math.round(wCm),
+              hCm: Math.round(hCm),
+              pcs: Math.max(1, Math.round(pcs)),
+            };
+          })
+          .filter((x): x is NonNullable<typeof x> => x != null)
+          .slice(0, 40)
+      : [];
+
+  const head = parsedLines[0];
+  const lCm =
+    head?.lCm ??
+    (Number.isFinite(t.lCm) && t.lCm > 0 ? Math.round(t.lCm) : 30);
+  const wCm =
+    head?.wCm ??
+    (Number.isFinite(t.wCm) && t.wCm > 0 ? Math.round(t.wCm) : 20);
+  const hCm =
+    head?.hCm ??
+    (Number.isFinite(t.hCm) && t.hCm > 0 ? Math.round(t.hCm) : 20);
   const stdPcsKg =
     t.stdPcsKg != null && Number.isFinite(t.stdPcsKg) && t.stdPcsKg > 0
       ? Math.round(t.stdPcsKg * 100) / 100
@@ -212,6 +239,7 @@ export function clampCustomerSavedDimTemplate(t: CustomerSavedDimTemplate): Cust
     hCm,
     ...(stdPcsKg != null ? { stdPcsKg } : {}),
     ...(t.isDefault ? { isDefault: true } : {}),
+    ...(parsedLines.length > 0 ? { lines: parsedLines } : {}),
   };
 }
 

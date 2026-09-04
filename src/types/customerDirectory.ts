@@ -40,6 +40,13 @@ export type CustomerSavedShipper = {
 };
 
 /** Mẫu kích thước DIM lưu sẵn theo khách hàng. */
+export type CustomerSavedDimTemplateLine = {
+  lCm: number;
+  wCm: number;
+  hCm: number;
+  pcs: number;
+};
+
 export type CustomerSavedDimTemplate = {
   id: string;
   /** Nhãn phân biệt (VD: Thùng Garment A, Pallet B). */
@@ -50,6 +57,11 @@ export type CustomerSavedDimTemplate = {
   /** Trọng lượng tiêu chuẩn 1 kiện kg (tùy chọn). */
   stdPcsKg?: number;
   isDefault?: boolean;
+  /**
+   * Nhiều dòng DIM (server-synced). Khi có, áp dụng cả lô;
+   * `lCm/wCm/hCm` vẫn giữ dòng đầu để tương thích UI cũ.
+   */
+  lines?: CustomerSavedDimTemplateLine[];
 };
 
 /** Loại xe (hồ sơ khách). */

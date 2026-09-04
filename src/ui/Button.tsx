@@ -38,7 +38,7 @@ export function Button({
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center rounded-xl font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed ${VARIANT[variant]} ${SIZE[size]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-xl font-semibold btn-kinetic hover:shadow-ui-md disabled:active:scale-100 disabled:shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed ${VARIANT[variant]} ${SIZE[size]} ${className}`}
       {...rest}
     >
       {children}
@@ -68,7 +68,7 @@ export function IconButton({
       type={type}
       aria-label={label}
       title={label}
-      className={`inline-flex items-center justify-center rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed ${VARIANT[variant]} ${box} ${className}`}
+      className={`inline-flex items-center justify-center rounded-xl btn-kinetic hover:shadow-ui-md disabled:active:scale-100 disabled:shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed ${VARIANT[variant]} ${box} ${className}`}
       {...rest}
     >
       {children}

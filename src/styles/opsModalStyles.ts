@@ -65,7 +65,7 @@ export const OPS = {
   pickSaved:
     "mb-1.5 w-full rounded-2xl border border-black/[0.06] bg-apple-bg/50 px-4 py-3 text-left transition hover:bg-apple-blue/10",
   actionIcon:
-    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-ui-border bg-ui-surface text-ui-text shadow-sm transition-colors hover:bg-ui-surface-muted focus:outline-none focus:ring-2 focus:ring-ui-focus",
+    "btn-kinetic inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-ui-border bg-ui-surface text-ui-text shadow-sm hover:bg-ui-surface-muted hover:border-ui-border/80 hover:-translate-y-0.5 hover:shadow-ui-sm focus:outline-none focus:ring-2 focus:ring-ui-focus",
   actionIconOpen:
     "border-ui-primary/55 bg-ui-primary/10 text-ui-primary ring-1 ring-ui-primary/35",
   actionIconEmerald:

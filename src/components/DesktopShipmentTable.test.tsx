@@ -104,9 +104,10 @@ describe("DesktopShipmentTable density", () => {
     expect(html).toContain("min-h-11");
   });
 
-  it("DIM SCSC trên header kho family SCSC, không trên TCS", () => {
+  it("header kho không còn nút xuất DIM SCSC theo ngày phiên", () => {
     const tcsHtml = renderTable();
     expect(tcsHtml).not.toContain("warehouse-dim-scsc");
+    expect(tcsHtml).not.toContain("DIM SCSC");
     expect(tcsHtml).toContain('aria-label="+ Booking TCS"');
 
     const scscRow = {
@@ -125,12 +126,11 @@ describe("DesktopShipmentTable density", () => {
           onPrint={() => undefined}
           onAddBlankRow={() => undefined}
           viewSessionYmd="2026-08-23"
-          onDownloadScscDim={() => undefined}
         />
       </ToastProvider>,
     );
-    expect(scscHtml).toContain("warehouse-dim-scsc");
-    expect(scscHtml).toContain("DIM SCSC");
+    expect(scscHtml).not.toContain("warehouse-dim-scsc");
+    expect(scscHtml).not.toContain("DIM SCSC");
     expect(scscHtml).toContain('aria-label="+ Booking SCSC"');
   });
 });

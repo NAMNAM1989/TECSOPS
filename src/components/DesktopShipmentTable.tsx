@@ -20,7 +20,7 @@ import {
   flightNumberAccent,
 } from "./statusStyles";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
-import { normalizeWarehouse, warehouseLabel, isScscWarehouse } from "../constants/warehouses";
+import { normalizeWarehouse, warehouseLabel } from "../constants/warehouses";
 import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
 import { InlineCustomerInfoCell } from "./InlineCustomerInfoCell";
 import { CneeDetailPopover } from "./CneeDetailPopover";
@@ -49,9 +49,6 @@ interface Props {
   selectedRowId?: string | null;
   onSelectRow?: (id: string | null) => void;
   onAddBlankRow?: (warehouse: Warehouse) => void;
-  /** Xuất LIST DIM — hiện trên header khi kho family SCSC. */
-  onDownloadScscDim?: () => void;
-  scscDimExporting?: boolean;
   onUpdateCustomers?: (
     customers: CustomerDirectoryEntry[]
   ) => Promise<boolean | void>;
@@ -99,8 +96,6 @@ export function DesktopShipmentTable({
   selectedRowId,
   onSelectRow,
   onAddBlankRow,
-  onDownloadScscDim,
-  scscDimExporting = false,
   onUpdate,
   onDelete,
   onPrint,
@@ -123,7 +118,6 @@ export function DesktopShipmentTable({
     [rows, activeWarehouse],
   );
   const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);
-  const showScscDim = Boolean(onDownloadScscDim) && isScscWarehouse(activeWarehouse);
 
   return (
     <>
@@ -152,29 +146,6 @@ export function DesktopShipmentTable({
                 />
               ) : null}
             </div>
-            {showScscDim ? (
-              <button
-                type="button"
-                data-testid="warehouse-dim-scsc"
-                title="Excel LIST DIM SCSC theo ngày phiên"
-                aria-label="DIM SCSC"
-                disabled={scscDimExporting}
-                onClick={onDownloadScscDim}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-ui-text transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <svg
-                  className="h-3.5 w-3.5 shrink-0 text-ui-text-muted"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  viewBox="0 0 24 24"
-                  aria-hidden
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h10M8 7v10" />
-                </svg>
-                {scscDimExporting ? "DIM…" : "DIM SCSC"}
-              </button>
-            ) : null}
           </div>
           <div
             className={`overflow-auto px-1 py-0.5 ${
@@ -247,6 +218,7 @@ export function DesktopShipmentTable({
           key={dimModalRow.id}
           row={dimModalRow}
           customerDirectory={customerDirectory}
+          onUpdateCustomers={onUpdateCustomers}
           onClose={() => setDimModalRow(null)}
           onSave={(payload) => {
             onUpdate(dimModalRow.id, payload);
@@ -310,7 +282,7 @@ function ShipmentTableRowImpl({
         : "";
     const cardEdge =
       "border-y border-ui-border/70 shadow-[0_1px_0_rgba(15,23,42,0.04)]";
-    return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} ${cardEdge} group-hover/row:shadow-[inset_0_0_0_9999px_rgba(13,148,136,0.05)] ${
+    return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} ${cardEdge} transition-colors duration-150 ease-fluid group-hover/row:shadow-[inset_0_0_0_9999px_rgba(13,148,136,0.06)] ${
       part === "first" ? "border-l border-ui-border/80" : ""
     } ${part === "last" ? "border-r border-ui-border/80" : ""} px-1 py-1 ${extra}`.trim();
   };

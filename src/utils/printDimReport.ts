@@ -45,17 +45,19 @@ export function printDimReport(s: Shipment): void {
   const dimKgStripEsc = escapeHtml(model.dimKgStrip);
 
   const bodyRows = model.rows
-    .map(
-      (line) =>
-        `<tr>
+    .map((line) => {
+      const source = line.estimated ? "Ước" : "Đo";
+      const rowClass = line.estimated ? ' class="est"' : "";
+      return `<tr${rowClass}>
         <td class="stt">${line.stt}</td>
         <td class="num">${line.lCm.toFixed(2)}</td>
         <td class="num">${line.wCm.toFixed(2)}</td>
         <td class="num">${line.hCm.toFixed(2)}</td>
         <td class="num">${line.pcs}</td>
         <td class="num dim">${escapeHtml(line.dimKg == null ? "—" : formatLineDimKgDisplay(line.dimKg, model.dimCtx))}</td>
-      </tr>`
-    )
+        <td class="src">${source}</td>
+      </tr>`;
+    })
     .join("\n");
 
   const html = `<!DOCTYPE html>
@@ -123,6 +125,13 @@ export function printDimReport(s: Shipment): void {
     }
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     td.dim { font-weight: 700; }
+    td.src {
+      text-align: center;
+      font-size: 9.5pt;
+      font-weight: 600;
+    }
+    tr.est td { color: #444; font-style: italic; }
+    tr.est td.src { color: #b45309; }
     @media print {
       body { padding: 10mm 12mm; }
       @page { size: A4 portrait; margin: 12mm; }
@@ -147,6 +156,7 @@ export function printDimReport(s: Shipment): void {
         <th>CAO</th>
         <th>SỐ KIỆN</th>
         <th>DIM (kg)</th>
+        <th>NGUỒN</th>
       </tr>
     </thead>
     <tbody>

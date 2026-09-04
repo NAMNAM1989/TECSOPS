@@ -170,9 +170,13 @@ function parseSavedDimTemplatesLoose(raw: unknown): CustomerDirectoryEntry["save
     if (!item || typeof item !== "object") continue;
     const o = item as Record<string, unknown>;
     const id = trimStr(o.id);
-    const lCm = Number(o.lCm);
-    const wCm = Number(o.wCm);
-    const hCm = Number(o.hCm);
+    const linesRaw = Array.isArray(o.lines) ? o.lines : undefined;
+    const head = linesRaw && linesRaw[0] && typeof linesRaw[0] === "object"
+      ? (linesRaw[0] as Record<string, unknown>)
+      : null;
+    const lCm = Number(head?.lCm ?? o.lCm);
+    const wCm = Number(head?.wCm ?? o.wCm);
+    const hCm = Number(head?.hCm ?? o.hCm);
     if (!id || !Number.isFinite(lCm) || lCm <= 0 || !Number.isFinite(wCm) || wCm <= 0 || !Number.isFinite(hCm) || hCm <= 0) continue;
     out.push(
       clampCustomerSavedDimTemplate({
@@ -183,6 +187,19 @@ function parseSavedDimTemplatesLoose(raw: unknown): CustomerDirectoryEntry["save
         hCm,
         stdPcsKg: Number.isFinite(o.stdPcsKg) && Number(o.stdPcsKg) > 0 ? Number(o.stdPcsKg) : undefined,
         isDefault: Boolean(o.isDefault),
+        ...(linesRaw
+          ? {
+              lines: linesRaw.map((line) => {
+                const x = line as Record<string, unknown>;
+                return {
+                  lCm: Number(x.lCm),
+                  wCm: Number(x.wCm),
+                  hCm: Number(x.hCm),
+                  pcs: Number(x.pcs) || 1,
+                };
+              }),
+            }
+          : {}),
       })
     );
   }

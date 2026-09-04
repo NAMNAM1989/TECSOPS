@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyScscLineDimRounding,
   applyScscTotalDimRounding,
+  applyQrLineDimRounding,
   ceilToStep,
   resolveScscAirlineDimRule,
   truncatePositiveKg,
@@ -71,9 +72,18 @@ describe("SCSC airline.1.xlsx — ví dụ làm tròn", () => {
     expect(applyScscLineDimRounding(20.5556, "TRUNCATE_2DP")).toBe(20.55);
   });
 
-  it("QR dòng: cắt 1 số lẻ (20,5556 → 20,5)", () => {
-    expect(applyScscLineDimRounding(20.5556, "QR_LINE")).toBe(20.5);
-    expect(truncatePositiveKg(20.5556, 1)).toBe(20.5);
+  it("QR dòng — SOP: 0 giữ · 1–4 lên 0.5 · ≥5 lên nguyên", () => {
+    expect(applyQrLineDimRounding(20.5)).toBe(20.5);
+    expect(applyScscLineDimRounding(20.41, "QR_LINE")).toBe(20.5);
+    expect(applyScscLineDimRounding(20.44, "QR_LINE")).toBe(20.5);
+    expect(applyScscLineDimRounding(20.5556, "QR_LINE")).toBe(21);
+    expect(applyScscLineDimRounding(20.05, "QR_LINE")).toBe(21);
+    expect(applyScscLineDimRounding(10.0, "QR_LINE")).toBe(10);
+  });
+
+  it("QR tổng: làm tròn 0.5 sau cộng dòng", () => {
+    expect(applyScscTotalDimRounding(100.104, "QR_TOTAL")).toBe(100.5);
+    expect(applyScscTotalDimRounding(100.546, "QR_TOTAL")).toBe(101);
   });
 
   it("ceilToStep khớp ví dụ tổng", () => {

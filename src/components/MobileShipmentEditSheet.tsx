@@ -60,6 +60,9 @@ type Props = {
   focusField?: MobileEditFocus;
   onClose: () => void;
   onSave: (patch: Partial<Shipment>) => void;
+  onUpdateCustomers?: (
+    customers: CustomerDirectoryEntry[],
+  ) => Promise<boolean | void> | boolean | void;
 };
 
 const TABS: { id: TabId; label: string }[] = [
@@ -77,6 +80,7 @@ export function MobileShipmentEditSheet({
   focusField = null,
   onClose,
   onSave,
+  onUpdateCustomers,
 }: Props) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<TabId>("lot");
@@ -615,6 +619,7 @@ export function MobileShipmentEditSheet({
         <LazyMobileDimKgModal
           row={{ ...shipment, dimWeightKg, dimLines }}
           customerDirectory={customerDirectory}
+          onUpdateCustomers={onUpdateCustomers}
           onClose={() => setDimOpen(false)}
           onSave={onDimSave}
         />

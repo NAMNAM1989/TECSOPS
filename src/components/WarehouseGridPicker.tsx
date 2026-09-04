@@ -117,18 +117,18 @@ export function WarehouseGridPicker({
               aria-selected={isActive}
               title={`${warehouseLabel[wh]} · Lô ${m.lots} · Kiện ${m.pcs} · Kg ${kg}`}
               onClick={() => onSelect(wh)}
-              className={`touch-manipulation ring-1 transition active:scale-[0.98] ${
+              className={`btn-kinetic glide-pill touch-manipulation ring-1 select-none ${
                 fitRow
                   ? "inline-flex min-h-8 min-w-0 w-full flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 py-1 text-center"
                   : `inline-flex shrink-0 flex-col items-start justify-center text-left ${
                       denseChips
                         ? touchTargets
-                          ? "min-h-10 gap-0.5 rounded-xl px-2.5 py-1"
-                          : "min-h-9 gap-0.5 rounded-lg px-2 py-1"
-                        : "min-h-11 gap-0.5 rounded-xl px-2.5 py-1"
+                          ? "min-h-10 gap-0.5 rounded-xl px-2.5 py-1 hover:-translate-y-0.5 hover:shadow-ui-sm"
+                          : "min-h-9 gap-0.5 rounded-lg px-2 py-1 hover:-translate-y-0.5 hover:shadow-ui-sm"
+                        : "min-h-11 gap-0.5 rounded-xl px-2.5 py-1 hover:-translate-y-0.5 hover:shadow-ui-sm"
                     }`
               } ${
-                isActive ? CHIP_ACTIVE[wh] : CHIP_IDLE[wh]
+                isActive ? `${CHIP_ACTIVE[wh]} shadow-[0_2px_8px_rgba(0,0,0,0.12)] scale-[1.01]` : CHIP_IDLE[wh]
               } ${hasSearchHit && !isActive ? "ring-2 ring-ui-primary/50" : ""}`}
             >
               <span

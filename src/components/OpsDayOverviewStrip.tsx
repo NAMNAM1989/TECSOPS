@@ -26,10 +26,10 @@ function CompactKpi({
 }) {
   return (
     <span
-      className={`inline-flex min-h-9 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-2.5 py-1 text-center transition ${
+      className={`glide-pill inline-flex min-h-9 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-2.5 py-1 text-center select-none ${
         active
-          ? "border-teal-500/45 bg-teal-500/10"
-          : "border-ui-border/80 bg-ui-surface hover:border-teal-500/30"
+          ? "border-teal-500/45 bg-teal-500/10 shadow-sm"
+          : "border-ui-border/80 bg-ui-surface hover:border-teal-500/30 hover:shadow-ui-sm hover:-translate-y-0.5"
       }`}
       title={`${label}: ${value}`}
     >

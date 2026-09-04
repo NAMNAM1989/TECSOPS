@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Shipment } from "../types/shipment";
 import { blankShipmentDraft } from "../utils/blankShipment";
@@ -7,6 +7,22 @@ import {
   resolveDimChargeable,
   resolveDimModalStatus,
 } from "./MobileDimKgModal";
+
+beforeAll(() => {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }),
+  });
+});
 
 const baseRow = {
   ...blankShipmentDraft("2026-08-23", "TCS"),
@@ -93,12 +109,19 @@ describe("MobileDimKgModal UX", () => {
     expect(html).toContain("Nâng cao");
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain("Mẫu · sinh ảo · gộp dòng");
-    expect(html).not.toContain("Sinh ngay");
-    expect(html).not.toContain("Điền đủ");
+    expect(html).not.toContain("Bù kiện ước tính");
+    expect(html).not.toContain("Sinh lại");
+    expect(html).not.toContain("dim-estimate-panel");
     expect(html).not.toContain("Gộp dòng giống");
     expect(html).not.toContain("Cấu hình Ước tính");
     expect(html).not.toContain("Đo thật");
     expect(html).not.toContain(">Nhanh<");
+    expect(html).toContain("dim-modal-shell");
+    expect(html).toContain("dim-modal-drag-handle");
+    expect(html).toContain("dim-undo");
+    expect(html).toContain("dim-redo");
+    expect(html).toContain("Ctrl+Enter");
+    expect(html).toContain("90rem");
   });
 
   it("footer hiển thị trực quan các nút công cụ (Hủy, Làm lại, Nâng cao, Lưu) và overflow-visible", () => {
@@ -107,6 +130,8 @@ describe("MobileDimKgModal UX", () => {
     expect(html).toContain("overflow-visible");
     expect(html).toContain("Hủy");
     expect(html).toContain("Làm lại");
+    expect(html).toContain("Undo");
+    expect(html).toContain("Redo");
     expect(html).toContain("Nâng cao");
     expect(html).toContain("dim-save");
   });
@@ -173,7 +198,7 @@ describe("MobileDimKgModal UX", () => {
     );
     expect(html).toContain("Quy cách khách");
     expect(html).toContain("AGL");
-    expect(html).toContain("+ Lưu mẫu khách");
+    expect(html).toContain("+ Ghim gần đây");
     expect(html).toContain("60×40×40");
   });
 });

@@ -203,7 +203,7 @@ export function BottomNav({
           id={menuId}
           role="menu"
           aria-label="Menu Ops"
-          className="mb-2 w-[13.5rem] overflow-hidden rounded-2xl border border-ui-border bg-ui-surface shadow-ui-lg"
+          className="mb-2 w-[13.5rem] overflow-hidden rounded-2xl border border-ui-border bg-ui-surface shadow-ui-lg animate-cnee-slide-up"
         >
           {reportActions.length > 0 ? (
             <div data-testid="bottom-nav-cargo-copy" className="border-b border-ui-border/70">
@@ -303,7 +303,7 @@ export function BottomNav({
         aria-controls={open ? menuId : undefined}
         aria-haspopup="menu"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-14 min-h-14 w-14 min-w-14 touch-manipulation items-center justify-center rounded-full border border-ui-border/80 bg-ui-surface text-ui-navy shadow-ui-md transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus active:scale-[0.97]"
+        className="btn-kinetic inline-flex h-14 min-h-14 w-14 min-w-14 touch-manipulation items-center justify-center rounded-full border border-ui-border/80 bg-ui-surface text-ui-navy shadow-ui-md hover:bg-ui-surface-muted hover:shadow-ui-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
       >
         {open ? <IconClose className="h-6 w-6" /> : <ActiveIcon className="h-6 w-6 text-ui-accent" />}
       </button>

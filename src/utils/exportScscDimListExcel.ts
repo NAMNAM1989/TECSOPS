@@ -5,7 +5,7 @@ import { canPrintDimScscReport } from "./printDimReport";
 import { buildScscDimListModel, dimKgExcelLineNumFmt, type ScscDimListModel } from "./scscDimListReport";
 import { awbForFilename, downloadXlsxBuffer } from "./downloadXlsx";
 
-const LAST_COL = 6;
+const LAST_COL = 7;
 const BLACK = "FF000000";
 
 /** Meta không viền — bắt đầu từ hàng 1; sau meta là dòng trống + header bảng DIM */
@@ -73,7 +73,7 @@ function styleBodyCell(cell: Cell, col: number) {
   cell.font = BODY_FONT as Font;
   cell.alignment = {
     vertical: "middle",
-    horizontal: col === 1 ? "center" : "right",
+    horizontal: col === 1 || col === 7 ? "center" : "right",
   };
 }
 
@@ -89,6 +89,7 @@ async function fillListScscSheet(
     { width: 14 },
     { width: 12 },
     { width: 16 },
+    { width: 10 },
   ];
 
   const flightDate = `${s.flight.trim()} / ${s.flightDate.trim()}`;
@@ -115,7 +116,7 @@ async function fillListScscSheet(
 
   sheet.getRow(ROW_SPACER_BEFORE_TABLE).height = 8;
 
-  const headers = ["STT", "DÀI", "RỘNG", "CAO", "SỐ KIỆN", "DIM (kg)"];
+  const headers = ["STT", "DÀI", "RỘNG", "CAO", "SỐ KIỆN", "DIM (kg)", "NGUỒN"];
   const headerRow = sheet.getRow(ROW_TABLE_HEADER);
   headerRow.height = 26;
   headers.forEach((text, i) => {
@@ -137,6 +138,7 @@ async function fillListScscSheet(
     row.getCell(4).value = r.hCm;
     row.getCell(5).value = r.pcs;
     row.getCell(6).value = r.dimKg != null ? r.dimKg : "—";
+    row.getCell(7).value = r.estimated ? "Ước" : "Đo";
 
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       styleBodyCell(cell, colNumber);
@@ -145,6 +147,9 @@ async function fillListScscSheet(
       }
       if (colNumber === 6 && r.dimKg != null) {
         cell.numFmt = dimFmt;
+      }
+      if (colNumber === 7 && r.estimated) {
+        cell.font = { ...BODY_FONT, italic: true } as Font;
       }
     });
   });
@@ -177,58 +182,6 @@ async function buildListScscWorkbook(s: Shipment, model: ScscDimListModel) {
   });
   await fillListScscSheet(sheet, s, model);
   return wb;
-}
-
-function uniqueSheetName(used: Set<string>, base: string): string {
-  const name = base.slice(0, 28) || "DIM";
-  if (!used.has(name)) {
-    used.add(name);
-    return name;
-  }
-  let i = 2;
-  while (used.has(`${name}_${i}`)) i++;
-  const n = `${name}_${i}`.slice(0, 31);
-  used.add(n);
-  return n;
-}
-
-/**
- * Xuất nhiều lô SCSC đã có DIM → 1 file Excel, mỗi lô 1 sheet.
- * Trả về số sheet đã ghi.
- */
-export async function downloadScscDimDayExcel(
-  shipments: readonly Shipment[],
-  sessionYmd: string
-): Promise<number> {
-  const ready = shipments.filter((s) => canPrintDimScscReport(s));
-  if (ready.length === 0) {
-    notifyWarning(
-      "Chưa có lô TECS-SCSC nào đã nhập chi tiết DIM (D×R×C×kiện) trong ngày này.",
-      "Xuất DIM SCSC"
-    );
-    return 0;
-  }
-
-  const ExcelJS = (await import("exceljs")).default;
-  const wb = new ExcelJS.Workbook();
-  wb.creator = "TECSOPS";
-  wb.created = new Date();
-  const used = new Set<string>();
-
-  for (const s of ready) {
-    const model = buildScscDimListModel(s);
-    if (!model) continue;
-    const base = awbForFilename(s.awb) || `STT${s.stt}`;
-    const sheet = wb.addWorksheet(uniqueSheetName(used, base), {
-      views: [{ state: "frozen", ySplit: ROW_TABLE_HEADER }],
-      properties: { defaultRowHeight: 18 },
-    });
-    await fillListScscSheet(sheet, s, model);
-  }
-
-  const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
-  downloadXlsxBuffer(buf, `LIST_SCSC_DIM_${sessionYmd}.xlsx`);
-  return ready.length;
 }
 
 /** Excel LIST SCSC — meta không viền; chỉ bảng DIM có lưới đen. */

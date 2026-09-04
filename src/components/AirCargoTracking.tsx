@@ -711,6 +711,7 @@ export function AirCargoTracking({
             focusField={mobileEditFocus}
             sessionDateYmd={selectedYmd}
             customerDirectory={state?.customers ?? EMPTY_CUSTOMERS_DIR}
+            onUpdateCustomers={onUpdateCustomers}
             onClose={() => {
               setMobileEditShipment(null);
               setMobileEditFocus(null);

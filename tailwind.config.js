@@ -116,6 +116,10 @@ export default {
         "ui-toast-in": "ui-toast-in 0.2s ease-out forwards",
         "ui-skeleton": "ui-skeleton 1.2s ease-in-out infinite",
       },
+      transitionTimingFunction: {
+        fluid: "cubic-bezier(0.16, 1, 0.3, 1)",
+        spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+      },
     },
   },
   plugins: [],

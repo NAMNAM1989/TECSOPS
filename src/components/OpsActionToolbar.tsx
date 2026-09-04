@@ -103,10 +103,10 @@ function ToolChip({
       onClick={onClick}
       onMouseEnter={onPrefetch}
       onFocus={onPrefetch}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-lg font-semibold text-ui-text transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`btn-kinetic inline-flex shrink-0 items-center gap-1 rounded-lg font-semibold text-ui-text focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 ${
         mobile
-          ? "min-h-10 touch-manipulation px-2 text-[11px] active:scale-[0.98] hover:bg-ui-surface-muted"
-          : "h-8 px-2 text-[11px] hover:bg-ui-surface-muted"
+          ? "min-h-10 touch-manipulation px-2 text-[11px] hover:bg-ui-surface-muted"
+          : "h-8 px-2 text-[11px] hover:bg-ui-surface-muted hover:-translate-y-0.5"
       }`}
     >
       {children}
@@ -232,10 +232,10 @@ export function OpsActionToolbar({
                 if (action.disabled) return;
                 onCopyCargoDayReport(action.id);
               }}
-              className={`inline-flex shrink-0 items-center rounded-lg border font-extrabold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-35 ${
+              className={`btn-kinetic inline-flex shrink-0 items-center rounded-lg border font-extrabold focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-35 disabled:active:scale-100 ${
                 isMobile
-                  ? "min-h-10 touch-manipulation border px-2 text-[11px] active:scale-[0.98]"
-                  : "h-8 border px-1.5 text-[10px]"
+                  ? "min-h-10 touch-manipulation border px-2 text-[11px]"
+                  : "h-8 border px-1.5 text-[10px] hover:-translate-y-0.5 hover:shadow-ui-sm"
               } ${REPORT_TONE[action.id]}`}
             >
               {action.label}

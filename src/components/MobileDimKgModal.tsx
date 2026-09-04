@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { useDraggablePanel } from "../hooks/useDraggablePanel";
+import { useDimLinesHistory } from "../hooks/useDimLinesHistory";
 import {
   useOpsMobileOverlayLock,
   useVisualViewportBottomInset,
@@ -56,6 +59,21 @@ import {
   type DimTemplate,
   type CustomerRecentDimSize,
 } from "../utils/dimTemplateStorage";
+import { saveCustomerDimHistory } from "../utils/dimHistoryStorage";
+import { loadCustomDimPresets } from "../utils/dimCustomPresetsStorage";
+import {
+  applyDimTemplateLines,
+  customerDimTemplateToPieceLines,
+  pieceLinesToCustomerDimTemplate,
+  seedLinesFromCustomerDefault,
+  type DimTemplateApplyMode,
+} from "../utils/dimTemplateApply";
+import {
+  clearDimDraft,
+  dimDraftParentChanged,
+  loadDimDraft,
+  saveDimDraft,
+} from "../utils/dimDraftStorage";
 
 export type MobileDimSavePayload = {
   dimWeightKg: number | null;
@@ -68,6 +86,10 @@ interface MobileDimKgModalProps {
   customerDirectory?: readonly CustomerDirectoryEntry[];
   onClose: () => void;
   onSave: (payload: MobileDimSavePayload) => void;
+  /** Đồng bộ mẫu DIM multi-line lên hồ sơ khách (server). */
+  onUpdateCustomers?: (
+    customers: CustomerDirectoryEntry[],
+  ) => Promise<boolean | void> | boolean | void;
 }
 
 export type DimModalStatus = {
@@ -199,35 +221,91 @@ const CARGO_PRESETS = [
   { label: "Pallet gỗ", d: 120, r: 80, c: 80, icon: "🪵" },
 ] as const;
 
+type DimCellNav = "next" | "prev" | "up" | "down";
+
+function focusDimCell(row: number, col: number) {
+  const el = document.querySelector<HTMLInputElement>(
+    `[data-dim-cell="${row}-${col}"]`,
+  );
+  el?.focus();
+  el?.select();
+}
+
 function DimNumCell({
   value,
   onCommit,
   ariaLabel,
+  rowIndex,
+  colIndex,
+  rowCount,
 }: {
   value: number;
   onCommit: (n: number) => void;
   ariaLabel: string;
+  rowIndex: number;
+  colIndex: number;
+  rowCount: number;
 }) {
   const [raw, setRaw] = useState(String(value));
   useEffect(() => {
     setRaw(String(value));
   }, [value]);
 
+  const commitRaw = (): boolean => {
+    const n = Number(raw.replace(",", "."));
+    if (Number.isFinite(n) && n > 0) {
+      if (n !== value) onCommit(n);
+      return true;
+    }
+    setRaw(String(value));
+    return false;
+  };
+
+  const navigate = (dir: DimCellNav) => {
+    const cols = 4;
+    if (dir === "next") {
+      if (colIndex < cols - 1) focusDimCell(rowIndex, colIndex + 1);
+      else if (rowIndex < rowCount - 1) focusDimCell(rowIndex + 1, 0);
+    } else if (dir === "prev") {
+      if (colIndex > 0) focusDimCell(rowIndex, colIndex - 1);
+      else if (rowIndex > 0) focusDimCell(rowIndex - 1, cols - 1);
+    } else if (dir === "down" && rowIndex < rowCount - 1) {
+      focusDimCell(rowIndex + 1, colIndex);
+    } else if (dir === "up" && rowIndex > 0) {
+      focusDimCell(rowIndex - 1, colIndex);
+    }
+  };
+
   return (
     <input
       aria-label={ariaLabel}
+      data-dim-cell={`${rowIndex}-${colIndex}`}
       inputMode="numeric"
       value={raw}
       onChange={(e) => setRaw(e.target.value)}
       onBlur={() => {
-        const n = Number(raw.replace(",", "."));
-        if (Number.isFinite(n) && n > 0) onCommit(n);
-        else setRaw(String(value));
+        commitRaw();
       }}
       onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commitRaw();
+          navigate("next");
+          return;
+        }
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          commitRaw();
+          navigate("down");
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          commitRaw();
+          navigate("up");
+        }
       }}
-      className="h-8 w-full rounded-md border border-transparent bg-transparent px-1 text-center font-mono text-[12px] font-semibold tabular-nums text-ui-text outline-none hover:border-ui-border focus:border-ui-primary/50 focus:bg-ui-surface focus:ring-1 focus:ring-ui-focus"
+      className="h-9 w-full rounded-md border border-transparent bg-transparent px-1 text-center font-mono text-[13px] font-semibold tabular-nums text-ui-text outline-none hover:border-ui-border focus:border-ui-primary/50 focus:bg-ui-surface focus:ring-1 focus:ring-ui-focus"
     />
   );
 }
@@ -334,23 +412,23 @@ function DimLinesTable({
         onPasteText(text);
       }}
     >
-      <table className="w-full min-w-[34rem] border-collapse text-[12px]">
-        <thead className="sticky top-0 z-10 bg-ui-surface-muted">
-          <tr className="border-b border-ui-border text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
-            <th className="w-8 px-2 py-1.5 text-left">#</th>
-            <th className="w-[4.5rem] px-1 py-1.5 text-center">D</th>
-            <th className="w-[4.5rem] px-1 py-1.5 text-center">R</th>
-            <th className="w-[4.5rem] px-1 py-1.5 text-center">C</th>
-            <th className="w-16 px-1 py-1.5 text-center">Kiện</th>
-            <th className="w-20 px-2 py-1.5 text-right">Kg</th>
-            <th className="w-16 px-2 py-1.5 text-left">Nguồn</th>
-            <th className="w-[4.75rem] px-1 py-1.5" />
+      <table className="w-full min-w-[40rem] border-collapse text-[13px]">
+        <thead className="sticky top-0 z-10 bg-ui-surface-muted shadow-sm">
+          <tr className="border-b border-ui-border text-[11px] font-bold uppercase tracking-wide text-ui-text-muted">
+            <th className="w-10 px-2.5 py-2 text-left">#</th>
+            <th className="w-[5.25rem] px-1.5 py-2 text-center">D</th>
+            <th className="w-[5.25rem] px-1.5 py-2 text-center">R</th>
+            <th className="w-[5.25rem] px-1.5 py-2 text-center">C</th>
+            <th className="w-[4.75rem] px-1.5 py-2 text-center">Kiện</th>
+            <th className="w-24 px-2.5 py-2 text-right">Kg</th>
+            <th className="w-20 px-2.5 py-2 text-left">Nguồn</th>
+            <th className="w-[5.5rem] px-1.5 py-2" />
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={8} className="px-3 py-8 text-center text-[12px] text-ui-text-muted">
+              <td colSpan={8} className="px-4 py-10 text-center text-[13px] text-ui-text-muted">
                 {emptyHint}
               </td>
             </tr>
@@ -364,41 +442,53 @@ function DimLinesTable({
                     tone === "measured" ? "bg-ui-success/5" : "bg-ui-surface"
                   }`}
                 >
-                  <td className="px-2 py-0.5 font-mono text-[11px] text-ui-text-muted">{i + 1}</td>
-                  <td className="px-1 py-0.5">
+                  <td className="px-2.5 py-1 font-mono text-[12px] text-ui-text-muted">{i + 1}</td>
+                  <td className="px-1.5 py-1">
                     <DimNumCell
                       ariaLabel={`Dòng ${i + 1} cạnh D`}
                       value={line.lCm}
+                      rowIndex={i}
+                      colIndex={0}
+                      rowCount={rows.length}
                       onCommit={(n) => onPatch(idx, { lCm: Math.round(n) }, true)}
                     />
                   </td>
-                  <td className="px-1 py-0.5">
+                  <td className="px-1.5 py-1">
                     <DimNumCell
                       ariaLabel={`Dòng ${i + 1} cạnh R`}
                       value={line.wCm}
+                      rowIndex={i}
+                      colIndex={1}
+                      rowCount={rows.length}
                       onCommit={(n) => onPatch(idx, { wCm: Math.round(n) }, true)}
                     />
                   </td>
-                  <td className="px-1 py-0.5">
+                  <td className="px-1.5 py-1">
                     <DimNumCell
                       ariaLabel={`Dòng ${i + 1} cạnh C`}
                       value={line.hCm}
+                      rowIndex={i}
+                      colIndex={2}
+                      rowCount={rows.length}
                       onCommit={(n) => onPatch(idx, { hCm: Math.round(n) }, true)}
                     />
                   </td>
-                  <td className="px-1 py-0.5">
+                  <td className="px-1.5 py-1">
                     <DimNumCell
                       ariaLabel={`Dòng ${i + 1} số kiện`}
                       value={line.pcs}
+                      rowIndex={i}
+                      colIndex={3}
+                      rowCount={rows.length}
                       onCommit={(n) => onPatch(idx, { pcs: Math.max(1, Math.floor(n)) })}
                     />
                   </td>
-                  <td className="px-2 py-0.5 text-right font-mono text-[12px] font-semibold tabular-nums text-ui-text">
+                  <td className="px-2.5 py-1 text-right font-mono text-[13px] font-semibold tabular-nums text-ui-text">
                     {kg != null ? formatLineDimKgDisplay(kg, dimCtx) : "—"}
                   </td>
-                  <td className="px-2 py-0.5">
+                  <td className="px-2.5 py-1">
                     <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                      className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${
                         tone === "measured"
                           ? "bg-ui-success/15 text-ui-success"
                           : "bg-ui-surface-muted text-ui-text-muted"
@@ -407,13 +497,13 @@ function DimLinesTable({
                       {tone === "measured" ? "Đo" : line.locked ? "Khóa" : "Ước"}
                     </span>
                   </td>
-                  <td className="px-1 py-0.5">
+                  <td className="px-1.5 py-1">
                     <div className="flex justify-end gap-0.5">
                       {tone === "estimated" ? (
                         <button
                           type="button"
                           onClick={() => onToggleLock(idx)}
-                          className="h-8 rounded-md px-1.5 text-[10px] font-bold text-ui-text-muted hover:bg-ui-surface-muted"
+                          className="h-9 rounded-md px-2 text-[11px] font-bold text-ui-text-muted hover:bg-ui-surface-muted"
                           title={line.locked ? "Mở khóa" : "Khóa dòng"}
                         >
                           {line.locked ? "Khóa" : "Ghim"}
@@ -422,7 +512,7 @@ function DimLinesTable({
                       <button
                         type="button"
                         onClick={() => onRemove(idx)}
-                        className="h-8 rounded-md px-1.5 text-[10px] font-bold text-ui-danger hover:bg-ui-danger/10"
+                        className="h-9 rounded-md px-2 text-[11px] font-bold text-ui-danger hover:bg-ui-danger/10"
                       >
                         Xóa
                       </button>
@@ -436,11 +526,11 @@ function DimLinesTable({
         {rows.length > 0 ? (
           <tfoot>
             <tr className="sticky bottom-0 border-t border-ui-border bg-ui-surface-muted font-bold">
-              <td className="px-2 py-1.5 text-[10px] uppercase text-ui-text-muted" colSpan={4}>
+              <td className="px-2.5 py-2 text-[11px] uppercase text-ui-text-muted" colSpan={4}>
                 Tổng
               </td>
-              <td className="px-2 py-1.5 text-center font-mono tabular-nums">{sumPcs}</td>
-              <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ui-navy">
+              <td className="px-2.5 py-2 text-center font-mono text-[13px] tabular-nums">{sumPcs}</td>
+              <td className="px-2.5 py-2 text-right font-mono text-[13px] tabular-nums text-ui-navy">
                 {totalDimLabel}
               </td>
               <td colSpan={2} />
@@ -457,71 +547,142 @@ function EstimationConfigPanel({
   snap,
   targetRatioPercent,
   setTargetRatioPercent,
+  lockFixedKg,
+  setLockFixedKg,
   randomTargetKgInput,
   setRandomTargetKgInput,
   randomLineCountInput,
   setRandomLineCountInput,
   autoRandomAfterAdd,
   setAutoRandomAfterAdd,
+  hasEstimated,
   onGenerate,
   onClearEstimated,
 }: {
   lot: { declaredKg: number | null | undefined; declaredPcs: number | null | undefined };
-  snap: { remainingPcs: number; sumEstimatedPcs: number; targetLineCount: { min: number; max: number } | null };
+  snap: {
+    remainingPcs: number;
+    sumEstimatedPcs: number;
+    targetLineCount: { min: number; max: number } | null;
+  };
   targetRatioPercent: number;
   setTargetRatioPercent: (v: number) => void;
+  lockFixedKg: boolean;
+  setLockFixedKg: (v: boolean) => void;
   randomTargetKgInput: string;
   setRandomTargetKgInput: (v: string) => void;
   randomLineCountInput: string;
   setRandomLineCountInput: (v: string) => void;
   autoRandomAfterAdd: boolean;
   setAutoRandomAfterAdd: (v: boolean) => void;
+  hasEstimated: boolean;
   onGenerate: () => void;
   onClearEstimated: () => void;
 }) {
+  const ratioKg =
+    lot.declaredKg != null && lot.declaredKg > 0
+      ? Math.round(lot.declaredKg * (targetRatioPercent / 100))
+      : null;
+  const canGenerate = snap.remainingPcs > 0;
+
   return (
-    <div className="space-y-2.5 text-xs">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-bold text-ui-navy">Sinh kiện ước tính</span>
+    <div className="space-y-2.5 text-xs" data-testid="dim-estimate-panel">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <span className="text-[11px] font-bold text-ui-navy">Bù kiện ước tính</span>
+          <p className="text-[10px] text-ui-text-muted">
+            {canGenerate
+              ? `Còn thiếu ${snap.remainingPcs} kiện · mục tiêu dưới kg lô`
+              : "Đã đủ kiện — xóa ước tính chưa khóa nếu muốn sinh lại"}
+          </p>
+        </div>
         <Button
           type="button"
           size="sm"
           variant="secondary"
           onClick={onGenerate}
-          disabled={snap.remainingPcs <= 0}
+          disabled={!canGenerate}
           className="min-h-11 px-3"
+          title={
+            canGenerate
+              ? hasEstimated
+                ? "Sinh lại phân bổ kiện ước tính"
+                : "Bù kiện còn thiếu bằng dòng ước tính"
+              : "Không còn kiện thiếu"
+          }
         >
-          Sinh ngay
+          {hasEstimated && canGenerate ? "Sinh lại" : "Bù kiện ước tính"}
         </Button>
       </div>
 
-      <div className="space-y-2">
-        {lot.declaredKg != null && lot.declaredKg > 0 ? (
-          <div className="space-y-1">
-            <div className="flex justify-between text-[10px] font-bold text-ui-text-muted">
-              <span>Tỉ lệ DIM/Gross</span>
-              <span className="text-ui-navy">
-                {targetRatioPercent.toFixed(1)}% (~{Math.round(lot.declaredKg * (targetRatioPercent / 100))} kg)
-              </span>
-            </div>
-            <input
-              type="range"
-              min={85}
-              max={99.9}
-              step={0.5}
-              value={targetRatioPercent}
-              onChange={(e) => {
-                setTargetRatioPercent(Number(e.target.value));
-                setRandomTargetKgInput("");
-              }}
-              className="h-2 w-full cursor-pointer rounded-lg bg-ui-surface-muted accent-ui-primary"
-            />
+      {lot.declaredKg != null && lot.declaredKg > 0 ? (
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-ui-text-muted">
+            <span>Tỉ lệ DIM / Gross</span>
+            <span className="tabular-nums text-ui-navy">
+              {targetRatioPercent.toFixed(1)}%
+              {ratioKg != null && !lockFixedKg ? ` · ~${ratioKg} kg` : ""}
+            </span>
           </div>
-        ) : null}
+          <div className="flex flex-wrap gap-1">
+            {[92, 95, 98].map((p) => (
+              <button
+                key={p}
+                type="button"
+                disabled={lockFixedKg}
+                onClick={() => {
+                  setTargetRatioPercent(p);
+                  setRandomTargetKgInput("");
+                }}
+                className={`min-h-9 rounded-lg px-2.5 text-[11px] font-bold tabular-nums transition ${
+                  !lockFixedKg && Math.abs(targetRatioPercent - p) < 0.26
+                    ? "bg-ui-primary text-white"
+                    : "border border-ui-border bg-ui-surface-muted text-ui-text hover:bg-ui-surface disabled:opacity-40"
+                }`}
+              >
+                {p}%
+              </button>
+            ))}
+          </div>
+          <input
+            type="range"
+            min={85}
+            max={99.9}
+            step={0.5}
+            value={targetRatioPercent}
+            disabled={lockFixedKg}
+            onChange={(e) => {
+              setTargetRatioPercent(Number(e.target.value));
+              setRandomTargetKgInput("");
+            }}
+            className="h-2 w-full cursor-pointer rounded-lg bg-ui-surface-muted accent-ui-primary disabled:cursor-not-allowed disabled:opacity-40"
+          />
+        </div>
+      ) : null}
 
-        <div className="grid grid-cols-2 gap-1.5">
+      <label className="flex cursor-pointer items-center gap-1.5 text-[10px] font-semibold text-ui-text">
+        <input
+          type="checkbox"
+          checked={lockFixedKg}
+          onChange={(e) => {
+            const on = e.target.checked;
+            setLockFixedKg(on);
+            if (on && !randomTargetKgInput.trim() && ratioKg != null) {
+              setRandomTargetKgInput(String(ratioKg));
+            }
+            if (!on) setRandomTargetKgInput("");
+          }}
+          className="rounded text-ui-primary focus:ring-ui-focus"
+        />
+        Khóa kg DIM cố định
+      </label>
+
+      <div className={`grid gap-1.5 ${lockFixedKg ? "grid-cols-2" : "grid-cols-1"}`}>
+        {lockFixedKg ? (
           <label>
-            <span className="mb-0.5 block text-[9px] font-bold uppercase text-ui-text-muted">Kg DIM cố định</span>
+            <span className="mb-0.5 block text-[9px] font-bold uppercase text-ui-text-muted">
+              Kg DIM cố định
+            </span>
             <Input
               type="number"
               min={1}
@@ -529,53 +690,56 @@ function EstimationConfigPanel({
               inputMode="decimal"
               value={randomTargetKgInput}
               onChange={(e) => setRandomTargetKgInput(e.target.value)}
-              placeholder={
-                lot.declaredKg != null
-                  ? `~${Math.round(lot.declaredKg * (targetRatioPercent / 100))} kg`
-                  : "950"
-              }
+              placeholder={ratioKg != null ? String(ratioKg) : "950"}
               className="text-center text-sm font-semibold tabular-nums"
             />
           </label>
-          <label>
-            <span className="mb-0.5 block text-[9px] font-bold uppercase text-ui-text-muted">Số dòng ước tính</span>
-            <Input
-              type="number"
-              min={1}
-              max={snap.remainingPcs}
-              inputMode="numeric"
-              value={randomLineCountInput}
-              onChange={(e) => setRandomLineCountInput(e.target.value)}
-              placeholder={
-                snap.targetLineCount
-                  ? `${snap.targetLineCount.min}–${snap.targetLineCount.max}`
-                  : String(Math.min(snap.remainingPcs, 10))
-              }
-              className="text-center text-sm font-semibold tabular-nums"
-            />
-          </label>
-        </div>
+        ) : null}
+        <label>
+          <span className="mb-0.5 block text-[9px] font-bold uppercase text-ui-text-muted">
+            Số dòng ước tính
+          </span>
+          <Input
+            type="number"
+            min={1}
+            max={Math.max(1, snap.remainingPcs)}
+            inputMode="numeric"
+            value={randomLineCountInput}
+            onChange={(e) => setRandomLineCountInput(e.target.value)}
+            placeholder={
+              snap.targetLineCount
+                ? `vd. ${Math.round((snap.targetLineCount.min + snap.targetLineCount.max) / 2)}`
+                : String(Math.min(Math.max(1, snap.remainingPcs), 10))
+            }
+            className="text-center text-sm font-semibold tabular-nums"
+          />
+          {snap.targetLineCount ? (
+            <span className="mt-0.5 block text-[9px] text-ui-text-muted">
+              Lô lớn: gợi ý {snap.targetLineCount.min}–{snap.targetLineCount.max} dòng
+            </span>
+          ) : null}
+        </label>
+      </div>
 
-        <div className="flex items-center justify-between border-t border-ui-border pt-1.5 text-[10px]">
-          <label className="flex cursor-pointer items-center gap-1.5 font-semibold text-ui-text">
-            <input
-              type="checkbox"
-              checked={autoRandomAfterAdd}
-              onChange={(e) => setAutoRandomAfterAdd(e.target.checked)}
-              className="rounded text-ui-primary focus:ring-ui-focus"
-            />
-            Tự sinh sau khi Thêm
-          </label>
-          {snap.sumEstimatedPcs > 0 && (
-            <button
-              type="button"
-              onClick={onClearEstimated}
-              className="font-bold text-ui-danger hover:underline"
-            >
-              Xóa chưa khóa
-            </button>
-          )}
-        </div>
+      <div className="flex items-center justify-between border-t border-ui-border pt-1.5 text-[10px]">
+        <label className="flex cursor-pointer items-center gap-1.5 font-semibold text-ui-text">
+          <input
+            type="checkbox"
+            checked={autoRandomAfterAdd}
+            onChange={(e) => setAutoRandomAfterAdd(e.target.checked)}
+            className="rounded text-ui-primary focus:ring-ui-focus"
+          />
+          Tự bù sau khi Thêm
+        </label>
+        {snap.sumEstimatedPcs > 0 ? (
+          <button
+            type="button"
+            onClick={onClearEstimated}
+            className="font-bold text-ui-danger hover:underline"
+          >
+            Xóa chưa khóa
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -586,12 +750,26 @@ export function MobileDimKgModal({
   customerDirectory,
   onClose,
   onSave,
+  onUpdateCustomers,
 }: MobileDimKgModalProps) {
-  const [lines, setLines] = useState<DimPieceLine[]>(() =>
-    consolidateDimPieceLines(cloneLines(row.dimLines)),
-  );
   useOpsMobileOverlayLock(true);
   const keyboardInset = useVisualViewportBottomInset(true);
+  const isMobile = useIsMobile(640);
+  const {
+    panelRef: dragPanelRef,
+    offset: dragOffset,
+    size: dragSize,
+    dragging: isDraggingPanel,
+    resizing: isResizingPanel,
+    nudgeByKey,
+    handleProps: dragHandleProps,
+    resizeHandleProps,
+    resizable: panelResizable,
+  } = useDraggablePanel({
+    enabled: !isMobile,
+    persistKey: "tecsops_dim_modal_layout_v1",
+    resizable: true,
+  });
 
   const [comboInput, setComboInput] = useState("");
 
@@ -614,6 +792,31 @@ export function MobileDimKgModal({
     );
   }, [customerDirectory, row.customerCode, row.customer]);
 
+  const initialLines = useMemo(() => {
+    const draft = loadDimDraft(row.id);
+    if (draft?.lines.length) {
+      // Ưu tiên draft đang soạn nếu lô chưa có DIM lưu, hoặc draft mới hơn thao tác trống
+      if (!row.dimLines?.length) {
+        return consolidateDimPieceLines(cloneLines(draft.lines));
+      }
+    }
+    if (row.dimLines?.length) {
+      return consolidateDimPieceLines(cloneLines(row.dimLines));
+    }
+    const seeded = seedLinesFromCustomerDefault(matchedCustomer, row.pcs);
+    return seeded ? consolidateDimPieceLines(seeded) : [];
+  }, []); // seed once on open
+
+  const {
+    lines,
+    setLines,
+    replaceLines,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useDimLinesHistory(initialLines);
+
   const [customerRecentDims, setCustomerRecentDims] = useState<CustomerRecentDimSize[]>(() =>
     customerKey ? loadCustomerRecentDims(customerKey) : [],
   );
@@ -628,15 +831,29 @@ export function MobileDimKgModal({
 
   /** Tắt mặc định — dán/thêm đo không tự bù kiện. */
   const [autoRandomAfterAdd, setAutoRandomAfterAdd] = useState(false);
-  const [actionNote, setActionNote] = useState<string | null>(null);
+  const [actionNote, setActionNote] = useState<string | null>(() => {
+    const draft = loadDimDraft(row.id);
+    if (draft?.lines.length && !row.dimLines?.length) {
+      return "Đã khôi phục bản nháp DIM (chưa lưu).";
+    }
+    if (row.dimLines?.length) return null;
+    if (initialLines.length > 0) {
+      return "Đã áp mẫu kích thước mặc định của khách (có thể Ctrl+Z / Thay mẫu).";
+    }
+    return null;
+  });
   const [targetRatioPercent, setTargetRatioPercent] = useState(95.0);
+  const [lockFixedKg, setLockFixedKg] = useState(false);
   const [randomLineCountInput, setRandomLineCountInput] = useState("");
   const [randomTargetKgInput, setRandomTargetKgInput] = useState("");
+  const [regenerationNonce, setRegenerationNonce] = useState(0);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [dimTemplates, setDimTemplates] = useState<DimTemplate[]>(() => loadDimTemplates());
   const [showSaveTemplateForm, setShowSaveTemplateForm] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [templateApplyMode, setTemplateApplyMode] =
+    useState<DimTemplateApplyMode>("replace");
 
   const listSectionRef = useRef<HTMLDivElement>(null);
   const advancedRef = useRef<HTMLDivElement>(null);
@@ -665,6 +882,31 @@ export function MobileDimKgModal({
     () => snapshotDimEntry(lines, lot, divisor, dimCtx),
     [lines, lot, divisor, dimCtx],
   );
+
+  // C3: autosave draft theo shipmentId
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (lines.length === 0) {
+        clearDimDraft(row.id);
+        return;
+      }
+      saveDimDraft(row.id, lines, {
+        declaredPcs: lot.declaredPcs ?? null,
+        declaredKg: lot.declaredKg ?? null,
+      });
+    }, 450);
+    return () => window.clearTimeout(t);
+  }, [lines, lot.declaredPcs, lot.declaredKg, row.id]);
+
+  // C3: cảnh báo khi pcs/kg lô đổi so với draft
+  useEffect(() => {
+    const draft = loadDimDraft(row.id);
+    if (dimDraftParentChanged(draft, row.pcs ?? null, row.kg ?? null)) {
+      setActionNote(
+        `⚠ Lô đổi kiện/kg (nháp: ${draft?.declaredPcs ?? "—"}k/${draft?.declaredKg ?? "—"}kg → hiện: ${row.pcs ?? "—"}k/${row.kg ?? "—"}kg). Kiểm tra lại bảng DIM.`,
+      );
+    }
+  }, [row.id, row.pcs, row.kg]);
 
   const totalDimLabel =
     snap.totalDim != null ? `${formatDimKgDisplay(snap.totalDim, dimCtx)} kg` : "—";
@@ -762,43 +1004,129 @@ export function MobileDimKgModal({
       estimated: false,
     }));
 
-    const templatePcs = templatePieceLines.reduce((s, l) => s + l.pcs, 0);
+    const applied = applyDimTemplateLines(
+      lines,
+      templatePieceLines,
+      templateApplyMode,
+      lot.declaredPcs,
+    );
+
+    const modeLabel =
+      templateApplyMode === "replace"
+        ? "thay"
+        : templateApplyMode === "insert"
+          ? "chèn"
+          : "scale kiện";
+
+    const templatePcs = applied.filter((l) => !l.estimated).reduce((s, l) => s + l.pcs, 0);
     const remainingAfterTemplate =
       lot.declaredPcs != null ? Math.max(0, lot.declaredPcs - templatePcs) : 0;
-    if (autoRandomAfterAdd && randomParams && remainingAfterTemplate > 0) {
-      const fill = dimEntryRandomFill(templatePieceLines, lot, {
+
+    if (
+      templateApplyMode !== "insert" &&
+      autoRandomAfterAdd &&
+      randomParams &&
+      remainingAfterTemplate > 0
+    ) {
+      const fill = dimEntryRandomFill(applied, lot, {
         ...randomParams,
-        targetRatioPercent,
+        regenerationNonce: regenerationNonce + 1,
+        targetRatioPercent: lockFixedKg ? undefined : targetRatioPercent,
+        targetTotalDimKg: lockFixedKg ? parseTargetDimKgInput(randomTargetKgInput) : undefined,
       });
       if (fill.ok) {
-        applyMutation(fill.lines, `Đã áp dụng mẫu "${t.name}" và tự động điền đủ kiện.`, {
-          scrollList: true,
-        });
+        setRegenerationNonce((n) => n + 1);
+        applyMutation(
+          fill.lines,
+          `Đã ${modeLabel} mẫu "${t.name}" và tự động điền đủ kiện.`,
+          { scrollList: true },
+        );
         return;
       }
     }
-    applyMutation(templatePieceLines, `Đã áp dụng mẫu "${t.name}" (${t.totalPcs} kiện).`, {
-      scrollList: true,
-    });
+    applyMutation(
+      applied,
+      `Đã ${modeLabel} mẫu "${t.name}" (${templatePcs} kiện đo).`,
+      { scrollList: true },
+    );
   };
 
   const handleSaveCurrentTemplate = () => {
     const nameToSave =
       newTemplateName.trim() || `Mẫu ${row.customerCode || "DIM"} (${snap.sumDimPcs}k)`;
-    try {
-      const nextList = saveDimTemplate({
-        name: nameToSave,
-        lines,
-        customerCode: row.customerCode,
-      });
-      setDimTemplates(nextList);
-      setNewTemplateName("");
-      setShowSaveTemplateForm(false);
-      setActionNote(`Đã lưu thành công mẫu "${nameToSave}".`);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      setActionNote(`❌ Lỗi lưu mẫu: ${message}`);
-    }
+    void (async () => {
+      if (matchedCustomer && onUpdateCustomers && customerDirectory) {
+        const serverTmpl = pieceLinesToCustomerDimTemplate({
+          label: nameToSave,
+          lines,
+          isDefault: !(matchedCustomer.savedDimTemplates?.length),
+        });
+        if (!serverTmpl) {
+          setActionNote("❌ Cần ít nhất 1 dòng DIM để lưu mẫu khách.");
+          return;
+        }
+        const next = customerDirectory.map((c) => {
+          if (c.id !== matchedCustomer.id) return c;
+          const prev = c.savedDimTemplates ?? [];
+          return {
+            ...c,
+            savedDimTemplates: [serverTmpl, ...prev.filter((t) => t.id !== serverTmpl.id)].slice(
+              0,
+              20,
+            ),
+            defaultDimTemplateId: c.defaultDimTemplateId || serverTmpl.id,
+          };
+        });
+        try {
+          const ok = await onUpdateCustomers([...next]);
+          if (ok === false) {
+            setActionNote("❌ Không đồng bộ được mẫu lên hồ sơ khách.");
+            return;
+          }
+          setNewTemplateName("");
+          setShowSaveTemplateForm(false);
+          setActionNote(`☁ Đã lưu mẫu "${nameToSave}" lên hồ sơ khách (đồng bộ server).`);
+          return;
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          setActionNote(`❌ Lỗi sync mẫu khách: ${message}`);
+          return;
+        }
+      }
+      try {
+        const nextList = saveDimTemplate({
+          name: nameToSave,
+          lines,
+          customerCode: row.customerCode,
+        });
+        setDimTemplates(nextList);
+        setNewTemplateName("");
+        setShowSaveTemplateForm(false);
+        setActionNote(`Đã lưu mẫu local "${nameToSave}".`);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setActionNote(`❌ Lỗi lưu mẫu: ${message}`);
+      }
+    })();
+  };
+
+  const handleApplyCustomerServerTemplate = (tmplId: string) => {
+    const tmpl = matchedCustomer?.savedDimTemplates?.find((t) => t.id === tmplId);
+    if (!tmpl) return;
+    const piece =
+      templateApplyMode === "scale"
+        ? customerDimTemplateToPieceLines(tmpl, lot.declaredPcs)
+        : customerDimTemplateToPieceLines(tmpl, null);
+    const applied = applyDimTemplateLines(
+      lines,
+      piece,
+      templateApplyMode === "scale" ? "replace" : templateApplyMode,
+      lot.declaredPcs,
+    );
+    const pcs = applied.filter((l) => !l.estimated).reduce((s, l) => s + l.pcs, 0);
+    applyMutation(applied, `Đã áp mẫu khách "${tmpl.label}" (${pcs} kiện).`, {
+      scrollList: true,
+    });
   };
 
   const handleDeleteTemplate = (id: string, e: React.MouseEvent) => {
@@ -812,12 +1140,20 @@ export function MobileDimKgModal({
     if (!comboInput.trim()) return;
     const r = dimEntryAddMeasuredFromCombo(lines, comboInput, lot, {
       thenRandomFill: autoRandomAfterAdd,
-      randomFillParams: randomParams ? { ...randomParams, targetRatioPercent } : undefined,
+      randomFillParams: randomParams
+        ? {
+            ...randomParams,
+            regenerationNonce: regenerationNonce + 1,
+            targetRatioPercent: lockFixedKg ? undefined : targetRatioPercent,
+            targetTotalDimKg: lockFixedKg ? parseTargetDimKgInput(randomTargetKgInput) : undefined,
+          }
+        : undefined,
     });
     if (!r.ok) {
       setActionNote(`❌ ${r.error}`);
       return;
     }
+    if (autoRandomAfterAdd) setRegenerationNonce((n) => n + 1);
     applyMutation(r.lines, r.note ?? "Đã bóc tách và thêm dòng đo mới.", {
       scrollList: true,
     });
@@ -830,7 +1166,7 @@ export function MobileDimKgModal({
     d: number;
     r: number;
     c: number;
-    type: "profile" | "recent" | "standard";
+    type: "profile" | "recent" | "custom" | "standard";
     icon: string;
   };
 
@@ -876,7 +1212,24 @@ export function MobileDimKgModal({
       }
     }
 
-    // 3. Fallback standard presets (📦)
+    // 3. Legacy custom presets (local) — vẫn hiện nếu còn trong storage
+    for (const item of loadCustomDimPresets()) {
+      const key = `${item.lCm}x${item.wCm}x${item.hCm}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push({
+          id: `custom-${item.id}`,
+          label: item.label || `${item.lCm}×${item.wCm}×${item.hCm}`,
+          d: item.lCm,
+          r: item.wCm,
+          c: item.hCm,
+          type: "custom",
+          icon: "📌",
+        });
+      }
+    }
+
+    // 4. Fallback standard presets (📦)
     for (const p of CARGO_PRESETS) {
       const key = `${p.d}x${p.r}x${p.c}`;
       if (!seen.has(key)) {
@@ -899,9 +1252,31 @@ export function MobileDimKgModal({
   const handleApplyPreset = (p: { d: number; r: number; c: number; label?: string }) => {
     const pcsVal = snap.remainingPcs > 0 ? snap.remainingPcs : 1;
     const combo = `${p.d}×${p.r}×${p.c}×${pcsVal}`;
-    setComboInput(combo);
-    setActionNote(`Đã chọn: ${p.label || `${p.d}×${p.r}×${p.c}`} (${combo}). Bấm Thêm hoặc Enter.`);
-    comboInputRef.current?.focus();
+    const r = dimEntryAddMeasuredFromCombo(lines, combo, lot, {
+      thenRandomFill: autoRandomAfterAdd,
+      randomFillParams: randomParams
+        ? {
+            ...randomParams,
+            regenerationNonce: regenerationNonce + 1,
+            targetRatioPercent: lockFixedKg ? undefined : targetRatioPercent,
+            targetTotalDimKg: lockFixedKg ? parseTargetDimKgInput(randomTargetKgInput) : undefined,
+          }
+        : undefined,
+    });
+    if (!r.ok) {
+      setComboInput(combo);
+      setActionNote(`❌ ${r.error} — đã điền vào ô nhập.`);
+      comboInputRef.current?.focus();
+      return;
+    }
+    if (autoRandomAfterAdd) setRegenerationNonce((n) => n + 1);
+    applyMutation(
+      r.lines,
+      r.note ??
+        `Đã thêm ${p.label || `${p.d}×${p.r}×${p.c}`} × ${pcsVal} kiện.`,
+      { scrollList: true },
+    );
+    setComboInput("");
   };
 
   const handleDeleteRecentPreset = (
@@ -973,12 +1348,20 @@ export function MobileDimKgModal({
   const handlePasteIntoTable = (text: string) => {
     const r = dimEntryAddMeasuredFromCombo(lines, text, lot, {
       thenRandomFill: autoRandomAfterAdd,
-      randomFillParams: randomParams ? { ...randomParams, targetRatioPercent } : undefined,
+      randomFillParams: randomParams
+        ? {
+            ...randomParams,
+            regenerationNonce: regenerationNonce + 1,
+            targetRatioPercent: lockFixedKg ? undefined : targetRatioPercent,
+            targetTotalDimKg: lockFixedKg ? parseTargetDimKgInput(randomTargetKgInput) : undefined,
+          }
+        : undefined,
     });
     if (!r.ok) {
       setActionNote(`❌ ${r.error}`);
       return;
     }
+    if (autoRandomAfterAdd) setRegenerationNonce((n) => n + 1);
     applyMutation(r.lines, r.note ?? "Đã nạp kích thước từ dán trực tiếp.", {
       scrollList: true,
     });
@@ -986,11 +1369,14 @@ export function MobileDimKgModal({
 
   const handleRandom = () => {
     if (!randomParams) return;
-    const targetKg = parseTargetDimKgInput(randomTargetKgInput);
+    const nextNonce = regenerationNonce + 1;
+    setRegenerationNonce(nextNonce);
+    const targetKg = lockFixedKg ? parseTargetDimKgInput(randomTargetKgInput) : undefined;
     const lineCount = parseRandomLineCountInput(randomLineCountInput);
     const r = dimEntryRandomFill(lines, lot, {
       ...randomParams,
-      targetRatioPercent,
+      regenerationNonce: nextNonce,
+      targetRatioPercent: lockFixedKg ? undefined : targetRatioPercent,
       targetTotalDimKg: targetKg,
       targetEstimatedLineCount: lineCount,
     });
@@ -998,26 +1384,21 @@ export function MobileDimKgModal({
       setActionNote(`❌ ${r.error}`);
       return;
     }
-    applyMutation(r.lines, r.note, { scrollList: true });
+    applyMutation(r.lines, r.note ?? "Đã bù kiện ước tính.", { scrollList: true });
   };
 
-  const handleOneClickAutoFill = () => {
-    if (!randomParams) return;
-    const r = dimEntryRandomFill(lines, lot, {
-      ...randomParams,
-      targetRatioPercent,
+  const openAdvancedPanel = useCallback(() => {
+    setShowAdvanced(true);
+    window.requestAnimationFrame(() => {
+      advancedRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
-    if (!r.ok) {
-      setActionNote(`❌ ${r.error}`);
-      return;
-    }
-    applyMutation(r.lines, r.note, { scrollList: true });
-  };
+  }, []);
 
   const handleResetOriginal = () => {
-    setLines(consolidateDimPieceLines(cloneLines(row.dimLines)));
+    replaceLines(consolidateDimPieceLines(cloneLines(row.dimLines)));
     setComboInput("");
-    setActionNote("Đã hoàn tác về trạng thái ban đầu.");
+    setRegenerationNonce(0);
+    setActionNote("Đã hoàn tác về trạng thái ban đầu (xóa lịch sử undo).");
   };
 
   const handleSave = () => {
@@ -1027,11 +1408,20 @@ export function MobileDimKgModal({
       return;
     }
     if (customerKey && v.lines.length > 0) {
+      const measured = v.lines.filter((l) => !l.estimated);
+      const forRecent = measured.length > 0 ? measured : v.lines;
       recordCustomerRecentDims(
         customerKey,
-        v.lines.map((l) => ({ lCm: l.lCm, wCm: l.wCm, hCm: l.hCm })),
+        forRecent.map((l) => ({ lCm: l.lCm, wCm: l.wCm, hCm: l.hCm })),
       );
+      if (measured.length > 0) {
+        saveCustomerDimHistory(
+          customerKey,
+          measured.map((l) => ({ lCm: l.lCm, wCm: l.wCm, hCm: l.hCm })),
+        );
+      }
     }
+    clearDimDraft(row.id);
     onSave({
       dimWeightKg: snap.totalDim,
       dimLines: v.lines,
@@ -1048,33 +1438,84 @@ export function MobileDimKgModal({
     applyMutation(r.lines, r.note ?? "Đã gộp dòng cùng kích thước.");
   };
 
-  /** Copy chuỗi format terminal hệ thống hàng không */
+  /** Copy chuỗi format terminal hệ thống hàng không. Dòng ước tính gắn suffix `*`. */
   const handleCopyFormatString = async (format: "scsc" | "tcs" | "cargospot") => {
     if (!lines.length) return;
+    const mark = (base: string, estimated?: boolean) => (estimated ? `${base}*` : base);
     let str = "";
     if (format === "scsc") {
-      str = lines.map((l) => `${l.lCm}-${l.wCm}-${l.hCm}/${l.pcs}`).join(" ");
+      str = lines.map((l) => mark(`${l.lCm}-${l.wCm}-${l.hCm}/${l.pcs}`, l.estimated)).join(" ");
     } else if (format === "tcs") {
-      str = lines.map((l) => `${l.lCm}*${l.wCm}*${l.hCm}/${l.pcs}`).join("+");
+      str = lines.map((l) => mark(`${l.lCm}*${l.wCm}*${l.hCm}/${l.pcs}`, l.estimated)).join("+");
     } else {
-      str = lines.map((l) => `${l.pcs}/${l.lCm}/${l.wCm}/${l.hCm}`).join(" ");
+      str = lines.map((l) => mark(`${l.pcs}/${l.lCm}/${l.wCm}/${l.hCm}`, l.estimated)).join(" ");
     }
+    const estCount = lines.filter((l) => l.estimated).length;
     try {
       await navigator.clipboard.writeText(str);
       setCopyFeedback(format);
       setTimeout(() => setCopyFeedback(null), 2000);
-      setActionNote(`📋 Đã copy chuỗi format ${format.toUpperCase()}: ${str}`);
+      const estHint = estCount > 0 ? ` (${estCount} dòng ước gắn *)` : "";
+      setActionNote(`📋 Đã copy chuỗi format ${format.toUpperCase()}${estHint}: ${str}`);
     } catch {
       setActionNote("❌ Không thể copy vào clipboard.");
     }
   };
 
-  // Global Ctrl+S to save and Ctrl+V handling
+  // Ctrl+S lưu · Ctrl+Enter lưu · Ctrl+Z/Y undo/redo · Ctrl+B bù · Ctrl+G gộp
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      const mod = e.ctrlKey || e.metaKey;
+      const target = e.target as HTMLElement | null;
+      const inCombo =
+        target instanceof HTMLTextAreaElement && target === comboInputRef.current;
+      const inPlainText =
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLInputElement &&
+          target.type === "text" &&
+          !target.hasAttribute("data-dim-cell"));
+
+      if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (snap.canSave) handleSave();
+        return;
+      }
+      if (mod && e.key === "Enter") {
+        e.preventDefault();
+        if (snap.canSave) handleSave();
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        if (inCombo || inPlainText) return;
+        e.preventDefault();
+        if (undo()) setActionNote("↩ Đã hoàn tác một bước.");
+        return;
+      }
+      if (mod && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
+        if (inCombo || inPlainText) return;
+        e.preventDefault();
+        if (redo()) setActionNote("↪ Đã làm lại một bước.");
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        if (snap.remainingPcs > 0) handleRandom();
+        else setActionNote("Không còn kiện thiếu để bù.");
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        handleMergeLines();
+        return;
+      }
+      if (
+        mod &&
+        !inCombo &&
+        !inPlainText &&
+        ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)
+      ) {
+        e.preventDefault();
+        nudgeByKey(e.key, e.shiftKey ? 48 : 16);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -1088,14 +1529,6 @@ export function MobileDimKgModal({
       : snap.pcsShort
         ? `Lưu ${snap.sumDimPcs} kiện (thiếu ${snap.remainingPcs})`
         : "Lưu DIM";
-
-  const canOneClick =
-    lot.declaredPcs != null &&
-    lot.declaredPcs > 0 &&
-    lot.declaredKg != null &&
-    lot.declaredKg > 0 &&
-    snap.remainingPcs > 0 &&
-    !snap.pcsExcess;
 
   const pcsPct =
     lot.declaredPcs != null && lot.declaredPcs > 0
@@ -1122,11 +1555,44 @@ export function MobileDimKgModal({
       }}
     >
       <div
-        className="flex h-[96dvh] max-h-[96dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-ui-border bg-ui-surface shadow-ui-lg sm:h-[min(94dvh,900px)] sm:max-w-[min(96vw,52rem)] sm:rounded-2xl lg:max-w-[min(96vw,64rem)]"
+        ref={dragPanelRef}
+        className="relative flex h-[98dvh] max-h-[98dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-ui-border bg-ui-surface shadow-ui-lg sm:h-[min(96dvh,980px)] sm:max-w-[min(98vw,72rem)] sm:rounded-2xl lg:max-w-[min(98vw,90rem)] xl:max-w-[min(98vw,96rem)]"
+        data-testid="dim-modal-shell"
+        style={
+          isMobile
+            ? undefined
+            : {
+                transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+                willChange: isDraggingPanel || isResizingPanel ? "transform" : undefined,
+                ...(dragSize
+                  ? {
+                      width: dragSize.width,
+                      height: dragSize.height,
+                      maxWidth: "98vw",
+                      maxHeight: "98dvh",
+                    }
+                  : {}),
+              }
+        }
         onClick={(e) => e.stopPropagation()}
       >
-        {/* HEADER */}
-        <div className="shrink-0 border-b border-ui-border bg-ui-surface px-4 pb-2.5 pt-3 sm:px-5">
+        {/* HEADER — kéo được trên desktop */}
+        <div
+          data-testid="dim-modal-drag-handle"
+          title={
+            isMobile
+              ? undefined
+              : "Kéo để di chuyển · double-click về giữa · Ctrl+mũi tên tinh chỉnh"
+          }
+          className={`shrink-0 border-b border-ui-border bg-ui-surface px-4 pb-2.5 pt-3 sm:px-5 ${
+            isMobile
+              ? ""
+              : isDraggingPanel
+                ? "cursor-grabbing select-none"
+                : "cursor-grab select-none touch-none"
+          }`}
+          {...(isMobile ? {} : dragHandleProps)}
+        >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -1216,6 +1682,7 @@ export function MobileDimKgModal({
               size="md"
               variant="ghost"
               onClick={onClose}
+              data-no-drag
               className="shrink-0"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -1235,7 +1702,7 @@ export function MobileDimKgModal({
         ) : null}
 
         {/* WORKSPACE BODY - 2 COLUMNS ON DESKTOP */}
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain bg-ui-background/40 p-3 sm:p-4 lg:grid lg:grid-cols-[22rem_minmax(0,1fr)] lg:gap-4 lg:overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain bg-ui-background/40 p-3 sm:p-4 lg:grid lg:grid-cols-[minmax(22rem,28rem)_minmax(0,1fr)] lg:gap-5 lg:overflow-hidden xl:grid-cols-[minmax(24rem,30rem)_minmax(0,1fr)]">
           {/* LEFT COLUMN: FAST ENTRY & PRESETS */}
           <div className="flex min-h-0 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
             {/* FAST MEASURE SECTION */}
@@ -1267,9 +1734,9 @@ export function MobileDimKgModal({
                       type="button"
                       onClick={handleQuickBookmarkForCustomer}
                       className="text-[10px] font-bold text-ui-primary hover:underline"
-                      title="Lưu kích thước đang nhập vào danh sách thường dùng của khách này"
+                      title="Ghim kích thước đang nhập vào danh sách gần đây của khách (trên máy này)"
                     >
-                      + Lưu mẫu khách
+                      + Ghim gần đây
                     </button>
                   ) : null}
                 </div>
@@ -1280,7 +1747,7 @@ export function MobileDimKgModal({
                       className={`group inline-flex items-center rounded-lg border text-[11px] font-semibold transition ${
                         p.type === "profile"
                           ? "border-amber-300/90 bg-amber-50/80 text-amber-950 hover:bg-amber-100"
-                          : p.type === "recent"
+                          : p.type === "recent" || p.type === "custom"
                             ? "border-teal-300/90 bg-teal-50/80 text-teal-950 hover:bg-teal-100"
                             : "border-ui-border/80 bg-ui-surface-muted text-ui-text hover:border-ui-primary/50 hover:bg-white"
                       }`}
@@ -1394,9 +1861,82 @@ export function MobileDimKgModal({
               {showAdvanced ? (
                 <div className="space-y-3 border-t border-ui-border px-3 pb-3 pt-2.5">
                   <div className="space-y-1.5">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
-                      Mẫu DIM
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
+                        Mẫu DIM
+                      </p>
+                      <div
+                        className="inline-flex rounded-lg border border-ui-border bg-ui-surface-muted p-0.5"
+                        role="group"
+                        aria-label="Chế độ áp mẫu"
+                      >
+                        {(
+                          [
+                            ["replace", "Thay"],
+                            ["insert", "Chèn"],
+                            ["scale", "Scale"],
+                          ] as const
+                        ).map(([mode, label]) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setTemplateApplyMode(mode)}
+                            className={`min-h-8 rounded-md px-2 text-[10px] font-bold ${
+                              templateApplyMode === mode
+                                ? "bg-ui-primary text-white"
+                                : "text-ui-text-muted hover:text-ui-text"
+                            }`}
+                            title={
+                              mode === "replace"
+                                ? "Thay toàn bộ bảng bằng mẫu"
+                                : mode === "insert"
+                                  ? "Chèn dòng mẫu vào bảng hiện tại"
+                                  : "Scale kiện mẫu theo tổng kiện lô"
+                            }
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {matchedCustomer?.savedDimTemplates?.length ? (
+                      <div className="space-y-1" data-testid="dim-customer-server-templates">
+                        <p className="text-[10px] font-semibold text-ui-text-muted">
+                          Mẫu khách (server)
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {matchedCustomer.savedDimTemplates.map((tmpl) => {
+                            const multi = (tmpl.lines?.length ?? 0) > 1;
+                            const pcs =
+                              tmpl.lines?.reduce((s, l) => s + l.pcs, 0) ??
+                              null;
+                            return (
+                              <button
+                                key={tmpl.id}
+                                type="button"
+                                onClick={() => handleApplyCustomerServerTemplate(tmpl.id)}
+                                className="min-h-11 rounded-lg border border-teal-300/80 bg-teal-50/70 px-2.5 text-[11px] font-semibold text-teal-950 hover:bg-teal-100"
+                                title={
+                                  multi
+                                    ? `${tmpl.label} · ${tmpl.lines!.length} dòng`
+                                    : `${tmpl.lCm}×${tmpl.wCm}×${tmpl.hCm}`
+                                }
+                              >
+                                ☁ {tmpl.label}
+                                {pcs != null ? (
+                                  <span className="ml-1 tabular-nums text-teal-700/80">{pcs}</span>
+                                ) : null}
+                                {multi ? (
+                                  <span className="ml-1 text-[9px] font-bold text-teal-700">
+                                    ×{tmpl.lines!.length}
+                                  </span>
+                                ) : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
                     {dimTemplates.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
                         {dimTemplates.map((tmpl) => (
@@ -1452,7 +1992,7 @@ export function MobileDimKgModal({
                           className="min-w-[10rem] flex-1"
                         />
                         <Button type="button" size="sm" onClick={handleSaveCurrentTemplate} className="min-h-11">
-                          Lưu mẫu
+                          {matchedCustomer && onUpdateCustomers ? "Lưu lên khách" : "Lưu mẫu"}
                         </Button>
                         <Button
                           type="button"
@@ -1479,29 +2019,20 @@ export function MobileDimKgModal({
                     </Button>
                   ) : null}
 
-                  {canOneClick ? (
-                    <Button
-                      type="button"
-                      size="md"
-                      variant="secondary"
-                      onClick={handleOneClickAutoFill}
-                      className="min-h-11 w-full"
-                    >
-                      Điền đủ {lot.declaredPcs} kiện ước tính · {targetRatioPercent.toFixed(0)}% GW
-                    </Button>
-                  ) : null}
-
                   <EstimationConfigPanel
                     lot={lot}
                     snap={snap}
                     targetRatioPercent={targetRatioPercent}
                     setTargetRatioPercent={setTargetRatioPercent}
+                    lockFixedKg={lockFixedKg}
+                    setLockFixedKg={setLockFixedKg}
                     randomTargetKgInput={randomTargetKgInput}
                     setRandomTargetKgInput={setRandomTargetKgInput}
                     randomLineCountInput={randomLineCountInput}
                     setRandomLineCountInput={setRandomLineCountInput}
                     autoRandomAfterAdd={autoRandomAfterAdd}
                     setAutoRandomAfterAdd={setAutoRandomAfterAdd}
+                    hasEstimated={snap.estimatedLineCount > 0}
                     onGenerate={handleRandom}
                     onClearEstimated={() =>
                       applyMutation(dimEntryClearEstimated(lines), "Đã xóa kiện ước tính chưa khóa.")
@@ -1516,10 +2047,14 @@ export function MobileDimKgModal({
           <div ref={listSectionRef} className="flex min-h-0 flex-1 flex-col gap-2.5 lg:overflow-hidden">
             {/* Table Header & Controls */}
             <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-extrabold text-ui-navy">Bảng DIM</span>
-                <span className="rounded-full bg-ui-surface-muted px-2 py-0.5 text-[10px] font-bold tabular-nums text-ui-text-muted">
-                  {snap.lineCount} dòng · {snap.sumDimPcs} kiện
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[13px] font-extrabold text-ui-navy">Bảng DIM</span>
+                <span className="rounded-full bg-ui-surface-muted px-2.5 py-1 text-[11px] font-bold tabular-nums text-ui-text-muted">
+                  {snap.lineCount} dòng · {snap.sumDimPcs}
+                  {lot.declaredPcs != null ? `/${lot.declaredPcs}` : ""} kiện
+                  {snap.estimatedLineCount > 0
+                    ? ` · ${snap.sumEstimatedPcs} ước`
+                    : ""}
                 </span>
               </div>
               {dimEntryHasMergeableDuplicates(lines) ? (
@@ -1616,9 +2151,37 @@ export function MobileDimKgModal({
                 variant="secondary"
                 onClick={handleResetOriginal}
                 className="min-h-11 px-3 text-[12px] font-semibold"
-                title="Khôi phục trạng thái ban đầu"
+                title="Khôi phục trạng thái ban đầu và xóa lịch sử undo"
               >
                 ↺ Làm lại
+              </Button>
+              <Button
+                type="button"
+                size="md"
+                variant="ghost"
+                disabled={!canUndo}
+                onClick={() => {
+                  if (undo()) setActionNote("↩ Đã hoàn tác một bước.");
+                }}
+                className="min-h-11 px-2.5 text-[12px] font-semibold disabled:opacity-40"
+                title="Hoàn tác (Ctrl+Z)"
+                data-testid="dim-undo"
+              >
+                Undo
+              </Button>
+              <Button
+                type="button"
+                size="md"
+                variant="ghost"
+                disabled={!canRedo}
+                onClick={() => {
+                  if (redo()) setActionNote("↪ Đã làm lại một bước.");
+                }}
+                className="min-h-11 px-2.5 text-[12px] font-semibold disabled:opacity-40"
+                title="Làm lại (Ctrl+Y)"
+                data-testid="dim-redo"
+              >
+                Redo
               </Button>
               {lines.length > 0 ? (
                 <Button
@@ -1638,11 +2201,17 @@ export function MobileDimKgModal({
                 type="button"
                 size="md"
                 variant={showAdvanced ? "secondary" : "ghost"}
-                onClick={() => setShowAdvanced((v) => !v)}
+                onClick={() => {
+                  if (showAdvanced) {
+                    setShowAdvanced(false);
+                  } else {
+                    openAdvancedPanel();
+                  }
+                }}
                 className="min-h-11 px-3 text-[12px] font-semibold text-ui-navy"
                 title="Mở / đóng bảng cấu hình nâng cao"
               >
-                ⚙️ {showAdvanced ? "Thu gọn" : "Nâng cao"}
+                {showAdvanced ? "Thu gọn" : "Nâng cao"}
               </Button>
             </div>
 
@@ -1656,11 +2225,37 @@ export function MobileDimKgModal({
                 data-testid="dim-save"
                 className="min-h-11 sm:min-h-12 w-full sm:w-auto sm:min-w-[15rem] font-bold text-sm shadow-ui-sm"
               >
-                {saveBtnLabel} (Enter / Ctrl+S)
+                {saveBtnLabel} (Ctrl+Enter / Ctrl+S)
               </Button>
             </div>
           </div>
         </div>
+
+        {panelResizable ? (
+          <>
+            <div
+              className="absolute bottom-0 right-0 z-30 h-4 w-4 cursor-se-resize"
+              title="Kéo góc để đổi kích thước"
+              {...resizeHandleProps("se")}
+            />
+            <div
+              className="absolute bottom-0 left-1/2 z-30 h-3 w-10 -translate-x-1/2 cursor-s-resize"
+              {...resizeHandleProps("s")}
+            />
+            <div
+              className="absolute right-0 top-1/2 z-30 h-10 w-3 -translate-y-1/2 cursor-e-resize"
+              {...resizeHandleProps("e")}
+            />
+            <div
+              className="absolute left-0 top-1/2 z-30 h-10 w-3 -translate-y-1/2 cursor-w-resize"
+              {...resizeHandleProps("w")}
+            />
+            <div
+              className="absolute left-1/2 top-0 z-30 h-3 w-10 -translate-x-1/2 cursor-n-resize"
+              {...resizeHandleProps("n")}
+            />
+          </>
+        ) : null}
       </div>
     </div>
   );

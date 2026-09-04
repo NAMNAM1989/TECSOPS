@@ -54,7 +54,7 @@ const NOTE_LINE_TRUNC2 = "Để 2 số lẻ";
 const NOTE_TOTAL_TRUNC2_HALF = "Để 2 số lẻ làm tròn 0.5";
 const NOTE_ROUND_INT = "Làm tròn số";
 const NOTE_QR_LINE =
-  "Để 1 số lẻ (0 giữ nguyên, 1→4 up 0.5, trên 5 up 1)";
+  "Để 1 số lẻ (0 giữ nguyên, 1→4 lên 0.5, ≥5 lên số nguyên)";
 const NOTE_QR_TOTAL = `${NOTE_QR_LINE}; tổng làm tròn 0.5`;
 
 function ruleTrunc3TotalHalf(

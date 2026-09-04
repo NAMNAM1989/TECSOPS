@@ -227,9 +227,42 @@ function parseSavedDimTemplatesLoose(item) {
     if (!x || typeof x !== "object") continue;
     const sid = typeof x.id === "string" ? x.id.trim() : "";
     if (!sid) continue;
-    const lCm = Number(x.lCm);
-    const wCm = Number(x.wCm);
-    const hCm = Number(x.hCm);
+
+    const rawLines = Array.isArray(x.lines) ? x.lines : null;
+    const lines = [];
+    if (rawLines) {
+      for (const line of rawLines) {
+        if (!line || typeof line !== "object") continue;
+        const lCm = Number(line.lCm);
+        const wCm = Number(line.wCm);
+        const hCm = Number(line.hCm);
+        const pcs = Number(line.pcs);
+        if (
+          !Number.isFinite(lCm) ||
+          lCm <= 0 ||
+          !Number.isFinite(wCm) ||
+          wCm <= 0 ||
+          !Number.isFinite(hCm) ||
+          hCm <= 0 ||
+          !Number.isFinite(pcs) ||
+          pcs <= 0
+        ) {
+          continue;
+        }
+        lines.push({
+          lCm: Math.round(lCm),
+          wCm: Math.round(wCm),
+          hCm: Math.round(hCm),
+          pcs: Math.max(1, Math.round(pcs)),
+        });
+        if (lines.length >= 40) break;
+      }
+    }
+
+    const head = lines[0];
+    const lCm = Number(head?.lCm ?? x.lCm);
+    const wCm = Number(head?.wCm ?? x.wCm);
+    const hCm = Number(head?.hCm ?? x.hCm);
     if (
       !Number.isFinite(lCm) ||
       lCm <= 0 ||
@@ -254,6 +287,7 @@ function parseSavedDimTemplatesLoose(item) {
       hCm: Math.round(hCm),
       ...(stdPcsKg != null ? { stdPcsKg } : {}),
       ...(x.isDefault ? { isDefault: true } : {}),
+      ...(lines.length > 0 ? { lines } : {}),
     });
   }
   return out.slice(0, L.savedDimTemplateCount);

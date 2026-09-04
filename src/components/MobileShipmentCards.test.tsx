@@ -61,7 +61,7 @@ describe("MobileShipmentCards", () => {
     expect(html).toContain("row-actions-menu-s1");
   });
 
-  it("densify: padding py-1.5, status/menu dense, clearance FAB", () => {
+  it("day-board A: spacing thẻ, padding card, status/menu dense, clearance FAB", () => {
     const html = renderToStaticMarkup(
       <MobileShipmentCards
         rows={[row]}
@@ -74,10 +74,11 @@ describe("MobileShipmentCards", () => {
         viewSessionYmd="2026-08-23"
       />,
     );
-    expect(html).toContain("space-y-0.5");
-    expect(html).toContain("px-2 py-1.5");
-    expect(html).toContain("text-ui-navy");
-    expect(html).toContain("text-[14px]");
+    expect(html).toContain("space-y-1.5");
+    expect(html).toContain("px-2.5 py-2");
+    expect(html).toContain("rounded-xl");
+    expect(html).toContain("text-ui-awb");
+    expect(html).toContain("text-[15px]");
     expect(html).toContain("h-7 w-full");
     expect(html).toContain("h-8 w-8");
     expect(html).not.toContain("h-11 w-full min-h-11");

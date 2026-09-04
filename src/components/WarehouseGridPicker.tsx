@@ -143,8 +143,19 @@ export function WarehouseGridPicker({
                 {warehouseLabel[wh]}
               </span>
               {fitRow ? (
-                <span className="font-mono text-[11px] font-bold tabular-nums leading-none">
-                  {m.lots}
+                <span className="mt-0.5 flex w-full items-center justify-center gap-1">
+                  <span className="font-mono text-[11px] font-extrabold tabular-nums leading-none">
+                    {m.lots}
+                  </span>
+                  <span
+                    className={`h-3 w-px shrink-0 ${
+                      isActive ? "bg-white/35" : "bg-ui-border/80"
+                    }`}
+                    aria-hidden
+                  />
+                  <span className="max-w-[3.25rem] truncate font-mono text-[10px] font-extrabold tabular-nums leading-none">
+                    {kg}
+                  </span>
                 </span>
               ) : denseChips && !touchTargets ? (
                 <span className="mt-0.5 flex items-end gap-2">

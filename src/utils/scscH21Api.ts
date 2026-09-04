@@ -98,12 +98,22 @@ export async function importScscH21Goods(
   return { created: b.created ?? 0, updated: b.updated ?? 0 };
 }
 
-export async function fetchScscH21Stamps(): Promise<ScscH21StampId[]> {
-  const res = await fetch("/api/scsc-h21/stamps", credFetch);
+export async function fetchScscH21Stamps(opts?: {
+  includeSeal?: boolean;
+}): Promise<ScscH21StampId[]> {
+  const qs = opts?.includeSeal ? "?includeSeal=1" : "";
+  const res = await fetch(`/api/scsc-h21/stamps${qs}`, credFetch);
   const body = await readJson(res);
   if (!res.ok) throw new Error(errMessage(body, "Không tải được shipper tờ khai", res));
   const items = (body as { items?: ScscH21StampId[] })?.items;
   return Array.isArray(items) ? items : [];
+}
+
+export async function fetchScscH21Stamp(id: string): Promise<ScscH21StampId> {
+  const res = await fetch(`/api/scsc-h21/stamps/${encodeURIComponent(id)}`, credFetch);
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(errMessage(body, "Không tải được shipper tờ khai", res));
+  return (body as { item: ScscH21StampId }).item;
 }
 
 export async function createScscH21Stamp(

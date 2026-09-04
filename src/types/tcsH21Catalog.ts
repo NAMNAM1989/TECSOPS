@@ -43,9 +43,11 @@ export type TcsH21StampId = {
   active?: boolean;
   /**
    * Ảnh con dấu (data URL image/png|jpeg|webp) — hiện cuối invoice.
-   * `null`/thiếu = chưa upload.
+   * `null`/thiếu = chưa upload. List mặc định không trả field này (dùng hasSealImage).
    */
   sealImageData?: string | null;
+  /** List nhẹ: có con dấu hay không (không kèm base64). */
+  hasSealImage?: boolean;
 };
 
 /**

@@ -3,6 +3,7 @@ import type { ScscH21StampId } from "../types/scscH21Catalog";
 import {
   createScscH21Stamp,
   deleteScscH21Stamp,
+  fetchScscH21Stamp,
   fetchScscH21Stamps,
   updateScscH21Stamp,
 } from "../utils/scscH21Api";
@@ -153,6 +154,10 @@ export function ScscH21ShipperSection() {
                         alt={`Con dấu ${s.shipperName}`}
                         className="h-10 w-10 rounded border border-ui-border/70 object-contain bg-white"
                       />
+                    ) : s.hasSealImage ? (
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-ui-border/70 bg-emerald-50 text-[9px] font-bold text-emerald-800">
+                        OK
+                      </span>
                     ) : (
                       <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-dashed border-ui-border/80 text-[9px] text-ui-text-muted">
                         —
@@ -169,14 +174,23 @@ export function ScscH21ShipperSection() {
                     <button
                       type="button"
                       className="mr-2 text-[11px] font-semibold text-indigo-700"
-                      onClick={() =>
-                        setDraft({
-                          ...s,
-                          shipperAddress: s.shipperAddress ?? "",
-                          shipperPhone: s.shipperPhone ?? "",
-                          sealImageData: s.sealImageData ?? null,
-                        })
-                      }
+                      onClick={() => {
+                        void (async () => {
+                          try {
+                            const full = await fetchScscH21Stamp(s.id);
+                            setDraft({
+                              ...full,
+                              shipperAddress: full.shipperAddress ?? "",
+                              shipperPhone: full.shipperPhone ?? "",
+                              sealImageData: full.sealImageData ?? null,
+                            });
+                          } catch (e) {
+                            toast.error(
+                              e instanceof Error ? e.message : "Không tải được shipper"
+                            );
+                          }
+                        })();
+                      }}
                     >
                       Sửa
                     </button>

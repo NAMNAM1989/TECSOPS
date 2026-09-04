@@ -8,6 +8,7 @@ import {
   getScscH21Goods,
   listScscH21Goods,
   listScscH21Stamps,
+  getScscH21Stamp,
   replaceAllScscH21Goods,
   seedScscH21CatalogIfEmpty,
   updateScscH21Goods,
@@ -124,10 +125,27 @@ export function registerScscH21Routes(app, deps = {}) {
     }
   });
 
-  app.get("/api/scsc-h21/stamps", requireAuth, async (_req, res) => {
+  app.get("/api/scsc-h21/stamps", requireAuth, async (req, res) => {
     try {
-      const items = await withCatalog((client) => listScscH21Stamps(client));
+      const includeSeal =
+        req.query?.includeSeal === "1" ||
+        req.query?.includeSeal === "true" ||
+        req.query?.full === "1";
+      const items = await withCatalog((client) => listScscH21Stamps(client, { includeSeal }));
       res.json({ warehouseScope: "SCSC", items });
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  app.get("/api/scsc-h21/stamps/:id", requireAuth, async (req, res) => {
+    try {
+      const item = await withCatalog((client) => getScscH21Stamp(client, req.params.id));
+      if (!item) {
+        res.status(404).json({ error: "Không tìm thấy shipper tờ khai" });
+        return;
+      }
+      res.json({ item });
     } catch (e) {
       sendError(res, e);
     }

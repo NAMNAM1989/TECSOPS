@@ -146,25 +146,32 @@ app.get("/api/state", appAuth.requireAuth, async (req, res) => {
   }
 });
 
-/** Thin SoT: SELECT lots.synced_at + ops_customers.synced_at (namnamlogistics). */
-app.get("/api/sync-meta", appAuth.requireAuth, async (_req, res) => {
+/** Thin SoT: aggregates mặc định; `?detail=1` kèm mảng lots/customers (payload lớn). */
+app.get("/api/sync-meta", appAuth.requireAuth, async (req, res) => {
   try {
     const snapshot = await loadNamnamlogisticsSyncedAtSnapshot();
-    res.json({
+    const detail =
+      req.query?.detail === "1" ||
+      req.query?.detail === "true" ||
+      req.query?.full === "1";
+    const body = {
       ok: true,
       ...buildSyncMeta(snapshot),
-      lots: (snapshot.lots ?? []).map((l) => ({
+    };
+    if (detail) {
+      body.lots = (snapshot.lots ?? []).map((l) => ({
         awb: l.awb ?? null,
         awb_norm: l.awb_norm ?? null,
         warehouse: l.warehouse ?? null,
         session_date: l.session_date ?? l.sessionDate ?? null,
         synced_at: l.synced_at ?? l.syncedAt ?? null,
-      })),
-      customers: (snapshot.customers ?? []).map((c) => ({
+      }));
+      body.customers = (snapshot.customers ?? []).map((c) => ({
         code: c.code ?? null,
         synced_at: c.synced_at ?? c.syncedAt ?? null,
-      })),
-    });
+      }));
+    }
+    res.json(body);
   } catch (e) {
     console.error("[api/sync-meta]", e);
     res.status(500).json({

@@ -380,7 +380,8 @@ export function AirCargoTracking({
     const fetchStamps = isTcsH21Warehouse(s.warehouse)
       ? fetchTcsH21Stamps
       : fetchScscH21Stamps;
-    void fetchStamps()
+    // Invoice cần base64 con dấu — xin list đầy đủ một lần khi mở modal.
+    void fetchStamps({ includeSeal: true })
       .then(setH21Stamps)
       .catch(() => {});
   }, []);

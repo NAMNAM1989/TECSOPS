@@ -51,10 +51,19 @@
 5. **Excel Ops** — cùng ngày phiên đã sync: không `full=1`; DIM SCSC dùng `allRows` local.
 6. **Railway** — `healthcheckPath = "/api/health"`, timeout 30s.
 7. **Lint server** — `globalThis.crypto` trong stampId (scsc/tcs H21).
+8. **Stamp list slim** — bỏ base64 khỏi list; `hasSealImage` + GET theo id; invoice `includeSeal=1`.
+9. **sync-meta slim** — aggregates mặc định; detail opt-in.
 
 ## Dead Code Removed
 
-Không xóa component lớn (AirlineLabelSettingsModal còn REVIEW_REQUIRED). Chỉ gỡ leftover preload `PDFButton` trong vite filter.
+- `AirlineLabelSettingsModal` — đã không còn trong tree (trang thật: `AirlinesLabelsPage`).
+- Leftover preload `PDFButton` trong vite filter (round trước).
+
+## API Optimization
+
+- Tránh `GET /api/state?full=1` khi xuất Excel/DIM cùng ngày phiên đã sync.
+- **Stamp H21 list** mặc định bỏ `seal_image_data` (base64); trả `hasSealImage`. Invoice dùng `?includeSeal=1`; sửa shipper dùng `GET /stamps/:id`.
+- **`GET /api/sync-meta`** mặc định chỉ aggregates; `?detail=1` mới kèm mảng lots/customers.
 
 ## Bundle Optimization — After (local)
 
@@ -66,10 +75,6 @@ Không xóa component lớn (AirlineLabelSettingsModal còn REVIEW_REQUIRED). Ch
 | Print CSS on HTML | Có (global) | Không | Chỉ theo PrintShippingLabel |
 | Fonts first CSS | 12 faces | 4 faces critical | 700+Mono deferred |
 | Build time | ~7.92s | ~8.0s | Tương đương |
-
-## API Optimization
-
-- Tránh `GET /api/state?full=1` khi xuất Excel/DIM cùng ngày phiên đã sync.
 
 ## Database Optimization
 
@@ -135,12 +140,10 @@ PRE_OPTIMIZATION_COMMIT: 13f84062ff1ef4263953a8d716616da792ae49b3
 
 - Bảng Ops / catalog chưa virtualize
 - Full-state RMW + JSONB blob trên mỗi mutation (backend P0)
-- Stamp H21 list vẫn kèm base64
 - Logo TCS PNG ~669 KB; Noto TTF PDF ~1.1 MB (on-demand)
 
 ## Recommended Next Steps
 
 1. Incremental customer diff + slim blob write (backend)
 2. Virtualize LotsDetailTable / H21 catalog trước Ops grid
-3. Stamp list: `hasSeal` + fetch ảnh theo id
-4. Nén `public/brand/tcs-logo.png`
+3. Nén `public/brand/tcs-logo.png`

@@ -98,12 +98,22 @@ export async function importTcsH21Goods(
   return { created: b.created ?? 0, updated: b.updated ?? 0 };
 }
 
-export async function fetchTcsH21Stamps(): Promise<TcsH21StampId[]> {
-  const res = await fetch("/api/tcs-h21/stamps", credFetch);
+export async function fetchTcsH21Stamps(opts?: {
+  includeSeal?: boolean;
+}): Promise<TcsH21StampId[]> {
+  const qs = opts?.includeSeal ? "?includeSeal=1" : "";
+  const res = await fetch(`/api/tcs-h21/stamps${qs}`, credFetch);
   const body = await readJson(res);
   if (!res.ok) throw new Error(errMessage(body, "Không tải được shipper tờ khai", res));
   const items = (body as { items?: TcsH21StampId[] })?.items;
   return Array.isArray(items) ? items : [];
+}
+
+export async function fetchTcsH21Stamp(id: string): Promise<TcsH21StampId> {
+  const res = await fetch(`/api/tcs-h21/stamps/${encodeURIComponent(id)}`, credFetch);
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(errMessage(body, "Không tải được shipper tờ khai", res));
+  return (body as { item: TcsH21StampId }).item;
 }
 
 export async function createTcsH21Stamp(

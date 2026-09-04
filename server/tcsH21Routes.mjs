@@ -8,6 +8,7 @@ import {
   getTcsH21Goods,
   listTcsH21Goods,
   listTcsH21Stamps,
+  getTcsH21Stamp,
   replaceAllTcsH21Goods,
   seedTcsH21CatalogIfEmpty,
   updateTcsH21Goods,
@@ -124,10 +125,27 @@ export function registerTcsH21Routes(app, deps = {}) {
     }
   });
 
-  app.get("/api/tcs-h21/stamps", requireAuth, async (_req, res) => {
+  app.get("/api/tcs-h21/stamps", requireAuth, async (req, res) => {
     try {
-      const items = await withCatalog((client) => listTcsH21Stamps(client));
+      const includeSeal =
+        req.query?.includeSeal === "1" ||
+        req.query?.includeSeal === "true" ||
+        req.query?.full === "1";
+      const items = await withCatalog((client) => listTcsH21Stamps(client, { includeSeal }));
       res.json({ warehouseScope: "TCS", items });
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  app.get("/api/tcs-h21/stamps/:id", requireAuth, async (req, res) => {
+    try {
+      const item = await withCatalog((client) => getTcsH21Stamp(client, req.params.id));
+      if (!item) {
+        res.status(404).json({ error: "Không tìm thấy shipper tờ khai" });
+        return;
+      }
+      res.json({ item });
     } catch (e) {
       sendError(res, e);
     }

@@ -389,26 +389,44 @@ export async function upsertTcsH21GoodsBulk(client, rawList) {
   return { created, updated, items: out };
 }
 
-export async function listTcsH21Stamps(client) {
+/**
+ * Danh sách shipper — mặc định không trả base64 con dấu (payload nhẹ).
+ * `includeSeal=true` dùng khi mở invoice cần ảnh ngay.
+ */
+export async function listTcsH21Stamps(client, opts = {}) {
+  const includeSeal = opts?.includeSeal === true;
   const res = await client.query(
-    `SELECT id, shipper_name, shipper_address, shipper_phone, stamp_id, active, seal_image_data
-     FROM ${TCS_H21_STAMPS_TABLE}
-     WHERE warehouse_scope = 'TCS' ORDER BY shipper_name ASC`
+    includeSeal
+      ? `SELECT id, shipper_name, shipper_address, shipper_phone, stamp_id, active, seal_image_data,
+                (seal_image_data IS NOT NULL AND length(seal_image_data) > 0) AS has_seal
+         FROM ${TCS_H21_STAMPS_TABLE}
+         WHERE warehouse_scope = 'TCS' ORDER BY shipper_name ASC`
+      : `SELECT id, shipper_name, shipper_address, shipper_phone, stamp_id, active,
+                (seal_image_data IS NOT NULL AND length(seal_image_data) > 0) AS has_seal
+         FROM ${TCS_H21_STAMPS_TABLE}
+         WHERE warehouse_scope = 'TCS' ORDER BY shipper_name ASC`
   );
-  return res.rows.map((r) => rowToStamp(r));
+  return res.rows.map((r) => rowToStamp(r, { includeSeal })).filter(Boolean);
 }
 
-function rowToStamp(row) {
-  return normalizeTcsH21Stamp({
+function rowToStamp(row, opts = {}) {
+  const includeSeal = opts?.includeSeal === true;
+  const hasSeal =
+    row.has_seal === true ||
+    row.has_seal === 1 ||
+    (typeof row.seal_image_data === "string" && row.seal_image_data.length > 0);
+  const base = normalizeTcsH21Stamp({
     id: row.id,
     shipperName: row.shipper_name,
     shipperAddress: row.shipper_address,
     shipperPhone: row.shipper_phone,
     stampId: row.stamp_id,
     active: row.active,
-    sealImageData: row.seal_image_data ?? null,
+    sealImageData: includeSeal ? row.seal_image_data ?? null : null,
     warehouseScope: TCS_H21_WAREHOUSE_SCOPE,
   });
+  if (!base) return null;
+  return { ...base, hasSealImage: Boolean(hasSeal) };
 }
 
 function stampId() {
@@ -472,7 +490,7 @@ export async function createTcsH21Stamp(client, raw) {
       item.sealImageData ?? null,
     ]
   );
-  return item;
+  return { ...item, hasSealImage: Boolean(item.sealImageData) };
 }
 
 export async function updateTcsH21Stamp(client, id, patch) {
@@ -515,16 +533,17 @@ export async function updateTcsH21Stamp(client, id, patch) {
       next.sealImageData ?? null,
     ]
   );
-  return next;
+  return { ...next, hasSealImage: Boolean(next.sealImageData) };
 }
 
 export async function getTcsH21Stamp(client, id) {
   const res = await client.query(
-    `SELECT id, shipper_name, shipper_address, shipper_phone, stamp_id, active, seal_image_data
+    `SELECT id, shipper_name, shipper_address, shipper_phone, stamp_id, active, seal_image_data,
+            (seal_image_data IS NOT NULL AND length(seal_image_data) > 0) AS has_seal
      FROM ${TCS_H21_STAMPS_TABLE} WHERE id=$1 AND warehouse_scope='TCS' LIMIT 1`,
     [String(id)]
   );
-  return res.rows[0] ? rowToStamp(res.rows[0]) : null;
+  return res.rows[0] ? rowToStamp(res.rows[0], { includeSeal: true }) : null;
 }
 
 export async function deleteTcsH21Stamp(client, id) {

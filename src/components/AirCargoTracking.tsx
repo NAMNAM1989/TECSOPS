@@ -130,7 +130,6 @@ export function AirCargoTracking({
   const [flightDateFilter, setFlightDateFilter] = useState("");
   const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
   const [excelExporting, setExcelExporting] = useState(false);
-  const [scscDimExporting, setScscDimExporting] = useState(false);
   const [cargoReportCopying, setCargoReportCopying] = useState(false);
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
   const [excelRangeOpen, setExcelRangeOpen] = useState(false);
@@ -452,23 +451,6 @@ export function AirCargoTracking({
     [allRows, selectedYmd, state, toast]
   );
 
-  const onDownloadScscDimDay = useCallback(async () => {
-    setScscDimExporting(true);
-    try {
-      // Ngày phiên đã sync trong `allRows` — không cần GET full=1.
-      const rows = filterShipmentsBySessionYmd(allRows, selectedYmd).filter((r) =>
-        isScscWarehouse(r.warehouse)
-      );
-      const { downloadScscDimDayExcel } = await import("../utils/exportScscDimListExcel");
-      await downloadScscDimDayExcel(rows, selectedYmd);
-    } catch (e) {
-      debugError("ui:excel-scsc-dim-day", e);
-      toast.error(e instanceof Error ? e.message : "Không tạo được file DIM SCSC.", "Xuất DIM SCSC");
-    } finally {
-      setScscDimExporting(false);
-    }
-  }, [allRows, selectedYmd, toast]);
-
   const openMobileEdit = useCallback(
     (s: Shipment, opts?: { tab?: "lot" | "notify" | "dim"; focus?: MobileEditFocus }) => {
       startTransition(() => {
@@ -687,8 +669,6 @@ export function AirCargoTracking({
             viewSessionYmd={selectedYmd}
             onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
             onQuickEdit={(row) => openMobileEdit(row)}
-            onDownloadScscDim={() => void onDownloadScscDimDay()}
-            scscDimExporting={scscDimExporting}
           />
         </Suspense>
       ) : (
@@ -702,8 +682,6 @@ export function AirCargoTracking({
             selectedRowId={selectedId}
             onSelectRow={setSelectedId}
             onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
-            onDownloadScscDim={() => void onDownloadScscDimDay()}
-            scscDimExporting={scscDimExporting}
             onUpdate={onUpdate}
             onUpdateCustomers={onUpdateCustomers}
             onDelete={onDelete}

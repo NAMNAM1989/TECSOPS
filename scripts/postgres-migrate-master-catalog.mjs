@@ -14,7 +14,7 @@ import {
 
 const { Pool } = pg;
 const TABLE_NAME = "app_state";
-const DEFAULT_KEY = process.env.POSTGRES_STATE_KEY || process.env.REDIS_STATE_KEY || "tecsops:state";
+const DEFAULT_KEY = process.env.POSTGRES_STATE_KEY || "tecsops:state";
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL?.trim();

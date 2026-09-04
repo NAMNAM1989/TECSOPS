@@ -1,7 +1,7 @@
 import express from "express";
 import { applyMutation } from "./stateStore.mjs";
 
-/** Express tối giản cho smoke test HTTP — không Redis/Postgres. */
+/** Express tối giản cho smoke test HTTP — state in-memory, không Postgres. */
 export function createMutationTestApp(initialState) {
   let state = structuredClone(initialState);
   const app = express();

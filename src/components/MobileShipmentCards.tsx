@@ -11,7 +11,6 @@ import {
 } from "./statusStyles";
 import {
   emptyWarehouseRecord,
-  isScscWarehouse,
   warehouseLabel,
   warehouseSectionsForLayout,
   WAREHOUSE_ORDER,
@@ -205,7 +204,7 @@ const MobileShipmentCard = memo(
           {/* Dòng 2: khách | kiện/kg */}
           <button
             type="button"
-            className="mt-1 flex min-w-0 w-full items-center gap-2 py-0 text-left active:opacity-90"
+            className="mt-1.5 flex min-w-0 w-full items-center gap-2 py-0 text-left active:opacity-90"
             onClick={() => onOpenEdit(row)}
             title={[customerTitle, cneeSummary].filter(Boolean).join(" · ") || undefined}
           >
@@ -244,8 +243,6 @@ interface MobileShipmentCardsProps {
   pinnedOpenWarehouses?: readonly Warehouse[];
   highlightedShipmentId?: string | null;
   onAddBlankRow?: (warehouse: Warehouse) => void;
-  onDownloadScscDim?: () => void;
-  scscDimExporting?: boolean;
 }
 
 export function MobileShipmentCards({
@@ -264,8 +261,6 @@ export function MobileShipmentCards({
   pinnedOpenWarehouses = [],
   highlightedShipmentId = null,
   onAddBlankRow: _onAddBlankRow,
-  onDownloadScscDim,
-  scscDimExporting = false,
 }: MobileShipmentCardsProps) {
   const isMobile = useIsMobile();
   const rowsByWarehouse = useMemo(
@@ -312,7 +307,7 @@ export function MobileShipmentCards({
 
   return (
     <div
-      className={`space-y-0.5 pb-[calc(5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
+      className={`space-y-1.5 px-0.5 pb-[calc(5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
       data-testid="mobile-shipment-list"
     >
       {searchActive
@@ -324,7 +319,7 @@ export function MobileShipmentCards({
               <section
                 key={wh}
                 id={`warehouse-section-${wh}`}
-                className="space-y-0.5"
+                className="space-y-1.5"
               >
                 <div className="flex min-h-11 w-full items-center gap-1.5">
                   <button
@@ -340,19 +335,6 @@ export function MobileShipmentCards({
                       {group.length}
                     </span>
                   </button>
-                  {onDownloadScscDim && isScscWarehouse(wh) ? (
-                    <button
-                      type="button"
-                      data-testid={`warehouse-dim-scsc-${wh}`}
-                      title="Excel LIST DIM SCSC theo ngày phiên"
-                      aria-label="DIM SCSC"
-                      disabled={scscDimExporting}
-                      onClick={onDownloadScscDim}
-                      className="inline-flex min-h-9 shrink-0 touch-manipulation items-center rounded-lg px-2 text-[11px] font-semibold text-ui-text hover:bg-ui-surface-muted disabled:opacity-40"
-                    >
-                      {scscDimExporting ? "DIM…" : "DIM"}
-                    </button>
-                  ) : null}
                 </div>
                 {!collapsed ? group.map(renderCard) : null}
               </section>

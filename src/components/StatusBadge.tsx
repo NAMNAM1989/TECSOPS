@@ -29,12 +29,12 @@ export function StatusSelect({ value, onChange, warehouse, compact, dense }: Sta
       onClick={(e) => e.stopPropagation()}
       aria-label={`Trạng thái · ${statusLabel[value]}`}
       title={`${statusIcon[value]} ${statusLabel[value]}`}
-      className={`cursor-pointer rounded-full border font-bold shadow-ui-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ui-focus ${statusSelectSurface[value]} ${
+      className={`cursor-pointer rounded-lg border font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-ui-focus ${statusSelectSurface[value]} ${
         dense
           ? "h-7 w-full min-w-0 truncate px-1.5 text-[10px] leading-none"
           : compact
-            ? "h-11 w-full min-h-11 min-w-0 touch-manipulation truncate px-1.5 text-[10px] leading-none"
-            : "px-2.5 py-1 text-xs"
+            ? "h-11 w-full min-h-11 min-w-0 touch-manipulation truncate rounded-xl px-1.5 text-[10px] leading-none shadow-ui-sm"
+            : "rounded-full px-2.5 py-1 text-xs shadow-ui-sm"
       }`}
     >
       {options.map((st) => (

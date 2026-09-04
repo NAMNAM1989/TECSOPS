@@ -63,17 +63,17 @@ export const statusRowAccent: Record<ShipmentStatus, string> = {
 /** Hàng được chọn — tint teal nhẹ Round 2. */
 export const statusRowSelected = "bg-teal-500/[0.08] ring-1 ring-teal-600/35";
 
-/** Dropdown / pill trạng thái — nền tint + chữ tương phản (Round 2). */
+/** Dropdown / pill trạng thái — tint dịu, chữ đủ tương phản (Day board A). */
 export const statusSelectSurface: Record<ShipmentStatus, string> = {
-  PENDING: "bg-blue-50 text-blue-900 border-blue-200/90",
-  RECEIVED: "bg-amber-50 text-amber-950 border-amber-200/90",
-  VOLUME_DONE: "bg-cyan-50 text-cyan-950 border-cyan-200/90",
-  CUSTOMS: "bg-sky-50 text-sky-950 border-sky-200/90",
-  SECURITY: "bg-orange-50 text-orange-950 border-orange-200/90",
-  OLA_PULL: "bg-fuchsia-50 text-fuchsia-950 border-fuchsia-200/90",
-  RECEPTION_COMPLETED: "bg-teal-50 text-teal-950 border-teal-200/90",
-  WEIGH_SLIP: "bg-lime-50 text-lime-950 border-lime-200/90",
-  COMPLETED: "bg-emerald-50 text-emerald-950 border-emerald-200/90",
+  PENDING: "bg-blue-50/80 text-blue-900 border-blue-100",
+  RECEIVED: "bg-amber-50/80 text-amber-950 border-amber-100",
+  VOLUME_DONE: "bg-cyan-50/80 text-cyan-950 border-cyan-100",
+  CUSTOMS: "bg-sky-50/80 text-sky-950 border-sky-100",
+  SECURITY: "bg-orange-50/80 text-orange-950 border-orange-100",
+  OLA_PULL: "bg-fuchsia-50/80 text-fuchsia-950 border-fuchsia-100",
+  RECEPTION_COMPLETED: "bg-teal-50/80 text-teal-950 border-teal-100",
+  WEIGH_SLIP: "bg-lime-50/80 text-lime-950 border-lime-100",
+  COMPLETED: "bg-emerald-50/80 text-emerald-950 border-emerald-100",
 };
 
 /** Màu nhấn số hiệu chuyến bay. */

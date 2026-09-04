@@ -1,21 +1,21 @@
-/** Token UI mobile OPS — Operational Signal Round 2. */
+/** Token UI mobile OPS — Day board sạch (Hướng A). */
 export const MOBILE = {
   sheet:
     "flex w-full max-h-[min(92vh,92dvh)] max-w-[100vw] flex-col rounded-t-[28px] border border-ui-border bg-ui-surface shadow-ui-lg animate-cnee-slide-up",
   sheetBackdrop:
     "fixed inset-0 z-[560] flex flex-col justify-end bg-black/40 md:hidden",
-  /** Card lô day-board — denser 2 dòng */
-  card: "relative overflow-hidden rounded-lg border border-ui-border/90 bg-ui-surface shadow-ui-sm",
-  cardInner: "relative z-10 bg-transparent px-2 py-1.5",
+  /** Card lô — hierarchy AWB → status → kg */
+  card: "relative overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+  cardInner: "relative z-10 bg-transparent px-2.5 py-2",
   destBadge:
-    "inline-flex shrink-0 items-center rounded-md bg-ui-navy/10 px-1 py-px font-mono text-[10px] font-extrabold uppercase tracking-wide text-ui-awb",
+    "inline-flex shrink-0 items-center rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-extrabold uppercase tracking-wide text-slate-700 ring-1 ring-slate-200/80",
   cardFlight:
-    "truncate font-shipment-data text-[10px] font-semibold leading-none text-ui-text-muted",
-  cardQty: "font-mono text-[11px] font-bold tabular-nums text-ui-navy",
+    "truncate font-shipment-data text-[10px] font-medium leading-none text-ui-text-muted/90",
+  cardQty: "font-mono text-[12px] font-extrabold tabular-nums text-teal-800",
   cardMeta: "truncate font-shipment-data text-[11px] font-medium leading-tight text-ui-text-muted",
   customerName:
-    "font-vi truncate font-sans text-[12px] font-bold leading-snug tracking-normal text-ui-navy",
-  awb: "font-shipment-data text-[14px] font-extrabold leading-none tracking-tight tabular-nums text-ui-navy whitespace-nowrap",
+    "font-vi inline-flex max-w-full truncate rounded-md bg-rose-50 px-1.5 py-0.5 font-sans text-[13px] font-extrabold leading-snug tracking-normal text-ui-awb ring-1 ring-rose-100/90",
+  awb: "font-shipment-data text-[15px] font-extrabold leading-none tracking-tight tabular-nums text-ui-navy whitespace-nowrap",
   awbEmpty: "text-[13px] font-semibold leading-tight text-ui-primary hover:text-ui-primary-hover",
   chip: "inline-flex items-center rounded-md bg-ui-surface-muted px-1.5 py-px text-[9px] font-bold uppercase tracking-wide tabular-nums text-ui-text",
   chipCutoff:

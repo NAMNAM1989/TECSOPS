@@ -80,6 +80,18 @@ describe("OpsMobileStickyHeader chrome", () => {
     expect(html).toContain("Xóa bộ lọc");
   });
 
+  it("top row: tổng ngày tất cả kho giữa ngày và Live", () => {
+    const html = renderHeader();
+    expect(html).toContain("ops-mobile-day-totals");
+    expect(html).toContain("Tổng ngày");
+    expect(html).toContain(">Lô<");
+    expect(html).toContain(">Kg<");
+    expect(html).not.toContain(">Kiện<");
+    expect(html).toContain("1");
+    expect(html).toContain("10");
+    expect(html).toContain("Tất cả kho");
+  });
+
   it("top row dense h-9; 4 kho fitRow cố định", () => {
     const html = renderHeader();
     expect(html).toContain("ops-mobile-top-row");

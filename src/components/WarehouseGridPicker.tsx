@@ -30,10 +30,10 @@ const CHIP_ACTIVE: Record<Warehouse, string> = {
 };
 
 const CHIP_IDLE: Record<Warehouse, string> = {
-  "TECS-TCS": "bg-sky-50 text-sky-950 ring-sky-200/90",
-  "TECS-SCSC": "bg-violet-50 text-violet-950 ring-violet-200/90",
-  TCS: "bg-cyan-50 text-cyan-950 ring-cyan-200/90",
-  SCSC: "bg-fuchsia-50 text-fuchsia-950 ring-fuchsia-200/90",
+  "TECS-TCS": "bg-sky-50/70 text-sky-900/80 ring-sky-100/90",
+  "TECS-SCSC": "bg-violet-50/70 text-violet-900/80 ring-violet-100/90",
+  TCS: "bg-cyan-50/70 text-cyan-900/80 ring-cyan-100/90",
+  SCSC: "bg-fuchsia-50/70 text-fuchsia-900/80 ring-fuchsia-100/90",
 };
 
 const TEAM_CHIP: Record<OpsTeam, { label: string; className: string }> = {

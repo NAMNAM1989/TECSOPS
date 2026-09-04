@@ -3,6 +3,8 @@ import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
 import { formatSyncedPhrase } from "../utils/dbSyncedAt";
+import { formatKgTotal } from "../utils/formatKgTotal";
+import { computeDayPulseTotals } from "../utils/opsDayOverview";
 import { SyncStatusPill } from "../ui";
 import type { SyncStatus } from "../hooks/useShipmentSync";
 import { OpsDatePicker } from "./OpsDatePicker";
@@ -114,6 +116,9 @@ export function OpsMobileStickyHeader({
     statusFilter !== "ALL" || searchQuery.trim().length > 0 || Boolean(flightDateFilter);
 
   const live = syncStatus === "live" && socketConnected;
+  const dayTotals = useMemo(() => computeDayPulseTotals(viewRows), [viewRows]);
+  const lotsLabel = dayTotals.lots.toLocaleString("en-US");
+  const kgLabel = formatKgTotal(dayTotals.kg);
   const syncTitle = useMemo(() => {
     const phrase = formatSyncedPhrase(lotSyncedAt);
     const pending = pendingOfflineCount > 0 ? `${pendingOfflineCount} chờ gửi` : "";
@@ -129,10 +134,10 @@ export function OpsMobileStickyHeader({
 
   return (
     <header className="space-y-0" data-testid="ops-mobile-sticky-header">
-      <div className="overflow-hidden rounded-none border-b border-ui-border/80 bg-ui-background">
+      <div className="overflow-hidden rounded-none border-b border-ui-border/70 bg-ui-surface">
         <div
           data-testid="ops-mobile-top-row"
-          className="flex h-9 items-center gap-1 px-2 py-0"
+          className="flex h-9 items-center gap-1.5 px-2 py-0"
         >
           <div className="min-w-0 shrink-0">
             <OpsDatePicker
@@ -146,7 +151,32 @@ export function OpsMobileStickyHeader({
               isViewingToday={isViewingToday}
             />
           </div>
-          <div className="min-w-0 flex-1" aria-hidden />
+          <div
+            data-testid="ops-mobile-day-totals"
+            className="flex min-w-0 flex-1 items-center justify-center"
+            title={`Tất cả kho · ${lotsLabel} lô · ${kgLabel}kg`}
+            aria-label={`Tổng ngày: ${lotsLabel} lô, ${kgLabel} kg`}
+          >
+            <div className="inline-flex max-w-full items-stretch overflow-hidden rounded-xl bg-teal-500/[0.08] shadow-ui-sm ring-1 ring-teal-600/20">
+              <div className="flex min-w-0 flex-col items-center justify-center gap-0.5 px-2.5 py-1">
+                <span className="text-[8px] font-bold uppercase leading-none tracking-wide text-teal-800/65">
+                  Lô
+                </span>
+                <span className="font-mono text-[13px] font-extrabold tabular-nums leading-none text-ui-navy">
+                  {lotsLabel}
+                </span>
+              </div>
+              <span className="my-1.5 w-px shrink-0 bg-teal-700/15" aria-hidden />
+              <div className="flex min-w-0 flex-col items-center justify-center gap-0.5 px-2.5 py-1">
+                <span className="text-[8px] font-bold uppercase leading-none tracking-wide text-teal-800/65">
+                  Kg
+                </span>
+                <span className="max-w-[5.5rem] truncate font-mono text-[13px] font-extrabold tabular-nums leading-none text-teal-900">
+                  {kgLabel}
+                </span>
+              </div>
+            </div>
+          </div>
           {syncCta ? (
             <button
               type="button"

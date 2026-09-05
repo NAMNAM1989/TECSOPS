@@ -5,11 +5,13 @@
 | `CSD-FD.pdf` | Thai AirAsia | mã **FD**… | `CSD_CARRIER_PROFILES.FD` |
 | `CSD-TG.pdf` | Thai Airways | mã **TG**… | `CSD_CARRIER_PROFILES.TG` |
 | `CSD-MH.pdf` | Malaysia Airlines (maskargo) | mã **MH**… | `CSD_CARRIER_PROFILES.MH` |
+| `CSD-QR.pdf` | Qatar Airways | mã **QR**… | `CSD_CARRIER_PROFILES.QR` |
 
 Logic điền + tải PDF: `src/utils/csdForms.ts`  
 Popup nhập Origin / Transfer: `src/components/CsdPrintModal.tsx`
 
-Tên file tải về: `CSD-{TECS|TCS|SCSC}-{FD|TG|MH}-{AWB}.pdf`.
+Tên file tải về: `{kho}_{hãng}_{awb}_{khách}.pdf`  
+Ví dụ: `SCSC_QR_157-66802024_PCS.pdf` (ưu tiên `customerCode`, không có thì tên khách).
 
 ## Ô điền theo mẫu
 
@@ -30,10 +32,17 @@ Tên file tải về: `CSD-{TECS|TCS|SCSC}-{FD|TG|MH}-{AWB}.pdf`.
 - DEST + Transfer — cùng hàng với Origin SGN (ô trống trên mẫu)
 - URL mẫu có `?v=` để tránh cache PDF cũ
 
+### QR (A4 — QTR-CGO-CSM-001-CSD)
+- Header: TAN SON NHAT SECURITY CENTER
+- Origin SGN đã in sẵn; SPX / XRY mẫu giữ nguyên
+- Wipe **chỉ bbox chữ mẫu** (không phủ nhãn / Consolidation) rồi ghi: RA, AWB, Contents, DEST, Transfer
+- Hub Transfer gợi ý: **DOH**
+- Quy tắc: vùng wipe phải hẹp hơn khoảng trống dưới nhãn — tránh rectangle trắng che tiêu đề
+
 ## Mã RA theo kho (overlay §1 / §14)
 
-| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG) | Mã RA trên mẫu MH |
-|---------------|-----------|---------------|-------------------|
+| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG/QR) | Mã RA trên mẫu MH |
+|---------------|-----------|------------------|-------------------|
 | TECS | `TECS-TCS`, `TECS-SCSC` | `VN/RA3/00013-01` | `VN/RA3-00013-01` |
 | SCSC | `SCSC` | `VN/RA3/00009-01` | `VN/RA3-00009-01` |
 | TCS | `TCS` | `VN/RA3/00010-01` | `VN/RA3-00010-01` |

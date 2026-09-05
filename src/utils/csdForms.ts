@@ -18,14 +18,14 @@ import { clipScscGoodsDescriptionPrint } from "./scscPrintContent";
 import { notifyInfo, notifyWarning } from "../ui/notify";
 
 /** Thêm hãng mới: mở rộng union + thêm entry trong CSD_CARRIER_PROFILES + PDF mẫu. */
-export type CsdCarrier = "FD" | "TG" | "MH";
+export type CsdCarrier = "FD" | "TG" | "MH" | "QR";
 
 export type CsdCarrierProfile = {
   id: CsdCarrier;
   label: string;
   airlineName: string;
   templateUrl: string;
-  /** Prefix mã chuyến (FD301 → FD, TG621 → TG, MH751 → MH). */
+  /** Prefix mã chuyến (FD301 → FD, TG621 → TG, MH751 → MH, QR970 → QR). */
   flightPrefixes: readonly string[];
   showOrigin: boolean;
   showTransfer: boolean;
@@ -91,12 +91,24 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     showTransfer: true,
     transferPresets: ["KUL", "PEN", "BKI", "KCH"],
   },
+  QR: {
+    id: "QR",
+    label: "QR",
+    airlineName: "Qatar Airways",
+    templateUrl: "/templates/csd/CSD-QR.pdf?v=20260905",
+    flightPrefixes: ["QR"],
+    /** Origin SGN đã in sẵn trên mẫu QTR-CGO. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["DOH", "DXB", "BAH", "MCT"],
+  },
 };
 
 export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   FD: CSD_CARRIER_PROFILES.FD.templateUrl,
   TG: CSD_CARRIER_PROFILES.TG.templateUrl,
   MH: CSD_CARRIER_PROFILES.MH.templateUrl,
+  QR: CSD_CARRIER_PROFILES.QR.templateUrl,
 };
 
 export type CsdFillFields = {
@@ -164,6 +176,11 @@ export function isCsdMhFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "MH";
 }
 
+/** Chuyến QR… → Qatar Airways CSD. */
+export function isCsdQrFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "QR";
+}
+
 /** @deprecated dùng isCsdTgFlight */
 export function isCsdThFlight(flight: string | undefined | null): boolean {
   return isCsdTgFlight(flight);
@@ -226,7 +243,8 @@ export function normalizeCsdTransfer(raw: string | undefined | null): string {
 
 /**
  * Gợi ý Transit: nhớ lần trước theo hãng;
- * MH → KUL khi DEST khác KUL; FD/TG → BKK khi DEST khác BKK/DMK.
+ * MH → KUL khi DEST khác KUL; QR → DOH khi DEST khác DOH;
+ * FD/TG → BKK khi DEST khác BKK/DMK.
  */
 export function suggestCsdTransfer(
   dest: string | undefined | null,
@@ -240,6 +258,10 @@ export function suggestCsdTransfer(
     .slice(0, 3);
   if (carrier === "MH") {
     if (d && d !== "KUL") return "KUL";
+    return "";
+  }
+  if (carrier === "QR") {
+    if (d && d !== "DOH") return "DOH";
     return "";
   }
   if (d && d !== "BKK" && d !== "DMK") return "BKK";
@@ -399,6 +421,57 @@ const LAYOUT_MH = {
   transfer: { x: 430, yTop: 325, size: 13 },
 } as const;
 
+/**
+ * Layout QR — A4 (QTR-CGO-CSM-001-CSD).
+ * Wipe CHỈ đúng bbox chữ mẫu (không phủ nhãn / Consolidation).
+ * Sample fitz: RA y≈152 x52–166 · AWB y≈149 x320–410 · FABRICS y≈227 x149–195 ·
+ * JED y≈273 x211–234 · DOH y≈270 x362–391.
+ */
+const LAYOUT_QR = {
+  raWipe: { x: 50, yTop: 150, w: 125, h: 16 },
+  ra: { x: 52, yTop: 162, size: 11 },
+  awbWipe: { x: 315, yTop: 147, w: 105, h: 16 },
+  awb: { x: 318, yTop: 160, size: 13 },
+  /** Chỉ phủ "FABRICS" — không kéo xuống checkbox Consolidation. */
+  goodsWipe: { x: 145, yTop: 224, w: 70, h: 14 },
+  goods: { x: 148, yTop: 236, size: 11 },
+  goodsMaxChars: 55,
+  /** Dưới nhãn Destination (y≈251), chỉ phủ "JED". */
+  destWipe: { x: 205, yTop: 270, w: 35, h: 16 },
+  dest: { x: 210, yTop: 282, size: 14 },
+  /** Dưới nhãn Transfer (y≈251), chỉ phủ "DOH". */
+  transferWipe: { x: 355, yTop: 267, w: 42, h: 16 },
+  transfer: { x: 360, yTop: 282, size: 13 },
+} as const;
+
+/**
+ * Phủ trắng vùng giá trị mẫu. Caller phải truyền bbox sát chữ — không phủ nhãn.
+ */
+function wipeRect(
+  page: {
+    getHeight: () => number;
+    drawRectangle: (opts: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      color: ReturnType<typeof rgb>;
+      borderWidth: number;
+    }) => void;
+  },
+  box: { x: number; yTop: number; w: number; h: number }
+) {
+  const pageH = page.getHeight();
+  page.drawRectangle({
+    x: box.x,
+    y: pageH - box.yTop - box.h,
+    width: box.w,
+    height: box.h,
+    color: rgb(1, 1, 1),
+    borderWidth: 0,
+  });
+}
+
 async function loadTemplate(carrier: CsdCarrier): Promise<ArrayBuffer> {
   const url = getCsdCarrierProfile(carrier).templateUrl;
   /** no-cache: tránh giữ PDF mẫu cũ trong HTTP cache trình duyệt. */
@@ -531,6 +604,52 @@ export async function fillCsdPdfBytes(
         LAYOUT_MH.transfer.size
       );
     }
+  } else if (carrier === "QR") {
+    /* Qatar Airways — wipe giá trị mẫu rồi ghi RA/AWB/Contents/DEST/Transfer */
+    if (raCode) {
+      wipeRect(page, LAYOUT_QR.raWipe);
+      draw(
+        raCode,
+        LAYOUT_QR.ra.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_QR.ra.yTop),
+        LAYOUT_QR.ra.size
+      );
+    }
+    wipeRect(page, LAYOUT_QR.awbWipe);
+    draw(
+      fields.awb,
+      LAYOUT_QR.awb.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_QR.awb.yTop),
+      LAYOUT_QR.awb.size
+    );
+    wipeRect(page, LAYOUT_QR.goodsWipe);
+    const goodsLine =
+      wrapCsdGoodsLines(fields.goods, LAYOUT_QR.goodsMaxChars)[0] ||
+      fields.goods;
+    draw(
+      goodsLine,
+      LAYOUT_QR.goods.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_QR.goods.yTop),
+      LAYOUT_QR.goods.size
+    );
+    wipeRect(page, LAYOUT_QR.destWipe);
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        LAYOUT_QR.dest.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_QR.dest.yTop),
+        LAYOUT_QR.dest.size
+      );
+    }
+    wipeRect(page, LAYOUT_QR.transferWipe);
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        LAYOUT_QR.transfer.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_QR.transfer.yTop),
+        LAYOUT_QR.transfer.size
+      );
+    }
   } else {
     /* TG — mẫu A4 trống: ghi §1 RA, §2 AWB, §3 Contents, §4–6, §14 RA */
     if (raLabel) {
@@ -599,19 +718,46 @@ export async function fillCsdFdPdfBytes(
   return fillCsdPdfBytes("FD", fields, templateBytes, assets);
 }
 
-/** Tên file tải về — theo kho + hãng + AWB. */
-export function csdDownloadFilename(
-  carrier: CsdCarrier,
-  awb: string,
-  opsTeam?: OpsTeam
+/** Chuẩn hoá đoạn tên file CSD (bỏ ký tự Windows-illegal, gộp khoảng trắng). */
+export function sanitizeCsdFilenamePart(
+  raw: string | undefined | null,
+  fallback = "NA"
 ): string {
-  const digits = awbDigitsKey(awb);
-  const label =
+  const t = String(raw ?? "")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/_+/g, "_")
+    .replace(/^[\s._-]+|[\s._-]+$/g, "");
+  return t || fallback;
+}
+
+/**
+ * Tên file tải về: `{kho}_{hãng}_{awb}_{khách}.pdf`
+ * Ưu tiên customerCode; không có thì dùng tên khách.
+ */
+export function csdDownloadFilename(input: {
+  carrier: CsdCarrier;
+  awb: string;
+  warehouse?: string | null;
+  customer?: string | null;
+  customerCode?: string | null;
+}): string {
+  const kho = sanitizeCsdFilenamePart(
+    normalizeWarehouse(input.warehouse) || String(input.warehouse || ""),
+    "KHO"
+  );
+  const hang = input.carrier;
+  const digits = awbDigitsKey(input.awb);
+  const awb =
     digits.length === 11
       ? `${digits.slice(0, 3)}-${digits.slice(3)}`
       : digits || "draft";
-  const team = opsTeam ? `${opsTeam}-` : "";
-  return `CSD-${team}${carrier}-${label}.pdf`;
+  const khach = sanitizeCsdFilenamePart(
+    input.customerCode || input.customer || "",
+    "KHACH"
+  );
+  return `${kho}_${hang}_${awb}_${khach}.pdf`;
 }
 
 function downloadPdfBytes(bytes: Uint8Array, filename: string) {
@@ -664,7 +810,13 @@ export async function printCsdForShipment(
   }
 
   const bytes = await fillCsdPdfBytes(carrier, fields);
-  const filename = csdDownloadFilename(carrier, s.awb, fields.opsTeam);
+  const filename = csdDownloadFilename({
+    carrier,
+    awb: s.awb,
+    warehouse: s.warehouse,
+    customer: s.customer,
+    customerCode: s.customerCode,
+  });
 
   downloadPdfBytes(bytes, filename);
 

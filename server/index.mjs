@@ -329,7 +329,10 @@ io.on("connection", async (socket) => {
       socket.data.stateScope = nextScope;
     });
     const clientVersion = parseInt(socket.handshake.query?.v || "0", 10);
-    const initial = await loadState();
+    const initial =
+      scope.full || !scope.sessionDate
+        ? await loadState()
+        : await loadState({ sessionDate: scope.sessionDate });
     if (initial.version > clientVersion) {
       socket.emit("sync", projectAppState(initial, scope));
     } else {

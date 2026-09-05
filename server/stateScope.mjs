@@ -1,9 +1,26 @@
 /**
  * Thu hẹp AppState trên wire: chỉ rows đúng sessionDate (giữ customers/profiles).
  * full=true → không lọc rows.
+ * Mọi response đều compact field rỗng trên rows để giảm JSON.
  */
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Khóa luôn giữ trên wire (kể cả "") để client list/Ops không lệch schema tối thiểu. */
+const ROW_ALWAYS_KEYS = new Set([
+  "id",
+  "stt",
+  "sessionDate",
+  "awb",
+  "flight",
+  "flightDate",
+  "cutoff",
+  "cutoffNote",
+  "dest",
+  "warehouse",
+  "customer",
+  "status",
+]);
 
 export function normalizeSessionDateParam(raw) {
   const s = String(raw ?? "")
@@ -32,18 +49,52 @@ export function parseStateScopeFromHeaders(headers = {}) {
   return { full: false, sessionDate };
 }
 
+function isEmptyWireValue(v) {
+  if (v == null) return true;
+  if (v === "") return true;
+  if (Array.isArray(v) && v.length === 0) return true;
+  return false;
+}
+
+/**
+ * Bỏ field null / "" / [] trên từng lô — giữ khóa tối thiểu Ops.
+ * Giảm ~40–70% JSON rows khi nhiều ô in ấn trống.
+ */
+export function compactShipmentRowForWire(row) {
+  if (!row || typeof row !== "object") return row;
+  const out = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (ROW_ALWAYS_KEYS.has(k)) {
+      out[k] = v ?? (k === "stt" ? 0 : "");
+      continue;
+    }
+    if (isEmptyWireValue(v)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+export function compactShipmentRowsForWire(rows) {
+  if (!Array.isArray(rows)) return rows;
+  return rows.map(compactShipmentRowForWire);
+}
+
 /**
  * @param {object} state
  * @param {{ full?: boolean, sessionDate?: string | null }} scope
- * @param {{ omitCustomers?: boolean }} options
+ * @param {{ omitCustomers?: boolean, compactRows?: boolean }} options
  */
 export function projectAppState(state, scope = {}, options = {}) {
   if (!state || typeof state !== "object") return state;
   const omitCustomers = Boolean(options.omitCustomers);
+  const compactRows = options.compactRows !== false;
 
   if (scope.full || !scope.sessionDate) {
     const projected = {
       ...state,
+      rows: compactRows
+        ? compactShipmentRowsForWire(state.rows)
+        : state.rows,
       stateScope: scope.full ? "full" : "all",
     };
     if (omitCustomers && !scope.full) {
@@ -58,7 +109,7 @@ export function projectAppState(state, scope = {}, options = {}) {
     : [];
   const projected = {
     ...state,
-    rows,
+    rows: compactRows ? compactShipmentRowsForWire(rows) : rows,
     stateScope: key,
   };
   if (omitCustomers) {

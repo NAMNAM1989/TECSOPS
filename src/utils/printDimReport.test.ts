@@ -139,10 +139,10 @@ describe("printDimReport", () => {
     expect(html).toContain("VN123");
     expect(html).toContain("06APR");
     expect(html).toContain("DIM (kg)</th>");
-    expect(html).toContain("NGUỒN</th>");
+    expect(html).not.toContain("NGUỒN");
     expect(html).not.toContain("DIMINSEN");
     expect(html).toContain("120.00");
-    expect(html).toContain(">Đo</td>");
+    expect(html).not.toContain(">Đo</td>");
     expect(html).not.toMatch(/>\d+\s+ƯT</);
     expect(html).toContain("KUL");
     expect(html).toContain("Tổng kiện");
@@ -152,7 +152,7 @@ describe("printDimReport", () => {
     expect(mockWin.print).toHaveBeenCalled();
   });
 
-  it("kiện ước tính: cột NGUỒN phân biệt Đo / Ước", () => {
+  it("kiện ước tính: form in không có cột NGUỒN / marker ƯT", () => {
     const mockDoc = {
       open: vi.fn(),
       write: vi.fn(),
@@ -187,11 +187,11 @@ describe("printDimReport", () => {
     vi.useRealTimers();
 
     const html = String(mockDoc.write.mock.calls[0]?.[0] ?? "");
-    expect(html).toContain("NGUỒN</th>");
+    expect(html).not.toContain("NGUỒN");
     expect(html).not.toContain("GHI CHÚ");
-    expect(html).toContain(">Đo</td>");
-    expect(html).toContain(">Ước</td>");
-    expect(html).toContain('class="est"');
+    expect(html).not.toContain(">Đo</td>");
+    expect(html).not.toContain(">Ước</td>");
+    expect(html).not.toContain('class="est"');
     expect(html).not.toMatch(/class="num dim">\d+\s+ƯT/);
   });
 });

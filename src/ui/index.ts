@@ -33,3 +33,4 @@ export { Input, TextArea, Select } from "./Input";
 export { BottomNav } from "./BottomNav";
 export { OpsLeftRail } from "./OpsLeftRail";
 export { ConfirmDialog } from "./ConfirmDialog";
+export { SplitPane } from "./SplitPane";

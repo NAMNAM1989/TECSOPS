@@ -98,6 +98,22 @@ export async function importTcsH21Goods(
   return { created: b.created ?? 0, updated: b.updated ?? 0 };
 }
 
+/** Xóa toàn bộ catalog TCS rồi ghi lại từ file (thay thế, không giữ bản cũ). */
+export async function replaceTcsH21Goods(
+  items: Partial<TcsH21CatalogItem>[]
+): Promise<{ count: number }> {
+  const res = await fetch("/api/tcs-h21/goods", {
+    ...credFetch,
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(errMessage(body, "Thay thế catalog thất bại"));
+  const b = body as { count?: number; items?: unknown[] };
+  return { count: b.count ?? (Array.isArray(b.items) ? b.items.length : 0) };
+}
+
 export async function fetchTcsH21Stamps(opts?: {
   includeSeal?: boolean;
 }): Promise<TcsH21StampId[]> {

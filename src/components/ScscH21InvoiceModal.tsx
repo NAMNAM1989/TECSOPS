@@ -9,6 +9,7 @@ import {
 import {
   clampScscH21InvoiceLines,
   invoiceLineFromCatalogItem,
+  resolveH21UnitFactorKg,
 } from "../../shared/scscH21CatalogNormalize.mjs";
 import {
   computeH21InvoiceFooter,
@@ -48,10 +49,11 @@ import { importH21GoodsListToInvoiceLines } from "../utils/scscH21GoodsListImpor
 import { useOpsMobileOverlayLock } from "../hooks/useOpsMobileOverlayLock";
 import { formatH21InvoiceCneeDisplay } from "../utils/h21InvoiceCneeFormat";
 import { H21CargoFamilyKanban } from "./H21CargoFamilyKanban";
+import { H21InvoiceLinesEditor } from "./H21InvoiceLinesEditor";
 import { ScscH21InvoiceDeclTabs } from "./ScscH21InvoiceDeclTabs";
 import { ScscH21InvoiceReview } from "./ScscH21InvoiceReview";
 import { OPS } from "../styles/opsModalStyles";
-import { Button, ConfirmDialog, useToast } from "../ui";
+import { Button, ConfirmDialog, SplitPane, useToast } from "../ui";
 
 export type ScscH21InvoiceSavePayload = {
   invoiceItems: ScscH21InvoiceLine[];
@@ -69,66 +71,6 @@ type Props = {
 
 type MobilePane = "setup" | "review";
 type CargoFamilyMode = H21CargoFamilyMode;
-
-function parseIntDraft(raw: string): number {
-  const t = raw.trim();
-  if (!t) return 0;
-  const n = parseInt(t, 10);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function parseDecimalDraft(raw: string): number {
-  const t = raw.trim().replace(",", ".");
-  if (!t) return 0;
-  const n = parseFloat(t);
-  return Number.isFinite(n) ? n : 0;
-}
-
-/** Ô số trong dòng invoice — draft khi focus, commit khi blur (tránh lỗi type=number). */
-function H21LineNumericInput({
-  value,
-  onCommit,
-  decimal = false,
-  title,
-  className,
-}: {
-  value: number;
-  onCommit: (n: number) => void;
-  decimal?: boolean;
-  title?: string;
-  className?: string;
-}) {
-  const [draft, setDraft] = useState(() => String(value));
-  const [focused, setFocused] = useState(false);
-
-  useEffect(() => {
-    if (!focused) setDraft(String(value));
-  }, [value, focused]);
-
-  return (
-    <input
-      type="text"
-      inputMode={decimal ? "decimal" : "numeric"}
-      className={className}
-      title={title}
-      value={focused ? draft : String(value)}
-      onFocus={() => {
-        setFocused(true);
-        setDraft(String(value));
-      }}
-      onChange={(e) => {
-        const v = decimal
-          ? e.target.value.replace(/[^\d.,]/g, "")
-          : e.target.value.replace(/\D/g, "");
-        setDraft(v);
-      }}
-      onBlur={() => {
-        setFocused(false);
-        onCommit(decimal ? parseDecimalDraft(draft) : parseIntDraft(draft));
-      }}
-    />
-  );
-}
 
 /** Full-screen invoice H21 — chọn shipper tờ khai + review + chỉnh dòng hàng. */
 export function ScscH21InvoiceModal({
@@ -448,19 +390,25 @@ export function ScscH21InvoiceModal({
         if (l.id !== id) return l;
         const next = { ...l, ...patch };
         const cat = next.catalogItemId ? catalogById.get(next.catalogItemId) : undefined;
-        if (patch.quantity != null && cat?.unitFactor) {
-          next.weightKg =
-            Math.round((next.quantity || 0) * cat.unitFactor * 1000) / 1000;
+        const factor = resolveH21UnitFactorKg({
+          description: next.description,
+          unitFactor: cat?.unitFactor ?? 0,
+          qty1: next.quantity,
+          qty2: next.weightKg,
+        });
+        if (patch.quantity != null && factor > 0 && patch.weightKg == null) {
+          next.weightKg = Math.round((next.quantity || 0) * factor * 1000) / 1000;
         }
-        if (patch.quantity != null || patch.unitPrice != null) {
-          next.amount =
-            Math.round((next.quantity || 0) * (next.unitPrice || 0) * 10000) / 10000;
+        if (patch.weightKg != null && patch.quantity == null && factor > 0) {
+          next.quantity = Math.max(1, Math.round((next.weightKg || 0) / factor));
         }
-        if (patch.weightKg != null && patch.quantity == null && cat?.unitFactor) {
-          next.quantity = Math.max(
-            1,
-            Math.round((next.weightKg || 0) / cat.unitFactor)
-          );
+        if (patch.amount != null) {
+          next.amount = patch.amount;
+        } else if (
+          patch.quantity != null ||
+          patch.unitPrice != null ||
+          patch.weightKg != null
+        ) {
           next.amount =
             Math.round((next.quantity || 0) * (next.unitPrice || 0) * 10000) / 10000;
         }
@@ -782,112 +730,81 @@ export function ScscH21InvoiceModal({
       ) : null}
 
       {/* Catalog + lines */}
-      <div className="grid min-h-0 flex-1 gap-0 overflow-hidden md:grid-cols-2">
-        <aside className="flex min-h-0 flex-col border-b border-ui-border/60 md:border-b-0 md:border-r">
-          <div className="flex flex-wrap gap-2 border-b border-black/[0.06] p-2">
-            <input
-              className={`${OPS.input} min-w-[100px] flex-1 text-xs`}
-              placeholder="Tìm catalog…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-            <select
-              className={`${OPS.input} text-xs`}
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-            >
-              <option value="">Tất cả</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {loading ? (
-              <p className="p-2 text-xs text-ui-text-muted">Đang tải catalog…</p>
-            ) : (
-              filteredCatalog.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={OPS.pickItem}
-                  onClick={() => addFromCatalog(item)}
-                >
-                  <div className="min-w-0 flex-1 text-left">
-                    <div className="text-[10px] font-bold text-indigo-700">{item.category}</div>
-                    <div className="line-clamp-2 text-xs font-medium">{item.description}</div>
-                  </div>
-                  <span className="shrink-0 text-lg font-bold text-apple-blue">+</span>
-                </button>
-              ))
-            )}
-          </div>
-        </aside>
-
-        <section className="flex min-h-0 flex-col">
-          <div className="flex items-center justify-between border-b border-black/[0.06] px-3 py-1.5">
-            <span className="text-xs font-semibold">Dòng invoice</span>
-            <button
-              type="button"
-              className="text-[10px] font-semibold text-red-700"
-              onClick={() => setLines([])}
-            >
-              Xóa hết
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {lines.length === 0 ? (
-              <div className={`${OPS.empty} text-xs`}>Chưa có dòng hàng.</div>
-            ) : (
-              lines.map((line, idx) => (
-                <div key={line.id} className={`${OPS.card} mb-1.5 p-2`}>
-                  <div className="mb-1 flex justify-between">
-                    <span className="text-[10px] font-bold text-ui-text-muted">#{idx + 1}</span>
-                    <button
-                      type="button"
-                      className="text-[10px] text-red-700"
-                      onClick={() => setLines((prev) => prev.filter((x) => x.id !== line.id))}
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                  <p className="mb-1 line-clamp-2 text-[11px] font-medium">{line.description}</p>
-                  <div className="grid grid-cols-4 gap-1">
-                    <H21LineNumericInput
-                      className={`${OPS.input} text-[10px]`}
-                      title="SL"
-                      value={line.quantity ?? 0}
-                      onCommit={(quantity) => patchLine(line.id, { quantity })}
-                    />
-                    <input
-                      className={`${OPS.input} text-[10px]`}
-                      title="ĐVT"
-                      value={line.uom}
-                      onChange={(e) => patchLine(line.id, { uom: e.target.value })}
-                    />
-                    <H21LineNumericInput
-                      className={`${OPS.input} text-[10px]`}
-                      title="Kg"
-                      decimal
-                      value={line.weightKg ?? 0}
-                      onCommit={(weightKg) => patchLine(line.id, { weightKg })}
-                    />
-                    <H21LineNumericInput
-                      className={`${OPS.input} text-[10px]`}
-                      title="Đ.giá"
-                      decimal
-                      value={line.unitPrice ?? 0}
-                      onCommit={(unitPrice) => patchLine(line.id, { unitPrice })}
-                    />
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-      </div>
+      <SplitPane
+        surfaceId="h21_invoice_catalog_lines"
+        breakpoint="md"
+        defaultPrimary={46}
+        minPrimary={28}
+        maxPrimary={65}
+        minSecondaryPx={260}
+        className="min-h-0 flex-1 overflow-hidden"
+        primaryClassName="border-b border-ui-border/60 md:border-b-0"
+        secondaryClassName=""
+        primary={
+          <aside className="flex min-h-0 flex-1 flex-col">
+            <div className="flex flex-wrap gap-2 border-b border-black/[0.06] p-2">
+              <input
+                className={`${OPS.input} min-w-[100px] flex-1 text-xs`}
+                placeholder="Tìm catalog…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+              <select
+                className={`${OPS.input} text-xs`}
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              >
+                <option value="">Tất cả</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
+              {loading ? (
+                <p className="p-2 text-xs text-ui-text-muted">Đang tải catalog…</p>
+              ) : (
+                filteredCatalog.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={OPS.pickItem}
+                    onClick={() => addFromCatalog(item)}
+                  >
+                    <div className="min-w-0 flex-1 text-left">
+                      <div className="text-[10px] font-bold text-indigo-700">{item.category}</div>
+                      <div className="line-clamp-2 text-xs font-medium">{item.description}</div>
+                    </div>
+                    <span className="shrink-0 text-lg font-bold text-apple-blue">+</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </aside>
+        }
+        secondary={
+          <H21InvoiceLinesEditor
+            lines={lines}
+            declarationKg={allocateKg}
+            resolveUnitFactor={(line) => {
+              const cat = line.catalogItemId
+                ? catalogById.get(line.catalogItemId)
+                : undefined;
+              return resolveH21UnitFactorKg({
+                description: line.description,
+                unitFactor: cat?.unitFactor ?? 0,
+                qty1: line.quantity,
+                qty2: line.weightKg,
+              });
+            }}
+            onPatch={(id, patch) => patchLine(id, patch)}
+            onRemove={(id) => setLines((prev) => prev.filter((x) => x.id !== id))}
+            onClearAll={() => setLines([])}
+          />
+        }
+      />
     </div>
   );
 
@@ -985,22 +902,22 @@ export function ScscH21InvoiceModal({
         </Button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div
-          className={`flex min-h-0 flex-col lg:w-[54%] lg:border-r lg:border-ui-border/80 ${
-            mobilePane === "review" ? "hidden lg:flex" : "flex flex-1"
-          }`}
-        >
-          {setupPane}
-        </div>
-        <div
-          className={`min-h-0 flex-col lg:flex lg:w-[46%] ${
-            mobilePane === "setup" ? "hidden lg:flex" : "flex flex-1"
-          }`}
-        >
-          {reviewPane}
-        </div>
-      </div>
+      <SplitPane
+        surfaceId="h21_invoice_main"
+        enabled
+        defaultPrimary={54}
+        minPrimary={32}
+        maxPrimary={72}
+        minSecondaryPx={320}
+        primaryClassName={
+          mobilePane === "review" ? "hidden lg:flex" : "flex flex-1 lg:flex-none"
+        }
+        secondaryClassName={
+          mobilePane === "setup" ? "hidden lg:flex" : "flex flex-1 lg:flex-none"
+        }
+        primary={setupPane}
+        secondary={reviewPane}
+      />
 
       <ConfirmDialog
         open={closeConfirmOpen}

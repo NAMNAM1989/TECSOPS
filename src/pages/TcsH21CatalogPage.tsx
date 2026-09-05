@@ -6,6 +6,7 @@ import {
   fetchTcsH21Goods,
   importTcsH21Goods,
   parseTcsH21CatalogExcel,
+  replaceTcsH21Goods,
   updateTcsH21Goods,
 } from "../utils/tcsH21Api";
 import {
@@ -112,6 +113,10 @@ export function TcsH21CatalogPage({ onBack }: Props) {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(true);
+  const [pendingImport, setPendingImport] = useState<
+    Partial<TcsH21CatalogItem>[] | null
+  >(null);
+  const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const reload = useCallback(async () => {
@@ -227,6 +232,11 @@ export function TcsH21CatalogPage({ onBack }: Props) {
         );
         return;
       }
+      const existingCount = items.filter((x) => !x._isNew).length;
+      if (existingCount > 0) {
+        setPendingImport(parsed);
+        return;
+      }
       const result = await importTcsH21Goods(parsed);
       toast.success(`Import: tạo ${result.created}, cập nhật ${result.updated}`);
       await reload();
@@ -234,6 +244,27 @@ export function TcsH21CatalogPage({ onBack }: Props) {
       toast.error(e instanceof Error ? e.message : "Import lỗi");
     } finally {
       if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const runPendingImport = async (mode: "merge" | "replace") => {
+    const parsed = pendingImport;
+    if (!parsed?.length) return;
+    setPendingImport(null);
+    setImporting(true);
+    try {
+      if (mode === "replace") {
+        const result = await replaceTcsH21Goods(parsed);
+        toast.success(`Đã xóa catalog cũ · nhập mới ${result.count} mặt hàng`);
+      } else {
+        const result = await importTcsH21Goods(parsed);
+        toast.success(`Import: tạo ${result.created}, cập nhật ${result.updated}`);
+      }
+      await reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import lỗi");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -348,6 +379,7 @@ export function TcsH21CatalogPage({ onBack }: Props) {
                 variant="secondary"
                 size="sm"
                 onClick={() => fileRef.current?.click()}
+                disabled={importing}
               >
                 ↑ Nhập Excel
               </Button>
@@ -728,6 +760,20 @@ export function TcsH21CatalogPage({ onBack }: Props) {
         danger
         onConfirm={() => void handleDelete()}
         onCancel={() => setDeleteId(null)}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingImport?.length)}
+        title="Cách nhập Excel?"
+        message={`File có ${pendingImport?.length ?? 0} dòng. Catalog hiện có ${
+          items.filter((x) => !x._isNew).length
+        } mặt hàng.\n\n• Gộp: giữ bản cũ, cập nhật dòng trùng mô tả, thêm dòng mới.\n• Xóa hết & nhập: xóa toàn bộ catalog rồi ghi lại từ file.`}
+        cancelLabel="Hủy"
+        altLabel="Gộp vào cũ"
+        confirmLabel="Xóa hết & nhập"
+        danger
+        onCancel={() => setPendingImport(null)}
+        onAlt={() => void runPendingImport("merge")}
+        onConfirm={() => void runPendingImport("replace")}
       />
     </div>
   );

@@ -98,6 +98,22 @@ export async function importScscH21Goods(
   return { created: b.created ?? 0, updated: b.updated ?? 0 };
 }
 
+/** Xóa toàn bộ catalog SCSC rồi ghi lại từ file (thay thế, không giữ bản cũ). */
+export async function replaceScscH21Goods(
+  items: Partial<ScscH21CatalogItem>[]
+): Promise<{ count: number }> {
+  const res = await fetch("/api/scsc-h21/goods", {
+    ...credFetch,
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+  const body = await readJson(res);
+  if (!res.ok) throw new Error(errMessage(body, "Thay thế catalog thất bại"));
+  const b = body as { count?: number; items?: unknown[] };
+  return { count: b.count ?? (Array.isArray(b.items) ? b.items.length : 0) };
+}
+
 export async function fetchScscH21Stamps(opts?: {
   includeSeal?: boolean;
 }): Promise<ScscH21StampId[]> {

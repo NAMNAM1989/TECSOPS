@@ -7,9 +7,12 @@ type Props = {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** Nút phụ (vd. «Gộp») — nằm giữa Hủy và xác nhận chính. */
+  altLabel?: string;
   danger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  onAlt?: () => void;
 };
 
 /** Dialog xác nhận nhẹ — thay window.confirm khi cần dirty-state UX. */
@@ -19,9 +22,11 @@ export function ConfirmDialog({
   message,
   confirmLabel = "Đồng ý",
   cancelLabel = "Hủy",
+  altLabel,
   danger = false,
   onConfirm,
   onCancel,
+  onAlt,
 }: Props) {
   const titleId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -54,7 +59,9 @@ export function ConfirmDialog({
         <h2 id={titleId} className="m-0 text-base font-bold text-ui-navy">
           {title}
         </h2>
-        <p className="mt-2 text-sm leading-relaxed text-ui-text-muted">{message}</p>
+        <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ui-text-muted">
+          {message}
+        </p>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             ref={cancelRef}
@@ -64,6 +71,11 @@ export function ConfirmDialog({
           >
             {cancelLabel}
           </button>
+          {altLabel && onAlt ? (
+            <Button variant="secondary" size="sm" onClick={onAlt}>
+              {altLabel}
+            </Button>
+          ) : null}
           <Button variant={danger ? "danger" : "primary"} size="sm" onClick={onConfirm}>
             {confirmLabel}
           </Button>

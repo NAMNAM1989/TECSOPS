@@ -15,6 +15,7 @@ import {
   IconButton,
   Input,
   TextArea,
+  SplitPane,
   type BannerTone,
 } from "../ui";
 import {
@@ -1701,10 +1702,20 @@ export function MobileDimKgModal({
           </div>
         ) : null}
 
-        {/* WORKSPACE BODY - 2 COLUMNS ON DESKTOP */}
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain bg-ui-background/40 p-3 sm:p-4 lg:grid lg:grid-cols-[minmax(22rem,28rem)_minmax(0,1fr)] lg:gap-5 lg:overflow-hidden xl:grid-cols-[minmax(24rem,30rem)_minmax(0,1fr)]">
-          {/* LEFT COLUMN: FAST ENTRY & PRESETS */}
+        {/* WORKSPACE BODY - 2 COLUMNS ON DESKTOP (kéo được) */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain bg-ui-background/40 p-3 sm:p-4 lg:overflow-hidden">
+          <SplitPane
+            surfaceId="dim_modal_workspace"
+            breakpoint="lg"
+            unit="px"
+            defaultPrimary={416}
+            minPrimary={300}
+            maxPrimary={560}
+            minSecondaryPx={360}
+            className="min-h-0 flex-1 gap-3 lg:gap-0"
+            primary={
           <div className="flex min-h-0 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
+            {/* LEFT COLUMN: FAST ENTRY & PRESETS */}
             {/* FAST MEASURE SECTION */}
             <section
               data-testid="dim-quick-measure"
@@ -2042,9 +2053,10 @@ export function MobileDimKgModal({
               ) : null}
             </div>
           </div>
-
-          {/* RIGHT COLUMN: DIM LINES TABLE & FAST COPY */}
+            }
+            secondary={
           <div ref={listSectionRef} className="flex min-h-0 flex-1 flex-col gap-2.5 lg:overflow-hidden">
+            {/* RIGHT COLUMN: DIM LINES TABLE & FAST COPY */}
             {/* Table Header & Controls */}
             <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
               <div className="flex flex-wrap items-center gap-2">
@@ -2124,6 +2136,8 @@ export function MobileDimKgModal({
               </div>
             ) : null}
           </div>
+            }
+          />
         </div>
 
         {/* FOOTER TOOLBAR & CTA */}

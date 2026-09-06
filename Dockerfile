@@ -9,6 +9,13 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+
+# Vite inlines VITE_* at build time — Railway maps matching service vars to these ARGs.
+ARG VITE_DATA_SUPABASE_URL
+ARG VITE_DATA_SUPABASE_ANON_KEY
+ENV VITE_DATA_SUPABASE_URL=$VITE_DATA_SUPABASE_URL
+ENV VITE_DATA_SUPABASE_ANON_KEY=$VITE_DATA_SUPABASE_ANON_KEY
+
 RUN npm run build
 
 FROM node:20-bookworm-slim AS runtime

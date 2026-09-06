@@ -1,5 +1,5 @@
 import type { ScscH21InvoiceLine } from "../types/scscH21Catalog";
-import { scscH21DescriptionKey } from "../../shared/scscH21CatalogNormalize.mjs";
+import { resolveH21UnitFactorKg, scscH21DescriptionKey } from "../../shared/scscH21CatalogNormalize.mjs";
 import { allocateH21InvoiceLinesFromItems } from "../../shared/scscH21InvoiceCore.mjs";
 import { filterCatalogByH21Family } from "../../shared/scscH21InvoiceGroups.mjs";
 import type { H21CargoFamilyId } from "./scscH21InvoiceCargoFamily";
@@ -242,7 +242,9 @@ export function matchH21GoodsListToCatalog(
       ? [...catalog]
       : (filterCatalogByH21Family([...catalog], family, 1) as H21CatalogGoodsLike[]);
 
-  const usable = pool.filter((c) => c.active !== false && (c.unitFactor ?? 0) > 0);
+  const usable = pool.filter(
+    (c) => c.active !== false && resolveH21UnitFactorKg(c, { allowQtyRatio: false }) > 0
+  );
   const matches: H21GoodsListMatch[] = [];
   const unmatched: string[] = [];
   const usedIds = new Set<string>();

@@ -28,6 +28,16 @@ export function findTcsH21DescriptionConflict(
 
 export function catalogItemFromExcelRow(row: Record<string, unknown>): TcsH21CatalogItem | null;
 
+export function resolveH21UnitFactorKg(
+  item: {
+    description?: unknown;
+    unitFactor?: unknown;
+    qty1?: unknown;
+    qty2?: unknown;
+  } | null | undefined,
+  opts?: { allowQtyRatio?: boolean }
+): number;
+
 export function invoiceLineFromCatalogItem(catalogItem: unknown): TcsH21InvoiceLine | null;
 
 export function normalizeTcsH21InvoiceLine(raw: unknown): TcsH21InvoiceLine | null;

@@ -64,13 +64,16 @@ export function parsePackWeightKgFromDescription(description) {
   return Math.round((n / 1000) * 1000) / 1000;
 }
 
-/** @param {{ description?: unknown, unitFactor?: unknown, qty1?: unknown, qty2?: unknown } | null | undefined} item */
-export function resolveH21UnitFactorKg(item) {
+/** @param {{ description?: unknown, unitFactor?: unknown, qty1?: unknown, qty2?: unknown } | null | undefined} item
+ * @param {{ allowQtyRatio?: boolean }} [opts]
+ */
+export function resolveH21UnitFactorKg(item, opts = {}) {
   if (!item || typeof item !== "object") return 0;
   const fromDesc = parsePackWeightKgFromDescription(item.description);
   if (fromDesc != null && fromDesc > 0) return fromDesc;
   const f = num(item.unitFactor, 0);
   if (f > 0) return f;
+  if (opts.allowQtyRatio === false) return 0;
   const q1 = num(item.qty1, 0);
   const q2 = num(item.qty2, 0);
   if (q1 > 0 && q2 > 0) return Math.round((q2 / q1) * 1000000) / 1000000;
@@ -89,8 +92,11 @@ export function normalizeTcsH21CatalogItem(raw, opts = {}) {
   const id = opts.keepId !== false && str(o.id, 64) ? str(o.id, 64) : newId();
   const qty1 = Math.max(0, num(o.qty1 ?? o.quantity, 0));
   const unitPrice = Math.max(0, num(o.unitPrice ?? o.unit_price, 0));
-  let amount = Math.max(0, num(o.amount, 0));
-  if (!amount && qty1 && unitPrice) amount = Math.round(qty1 * unitPrice * 10000) / 10000;
+  /** Trị giá luôn = Lượng 1 × đơn giá (không giữ amount Excel lệch). */
+  const amount =
+    qty1 > 0 && unitPrice >= 0
+      ? Math.round(qty1 * unitPrice * 10000) / 10000
+      : Math.max(0, num(o.amount, 0));
   const active = o.active === false || o.active === 0 || o.active === "0" ? false : true;
   const fromDesc = parsePackWeightKgFromDescription(description);
   let unitFactor =
@@ -236,8 +242,7 @@ export function invoiceLineFromCatalogItem(catalogItem) {
         ? item.qty2
         : 0;
   const unitPrice = item.unitPrice;
-  const amount =
-    item.amount > 0 ? item.amount : Math.round(quantity * unitPrice * 10000) / 10000;
+  const amount = Math.round(quantity * unitPrice * 10000) / 10000;
   return {
     id: newId(),
     catalogItemId: item.id,
@@ -262,10 +267,7 @@ export function normalizeTcsH21InvoiceLine(raw) {
   if (!description) return null;
   const quantity = Math.max(0, num(o.quantity ?? o.qty1, 0));
   const unitPrice = Math.max(0, num(o.unitPrice, 0));
-  let amount = Math.max(0, num(o.amount, 0));
-  if (!amount && quantity && unitPrice) {
-    amount = Math.round(quantity * unitPrice * 10000) / 10000;
-  }
+  const amount = Math.round(quantity * unitPrice * 10000) / 10000;
   return {
     id: str(o.id, 64) || newId(),
     catalogItemId: str(o.catalogItemId ?? o.catalog_item_id, 64) || null,
@@ -313,11 +315,18 @@ export function normalizeTcsH21InvoiceDeclaration(raw, seqFallback = 1) {
   const modeRaw = str(o.cargoFamilyMode ?? o.cargo_family_mode ?? o.cargoFamily, 24).toLowerCase();
   const cargoFamilyMode = CARGO_FAMILY_MODES.has(modeRaw) ? modeRaw : "auto";
   const declarationKg = Math.max(0, num(o.declarationKg ?? o.declaration_kg ?? o.kg, 0));
+  const declarationPcs = Math.max(
+    0,
+    Math.round(num(o.declarationPcs ?? o.declaration_pcs ?? o.pcs, 0))
+  );
+  const invoiceNo = str(o.invoiceNo ?? o.invoice_no ?? o.invNo, 80).trim();
   const seq = Math.max(1, Math.trunc(num(o.seq, seqFallback)) || seqFallback);
   return {
     id: str(o.id, 64) || newId(),
     seq,
     declarationKg,
+    declarationPcs,
+    invoiceNo,
     cargoFamilyMode,
     lines,
   };

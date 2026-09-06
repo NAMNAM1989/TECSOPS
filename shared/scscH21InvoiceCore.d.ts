@@ -8,6 +8,13 @@ export function buildH21InvoiceNo(
   seqOrOpts?: number | { seq?: number; total?: number }
 ): string;
 
+export function resolveH21InvoiceNo(
+  manual: string | null | undefined,
+  shipment: { customerCode?: string; flight?: string; flightDate?: string },
+  customerEntry?: { code?: string } | null,
+  seqOrOpts?: number | { seq?: number; total?: number }
+): string;
+
 export function allocateH21InvoiceLinesFromItems(opts: {
   items: unknown[];
   grossKg: number;
@@ -28,7 +35,7 @@ export function generateRandomH21InvoiceLines(opts: {
 export function computeH21InvoiceFooter(
   shipment: { kg?: number | null; pcs?: number | null },
   lines: { weightKg?: number; amount?: number; quantity?: number }[],
-  opts?: { declarationKg?: number | null }
+  opts?: { declarationKg?: number | null; declarationPcs?: number | null }
 ): {
   grossKg: number;
   lotKg: number;
@@ -83,6 +90,9 @@ export function buildH21InvoiceDocument(opts: {
   cnee?: { name?: string; addressLines?: string[]; phone?: string } | null;
   lines: unknown[];
   declarationKg?: number | null;
+  declarationPcs?: number | null;
+  /** INV NO nhập tay — ưu tiên hơn gợi ý tự động. */
+  invoiceNo?: string | null;
   invoiceSeq?: number;
   invoiceSeqTotal?: number;
 }): H21InvoiceDocument;
@@ -93,4 +103,7 @@ export function validateH21InvoiceExport(opts: {
   shipper?: { shipperName?: string } | null;
   cnee?: { name?: string } | null;
   lines?: unknown[];
+  invoiceNo?: string | null;
+  invoiceSeq?: number;
+  invoiceSeqTotal?: number;
 }): string[];

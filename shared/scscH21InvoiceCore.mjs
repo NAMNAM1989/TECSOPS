@@ -31,6 +31,7 @@ function num(v) {
 
 /**
  * INV NO: mã KH + chuyến + ngày bay. Tách nhiều tờ khai → suffix -1, -2.
+ * Chỉ là **gợi ý** — ưu tiên số nhập tay (`invoiceNo` trên tờ khai).
  * @param {{ customerCode?: string, flight?: string, flightDate?: string }} shipment
  * @param {{ code?: string } | null | undefined} [customerEntry]
  * @param {number | { seq?: number, total?: number }} [seqOrOpts]
@@ -58,6 +59,19 @@ export function buildH21InvoiceNo(shipment, customerEntry, seqOrOpts) {
   }
   if (seq >= 1 && (seq > 1 || total > 1)) return `${base}-${seq}`;
   return base;
+}
+
+/**
+ * Ưu tiên INV NO nhập tay; nếu trống mới dùng gợi ý tự động.
+ * @param {string | null | undefined} manual
+ * @param {{ customerCode?: string, flight?: string, flightDate?: string }} shipment
+ * @param {{ code?: string } | null | undefined} [customerEntry]
+ * @param {number | { seq?: number, total?: number }} [seqOrOpts]
+ */
+export function resolveH21InvoiceNo(manual, shipment, customerEntry, seqOrOpts) {
+  const typed = str(manual, 80).trim();
+  if (typed) return typed;
+  return buildH21InvoiceNo(shipment, customerEntry, seqOrOpts);
 }
 
 /**
@@ -166,10 +180,10 @@ export function generateRandomH21InvoiceLines(opts) {
 }
 
 /**
- * Footer invoice H21: total carton từ kg dư.
+ * Footer invoice H21: Total carton = số kiện tờ khai (nhập tay / tỉ lệ lô).
  * @param {{ kg?: number | null, pcs?: number | null }} shipment
  * @param {{ weightKg?: number }[]} lines
- * @param {{ declarationKg?: number | null }} [opts] — KG phân bổ cho tờ khai này (chia lô).
+ * @param {{ declarationKg?: number | null, declarationPcs?: number | null }} [opts]
  */
 export function computeH21InvoiceFooter(shipment, lines, opts = {}) {
   const lotKg = num(shipment?.kg) ?? 0;
@@ -181,6 +195,11 @@ export function computeH21InvoiceFooter(shipment, lines, opts = {}) {
   let pcs = lotPcs;
   if (declRaw != null && declRaw > 0 && lotKg > 0 && lotPcs > 0) {
     pcs = Math.max(1, Math.round((grossKg / lotKg) * lotPcs));
+  }
+
+  const manualPcs = num(opts.declarationPcs);
+  if (manualPcs != null && manualPcs > 0) {
+    pcs = Math.max(0, Math.round(manualPcs));
   }
 
   let linesKg = 0;
@@ -195,13 +214,7 @@ export function computeH21InvoiceFooter(shipment, lines, opts = {}) {
   lineAmount = Math.round(lineAmount * 100) / 100;
   const residualKg = Math.max(0, Math.round((grossKg - linesKg) * 1000) / 1000);
 
-  let totalCartonPkgs = 0;
-  if (linesKg > 0 && pcs > 0 && grossKg > 0) {
-    const kgPerPkg = grossKg / pcs;
-    totalCartonPkgs = Math.max(0, Math.round(residualKg / kgPerPkg));
-  } else if (linesKg > 0 && residualKg > 0) {
-    totalCartonPkgs = Math.max(0, Math.round(residualKg / 0.5));
-  }
+  const totalCartonPkgs = pcs > 0 ? pcs : 0;
 
   return {
     grossKg,
@@ -225,18 +238,20 @@ export function computeH21InvoiceFooter(shipment, lines, opts = {}) {
  * @param {{ name?: string, addressLines?: string[], phone?: string } | null} [opts.cnee]
  * @param {unknown[]} opts.lines
  * @param {number | null} [opts.declarationKg] — KG phân bổ tờ khai (chia lô)
+ * @param {number | null} [opts.declarationPcs] — Số kiện tờ khai (Total carton)
+ * @param {string | null} [opts.invoiceNo] — INV NO nhập tay (ưu tiên)
  * @param {number} [opts.invoiceSeq]
  * @param {number} [opts.invoiceSeqTotal]
  */
 export function buildH21InvoiceDocument(opts) {
-  const { shipment, customerEntry, shipper, cnee, lines, declarationKg } = opts;
-  const invoiceNo = buildH21InvoiceNo(shipment, customerEntry, {
+  const { shipment, customerEntry, shipper, cnee, lines, declarationKg, declarationPcs } = opts;
+  const invoiceNo = resolveH21InvoiceNo(opts.invoiceNo, shipment, customerEntry, {
     seq: opts.invoiceSeq,
     total: opts.invoiceSeqTotal,
   });
   const flight = str(shipment?.flight || "").toUpperCase();
   const flightDate = str(shipment?.flightDate || "").toUpperCase();
-  const footer = computeH21InvoiceFooter(shipment, lines, { declarationKg });
+  const footer = computeH21InvoiceFooter(shipment, lines, { declarationKg, declarationPcs });
 
   return {
     title: "NONCOMMERCIAL INVOICE",
@@ -296,8 +311,12 @@ function formatInvoiceDateLabel(sessionYmd) {
 export function validateH21InvoiceExport(opts) {
   const errors = [];
   const { shipment, customerEntry, shipper, cnee, lines } = opts;
-  if (!buildH21InvoiceNo(shipment, customerEntry)) {
-    errors.push("Thiếu mã khách / chuyến / ngày bay để tạo INVOICE NO.");
+  const invoiceNo = resolveH21InvoiceNo(opts.invoiceNo, shipment, customerEntry, {
+    seq: opts.invoiceSeq,
+    total: opts.invoiceSeqTotal,
+  });
+  if (!invoiceNo) {
+    errors.push("Nhập INVOICE NO (hoặc đủ mã khách / chuyến / ngày bay để dùng gợi ý).");
   }
   if (!shipper?.shipperName?.trim()) errors.push("Chưa chọn Shipper tờ khai.");
   if (!cnee?.name?.trim()) errors.push("Chưa chọn CNEE trong INFO KH.");

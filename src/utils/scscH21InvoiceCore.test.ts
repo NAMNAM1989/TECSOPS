@@ -4,6 +4,7 @@ import {
   computeH21InvoiceFooter,
   createSeededRng,
   generateRandomH21InvoiceLines,
+  resolveH21InvoiceNo,
 } from "../../shared/scscH21InvoiceCore.mjs";
 
 describe("scscH21InvoiceCore", () => {
@@ -30,6 +31,23 @@ describe("scscH21InvoiceCore", () => {
     ).toBe("CC-SQ185/03SEP-2");
   });
 
+  it("resolveH21InvoiceNo ưu tiên nhập tay", () => {
+    expect(
+      resolveH21InvoiceNo(
+        " MY-INV-01 ",
+        { customerCode: "cc", flight: "sq185", flightDate: "03sep" },
+        undefined
+      )
+    ).toBe("MY-INV-01");
+    expect(
+      resolveH21InvoiceNo(
+        "",
+        { customerCode: "cc", flight: "sq185", flightDate: "03sep" },
+        undefined
+      )
+    ).toBe("CC-SQ185/03SEP");
+  });
+
   it("compute footer with declaration kg split", () => {
     const footer = computeH21InvoiceFooter(
       { kg: 850, pcs: 100 },
@@ -42,7 +60,7 @@ describe("scscH21InvoiceCore", () => {
     expect(footer.declarationPcs).toBe(47);
   });
 
-  it("compute footer residual carton", () => {
+  it("compute footer total carton from lot pcs (not residual kg)", () => {
     const footer = computeH21InvoiceFooter(
       { kg: 1000, pcs: 400 },
       [
@@ -53,15 +71,26 @@ describe("scscH21InvoiceCore", () => {
     expect(footer.grossKg).toBe(1000);
     expect(footer.linesKg).toBe(900);
     expect(footer.residualKg).toBe(100);
-    expect(footer.totalCartonPkgs).toBe(40);
+    expect(footer.totalCartonPkgs).toBe(400);
   });
 
-  it("total carton is zero when no invoice lines", () => {
+  it("compute footer respects manual declarationPcs", () => {
+    const footer = computeH21InvoiceFooter(
+      { kg: 1000, pcs: 400 },
+      [{ weightKg: 900, amount: 100, quantity: 10 }],
+      { declarationPcs: 160 }
+    );
+    expect(footer.residualKg).toBe(100);
+    expect(footer.totalCartonPkgs).toBe(160);
+    expect(footer.declarationPcs).toBe(160);
+  });
+
+  it("total carton follows lot pcs even when no invoice lines", () => {
     const footer = computeH21InvoiceFooter({ kg: 3977, pcs: 329 }, []);
     expect(footer.grossKg).toBe(3977);
     expect(footer.linesKg).toBe(0);
     expect(footer.residualKg).toBe(3977);
-    expect(footer.totalCartonPkgs).toBe(0);
+    expect(footer.totalCartonPkgs).toBe(329);
   });
 
   it("generate random lines bounded by gross kg", () => {

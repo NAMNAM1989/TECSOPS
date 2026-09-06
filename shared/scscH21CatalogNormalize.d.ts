@@ -22,7 +22,7 @@ export function resolveH21UnitFactorKg(item: {
   unitFactor?: unknown;
   qty1?: unknown;
   qty2?: unknown;
-} | null | undefined): number;
+} | null | undefined, opts?: { allowQtyRatio?: boolean }): number;
 
 export function findDuplicateScscH21Descriptions(
   list: unknown,

@@ -120,15 +120,7 @@ export function TcsH21InvoiceReview({ doc }: Props) {
       </div>
 
       <div className="mt-2 space-y-0.5">
-        <div>
-          1. Total carton: {doc.footer.totalCartonPkgs} PKGS
-          {doc.footer.linesKg > 0 ? (
-            <span className="text-neutral-600">
-              {" "}
-              (dư {doc.footer.residualKg} kg = KG tờ khai − trọng lượng dòng)
-            </span>
-          ) : null}
-        </div>
+        <div>1. Total carton: {doc.footer.totalCartonPkgs} PKGS</div>
         <div>2. Total gross weight: {doc.footer.grossKg} KGM</div>
       </div>
       <p className="mt-1.5 italic text-neutral-600">{doc.customsNote}</p>

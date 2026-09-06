@@ -35,6 +35,7 @@ type Props = {
   remainLotKg: number;
   allocateKgDraft: string;
   lineCountDraft: string;
+  pcsDraft: string;
   linesLength: number;
   footer: InvoiceFooterSummary;
   effectiveCargoFamily: H21CargoFamilyId;
@@ -47,12 +48,14 @@ type Props = {
   onAllocateKgBlur: () => void;
   onLineCountChange: (value: string) => void;
   onLineCountBlur: () => void;
+  onPcsChange: (value: string) => void;
+  onPcsBlur: () => void;
   onRandomGenerate: () => void;
   onGoodsListFile: (file: File | null) => void;
   onUploadListClick: () => void;
 };
 
-/** Tab tờ khai + toolbar KG/dòng/upload — tách khỏi modal để giảm kích thước file. */
+/** Tab tờ khai + toolbar KG/dòng/kiện/upload — tách khỏi modal để giảm kích thước file. */
 export function TcsH21InvoiceDeclTabs({
   shipment,
   customerEntry,
@@ -69,6 +72,7 @@ export function TcsH21InvoiceDeclTabs({
   remainLotKg,
   allocateKgDraft,
   lineCountDraft,
+  pcsDraft,
   linesLength,
   footer,
   effectiveCargoFamily,
@@ -81,6 +85,8 @@ export function TcsH21InvoiceDeclTabs({
   onAllocateKgBlur,
   onLineCountChange,
   onLineCountBlur,
+  onPcsChange,
+  onPcsBlur,
   onRandomGenerate,
   onGoodsListFile,
   onUploadListClick,
@@ -114,10 +120,11 @@ export function TcsH21InvoiceDeclTabs({
       >
         {splits.map((s, idx) => {
           const seq = idx + 1;
-          const no = buildH21InvoiceNo(shipment, customerEntry, {
+          const suggested = buildH21InvoiceNo(shipment, customerEntry, {
             seq,
             total: invoiceSeqTotal,
           });
+          const no = String(s.invoiceNoDraft ?? "").trim() || suggested;
           const selected = s.id === activeSplitId;
           const hasLines = s.lines.length > 0;
           return (
@@ -204,8 +211,8 @@ export function TcsH21InvoiceDeclTabs({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-ui-border/50 bg-ui-surface-muted/40 px-2.5 py-2">
-        <div className="text-[10px] font-bold uppercase tracking-wide text-indigo-800">
+      <div className="flex flex-wrap items-end gap-2.5 rounded-xl border border-ui-border/50 bg-ui-surface-muted/40 px-2.5 py-2">
+        <div className="mr-0.5 self-center text-[10px] font-bold uppercase tracking-wide text-indigo-800">
           Đang sửa TK {invoiceSeq}
         </div>
         <label className="text-[11px] font-semibold text-ui-text-muted">
@@ -213,7 +220,7 @@ export function TcsH21InvoiceDeclTabs({
           <input
             type="text"
             inputMode="decimal"
-            className={`${OPS.input} mt-0.5 w-24`}
+            className={`${OPS.input} mt-0.5 w-[4.75rem]`}
             value={allocateKgDraft}
             onChange={(e) => onAllocateKgChange(e.target.value.replace(/[^\d.,]/g, ""))}
             onBlur={onAllocateKgBlur}
@@ -224,10 +231,22 @@ export function TcsH21InvoiceDeclTabs({
           <input
             type="text"
             inputMode="numeric"
-            className={`${OPS.input} mt-0.5 w-16`}
+            className={`${OPS.input} mt-0.5 w-14`}
             value={lineCountDraft}
             onChange={(e) => onLineCountChange(e.target.value.replace(/\D/g, "").slice(0, 2))}
             onBlur={onLineCountBlur}
+          />
+        </label>
+        <label className="text-[11px] font-semibold text-ui-text-muted">
+          Số kiện
+          <input
+            type="text"
+            inputMode="numeric"
+            className={`${OPS.input} mt-0.5 w-16`}
+            value={pcsDraft}
+            title="Tổng số kiện (Total carton) trên invoice"
+            onChange={(e) => onPcsChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            onBlur={onPcsBlur}
           />
         </label>
         <Button type="button" variant="secondary" size="sm" onClick={onRandomGenerate}>
@@ -250,7 +269,7 @@ export function TcsH21InvoiceDeclTabs({
         >
           {importingList ? "Đang khớp…" : "Upload list hàng"}
         </Button>
-        <div className="ml-auto text-[10px] font-medium leading-snug text-ui-text-muted">
+        <div className="ml-auto min-w-[11rem] rounded-lg border border-ui-border/40 bg-white/70 px-2.5 py-1.5 text-[10px] font-medium leading-snug text-ui-text-muted">
           <div>
             {linesLength} dòng · {footer.linesKg}/{footer.grossKg} kg
             <span className="text-indigo-700">
@@ -259,13 +278,11 @@ export function TcsH21InvoiceDeclTabs({
             </span>
           </div>
           <div>
-            Dư {footer.residualKg} kg → <strong>{footer.totalCartonPkgs} PKGS</strong>
-            {lotKg > 0 && footer.grossKg < lotKg ? (
-              <span className="text-indigo-700">
-                {" "}
-                · ~{footer.declarationPcs}/{lotPcs} kiện
-              </span>
+            Total carton: <strong className="text-ui-text">{footer.totalCartonPkgs} PKGS</strong>
+            {footer.residualKg > 0 ? (
+              <span> · dư {footer.residualKg} kg</span>
             ) : null}
+            {lotPcs > 0 ? <span className="text-indigo-700"> · lô {lotPcs} kiện</span> : null}
           </div>
         </div>
       </div>

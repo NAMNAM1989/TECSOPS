@@ -145,21 +145,40 @@ type Props = {
 };
 
 function defaultFactor(line: H21EditableInvoiceLine): number {
-  return resolveH21UnitFactorKg({
-    description: line.description,
-    unitFactor: 0,
-    qty1: line.quantity,
-    qty2: line.weightKg,
-  });
+  /** Không dùng L2÷L1 — tránh audit L2 luôn “OK”. */
+  return resolveH21UnitFactorKg(
+    {
+      description: line.description,
+      unitFactor: 0,
+      qty1: line.quantity,
+      qty2: line.weightKg,
+    },
+    { allowQtyRatio: false }
+  );
+}
+
+/** QC hiển thị: ưu tiên nguồn chuẩn; nếu thiếu thì ≈ L2÷L1 (chỉ tham khảo). */
+function displayFactor(line: H21EditableInvoiceLine, auditFactor: number): {
+  value: number;
+  derived: boolean;
+} {
+  if (auditFactor > 0) return { value: auditFactor, derived: false };
+  const q1 = line.quantity || 0;
+  const q2 = line.weightKg || 0;
+  if (q1 > 0 && q2 > 0) {
+    return { value: Math.round((q2 / q1) * 1_000_000) / 1_000_000, derived: true };
+  }
+  return { value: 0, derived: false };
 }
 
 /**
  * Bảng dòng invoice H21.
  *
  * Công thức:
- * - Quy cách (kg/ĐVT1) ← mô tả pack / catalog.unitFactor / (L2÷L1)
+ * - Quy cách (kg/ĐVT1) ← mô tả pack / catalog.unitFactor (không lấy L2÷L1 làm nguồn audit)
  * - Lượng 2 (KGM) = Lượng 1 × quy cách
  * - Trị giá (USD) = Lượng 1 × đơn giá
+ * - ΣL2 < KG tờ khai thường là under-allocate cố ý (random/list); chỉ lỗi khi vượt
  */
 export function H21InvoiceLinesEditor({
   lines,
@@ -178,6 +197,7 @@ export function H21InvoiceLinesEditor({
     let weightMismatches = 0;
     let amountMismatches = 0;
     let missingHs = 0;
+    let missingFactor = 0;
     for (const line of lines) {
       const q1 = line.quantity || 0;
       const w = line.weightKg || 0;
@@ -187,6 +207,7 @@ export function H21InvoiceLinesEditor({
       amountCalc += amt;
       if (!String(line.hsCode ?? "").trim()) missingHs += 1;
       const f = factorOf(line);
+      if (!(f > 0)) missingFactor += 1;
       const expected = calcExpectedQty2(q1, f);
       if (expected != null && Math.abs(expected - w) > 0.05) weightMismatches += 1;
       if (Math.abs(amt - (line.amount || 0)) > 0.02) amountMismatches += 1;
@@ -195,6 +216,9 @@ export function H21InvoiceLinesEditor({
     amountCalc = Math.round(amountCalc * 100) / 100;
     const residual =
       declarationKg > 0 ? roundKg(declarationKg - qty2) : null;
+    /** Vượt KG tờ khai = lỗi; dư dương = under-allocate (thường cố ý). */
+    const overAllocated = residual != null && residual < -0.05;
+    const underAllocated = residual != null && residual > 0.05;
     return {
       qty1,
       qty2,
@@ -202,7 +226,10 @@ export function H21InvoiceLinesEditor({
       weightMismatches,
       amountMismatches,
       missingHs,
+      missingFactor,
       residual,
+      overAllocated,
+      underAllocated,
     };
   }, [declarationKg, factorOf, lines]);
 
@@ -210,7 +237,7 @@ export function H21InvoiceLinesEditor({
     audit.weightMismatches > 0 ||
     audit.amountMismatches > 0 ||
     audit.missingHs > 0 ||
-    (audit.residual != null && Math.abs(audit.residual) > 0.05);
+    audit.overAllocated;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" data-testid="h21-invoice-lines-editor">
@@ -231,17 +258,26 @@ export function H21InvoiceLinesEditor({
             {declarationKg > 0 ? (
               <span
                 className={`tabular-nums ${
-                  audit.residual != null && Math.abs(audit.residual) > 0.05
-                    ? audit.residual! < 0
-                      ? "font-bold text-red-700"
-                      : "font-semibold text-amber-800"
-                    : "text-indigo-800"
+                  audit.overAllocated
+                    ? "font-bold text-red-700"
+                    : audit.underAllocated
+                      ? "text-indigo-800"
+                      : "text-indigo-800"
                 }`}
-                title="KG tờ khai − Σ lượng 2"
+                title={
+                  audit.overAllocated
+                    ? "Σ lượng 2 vượt KG tờ khai"
+                    : audit.underAllocated
+                      ? "Còn dư KG tờ khai (bình thường với random/list ~75–92%)"
+                      : "KG tờ khai − Σ lượng 2"
+                }
               >
-                TK {declarationKg} · chênh{" "}
-                {audit.residual != null && audit.residual > 0 ? "+" : ""}
-                {audit.residual}
+                TK {declarationKg} ·{" "}
+                {audit.overAllocated
+                  ? `vượt ${Math.abs(audit.residual!)}`
+                  : audit.underAllocated
+                    ? `dư +${audit.residual}`
+                    : `chênh ${audit.residual}`}
               </span>
             ) : null}
             <span
@@ -258,9 +294,7 @@ export function H21InvoiceLinesEditor({
                     audit.amountMismatches > 0
                       ? `${audit.amountMismatches} lệch trị giá`
                       : null,
-                    audit.residual != null && Math.abs(audit.residual) > 0.05
-                      ? "ΣL2≠KG TK"
-                      : null,
+                    audit.overAllocated ? "ΣL2 vượt KG TK" : null,
                   ]
                     .filter(Boolean)
                     .join(" · ")
@@ -336,6 +370,7 @@ export function H21InvoiceLinesEditor({
             <tbody>
               {lines.map((line, idx) => {
                 const factor = factorOf(line);
+                const shown = displayFactor(line, factor);
                 const expectedL2 = calcExpectedQty2(line.quantity || 0, factor);
                 const l2Mismatch =
                   expectedL2 != null &&
@@ -481,20 +516,33 @@ export function H21InvoiceLinesEditor({
                       ) : null}
                     </td>
 
-                    {/* Quy cách — 1 dòng: 0.5 kg/PCE */}
+                    {/* Quy cách — nguồn chuẩn; ≈ nếu chỉ suy từ L2÷L1 */}
                     <td className="px-1 py-1 align-middle text-right">
                       <div
-                        className="flex h-7 items-center justify-end gap-0.5 rounded bg-indigo-50 px-1 font-mono text-[11px] font-semibold tabular-nums text-indigo-900"
+                        className={`flex h-7 items-center justify-end gap-0.5 rounded px-1 font-mono text-[11px] font-semibold tabular-nums ${
+                          shown.derived
+                            ? "bg-slate-100 text-slate-600"
+                            : "bg-indigo-50 text-indigo-900"
+                        }`}
                         title={
-                          factor > 0
-                            ? `1 ${uom1} = ${factor} KGM · L2 = L1 × ${factor}`
+                          shown.value > 0
+                            ? shown.derived
+                              ? `≈ L2÷L1 (tham khảo) — chưa có pack mô tả / catalog QC`
+                              : `1 ${uom1} = ${shown.value} KGM · L2 = L1 × ${shown.value}`
                             : "Chưa có quy cách (mô tả pack / catalog)"
                         }
                       >
-                        {factor > 0 ? (
+                        {shown.value > 0 ? (
                           <>
-                            <span>{factor}</span>
-                            <span className="text-[8px] font-bold text-indigo-600/80">
+                            <span>
+                              {shown.derived ? "≈" : ""}
+                              {shown.value}
+                            </span>
+                            <span
+                              className={`text-[8px] font-bold ${
+                                shown.derived ? "text-slate-500" : "text-indigo-600/80"
+                              }`}
+                            >
                               kg/{uom1}
                             </span>
                           </>

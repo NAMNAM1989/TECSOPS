@@ -68,6 +68,10 @@ export type ScscH21InvoiceDeclaration = {
   /** Số thứ tự INV (1-based). */
   seq: number;
   declarationKg: number;
+  /** Tổng số kiện (Total carton) của tờ khai. */
+  declarationPcs: number;
+  /** INV NO nhập tay (ưu tiên hơn công thức tự động). */
+  invoiceNo: string;
   cargoFamilyMode: "auto" | "frozen" | "fruit" | "food" | "garment" | "general";
   lines: ScscH21InvoiceLine[];
 };

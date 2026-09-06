@@ -8,6 +8,7 @@ import {
   invoiceLineFromCatalogItem,
   normalizeScscH21CatalogItem,
   parsePackWeightKgFromDescription,
+  resolveH21UnitFactorKg,
 } from "../../shared/scscH21CatalogNormalize.mjs";
 import { isScscH21Warehouse } from "../types/scscH21Catalog";
 import { clampInvoiceItemsForShipment } from "./scscH21Api";
@@ -103,11 +104,22 @@ describe("scscH21CatalogNormalize", () => {
     expect(parsePackWeightKgFromDescription("Z no pack")).toBeNull();
   });
 
-  it("invoice lines clamp", () => {
+  it("invoice lines clamp đồng bộ amount = qty × đơn giá", () => {
     expect(clampScscH21InvoiceLines([{ description: "" }])).toHaveLength(0);
+    const lines = clampScscH21InvoiceLines([
+      { description: "OK", quantity: 1, unitPrice: 2, amount: 999 },
+    ]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].amount).toBe(2);
+  });
+
+  it("resolveH21UnitFactorKg allowQtyRatio:false bỏ L2÷L1", () => {
     expect(
-      clampScscH21InvoiceLines([{ description: "OK", quantity: 1, unitPrice: 2 }])
-    ).toHaveLength(1);
+      resolveH21UnitFactorKg(
+        { description: "x", unitFactor: 0, qty1: 10, qty2: 5 },
+        { allowQtyRatio: false }
+      )
+    ).toBe(0);
   });
 
   it("phát hiện mô tả trùng (không phân biệt hoa thường / khoảng trắng)", () => {

@@ -62,6 +62,10 @@ export function buildH21InvoiceForShipment(opts: {
   shipperId?: string;
   /** KG phân bổ cho tờ khai này (chia lô). */
   declarationKg?: number | null;
+  /** Số kiện tờ khai (Total carton). */
+  declarationPcs?: number | null;
+  /** INV NO nhập tay. */
+  invoiceNo?: string | null;
   invoiceSeq?: number;
   invoiceSeqTotal?: number;
 }): H21InvoiceDocument {
@@ -77,6 +81,8 @@ export function buildH21InvoiceForShipment(opts: {
     cnee,
     lines,
     declarationKg: opts.declarationKg,
+    declarationPcs: opts.declarationPcs,
+    invoiceNo: opts.invoiceNo,
     invoiceSeq: opts.invoiceSeq,
     invoiceSeqTotal: opts.invoiceSeqTotal,
   });
@@ -88,6 +94,9 @@ export function validateH21InvoiceForShipment(opts: {
   stamps: readonly H21StampLike[];
   lines?: ScscH21InvoiceLine[];
   shipperId?: string;
+  invoiceNo?: string | null;
+  invoiceSeq?: number;
+  invoiceSeqTotal?: number;
 }): string[] {
   const customerEntry = findCustomerEntry(opts.shipment, opts.directory);
   const sid = opts.shipperId ?? opts.shipment.h21DeclarationShipperId;
@@ -100,5 +109,8 @@ export function validateH21InvoiceForShipment(opts: {
     shipper,
     cnee,
     lines,
+    invoiceNo: opts.invoiceNo,
+    invoiceSeq: opts.invoiceSeq,
+    invoiceSeqTotal: opts.invoiceSeqTotal,
   });
 }

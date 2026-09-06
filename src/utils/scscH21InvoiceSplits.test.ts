@@ -78,6 +78,27 @@ describe("hydrateSplitsFromShipment", () => {
     expect(splits[1]?.lineCountDraft).toBe("15");
   });
 
+  it("hydrate + save INV NO nhập tay", () => {
+    const shipment = {
+      ...baseShipment,
+      invoiceDeclarations: [
+        {
+          id: "d1",
+          seq: 1,
+          declarationKg: 40,
+          declarationPcs: 10,
+          invoiceNo: "HTS-CUSTOM/01",
+          cargoFamilyMode: "auto" as const,
+          lines: [],
+        },
+      ],
+    } as Shipment;
+    const splits = hydrateSplitsFromShipment(shipment);
+    expect(splits[0]?.invoiceNoDraft).toBe("HTS-CUSTOM/01");
+    const decls = splitsToDeclarations(splits, 100);
+    expect(decls[0]?.invoiceNo).toBe("HTS-CUSTOM/01");
+  });
+
   it("falls back to legacy invoiceItems", () => {
     const shipment = {
       ...baseShipment,

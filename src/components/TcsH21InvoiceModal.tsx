@@ -38,9 +38,12 @@ import {
   fingerprintH21Splits,
   hydrateSplitsFromShipment,
   normalizeLineCountDraft,
+  normalizePcsDraft,
   parseAllocateKgFromDraft,
   parseLineCountFromDraft,
+  parsePcsFromDraft,
   roundH21Kg,
+  suggestDeclarationPcs,
   sumAllocatedKg,
   type H21CargoFamilyMode,
   type H21DeclSplit,
@@ -113,6 +116,8 @@ export function TcsH21InvoiceModal({
   );
   const lineCountDraft = activeSplit?.lineCountDraft ?? "15";
   const allocateKgDraft = activeSplit?.kgDraft ?? "";
+  const pcsDraft = activeSplit?.pcsDraft ?? "";
+  const invoiceNoDraft = activeSplit?.invoiceNoDraft ?? "";
   const cargoFamilyMode = activeSplit?.cargoFamilyMode ?? "auto";
   const lines = activeSplit?.lines ?? [];
   const invoiceSeq = Math.max(1, splits.findIndex((s) => s.id === activeSplit?.id) + 1);
@@ -127,6 +132,10 @@ export function TcsH21InvoiceModal({
   const setLineCountDraft = (v: string | ((prev: string) => string)) => {
     const next = typeof v === "function" ? v(lineCountDraft) : v;
     patchActiveSplit({ lineCountDraft: next });
+  };
+  const setPcsDraft = (v: string | ((prev: string) => string)) => {
+    const next = typeof v === "function" ? v(pcsDraft) : v;
+    patchActiveSplit({ pcsDraft: next });
   };
   const setCargoFamilyMode = (v: CargoFamilyMode) => patchActiveSplit({ cargoFamilyMode: v });
   const setLines = (
@@ -144,6 +153,7 @@ export function TcsH21InvoiceModal({
     () => parseAllocateKgFromDraft(allocateKgDraft, lotKg),
     [allocateKgDraft, lotKg]
   );
+  const allocatePcs = useMemo(() => parsePcsFromDraft(pcsDraft), [pcsDraft]);
 
   const allocatedKgSum = useMemo(() => sumAllocatedKg(splits, lotKg), [splits, lotKg]);
   const remainLotKg = lotKg > 0 ? roundH21Kg(lotKg - allocatedKgSum) : 0;
@@ -237,7 +247,7 @@ export function TcsH21InvoiceModal({
     [shipment, customerDirectory]
   );
 
-  const invoiceNo = useMemo(
+  const suggestedInvoiceNo = useMemo(
     () =>
       buildH21InvoiceNo(shipment, customerEntry, {
         seq: invoiceSeq,
@@ -245,6 +255,8 @@ export function TcsH21InvoiceModal({
       }),
     [shipment, customerEntry, invoiceSeq, invoiceSeqTotal]
   );
+
+  const invoiceNo = invoiceNoDraft.trim() || suggestedInvoiceNo;
 
   const goodsTextForFamily = useMemo(
     () => resolveShipmentGoodsTextForH21(shipment, customerDirectory),
@@ -274,8 +286,12 @@ export function TcsH21InvoiceModal({
   }, [catalog]);
 
   const footer = useMemo(
-    () => computeH21InvoiceFooter(shipment, lines, { declarationKg: allocateKg }),
-    [shipment, lines, allocateKg]
+    () =>
+      computeH21InvoiceFooter(shipment, lines, {
+        declarationKg: allocateKg,
+        declarationPcs: allocatePcs > 0 ? allocatePcs : null,
+      }),
+    [shipment, lines, allocateKg, allocatePcs]
   );
 
   const invoiceDoc = useMemo(
@@ -287,10 +303,23 @@ export function TcsH21InvoiceModal({
         lines,
         shipperId,
         declarationKg: allocateKg,
+        declarationPcs: allocatePcs > 0 ? allocatePcs : null,
+        invoiceNo: invoiceNoDraft.trim() || null,
         invoiceSeq,
         invoiceSeqTotal,
       }),
-    [shipment, customerDirectory, stamps, lines, shipperId, allocateKg, invoiceSeq, invoiceSeqTotal]
+    [
+      shipment,
+      customerDirectory,
+      stamps,
+      lines,
+      shipperId,
+      allocateKg,
+      allocatePcs,
+      invoiceNoDraft,
+      invoiceSeq,
+      invoiceSeqTotal,
+    ]
   );
 
   const cneeDisplay = useMemo(
@@ -306,8 +335,20 @@ export function TcsH21InvoiceModal({
         stamps,
         lines,
         shipperId,
+        invoiceNo: invoiceNoDraft.trim() || null,
+        invoiceSeq,
+        invoiceSeqTotal,
       }),
-    [shipment, customerDirectory, stamps, lines, shipperId]
+    [
+      shipment,
+      customerDirectory,
+      stamps,
+      lines,
+      shipperId,
+      invoiceNoDraft,
+      invoiceSeq,
+      invoiceSeqTotal,
+    ]
   );
 
   const familyCatalog = useMemo(() => {
@@ -390,24 +431,26 @@ export function TcsH21InvoiceModal({
         if (l.id !== id) return l;
         const next = { ...l, ...patch };
         const cat = next.catalogItemId ? catalogById.get(next.catalogItemId) : undefined;
-        const factor = resolveH21UnitFactorKg({
-          description: next.description,
-          unitFactor: cat?.unitFactor ?? 0,
-          qty1: next.quantity,
-          qty2: next.weightKg,
-        });
+        const factor = resolveH21UnitFactorKg(
+          {
+            description: next.description,
+            unitFactor: cat?.unitFactor ?? 0,
+            qty1: next.quantity,
+            qty2: next.weightKg,
+          },
+          { allowQtyRatio: false }
+        );
         if (patch.quantity != null && factor > 0 && patch.weightKg == null) {
           next.weightKg = Math.round((next.quantity || 0) * factor * 1000) / 1000;
         }
         if (patch.weightKg != null && patch.quantity == null && factor > 0) {
           next.quantity = Math.max(1, Math.round((next.weightKg || 0) / factor));
         }
-        if (patch.amount != null) {
-          next.amount = patch.amount;
-        } else if (
+        if (
           patch.quantity != null ||
           patch.unitPrice != null ||
-          patch.weightKg != null
+          patch.weightKg != null ||
+          patch.amount != null
         ) {
           next.amount =
             Math.round((next.quantity || 0) * (next.unitPrice || 0) * 10000) / 10000;
@@ -507,7 +550,10 @@ export function TcsH21InvoiceModal({
       toast.error("Hạ KG tờ khai hiện tại trước khi thêm tờ khai tiếp theo");
       return;
     }
-    const next = createDeclSplit(remain > 0 ? String(remain) : "");
+    const suggested = suggestDeclarationPcs(remain > 0 ? remain : 0, lotKg, lotPcs);
+    const next = createDeclSplit(remain > 0 ? String(remain) : "", {
+      pcsDraft: suggested > 0 ? String(suggested) : "",
+    });
     setSplits((prev) => [...prev, next]);
     setActiveSplitId(next.id);
   };
@@ -627,9 +673,52 @@ export function TcsH21InvoiceModal({
         )}
       </section>
 
-      {/* CNEE + meta */}
+      {/* INV NO (trái) + CNEE */}
       <section className="grid shrink-0 gap-2 border-b border-ui-border/60 bg-ui-surface-muted/30 px-4 py-2 text-xs sm:grid-cols-2">
-        <div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <label className="inline-flex min-w-0 max-w-full flex-1 items-center gap-1.5 sm:flex-initial">
+              <span className="shrink-0 font-bold text-ui-text-muted">INV NO:</span>
+              <input
+                type="text"
+                className={`${OPS.input} h-7 min-w-[10rem] max-w-[18rem] flex-1 px-2 font-mono text-[11px] uppercase`}
+                value={invoiceNoDraft}
+                placeholder={suggestedInvoiceNo || "Nhập số invoice…"}
+                title="Nhập tay INVOICE NO — lưu theo từng tờ khai"
+                maxLength={80}
+                onChange={(e) =>
+                  patchActiveSplit({ invoiceNoDraft: e.target.value.toUpperCase() })
+                }
+                data-testid="h21-invoice-no-input"
+              />
+            </label>
+            {suggestedInvoiceNo && invoiceNoDraft.trim() !== suggestedInvoiceNo ? (
+              <button
+                type="button"
+                className="shrink-0 text-[10px] font-semibold text-indigo-700 underline"
+                title={`Điền gợi ý: ${suggestedInvoiceNo}`}
+                onClick={() => patchActiveSplit({ invoiceNoDraft: suggestedInvoiceNo })}
+              >
+                Gợi ý
+              </button>
+            ) : null}
+            {invoiceSeqTotal > 1 ? (
+              <span className="shrink-0 text-indigo-700">
+                ({invoiceSeq}/{invoiceSeqTotal})
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-1">
+            <span className="font-bold text-ui-text-muted">KG lô: </span>
+            {lotKg || "—"} · Kiện: {lotPcs || "—"}
+            {lotKg > 0 && allocatedKgSum > 0 && allocatedKgSum < lotKg ? (
+              <span className="ml-1 text-indigo-700">
+                (đã tách {allocatedKgSum}/{lotKg} kg)
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div className="min-w-0">
           <div className="font-bold text-ui-text-muted">CNEE (INFO KH)</div>
           <div className="font-semibold">{cneeDisplay.nameLine || "— Chưa chọn CNEE"}</div>
           {cneeDisplay.addressLines.map((line) => (
@@ -643,26 +732,6 @@ export function TcsH21InvoiceModal({
           {cneeDisplay.emailLine ? (
             <div className="text-ui-text-muted">{cneeDisplay.emailLine}</div>
           ) : null}
-        </div>
-        <div className="sm:text-right">
-          <div>
-            <span className="font-bold text-ui-text-muted">INV NO: </span>
-            {invoiceNo || "—"}
-            {invoiceSeqTotal > 1 ? (
-              <span className="ml-1 text-indigo-700">
-                ({invoiceSeq}/{invoiceSeqTotal})
-              </span>
-            ) : null}
-          </div>
-          <div>
-            <span className="font-bold text-ui-text-muted">KG lô: </span>
-            {lotKg || "—"} · Kiện: {lotPcs || "—"}
-            {lotKg > 0 && allocatedKgSum > 0 && allocatedKgSum < lotKg ? (
-              <span className="ml-1 text-indigo-700">
-                (đã tách {allocatedKgSum}/{lotKg} kg)
-              </span>
-            ) : null}
-          </div>
         </div>
       </section>
 
@@ -683,6 +752,7 @@ export function TcsH21InvoiceModal({
         remainLotKg={remainLotKg}
         allocateKgDraft={allocateKgDraft}
         lineCountDraft={lineCountDraft}
+        pcsDraft={pcsDraft}
         linesLength={lines.length}
         footer={footer}
         effectiveCargoFamily={effectiveCargoFamily}
@@ -708,6 +778,8 @@ export function TcsH21InvoiceModal({
         }}
         onLineCountChange={(v) => setLineCountDraft(v)}
         onLineCountBlur={() => setLineCountDraft(normalizeLineCountDraft(lineCountDraft))}
+        onPcsChange={(v) => setPcsDraft(v)}
+        onPcsBlur={() => setPcsDraft(normalizePcsDraft(pcsDraft))}
         onRandomGenerate={handleRandomGenerate}
         onGoodsListFile={(file) => void handleGoodsListFile(file)}
         onUploadListClick={() => goodsListFileRef.current?.click()}
@@ -792,12 +864,15 @@ export function TcsH21InvoiceModal({
               const cat = line.catalogItemId
                 ? catalogById.get(line.catalogItemId)
                 : undefined;
-              return resolveH21UnitFactorKg({
-                description: line.description,
-                unitFactor: cat?.unitFactor ?? 0,
-                qty1: line.quantity,
-                qty2: line.weightKg,
-              });
+              return resolveH21UnitFactorKg(
+                {
+                  description: line.description,
+                  unitFactor: cat?.unitFactor ?? 0,
+                  qty1: line.quantity,
+                  qty2: line.weightKg,
+                },
+                { allowQtyRatio: false }
+              );
             }}
             onPatch={(id, patch) => patchLine(id, patch)}
             onRemove={(id) => setLines((prev) => prev.filter((x) => x.id !== id))}

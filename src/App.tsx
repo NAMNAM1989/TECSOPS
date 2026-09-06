@@ -3,6 +3,7 @@ import type { Shipment } from "./types/shipment";
 import type { CustomerDirectoryEntry } from "./types/customerDirectory";
 import { useShipmentSync } from "./hooks/useShipmentSync";
 import { useHashRoute } from "./hooks/useHashRoute";
+import { useAirlineCatalog } from "./hooks/useAirlineCatalog";
 import type { AirlineLabelOverrides } from "./utils/airlineLabelOverridesCore";
 import { BottomNav, OpsLeftRail, PageSkeleton } from "./ui";
 import type { MobileCargoCopyApi } from "./ui/BottomNav";
@@ -10,13 +11,12 @@ import { AppAuthGate } from "./components/AppAuthGate";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { formatLocalSessionDate } from "./utils/sessionDate";
 import { useIsMobile } from "./hooks/useIsMobile";
+import { useToast } from "./ui";
 
 const loadCustomersPage = () =>
   import("./pages/CustomersPage").then((m) => ({ default: m.CustomersPage }));
 const loadOpsStatsPage = () =>
   import("./pages/OpsStatsPage").then((m) => ({ default: m.OpsStatsPage }));
-const loadAirlinesLabelsPage = () =>
-  import("./pages/AirlinesLabelsPage").then((m) => ({ default: m.AirlinesLabelsPage }));
 const loadScscH21CatalogPage = () =>
   import("./pages/ScscH21CatalogPage").then((m) => ({ default: m.ScscH21CatalogPage }));
 const loadTcsH21CatalogPage = () =>
@@ -27,14 +27,17 @@ const AirCargoTracking = lazy(() =>
 );
 const CustomersPage = lazy(loadCustomersPage);
 const OpsStatsPage = lazy(loadOpsStatsPage);
-const AirlinesLabelsPage = lazy(loadAirlinesLabelsPage);
 const ScscH21CatalogPage = lazy(loadScscH21CatalogPage);
 const TcsH21CatalogPage = lazy(loadTcsH21CatalogPage);
 const PrintShippingLabel = lazy(() =>
   import("./components/PrintShippingLabel").then((m) => ({ default: m.PrintShippingLabel }))
 );
 
-type PrintJob = { shipment: Shipment; airlineLabelOverrides?: AirlineLabelOverrides | null };
+type PrintJob = {
+  shipment: Shipment;
+  airlineLabelOverrides?: AirlineLabelOverrides | null;
+  airlineReplaceDefaults?: boolean;
+};
 
 const EMPTY_CUSTOMERS: CustomerDirectoryEntry[] = [];
 
@@ -42,11 +45,14 @@ function AuthenticatedApp() {
   const todayYmd = formatLocalSessionDate(new Date());
   const fallback = useMemo(() => ({ rows: [] as Shipment[] }), []);
   const sync = useShipmentSync(fallback, { sessionDate: todayYmd });
+  const airlineCatalog = useAirlineCatalog();
+  const toast = useToast();
   const { route, navigate } = useHashRoute();
   const isMobile = useIsMobile();
   const [printJob, setPrintJob] = useState<PrintJob | null>(null);
   const [opsSessionYmd, setOpsSessionYmd] = useState(todayYmd);
   const [cargoCopyApi, setCargoCopyApi] = useState<MobileCargoCopyApi | null>(null);
+  const [airlineSyncing, setAirlineSyncing] = useState(false);
 
   useEffect(() => {
     if (route === "stats") {
@@ -65,10 +71,6 @@ function AuthenticatedApp() {
     void loadOpsStatsPage();
   }, []);
 
-  const prefetchAirlines = useCallback(() => {
-    void loadAirlinesLabelsPage();
-  }, []);
-
   const prefetchScscH21 = useCallback(() => {
     void loadScscH21CatalogPage();
   }, []);
@@ -78,20 +80,46 @@ function AuthenticatedApp() {
   }, []);
 
   const onRequestPrint = useCallback(
-    (shipment: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => {
-      setPrintJob({ shipment, airlineLabelOverrides });
+    (shipment: Shipment) => {
+      setPrintJob({
+        shipment,
+        airlineLabelOverrides: airlineCatalog.maps,
+        airlineReplaceDefaults: airlineCatalog.fromCatalog,
+      });
     },
-    []
+    [airlineCatalog.fromCatalog, airlineCatalog.maps]
   );
 
+  const onSyncAirlines = useCallback(async () => {
+    const { dataSupabaseConfig, loadAirlineCatalogCache } = await import(
+      "./utils/airlineCatalogFromSupabase"
+    );
+    if (!dataSupabaseConfig()) {
+      toast.error(
+        "Thiếu VITE_DATA_SUPABASE_URL / VITE_DATA_SUPABASE_ANON_KEY trong env",
+        "Hãng bay"
+      );
+      return;
+    }
+    setAirlineSyncing(true);
+    try {
+      await airlineCatalog.refresh();
+      const cached = loadAirlineCatalogCache();
+      if (!cached) {
+        toast.error("Không đồng bộ được hãng bay từ Supabase.", "Hãng bay");
+        return;
+      }
+      const n = Object.keys(cached.maps.byFlightPrefix).length;
+      toast.success(`Đã đồng bộ ${n} hãng bay từ Supabase`, "Hãng bay");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Không đồng bộ được hãng bay.", "Hãng bay");
+    } finally {
+      setAirlineSyncing(false);
+    }
+  }, [airlineCatalog, toast]);
+
   const skeletonVariant =
-    route === "customers"
-      ? "customers"
-      : route === "stats"
-        ? "stats"
-        : route === "airlines" || route === "scsc-h21" || route === "tcs-h21"
-          ? "ops"
-          : "ops";
+    route === "customers" ? "customers" : route === "stats" ? "stats" : "ops";
 
   return (
     <>
@@ -106,9 +134,11 @@ function AuthenticatedApp() {
             onNavigate={navigate}
             onPrefetchCustomers={prefetchCustomers}
             onPrefetchStats={prefetchStats}
-            onPrefetchAirlines={prefetchAirlines}
             onPrefetchScscH21={prefetchScscH21}
             onPrefetchTcsH21={prefetchTcsH21}
+            airlineSyncedAt={airlineCatalog.syncedAt}
+            airlineSyncing={airlineSyncing || airlineCatalog.status === "loading"}
+            onSyncAirlines={() => void onSyncAirlines()}
           />
         ) : null}
         <div
@@ -138,22 +168,30 @@ function AuthenticatedApp() {
               onNavigateOps={() => navigate("ops")}
               onNavigateCustomers={() => navigate("customers")}
             />
-          ) : route === "airlines" ? (
-            <AirlinesLabelsPage
-              value={sync.state?.airlineLabelOverrides}
-              flightSamples={(sync.state?.rows ?? fallback.rows).map((r) => r.flight)}
-              ready={sync.state != null && sync.status !== "loading"}
-              syncStatus={sync.status}
-              socketConnected={sync.socketConnected}
-              onSave={async (overrides) => {
-                await sync.mutate({ action: "SET_AIRLINE_LABEL_OVERRIDES", overrides });
-              }}
-              onBack={() => navigate("ops")}
-            />
           ) : route === "scsc-h21" ? (
-            <ScscH21CatalogPage onBack={() => navigate("ops")} />
+            <ScscH21CatalogPage
+              onBack={() => navigate("ops")}
+              customerDirectory={sync.state?.customers ?? EMPTY_CUSTOMERS}
+              onSaveCustomers={async (customers) => {
+                const next = await sync.mutate({
+                  action: "SET_CUSTOMERS",
+                  customers,
+                });
+                return next != null;
+              }}
+            />
           ) : route === "tcs-h21" ? (
-            <TcsH21CatalogPage onBack={() => navigate("ops")} />
+            <TcsH21CatalogPage
+              onBack={() => navigate("ops")}
+              customerDirectory={sync.state?.customers ?? EMPTY_CUSTOMERS}
+              onSaveCustomers={async (customers) => {
+                const next = await sync.mutate({
+                  action: "SET_CUSTOMERS",
+                  customers,
+                });
+                return next != null;
+              }}
+            />
           ) : (
             <AirCargoTracking
               sync={sync}
@@ -171,10 +209,12 @@ function AuthenticatedApp() {
           onNavigate={navigate}
           onPrefetchCustomers={prefetchCustomers}
           onPrefetchStats={prefetchStats}
-          onPrefetchAirlines={prefetchAirlines}
           onPrefetchScscH21={prefetchScscH21}
           onPrefetchTcsH21={prefetchTcsH21}
           cargoCopy={route === "ops" ? cargoCopyApi : null}
+          airlineSyncedAt={airlineCatalog.syncedAt}
+          airlineSyncing={airlineSyncing || airlineCatalog.status === "loading"}
+          onSyncAirlines={() => void onSyncAirlines()}
         />
       ) : null}
       {printJob ? (
@@ -204,9 +244,8 @@ function AuthenticatedApp() {
           <Suspense fallback={null}>
             <PrintShippingLabel
               shipment={printJob.shipment}
-              airlineLabelOverrides={
-                sync.state?.airlineLabelOverrides ?? printJob.airlineLabelOverrides
-              }
+              airlineLabelOverrides={printJob.airlineLabelOverrides}
+              airlineReplaceDefaults={printJob.airlineReplaceDefaults}
               onClose={() => setPrintJob(null)}
             />
           </Suspense>

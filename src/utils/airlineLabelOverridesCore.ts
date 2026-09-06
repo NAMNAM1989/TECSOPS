@@ -41,11 +41,20 @@ export function normalizeFlightPrefixKey(raw: string): string {
     .slice(0, 3);
 }
 
-export function mergeAirlineLookupMaps(overrides: AirlineLabelOverrides | undefined | null): {
+export function mergeAirlineLookupMaps(
+  overrides: AirlineLabelOverrides | undefined | null,
+  opts?: { replaceDefaults?: boolean }
+): {
   byAwb: Record<string, string>;
   byFlight: Record<string, string>;
 } {
   const o = overrides ? clampAirlineLabelOverrides(overrides) : EMPTY_AIRLINE_LABEL_OVERRIDES;
+  if (opts?.replaceDefaults) {
+    return {
+      byAwb: { ...o.byAwbPrefix },
+      byFlight: { ...o.byFlightPrefix },
+    };
+  }
   return {
     byAwb: { ...DEFAULT_AIRLINE_BY_AWB_PREFIX, ...o.byAwbPrefix },
     byFlight: { ...DEFAULT_AIRLINE_BY_FLIGHT_PREFIX, ...o.byFlightPrefix },

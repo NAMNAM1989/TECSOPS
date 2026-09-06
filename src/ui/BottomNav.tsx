@@ -15,11 +15,13 @@ type Props = {
   onNavigate: (route: AppRoute) => void;
   onPrefetchCustomers?: () => void;
   onPrefetchStats?: () => void;
-  onPrefetchAirlines?: () => void;
   onPrefetchScscH21?: () => void;
   onPrefetchTcsH21?: () => void;
   /** Ops mobile — copy ảnh báo cáo trong cùng menu nav. */
   cargoCopy?: MobileCargoCopyApi | null;
+  airlineSyncedAt?: string | null;
+  airlineSyncing?: boolean;
+  onSyncAirlines?: () => void;
   /** Test-only: mở menu ngay khi render. */
   defaultOpen?: boolean;
 };
@@ -126,7 +128,6 @@ const ITEMS: {
 }[] = [
   { id: "ops", label: "Ops", Icon: IconOps },
   { id: "customers", label: "Khách", Icon: IconCustomers },
-  { id: "airlines", label: "Hãng", Icon: IconAirline },
   { id: "scsc-h21", label: "H21 SCSC", Icon: IconH21 },
   { id: "tcs-h21", label: "H21 TCS", Icon: IconH21 },
   { id: "stats", label: "TK", Icon: IconStats },
@@ -141,10 +142,12 @@ export function BottomNav({
   onNavigate,
   onPrefetchCustomers,
   onPrefetchStats,
-  onPrefetchAirlines,
   onPrefetchScscH21,
   onPrefetchTcsH21,
   cargoCopy = null,
+  airlineSyncedAt = null,
+  airlineSyncing = false,
+  onSyncAirlines,
   defaultOpen = false,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen);
@@ -187,10 +190,20 @@ export function BottomNav({
   const prefetch = (id: AppRoute) => {
     if (id === "customers") onPrefetchCustomers?.();
     if (id === "stats") onPrefetchStats?.();
-    if (id === "airlines") onPrefetchAirlines?.();
     if (id === "scsc-h21") onPrefetchScscH21?.();
     if (id === "tcs-h21") onPrefetchTcsH21?.();
   };
+
+  const syncedLabel = (() => {
+    if (!airlineSyncedAt) return "Chưa đồng bộ";
+    try {
+      const d = new Date(airlineSyncedAt);
+      if (Number.isNaN(d.getTime())) return "Chưa đồng bộ";
+      return d.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
+    } catch {
+      return "Chưa đồng bộ";
+    }
+  })();
 
   return (
     <div
@@ -238,6 +251,32 @@ export function BottomNav({
                   </span>
                 </button>
               ))}
+            </div>
+          ) : null}
+
+          {onSyncAirlines ? (
+            <div className="border-b border-ui-border/70">
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="bottom-nav-sync-airlines"
+                disabled={airlineSyncing}
+                onClick={() => {
+                  onSyncAirlines();
+                  setOpen(false);
+                }}
+                className="flex w-full touch-manipulation items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-bold text-ui-text transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ui-focus disabled:opacity-50"
+              >
+                <IconAirline className="h-5 w-5 shrink-0 text-ui-text-muted" />
+                <span className="min-w-0 flex-1">
+                  <span className="block leading-tight">
+                    {airlineSyncing ? "Đang đồng bộ hãng…" : "Đồng bộ hãng bay"}
+                  </span>
+                  <span className="block truncate text-[10px] font-medium text-ui-text-muted">
+                    {syncedLabel}
+                  </span>
+                </span>
+              </button>
             </div>
           ) : null}
 

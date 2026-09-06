@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFlightLabelMapForEditor,
+  mergeAirlineLookupMaps,
   overridesFromEffectiveMaps,
   syntheticAirlineLabelName,
 } from "./airlineLabelOverridesCore";
@@ -95,6 +96,18 @@ describe("overridesFromEffectiveMaps", () => {
   });
 });
 
+describe("mergeAirlineLookupMaps replaceDefaults", () => {
+  it("catalog Supabase không merge defaults cứng", () => {
+    const maps = mergeAirlineLookupMaps(
+      { byAwbPrefix: { "738": "Vietnam Airlines" }, byFlightPrefix: { VN: "Vietnam Airlines" } },
+      { replaceDefaults: true }
+    );
+    expect(maps.byFlight.VN).toBe("Vietnam Airlines");
+    expect(maps.byFlight.TR).toBeUndefined();
+    expect(maps.byAwb["738"]).toBe("Vietnam Airlines");
+  });
+});
+
 describe("buildFlightLabelMapForEditor + tem TR", () => {
   it("TR mặc định SCOOT; đổi sang Singapore airlines thì tem khớp", () => {
     expect(DEFAULT_AIRLINE_BY_FLIGHT_PREFIX.TR).toBe("SCOOT");
@@ -115,5 +128,18 @@ describe("buildFlightLabelMapForEditor + tem TR", () => {
     const map = buildFlightLabelMapForEditor(undefined, ["XY123", "VN773"]);
     expect(map.VN).toBe("VIETNAM AIRLINES");
     expect(map.XY).toBe("XY AIRLINES");
+  });
+
+  it("tem dùng catalog replaceDefaults", () => {
+    const catalog = {
+      byAwbPrefix: { "738": "Vietnam Airlines" },
+      byFlightPrefix: { VN: "Vietnam Airlines" },
+    };
+    const d = mapShipmentToAirCargoLabelData(
+      baseShipment({ flight: "VN773", awb: "738-1234 5678" }),
+      catalog,
+      { replaceDefaults: true }
+    );
+    expect(d.airline).toBe("Vietnam Airlines");
   });
 });

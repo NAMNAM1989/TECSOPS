@@ -5,9 +5,11 @@ type Props = {
   onNavigate: (route: AppRoute) => void;
   onPrefetchCustomers?: () => void;
   onPrefetchStats?: () => void;
-  onPrefetchAirlines?: () => void;
   onPrefetchScscH21?: () => void;
   onPrefetchTcsH21?: () => void;
+  airlineSyncedAt?: string | null;
+  airlineSyncing?: boolean;
+  onSyncAirlines?: () => void;
 };
 
 function IconOps({ className }: { className?: string }) {
@@ -35,14 +37,6 @@ function IconStats({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
       <path d="M4 19V5M4 19h16M8 15v-4M12 15V9M16 15v-2" />
-    </svg>
-  );
-}
-
-function IconAirline({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
-      <path d="M7 7h.01M3 11l8.5 8.5a2 2 0 002.828 0l6.172-6.172a2 2 0 000-2.828L12.5 2.5 3 11z" />
     </svg>
   );
 }
@@ -80,6 +74,14 @@ function IconH21({ className }: { className?: string }) {
   );
 }
 
+function IconAirlineSync({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+      <path d="M7 7h.01M3 11l8.5 8.5a2 2 0 002.828 0l6.172-6.172a2 2 0 000-2.828L12.5 2.5 3 11z" />
+    </svg>
+  );
+}
+
 const ITEMS: {
   id: AppRoute;
   label: string;
@@ -88,11 +90,21 @@ const ITEMS: {
 }[] = [
   { id: "ops", label: "Ops", Icon: IconOps },
   { id: "customers", label: "Khách", Icon: IconCustomers },
-  { id: "airlines", label: "Hãng", Icon: IconAirline },
   { id: "scsc-h21", label: "H21 SCSC", Icon: IconH21, emphasize: true },
   { id: "tcs-h21", label: "H21 TCS", Icon: IconH21, emphasize: true },
   { id: "stats", label: "Thống kê", Icon: IconStats },
 ];
+
+function formatSyncedAt(iso: string | null | undefined): string {
+  if (!iso) return "Chưa đồng bộ";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "Chưa đồng bộ";
+    return d.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
+  } catch {
+    return "Chưa đồng bộ";
+  }
+}
 
 /** Rail trái desktop — polish v4 Operational Signal. */
 export function OpsLeftRail({
@@ -100,9 +112,11 @@ export function OpsLeftRail({
   onNavigate,
   onPrefetchCustomers,
   onPrefetchStats,
-  onPrefetchAirlines,
   onPrefetchScscH21,
   onPrefetchTcsH21,
+  airlineSyncedAt = null,
+  airlineSyncing = false,
+  onSyncAirlines,
 }: Props) {
   return (
     <aside
@@ -132,14 +146,12 @@ export function OpsLeftRail({
               onMouseEnter={() => {
                 if (id === "customers") onPrefetchCustomers?.();
                 if (id === "stats") onPrefetchStats?.();
-                if (id === "airlines") onPrefetchAirlines?.();
                 if (id === "scsc-h21") onPrefetchScscH21?.();
                 if (id === "tcs-h21") onPrefetchTcsH21?.();
               }}
               onFocus={() => {
                 if (id === "customers") onPrefetchCustomers?.();
                 if (id === "stats") onPrefetchStats?.();
-                if (id === "airlines") onPrefetchAirlines?.();
                 if (id === "scsc-h21") onPrefetchScscH21?.();
                 if (id === "tcs-h21") onPrefetchTcsH21?.();
               }}
@@ -185,6 +197,23 @@ export function OpsLeftRail({
           );
         })}
       </nav>
+
+      {onSyncAirlines ? (
+        <div className="mt-auto flex w-full flex-col items-center gap-1 pt-2">
+          <button
+            type="button"
+            data-testid="sync-airlines-rail"
+            title={`Đồng bộ hãng bay · ${formatSyncedAt(airlineSyncedAt)}`}
+            aria-label="Đồng bộ hãng bay từ Supabase"
+            disabled={airlineSyncing}
+            onClick={onSyncAirlines}
+            className="btn-kinetic flex min-h-11 w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-[9px] font-semibold text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:opacity-50"
+          >
+            <IconAirlineSync className={`h-5 w-5 ${airlineSyncing ? "animate-spin" : ""}`} />
+            <span className="leading-tight">{airlineSyncing ? "Đang…" : "Hãng"}</span>
+          </button>
+        </div>
+      ) : null}
     </aside>
   );
 }

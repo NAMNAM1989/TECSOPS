@@ -136,7 +136,7 @@ function IconCamera({ className }: { className: string }) {
   );
 }
 
-/** Thanh thao tác Ops — Lệnh / Xuất / Ảnh. Nav (Khách·Hãng·Thống kê) ở rail / bottom nav. */
+/** Thanh thao tác Ops — Lệnh / Xuất / Ảnh. Nav (Khách·Thống kê·H21) ở rail / bottom nav. */
 export function OpsActionToolbar({
   variant,
   activeWarehouse,

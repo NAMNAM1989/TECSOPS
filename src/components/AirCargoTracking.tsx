@@ -30,7 +30,6 @@ import { statusOrderForFilter } from "../utils/shipmentWorkflowStatus";
 import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { debugError } from "../utils/debugLog";
-import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { useIsMobile } from "../hooks/useIsMobile";
 import {
   AppShell,
@@ -84,7 +83,7 @@ const EMPTY_CUSTOMERS_DIR: CustomerDirectoryEntry[] = [];
 interface AirCargoTrackingProps {
   sync: SyncApi;
   onSessionDateChange?: (ymd: string) => void;
-  onRequestPrint: (s: Shipment, airlineLabelOverrides?: AirlineLabelOverrides | null) => void;
+  onRequestPrint: (s: Shipment) => void;
   /** Mobile BottomNav — đăng ký API copy ảnh báo cáo. */
   onCargoCopyApiChange?: (
     api: {
@@ -351,10 +350,8 @@ export function AirCargoTracking({
 
   const requestPrintLabel = useCallback(
     (s: Shipment) => {
-      onRequestPrint(s, state?.airlineLabelOverrides);
+      onRequestPrint(s);
     },
-    // Chỉ [onRequestPrint]: state đổi liên tục qua Socket — đưa airlineLabelOverrides vào deps gây loop (#310).
-    // Đọc overrides qua closure tại lúc gọi in.
     [onRequestPrint]
   );
 

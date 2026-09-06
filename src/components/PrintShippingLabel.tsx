@@ -23,6 +23,8 @@ export type LabelSheetVariant = "standard" | "compact";
 type LabelContentProps = {
   s: Shipment;
   airlineLabelOverrides?: AirlineLabelOverrides | null;
+  /** Catalog Supabase: không merge defaults cứng. */
+  airlineReplaceDefaults?: boolean;
   sheetVariant?: LabelSheetVariant;
 };
 
@@ -34,9 +36,12 @@ type LabelContentProps = {
 export function LabelContent({
   s,
   airlineLabelOverrides,
+  airlineReplaceDefaults = false,
   sheetVariant = "standard",
 }: LabelContentProps) {
-  const d = mapShipmentToAirCargoLabelData(s, airlineLabelOverrides);
+  const d = mapShipmentToAirCargoLabelData(s, airlineLabelOverrides, {
+    replaceDefaults: airlineReplaceDefaults,
+  });
   const compact = sheetVariant === "compact";
   const hasAirline = Boolean(d.airline);
 
@@ -115,10 +120,12 @@ function LabelPreviewSimple({
   shipment,
   format,
   airlineLabelOverrides,
+  airlineReplaceDefaults = false,
 }: {
   shipment: Shipment;
   format: LabelSheetFormat;
   airlineLabelOverrides?: AirlineLabelOverrides | null;
+  airlineReplaceDefaults?: boolean;
 }) {
   const compact = format === "100x50";
   const labelHMm = compact ? 50 : 80;
@@ -146,6 +153,7 @@ function LabelPreviewSimple({
           <LabelContent
             s={shipment}
             airlineLabelOverrides={airlineLabelOverrides}
+            airlineReplaceDefaults={airlineReplaceDefaults}
             sheetVariant={compact ? "compact" : "standard"}
           />
         </div>
@@ -157,12 +165,14 @@ function LabelPreviewSimple({
 interface PrintShippingLabelProps {
   shipment: Shipment;
   airlineLabelOverrides?: AirlineLabelOverrides | null;
+  airlineReplaceDefaults?: boolean;
   onClose: () => void;
 }
 
 export function PrintShippingLabel({
   shipment,
   airlineLabelOverrides,
+  airlineReplaceDefaults = false,
   onClose,
 }: PrintShippingLabelProps) {
   const [format, setFormat] = useState<LabelSheetFormat>(() => loadLabelSheetFormat());
@@ -175,8 +185,11 @@ export function PrintShippingLabel({
   });
   const pageMm = useMemo(() => thermalPageMm(format, "xp470b"), [format]);
   const labelData = useMemo(
-    () => mapShipmentToAirCargoLabelData(shipment, airlineLabelOverrides),
-    [shipment, airlineLabelOverrides]
+    () =>
+      mapShipmentToAirCargoLabelData(shipment, airlineLabelOverrides, {
+        replaceDefaults: airlineReplaceDefaults,
+      }),
+    [shipment, airlineLabelOverrides, airlineReplaceDefaults]
   );
   const warnings = useMemo(() => {
     const next: string[] = [];
@@ -266,6 +279,7 @@ export function PrintShippingLabel({
               shipment={shipment}
               format={format}
               airlineLabelOverrides={airlineLabelOverrides}
+              airlineReplaceDefaults={airlineReplaceDefaults}
             />
 
             <div>
@@ -337,6 +351,7 @@ export function PrintShippingLabel({
             <LabelContent
               s={shipment}
               airlineLabelOverrides={airlineLabelOverrides}
+              airlineReplaceDefaults={airlineReplaceDefaults}
               sheetVariant={format === "100x50" ? "compact" : "standard"}
             />
           </div>

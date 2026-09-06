@@ -76,9 +76,10 @@ function specialFromShipment(s: Shipment): AirCargoLabelSpecial {
 
 export function mapShipmentToAirCargoLabelData(
   s: Shipment,
-  airlineLabelOverrides?: AirlineLabelOverrides | null
+  airlineLabelOverrides?: AirlineLabelOverrides | null,
+  opts?: { replaceDefaults?: boolean }
 ): AirCargoLabelData {
-  const maps = mergeAirlineLookupMaps(airlineLabelOverrides ?? undefined);
+  const maps = mergeAirlineLookupMaps(airlineLabelOverrides ?? undefined, opts);
   const pieces = s.pcs != null && s.pcs > 0 ? String(s.pcs) : "";
   const hawbNo = compact(s.hawb ?? "");
   const hasHawb = hawbNo.length > 0;

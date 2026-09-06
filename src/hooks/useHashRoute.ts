@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type AppRoute = "ops" | "customers" | "stats" | "airlines" | "scsc-h21" | "tcs-h21";
+export type AppRoute = "ops" | "customers" | "stats" | "scsc-h21" | "tcs-h21";
 
 function parseHashRoute(): AppRoute {
   const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
   if (raw === "customers" || raw.startsWith("customers/")) return "customers";
   if (raw === "stats" || raw.startsWith("stats/")) return "stats";
+  // Legacy #/airlines → Ops (catalog lấy từ Supabase, không còn trang riêng)
   if (raw === "airlines" || raw.startsWith("airlines/") || raw === "hang" || raw.startsWith("hang/")) {
-    return "airlines";
+    return "ops";
   }
   if (
     raw === "scsc-h21" ||
@@ -35,7 +36,6 @@ function parseHashRoute(): AppRoute {
 function hashFor(route: AppRoute): string {
   if (route === "customers") return "#/customers";
   if (route === "stats") return "#/stats";
-  if (route === "airlines") return "#/airlines";
   if (route === "scsc-h21") return "#/scsc-h21";
   if (route === "tcs-h21") return "#/tcs-h21";
   return "#/";

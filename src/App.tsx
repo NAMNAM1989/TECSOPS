@@ -169,29 +169,9 @@ function AuthenticatedApp() {
               onNavigateCustomers={() => navigate("customers")}
             />
           ) : route === "scsc-h21" ? (
-            <ScscH21CatalogPage
-              onBack={() => navigate("ops")}
-              customerDirectory={sync.state?.customers ?? EMPTY_CUSTOMERS}
-              onSaveCustomers={async (customers) => {
-                const next = await sync.mutate({
-                  action: "SET_CUSTOMERS",
-                  customers,
-                });
-                return next != null;
-              }}
-            />
+            <ScscH21CatalogPage onBack={() => navigate("ops")} />
           ) : route === "tcs-h21" ? (
-            <TcsH21CatalogPage
-              onBack={() => navigate("ops")}
-              customerDirectory={sync.state?.customers ?? EMPTY_CUSTOMERS}
-              onSaveCustomers={async (customers) => {
-                const next = await sync.mutate({
-                  action: "SET_CUSTOMERS",
-                  customers,
-                });
-                return next != null;
-              }}
-            />
+            <TcsH21CatalogPage onBack={() => navigate("ops")} />
           ) : (
             <AirCargoTracking
               sync={sync}

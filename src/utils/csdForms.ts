@@ -18,14 +18,24 @@ import { clipScscGoodsDescriptionPrint } from "./scscPrintContent";
 import { notifyInfo, notifyWarning } from "../ui/notify";
 
 /** Thêm hãng mới: mở rộng union + thêm entry trong CSD_CARRIER_PROFILES + PDF mẫu. */
-export type CsdCarrier = "FD" | "TG" | "MH" | "QR";
+export type CsdCarrier =
+  | "FD"
+  | "TG"
+  | "MH"
+  | "QR"
+  | "AK"
+  | "VU"
+  | "VJ"
+  | "SQ"
+  | "TR"
+  | "BI";
 
 export type CsdCarrierProfile = {
   id: CsdCarrier;
   label: string;
   airlineName: string;
   templateUrl: string;
-  /** Prefix mã chuyến (FD301 → FD, TG621 → TG, MH751 → MH, QR970 → QR). */
+  /** Prefix mã chuyến (FD301 → FD, AK512 → AK, …). */
   flightPrefixes: readonly string[];
   showOrigin: boolean;
   showTransfer: boolean;
@@ -83,8 +93,8 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     id: "MH",
     label: "MH",
     airlineName: "Malaysia Airlines",
-    /** ?v= — bust cache khi đổi file mẫu (tránh dán đè lên PDF cũ). */
-    templateUrl: "/templates/csd/CSD-MH.pdf?v=20260902b",
+    /** ?v= — bust cache khi đổi layout/điền mẫu. */
+    templateUrl: "/templates/csd/CSD-MH.pdf?v=20260905",
     flightPrefixes: ["MH"],
     /** Origin SGN đã in sẵn trên mẫu maskargo. */
     showOrigin: false,
@@ -102,6 +112,70 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     showTransfer: true,
     transferPresets: ["DOH", "DXB", "BAH", "MCT"],
   },
+  AK: {
+    id: "AK",
+    label: "AK",
+    airlineName: "AirAsia",
+    templateUrl: "/templates/csd/CSD-AK.pdf?v=20260905",
+    flightPrefixes: ["AK"],
+    /** Origin SGN + chữ RA đã in sẵn trên mẫu. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["KUL", "BKI", "PEN", "KCH"],
+  },
+  VU: {
+    id: "VU",
+    label: "VU",
+    airlineName: "Vietravel Airlines",
+    templateUrl: "/templates/csd/CSD-VU.pdf?v=20260907",
+    flightPrefixes: ["VU"],
+    /** Origin SGN + SPX / X-RAY đã in sẵn trên mẫu SCSC. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["HAN", "DAD", "CXR", "PQC", "HPH"],
+  },
+  VJ: {
+    id: "VJ",
+    label: "VJ",
+    airlineName: "VietJet Air",
+    templateUrl: "/templates/csd/CSD-IATA.pdf?v=20260907",
+    flightPrefixes: ["VJ"],
+    /** Mẫu IATA chung — Origin SGN đã in sẵn. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["HAN", "DAD", "CXR", "BKK", "SIN"],
+  },
+  SQ: {
+    id: "SQ",
+    label: "SQ",
+    airlineName: "Singapore Airlines",
+    templateUrl: "/templates/csd/CSD-IATA.pdf?v=20260907",
+    flightPrefixes: ["SQ"],
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["SIN", "CGK", "BKK", "HKG"],
+  },
+  TR: {
+    id: "TR",
+    label: "TR",
+    airlineName: "Scoot",
+    templateUrl: "/templates/csd/CSD-IATA.pdf?v=20260907",
+    flightPrefixes: ["TR"],
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["SIN", "DMK", "TPE", "NRT"],
+  },
+  BI: {
+    id: "BI",
+    label: "BI",
+    airlineName: "Royal Brunei Airlines",
+    templateUrl: "/templates/csd/CSD-BI.pdf?v=20260907",
+    flightPrefixes: ["BI"],
+    /** Origin SGN + SPX / XRAY / R.A đã in sẵn. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["BWN", "KUL", "SIN", "CGK"],
+  },
 };
 
 export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
@@ -109,6 +183,12 @@ export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   TG: CSD_CARRIER_PROFILES.TG.templateUrl,
   MH: CSD_CARRIER_PROFILES.MH.templateUrl,
   QR: CSD_CARRIER_PROFILES.QR.templateUrl,
+  AK: CSD_CARRIER_PROFILES.AK.templateUrl,
+  VU: CSD_CARRIER_PROFILES.VU.templateUrl,
+  VJ: CSD_CARRIER_PROFILES.VJ.templateUrl,
+  SQ: CSD_CARRIER_PROFILES.SQ.templateUrl,
+  TR: CSD_CARRIER_PROFILES.TR.templateUrl,
+  BI: CSD_CARRIER_PROFILES.BI.templateUrl,
 };
 
 export type CsdFillFields = {
@@ -181,6 +261,41 @@ export function isCsdQrFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "QR";
 }
 
+/** Chuyến AK… → AirAsia CSD. */
+export function isCsdAkFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "AK";
+}
+
+/** Chuyến VU… → Vietravel Airlines CSD. */
+export function isCsdVuFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "VU";
+}
+
+/** Chuyến VJ… → VietJet (mẫu IATA). */
+export function isCsdVjFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "VJ";
+}
+
+/** Chuyến SQ… → Singapore Airlines (mẫu IATA). */
+export function isCsdSqFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "SQ";
+}
+
+/** Chuyến TR… → Scoot (mẫu IATA). */
+export function isCsdTrFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "TR";
+}
+
+/** Chuyến BI… → Royal Brunei Airlines CSD. */
+export function isCsdBiFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "BI";
+}
+
+/** Ba hãng dùng chung mẫu CSD-IATA.pdf. */
+export function isCsdIataTemplateCarrier(carrier: CsdCarrier): boolean {
+  return carrier === "VJ" || carrier === "SQ" || carrier === "TR";
+}
+
 /** @deprecated dùng isCsdTgFlight */
 export function isCsdThFlight(flight: string | undefined | null): boolean {
   return isCsdTgFlight(flight);
@@ -243,8 +358,8 @@ export function normalizeCsdTransfer(raw: string | undefined | null): string {
 
 /**
  * Gợi ý Transit: nhớ lần trước theo hãng;
- * MH → KUL khi DEST khác KUL; QR → DOH khi DEST khác DOH;
- * FD/TG → BKK khi DEST khác BKK/DMK.
+ * MH/AK → KUL; QR → DOH; SQ/TR → SIN; BI → BWN;
+ * VU/VJ → không gợi ý hub mặc định; FD/TG → BKK.
  */
 export function suggestCsdTransfer(
   dest: string | undefined | null,
@@ -256,12 +371,23 @@ export function suggestCsdTransfer(
     .trim()
     .toUpperCase()
     .slice(0, 3);
-  if (carrier === "MH") {
+  if (carrier === "MH" || carrier === "AK") {
     if (d && d !== "KUL") return "KUL";
     return "";
   }
   if (carrier === "QR") {
     if (d && d !== "DOH") return "DOH";
+    return "";
+  }
+  if (carrier === "SQ" || carrier === "TR") {
+    if (d && d !== "SIN") return "SIN";
+    return "";
+  }
+  if (carrier === "BI") {
+    if (d && d !== "BWN") return "BWN";
+    return "";
+  }
+  if (carrier === "VU" || carrier === "VJ") {
     return "";
   }
   if (d && d !== "BKK" && d !== "DMK") return "BKK";
@@ -410,15 +536,34 @@ const LAYOUT_TG = {
 
 /**
  * Layout MH — A4 ~595×842 (maskargo).
- * Baseline yTop căn với Origin SGN (~325); Contents dưới nhãn, trên Consolidation.
+ * Ô trống: RA / AWB / Contents / DEST / Transfer; Origin SGN đã in sẵn.
+ * Contents ghi bên phải Consolidation — tránh đè nhãn (khoảng dọc quá hẹp).
  */
 const LAYOUT_MH = {
   ra: { x: 54, yTop: 212, size: 11 },
   awb: { x: 350, yTop: 178, size: 13 },
-  goods: { x: 54, yTop: 252, size: 11 },
-  goodsMaxChars: 70,
-  dest: { x: 270, yTop: 325, size: 14 },
-  transfer: { x: 430, yTop: 325, size: 13 },
+  goods: { x: 240, yTop: 268, size: 11 },
+  goodsMaxChars: 48,
+  /** Cùng hàng với Origin SGN (glyph top ≈313). */
+  dest: { x: 270, yTop: 326, size: 14 },
+  transfer: { x: 430, yTop: 326, size: 13 },
+} as const;
+
+/**
+ * Layout AK — Letter 612×792 (AirAsia).
+ * Giữ "RA" + Origin SGN in sẵn; ghi mã RA bên cạnh; AWB/Contents/DEST/Transfer trống.
+ * Không wipe — tránh che nhãn trên form ảnh.
+ */
+const LAYOUT_AK = {
+  /** Identifier sau chữ "RA" đã in. */
+  ra: { x: 170, yTop: 176, size: 10 },
+  awb: { x: 330, yTop: 176, size: 13 },
+  /** Bên phải checkbox Consolidation. */
+  goods: { x: 200, yTop: 215, size: 11 },
+  goodsMaxChars: 48,
+  /** Cùng hàng với Origin SGN (y≈240). */
+  dest: { x: 230, yTop: 254, size: 14 },
+  transfer: { x: 400, yTop: 254, size: 13 },
 } as const;
 
 /**
@@ -442,6 +587,59 @@ const LAYOUT_QR = {
   /** Dưới nhãn Transfer (y≈251), chỉ phủ "DOH". */
   transferWipe: { x: 355, yTop: 267, w: 42, h: 16 },
   transfer: { x: 360, yTop: 282, size: 13 },
+} as const;
+
+/**
+ * Layout VU — A4 (mẫu SCSC Vietravel).
+ * Origin SGN + SPX + X-RAY đã in sẵn; ô trống: RA / AWB / Contents / DEST / Transfer / footer RA.
+ * Không wipe.
+ */
+const LAYOUT_VU = {
+  ra: { x: 70, yTop: 222, size: 11 },
+  awb: { x: 330, yTop: 210, size: 13 },
+  goods: { x: 70, yTop: 268, size: 11 },
+  goodsMaxChars: 58,
+  /** Cùng hàng với Origin SGN (glyph ≈334–346). */
+  dest: { x: 210, yTop: 346, size: 14 },
+  transfer: { x: 335, yTop: 346, size: 13 },
+  footerRa: { x: 70, yTop: 658, size: 10 },
+} as const;
+
+/**
+ * Layout IATA chung — A4 (CSD-IATA.pdf) cho VJ / SQ / TR.
+ * Origin SGN đã in sẵn; ô trống: RA / AWB / Contents / DEST / Transfer /
+ * Security Status (SPX) / Screening (XRY) / footer RA. Không wipe.
+ */
+const LAYOUT_IATA = {
+  ra: { x: 65, yTop: 188, size: 11 },
+  awb: { x: 300, yTop: 188, size: 13 },
+  /** Bên phải checkbox Consolidation. */
+  goods: { x: 130, yTop: 236, size: 11 },
+  goodsMaxChars: 55,
+  /** Cùng hàng với Origin SGN (glyph ≈276–286). */
+  dest: { x: 190, yTop: 286, size: 13 },
+  transfer: { x: 320, yTop: 286, size: 12 },
+  /** Security Status — ghi mã SPX. */
+  securityStatus: { x: 68, yTop: 340, size: 12 },
+  /** Screening Method (codes) — ghi XRY. */
+  screening: { x: 275, yTop: 355, size: 11 },
+  footerRa: { x: 65, yTop: 532, size: 10 },
+} as const;
+
+/**
+ * Layout BI — A4 (Royal Brunei).
+ * Origin SGN + SPX + XRAY + Received from R.A đã in sẵn.
+ * Ô trống: RA / AWB / Contents / DEST / Transfer / footer RA. Không wipe.
+ */
+const LAYOUT_BI = {
+  ra: { x: 65, yTop: 185, size: 11 },
+  awb: { x: 310, yTop: 185, size: 13 },
+  goods: { x: 70, yTop: 238, size: 11 },
+  goodsMaxChars: 55,
+  /** Cùng hàng với Origin SGN (glyph ≈303–318). */
+  dest: { x: 200, yTop: 316, size: 14 },
+  transfer: { x: 320, yTop: 316, size: 13 },
+  footerRa: { x: 65, yTop: 620, size: 10 },
 } as const;
 
 /**
@@ -604,6 +802,47 @@ export async function fillCsdPdfBytes(
         LAYOUT_MH.transfer.size
       );
     }
+  } else if (carrier === "AK") {
+    /* AirAsia — giữ "RA"/SGN in sẵn; ghi mã RA + AWB + Contents + DEST + Transfer */
+    if (raCode) {
+      draw(
+        raCode,
+        LAYOUT_AK.ra.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_AK.ra.yTop),
+        LAYOUT_AK.ra.size
+      );
+    }
+    draw(
+      fields.awb,
+      LAYOUT_AK.awb.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_AK.awb.yTop),
+      LAYOUT_AK.awb.size
+    );
+    const goodsLine =
+      wrapCsdGoodsLines(fields.goods, LAYOUT_AK.goodsMaxChars)[0] ||
+      fields.goods;
+    draw(
+      goodsLine,
+      LAYOUT_AK.goods.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_AK.goods.yTop),
+      LAYOUT_AK.goods.size
+    );
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        LAYOUT_AK.dest.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_AK.dest.yTop),
+        LAYOUT_AK.dest.size
+      );
+    }
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        LAYOUT_AK.transfer.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_AK.transfer.yTop),
+        LAYOUT_AK.transfer.size
+      );
+    }
   } else if (carrier === "QR") {
     /* Qatar Airways — wipe giá trị mẫu rồi ghi RA/AWB/Contents/DEST/Transfer */
     if (raCode) {
@@ -648,6 +887,159 @@ export async function fillCsdPdfBytes(
         LAYOUT_QR.transfer.x,
         topYToPdfLibBaseline(pageH, LAYOUT_QR.transfer.yTop),
         LAYOUT_QR.transfer.size
+      );
+    }
+  } else if (carrier === "VU") {
+    /* Vietravel — giữ SGN/SPX/X-RAY; ghi RA + AWB + Contents + DEST + Transfer (+ footer RA) */
+    if (raLabel) {
+      draw(
+        raLabel,
+        LAYOUT_VU.ra.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_VU.ra.yTop),
+        LAYOUT_VU.ra.size
+      );
+      draw(
+        raLabel,
+        LAYOUT_VU.footerRa.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_VU.footerRa.yTop),
+        LAYOUT_VU.footerRa.size
+      );
+    }
+    draw(
+      fields.awb,
+      LAYOUT_VU.awb.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_VU.awb.yTop),
+      LAYOUT_VU.awb.size
+    );
+    const goodsLine =
+      wrapCsdGoodsLines(fields.goods, LAYOUT_VU.goodsMaxChars)[0] ||
+      fields.goods;
+    draw(
+      goodsLine,
+      LAYOUT_VU.goods.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_VU.goods.yTop),
+      LAYOUT_VU.goods.size
+    );
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        LAYOUT_VU.dest.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_VU.dest.yTop),
+        LAYOUT_VU.dest.size
+      );
+    }
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        LAYOUT_VU.transfer.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_VU.transfer.yTop),
+        LAYOUT_VU.transfer.size
+      );
+    }
+  } else if (isCsdIataTemplateCarrier(carrier)) {
+    /* IATA blank (VJ/SQ/TR) — giữ SGN; ghi RA/AWB/Contents/DEST/Transfer + SPX/XRY */
+    if (raLabel) {
+      draw(
+        raLabel,
+        LAYOUT_IATA.ra.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_IATA.ra.yTop),
+        LAYOUT_IATA.ra.size
+      );
+      draw(
+        raLabel,
+        LAYOUT_IATA.footerRa.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_IATA.footerRa.yTop),
+        LAYOUT_IATA.footerRa.size
+      );
+    }
+    draw(
+      fields.awb,
+      LAYOUT_IATA.awb.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_IATA.awb.yTop),
+      LAYOUT_IATA.awb.size
+    );
+    const goodsLine =
+      wrapCsdGoodsLines(fields.goods, LAYOUT_IATA.goodsMaxChars)[0] ||
+      fields.goods;
+    draw(
+      goodsLine,
+      LAYOUT_IATA.goods.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_IATA.goods.yTop),
+      LAYOUT_IATA.goods.size
+    );
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        LAYOUT_IATA.dest.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_IATA.dest.yTop),
+        LAYOUT_IATA.dest.size
+      );
+    }
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        LAYOUT_IATA.transfer.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_IATA.transfer.yTop),
+        LAYOUT_IATA.transfer.size
+      );
+    }
+    draw(
+      "SPX",
+      LAYOUT_IATA.securityStatus.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_IATA.securityStatus.yTop),
+      LAYOUT_IATA.securityStatus.size
+    );
+    draw(
+      "XRY",
+      LAYOUT_IATA.screening.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_IATA.screening.yTop),
+      LAYOUT_IATA.screening.size
+    );
+  } else if (carrier === "BI") {
+    /* Royal Brunei — giữ SGN/SPX/XRAY/R.A; ghi RA + AWB + Contents + DEST + Transfer */
+    if (raLabel) {
+      draw(
+        raLabel,
+        LAYOUT_BI.ra.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_BI.ra.yTop),
+        LAYOUT_BI.ra.size
+      );
+      draw(
+        raLabel,
+        LAYOUT_BI.footerRa.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_BI.footerRa.yTop),
+        LAYOUT_BI.footerRa.size
+      );
+    }
+    draw(
+      fields.awb,
+      LAYOUT_BI.awb.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_BI.awb.yTop),
+      LAYOUT_BI.awb.size
+    );
+    const goodsLine =
+      wrapCsdGoodsLines(fields.goods, LAYOUT_BI.goodsMaxChars)[0] ||
+      fields.goods;
+    draw(
+      goodsLine,
+      LAYOUT_BI.goods.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_BI.goods.yTop),
+      LAYOUT_BI.goods.size
+    );
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        LAYOUT_BI.dest.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_BI.dest.yTop),
+        LAYOUT_BI.dest.size
+      );
+    }
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        LAYOUT_BI.transfer.x,
+        topYToPdfLibBaseline(pageH, LAYOUT_BI.transfer.yTop),
+        LAYOUT_BI.transfer.size
       );
     }
   } else {
@@ -718,7 +1110,7 @@ export async function fillCsdFdPdfBytes(
   return fillCsdPdfBytes("FD", fields, templateBytes, assets);
 }
 
-/** Chuẩn hoá đoạn tên file CSD (bỏ ký tự Windows-illegal, gộp khoảng trắng). */
+/** Chuẩn hoá đoạn tên file CSD (bỏ ký tự Windows-illegal; giữ khoảng trắng tên khách). */
 export function sanitizeCsdFilenamePart(
   raw: string | undefined | null,
   fallback = "NA"
@@ -726,37 +1118,31 @@ export function sanitizeCsdFilenamePart(
   const t = String(raw ?? "")
     .trim()
     .replace(/[\\/:*?"<>|]+/g, "")
-    .replace(/\s+/g, "-")
+    .replace(/\s+/g, " ")
     .replace(/_+/g, "_")
     .replace(/^[\s._-]+|[\s._-]+$/g, "");
   return t || fallback;
 }
 
 /**
- * Tên file tải về: `{kho}_{hãng}_{awb}_{khách}.pdf`
- * Ưu tiên customerCode; không có thì dùng tên khách.
+ * Tên file tải về: `{kho}_{hãng}_{awb}_{tên khách}.pdf`
+ * Ví dụ: `tecs_qr_15799888899_tín phát.pdf`
+ * — kho = ops team (tecs/tcs/scsc); awb = 11 số; khách = tên khách (không dùng mã).
  */
 export function csdDownloadFilename(input: {
   carrier: CsdCarrier;
   awb: string;
   warehouse?: string | null;
   customer?: string | null;
+  /** @deprecated không dùng cho tên file — chỉ tên khách (`customer`). */
   customerCode?: string | null;
 }): string {
-  const kho = sanitizeCsdFilenamePart(
-    normalizeWarehouse(input.warehouse) || String(input.warehouse || ""),
-    "KHO"
-  );
-  const hang = input.carrier;
+  const team = opsTeamOf(normalizeWarehouse(input.warehouse));
+  const kho = team.toLowerCase();
+  const hang = input.carrier.toLowerCase();
   const digits = awbDigitsKey(input.awb);
-  const awb =
-    digits.length === 11
-      ? `${digits.slice(0, 3)}-${digits.slice(3)}`
-      : digits || "draft";
-  const khach = sanitizeCsdFilenamePart(
-    input.customerCode || input.customer || "",
-    "KHACH"
-  );
+  const awb = digits || "draft";
+  const khach = sanitizeCsdFilenamePart(input.customer, "khach").toLowerCase();
   return `${kho}_${hang}_${awb}_${khach}.pdf`;
 }
 

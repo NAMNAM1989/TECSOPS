@@ -36,6 +36,7 @@ export function CsdPrintModal({
   const profile = carrier ? getCsdCarrierProfile(carrier) : null;
   const ra = shipment ? csdRaForWarehouse(shipment.warehouse) : null;
   const isEk = carrier === "EK";
+  const isPr = carrier === "PR";
 
   const [transfer, setTransfer] = useState("");
   const [origin, setOrigin] = useState("");
@@ -188,11 +189,34 @@ export function CsdPrintModal({
                 </dd>
               </>
             ) : null}
+            {isPr ? (
+              <>
+                <dt className={OPS.muted}>Flight</dt>
+                <dd className={`font-semibold ${OPS.title}`}>
+                  {preview.flightDest || "—"}
+                </dd>
+                <dt className={OPS.muted}>Pcs/Wt</dt>
+                <dd className={`font-semibold tabular-nums ${OPS.title}`}>
+                  {preview.pcsWeight || "—"}
+                </dd>
+                <dt className={OPS.muted}>Shipper</dt>
+                <dd className={`truncate ${OPS.secondary}`} title={preview.shipperName}>
+                  {preview.shipperName || "(trống — điền shipper trên lô)"}
+                </dd>
+              </>
+            ) : null}
             <dt className={OPS.muted}>Hàng</dt>
             <dd className={`truncate ${OPS.secondary}`} title={preview.goods}>
               {preview.goods || "(trống)"}
             </dd>
           </dl>
+
+          {isPr ? (
+            <p className={`text-[11px] ${OPS.muted}`}>
+              Origin <span className="font-semibold">SGN</span> · SPX · X-RAY · Forwarder —
+              giữ mặc định trên mẫu PAL. Chữ ký: ký tay trên bản in.
+            </p>
+          ) : null}
 
           {isEk ? (
             <div className="space-y-3">

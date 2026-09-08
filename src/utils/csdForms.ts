@@ -33,7 +33,8 @@ export type CsdCarrier =
   | "SQ"
   | "TR"
   | "BI"
-  | "EK";
+  | "EK"
+  | "PR";
 
 export type CsdCarrierProfile = {
   id: CsdCarrier;
@@ -192,6 +193,17 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     showTransfer: false,
     transferPresets: ["DXB"],
   },
+  PR: {
+    id: "PR",
+    label: "PR",
+    airlineName: "Philippine Airlines",
+    templateUrl: "/templates/csd/CSD-PR.pdf?v=20260908",
+    flightPrefixes: ["PR"],
+    /** Origin SGN + SPX / X-RAY / defaults đã in sẵn trên F-0462. */
+    showOrigin: false,
+    showTransfer: false,
+    transferPresets: ["MNL"],
+  },
 };
 
 export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
@@ -206,6 +218,7 @@ export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   TR: CSD_CARRIER_PROFILES.TR.templateUrl,
   BI: CSD_CARRIER_PROFILES.BI.templateUrl,
   EK: CSD_CARRIER_PROFILES.EK.templateUrl,
+  PR: CSD_CARRIER_PROFILES.PR.templateUrl,
 };
 
 export type CsdFillFields = {
@@ -237,6 +250,14 @@ export type CsdFillFields = {
   issuedDateTime?: string;
   /** EK Additional Security Information. */
   additionalSecurity?: string;
+  /** PR: shipper / phone / pcs-weight / flight-dest / ngày form. */
+  shipperName?: string;
+  shipperAddress?: string;
+  shipperPhone?: string;
+  pcsWeight?: string;
+  flightDest?: string;
+  formDate?: string;
+  verifiedBy?: string;
 };
 
 export type PrintCsdOptions = {
@@ -337,6 +358,11 @@ export function isCsdEkFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "EK";
 }
 
+/** Chuyến PR… → Philippine Airlines Cargo Security Declaration. */
+export function isCsdPrFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "PR";
+}
+
 /** Ba hãng dùng chung mẫu CSD-IATA.pdf. */
 export function isCsdIataTemplateCarrier(carrier: CsdCarrier): boolean {
   return carrier === "VJ" || carrier === "SQ" || carrier === "TR";
@@ -388,6 +414,46 @@ export function resolveCsdEkSignCompany(
   s: Pick<Shipment, "shipperNamePrint">
 ): string {
   return String(s.shipperNamePrint || "").trim();
+}
+
+/** PR — Verified/Accepted by theo kho. */
+export function resolveCsdPrVerifiedBy(
+  warehouse: Shipment["warehouse"] | string | undefined | null
+): string {
+  const team = opsTeamOf(normalizeWarehouse(warehouse));
+  if (team === "SCSC") return "SCSC - PAL Cargo Handler";
+  if (team === "TECS") return "TECS - PAL Cargo Handler";
+  return "TCS Co., Ltd. - PAL Cargo Handler";
+}
+
+/** PR — Flight No./Destination, vd. PR598/MNL. */
+export function formatCsdPrFlightDest(
+  flight: string | undefined | null,
+  dest: string | undefined | null
+): string {
+  const f = String(flight || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  const d = String(dest || "")
+    .trim()
+    .toUpperCase()
+    .slice(0, 3);
+  if (f && d) return `${f}/${d}`;
+  return f || d;
+}
+
+/** PR — Pcs/Weight tendered. */
+export function formatCsdPrPcsWeight(
+  pcs: string | undefined | null,
+  kg: string | undefined | null
+): string {
+  const p = String(pcs || "").trim();
+  const k = String(kg || "").trim();
+  if (p && k) return `${p} / ${k} kg`;
+  if (p) return `${p} pcs`;
+  if (k) return `${k} kg`;
+  return "";
 }
 
 /** Pcs in CSD/Letter — số nguyên gọn. */
@@ -469,7 +535,7 @@ export function normalizeCsdTransfer(raw: string | undefined | null): string {
 
 /**
  * Gợi ý Transit: nhớ lần trước theo hãng;
- * MH/AK → KUL; QR → DOH; SQ/TR → SIN; BI → BWN; EK → DXB;
+ * MH/AK → KUL; QR → DOH; SQ/TR → SIN; BI → BWN; EK → DXB; PR → MNL;
  * VU/VJ → không gợi ý hub mặc định; FD/TG → BKK.
  */
 export function suggestCsdTransfer(
@@ -500,6 +566,10 @@ export function suggestCsdTransfer(
   }
   if (carrier === "EK") {
     if (d && d !== "DXB") return "DXB";
+    return "";
+  }
+  if (carrier === "PR") {
+    if (d && d !== "MNL") return "MNL";
     return "";
   }
   if (carrier === "VU" || carrier === "VJ") {
@@ -545,8 +615,10 @@ export function buildCsdFields(
         Shipment,
         | "pcs"
         | "kg"
+        | "flight"
         | "shipperNamePrint"
         | "shipperAddressPrint"
+        | "shipperPhonePrint"
         | "consigneeNamePrint"
         | "consigneeAddressPrint"
       >
@@ -603,6 +675,18 @@ export function buildCsdFields(
       resolveCsdEkSignCompany(s);
     base.issuedDateTime = issuedDateTime;
     base.additionalSecurity = "NO HAWB";
+  }
+  if (carrier === "PR") {
+    base.origin = "SGN";
+    base.pcs = formatCsdEkPcs(s.pcs);
+    base.kg = formatCsdEkKg(s.kg);
+    base.pcsWeight = formatCsdPrPcsWeight(base.pcs, base.kg);
+    base.shipperName = String(s.shipperNamePrint || "").trim();
+    base.shipperAddress = String(s.shipperAddressPrint || "").trim();
+    base.shipperPhone = String(s.shipperPhonePrint || "").trim();
+    base.flightDest = formatCsdPrFlightDest(s.flight, base.dest);
+    base.formDate = formatCsdEkDate();
+    base.verifiedBy = resolveCsdPrVerifiedBy(s.warehouse);
   }
   return base;
 }
@@ -795,6 +879,26 @@ const LAYOUT_BI = {
   dest: { x: 200, yTop: 316, size: 14 },
   transfer: { x: 320, yTop: 316, size: 13 },
   footerRa: { x: 65, yTop: 620, size: 10 },
+} as const;
+
+/**
+ * Layout PR — A4 PAL F-0462 Cargo Security Declaration.
+ * Giữ defaults (N/A, Forwarder, X-RAY Yes, SPX, Origin SGN, UAI…).
+ * Điền: Date, Shipper, AWB, Pcs/Weight, Contents, Verified by, counts, Flight/Dest.
+ */
+const LAYOUT_PR = {
+  dateTop: { x: 470, yTop: 82, size: 8, maxWidth: 65, minSize: 6 },
+  shipperName: { x: 60, yTop: 266, size: 8, maxWidth: 175, minSize: 6 },
+  shipperAddress: { x: 246, yTop: 266, size: 7, maxWidth: 175, minSize: 5 },
+  telephone: { x: 435, yTop: 266, size: 8, maxWidth: 95, minSize: 6 },
+  awb: { x: 132, yTop: 284, size: 9, maxWidth: 105, minSize: 6 },
+  pcsWeight: { x: 250, yTop: 285, size: 8, maxWidth: 135, minSize: 6 },
+  goods: { x: 398, yTop: 285, size: 7, maxWidth: 130, minSize: 5 },
+  verifiedBy: { x: 380, yTop: 351, size: 6, maxWidth: 150, minSize: 5 },
+  xrayCount: { x: 340, yTop: 485, size: 10, maxWidth: 42, minSize: 7 },
+  totalScreened: { x: 490, yTop: 485, size: 10, maxWidth: 42, minSize: 7 },
+  flightDest: { x: 400, yTop: 525, size: 8, maxWidth: 62, minSize: 6 },
+  dateOrigin: { x: 475, yTop: 525, size: 8, maxWidth: 55, minSize: 6 },
 } as const;
 
 /**
@@ -1446,6 +1550,45 @@ export async function fillCsdPdfBytes(
         LAYOUT_BI.transfer.size
       );
     }
+  } else if (carrier === "PR") {
+    /* Philippine Airlines F-0462 — giữ defaults; điền shipper/AWB/pcs/goods/flight */
+    const fit = (
+      text: string,
+      slot: {
+        x: number;
+        yTop: number;
+        size: number;
+        maxWidth: number;
+        minSize: number;
+      }
+    ) => {
+      const t = text.trim();
+      if (!t) return;
+      let size = slot.size;
+      while (size > slot.minSize && fontBold.widthOfTextAtSize(t, size) > slot.maxWidth) {
+        size -= 0.5;
+      }
+      draw(t, slot.x, topYToPdfLibBaseline(pageH, slot.yTop), size);
+    };
+    const P = LAYOUT_PR;
+    fit(fields.formDate || "", P.dateTop);
+    fit(fields.shipperName || "", P.shipperName);
+    fit(fields.shipperAddress || "", P.shipperAddress);
+    fit(fields.shipperPhone || "", P.telephone);
+    fit(fields.awb, P.awb);
+    fit(fields.pcsWeight || "", P.pcsWeight);
+    fit(
+      wrapCsdGoodsLines(fields.goods, 42)[0] || fields.goods,
+      P.goods
+    );
+    fit(fields.verifiedBy || "", P.verifiedBy);
+    const pcsNum = (fields.pcs || "").trim();
+    if (pcsNum) {
+      fit(pcsNum, P.xrayCount);
+      fit(pcsNum, P.totalScreened);
+    }
+    fit(fields.flightDest || "", P.flightDest);
+    fit(fields.formDate || "", P.dateOrigin);
   } else {
     /* TG — mẫu A4 trống: ghi §1 RA, §2 AWB, §3 Contents, §4–6, §14 RA */
     if (raLabel) {

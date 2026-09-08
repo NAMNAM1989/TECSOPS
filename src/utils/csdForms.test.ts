@@ -21,13 +21,17 @@ import {
   isCsdTrFlight,
   isCsdBiFlight,
   isCsdEkFlight,
+  isCsdPrFlight,
   isCsdIataTemplateCarrier,
   formatCsdEkDate,
   formatCsdEkDateTime,
   formatCsdEkKg,
   formatCsdEkPcs,
+  formatCsdPrFlightDest,
+  formatCsdPrPcsWeight,
   resolveCsdEkCompanyBlock,
   resolveCsdEkSignCompany,
+  resolveCsdPrVerifiedBy,
   normalizeCsdTransfer,
   suggestCsdTransfer,
   resolveCsdGoodsText,
@@ -39,7 +43,7 @@ describe("csdForms", () => {
     localStorage.clear();
   });
 
-  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI / EK qua registry", () => {
+  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI / EK / PR qua registry", () => {
     expect(isCsdFdFlight("FD301")).toBe(true);
     expect(isCsdTgFlight("TG621")).toBe(true);
     expect(isCsdTgFlight("tg 621")).toBe(true);
@@ -52,6 +56,7 @@ describe("csdForms", () => {
     expect(isCsdTrFlight("TR302")).toBe(true);
     expect(isCsdBiFlight("BI423")).toBe(true);
     expect(isCsdEkFlight("EK392")).toBe(true);
+    expect(isCsdPrFlight("PR598")).toBe(true);
     expect(isCsdIataTemplateCarrier("VJ")).toBe(true);
     expect(isCsdIataTemplateCarrier("SQ")).toBe(true);
     expect(isCsdIataTemplateCarrier("TR")).toBe(true);
@@ -68,13 +73,15 @@ describe("csdForms", () => {
     expect(getCsdCarrierProfile("BI").showOrigin).toBe(false);
     expect(getCsdCarrierProfile("EK").showOrigin).toBe(false);
     expect(getCsdCarrierProfile("EK").showTransfer).toBe(false);
+    expect(getCsdCarrierProfile("PR").showTransfer).toBe(false);
     expect(getCsdCarrierProfile("SQ").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("TR").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("BI").templateUrl).toContain("CSD-BI");
     expect(getCsdCarrierProfile("EK").templateUrl).toContain("CSD-EK");
+    expect(getCsdCarrierProfile("PR").templateUrl).toContain("CSD-PR");
   });
 
-  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI|EK + AWB 11 số", () => {
+  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI|EK|PR + AWB 11 số", () => {
     expect(canPrintCsd({ flight: "FD301", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "MH751", awb: "232-12345675" })).toBe(true);
@@ -86,6 +93,7 @@ describe("csdForms", () => {
     expect(canPrintCsd({ flight: "TR302", awb: "618-22345675" })).toBe(true);
     expect(canPrintCsd({ flight: "BI423", awb: "672-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "EK392", awb: "176-21216812" })).toBe(true);
+    expect(canPrintCsd({ flight: "PR598", awb: "079-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "123" })).toBe(false);
   });
 
@@ -656,6 +664,65 @@ describe("csdForms", () => {
     expect(formatCsdEkKg(850)).toBe("850");
     expect(formatCsdEkKg(850.25)).toBe("850.3");
     expect(formatCsdEkKg("1,234.5")).toBe("1234.5");
+  });
+
+  it("build PR: shipper + pcs/weight + flight/dest + verified by", () => {
+    const f = buildCsdFields(
+      {
+        awb: "07912345675",
+        dest: "mnl",
+        flight: "PR598",
+        goodsDescriptionPrint: "GARMENTS",
+        warehouse: "TCS",
+        pcs: 40,
+        kg: 520,
+        shipperNamePrint: "SAIGON EXPORT CO",
+        shipperAddressPrint: "Tan Son Nhat",
+        shipperPhonePrint: "0281234567",
+        customer: "TCS",
+      },
+      "PR"
+    );
+    expect(f.origin).toBe("SGN");
+    expect(f.dest).toBe("MNL");
+    expect(f.pcsWeight).toBe("40 / 520 kg");
+    expect(f.flightDest).toBe("PR598/MNL");
+    expect(f.shipperName).toBe("SAIGON EXPORT CO");
+    expect(f.shipperPhone).toBe("0281234567");
+    expect(f.verifiedBy).toBe("TCS Co., Ltd. - PAL Cargo Handler");
+    expect(formatCsdPrFlightDest("pr 598", "CEB")).toBe("PR598/CEB");
+    expect(formatCsdPrPcsWeight("10", "100")).toBe("10 / 100 kg");
+    expect(resolveCsdPrVerifiedBy("SCSC")).toBe("SCSC - PAL Cargo Handler");
+  });
+
+  it("điền PDF CSD PR: 1 trang F-0462", async () => {
+    const template = Uint8Array.from(
+      readFileSync(resolve("public/templates/csd/CSD-PR.pdf"))
+    );
+    const bytes = await fillCsdPdfBytes(
+      "PR",
+      {
+        awb: "079-1234 5675",
+        goods: "GARMENTS",
+        dest: "MNL",
+        origin: "SGN",
+        raCode: "VN/RA3/00010-01",
+        shipperName: "SAIGON EXPORT CO",
+        shipperAddress: "Tan Son Nhat",
+        shipperPhone: "0281234567",
+        pcs: "40",
+        kg: "520",
+        pcsWeight: "40 / 520 kg",
+        flightDest: "PR598/MNL",
+        formDate: "08-Sep-2026",
+        verifiedBy: "TCS Co., Ltd. - PAL Cargo Handler",
+      },
+      template
+    );
+    expect(bytes.byteLength).toBeGreaterThan(1000);
+    const { PDFDocument } = await import("pdf-lib");
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPageCount()).toBe(1);
   });
 
   it("điền PDF CSD EK: 2 trang Letter + CSD", async () => {

@@ -60,7 +60,7 @@ export function clampSplitPrimary(
 ): number {
   let v = value;
   if (!Number.isFinite(v)) v = opts.min;
-  let min = opts.min;
+  const min = opts.min;
   let max = opts.max;
   const container = opts.containerSize ?? 0;
   const minSec = opts.minSecondaryPx ?? 0;

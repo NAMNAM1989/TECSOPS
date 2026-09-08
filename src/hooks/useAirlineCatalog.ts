@@ -97,8 +97,7 @@ export function useAirlineCatalog(): AirlineCatalogState {
   useEffect(() => {
     if (cached) return;
     void ensureLoaded();
-    // Chỉ bootstrap lần đầu khi chưa có cache.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Bootstrap một lần khi mount nếu chưa có cache (cố ý bỏ deps).
   }, []);
 
   return {

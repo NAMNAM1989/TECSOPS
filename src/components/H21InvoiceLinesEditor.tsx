@@ -73,7 +73,7 @@ function CellNum({
       }}
       onChange={(e) => {
         const v = decimal
-          ? e.target.value.replace(/[^\d.,\-]/g, "")
+          ? e.target.value.replace(/[^\d.,-]/g, "")
           : e.target.value.replace(/\D/g, "");
         setDraft(v);
       }}

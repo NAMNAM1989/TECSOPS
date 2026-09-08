@@ -9,11 +9,13 @@ import {
   buildCsdFields,
   csdCarrierForShipment,
   csdRaForWarehouse,
+  formatCsdEkDateTime,
   getCsdCarrierProfile,
   normalizeCsdTransfer,
   printCsdForShipment,
   suggestCsdTransfer,
 } from "../utils/csdForms";
+import { loadLastCsdEkIssuer } from "../utils/csdPrintPrefs";
 import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 
 type Props = {
@@ -33,9 +35,14 @@ export function CsdPrintModal({
   const carrier = shipment ? csdCarrierForShipment(shipment) : null;
   const profile = carrier ? getCsdCarrierProfile(carrier) : null;
   const ra = shipment ? csdRaForWarehouse(shipment.warehouse) : null;
+  const isEk = carrier === "EK";
 
   const [transfer, setTransfer] = useState("");
   const [origin, setOrigin] = useState("");
+  const [issuedBy, setIssuedBy] = useState("");
+  const [issuedTitle, setIssuedTitle] = useState("STAFF");
+  const [signCompany, setSignCompany] = useState("");
+  const [issuedDateTime, setIssuedDateTime] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -49,7 +56,20 @@ export function CsdPrintModal({
     setBusy(false);
     setTransfer(suggestCsdTransfer(shipment.dest, carrier));
     setOrigin(profile.defaultOrigin || "SGN");
-  }, [open, shipment, carrier, profile]);
+    if (carrier === "EK") {
+      const last = loadLastCsdEkIssuer();
+      setIssuedBy(last.issuedBy);
+      setIssuedTitle(last.issuedTitle || "STAFF");
+      const shipperCo = String(shipment.shipperNamePrint || "").trim();
+      setSignCompany(shipperCo || last.signCompany || "");
+      setIssuedDateTime(formatCsdEkDateTime());
+    } else {
+      setIssuedBy("");
+      setIssuedTitle("STAFF");
+      setSignCompany("");
+      setIssuedDateTime("");
+    }
+  }, [open, shipment, carrier, profile, ra]);
 
   if (!open || !shipment || !carrier || !profile) return null;
 
@@ -57,6 +77,10 @@ export function CsdPrintModal({
     transfer,
     origin: profile.showOrigin ? origin : undefined,
     customerDirectory,
+    issuedBy: isEk ? issuedBy : undefined,
+    issuedTitle: isEk ? issuedTitle : undefined,
+    signCompany: isEk ? signCompany : undefined,
+    issuedDateTime: isEk ? issuedDateTime : undefined,
   });
 
   const onPrint = async () => {
@@ -70,6 +94,10 @@ export function CsdPrintModal({
         origin: profile.showOrigin ? origin : undefined,
         allowEmptyGoods: true,
         customerDirectory,
+        issuedBy: isEk ? issuedBy.trim() : undefined,
+        issuedTitle: isEk ? issuedTitle.trim() || "STAFF" : undefined,
+        signCompany: isEk ? signCompany.trim() : undefined,
+        issuedDateTime: isEk ? issuedDateTime.trim() : undefined,
       });
       onClose();
     } catch (e) {
@@ -103,6 +131,7 @@ export function CsdPrintModal({
               </h2>
               <p className={`mt-0.5 text-[11px] ${OPS.secondary}`}>
                 {profile.airlineName} · chuyến {shipment.flight || "—"}
+                {isEk ? " · Letter + CSD" : ""}
               </p>
             </div>
             <button
@@ -138,55 +167,53 @@ export function CsdPrintModal({
             </dd>
             <dt className={OPS.muted}>DEST</dt>
             <dd className={`font-semibold ${OPS.title}`}>{preview.dest || "—"}</dd>
+            {isEk ? (
+              <>
+                <dt className={OPS.muted}>Routing</dt>
+                <dd className={`font-semibold tabular-nums ${OPS.title}`}>
+                  {preview.routing || "—"}
+                </dd>
+                <dt className={OPS.muted}>Transfer</dt>
+                <dd className={`font-semibold ${OPS.title}`}>DXB (cố định)</dd>
+                <dt className={OPS.muted}>Pcs / Kg</dt>
+                <dd className={`font-semibold tabular-nums ${OPS.title}`}>
+                  {preview.pcs || "—"} / {preview.kg || "—"}
+                </dd>
+                <dt className={OPS.muted}>CNEE</dt>
+                <dd
+                  className={`truncate whitespace-pre-line ${OPS.secondary}`}
+                  title={preview.companyBlock}
+                >
+                  {preview.companyBlock || "(trống — điền consignee trên lô)"}
+                </dd>
+              </>
+            ) : null}
             <dt className={OPS.muted}>Hàng</dt>
             <dd className={`truncate ${OPS.secondary}`} title={preview.goods}>
               {preview.goods || "(trống)"}
             </dd>
           </dl>
 
-          {profile.showOrigin ? (
-            <label className="block">
-              <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
-                Origin
-              </span>
-              <input
-                className={`${OPS.inputLg} w-full font-mono uppercase tracking-wider`}
-                value={origin}
-                maxLength={3}
-                spellCheck={false}
-                disabled={busy}
-                onChange={(e) =>
-                  setOrigin(
-                    e.target.value
-                      .toUpperCase()
-                      .replace(/[^A-Z]/g, "")
-                      .slice(0, 3)
-                  )
-                }
-              />
-            </label>
-          ) : (
-            <p className={`text-[11px] ${OPS.muted}`}>
-              Origin trên mẫu đã in sẵn <span className="font-semibold">SGN</span>.
-            </p>
-          )}
-
-          {profile.showTransfer ? (
-            <div>
+          {isEk ? (
+            <div className="space-y-3">
+              <p className={`text-[11px] ${OPS.muted}`}>
+                Origin <span className="font-semibold">SGN</span> · SPX · XRY · Received from
+                REGULATED AGENT — tự điền. Chữ ký: ký tay trên bản in (không đóng dấu ảnh).
+              </p>
               <label className="block">
                 <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
-                  Transfer / Transit{" "}
-                  <span className={`font-normal ${OPS.muted}`}>(nếu biết — có thể để trống)</span>
+                  Issued by / Name{" "}
+                  <span className={`font-normal ${OPS.muted}`}>(không bắt buộc)</span>
                 </span>
                 <input
-                  className={`${OPS.inputLg} w-full font-mono uppercase tracking-wider`}
-                  value={transfer}
-                  placeholder="BKK hoặc BKK/CNX"
-                  maxLength={24}
+                  className={`${OPS.inputLg} w-full`}
+                  value={issuedBy}
+                  placeholder="Họ tên — có thể để trống, ký tay trên bản in"
+                  maxLength={80}
                   spellCheck={false}
                   autoFocus
                   disabled={busy}
-                  onChange={(e) => setTransfer(e.target.value.toUpperCase())}
+                  onChange={(e) => setIssuedBy(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -195,38 +222,140 @@ export function CsdPrintModal({
                   }}
                 />
               </label>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {profile.transferPresets.map((code) => {
-                  const active = normalizeCsdTransfer(transfer) === code;
-                  return (
-                    <button
-                      key={code}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setTransfer(code)}
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-bold tabular-nums ring-1 transition ${
-                        active
-                          ? "bg-apple-blue text-white ring-apple-blue"
-                          : "bg-white text-apple-label ring-black/10 hover:bg-apple-blue/5"
-                      }`}
-                    >
-                      {code}
-                    </button>
-                  );
-                })}
-                {transfer ? (
-                  <button
-                    type="button"
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
+                    Title
+                  </span>
+                  <input
+                    className={`${OPS.inputLg} w-full`}
+                    value={issuedTitle}
+                    maxLength={40}
+                    spellCheck={false}
                     disabled={busy}
-                    onClick={() => setTransfer("")}
-                    className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-apple-tertiary ring-1 ring-black/10 hover:bg-black/[0.03]"
-                  >
-                    Xóa
-                  </button>
-                ) : null}
+                    onChange={(e) => setIssuedTitle(e.target.value)}
+                  />
+                </label>
+                <label className="block">
+                  <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
+                    Company{" "}
+                    <span className={`font-normal ${OPS.muted}`}>(shipper)</span>
+                  </span>
+                  <input
+                    className={`${OPS.inputLg} w-full`}
+                    value={signCompany}
+                    placeholder="Tên shipper trên lô"
+                    maxLength={80}
+                    spellCheck={false}
+                    disabled={busy}
+                    onChange={(e) => setSignCompany(e.target.value)}
+                  />
+                </label>
               </div>
+              <label className="block">
+                <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
+                  Date-Time
+                </span>
+                <input
+                  className={`${OPS.inputLg} w-full font-mono`}
+                  value={issuedDateTime}
+                  placeholder="08-Sep-2026  15:30"
+                  maxLength={32}
+                  spellCheck={false}
+                  disabled={busy}
+                  onChange={(e) => setIssuedDateTime(e.target.value)}
+                />
+              </label>
             </div>
-          ) : null}
+          ) : (
+            <>
+              {profile.showOrigin ? (
+                <label className="block">
+                  <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
+                    Origin
+                  </span>
+                  <input
+                    className={`${OPS.inputLg} w-full font-mono uppercase tracking-wider`}
+                    value={origin}
+                    maxLength={3}
+                    spellCheck={false}
+                    disabled={busy}
+                    onChange={(e) =>
+                      setOrigin(
+                        e.target.value
+                          .toUpperCase()
+                          .replace(/[^A-Z]/g, "")
+                          .slice(0, 3)
+                      )
+                    }
+                  />
+                </label>
+              ) : (
+                <p className={`text-[11px] ${OPS.muted}`}>
+                  Origin trên mẫu đã in sẵn <span className="font-semibold">SGN</span>.
+                </p>
+              )}
+
+              {profile.showTransfer ? (
+                <div>
+                  <label className="block">
+                    <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
+                      Transfer / Transit{" "}
+                      <span className={`font-normal ${OPS.muted}`}>
+                        (nếu biết — có thể để trống)
+                      </span>
+                    </span>
+                    <input
+                      className={`${OPS.inputLg} w-full font-mono uppercase tracking-wider`}
+                      value={transfer}
+                      placeholder="BKK hoặc BKK/CNX"
+                      maxLength={24}
+                      spellCheck={false}
+                      autoFocus
+                      disabled={busy}
+                      onChange={(e) => setTransfer(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void onPrint();
+                        }
+                      }}
+                    />
+                  </label>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {profile.transferPresets.map((code) => {
+                      const active = normalizeCsdTransfer(transfer) === code;
+                      return (
+                        <button
+                          key={code}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setTransfer(code)}
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-bold tabular-nums ring-1 transition ${
+                            active
+                              ? "bg-apple-blue text-white ring-apple-blue"
+                              : "bg-white text-apple-label ring-black/10 hover:bg-apple-blue/5"
+                          }`}
+                        >
+                          {code}
+                        </button>
+                      );
+                    })}
+                    {transfer ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setTransfer("")}
+                        className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-apple-tertiary ring-1 ring-black/10 hover:bg-black/[0.03]"
+                      >
+                        Xóa
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
 
           {!preview.goods ? (
             <p className="rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] text-amber-950">
@@ -251,8 +380,12 @@ export function CsdPrintModal({
           <Button type="button" variant="ghost" disabled={busy} onClick={onClose}>
             Hủy
           </Button>
-          <Button type="button" disabled={busy || !preview.dest} onClick={() => void onPrint()}>
-            {busy ? "Đang tạo PDF…" : "Tải & In CSD"}
+          <Button
+            type="button"
+            disabled={busy || !preview.dest}
+            onClick={() => void onPrint()}
+          >
+            {busy ? "Đang tạo PDF…" : isEk ? "Tải & In Letter+CSD" : "Tải & In CSD"}
           </Button>
         </div>
       </div>

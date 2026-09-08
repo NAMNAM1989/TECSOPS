@@ -10,9 +10,10 @@
 | `CSD-VU.pdf` | Vietravel Airlines | mã **VU**… | `CSD_CARRIER_PROFILES.VU` |
 | `CSD-IATA.pdf` | VietJet / Singapore Airlines / Scoot | mã **VJ** / **SQ** / **TR**… | `CSD_CARRIER_PROFILES.VJ` / `.SQ` / `.TR` |
 | `CSD-BI.pdf` | Royal Brunei Airlines | mã **BI**… | `CSD_CARRIER_PROFILES.BI` |
+| `CSD-EK.pdf` | Emirates SkyCargo | mã **EK**… | `CSD_CARRIER_PROFILES.EK` |
 
 Logic điền + tải PDF: `src/utils/csdForms.ts`  
-Popup nhập Origin / Transfer: `src/components/CsdPrintModal.tsx`
+Popup nhập Origin / Transfer (hoặc Issued by cho EK): `src/components/CsdPrintModal.tsx`
 
 Tên file tải về: `{kho}_{hãng}_{awb}_{tên khách}.pdf`  
 Ví dụ: `scsc_vj_97812345675_tín phát.pdf`  
@@ -62,10 +63,17 @@ Ví dụ: `scsc_vj_97812345675_tín phát.pdf`
 - Hub Transfer gợi ý: **BWN**
 - URL: `CSD-BI.pdf?v=20260907`
 
+### EK (Letter + CSD — Emirates SkyCargo)
+- File: `CSD-EK.pdf` (nền trắng, không sample; hairline đen; SPX + REGULATED AGENT mặc định; không viền ô Pcs/Weight/SPX/Received from) — URL `?v=20260908fill`
+- Mockup review: `CSD-EK-MOCKUP.pdf` · scripts `make-csd-ek-blank.py` / `make-csd-ek-mockup.py`
+- **Luôn in 2 trang** (Consignee Certification Letter + CSD)
+- Auto: AWB, DEST, RA, Origin **SGN**, Transfer **DXB**, SPX, XRY tick, Received from REGULATED AGENT, Routing `SGN-DXB-{DEST}`, Pcs/Kg/Contents từ lô, Company Name/Address Letter = **CNEE**, Company ký = **shipper**, Additional `NO HAWB`
+- Popup: Issued by / Name (**không bắt buộc**), Title, Company (mặc định shipper), Date-Time — chữ ký **ký tay** trên bản in (không seal ảnh)
+
 ## Mã RA theo kho (overlay §1 / §14)
 
-| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG/QR/AK/VU/VJ/SQ/TR/BI) | Mã RA trên mẫu MH |
-|---------------|-----------|----------------------------------|-------------------|
+| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG/QR/AK/VU/VJ/SQ/TR/BI/EK) | Mã RA trên mẫu MH |
+|---------------|-----------|--------------------------------------|-------------------|
 | TECS | `TECS-TCS`, `TECS-SCSC` | `VN/RA3/00013-01` | `VN/RA3-00013-01` |
 | SCSC | `SCSC` | `VN/RA3/00009-01` | `VN/RA3-00009-01` |
 | TCS | `TCS` | `VN/RA3/00010-01` | `VN/RA3-00010-01` |

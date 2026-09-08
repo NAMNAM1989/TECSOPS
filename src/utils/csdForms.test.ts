@@ -20,7 +20,14 @@ import {
   isCsdSqFlight,
   isCsdTrFlight,
   isCsdBiFlight,
+  isCsdEkFlight,
   isCsdIataTemplateCarrier,
+  formatCsdEkDate,
+  formatCsdEkDateTime,
+  formatCsdEkKg,
+  formatCsdEkPcs,
+  resolveCsdEkCompanyBlock,
+  resolveCsdEkSignCompany,
   normalizeCsdTransfer,
   suggestCsdTransfer,
   resolveCsdGoodsText,
@@ -32,7 +39,7 @@ describe("csdForms", () => {
     localStorage.clear();
   });
 
-  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI qua registry", () => {
+  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI / EK qua registry", () => {
     expect(isCsdFdFlight("FD301")).toBe(true);
     expect(isCsdTgFlight("TG621")).toBe(true);
     expect(isCsdTgFlight("tg 621")).toBe(true);
@@ -44,6 +51,7 @@ describe("csdForms", () => {
     expect(isCsdSqFlight("SQ178")).toBe(true);
     expect(isCsdTrFlight("TR302")).toBe(true);
     expect(isCsdBiFlight("BI423")).toBe(true);
+    expect(isCsdEkFlight("EK392")).toBe(true);
     expect(isCsdIataTemplateCarrier("VJ")).toBe(true);
     expect(isCsdIataTemplateCarrier("SQ")).toBe(true);
     expect(isCsdIataTemplateCarrier("TR")).toBe(true);
@@ -58,12 +66,15 @@ describe("csdForms", () => {
     expect(getCsdCarrierProfile("VU").showOrigin).toBe(false);
     expect(getCsdCarrierProfile("VJ").showOrigin).toBe(false);
     expect(getCsdCarrierProfile("BI").showOrigin).toBe(false);
+    expect(getCsdCarrierProfile("EK").showOrigin).toBe(false);
+    expect(getCsdCarrierProfile("EK").showTransfer).toBe(false);
     expect(getCsdCarrierProfile("SQ").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("TR").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("BI").templateUrl).toContain("CSD-BI");
+    expect(getCsdCarrierProfile("EK").templateUrl).toContain("CSD-EK");
   });
 
-  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI + AWB 11 số", () => {
+  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI|EK + AWB 11 số", () => {
     expect(canPrintCsd({ flight: "FD301", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "MH751", awb: "232-12345675" })).toBe(true);
@@ -74,6 +85,7 @@ describe("csdForms", () => {
     expect(canPrintCsd({ flight: "SQ178", awb: "618-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TR302", awb: "618-22345675" })).toBe(true);
     expect(canPrintCsd({ flight: "BI423", awb: "672-12345675" })).toBe(true);
+    expect(canPrintCsd({ flight: "EK392", awb: "176-21216812" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "123" })).toBe(false);
   });
 
@@ -143,6 +155,8 @@ describe("csdForms", () => {
     expect(suggestCsdTransfer("SIN", "TR")).toBe("");
     expect(suggestCsdTransfer("KUL", "BI")).toBe("BWN");
     expect(suggestCsdTransfer("BWN", "BI")).toBe("");
+    expect(suggestCsdTransfer("MAD", "EK")).toBe("DXB");
+    expect(suggestCsdTransfer("DXB", "EK")).toBe("");
     localStorage.setItem(
       "tecsops.csd.lastTransfer.v1",
       JSON.stringify({ FD: "DMK" })
@@ -572,5 +586,107 @@ describe("csdForms", () => {
     expect(f.dest).toBe("KUL");
     expect(f.transfer).toBe("BWN");
     expect(f.raCode).toBe("VN/RA3/00013-01");
+  });
+
+  it("build EK: routing SGN-DXB-DEST, transfer DXB, popup issuer", () => {
+    const f = buildCsdFields(
+      {
+        awb: "17621216812",
+        dest: "mad",
+        goodsDescriptionPrint: "FRESH FRUITS",
+        warehouse: "SCSC",
+        pcs: 120,
+        kg: 850,
+        shipperNamePrint: "SAIGON CARGO SERVICE CORP.",
+        shipperAddressPrint: "Tan Son Nhat Airport",
+        consigneeNamePrint: "ACME IMPORTS LTD",
+        consigneeAddressPrint: "Madrid, Spain",
+        customer: "SCSC",
+      },
+      "EK",
+      {
+        issuedBy: "NGUYEN VAN A",
+        issuedTitle: "STAFF",
+        issuedDateTime: "08-Sep-2026  15:30",
+      }
+    );
+    expect(f.origin).toBe("SGN");
+    expect(f.transfer).toBe("DXB");
+    expect(f.routing).toBe("SGN-DXB-MAD");
+    expect(f.dest).toBe("MAD");
+    expect(f.pcs).toBe("120");
+    expect(f.kg).toBe("850");
+    expect(f.companyBlock).toBe("ACME IMPORTS LTD\nMadrid, Spain");
+    expect(f.signCompany).toBe("SAIGON CARGO SERVICE CORP.");
+    expect(f.issuedBy).toBe("NGUYEN VAN A");
+    expect(f.letterDate).toBe("08-Sep-2026");
+    expect(f.raCode).toBe("VN/RA3/00009-01");
+    expect(f.additionalSecurity).toBe("NO HAWB");
+  });
+
+  it("resolveCsdEkCompanyBlock dùng CNEE; signCompany dùng shipper", () => {
+    expect(
+      resolveCsdEkCompanyBlock({
+        consigneeNamePrint: "ACME CO",
+        consigneeAddressPrint: "1 Road",
+      })
+    ).toBe("ACME CO\n1 Road");
+    expect(
+      resolveCsdEkCompanyBlock({
+        consigneeNamePrint: "",
+        consigneeAddressPrint: "",
+      })
+    ).toBe("");
+    expect(
+      resolveCsdEkSignCompany({
+        shipperNamePrint: "SHIPPER CO",
+      })
+    ).toBe("SHIPPER CO");
+  });
+
+  it("formatCsdEkDate / DateTime", () => {
+    const d = new Date(2026, 8, 8, 15, 30, 0);
+    expect(formatCsdEkDate(d)).toBe("08-Sep-2026");
+    expect(formatCsdEkDateTime(d)).toBe("08-Sep-2026  15:30");
+  });
+
+  it("formatCsdEkPcs / formatCsdEkKg gọn số", () => {
+    expect(formatCsdEkPcs(120)).toBe("120");
+    expect(formatCsdEkPcs(120.6)).toBe("121");
+    expect(formatCsdEkKg(850)).toBe("850");
+    expect(formatCsdEkKg(850.25)).toBe("850.3");
+    expect(formatCsdEkKg("1,234.5")).toBe("1234.5");
+  });
+
+  it("điền PDF CSD EK: 2 trang Letter + CSD", async () => {
+    const template = Uint8Array.from(
+      readFileSync(resolve("public/templates/csd/CSD-EK.pdf"))
+    );
+    const bytes = await fillCsdPdfBytes(
+      "EK",
+      {
+        awb: "176-21216812",
+        goods: "FRESH FRUITS",
+        dest: "MAD",
+        origin: "SGN",
+        transfer: "DXB",
+        raCode: "VN/RA3/00009-01",
+        routing: "SGN-DXB-MAD",
+        companyBlock: "SAIGON CARGO\nAirport",
+        pcs: "120",
+        kg: "850",
+        letterDate: "08-Sep-2026",
+        issuedBy: "NGUYEN VAN A",
+        issuedTitle: "STAFF",
+        signCompany: "SCSC",
+        issuedDateTime: "08-Sep-2026  15:30",
+        additionalSecurity: "NO HAWB",
+      },
+      template
+    );
+    expect(bytes.byteLength).toBeGreaterThan(1000);
+    const { PDFDocument } = await import("pdf-lib");
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPageCount()).toBe(2);
   });
 });

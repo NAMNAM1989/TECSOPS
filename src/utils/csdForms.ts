@@ -13,7 +13,11 @@ import {
   resolveSavedGoodsForBooking,
 } from "./customerBookingResolve";
 import { savedGoodsPrintText } from "./customerPrintProfileLink";
-import { loadLastCsdTransfer, saveLastCsdTransfer } from "./csdPrintPrefs";
+import {
+  loadLastCsdTransfer,
+  saveLastCsdEkIssuer,
+  saveLastCsdTransfer,
+} from "./csdPrintPrefs";
 import { clipScscGoodsDescriptionPrint } from "./scscPrintContent";
 import { notifyInfo, notifyWarning } from "../ui/notify";
 
@@ -28,7 +32,8 @@ export type CsdCarrier =
   | "VJ"
   | "SQ"
   | "TR"
-  | "BI";
+  | "BI"
+  | "EK";
 
 export type CsdCarrierProfile = {
   id: CsdCarrier;
@@ -176,6 +181,17 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     showTransfer: true,
     transferPresets: ["BWN", "KUL", "SIN", "CGK"],
   },
+  EK: {
+    id: "EK",
+    label: "EK",
+    airlineName: "Emirates SkyCargo",
+    templateUrl: "/templates/csd/CSD-EK.pdf?v=20260908fill",
+    flightPrefixes: ["EK"],
+    /** Origin/Transfer auto SGN + DXB trên CSD; Letter routing SGN-DXB-{DEST}. */
+    showOrigin: false,
+    showTransfer: false,
+    transferPresets: ["DXB"],
+  },
 };
 
 export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
@@ -189,6 +205,7 @@ export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   SQ: CSD_CARRIER_PROFILES.SQ.templateUrl,
   TR: CSD_CARRIER_PROFILES.TR.templateUrl,
   BI: CSD_CARRIER_PROFILES.BI.templateUrl,
+  EK: CSD_CARRIER_PROFILES.EK.templateUrl,
 };
 
 export type CsdFillFields = {
@@ -201,6 +218,25 @@ export type CsdFillFields = {
   /** Mã RA theo kho lô (đóng dấu §1). */
   raCode?: string;
   opsTeam?: OpsTeam;
+  /** EK Letter: Company Name / Address. */
+  companyBlock?: string;
+  /** EK: số kiện / kg lô. */
+  pcs?: string;
+  kg?: string;
+  /** EK Letter: routing luôn SGN-DXB-{DEST}. */
+  routing?: string;
+  /** EK Letter: ngày trên thư (cùng ngày popup). */
+  letterDate?: string;
+  /** EK popup — Security Status Issued by / Name. */
+  issuedBy?: string;
+  /** EK popup — Title (mặc định STAFF). */
+  issuedTitle?: string;
+  /** EK Letter — Company ký. */
+  signCompany?: string;
+  /** EK popup — Date-Time phát hành CSD. */
+  issuedDateTime?: string;
+  /** EK Additional Security Information. */
+  additionalSecurity?: string;
 };
 
 export type PrintCsdOptions = {
@@ -210,6 +246,11 @@ export type PrintCsdOptions = {
   allowEmptyGoods?: boolean;
   /** Hồ sơ khách — lấy tên hàng đã chọn nếu lô chưa có goodsDescriptionPrint. */
   customerDirectory?: readonly CustomerDirectoryEntry[];
+  /** EK popup fields. */
+  issuedBy?: string;
+  issuedTitle?: string;
+  signCompany?: string;
+  issuedDateTime?: string;
 };
 
 const CSD_FONT_BOLD_URL = "/fonts/NotoSans-Bold.ttf";
@@ -291,9 +332,79 @@ export function isCsdBiFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "BI";
 }
 
+/** Chuyến EK… → Emirates SkyCargo CSD (Letter + CSD). */
+export function isCsdEkFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "EK";
+}
+
 /** Ba hãng dùng chung mẫu CSD-IATA.pdf. */
 export function isCsdIataTemplateCarrier(carrier: CsdCarrier): boolean {
   return carrier === "VJ" || carrier === "SQ" || carrier === "TR";
+}
+
+const CSD_EK_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+/** Ngày EK dạng `08-Sep-2026`. */
+export function formatCsdEkDate(d: Date = new Date()): string {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mon = CSD_EK_MONTHS[d.getMonth()];
+  return `${dd}-${mon}-${d.getFullYear()}`;
+}
+
+/** Date-Time EK dạng `08-Sep-2026  15:30`. */
+export function formatCsdEkDateTime(d: Date = new Date()): string {
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${formatCsdEkDate(d)}  ${hh}:${mm}`;
+}
+
+export function resolveCsdEkCompanyBlock(
+  s: Pick<
+    Shipment,
+    "consigneeNamePrint" | "consigneeAddressPrint"
+  >
+): string {
+  const name = String(s.consigneeNamePrint || "").trim();
+  const addr = String(s.consigneeAddressPrint || "").trim();
+  if (name || addr) return [name, addr].filter(Boolean).join("\n");
+  return "";
+}
+
+/** Letter signature Company — lấy tên shipper in ấn. */
+export function resolveCsdEkSignCompany(
+  s: Pick<Shipment, "shipperNamePrint">
+): string {
+  return String(s.shipperNamePrint || "").trim();
+}
+
+/** Pcs in CSD/Letter — số nguyên gọn. */
+export function formatCsdEkPcs(pcs: number | string | null | undefined): string {
+  if (pcs == null || pcs === "") return "";
+  const n = typeof pcs === "number" ? pcs : Number(String(pcs).replace(/,/g, ""));
+  if (!Number.isFinite(n)) return String(pcs).trim();
+  return String(Math.round(n));
+}
+
+/** Kg in CSD/Letter — bỏ phần thập phân thừa. */
+export function formatCsdEkKg(kg: number | string | null | undefined): string {
+  if (kg == null || kg === "") return "";
+  const n = typeof kg === "number" ? kg : Number(String(kg).replace(/,/g, ""));
+  if (!Number.isFinite(n)) return String(kg).trim();
+  const rounded = Math.round(n * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
 /** @deprecated dùng isCsdTgFlight */
@@ -358,7 +469,7 @@ export function normalizeCsdTransfer(raw: string | undefined | null): string {
 
 /**
  * Gợi ý Transit: nhớ lần trước theo hãng;
- * MH/AK → KUL; QR → DOH; SQ/TR → SIN; BI → BWN;
+ * MH/AK → KUL; QR → DOH; SQ/TR → SIN; BI → BWN; EK → DXB;
  * VU/VJ → không gợi ý hub mặc định; FD/TG → BKK.
  */
 export function suggestCsdTransfer(
@@ -385,6 +496,10 @@ export function suggestCsdTransfer(
   }
   if (carrier === "BI") {
     if (d && d !== "BWN") return "BWN";
+    return "";
+  }
+  if (carrier === "EK") {
+    if (d && d !== "DXB") return "DXB";
     return "";
   }
   if (carrier === "VU" || carrier === "VJ") {
@@ -424,9 +539,29 @@ export function buildCsdFields(
     | "customerId"
     | "customerCode"
     | "customer"
-  >,
+  > &
+    Partial<
+      Pick<
+        Shipment,
+        | "pcs"
+        | "kg"
+        | "shipperNamePrint"
+        | "shipperAddressPrint"
+        | "consigneeNamePrint"
+        | "consigneeAddressPrint"
+      >
+    >,
   carrier: CsdCarrier,
-  overrides?: Pick<PrintCsdOptions, "transfer" | "origin" | "customerDirectory">
+  overrides?: Pick<
+    PrintCsdOptions,
+    | "transfer"
+    | "origin"
+    | "customerDirectory"
+    | "issuedBy"
+    | "issuedTitle"
+    | "signCompany"
+    | "issuedDateTime"
+  >
 ): CsdFillFields {
   const profile = getCsdCarrierProfile(carrier);
   const ra = csdRaForWarehouse(s.warehouse);
@@ -448,6 +583,26 @@ export function buildCsdFields(
   if (profile.showTransfer) {
     const transfer = normalizeCsdTransfer(overrides?.transfer ?? "");
     if (transfer) base.transfer = transfer;
+  }
+  if (carrier === "EK") {
+    const issuedDateTime =
+      String(overrides?.issuedDateTime || "").trim() || formatCsdEkDateTime();
+    base.origin = "SGN";
+    base.transfer = "DXB";
+    base.routing = base.dest ? `SGN-DXB-${base.dest}` : "SGN-DXB";
+    base.companyBlock = resolveCsdEkCompanyBlock(s);
+    base.pcs = formatCsdEkPcs(s.pcs);
+    base.kg = formatCsdEkKg(s.kg);
+    base.letterDate =
+      issuedDateTime.match(/^\d{2}-[A-Za-z]{3}-\d{4}/)?.[0] || formatCsdEkDate();
+    base.issuedBy = String(overrides?.issuedBy || "").trim();
+    base.issuedTitle =
+      String(overrides?.issuedTitle || "").trim() || "STAFF";
+    base.signCompany =
+      String(overrides?.signCompany || "").trim() ||
+      resolveCsdEkSignCompany(s);
+    base.issuedDateTime = issuedDateTime;
+    base.additionalSecurity = "NO HAWB";
   }
   return base;
 }
@@ -682,6 +837,252 @@ async function loadTemplate(carrier: CsdCarrier): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
+/**
+ * Layout EK — tọa độ baseline từ đỉnh trang (khớp mẫu gốc + blank sạch).
+ * Trang 0 Letter 612×792 · Trang 1 CSD ~523×755.
+ * maxWidth: thu nhỏ font để chữ không tràn ô.
+ */
+const LAYOUT_EK_LETTER = {
+  company: {
+    x: 78,
+    yTop: 118,
+    size: 10,
+    leading: 12,
+    maxWidth: 460,
+    maxLines: 4,
+    minSize: 7,
+  },
+  awb: { x: 144, yTop: 238, size: 14, maxWidth: 128, minSize: 10 },
+  routing: { x: 388, yTop: 236, size: 11, maxWidth: 160, minSize: 8 },
+  letterDate: { x: 144, yTop: 258, size: 13, maxWidth: 120, minSize: 9 },
+  goods: { x: 388, yTop: 258, size: 12, maxWidth: 165, minSize: 8 },
+  pcs: { x: 150, yTop: 278, size: 12, maxWidth: 50, minSize: 9 },
+  kg: { x: 390, yTop: 278, size: 12, maxWidth: 62, minSize: 9 },
+  issuedBy: { x: 120, yTop: 662, size: 11, maxWidth: 160, minSize: 8 },
+  title: { x: 365, yTop: 662, size: 10, maxWidth: 140, minSize: 8 },
+  signCompany: { x: 120, yTop: 686, size: 10, maxWidth: 185, minSize: 7 },
+  signDate: { x: 365, yTop: 686, size: 10, maxWidth: 140, minSize: 8 },
+} as const;
+
+const LAYOUT_EK_CSD = {
+  ra: { x: 18, yTop: 191, size: 10, maxWidth: 95, minSize: 7 },
+  awb: { x: 250, yTop: 191, size: 12, maxWidth: 115, minSize: 8 },
+  /** Contents — cột trái, dưới nhãn; size lớn nhưng fit width. */
+  goods: { x: 18, yTop: 232, size: 15, maxWidth: 220, minSize: 8 },
+  pcs: { x: 286, yTop: 217, size: 11, maxWidth: 42, minSize: 8 },
+  kg: { x: 416, yTop: 217, size: 11, maxWidth: 72, minSize: 8 },
+  origin: { x: 56, yTop: 262, size: 14, maxWidth: 50, minSize: 10 },
+  dest: { x: 185, yTop: 262, size: 16, maxWidth: 55, minSize: 10 },
+  transfer: { x: 390, yTop: 258, size: 12, maxWidth: 100, minSize: 8 },
+  xryTick: { x: 268, yTop: 319, size: 10 },
+  issuedBy: { x: 20, yTop: 534, size: 11, maxWidth: 200, minSize: 8 },
+  issuedDateTime: { x: 348, yTop: 540, size: 10, maxWidth: 150, minSize: 7 },
+  footerRa: { x: 36, yTop: 584, size: 11, maxWidth: 140, minSize: 8 },
+  additional: { x: 20, yTop: 630, size: 11, maxWidth: 470, minSize: 8 },
+} as const;
+
+type EkFont = {
+  widthOfTextAtSize: (text: string, size: number) => number;
+};
+
+function fitEkFontSize(
+  font: EkFont,
+  text: string,
+  maxWidth: number,
+  preferred: number,
+  minSize: number
+): number {
+  let size = preferred;
+  while (size > minSize && font.widthOfTextAtSize(text, size) > maxWidth) {
+    size -= 0.5;
+  }
+  return size;
+}
+
+function wrapEkLines(
+  font: EkFont,
+  text: string,
+  maxWidth: number,
+  size: number,
+  maxLines: number
+): string[] {
+  const raw = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  for (const paragraph of raw) {
+    const words = paragraph.split(/\s+/).filter(Boolean);
+    let line = '';
+    for (const word of words) {
+      const next = line ? line + " " + word : word;
+      if (font.widthOfTextAtSize(next, size) <= maxWidth) {
+        line = next;
+        continue;
+      }
+      if (line) {
+        out.push(line);
+        if (out.length >= maxLines) return out;
+      }
+      if (font.widthOfTextAtSize(word, size) > maxWidth) {
+        let chunk = '';
+        for (const ch of word) {
+          const tryChunk = chunk + ch;
+          if (font.widthOfTextAtSize(tryChunk, size) > maxWidth && chunk) {
+            out.push(chunk);
+            if (out.length >= maxLines) return out;
+            chunk = ch;
+          } else {
+            chunk = tryChunk;
+          }
+        }
+        line = chunk;
+      } else {
+        line = word;
+      }
+    }
+    if (line) {
+      out.push(line);
+      if (out.length >= maxLines) return out;
+    }
+  }
+  return out.slice(0, maxLines);
+}
+
+async function fillCsdEkPdfBytes(
+  pdf: PDFDocument,
+  fields: CsdFillFields,
+  assets?: CsdPdfAssets
+): Promise<Uint8Array> {
+  const pages = pdf.getPages();
+  if (pages.length < 2) {
+    throw new Error('Mẫu CSD EK cần đủ 2 trang (Letter + CSD).');
+  }
+  const [letterPage, csdPage] = pages;
+  let fontBold;
+  try {
+    fontBold = await embedCsdBoldFont(pdf, assets);
+  } catch {
+    fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  }
+  let fontReg;
+  try {
+    fontReg = await pdf.embedFont(StandardFonts.Helvetica);
+  } catch {
+    fontReg = fontBold;
+  }
+  const ink = rgb(0, 0, 0);
+
+  const drawFitted = (
+    page: (typeof pages)[0],
+    text: string,
+    slot: { x: number; yTop: number; size: number; maxWidth?: number; minSize?: number },
+    font = fontBold
+  ) => {
+    const t = text.trim();
+    if (!t) return;
+    const maxW = slot.maxWidth ?? 9999;
+    const minS = slot.minSize ?? 7;
+    const size = fitEkFontSize(font, t, maxW, slot.size, minS);
+    const pageH = page.getHeight();
+    page.drawText(t, {
+      x: slot.x,
+      y: topYToPdfLibBaseline(pageH, slot.yTop),
+      size,
+      font,
+      color: ink,
+    });
+  };
+
+  const L = LAYOUT_EK_LETTER;
+  const companyText = String(fields.companyBlock || '').trim();
+  if (companyText) {
+    const longest =
+      companyText
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .sort((a, b) => b.length - a.length)[0] || companyText;
+    const companySize = fitEkFontSize(
+      fontReg,
+      longest,
+      L.company.maxWidth,
+      L.company.size,
+      L.company.minSize
+    );
+    const lines = wrapEkLines(
+      fontReg,
+      companyText,
+      L.company.maxWidth,
+      companySize,
+      L.company.maxLines
+    );
+    const pageH = letterPage.getHeight();
+    lines.forEach((line, i) => {
+      letterPage.drawText(line, {
+        x: L.company.x,
+        y: topYToPdfLibBaseline(
+          pageH,
+          L.company.yTop + i * L.company.leading
+        ),
+        size: companySize,
+        font: fontReg,
+        color: ink,
+      });
+    });
+  }
+
+  drawFitted(letterPage, fields.awb, L.awb);
+  drawFitted(letterPage, fields.routing || '', L.routing);
+  drawFitted(letterPage, fields.letterDate || '', L.letterDate);
+  drawFitted(letterPage, fields.goods, L.goods);
+  drawFitted(letterPage, fields.pcs || '', L.pcs);
+  if ((fields.pcs || '').trim()) {
+    drawFitted(
+      letterPage,
+      'pcs',
+      { x: 206, yTop: 278, size: 10, maxWidth: 28, minSize: 8 },
+      fontReg
+    );
+  }
+  drawFitted(letterPage, fields.kg || '', L.kg);
+  if ((fields.kg || '').trim()) {
+    drawFitted(
+      letterPage,
+      'kgs',
+      { x: 458, yTop: 278, size: 10, maxWidth: 28, minSize: 8 },
+      fontReg
+    );
+  }
+  drawFitted(letterPage, fields.issuedBy || '', L.issuedBy);
+  drawFitted(letterPage, fields.issuedTitle || '', L.title);
+  drawFitted(letterPage, fields.signCompany || '', L.signCompany, fontReg);
+  drawFitted(letterPage, fields.letterDate || '', L.signDate);
+
+  const C = LAYOUT_EK_CSD;
+  const raCode = (fields.raCode || '').trim();
+  drawFitted(csdPage, raCode, C.ra);
+  drawFitted(csdPage, fields.awb, C.awb);
+  drawFitted(csdPage, fields.goods, C.goods);
+  drawFitted(csdPage, fields.pcs || '', C.pcs);
+  drawFitted(csdPage, fields.kg || '', C.kg);
+  drawFitted(csdPage, fields.origin || 'SGN', C.origin);
+  drawFitted(csdPage, fields.dest, C.dest);
+  drawFitted(csdPage, fields.transfer || 'DXB', C.transfer);
+  // SPX + REGULATED AGENT đã bake trên template
+  drawFitted(csdPage, 'X', C.xryTick);
+  drawFitted(csdPage, fields.issuedBy || '', C.issuedBy);
+  drawFitted(csdPage, fields.issuedDateTime || '', C.issuedDateTime);
+  drawFitted(csdPage, raCode, C.footerRa);
+  drawFitted(
+    csdPage,
+    fields.additionalSecurity || 'NO HAWB',
+    C.additional
+  );
+
+  return pdf.save();
+}
+
 export async function fillCsdPdfBytes(
   carrier: CsdCarrier,
   fields: CsdFillFields,
@@ -690,6 +1091,9 @@ export async function fillCsdPdfBytes(
 ): Promise<Uint8Array> {
   const raw = templateBytes ?? (await loadTemplate(carrier));
   const pdf = await PDFDocument.load(raw);
+  if (carrier === "EK") {
+    return fillCsdEkPdfBytes(pdf, fields, assets);
+  }
   const page = pdf.getPages()[0];
   if (!page) throw new Error(`Mẫu CSD ${carrier} không có trang.`);
   const pageH = page.getHeight();
@@ -1193,6 +1597,13 @@ export async function printCsdForShipment(
 
   if (fields.transfer) {
     saveLastCsdTransfer(carrier, fields.transfer);
+  }
+  if (carrier === "EK") {
+    saveLastCsdEkIssuer({
+      issuedBy: fields.issuedBy || "",
+      issuedTitle: fields.issuedTitle || "STAFF",
+      signCompany: fields.signCompany || "",
+    });
   }
 
   const bytes = await fillCsdPdfBytes(carrier, fields);

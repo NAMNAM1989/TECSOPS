@@ -17,7 +17,6 @@ import {
   downloadTcsAttachedDimsExcel,
   printTcsAttachedDimsList,
 } from "../utils/exportTcsAttachedDimsExcel";
-import { canDownloadPhieuCanExcel } from "../utils/phieuCanExcel";
 import { awbDigitsKey } from "../utils/awbFormat";
 import { isTcsWarehouse } from "../constants/warehouses";
 import { isScscH21Warehouse } from "../types/scscH21Catalog";
@@ -212,7 +211,6 @@ export function ShipmentRowActionsMenu({
   const menuId = useId();
 
   const showDim = canPrintDimScscReport(row);
-  const showPhieuCan = canDownloadPhieuCanExcel(row);
   const showTcsDim = isTcsWarehouse(row.warehouse) && canExportTcsDimTemplate(row);
   const showTcsDimPdf = isTcsWarehouse(row.warehouse) && (row.dimLines?.length ?? 0) > 0;
   const showInvoice =
@@ -227,7 +225,6 @@ export function ShipmentRowActionsMenu({
   const csdAirline = csdCarrier ? CSD_AIRLINE[csdCarrier] : "";
   const [csdOpen, setCsdOpen] = useState(false);
   const menuExtras =
-    (showPhieuCan ? 1 : 0) +
     (showDim ? 1 : 0) +
     (showTcsDim ? 2 : 0) +
     (showTcsDimPdf ? 1 : 0) +
@@ -337,19 +334,6 @@ export function ShipmentRowActionsMenu({
               () => onInvoice?.(row),
               undefined,
               `row-invoice-h21-${row.id}`
-            )
-          : null}
-        {showPhieuCan
-          ? menuItem(
-              "Tải phiếu cân Excel",
-              () => {
-                void import("../utils/phieuCanExcel").then((m) =>
-                  m.downloadPhieuCanExcel(row, customerDirectory)
-                );
-              },
-              undefined,
-              `row-phieucan-${row.id}`,
-              "Đổ dữ liệu lô vào mẫu Excel — in bằng Excel trên máy kim"
             )
           : null}
         {showDim

@@ -446,20 +446,22 @@ describe("csdForms", () => {
     expect(bytes.byteLength).toBeGreaterThan(1000);
   });
 
-  it("điền PDF CSD VU: RA + AWB + Contents + DEST/Transfer (giữ SGN/SPX)", async () => {
+  it("điền PDF CSD VU: Contents dùng đủ chiều rộng ô (không cắt đuôi tên dài)", async () => {
     const template = new Uint8Array(
       readFileSync(resolve("public/templates/csd/CSD-VU.pdf"))
     );
     const bold = new Uint8Array(
       readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
     );
+    const goods =
+      "E-COMMERCE GOODS HOME&LIVING HS CODE:9099099 WOMEN CLOTHES HS CODE: 9099099 BABY&KID FASHION HS CODE: 62092090 MUSLIM FA";
     const bytes = await fillCsdPdfBytes(
       "VU",
       {
-        awb: "759-12345675",
-        goods: "FRESH FRUIT",
-        dest: "HAN",
-        transfer: "DAD",
+        awb: "759-00256583",
+        goods,
+        dest: "BKK",
+        transfer: "BKK",
         raCode: "VN/RA3/00009-01",
         opsTeam: "SCSC",
       },
@@ -467,6 +469,17 @@ describe("csdForms", () => {
       { bold }
     );
     expect(bytes.byteLength).toBeGreaterThan(1000);
+    const { PDFDocument } = await import("pdf-lib");
+    const pdf = await PDFDocument.load(bytes);
+    // pdf-lib không extract text; kiểm tra wrap width đủ chứa đuôi "MUSLIM FA"
+    const fontkit = (await import("@pdf-lib/fontkit")).default;
+    const probe = await PDFDocument.create();
+    probe.registerFontkit(fontkit);
+    const font = await probe.embedFont(bold);
+    const lines = wrapCsdGoodsByWidth(font, goods, 480, 12, 3);
+    expect(lines.join(" ")).toContain("MUSLIM FA");
+    expect(lines.join(" ")).toContain("62092090");
+    expect(lines.length).toBeLessThanOrEqual(3);
   });
 
   it("build AK: không ép origin; transfer + RA theo kho", () => {

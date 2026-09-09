@@ -811,8 +811,10 @@ export function wrapCsdGoodsByWidth(
 }
 
 /**
- * Điền Contents: ưu tiên thu nhỏ font để đủ 1 dòng; nếu vẫn dài → tối đa maxLines.
- * Tránh bug cũ: wrap theo ký tự rồi chỉ lấy dòng [0] → mất đuôi tên hàng.
+ * Điền Contents: ưu tiên giữ cỡ chữ đọc được.
+ * 1) đủ 1 dòng ở size gốc → ghi 1 dòng
+ * 2) không đủ → xuống dòng (maxLines) vẫn giữ size lớn nhất có thể
+ * 3) vẫn tràn → wrap ở minSize (có thể cắt đuôi nếu quá dài)
  */
 function drawCsdGoodsFitted(
   page: {
@@ -836,31 +838,39 @@ function drawCsdGoodsFitted(
     .replace(/\s+/g, " ")
     .trim();
   if (!t) return;
-  const minSize = slot.minSize ?? 6;
-  const maxLines = slot.maxLines ?? 2;
-  let size = fitCsdFontSize(font, t, slot.maxWidth, slot.size, minSize);
-  if (font.widthOfTextAtSize(t, size) <= slot.maxWidth) {
-    page.drawText(t, {
-      x: slot.x,
-      y: topYToPdfLibBaseline(pageH, slot.yTop),
-      size,
-      font,
-      color,
+  /** Sàn đọc được — tránh chữ 4–6pt khó nhìn khi in. */
+  const minSize = Math.max(slot.minSize ?? 9, 8);
+  const maxLines = Math.max(slot.maxLines ?? 2, 1);
+  const preferred = Math.max(slot.size, minSize);
+
+  const paint = (lines: string[], size: number) => {
+    const leading = slot.leading ?? size + 2;
+    lines.forEach((line, i) => {
+      page.drawText(line, {
+        x: slot.x,
+        y: topYToPdfLibBaseline(pageH, slot.yTop + i * leading),
+        size,
+        font,
+        color,
+      });
     });
+  };
+
+  if (font.widthOfTextAtSize(t, preferred) <= slot.maxWidth) {
+    paint([t], preferred);
     return;
   }
-  size = minSize;
-  const lines = wrapCsdGoodsByWidth(font, t, slot.maxWidth, size, maxLines);
-  const leading = slot.leading ?? size + 1.5;
-  lines.forEach((line, i) => {
-    page.drawText(line, {
-      x: slot.x,
-      y: topYToPdfLibBaseline(pageH, slot.yTop + i * leading),
-      size,
-      font,
-      color,
-    });
-  });
+
+  for (let size = preferred; size >= minSize; size -= 0.5) {
+    const probe = wrapCsdGoodsByWidth(font, t, slot.maxWidth, size, 99);
+    if (probe.length > 0 && probe.length <= maxLines) {
+      paint(probe, size);
+      return;
+    }
+  }
+
+  const fallback = wrapCsdGoodsByWidth(font, t, slot.maxWidth, minSize, maxLines);
+  paint(fallback.length ? fallback : [t], minSize);
 }
 
 /** Layout FD — Letter 612×792; chữ đậm + size lớn để dễ đọc khi in. */
@@ -913,7 +923,7 @@ const LAYOUT_TG = {
 const LAYOUT_MH = {
   ra: { x: 54, yTop: 212, size: 11 },
   awb: { x: 350, yTop: 178, size: 13 },
-  goods: { x: 240, yTop: 268, size: 11, maxWidth: 250, minSize: 6, maxLines: 2 },
+  goods: { x: 240, yTop: 268, size: 11, maxWidth: 250, minSize: 9, maxLines: 2 },
   goodsMaxChars: 48,
   /** Cùng hàng với Origin SGN (glyph top ≈313). */
   dest: { x: 270, yTop: 326, size: 14 },
@@ -930,7 +940,7 @@ const LAYOUT_AK = {
   ra: { x: 170, yTop: 176, size: 10 },
   awb: { x: 330, yTop: 176, size: 13 },
   /** Bên phải checkbox Consolidation. */
-  goods: { x: 200, yTop: 215, size: 11, maxWidth: 230, minSize: 6, maxLines: 2 },
+  goods: { x: 200, yTop: 215, size: 11, maxWidth: 230, minSize: 9, maxLines: 2 },
   goodsMaxChars: 48,
   /** Cùng hàng với Origin SGN (y≈240). */
   dest: { x: 230, yTop: 254, size: 14 },
@@ -950,7 +960,7 @@ const LAYOUT_QR = {
   awb: { x: 318, yTop: 160, size: 13 },
   /** Chỉ phủ "FABRICS" — không kéo xuống checkbox Consolidation. */
   goodsWipe: { x: 145, yTop: 224, w: 70, h: 14 },
-  goods: { x: 148, yTop: 236, size: 11, maxWidth: 280, minSize: 6, maxLines: 2 },
+  goods: { x: 148, yTop: 236, size: 11, maxWidth: 280, minSize: 9, maxLines: 2 },
   goodsMaxChars: 55,
   /** Dưới nhãn Destination (y≈251), chỉ phủ "JED". */
   destWipe: { x: 205, yTop: 270, w: 35, h: 16 },
@@ -964,12 +974,23 @@ const LAYOUT_QR = {
  * Layout VU — A4 (mẫu SCSC Vietravel).
  * Origin SGN + SPX + X-RAY đã in sẵn; ô trống: RA / AWB / Contents / DEST / Transfer / footer RA.
  * Không wipe.
+ *
+ * Ô Contents: x≈57–564, nhãn ~232–244, Consolidation ~282 → chữ từ ~250, rộng ~480, tối đa 3 dòng.
  */
 const LAYOUT_VU = {
   ra: { x: 70, yTop: 222, size: 11 },
   awb: { x: 330, yTop: 210, size: 13 },
-  goods: { x: 70, yTop: 268, size: 11, maxWidth: 280, minSize: 6, maxLines: 2 },
-  goodsMaxChars: 58,
+  goods: {
+    x: 70,
+    /** Dưới nhãn Contents (~244), trên Consolidation (~282). */
+    yTop: 258,
+    size: 12,
+    maxWidth: 480,
+    minSize: 10,
+    maxLines: 3,
+    leading: 13,
+  },
+  goodsMaxChars: 150,
   /** Cùng hàng với Origin SGN (glyph ≈334–346). */
   dest: { x: 210, yTop: 346, size: 14 },
   transfer: { x: 335, yTop: 346, size: 13 },
@@ -985,7 +1006,7 @@ const LAYOUT_IATA = {
   ra: { x: 65, yTop: 188, size: 11 },
   awb: { x: 300, yTop: 188, size: 13 },
   /** Bên phải checkbox Consolidation. */
-  goods: { x: 130, yTop: 236, size: 11, maxWidth: 250, minSize: 6, maxLines: 2 },
+  goods: { x: 130, yTop: 236, size: 11, maxWidth: 250, minSize: 9, maxLines: 2 },
   goodsMaxChars: 55,
   /** Cùng hàng với Origin SGN (glyph ≈276–286). */
   dest: { x: 190, yTop: 286, size: 13 },
@@ -1005,7 +1026,7 @@ const LAYOUT_IATA = {
 const LAYOUT_BI = {
   ra: { x: 65, yTop: 185, size: 11 },
   awb: { x: 310, yTop: 185, size: 13 },
-  goods: { x: 70, yTop: 238, size: 11, maxWidth: 280, minSize: 6, maxLines: 2 },
+  goods: { x: 70, yTop: 238, size: 11, maxWidth: 280, minSize: 9, maxLines: 2 },
   goodsMaxChars: 55,
   /** Cùng hàng với Origin SGN (glyph ≈303–318). */
   dest: { x: 200, yTop: 316, size: 14 },
@@ -1025,7 +1046,7 @@ const LAYOUT_PR = {
   telephone: { x: 435, yTop: 266, size: 8, maxWidth: 95, minSize: 6 },
   awb: { x: 132, yTop: 284, size: 9, maxWidth: 105, minSize: 6 },
   pcsWeight: { x: 250, yTop: 285, size: 8, maxWidth: 135, minSize: 6 },
-  goods: { x: 398, yTop: 285, size: 7, maxWidth: 130, minSize: 4.5, maxLines: 1 },
+  goods: { x: 398, yTop: 285, size: 9, maxWidth: 130, minSize: 8, maxLines: 1 },
   verifiedBy: { x: 380, yTop: 351, size: 6, maxWidth: 150, minSize: 5 },
   xrayCount: { x: 340, yTop: 485, size: 10, maxWidth: 42, minSize: 7 },
   totalScreened: { x: 490, yTop: 485, size: 10, maxWidth: 42, minSize: 7 },
@@ -1091,7 +1112,7 @@ const LAYOUT_EK_LETTER = {
   awb: { x: 144, yTop: 238, size: 14, maxWidth: 128, minSize: 10 },
   routing: { x: 388, yTop: 236, size: 11, maxWidth: 160, minSize: 8 },
   letterDate: { x: 144, yTop: 258, size: 13, maxWidth: 120, minSize: 9 },
-  goods: { x: 388, yTop: 258, size: 12, maxWidth: 165, minSize: 8 },
+  goods: { x: 388, yTop: 258, size: 12, maxWidth: 165, minSize: 10, maxLines: 2 },
   pcs: { x: 150, yTop: 278, size: 12, maxWidth: 50, minSize: 9 },
   kg: { x: 390, yTop: 278, size: 12, maxWidth: 62, minSize: 9 },
   issuedBy: { x: 120, yTop: 662, size: 11, maxWidth: 160, minSize: 8 },
@@ -1104,7 +1125,7 @@ const LAYOUT_EK_CSD = {
   ra: { x: 18, yTop: 191, size: 10, maxWidth: 95, minSize: 7 },
   awb: { x: 250, yTop: 191, size: 12, maxWidth: 115, minSize: 8 },
   /** Contents — cột trái, dưới nhãn; size lớn nhưng fit width. */
-  goods: { x: 18, yTop: 232, size: 15, maxWidth: 220, minSize: 8 },
+  goods: { x: 18, yTop: 232, size: 13, maxWidth: 220, minSize: 10, maxLines: 2 },
   pcs: { x: 286, yTop: 217, size: 11, maxWidth: 42, minSize: 8 },
   kg: { x: 416, yTop: 217, size: 11, maxWidth: 72, minSize: 8 },
   origin: { x: 56, yTop: 262, size: 14, maxWidth: 50, minSize: 10 },
@@ -1266,7 +1287,10 @@ async function fillCsdEkPdfBytes(
   drawFitted(letterPage, fields.awb, L.awb);
   drawFitted(letterPage, fields.routing || '', L.routing);
   drawFitted(letterPage, fields.letterDate || '', L.letterDate);
-  drawFitted(letterPage, fields.goods, L.goods);
+  drawCsdGoodsFitted(letterPage, letterPage.getHeight(), fontBold, ink, fields.goods, {
+    ...L.goods,
+    leading: 14,
+  });
   drawFitted(letterPage, fields.pcs || '', L.pcs);
   if ((fields.pcs || '').trim()) {
     drawFitted(
@@ -1294,7 +1318,10 @@ async function fillCsdEkPdfBytes(
   const raCode = (fields.raCode || '').trim();
   drawFitted(csdPage, raCode, C.ra);
   drawFitted(csdPage, fields.awb, C.awb);
-  drawFitted(csdPage, fields.goods, C.goods);
+  drawCsdGoodsFitted(csdPage, csdPage.getHeight(), fontBold, ink, fields.goods, {
+    ...C.goods,
+    leading: 15,
+  });
   drawFitted(csdPage, fields.pcs || '', C.pcs);
   drawFitted(csdPage, fields.kg || '', C.kg);
   drawFitted(csdPage, fields.origin || 'SGN', C.origin);

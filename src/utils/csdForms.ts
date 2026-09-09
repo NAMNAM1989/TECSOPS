@@ -749,20 +749,6 @@ type CsdPdfFont = {
   widthOfTextAtSize: (text: string, size: number) => number;
 };
 
-function fitCsdFontSize(
-  font: CsdPdfFont,
-  text: string,
-  maxWidth: number,
-  preferred: number,
-  minSize: number
-): number {
-  let size = preferred;
-  while (size > minSize && font.widthOfTextAtSize(text, size) > maxWidth) {
-    size -= 0.5;
-  }
-  return size;
-}
-
 /** Bọc tên hàng theo chiều rộng font thật (không cắt cứng theo số ký tự). */
 export function wrapCsdGoodsByWidth(
   font: CsdPdfFont,

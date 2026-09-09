@@ -20,9 +20,15 @@ export type AirlineCatalogState = {
   refresh: () => Promise<void>;
 };
 
+type FetchOpts = {
+  /** Không đổi UI sang loading (stale-while-revalidate nền). */
+  silent?: boolean;
+};
+
 /**
  * Master hãng bay từ Supabase (client) + localStorage.
- * Cache trống → tự fetch một lần; `refresh` ghi đè toàn bộ.
+ * Cache trống → fetch; có cache → hiện ngay rồi refresh nền khi mở app (hãng mới như T5).
+ * Nút Đồng bộ = refresh ghi đè thủ công.
  */
 export function useAirlineCatalog(): AirlineCatalogState {
   const cached = typeof window !== "undefined" ? loadAirlineCatalogCache() : null;
@@ -34,7 +40,7 @@ export function useAirlineCatalog(): AirlineCatalogState {
   const [error, setError] = useState<string | null>(null);
   const inflight = useRef<Promise<void> | null>(null);
 
-  const runFetch = useCallback(async (force: boolean) => {
+  const runFetch = useCallback(async (force: boolean, opts: FetchOpts = {}) => {
     if (inflight.current) return inflight.current;
 
     const job = (async () => {
@@ -56,7 +62,9 @@ export function useAirlineCatalog(): AirlineCatalogState {
         }
       }
 
-      setStatus("loading");
+      if (!opts.silent) {
+        setStatus("loading");
+      }
       setError(null);
       try {
         const next = await fetchAirlinesFromSupabase(cfg);
@@ -72,7 +80,7 @@ export function useAirlineCatalog(): AirlineCatalogState {
           setMaps(fallback.maps);
           setSyncedAt(fallback.syncedAt);
           setStatus("ready");
-        } else {
+        } else if (!opts.silent) {
           setStatus("error");
         }
       }
@@ -95,9 +103,16 @@ export function useAirlineCatalog(): AirlineCatalogState {
   }, [runFetch]);
 
   useEffect(() => {
-    if (cached) return;
-    void ensureLoaded();
-    // Bootstrap một lần khi mount nếu chưa có cache (cố ý bỏ deps).
+    void (async () => {
+      if (!cached) {
+        await runFetch(false);
+        return;
+      }
+      // Stale-while-revalidate: giữ cache cũ trên UI, kéo lại từ Supabase khi mở app.
+      await runFetch(true, { silent: true });
+    })();
+    // Bootstrap một lần khi mount (cố ý bỏ deps).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return {

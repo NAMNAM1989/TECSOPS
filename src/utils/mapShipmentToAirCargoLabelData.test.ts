@@ -64,6 +64,11 @@ describe("extractFlightAirlinePrefix", () => {
   it("khớp prefix 3 ký tự nếu có trong bảng", () => {
     expect(extractFlightAirlinePrefix("XYZ99", { XYZ: "X" })).toBe("XYZ");
   });
+
+  it("IATA chữ+số kiểu T5", () => {
+    expect(extractFlightAirlinePrefix("T5123")).toBe("T5");
+    expect(extractFlightAirlinePrefix("T5 101/09SEP", { T5: "TURKMENISTAN AIRLINES" })).toBe("T5");
+  });
 });
 
 describe("mapShipmentToAirCargoLabelData airline", () => {
@@ -83,5 +88,34 @@ describe("mapShipmentToAirCargoLabelData airline", () => {
   it("fallback AWB khi không có chuyến", () => {
     const d = mapShipmentToAirCargoLabelData(baseShipment({ flight: "", awb: "695-5630 0484" }));
     expect(d.airline).toBe("EVA AIR");
+  });
+
+  it("T5 từ catalog Supabase → TURKMENISTAN AIRLINES", () => {
+    const catalog = {
+      byAwbPrefix: { "542": "TURKMENISTAN AIRLINES" },
+      byFlightPrefix: { T5: "TURKMENISTAN AIRLINES" },
+    };
+    const byFlight = mapShipmentToAirCargoLabelData(
+      baseShipment({ flight: "T5123", awb: "542-1234 5678" }),
+      catalog,
+      { replaceDefaults: true }
+    );
+    expect(byFlight.airline).toBe("TURKMENISTAN AIRLINES");
+
+    const byAwb = mapShipmentToAirCargoLabelData(
+      baseShipment({ flight: "", awb: "542-1234 5678" }),
+      catalog,
+      { replaceDefaults: true }
+    );
+    expect(byAwb.airline).toBe("TURKMENISTAN AIRLINES");
+  });
+
+  it("thiếu T5 trong catalog (cache cũ) → synthetic T5 AIRLINES", () => {
+    const d = mapShipmentToAirCargoLabelData(
+      baseShipment({ flight: "T5123", awb: "542-1234 5678" }),
+      { byAwbPrefix: {}, byFlightPrefix: {} },
+      { replaceDefaults: true }
+    );
+    expect(d.airline).toBe("T5 AIRLINES");
   });
 });

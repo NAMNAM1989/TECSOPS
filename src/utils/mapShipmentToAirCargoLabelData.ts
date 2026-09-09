@@ -44,8 +44,8 @@ export function extractFlightAirlinePrefix(
   const two = raw.slice(0, 2);
   if (known?.has(three)) return three;
   if (known?.has(two)) return two;
-  // Designator số+chữ kiểu 5J / 3U — lấy 2 ký tự
-  if (/^[0-9][A-Z]/.test(two)) return two;
+  // Designator số+chữ (5J) hoặc chữ+số (T5) — lấy 2 ký tự IATA
+  if (/^[0-9][A-Z]/.test(two) || /^[A-Z][0-9]/.test(two)) return two;
   if (known === null && /^[A-Z]{3}/.test(three) && !/^[A-Z]{2}\d/.test(raw)) {
     // Hiếm: mã 3 chữ không kèm số chuyến
     return three;

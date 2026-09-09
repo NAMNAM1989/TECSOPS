@@ -36,6 +36,7 @@ import {
   suggestCsdTransfer,
   resolveCsdGoodsText,
   wrapCsdGoodsLines,
+  wrapCsdGoodsByWidth,
 } from "./csdForms";
 
 describe("csdForms", () => {
@@ -251,6 +252,42 @@ describe("csdForms", () => {
 
   it("wrap tên hàng", () => {
     expect(wrapCsdGoodsLines("CLOTHES")).toEqual(["CLOTHES"]);
+  });
+
+  it("Contents CSD không cắt đuôi tên hàng dài (fit width thay vì wrap[0])", async () => {
+    const template = Uint8Array.from(
+      readFileSync(resolve("public/templates/csd/CSD-BI.pdf"))
+    );
+    const bold = Uint8Array.from(
+      readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
+    );
+    const long =
+      "FRESH FRUITS AND VEGETABLES MIXED ORGANIC EXPORT QUALITY PACKED";
+    // Bug cũ: wrap max 55 rồi lấy [0] → mất phần đuôi
+    expect(wrapCsdGoodsLines(long, 55)[0]).not.toBe(long);
+
+    const { PDFDocument } = await import("pdf-lib");
+    const fontkit = (await import("@pdf-lib/fontkit")).default;
+    const probe = await PDFDocument.create();
+    probe.registerFontkit(fontkit);
+    const font = await probe.embedFont(bold);
+    const fitted = wrapCsdGoodsByWidth(font, long, 280, 6, 2).join(" ");
+    expect(fitted.includes("PACKED")).toBe(true);
+    expect(fitted.length).toBeGreaterThanOrEqual(long.length - 5);
+
+    const bytes = await fillCsdPdfBytes(
+      "BI",
+      {
+        awb: "672-12345675",
+        goods: long,
+        dest: "BWN",
+        transfer: "BWN",
+        raCode: "VN/RA3/00009-01",
+      },
+      template,
+      { bold }
+    );
+    expect(bytes.byteLength).toBeGreaterThan(1000);
   });
 
   it("tên hàng CSD lấy từ hồ sơ khách khi lô chưa có goodsDescriptionPrint", () => {
@@ -699,6 +736,9 @@ describe("csdForms", () => {
     const template = Uint8Array.from(
       readFileSync(resolve("public/templates/csd/CSD-PR.pdf"))
     );
+    const bold = Uint8Array.from(
+      readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
+    );
     const bytes = await fillCsdPdfBytes(
       "PR",
       {
@@ -717,7 +757,8 @@ describe("csdForms", () => {
         formDate: "08-Sep-2026",
         verifiedBy: "TCS Co., Ltd. - PAL Cargo Handler",
       },
-      template
+      template,
+      { bold }
     );
     expect(bytes.byteLength).toBeGreaterThan(1000);
     const { PDFDocument } = await import("pdf-lib");
@@ -728,6 +769,9 @@ describe("csdForms", () => {
   it("điền PDF CSD EK: 2 trang Letter + CSD", async () => {
     const template = Uint8Array.from(
       readFileSync(resolve("public/templates/csd/CSD-EK.pdf"))
+    );
+    const bold = Uint8Array.from(
+      readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
     );
     const bytes = await fillCsdPdfBytes(
       "EK",
@@ -749,7 +793,8 @@ describe("csdForms", () => {
         issuedDateTime: "08-Sep-2026  15:30",
         additionalSecurity: "NO HAWB",
       },
-      template
+      template,
+      { bold }
     );
     expect(bytes.byteLength).toBeGreaterThan(1000);
     const { PDFDocument } = await import("pdf-lib");

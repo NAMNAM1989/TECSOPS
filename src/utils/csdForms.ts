@@ -712,15 +712,29 @@ async function embedCsdBoldFont(
   pdf: PDFDocument,
   assets?: CsdPdfAssets
 ): Promise<Awaited<ReturnType<PDFDocument["embedFont"]>>> {
-  const bytes =
-    assets?.bold ??
-    (await (async () => {
-      const res = await fetch(CSD_FONT_BOLD_URL, { cache: "force-cache" });
-      if (!res.ok) throw new Error(`Không tải được font CSD (${res.status}).`);
-      return res.arrayBuffer();
-    })());
   pdf.registerFontkit(fontkit);
-  return pdf.embedFont(bytes);
+  if (assets?.bold) {
+    return pdf.embedFont(assets.bold);
+  }
+  const load = async (url: string) => {
+    /** no-cache: tránh font lỗi/cũ trong HTTP cache trình duyệt (production). */
+    const res = await fetch(url, { cache: "no-cache" });
+    if (!res.ok) throw new Error(`Không tải được font CSD (${url}: ${res.status}).`);
+    return res.arrayBuffer();
+  };
+  try {
+    return await pdf.embedFont(await load(CSD_FONT_BOLD_URL));
+  } catch (e1) {
+    try {
+      return await pdf.embedFont(await load("/fonts/NotoSans-Regular.ttf"));
+    } catch {
+      throw new Error(
+        `Không tải được font Unicode cho CSD (cần Noto Sans). ${
+          e1 instanceof Error ? e1.message : ""
+        }`.trim()
+      );
+    }
+  }
 }
 
 function lineYToPdfLibBaseline(pageH: number, lineY: number): number {
@@ -729,6 +743,124 @@ function lineYToPdfLibBaseline(pageH: number, lineY: number): number {
 
 function topYToPdfLibBaseline(pageH: number, yTop: number): number {
   return pageH - yTop;
+}
+
+type CsdPdfFont = {
+  widthOfTextAtSize: (text: string, size: number) => number;
+};
+
+function fitCsdFontSize(
+  font: CsdPdfFont,
+  text: string,
+  maxWidth: number,
+  preferred: number,
+  minSize: number
+): number {
+  let size = preferred;
+  while (size > minSize && font.widthOfTextAtSize(text, size) > maxWidth) {
+    size -= 0.5;
+  }
+  return size;
+}
+
+/** Bọc tên hàng theo chiều rộng font thật (không cắt cứng theo số ký tự). */
+export function wrapCsdGoodsByWidth(
+  font: CsdPdfFont,
+  text: string,
+  maxWidth: number,
+  size: number,
+  maxLines: number
+): string[] {
+  const words = text
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+  if (!words.length) return [];
+  const out: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (font.widthOfTextAtSize(next, size) <= maxWidth) {
+      line = next;
+      continue;
+    }
+    if (line) {
+      out.push(line);
+      if (out.length >= maxLines) return out;
+    }
+    if (font.widthOfTextAtSize(word, size) > maxWidth) {
+      let chunk = "";
+      for (const ch of word) {
+        const tryChunk = chunk + ch;
+        if (font.widthOfTextAtSize(tryChunk, size) > maxWidth && chunk) {
+          out.push(chunk);
+          if (out.length >= maxLines) return out;
+          chunk = ch;
+        } else {
+          chunk = tryChunk;
+        }
+      }
+      line = chunk;
+    } else {
+      line = word;
+    }
+  }
+  if (line && out.length < maxLines) out.push(line);
+  return out.slice(0, maxLines);
+}
+
+/**
+ * Điền Contents: ưu tiên thu nhỏ font để đủ 1 dòng; nếu vẫn dài → tối đa maxLines.
+ * Tránh bug cũ: wrap theo ký tự rồi chỉ lấy dòng [0] → mất đuôi tên hàng.
+ */
+function drawCsdGoodsFitted(
+  page: {
+    drawText: (text: string, opts: Record<string, unknown>) => void;
+  },
+  pageH: number,
+  font: CsdPdfFont & object,
+  color: ReturnType<typeof rgb>,
+  text: string,
+  slot: {
+    x: number;
+    yTop: number;
+    size: number;
+    maxWidth: number;
+    minSize?: number;
+    maxLines?: number;
+    leading?: number;
+  }
+): void {
+  const t = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!t) return;
+  const minSize = slot.minSize ?? 6;
+  const maxLines = slot.maxLines ?? 2;
+  let size = fitCsdFontSize(font, t, slot.maxWidth, slot.size, minSize);
+  if (font.widthOfTextAtSize(t, size) <= slot.maxWidth) {
+    page.drawText(t, {
+      x: slot.x,
+      y: topYToPdfLibBaseline(pageH, slot.yTop),
+      size,
+      font,
+      color,
+    });
+    return;
+  }
+  size = minSize;
+  const lines = wrapCsdGoodsByWidth(font, t, slot.maxWidth, size, maxLines);
+  const leading = slot.leading ?? size + 1.5;
+  lines.forEach((line, i) => {
+    page.drawText(line, {
+      x: slot.x,
+      y: topYToPdfLibBaseline(pageH, slot.yTop + i * leading),
+      size,
+      font,
+      color,
+    });
+  });
 }
 
 /** Layout FD — Letter 612×792; chữ đậm + size lớn để dễ đọc khi in. */
@@ -781,7 +913,7 @@ const LAYOUT_TG = {
 const LAYOUT_MH = {
   ra: { x: 54, yTop: 212, size: 11 },
   awb: { x: 350, yTop: 178, size: 13 },
-  goods: { x: 240, yTop: 268, size: 11 },
+  goods: { x: 240, yTop: 268, size: 11, maxWidth: 250, minSize: 6, maxLines: 2 },
   goodsMaxChars: 48,
   /** Cùng hàng với Origin SGN (glyph top ≈313). */
   dest: { x: 270, yTop: 326, size: 14 },
@@ -798,7 +930,7 @@ const LAYOUT_AK = {
   ra: { x: 170, yTop: 176, size: 10 },
   awb: { x: 330, yTop: 176, size: 13 },
   /** Bên phải checkbox Consolidation. */
-  goods: { x: 200, yTop: 215, size: 11 },
+  goods: { x: 200, yTop: 215, size: 11, maxWidth: 230, minSize: 6, maxLines: 2 },
   goodsMaxChars: 48,
   /** Cùng hàng với Origin SGN (y≈240). */
   dest: { x: 230, yTop: 254, size: 14 },
@@ -818,7 +950,7 @@ const LAYOUT_QR = {
   awb: { x: 318, yTop: 160, size: 13 },
   /** Chỉ phủ "FABRICS" — không kéo xuống checkbox Consolidation. */
   goodsWipe: { x: 145, yTop: 224, w: 70, h: 14 },
-  goods: { x: 148, yTop: 236, size: 11 },
+  goods: { x: 148, yTop: 236, size: 11, maxWidth: 280, minSize: 6, maxLines: 2 },
   goodsMaxChars: 55,
   /** Dưới nhãn Destination (y≈251), chỉ phủ "JED". */
   destWipe: { x: 205, yTop: 270, w: 35, h: 16 },
@@ -836,7 +968,7 @@ const LAYOUT_QR = {
 const LAYOUT_VU = {
   ra: { x: 70, yTop: 222, size: 11 },
   awb: { x: 330, yTop: 210, size: 13 },
-  goods: { x: 70, yTop: 268, size: 11 },
+  goods: { x: 70, yTop: 268, size: 11, maxWidth: 280, minSize: 6, maxLines: 2 },
   goodsMaxChars: 58,
   /** Cùng hàng với Origin SGN (glyph ≈334–346). */
   dest: { x: 210, yTop: 346, size: 14 },
@@ -853,7 +985,7 @@ const LAYOUT_IATA = {
   ra: { x: 65, yTop: 188, size: 11 },
   awb: { x: 300, yTop: 188, size: 13 },
   /** Bên phải checkbox Consolidation. */
-  goods: { x: 130, yTop: 236, size: 11 },
+  goods: { x: 130, yTop: 236, size: 11, maxWidth: 250, minSize: 6, maxLines: 2 },
   goodsMaxChars: 55,
   /** Cùng hàng với Origin SGN (glyph ≈276–286). */
   dest: { x: 190, yTop: 286, size: 13 },
@@ -873,7 +1005,7 @@ const LAYOUT_IATA = {
 const LAYOUT_BI = {
   ra: { x: 65, yTop: 185, size: 11 },
   awb: { x: 310, yTop: 185, size: 13 },
-  goods: { x: 70, yTop: 238, size: 11 },
+  goods: { x: 70, yTop: 238, size: 11, maxWidth: 280, minSize: 6, maxLines: 2 },
   goodsMaxChars: 55,
   /** Cùng hàng với Origin SGN (glyph ≈303–318). */
   dest: { x: 200, yTop: 316, size: 14 },
@@ -893,7 +1025,7 @@ const LAYOUT_PR = {
   telephone: { x: 435, yTop: 266, size: 8, maxWidth: 95, minSize: 6 },
   awb: { x: 132, yTop: 284, size: 9, maxWidth: 105, minSize: 6 },
   pcsWeight: { x: 250, yTop: 285, size: 8, maxWidth: 135, minSize: 6 },
-  goods: { x: 398, yTop: 285, size: 7, maxWidth: 130, minSize: 5 },
+  goods: { x: 398, yTop: 285, size: 7, maxWidth: 130, minSize: 4.5, maxLines: 1 },
   verifiedBy: { x: 380, yTop: 351, size: 6, maxWidth: 150, minSize: 5 },
   xrayCount: { x: 340, yTop: 485, size: 10, maxWidth: 42, minSize: 7 },
   totalScreened: { x: 490, yTop: 485, size: 10, maxWidth: 42, minSize: 7 },
@@ -1063,12 +1195,7 @@ async function fillCsdEkPdfBytes(
     throw new Error('Mẫu CSD EK cần đủ 2 trang (Letter + CSD).');
   }
   const [letterPage, csdPage] = pages;
-  let fontBold;
-  try {
-    fontBold = await embedCsdBoldFont(pdf, assets);
-  } catch {
-    fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  }
+  const fontBold = await embedCsdBoldFont(pdf, assets);
   let fontReg;
   try {
     fontReg = await pdf.embedFont(StandardFonts.Helvetica);
@@ -1201,12 +1328,7 @@ export async function fillCsdPdfBytes(
   const page = pdf.getPages()[0];
   if (!page) throw new Error(`Mẫu CSD ${carrier} không có trang.`);
   const pageH = page.getHeight();
-  let fontBold;
-  try {
-    fontBold = await embedCsdBoldFont(pdf, assets);
-  } catch {
-    fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  }
+  const fontBold = await embedCsdBoldFont(pdf, assets);
   const ink = rgb(0, 0, 0);
   const raCode = (fields.raCode || "").trim();
   const raLabel = raCode ? `RA ${raCode}` : "";
@@ -1216,6 +1338,18 @@ export async function fillCsdPdfBytes(
     if (!t) return;
     page.drawText(t, { x, y, size, font: fontBold, color: ink });
   };
+
+  const drawGoods = (
+    slot: {
+      x: number;
+      yTop: number;
+      size: number;
+      maxWidth: number;
+      minSize?: number;
+      maxLines?: number;
+      leading?: number;
+    }
+  ) => drawCsdGoodsFitted(page, pageH, fontBold, ink, fields.goods, slot);
 
   if (carrier === "FD") {
     if (raCode) {
@@ -1238,7 +1372,13 @@ export async function fillCsdPdfBytes(
       lineYToPdfLibBaseline(pageH, LAYOUT_FD.awb.lineY),
       LAYOUT_FD.awb.size
     );
-    wrapCsdGoodsLines(fields.goods, 58).forEach((line, i) => {
+    wrapCsdGoodsByWidth(
+      fontBold,
+      fields.goods,
+      320,
+      LAYOUT_FD.goodsSize,
+      LAYOUT_FD.goodsLines.length
+    ).forEach((line, i) => {
       const slot = LAYOUT_FD.goodsLines[i];
       if (!slot) return;
       draw(
@@ -1285,15 +1425,7 @@ export async function fillCsdPdfBytes(
       topYToPdfLibBaseline(pageH, LAYOUT_MH.awb.yTop),
       LAYOUT_MH.awb.size
     );
-    const goodsLine =
-      wrapCsdGoodsLines(fields.goods, LAYOUT_MH.goodsMaxChars)[0] ||
-      fields.goods;
-    draw(
-      goodsLine,
-      LAYOUT_MH.goods.x,
-      topYToPdfLibBaseline(pageH, LAYOUT_MH.goods.yTop),
-      LAYOUT_MH.goods.size
-    );
+    drawGoods(LAYOUT_MH.goods);
     if (fields.dest) {
       draw(
         fields.dest,
@@ -1326,15 +1458,7 @@ export async function fillCsdPdfBytes(
       topYToPdfLibBaseline(pageH, LAYOUT_AK.awb.yTop),
       LAYOUT_AK.awb.size
     );
-    const goodsLine =
-      wrapCsdGoodsLines(fields.goods, LAYOUT_AK.goodsMaxChars)[0] ||
-      fields.goods;
-    draw(
-      goodsLine,
-      LAYOUT_AK.goods.x,
-      topYToPdfLibBaseline(pageH, LAYOUT_AK.goods.yTop),
-      LAYOUT_AK.goods.size
-    );
+    drawGoods(LAYOUT_AK.goods);
     if (fields.dest) {
       draw(
         fields.dest,
@@ -1370,15 +1494,7 @@ export async function fillCsdPdfBytes(
       LAYOUT_QR.awb.size
     );
     wipeRect(page, LAYOUT_QR.goodsWipe);
-    const goodsLine =
-      wrapCsdGoodsLines(fields.goods, LAYOUT_QR.goodsMaxChars)[0] ||
-      fields.goods;
-    draw(
-      goodsLine,
-      LAYOUT_QR.goods.x,
-      topYToPdfLibBaseline(pageH, LAYOUT_QR.goods.yTop),
-      LAYOUT_QR.goods.size
-    );
+    drawGoods(LAYOUT_QR.goods);
     wipeRect(page, LAYOUT_QR.destWipe);
     if (fields.dest) {
       draw(
@@ -1419,15 +1535,7 @@ export async function fillCsdPdfBytes(
       topYToPdfLibBaseline(pageH, LAYOUT_VU.awb.yTop),
       LAYOUT_VU.awb.size
     );
-    const goodsLine =
-      wrapCsdGoodsLines(fields.goods, LAYOUT_VU.goodsMaxChars)[0] ||
-      fields.goods;
-    draw(
-      goodsLine,
-      LAYOUT_VU.goods.x,
-      topYToPdfLibBaseline(pageH, LAYOUT_VU.goods.yTop),
-      LAYOUT_VU.goods.size
-    );
+    drawGoods(LAYOUT_VU.goods);
     if (fields.dest) {
       draw(
         fields.dest,
@@ -1466,15 +1574,7 @@ export async function fillCsdPdfBytes(
       topYToPdfLibBaseline(pageH, LAYOUT_IATA.awb.yTop),
       LAYOUT_IATA.awb.size
     );
-    const goodsLine =
-      wrapCsdGoodsLines(fields.goods, LAYOUT_IATA.goodsMaxChars)[0] ||
-      fields.goods;
-    draw(
-      goodsLine,
-      LAYOUT_IATA.goods.x,
-      topYToPdfLibBaseline(pageH, LAYOUT_IATA.goods.yTop),
-      LAYOUT_IATA.goods.size
-    );
+    drawGoods(LAYOUT_IATA.goods);
     if (fields.dest) {
       draw(
         fields.dest,
@@ -1525,15 +1625,7 @@ export async function fillCsdPdfBytes(
       topYToPdfLibBaseline(pageH, LAYOUT_BI.awb.yTop),
       LAYOUT_BI.awb.size
     );
-    const goodsLine =
-      wrapCsdGoodsLines(fields.goods, LAYOUT_BI.goodsMaxChars)[0] ||
-      fields.goods;
-    draw(
-      goodsLine,
-      LAYOUT_BI.goods.x,
-      topYToPdfLibBaseline(pageH, LAYOUT_BI.goods.yTop),
-      LAYOUT_BI.goods.size
-    );
+    drawGoods(LAYOUT_BI.goods);
     if (fields.dest) {
       draw(
         fields.dest,
@@ -1577,10 +1669,7 @@ export async function fillCsdPdfBytes(
     fit(fields.shipperPhone || "", P.telephone);
     fit(fields.awb, P.awb);
     fit(fields.pcsWeight || "", P.pcsWeight);
-    fit(
-      wrapCsdGoodsLines(fields.goods, 42)[0] || fields.goods,
-      P.goods
-    );
+    drawGoods(P.goods);
     fit(fields.verifiedBy || "", P.verifiedBy);
     const pcsNum = (fields.pcs || "").trim();
     if (pcsNum) {
@@ -1611,18 +1700,22 @@ export async function fillCsdPdfBytes(
       topYToPdfLibBaseline(pageH, LAYOUT_TG.awb.yTop),
       LAYOUT_TG.awb.size
     );
-    wrapCsdGoodsLines(fields.goods, LAYOUT_TG.goodsMaxChars).forEach(
-      (line, i) => {
-        const slot = LAYOUT_TG.goodsLines[i];
-        if (!slot) return;
-        draw(
-          line,
-          slot.x,
-          topYToPdfLibBaseline(pageH, slot.yTop),
-          LAYOUT_TG.goodsSize
-        );
-      }
-    );
+    wrapCsdGoodsByWidth(
+      fontBold,
+      fields.goods,
+      340,
+      LAYOUT_TG.goodsSize,
+      LAYOUT_TG.goodsLines.length
+    ).forEach((line, i) => {
+      const slot = LAYOUT_TG.goodsLines[i];
+      if (!slot) return;
+      draw(
+        line,
+        slot.x,
+        topYToPdfLibBaseline(pageH, slot.yTop),
+        LAYOUT_TG.goodsSize
+      );
+    });
     draw(
       fields.origin || CSD_DEFAULT_ORIGIN,
       LAYOUT_TG.origin.x,
@@ -1749,7 +1842,16 @@ export async function printCsdForShipment(
     });
   }
 
-  const bytes = await fillCsdPdfBytes(carrier, fields);
+  /** Preload Noto trước khi fill — tránh Helvetica cắt mất tiếng Việt trên production. */
+  let assets: CsdPdfAssets | undefined;
+  try {
+    const res = await fetch(CSD_FONT_BOLD_URL, { cache: "no-cache" });
+    if (res.ok) assets = { bold: await res.arrayBuffer() };
+  } catch {
+    /* embedCsdBoldFont sẽ thử lại / báo lỗi rõ */
+  }
+
+  const bytes = await fillCsdPdfBytes(carrier, fields, undefined, assets);
   const filename = csdDownloadFilename({
     carrier,
     awb: s.awb,

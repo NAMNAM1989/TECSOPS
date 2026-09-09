@@ -476,10 +476,13 @@ describe("csdForms", () => {
     const probe = await PDFDocument.create();
     probe.registerFontkit(fontkit);
     const font = await probe.embedFont(bold);
-    const lines = wrapCsdGoodsByWidth(font, goods, 480, 12, 3);
-    expect(lines.join(" ")).toContain("MUSLIM FA");
-    expect(lines.join(" ")).toContain("62092090");
-    expect(lines.length).toBeLessThanOrEqual(3);
+    const beside = wrapCsdGoodsByWidth(font, goods, 340, 12, 1)[0] || "";
+    const rest = goods.slice(beside.length).trim();
+    const body = wrapCsdGoodsByWidth(font, rest, 485, 12, 2);
+    const painted = [beside, ...body].join(" ");
+    expect(painted).toContain("MUSLIM FA");
+    expect(painted).toContain("62092090");
+    expect(body.length).toBeLessThanOrEqual(2);
   });
 
   it("build AK: không ép origin; transfer + RA theo kho", () => {

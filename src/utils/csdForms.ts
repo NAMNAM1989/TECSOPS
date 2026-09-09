@@ -975,18 +975,23 @@ const LAYOUT_QR = {
  * Origin SGN + SPX + X-RAY đã in sẵn; ô trống: RA / AWB / Contents / DEST / Transfer / footer RA.
  * Không wipe.
  *
- * Ô Contents: x≈57–564, nhãn ~232–244, Consolidation ~282 → chữ từ ~250, rộng ~480, tối đa 3 dòng.
+ * Ô Contents (~57–564, nhãn ~232–244, Consolidation ~282):
+ * dòng 1 cạnh nhãn; dòng tiếp theo full-width phía dưới — cỡ chữ lớn hơn.
  */
 const LAYOUT_VU = {
   ra: { x: 70, yTop: 222, size: 11 },
   awb: { x: 330, yTop: 210, size: 13 },
   goods: {
+    /** Cạnh phải nhãn "Contents of the Consignment:" (~214). */
+    firstX: 218,
+    firstYTop: 242,
+    firstMaxWidth: 340,
+    /** Dòng tiếp theo — full ô, trên Consolidation. */
     x: 70,
-    /** Dưới nhãn Contents (~244), trên Consolidation (~282). */
     yTop: 258,
     size: 12,
-    maxWidth: 480,
-    minSize: 10,
+    maxWidth: 485,
+    minSize: 11,
     maxLines: 3,
     leading: 13,
   },
@@ -996,6 +1001,82 @@ const LAYOUT_VU = {
   transfer: { x: 335, yTop: 346, size: 13 },
   footerRa: { x: 70, yTop: 658, size: 10 },
 } as const;
+
+/**
+ * Contents VU: ưu tiên cỡ lớn — dòng 1 cạnh nhãn, phần còn lại full-width bên dưới.
+ */
+function drawCsdVuGoodsFitted(
+  page: {
+    drawText: (text: string, opts: Record<string, unknown>) => void;
+  },
+  pageH: number,
+  font: CsdPdfFont & object,
+  color: ReturnType<typeof rgb>,
+  text: string,
+  slot: (typeof LAYOUT_VU)["goods"]
+): void {
+  const t = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!t) return;
+  const minSize = slot.minSize;
+  const preferred = slot.size;
+  const leading = slot.leading;
+  const bodyMaxLines = Math.max(slot.maxLines - 1, 1);
+
+  const paintAt = (line: string, x: number, yTop: number, size: number) => {
+    page.drawText(line, {
+      x,
+      y: topYToPdfLibBaseline(pageH, yTop),
+      size,
+      font,
+      color,
+    });
+  };
+
+  for (let size = preferred; size >= minSize; size -= 0.5) {
+    // Cả chuỗi vừa cạnh nhãn
+    if (font.widthOfTextAtSize(t, size) <= slot.firstMaxWidth) {
+      paintAt(t, slot.firstX, slot.firstYTop, size);
+      return;
+    }
+
+    const head = wrapCsdGoodsByWidth(font, t, slot.firstMaxWidth, size, 1)[0];
+    if (!head) continue;
+    const rest = t.slice(head.length).trim();
+    if (!rest) {
+      paintAt(head, slot.firstX, slot.firstYTop, size);
+      return;
+    }
+
+    const body = wrapCsdGoodsByWidth(font, rest, slot.maxWidth, size, 99);
+    if (body.length > 0 && body.length <= bodyMaxLines) {
+      paintAt(head, slot.firstX, slot.firstYTop, size);
+      body.forEach((line, i) => {
+        paintAt(line, slot.x, slot.yTop + i * leading, size);
+      });
+      return;
+    }
+
+    // Không dùng dòng cạnh nhãn — toàn bộ full-width (tối đa maxLines)
+    const all = wrapCsdGoodsByWidth(font, t, slot.maxWidth, size, 99);
+    if (all.length > 0 && all.length <= slot.maxLines) {
+      all.forEach((line, i) => {
+        paintAt(line, slot.x, slot.yTop + i * leading, size);
+      });
+      return;
+    }
+  }
+
+  // Fallback sàn minSize
+  const head = wrapCsdGoodsByWidth(font, t, slot.firstMaxWidth, minSize, 1)[0] || "";
+  const rest = t.slice(head.length).trim();
+  if (head) paintAt(head, slot.firstX, slot.firstYTop, minSize);
+  const body = wrapCsdGoodsByWidth(font, rest || t, slot.maxWidth, minSize, bodyMaxLines);
+  body.forEach((line, i) => {
+    paintAt(line, slot.x, slot.yTop + i * leading, minSize);
+  });
+}
 
 /**
  * Layout IATA chung — A4 (CSD-IATA.pdf) cho VJ / SQ / TR.
@@ -1562,7 +1643,7 @@ export async function fillCsdPdfBytes(
       topYToPdfLibBaseline(pageH, LAYOUT_VU.awb.yTop),
       LAYOUT_VU.awb.size
     );
-    drawGoods(LAYOUT_VU.goods);
+    drawCsdVuGoodsFitted(page, pageH, fontBold, ink, fields.goods, LAYOUT_VU.goods);
     if (fields.dest) {
       draw(
         fields.dest,

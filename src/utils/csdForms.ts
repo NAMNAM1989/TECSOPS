@@ -34,7 +34,8 @@ export type CsdCarrier =
   | "TR"
   | "BI"
   | "EK"
-  | "PR";
+  | "PR"
+  | "T5";
 
 export type CsdCarrierProfile = {
   id: CsdCarrier;
@@ -204,6 +205,17 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     showTransfer: false,
     transferPresets: ["MNL"],
   },
+  T5: {
+    id: "T5",
+    label: "T5",
+    airlineName: "Turkmenistan Airlines",
+    templateUrl: "/templates/csd/CSD-T5.pdf?v=20260909",
+    flightPrefixes: ["T5"],
+    /** Origin SGN + công ty SCSC đã in sẵn; điền UAI/AWB/Contents/DEST/Transfer + tick SPX/XRY. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["ASB", "IST", "DXB", "ALA"],
+  },
 };
 
 export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
@@ -219,6 +231,7 @@ export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   BI: CSD_CARRIER_PROFILES.BI.templateUrl,
   EK: CSD_CARRIER_PROFILES.EK.templateUrl,
   PR: CSD_CARRIER_PROFILES.PR.templateUrl,
+  T5: CSD_CARRIER_PROFILES.T5.templateUrl,
 };
 
 export type CsdFillFields = {
@@ -258,6 +271,8 @@ export type CsdFillFields = {
   flightDest?: string;
   formDate?: string;
   verifiedBy?: string;
+  /** T5: Date (ddmmyy) + Time (tttt) trên ô Issued on. */
+  issuedOn?: string;
 };
 
 export type PrintCsdOptions = {
@@ -363,6 +378,11 @@ export function isCsdPrFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "PR";
 }
 
+/** Chuyến T5… → Turkmenistan Airlines CSD. */
+export function isCsdT5Flight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "T5";
+}
+
 /** Ba hãng dùng chung mẫu CSD-IATA.pdf. */
 export function isCsdIataTemplateCarrier(carrier: CsdCarrier): boolean {
   return carrier === "VJ" || carrier === "SQ" || carrier === "TR";
@@ -395,6 +415,16 @@ export function formatCsdEkDateTime(d: Date = new Date()): string {
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
   return `${formatCsdEkDate(d)}  ${hh}:${mm}`;
+}
+
+/** T5 Issued on — Date (ddmmyy) + Time (tttt). */
+export function formatCsdT5IssuedOn(d: Date = new Date()): string {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}${mm}${yy}  ${hh}${mi}`;
 }
 
 export function resolveCsdEkCompanyBlock(
@@ -536,7 +566,7 @@ export function normalizeCsdTransfer(raw: string | undefined | null): string {
 /**
  * Gợi ý Transit: nhớ lần trước theo hãng;
  * MH/AK → KUL; QR → DOH; SQ/TR → SIN; BI → BWN; EK → DXB; PR → MNL;
- * VU/VJ → không gợi ý hub mặc định; FD/TG → BKK.
+ * T5 → ASB; VU/VJ → không gợi ý hub mặc định; FD/TG → BKK.
  */
 export function suggestCsdTransfer(
   dest: string | undefined | null,
@@ -570,6 +600,10 @@ export function suggestCsdTransfer(
   }
   if (carrier === "PR") {
     if (d && d !== "MNL") return "MNL";
+    return "";
+  }
+  if (carrier === "T5") {
+    if (d && d !== "ASB") return "ASB";
     return "";
   }
   if (carrier === "VU" || carrier === "VJ") {
@@ -687,6 +721,9 @@ export function buildCsdFields(
     base.flightDest = formatCsdPrFlightDest(s.flight, base.dest);
     base.formDate = formatCsdEkDate();
     base.verifiedBy = resolveCsdPrVerifiedBy(s.warehouse);
+  }
+  if (carrier === "T5") {
+    base.issuedOn = formatCsdT5IssuedOn();
   }
   return base;
 }
@@ -1099,6 +1136,32 @@ const LAYOUT_BI = {
   dest: { x: 200, yTop: 316, size: 14 },
   transfer: { x: 320, yTop: 316, size: 13 },
   footerRa: { x: 65, yTop: 620, size: 10 },
+} as const;
+
+/**
+ * Layout T5 — Letter 612×792 (Turkmenistan Airlines).
+ * Giữ logo + TAN SON NHAT CARGO SERVICES JSC + Origin SGN.
+ * Điền: UAI, AWB, Contents, DEST, Transfer, tick SPX + XRY, Received from RA,
+ * Issued on (ddmmyy/tttt), footer RA.
+ */
+const LAYOUT_T5 = {
+  /** Sau nhãn "UAI Number:" (~184). */
+  uai: { x: 190, yTop: 161, size: 10, maxWidth: 120, minSize: 8 },
+  awb: { x: 340, yTop: 145, size: 13, maxWidth: 200, minSize: 10 },
+  /** Trên hàng Consolidation trong ô Contents. */
+  goods: { x: 78, yTop: 188, size: 11, maxWidth: 470, minSize: 9, maxLines: 1 },
+  dest: { x: 220, yTop: 250, size: 14 },
+  transfer: { x: 370, yTop: 250, size: 13 },
+  /** Tick ô checkbox SPX / Xray. */
+  spxTick: { x: 73.5, yTop: 335, size: 11 },
+  xryTick: { x: 328.5, yTop: 370, size: 11 },
+  receivedFrom: { x: 210, yTop: 320, size: 12 },
+  /** Phủ riêng cụm dấu chấm Date / Time — giữ nhãn. */
+  issuedDateWipe: { x: 402, yTop: 570, w: 35, h: 14 },
+  issuedTimeWipe: { x: 488, yTop: 570, w: 35, h: 14 },
+  issuedDate: { x: 404, yTop: 582, size: 10 },
+  issuedTime: { x: 490, yTop: 582, size: 10 },
+  footerRa: { x: 80, yTop: 655, size: 11 },
 } as const;
 
 /**
@@ -1772,6 +1835,84 @@ export async function fillCsdPdfBytes(
     }
     fit(fields.flightDest || "", P.flightDest);
     fit(fields.formDate || "", P.dateOrigin);
+  } else if (carrier === "T5") {
+    /* Turkmenistan Airlines — giữ SGN + SCSC; điền UAI/AWB/Contents/DEST/Transfer + SPX/XRY */
+    const fit = (
+      text: string,
+      slot: {
+        x: number;
+        yTop: number;
+        size: number;
+        maxWidth?: number;
+        minSize?: number;
+      }
+    ) => {
+      const t = text.trim();
+      if (!t) return;
+      const maxW = slot.maxWidth ?? 9999;
+      const minS = slot.minSize ?? 8;
+      let size = slot.size;
+      while (size > minS && fontBold.widthOfTextAtSize(t, size) > maxW) {
+        size -= 0.5;
+      }
+      draw(t, slot.x, topYToPdfLibBaseline(pageH, slot.yTop), size);
+    };
+    const T = LAYOUT_T5;
+    if (raCode) fit(raCode, T.uai);
+    fit(fields.awb, T.awb);
+    drawGoods(T.goods);
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        T.dest.x,
+        topYToPdfLibBaseline(pageH, T.dest.yTop),
+        T.dest.size
+      );
+    }
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        T.transfer.x,
+        topYToPdfLibBaseline(pageH, T.transfer.yTop),
+        T.transfer.size
+      );
+    }
+    draw("X", T.spxTick.x, topYToPdfLibBaseline(pageH, T.spxTick.yTop), T.spxTick.size);
+    draw("X", T.xryTick.x, topYToPdfLibBaseline(pageH, T.xryTick.yTop), T.xryTick.size);
+    draw(
+      "RA",
+      T.receivedFrom.x,
+      topYToPdfLibBaseline(pageH, T.receivedFrom.yTop),
+      T.receivedFrom.size
+    );
+    wipeRect(page, T.issuedDateWipe);
+    wipeRect(page, T.issuedTimeWipe);
+    const issued = String(fields.issuedOn || "").trim();
+    const [issuedDate = "", issuedTime = ""] = issued.split(/\s+/);
+    if (issuedDate) {
+      draw(
+        issuedDate,
+        T.issuedDate.x,
+        topYToPdfLibBaseline(pageH, T.issuedDate.yTop),
+        T.issuedDate.size
+      );
+    }
+    if (issuedTime) {
+      draw(
+        issuedTime,
+        T.issuedTime.x,
+        topYToPdfLibBaseline(pageH, T.issuedTime.yTop),
+        T.issuedTime.size
+      );
+    }
+    if (raLabel) {
+      draw(
+        raLabel,
+        T.footerRa.x,
+        topYToPdfLibBaseline(pageH, T.footerRa.yTop),
+        T.footerRa.size
+      );
+    }
   } else {
     /* TG — mẫu A4 trống: ghi §1 RA, §2 AWB, §3 Contents, §4–6, §14 RA */
     if (raLabel) {

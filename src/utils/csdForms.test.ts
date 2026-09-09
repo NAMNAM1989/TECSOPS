@@ -22,9 +22,11 @@ import {
   isCsdBiFlight,
   isCsdEkFlight,
   isCsdPrFlight,
+  isCsdT5Flight,
   isCsdIataTemplateCarrier,
   formatCsdEkDate,
   formatCsdEkDateTime,
+  formatCsdT5IssuedOn,
   formatCsdEkKg,
   formatCsdEkPcs,
   formatCsdPrFlightDest,
@@ -44,7 +46,7 @@ describe("csdForms", () => {
     localStorage.clear();
   });
 
-  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI / EK / PR qua registry", () => {
+  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI / EK / PR / T5 qua registry", () => {
     expect(isCsdFdFlight("FD301")).toBe(true);
     expect(isCsdTgFlight("TG621")).toBe(true);
     expect(isCsdTgFlight("tg 621")).toBe(true);
@@ -58,6 +60,7 @@ describe("csdForms", () => {
     expect(isCsdBiFlight("BI423")).toBe(true);
     expect(isCsdEkFlight("EK392")).toBe(true);
     expect(isCsdPrFlight("PR598")).toBe(true);
+    expect(isCsdT5Flight("T5123")).toBe(true);
     expect(isCsdIataTemplateCarrier("VJ")).toBe(true);
     expect(isCsdIataTemplateCarrier("SQ")).toBe(true);
     expect(isCsdIataTemplateCarrier("TR")).toBe(true);
@@ -75,14 +78,17 @@ describe("csdForms", () => {
     expect(getCsdCarrierProfile("EK").showOrigin).toBe(false);
     expect(getCsdCarrierProfile("EK").showTransfer).toBe(false);
     expect(getCsdCarrierProfile("PR").showTransfer).toBe(false);
+    expect(getCsdCarrierProfile("T5").showOrigin).toBe(false);
+    expect(getCsdCarrierProfile("T5").showTransfer).toBe(true);
     expect(getCsdCarrierProfile("SQ").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("TR").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("BI").templateUrl).toContain("CSD-BI");
     expect(getCsdCarrierProfile("EK").templateUrl).toContain("CSD-EK");
     expect(getCsdCarrierProfile("PR").templateUrl).toContain("CSD-PR");
+    expect(getCsdCarrierProfile("T5").templateUrl).toContain("CSD-T5");
   });
 
-  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI|EK|PR + AWB 11 số", () => {
+  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI|EK|PR|T5 + AWB 11 số", () => {
     expect(canPrintCsd({ flight: "FD301", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "MH751", awb: "232-12345675" })).toBe(true);
@@ -95,6 +101,7 @@ describe("csdForms", () => {
     expect(canPrintCsd({ flight: "BI423", awb: "672-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "EK392", awb: "176-21216812" })).toBe(true);
     expect(canPrintCsd({ flight: "PR598", awb: "079-12345675" })).toBe(true);
+    expect(canPrintCsd({ flight: "T5123", awb: "496-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "123" })).toBe(false);
   });
 
@@ -166,6 +173,8 @@ describe("csdForms", () => {
     expect(suggestCsdTransfer("BWN", "BI")).toBe("");
     expect(suggestCsdTransfer("MAD", "EK")).toBe("DXB");
     expect(suggestCsdTransfer("DXB", "EK")).toBe("");
+    expect(suggestCsdTransfer("IST", "T5")).toBe("ASB");
+    expect(suggestCsdTransfer("ASB", "T5")).toBe("");
     localStorage.setItem(
       "tecsops.csd.lastTransfer.v1",
       JSON.stringify({ FD: "DMK" })
@@ -630,6 +639,48 @@ describe("csdForms", () => {
       { bold }
     );
     expect(bytes.byteLength).toBeGreaterThan(1000);
+  });
+
+  it("điền PDF CSD T5: UAI + AWB + Contents + DEST/Transfer + SPX/XRY", async () => {
+    const template = new Uint8Array(
+      readFileSync(resolve("public/templates/csd/CSD-T5.pdf"))
+    );
+    const bold = new Uint8Array(
+      readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
+    );
+    const bytes = await fillCsdPdfBytes(
+      "T5",
+      {
+        awb: "496-12345675",
+        goods: "GARMENTS",
+        dest: "ASB",
+        transfer: "ASB",
+        raCode: "VN/RA3/00009-01",
+        opsTeam: "SCSC",
+        issuedOn: formatCsdT5IssuedOn(new Date("2026-09-09T15:30:00")),
+      },
+      template,
+      { bold }
+    );
+    expect(bytes.byteLength).toBeGreaterThan(1000);
+  });
+
+  it("build T5: không ép origin; transfer + issuedOn + RA theo kho", () => {
+    const f = buildCsdFields(
+      {
+        awb: "49612345675",
+        dest: "ist",
+        goodsDescriptionPrint: "GARMENTS",
+        warehouse: "SCSC",
+      },
+      "T5",
+      { transfer: "asb" }
+    );
+    expect(f.origin).toBeUndefined();
+    expect(f.dest).toBe("IST");
+    expect(f.transfer).toBe("ASB");
+    expect(f.raCode).toBe("VN/RA3/00009-01");
+    expect(f.issuedOn).toMatch(/^\d{6}\s+\d{4}$/);
   });
 
   it("build BI: không ép origin; transfer + RA theo kho", () => {

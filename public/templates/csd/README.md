@@ -12,6 +12,7 @@
 | `CSD-BI.pdf` | Royal Brunei Airlines | mã **BI**… | `CSD_CARRIER_PROFILES.BI` |
 | `CSD-EK.pdf` | Emirates SkyCargo | mã **EK**… | `CSD_CARRIER_PROFILES.EK` |
 | `CSD-PR.pdf` | Philippine Airlines | mã **PR**… | `CSD_CARRIER_PROFILES.PR` |
+| `CSD-T5.pdf` | Turkmenistan Airlines | mã **T5**… | `CSD_CARRIER_PROFILES.T5` |
 
 Logic điền + tải PDF: `src/utils/csdForms.ts`  
 Popup nhập Origin / Transfer (hoặc Issued by cho EK): `src/components/CsdPrintModal.tsx`
@@ -77,9 +78,14 @@ Ví dụ: `scsc_vj_97812345675_tín phát.pdf`
 - Điền: Date, Shipper Name/Address/Telephone, AWB, Pcs/Weight, Contents, Verified by (theo kho), số kiện X-ray/Total, Flight No./Destination, Date origin
 - Không popup Transfer (form không có ô Transfer)
 
+### T5 (Letter — Turkmenistan Airlines)
+- File: `CSD-T5.pdf` — URL `?v=20260909`
+- Giữ logo + **TAN SON NHAT CARGO SERVICES JSC** + Origin **SGN**
+- Điền: UAI (mã RA), AWB, Contents, DEST, Transfer (gợi ý **ASB**), tick **SPX** + **Xray (XRY)**, Received from **RA**, Issued on (ddmmyy/tttt), footer `RA {mã}`
+
 ## Mã RA theo kho (overlay §1 / §14)
 
-| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG/QR/AK/VU/VJ/SQ/TR/BI/EK/PR) | Mã RA trên mẫu MH |
+| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG/QR/AK/VU/VJ/SQ/TR/BI/EK/PR/T5) | Mã RA trên mẫu MH |
 |---------------|-----------|--------------------------------------|-------------------|
 | TECS | `TECS-TCS`, `TECS-SCSC` | `VN/RA3/00013-01` | `VN/RA3-00013-01` |
 | SCSC | `SCSC` | `VN/RA3/00009-01` | `VN/RA3-00009-01` |

@@ -6,12 +6,15 @@ const outPdf = resolve("public/templates/csd/_preview-pr-app-fill.pdf");
 const template = Uint8Array.from(
   readFileSync(resolve("public/templates/csd/CSD-PR.pdf"))
 );
+const bold = Uint8Array.from(
+  readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
+);
 
 const bytes = await fillCsdPdfBytes(
   "PR",
   {
     awb: "079-1234 5675",
-    goods: "GARMENTS",
+    goods: "GARMENTS AND TEXTILES FOR EXPORT SHIPMENT",
     dest: "MNL",
     origin: "SGN",
     raCode: "VN/RA3/00010-01",
@@ -22,10 +25,11 @@ const bytes = await fillCsdPdfBytes(
     kg: "520",
     pcsWeight: "40 / 520 kg",
     flightDest: "PR598/MNL",
-    formDate: "08-Sep-2026",
+    formDate: "12-Sep-2026",
     verifiedBy: "TCS Co., Ltd. - PAL Cargo Handler",
   },
-  template
+  template,
+  { bold }
 );
 
 writeFileSync(outPdf, bytes);

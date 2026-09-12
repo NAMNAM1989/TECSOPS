@@ -1,5 +1,5 @@
 /** Gioi han luu tren lo (ten hang / yeu cau khac). */
-export const SCSC_GOODS_DESCRIPTION_PRINT_MAX = 150;
+export const SCSC_GOODS_DESCRIPTION_PRINT_MAX = 300;
 export const SCSC_OTHER_REQUIREMENTS_PRINT_MAX = 200;
 
 function compact(s: string, max: number): string {

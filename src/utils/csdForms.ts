@@ -1053,7 +1053,7 @@ const LAYOUT_VU = {
     maxLines: 3,
     leading: 13,
   },
-  goodsMaxChars: 150,
+  goodsMaxChars: 300,
   /** Cùng hàng với Origin SGN (glyph ≈334–346). */
   dest: { x: 210, yTop: 346, size: 14 },
   transfer: { x: 335, yTop: 346, size: 13 },

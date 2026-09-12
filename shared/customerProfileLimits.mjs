@@ -27,7 +27,7 @@ export const CUSTOMER_PROFILE_LIMITS = {
   savedConsigneeLabel: 80,
   savedConsigneeCount: 40,
   savedGoodsLabel: 80,
-  savedGoodsDescription: 120,
+  savedGoodsDescription: 300,
   savedGoodsCount: 40,
   savedShipperLabel: 80,
   savedShipperCount: 40,

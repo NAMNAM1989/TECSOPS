@@ -6,8 +6,8 @@ import {
 
 describe("scscPrintContent", () => {
   it("clip goods theo max", () => {
-    const long = "X".repeat(200);
-    expect(clipScscGoodsDescriptionPrint(long).length).toBe(150);
+    const long = "X".repeat(400);
+    expect(clipScscGoodsDescriptionPrint(long).length).toBe(300);
   });
 
   it("clip other requirements theo max", () => {

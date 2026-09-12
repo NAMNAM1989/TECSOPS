@@ -28,7 +28,7 @@ const CsdPrintModal = lazy(() =>
 );
 
 const CSD_AIRLINE: Record<
-  "FD" | "TG" | "MH" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5",
+  "FD" | "TG" | "MH" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5" | "AI",
   string
 > = {
   FD: "Thai AirAsia",
@@ -44,6 +44,7 @@ const CSD_AIRLINE: Record<
   EK: "Emirates SkyCargo",
   PR: "Philippine Airlines",
   T5: "Turkmenistan Airlines",
+  AI: "Air India",
 };
 
 type Props = {
@@ -62,7 +63,7 @@ const iconCls = "h-3.5 w-3.5";
 
 function lightweightCsdCarrier(
   row: Pick<Shipment, "flight" | "awb">
-): "FD" | "TG" | "MH" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5" | null {
+): "FD" | "TG" | "MH" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5" | "AI" | null {
   if (awbDigitsKey(row.awb).length !== 11) return null;
   const flight = String(row.flight || "").trim().toUpperCase().replace(/\s+/g, "");
   if (flight.startsWith("FD")) return "FD";
@@ -78,6 +79,7 @@ function lightweightCsdCarrier(
   if (flight.startsWith("EK")) return "EK";
   if (flight.startsWith("PR")) return "PR";
   if (flight.startsWith("T5")) return "T5";
+  if (flight.startsWith("AI")) return "AI";
   return null;
 }
 

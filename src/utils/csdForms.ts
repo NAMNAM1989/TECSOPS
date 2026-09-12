@@ -35,7 +35,8 @@ export type CsdCarrier =
   | "BI"
   | "EK"
   | "PR"
-  | "T5";
+  | "T5"
+  | "AI";
 
 export type CsdCarrierProfile = {
   id: CsdCarrier;
@@ -216,6 +217,17 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     showTransfer: true,
     transferPresets: ["ASB", "IST", "DXB", "ALA"],
   },
+  AI: {
+    id: "AI",
+    label: "AI",
+    airlineName: "Air India",
+    templateUrl: "/templates/csd/CSD-AI.pdf?v=20260912",
+    flightPrefixes: ["AI"],
+    /** Origin SGN + SPX + XRAY + R.A đã in sẵn; điền RA/AWB/Contents/DEST/Transfer/Date-Time/footer RA. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["DEL", "BOM", "MAA", "HYD"],
+  },
 };
 
 export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
@@ -232,6 +244,7 @@ export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   EK: CSD_CARRIER_PROFILES.EK.templateUrl,
   PR: CSD_CARRIER_PROFILES.PR.templateUrl,
   T5: CSD_CARRIER_PROFILES.T5.templateUrl,
+  AI: CSD_CARRIER_PROFILES.AI.templateUrl,
 };
 
 export type CsdFillFields = {
@@ -271,7 +284,7 @@ export type CsdFillFields = {
   flightDest?: string;
   formDate?: string;
   verifiedBy?: string;
-  /** T5: Date (ddmmyy) + Time (tttt) trên ô Issued on. */
+  /** T5 / AI: Date + Time trên ô Issued on. */
   issuedOn?: string;
 };
 
@@ -383,6 +396,11 @@ export function isCsdT5Flight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "T5";
 }
 
+/** Chuyến AI… → Air India CSD. */
+export function isCsdAiFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "AI";
+}
+
 /** Ba hãng dùng chung mẫu CSD-IATA.pdf. */
 export function isCsdIataTemplateCarrier(carrier: CsdCarrier): boolean {
   return carrier === "VJ" || carrier === "SQ" || carrier === "TR";
@@ -425,6 +443,16 @@ export function formatCsdT5IssuedOn(d: Date = new Date()): string {
   const hh = String(d.getHours()).padStart(2, "0");
   const mi = String(d.getMinutes()).padStart(2, "0");
   return `${dd}${mm}${yy}  ${hh}${mi}`;
+}
+
+/** AI Issued on — Date (dd/mm/yyyy) + Time (hh:mm). */
+export function formatCsdAiIssuedOn(d: Date = new Date()): string {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(d.getFullYear());
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy}  ${hh}:${mi}`;
 }
 
 export function resolveCsdEkCompanyBlock(
@@ -566,7 +594,7 @@ export function normalizeCsdTransfer(raw: string | undefined | null): string {
 /**
  * Gợi ý Transit: nhớ lần trước theo hãng;
  * MH/AK → KUL; QR → DOH; SQ/TR → SIN; BI → BWN; EK → DXB; PR → MNL;
- * T5 → ASB; VU/VJ → không gợi ý hub mặc định; FD/TG → BKK.
+ * T5 → ASB; AI → DEL; VU/VJ → không gợi ý hub mặc định; FD/TG → BKK.
  */
 export function suggestCsdTransfer(
   dest: string | undefined | null,
@@ -604,6 +632,10 @@ export function suggestCsdTransfer(
   }
   if (carrier === "T5") {
     if (d && d !== "ASB") return "ASB";
+    return "";
+  }
+  if (carrier === "AI") {
+    if (d && d !== "DEL" && d !== "BOM") return "DEL";
     return "";
   }
   if (carrier === "VU" || carrier === "VJ") {
@@ -724,6 +756,9 @@ export function buildCsdFields(
   }
   if (carrier === "T5") {
     base.issuedOn = formatCsdT5IssuedOn();
+  }
+  if (carrier === "AI") {
+    base.issuedOn = formatCsdAiIssuedOn();
   }
   return base;
 }
@@ -1136,6 +1171,32 @@ const LAYOUT_BI = {
   dest: { x: 200, yTop: 316, size: 14 },
   transfer: { x: 320, yTop: 316, size: 13 },
   footerRa: { x: 65, yTop: 620, size: 10 },
+} as const;
+
+/**
+ * Layout AI — A4 (Air India CSD).
+ * Giữ logo + Origin SGN + SPX + XRAY + R.A đã tick/in sẵn.
+ * Điền: RA identifier, AWB, Contents, DEST, Transfer, Date/Time, footer RA.
+ */
+const LAYOUT_AI = {
+  ra: { x: 65, yTop: 210, size: 11 },
+  awb: { x: 300, yTop: 190, size: 13, maxWidth: 220, minSize: 10 },
+  /** Trên checkbox Consolidation (~276). */
+  goods: {
+    x: 65,
+    yTop: 248,
+    size: 12,
+    maxWidth: 460,
+    minSize: 10,
+    maxLines: 2,
+    leading: 14,
+  },
+  /** Cùng hàng Origin SGN (~326–342). */
+  dest: { x: 190, yTop: 338, size: 14 },
+  transfer: { x: 310, yTop: 338, size: 13 },
+  issuedDate: { x: 318, yTop: 595, size: 10 },
+  issuedTime: { x: 442, yTop: 595, size: 10 },
+  footerRa: { x: 65, yTop: 645, size: 11 },
 } as const;
 
 /**
@@ -1911,6 +1972,79 @@ export async function fillCsdPdfBytes(
         T.footerRa.x,
         topYToPdfLibBaseline(pageH, T.footerRa.yTop),
         T.footerRa.size
+      );
+    }
+  } else if (carrier === "AI") {
+    /* Air India — giữ SGN/SPX/XRAY/R.A; điền RA + AWB + Contents + DEST + Transfer + Date/Time */
+    const fit = (
+      text: string,
+      slot: {
+        x: number;
+        yTop: number;
+        size: number;
+        maxWidth?: number;
+        minSize?: number;
+      }
+    ) => {
+      const t = text.trim();
+      if (!t) return;
+      const maxW = slot.maxWidth ?? 9999;
+      const minS = slot.minSize ?? 8;
+      let size = slot.size;
+      while (size > minS && fontBold.widthOfTextAtSize(t, size) > maxW) {
+        size -= 0.5;
+      }
+      draw(t, slot.x, topYToPdfLibBaseline(pageH, slot.yTop), size);
+    };
+    const A = LAYOUT_AI;
+    if (raLabel) {
+      draw(
+        raLabel,
+        A.ra.x,
+        topYToPdfLibBaseline(pageH, A.ra.yTop),
+        A.ra.size
+      );
+      draw(
+        raLabel,
+        A.footerRa.x,
+        topYToPdfLibBaseline(pageH, A.footerRa.yTop),
+        A.footerRa.size
+      );
+    }
+    fit(fields.awb, A.awb);
+    drawGoods(A.goods);
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        A.dest.x,
+        topYToPdfLibBaseline(pageH, A.dest.yTop),
+        A.dest.size
+      );
+    }
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        A.transfer.x,
+        topYToPdfLibBaseline(pageH, A.transfer.yTop),
+        A.transfer.size
+      );
+    }
+    const issued = String(fields.issuedOn || "").trim();
+    const [issuedDate = "", issuedTime = ""] = issued.split(/\s+/);
+    if (issuedDate) {
+      draw(
+        issuedDate,
+        A.issuedDate.x,
+        topYToPdfLibBaseline(pageH, A.issuedDate.yTop),
+        A.issuedDate.size
+      );
+    }
+    if (issuedTime) {
+      draw(
+        issuedTime,
+        A.issuedTime.x,
+        topYToPdfLibBaseline(pageH, A.issuedTime.yTop),
+        A.issuedTime.size
       );
     }
   } else {

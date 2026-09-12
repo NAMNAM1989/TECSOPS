@@ -13,6 +13,7 @@
 | `CSD-EK.pdf` | Emirates SkyCargo | mã **EK**… | `CSD_CARRIER_PROFILES.EK` |
 | `CSD-PR.pdf` | Philippine Airlines | mã **PR**… | `CSD_CARRIER_PROFILES.PR` |
 | `CSD-T5.pdf` | Turkmenistan Airlines | mã **T5**… | `CSD_CARRIER_PROFILES.T5` |
+| `CSD-AI.pdf` | Air India | mã **AI**… | `CSD_CARRIER_PROFILES.AI` |
 
 Logic điền + tải PDF: `src/utils/csdForms.ts`  
 Popup nhập Origin / Transfer (hoặc Issued by cho EK): `src/components/CsdPrintModal.tsx`
@@ -83,9 +84,15 @@ Ví dụ: `scsc_vj_97812345675_tín phát.pdf`
 - Giữ logo + **TAN SON NHAT CARGO SERVICES JSC** + Origin **SGN**
 - Điền: UAI (mã RA), AWB, Contents, DEST, Transfer (gợi ý **ASB**), tick **SPX** + **Xray (XRY)**, Received from **RA**, Issued on (ddmmyy/tttt), footer `RA {mã}`
 
+### AI (A4 — Air India)
+- File: `CSD-AI.pdf` — URL `?v=20260912`
+- Giữ logo Air India + Origin **SGN** + **SPX** + **XRAY** + Received from **R.A** đã tick/in sẵn
+- Điền: `RA {mã}` (§1 + footer), AWB, Contents, DEST, Transfer (gợi ý **DEL**), Date/Time Issued on
+- Issued by để trống (ký tay)
+
 ## Mã RA theo kho (overlay §1 / §14)
 
-| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG/QR/AK/VU/VJ/SQ/TR/BI/EK/PR/T5) | Mã RA trên mẫu MH |
+| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG/QR/AK/VU/VJ/SQ/TR/BI/EK/PR/T5/AI) | Mã RA trên mẫu MH |
 |---------------|-----------|--------------------------------------|-------------------|
 | TECS | `TECS-TCS`, `TECS-SCSC` | `VN/RA3/00013-01` | `VN/RA3-00013-01` |
 | SCSC | `SCSC` | `VN/RA3/00009-01` | `VN/RA3-00009-01` |

@@ -23,10 +23,12 @@ import {
   isCsdEkFlight,
   isCsdPrFlight,
   isCsdT5Flight,
+  isCsdAiFlight,
   isCsdIataTemplateCarrier,
   formatCsdEkDate,
   formatCsdEkDateTime,
   formatCsdT5IssuedOn,
+  formatCsdAiIssuedOn,
   formatCsdEkKg,
   formatCsdEkPcs,
   formatCsdPrFlightDest,
@@ -46,7 +48,7 @@ describe("csdForms", () => {
     localStorage.clear();
   });
 
-  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI / EK / PR / T5 qua registry", () => {
+  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI / EK / PR / T5 / AI qua registry", () => {
     expect(isCsdFdFlight("FD301")).toBe(true);
     expect(isCsdTgFlight("TG621")).toBe(true);
     expect(isCsdTgFlight("tg 621")).toBe(true);
@@ -61,6 +63,7 @@ describe("csdForms", () => {
     expect(isCsdEkFlight("EK392")).toBe(true);
     expect(isCsdPrFlight("PR598")).toBe(true);
     expect(isCsdT5Flight("T5123")).toBe(true);
+    expect(isCsdAiFlight("AI131")).toBe(true);
     expect(isCsdIataTemplateCarrier("VJ")).toBe(true);
     expect(isCsdIataTemplateCarrier("SQ")).toBe(true);
     expect(isCsdIataTemplateCarrier("TR")).toBe(true);
@@ -80,15 +83,18 @@ describe("csdForms", () => {
     expect(getCsdCarrierProfile("PR").showTransfer).toBe(false);
     expect(getCsdCarrierProfile("T5").showOrigin).toBe(false);
     expect(getCsdCarrierProfile("T5").showTransfer).toBe(true);
+    expect(getCsdCarrierProfile("AI").showOrigin).toBe(false);
+    expect(getCsdCarrierProfile("AI").showTransfer).toBe(true);
     expect(getCsdCarrierProfile("SQ").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("TR").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("BI").templateUrl).toContain("CSD-BI");
     expect(getCsdCarrierProfile("EK").templateUrl).toContain("CSD-EK");
     expect(getCsdCarrierProfile("PR").templateUrl).toContain("CSD-PR");
     expect(getCsdCarrierProfile("T5").templateUrl).toContain("CSD-T5");
+    expect(getCsdCarrierProfile("AI").templateUrl).toContain("CSD-AI");
   });
 
-  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI|EK|PR|T5 + AWB 11 số", () => {
+  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI|EK|PR|T5|AI + AWB 11 số", () => {
     expect(canPrintCsd({ flight: "FD301", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "MH751", awb: "232-12345675" })).toBe(true);
@@ -102,6 +108,7 @@ describe("csdForms", () => {
     expect(canPrintCsd({ flight: "EK392", awb: "176-21216812" })).toBe(true);
     expect(canPrintCsd({ flight: "PR598", awb: "079-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "T5123", awb: "496-12345675" })).toBe(true);
+    expect(canPrintCsd({ flight: "AI131", awb: "098-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "123" })).toBe(false);
   });
 
@@ -175,6 +182,9 @@ describe("csdForms", () => {
     expect(suggestCsdTransfer("DXB", "EK")).toBe("");
     expect(suggestCsdTransfer("IST", "T5")).toBe("ASB");
     expect(suggestCsdTransfer("ASB", "T5")).toBe("");
+    expect(suggestCsdTransfer("BOM", "AI")).toBe("");
+    expect(suggestCsdTransfer("DEL", "AI")).toBe("");
+    expect(suggestCsdTransfer("MAA", "AI")).toBe("DEL");
     localStorage.setItem(
       "tecsops.csd.lastTransfer.v1",
       JSON.stringify({ FD: "DMK" })
@@ -681,6 +691,48 @@ describe("csdForms", () => {
     expect(f.transfer).toBe("ASB");
     expect(f.raCode).toBe("VN/RA3/00009-01");
     expect(f.issuedOn).toMatch(/^\d{6}\s+\d{4}$/);
+  });
+
+  it("điền PDF CSD AI: RA + AWB + Contents + DEST/Transfer (giữ SGN/SPX/XRAY)", async () => {
+    const template = new Uint8Array(
+      readFileSync(resolve("public/templates/csd/CSD-AI.pdf"))
+    );
+    const bold = new Uint8Array(
+      readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
+    );
+    const bytes = await fillCsdPdfBytes(
+      "AI",
+      {
+        awb: "098-12345675",
+        goods: "GARMENTS",
+        dest: "DEL",
+        transfer: "DEL",
+        raCode: "VN/RA3/00009-01",
+        opsTeam: "SCSC",
+        issuedOn: formatCsdAiIssuedOn(new Date("2026-09-12T08:15:00")),
+      },
+      template,
+      { bold }
+    );
+    expect(bytes.byteLength).toBeGreaterThan(1000);
+  });
+
+  it("build AI: không ép origin; transfer DEL + issuedOn + RA theo kho", () => {
+    const f = buildCsdFields(
+      {
+        awb: "09812345675",
+        dest: "maa",
+        goodsDescriptionPrint: "GARMENTS",
+        warehouse: "TECS-SCSC",
+      },
+      "AI",
+      { transfer: "del" }
+    );
+    expect(f.origin).toBeUndefined();
+    expect(f.dest).toBe("MAA");
+    expect(f.transfer).toBe("DEL");
+    expect(f.raCode).toBe("VN/RA3/00013-01");
+    expect(f.issuedOn).toMatch(/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/);
   });
 
   it("build BI: không ép origin; transfer + RA theo kho", () => {

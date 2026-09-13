@@ -11,7 +11,9 @@ export type H21CargoFamilyMode =
   | "fruit"
   | "food"
   | "garment"
-  | "general";
+  | "general"
+  /** Dùng pool SKU đã gán trên hồ sơ khách. */
+  | "customer";
 
 /** Draft UI cho một tờ khai trên modal H21. */
 export type H21DeclSplit = {

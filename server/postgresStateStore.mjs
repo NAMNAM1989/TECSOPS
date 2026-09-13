@@ -441,6 +441,9 @@ function mergeCustomerBlobProfile(base, fromBlob) {
     savedDimTemplates: Array.isArray(fromBlob.savedDimTemplates)
       ? fromBlob.savedDimTemplates
       : base.savedDimTemplates ?? [],
+    h21InvoicePresets: Array.isArray(fromBlob.h21InvoicePresets)
+      ? fromBlob.h21InvoicePresets
+      : base.h21InvoicePresets ?? [],
     ...(typeof fromBlob.defaultShipperId === "string"
       ? { defaultShipperId: fromBlob.defaultShipperId }
       : {}),

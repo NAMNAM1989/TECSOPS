@@ -172,6 +172,97 @@ function parseSavedGoodsLoose(item) {
   return out.slice(0, L.savedGoodsCount);
 }
 
+function parseH21InvoicePresetsLoose(item) {
+  if (!Array.isArray(item.h21InvoicePresets)) return [];
+  const byScope = new Map();
+  for (const x of item.h21InvoicePresets) {
+    if (!x || typeof x !== "object") continue;
+    const scope = String(x.warehouseScope ?? x.warehouse_scope ?? "")
+      .trim()
+      .toUpperCase();
+    if (scope !== "SCSC" && scope !== "TCS") continue;
+    const seen = new Set();
+    const catalogItemIds = [];
+    const rawIds = Array.isArray(x.catalogItemIds)
+      ? x.catalogItemIds
+      : Array.isArray(x.catalog_item_ids)
+        ? x.catalog_item_ids
+        : [];
+    for (const idRaw of rawIds) {
+      const id = sliceStr(idRaw, 64).trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      catalogItemIds.push(id);
+      if (catalogItemIds.length >= L.h21PresetCatalogIds) break;
+    }
+    const items = [];
+    const itemSeen = new Set();
+    const rawItems = Array.isArray(x.items) ? x.items : [];
+    for (const row of rawItems) {
+      if (!row || typeof row !== "object") continue;
+      const description = sliceStr(row.description, 400).replace(/\s+/g, " ").trim();
+      if (!description) continue;
+      let id = sliceStr(row.id, 64).trim();
+      if (!id) id = `kh-${items.length + 1}`;
+      if (itemSeen.has(id)) continue;
+      itemSeen.add(id);
+      const hsCode = String(row.hsCode ?? row.hs_code ?? "")
+        .replace(/\D/g, "")
+        .slice(0, 12);
+      const category = sliceStr(row.category, 80).trim();
+      const origin = sliceStr(row.origin, 80).trim() || "VIETNAM";
+      const uom1 = String(row.uom1 ?? row.uom ?? "PCE")
+        .trim()
+        .toUpperCase()
+        .slice(0, 8) || "PCE";
+      const unitPriceRaw = Number(row.unitPrice ?? row.unit_price);
+      const unitPrice =
+        Number.isFinite(unitPriceRaw) && unitPriceRaw >= 0
+          ? Math.round(unitPriceRaw * 10000) / 10000
+          : 0;
+      const factorRaw = Number(row.unitFactor ?? row.unit_factor);
+      const unitFactor =
+        Number.isFinite(factorRaw) && factorRaw > 0
+          ? Math.round(factorRaw * 1e6) / 1e6
+          : 1;
+      const sourceCatalogItemId = sliceStr(
+        row.sourceCatalogItemId ?? row.source_catalog_item_id,
+        64
+      ).trim();
+      items.push({
+        id,
+        description,
+        unitFactor,
+        ...(hsCode ? { hsCode } : {}),
+        ...(category ? { category } : {}),
+        ...(origin ? { origin } : {}),
+        ...(uom1 ? { uom1 } : {}),
+        ...(unitPrice > 0 ? { unitPrice } : {}),
+        ...(sourceCatalogItemId ? { sourceCatalogItemId } : {}),
+      });
+      if (sourceCatalogItemId && !seen.has(sourceCatalogItemId)) {
+        seen.add(sourceCatalogItemId);
+        catalogItemIds.push(sourceCatalogItemId);
+      }
+      if (items.length >= L.h21PresetCatalogIds) break;
+    }
+    if (!items.length && !catalogItemIds.length) continue;
+    const defaultStampId = sliceStr(x.defaultStampId ?? x.default_stamp_id, 64).trim();
+    let preferredLineCount;
+    const n = Number(x.preferredLineCount ?? x.preferred_line_count);
+    if (Number.isFinite(n) && n >= 1) preferredLineCount = Math.min(50, Math.max(1, Math.round(n)));
+    byScope.set(scope, {
+      warehouseScope: scope,
+      ...(items.length ? { items } : {}),
+      catalogItemIds: catalogItemIds.slice(0, L.h21PresetCatalogIds),
+      ...(defaultStampId ? { defaultStampId } : {}),
+      ...(preferredLineCount != null ? { preferredLineCount } : {}),
+    });
+    if (byScope.size >= L.h21PresetCount) break;
+  }
+  return [...byScope.values()];
+}
+
 function normalizeVehicleTypeLoose(v) {
   const u = String(v ?? "")
     .trim()
@@ -345,6 +436,7 @@ export function parseCustomersLoose(raw) {
     const savedConsignees = parseSavedConsigneesLoose(item);
     const savedVehicles = parseSavedVehiclesLoose(item);
     const savedDimTemplates = parseSavedDimTemplatesLoose(item);
+    const h21InvoicePresets = parseH21InvoicePresetsLoose(item);
     out.push({
       id: sliceStr(id, 80).trim(),
       ...accountFieldsFromItem(item, code, name),
@@ -368,6 +460,7 @@ export function parseCustomersLoose(raw) {
       savedConsignees,
       savedVehicles,
       savedDimTemplates,
+      ...(h21InvoicePresets.length ? { h21InvoicePresets } : {}),
       parties: parsePartiesLoose(item),
       otherRequirementsPrint: sliceStr(item.otherRequirementsPrint, L.otherRequirementsPrint).trim(),
       ...(item.syncedAt != null || item.synced_at != null
@@ -430,6 +523,7 @@ export function validateCustomerDirectoryPayload(raw) {
     const savedConsignees = parseSavedConsigneesLoose(item);
     const savedVehicles = parseSavedVehiclesLoose(item);
     const savedDimTemplates = parseSavedDimTemplatesLoose(item);
+    const h21InvoicePresets = parseH21InvoicePresetsLoose(item);
     const seenShipper = new Set();
     for (let j = 0; j < savedShippers.length; j++) {
       const ss = savedShippers[j];
@@ -513,6 +607,7 @@ export function validateCustomerDirectoryPayload(raw) {
       savedConsignees,
       savedVehicles,
       savedDimTemplates,
+      ...(h21InvoicePresets.length ? { h21InvoicePresets } : {}),
       parties: parsePartiesLoose(item),
       otherRequirementsPrint: sliceStr(item.otherRequirementsPrint, L.otherRequirementsPrint).trim(),
       ...(item.syncedAt != null || item.synced_at != null

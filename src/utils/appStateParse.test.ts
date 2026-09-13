@@ -17,4 +17,37 @@ describe("parseAppStateFetchResult", () => {
       state: expect.objectContaining({ version: 7, rows: [] }),
     });
   });
+
+  it("giữ h21InvoicePresets khi parse customers từ wire", () => {
+    const raw = {
+      version: 9,
+      rows: [],
+      customers: [
+        {
+          id: "c1",
+          code: "MKH",
+          name: "MINH KHANG",
+          parties: [],
+          h21InvoicePresets: [
+            {
+              warehouseScope: "SCSC",
+              items: [
+                { id: "kh1", description: "Ao thun", unitFactor: 0.2, hsCode: "6109" },
+              ],
+              preferredLineCount: 12,
+            },
+            { warehouseScope: "TCS", catalogItemIds: ["t1"] },
+          ],
+        },
+      ],
+    };
+    const state = parseAppState(raw);
+    const presets = state?.customers[0]?.h21InvoicePresets;
+    expect(presets?.find((p) => p.warehouseScope === "SCSC")?.items?.[0]?.description).toBe(
+      "Ao thun"
+    );
+    expect(presets?.find((p) => p.warehouseScope === "TCS")?.catalogItemIds).toEqual([
+      "t1",
+    ]);
+  });
 });

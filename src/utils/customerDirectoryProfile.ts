@@ -1,5 +1,6 @@
 import type {
   CustomerDirectoryEntry,
+  CustomerH21InvoicePreset,
   CustomerParty,
   CustomerPartyType,
   CustomerSavedConsignee,
@@ -14,6 +15,7 @@ import { normalizeCustomerShortCode } from "./customerCodeOps";
 
 import { CUSTOMER_PROFILE_LIMITS } from "../../shared/customerProfileLimits.mjs";
 import { normalizeVehiclePlateInput } from "./vehiclePlateNormalize";
+import { clampCustomerH21InvoicePresets } from "./customerH21InvoicePreset";
 
 /** Re-export — nguồn sự thật: `shared/customerProfileLimits.mjs`. */
 export { CUSTOMER_PROFILE_LIMITS };
@@ -363,6 +365,9 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
         .map((x) => clampCustomerSavedDimTemplate(x as CustomerSavedDimTemplate))
         .filter((x) => x.label && x.lCm > 0 && x.wCm > 0 && x.hCm > 0)
     : [];
+  const h21InvoicePresets = clampCustomerH21InvoicePresets(
+    migrated.h21InvoicePresets
+  ) as CustomerH21InvoicePreset[];
   const shipperIds = new Set(savedShippers.map((x) => x.id));
   const cneeIds = new Set(savedConsignees.map((x) => x.id));
   const goodsIds = new Set(savedGoods.map((x) => x.id));
@@ -413,6 +418,7 @@ export function clampCustomerDirectoryEntry(e: CustomerDirectoryEntry): Customer
     savedGoods,
     savedVehicles,
     savedDimTemplates,
+    ...(h21InvoicePresets.length ? { h21InvoicePresets } : {}),
     otherRequirementsPrint: clip(migrated.otherRequirementsPrint, L.otherRequirementsPrint).trim() || undefined,
     parties,
     ...(typeof migrated.syncedAt === "string" && migrated.syncedAt

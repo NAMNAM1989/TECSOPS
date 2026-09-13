@@ -8,7 +8,6 @@ import {
 } from "../utils/scscH21InvoiceSplits";
 import type { H21CargoFamilyId } from "../utils/scscH21InvoiceCargoFamily";
 import { labelForH21CargoFamily } from "../utils/scscH21InvoiceCargoFamily";
-import { OPS } from "../styles/opsModalStyles";
 import { Button } from "../ui";
 
 type InvoiceFooterSummary = {
@@ -25,7 +24,6 @@ type Props = {
   splits: readonly H21DeclSplit[];
   activeSplitId: string | undefined;
   tabsScrollRef: RefObject<HTMLDivElement | null>;
-  goodsListFileRef: RefObject<HTMLInputElement | null>;
   isDirty: boolean;
   filledSplitCount: number;
   invoiceSeq: number;
@@ -39,8 +37,6 @@ type Props = {
   linesLength: number;
   footer: InvoiceFooterSummary;
   effectiveCargoFamily: H21CargoFamilyId;
-  importingList: boolean;
-  loading: boolean;
   onSelectSplit: (id: string) => void;
   onRemoveSplit: (id: string) => void;
   onAddSplit: () => void;
@@ -51,18 +47,18 @@ type Props = {
   onPcsChange: (value: string) => void;
   onPcsBlur: () => void;
   onRandomGenerate: () => void;
-  onGoodsListFile: (file: File | null) => void;
-  onUploadListClick: () => void;
 };
 
-/** Tab tờ khai + toolbar KG/dòng/kiện/upload — tách khỏi modal để giảm kích thước file. */
+const fieldClass =
+  "h-8 w-full rounded-lg border border-ui-border/80 bg-white px-2 font-mono text-[13px] font-semibold tabular-nums text-ui-navy outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200/50";
+
+/** Tab tờ khai + toolbar — gọn 2 hàng, thao tác nhanh. */
 export function ScscH21InvoiceDeclTabs({
   shipment,
   customerEntry,
   splits,
   activeSplitId,
   tabsScrollRef,
-  goodsListFileRef,
   isDirty,
   filledSplitCount,
   invoiceSeq,
@@ -76,8 +72,6 @@ export function ScscH21InvoiceDeclTabs({
   linesLength,
   footer,
   effectiveCargoFamily,
-  importingList,
-  loading,
   onSelectSplit,
   onRemoveSplit,
   onAddSplit,
@@ -88,203 +82,200 @@ export function ScscH21InvoiceDeclTabs({
   onPcsChange,
   onPcsBlur,
   onRandomGenerate,
-  onGoodsListFile,
-  onUploadListClick,
 }: Props) {
   return (
-    <div className="shrink-0 space-y-2 border-b border-ui-border/60 px-4 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold text-ui-text-muted">
-          Tab tờ khai
-          {invoiceSeqTotal > 1 ? ` · ${invoiceSeqTotal} INV` : ""}
+    <div className="shrink-0 space-y-1.5 border-b border-ui-border/70 bg-ui-surface px-3 py-2 sm:px-4">
+      {/* Hàng 1: tiêu đề + tab strip */}
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="text-[12px] font-extrabold text-ui-navy">Tờ khai</span>
+          {invoiceSeqTotal > 1 ? (
+            <span className="text-[10px] font-semibold text-ui-text-muted">{invoiceSeqTotal} INV</span>
+          ) : null}
           {isDirty ? (
-            <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">
+            <span className="rounded-full bg-amber-100 px-1.5 py-px text-[9px] font-bold text-amber-900">
               chưa lưu
             </span>
           ) : filledSplitCount > 0 ? (
-            <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+            <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[9px] font-bold text-emerald-800">
               đã lưu
             </span>
           ) : null}
-        </span>
-        <span className="text-[10px] text-ui-text-muted">
-          Alt+1…9 chuyển tab · Esc đóng · Lưu giữ cửa sổ mở
-        </span>
-      </div>
+        </div>
 
-      <div
-        ref={tabsScrollRef as RefObject<HTMLDivElement>}
-        className="flex items-stretch gap-1.5 overflow-x-auto pb-0.5"
-        role="tablist"
-        aria-label="Tờ khai H21"
-      >
-        {splits.map((s, idx) => {
-          const seq = idx + 1;
-          const suggested = buildH21InvoiceNo(shipment, customerEntry, {
-            seq,
-            total: invoiceSeqTotal,
-          });
-          const no = String(s.invoiceNoDraft ?? "").trim() || suggested;
-          const selected = s.id === activeSplitId;
-          const hasLines = s.lines.length > 0;
-          return (
-            <div
-              key={s.id}
-              data-split-id={s.id}
-              role="tab"
-              aria-selected={selected}
-              className={`group relative flex min-w-[9.5rem] max-w-[14rem] shrink-0 flex-col rounded-xl border px-2.5 py-1.5 transition ${
-                selected
-                  ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
-                  : "border-ui-border/80 bg-white hover:border-indigo-300"
-              }`}
-            >
-              <button
-                type="button"
-                className="min-w-0 flex-1 text-left"
-                onClick={() => onSelectSplit(s.id)}
+        <div
+          ref={tabsScrollRef as RefObject<HTMLDivElement>}
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          role="tablist"
+          aria-label="Tờ khai H21"
+        >
+          {splits.map((s, idx) => {
+            const seq = idx + 1;
+            const suggested = buildH21InvoiceNo(shipment, customerEntry, {
+              seq,
+              total: invoiceSeqTotal,
+            });
+            const no = String(s.invoiceNoDraft ?? "").trim() || suggested;
+            const selected = s.id === activeSplitId;
+            const hasLines = s.lines.length > 0;
+            const kg = parseAllocateKgFromDraft(s.kgDraft, lotKg);
+            return (
+              <div
+                key={s.id}
+                data-split-id={s.id}
+                role="tab"
+                aria-selected={selected}
+                className={`group relative flex h-9 shrink-0 items-center gap-1.5 rounded-xl border pl-2.5 pr-1.5 transition ${
+                  selected
+                    ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
+                    : "border-ui-border/80 bg-slate-50 text-ui-text hover:border-indigo-300 hover:bg-white"
+                }`}
               >
-                <div
-                  className={`flex items-center justify-between gap-1 text-[9px] font-bold uppercase tracking-wide ${
-                    selected ? "text-white/80" : "text-ui-text-muted"
-                  }`}
-                >
-                  <span>TK {seq}</span>
-                  {hasLines ? (
-                    <span
-                      className={`rounded px-1 ${
-                        selected ? "bg-white/20" : "bg-emerald-100 text-emerald-800"
-                      }`}
-                    >
-                      {s.lines.length} dòng
-                    </span>
-                  ) : (
-                    <span className={selected ? "text-white/70" : "text-amber-700"}>trống</span>
-                  )}
-                </div>
-                <div
-                  className={`mt-0.5 truncate font-mono text-[11px] font-semibold ${
-                    selected ? "text-white" : "text-indigo-800"
-                  }`}
-                  title={no || undefined}
-                >
-                  {no || "—"}
-                </div>
-                <div className={`text-[10px] ${selected ? "text-white/85" : "text-ui-text-muted"}`}>
-                  {parseAllocateKgFromDraft(s.kgDraft, lotKg) || "—"} kg
-                </div>
-              </button>
-              {splits.length > 1 ? (
                 <button
                   type="button"
-                  className={`absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold shadow ${
-                    selected
-                      ? "bg-white text-red-700"
-                      : "bg-red-50 text-red-700 opacity-0 group-hover:opacity-100"
-                  }`}
-                  title="Xóa tờ khai"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveSplit(s.id);
-                  }}
+                  className="flex min-w-0 max-w-[14rem] items-center gap-1.5 text-left focus:outline-none"
+                  onClick={() => onSelectSplit(s.id)}
+                  title={no || undefined}
                 >
-                  ×
+                  <span className="shrink-0 text-[10px] font-extrabold">TK{seq}</span>
+                  <span
+                    className={`hidden truncate font-mono text-[11px] font-semibold sm:inline ${
+                      selected ? "text-white/95" : "text-indigo-900"
+                    }`}
+                  >
+                    {no || "—"}
+                  </span>
+                  <span
+                    className={`shrink-0 font-mono text-[11px] font-bold tabular-nums ${
+                      selected ? "text-white/90" : "text-ui-text-muted"
+                    }`}
+                  >
+                    {kg || "—"}kg
+                  </span>
+                  <span
+                    className={`shrink-0 rounded px-1 text-[9px] font-bold ${
+                      hasLines
+                        ? selected
+                          ? "bg-white/20"
+                          : "bg-emerald-100 text-emerald-800"
+                        : selected
+                          ? "bg-white/15 text-white/85"
+                          : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {hasLines ? `${s.lines.length}d` : "trống"}
+                  </span>
                 </button>
-              ) : null}
-            </div>
-          );
-        })}
-        <button
-          type="button"
-          className="flex min-w-[4.5rem] shrink-0 flex-col items-center justify-center rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 px-2 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100"
-          onClick={onAddSplit}
-          title="Thêm tờ khai mới (INV tăng -1, -2…)"
-        >
-          <span className="text-lg leading-none">+</span>
-          <span>Thêm</span>
-        </button>
+                {splits.length > 1 ? (
+                  <button
+                    type="button"
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[12px] font-bold transition ${
+                      selected
+                        ? "text-white/80 hover:bg-white/15 hover:text-white"
+                        : "text-ui-text-muted opacity-0 hover:bg-red-50 hover:text-red-700 group-hover:opacity-100"
+                    }`}
+                    title="Xóa tờ khai"
+                    aria-label={`Xóa tờ khai ${seq}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveSplit(s.id);
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            );
+          })}
+          <button
+            type="button"
+            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/70 px-2.5 text-[11px] font-bold text-indigo-800 transition hover:bg-indigo-100"
+            onClick={onAddSplit}
+            title="Thêm tờ khai mới (INV tăng -1, -2…)"
+          >
+            <span className="text-base leading-none">+</span>
+            Thêm
+          </button>
+          {remainLotKg > 0 ? (
+            <span className="shrink-0 text-[10px] font-semibold text-indigo-700">
+              còn {remainLotKg}/{lotKg} kg
+            </span>
+          ) : null}
+        </div>
       </div>
 
-      {remainLotKg > 0 ? (
-        <div className="text-[10px] font-medium text-indigo-700">
-          Còn {remainLotKg} kg / {lotKg} kg lô — bấm + Thêm để tách tờ tiếp
-        </div>
-      ) : null}
+      {/* Hàng 2: chỉnh TK + hành động + tóm tắt 1 dòng */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-ui-border/60 bg-slate-50/80 px-2 py-1.5">
+        <span className="inline-flex h-7 shrink-0 items-center rounded-lg bg-indigo-600 px-2 text-[10px] font-extrabold text-white">
+          TK {invoiceSeq}
+        </span>
 
-      <div className="flex flex-wrap items-end gap-2.5 rounded-xl border border-ui-border/50 bg-ui-surface-muted/40 px-2.5 py-2">
-        <div className="mr-0.5 self-center text-[10px] font-bold uppercase tracking-wide text-indigo-800">
-          Đang sửa TK {invoiceSeq}
-        </div>
-        <label className="text-[11px] font-semibold text-ui-text-muted">
-          KG tờ khai
+        <label className="inline-flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-ui-text-muted">Kg</span>
           <input
             type="text"
             inputMode="decimal"
-            className={`${OPS.input} mt-0.5 w-[4.75rem]`}
+            className={`${fieldClass} w-[4.5rem]`}
             value={allocateKgDraft}
+            aria-label="KG tờ khai"
             onChange={(e) => onAllocateKgChange(e.target.value.replace(/[^\d.,]/g, ""))}
             onBlur={onAllocateKgBlur}
           />
         </label>
-        <label className="text-[11px] font-semibold text-ui-text-muted">
-          Số dòng
+        <label className="inline-flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-ui-text-muted">Dòng</span>
           <input
             type="text"
             inputMode="numeric"
-            className={`${OPS.input} mt-0.5 w-14`}
+            className={`${fieldClass} w-12`}
             value={lineCountDraft}
+            aria-label="Số dòng"
             onChange={(e) => onLineCountChange(e.target.value.replace(/\D/g, "").slice(0, 2))}
             onBlur={onLineCountBlur}
           />
         </label>
-        <label className="text-[11px] font-semibold text-ui-text-muted">
-          Số kiện
+        <label className="inline-flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-ui-text-muted">Kiện</span>
           <input
             type="text"
             inputMode="numeric"
-            className={`${OPS.input} mt-0.5 w-16`}
+            className={`${fieldClass} w-14`}
             value={pcsDraft}
+            aria-label="Số kiện"
             title="Tổng số kiện (Total carton) trên invoice"
             onChange={(e) => onPcsChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
             onBlur={onPcsBlur}
           />
         </label>
-        <Button type="button" variant="secondary" size="sm" onClick={onRandomGenerate}>
-          Tạo ngẫu nhiên
-        </Button>
-        <input
-          ref={goodsListFileRef as RefObject<HTMLInputElement>}
-          type="file"
-          accept=".xlsx,.xls,.csv,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          className="hidden"
-          onChange={(e) => void onGoodsListFile(e.target.files?.[0] ?? null)}
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          disabled={importingList || loading}
-          title="Upload list hàng khách gửi — hệ thống khớp mặt hàng tương tự trong catalog H21"
-          onClick={onUploadListClick}
-        >
-          {importingList ? "Đang khớp…" : "Upload list hàng"}
-        </Button>
-        <div className="ml-auto min-w-[11rem] rounded-lg border border-ui-border/40 bg-white/70 px-2.5 py-1.5 text-[10px] font-medium leading-snug text-ui-text-muted">
-          <div>
-            {linesLength} dòng · {footer.linesKg}/{footer.grossKg} kg
-            <span className="text-indigo-700">
-              {" "}
-              · {labelForH21CargoFamily(effectiveCargoFamily)}
-            </span>
-          </div>
-          <div>
-            Total carton: <strong className="text-ui-text">{footer.totalCartonPkgs} PKGS</strong>
-            {footer.residualKg > 0 ? (
-              <span> · dư {footer.residualKg} kg</span>
-            ) : null}
-            {lotPcs > 0 ? <span className="text-indigo-700"> · lô {lotPcs} kiện</span> : null}
-          </div>
+
+        <span className="hidden h-5 w-px bg-ui-border/80 sm:block" aria-hidden />
+
+        <div className="flex items-center gap-1">
+          <Button type="button" variant="secondary" size="sm" className="!min-h-8 !px-2.5" onClick={onRandomGenerate}>
+            Ngẫu nhiên
+          </Button>
         </div>
+
+        <p
+          className="ml-auto min-w-0 truncate text-right font-mono text-[11px] font-semibold tabular-nums text-ui-text-muted"
+          title={`${linesLength} dòng · ${footer.linesKg}/${footer.grossKg} kg · ${labelForH21CargoFamily(effectiveCargoFamily)} · ${footer.totalCartonPkgs} PKGS${footer.residualKg > 0 ? ` · dư ${footer.residualKg} kg` : ""}${lotPcs > 0 ? ` · lô ${lotPcs} kiện` : ""}`}
+        >
+          <span className="text-ui-navy">{linesLength}</span>d
+          <span className="mx-1 text-ui-border">·</span>
+          <span className="text-indigo-800">
+            {footer.linesKg}/{footer.grossKg}kg
+          </span>
+          <span className="mx-1 text-ui-border">·</span>
+          {labelForH21CargoFamily(effectiveCargoFamily)}
+          <span className="mx-1 text-ui-border">·</span>
+          <span className="text-emerald-800">{footer.totalCartonPkgs} PKGS</span>
+          {footer.residualKg > 0 ? (
+            <>
+              <span className="mx-1 text-ui-border">·</span>
+              <span className="text-amber-800">dư {footer.residualKg}</span>
+            </>
+          ) : null}
+        </p>
       </div>
     </div>
   );

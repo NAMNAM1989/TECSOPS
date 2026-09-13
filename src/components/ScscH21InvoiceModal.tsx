@@ -48,7 +48,6 @@ import {
   type H21CargoFamilyMode,
   type H21DeclSplit,
 } from "../utils/scscH21InvoiceSplits";
-import { importH21GoodsListToInvoiceLines } from "../utils/scscH21GoodsListImport";
 import { useOpsMobileOverlayLock } from "../hooks/useOpsMobileOverlayLock";
 import { formatH21InvoiceCneeDisplay } from "../utils/h21InvoiceCneeFormat";
 import { H21CargoFamilyKanban } from "./H21CargoFamilyKanban";
@@ -57,6 +56,12 @@ import { ScscH21InvoiceDeclTabs } from "./ScscH21InvoiceDeclTabs";
 import { ScscH21InvoiceReview } from "./ScscH21InvoiceReview";
 import { OPS } from "../styles/opsModalStyles";
 import { Button, ConfirmDialog, SplitPane, useToast } from "../ui";
+import {
+  getCustomerH21Preset,
+  resolveBoundCustomerH21WorkingCatalog,
+  withPreferredCustomerCargoFamilyMode,
+  withPreferredLineCountOnCustomerSplits,
+} from "../utils/customerH21InvoicePreset";
 
 export type ScscH21InvoiceSavePayload = {
   invoiceItems: ScscH21InvoiceLine[];
@@ -102,10 +107,9 @@ export function ScscH21InvoiceModal({
   );
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [removeSplitId, setRemoveSplitId] = useState<string | null>(null);
-  const [importingList, setImportingList] = useState(false);
-  const [pendingGoodsListFile, setPendingGoodsListFile] = useState<File | null>(null);
   const tabsScrollRef = useRef<HTMLDivElement>(null);
-  const goodsListFileRef = useRef<HTMLInputElement>(null);
+  const customerPoolAppliedRef = useRef(false);
+  const pendingPreferFingerprintRef = useRef(false);
 
   const lotKg = shipment.kg ?? 0;
   const lotPcs = shipment.pcs ?? 0;
@@ -171,6 +175,8 @@ export function ScscH21InvoiceModal({
   useEffect(() => {
     const next = hydrateSplitsFromShipment(shipment);
     const sid = shipment.h21DeclarationShipperId?.trim() ?? "";
+    customerPoolAppliedRef.current = false;
+    pendingPreferFingerprintRef.current = false;
     setSplits(next);
     setActiveSplitId(next[0]?.id ?? "");
     setShipperId(sid);
@@ -268,22 +274,83 @@ export function ScscH21InvoiceModal({
     [shipment, customerDirectory]
   );
 
-  const effectiveCargoFamily = useMemo(
-    (): H21CargoFamilyId =>
-      cargoFamilyMode === "auto" ? detectedCargoFamily : cargoFamilyMode,
-    [cargoFamilyMode, detectedCargoFamily]
+  const customerPreset = useMemo(
+    () => getCustomerH21Preset(customerEntry, "SCSC"),
+    [customerEntry]
   );
+
+  /**
+   * KH đã gán Data H21 tại SCSC → bắt buộc chỉ dùng snapshot riêng của KH.
+   */
+  const boundCustomerCatalog = useMemo(
+    () =>
+      resolveBoundCustomerH21WorkingCatalog(catalog, customerPreset, {
+        warehouseScope: "SCSC",
+      }),
+    [catalog, customerPreset]
+  );
+  const boundToCustomer = boundCustomerCatalog.bound;
+  const customerPresetPool = boundCustomerCatalog.pool as ScscH21CatalogItem[];
+  const customerUnresolvedCount = boundCustomerCatalog.unresolvedCount;
+
+  /** Khóa nguồn hàng = Data KH khi đã gán (không phụ thuộc lane tay). */
+  const useCustomerPool = boundToCustomer;
+
+  /**
+   * Có Data KH → pool khóa; migrate mode `customer` → `auto` + preferred lineCount.
+   * Vẫn cho chọn nhóm hàng (TP / đông lạnh…) trong pool KH.
+   */
+  useEffect(() => {
+    if (customerPoolAppliedRef.current) return;
+    if (!boundToCustomer) return;
+    customerPoolAppliedRef.current = true;
+    pendingPreferFingerprintRef.current = true;
+    setSplits((prev) => {
+      const preferred = withPreferredCustomerCargoFamilyMode(prev, true);
+      return withPreferredLineCountOnCustomerSplits(
+        preferred,
+        customerPreset?.preferredLineCount
+      );
+    });
+  }, [boundToCustomer, customerPreset?.preferredLineCount]);
+
+  useEffect(() => {
+    if (!pendingPreferFingerprintRef.current) return;
+    pendingPreferFingerprintRef.current = false;
+    setSavedFingerprint(fingerprintH21Splits(splits, shipperId));
+  }, [splits, shipperId]);
+
+  /** Stamp mặc định từ preset KH (chỉ khi lô chưa chọn shipper tờ khai). */
+  useEffect(() => {
+    const stampId = customerPreset?.defaultStampId?.trim();
+    if (!stampId) return;
+    if (shipment.h21DeclarationShipperId?.trim()) return;
+    if (!activeStamps.some((s) => s.id === stampId)) return;
+    setShipperId((prev) => (prev.trim() ? prev : stampId));
+  }, [
+    customerPreset?.defaultStampId,
+    activeStamps,
+    shipment.h21DeclarationShipperId,
+  ]);
+
+  const effectiveCargoFamily = useMemo((): H21CargoFamilyId => {
+    // Legacy `customer` = cả Data KH (= general trong pool đã khóa).
+    if (cargoFamilyMode === "customer") return "general";
+    if (cargoFamilyMode === "auto") return detectedCargoFamily;
+    return cargoFamilyMode;
+  }, [cargoFamilyMode, detectedCargoFamily]);
 
   useEffect(() => {
     setCategoryFilter("");
-  }, [effectiveCargoFamily]);
+  }, [effectiveCargoFamily, useCustomerPool]);
 
   const cargoFamilyCounts = useMemo(() => {
+    const source = boundToCustomer ? customerPresetPool : catalog;
     const ids: H21CargoFamilyId[] = ["frozen", "fruit", "food", "garment", "general"];
     const counts: Partial<Record<H21CargoFamilyId, number>> = {};
-    for (const id of ids) counts[id] = countCatalogInH21Family(catalog, id);
+    for (const id of ids) counts[id] = countCatalogInH21Family(source, id);
     return counts;
-  }, [catalog]);
+  }, [boundToCustomer, catalog, customerPresetPool]);
 
   const footer = useMemo(
     () =>
@@ -352,9 +419,11 @@ export function ScscH21InvoiceModal({
   );
 
   const familyCatalog = useMemo(() => {
-    if (effectiveCargoFamily === "general") return catalog;
-    return filterCatalogByH21Family(catalog, effectiveCargoFamily, 1) as ScscH21CatalogItem[];
-  }, [catalog, effectiveCargoFamily]);
+    // KH đã gán data → CHỈ pool KH, rồi lọc theo nhóm hàng trong pool đó.
+    const base = boundToCustomer ? customerPresetPool : catalog;
+    if (effectiveCargoFamily === "general") return base;
+    return filterCatalogByH21Family(base, effectiveCargoFamily, 1) as ScscH21CatalogItem[];
+  }, [boundToCustomer, catalog, customerPresetPool, effectiveCargoFamily]);
 
   const categories = useMemo(() => {
     const s = new Set(familyCatalog.map((c) => c.category).filter(Boolean));
@@ -476,72 +545,35 @@ export function ScscH21InvoiceModal({
       return;
     }
     try {
+      if (boundToCustomer) {
+        if (customerPresetPool.length === 0) {
+          toast.error(
+            customerUnresolvedCount > 0
+              ? `Data KH · ${customerEntry?.code ?? "—"}: ${customerUnresolvedCount} SP không còn trong catalog SCSC (đổi id / thiếu QC) — gán lại trên Danh mục`
+              : "Data KH trống — gán SP trên Danh mục H21 · SCSC"
+          );
+          return;
+        }
+      }
+      const pool = boundToCustomer ? customerPresetPool : catalog;
       const generated = generateRandomH21InvoiceLines({
-        catalog,
+        catalog: pool,
         lineCount,
         grossKg: kg,
         cargoFamily: effectiveCargoFamily,
       }) as ScscH21InvoiceLine[];
       setLines(generated);
       setLineCountDraft(String(generated.length));
+      const famLabel = boundToCustomer
+        ? `Data KH${customerEntry?.code ? ` · ${customerEntry.code}` : ""} · ${labelForH21CargoFamily(effectiveCargoFamily)}`
+        : labelForH21CargoFamily(effectiveCargoFamily);
       toast.success(
-        `Đã tạo ${generated.length} dòng · ${invoiceNo || "INV"} · ${labelForH21CargoFamily(effectiveCargoFamily)} · ${kg} kg`
+        `Đã tạo ${generated.length} dòng · ${invoiceNo || "INV"} · ${famLabel} · ${kg} kg`
       );
       setMobilePane("review");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Tạo ngẫu nhiên thất bại");
     }
-  };
-
-  const runGoodsListImport = async (file: File) => {
-    const kg = allocateKg;
-    if (kg == null || kg <= 0) {
-      toast.error("Nhập KG tờ khai (> 0) trước khi upload list hàng");
-      return;
-    }
-    if (!catalog.length) {
-      toast.error("Catalog H21 chưa tải xong — thử lại sau");
-      return;
-    }
-    setImportingList(true);
-    try {
-      const buf = await file.arrayBuffer();
-      const result = await importH21GoodsListToInvoiceLines({
-        buf,
-        fileName: file.name,
-        catalog,
-        grossKg: kg,
-        cargoFamily: effectiveCargoFamily,
-      });
-      setLines(result.lines);
-      setLineCountDraft(String(result.lines.length));
-      const miss = result.unmatched.length;
-      toast.success(
-        miss > 0
-          ? `Khớp ${result.matches.length}/${result.queries.length} mặt hàng → ${result.lines.length} dòng · bỏ ${miss} không khớp`
-          : `Khớp ${result.matches.length} mặt hàng → ${result.lines.length} dòng invoice`
-      );
-      setMobilePane("review");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Upload list hàng thất bại");
-    } finally {
-      setImportingList(false);
-      if (goodsListFileRef.current) goodsListFileRef.current.value = "";
-    }
-  };
-
-  const handleGoodsListFile = (file: File | null) => {
-    if (!file) return;
-    if (allocateKg <= 0) {
-      toast.error("Nhập KG tờ khai (> 0) trước khi upload list hàng");
-      if (goodsListFileRef.current) goodsListFileRef.current.value = "";
-      return;
-    }
-    if (lines.length > 0) {
-      setPendingGoodsListFile(file);
-      return;
-    }
-    void runGoodsListImport(file);
   };
 
   const handleAddSplit = () => {
@@ -553,6 +585,11 @@ export function ScscH21InvoiceModal({
     const suggested = suggestDeclarationPcs(remain > 0 ? remain : 0, lotKg, lotPcs);
     const next = createDeclSplit(remain > 0 ? String(remain) : "", {
       pcsDraft: suggested > 0 ? String(suggested) : "",
+      cargoFamilyMode: "auto",
+      lineCountDraft:
+        boundToCustomer && customerPreset?.preferredLineCount
+          ? String(customerPreset.preferredLineCount)
+          : "15",
     });
     setSplits((prev) => [...prev, next]);
     setActiveSplitId(next.id);
@@ -742,7 +779,6 @@ export function ScscH21InvoiceModal({
         splits={splits}
         activeSplitId={activeSplit?.id}
         tabsScrollRef={tabsScrollRef}
-        goodsListFileRef={goodsListFileRef}
         isDirty={isDirty}
         filledSplitCount={filledSplitCount}
         invoiceSeq={invoiceSeq}
@@ -756,8 +792,6 @@ export function ScscH21InvoiceModal({
         linesLength={lines.length}
         footer={footer}
         effectiveCargoFamily={effectiveCargoFamily}
-        importingList={importingList}
-        loading={loading}
         onSelectSplit={setActiveSplitId}
         onRemoveSplit={handleRemoveSplit}
         onAddSplit={handleAddSplit}
@@ -781,8 +815,6 @@ export function ScscH21InvoiceModal({
         onPcsChange={(v) => setPcsDraft(v)}
         onPcsBlur={() => setPcsDraft(normalizePcsDraft(pcsDraft))}
         onRandomGenerate={handleRandomGenerate}
-        onGoodsListFile={(file) => void handleGoodsListFile(file)}
-        onUploadListClick={() => goodsListFileRef.current?.click()}
       />
 
       <div className="shrink-0 border-b border-ui-border/60 px-4 py-2">
@@ -792,8 +824,36 @@ export function ScscH21InvoiceModal({
           detectedFamily={detectedCargoFamily}
           goodsText={goodsTextForFamily}
           counts={cargoFamilyCounts}
+          customerPresetCount={customerPresetPool.length}
+          customerLabel={customerEntry?.code || customerEntry?.shortCode}
+          lockedToCustomer={boundToCustomer}
         />
       </div>
+
+      {boundToCustomer && customerPresetPool.length > 0 ? (
+        <div className="shrink-0 border-b border-emerald-200/80 bg-emerald-50/70 px-4 py-1.5 text-[11px] text-emerald-950">
+          Chỉ hiện data riêng · {customerEntry?.code ?? "—"} ·{" "}
+          {customerPresetPool.length} SP đã up (không lẫn catalog chung)
+          {customerUnresolvedCount > 0
+            ? ` · ${customerUnresolvedCount} SP thiếu QC`
+            : ""}
+        </div>
+      ) : boundToCustomer && customerPresetPool.length === 0 ? (
+        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] text-amber-950">
+          KH {customerEntry?.code ?? "—"} đã có Data H21 nhưng không dùng được — up
+          lại list trên Danh mục H21 · SCSC.
+        </div>
+      ) : customerEntry ? (
+        <div className="shrink-0 border-b border-ui-border/60 bg-ui-surface-muted/50 px-4 py-1.5 text-[11px] text-ui-text-muted">
+          KH {customerEntry.code} chưa up data H21 tại SCSC — đang hiện catalog
+          chung. Vào Danh mục H21 · SCSC → chọn KH → Thay list của KH.
+        </div>
+      ) : (
+        <div className="shrink-0 border-b border-ui-border/60 bg-ui-surface-muted/50 px-4 py-1.5 text-[11px] text-ui-text-muted">
+          Lô chưa khớp khách trong danh bạ — H21 hiện catalog chung. Gắn đúng KH
+          trên lô (vd. MINH KHANG).
+        </div>
+      )}
 
       {validationErrors.length > 0 ? (
         <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] text-amber-900">
@@ -908,7 +968,38 @@ export function ScscH21InvoiceModal({
       data-testid="scsc-h21-invoice-modal"
     >
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ui-border/90 bg-ui-surface px-4 py-3 shadow-ui-sm">
-        <div className="min-w-0 flex-1">
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          <Button type="button" size="sm" disabled={saving || !isDirty} onClick={() => void handleSave()}>
+            {saving
+              ? "Đang lưu…"
+              : filledSplitCount > 0
+                ? `Lưu ${filledSplitCount} tờ khai`
+                : "Lưu tờ khai"}
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={requestClose}>
+            Đóng
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={exporting}
+            onClick={() => void handleExport("excel")}
+          >
+            Excel
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={exporting}
+            onClick={() => void handleExport("pdf")}
+          >
+            PDF
+          </Button>
+        </div>
+
+        <div className="min-w-0 flex-1 sm:px-2">
           <h2 className="text-sm font-extrabold text-ui-navy sm:text-base">
             Invoice H21 · Phi mậu dịch
             {isDirty ? (
@@ -946,35 +1037,6 @@ export function ScscH21InvoiceModal({
             Review
           </button>
         </div>
-
-        <Button type="button" size="sm" disabled={saving || !isDirty} onClick={() => void handleSave()}>
-          {saving
-            ? "Đang lưu…"
-            : filledSplitCount > 0
-              ? `Lưu ${filledSplitCount} tờ khai`
-              : "Lưu tờ khai"}
-        </Button>
-        <Button type="button" variant="secondary" size="sm" onClick={requestClose}>
-          Đóng
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          disabled={exporting}
-          onClick={() => void handleExport("excel")}
-        >
-          Excel
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          disabled={exporting}
-          onClick={() => void handleExport("pdf")}
-        >
-          PDF
-        </Button>
       </header>
 
       <SplitPane
@@ -1016,23 +1078,6 @@ export function ScscH21InvoiceModal({
         danger
         onConfirm={confirmRemoveSplit}
         onCancel={() => setRemoveSplitId(null)}
-      />
-      <ConfirmDialog
-        open={pendingGoodsListFile != null}
-        title="Thay dòng bằng list hàng?"
-        message={`TK ${invoiceSeq} đang có ${lines.length} dòng. Upload list sẽ thay toàn bộ dòng hiện tại bằng mặt hàng khớp từ file.`}
-        confirmLabel="Upload & thay"
-        cancelLabel="Hủy"
-        danger
-        onConfirm={() => {
-          const f = pendingGoodsListFile;
-          setPendingGoodsListFile(null);
-          if (f) void runGoodsListImport(f);
-        }}
-        onCancel={() => {
-          setPendingGoodsListFile(null);
-          if (goodsListFileRef.current) goodsListFileRef.current.value = "";
-        }}
       />
     </div>
   );

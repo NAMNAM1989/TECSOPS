@@ -123,6 +123,38 @@ export type CustomerParty = {
 
 export type CustomerType = "FORWARDER" | "DIRECT_SHIPPER" | "AGENT" | "OTHER";
 
+/** Preset hàng H21 riêng theo khách × kho — snapshot đã upload (không phụ thuộc catalog chung). */
+export type CustomerH21GoodsItem = {
+  id: string;
+  description: string;
+  hsCode?: string;
+  category?: string;
+  origin?: string;
+  uom1?: string;
+  unitPrice?: number;
+  /** Kg / 1 ĐVT1 — cần > 0 để tạo invoice. */
+  unitFactor: number;
+  /** Id catalog chung nếu đã enrich (tuỳ chọn). */
+  sourceCatalogItemId?: string;
+};
+
+/** Preset H21 theo kho — data riêng của khách dùng khi lập invoice. */
+export type CustomerH21InvoicePreset = {
+  warehouseScope: "SCSC" | "TCS";
+  /**
+   * Snapshot hàng đã upload / gán cho khách tại kho này.
+   * Đây là nguồn sự thật để H21 «chỉ hiện data KH».
+   */
+  items?: CustomerH21GoodsItem[];
+  /**
+   * @deprecated Legacy — id catalog chung. Vẫn đọc để migrate → items.
+   */
+  catalogItemIds?: string[];
+  /** Shipper tờ khai H21 mặc định (stamp id). */
+  defaultStampId?: string;
+  preferredLineCount?: number;
+};
+
 export const CUSTOMER_TYPES: readonly CustomerType[] = [
   "FORWARDER",
   "DIRECT_SHIPPER",
@@ -195,6 +227,11 @@ export type CustomerDirectoryEntry = {
   /** Mẫu kích thước DIM lưu sẵn theo mã khách. */
   savedDimTemplates?: CustomerSavedDimTemplate[];
 
+  /**
+   * Preset H21 theo kho — danh sách SKU catalog hay dùng khi lập invoice.
+   * Khác `savedGoods` (tên hàng phiếu cân).
+   */
+  h21InvoicePresets?: CustomerH21InvoicePreset[];
 
   /** Yêu cầu khác in trên phiếu cân SCSC (theo từng khách). */
   otherRequirementsPrint?: string;

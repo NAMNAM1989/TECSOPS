@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { ScscH21CatalogItem } from "../types/scscH21Catalog";
 import {
   createScscH21Goods,
@@ -15,6 +16,7 @@ import {
 } from "../../shared/scscH21CatalogNormalize.mjs";
 import { OPS } from "../styles/opsModalStyles";
 import { Button, ConfirmDialog, IconButton, Input, TextArea, Wordmark, useToast } from "../ui";
+import { H21CustomerCatalogPresetSection } from "../components/H21CustomerCatalogPresetSection";
 import { ScscH21ShipperSection } from "../components/ScscH21ShipperSection";
 
 type Draft = ScscH21CatalogItem & { _isNew?: boolean };
@@ -100,10 +102,18 @@ function IconRefresh({ className }: { className?: string }) {
 
 type Props = {
   onBack: () => void;
+  customerDirectory?: readonly CustomerDirectoryEntry[];
+  onSaveCustomers?: (
+    customers: CustomerDirectoryEntry[]
+  ) => Promise<boolean | void>;
 };
 
 /** Quản lý danh mục H21 — chỉ kho SCSC (CRUD như database). */
-export function ScscH21CatalogPage({ onBack }: Props) {
+export function ScscH21CatalogPage({
+  onBack,
+  customerDirectory = [],
+  onSaveCustomers,
+}: Props) {
   const toast = useToast();
   const [items, setItems] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -301,7 +311,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
               Danh mục H21 · SCSC
             </h1>
             <p className="text-[11px] text-ui-text-muted">
-              Chỉ kho SCSC — nhập / sửa / xóa mặt hàng dùng lập invoice phi mậu dịch
+              Catalog SCSC · gán Data KH tại đây · khai H21 lấy đúng pool kho này
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -318,6 +328,14 @@ export function ScscH21CatalogPage({ onBack }: Props) {
 
       <main className="mx-auto max-w-7xl space-y-3 px-4 py-4">
         <ScscH21ShipperSection />
+        {onSaveCustomers ? (
+          <H21CustomerCatalogPresetSection
+            warehouseScope="SCSC"
+            customerDirectory={customerDirectory}
+            catalog={items}
+            onSaveCustomers={onSaveCustomers}
+          />
+        ) : null}
         {/* Toolbar */}
         <section className="rounded-2xl border border-ui-border/80 bg-ui-surface p-3 shadow-ui-sm sm:p-3.5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">

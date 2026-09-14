@@ -36,7 +36,8 @@ export type CsdCarrier =
   | "EK"
   | "PR"
   | "T5"
-  | "AI";
+  | "AI"
+  | "MF";
 
 export type CsdCarrierProfile = {
   id: CsdCarrier;
@@ -228,6 +229,17 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     showTransfer: true,
     transferPresets: ["DEL", "BOM", "MAA", "HYD"],
   },
+  MF: {
+    id: "MF",
+    label: "MF",
+    airlineName: "Xiamen Airlines",
+    templateUrl: "/templates/csd/CSD-MF.pdf?v=20260914",
+    flightPrefixes: ["MF"],
+    /** Origin SGN + SPX + XRY + Received from N/A + Consolidation đã in sẵn. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["XMN", "FOC", "HGH", "PKX"],
+  },
 };
 
 export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
@@ -245,6 +257,7 @@ export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   PR: CSD_CARRIER_PROFILES.PR.templateUrl,
   T5: CSD_CARRIER_PROFILES.T5.templateUrl,
   AI: CSD_CARRIER_PROFILES.AI.templateUrl,
+  MF: CSD_CARRIER_PROFILES.MF.templateUrl,
 };
 
 export type CsdFillFields = {
@@ -284,7 +297,7 @@ export type CsdFillFields = {
   flightDest?: string;
   formDate?: string;
   verifiedBy?: string;
-  /** T5 / AI: Date + Time trên ô Issued on. */
+  /** T5 / AI / MF: Date (+ Time) trên ô Issued on. */
   issuedOn?: string;
 };
 
@@ -399,6 +412,11 @@ export function isCsdT5Flight(flight: string | undefined | null): boolean {
 /** Chuyến AI… → Air India CSD. */
 export function isCsdAiFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "AI";
+}
+
+/** Chuyến MF… → Xiamen Airlines CSD. */
+export function isCsdMfFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "MF";
 }
 
 /** Ba hãng dùng chung mẫu CSD-IATA.pdf. */
@@ -638,6 +656,10 @@ export function suggestCsdTransfer(
     if (d && d !== "DEL" && d !== "BOM") return "DEL";
     return "";
   }
+  if (carrier === "MF") {
+    if (d && d !== "XMN") return "XMN";
+    return "";
+  }
   if (carrier === "VU" || carrier === "VJ") {
     return "";
   }
@@ -758,6 +780,9 @@ export function buildCsdFields(
     base.issuedOn = formatCsdT5IssuedOn();
   }
   if (carrier === "AI") {
+    base.issuedOn = formatCsdAiIssuedOn();
+  }
+  if (carrier === "MF") {
     base.issuedOn = formatCsdAiIssuedOn();
   }
   return base;
@@ -1197,6 +1222,31 @@ const LAYOUT_AI = {
   issuedDate: { x: 318, yTop: 595, size: 10 },
   issuedTime: { x: 442, yTop: 595, size: 10 },
   footerRa: { x: 65, yTop: 645, size: 11 },
+} as const;
+
+/**
+ * Layout MF — ~A4 ngắn (Xiamen Airlines IATA CSD).
+ * Giữ Origin SGN + SPX + XRY + Received from N/A + Consolidation.
+ * Điền: RA, AWB, Contents, DEST, Transfer, Issued Date, footer RA.
+ */
+const LAYOUT_MF = {
+  ra: { x: 55, yTop: 158, size: 11, maxWidth: 220, minSize: 8 },
+  awb: { x: 310, yTop: 152, size: 13, maxWidth: 230, minSize: 10 },
+  /** Dưới dòng Contents/Consolidation (~182), trên Origin (~221). */
+  goods: {
+    x: 55,
+    yTop: 205,
+    size: 12,
+    maxWidth: 480,
+    minSize: 10,
+    maxLines: 2,
+    leading: 13,
+  },
+  /** Cùng hàng Origin SGN (~221–238); lệch phải tránh đè nhãn Destination. */
+  dest: { x: 215, yTop: 245, size: 14 },
+  transfer: { x: 340, yTop: 245, size: 13 },
+  issuedDate: { x: 478, yTop: 465, size: 10, maxWidth: 70, minSize: 8 },
+  footerRa: { x: 55, yTop: 560, size: 11, maxWidth: 480, minSize: 8 },
 } as const;
 
 /**
@@ -2047,6 +2097,54 @@ export async function fillCsdPdfBytes(
         A.issuedTime.size
       );
     }
+  } else if (carrier === "MF") {
+    /* Xiamen Airlines — giữ SGN/SPX/XRY/N/A; điền RA + AWB + Contents + DEST + Transfer + Date + footer RA */
+    const fit = (
+      text: string,
+      slot: {
+        x: number;
+        yTop: number;
+        size: number;
+        maxWidth?: number;
+        minSize?: number;
+      }
+    ) => {
+      const t = text.trim();
+      if (!t) return;
+      const maxW = slot.maxWidth ?? 9999;
+      const minS = slot.minSize ?? 8;
+      let size = slot.size;
+      while (size > minS && fontBold.widthOfTextAtSize(t, size) > maxW) {
+        size -= 0.5;
+      }
+      draw(t, slot.x, topYToPdfLibBaseline(pageH, slot.yTop), size);
+    };
+    const M = LAYOUT_MF;
+    if (raLabel) {
+      fit(raLabel, M.ra);
+      fit(raLabel, M.footerRa);
+    }
+    fit(fields.awb, M.awb);
+    drawGoods(M.goods);
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        M.dest.x,
+        topYToPdfLibBaseline(pageH, M.dest.yTop),
+        M.dest.size
+      );
+    }
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        M.transfer.x,
+        topYToPdfLibBaseline(pageH, M.transfer.yTop),
+        M.transfer.size
+      );
+    }
+    const issued = String(fields.issuedOn || "").trim();
+    const issuedDate = issued.split(/\s+/)[0] || "";
+    if (issuedDate) fit(issuedDate, M.issuedDate);
   } else {
     /* TG — mẫu A4 trống: ghi §1 RA, §2 AWB, §3 Contents, §4–6, §14 RA */
     if (raLabel) {

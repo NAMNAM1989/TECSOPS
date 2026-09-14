@@ -24,6 +24,7 @@ import {
   isCsdPrFlight,
   isCsdT5Flight,
   isCsdAiFlight,
+  isCsdMfFlight,
   isCsdIataTemplateCarrier,
   formatCsdEkDate,
   formatCsdEkDateTime,
@@ -48,7 +49,7 @@ describe("csdForms", () => {
     localStorage.clear();
   });
 
-  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI / EK / PR / T5 / AI qua registry", () => {
+  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI / EK / PR / T5 / AI / MF qua registry", () => {
     expect(isCsdFdFlight("FD301")).toBe(true);
     expect(isCsdTgFlight("TG621")).toBe(true);
     expect(isCsdTgFlight("tg 621")).toBe(true);
@@ -64,6 +65,7 @@ describe("csdForms", () => {
     expect(isCsdPrFlight("PR598")).toBe(true);
     expect(isCsdT5Flight("T5123")).toBe(true);
     expect(isCsdAiFlight("AI131")).toBe(true);
+    expect(isCsdMfFlight("MF812")).toBe(true);
     expect(isCsdIataTemplateCarrier("VJ")).toBe(true);
     expect(isCsdIataTemplateCarrier("SQ")).toBe(true);
     expect(isCsdIataTemplateCarrier("TR")).toBe(true);
@@ -85,6 +87,8 @@ describe("csdForms", () => {
     expect(getCsdCarrierProfile("T5").showTransfer).toBe(true);
     expect(getCsdCarrierProfile("AI").showOrigin).toBe(false);
     expect(getCsdCarrierProfile("AI").showTransfer).toBe(true);
+    expect(getCsdCarrierProfile("MF").showOrigin).toBe(false);
+    expect(getCsdCarrierProfile("MF").showTransfer).toBe(true);
     expect(getCsdCarrierProfile("SQ").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("TR").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("BI").templateUrl).toContain("CSD-BI");
@@ -92,9 +96,10 @@ describe("csdForms", () => {
     expect(getCsdCarrierProfile("PR").templateUrl).toContain("CSD-PR");
     expect(getCsdCarrierProfile("T5").templateUrl).toContain("CSD-T5");
     expect(getCsdCarrierProfile("AI").templateUrl).toContain("CSD-AI");
+    expect(getCsdCarrierProfile("MF").templateUrl).toContain("CSD-MF");
   });
 
-  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI|EK|PR|T5|AI + AWB 11 số", () => {
+  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI|EK|PR|T5|AI|MF + AWB 11 số", () => {
     expect(canPrintCsd({ flight: "FD301", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "MH751", awb: "232-12345675" })).toBe(true);
@@ -109,6 +114,7 @@ describe("csdForms", () => {
     expect(canPrintCsd({ flight: "PR598", awb: "079-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "T5123", awb: "496-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "AI131", awb: "098-12345675" })).toBe(true);
+    expect(canPrintCsd({ flight: "MF812", awb: "731-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "123" })).toBe(false);
   });
 
@@ -185,6 +191,8 @@ describe("csdForms", () => {
     expect(suggestCsdTransfer("BOM", "AI")).toBe("");
     expect(suggestCsdTransfer("DEL", "AI")).toBe("");
     expect(suggestCsdTransfer("MAA", "AI")).toBe("DEL");
+    expect(suggestCsdTransfer("YVR", "MF")).toBe("XMN");
+    expect(suggestCsdTransfer("XMN", "MF")).toBe("");
     localStorage.setItem(
       "tecsops.csd.lastTransfer.v1",
       JSON.stringify({ FD: "DMK" })
@@ -732,6 +740,51 @@ describe("csdForms", () => {
     expect(f.dest).toBe("MAA");
     expect(f.transfer).toBe("DEL");
     expect(f.raCode).toBe("VN/RA3/00013-01");
+    expect(f.issuedOn).toMatch(/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/);
+  });
+
+  it("điền PDF CSD MF: RA + AWB + Contents + DEST/Transfer (giữ SGN/SPX/XRY)", async () => {
+    const template = new Uint8Array(
+      readFileSync(resolve("public/templates/csd/CSD-MF.pdf"))
+    );
+    const bold = new Uint8Array(
+      readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
+    );
+    const bytes = await fillCsdPdfBytes(
+      "MF",
+      {
+        awb: "731-12345675",
+        goods: "GARMENTS",
+        dest: "YVR",
+        transfer: "XMN",
+        raCode: "VN/RA3/00009-01",
+        opsTeam: "SCSC",
+        issuedOn: formatCsdAiIssuedOn(new Date("2026-09-14T08:15:00")),
+      },
+      template,
+      { bold }
+    );
+    expect(bytes.byteLength).toBeGreaterThan(1000);
+    const { PDFDocument } = await import("pdf-lib");
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPageCount()).toBe(1);
+  });
+
+  it("build MF: không ép origin; transfer XMN + issuedOn + RA theo kho", () => {
+    const f = buildCsdFields(
+      {
+        awb: "73112345675",
+        dest: "yvr",
+        goodsDescriptionPrint: "GARMENTS",
+        warehouse: "SCSC",
+      },
+      "MF",
+      { transfer: "xmn" }
+    );
+    expect(f.origin).toBeUndefined();
+    expect(f.dest).toBe("YVR");
+    expect(f.transfer).toBe("XMN");
+    expect(f.raCode).toBe("VN/RA3/00009-01");
     expect(f.issuedOn).toMatch(/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/);
   });
 

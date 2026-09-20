@@ -14,6 +14,7 @@ import {
 } from "./stateStore.mjs";
 import { createPostgresStateStore } from "./postgresStateStore.mjs";
 import { registerLookupRoutes } from "./lookupRoutes.mjs";
+import { registerGlobalSearchRoutes } from "./globalSearchRoutes.mjs";
 import { registerScscH21Routes } from "./scscH21Routes.mjs";
 import { registerTcsH21Routes } from "./tcsH21Routes.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
@@ -246,6 +247,8 @@ registerScscH21Routes(app, { requireAuth: appAuth.requireAuth });
 console.info("[api] scsc-h21 catalog");
 registerTcsH21Routes(app, { requireAuth: appAuth.requireAuth });
 console.info("[api] tcs-h21 catalog");
+registerGlobalSearchRoutes(app, { requireAuth: appAuth.requireAuth });
+console.info("[api] search");
 
 if (isDatabaseConfigured()) {
   registerLookupRoutes(app, { requireAuth: appAuth.requireAuth });

@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
+import type { GlobalSearchLotHit } from "../utils/globalSearchApi";
 import {
   SyncStatusPill,
   Wordmark,
@@ -47,6 +48,7 @@ type Props = {
   searchContext: ShipmentSearchContext;
   searchInputRef?: RefObject<HTMLInputElement>;
   onSelectSearchMatch: (match: ShipmentSearchMatch) => void;
+  onSelectGlobalLot?: (hit: GlobalSearchLotHit) => void;
   statusFilter: StatusFilterValue;
   onStatusFilterChange: (v: StatusFilterValue) => void;
   onClearFilters: () => void;
@@ -83,6 +85,7 @@ export function OpsDesktopCommandBar({
   searchContext,
   searchInputRef,
   onSelectSearchMatch,
+  onSelectGlobalLot,
   statusFilter,
   onStatusFilterChange,
   onClearFilters,
@@ -172,6 +175,7 @@ export function OpsDesktopCommandBar({
         searchContext={searchContext}
         searchInputRef={searchInputRef}
         onSelectSearchMatch={onSelectSearchMatch}
+        onSelectGlobalLot={onSelectGlobalLot}
         statusFilter={statusFilter}
         onStatusFilterChange={onStatusFilterChange}
         onClearFilters={onClearFilters}

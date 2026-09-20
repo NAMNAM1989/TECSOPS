@@ -21,6 +21,8 @@ import { clampScscH21InvoiceDeclarations, clampScscH21InvoiceLines } from "../sh
 import { clampTcsH21InvoiceDeclarations, clampTcsH21InvoiceLines } from "../shared/tcsH21CatalogNormalize.mjs";
 import { parseCustomersLoose } from "./customerDirectoryValidate.mjs";
 import { planRelationalPersist } from "./postgresStateDiff.mjs";
+import { rawAwbDigits } from "../shared/awbFormat.mjs";
+import { buildLotSearchNorm } from "../shared/searchNormalize.mjs";
 
 const { Pool } = pg;
 
@@ -170,6 +172,18 @@ async function ensureSchema(client) {
   await client.query(
     `ALTER TABLE ${SHIPMENTS_TABLE} ADD COLUMN IF NOT EXISTS hawb text NOT NULL DEFAULT ''`
   );
+  await client.query(
+    `ALTER TABLE ${SHIPMENTS_TABLE} ADD COLUMN IF NOT EXISTS awb_digits text NOT NULL DEFAULT ''`
+  );
+  await client.query(
+    `ALTER TABLE ${SHIPMENTS_TABLE} ADD COLUMN IF NOT EXISTS search_norm text NOT NULL DEFAULT ''`
+  );
+  await client.query(
+    `CREATE INDEX IF NOT EXISTS idx_shipments_session_date_desc ON ${SHIPMENTS_TABLE}(session_date DESC)`
+  );
+  await client.query(
+    `CREATE INDEX IF NOT EXISTS idx_shipments_awb_digits ON ${SHIPMENTS_TABLE}(awb_digits)`
+  );
   await client.query(`
     CREATE TABLE IF NOT EXISTS ${CUSTOMER_CONSIGNEES_TABLE} (
       id text PRIMARY KEY,
@@ -283,6 +297,41 @@ async function ensureSchema(client) {
   await seedScscH21CatalogIfEmpty(client);
   await ensureTcsH21CatalogSchema(client);
   await seedTcsH21CatalogIfEmpty(client);
+  await backfillShipmentSearchColumns(client);
+}
+
+async function backfillShipmentSearchColumns(client) {
+  const res = await client.query(
+    `
+    SELECT id, awb, hawb, flight, flight_date, customer, customer_code, dest, note, cutoff_note,
+           shipper_name_print, consignee_name_print, goods_description_print, notify_name_print, warehouse
+    FROM ${SHIPMENTS_TABLE}
+    WHERE search_norm = ''
+    LIMIT 8000
+    `
+  );
+  for (const row of res.rows) {
+    const s = {
+      awb: row.awb,
+      hawb: row.hawb,
+      flight: row.flight,
+      flightDate: row.flight_date,
+      customer: row.customer,
+      customerCode: row.customer_code,
+      dest: row.dest,
+      note: row.note,
+      cutoffNote: row.cutoff_note,
+      shipperNamePrint: row.shipper_name_print,
+      consigneeNamePrint: row.consignee_name_print,
+      goodsDescriptionPrint: row.goods_description_print,
+      notifyNamePrint: row.notify_name_print,
+      warehouse: row.warehouse,
+    };
+    await client.query(
+      `UPDATE ${SHIPMENTS_TABLE} SET awb_digits = $2, search_norm = $3 WHERE id = $1`,
+      [row.id, rawAwbDigits(row.awb), buildLotSearchNorm(s)]
+    );
+  }
 }
 
 function str(v) {
@@ -788,6 +837,10 @@ async function upsertShipmentRow(client, s) {
       invoice_declarations = EXCLUDED.invoice_declarations
     `,
     shipmentInsertParams(s)
+  );
+  await client.query(
+    `UPDATE ${SHIPMENTS_TABLE} SET awb_digits = $2, search_norm = $3 WHERE id = $1`,
+    [id, rawAwbDigits(s.awb), buildLotSearchNorm(s)]
   );
 }
 

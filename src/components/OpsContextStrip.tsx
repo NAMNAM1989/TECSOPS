@@ -1,6 +1,7 @@
 import type { ReactNode, RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
+import type { GlobalSearchLotHit } from "../utils/globalSearchApi";
 import { Button } from "../ui";
 import { OpsDayOverviewStrip } from "./OpsDayOverviewStrip";
 import { SmartSearchBar } from "./SmartSearchBar";
@@ -25,6 +26,7 @@ type Props = {
   searchContext: ShipmentSearchContext;
   searchInputRef?: RefObject<HTMLInputElement>;
   onSelectSearchMatch: (match: ShipmentSearchMatch) => void;
+  onSelectGlobalLot?: (hit: GlobalSearchLotHit) => void;
   statusFilter: StatusFilterValue;
   onStatusFilterChange: (v: StatusFilterValue) => void;
   onClearFilters: () => void;
@@ -56,6 +58,7 @@ export function OpsContextStrip({
   searchContext,
   searchInputRef,
   onSelectSearchMatch,
+  onSelectGlobalLot,
   statusFilter,
   onStatusFilterChange,
   onClearFilters,
@@ -110,6 +113,8 @@ export function OpsContextStrip({
                   searchContext={searchContext}
                   inputRef={searchInputRef}
                   onSelectMatch={onSelectSearchMatch}
+                  sessionDate={selectedYmd}
+                  onSelectGlobalLot={onSelectGlobalLot}
                   inlineFacets={false}
                   debounceMs={200}
                 />
@@ -165,29 +170,31 @@ export function OpsContextStrip({
           className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain px-5 py-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
         >
           {overview}
-          {hasRows ? (
-            <>
-              <StripDivider />
-              <div
-                data-testid="ops-desktop-filter-row"
-                className="flex min-w-0 flex-1 items-center gap-2"
-              >
-                <div className="min-w-[12rem] max-w-lg flex-1">
-                  <SmartSearchBar
-                    tightFacets
-                    value={searchQuery}
-                    onChange={onSearchChange}
-                    flightDateFilter={flightDateFilter}
-                    onFlightDateChange={onFlightDateChange}
-                    searchableRows={statusFilteredRows}
-                    matchedRows={filteredViewRows}
-                    searchContext={searchContext}
-                    inputRef={searchInputRef}
-                    onSelectMatch={onSelectSearchMatch}
-                    inlineFacets
-                    debounceMs={200}
-                  />
-                </div>
+          <StripDivider />
+          <div
+            data-testid="ops-desktop-filter-row"
+            className="flex min-w-0 flex-1 items-center gap-2"
+          >
+            <div className="min-w-[12rem] max-w-lg flex-1">
+              <SmartSearchBar
+                tightFacets
+                value={searchQuery}
+                onChange={onSearchChange}
+                flightDateFilter={flightDateFilter}
+                onFlightDateChange={onFlightDateChange}
+                searchableRows={statusFilteredRows}
+                matchedRows={filteredViewRows}
+                searchContext={searchContext}
+                inputRef={searchInputRef}
+                onSelectMatch={onSelectSearchMatch}
+                sessionDate={selectedYmd}
+                onSelectGlobalLot={onSelectGlobalLot}
+                inlineFacets
+                debounceMs={200}
+              />
+            </div>
+            {hasRows ? (
+              <>
                 <StripDivider />
                 <StatusFilterBar
                   compact
@@ -209,13 +216,13 @@ export function OpsContextStrip({
                     Xóa lọc
                   </button>
                 ) : null}
-              </div>
-            </>
-          ) : (
-            <p className="shrink-0 text-[11px] font-medium text-ui-text-muted">
-              Chưa có lô trong ngày · dùng Booking hoặc Sync
-            </p>
-          )}
+              </>
+            ) : (
+              <p className="shrink-0 text-[11px] font-medium text-ui-text-muted">
+                Chưa có lô trong ngày · dùng Booking hoặc Sync
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

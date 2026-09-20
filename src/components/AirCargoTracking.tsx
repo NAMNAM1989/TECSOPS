@@ -45,6 +45,7 @@ import {
   type ShipmentSearchContext,
   type ShipmentSearchMatch,
 } from "../utils/shipmentSearch";
+import type { GlobalSearchLotHit } from "../utils/globalSearchApi";
 import { DayExcelExportDialog } from "./DayExcelExportDialog";
 import type { ScscH21StampId } from "../types/scscH21Catalog";
 import { isScscH21Warehouse } from "../types/scscH21Catalog";
@@ -135,6 +136,11 @@ export function AirCargoTracking({
   const [invoiceShipment, setInvoiceShipment] = useState<Shipment | null>(null);
   const [h21Stamps, setH21Stamps] = useState<readonly (ScscH21StampId | TcsH21StampId)[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const pendingJumpRef = useRef<{
+    id: string;
+    warehouse: Warehouse;
+    sessionDate: string;
+  } | null>(null);
   const isMobile = useIsMobile();
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
   const isViewingToday = selectedYmd === todayYmd;
@@ -190,14 +196,23 @@ export function AirCargoTracking({
   }, [searchActive, filteredViewRows]);
 
   useEffect(() => {
+    const jump = pendingJumpRef.current;
+    const keepJump = Boolean(jump && jump.sessionDate === selectedYmd);
     setStatusFilter("ALL");
     setSearchQuery("");
     setFlightDateFilter("");
+    if (keepJump && jump) {
+      setActiveWarehouse(jump.warehouse);
+      setHighlightedShipmentId(jump.id);
+      setSelectedId(jump.id);
+      return;
+    }
     setHighlightedShipmentId(null);
     setActiveWarehouse("TECS-TCS");
   }, [selectedYmd]);
 
   useEffect(() => {
+    if (pendingJumpRef.current) return;
     setActiveWarehouse((prev) => {
       const hasInActive = filteredViewRows.some((r) => r.warehouse === prev);
       if (hasInActive) return prev;
@@ -229,23 +244,66 @@ export function AirCargoTracking({
     setHighlightedShipmentId(null);
   }, []);
 
-  const scrollToShipmentMatch = useCallback((match: ShipmentSearchMatch) => {
-    const { shipment } = match;
-    setActiveWarehouse(shipment.warehouse);
-    setHighlightedShipmentId(shipment.id);
-    setSelectedId(shipment.id);
+  const applyShipmentJump = useCallback((id: string, warehouse: Warehouse) => {
+    setActiveWarehouse(warehouse);
+    setHighlightedShipmentId(id);
+    setSelectedId(id);
     window.setTimeout(() => {
-      document.getElementById(`warehouse-section-${shipment.warehouse}`)?.scrollIntoView({
+      document.getElementById(`warehouse-section-${warehouse}`)?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
       const rowEl =
-        document.getElementById(`shipment-row-${shipment.id}`) ??
-        document.getElementById(`mobile-shipment-${shipment.id}`);
+        document.getElementById(`shipment-row-${id}`) ??
+        document.getElementById(`mobile-shipment-${id}`);
       rowEl?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 60);
-    window.setTimeout(() => setHighlightedShipmentId(null), 2400);
+    window.setTimeout(() => {
+      setHighlightedShipmentId((cur) => (cur === id ? null : cur));
+    }, 2400);
   }, []);
+
+  const scrollToShipmentMatch = useCallback(
+    (match: ShipmentSearchMatch) => {
+      applyShipmentJump(match.shipment.id, match.shipment.warehouse);
+    },
+    [applyShipmentJump],
+  );
+
+  const jumpToGlobalLot = useCallback(
+    (hit: GlobalSearchLotHit) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(hit.sessionDate)) return;
+      if (hit.sessionDate === selectedYmd) {
+        applyShipmentJump(hit.id, hit.warehouse);
+        return;
+      }
+      pendingJumpRef.current = {
+        id: hit.id,
+        warehouse: hit.warehouse,
+        sessionDate: hit.sessionDate,
+      };
+      setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(hit.sessionDate)));
+    },
+    [selectedYmd, applyShipmentJump],
+  );
+
+  useEffect(() => {
+    const jump = pendingJumpRef.current;
+    if (!jump || jump.sessionDate !== selectedYmd) return;
+    const found = viewRows.find((r) => r.id === jump.id);
+    if (found) {
+      pendingJumpRef.current = null;
+      applyShipmentJump(found.id, found.warehouse);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      if (pendingJumpRef.current === jump) {
+        pendingJumpRef.current = null;
+        setHighlightedShipmentId((cur) => (cur === jump.id ? null : cur));
+      }
+    }, 8000);
+    return () => window.clearTimeout(t);
+  }, [viewRows, selectedYmd, applyShipmentJump]);
 
   const daysWithData = useMemo(() => {
     const s = new Set<string>();
@@ -254,6 +312,7 @@ export function AirCargoTracking({
   }, [allRows]);
 
   useEffect(() => {
+    if (pendingJumpRef.current) return;
     setSelectedId((s) => (s && filteredViewRows.some((r) => r.id === s) ? s : null));
   }, [filteredViewRows]);
 
@@ -566,6 +625,7 @@ export function AirCargoTracking({
       searchContext={searchContext}
       searchInputRef={searchInputRef}
       onSelectSearchMatch={scrollToShipmentMatch}
+      onSelectGlobalLot={jumpToGlobalLot}
       statusFilter={statusFilter}
       onStatusFilterChange={setStatusFilter}
       onClearFilters={clearViewFilters}
@@ -600,6 +660,7 @@ export function AirCargoTracking({
       searchContext={searchContext}
       searchInputRef={searchInputRef}
       onSelectSearchMatch={scrollToShipmentMatch}
+      onSelectGlobalLot={jumpToGlobalLot}
       statusFilter={statusFilter}
       onStatusFilterChange={setStatusFilter}
       onClearFilters={clearViewFilters}

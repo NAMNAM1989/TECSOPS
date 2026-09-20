@@ -2,6 +2,7 @@ import { useMemo, useState, type RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
+import type { GlobalSearchLotHit } from "../utils/globalSearchApi";
 import { formatSyncedPhrase } from "../utils/dbSyncedAt";
 import { formatKgTotal } from "../utils/formatKgTotal";
 import { computeDayPulseTotals } from "../utils/opsDayOverview";
@@ -45,6 +46,7 @@ interface Props {
   searchContext: ShipmentSearchContext;
   searchInputRef?: RefObject<HTMLInputElement>;
   onSelectSearchMatch: (match: ShipmentSearchMatch) => void;
+  onSelectGlobalLot?: (hit: GlobalSearchLotHit) => void;
   statusFilter: StatusFilterValue;
   onStatusFilterChange: (v: StatusFilterValue) => void;
   onClearFilters: () => void;
@@ -101,6 +103,7 @@ export function OpsMobileStickyHeader({
   searchContext,
   searchInputRef,
   onSelectSearchMatch,
+  onSelectGlobalLot,
   statusFilter,
   onStatusFilterChange,
   onClearFilters,
@@ -233,6 +236,8 @@ export function OpsMobileStickyHeader({
               searchContext={searchContext}
               inputRef={searchInputRef}
               onSelectMatch={onSelectSearchMatch}
+              sessionDate={selectedYmd}
+              onSelectGlobalLot={onSelectGlobalLot}
               inlineFacets={false}
               debounceMs={200}
             />

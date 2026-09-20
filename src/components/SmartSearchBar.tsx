@@ -18,6 +18,12 @@ import {
   type ShipmentSearchContext,
   type ShipmentSearchMatch,
 } from "../utils/shipmentSearch";
+import {
+  fetchGlobalSearch,
+  lotHitsFromGlobalSearch,
+  shouldFetchGlobalSearch,
+  type GlobalSearchLotHit,
+} from "../utils/globalSearchApi";
 
 const WAREHOUSE_CHIP_CLASS: Record<Warehouse, string> = {
   "TECS-TCS": "bg-sky-100 text-sky-900 ring-sky-200/80",
@@ -39,6 +45,9 @@ interface SmartSearchBarProps {
   searchContext: ShipmentSearchContext;
   inputRef?: RefObject<HTMLInputElement>;
   onSelectMatch?: (match: ShipmentSearchMatch) => void;
+  /** Ngày phiên đang xem — API bỏ lô ngày này (đã có local). */
+  sessionDate?: string;
+  onSelectGlobalLot?: (hit: GlobalSearchLotHit) => void;
   /** Gọn — mobile header */
   compact?: boolean;
   /**
@@ -111,16 +120,22 @@ function FlightDateChips({
 
 function SuggestionList({
   suggestions,
+  remoteLots,
+  remoteLoading = false,
   activeIdx,
   onPick,
+  onPickRemote,
   id,
 }: {
   suggestions: ShipmentSearchMatch[];
+  remoteLots: GlobalSearchLotHit[];
+  remoteLoading?: boolean;
   activeIdx: number;
   onPick: (match: ShipmentSearchMatch) => void;
+  onPickRemote: (hit: GlobalSearchLotHit) => void;
   id: string;
 }) {
-  if (!suggestions.length) return null;
+  if (!suggestions.length && !remoteLots.length && !remoteLoading) return null;
   return (
     <ul
       id={id}
@@ -160,6 +175,48 @@ function SuggestionList({
           </button>
         </li>
       ))}
+      {remoteLots.length || remoteLoading ? (
+        <li className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
+          Ngày khác
+        </li>
+      ) : null}
+      {remoteLoading && !remoteLots.length ? (
+        <li className="px-3 py-2 text-[11px] text-ui-text-muted">Đang tìm ngày khác…</li>
+      ) : null}
+      {remoteLots.map((hit, i) => {
+        const idx = suggestions.length + i;
+        return (
+          <li key={`remote-${hit.id}`} role="option" aria-selected={idx === activeIdx}>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onPickRemote(hit)}
+              className={`flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${
+                idx === activeIdx ? "bg-ui-primary/10" : "hover:bg-ui-surface-muted"
+              }`}
+            >
+              <span
+                className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${WAREHOUSE_CHIP_CLASS[hit.warehouse]}`}
+              >
+                {warehouseLabel[hit.warehouse]}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="font-mono text-[12px] font-bold text-ui-text">
+                    {hit.label}
+                  </span>
+                  <span className="rounded bg-ui-surface-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase text-ui-text-muted">
+                    {matchKindLabel(hit.kind)}
+                  </span>
+                </span>
+                <span className="mt-0.5 block truncate text-[11px] text-ui-text-muted">
+                  {hit.sublabel || hit.sessionDate}
+                </span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -174,6 +231,8 @@ export function SmartSearchBar({
   searchContext,
   inputRef,
   onSelectMatch,
+  sessionDate,
+  onSelectGlobalLot,
   compact = false,
   inlineFacets = false,
   tightFacets = false,
@@ -188,6 +247,8 @@ export function SmartSearchBar({
   const [activeIdx, setActiveIdx] = useState(0);
   const [draftValue, setDraftValue] = useState(value);
   const [matchQuery, setMatchQuery] = useState(value.trim());
+  const [remoteLots, setRemoteLots] = useState<GlobalSearchLotHit[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -237,12 +298,41 @@ export function SmartSearchBar({
     [matchedRows],
   );
 
+  useEffect(() => {
+    if (!shouldFetchGlobalSearch(matchQuery)) {
+      setRemoteLots([]);
+      setRemoteLoading(false);
+      return;
+    }
+    const ac = new AbortController();
+    let cancelled = false;
+    setRemoteLoading(true);
+    const t = window.setTimeout(() => {
+      void fetchGlobalSearch({
+        q: matchQuery,
+        excludeSession: sessionDate,
+        signal: ac.signal,
+      }).then((body) => {
+        if (cancelled || ac.signal.aborted) return;
+        setRemoteLots(lotHitsFromGlobalSearch(body));
+        setRemoteLoading(false);
+      });
+    }, 200);
+    return () => {
+      cancelled = true;
+      ac.abort();
+      window.clearTimeout(t);
+    };
+  }, [matchQuery, sessionDate]);
+
+  const optionCount = suggestions.length + remoteLots.length;
+  const hasMenu = optionCount > 0 || remoteLoading;
   const mobileOverlay = compact && open;
   const hasFilterSummary = Boolean(trimmed || flightDateFilter);
 
   useEffect(() => {
     setActiveIdx(0);
-  }, [trimmed, suggestions.length]);
+  }, [trimmed, suggestions.length, remoteLots.length]);
 
   useEffect(() => {
     if (mobileOverlay) return;
@@ -276,6 +366,12 @@ export function SmartSearchBar({
     onSelectMatch?.(match);
   };
 
+  const pickRemote = (hit: GlobalSearchLotHit) => {
+    onChange("");
+    setOpen(false);
+    onSelectGlobalLot?.(hit);
+  };
+
   const pickFlightDate = (date: string) => {
     onFlightDateChange?.(date);
     // Nếu ô đang chỉ chứa token ngày bay cũ — xóa để tránh lọc kép.
@@ -295,17 +391,22 @@ export function SmartSearchBar({
       setOpen(false);
       return;
     }
-    if (!suggestions.length) return;
+    if (!optionCount) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIdx((i) => (i + 1) % suggestions.length);
+      setActiveIdx((i) => (i + 1) % optionCount);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIdx((i) => (i - 1 + suggestions.length) % suggestions.length);
+      setActiveIdx((i) => (i - 1 + optionCount) % optionCount);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const hit = suggestions[activeIdx];
-      if (hit) pickMatch(hit);
+      if (activeIdx < suggestions.length) {
+        const hit = suggestions[activeIdx];
+        if (hit) pickMatch(hit);
+        return;
+      }
+      const remote = remoteLots[activeIdx - suggestions.length];
+      if (remote) pickRemote(remote);
     }
   };
 
@@ -395,7 +496,7 @@ export function SmartSearchBar({
                   enterKeyHint="search"
                   className={inputClass}
                   aria-label="Tìm kiếm thông minh"
-                  aria-expanded={suggestions.length > 0}
+                  aria-expanded={hasMenu}
                   aria-controls={listboxId}
                   role="combobox"
                 />
@@ -427,15 +528,18 @@ export function SmartSearchBar({
                   Chọn ngày bay, hoặc gõ MAWB / số xe / tài xế / DEST.
                 </p>
               ) : null}
-              {trimmed && suggestions.length > 0 ? (
+              {trimmed && hasMenu ? (
                 <SuggestionList
                   id={listboxId}
                   suggestions={suggestions}
+                  remoteLots={remoteLots}
+                  remoteLoading={remoteLoading}
                   activeIdx={activeIdx}
                   onPick={pickMatch}
+                  onPickRemote={pickRemote}
                 />
               ) : null}
-              {trimmed && suggestions.length === 0 ? (
+              {trimmed && !hasMenu ? (
                 <p className="rounded-xl border border-dashed border-ui-border bg-ui-surface px-3 py-6 text-center text-[12px] text-ui-text-muted">
                   Không có lô khớp. Thử MAWB, số xe, tài xế hoặc DEST.
                 </p>
@@ -472,7 +576,7 @@ export function SmartSearchBar({
         readOnly={compact && open}
         className={inputClass}
         aria-label="Tìm kiếm thông minh MAWB, shipper, tên hàng, số xe, tài xế, DEST"
-        aria-expanded={open && suggestions.length > 0}
+        aria-expanded={open && hasMenu}
         aria-controls={listboxId}
         role="combobox"
       />
@@ -535,13 +639,16 @@ export function SmartSearchBar({
         </>
       )}
 
-      {!compact && open && trimmed && suggestions.length > 0 ? (
+      {!compact && open && trimmed && hasMenu ? (
         <div className={`absolute z-50 mt-1 ${useInline ? "left-0 w-[min(100%,22rem)]" : "left-0 right-0"}`}>
           <SuggestionList
             id={listboxId}
             suggestions={suggestions}
+            remoteLots={remoteLots}
+            remoteLoading={remoteLoading}
             activeIdx={activeIdx}
             onPick={pickMatch}
+            onPickRemote={pickRemote}
           />
         </div>
       ) : null}

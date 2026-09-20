@@ -162,6 +162,7 @@ function AuthenticatedApp() {
           ) : route === "stats" ? (
             <OpsStatsPage
               rows={sync.state?.rows ?? fallback.rows}
+              customers={sync.state?.customers ?? EMPTY_CUSTOMERS}
               ready={sync.state != null && sync.status !== "loading"}
               syncStatus={sync.status}
               socketConnected={sync.socketConnected}

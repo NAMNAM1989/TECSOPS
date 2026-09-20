@@ -18,6 +18,7 @@ import { OPS } from "../styles/opsModalStyles";
 import { Button, ConfirmDialog, IconButton, Input, TextArea, Wordmark, useToast } from "../ui";
 import { H21CustomerCatalogPresetSection } from "../components/H21CustomerCatalogPresetSection";
 import { ScscH21ShipperSection } from "../components/ScscH21ShipperSection";
+import { foldSearchText } from "../utils/searchNormalize";
 
 type Draft = ScscH21CatalogItem & { _isNew?: boolean };
 
@@ -146,15 +147,15 @@ export function ScscH21CatalogPage({
   }, [reload]);
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = foldSearchText(query);
     return items.filter((it) => {
       if (!showInactive && !it.active) return false;
       if (categoryFilter && it.category !== categoryFilter) return false;
       if (!needle) return true;
       return (
-        it.description.toLowerCase().includes(needle) ||
-        it.category.toLowerCase().includes(needle) ||
-        it.hsCode.includes(needle)
+        foldSearchText(it.description).includes(needle) ||
+        foldSearchText(it.category).includes(needle) ||
+        foldSearchText(it.hsCode).includes(needle)
       );
     });
   }, [items, query, showInactive, categoryFilter]);

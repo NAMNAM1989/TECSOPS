@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useMemo, useState, type ReactNode } from "react";
 import type { SyncStatus } from "../hooks/useShipmentSync";
 import type { Shipment } from "../types/shipment";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { WarehouseLayoutFilter } from "../constants/warehouses";
 import { warehouseLabel, WAREHOUSE_ORDER } from "../constants/warehouses";
 import {
@@ -35,6 +36,7 @@ import {
   weekStartYmd,
   type StatsPeriodMode,
 } from "../utils/opsStatsPeriod";
+import { shipmentMatchesSearchQuery, type ShipmentSearchContext } from "../utils/shipmentSearch";
 
 const OpsStatsChartsPanel = lazy(() =>
   import("../components/OpsStatsChartsPanel").then((m) => ({
@@ -44,6 +46,7 @@ const OpsStatsChartsPanel = lazy(() =>
 
 type Props = {
   rows: readonly Shipment[];
+  customers?: readonly CustomerDirectoryEntry[];
   ready: boolean;
   syncStatus: SyncStatus;
   socketConnected: boolean;
@@ -289,6 +292,7 @@ function LotsDetailTable({ lots }: { lots: readonly OpsStatsLotRow[] }) {
 
 export function OpsStatsPage({
   rows,
+  customers = [],
   ready,
   syncStatus,
   socketConnected,
@@ -353,26 +357,18 @@ export function OpsStatsPage({
   const isCurrentWeek =
     mode === "week" && weekStartYmd(weekYmd) === weekStartYmd(todaySaigon);
 
+  const searchContext = useMemo(
+    (): ShipmentSearchContext => ({ customers }),
+    [customers]
+  );
+
   const filteredLots = useMemo(() => {
-    const q = lotSearch.trim().toLowerCase();
+    const q = lotSearch.trim();
     if (!q) return stats.lots;
-    return stats.lots.filter((lot) => {
-      const s = lot.shipment;
-      const hay = [
-        s.awb,
-        s.dest,
-        s.flight,
-        s.customer,
-        s.customerCode,
-        s.sessionDate,
-        s.warehouse,
-        s.note,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
-  }, [stats.lots, lotSearch]);
+    return stats.lots.filter((lot) =>
+      shipmentMatchesSearchQuery(lot.shipment, q, searchContext)
+    );
+  }, [stats.lots, lotSearch, searchContext]);
 
   const dayAggRows = useMemo(
     () => stats.byDay.map((r: OpsStatsDayRow) => ({ ...r, _key: r.sessionDate })),
@@ -771,7 +767,7 @@ export function OpsStatsPage({
                       <input
                         type="search"
                         className={`${FIELD} mb-2 w-full max-w-xs`}
-                        placeholder="Tìm AWB / dest / khách…"
+                        placeholder="Tìm AWB / shipper / hàng / khách…"
                         value={lotSearch}
                         onChange={(e) => setLotSearch(e.target.value)}
                       />

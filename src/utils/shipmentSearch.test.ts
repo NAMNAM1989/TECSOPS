@@ -39,6 +39,29 @@ describe("shipmentSearch", () => {
         id: "c1",
         code: "ABC01",
         name: "ABC",
+        savedShippers: [
+          {
+            id: "ss1",
+            label: "HCM",
+            shipperName: "Công ty Nguyễn Phát",
+            shipperAddress: "",
+            shipperPhone: "",
+            shipperEmail: "",
+            taxCode: "",
+          },
+        ],
+        savedConsignees: [
+          {
+            id: "sc1",
+            label: "SIN",
+            consigneeName: "Tanaka Trading",
+            consigneeAddress: "",
+            consigneePhone: "",
+            consigneeEmail: "",
+            notifyName: "",
+          },
+        ],
+        savedGoods: [{ id: "sg1", label: "Garment", goodsDescription: "Quần áo đông" }],
         savedVehicles: [
           {
             id: "v1",
@@ -112,5 +135,30 @@ describe("shipmentSearch", () => {
   it("marks flightDate match kind", () => {
     const matches = buildShipmentSearchMatches([baseRow({ flightDate: "28JUL" })], "28JUL", ctx);
     expect(matches[0]?.kind).toBe("flightDate");
+  });
+
+  it("matches folded shipper and goods from directory", () => {
+    expect(shipmentMatchesSearchQuery(baseRow(), "nguyen phat", ctx)).toBe(true);
+    expect(shipmentMatchesSearchQuery(baseRow(), "quan ao", ctx)).toBe(true);
+  });
+
+  it("matches print fields on the lot", () => {
+    const row = baseRow({
+      shipperNamePrint: "Công ty TNHH Ánh Dương",
+      consigneeNamePrint: "Osaka Buyer",
+      goodsDescriptionPrint: "Hải sản đông lạnh",
+    });
+    expect(shipmentMatchesSearchQuery(row, "anh duong", ctx)).toBe(true);
+    expect(shipmentMatchesSearchQuery(row, "osaka", ctx)).toBe(true);
+    expect(shipmentMatchesSearchQuery(row, "hai san", ctx)).toBe(true);
+  });
+
+  it("matches customer code fragments", () => {
+    expect(shipmentMatchesSearchQuery(baseRow(), "abc01", ctx)).toBe(true);
+  });
+
+  it("labels shipper match kind", () => {
+    const matches = buildShipmentSearchMatches([baseRow()], "nguyen phat", ctx);
+    expect(matches[0]?.kind).toBe("shipper");
   });
 });

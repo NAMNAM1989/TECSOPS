@@ -36,6 +36,16 @@ const directory: CustomerDirectoryEntry[] = [
     parties: [],
   },
   {
+    id: "c3",
+    code: "NPH",
+    name: "CÔNG TY NGUYỄN PHÁT",
+    savedShippers: [],
+    savedConsignees: [],
+    savedGoods: [],
+    savedVehicles: [],
+    parties: [],
+  },
+  {
     id: "c2",
     code: "SCSC",
     name: "SCSC Express",
@@ -53,10 +63,17 @@ describe("filterCustomerDirectoryEntries", () => {
     expect(filterCustomerDirectoryEntries(directory, "scsc").map((e) => e.id)).toEqual(["c2"]);
   });
 
+  it("folds Vietnamese diacritics in name", () => {
+    expect(filterCustomerDirectoryEntries(directory, "nguyen phat").map((e) => e.id)).toEqual([
+      "c3",
+    ]);
+  });
+
   it("puts preferred customer first when query empty", () => {
     expect(filterCustomerDirectoryEntries(directory, "", 12, "c2").map((e) => e.id)).toEqual([
       "c2",
       "c1",
+      "c3",
     ]);
   });
 });

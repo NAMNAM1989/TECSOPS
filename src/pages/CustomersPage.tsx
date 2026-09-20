@@ -38,6 +38,7 @@ import {
   emptyCustomerSavedShipper,
   emptyCustomerSavedVehicle,
 } from "../utils/customerDirectoryProfile";
+import { compactSearchAlnum, foldSearchText } from "../utils/searchNormalize";
 import {
   ensureCustomerEditScaffold,
   scaffoldNewCustomer,
@@ -266,7 +267,8 @@ export function CustomersPage({
   const selected = draft.find((e) => e.id === selectedId) ?? null;
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = foldSearchText(query);
+    const needleCompact = compactSearchAlnum(query);
     return draft.filter((e) => {
       if (
         typeFilter !== "ALL" &&
@@ -276,16 +278,24 @@ export function CustomersPage({
       }
       if (!needle) return true;
       const contact = contactOf(e);
-      return [
+      const textBits = [
         e.code,
         e.name,
         e.shortCode,
         contact.phone,
         contact.email,
         contact.taxCode,
-      ]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(needle));
+        ...(e.savedShippers ?? []).map((s) => s.shipperName),
+        ...(e.savedConsignees ?? []).map((s) => s.consigneeName),
+        ...(e.savedGoods ?? []).map((s) => s.goodsDescription),
+      ];
+      if (textBits.some((v) => foldSearchText(String(v ?? "")).includes(needle))) return true;
+      if (needleCompact.length < 3) return false;
+      const compactBits = [
+        contact.phone,
+        ...(e.savedVehicles ?? []).map((v) => v.licensePlate),
+      ];
+      return compactBits.some((v) => compactSearchAlnum(String(v ?? "")).includes(needleCompact));
     });
   }, [draft, query, typeFilter]);
 

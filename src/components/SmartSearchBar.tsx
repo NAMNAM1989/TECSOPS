@@ -389,7 +389,7 @@ export function SmartSearchBar({
                   value={value}
                   onChange={(e) => onChange(e.target.value)}
                   onKeyDown={onKeyDown}
-                  placeholder="MAWB · xe · tài xế · DEST…"
+                  placeholder="MAWB · shipper · hàng · xe · DEST…"
                   autoComplete="off"
                   spellCheck={false}
                   enterKeyHint="search"
@@ -466,12 +466,12 @@ export function SmartSearchBar({
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
-        placeholder={compact ? "MAWB / xe / DEST…" : "MAWB · xe · DEST… (/)"}
+        placeholder={compact ? "MAWB / hàng / xe…" : "MAWB · shipper · hàng · xe… (/)"}
         autoComplete="off"
         spellCheck={false}
         readOnly={compact && open}
         className={inputClass}
-        aria-label="Tìm kiếm thông minh MAWB, số xe, tài xế, DEST"
+        aria-label="Tìm kiếm thông minh MAWB, shipper, tên hàng, số xe, tài xế, DEST"
         aria-expanded={open && suggestions.length > 0}
         aria-controls={listboxId}
         role="combobox"

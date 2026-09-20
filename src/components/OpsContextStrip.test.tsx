@@ -43,7 +43,7 @@ describe("OpsContextStrip", () => {
     expect(html).toContain("ops-desktop-context-row");
     expect(html).toContain("ops-desktop-filter-row");
     expect(html).toContain("Lọc trạng thái");
-    expect(html).toContain("MAWB · xe · DEST");
+    expect(html).toContain("MAWB · shipper · hàng · xe");
   });
 
   it("mobile: filter row + nút ST khi status thu gọn", () => {

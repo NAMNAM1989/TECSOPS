@@ -19,6 +19,7 @@ import {
 } from "../utils/scscH21GoodsListImport";
 import { parseScscH21CatalogExcel } from "../utils/scscH21Api";
 import { CUSTOMER_PROFILE_LIMITS } from "../../shared/customerProfileLimits.mjs";
+import { foldSearchText } from "../utils/searchNormalize";
 
 type CatalogItem = Pick<
   ScscH21CatalogItem,
@@ -95,7 +96,7 @@ export function H21CustomerCatalogPresetSection({
     const descKeys = new Set(
       privateItems.map((x) => x.description.trim().toLowerCase())
     );
-    const needle = catalogQ.trim().toLowerCase();
+    const needle = foldSearchText(catalogQ);
     return catalog
       .filter((c) => c.active !== false)
       .filter((c) => !inPrivate.has(c.id))
@@ -103,9 +104,9 @@ export function H21CustomerCatalogPresetSection({
       .filter((c) => {
         if (!needle) return true;
         return (
-          c.description.toLowerCase().includes(needle) ||
-          c.category.toLowerCase().includes(needle) ||
-          c.hsCode.includes(needle)
+          foldSearchText(c.description).includes(needle) ||
+          foldSearchText(c.category).includes(needle) ||
+          foldSearchText(c.hsCode).includes(needle)
         );
       })
       .slice(0, 60);

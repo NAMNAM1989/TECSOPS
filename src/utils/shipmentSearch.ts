@@ -6,6 +6,7 @@ import type { Shipment, Warehouse } from "../types/shipment";
 import { emptyWarehouseRecord, normalizeWarehouse } from "../constants/warehouses";
 import { rawAwbDigits } from "./awbFormat";
 import { findCustomerEntry } from "./customerBookingResolve";
+import { compactSearchAlnum, foldSearchText } from "./searchNormalize";
 
 const MONTHS3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
 
@@ -19,6 +20,10 @@ export type ShipmentSearchMatchKind =
   | "vehicle"
   | "driver"
   | "flightDate"
+  | "shipper"
+  | "cnee"
+  | "goods"
+  | "customer"
   | "other";
 
 export type ShipmentSearchMatch = {
@@ -34,37 +39,50 @@ export type FlightDateFacet = {
   count: number;
 };
 
+type CustomerSearchProfile = {
+  vehicles: readonly CustomerSavedVehicle[];
+  shipperNames: string[];
+  consigneeNames: string[];
+  goodsNames: string[];
+};
+
 function vehicleTokens(raw: string): string[] {
-  const lower = raw.trim().toLowerCase();
-  const compact = lower.replace(/[^a-z0-9]/g, "");
-  return [...new Set([lower, compact].filter(Boolean))];
+  const folded = foldSearchText(raw);
+  const compact = compactSearchAlnum(raw);
+  return [...new Set([folded, compact].filter(Boolean))];
 }
 
 /**
- * Cache xe theo identity (danh bạ, lô).
+ * Cache hồ sơ khách theo identity (danh bạ, lô).
  *
- * `findCustomerEntry` quét tuyến tính danh bạ tới 9 lần, và mỗi lô gọi hàm này
- * 3 lần cho mỗi ký tự gõ tìm kiếm. Khóa theo identity nên cache tự hết hiệu lực
- * khi danh bạ hoặc lô được thay bằng object mới sau mutation.
+ * `findCustomerEntry` quét tuyến tính danh bạ tới 9 lần — gọi một lần / lô rồi
+ * WeakMap. Khóa theo identity nên cache hết hiệu lực khi danh bạ hoặc lô được
+ * thay bằng object mới sau mutation.
  */
-const vehiclesByDirectory = new WeakMap<object, WeakMap<Shipment, readonly CustomerSavedVehicle[]>>();
+const profileByDirectory = new WeakMap<object, WeakMap<Shipment, CustomerSearchProfile>>();
 
-function getCustomerVehiclesForShipment(
+function getCustomerSearchProfile(
   shipment: Shipment,
   customers: readonly CustomerDirectoryEntry[]
-): readonly CustomerSavedVehicle[] {
+): CustomerSearchProfile {
   const dirKey = customers as unknown as object;
-  let perShipment = vehiclesByDirectory.get(dirKey);
+  let perShipment = profileByDirectory.get(dirKey);
   if (!perShipment) {
     perShipment = new WeakMap();
-    vehiclesByDirectory.set(dirKey, perShipment);
+    profileByDirectory.set(dirKey, perShipment);
   }
   const cached = perShipment.get(shipment);
   if (cached) return cached;
 
-  const resolved = findCustomerEntry(shipment, customers)?.savedVehicles ?? [];
-  perShipment.set(shipment, resolved);
-  return resolved;
+  const entry = findCustomerEntry(shipment, customers);
+  const built: CustomerSearchProfile = {
+    vehicles: entry?.savedVehicles ?? [],
+    shipperNames: (entry?.savedShippers ?? []).flatMap((s) => [s.shipperName, s.label]),
+    consigneeNames: (entry?.savedConsignees ?? []).flatMap((s) => [s.consigneeName, s.label]),
+    goodsNames: (entry?.savedGoods ?? []).flatMap((s) => [s.goodsDescription, s.label]),
+  };
+  perShipment.set(shipment, built);
+  return built;
 }
 
 /** Chuẩn hoá ngày bay → DDMMM (28JUL). Hỗ trợ 28jul, 28 JUL, 28/07… */
@@ -134,14 +152,16 @@ export function buildShipmentSearchHaystack(shipment: Shipment, ctx: ShipmentSea
 
 function computeShipmentSearchHaystack(shipment: Shipment, ctx: ShipmentSearchContext): string {
   const flightDateNorm = normalizeFlightDateToken(shipment.flightDate || "");
+  const profile = getCustomerSearchProfile(shipment, ctx.customers);
   const parts = [
     shipment.awb,
     rawAwbDigits(shipment.awb),
+    compactSearchAlnum(shipment.awb),
     shipment.hawb ?? "",
+    compactSearchAlnum(shipment.hawb ?? ""),
     shipment.flight,
     shipment.flightDate,
     flightDateNorm,
-    flightDateNorm.toLowerCase(),
     shipment.customer,
     shipment.customerCode,
     shipment.dest,
@@ -153,18 +173,25 @@ function computeShipmentSearchHaystack(shipment: Shipment, ctx: ShipmentSearchCo
     shipment.pcs != null ? String(shipment.pcs) : "",
     shipment.kg != null ? String(shipment.kg) : "",
     shipment.dimWeightKg != null ? String(shipment.dimWeightKg) : "",
+    shipment.shipperNamePrint ?? "",
+    shipment.consigneeNamePrint ?? "",
+    shipment.goodsDescriptionPrint ?? "",
+    shipment.notifyNamePrint ?? "",
+    ...profile.shipperNames,
+    ...profile.consigneeNames,
+    ...profile.goodsNames,
   ];
 
-  for (const v of getCustomerVehiclesForShipment(shipment, ctx.customers)) {
+  for (const v of profile.vehicles) {
     parts.push(v.licensePlate, v.driverName, v.driverId);
     parts.push(...vehicleTokens(v.licensePlate));
   }
 
-  return parts.map((x) => String(x ?? "").toLowerCase()).join(" ");
+  return parts.map((x) => foldSearchText(String(x ?? ""))).filter(Boolean).join(" ");
 }
 
 function queryTokens(raw: string): string[] {
-  const q = raw.trim().toLowerCase();
+  const q = foldSearchText(raw);
   if (!q) return [];
   return q.split(/\s+/).filter(Boolean);
 }
@@ -178,11 +205,25 @@ function awbDigitsMatch(shipment: Shipment, query: string): boolean {
 }
 
 function vehicleMatch(haystackVehicles: string[], query: string): boolean {
-  const qRaw = query.trim().toLowerCase();
-  const qCompact = qRaw.replace(/[^a-z0-9]/g, "");
+  const qFold = foldSearchText(query);
+  const qCompact = compactSearchAlnum(query);
   if (qCompact.length >= 3 && haystackVehicles.some((v) => v.includes(qCompact))) return true;
-  if (qRaw.length >= 3 && haystackVehicles.some((v) => v.includes(qRaw))) return true;
+  if (qFold.length >= 3 && haystackVehicles.some((v) => v.includes(qFold))) return true;
   return false;
+}
+
+function foldedIncludes(hay: string, query: string): boolean {
+  const q = foldSearchText(query);
+  if (!q) return false;
+  if (hay.includes(q)) return true;
+  const compact = compactSearchAlnum(query);
+  return compact.length >= 3 && hay.includes(compact);
+}
+
+function tokenHitsHay(token: string, hay: string): boolean {
+  if (hay.includes(token)) return true;
+  const compact = compactSearchAlnum(token);
+  return compact.length >= 3 && hay.includes(compact);
 }
 
 function resolveMatchKind(
@@ -191,7 +232,7 @@ function resolveMatchKind(
   ctx: ShipmentSearchContext
 ): ShipmentSearchMatchKind {
   const q = query.trim();
-  const qLower = q.toLowerCase();
+  const qFold = foldSearchText(q);
   const flightQ = normalizeFlightDateToken(q);
 
   if (flightQ && normalizeFlightDateToken(shipment.flightDate || "") === flightQ) {
@@ -199,22 +240,39 @@ function resolveMatchKind(
   }
 
   if (awbDigitsMatch(shipment, q)) {
-    const hawb = (shipment.hawb ?? "").toLowerCase();
-    if (hawb && (hawb.includes(qLower) || rawAwbDigits(hawb).includes(rawAwbDigits(q)))) {
+    const hawbFold = foldSearchText(shipment.hawb ?? "");
+    const hawbDigits = rawAwbDigits(shipment.hawb ?? "");
+    if (hawbFold && (hawbFold.includes(qFold) || hawbDigits.includes(rawAwbDigits(q)))) {
       return "hawb";
     }
     return "mawb";
   }
 
-  const vehicles = getCustomerVehiclesForShipment(shipment, ctx.customers).map((v) => v.licensePlate);
-  const vehicleHay = vehicles.flatMap((v) => vehicleTokens(v));
+  const profile = getCustomerSearchProfile(shipment, ctx.customers);
+  const vehicleHay = profile.vehicles.flatMap((v) => vehicleTokens(v.licensePlate));
   if (vehicleMatch(vehicleHay, q)) return "vehicle";
 
-  const drivers = getCustomerVehiclesForShipment(shipment, ctx.customers)
+  const drivers = profile.vehicles
     .flatMap((v) => [v.driverName, v.driverId])
-    .map((d) => d.trim().toLowerCase())
+    .map((d) => foldSearchText(d))
     .filter(Boolean);
-  if (drivers.some((d) => d.includes(qLower))) return "driver";
+  if (drivers.some((d) => d.includes(qFold))) return "driver";
+
+  if (profile.shipperNames.some((n) => foldedIncludes(foldSearchText(n), q))) return "shipper";
+  if (foldedIncludes(foldSearchText(shipment.shipperNamePrint ?? ""), q)) return "shipper";
+
+  if (profile.consigneeNames.some((n) => foldedIncludes(foldSearchText(n), q))) return "cnee";
+  if (foldedIncludes(foldSearchText(shipment.consigneeNamePrint ?? ""), q)) return "cnee";
+
+  if (profile.goodsNames.some((n) => foldedIncludes(foldSearchText(n), q))) return "goods";
+  if (foldedIncludes(foldSearchText(shipment.goodsDescriptionPrint ?? ""), q)) return "goods";
+
+  if (
+    foldedIncludes(foldSearchText(shipment.customer), q) ||
+    foldedIncludes(foldSearchText(shipment.customerCode), q)
+  ) {
+    return "customer";
+  }
 
   return "other";
 }
@@ -228,9 +286,7 @@ export function shipmentMatchesSearchQuery(
   if (!q) return true;
 
   const tokens = queryTokens(q);
-  const flightTokens = tokens
-    .map((t) => normalizeFlightDateToken(t))
-    .filter(Boolean);
+  const flightTokens = tokens.map((t) => normalizeFlightDateToken(t)).filter(Boolean);
   const otherTokens = tokens.filter((t) => !normalizeFlightDateToken(t));
 
   if (flightTokens.length) {
@@ -240,20 +296,16 @@ export function shipmentMatchesSearchQuery(
   }
 
   const hay = buildShipmentSearchHaystack(shipment, ctx);
-  if (otherTokens.length && otherTokens.every((t) => hay.includes(t))) return true;
-  if (!flightTokens.length && tokens.every((t) => hay.includes(t))) return true;
+  if (otherTokens.length && otherTokens.every((t) => tokenHitsHay(t, hay))) return true;
+  if (!flightTokens.length && tokens.every((t) => tokenHitsHay(t, hay))) return true;
 
   if (awbDigitsMatch(shipment, q)) return true;
 
-  const vehicles = getCustomerVehiclesForShipment(shipment, ctx.customers).map((v) => v.licensePlate);
-  if (vehicleMatch(vehicles.flatMap((v) => vehicleTokens(v)), q)) return true;
+  const profile = getCustomerSearchProfile(shipment, ctx.customers);
+  if (vehicleMatch(profile.vehicles.flatMap((v) => vehicleTokens(v.licensePlate)), q)) return true;
 
-  const qLower = q.toLowerCase();
-  const drivers = getCustomerVehiclesForShipment(shipment, ctx.customers)
-    .map((v) => v.driverName)
-    .map((d) => d.trim().toLowerCase())
-    .filter(Boolean);
-  return drivers.some((d) => d.includes(qLower));
+  const qFold = foldSearchText(q);
+  return profile.vehicles.some((v) => foldSearchText(v.driverName).includes(qFold));
 }
 
 export function buildShipmentSearchMatches(
@@ -269,12 +321,12 @@ export function buildShipmentSearchMatches(
   for (const shipment of rows) {
     if (!shipmentMatchesSearchQuery(shipment, q, ctx)) continue;
 
-    const vehicles = getCustomerVehiclesForShipment(shipment, ctx.customers);
+    const profile = getCustomerSearchProfile(shipment, ctx.customers);
     const kind = resolveMatchKind(shipment, q, ctx);
     const awbLabel = shipment.awb.trim() || "—";
     const hawbLabel = shipment.hawb?.trim();
-    const vehicleLabel = vehicles[0]?.licensePlate?.trim() ?? "";
-    const driverLabel = vehicles[0]?.driverName?.trim() ?? "";
+    const vehicleLabel = profile.vehicles[0]?.licensePlate?.trim() ?? "";
+    const driverLabel = profile.vehicles[0]?.driverName?.trim() ?? "";
     const flightDate = normalizeFlightDateToken(shipment.flightDate || "") || shipment.flightDate.trim();
 
     let label = awbLabel;
@@ -287,7 +339,15 @@ export function buildShipmentSearchMatches(
       if ((shipment.dest ?? "").trim()) bits.push((shipment.dest ?? "").trim());
     } else if (kind === "vehicle" && vehicleLabel) bits.push(vehicleLabel);
     else if (kind === "driver" && driverLabel) bits.push(driverLabel);
-    else {
+    else if (kind === "shipper") {
+      bits.push(
+        (shipment.shipperNamePrint || profile.shipperNames[0] || "").trim() || shipment.customer
+      );
+    } else if (kind === "cnee") {
+      bits.push((shipment.consigneeNamePrint || profile.consigneeNames[0] || "").trim());
+    } else if (kind === "goods") {
+      bits.push((shipment.goodsDescriptionPrint || profile.goodsNames[0] || "").trim());
+    } else {
       if (flightDate) bits.push(flightDate);
       if (vehicleLabel) bits.push(vehicleLabel);
       if (driverLabel) bits.push(driverLabel);
@@ -297,7 +357,7 @@ export function buildShipmentSearchMatches(
       shipment,
       kind,
       label,
-      sublabel: bits.length ? bits.join(" · ") : shipment.customer.trim() || undefined,
+      sublabel: bits.filter(Boolean).join(" · ") || shipment.customer.trim() || undefined,
     });
     if (hits.length >= limit) break;
   }
@@ -327,6 +387,14 @@ export function matchKindLabel(kind: ShipmentSearchMatchKind): string {
       return "Tài xế";
     case "flightDate":
       return "Ngày bay";
+    case "shipper":
+      return "Shipper";
+    case "cnee":
+      return "CNEE";
+    case "goods":
+      return "Tên hàng";
+    case "customer":
+      return "Khách";
     default:
       return "Khác";
   }

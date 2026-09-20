@@ -25,6 +25,7 @@ import {
   isCsdT5Flight,
   isCsdAiFlight,
   isCsdMfFlight,
+  isCsdThFlight,
   isCsdIataTemplateCarrier,
   formatCsdEkDate,
   formatCsdEkDateTime,
@@ -49,7 +50,7 @@ describe("csdForms", () => {
     localStorage.clear();
   });
 
-  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI / EK / PR / T5 / AI / MF qua registry", () => {
+  it("nhận diện chuyến FD / TG / MH / QR / AK / VU / VJ / SQ / TR / BI / EK / PR / T5 / AI / MF / TH qua registry", () => {
     expect(isCsdFdFlight("FD301")).toBe(true);
     expect(isCsdTgFlight("TG621")).toBe(true);
     expect(isCsdTgFlight("tg 621")).toBe(true);
@@ -66,12 +67,13 @@ describe("csdForms", () => {
     expect(isCsdT5Flight("T5123")).toBe(true);
     expect(isCsdAiFlight("AI131")).toBe(true);
     expect(isCsdMfFlight("MF812")).toBe(true);
+    expect(isCsdThFlight("TH101")).toBe(true);
     expect(isCsdIataTemplateCarrier("VJ")).toBe(true);
     expect(isCsdIataTemplateCarrier("SQ")).toBe(true);
     expect(isCsdIataTemplateCarrier("TR")).toBe(true);
     expect(isCsdIataTemplateCarrier("VU")).toBe(false);
     expect(csdCarrierForShipment({ flight: "VN123" })).toBeNull();
-    expect(csdCarrierForShipment({ flight: "TH621" })).toBeNull();
+    expect(csdCarrierForShipment({ flight: "TH621" })).not.toBeNull();
     expect(getCsdCarrierProfile("FD").showTransfer).toBe(true);
     expect(getCsdCarrierProfile("TG").showOrigin).toBe(true);
     expect(getCsdCarrierProfile("MH").showOrigin).toBe(false);
@@ -89,6 +91,8 @@ describe("csdForms", () => {
     expect(getCsdCarrierProfile("AI").showTransfer).toBe(true);
     expect(getCsdCarrierProfile("MF").showOrigin).toBe(false);
     expect(getCsdCarrierProfile("MF").showTransfer).toBe(true);
+    expect(getCsdCarrierProfile("TH").showOrigin).toBe(false);
+    expect(getCsdCarrierProfile("TH").showTransfer).toBe(true);
     expect(getCsdCarrierProfile("SQ").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("TR").templateUrl).toContain("CSD-IATA");
     expect(getCsdCarrierProfile("BI").templateUrl).toContain("CSD-BI");
@@ -97,9 +101,10 @@ describe("csdForms", () => {
     expect(getCsdCarrierProfile("T5").templateUrl).toContain("CSD-T5");
     expect(getCsdCarrierProfile("AI").templateUrl).toContain("CSD-AI");
     expect(getCsdCarrierProfile("MF").templateUrl).toContain("CSD-MF");
+    expect(getCsdCarrierProfile("TH").templateUrl).toContain("CSD-TH");
   });
 
-  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI|EK|PR|T5|AI|MF + AWB 11 số", () => {
+  it("canPrintCsd cần FD|TG|MH|QR|AK|VU|VJ|SQ|TR|BI|EK|PR|T5|AI|MF|TH + AWB 11 số", () => {
     expect(canPrintCsd({ flight: "FD301", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "MH751", awb: "232-12345675" })).toBe(true);
@@ -115,6 +120,7 @@ describe("csdForms", () => {
     expect(canPrintCsd({ flight: "T5123", awb: "496-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "AI131", awb: "098-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "MF812", awb: "731-12345675" })).toBe(true);
+    expect(canPrintCsd({ flight: "TH101", awb: "539-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "123" })).toBe(false);
   });
 
@@ -193,6 +199,9 @@ describe("csdForms", () => {
     expect(suggestCsdTransfer("MAA", "AI")).toBe("DEL");
     expect(suggestCsdTransfer("YVR", "MF")).toBe("XMN");
     expect(suggestCsdTransfer("XMN", "MF")).toBe("");
+    expect(suggestCsdTransfer("BKK", "TH")).toBe("KUL");
+    expect(suggestCsdTransfer("KUL", "TH")).toBe("");
+    expect(suggestCsdTransfer("SZB", "TH")).toBe("");
     localStorage.setItem(
       "tecsops.csd.lastTransfer.v1",
       JSON.stringify({ FD: "DMK" })
@@ -784,6 +793,51 @@ describe("csdForms", () => {
     expect(f.origin).toBeUndefined();
     expect(f.dest).toBe("YVR");
     expect(f.transfer).toBe("XMN");
+    expect(f.raCode).toBe("VN/RA3/00009-01");
+    expect(f.issuedOn).toMatch(/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/);
+  });
+
+  it("điền PDF CSD TH: RA + AWB + Contents + DEST/Transfer + SPX/XRY", async () => {
+    const template = new Uint8Array(
+      readFileSync(resolve("public/templates/csd/CSD-TH.pdf"))
+    );
+    const bold = new Uint8Array(
+      readFileSync(resolve("public/fonts/NotoSans-Bold.ttf"))
+    );
+    const bytes = await fillCsdPdfBytes(
+      "TH",
+      {
+        awb: "539-12345675",
+        goods: "GARMENTS",
+        dest: "KUL",
+        transfer: "KUL",
+        raCode: "VN/RA3/00009-01",
+        opsTeam: "SCSC",
+        issuedOn: formatCsdAiIssuedOn(new Date("2026-09-20T09:15:00")),
+      },
+      template,
+      { bold }
+    );
+    expect(bytes.byteLength).toBeGreaterThan(1000);
+    const { PDFDocument } = await import("pdf-lib");
+    const pdf = await PDFDocument.load(bytes);
+    expect(pdf.getPageCount()).toBe(1);
+  });
+
+  it("build TH: không ép origin; transfer KUL + issuedOn + RA theo kho", () => {
+    const f = buildCsdFields(
+      {
+        awb: "53912345675",
+        dest: "bkk",
+        goodsDescriptionPrint: "GARMENTS",
+        warehouse: "SCSC",
+      },
+      "TH",
+      { transfer: "kul" }
+    );
+    expect(f.origin).toBeUndefined();
+    expect(f.dest).toBe("BKK");
+    expect(f.transfer).toBe("KUL");
     expect(f.raCode).toBe("VN/RA3/00009-01");
     expect(f.issuedOn).toMatch(/^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}$/);
   });

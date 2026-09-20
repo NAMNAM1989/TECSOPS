@@ -37,7 +37,8 @@ export type CsdCarrier =
   | "PR"
   | "T5"
   | "AI"
-  | "MF";
+  | "MF"
+  | "TH";
 
 export type CsdCarrierProfile = {
   id: CsdCarrier;
@@ -240,6 +241,17 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     showTransfer: true,
     transferPresets: ["XMN", "FOC", "HGH", "PKX"],
   },
+  TH: {
+    id: "TH",
+    label: "TH",
+    airlineName: "Raya Airways",
+    templateUrl: "/templates/csd/CSD-TH.pdf?v=20260920",
+    flightPrefixes: ["TH"],
+    /** Origin SGN đã in sẵn; điền RA/AWB/Contents/DEST/Transfer + tick SPX/XRY + Received from RA + Date/Time. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["KUL", "SZB", "PEN", "BKI"],
+  },
 };
 
 export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
@@ -258,6 +270,7 @@ export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   T5: CSD_CARRIER_PROFILES.T5.templateUrl,
   AI: CSD_CARRIER_PROFILES.AI.templateUrl,
   MF: CSD_CARRIER_PROFILES.MF.templateUrl,
+  TH: CSD_CARRIER_PROFILES.TH.templateUrl,
 };
 
 export type CsdFillFields = {
@@ -297,7 +310,7 @@ export type CsdFillFields = {
   flightDest?: string;
   formDate?: string;
   verifiedBy?: string;
-  /** T5 / AI / MF: Date (+ Time) trên ô Issued on. */
+  /** T5 / AI / MF / TH: Date (+ Time) trên ô Issued on. */
   issuedOn?: string;
 };
 
@@ -417,6 +430,11 @@ export function isCsdAiFlight(flight: string | undefined | null): boolean {
 /** Chuyến MF… → Xiamen Airlines CSD. */
 export function isCsdMfFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "MF";
+}
+
+/** Chuyến TH… → Raya Airways CSD. */
+export function isCsdThFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "TH";
 }
 
 /** Ba hãng dùng chung mẫu CSD-IATA.pdf. */
@@ -549,11 +567,6 @@ export function formatCsdEkKg(kg: number | string | null | undefined): string {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
-/** @deprecated dùng isCsdTgFlight */
-export function isCsdThFlight(flight: string | undefined | null): boolean {
-  return isCsdTgFlight(flight);
-}
-
 /** Mẫu MH in sẵn dạng VN/RA3-00010-01 (gạch ngang sau RA3). */
 export function formatCsdMhRaCode(raCode: string): string {
   return String(raCode || "")
@@ -658,6 +671,10 @@ export function suggestCsdTransfer(
   }
   if (carrier === "MF") {
     if (d && d !== "XMN") return "XMN";
+    return "";
+  }
+  if (carrier === "TH") {
+    if (d && d !== "KUL" && d !== "SZB") return "KUL";
     return "";
   }
   if (carrier === "VU" || carrier === "VJ") {
@@ -783,6 +800,9 @@ export function buildCsdFields(
     base.issuedOn = formatCsdAiIssuedOn();
   }
   if (carrier === "MF") {
+    base.issuedOn = formatCsdAiIssuedOn();
+  }
+  if (carrier === "TH") {
     base.issuedOn = formatCsdAiIssuedOn();
   }
   return base;
@@ -1247,6 +1267,37 @@ const LAYOUT_MF = {
   transfer: { x: 340, yTop: 245, size: 13 },
   issuedDate: { x: 478, yTop: 465, size: 10, maxWidth: 70, minSize: 8 },
   footerRa: { x: 55, yTop: 560, size: 11, maxWidth: 480, minSize: 8 },
+} as const;
+
+/**
+ * Layout TH — A4 (Raya Airways / SCSC CSD).
+ * Giữ Origin SGN; wipe RA mẫu trên blank.
+ * Điền: RA, AWB, Contents, DEST, Transfer, tick SPX + XRY, Received from RA,
+ * Issued Date/Time, footer RA.
+ */
+const LAYOUT_TH = {
+  ra: { x: 60, yTop: 190, size: 11, maxWidth: 220, minSize: 8 },
+  awb: { x: 310, yTop: 170, size: 13, maxWidth: 230, minSize: 10 },
+  /** Trên checkbox Consolidation (~269). */
+  goods: {
+    x: 60,
+    yTop: 245,
+    size: 12,
+    maxWidth: 460,
+    minSize: 10,
+    maxLines: 2,
+    leading: 14,
+  },
+  /** Cùng hàng Origin SGN (~295–320). */
+  dest: { x: 200, yTop: 330, size: 14 },
+  transfer: { x: 330, yTop: 330, size: 13 },
+  /** Tick ô checkbox SPX / XRY. */
+  spxTick: { x: 76, yTop: 395, size: 11 },
+  xryTick: { x: 316, yTop: 395, size: 11 },
+  receivedFrom: { x: 200, yTop: 400, size: 12, maxWidth: 90, minSize: 9 },
+  issuedDate: { x: 330, yTop: 590, size: 10, maxWidth: 80, minSize: 8 },
+  issuedTime: { x: 455, yTop: 590, size: 10, maxWidth: 55, minSize: 8 },
+  footerRa: { x: 60, yTop: 630, size: 11, maxWidth: 480, minSize: 8 },
 } as const;
 
 /**
@@ -2145,6 +2196,58 @@ export async function fillCsdPdfBytes(
     const issued = String(fields.issuedOn || "").trim();
     const issuedDate = issued.split(/\s+/)[0] || "";
     if (issuedDate) fit(issuedDate, M.issuedDate);
+  } else if (carrier === "TH") {
+    /* Raya Airways — giữ SGN; điền RA + AWB + Contents + DEST/Transfer + SPX/XRY + Received from RA + Date/Time */
+    const fit = (
+      text: string,
+      slot: {
+        x: number;
+        yTop: number;
+        size: number;
+        maxWidth?: number;
+        minSize?: number;
+      }
+    ) => {
+      const t = text.trim();
+      if (!t) return;
+      const maxW = slot.maxWidth ?? 9999;
+      const minS = slot.minSize ?? 8;
+      let size = slot.size;
+      while (size > minS && fontBold.widthOfTextAtSize(t, size) > maxW) {
+        size -= 0.5;
+      }
+      draw(t, slot.x, topYToPdfLibBaseline(pageH, slot.yTop), size);
+    };
+    const T = LAYOUT_TH;
+    if (raLabel) {
+      fit(raLabel, T.ra);
+      fit(raLabel, T.footerRa);
+    }
+    fit(fields.awb, T.awb);
+    drawGoods(T.goods);
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        T.dest.x,
+        topYToPdfLibBaseline(pageH, T.dest.yTop),
+        T.dest.size
+      );
+    }
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        T.transfer.x,
+        topYToPdfLibBaseline(pageH, T.transfer.yTop),
+        T.transfer.size
+      );
+    }
+    draw("X", T.spxTick.x, topYToPdfLibBaseline(pageH, T.spxTick.yTop), T.spxTick.size);
+    draw("X", T.xryTick.x, topYToPdfLibBaseline(pageH, T.xryTick.yTop), T.xryTick.size);
+    fit("RA", T.receivedFrom);
+    const issued = String(fields.issuedOn || "").trim();
+    const [issuedDate = "", issuedTime = ""] = issued.split(/\s+/);
+    if (issuedDate) fit(issuedDate, T.issuedDate);
+    if (issuedTime) fit(issuedTime, T.issuedTime);
   } else {
     /* TG — mẫu A4 trống: ghi §1 RA, §2 AWB, §3 Contents, §4–6, §14 RA */
     if (raLabel) {

@@ -15,6 +15,7 @@
 | `CSD-T5.pdf` | Turkmenistan Airlines | mã **T5**… | `CSD_CARRIER_PROFILES.T5` |
 | `CSD-AI.pdf` | Air India | mã **AI**… | `CSD_CARRIER_PROFILES.AI` |
 | `CSD-MF.pdf` | Xiamen Airlines | mã **MF**… | `CSD_CARRIER_PROFILES.MF` |
+| `CSD-TH.pdf` | Raya Airways | mã **TH**… | `CSD_CARRIER_PROFILES.TH` |
 
 Logic điền + tải PDF: `src/utils/csdForms.ts`  
 Popup nhập Origin / Transfer (hoặc Issued by cho EK): `src/components/CsdPrintModal.tsx`
@@ -97,9 +98,15 @@ Ví dụ: `scsc_vj_97812345675_tín phát.pdf`
 - Điền: `RA {mã}` (§1 + footer), AWB, Contents, DEST, Transfer (gợi ý **XMN**), Issued on Date
 - Issued by để trống (ký tay)
 
+### TH (A4 — Raya Airways / SCSC CSD)
+- File: `CSD-TH.pdf` — URL `?v=20260920`
+- Giữ logo SCSC + Origin **SGN**; blank đã wipe RA mẫu
+- Điền: `RA {mã}` (§1 + footer), AWB, Contents, DEST, Transfer (gợi ý **KUL**), tick **SPX** + **XRY**, Received from **RA**, Date/Time Issued on
+- Issued by để trống (ký tay)
+
 ## Mã RA theo kho (overlay §1 / §14)
 
-| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG/QR/AK/VU/VJ/SQ/TR/BI/EK/PR/T5/AI/MF) | Mã RA trên mẫu MH |
+| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG/QR/AK/VU/VJ/SQ/TR/BI/EK/PR/T5/AI/MF/TH) | Mã RA trên mẫu MH |
 |---------------|-----------|--------------------------------------|-------------------|
 | TECS | `TECS-TCS`, `TECS-SCSC` | `VN/RA3/00013-01` | `VN/RA3-00013-01` |
 | SCSC | `SCSC` | `VN/RA3/00009-01` | `VN/RA3-00009-01` |

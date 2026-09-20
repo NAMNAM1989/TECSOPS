@@ -1,6 +1,13 @@
-import { lazy, Suspense, useCallback, useMemo, useState, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type { SyncStatus } from "../hooks/useShipmentSync";
-import type { Shipment } from "../types/shipment";
+import type { Shipment, ShipmentStatus } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { WarehouseLayoutFilter } from "../constants/warehouses";
 import { warehouseLabel, WAREHOUSE_ORDER } from "../constants/warehouses";
@@ -15,28 +22,68 @@ import {
 } from "../ui";
 import { statusLabel } from "../components/statusStyles";
 import { formatKgTotal } from "../utils/formatKgTotal";
+import { statusOrderForFilter } from "../utils/shipmentWorkflowStatus";
 import {
   computeOpsStats,
   listDestOptionsInRange,
-  type OpsStatsDayRow,
-  type OpsStatsDestRow,
-  type OpsStatsLotRow,
-  type OpsStatsTotals,
-  type OpsStatsWarehouseRow,
+  normalizeStatsDest,
 } from "../utils/opsStatsMetrics";
 import {
-  currentMonthYm,
+  computeOpsStatsIntelligence,
+  filterShipmentsForStatsIntel,
+  listCustomerOptionsInRows,
+  listFlightOptionsInRows,
+} from "../utils/opsStatsIntelligence";
+import {
+  computeSevenDayForecast,
+  computeNextWeekLaneSuggestions,
+  computeWeeklyShareSparkline,
+  pickMissLanes,
+} from "../utils/opsStatsForecast";
+import {
+  parseLotSortParam,
+  serializeLotSortParam,
+  toggleLotSort,
+  type LotSortState,
+} from "../utils/opsStatsLotSort";
+import {
+  formatPctDeltaLabel,
   formatStatsPeriodLabel,
   formatWeekEmptyCopy,
   formatWeekRangeLabel,
+  pctDelta,
+  previousStatsPeriodRange,
   resolveStatsPeriodRange,
   shiftStatsPeriodAnchor,
-  todaySessionYmd,
   todayYmdAsiaSaigon,
   weekStartYmd,
   type StatsPeriodMode,
 } from "../utils/opsStatsPeriod";
-import { shipmentMatchesSearchQuery, type ShipmentSearchContext } from "../utils/shipmentSearch";
+import {
+  parseOpsStatsUrlState,
+  replaceStatsHash,
+  type OpsStatsDetailTab,
+  type OpsStatsIntelTab,
+  type OpsStatsUrlState,
+} from "../utils/opsStatsUrlState";
+import { filterShipmentsBySessionYmdRange } from "../utils/filterShipmentsBySessionYmd";
+import {
+  shipmentMatchesSearchQuery,
+  type ShipmentSearchContext,
+} from "../utils/shipmentSearch";
+import { StatsKpiStrip, formatStatsPct } from "../components/opsStats/StatsKpiStrip";
+import { OpsStatsActiveFilterBar } from "../components/opsStats/OpsStatsActiveFilterBar";
+import { OpsStatsBookingPanel } from "../components/opsStats/OpsStatsBookingPanel";
+import { OpsStatsMarketPanel } from "../components/opsStats/OpsStatsMarketPanel";
+import { OpsStatsAlertList } from "../components/opsStats/OpsStatsAlertList";
+import {
+  AggTable,
+  FilterField,
+  LotsDetailTable,
+  mapDayAgg,
+  mapDestAgg,
+  mapWhAgg,
+} from "../components/opsStats/OpsStatsDetailTables";
 
 const OpsStatsChartsPanel = lazy(() =>
   import("../components/OpsStatsChartsPanel").then((m) => ({
@@ -52,9 +99,15 @@ type Props = {
   socketConnected: boolean;
   onNavigateOps: () => void;
   onNavigateCustomers: () => void;
+  onOpenLot?: (opts: {
+    sessionYmd: string;
+    query: string;
+    shipmentId?: string;
+  }) => void;
 };
 
-type DetailTab = "lots" | "day" | "warehouse" | "dest";
+type DetailTab = OpsStatsDetailTab;
+type IntelTab = OpsStatsIntelTab;
 
 const PERIOD_MODES: { id: StatsPeriodMode; label: string }[] = [
   { id: "today", label: "Hôm nay" },
@@ -63,6 +116,13 @@ const PERIOD_MODES: { id: StatsPeriodMode; label: string }[] = [
   { id: "month", label: "Tháng" },
   { id: "year", label: "Năm" },
   { id: "range", label: "Khoảng" },
+];
+
+const INTEL_TABS: { id: IntelTab; label: string }[] = [
+  { id: "ops", label: "Vận hành" },
+  { id: "booking", label: "Booking" },
+  { id: "market", label: "Thị trường" },
+  { id: "alerts", label: "Cảnh báo" },
 ];
 
 const DETAIL_TABS: { id: DetailTab; label: string }[] = [
@@ -75,217 +135,74 @@ const DETAIL_TABS: { id: DetailTab; label: string }[] = [
 const FIELD =
   "min-h-9 rounded-lg border border-ui-border/80 bg-ui-surface px-2.5 py-1.5 text-sm text-ui-text outline-none transition focus:border-ui-primary/45 focus:ring-2 focus:ring-ui-focus/80";
 
+const STATUS_FILTER_OPTIONS = statusOrderForFilter("ALL");
+
 function warehouseFilterLabel(w: WarehouseLayoutFilter): string {
   return w === "ALL" ? "Tất cả kho" : warehouseLabel[w];
 }
 
-function KpiStrip({
-  items,
+function readUrlPartial(): Partial<OpsStatsUrlState> {
+  if (typeof window === "undefined") return {};
+  return parseOpsStatsUrlState(window.location.hash);
+}
+
+function kpiDelta(current: number, previous: number) {
+  const d = pctDelta(current, previous);
+  const deltaLabel = formatPctDeltaLabel(d, current, previous);
+  const deltaPositive =
+    (d != null && d > 0) || (previous === 0 && current > 0);
+  return { deltaLabel, deltaPositive };
+}
+
+function SegmentedTabs<T extends string>({
+  ariaLabel,
+  tabs,
+  value,
+  onChange,
+  counts,
 }: {
-  items: {
-    label: string;
-    value: string | number;
-    hint?: string;
-    accent?: boolean;
-  }[];
+  ariaLabel: string;
+  tabs: { id: T; label: string }[];
+  value: T;
+  onChange: (id: T) => void;
+  counts?: Partial<Record<T, number>>;
 }) {
   return (
     <div
-      className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm"
-      data-testid="stats-kpi-strip"
+      aria-label={ariaLabel}
+      className="flex gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      role="tablist"
     >
-      <div className="grid grid-cols-2 divide-x divide-y divide-ui-border/60 sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
-        {items.map((item) => (
-          <div key={item.label} title={item.hint} className="px-3.5 py-3.5 sm:px-4">
-            <p className="m-0 text-[10px] font-bold uppercase tracking-[0.08em] text-ui-text-muted">
-              {item.label}
-            </p>
-            <p
-              className={`m-0 mt-1.5 font-mono text-xl font-semibold tabular-nums tracking-tight sm:text-[1.35rem] ${
-                item.accent ? "text-amber-800" : "text-ui-navy"
-              }`}
-            >
-              {item.value}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FilterField({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1">
-      <span className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function AggTable({
-  rows,
-  keyLabel,
-  getKey,
-}: {
-  rows: readonly (OpsStatsTotals & { _key: string })[];
-  keyLabel: string;
-  getKey?: (r: OpsStatsTotals & { _key: string }) => string;
-}) {
-  if (rows.length === 0) {
-    return (
-      <p className="px-4 py-10 text-center text-sm text-ui-text-muted">Không có dòng</p>
-    );
-  }
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full border-collapse text-left text-sm">
-        <thead>
-          <tr className="border-b border-ui-border/80 bg-slate-50/80 text-[10px] uppercase tracking-wider text-ui-text-muted">
-            <th className="px-3.5 py-2.5 font-bold">{keyLabel}</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">Lô</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">Kiện</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">Kg thực</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">DIM</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">CW</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">Δ</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">Chưa DIM</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const key = getKey ? getKey(r) : r._key;
-            return (
-              <tr
-                key={key}
-                className="border-b border-ui-border/50 transition last:border-0 hover:bg-teal-500/[0.04]"
+      {tabs.map((tab) => {
+        const active = value === tab.id;
+        const count = counts?.[tab.id];
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(tab.id)}
+            className={`relative min-h-10 shrink-0 px-3 text-[12px] font-bold transition ${
+              active ? "text-ui-navy" : "text-ui-text-muted hover:text-ui-text"
+            }`}
+          >
+            {tab.label}
+            {count != null ? (
+              <span
+                className={`ml-1.5 tabular-nums ${
+                  active ? "text-teal-700" : "text-ui-text-muted/80"
+                }`}
               >
-                <td className="px-3.5 py-2 font-medium tabular-nums text-ui-navy">{r._key}</td>
-                <td className="px-3.5 py-2 text-right tabular-nums">{r.lots}</td>
-                <td className="px-3.5 py-2 text-right tabular-nums">{r.pcs}</td>
-                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
-                  {formatKgTotal(r.actualKg)}
-                </td>
-                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
-                  {formatKgTotal(r.dimKg)}
-                </td>
-                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
-                  {formatKgTotal(r.chargeableKg)}
-                </td>
-                <td
-                  className={`px-3.5 py-2 text-right font-mono tabular-nums ${
-                    r.deltaKg > 0 ? "font-semibold text-amber-800" : ""
-                  }`}
-                >
-                  {r.deltaKg > 0 ? "+" : ""}
-                  {formatKgTotal(r.deltaKg)}
-                </td>
-                <td className="px-3.5 py-2 text-right tabular-nums text-ui-text-muted">
-                  {r.missingDimLots > 0 ? r.missingDimLots : "—"}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function LotsDetailTable({ lots }: { lots: readonly OpsStatsLotRow[] }) {
-  if (lots.length === 0) {
-    return (
-      <p className="px-4 py-10 text-center text-sm text-ui-text-muted">Không có lô</p>
-    );
-  }
-  return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full border-collapse text-left text-[13px]">
-        <thead>
-          <tr className="border-b border-ui-border/80 bg-slate-50/80 text-[10px] uppercase tracking-wider text-ui-text-muted">
-            <th className="sticky left-0 z-[1] bg-slate-50/95 px-3.5 py-2.5 font-bold backdrop-blur-sm">
-              Ngày
-            </th>
-            <th className="px-3.5 py-2.5 font-bold">Kho</th>
-            <th className="px-3.5 py-2.5 font-bold">MAWB</th>
-            <th className="px-3.5 py-2.5 font-bold">Dest</th>
-            <th className="px-3.5 py-2.5 font-bold">Chuyến</th>
-            <th className="px-3.5 py-2.5 font-bold">Khách</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">Kiện</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">Kg</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">DIM</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">CW</th>
-            <th className="px-3.5 py-2.5 text-right font-bold">Δ</th>
-            <th className="px-3.5 py-2.5 font-bold">TT</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lots.map((lot) => {
-            const s = lot.shipment;
-            return (
-              <tr
-                key={s.id}
-                className="border-b border-ui-border/45 transition hover:bg-teal-500/[0.04]"
-              >
-                <td className="sticky left-0 z-[1] bg-ui-surface/95 px-3.5 py-2 font-medium tabular-nums backdrop-blur-sm">
-                  {(s.sessionDate || "").trim()}
-                </td>
-                <td className="px-3.5 py-2 text-[12px] text-ui-text-muted">
-                  {s.warehouse.replace("TECS-", "")}
-                </td>
-                <td className="px-3.5 py-2 font-shipment-data text-[12px] font-bold text-ui-awb">
-                  {s.awb || "—"}
-                </td>
-                <td className="px-3.5 py-2 font-semibold text-ui-navy">{s.dest || "—"}</td>
-                <td className="px-3.5 py-2 text-ui-text-muted">{s.flight || "—"}</td>
-                <td className="max-w-[10rem] truncate px-3.5 py-2" title={s.customer}>
-                  {s.customerCode ? (
-                    <span className="mr-1 rounded bg-slate-100 px-1 text-[10px] font-bold text-slate-700">
-                      {s.customerCode}
-                    </span>
-                  ) : null}
-                  {s.customer || "—"}
-                </td>
-                <td className="px-3.5 py-2 text-right tabular-nums">{lot.pcs || "—"}</td>
-                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
-                  {formatKgTotal(lot.actualKg)}
-                </td>
-                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
-                  {lot.hasDim ? formatKgTotal(lot.dimKg) : "—"}
-                </td>
-                <td className="px-3.5 py-2 text-right font-mono tabular-nums">
-                  {formatKgTotal(lot.chargeableKg)}
-                </td>
-                <td
-                  className={`px-3.5 py-2 text-right font-mono tabular-nums ${
-                    lot.deltaKg > 0 ? "font-semibold text-amber-800" : ""
-                  }`}
-                >
-                  {lot.hasDim ? (
-                    <>
-                      {lot.deltaKg > 0 ? "+" : ""}
-                      {formatKgTotal(lot.deltaKg)}
-                    </>
-                  ) : (
-                    <span className="text-[10px] text-slate-500">chưa DIM</span>
-                  )}
-                </td>
-                <td className="px-3.5 py-2 text-[11px] text-ui-text-muted">
-                  {statusLabel[s.status] ?? s.status}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                {count}
+              </span>
+            ) : null}
+            {active ? (
+              <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-ui-primary" />
+            ) : null}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -298,23 +215,44 @@ export function OpsStatsPage({
   socketConnected,
   onNavigateOps,
   onNavigateCustomers,
+  onOpenLot,
 }: Props) {
   const toast = useToast();
-  const today = todaySessionYmd();
-  const todaySaigon = todayYmdAsiaSaigon();
+  const today = todayYmdAsiaSaigon();
+  const url0 = useMemo(() => readUrlPartial(), []);
 
-  const [mode, setMode] = useState<StatsPeriodMode>("today");
-  const [dayYmd, setDayYmd] = useState(today);
-  const [weekYmd, setWeekYmd] = useState(todaySaigon);
-  const [monthYm, setMonthYm] = useState(currentMonthYm());
-  const [year, setYear] = useState(Number(today.slice(0, 4)));
-  const [rangeFrom, setRangeFrom] = useState(today);
-  const [rangeTo, setRangeTo] = useState(today);
-  const [warehouse, setWarehouse] = useState<WarehouseLayoutFilter>("ALL");
-  const [dest, setDest] = useState<string | "ALL">("ALL");
+  const [mode, setMode] = useState<StatsPeriodMode>(() => url0.mode ?? "today");
+  const [dayYmd, setDayYmd] = useState(() => url0.dayYmd ?? today);
+  const [weekYmd, setWeekYmd] = useState(() => url0.weekYmd ?? today);
+  const [monthYm, setMonthYm] = useState(() => url0.monthYm ?? today.slice(0, 7));
+  const [year, setYear] = useState(() => url0.year ?? Number(today.slice(0, 4)));
+  const [rangeFrom, setRangeFrom] = useState(() => url0.rangeFrom ?? today);
+  const [rangeTo, setRangeTo] = useState(() => url0.rangeTo ?? today);
+  const [warehouse, setWarehouse] = useState<WarehouseLayoutFilter>(
+    () => url0.warehouse ?? "ALL"
+  );
+  const [dest, setDest] = useState<string | "ALL">(() => url0.dest ?? "ALL");
+  const [customerKey, setCustomerKey] = useState<string | "ALL">(
+    () => url0.customerKey ?? "ALL"
+  );
+  const [flightKey, setFlightKey] = useState<string | "ALL">(
+    () => url0.flightKey ?? "ALL"
+  );
+  const [statuses, setStatuses] = useState<ShipmentStatus[] | "ALL">(
+    () => url0.statuses ?? "ALL"
+  );
   const [exporting, setExporting] = useState(false);
-  const [detailTab, setDetailTab] = useState<DetailTab>("lots");
+  const [intelTab, setIntelTab] = useState<IntelTab>(() => url0.intelTab ?? "ops");
+  const [detailTab, setDetailTab] = useState<DetailTab>(
+    () => url0.detailTab ?? "lots"
+  );
   const [lotSearch, setLotSearch] = useState("");
+  const [focusYmdOverride, setFocusYmdOverride] = useState<string | null>(
+    () => url0.focusYmd ?? null
+  );
+  const [lotSort, setLotSort] = useState<LotSortState>(() =>
+    parseLotSortParam(url0.sort)
+  );
 
   const range = useMemo(
     () =>
@@ -326,10 +264,63 @@ export function OpsStatsPage({
         year,
         rangeFromYmd: rangeFrom,
         rangeToYmd: rangeTo,
-        todayYmd: mode === "week" ? todaySaigon : today,
+        todayYmd: today,
       }),
-    [mode, dayYmd, weekYmd, monthYm, year, rangeFrom, rangeTo, today, todaySaigon],
+    [mode, dayYmd, weekYmd, monthYm, year, rangeFrom, rangeTo, today]
   );
+
+  const focusYmd = useMemo(() => {
+    if (focusYmdOverride) return focusYmdOverride;
+    if (today >= range.fromYmd && today <= range.toYmd) return today;
+    return range.toYmd;
+  }, [focusYmdOverride, today, range.fromYmd, range.toYmd]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      replaceStatsHash({
+        mode,
+        dayYmd,
+        weekYmd,
+        monthYm,
+        year,
+        rangeFrom,
+        rangeTo,
+        warehouse,
+        dest,
+        customerKey,
+        flightKey,
+        statuses,
+        intelTab,
+        detailTab,
+        focusYmd,
+        sort: serializeLotSortParam(lotSort),
+      });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [
+    mode,
+    dayYmd,
+    weekYmd,
+    monthYm,
+    year,
+    rangeFrom,
+    rangeTo,
+    warehouse,
+    dest,
+    customerKey,
+    flightKey,
+    statuses,
+    intelTab,
+    detailTab,
+    focusYmd,
+    lotSort,
+  ]);
+
+  const inRangeWh = useMemo(() => {
+    const inRange = filterShipmentsBySessionYmdRange(rows, range.fromYmd, range.toYmd);
+    if (warehouse === "ALL") return inRange;
+    return inRange.filter((r) => r.warehouse === warehouse);
+  }, [rows, range.fromYmd, range.toYmd, warehouse]);
 
   const destOptions = useMemo(
     () =>
@@ -338,24 +329,129 @@ export function OpsStatsPage({
         toYmd: range.toYmd,
         warehouse,
       }),
-    [rows, range.fromYmd, range.toYmd, warehouse],
+    [rows, range.fromYmd, range.toYmd, warehouse]
   );
+
+  const customerOptions = useMemo(() => listCustomerOptionsInRows(inRangeWh), [inRangeWh]);
+  const flightOptions = useMemo(() => listFlightOptionsInRows(inRangeWh), [inRangeWh]);
+
+  const scopedPeriodRows = useMemo(() => {
+    let base = inRangeWh;
+    if (dest !== "ALL") {
+      base = base.filter((r) => normalizeStatsDest(r.dest) === dest);
+    }
+    return filterShipmentsForStatsIntel(base, {
+      customerKey,
+      flightKey,
+      statuses,
+    });
+  }, [inRangeWh, dest, customerKey, flightKey, statuses]);
 
   const stats = useMemo(
     () =>
-      computeOpsStats(rows, {
+      computeOpsStats(scopedPeriodRows, {
         fromYmd: range.fromYmd,
         toYmd: range.toYmd,
-        warehouse,
-        dest,
+        warehouse: "ALL",
+        dest: "ALL",
       }),
-    [rows, range.fromYmd, range.toYmd, warehouse, dest],
+    [scopedPeriodRows, range.fromYmd, range.toYmd]
   );
+
+  const prevRange = useMemo(
+    () => previousStatsPeriodRange(range, mode),
+    [range, mode]
+  );
+
+  const prevScopedRows = useMemo(() => {
+    let base = filterShipmentsBySessionYmdRange(
+      rows,
+      prevRange.fromYmd,
+      prevRange.toYmd
+    );
+    if (warehouse !== "ALL") {
+      base = base.filter((r) => r.warehouse === warehouse);
+    }
+    if (dest !== "ALL") {
+      base = base.filter((r) => normalizeStatsDest(r.dest) === dest);
+    }
+    return filterShipmentsForStatsIntel(base, {
+      customerKey,
+      flightKey,
+      statuses,
+    });
+  }, [rows, prevRange.fromYmd, prevRange.toYmd, warehouse, dest, customerKey, flightKey, statuses]);
+
+  const prevStats = useMemo(
+    () =>
+      computeOpsStats(prevScopedRows, {
+        fromYmd: prevRange.fromYmd,
+        toYmd: prevRange.toYmd,
+        warehouse: "ALL",
+        dest: "ALL",
+      }),
+    [prevScopedRows, prevRange.fromYmd, prevRange.toYmd]
+  );
+
+  const historyRows = useMemo(() => {
+    let base: Shipment[] =
+      warehouse === "ALL" ? [...rows] : rows.filter((r) => r.warehouse === warehouse);
+    if (dest !== "ALL") {
+      base = base.filter((r) => normalizeStatsDest(r.dest) === dest);
+    }
+    return filterShipmentsForStatsIntel(base, {
+      customerKey,
+      flightKey,
+      statuses: "ALL",
+    });
+  }, [rows, warehouse, dest, customerKey, flightKey]);
+
+  const intel = useMemo(
+    () => computeOpsStatsIntelligence(stats.filtered, historyRows, focusYmd, 8),
+    [stats.filtered, historyRows, focusYmd]
+  );
+
+  const missLanes = useMemo(
+    () => pickMissLanes(intel.flightDest),
+    [intel.flightDest]
+  );
+  const nextWeek = useMemo(
+    () => computeNextWeekLaneSuggestions(historyRows, today),
+    [historyRows, today]
+  );
+  const forecast = useMemo(
+    () => computeSevenDayForecast(historyRows, today),
+    [historyRows, today]
+  );
+
+  const sparkByCustomerKey = useMemo(() => {
+    const out: Record<string, ReturnType<typeof computeWeeklyShareSparkline>> = {};
+    for (const row of intel.customerShare.rows.slice(0, 5)) {
+      out[row.key] = computeWeeklyShareSparkline(historyRows, {
+        kind: "customer",
+        matchKey: row.key,
+        beforeYmd: today,
+      });
+    }
+    return out;
+  }, [intel.customerShare.rows, historyRows, today]);
+
+  const sparkByDestKey = useMemo(() => {
+    const out: Record<string, ReturnType<typeof computeWeeklyShareSparkline>> = {};
+    for (const row of intel.destShare.rows.slice(0, 5)) {
+      out[row.key] = computeWeeklyShareSparkline(historyRows, {
+        kind: "dest",
+        matchKey: row.key,
+        beforeYmd: today,
+      });
+    }
+    return out;
+  }, [intel.destShare.rows, historyRows, today]);
 
   const periodLabel = formatStatsPeriodLabel(range, mode);
   const weekLabel = formatWeekRangeLabel(range.fromYmd, range.toYmd);
   const isCurrentWeek =
-    mode === "week" && weekStartYmd(weekYmd) === weekStartYmd(todaySaigon);
+    mode === "week" && weekStartYmd(weekYmd) === weekStartYmd(today);
 
   const searchContext = useMemo(
     (): ShipmentSearchContext => ({ customers }),
@@ -370,21 +466,78 @@ export function OpsStatsPage({
     );
   }, [stats.lots, lotSearch, searchContext]);
 
-  const dayAggRows = useMemo(
-    () => stats.byDay.map((r: OpsStatsDayRow) => ({ ...r, _key: r.sessionDate })),
-    [stats.byDay],
-  );
-  const whAggRows = useMemo(
-    () =>
-      stats.byWarehouse
-        .filter((r) => r.lots > 0)
-        .map((r: OpsStatsWarehouseRow) => ({ ...r, _key: r.label })),
-    [stats.byWarehouse],
-  );
-  const destAggRows = useMemo(
-    () => stats.byDest.map((r: OpsStatsDestRow) => ({ ...r, _key: r.dest })),
-    [stats.byDest],
-  );
+  const activeFilterChips = useMemo(() => {
+    const chips: { id: string; label: string; onClear: () => void }[] = [];
+    if (warehouse !== "ALL") {
+      chips.push({
+        id: "wh",
+        label: warehouseFilterLabel(warehouse),
+        onClear: () => setWarehouse("ALL"),
+      });
+    }
+    if (dest !== "ALL") {
+      chips.push({
+        id: "dest",
+        label: `Dest ${dest}`,
+        onClear: () => setDest("ALL"),
+      });
+    }
+    if (customerKey !== "ALL") {
+      const custLabel =
+        customerOptions.find((c) => c.key === customerKey)?.label ?? customerKey;
+      chips.push({
+        id: "cust",
+        label: custLabel,
+        onClear: () => setCustomerKey("ALL"),
+      });
+    }
+    if (flightKey !== "ALL") {
+      chips.push({
+        id: "flight",
+        label: `Chuyến ${flightKey}`,
+        onClear: () => setFlightKey("ALL"),
+      });
+    }
+    if (statuses !== "ALL") {
+      chips.push({
+        id: "st",
+        label: statuses.map((s) => statusLabel[s] ?? s).join(", "),
+        onClear: () => setStatuses("ALL"),
+      });
+    }
+    if (mode === "day") {
+      chips.push({
+        id: "day",
+        label: `Ngày ${dayYmd}`,
+        onClear: () => {
+          setMode("today");
+        },
+      });
+    }
+    return chips;
+  }, [
+    warehouse,
+    dest,
+    customerKey,
+    flightKey,
+    statuses,
+    mode,
+    dayYmd,
+    customerOptions,
+  ]);
+
+  const clearAllFilters = useCallback(() => {
+    setWarehouse("ALL");
+    setDest("ALL");
+    setCustomerKey("ALL");
+    setFlightKey("ALL");
+    setStatuses("ALL");
+    if (mode === "day") setMode("today");
+  }, [mode]);
+
+  const dayAggRows = useMemo(() => mapDayAgg(stats.byDay), [stats.byDay]);
+  const whAggRows = useMemo(() => mapWhAgg(stats.byWarehouse), [stats.byWarehouse]);
+  const destAggRows = useMemo(() => mapDestAgg(stats.byDest), [stats.byDest]);
 
   const onExport = useCallback(async () => {
     setExporting(true);
@@ -401,6 +554,15 @@ export function OpsStatsPage({
         byWarehouse: stats.byWarehouse,
         byDest: stats.byDest,
         lots: stats.lots,
+        intelligence: intel,
+        filterMeta: {
+          Khách: customerKey === "ALL" ? "Tất cả" : customerKey,
+          Chuyến: flightKey === "ALL" ? "Tất cả" : flightKey,
+          "Trạng thái":
+            statuses === "ALL"
+              ? "Tất cả"
+              : statuses.map((s) => statusLabel[s] ?? s).join(", "),
+        },
       });
       toast.success("Đã xuất Excel thống kê");
     } catch (e) {
@@ -408,10 +570,43 @@ export function OpsStatsPage({
     } finally {
       setExporting(false);
     }
-  }, [dest, mode, range, stats, toast, warehouse]);
+  }, [customerKey, dest, flightKey, intel, mode, range, stats, statuses, toast, warehouse]);
+
+  const toggleStatus = useCallback((s: ShipmentStatus) => {
+    setStatuses((prev) => {
+      if (prev === "ALL") return [s];
+      if (prev.includes(s)) {
+        const next = prev.filter((x) => x !== s);
+        return next.length === 0 ? "ALL" : next;
+      }
+      return [...prev, s];
+    });
+  }, []);
 
   const t = stats.totals;
+  const pt = prevStats.totals;
+  const lotsDelta = kpiDelta(t.lots, pt.lots);
+  const pcsDelta = kpiDelta(t.pcs, pt.pcs);
+  const actualDelta = kpiDelta(t.actualKg, pt.actualKg);
+  const cwDelta = kpiDelta(t.chargeableKg, pt.chargeableKg);
   const deltaPositive = t.deltaKg > 0;
+  const statusMixHint = intel.statusMix
+    .slice(0, 3)
+    .map((m) => `${statusLabel[m.status] ?? m.status} ${m.pct}%`)
+    .join(" · ");
+
+  const openLotFromAlert = useCallback(
+    (sessionYmd: string, awb: string, shipmentId?: string) => {
+      if (!onOpenLot) return;
+      const q = awb.trim();
+      onOpenLot({
+        sessionYmd,
+        query: q && q !== "(không AWB)" ? q : "",
+        shipmentId,
+      });
+    },
+    [onOpenLot]
+  );
 
   return (
     <div className="min-h-screen bg-ui-background" data-testid="ops-stats-page">
@@ -424,9 +619,14 @@ export function OpsStatsPage({
                   <Wordmark size="md" />
                 </h1>
                 <span className="text-ui-text-muted">·</span>
-                <span className="text-[13px] font-extrabold tracking-tight text-ui-navy">
-                  Thống kê
-                </span>
+                <div className="min-w-0">
+                  <span className="block text-[13px] font-extrabold tracking-tight text-ui-navy">
+                    Thống kê vận hành & booking
+                  </span>
+                  <span className="hidden text-[11px] text-ui-text-muted sm:block">
+                    Control · Booking intelligence · Share nội bộ
+                  </span>
+                </div>
                 <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -546,7 +746,7 @@ export function OpsStatsPage({
                           variant="secondary"
                           size="sm"
                           className="px-2.5 text-[11px]"
-                          onClick={() => setWeekYmd(todaySaigon)}
+                          onClick={() => setWeekYmd(today)}
                         >
                           Tuần này
                         </Button>
@@ -560,7 +760,9 @@ export function OpsStatsPage({
                       type="month"
                       className={FIELD}
                       value={monthYm}
-                      onChange={(e) => setMonthYm(e.target.value || currentMonthYm())}
+                      onChange={(e) =>
+                        setMonthYm(e.target.value || today.slice(0, 7))
+                      }
                     />
                   </FilterField>
                 ) : null}
@@ -607,6 +809,8 @@ export function OpsStatsPage({
                     onChange={(e) => {
                       setWarehouse(e.target.value as WarehouseLayoutFilter);
                       setDest("ALL");
+                      setCustomerKey("ALL");
+                      setFlightKey("ALL");
                     }}
                   >
                     <option value="ALL">Tất cả</option>
@@ -635,11 +839,87 @@ export function OpsStatsPage({
                   </select>
                 </FilterField>
 
+                <FilterField label="Khách">
+                  <select
+                    className={`${FIELD} min-w-[9rem] max-w-[14rem]`}
+                    value={customerKey}
+                    onChange={(e) =>
+                      setCustomerKey(e.target.value === "ALL" ? "ALL" : e.target.value)
+                    }
+                  >
+                    <option value="ALL">Tất cả</option>
+                    {customerOptions.map((c) => (
+                      <option key={c.key} value={c.key}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </FilterField>
+
+                <FilterField label="Chuyến">
+                  <select
+                    className={`${FIELD} min-w-[7rem]`}
+                    value={flightKey}
+                    onChange={(e) =>
+                      setFlightKey(e.target.value === "ALL" ? "ALL" : e.target.value)
+                    }
+                  >
+                    <option value="ALL">Tất cả</option>
+                    {flightOptions.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </FilterField>
+
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+                    Trạng thái
+                  </span>
+                  <div
+                    aria-label="Lọc trạng thái"
+                    className="flex max-w-full flex-wrap gap-1"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setStatuses("ALL")}
+                      className={`min-h-8 rounded-lg px-2 text-[11px] font-bold transition ${
+                        statuses === "ALL"
+                          ? "bg-ui-navy text-white shadow-ui-sm"
+                          : "border border-ui-border/80 bg-ui-surface text-ui-text-muted hover:text-ui-text"
+                      }`}
+                    >
+                      Tất cả
+                    </button>
+                    {STATUS_FILTER_OPTIONS.map((s) => {
+                      const active =
+                        statuses !== "ALL" && statuses.includes(s);
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => toggleStatus(s)}
+                          className={`min-h-8 rounded-lg px-2 text-[11px] font-bold transition ${
+                            active
+                              ? "bg-teal-700 text-white shadow-ui-sm"
+                              : "border border-ui-border/80 bg-ui-surface text-ui-text-muted hover:text-ui-text"
+                          }`}
+                        >
+                          {statusLabel[s]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <p className="ml-auto pb-1.5 text-[12px] text-ui-text-muted">
                   Kỳ{" "}
                   <span className="font-bold tabular-nums text-ui-navy">{periodLabel}</span>
                   <span className="mx-1.5 text-slate-300">·</span>
                   <span className="font-semibold text-teal-800">{t.lots} lô</span>
+                  <span className="mx-1.5 text-slate-300">·</span>
+                  <span className="tabular-nums">focus {focusYmd}</span>
                 </p>
               </div>
             </div>
@@ -650,18 +930,43 @@ export function OpsStatsPage({
           <p className="text-sm text-ui-text-muted">Đang tải dữ liệu…</p>
         ) : (
           <div className="space-y-3.5 pb-8">
-            <KpiStrip
+            <StatsKpiStrip
               items={[
-                { label: "Lô", value: t.lots, hint: periodLabel },
-                { label: "Kiện", value: t.pcs },
-                { label: "Kg thực", value: formatKgTotal(t.actualKg) },
-                { label: "DIM", value: formatKgTotal(t.dimKg) },
-                { label: "Chargeable", value: formatKgTotal(t.chargeableKg) },
+                {
+                  label: "Lô",
+                  value: t.lots,
+                  hint: periodLabel,
+                  deltaLabel: lotsDelta.deltaLabel,
+                  deltaPositive: lotsDelta.deltaPositive,
+                },
+                {
+                  label: "Kiện",
+                  value: t.pcs,
+                  deltaLabel: pcsDelta.deltaLabel,
+                  deltaPositive: pcsDelta.deltaPositive,
+                },
+                {
+                  label: "Kg thực",
+                  value: formatKgTotal(t.actualKg),
+                  deltaLabel: actualDelta.deltaLabel,
+                  deltaPositive: actualDelta.deltaPositive,
+                },
+                {
+                  label: "Chargeable",
+                  value: formatKgTotal(t.chargeableKg),
+                  deltaLabel: cwDelta.deltaLabel,
+                  deltaPositive: cwDelta.deltaPositive,
+                },
                 {
                   label: "Δ (CW−Kg)",
                   value: `${deltaPositive ? "+" : ""}${formatKgTotal(t.deltaKg)}`,
                   hint: "Chênh lệch dùng ước tính phí kho bãi",
                   accent: deltaPositive,
+                },
+                {
+                  label: "% Volume",
+                  value: formatStatsPct(intel.volumeDonePct),
+                  hint: statusMixHint || "VOLUME_DONE trở đi / tổng lô kỳ",
                 },
               ]}
             />
@@ -676,39 +981,112 @@ export function OpsStatsPage({
                   Đủ DIM
                 </span>
               )}
+              {intel.statusMix.slice(0, 4).map((m) => (
+                <span
+                  key={m.status}
+                  className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-800 ring-1 ring-slate-200/80"
+                >
+                  {statusLabel[m.status] ?? m.status} {m.pct}%
+                </span>
+              ))}
               <span className="text-[11px] text-ui-text-muted">
                 Chargeable = max(Kg, DIM). Chưa DIM → CW = Kg, Δ = 0.
               </span>
             </div>
 
-            {t.lots === 0 ? (
-              <EmptyState
-                {...(mode === "week"
-                  ? formatWeekEmptyCopy(weekLabel)
-                  : {
-                      title: "Không có lô trong kỳ",
-                      description:
-                        "Đổi kỳ / kho / dest, hoặc nhập liệu trên Ops rồi quay lại.",
-                    })}
-                actionLabel="Về Ops"
-                onAction={onNavigateOps}
-              />
-            ) : (
-              <>
-                <Suspense
-                  fallback={
-                    <div className="grid min-h-[12rem] place-items-center rounded-2xl border border-ui-border/60 bg-ui-surface-muted/40 text-sm text-ui-text-muted">
-                      Đang tải biểu đồ…
-                    </div>
-                  }
-                >
-                  <OpsStatsChartsPanel
-                    byDay={stats.byDay}
-                    byWarehouse={stats.byWarehouse}
-                    byDest={stats.byDest}
-                    onSelectWarehouse={(wh) => {
-                      setWarehouse(wh);
-                      setDest("ALL");
+            <OpsStatsActiveFilterBar
+              chips={activeFilterChips}
+              onClearAll={clearAllFilters}
+            />
+
+            <section className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
+              <div className="border-b border-ui-border/70 px-2 pt-1 sm:px-3">
+                <SegmentedTabs
+                  ariaLabel="Chế độ thống kê"
+                  tabs={INTEL_TABS}
+                  value={intelTab}
+                  onChange={setIntelTab}
+                  counts={{
+                    alerts: intel.alerts.length,
+                    booking: intel.flightDest.filter(
+                      (r) => r.lots > 0 || r.signal === "miss"
+                    ).length,
+                  }}
+                />
+              </div>
+              <div className="p-3 sm:p-3.5">
+                {intelTab === "ops" ? (
+                  t.lots === 0 ? (
+                    <EmptyState
+                      {...(mode === "week"
+                        ? formatWeekEmptyCopy(weekLabel)
+                        : {
+                            title: "Không có lô trong kỳ",
+                            description:
+                              "Đổi kỳ / kho / dest / khách, hoặc nhập liệu trên Ops rồi quay lại.",
+                          })}
+                      actionLabel="Về Ops"
+                      onAction={onNavigateOps}
+                    />
+                  ) : (
+                    <Suspense
+                      fallback={
+                        <div className="grid min-h-[12rem] place-items-center rounded-2xl border border-ui-border/60 bg-ui-surface-muted/40 text-sm text-ui-text-muted">
+                          Đang tải biểu đồ…
+                        </div>
+                      }
+                    >
+                      <OpsStatsChartsPanel
+                        byDay={stats.byDay}
+                        byWarehouse={stats.byWarehouse}
+                        byDest={stats.byDest}
+                        onSelectDay={(ymd) => {
+                          setMode("day");
+                          setDayYmd(ymd);
+                          setDetailTab("lots");
+                          setIntelTab("ops");
+                        }}
+                        onSelectWarehouse={(wh) => {
+                          setWarehouse(wh);
+                          setDest("ALL");
+                          setDetailTab("lots");
+                        }}
+                        onSelectDest={(d) => {
+                          setDest(d);
+                          setDetailTab("lots");
+                        }}
+                      />
+                    </Suspense>
+                  )
+                ) : null}
+                {intelTab === "booking" ? (
+                  <OpsStatsBookingPanel
+                    focusYmd={focusYmd}
+                    todayYmd={today}
+                    insights={intel.insights}
+                    flightDest={intel.flightDest}
+                    missLanes={missLanes}
+                    nextWeek={nextWeek}
+                    forecast={forecast}
+                    onFocusYmdChange={(ymd) => setFocusYmdOverride(ymd)}
+                    onSelectFlightDest={(fk, d) => {
+                      setFlightKey(fk === "(chưa có)" ? "ALL" : fk);
+                      setDest(d);
+                      setIntelTab("ops");
+                      setDetailTab("lots");
+                    }}
+                  />
+                ) : null}
+                {intelTab === "market" ? (
+                  <OpsStatsMarketPanel
+                    customerShare={intel.customerShare}
+                    destShare={intel.destShare}
+                    airlineShare={intel.airlineShare}
+                    customerDestTop={intel.customerDestTop}
+                    sparkByCustomerKey={sparkByCustomerKey}
+                    sparkByDestKey={sparkByDestKey}
+                    onSelectCustomer={(key) => {
+                      setCustomerKey(key);
                       setDetailTab("lots");
                     }}
                     onSelectDest={(d) => {
@@ -716,79 +1094,85 @@ export function OpsStatsPage({
                       setDetailTab("lots");
                     }}
                   />
-                </Suspense>
+                ) : null}
+                {intelTab === "alerts" ? (
+                  <OpsStatsAlertList
+                    alerts={intel.alerts}
+                    onSelectAwb={(awb) => {
+                      setLotSearch(awb);
+                      setDetailTab("lots");
+                      setIntelTab("ops");
+                    }}
+                    onOpenOps={(a) =>
+                      openLotFromAlert(a.sessionDate, a.awb, a.shipmentId)
+                    }
+                  />
+                ) : null}
+              </div>
+            </section>
 
-                <section className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
-                  <div className="flex flex-wrap items-end justify-between gap-2 border-b border-ui-border/70 px-3 pt-2 sm:px-4">
-                    <div
-                      className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                      role="tablist"
-                      aria-label="Bảng chi tiết"
-                    >
-                      {DETAIL_TABS.map((tab) => {
-                        const active = detailTab === tab.id;
-                        const count =
-                          tab.id === "lots"
-                            ? filteredLots.length
-                            : tab.id === "day"
-                              ? stats.byDay.length
-                              : tab.id === "warehouse"
-                                ? whAggRows.length
-                                : stats.byDest.length;
-                        return (
-                          <button
-                            key={tab.id}
-                            type="button"
-                            role="tab"
-                            aria-selected={active}
-                            onClick={() => setDetailTab(tab.id)}
-                            className={`relative min-h-10 shrink-0 px-3 text-[12px] font-bold transition ${
-                              active
-                                ? "text-ui-navy"
-                                : "text-ui-text-muted hover:text-ui-text"
-                            }`}
-                          >
-                            {tab.label}
-                            <span
-                              className={`ml-1.5 tabular-nums ${
-                                active ? "text-teal-700" : "text-ui-text-muted/80"
-                              }`}
-                            >
-                              {count}
-                            </span>
-                            {active ? (
-                              <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-ui-primary" />
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {detailTab === "lots" ? (
-                      <input
-                        type="search"
-                        className={`${FIELD} mb-2 w-full max-w-xs`}
-                        placeholder="Tìm AWB / shipper / hàng / khách…"
-                        value={lotSearch}
-                        onChange={(e) => setLotSearch(e.target.value)}
-                      />
-                    ) : (
-                      <div className="mb-2 hidden sm:block sm:h-9" />
-                    )}
-                  </div>
+            {t.lots > 0 ? (
+              <section className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
+                <div className="flex flex-wrap items-end justify-between gap-2 border-b border-ui-border/70 px-3 pt-2 sm:px-4">
+                  <SegmentedTabs
+                    ariaLabel="Bảng chi tiết"
+                    tabs={DETAIL_TABS}
+                    value={detailTab}
+                    onChange={setDetailTab}
+                    counts={{
+                      lots: filteredLots.length,
+                      day: stats.byDay.length,
+                      warehouse: whAggRows.length,
+                      dest: stats.byDest.length,
+                    }}
+                  />
+                  {detailTab === "lots" ? (
+                    <input
+                      type="search"
+                      className={`${FIELD} mb-2 w-full max-w-xs`}
+                      placeholder="Tìm AWB / dest / khách…"
+                      value={lotSearch}
+                      onChange={(e) => setLotSearch(e.target.value)}
+                    />
+                  ) : (
+                    <div className="mb-2 hidden sm:block sm:h-9" />
+                  )}
+                </div>
 
-                  {detailTab === "lots" ? <LotsDetailTable lots={filteredLots} /> : null}
-                  {detailTab === "day" ? (
-                    <AggTable rows={dayAggRows} keyLabel="Ngày phiên" />
-                  ) : null}
-                  {detailTab === "warehouse" ? (
-                    <AggTable rows={whAggRows} keyLabel="Kho" />
-                  ) : null}
-                  {detailTab === "dest" ? (
-                    <AggTable rows={destAggRows} keyLabel="Dest" />
-                  ) : null}
-                </section>
-              </>
-            )}
+                {detailTab === "lots" ? (
+                  <LotsDetailTable
+                    lots={filteredLots}
+                    sort={lotSort}
+                    onSortChange={(key) =>
+                      setLotSort((prev) => toggleLotSort(prev, key))
+                    }
+                    onOpenLot={
+                      onOpenLot
+                        ? (lot) => {
+                            const awb = (lot.shipment.awb || "").trim();
+                            onOpenLot({
+                              sessionYmd:
+                                (lot.shipment.sessionDate || "").trim() || focusYmd,
+                              query:
+                                awb && awb !== "(không AWB)" ? awb : "",
+                              shipmentId: lot.shipment.id,
+                            });
+                          }
+                        : undefined
+                    }
+                  />
+                ) : null}
+                {detailTab === "day" ? (
+                  <AggTable rows={dayAggRows} keyLabel="Ngày phiên" />
+                ) : null}
+                {detailTab === "warehouse" ? (
+                  <AggTable rows={whAggRows} keyLabel="Kho" />
+                ) : null}
+                {detailTab === "dest" ? (
+                  <AggTable rows={destAggRows} keyLabel="Dest" />
+                ) : null}
+              </section>
+            ) : null}
           </div>
         )}
       </AppShell>

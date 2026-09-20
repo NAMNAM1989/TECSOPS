@@ -249,3 +249,61 @@ export function shiftStatsPeriodAnchor(
   }
   return formatLocalSessionDate(addLocalDays(d, delta));
 }
+
+/** Số ngày inclusive trong khoảng YYYY-MM-DD. */
+export function statsRangeDayCount(range: StatsPeriodRange): number {
+  const a = parseSessionDateYmd(range.fromYmd);
+  const b = parseSessionDateYmd(range.toYmd);
+  const ms = b.getTime() - a.getTime();
+  return Math.max(1, Math.round(ms / 86_400_000) + 1);
+}
+
+/**
+ * Kỳ liền trước cùng độ dài / cùng mode (so sánh KPI).
+ * today/day → −1 ngày; week → −7; month/year → lịch; range → lùi bằng số ngày kỳ hiện tại.
+ */
+export function previousStatsPeriodRange(
+  range: StatsPeriodRange,
+  mode: StatsPeriodMode
+): StatsPeriodRange {
+  if (mode === "week") {
+    const prevAnchor = shiftStatsPeriodAnchor("week", range.fromYmd, -1);
+    return weekYmdToRange(prevAnchor) ?? {
+      fromYmd: shiftStatsPeriodAnchor("day", range.fromYmd, -7),
+      toYmd: shiftStatsPeriodAnchor("day", range.toYmd, -7),
+    };
+  }
+  if (mode === "month") {
+    const ym = range.fromYmd.slice(0, 7);
+    const [y, m] = ym.split("-").map(Number);
+    const prev = m === 1 ? `${y! - 1}-12` : `${y}-${String(m! - 1).padStart(2, "0")}`;
+    return monthYmToRange(prev) ?? range;
+  }
+  if (mode === "year") {
+    const y = Number(range.fromYmd.slice(0, 4)) - 1;
+    return yearToRange(y) ?? range;
+  }
+  if (mode === "today" || mode === "day") {
+    const d = shiftStatsPeriodAnchor("day", range.fromYmd, -1);
+    return { fromYmd: d, toYmd: d };
+  }
+  const n = statsRangeDayCount(range);
+  return {
+    fromYmd: formatLocalSessionDate(addLocalDays(parseSessionDateYmd(range.fromYmd), -n)),
+    toYmd: formatLocalSessionDate(addLocalDays(parseSessionDateYmd(range.toYmd), -n)),
+  };
+}
+
+/** % đổi: null nếu không so được (prev=0 và cur>0 → +∞ hiển thị riêng). */
+export function pctDelta(current: number, previous: number): number | null {
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return null;
+  if (previous === 0) return current === 0 ? 0 : null;
+  return Math.round(((current - previous) / previous) * 1000) / 10;
+}
+
+export function formatPctDeltaLabel(delta: number | null, current: number, previous: number): string {
+  if (previous === 0 && current > 0) return "mới";
+  if (delta == null) return "—";
+  if (delta === 0) return "0%";
+  return `${delta > 0 ? "+" : ""}${delta}%`;
+}

@@ -51,6 +51,11 @@ function AuthenticatedApp() {
   const isMobile = useIsMobile();
   const [printJob, setPrintJob] = useState<PrintJob | null>(null);
   const [opsSessionYmd, setOpsSessionYmd] = useState(todayYmd);
+  const [opsDeepLink, setOpsDeepLink] = useState<{
+    sessionYmd: string;
+    query: string;
+    shipmentId?: string;
+  } | null>(null);
   const [cargoCopyApi, setCargoCopyApi] = useState<MobileCargoCopyApi | null>(null);
   const [airlineSyncing, setAirlineSyncing] = useState(false);
 
@@ -168,6 +173,11 @@ function AuthenticatedApp() {
               socketConnected={sync.socketConnected}
               onNavigateOps={() => navigate("ops")}
               onNavigateCustomers={() => navigate("customers")}
+              onOpenLot={(opts) => {
+                setOpsDeepLink(opts);
+                setOpsSessionYmd(opts.sessionYmd);
+                navigate("ops");
+              }}
             />
           ) : route === "scsc-h21" ? (
             <ScscH21CatalogPage onBack={() => navigate("ops")} />
@@ -179,6 +189,8 @@ function AuthenticatedApp() {
               onSessionDateChange={setOpsSessionYmd}
               onRequestPrint={onRequestPrint}
               onCargoCopyApiChange={setCargoCopyApi}
+              deepLink={opsDeepLink}
+              onDeepLinkConsumed={() => setOpsDeepLink(null)}
             />
           )}
         </Suspense>

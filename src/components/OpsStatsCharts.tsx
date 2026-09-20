@@ -65,7 +65,13 @@ function kgTip(value: unknown): string {
 }
 
 /** Xu hướng kg theo ngày phiên. */
-export function OpsStatsDayTrendChart({ rows }: { rows: readonly OpsStatsDayRow[] }) {
+export function OpsStatsDayTrendChart({
+  rows,
+  onSelectDay,
+}: {
+  rows: readonly OpsStatsDayRow[];
+  onSelectDay?: (ymd: string) => void;
+}) {
   const data = useMemo(
     () =>
       rows.map((r) => ({
@@ -96,11 +102,24 @@ export function OpsStatsDayTrendChart({ rows }: { rows: readonly OpsStatsDayRow[
   return (
     <ChartCard
       title="Xu hướng theo ngày"
-      subtitle="Kg thực · DIM · Chargeable"
+      subtitle={
+        onSelectDay
+          ? "Kg thực · DIM · Chargeable · click ngày để lọc"
+          : "Kg thực · DIM · Chargeable"
+      }
       className="lg:col-span-2"
     >
       <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+        <LineChart
+          data={data}
+          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+          style={{ cursor: onSelectDay ? "pointer" : undefined }}
+          onClick={(state) => {
+            const full = (state as { activePayload?: { payload?: { full?: string } }[] })
+              ?.activePayload?.[0]?.payload?.full;
+            if (full && onSelectDay) onSelectDay(full);
+          }}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
           <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fontSize: 11, fill: "#64748b" }} width={44} axisLine={false} tickLine={false} />
@@ -140,7 +159,7 @@ export function OpsStatsDayTrendChart({ rows }: { rows: readonly OpsStatsDayRow[
             stroke={COLORS.actual}
             strokeWidth={2.25}
             dot={false}
-            activeDot={{ r: 4 }}
+            activeDot={{ r: 5 }}
           />
           <Line
             type="monotone"

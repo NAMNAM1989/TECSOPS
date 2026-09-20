@@ -6,6 +6,7 @@ import type {
   OpsStatsTotals,
   OpsStatsWarehouseRow,
 } from "./opsStatsMetrics";
+import type { OpsStatsIntelligence } from "./opsStatsIntelligence";
 import { downloadXlsxBuffer } from "./downloadXlsx";
 import { formatStatsPeriodLabel, type StatsPeriodMode } from "./opsStatsPeriod";
 import { warehouseLabel } from "../constants/warehouses";
@@ -227,6 +228,9 @@ export async function buildOpsStatsWorkbook(opts: {
   byWarehouse?: readonly OpsStatsWarehouseRow[];
   byDest?: readonly OpsStatsDestRow[];
   lots?: readonly OpsStatsLotRow[];
+  intelligence?: OpsStatsIntelligence;
+  /** Nhãn filter phụ (khách/chuyến/status…) ghi sheet Tổng quan */
+  filterMeta?: Record<string, string>;
 }): Promise<Workbook> {
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
@@ -249,6 +253,18 @@ export async function buildOpsStatsWorkbook(opts: {
   meta.addRow(["Chargeable", opts.totals.chargeableKg]);
   meta.addRow(["Δ (CW−Kg)", opts.totals.deltaKg]);
   meta.addRow(["Lô chưa đo DIM", opts.totals.missingDimLots]);
+  if (opts.intelligence) {
+    meta.addRow(["% Volume done", opts.intelligence.volumeDonePct]);
+    meta.addRow(["Focus ngày", opts.intelligence.focusYmd]);
+    meta.addRow(["HHI khách (kg)", opts.intelligence.customerShare.hhiKg]);
+    meta.addRow(["HHI dest (kg)", opts.intelligence.destShare.hhiKg]);
+    meta.addRow(["HHI hãng (kg)", opts.intelligence.airlineShare.hhiKg]);
+  }
+  if (opts.filterMeta) {
+    for (const [k, v] of Object.entries(opts.filterMeta)) {
+      meta.addRow([k, v]);
+    }
+  }
   meta.getColumn(1).width = 18;
   meta.getColumn(2).width = 28;
 
@@ -284,6 +300,115 @@ export async function buildOpsStatsWorkbook(opts: {
     addLotsSheet(wb, opts.lots);
   }
 
+  const intel = opts.intelligence;
+  if (intel) {
+    const booking = wb.addWorksheet("Booking flight-dest", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
+    const bHeader = booking.addRow([
+      "Chuyến",
+      "Dest",
+      "Lô",
+      "Kg",
+      "TB DOW lô",
+      "Surge",
+      "Tín hiệu",
+    ]);
+    styleHeader(bHeader);
+    intel.flightDest.forEach((r, i) => {
+      const row = booking.addRow([
+        r.flightKey,
+        r.dest,
+        r.lots,
+        r.actualKg,
+        r.baselineLots,
+        r.surgeLots,
+        r.signal,
+      ]);
+      paintDataRow(row, i);
+    });
+    booking.columns = [
+      { width: 12 },
+      { width: 8 },
+      { width: 8 },
+      { width: 12 },
+      { width: 12 },
+      { width: 10 },
+      { width: 12 },
+    ];
+
+    const market = wb.addWorksheet("Share khách", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
+    const mHeader = market.addRow(["Khách", "Lô", "Kg", "% lô", "% kg"]);
+    styleHeader(mHeader);
+    intel.customerShare.rows.forEach((r, i) => {
+      const row = market.addRow([r.label, r.lots, r.actualKg, r.shareLots, r.shareKg]);
+      paintDataRow(row, i);
+    });
+    market.columns = [{ width: 28 }, { width: 8 }, { width: 12 }, { width: 10 }, { width: 10 }];
+
+    const destShare = wb.addWorksheet("Share dest", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
+    const dHeader = destShare.addRow(["Dest", "Lô", "Kg", "% lô", "% kg"]);
+    styleHeader(dHeader);
+    intel.destShare.rows.forEach((r, i) => {
+      const row = destShare.addRow([r.label, r.lots, r.actualKg, r.shareLots, r.shareKg]);
+      paintDataRow(row, i);
+    });
+    destShare.columns = [{ width: 12 }, { width: 8 }, { width: 12 }, { width: 10 }, { width: 10 }];
+
+    const airShare = wb.addWorksheet("Share hãng", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
+    const aShareHeader = airShare.addRow(["Hãng", "Lô", "Kg", "% lô", "% kg"]);
+    styleHeader(aShareHeader);
+    intel.airlineShare.rows.forEach((r, i) => {
+      const row = airShare.addRow([r.label, r.lots, r.actualKg, r.shareLots, r.shareKg]);
+      paintDataRow(row, i);
+    });
+    airShare.columns = [{ width: 10 }, { width: 8 }, { width: 12 }, { width: 10 }, { width: 10 }];
+
+    const lane = wb.addWorksheet("Customer x dest", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
+    const lHeader = lane.addRow(["Khách", "Dest", "Lô", "Kg"]);
+    styleHeader(lHeader);
+    intel.customerDestTop.forEach((c, i) => {
+      const row = lane.addRow([c.customerLabel, c.dest, c.lots, c.actualKg]);
+      paintDataRow(row, i);
+    });
+    lane.columns = [{ width: 28 }, { width: 8 }, { width: 8 }, { width: 12 }];
+
+    if (intel.insights.length) {
+      const tip = wb.addWorksheet("Gợi ý booking");
+      tip.addRow(["Focus", intel.focusYmd]);
+      tip.addRow([]);
+      intel.insights.forEach((line) => tip.addRow([line]));
+      tip.getColumn(1).width = 100;
+    }
+
+    if (intel.alerts.length) {
+      const al = wb.addWorksheet("Cảnh báo", {
+        views: [{ state: "frozen", ySplit: 1 }],
+      });
+      const aHeader = al.addRow(["Loại", "AWB", "Ngày", "Mức", "Nội dung"]);
+      styleHeader(aHeader);
+      intel.alerts.forEach((a, i) => {
+        const row = al.addRow([a.kind, a.awb, a.sessionDate, a.severity, a.message]);
+        paintDataRow(row, i, false);
+      });
+      al.columns = [
+        { width: 16 },
+        { width: 16 },
+        { width: 12 },
+        { width: 10 },
+        { width: 48 },
+      ];
+    }
+  }
+
   return wb;
 }
 
@@ -298,6 +423,8 @@ export async function downloadOpsStatsExcel(opts: {
   byWarehouse?: readonly OpsStatsWarehouseRow[];
   byDest?: readonly OpsStatsDestRow[];
   lots?: readonly OpsStatsLotRow[];
+  intelligence?: OpsStatsIntelligence;
+  filterMeta?: Record<string, string>;
 }): Promise<void> {
   const wb = await buildOpsStatsWorkbook(opts);
   const buf = await wb.xlsx.writeBuffer();

@@ -93,6 +93,13 @@ interface AirCargoTrackingProps {
       onCopy: (kind: CargoDayReportCopyKind) => void;
     } | null,
   ) => void;
+  /** Deep-link từ Stats → Ops (ngày phiên + tìm AWB / highlight lô). */
+  deepLink?: {
+    sessionYmd: string;
+    query: string;
+    shipmentId?: string;
+  } | null;
+  onDeepLinkConsumed?: () => void;
 }
 
 export function AirCargoTracking({
@@ -100,6 +107,8 @@ export function AirCargoTracking({
   onSessionDateChange,
   onRequestPrint,
   onCargoCopyApiChange,
+  deepLink = null,
+  onDeepLinkConsumed,
 }: AirCargoTrackingProps) {
   const {
     status,
@@ -129,6 +138,24 @@ export function AirCargoTracking({
   /** Ngày bay (DDMMM) — tách khỏi ô gõ, kết hợp AND với searchQuery. */
   const [flightDateFilter, setFlightDateFilter] = useState("");
   const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!deepLink) return;
+    const ymd = (deepLink.sessionYmd || "").trim();
+    if (ymd) {
+      try {
+        setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(ymd)));
+      } catch {
+        /* ignore invalid ymd */
+      }
+    }
+    setSearchQuery(deepLink.query ?? "");
+    if (deepLink.shipmentId) {
+      setHighlightedShipmentId(deepLink.shipmentId);
+    }
+    onDeepLinkConsumed?.();
+  }, [deepLink, onDeepLinkConsumed]);
+
   const [excelExporting, setExcelExporting] = useState(false);
   const [cargoReportCopying, setCargoReportCopying] = useState(false);
   const [sheetImportOpen, setSheetImportOpen] = useState(false);

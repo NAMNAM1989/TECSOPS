@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { statusLabel } from "../statusStyles";
 import { formatKgTotal } from "../../utils/formatKgTotal";
+import { warehouseLabel } from "../../constants/warehouses";
 import type {
   OpsStatsDestRow,
   OpsStatsDayRow,
@@ -155,7 +156,7 @@ function LotRow({
         {(s.sessionDate || "").trim()}
       </td>
       <td className="px-3.5 py-2 text-[12px] text-ui-text-muted">
-        {s.warehouse.replace("TECS-", "")}
+        {warehouseLabel[s.warehouse] ?? s.warehouse}
       </td>
       <td className="px-3.5 py-2 font-shipment-data text-[12px] font-bold text-ui-awb">
         {s.awb || "—"}

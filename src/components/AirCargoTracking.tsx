@@ -139,23 +139,6 @@ export function AirCargoTracking({
   const [flightDateFilter, setFlightDateFilter] = useState("");
   const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!deepLink) return;
-    const ymd = (deepLink.sessionYmd || "").trim();
-    if (ymd) {
-      try {
-        setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(ymd)));
-      } catch {
-        /* ignore invalid ymd */
-      }
-    }
-    setSearchQuery(deepLink.query ?? "");
-    if (deepLink.shipmentId) {
-      setHighlightedShipmentId(deepLink.shipmentId);
-    }
-    onDeepLinkConsumed?.();
-  }, [deepLink, onDeepLinkConsumed]);
-
   const [excelExporting, setExcelExporting] = useState(false);
   const [cargoReportCopying, setCargoReportCopying] = useState(false);
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
@@ -167,6 +150,7 @@ export function AirCargoTracking({
     id: string;
     warehouse: Warehouse;
     sessionDate: string;
+    query?: string;
   } | null>(null);
   const isMobile = useIsMobile();
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
@@ -226,14 +210,17 @@ export function AirCargoTracking({
     const jump = pendingJumpRef.current;
     const keepJump = Boolean(jump && jump.sessionDate === selectedYmd);
     setStatusFilter("ALL");
-    setSearchQuery("");
     setFlightDateFilter("");
     if (keepJump && jump) {
+      setSearchQuery(jump.query ?? "");
       setActiveWarehouse(jump.warehouse);
-      setHighlightedShipmentId(jump.id);
-      setSelectedId(jump.id);
+      if (jump.id) {
+        setHighlightedShipmentId(jump.id);
+        setSelectedId(jump.id);
+      }
       return;
     }
+    setSearchQuery("");
     setHighlightedShipmentId(null);
     setActiveWarehouse("TECS-TCS");
   }, [selectedYmd]);
@@ -290,6 +277,40 @@ export function AirCargoTracking({
     }, 2400);
   }, []);
 
+  useEffect(() => {
+    if (!deepLink) return;
+    const ymd = (deepLink.sessionYmd || "").trim();
+    const query = (deepLink.query ?? "").trim();
+    const shipmentId = (deepLink.shipmentId || "").trim();
+    const found = shipmentId ? allRows.find((r) => r.id === shipmentId) : undefined;
+    const warehouse = found?.warehouse ?? activeWarehouse;
+    const sessionDate = ymd || selectedYmd;
+
+    pendingJumpRef.current = {
+      id: shipmentId,
+      warehouse,
+      sessionDate,
+      query,
+    };
+
+    if (ymd && ymd !== selectedYmd) {
+      try {
+        setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(ymd)));
+      } catch {
+        setSearchQuery(query);
+        if (shipmentId) applyShipmentJump(shipmentId, warehouse);
+        else setActiveWarehouse(warehouse);
+        pendingJumpRef.current = null;
+      }
+    } else {
+      setSearchQuery(query);
+      if (shipmentId) applyShipmentJump(shipmentId, warehouse);
+      else setActiveWarehouse(warehouse);
+      if (!shipmentId) pendingJumpRef.current = null;
+    }
+    onDeepLinkConsumed?.();
+  }, [deepLink, onDeepLinkConsumed, allRows, selectedYmd, activeWarehouse, applyShipmentJump]);
+
   const scrollToShipmentMatch = useCallback(
     (match: ShipmentSearchMatch) => {
       applyShipmentJump(match.shipment.id, match.shipment.warehouse);
@@ -317,9 +338,16 @@ export function AirCargoTracking({
   useEffect(() => {
     const jump = pendingJumpRef.current;
     if (!jump || jump.sessionDate !== selectedYmd) return;
+    if (!jump.id) {
+      setSearchQuery(jump.query ?? "");
+      setActiveWarehouse(jump.warehouse);
+      pendingJumpRef.current = null;
+      return;
+    }
     const found = viewRows.find((r) => r.id === jump.id);
     if (found) {
       pendingJumpRef.current = null;
+      if (jump.query) setSearchQuery(jump.query);
       applyShipmentJump(found.id, found.warehouse);
       return;
     }

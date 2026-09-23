@@ -276,12 +276,13 @@ export async function buildOpsStatsWorkbook(opts: {
     opts.totals
   );
 
-  if (opts.byWarehouse?.length) {
+  const warehouseRows = (opts.byWarehouse ?? []).filter((r) => r.lots > 0);
+  if (warehouseRows.length) {
     addAggSheet(
       wb,
       "Theo kho",
       "Kho",
-      opts.byWarehouse.map((r) => ({ key: r.label, totals: r })),
+      warehouseRows.map((r) => ({ key: r.label, totals: r })),
       opts.totals
     );
   }

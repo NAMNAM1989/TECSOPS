@@ -2,35 +2,47 @@ import { useCallback, useEffect, useState } from "react";
 
 export type AppRoute = "ops" | "customers" | "stats" | "scsc-h21" | "tcs-h21";
 
-function parseHashRoute(): AppRoute {
-  const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
-  if (raw === "customers" || raw.startsWith("customers/")) return "customers";
-  if (raw === "stats" || raw.startsWith("stats/")) return "stats";
+/** Path hash không gồm query (`#/stats?mode=week` → `stats`). */
+export function hashPath(hash: string): string {
+  const raw = hash.replace(/^#\/?/, "").trim().toLowerCase();
+  return (raw.split(/[?#]/)[0] ?? "").replace(/\/+$/, "");
+}
+
+/** Định tuyến từ hash — nhận cả `#/stats?mode=today`. */
+export function parseAppHashRoute(hash: string): AppRoute {
+  const path = hashPath(hash);
+  if (path === "customers" || path.startsWith("customers/")) return "customers";
+  if (path === "stats" || path.startsWith("stats/")) return "stats";
   // Legacy #/airlines → Ops (catalog lấy từ Supabase, không còn trang riêng)
-  if (raw === "airlines" || raw.startsWith("airlines/") || raw === "hang" || raw.startsWith("hang/")) {
+  if (path === "airlines" || path.startsWith("airlines/") || path === "hang" || path.startsWith("hang/")) {
     return "ops";
   }
   if (
-    raw === "scsc-h21" ||
-    raw.startsWith("scsc-h21/") ||
-    raw === "h21" ||
-    raw.startsWith("h21/") ||
-    raw === "scsc-goods" ||
-    raw.startsWith("scsc-goods/")
+    path === "scsc-h21" ||
+    path.startsWith("scsc-h21/") ||
+    path === "h21" ||
+    path.startsWith("h21/") ||
+    path === "scsc-goods" ||
+    path.startsWith("scsc-goods/")
   ) {
     return "scsc-h21";
   }
   if (
-    raw === "tcs-h21" ||
-    raw.startsWith("tcs-h21/") ||
-    raw === "h21-tcs" ||
-    raw.startsWith("h21-tcs/") ||
-    raw === "tcs-goods" ||
-    raw.startsWith("tcs-goods/")
+    path === "tcs-h21" ||
+    path.startsWith("tcs-h21/") ||
+    path === "h21-tcs" ||
+    path.startsWith("h21-tcs/") ||
+    path === "tcs-goods" ||
+    path.startsWith("tcs-goods/")
   ) {
     return "tcs-h21";
   }
   return "ops";
+}
+
+function parseHashRoute(): AppRoute {
+  if (typeof window === "undefined") return "ops";
+  return parseAppHashRoute(window.location.hash);
 }
 
 function hashFor(route: AppRoute): string {
@@ -57,12 +69,11 @@ export function useHashRoute() {
   }, []);
 
   const navigate = useCallback((next: AppRoute) => {
-    const target = hashFor(next);
-    if (window.location.hash === target) {
+    if (parseAppHashRoute(window.location.hash) === next) {
       setRoute(next);
       return;
     }
-    window.location.hash = target;
+    window.location.hash = hashFor(next);
   }, []);
 
   return { route, navigate };

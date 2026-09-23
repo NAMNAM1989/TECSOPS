@@ -1,5 +1,7 @@
 import type { WarehouseLayoutFilter } from "../constants/warehouses";
 import type { ShipmentStatus } from "../types/shipment";
+import { SHIPMENT_STATUS_ORDER } from "./shipmentWorkflowStatus";
+import { normalizeStatsDest } from "./opsStatsMetrics";
 import type { StatsPeriodMode } from "./opsStatsPeriod";
 
 export type OpsStatsIntelTab = "ops" | "booking" | "market" | "alerts";
@@ -67,7 +69,10 @@ export function parseOpsStatsUrlState(hash: string): Partial<OpsStatsUrlState> {
   const month = sp.get("month");
   if (month && /^\d{4}-\d{2}$/.test(month)) out.monthYm = month;
   const year = sp.get("year");
-  if (year && /^\d{4}$/.test(year)) out.year = Number(year);
+  if (year && /^\d{4}$/.test(year)) {
+    const n = Number(year);
+    if (n >= 1970 && n <= 2100) out.year = n;
+  }
   const from = sp.get("from");
   if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) out.rangeFrom = from;
   const to = sp.get("to");
@@ -78,17 +83,19 @@ export function parseOpsStatsUrlState(hash: string): Partial<OpsStatsUrlState> {
     out.warehouse = wh;
   }
   const dest = sp.get("dest");
-  if (dest) out.dest = dest === "ALL" ? "ALL" : dest;
+  if (dest) out.dest = dest === "ALL" ? "ALL" : normalizeStatsDest(dest);
   const cust = sp.get("cust");
   if (cust) out.customerKey = cust === "ALL" ? "ALL" : cust;
   const flight = sp.get("flight");
   if (flight) out.flightKey = flight === "ALL" ? "ALL" : flight;
 
   const st = sp.get("st");
-  if (st === "ALL" || st === "" || st == null) {
-    if (st === "ALL") out.statuses = "ALL";
-  } else {
-    out.statuses = st.split(",").filter(Boolean) as ShipmentStatus[];
+  if (st === "ALL") {
+    out.statuses = "ALL";
+  } else if (st) {
+    const allowed = new Set<string>(SHIPMENT_STATUS_ORDER);
+    const next = st.split(",").filter((s): s is ShipmentStatus => allowed.has(s));
+    if (next.length > 0) out.statuses = next;
   }
 
   const tab = sp.get("tab");

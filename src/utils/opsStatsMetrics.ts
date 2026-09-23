@@ -1,6 +1,6 @@
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { WarehouseLayoutFilter } from "../constants/warehouses";
-import { WAREHOUSE_ORDER, warehouseLabel } from "../constants/warehouses";
+import { WAREHOUSE_ORDER, normalizeWarehouse, warehouseLabel } from "../constants/warehouses";
 import { filterShipmentsBySessionYmdRange } from "./filterShipmentsBySessionYmd";
 import { resolveShipmentDimWeightKg } from "./volumetricDim";
 
@@ -125,7 +125,7 @@ function filterByWarehouse(
   warehouse: WarehouseLayoutFilter
 ): Shipment[] {
   if (warehouse === "ALL") return [...rows];
-  return rows.filter((r) => r.warehouse === warehouse);
+  return rows.filter((r) => normalizeWarehouse(r.warehouse) === warehouse);
 }
 
 function filterByDest(rows: readonly Shipment[], dest: string | "ALL"): Shipment[] {
@@ -182,7 +182,7 @@ export function computeOpsStats(
     }
     addToTotals(dayBucket, w, pcs);
 
-    const whKey = s.warehouse;
+    const whKey = normalizeWarehouse(s.warehouse);
     let whBucket = byWhMap.get(whKey);
     if (!whBucket) {
       whBucket = emptyTotals();

@@ -11,8 +11,13 @@ import {
   computeSameDowBaseline,
   computeStatusMix,
   computeVolumeDonePct,
+  filterShipmentsForStatsIntel,
+  listFlightOptionsInRows,
+  MISSING_AWB_LABEL,
+  MISSING_FLIGHT_KEY,
   normalizeCustomerKey,
   normalizeFlightKey,
+  shipmentMatchesStatsLotSearch,
   surgeIndex,
 } from "./opsStatsIntelligence";
 
@@ -104,6 +109,26 @@ describe("collectOpsStatsAlerts", () => {
     expect(kinds.has("pending")).toBe(true);
     expect(kinds.has("cutoff_per")).toBe(true);
     expect(kinds.has("flight_date_skew")).toBe(true);
+  });
+});
+
+describe("filter missing flight / AWB search", () => {
+  it("lọc lô thiếu chuyến bằng (chưa có)", () => {
+    const rows = [
+      sample({ id: "1", sessionDate: "2026-09-18", flight: "SQ185" }),
+      sample({ id: "2", sessionDate: "2026-09-18", flight: "" }),
+    ];
+    expect(listFlightOptionsInRows(rows)[0]).toBe(MISSING_FLIGHT_KEY);
+    const missing = filterShipmentsForStatsIntel(rows, { flightKey: MISSING_FLIGHT_KEY });
+    expect(missing.map((r) => r.id)).toEqual(["2"]);
+  });
+
+  it("ô tìm (không AWB) khớp lô trống AWB", () => {
+    const empty = sample({ id: "1", sessionDate: "2026-09-18", awb: "" });
+    const filled = sample({ id: "2", sessionDate: "2026-09-18", awb: "176-11111111" });
+    const ctx = { customers: [] };
+    expect(shipmentMatchesStatsLotSearch(empty, MISSING_AWB_LABEL, ctx)).toBe(true);
+    expect(shipmentMatchesStatsLotSearch(filled, MISSING_AWB_LABEL, ctx)).toBe(false);
   });
 });
 

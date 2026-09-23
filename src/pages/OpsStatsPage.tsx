@@ -4,13 +4,14 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { SyncStatus } from "../hooks/useShipmentSync";
 import type { Shipment, ShipmentStatus } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { WarehouseLayoutFilter } from "../constants/warehouses";
-import { warehouseLabel, WAREHOUSE_ORDER } from "../constants/warehouses";
+import { normalizeWarehouse, warehouseLabel, WAREHOUSE_ORDER } from "../constants/warehouses";
 import {
   AppShell,
   Button,
@@ -33,6 +34,8 @@ import {
   filterShipmentsForStatsIntel,
   listCustomerOptionsInRows,
   listFlightOptionsInRows,
+  MISSING_AWB_LABEL,
+  shipmentMatchesStatsLotSearch,
 } from "../utils/opsStatsIntelligence";
 import {
   computeSevenDayForecast,
@@ -67,10 +70,7 @@ import {
   type OpsStatsUrlState,
 } from "../utils/opsStatsUrlState";
 import { filterShipmentsBySessionYmdRange } from "../utils/filterShipmentsBySessionYmd";
-import {
-  shipmentMatchesSearchQuery,
-  type ShipmentSearchContext,
-} from "../utils/shipmentSearch";
+import { type ShipmentSearchContext } from "../utils/shipmentSearch";
 import { StatsKpiStrip, formatStatsPct } from "../components/opsStats/StatsKpiStrip";
 import { OpsStatsActiveFilterBar } from "../components/opsStats/OpsStatsActiveFilterBar";
 import { OpsStatsBookingPanel } from "../components/opsStats/OpsStatsBookingPanel";
@@ -275,6 +275,14 @@ export function OpsStatsPage({
     return range.toYmd;
   }, [focusYmdOverride, today, range.fromYmd, range.toYmd]);
 
+  const periodKey = `${mode}|${dayYmd}|${weekYmd}|${monthYm}|${year}|${rangeFrom}|${rangeTo}`;
+  const periodKeyRef = useRef(periodKey);
+  useEffect(() => {
+    if (periodKeyRef.current === periodKey) return;
+    periodKeyRef.current = periodKey;
+    setFocusYmdOverride(null);
+  }, [periodKey]);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       replaceStatsHash({
@@ -292,7 +300,7 @@ export function OpsStatsPage({
         statuses,
         intelTab,
         detailTab,
-        focusYmd,
+        focusYmd: focusYmdOverride ?? "",
         sort: serializeLotSortParam(lotSort),
       });
     }, 150);
@@ -312,14 +320,14 @@ export function OpsStatsPage({
     statuses,
     intelTab,
     detailTab,
-    focusYmd,
+    focusYmdOverride,
     lotSort,
   ]);
 
   const inRangeWh = useMemo(() => {
     const inRange = filterShipmentsBySessionYmdRange(rows, range.fromYmd, range.toYmd);
     if (warehouse === "ALL") return inRange;
-    return inRange.filter((r) => r.warehouse === warehouse);
+    return inRange.filter((r) => normalizeWarehouse(r.warehouse) === warehouse);
   }, [rows, range.fromYmd, range.toYmd, warehouse]);
 
   const destOptions = useMemo(
@@ -334,6 +342,29 @@ export function OpsStatsPage({
 
   const customerOptions = useMemo(() => listCustomerOptionsInRows(inRangeWh), [inRangeWh]);
   const flightOptions = useMemo(() => listFlightOptionsInRows(inRangeWh), [inRangeWh]);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (dest !== "ALL" && destOptions.length > 0 && !destOptions.includes(dest)) {
+      setDest("ALL");
+    }
+  }, [ready, dest, destOptions]);
+  useEffect(() => {
+    if (!ready) return;
+    if (
+      customerKey !== "ALL" &&
+      customerOptions.length > 0 &&
+      !customerOptions.some((c) => c.key === customerKey)
+    ) {
+      setCustomerKey("ALL");
+    }
+  }, [ready, customerKey, customerOptions]);
+  useEffect(() => {
+    if (!ready) return;
+    if (flightKey !== "ALL" && flightOptions.length > 0 && !flightOptions.includes(flightKey)) {
+      setFlightKey("ALL");
+    }
+  }, [ready, flightKey, flightOptions]);
 
   const scopedPeriodRows = useMemo(() => {
     let base = inRangeWh;
@@ -370,7 +401,7 @@ export function OpsStatsPage({
       prevRange.toYmd
     );
     if (warehouse !== "ALL") {
-      base = base.filter((r) => r.warehouse === warehouse);
+      base = base.filter((r) => normalizeWarehouse(r.warehouse) === warehouse);
     }
     if (dest !== "ALL") {
       base = base.filter((r) => normalizeStatsDest(r.dest) === dest);
@@ -395,16 +426,18 @@ export function OpsStatsPage({
 
   const historyRows = useMemo(() => {
     let base: Shipment[] =
-      warehouse === "ALL" ? [...rows] : rows.filter((r) => r.warehouse === warehouse);
+      warehouse === "ALL"
+        ? [...rows]
+        : rows.filter((r) => normalizeWarehouse(r.warehouse) === warehouse);
     if (dest !== "ALL") {
       base = base.filter((r) => normalizeStatsDest(r.dest) === dest);
     }
     return filterShipmentsForStatsIntel(base, {
       customerKey,
       flightKey,
-      statuses: "ALL",
+      statuses,
     });
-  }, [rows, warehouse, dest, customerKey, flightKey]);
+  }, [rows, warehouse, dest, customerKey, flightKey, statuses]);
 
   const intel = useMemo(
     () => computeOpsStatsIntelligence(stats.filtered, historyRows, focusYmd, 8),
@@ -462,7 +495,7 @@ export function OpsStatsPage({
     const q = lotSearch.trim();
     if (!q) return stats.lots;
     return stats.lots.filter((lot) =>
-      shipmentMatchesSearchQuery(lot.shipment, q, searchContext)
+      shipmentMatchesStatsLotSearch(lot.shipment, q, searchContext)
     );
   }, [stats.lots, lotSearch, searchContext]);
 
@@ -601,7 +634,7 @@ export function OpsStatsPage({
       const q = awb.trim();
       onOpenLot({
         sessionYmd,
-        query: q && q !== "(không AWB)" ? q : "",
+        query: q && q !== MISSING_AWB_LABEL ? q : "",
         shipmentId,
       });
     },
@@ -776,7 +809,8 @@ export function OpsStatsPage({
                       value={year}
                       onChange={(e) => {
                         const n = Number(e.target.value);
-                        if (Number.isFinite(n)) setYear(n);
+                        if (!Number.isFinite(n)) return;
+                        setYear(Math.min(2100, Math.max(2000, Math.round(n))));
                       }}
                     />
                   </FilterField>
@@ -1070,7 +1104,7 @@ export function OpsStatsPage({
                     forecast={forecast}
                     onFocusYmdChange={(ymd) => setFocusYmdOverride(ymd)}
                     onSelectFlightDest={(fk, d) => {
-                      setFlightKey(fk === "(chưa có)" ? "ALL" : fk);
+                      setFlightKey(fk);
                       setDest(d);
                       setIntelTab("ops");
                       setDetailTab("lots");
@@ -1154,7 +1188,7 @@ export function OpsStatsPage({
                               sessionYmd:
                                 (lot.shipment.sessionDate || "").trim() || focusYmd,
                               query:
-                                awb && awb !== "(không AWB)" ? awb : "",
+                                awb && awb !== MISSING_AWB_LABEL ? awb : "",
                               shipmentId: lot.shipment.id,
                             });
                           }

@@ -2,6 +2,16 @@ import type { Shipment, ShipmentStatus } from "../types/shipment";
 import { flightDateToYmd } from "./bookingDateParse";
 import { normalizeStatsDest, computeShipmentWeightMetrics } from "./opsStatsMetrics";
 import { parseSessionDateYmd } from "./sessionDate";
+import {
+  shipmentMatchesSearchQuery,
+  type ShipmentSearchContext,
+} from "./shipmentSearch";
+
+/** Nhãn lô thiếu mã chuyến — khớp dropdown + click booking. */
+export const MISSING_FLIGHT_KEY = "(chưa có)";
+
+/** Nhãn lô thiếu AWB — khớp alert + ô tìm bảng lô. */
+export const MISSING_AWB_LABEL = "(không AWB)";
 
 /** Trạng thái đã qua / đang ở bước đo volume trở đi. */
 const VOLUME_DONE_OR_LATER = new Set<ShipmentStatus>([
@@ -122,7 +132,7 @@ function isCutoffPer(note: string): boolean {
 export function collectOpsStatsAlerts(rows: readonly Shipment[]): OpsStatsAlert[] {
   const out: OpsStatsAlert[] = [];
   for (const s of rows) {
-    const awb = (s.awb || "").trim() || "(không AWB)";
+    const awb = (s.awb || "").trim() || MISSING_AWB_LABEL;
     const day = (s.sessionDate || "").trim();
     const base = { shipmentId: s.id, sessionDate: day, awb };
 
@@ -290,7 +300,7 @@ export function computeAirlineShares(rows: readonly Shipment[]): {
   const map = new Map<string, { label: string; lots: number; actualKg: number }>();
   for (const s of rows) {
     const fk = normalizeFlightKey(s.flight);
-    const prefix = fk ? airlinePrefixFromFlightKey(fk) : "(chưa có)";
+    const prefix = fk ? airlinePrefixFromFlightKey(fk) : MISSING_FLIGHT_KEY;
     const w = computeShipmentWeightMetrics(s);
     let b = map.get(prefix);
     if (!b) {
@@ -440,7 +450,7 @@ export function computeFlightDestIntelligence(
 
   const todayMap = new Map<string, { flightKey: string; dest: string; lots: number; actualKg: number }>();
   for (const s of focusRows) {
-    const flightKey = normalizeFlightKey(s.flight) || "(chưa có)";
+    const flightKey = normalizeFlightKey(s.flight) || MISSING_FLIGHT_KEY;
     const dest = normalizeStatsDest(s.dest);
     const k = `${flightKey}|${dest}`;
     let b = todayMap.get(k);
@@ -460,7 +470,7 @@ export function computeFlightDestIntelligence(
     const day = (s.sessionDate || "").trim();
     if (!day || day >= focusYmd) continue;
     if (dow != null && sessionDowIndex(day) !== dow) continue;
-    const flightKey = normalizeFlightKey(s.flight) || "(chưa có)";
+    const flightKey = normalizeFlightKey(s.flight) || MISSING_FLIGHT_KEY;
     const dest = normalizeStatsDest(s.dest);
     const k = `${flightKey}|${dest}`;
     let h = histMap.get(k);
@@ -568,14 +578,14 @@ export function buildBookingInsights(opts: {
   for (const r of surges) {
     const pct = Math.round((r.surgeLots - 1) * 100);
     lines.push(
-      `${r.flightKey} ${r.dest}: ${r.lots} lô hôm nay — cao hơn cùng ${dow} TB ~${pct}% (baseline ${r.baselineLots} lô) — cân nhắc tăng booking.`
+      `${r.flightKey} ${r.dest}: ${r.lots} lô ${focusYmd} — cao hơn cùng ${dow} TB ~${pct}% (baseline ${r.baselineLots} lô) — cân nhắc tăng booking.`
     );
   }
 
   const misses = flightDest.filter((r) => r.signal === "miss" && r.baselineLots >= 1).slice(0, 2);
   for (const r of misses) {
     lines.push(
-      `${r.flightKey} ${r.dest}: thường ~${r.baselineLots} lô cùng ${dow} nhưng hôm nay ${r.lots} — rủi ro miss booking / mất share.`
+      `${r.flightKey} ${r.dest}: thường ~${r.baselineLots} lô cùng ${dow} nhưng ${focusYmd} ${r.lots} — rủi ro miss booking / mất share.`
     );
   }
 
@@ -663,11 +673,27 @@ export function listCustomerOptionsInRows(rows: readonly Shipment[]): { key: str
 /** Options chuyến đã normalize. */
 export function listFlightOptionsInRows(rows: readonly Shipment[]): string[] {
   const set = new Set<string>();
+  let hasMissing = false;
   for (const s of rows) {
     const k = normalizeFlightKey(s.flight);
     if (k) set.add(k);
+    else hasMissing = true;
   }
-  return [...set].sort((a, b) => a.localeCompare(b));
+  const out = [...set].sort((a, b) => a.localeCompare(b));
+  if (hasMissing) out.unshift(MISSING_FLIGHT_KEY);
+  return out;
+}
+
+/** Ô tìm bảng lô — `(không AWB)` khớp lô trống AWB. */
+export function shipmentMatchesStatsLotSearch(
+  shipment: Shipment,
+  raw: string,
+  ctx: ShipmentSearchContext
+): boolean {
+  const q = raw.trim();
+  if (!q) return true;
+  if (q === MISSING_AWB_LABEL) return !(shipment.awb || "").trim();
+  return shipmentMatchesSearchQuery(shipment, q, ctx);
 }
 
 /** Filter phụ trợ cho page (customer / flight / status). */
@@ -688,7 +714,12 @@ export function filterShipmentsForStatsIntel(
       if (key !== cust) return false;
     }
     if (flight !== "ALL") {
-      if (normalizeFlightKey(s.flight) !== flight) return false;
+      const fk = normalizeFlightKey(s.flight);
+      if (flight === MISSING_FLIGHT_KEY) {
+        if (fk) return false;
+      } else if (fk !== flight) {
+        return false;
+      }
     }
     if (statuses !== "ALL" && statuses.length > 0) {
       if (!statuses.includes(s.status)) return false;

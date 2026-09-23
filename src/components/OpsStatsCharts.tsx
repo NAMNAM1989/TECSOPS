@@ -349,7 +349,7 @@ export function OpsStatsWarehouseKgChart({ rows }: { rows: readonly OpsStatsWare
   const data = useMemo(
     () =>
       rows.map((r) => ({
-        name: r.label.replace("TECS-", ""),
+        name: r.label,
         actualKg: Math.round(r.actualKg * 1000) / 1000,
         chargeableKg: Math.round(r.chargeableKg * 1000) / 1000,
         deltaKg: Math.round(r.deltaKg * 1000) / 1000,

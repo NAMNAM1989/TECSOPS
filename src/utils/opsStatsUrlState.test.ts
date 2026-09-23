@@ -86,4 +86,12 @@ describe("opsStatsUrlState", () => {
     expect(parsed.statuses).toEqual(["PENDING", "RECEIVED"]);
     expect(parsed.focusYmd).toBe("2026-09-18");
   });
+
+  it("chuẩn hóa dest + bỏ status lạ", () => {
+    const parsed = parseOpsStatsUrlState("#/stats?dest=sin&st=PENDING,NOT_A_STATUS,RECEIVED");
+    expect(parsed.dest).toBe("SIN");
+    expect(parsed.statuses).toEqual(["PENDING", "RECEIVED"]);
+    expect(parseOpsStatsUrlState("#/stats?st=BOGUS").statuses).toBeUndefined();
+    expect(parseOpsStatsUrlState("#/stats?year=0999").year).toBeUndefined();
+  });
 });

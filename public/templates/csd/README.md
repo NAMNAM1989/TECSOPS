@@ -5,6 +5,7 @@
 | `CSD-FD.pdf` | Thai AirAsia | mã **FD**… | `CSD_CARRIER_PROFILES.FD` |
 | `CSD-TG.pdf` | Thai Airways | mã **TG**… | `CSD_CARRIER_PROFILES.TG` |
 | `CSD-MH.pdf` | Malaysia Airlines (maskargo) | mã **MH**… | `CSD_CARRIER_PROFILES.MH` |
+| `CSD-MH.pdf` | MJets Air | mã **WW**… | `CSD_CARRIER_PROFILES.WW` (cùng mẫu MH) |
 | `CSD-QR.pdf` | Qatar Airways | mã **QR**… | `CSD_CARRIER_PROFILES.QR` |
 | `CSD-AK.pdf` | AirAsia | mã **AK**… | `CSD_CARRIER_PROFILES.AK` |
 | `CSD-VU.pdf` | Vietravel Airlines | mã **VU**… | `CSD_CARRIER_PROFILES.VU` |
@@ -39,6 +40,11 @@ Ví dụ: `scsc_vj_97812345675_tín phát.pdf`
 - Mẫu đã in sẵn ACV + Origin SGN + ACC3 footer
 - Ghi mã RA theo kho (`VN/RA3-xxxxx-xx`) — dưới nhãn §1
 - Unique Consignment Identifier = AWB · Contents · DEST · Transfer
+- Tick cố định: **Loose**, **SPX**, **RA/RA3 Regulated Agent**, **XRY/X-ray Machine**
+
+### WW (A4 — cùng mẫu maskargo với MH)
+- File: `CSD-MH.pdf` · chuyến mã **WW**… (MJets Air)
+- Điền và tick giống MH. Hub Transfer gợi ý: **KUL**
 - URL mẫu có `?v=` để tránh cache PDF cũ
 
 ### QR (A4 — QTR-CGO-CSM-001-CSD)

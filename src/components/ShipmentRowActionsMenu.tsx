@@ -28,12 +28,13 @@ const CsdPrintModal = lazy(() =>
 );
 
 const CSD_AIRLINE: Record<
-  "FD" | "TG" | "MH" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5" | "AI" | "MF" | "TH",
+  "FD" | "TG" | "MH" | "WW" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5" | "AI" | "MF" | "TH",
   string
 > = {
   FD: "Thai AirAsia",
   TG: "Thai Airways",
   MH: "Malaysia Airlines",
+  WW: "MJets Air",
   QR: "Qatar Airways",
   AK: "AirAsia",
   VU: "Vietravel Airlines",
@@ -65,12 +66,13 @@ const iconCls = "h-3.5 w-3.5";
 
 function lightweightCsdCarrier(
   row: Pick<Shipment, "flight" | "awb">
-): "FD" | "TG" | "MH" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5" | "AI" | "MF" | "TH" | null {
+): "FD" | "TG" | "MH" | "WW" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5" | "AI" | "MF" | "TH" | null {
   if (awbDigitsKey(row.awb).length !== 11) return null;
   const flight = String(row.flight || "").trim().toUpperCase().replace(/\s+/g, "");
   if (flight.startsWith("FD")) return "FD";
   if (flight.startsWith("TG")) return "TG";
   if (flight.startsWith("MH")) return "MH";
+  if (flight.startsWith("WW")) return "WW";
   if (flight.startsWith("QR")) return "QR";
   if (flight.startsWith("AK")) return "AK";
   if (flight.startsWith("VU")) return "VU";

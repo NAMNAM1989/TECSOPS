@@ -12,6 +12,7 @@ import {
   getCsdCarrierProfile,
   isCsdFdFlight,
   isCsdMhFlight,
+  isCsdWwFlight,
   isCsdAkFlight,
   isCsdQrFlight,
   isCsdTgFlight,
@@ -55,6 +56,8 @@ describe("csdForms", () => {
     expect(isCsdTgFlight("TG621")).toBe(true);
     expect(isCsdTgFlight("tg 621")).toBe(true);
     expect(isCsdMhFlight("MH751")).toBe(true);
+    expect(isCsdWwFlight("WW701")).toBe(true);
+    expect(isCsdWwFlight("MH751")).toBe(false);
     expect(isCsdQrFlight("QR970")).toBe(true);
     expect(isCsdAkFlight("AK512")).toBe(true);
     expect(isCsdVuFlight("VU131")).toBe(true);
@@ -77,6 +80,8 @@ describe("csdForms", () => {
     expect(getCsdCarrierProfile("FD").showTransfer).toBe(true);
     expect(getCsdCarrierProfile("TG").showOrigin).toBe(true);
     expect(getCsdCarrierProfile("MH").showOrigin).toBe(false);
+    expect(getCsdCarrierProfile("WW").templateUrl).toContain("CSD-MH");
+    expect(getCsdCarrierProfile("WW").showTransfer).toBe(true);
     expect(getCsdCarrierProfile("QR").showOrigin).toBe(false);
     expect(getCsdCarrierProfile("AK").showOrigin).toBe(false);
     expect(getCsdCarrierProfile("VU").showOrigin).toBe(false);
@@ -108,6 +113,7 @@ describe("csdForms", () => {
     expect(canPrintCsd({ flight: "FD301", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "TG621", awb: "217-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "MH751", awb: "232-12345675" })).toBe(true);
+    expect(canPrintCsd({ flight: "WW701", awb: "232-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "QR970", awb: "157-66802024" })).toBe(true);
     expect(canPrintCsd({ flight: "AK512", awb: "843-12345675" })).toBe(true);
     expect(canPrintCsd({ flight: "VU131", awb: "759-12345675" })).toBe(true);
@@ -178,6 +184,8 @@ describe("csdForms", () => {
     expect(suggestCsdTransfer("BKK", "FD")).toBe("");
     expect(suggestCsdTransfer("PEN", "MH")).toBe("KUL");
     expect(suggestCsdTransfer("KUL", "MH")).toBe("");
+    expect(suggestCsdTransfer("BKI", "WW")).toBe("KUL");
+    expect(suggestCsdTransfer("KUL", "WW")).toBe("");
     expect(suggestCsdTransfer("BKI", "AK")).toBe("KUL");
     expect(suggestCsdTransfer("KUL", "AK")).toBe("");
     expect(suggestCsdTransfer("JED", "QR")).toBe("DOH");

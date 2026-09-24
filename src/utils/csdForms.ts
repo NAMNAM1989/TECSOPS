@@ -26,6 +26,7 @@ export type CsdCarrier =
   | "FD"
   | "TG"
   | "MH"
+  | "WW"
   | "QR"
   | "AK"
   | "VU"
@@ -107,6 +108,17 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     templateUrl: "/templates/csd/CSD-MH.pdf?v=20260905",
     flightPrefixes: ["MH"],
     /** Origin SGN đã in sẵn trên mẫu maskargo. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["KUL", "PEN", "BKI", "KCH"],
+  },
+  WW: {
+    id: "WW",
+    label: "WW",
+    airlineName: "MJets Air",
+    /** Cùng mẫu maskargo với MH. */
+    templateUrl: "/templates/csd/CSD-MH.pdf?v=20260924",
+    flightPrefixes: ["WW"],
     showOrigin: false,
     showTransfer: true,
     transferPresets: ["KUL", "PEN", "BKI", "KCH"],
@@ -258,6 +270,7 @@ export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   FD: CSD_CARRIER_PROFILES.FD.templateUrl,
   TG: CSD_CARRIER_PROFILES.TG.templateUrl,
   MH: CSD_CARRIER_PROFILES.MH.templateUrl,
+  WW: CSD_CARRIER_PROFILES.WW.templateUrl,
   QR: CSD_CARRIER_PROFILES.QR.templateUrl,
   AK: CSD_CARRIER_PROFILES.AK.templateUrl,
   VU: CSD_CARRIER_PROFILES.VU.templateUrl,
@@ -370,6 +383,11 @@ export function isCsdTgFlight(flight: string | undefined | null): boolean {
 /** Chuyến MH… → Malaysia Airlines (maskargo) CSD. */
 export function isCsdMhFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "MH";
+}
+
+/** Chuyến WW… → MJets Air, cùng mẫu CSD maskargo với MH. */
+export function isCsdWwFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "WW";
 }
 
 /** Chuyến QR… → Qatar Airways CSD. */
@@ -624,7 +642,7 @@ export function normalizeCsdTransfer(raw: string | undefined | null): string {
 
 /**
  * Gợi ý Transit: nhớ lần trước theo hãng;
- * MH/AK → KUL; QR → DOH; SQ/TR → SIN; BI → BWN; EK → DXB; PR → MNL;
+ * MH/WW/AK → KUL; QR → DOH; SQ/TR → SIN; BI → BWN; EK → DXB; PR → MNL;
  * T5 → ASB; AI → DEL; VU/VJ → không gợi ý hub mặc định; FD/TG → BKK.
  */
 export function suggestCsdTransfer(
@@ -637,7 +655,7 @@ export function suggestCsdTransfer(
     .trim()
     .toUpperCase()
     .slice(0, 3);
-  if (carrier === "MH" || carrier === "AK") {
+  if (carrier === "MH" || carrier === "WW" || carrier === "AK") {
     if (d && d !== "KUL") return "KUL";
     return "";
   }
@@ -1031,6 +1049,14 @@ const LAYOUT_MH = {
   /** Cùng hàng với Origin SGN (glyph top ≈313). */
   dest: { x: 270, yTop: 326, size: 14 },
   transfer: { x: 430, yTop: 326, size: 13 },
+  /** Ô Loose ~50.6–57.4 × 274.8–283.4 (cạnh Consolidation). */
+  looseTick: { x: 51.4, yTop: 282.2, size: 8 },
+  /** SPX box ~48.6–58.4 × 395–407. */
+  spxTick: { x: 50.0, yTop: 405.6, size: 10 },
+  /** RA/RA3 box ~120.6–128.6 × 403.6–413.5. */
+  raAgentTick: { x: 121.5, yTop: 412.4, size: 8 },
+  /** XRY box ~269.2–277.2 × 403.6–413.5. */
+  xryTick: { x: 270.1, yTop: 412.4, size: 8 },
 } as const;
 
 /**
@@ -1727,8 +1753,17 @@ export async function fillCsdPdfBytes(
         LAYOUT_FD.transfer.size
       );
     }
-  } else if (carrier === "MH") {
-    /* maskargo A4 — ô trống: ghi RA + AWB + Contents + DEST + Transfer */
+  } else if (carrier === "MH" || carrier === "WW") {
+    /* maskargo A4 — MH và WW dùng chung mẫu. Tick cố định Loose / SPX / RA/RA3 / XRY. */
+    const tick = (
+      slot: { x: number; yTop: number; size: number }
+    ) => {
+      draw("X", slot.x, topYToPdfLibBaseline(pageH, slot.yTop), slot.size);
+    };
+    tick(LAYOUT_MH.looseTick);
+    tick(LAYOUT_MH.spxTick);
+    tick(LAYOUT_MH.raAgentTick);
+    tick(LAYOUT_MH.xryTick);
     const mhRa = formatCsdMhRaCode(raCode);
     if (mhRa) {
       draw(

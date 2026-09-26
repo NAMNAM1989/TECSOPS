@@ -17,6 +17,7 @@ import { registerLookupRoutes } from "./lookupRoutes.mjs";
 import { registerGlobalSearchRoutes } from "./globalSearchRoutes.mjs";
 import { registerScscH21Routes } from "./scscH21Routes.mjs";
 import { registerTcsH21Routes } from "./tcsH21Routes.mjs";
+import { registerExportRoutes } from "./exportRoutes.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
 import {
@@ -254,6 +255,9 @@ if (isDatabaseConfigured()) {
   registerLookupRoutes(app, { requireAuth: appAuth.requireAuth });
   console.info("[api] lookup (Postgres)");
 }
+
+registerExportRoutes(app, { requireAuth: appAuth.requireAuth });
+console.info("[api] v1 export (shipments/customers)");
 
 const distDir = path.join(__dirname, "..", "dist");
 app.use(

@@ -35,6 +35,7 @@ Ví dụ: `scsc_vj_97812345675_tín phát.pdf`
 - §1 `RA {mã}` · §2 AWB · §3 Contents (2 dòng)
 - §4 Origin (mặc định SGN) · §5 DEST · §6 Transfer
 - §14 `RA {mã}` (footer)
+- Tick cố định: **PAX aircraft (SPX)**, **RA**, **XRY/X-ray Machine**
 
 ### MH (A4 — maskargo)
 - Mẫu đã in sẵn ACV + Origin SGN + ACC3 footer

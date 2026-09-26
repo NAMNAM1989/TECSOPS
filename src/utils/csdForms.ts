@@ -1034,6 +1034,12 @@ const LAYOUT_TG = {
   transfer: { x: 410, yTop: 278, size: 13 },
   /** §14 Regulated Entity (footer). */
   footerRa: { x: 35, yTop: 678, size: 10 },
+  /** Ô PAX aircraft (SPX) ~28.6–37.3 × 343.8–352.4. */
+  paxSpxTick: { x: 30.3, yTop: 351.2, size: 8 },
+  /** Ô RA (Received from) ~129.3–137.9 × 391.6–400.3. */
+  receivedRaTick: { x: 131.0, yTop: 399.1, size: 8 },
+  /** Ô XRY/X-ray Machine ~281.0–289.5 × 356.3–364.9. */
+  xryTick: { x: 282.6, yTop: 363.7, size: 8 },
 } as const;
 
 /**
@@ -2284,7 +2290,26 @@ export async function fillCsdPdfBytes(
     if (issuedDate) fit(issuedDate, T.issuedDate);
     if (issuedTime) fit(issuedTime, T.issuedTime);
   } else {
-    /* TG — mẫu A4 trống: ghi §1 RA, §2 AWB, §3 Contents, §4–6, §14 RA */
+    /* TG — mẫu A4 trống: ghi §1 RA, §2 AWB, §3 Contents, §4–6, §14 RA.
+       Tick cố định: PAX aircraft (SPX), RA, XRY/X-ray Machine. */
+    draw(
+      "X",
+      LAYOUT_TG.paxSpxTick.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_TG.paxSpxTick.yTop),
+      LAYOUT_TG.paxSpxTick.size
+    );
+    draw(
+      "X",
+      LAYOUT_TG.receivedRaTick.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_TG.receivedRaTick.yTop),
+      LAYOUT_TG.receivedRaTick.size
+    );
+    draw(
+      "X",
+      LAYOUT_TG.xryTick.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_TG.xryTick.yTop),
+      LAYOUT_TG.xryTick.size
+    );
     if (raLabel) {
       draw(
         raLabel,

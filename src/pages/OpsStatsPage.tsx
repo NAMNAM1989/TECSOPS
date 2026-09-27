@@ -641,9 +641,17 @@ export function OpsStatsPage({
     [onOpenLot]
   );
 
+  const syncStatusMessage = useMemo(() => {
+    if (syncStatus === "loading") return "Đang tải dữ liệu";
+    if (syncStatus === "live" && socketConnected) return "Đồng bộ trực tiếp";
+    if (syncStatus === "offline") return "Mất kết nối máy chủ, đang làm việc offline";
+    return "Đồng bộ hạn chế";
+  }, [syncStatus, socketConnected]);
+
   return (
     <div className="min-h-screen bg-ui-background" data-testid="ops-stats-page">
       <AppShell
+        syncStatusMessage={syncStatusMessage}
         chrome={
           <div className="space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -653,10 +661,10 @@ export function OpsStatsPage({
                 </h1>
                 <span className="text-ui-text-muted">·</span>
                 <div className="min-w-0">
-                  <span className="block text-[13px] font-extrabold tracking-tight text-ui-navy">
+                  <span className="block text-[13px] font-bold tracking-tight text-ui-navy">
                     Thống kê vận hành & booking
                   </span>
-                  <span className="hidden text-[11px] text-ui-text-muted sm:block">
+                  <span className="hidden text-2xs text-ui-text-muted sm:block">
                     Control · Booking intelligence · Share nội bộ
                   </span>
                 </div>
@@ -730,7 +738,7 @@ export function OpsStatsPage({
                 ) : null}
                 {mode === "week" ? (
                   <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+                    <span className="text-2xs font-bold uppercase tracking-wider text-ui-text-muted">
                       Tuần T2–CN
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -778,7 +786,7 @@ export function OpsStatsPage({
                         <Button
                           variant="secondary"
                           size="sm"
-                          className="px-2.5 text-[11px]"
+                          className="px-2.5 text-2xs"
                           onClick={() => setWeekYmd(today)}
                         >
                           Tuần này
@@ -908,7 +916,7 @@ export function OpsStatsPage({
                 </FilterField>
 
                 <div className="flex min-w-0 flex-col gap-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+                  <span className="text-2xs font-bold uppercase tracking-wider text-ui-text-muted">
                     Trạng thái
                   </span>
                   <div
@@ -918,7 +926,7 @@ export function OpsStatsPage({
                     <button
                       type="button"
                       onClick={() => setStatuses("ALL")}
-                      className={`min-h-8 rounded-lg px-2 text-[11px] font-bold transition ${
+                      className={`min-h-8 rounded-lg px-2 text-2xs font-bold transition ${
                         statuses === "ALL"
                           ? "bg-ui-navy text-white shadow-ui-sm"
                           : "border border-ui-border/80 bg-ui-surface text-ui-text-muted hover:text-ui-text"
@@ -934,7 +942,7 @@ export function OpsStatsPage({
                           key={s}
                           type="button"
                           onClick={() => toggleStatus(s)}
-                          className={`min-h-8 rounded-lg px-2 text-[11px] font-bold transition ${
+                          className={`min-h-8 rounded-lg px-2 text-2xs font-bold transition ${
                             active
                               ? "bg-teal-700 text-white shadow-ui-sm"
                               : "border border-ui-border/80 bg-ui-surface text-ui-text-muted hover:text-ui-text"
@@ -1007,23 +1015,23 @@ export function OpsStatsPage({
 
             <div className="flex flex-wrap items-center gap-2 px-0.5">
               {t.missingDimLots > 0 ? (
-                <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-950 ring-1 ring-amber-200/80">
+                <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-2xs font-semibold text-amber-950 ring-1 ring-amber-200/80">
                   {t.missingDimLots} lô chưa đo DIM
                 </span>
               ) : (
-                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-200/80">
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-2xs font-semibold text-emerald-900 ring-1 ring-emerald-200/80">
                   Đủ DIM
                 </span>
               )}
               {intel.statusMix.slice(0, 4).map((m) => (
                 <span
                   key={m.status}
-                  className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-800 ring-1 ring-slate-200/80"
+                  className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-2xs font-semibold text-slate-800 ring-1 ring-slate-200/80"
                 >
                   {statusLabel[m.status] ?? m.status} {m.pct}%
                 </span>
               ))}
-              <span className="text-[11px] text-ui-text-muted">
+              <span className="text-2xs text-ui-text-muted">
                 Chargeable = max(Kg, DIM). Chưa DIM → CW = Kg, Δ = 0.
               </span>
             </div>

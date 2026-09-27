@@ -42,3 +42,13 @@ public/downloads/*.zip
 # Local TCS automation workspace (không ship trong app Ops)
 tcs-awb-automation/
 
+# CSD debug/previews
+public/templates/csd/_*
+
+# Python bytecode
+scripts/__pycache__/
+__pycache__/
+
+# Design briefs
+TECSOPS_REDESIGN_CURSOR.md
+

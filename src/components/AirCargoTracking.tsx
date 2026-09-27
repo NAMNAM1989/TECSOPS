@@ -17,6 +17,13 @@ import {
   filterShipmentsBySessionYmd,
   filterShipmentsBySessionYmdRange,
 } from "../utils/filterShipmentsBySessionYmd";
+import { isAttentionRow } from "../utils/opsAttention";
+import {
+  parseOpsUrlState,
+  serializeOpsUrlState,
+  isOpsHash,
+  type OpsUrlState,
+} from "../utils/opsUrlState";
 import { type StatusFilterValue } from "./StatusFilterBar";
 import {
   WAREHOUSE_ORDER,
@@ -122,21 +129,36 @@ export function AirCargoTracking({
   const toast = useToast();
   const [syncRefreshing, setSyncRefreshing] = useState(false);
 
-  const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
+  const initialUrlStateRef = useRef<Partial<OpsUrlState> | null>(null);
+  if (initialUrlStateRef.current === null) {
+    initialUrlStateRef.current =
+      typeof window !== "undefined" && isOpsHash(window.location.hash)
+        ? parseOpsUrlState(window.location.hash)
+        : {};
+  }
+  const initUrl = initialUrlStateRef.current;
+
+  const [selectedViewDate, setSelectedViewDate] = useState(() => {
+    if (initUrl.d) {
+      const parsed = parseSessionDateYmd(initUrl.d);
+      if (parsed) return parsed;
+    }
+    return startOfLocalDay(new Date());
+  });
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
 
   useEffect(() => {
     onSessionDateChange?.(selectedYmd);
   }, [selectedYmd, onSessionDateChange]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initUrl.lot ?? null);
   const [mobileEditShipment, setMobileEditShipment] = useState<Shipment | null>(null);
   const [mobileEditInitialTab, setMobileEditInitialTab] = useState<"lot" | "notify" | "dim">("lot");
   const [mobileEditFocus, setMobileEditFocus] = useState<MobileEditFocus>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
-  const [activeWarehouse, setActiveWarehouse] = useState<Warehouse>("TECS-TCS");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(initUrl.st ?? "ALL");
+  const [activeWarehouse, setActiveWarehouse] = useState<Warehouse>(initUrl.wh ?? "TECS-TCS");
+  const [searchQuery, setSearchQuery] = useState(initUrl.q ?? "");
   /** Ngày bay (DDMMM) — tách khỏi ô gõ, kết hợp AND với searchQuery. */
-  const [flightDateFilter, setFlightDateFilter] = useState("");
+  const [flightDateFilter, setFlightDateFilter] = useState(initUrl.fd ?? "");
   const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
 
   const [excelExporting, setExcelExporting] = useState(false);
@@ -155,6 +177,74 @@ export function AirCargoTracking({
   const isMobile = useIsMobile();
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
   const isViewingToday = selectedYmd === todayYmd;
+
+  // Đồng bộ state ra URL hash (debounce 300ms)
+  useEffect(() => {
+    if (typeof window === "undefined" || !isOpsHash(window.location.hash)) return;
+
+    const timer = setTimeout(() => {
+      const targetHash = serializeOpsUrlState(
+        {
+          d: selectedYmd,
+          wh: activeWarehouse,
+          st: statusFilter,
+          q: searchQuery,
+          fd: flightDateFilter,
+          lot: selectedId ?? undefined,
+        },
+        {
+          defaultYmd: todayYmd,
+          defaultWarehouse: "TECS-TCS",
+        }
+      );
+
+      if (window.location.hash !== targetHash) {
+        window.history.replaceState(null, "", targetHash);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [
+    selectedYmd,
+    activeWarehouse,
+    statusFilter,
+    searchQuery,
+    flightDateFilter,
+    selectedId,
+    todayYmd,
+  ]);
+
+  // Lắng nghe popstate / back / forward từ trình duyệt
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handlePopState = () => {
+      if (!isOpsHash(window.location.hash)) return;
+      const parsed = parseOpsUrlState(window.location.hash);
+      if (parsed.d && parsed.d !== selectedYmd) {
+        const nextDate = parseSessionDateYmd(parsed.d);
+        if (nextDate) setSelectedViewDate(nextDate);
+      }
+      if (parsed.wh && parsed.wh !== activeWarehouse) {
+        setActiveWarehouse(parsed.wh);
+      }
+      if (parsed.st && parsed.st !== statusFilter) {
+        setStatusFilter(parsed.st);
+      }
+      if (parsed.q !== undefined && parsed.q !== searchQuery) {
+        setSearchQuery(parsed.q);
+      }
+      if (parsed.fd !== undefined && parsed.fd !== flightDateFilter) {
+        setFlightDateFilter(parsed.fd);
+      }
+      if (parsed.lot !== undefined && parsed.lot !== selectedId) {
+        setSelectedId(parsed.lot || null);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [selectedYmd, activeWarehouse, statusFilter, searchQuery, flightDateFilter, selectedId]);
 
   const allRows = state?.rows ?? EMPTY_SHIPMENT_ROWS;
   const viewRows = useMemo(
@@ -182,10 +272,13 @@ export function AirCargoTracking({
 
   const statusFilteredRows = useMemo(() => {
     return viewRows.filter((r) => {
-      if (statusFilter !== "ALL" && r.status !== (statusFilter as ShipmentStatus)) return false;
-      return true;
+      if (statusFilter === "ALL") return true;
+      if (statusFilter === "attention") {
+        return isAttentionRow(r, viewRows, selectedYmd);
+      }
+      return r.status === (statusFilter as ShipmentStatus);
     });
-  }, [viewRows, statusFilter]);
+  }, [viewRows, statusFilter, selectedYmd]);
 
   const searchActive =
     searchQuery.trim().length > 0 || Boolean(flightDateFilter);
@@ -722,12 +815,29 @@ export function AirCargoTracking({
     />
   );
 
+  const syncStatusMessage = useMemo(() => {
+    if (status === "live" && socketConnected) return "Đồng bộ trực tiếp";
+    if (status === "offline") return "Mất kết nối máy chủ, đang làm việc offline";
+    return "Đồng bộ hạn chế";
+  }, [status, socketConnected]);
+
   return (
-    <AppShell chrome={chrome}>
+    <AppShell chrome={chrome} syncStatusMessage={syncStatusMessage}>
       {status === "offline" ? (
-        <div className="mb-2 md:block hidden">
-          <Banner tone="warning" title="Chỉ máy này">
-            Không kết nối máy chủ. Thay đổi vẫn lưu trên trình duyệt; sẽ đồng bộ khi có mạng lại.
+        <div className="mb-2">
+          <Banner
+            tone={pendingOfflineCount >= 400 ? "danger" : "warning"}
+            title={pendingOfflineCount >= 400 ? "Cảnh báo: Sắp đầy hàng đợi offline" : "Chỉ máy này (Offline)"}
+          >
+            {pendingOfflineCount >= 400
+              ? `Hàng đợi offline đã đạt ${pendingOfflineCount}/500 thay đổi. Hãy kết nối mạng ngay để tránh mất dữ liệu!`
+              : "Không kết nối máy chủ. Thay đổi vẫn lưu trên trình duyệt; sẽ đồng bộ khi có mạng lại."}
+          </Banner>
+        </div>
+      ) : pendingOfflineCount >= 400 ? (
+        <div className="mb-2">
+          <Banner tone="danger" title="Cảnh báo: Sắp đầy hàng đợi offline">
+            Hàng đợi offline đã đạt {pendingOfflineCount}/500 thay đổi. Hãy kết nối mạng ngay để tránh mất dữ liệu!
           </Banner>
         </div>
       ) : null}

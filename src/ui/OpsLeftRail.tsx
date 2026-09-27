@@ -125,7 +125,7 @@ export function OpsLeftRail({
       data-testid="ops-left-rail"
     >
       <div
-        className="grid h-12 w-12 select-none place-items-center rounded-xl bg-ui-navy text-center text-[10px] font-bold leading-tight tracking-wide text-white shadow-[inset_0_-2px_0_#0D9488] transition-transform duration-300 ease-fluid hover:scale-105"
+        className="grid h-12 w-12 select-none place-items-center rounded-xl bg-ui-navy text-center text-2xs font-bold leading-tight tracking-wide text-white shadow-[inset_0_-2px_0_#0D9488] transition-transform duration-300 ease-fluid hover:scale-105"
         title="AirCargo_OPS"
         data-testid="brand-mark"
       >
@@ -155,7 +155,7 @@ export function OpsLeftRail({
                 if (id === "scsc-h21") onPrefetchScscH21?.();
                 if (id === "tcs-h21") onPrefetchTcsH21?.();
               }}
-              className={`group btn-kinetic relative flex min-h-11 w-full select-none touch-manipulation flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
+              className={`group btn-kinetic relative flex min-h-11 w-full select-none touch-manipulation flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-2xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
                 isActive
                   ? emphasize
                     ? "bg-teal-500/18 text-teal-800 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.32)]"
@@ -188,7 +188,7 @@ export function OpsLeftRail({
               </span>
               <span
                 className={`max-w-full text-center leading-tight transition-colors duration-150 ${
-                  emphasize ? "font-extrabold tracking-tight" : ""
+                  emphasize ? "font-bold tracking-tight" : ""
                 }`}
               >
                 {label}
@@ -207,9 +207,9 @@ export function OpsLeftRail({
             aria-label="Đồng bộ hãng bay từ Supabase"
             disabled={airlineSyncing}
             onClick={onSyncAirlines}
-            className="btn-kinetic flex min-h-11 w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-[9px] font-semibold text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:opacity-50"
+            className="btn-kinetic flex min-h-11 w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-2xs font-semibold text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:opacity-50"
           >
-            <IconAirlineSync className={`h-5 w-5 ${airlineSyncing ? "animate-spin" : ""}`} />
+            <IconAirlineSync className={`h-5 w-5 ${airlineSyncing ? "animate-spin motion-reduce:animate-none" : ""}`} />
             <span className="leading-tight">{airlineSyncing ? "Đang…" : "Hãng"}</span>
           </button>
         </div>

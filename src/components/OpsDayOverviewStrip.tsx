@@ -8,6 +8,7 @@ import { WarehouseGridPicker } from "./WarehouseGridPicker";
 type Props = {
   selectedYmd: string;
   rows: readonly Shipment[];
+  allRows?: readonly Shipment[];
   activeWarehouse: Warehouse;
   onSelectWarehouse: (wh: Warehouse) => void;
   highlightWarehouses?: readonly Warehouse[];
@@ -28,10 +29,11 @@ function CompactKpi({
   label: string;
   value: string | number;
   active?: boolean;
-  tone?: "default" | "danger";
+  tone?: "default" | "danger" | "success";
   onClick?: () => void;
 }) {
   const isDanger = tone === "danger";
+  const isSuccess = tone === "success";
   const Tag = onClick ? "button" : "span";
 
   return (
@@ -44,23 +46,27 @@ function CompactKpi({
         active
           ? isDanger
             ? "border-rose-500 bg-rose-500/15 shadow-sm text-rose-800"
-            : "border-teal-500/45 bg-teal-500/10 shadow-sm"
+            : isSuccess
+              ? "border-emerald-500 bg-emerald-500/15 shadow-sm text-emerald-800"
+              : "border-teal-500/45 bg-teal-500/10 shadow-sm"
           : isDanger
             ? "border-rose-300 bg-rose-50/70 text-rose-800 hover:bg-rose-100 hover:border-rose-400"
-            : "border-ui-border/80 bg-ui-surface hover:border-teal-500/30 hover:shadow-ui-sm hover:-translate-y-0.5"
+            : isSuccess
+              ? "border-emerald-200/80 bg-emerald-50/50 text-emerald-800 hover:bg-emerald-100/60"
+              : "border-ui-border/80 bg-ui-surface hover:border-teal-500/30 hover:shadow-ui-sm"
       }`}
       title={`${label}: ${value}`}
     >
       <span
         className={`text-2xs font-bold uppercase leading-none tracking-wide ${
-          isDanger ? "text-rose-700" : "text-ui-text-muted"
+          isDanger ? "text-rose-700" : isSuccess ? "text-emerald-700" : "text-ui-text-muted"
         }`}
       >
         {label}
       </span>
       <span
         className={`font-mono text-[13px] font-semibold tabular-nums leading-none ${
-          isDanger ? "text-rose-800 font-bold" : "text-ui-navy"
+          isDanger ? "text-rose-800 font-bold" : isSuccess ? "text-emerald-800" : "text-ui-navy"
         }`}
       >
         {value}
@@ -73,6 +79,7 @@ function CompactKpi({
 export function OpsDayOverviewStrip({
   selectedYmd,
   rows,
+  allRows,
   activeWarehouse,
   onSelectWarehouse,
   highlightWarehouses = [],
@@ -84,8 +91,8 @@ export function OpsDayOverviewStrip({
 }: Props) {
   const { totals } = useMemo(() => computeOpsDayOverview(rows), [rows]);
   const attentionCount = useMemo(
-    () => countAttentionRows(rows as Shipment[], rows as Shipment[], selectedYmd),
-    [rows, selectedYmd]
+    () => countAttentionRows(rows as Shipment[], (allRows ?? rows) as Shipment[], selectedYmd),
+    [rows, allRows, selectedYmd]
   );
   const isMobile = variant === "mobile";
   const kgLabel = formatKgTotal(totals.kg);
@@ -100,15 +107,13 @@ export function OpsDayOverviewStrip({
         <CompactKpi label={`Lô${filterHint}`} value={totals.lots} active={filtersActive} />
         <CompactKpi label="PCS" value={totals.pcs} />
         <CompactKpi label="KG" value={kgLabel} />
-        {attentionCount > 0 ? (
-          <CompactKpi
-            label="Cần xử lý"
-            value={`⚠ ${attentionCount}`}
-            tone="danger"
-            active={attentionActive}
-            onClick={onSelectAttention}
-          />
-        ) : null}
+        <CompactKpi
+          label="Cần xử lý"
+          value={attentionCount > 0 ? `⚠ ${attentionCount}` : "0 ✓"}
+          tone={attentionCount > 0 ? "danger" : "success"}
+          active={attentionActive}
+          onClick={onSelectAttention}
+        />
         <span className="mx-0.5 h-5 w-px shrink-0 bg-ui-border/70" aria-hidden />
         <WarehouseGridPicker
           rows={rows}
@@ -154,12 +159,12 @@ export function OpsDayOverviewStrip({
           {totals.pcs}
           <span className="mx-0.5 text-ui-border">·</span>
           {kgLabel}
+          <span className="mx-0.5 text-ui-border">·</span>
           {attentionCount > 0 ? (
-            <>
-              <span className="mx-0.5 text-ui-border">·</span>
-              <span className="text-rose-700 font-bold">⚠ {attentionCount}</span>
-            </>
-          ) : null}
+            <span className="text-rose-700 font-bold">⚠ {attentionCount}</span>
+          ) : (
+            <span className="text-emerald-700 font-semibold">0 ✓</span>
+          )}
         </span>
       </div>
 

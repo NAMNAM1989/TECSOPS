@@ -76,6 +76,9 @@ type Props = {
   ready: boolean;
   syncStatus: SyncStatus;
   socketConnected: boolean;
+  pendingOfflineCount?: number;
+  lastSyncedAt?: number | null;
+  onRefresh?: () => void;
   /** max(ops_customers.synced_at) — không lấy lots. */
   customersMaxSyncedAt?: string | null;
   onSave: (customers: CustomerDirectoryEntry[]) => Promise<void>;
@@ -195,6 +198,9 @@ export function CustomersPage({
   ready,
   syncStatus,
   socketConnected,
+  pendingOfflineCount,
+  lastSyncedAt,
+  onRefresh,
   customersMaxSyncedAt = null,
   onSave,
   onBack,
@@ -245,13 +251,18 @@ export function CustomersPage({
   );
 
   /** Chỉ ops_customers — ẩn nếu thiếu/null, không trộn lots. */
-  const customersSyncPhrase = useMemo(() => {
-    const at = resolveCustomersSyncedAtMs({
+  const customersSyncedAtMs = useMemo(() => {
+    return resolveCustomersSyncedAtMs({
       customers: initial,
       customersMaxSyncedAt,
     });
-    return formatSyncedPhrase(at);
   }, [initial, customersMaxSyncedAt]);
+
+  const effectiveSyncedAt = lastSyncedAt ?? customersSyncedAtMs;
+
+  const customersSyncPhrase = useMemo(() => {
+    return formatSyncedPhrase(customersSyncedAtMs);
+  }, [customersSyncedAtMs]);
 
   useEffect(() => {
     if (!ready) return;
@@ -742,31 +753,44 @@ export function CustomersPage({
               ← Quay lại
             </Button>
             <div className="min-w-0 flex-1">
-              <h1 className="m-0 truncate text-base font-extrabold text-ui-navy">
+              <h1 className="m-0 truncate text-base font-bold text-ui-navy">
                 {selected
                   ? normalizeCustomerNameInput(selected.name) || "Khách hàng"
                   : "Khách hàng"}
               </h1>
               {selected ? (
-                <p className="mt-0.5 truncate font-mono text-[11px] font-semibold text-ui-text-muted">
+                <p className="mt-0.5 truncate font-mono text-2xs font-semibold text-ui-text-muted">
                   {customerDirectoryListCode(selected)}
                 </p>
               ) : null}
             </div>
-            <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
+            <SyncStatusPill
+              status={syncStatus}
+              socketConnected={socketConnected}
+              pendingOfflineCount={pendingOfflineCount}
+              lastSyncedAt={effectiveSyncedAt}
+              onRefresh={onRefresh}
+            />
           </div>
         ) : isMobile ? (
           <>
             <div className="flex items-center gap-2 px-3 py-2.5">
               <div className="min-w-0 flex-1">
-                <h1 className="m-0 flex items-center gap-1.5 text-base font-extrabold tracking-tight text-ui-navy">
+                <h1 className="m-0 flex items-center gap-1.5 text-base font-bold tracking-tight text-ui-navy">
                   <Wordmark size="sm" />
                   <span className="text-ui-text-muted">·</span>
                   <span>Khách hàng</span>
                 </h1>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-ui-text-muted">
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-2xs text-ui-text-muted">
                   <span className="font-medium">{countLabel}</span>
-                  <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
+                  <SyncStatusPill
+                    status={syncStatus}
+                    socketConnected={socketConnected}
+                    pendingOfflineCount={pendingOfflineCount}
+                    lastSyncedAt={effectiveSyncedAt}
+                    onRefresh={onRefresh}
+                    compact
+                  />
                   {customersSyncPhrase ? (
                     <span data-testid="customers-sync-stamp">{customersSyncPhrase}</span>
                   ) : null}
@@ -790,14 +814,20 @@ export function CustomersPage({
               ← Ops
             </Button>
             <div className="min-w-0 flex-1">
-              <h1 className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-extrabold tracking-tight text-ui-navy sm:text-lg">
+              <h1 className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-bold tracking-tight text-ui-navy sm:text-lg">
                 <span>Khách hàng</span>
                 <span className="text-[12px] font-semibold text-ui-text-muted sm:text-[13px]">
                   · {countLabel}
                 </span>
               </h1>
-              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ui-text-muted">
-                <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs text-ui-text-muted">
+                <SyncStatusPill
+                  status={syncStatus}
+                  socketConnected={socketConnected}
+                  pendingOfflineCount={pendingOfflineCount}
+                  lastSyncedAt={effectiveSyncedAt}
+                  onRefresh={onRefresh}
+                />
                 {customersSyncPhrase ? (
                   <span
                     className="sr-only"
@@ -876,7 +906,7 @@ export function CustomersPage({
                 key={id}
                 type="button"
                 onClick={() => setTypeFilter(id)}
-                className={`inline-flex min-h-9 shrink-0 touch-manipulation items-center rounded-full px-3 text-[11px] font-bold transition ${
+                className={`inline-flex min-h-9 shrink-0 touch-manipulation items-center rounded-full px-3 text-2xs font-bold transition ${
                   typeFilter === id
                     ? "bg-ui-primary text-white shadow-ui-sm"
                     : "bg-ui-surface-muted text-ui-text-muted ring-1 ring-ui-border/80"
@@ -888,7 +918,7 @@ export function CustomersPage({
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-1" data-testid="cust-actions-bar">
             <span
-              className={`hidden text-[10px] font-bold sm:inline ${
+              className={`hidden text-2xs font-bold sm:inline ${
                 dirty ? "text-amber-700" : "text-emerald-700"
               }`}
               data-testid="sync-status"
@@ -947,7 +977,7 @@ export function CustomersPage({
                       key={id}
                       type="button"
                       onClick={() => setTypeFilter(id)}
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold transition ${
+                      className={`rounded-full px-2 py-0.5 text-2xs font-bold transition ${
                         typeFilter === id
                           ? "bg-ui-primary text-white shadow-ui-sm"
                           : "bg-ui-surface-muted text-ui-text-muted ring-1 ring-ui-border/80 hover:text-ui-text"
@@ -984,20 +1014,20 @@ export function CustomersPage({
                       {normalizeCustomerNameInput(c.name) || "Chưa đặt tên"}
                     </span>
                     <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                      <span className="font-mono text-[10px] font-semibold uppercase text-ui-text-muted">
+                      <span className="font-mono text-2xs font-semibold uppercase text-ui-text-muted">
                         {customerDirectoryListCode(c)}
                       </span>
-                      <span className="rounded-full bg-ui-surface-muted px-1.5 py-px text-[9px] font-bold text-ui-text-muted">
+                      <span className="rounded-full bg-ui-surface-muted px-1.5 py-px text-2xs font-bold text-ui-text-muted">
                         {typeLabel(c.customerType)}
                       </span>
                       {badge ? (
-                        <span className="rounded-full bg-teal-50 px-1.5 py-px text-[9px] font-bold text-teal-800 ring-1 ring-teal-200/80">
+                        <span className="rounded-full bg-teal-50 px-1.5 py-px text-2xs font-bold text-teal-800 ring-1 ring-teal-200/80">
                           {badge}
                         </span>
                       ) : null}
                     </span>
                     {phone ? (
-                      <span className="mt-0.5 block truncate text-[10px] tabular-nums text-ui-text-muted">
+                      <span className="mt-0.5 block truncate text-2xs tabular-nums text-ui-text-muted">
                         {phone}
                       </span>
                     ) : null}
@@ -1039,7 +1069,7 @@ export function CustomersPage({
                           role="tab"
                           aria-selected={profileTab === id}
                           onClick={() => setProfileTab(id)}
-                          className={`min-h-10 flex-1 touch-manipulation rounded-lg px-2 text-[12px] font-bold transition sm:min-h-9 sm:text-[11px] ${
+                          className={`min-h-10 flex-1 touch-manipulation rounded-lg px-2 text-[12px] font-bold transition sm:min-h-9 sm:text-2xs ${
                             profileTab === id
                               ? "bg-ui-primary text-white shadow-ui-sm"
                               : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
@@ -1061,7 +1091,7 @@ export function CustomersPage({
                         <section className="rounded-2xl border border-ui-border/90 bg-ui-surface p-3.5 shadow-ui-md sm:p-4">
                           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                             <label className="col-span-1 block">
-                              <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                              <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
                                 Mã khách
                               </span>
                               <input
@@ -1090,7 +1120,7 @@ export function CustomersPage({
                               />
                             </label>
                             <label className="block">
-                              <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                              <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
                                 Tên tắt
                               </span>
                               <input
@@ -1112,7 +1142,7 @@ export function CustomersPage({
                               />
                             </label>
                             <label className="col-span-2 block sm:col-span-1">
-                              <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                              <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
                                 Loại
                               </span>
                               <select
@@ -1132,7 +1162,7 @@ export function CustomersPage({
                               </select>
                             </label>
                             <label className="col-span-2 block sm:col-span-3">
-                              <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                              <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
                                 Tên khách
                               </span>
                               <input
@@ -1160,7 +1190,7 @@ export function CustomersPage({
                               />
                             </label>
                             <label className="col-span-2 block sm:col-span-1">
-                              <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                              <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
                                 Đơn giá (VND/kg)
                               </span>
                               <input
@@ -1177,15 +1207,15 @@ export function CustomersPage({
                           </div>
 
                           <div className="mt-3 border-t border-ui-border/70 pt-3">
-                            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+                            <p className="mb-1.5 text-2xs font-bold uppercase tracking-wider text-ui-text-muted">
                               Liên hệ
                             </p>
-                            <p className="mb-2 text-[10px] leading-snug text-ui-text-muted">
+                            <p className="mb-2 text-2xs leading-snug text-ui-text-muted">
                               Đồng bộ với Người gửi mặc định · dùng tìm kiếm &amp; điền OPS
                             </p>
                             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                               <label className="col-span-2 block sm:col-span-1">
-                                <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
                                   SĐT
                                 </span>
                                 <input
@@ -1207,7 +1237,7 @@ export function CustomersPage({
                                 />
                               </label>
                               <label className="col-span-2 block sm:col-span-1">
-                                <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
                                   Email
                                 </span>
                                 <input
@@ -1229,7 +1259,7 @@ export function CustomersPage({
                                 />
                               </label>
                               <label className="col-span-2 block sm:col-span-1">
-                                <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
                                   MST
                                 </span>
                                 <input
@@ -1249,7 +1279,7 @@ export function CustomersPage({
                                 />
                               </label>
                               <label className="col-span-2 block sm:col-span-3">
-                                <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+                                <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
                                   Địa chỉ
                                 </span>
                                 <textarea
@@ -1277,10 +1307,10 @@ export function CustomersPage({
                           className="rounded-xl border border-red-300/80 bg-gradient-to-br from-red-50 to-rose-50/80 p-3.5 shadow-ui-sm"
                           data-testid="cust-danger-zone"
                         >
-                          <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-900">
+                          <p className="text-2xs font-bold uppercase tracking-wider text-red-900">
                             Vùng nguy hiểm
                           </p>
-                          <p className="mt-1 text-[11px] leading-relaxed text-red-900/75">
+                          <p className="mt-1 text-2xs leading-relaxed text-red-900/75">
                             Xóa khách khỏi danh bạ. Thao tác cần xác nhận và bấm Lưu để ghi nhận.
                           </p>
                           <Button
@@ -1338,7 +1368,7 @@ export function CustomersPage({
                     className="sticky bottom-0 z-20 border-t border-amber-200/90 bg-amber-50/95 px-3 py-2.5 pb-[max(0.65rem,calc(4.25rem+env(safe-area-inset-bottom)))] sm:hidden"
                     data-testid="customers-dirty-footer"
                   >
-                    <p className="mb-1.5 text-[11px] font-semibold text-amber-950">
+                    <p className="mb-1.5 text-2xs font-semibold text-amber-950">
                       {saving ? "Đang lưu…" : "Có thay đổi chưa lưu"}
                     </p>
                     <div className="flex gap-2">

@@ -118,12 +118,12 @@ export function H21CargoFamilyKanban({
   return (
     <div className="w-full">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-1">
-        <span className="text-[11px] font-semibold text-ui-text-muted">
+        <span className="text-2xs font-semibold text-ui-text-muted">
           {lockedToCustomer
             ? "Nguồn hàng tờ khai · Data KH + nhóm"
             : "Tờ khai theo nhóm hàng"}
         </span>
-        <span className="text-[10px] text-ui-text-muted">
+        <span className="text-2xs text-ui-text-muted">
           {lockedToCustomer
             ? "Pool khóa Data KH — chọn nhóm (TP / đông lạnh…) trong list đã up."
             : "Data KH = pool SP gán trên trang Danh mục H21 theo kho."}
@@ -131,18 +131,18 @@ export function H21CargoFamilyKanban({
       </div>
 
       {lockedToCustomer ? (
-        <div className="mb-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-300/80 bg-emerald-50 px-2.5 py-1.5 text-[11px] text-emerald-950">
-          <span className="inline-flex items-center gap-1 font-extrabold">
+        <div className="mb-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-300/80 bg-emerald-50 px-2.5 py-1.5 text-2xs text-emerald-950">
+          <span className="inline-flex items-center gap-1 font-bold">
             <span aria-hidden>👤</span>
             Data KH
           </span>
-          <span className="rounded-full bg-emerald-700 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white">
+          <span className="rounded-full bg-emerald-700 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide text-white">
             Khóa
           </span>
           <span className="text-emerald-900/90">
             {customerLabel?.trim() || "—"} · {customerPresetCount} SP
           </span>
-          <span className="text-[10px] text-emerald-800/80">
+          <span className="text-2xs text-emerald-800/80">
             — chọn nhóm bên dưới để lọc / tạo ngẫu nhiên cùng loại
           </span>
         </div>
@@ -191,7 +191,7 @@ export function H21CargoFamilyKanban({
                 </span>
                 {suggested ? (
                   <span
-                    className={`rounded px-1 text-[8px] font-bold uppercase tracking-wide ${
+                    className={`rounded px-1 text-2xs font-bold uppercase tracking-wide ${
                       selected ? "bg-white/20" : "bg-emerald-100 text-emerald-800"
                     }`}
                   >
@@ -199,9 +199,9 @@ export function H21CargoFamilyKanban({
                   </span>
                 ) : null}
               </div>
-              <div className="mt-1 text-[11px] font-extrabold leading-tight">{lane.title}</div>
+              <div className="mt-1 text-2xs font-bold leading-tight">{lane.title}</div>
               <div
-                className={`mt-0.5 text-[9px] leading-tight ${
+                className={`mt-0.5 text-2xs leading-tight ${
                   selected ? "opacity-90" : "text-ui-text-muted"
                 }`}
               >

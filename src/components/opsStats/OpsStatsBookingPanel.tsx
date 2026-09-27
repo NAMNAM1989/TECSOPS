@@ -66,7 +66,7 @@ export function OpsStatsBookingPanel({
     <div className="space-y-3" data-testid="stats-booking-panel">
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+          <span className="text-2xs font-bold uppercase tracking-wider text-ui-text-muted">
             Ngày focus (baseline DOW)
           </span>
           <input
@@ -82,20 +82,20 @@ export function OpsStatsBookingPanel({
         {!isToday ? (
           <button
             type="button"
-            className="min-h-9 rounded-lg border border-ui-border/80 bg-ui-surface px-2.5 text-[11px] font-bold text-ui-navy hover:bg-slate-50"
+            className="min-h-9 rounded-lg border border-ui-border/80 bg-ui-surface px-2.5 text-2xs font-bold text-ui-navy hover:bg-slate-50"
             onClick={() => onFocusYmdChange?.(todayYmd)}
           >
             Hôm nay
           </button>
         ) : null}
-        <p className="pb-1.5 text-[11px] text-ui-text-muted">
+        <p className="pb-1.5 text-2xs text-ui-text-muted">
           Baseline = TB cùng weekday · tối đa 8 tuần trước focus
         </p>
       </div>
 
       {insights.length > 0 ? (
         <section className="rounded-2xl border border-teal-200/70 bg-teal-50/40 px-3.5 py-3 sm:px-4">
-          <h3 className="m-0 text-[12px] font-extrabold uppercase tracking-wider text-teal-900">
+          <h3 className="m-0 text-[12px] font-bold uppercase tracking-wider text-teal-900">
             Gợi ý booking · {focusYmd}
           </h3>
           <ul className="mb-0 mt-2 list-disc space-y-1.5 pl-4 text-[13px] text-teal-950">
@@ -113,17 +113,17 @@ export function OpsStatsBookingPanel({
       {missLanes.length > 0 ? (
         <section className="overflow-hidden rounded-2xl border border-rose-300/80 bg-rose-50/30 shadow-ui-sm">
           <header className="border-b border-rose-200/70 px-3.5 py-2.5 sm:px-4">
-            <h3 className="m-0 text-[13px] font-extrabold text-rose-950">
+            <h3 className="m-0 text-[13px] font-bold text-rose-950">
               Chuyến thường chạy nhưng trống
             </h3>
-            <p className="m-0 mt-0.5 text-[11px] text-rose-900/70">
+            <p className="m-0 mt-0.5 text-2xs text-rose-900/70">
               Baseline ≥ 1 lô cùng DOW · click để lọc bảng lô
             </p>
           </header>
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse text-left text-[13px]">
               <thead>
-                <tr className="border-b border-rose-200/60 bg-rose-50/60 text-[10px] uppercase tracking-wider text-rose-900/70">
+                <tr className="border-b border-rose-200/60 bg-rose-50/60 text-2xs uppercase tracking-wider text-rose-900/70">
                   <th className="px-3.5 py-2.5 font-bold">Chuyến</th>
                   <th className="px-3.5 py-2.5 font-bold">Dest</th>
                   <th className="px-3.5 py-2.5 text-right font-bold">Lô</th>
@@ -148,7 +148,7 @@ export function OpsStatsBookingPanel({
                     </td>
                     <td className="px-3.5 py-2">
                       <span
-                        className={`inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-bold ring-1 ${SIGNAL_CLASS[r.signal]}`}
+                        className={`inline-flex rounded-md px-1.5 py-0.5 text-2xs font-bold ring-1 ${SIGNAL_CLASS[r.signal]}`}
                       >
                         {SIGNAL_LABEL[r.signal]}
                       </span>
@@ -163,10 +163,10 @@ export function OpsStatsBookingPanel({
 
       <section className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
         <header className="border-b border-ui-border/60 px-3.5 py-2.5 sm:px-4">
-          <h3 className="m-0 text-[13px] font-extrabold text-ui-navy">
+          <h3 className="m-0 text-[13px] font-bold text-ui-navy">
             Flight × Dest · so baseline cùng DOW
           </h3>
-          <p className="m-0 mt-0.5 text-[11px] text-ui-text-muted">
+          <p className="m-0 mt-0.5 text-2xs text-ui-text-muted">
             Surge = hôm nay / max(TB cùng weekday, ε) · click để lọc bảng lô
           </p>
         </header>
@@ -178,7 +178,7 @@ export function OpsStatsBookingPanel({
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse text-left text-[13px]">
               <thead>
-                <tr className="border-b border-ui-border/80 bg-slate-50/80 text-[10px] uppercase tracking-wider text-ui-text-muted">
+                <tr className="border-b border-ui-border/80 bg-slate-50/80 text-2xs uppercase tracking-wider text-ui-text-muted">
                   <th className="px-3.5 py-2.5 font-bold">Chuyến</th>
                   <th className="px-3.5 py-2.5 font-bold">Dest</th>
                   <th className="px-3.5 py-2.5 text-right font-bold">Lô</th>
@@ -211,7 +211,7 @@ export function OpsStatsBookingPanel({
                     </td>
                     <td className="px-3.5 py-2">
                       <span
-                        className={`inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-bold ring-1 ${SIGNAL_CLASS[r.signal]}`}
+                        className={`inline-flex rounded-md px-1.5 py-0.5 text-2xs font-bold ring-1 ${SIGNAL_CLASS[r.signal]}`}
                       >
                         {SIGNAL_LABEL[r.signal]}
                       </span>
@@ -227,15 +227,15 @@ export function OpsStatsBookingPanel({
       {nextWeek.length > 0 ? (
         <section className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
           <header className="border-b border-ui-border/60 px-3.5 py-2.5 sm:px-4">
-            <h3 className="m-0 text-[13px] font-extrabold text-ui-navy">Tuần tới</h3>
-            <p className="m-0 mt-0.5 text-[11px] text-ui-text-muted">
+            <h3 className="m-0 text-[13px] font-bold text-ui-navy">Tuần tới</h3>
+            <p className="m-0 mt-0.5 text-2xs text-ui-text-muted">
               Top lane theo baseline cùng weekday · 7 ngày tới
             </p>
           </header>
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse text-left text-[13px]">
               <thead>
-                <tr className="border-b border-ui-border/80 bg-slate-50/80 text-[10px] uppercase tracking-wider text-ui-text-muted">
+                <tr className="border-b border-ui-border/80 bg-slate-50/80 text-2xs uppercase tracking-wider text-ui-text-muted">
                   <th className="px-3.5 py-2.5 font-bold">Ngày</th>
                   <th className="px-3.5 py-2.5 font-bold">Chuyến</th>
                   <th className="px-3.5 py-2.5 font-bold">Dest</th>
@@ -253,7 +253,7 @@ export function OpsStatsBookingPanel({
                   >
                     <td className="px-3.5 py-2 tabular-nums">
                       <span className="font-medium text-ui-navy">{r.ymd}</span>
-                      <span className="ml-1.5 text-[11px] text-ui-text-muted">
+                      <span className="ml-1.5 text-2xs text-ui-text-muted">
                         {r.dowLabel}
                       </span>
                     </td>
@@ -281,11 +281,11 @@ export function OpsStatsBookingPanel({
       {forecast.length > 0 ? (
         <section className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
           <header className="border-b border-ui-border/60 px-3.5 py-2.5 sm:px-4">
-            <h3 className="m-0 text-[13px] font-extrabold text-ui-navy">
+            <h3 className="m-0 text-[13px] font-bold text-ui-navy">
               Ước lượng 7 ngày
             </h3>
             <p
-              className="m-0 mt-0.5 text-[11px] text-ui-text-muted"
+              className="m-0 mt-0.5 text-2xs text-ui-text-muted"
               title="Naive · cùng DOW · không cam kết"
             >
               Naive · cùng DOW · không cam kết
@@ -294,7 +294,7 @@ export function OpsStatsBookingPanel({
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse text-left text-[13px]">
               <thead>
-                <tr className="border-b border-ui-border/80 bg-slate-50/80 text-[10px] uppercase tracking-wider text-ui-text-muted">
+                <tr className="border-b border-ui-border/80 bg-slate-50/80 text-2xs uppercase tracking-wider text-ui-text-muted">
                   <th className="px-3.5 py-2.5 font-bold">Ngày</th>
                   <th className="px-3.5 py-2.5 text-right font-bold">Lô</th>
                   <th className="px-3.5 py-2.5 text-right font-bold">Kg</th>
@@ -310,7 +310,7 @@ export function OpsStatsBookingPanel({
                   >
                     <td className="px-3.5 py-2 tabular-nums">
                       <span className="font-medium text-ui-navy">{r.ymd}</span>
-                      <span className="ml-1.5 text-[11px] text-ui-text-muted">
+                      <span className="ml-1.5 text-2xs text-ui-text-muted">
                         {r.dowLabel}
                       </span>
                     </td>

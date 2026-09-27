@@ -14,7 +14,7 @@ export function CustomerValidationBanner({
   return (
     <div
       role="alert"
-      className="mb-2 rounded-lg border border-red-300/60 bg-red-50 px-2.5 py-2 text-[11px] font-medium text-red-800"
+      className="mb-2 rounded-lg border border-red-300/60 bg-red-50 px-2.5 py-2 text-2xs font-medium text-red-800"
     >
       {sectionErrors.map((e) => (
         <p key={`${e.section}-${e.message}`}>{e.message}</p>
@@ -34,7 +34,7 @@ export function fieldInputClass(invalid: boolean): string {
 export function FieldErrorText({ message }: { message?: string }) {
   if (!message) return null;
   return (
-    <p className="mt-0.5 text-[10px] font-medium text-red-600">{message}</p>
+    <p className="mt-0.5 text-2xs font-medium text-red-600">{message}</p>
   );
 }
 
@@ -50,7 +50,7 @@ export function SectionErrorHint({
   ).length;
   if (!count) return null;
   return (
-    <span className={`text-[10px] font-semibold ${OPS.muted} text-red-600`}>
+    <span className={`text-2xs font-semibold ${OPS.muted} text-red-600`}>
       {count} lỗi
     </span>
   );

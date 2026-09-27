@@ -36,7 +36,7 @@ export function ShareSparkline({
       <svg width={width} height={height} className="overflow-visible" aria-hidden>
         <path d={path} fill="none" stroke="currentColor" strokeWidth={1.5} className="text-teal-700" />
       </svg>
-      <span className="font-mono text-[10px] tabular-nums text-ui-text-muted">{last.shareKgPct}%</span>
+      <span className="font-mono text-2xs tabular-nums text-ui-text-muted">{last.shareKgPct}%</span>
     </span>
   );
 }

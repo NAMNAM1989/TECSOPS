@@ -65,7 +65,7 @@ export function OpsRowNoteControl({ rowId, value, onCommit }: Props) {
       </button>
       {open ? (
         <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-ui-border bg-ui-surface p-2 shadow-lg">
-          <label className="mb-1 block text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">
+          <label className="mb-1 block text-2xs font-bold uppercase tracking-wide text-ui-text-muted">
             Ghi chú
           </label>
           <input
@@ -86,7 +86,7 @@ export function OpsRowNoteControl({ rowId, value, onCommit }: Props) {
                 setOpen(false);
               }
             }}
-            className="w-full rounded-lg border border-ui-border bg-white px-2 py-1.5 text-[11px] font-semibold text-ui-text outline-none focus:ring-2 focus:ring-ui-focus"
+            className="w-full rounded-lg border border-ui-border bg-white px-2 py-1.5 text-2xs font-semibold text-ui-text outline-none focus:ring-2 focus:ring-ui-focus"
           />
         </div>
       ) : null}

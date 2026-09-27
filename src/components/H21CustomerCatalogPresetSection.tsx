@@ -294,22 +294,22 @@ export function H21CustomerCatalogPresetSection({
     >
       <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="text-sm font-extrabold tracking-tight text-emerald-950">
+          <h2 className="text-sm font-bold tracking-tight text-emerald-950">
             Data riêng KH · {warehouseScope}
           </h2>
-          <p className="mt-0.5 text-[11px] text-ui-text-muted">
+          <p className="mt-0.5 text-2xs text-ui-text-muted">
             Up list → lưu riêng từng khách (vd. MINH KHANG). Lô đúng KH + kho này
             mở H21 chỉ hiện list đã lưu — không lẫn catalog chung.
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-200/90">
+        <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-2xs font-semibold text-emerald-900 ring-1 ring-emerald-200/90">
           {customersWithData} KH có data
         </span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <label className="inline-flex min-w-0 flex-1 items-center gap-1.5 sm:max-w-md">
-          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
+          <span className="shrink-0 text-2xs font-bold uppercase tracking-wide text-ui-text-muted">
             KH
           </span>
           <select
@@ -372,7 +372,7 @@ export function H21CustomerCatalogPresetSection({
 
       <div className="mt-2 flex flex-wrap items-end gap-2">
         <label className="inline-flex items-center gap-1.5">
-          <span className="text-[10px] font-bold text-ui-text-muted">
+          <span className="text-2xs font-bold text-ui-text-muted">
             Số dòng mặc định
           </span>
           <Input
@@ -387,13 +387,13 @@ export function H21CustomerCatalogPresetSection({
             onBlur={() => void saveLineCount()}
           />
         </label>
-        <span className="text-[10px] text-ui-text-muted">
+        <span className="text-2xs text-ui-text-muted">
           / tối đa {CUSTOMER_PROFILE_LIMITS.h21PresetCatalogIds} SP
         </span>
       </div>
 
       {entry && privateItems.length > 0 ? (
-        <p className="mt-2 text-[11px] font-semibold text-emerald-900">
+        <p className="mt-2 text-2xs font-semibold text-emerald-900">
           Đã lưu {privateItems.length} mặt hàng riêng cho {entry.code} — H21 chỉ
           hiện list này
         </p>
@@ -401,7 +401,7 @@ export function H21CustomerCatalogPresetSection({
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <div className="rounded-xl border border-ui-border/70 bg-white p-2.5">
-          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1 text-[11px]">
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1 text-2xs">
             <span className="font-semibold text-ui-text">
               List đã lưu của KH · {privateItems.length}
             </span>
@@ -410,15 +410,15 @@ export function H21CustomerCatalogPresetSection({
             ) : null}
           </div>
           {!entry ? (
-            <p className="text-[11px] text-ui-text-muted">
+            <p className="text-2xs text-ui-text-muted">
               Chọn KH (vd. MINH KHANG) rồi up list.
             </p>
           ) : privateItems.length === 0 ? (
-            <p className="text-[11px] text-ui-text-muted">
+            <p className="text-2xs text-ui-text-muted">
               Chưa có data — «Thay list của KH» hoặc «+» từ catalog.
             </p>
           ) : (
-            <ul className="max-h-52 space-y-1 overflow-y-auto text-[11px]">
+            <ul className="max-h-52 space-y-1 overflow-y-auto text-2xs">
               {privateItems.map((item) => (
                 <li
                   key={item.id}
@@ -452,7 +452,7 @@ export function H21CustomerCatalogPresetSection({
         </div>
 
         <div className="rounded-xl border border-ui-border/70 bg-white p-2.5">
-          <div className="mb-1.5 text-[11px] font-semibold text-ui-text">
+          <div className="mb-1.5 text-2xs font-semibold text-ui-text">
             Thêm từ catalog {warehouseScope} (tuỳ chọn)
           </div>
           <Input
@@ -465,15 +465,15 @@ export function H21CustomerCatalogPresetSection({
           />
           <div className="max-h-52 overflow-y-auto rounded-lg border border-ui-border/60">
             {!entry ? (
-              <p className={`${OPS.empty} m-0 rounded-none border-0 text-[11px]`}>
+              <p className={`${OPS.empty} m-0 rounded-none border-0 text-2xs`}>
                 Chọn KH trước.
               </p>
             ) : catalogPickList.length === 0 ? (
-              <p className={`${OPS.empty} m-0 rounded-none border-0 text-[11px]`}>
+              <p className={`${OPS.empty} m-0 rounded-none border-0 text-2xs`}>
                 Không còn SP phù hợp.
               </p>
             ) : (
-              <ul className="divide-y divide-black/[0.04] text-[11px]">
+              <ul className="divide-y divide-black/[0.04] text-2xs">
                 {catalogPickList.map((item) => (
                   <li key={item.id} className="flex items-center gap-2 px-2 py-1.5">
                     <span className="min-w-0 flex-1 truncate">
@@ -485,7 +485,7 @@ export function H21CustomerCatalogPresetSection({
                     </span>
                     <button
                       type="button"
-                      className="shrink-0 rounded-lg bg-emerald-700 px-2 py-0.5 text-[11px] font-bold text-white disabled:opacity-40"
+                      className="shrink-0 rounded-lg bg-emerald-700 px-2 py-0.5 text-2xs font-bold text-white disabled:opacity-40"
                       disabled={saving}
                       onClick={() => void pushFromCatalog(item)}
                     >

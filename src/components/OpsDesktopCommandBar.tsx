@@ -27,6 +27,9 @@ type Props = {
   isViewingToday: boolean;
   syncStatus: SyncStatus;
   socketConnected: boolean;
+  pendingOfflineCount?: number;
+  lastSyncedAt?: number | null;
+  onRefresh?: () => void;
   daysWithData: number;
   totalLots: number;
   activeWarehouse: Warehouse;
@@ -38,6 +41,7 @@ type Props = {
   onCopyCargoDayReport: (kind: CargoDayReportCopyKind) => void;
   toolsProps: ToolsProps;
   filteredViewRows: readonly Shipment[];
+  allRows?: readonly Shipment[];
   onWarehouseChange: (wh: Warehouse) => void;
   searchHighlightWarehouses?: readonly Warehouse[];
   searchQuery: string;
@@ -64,6 +68,9 @@ export function OpsDesktopCommandBar({
   isViewingToday,
   syncStatus,
   socketConnected,
+  pendingOfflineCount,
+  lastSyncedAt,
+  onRefresh,
   daysWithData,
   totalLots,
   activeWarehouse,
@@ -75,6 +82,7 @@ export function OpsDesktopCommandBar({
   onCopyCargoDayReport,
   toolsProps,
   filteredViewRows,
+  allRows,
   onWarehouseChange,
   searchHighlightWarehouses = [],
   searchQuery,
@@ -116,7 +124,7 @@ export function OpsDesktopCommandBar({
             />
             {!isViewingToday ? (
               <span
-                className="shrink-0 rounded-full bg-ui-warning/15 px-2 py-0.5 text-[8px] font-bold uppercase text-ui-navy"
+                className="shrink-0 rounded-full bg-ui-warning/15 px-2 py-0.5 text-2xs font-bold uppercase text-ui-navy"
                 title="Vẫn sửa / thêm lô được"
               >
                 Ngày khác
@@ -146,12 +154,19 @@ export function OpsDesktopCommandBar({
             <h1 className="m-0 shrink-0 leading-none">
               <Wordmark size="sm" />
             </h1>
-            <span className="shrink-0 rounded-full bg-ui-navy px-2 py-px text-[9px] font-bold uppercase tracking-wide text-white">
+            <span className="shrink-0 rounded-full bg-ui-navy px-2 py-px text-2xs font-bold uppercase tracking-wide text-white">
               OPS
             </span>
-            <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
+            <SyncStatusPill
+              status={syncStatus}
+              socketConnected={socketConnected}
+              pendingOfflineCount={pendingOfflineCount}
+              lastSyncedAt={lastSyncedAt}
+              onRefresh={onRefresh}
+              compact
+            />
             {daysWithData > 0 ? (
-              <span className="hidden shrink-0 text-[10px] text-ui-text-muted xl:inline">
+              <span className="hidden shrink-0 text-2xs text-ui-text-muted xl:inline">
                 {totalLots}/{daysWithData}d
               </span>
             ) : null}
@@ -163,6 +178,7 @@ export function OpsDesktopCommandBar({
         selectedYmd={selectedYmd}
         filteredViewRows={filteredViewRows}
         viewRows={viewRows}
+        allRows={allRows}
         activeWarehouse={activeWarehouse}
         onWarehouseChange={onWarehouseChange}
         searchHighlightWarehouses={searchHighlightWarehouses}

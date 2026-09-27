@@ -52,12 +52,12 @@ export function DayExcelExportDialog({
         <h2 id="excel-range-title" className="text-sm font-bold text-ui-text">
           Xuất Excel lô
         </h2>
-        <p className="mt-1 text-[11px] text-ui-text-muted">
+        <p className="mt-1 text-2xs text-ui-text-muted">
           Lọc trên dữ liệu đã sync · mẫu Import Shipments
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <label className="block">
-            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+            <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
               Từ ngày
             </span>
             <input
@@ -68,7 +68,7 @@ export function DayExcelExportDialog({
             />
           </label>
           <label className="block">
-            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+            <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
               Đến ngày
             </span>
             <input

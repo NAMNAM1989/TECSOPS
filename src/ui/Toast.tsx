@@ -132,7 +132,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={() => dismiss(t.id)}
-              className="shrink-0 rounded-lg px-1.5 py-0.5 text-[11px] font-semibold text-ui-text-muted hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+              className="shrink-0 rounded-lg px-1.5 py-0.5 text-2xs font-semibold text-ui-text-muted hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
               aria-label="Đóng thông báo"
             >
               Đóng

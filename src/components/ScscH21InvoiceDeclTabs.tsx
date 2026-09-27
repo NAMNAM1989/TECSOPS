@@ -88,16 +88,16 @@ export function ScscH21InvoiceDeclTabs({
       {/* Hàng 1: tiêu đề + tab strip */}
       <div className="flex min-w-0 items-center gap-2">
         <div className="flex shrink-0 items-center gap-1.5">
-          <span className="text-[12px] font-extrabold text-ui-navy">Tờ khai</span>
+          <span className="text-[12px] font-bold text-ui-navy">Tờ khai</span>
           {invoiceSeqTotal > 1 ? (
-            <span className="text-[10px] font-semibold text-ui-text-muted">{invoiceSeqTotal} INV</span>
+            <span className="text-2xs font-semibold text-ui-text-muted">{invoiceSeqTotal} INV</span>
           ) : null}
           {isDirty ? (
-            <span className="rounded-full bg-amber-100 px-1.5 py-px text-[9px] font-bold text-amber-900">
+            <span className="rounded-full bg-amber-100 px-1.5 py-px text-2xs font-bold text-amber-900">
               chưa lưu
             </span>
           ) : filledSplitCount > 0 ? (
-            <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[9px] font-bold text-emerald-800">
+            <span className="rounded-full bg-emerald-100 px-1.5 py-px text-2xs font-bold text-emerald-800">
               đã lưu
             </span>
           ) : null}
@@ -137,23 +137,23 @@ export function ScscH21InvoiceDeclTabs({
                   onClick={() => onSelectSplit(s.id)}
                   title={no || undefined}
                 >
-                  <span className="shrink-0 text-[10px] font-extrabold">TK{seq}</span>
+                  <span className="shrink-0 text-2xs font-bold">TK{seq}</span>
                   <span
-                    className={`hidden truncate font-mono text-[11px] font-semibold sm:inline ${
+                    className={`hidden truncate font-mono text-2xs font-semibold sm:inline ${
                       selected ? "text-white/95" : "text-indigo-900"
                     }`}
                   >
                     {no || "—"}
                   </span>
                   <span
-                    className={`shrink-0 font-mono text-[11px] font-bold tabular-nums ${
+                    className={`shrink-0 font-mono text-2xs font-bold tabular-nums ${
                       selected ? "text-white/90" : "text-ui-text-muted"
                     }`}
                   >
                     {kg || "—"}kg
                   </span>
                   <span
-                    className={`shrink-0 rounded px-1 text-[9px] font-bold ${
+                    className={`shrink-0 rounded px-1 text-2xs font-bold ${
                       hasLines
                         ? selected
                           ? "bg-white/20"
@@ -189,7 +189,7 @@ export function ScscH21InvoiceDeclTabs({
           })}
           <button
             type="button"
-            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/70 px-2.5 text-[11px] font-bold text-indigo-800 transition hover:bg-indigo-100"
+            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/70 px-2.5 text-2xs font-bold text-indigo-800 transition hover:bg-indigo-100"
             onClick={onAddSplit}
             title="Thêm tờ khai mới (INV tăng -1, -2…)"
           >
@@ -197,7 +197,7 @@ export function ScscH21InvoiceDeclTabs({
             Thêm
           </button>
           {remainLotKg > 0 ? (
-            <span className="shrink-0 text-[10px] font-semibold text-indigo-700">
+            <span className="shrink-0 text-2xs font-semibold text-indigo-700">
               còn {remainLotKg}/{lotKg} kg
             </span>
           ) : null}
@@ -206,12 +206,12 @@ export function ScscH21InvoiceDeclTabs({
 
       {/* Hàng 2: chỉnh TK + hành động + tóm tắt 1 dòng */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border border-ui-border/60 bg-slate-50/80 px-2 py-1.5">
-        <span className="inline-flex h-7 shrink-0 items-center rounded-lg bg-indigo-600 px-2 text-[10px] font-extrabold text-white">
+        <span className="inline-flex h-7 shrink-0 items-center rounded-lg bg-indigo-600 px-2 text-2xs font-bold text-white">
           TK {invoiceSeq}
         </span>
 
         <label className="inline-flex items-center gap-1.5">
-          <span className="text-[10px] font-bold text-ui-text-muted">Kg</span>
+          <span className="text-2xs font-bold text-ui-text-muted">Kg</span>
           <input
             type="text"
             inputMode="decimal"
@@ -223,7 +223,7 @@ export function ScscH21InvoiceDeclTabs({
           />
         </label>
         <label className="inline-flex items-center gap-1.5">
-          <span className="text-[10px] font-bold text-ui-text-muted">Dòng</span>
+          <span className="text-2xs font-bold text-ui-text-muted">Dòng</span>
           <input
             type="text"
             inputMode="numeric"
@@ -235,7 +235,7 @@ export function ScscH21InvoiceDeclTabs({
           />
         </label>
         <label className="inline-flex items-center gap-1.5">
-          <span className="text-[10px] font-bold text-ui-text-muted">Kiện</span>
+          <span className="text-2xs font-bold text-ui-text-muted">Kiện</span>
           <input
             type="text"
             inputMode="numeric"
@@ -257,7 +257,7 @@ export function ScscH21InvoiceDeclTabs({
         </div>
 
         <p
-          className="ml-auto min-w-0 truncate text-right font-mono text-[11px] font-semibold tabular-nums text-ui-text-muted"
+          className="ml-auto min-w-0 truncate text-right font-mono text-2xs font-semibold tabular-nums text-ui-text-muted"
           title={`${linesLength} dòng · ${footer.linesKg}/${footer.grossKg} kg · ${labelForH21CargoFamily(effectiveCargoFamily)} · ${footer.totalCartonPkgs} PKGS${footer.residualKg > 0 ? ` · dư ${footer.residualKg} kg` : ""}${lotPcs > 0 ? ` · lô ${lotPcs} kiện` : ""}`}
         >
           <span className="text-ui-navy">{linesLength}</span>d

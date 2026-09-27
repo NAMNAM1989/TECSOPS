@@ -1,3 +1,4 @@
+@import "./styles/tokens.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,13 +9,8 @@
     color-scheme: light;
   }
   body {
-    /* Operational Signal R2 — canvas lạnh + chiều sâu nhẹ, không flat đơn sắc. */
-    @apply min-h-screen text-ui-text antialiased font-sans;
-    background-color: #e8eef4;
-    background-image:
-      radial-gradient(ellipse 80% 60% at 10% 0%, rgba(148, 163, 184, 0.22), transparent 55%),
-      radial-gradient(ellipse 70% 50% at 95% 100%, rgba(13, 148, 136, 0.12), transparent 50%);
-    background-attachment: fixed;
+    /* Operational Signal — canvas chuẩn hóa theo design token bg-ui-background. */
+    @apply min-h-screen text-ui-text antialiased font-sans bg-ui-background;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: 0.012em;
@@ -27,7 +23,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid rgba(15, 118, 110, 0.45);
+    outline: 2px solid rgb(var(--ring));
     outline-offset: 2px;
   }
 
@@ -93,7 +89,7 @@
 
   /** AWB mono — contrast cao Round 2. */
   .ops-awb {
-    @apply font-shipment-data font-extrabold tracking-tight tabular-nums text-ui-awb;
+    @apply font-shipment-data font-bold tracking-tight tabular-nums text-ui-awb;
   }
 
   /** Zebra hàng bảng Ops — xen kẽ nhẹ (mobile / legacy). */

@@ -17,7 +17,7 @@ import {
   filterShipmentsBySessionYmd,
   filterShipmentsBySessionYmdRange,
 } from "../utils/filterShipmentsBySessionYmd";
-import { isAttentionRow } from "../utils/opsAttention";
+import { computeAllShipmentsAttention } from "../utils/opsAttention";
 import {
   parseOpsUrlState,
   serializeOpsUrlState,
@@ -178,7 +178,13 @@ export function AirCargoTracking({
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
   const isViewingToday = selectedYmd === todayYmd;
 
-  // Đồng bộ state ra URL hash (debounce 300ms)
+  const prevNavRef = useRef({
+    d: selectedYmd,
+    wh: activeWarehouse,
+    lot: selectedId,
+  });
+
+  // Đồng bộ state ra URL hash (debounce 250ms)
   useEffect(() => {
     if (typeof window === "undefined" || !isOpsHash(window.location.hash)) return;
 
@@ -194,14 +200,27 @@ export function AirCargoTracking({
         },
         {
           defaultYmd: todayYmd,
-          defaultWarehouse: "TECS-TCS",
         }
       );
 
       if (window.location.hash !== targetHash) {
-        window.history.replaceState(null, "", targetHash);
+        const isMajorNav =
+          prevNavRef.current.d !== selectedYmd ||
+          prevNavRef.current.wh !== activeWarehouse ||
+          (!prevNavRef.current.lot && Boolean(selectedId));
+
+        if (isMajorNav) {
+          window.history.pushState(null, "", targetHash);
+        } else {
+          window.history.replaceState(null, "", targetHash);
+        }
       }
-    }, 300);
+      prevNavRef.current = {
+        d: selectedYmd,
+        wh: activeWarehouse,
+        lot: selectedId,
+      };
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [
@@ -270,15 +289,19 @@ export function AirCargoTracking({
     [state?.customers]
   );
 
+  const attentionMap = useMemo(() => {
+    return computeAllShipmentsAttention(viewRows, allRows, selectedYmd);
+  }, [viewRows, allRows, selectedYmd]);
+
   const statusFilteredRows = useMemo(() => {
     return viewRows.filter((r) => {
       if (statusFilter === "ALL") return true;
       if (statusFilter === "attention") {
-        return isAttentionRow(r, viewRows, selectedYmd);
+        return attentionMap.get(r.id)?.needsAttention ?? false;
       }
       return r.status === (statusFilter as ShipmentStatus);
     });
-  }, [viewRows, statusFilter, selectedYmd]);
+  }, [viewRows, statusFilter, attentionMap]);
 
   const searchActive =
     searchQuery.trim().length > 0 || Boolean(flightDateFilter);
@@ -788,6 +811,22 @@ export function AirCargoTracking({
       isViewingToday={isViewingToday}
       syncStatus={status}
       socketConnected={socketConnected}
+      pendingOfflineCount={pendingOfflineCount ?? 0}
+      lastSyncedAt={lotSyncedAt}
+      onRefresh={async () => {
+        setSyncRefreshing(true);
+        try {
+          await refreshState();
+          toast.success("Đã làm mới dữ liệu", "Đồng bộ");
+        } catch (e) {
+          toast.error(
+            e instanceof Error ? e.message : "Không làm mới được.",
+            "Đồng bộ thất bại"
+          );
+        } finally {
+          setSyncRefreshing(false);
+        }
+      }}
       daysWithData={daysWithData}
       totalLots={allRows.length}
       activeWarehouse={activeWarehouse}
@@ -798,6 +837,7 @@ export function AirCargoTracking({
       onCopyCargoDayReport={(kind) => void onCopyCargoDayReport(kind)}
       toolsProps={toolsProps}
       filteredViewRows={filteredViewRows}
+      allRows={allRows}
       onWarehouseChange={handleActiveWarehouseChange}
       searchHighlightWarehouses={searchHighlightWarehouses}
       searchQuery={searchQuery}
@@ -839,6 +879,24 @@ export function AirCargoTracking({
           <Banner tone="danger" title="Cảnh báo: Sắp đầy hàng đợi offline">
             Hàng đợi offline đã đạt {pendingOfflineCount}/500 thay đổi. Hãy kết nối mạng ngay để tránh mất dữ liệu!
           </Banner>
+        </div>
+      ) : null}
+
+      {!isViewingToday ? (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-1.5 text-2xs text-amber-900 shadow-ui-sm">
+          <span className="flex items-center gap-1.5 font-medium">
+            <span aria-hidden>📅</span>
+            <span>
+              Đang xem ngày <strong>{selectedYmd.split("-").slice(1).reverse().join("/")}</strong>
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={goToday}
+            className="btn-kinetic inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-2xs font-bold text-amber-900 shadow-ui-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus touch-manipulation"
+          >
+            Về Hôm nay
+          </button>
         </div>
       ) : null}
 

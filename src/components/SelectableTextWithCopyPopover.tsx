@@ -113,7 +113,7 @@ export function SelectableTextWithCopyPopover({
                 transform: "translate(-50%, -100%)",
                 zIndex: 600,
               }}
-              className="select-none rounded-md border border-black/10 bg-apple-label px-2 py-0.5 text-[10px] font-semibold text-white shadow-apple active:scale-95"
+              className="select-none rounded-md border border-black/10 bg-apple-label px-2 py-0.5 text-2xs font-semibold text-white shadow-apple active:scale-95"
               onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => {
                 e.stopPropagation();

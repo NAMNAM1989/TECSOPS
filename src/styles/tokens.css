@@ -1,0 +1,107 @@
+/* src/styles/tokens.css */
+:root {
+  color-scheme: light;
+  /* Bề mặt */
+  --background: 238 242 246;        /* #EEF2F6 canvas */
+  --surface: 255 255 255;           /* card, bảng, sheet */
+  --surface-muted: 246 248 250;     /* header bảng, hàng tổng, input disabled */
+  --surface-sunken: 226 232 240;    /* track progress, skeleton */
+  /* Chữ */
+  --foreground: 11 18 32;           /* #0B1220 navy — 18.7:1 trên trắng */
+  --muted-foreground: 91 107 124;   /* #5B6B7C — 5.47:1 trên trắng, 4.86:1 trên canvas */
+  /* Viền */
+  --border: 220 227 234;            /* #DCE3EA — chỉ trang trí */
+  --border-strong: 203 213 225;     /* slate-300 — divider hàng tổng */
+  --input: 100 116 139;             /* slate-500 — viền control, 4.76:1 */
+  /* Thương hiệu */
+  --primary: 15 118 110;            /* teal-700 #0F766E — nền nút đặc, 5.47:1 với chữ trắng */
+  --primary-hover: 17 94 89;        /* teal-800 */
+  --primary-foreground: 255 255 255;
+  --primary-soft: 240 253 250;      /* teal-50 — hover/selected hàng */
+  --accent: 13 148 136;             /* teal-600 — CHỈ dùng cho vạch/chấm/icon, KHÔNG làm nền chữ trắng */
+  --ring: 15 118 110;
+  --brand-navy: 11 18 32;
+  /* Ngữ nghĩa */
+  --success: 21 128 61;             /* green-700 */
+  --success-soft: 240 253 244;       /* #f0fdf4 green-50 */
+  --warning: 194 65 12;             /* orange-700 — 5.18:1 */
+  --warning-soft: 254 252 232;       /* #fefce8 yellow-50 */
+  --danger: 185 28 28;              /* red-700 — 6.47:1 */
+  --danger-soft: 254 242 242;       /* red-50 */
+  --info: 3 105 161;                /* sky-700 */
+  --info-soft: 239 246 255;          /* #eff6ff blue-50 */
+  /* Giai đoạn quy trình */
+  --stage-booking: 2 132 199;        /* #0284c7 blue-600 */
+  --stage-at-warehouse: 124 58 237;  /* #7c3aed violet-600 */
+  --stage-docs: 234 88 12;           /* #ea580c orange-600 */
+  --stage-done: 21 128 61;           /* #15803d green-700 */
+  --stage-history: 100 116 139;      /* #64748b slate-500 */
+  /* Kho (family) */
+  --wh-tcs: 3 105 161;              /* sky-700 chữ; vạch dùng sky-600 */
+  --wh-tcs-bar: 2 132 199;          /* sky-600 — 4.10:1 */
+  --wh-scsc: 109 40 217;            /* violet-700 */
+  --wh-scsc-bar: 124 58 237;        /* violet-600 — 5.70:1 */
+  --wh-tecs: 11 18 32;              /* navy cho segment "TECS" */
+  /* Hình khối */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --shadow-sm: 0 1px 2px rgb(11 18 32 / 0.05);
+  --shadow-md: 0 4px 12px rgb(11 18 32 / 0.08);
+  --shadow-lg: 0 12px 32px rgb(11 18 32 / 0.12);
+  /* Mật độ */
+  --row-h-compact: 40px;            /* desktop, hàng 2 dòng (AWB+HAWB) */
+  --row-h-touch: 48px;
+  --control-h: 36px;                /* desktop */
+  --control-h-touch: 44px;          /* mobile tối thiểu */
+  --header-h: 52px;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: 2 6 23;             /* slate-950 */
+  --surface: 15 23 42;              /* slate-900 */
+  --surface-muted: 30 41 59;        /* slate-800 */
+  --surface-sunken: 51 65 85;
+  --foreground: 241 245 249;        /* slate-100 */
+  --muted-foreground: 148 163 184;  /* slate-400 — 6.96:1 trên slate-900 */
+  --border: 30 41 59;
+  --border-strong: 51 65 85;
+  --input: 100 116 139;             /* 3.75:1 trên slate-900 */
+  --primary: 45 212 191;            /* teal-400 */
+  --primary-hover: 94 234 212;
+  --primary-foreground: 15 23 42;   /* chữ tối trên teal-400 — 9.59:1 */
+  --primary-soft: 4 47 46;          /* teal-950 */
+  --accent: 45 212 191;
+  --ring: 45 212 191;
+  --success: 74 222 128;
+  --success-soft: 5 46 22;
+  --warning: 251 146 60;            /* orange-400 */
+  --warning-soft: 66 32 6;
+  --danger: 248 113 113;            /* red-400 */
+  --danger-soft: 69 10 10;
+  --info: 56 189 248;
+  --info-soft: 23 37 84;
+  --stage-booking: 56 189 248;
+  --stage-at-warehouse: 167 139 250;
+  --stage-docs: 251 146 60;
+  --stage-done: 74 222 128;
+  --stage-history: 148 163 184;
+  --wh-tcs: 125 211 252;
+  --wh-tcs-bar: 56 189 248;
+  --wh-scsc: 196 181 253;
+  --wh-scsc-bar: 167 139 250;
+  --wh-tecs: 226 232 240;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: 0 0 0 1px rgb(51 65 85);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -92,7 +92,7 @@ describe("DesktopShipmentTable density", () => {
 
   it("status desktop dense h-7, không min-h-11; overflow-visible menu", () => {
     const html = renderTable();
-    expect(html).toContain("h-7 w-full min-w-0 truncate px-1.5 text-[10px]");
+    expect(html).toContain("h-7 w-full min-w-0 truncate px-1.5 text-2xs");
     expect(html).not.toContain("h-11 w-full min-h-11");
     expect(html).toContain("overflow-visible py-0.5");
     expect(html).toContain("row-actions-menu-s1");

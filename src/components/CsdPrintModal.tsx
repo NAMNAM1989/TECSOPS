@@ -130,7 +130,7 @@ export function CsdPrintModal({
               <h2 id={titleId} className={`text-[16px] font-semibold ${OPS.title}`}>
                 In CSD {profile.label}
               </h2>
-              <p className={`mt-0.5 text-[11px] ${OPS.secondary}`}>
+              <p className={`mt-0.5 text-2xs ${OPS.secondary}`}>
                 {profile.airlineName} · chuyến {shipment.flight || "—"}
                 {isEk ? " · Letter + CSD" : ""}
               </p>
@@ -163,7 +163,7 @@ export function CsdPrintModal({
               {ra ? `${opsTeamLabel[ra.opsTeam]} · ${shipment.warehouse}` : shipment.warehouse}
             </dd>
             <dt className={OPS.muted}>Mã RA</dt>
-            <dd className={`font-mono text-[11px] font-bold tracking-tight ${OPS.title}`}>
+            <dd className={`font-mono text-2xs font-bold tracking-tight ${OPS.title}`}>
               {preview.raCode || "—"}
             </dd>
             <dt className={OPS.muted}>DEST</dt>
@@ -212,7 +212,7 @@ export function CsdPrintModal({
           </dl>
 
           {isPr ? (
-            <p className={`text-[11px] ${OPS.muted}`}>
+            <p className={`text-2xs ${OPS.muted}`}>
               Origin <span className="font-semibold">SGN</span> · SPX · X-RAY · Forwarder —
               giữ mặc định trên mẫu PAL. Chữ ký: ký tay trên bản in.
             </p>
@@ -220,12 +220,12 @@ export function CsdPrintModal({
 
           {isEk ? (
             <div className="space-y-3">
-              <p className={`text-[11px] ${OPS.muted}`}>
+              <p className={`text-2xs ${OPS.muted}`}>
                 Origin <span className="font-semibold">SGN</span> · SPX · XRY · Received from
                 REGULATED AGENT — tự điền. Chữ ký: ký tay trên bản in (không đóng dấu ảnh).
               </p>
               <label className="block">
-                <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
+                <span className={`mb-1 block text-2xs font-semibold ${OPS.secondary}`}>
                   Issued by / Name{" "}
                   <span className={`font-normal ${OPS.muted}`}>(không bắt buộc)</span>
                 </span>
@@ -248,7 +248,7 @@ export function CsdPrintModal({
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <label className="block">
-                  <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
+                  <span className={`mb-1 block text-2xs font-semibold ${OPS.secondary}`}>
                     Title
                   </span>
                   <input
@@ -261,7 +261,7 @@ export function CsdPrintModal({
                   />
                 </label>
                 <label className="block">
-                  <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
+                  <span className={`mb-1 block text-2xs font-semibold ${OPS.secondary}`}>
                     Company{" "}
                     <span className={`font-normal ${OPS.muted}`}>(shipper)</span>
                   </span>
@@ -277,7 +277,7 @@ export function CsdPrintModal({
                 </label>
               </div>
               <label className="block">
-                <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
+                <span className={`mb-1 block text-2xs font-semibold ${OPS.secondary}`}>
                   Date-Time
                 </span>
                 <input
@@ -295,7 +295,7 @@ export function CsdPrintModal({
             <>
               {profile.showOrigin ? (
                 <label className="block">
-                  <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
+                  <span className={`mb-1 block text-2xs font-semibold ${OPS.secondary}`}>
                     Origin
                   </span>
                   <input
@@ -315,7 +315,7 @@ export function CsdPrintModal({
                   />
                 </label>
               ) : (
-                <p className={`text-[11px] ${OPS.muted}`}>
+                <p className={`text-2xs ${OPS.muted}`}>
                   Origin trên mẫu đã in sẵn <span className="font-semibold">SGN</span>.
                 </p>
               )}
@@ -323,7 +323,7 @@ export function CsdPrintModal({
               {profile.showTransfer ? (
                 <div>
                   <label className="block">
-                    <span className={`mb-1 block text-[11px] font-semibold ${OPS.secondary}`}>
+                    <span className={`mb-1 block text-2xs font-semibold ${OPS.secondary}`}>
                       Transfer / Transit{" "}
                       <span className={`font-normal ${OPS.muted}`}>
                         (nếu biết — có thể để trống)
@@ -355,7 +355,7 @@ export function CsdPrintModal({
                           type="button"
                           disabled={busy}
                           onClick={() => setTransfer(code)}
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-bold tabular-nums ring-1 transition ${
+                          className={`rounded-full px-2.5 py-1 text-2xs font-bold tabular-nums ring-1 transition ${
                             active
                               ? "bg-apple-blue text-white ring-apple-blue"
                               : "bg-white text-apple-label ring-black/10 hover:bg-apple-blue/5"
@@ -370,7 +370,7 @@ export function CsdPrintModal({
                         type="button"
                         disabled={busy}
                         onClick={() => setTransfer("")}
-                        className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-apple-tertiary ring-1 ring-black/10 hover:bg-black/[0.03]"
+                        className="rounded-full px-2.5 py-1 text-2xs font-semibold text-apple-tertiary ring-1 ring-black/10 hover:bg-black/[0.03]"
                       >
                         Xóa
                       </button>
@@ -382,17 +382,17 @@ export function CsdPrintModal({
           )}
 
           {!preview.goods ? (
-            <p className="rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] text-amber-950">
+            <p className="rounded-lg bg-amber-50 px-2.5 py-2 text-2xs text-amber-950">
               Lô chưa có tên hàng in ấn — PDF sẽ để trống mục Contents.
             </p>
           ) : null}
           {!preview.dest ? (
-            <p className="rounded-lg bg-rose-50 px-2.5 py-2 text-[11px] font-medium text-rose-800">
+            <p className="rounded-lg bg-rose-50 px-2.5 py-2 text-2xs font-medium text-rose-800">
               Thiếu DEST trên lô — nhập mã sân bay đích trước khi in.
             </p>
           ) : null}
           {error ? (
-            <p className="rounded-lg bg-rose-50 px-2.5 py-2 text-[11px] font-medium text-rose-800">
+            <p className="rounded-lg bg-rose-50 px-2.5 py-2 text-2xs font-medium text-rose-800">
               {error}
             </p>
           ) : null}

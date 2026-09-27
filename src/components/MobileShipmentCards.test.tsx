@@ -54,7 +54,7 @@ describe("MobileShipmentCards", () => {
     expect(html).toContain("NAMNAM");
     expect(html).toContain("2K");
     expect(html).toContain("12.5kg");
-    expect(html).toContain("font-extrabold");
+    expect(html).toContain("font-bold");
     expect(html).toContain("text-ui-navy");
     expect(html).not.toContain(">K<");
     expect(html).not.toContain("CNEE");

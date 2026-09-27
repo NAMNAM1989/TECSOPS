@@ -117,7 +117,7 @@ function ActionIconBtn({
     >
       {children}
       {shortLabel ? (
-        <span className="text-[10px] font-semibold leading-none">{shortLabel}</span>
+        <span className="text-2xs font-semibold leading-none">{shortLabel}</span>
       ) : null}
     </button>
   );
@@ -432,7 +432,7 @@ export function ShipmentRowActionsMenu({
             e.stopPropagation();
             setCsdOpen(true);
           }}
-          className="inline-flex h-7 items-center rounded-md border border-rose-500/35 bg-rose-50 px-1.5 text-[10px] font-bold text-rose-900 hover:bg-rose-100"
+          className="inline-flex h-7 items-center rounded-md border border-rose-500/35 bg-rose-50 px-1.5 text-2xs font-bold text-rose-900 hover:bg-rose-100"
         >
           <IconCsd />
           <span className="ml-0.5">CSD {csdCarrier}</span>

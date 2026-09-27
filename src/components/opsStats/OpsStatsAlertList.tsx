@@ -35,8 +35,8 @@ export function OpsStatsAlertList({ alerts, onSelectAwb, onOpenOps }: Props) {
       data-testid="stats-alert-list"
     >
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-ui-border/60 px-3.5 py-2.5 sm:px-4">
-        <h3 className="m-0 text-[13px] font-extrabold text-ui-navy">Cảnh báo vận hành</h3>
-        <p className="m-0 text-[11px] text-ui-text-muted">
+        <h3 className="m-0 text-[13px] font-bold text-ui-navy">Cảnh báo vận hành</h3>
+        <p className="m-0 text-2xs text-ui-text-muted">
           {alerts.length} mục · {warn} mức cảnh báo
         </p>
       </header>
@@ -49,7 +49,7 @@ export function OpsStatsAlertList({ alerts, onSelectAwb, onOpenOps }: Props) {
               onClick={() => onSelectAwb?.(a.awb)}
             >
               <span
-                className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ${
                   a.severity === "warn"
                     ? "bg-amber-50 text-amber-950 ring-1 ring-amber-200/80"
                     : "bg-slate-100 text-slate-700 ring-1 ring-slate-200/80"
@@ -66,7 +66,7 @@ export function OpsStatsAlertList({ alerts, onSelectAwb, onOpenOps }: Props) {
             {onOpenOps ? (
               <button
                 type="button"
-                className="shrink-0 rounded-lg border border-ui-border/80 px-2 py-1 text-[11px] font-bold text-ui-navy hover:bg-slate-50"
+                className="shrink-0 rounded-lg border border-ui-border/80 px-2 py-1 text-2xs font-bold text-ui-navy hover:bg-slate-50"
                 onClick={() => onOpenOps(a)}
               >
                 Mở Ops

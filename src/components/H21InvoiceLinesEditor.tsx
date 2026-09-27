@@ -34,7 +34,7 @@ export function calcExpectedQty2(qty1: number, unitFactorKg: number): number | n
 }
 
 const cellIn =
-  "h-7 w-full min-w-0 rounded border border-ui-border/70 bg-white px-1 text-[11px] outline-none focus:border-apple-blue focus:ring-1 focus:ring-apple-blue/30";
+  "h-7 w-full min-w-0 rounded border border-ui-border/70 bg-white px-1 text-2xs outline-none focus:border-apple-blue focus:ring-1 focus:ring-apple-blue/30";
 const cellInBad = "border-amber-500 bg-amber-50 ring-1 ring-amber-400/40";
 
 function CellNum({
@@ -127,7 +127,7 @@ function Th({
   return (
     <th
       title={title}
-      className={`sticky top-0 z-[1] border-b border-slate-300 bg-slate-100 px-1 py-1.5 text-[9px] font-extrabold uppercase tracking-wide text-slate-600 ${className}`}
+      className={`sticky top-0 z-[1] border-b border-slate-300 bg-slate-100 px-1 py-1.5 text-2xs font-bold uppercase tracking-wide text-slate-600 ${className}`}
     >
       {children}
     </th>
@@ -242,7 +242,7 @@ export function H21InvoiceLinesEditor({
   return (
     <section className="flex min-h-0 flex-1 flex-col" data-testid="h21-invoice-lines-editor">
       {/* Thanh tóm tắt gọn — 1 hàng */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-black/[0.06] px-2.5 py-1.5 text-[10px]">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-black/[0.06] px-2.5 py-1.5 text-2xs">
         <span className="font-semibold text-ui-text">
           Dòng invoice
           <span className="ml-1 font-normal text-ui-text-muted">({lines.length})</span>
@@ -304,7 +304,7 @@ export function H21InvoiceLinesEditor({
         ) : null}
         <button
           type="button"
-          className="ml-auto text-[10px] font-semibold text-red-700 disabled:opacity-40"
+          className="ml-auto text-2xs font-semibold text-red-700 disabled:opacity-40"
           onClick={onClearAll}
           disabled={lines.length === 0}
         >
@@ -318,7 +318,7 @@ export function H21InvoiceLinesEditor({
             Chưa có dòng hàng — tạo ngẫu nhiên hoặc chọn từ catalog.
           </div>
         ) : (
-          <table className="w-full min-w-[860px] border-collapse text-[11px]">
+          <table className="w-full min-w-[860px] border-collapse text-2xs">
             <thead>
               <tr>
                 <Th className="w-7 text-center">#</Th>
@@ -397,7 +397,7 @@ export function H21InvoiceLinesEditor({
                     }`}
                     data-testid={`h21-invoice-line-${idx + 1}`}
                   >
-                    <td className="px-1 py-1 text-center align-middle text-[10px] font-bold tabular-nums text-ui-text-muted">
+                    <td className="px-1 py-1 text-center align-middle text-2xs font-bold tabular-nums text-ui-text-muted">
                       {idx + 1}
                     </td>
 
@@ -413,7 +413,7 @@ export function H21InvoiceLinesEditor({
                         }
                       />
                       {line.origin ? (
-                        <span className="mt-0.5 inline-block text-[8px] font-bold uppercase tracking-wide text-slate-500">
+                        <span className="mt-0.5 inline-block text-2xs font-bold uppercase tracking-wide text-slate-500">
                           XX {line.origin}
                         </span>
                       ) : null}
@@ -463,7 +463,7 @@ export function H21InvoiceLinesEditor({
                       {l2Mismatch && expectedL2 != null ? (
                         <button
                           type="button"
-                          className="mt-0.5 block w-full text-right text-[8px] font-bold text-amber-900 underline"
+                          className="mt-0.5 block w-full text-right text-2xs font-bold text-amber-900 underline"
                           title={`Áp L2 = L1 × quy cách = ${expectedL2}`}
                           onClick={() =>
                             onPatch(line.id, {
@@ -478,7 +478,7 @@ export function H21InvoiceLinesEditor({
                     </td>
 
                     <td
-                      className="px-0.5 py-1 text-center align-middle text-[10px] font-bold text-slate-500"
+                      className="px-0.5 py-1 text-center align-middle text-2xs font-bold text-slate-500"
                       title="ĐVT 2 cố định KGM"
                     >
                       KGM
@@ -508,7 +508,7 @@ export function H21InvoiceLinesEditor({
                       {amountMismatch ? (
                         <button
                           type="button"
-                          className="mt-0.5 block w-full text-right text-[8px] font-bold text-amber-900 underline"
+                          className="mt-0.5 block w-full text-right text-2xs font-bold text-amber-900 underline"
                           onClick={() => onPatch(line.id, { amount: calcAmount })}
                         >
                           sửa ${line.amount}
@@ -519,7 +519,7 @@ export function H21InvoiceLinesEditor({
                     {/* Quy cách — nguồn chuẩn; ≈ nếu chỉ suy từ L2÷L1 */}
                     <td className="px-1 py-1 align-middle text-right">
                       <div
-                        className={`flex h-7 items-center justify-end gap-0.5 rounded px-1 font-mono text-[11px] font-semibold tabular-nums ${
+                        className={`flex h-7 items-center justify-end gap-0.5 rounded px-1 font-mono text-2xs font-semibold tabular-nums ${
                           shown.derived
                             ? "bg-slate-100 text-slate-600"
                             : "bg-indigo-50 text-indigo-900"
@@ -539,7 +539,7 @@ export function H21InvoiceLinesEditor({
                               {shown.value}
                             </span>
                             <span
-                              className={`text-[8px] font-bold ${
+                              className={`text-2xs font-bold ${
                                 shown.derived ? "text-slate-500" : "text-indigo-600/80"
                               }`}
                             >
@@ -547,7 +547,7 @@ export function H21InvoiceLinesEditor({
                             </span>
                           </>
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-slate-500">—</span>
                         )}
                       </div>
                     </td>
@@ -555,7 +555,7 @@ export function H21InvoiceLinesEditor({
                     <td className="px-0.5 py-1 text-center align-middle">
                       <button
                         type="button"
-                        className="text-[10px] font-bold leading-none text-red-600 hover:text-red-800"
+                        className="text-2xs font-bold leading-none text-red-600 hover:text-red-800"
                         title="Xóa dòng"
                         aria-label="Xóa dòng"
                         onClick={() => onRemove(line.id)}
@@ -568,14 +568,14 @@ export function H21InvoiceLinesEditor({
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-slate-300 bg-slate-100 text-[11px] font-bold">
-                <td className="px-1 py-1.5 text-[10px] text-ui-text-muted" colSpan={3}>
+              <tr className="border-t-2 border-slate-300 bg-slate-100 text-2xs font-bold">
+                <td className="px-1 py-1.5 text-2xs text-ui-text-muted" colSpan={3}>
                   TỔNG
                 </td>
                 <td className="px-1 py-1.5 text-right tabular-nums">{audit.qty1}</td>
                 <td />
                 <td className="px-1 py-1.5 text-right tabular-nums">{audit.qty2}</td>
-                <td className="px-0.5 py-1.5 text-center text-[9px] text-slate-500">
+                <td className="px-0.5 py-1.5 text-center text-2xs text-slate-500">
                   KGM
                 </td>
                 <td />

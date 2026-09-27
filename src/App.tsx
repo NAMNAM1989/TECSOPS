@@ -158,6 +158,8 @@ function AuthenticatedApp() {
               ready={sync.state != null && sync.status !== "loading"}
               syncStatus={sync.status}
               socketConnected={sync.socketConnected}
+              pendingOfflineCount={sync.pendingOfflineCount}
+              onRefresh={sync.refreshState}
               customersMaxSyncedAt={sync.state?.syncMeta?.customersMaxSyncedAt ?? null}
               onSave={async (customers) => {
                 await sync.mutate({ action: "SET_CUSTOMERS", customers });
@@ -171,6 +173,8 @@ function AuthenticatedApp() {
               ready={sync.state != null && sync.status !== "loading"}
               syncStatus={sync.status}
               socketConnected={sync.socketConnected}
+              pendingOfflineCount={sync.pendingOfflineCount}
+              onRefresh={sync.refreshState}
               onNavigateOps={() => navigate("ops")}
               onNavigateCustomers={() => navigate("customers")}
               onOpenLot={(opts) => {

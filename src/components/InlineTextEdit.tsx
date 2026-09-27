@@ -151,7 +151,7 @@ export function InlineTextEdit({
         aria-invalid={Boolean(error)}
       />
       {error ? (
-        <span className="mt-0.5 text-[9px] font-semibold text-rose-600">{error}</span>
+        <span className="mt-0.5 text-2xs font-semibold text-rose-600">{error}</span>
       ) : null}
     </span>
   );

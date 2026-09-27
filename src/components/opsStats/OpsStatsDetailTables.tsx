@@ -38,7 +38,7 @@ export function AggTable({
     <div className="overflow-x-auto">
       <table className="min-w-full border-collapse text-left text-sm">
         <thead>
-          <tr className="border-b border-ui-border/80 bg-slate-50/80 text-[10px] uppercase tracking-wider text-ui-text-muted">
+          <tr className="border-b border-ui-border/80 bg-slate-50/80 text-2xs uppercase tracking-wider text-ui-text-muted">
             <th className="px-3.5 py-2.5 font-bold">{keyLabel}</th>
             <th className="px-3.5 py-2.5 text-right font-bold">Lô</th>
             <th className="px-3.5 py-2.5 text-right font-bold">Kiện</th>
@@ -165,7 +165,7 @@ function LotRow({
       <td className="px-3.5 py-2 text-ui-text-muted">{s.flight || "—"}</td>
       <td className="max-w-[10rem] truncate px-3.5 py-2" title={s.customer}>
         {s.customerCode ? (
-          <span className="mr-1 rounded bg-slate-100 px-1 text-[10px] font-bold text-slate-700">
+          <span className="mr-1 rounded bg-slate-100 px-1 text-2xs font-bold text-slate-700">
             {s.customerCode}
           </span>
         ) : null}
@@ -192,17 +192,17 @@ function LotRow({
             {formatKgTotal(lot.deltaKg)}
           </>
         ) : (
-          <span className="text-[10px] text-slate-500">chưa DIM</span>
+          <span className="text-2xs text-slate-500">chưa DIM</span>
         )}
       </td>
-      <td className="px-3.5 py-2 text-[11px] text-ui-text-muted">
+      <td className="px-3.5 py-2 text-2xs text-ui-text-muted">
         {statusLabel[s.status] ?? s.status}
       </td>
       {onOpenLot ? (
         <td className="px-3.5 py-2">
           <button
             type="button"
-            className="rounded-md border border-ui-border/70 px-1.5 py-0.5 text-[10px] font-bold text-ui-navy hover:bg-slate-50"
+            className="rounded-md border border-ui-border/70 px-1.5 py-0.5 text-2xs font-bold text-ui-navy hover:bg-slate-50"
             onClick={() => onOpenLot(lot)}
           >
             Ops
@@ -272,7 +272,7 @@ export function LotsDetailTable({
     >
       <table className="min-w-full border-collapse text-left text-[13px]">
         <thead className={virtualize ? "sticky top-0 z-[2]" : undefined}>
-          <tr className="border-b border-ui-border/80 bg-slate-50/80 text-[10px] uppercase tracking-wider text-ui-text-muted">
+          <tr className="border-b border-ui-border/80 bg-slate-50/80 text-2xs uppercase tracking-wider text-ui-text-muted">
             <SortHeader
               label="Ngày"
               sortKey="day"
@@ -365,7 +365,7 @@ export function FilterField({
 }) {
   return (
     <label className="flex min-w-0 flex-col gap-1">
-      <span className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+      <span className="text-2xs font-bold uppercase tracking-wider text-ui-text-muted">
         {label}
       </span>
       {children}

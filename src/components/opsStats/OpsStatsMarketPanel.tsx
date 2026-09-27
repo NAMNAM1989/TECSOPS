@@ -30,8 +30,8 @@ function ShareTable({
   return (
     <section className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
       <header className="border-b border-ui-border/60 px-3.5 py-2.5 sm:px-4">
-        <h3 className="m-0 text-[13px] font-extrabold text-ui-navy">{title}</h3>
-        <p className="m-0 mt-0.5 text-[11px] text-ui-text-muted">{subtitle}</p>
+        <h3 className="m-0 text-[13px] font-bold text-ui-navy">{title}</h3>
+        <p className="m-0 mt-0.5 text-2xs text-ui-text-muted">{subtitle}</p>
       </header>
       {rows.length === 0 ? (
         <p className="px-4 py-8 text-center text-sm text-ui-text-muted">Không có dữ liệu</p>
@@ -39,7 +39,7 @@ function ShareTable({
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-left text-[13px]">
             <thead>
-              <tr className="border-b border-ui-border/80 bg-slate-50/80 text-[10px] uppercase tracking-wider text-ui-text-muted">
+              <tr className="border-b border-ui-border/80 bg-slate-50/80 text-2xs uppercase tracking-wider text-ui-text-muted">
                 <th className="px-3.5 py-2.5 font-bold">Nhóm</th>
                 <th className="px-3.5 py-2.5 text-right font-bold">Lô</th>
                 <th className="px-3.5 py-2.5 text-right font-bold">Kg</th>
@@ -98,7 +98,7 @@ export function OpsStatsMarketPanel({
 }: Props) {
   return (
     <div className="space-y-3" data-testid="stats-market-panel">
-      <div className="flex flex-wrap gap-2 px-0.5 text-[11px] text-ui-text-muted">
+      <div className="flex flex-wrap gap-2 px-0.5 text-2xs text-ui-text-muted">
         <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-800 ring-1 ring-slate-200/80">
           HHI khách (kg): {customerShare.hhiKg.toFixed(3)}
         </span>
@@ -134,8 +134,8 @@ export function OpsStatsMarketPanel({
 
       <section className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
         <header className="border-b border-ui-border/60 px-3.5 py-2.5 sm:px-4">
-          <h3 className="m-0 text-[13px] font-extrabold text-ui-navy">Ai đang chiếm tuyến</h3>
-          <p className="m-0 mt-0.5 text-[11px] text-ui-text-muted">Top customer × dest theo kg</p>
+          <h3 className="m-0 text-[13px] font-bold text-ui-navy">Ai đang chiếm tuyến</h3>
+          <p className="m-0 mt-0.5 text-2xs text-ui-text-muted">Top customer × dest theo kg</p>
         </header>
         {customerDestTop.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-ui-text-muted">Không có dữ liệu</p>
@@ -143,7 +143,7 @@ export function OpsStatsMarketPanel({
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse text-left text-[13px]">
               <thead>
-                <tr className="border-b border-ui-border/80 bg-slate-50/80 text-[10px] uppercase tracking-wider text-ui-text-muted">
+                <tr className="border-b border-ui-border/80 bg-slate-50/80 text-2xs uppercase tracking-wider text-ui-text-muted">
                   <th className="px-3.5 py-2.5 font-bold">Khách</th>
                   <th className="px-3.5 py-2.5 font-bold">Dest</th>
                   <th className="px-3.5 py-2.5 text-right font-bold">Lô</th>

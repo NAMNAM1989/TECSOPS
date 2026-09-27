@@ -22,7 +22,7 @@ export const OPS = {
   panelSoft: "rounded-xl border border-black/[0.08] bg-apple-bg/40",
   tableWrap: "overflow-hidden rounded-xl border border-black/[0.08] bg-white",
   tableHead:
-    "border-b border-black/[0.08] bg-apple-bg/90 text-[10px] font-semibold uppercase text-apple-tertiary",
+    "border-b border-black/[0.08] bg-apple-bg/90 text-2xs font-semibold uppercase text-apple-tertiary",
   tableRow: "border-b border-black/[0.06] hover:bg-apple-bg/40",
   tableCell: "font-medium text-apple-label ",
   tableDetail: "bg-apple-bg/50 ",
@@ -31,7 +31,7 @@ export const OPS = {
   btnAdd:
     "rounded-full border border-dashed border-apple-blue/40 bg-white py-2 text-xs font-semibold text-apple-blue hover:bg-apple-blue/5",
   btnSmallAccent:
-    "rounded-full border border-black/[0.1] px-2.5 py-1 text-[10px] font-semibold text-apple-blue hover:bg-apple-blue/10",
+    "rounded-full border border-black/[0.1] px-2.5 py-1 text-2xs font-semibold text-apple-blue hover:bg-apple-blue/10",
   btnResetAmber:
     "rounded-full border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-950 hover:bg-amber-100",
   sectionProfile: "rounded-xl border border-apple-blue/20 bg-apple-blue/[0.04]",
@@ -52,7 +52,7 @@ export const OPS = {
   dropdownLg:
     "overflow-hidden rounded-xl border border-black/[0.1] bg-white py-1 shadow-apple-md",
   dropdownItem:
-    "block w-full px-2.5 py-1.5 text-left text-[11px] font-semibold text-apple-label hover:bg-black/[0.04]",
+    "block w-full px-2.5 py-1.5 text-left text-2xs font-semibold text-apple-label hover:bg-black/[0.04]",
   dropdownItemLg:
     "block w-full px-3 py-2.5 text-left text-sm font-semibold text-apple-label hover:bg-black/[0.04]",
   dropdownItemDanger: "text-red-700 hover:bg-red-50",
@@ -90,7 +90,7 @@ export const OPS = {
   printPreviewFrame:
     "relative overflow-hidden rounded-xl border border-black/[0.1] bg-[#e8eaee] shadow-inner",
   printCoordsToggle:
-    "flex cursor-pointer items-center gap-1.5 rounded-full border border-sky-200/80 bg-sky-50/80 px-2.5 py-1 text-[10px] font-semibold text-sky-900",
+    "flex cursor-pointer items-center gap-1.5 rounded-full border border-sky-200/80 bg-sky-50/80 px-2.5 py-1 text-2xs font-semibold text-sky-900",
   printCoordsToolbarOn:
     "rounded-xl border border-apple-blue/30 bg-apple-blue/5 px-3 py-2",
   printCoordsToolbarOff:
@@ -98,13 +98,13 @@ export const OPS = {
   printCoordsPanel:
     "flex min-h-0 flex-col rounded-xl border border-sky-200/60 bg-sky-50/40",
   printCoordsPanelHead: "border-b border-sky-200/50 px-3 py-2 ",
-  printCoordsPanelTitle: "text-[10px] font-semibold uppercase text-sky-900 ",
-  printCoordsPanelHint: "text-[10px] text-sky-900/75 ",
+  printCoordsPanelTitle: "text-2xs font-semibold uppercase text-sky-900 ",
+  printCoordsPanelHint: "text-2xs text-sky-900/75 ",
   printCoordsTableHead: "sticky top-0 bg-sky-100/90 text-sky-950",
   printSummaryCard:
     "rounded-lg border border-black/[0.06] bg-apple-bg/50 px-2.5 py-2",
   printStepperBtn:
     "min-w-[1.75rem] rounded border border-black/[0.08] bg-white px-1.5 py-0.5 text-xs font-bold text-apple-label hover:bg-black/[0.04]",
   printStepperInput:
-    "w-14 rounded border border-black/[0.08] bg-white px-1 py-0.5 text-center text-[10px] tabular-nums",
+    "w-14 rounded border border-black/[0.08] bg-white px-1 py-0.5 text-center text-2xs tabular-nums",
 } as const;

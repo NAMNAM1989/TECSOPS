@@ -64,8 +64,8 @@ function ToolbarSegment({
       aria-label={label}
     >
       <span
-        className={`shrink-0 select-none font-extrabold uppercase tracking-wide text-ui-text-muted ${
-          mobile ? "px-1 text-[9px]" : "px-1 text-[8px]"
+        className={`shrink-0 select-none font-bold uppercase tracking-wide text-ui-text-muted ${
+          mobile ? "px-1 text-2xs" : "px-1 text-2xs"
         }`}
       >
         {label}
@@ -105,8 +105,8 @@ function ToolChip({
       onFocus={onPrefetch}
       className={`btn-kinetic inline-flex shrink-0 items-center gap-1 rounded-lg font-semibold text-ui-text focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 ${
         mobile
-          ? "min-h-10 touch-manipulation px-2 text-[11px] hover:bg-ui-surface-muted"
-          : "h-8 px-2 text-[11px] hover:bg-ui-surface-muted hover:-translate-y-0.5"
+          ? "min-h-10 touch-manipulation px-2 text-2xs hover:bg-ui-surface-muted"
+          : "h-8 px-2 text-2xs hover:bg-ui-surface-muted"
       }`}
     >
       {children}
@@ -232,10 +232,10 @@ export function OpsActionToolbar({
                 if (action.disabled) return;
                 onCopyCargoDayReport(action.id);
               }}
-              className={`btn-kinetic inline-flex shrink-0 items-center rounded-lg border font-extrabold focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-35 disabled:active:scale-100 ${
+              className={`btn-kinetic inline-flex shrink-0 items-center rounded-lg border font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-35 disabled:active:scale-100 ${
                 isMobile
-                  ? "min-h-10 touch-manipulation border px-2 text-[11px]"
-                  : "h-8 border px-1.5 text-[10px] hover:-translate-y-0.5 hover:shadow-ui-sm"
+                  ? "min-h-10 touch-manipulation border px-2 text-2xs"
+                  : "h-8 border px-1.5 text-2xs hover:shadow-ui-sm"
               } ${REPORT_TONE[action.id]}`}
             >
               {action.label}
@@ -243,7 +243,7 @@ export function OpsActionToolbar({
           ))}
         </div>
         {cargoReportCopying ? (
-          <span className="shrink-0 px-1 text-[10px] font-semibold text-ui-text-muted" aria-live="polite">
+          <span className="shrink-0 px-1 text-2xs font-semibold text-ui-text-muted" aria-live="polite">
             …
           </span>
         ) : null}

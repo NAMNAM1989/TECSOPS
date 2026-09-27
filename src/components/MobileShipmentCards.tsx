@@ -172,7 +172,7 @@ const MobileShipmentCard = memo(
               {flightLine ? (
                 <span
                   className={`min-w-0 flex-1 truncate ${MOBILE.cardFlight} ${
-                    flightMeta.flightDateUrgent ? "!font-extrabold !text-red-600" : ""
+                    flightMeta.flightDateUrgent ? "!font-bold !text-red-600" : ""
                   }`}
                 >
                   {flightLine}
@@ -328,10 +328,10 @@ export function MobileShipmentCards({
                     className="flex min-h-11 min-w-0 flex-1 touch-manipulation items-center gap-1.5 px-0.5 py-0.5 text-left"
                   >
                     <Chevron collapsed={collapsed} />
-                    <span className="text-[11px] font-bold text-dashboard-primary">
+                    <span className="text-2xs font-bold text-dashboard-primary">
                       {warehouseLabel[wh]}
                     </span>
-                    <span className="text-[10px] text-dashboard-muted">
+                    <span className="text-2xs text-dashboard-muted">
                       {group.length}
                     </span>
                   </button>

@@ -47,11 +47,11 @@ function ChartCard({
       className={`flex min-h-[260px] flex-col overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm ${className}`}
     >
       <header className="shrink-0 border-b border-ui-border/60 bg-gradient-to-b from-slate-50/80 to-transparent px-3.5 py-2.5 sm:px-4">
-        <h3 className="m-0 text-[13px] font-extrabold tracking-tight text-ui-navy">
+        <h3 className="m-0 text-[13px] font-bold tracking-tight text-ui-navy">
           {title}
         </h3>
         {subtitle ? (
-          <p className="m-0 mt-0.5 text-[11px] text-ui-text-muted">{subtitle}</p>
+          <p className="m-0 mt-0.5 text-2xs text-ui-text-muted">{subtitle}</p>
         ) : null}
       </header>
       <div className="min-h-0 flex-1 p-2.5 sm:p-3">{children}</div>

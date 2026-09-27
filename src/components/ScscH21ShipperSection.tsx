@@ -117,7 +117,7 @@ export function ScscH21ShipperSection() {
     <section className="mb-6 rounded-2xl border border-ui-border/90 bg-ui-surface p-4 shadow-ui-sm">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-extrabold text-ui-navy">Shipper tờ khai H21</h2>
+          <h2 className="text-sm font-bold text-ui-navy">Shipper tờ khai H21</h2>
           <p className="text-xs text-ui-text-muted">
             Danh sách shipper cố định trên invoice — mỗi công ty có thể upload con dấu riêng (cuối tờ invoice).
           </p>
@@ -135,7 +135,7 @@ export function ScscH21ShipperSection() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="text-[10px] uppercase text-ui-text-muted">
+              <tr className="text-2xs uppercase text-ui-text-muted">
                 <th className="py-1 pr-2">Con dấu</th>
                 <th className="py-1 pr-2">Tên</th>
                 <th className="py-1 pr-2">Địa chỉ</th>
@@ -155,11 +155,11 @@ export function ScscH21ShipperSection() {
                         className="h-10 w-10 rounded border border-ui-border/70 object-contain bg-white"
                       />
                     ) : s.hasSealImage ? (
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-ui-border/70 bg-emerald-50 text-[9px] font-bold text-emerald-800">
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-ui-border/70 bg-emerald-50 text-2xs font-bold text-emerald-800">
                         OK
                       </span>
                     ) : (
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-dashed border-ui-border/80 text-[9px] text-ui-text-muted">
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-dashed border-ui-border/80 text-2xs text-ui-text-muted">
                         —
                       </span>
                     )}
@@ -173,7 +173,7 @@ export function ScscH21ShipperSection() {
                   <td className="py-1.5 text-right">
                     <button
                       type="button"
-                      className="mr-2 text-[11px] font-semibold text-indigo-700"
+                      className="mr-2 text-2xs font-semibold text-indigo-700"
                       onClick={() => {
                         void (async () => {
                           try {
@@ -196,7 +196,7 @@ export function ScscH21ShipperSection() {
                     </button>
                     <button
                       type="button"
-                      className="text-[11px] font-semibold text-red-700"
+                      className="text-2xs font-semibold text-red-700"
                       onClick={() => setDeleteId(s.id)}
                     >
                       Xóa
@@ -211,7 +211,7 @@ export function ScscH21ShipperSection() {
 
       {draft ? (
         <div className={`${OPS.card} mt-4 grid gap-2 p-3 sm:grid-cols-2`}>
-          <label className="text-[11px] font-semibold sm:col-span-2">
+          <label className="text-2xs font-semibold sm:col-span-2">
             Tên shipper
             <Input
               className="mt-1"
@@ -221,7 +221,7 @@ export function ScscH21ShipperSection() {
               }
             />
           </label>
-          <label className="text-[11px] font-semibold sm:col-span-2">
+          <label className="text-2xs font-semibold sm:col-span-2">
             Địa chỉ
             <Input
               className="mt-1"
@@ -231,7 +231,7 @@ export function ScscH21ShipperSection() {
               }
             />
           </label>
-          <label className="text-[11px] font-semibold">
+          <label className="text-2xs font-semibold">
             SĐT
             <Input
               className="mt-1"
@@ -241,7 +241,7 @@ export function ScscH21ShipperSection() {
               }
             />
           </label>
-          <label className="text-[11px] font-semibold">
+          <label className="text-2xs font-semibold">
             Stamp ID
             <Input
               className="mt-1 font-mono uppercase"
@@ -255,10 +255,10 @@ export function ScscH21ShipperSection() {
           </label>
 
           <div className="sm:col-span-2 rounded-xl border border-ui-border/70 bg-ui-surface-muted/40 p-3">
-            <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ui-navy">
+            <div className="mb-2 text-2xs font-bold uppercase tracking-wide text-ui-navy">
               Con dấu trên invoice
             </div>
-            <p className="mb-2 text-[10px] text-ui-text-muted">
+            <p className="mb-2 text-2xs text-ui-text-muted">
               Ảnh PNG/JPG/WEBP — hiện góc dưới tờ invoice (review / Excel / PDF). Nên dùng nền trong suốt.
             </p>
             <div className="flex flex-wrap items-center gap-3">
@@ -269,7 +269,7 @@ export function ScscH21ShipperSection() {
                   className="h-24 w-24 rounded-lg border border-ui-border bg-white object-contain p-1"
                 />
               ) : (
-                <div className="flex h-24 w-24 items-center justify-center rounded-lg border border-dashed border-ui-border text-[10px] text-ui-text-muted">
+                <div className="flex h-24 w-24 items-center justify-center rounded-lg border border-dashed border-ui-border text-2xs text-ui-text-muted">
                   Chưa có
                 </div>
               )}

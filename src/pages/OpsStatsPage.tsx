@@ -97,6 +97,9 @@ type Props = {
   ready: boolean;
   syncStatus: SyncStatus;
   socketConnected: boolean;
+  pendingOfflineCount?: number;
+  lastSyncedAt?: number | null;
+  onRefresh?: () => void;
   onNavigateOps: () => void;
   onNavigateCustomers: () => void;
   onOpenLot?: (opts: {
@@ -213,6 +216,9 @@ export function OpsStatsPage({
   ready,
   syncStatus,
   socketConnected,
+  pendingOfflineCount,
+  lastSyncedAt,
+  onRefresh,
   onNavigateOps,
   onNavigateCustomers,
   onOpenLot,
@@ -668,7 +674,13 @@ export function OpsStatsPage({
                     Control · Booking intelligence · Share nội bộ
                   </span>
                 </div>
-                <SyncStatusPill status={syncStatus} socketConnected={socketConnected} />
+                <SyncStatusPill
+                  status={syncStatus}
+                  socketConnected={socketConnected}
+                  pendingOfflineCount={pendingOfflineCount}
+                  lastSyncedAt={lastSyncedAt}
+                  onRefresh={onRefresh}
+                />
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <Button

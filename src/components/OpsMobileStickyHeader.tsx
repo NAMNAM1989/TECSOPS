@@ -162,7 +162,7 @@ export function OpsMobileStickyHeader({
           >
             <div className="inline-flex max-w-full items-stretch overflow-hidden rounded-xl bg-teal-500/[0.08] shadow-ui-sm ring-1 ring-teal-600/20">
               <div className="flex min-w-0 flex-col items-center justify-center gap-0.5 px-2.5 py-1">
-                <span className="text-2xs font-bold uppercase leading-none tracking-wide text-teal-800/65">
+                <span className="text-2xs font-bold uppercase leading-none tracking-wide text-ui-text-muted">
                   Lô
                 </span>
                 <span className="font-mono text-[13px] font-bold tabular-nums leading-none text-ui-navy">
@@ -171,7 +171,7 @@ export function OpsMobileStickyHeader({
               </div>
               <span className="my-1.5 w-px shrink-0 bg-teal-700/15" aria-hidden />
               <div className="flex min-w-0 flex-col items-center justify-center gap-0.5 px-2.5 py-1">
-                <span className="text-2xs font-bold uppercase leading-none tracking-wide text-teal-800/65">
+                <span className="text-2xs font-bold uppercase leading-none tracking-wide text-ui-text-muted">
                   Kg
                 </span>
                 <span className="max-w-[5.5rem] truncate font-mono text-[13px] font-bold tabular-nums leading-none text-teal-900">
@@ -188,12 +188,27 @@ export function OpsMobileStickyHeader({
               title={syncTitle || syncCta}
               aria-label={syncCta}
             >
-              <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact interactive={false} />
+              <SyncStatusPill
+                status={syncStatus}
+                socketConnected={socketConnected}
+                pendingOfflineCount={pendingOfflineCount}
+                lastSyncedAt={lotSyncedAt}
+                onRefresh={onSyncRefresh}
+                compact
+                interactive={false}
+              />
               <span className="text-2xs font-bold text-ui-navy">{syncCta}</span>
             </button>
           ) : (
             <span title={syncTitle || "Live sync"} className="inline-flex shrink-0 origin-right">
-              <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
+              <SyncStatusPill
+                status={syncStatus}
+                socketConnected={socketConnected}
+                pendingOfflineCount={pendingOfflineCount}
+                lastSyncedAt={lotSyncedAt}
+                onRefresh={onSyncRefresh}
+                compact
+              />
             </span>
           )}
           <button
@@ -258,7 +273,7 @@ export function OpsMobileStickyHeader({
               <button
                 type="button"
                 onClick={onClearFilters}
-                className="mt-1.5 text-2xs font-semibold text-ui-primary"
+                className="mt-1.5 inline-flex items-center min-h-11 px-3 touch-manipulation rounded-lg text-2xs font-semibold text-ui-primary hover:bg-ui-surface-muted"
               >
                 Xóa bộ lọc
               </button>

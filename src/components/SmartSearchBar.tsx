@@ -89,8 +89,8 @@ function FlightDateChips({
             onClick={() => onPick(active ? "" : f.date)}
             className={`inline-flex shrink-0 items-center justify-center gap-0.5 ring-1 transition active:scale-[0.98] ${
               tight
-                ? "h-8 rounded-lg px-2 text-[10px] font-bold tabular-nums"
-                : "min-h-11 min-w-11 rounded-md px-1.5 text-[10px] font-bold tabular-nums"
+                ? "h-8 rounded-lg px-2 text-2xs font-bold tabular-nums"
+                : "min-h-11 min-w-11 rounded-md px-1.5 text-2xs font-bold tabular-nums"
             } ${
               active
                 ? "bg-ui-primary text-white ring-ui-primary"
@@ -105,7 +105,7 @@ function FlightDateChips({
           >
             <span>{f.date}</span>
             <span
-              className={`rounded px-1 py-px text-[9px] font-semibold ${
+              className={`rounded px-1 py-px text-2xs font-semibold ${
                 active ? "bg-white/20 text-white" : "bg-ui-surface-muted text-ui-text-muted"
               }`}
             >
@@ -153,7 +153,7 @@ function SuggestionList({
             }`}
           >
             <span
-              className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${WAREHOUSE_CHIP_CLASS[match.shipment.warehouse]}`}
+              className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ring-1 ${WAREHOUSE_CHIP_CLASS[match.shipment.warehouse]}`}
             >
               {warehouseLabel[match.shipment.warehouse]}
             </span>
@@ -162,12 +162,12 @@ function SuggestionList({
                 <span className="font-mono text-[12px] font-bold text-ui-text">
                   {match.label}
                 </span>
-                <span className="rounded bg-ui-surface-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase text-ui-text-muted">
+                <span className="rounded bg-ui-surface-muted px-1.5 py-0.5 text-2xs font-semibold uppercase text-ui-text-muted">
                   {matchKindLabel(match.kind)}
                 </span>
               </span>
               {match.sublabel ? (
-                <span className="mt-0.5 block truncate text-[11px] text-ui-text-muted">
+                <span className="mt-0.5 block truncate text-2xs text-ui-text-muted">
                   {match.sublabel}
                 </span>
               ) : null}
@@ -176,12 +176,12 @@ function SuggestionList({
         </li>
       ))}
       {remoteLots.length || remoteLoading ? (
-        <li className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
+        <li className="px-3 pb-1 pt-2 text-2xs font-bold uppercase tracking-wide text-ui-text-muted">
           Ngày khác
         </li>
       ) : null}
       {remoteLoading && !remoteLots.length ? (
-        <li className="px-3 py-2 text-[11px] text-ui-text-muted">Đang tìm ngày khác…</li>
+        <li className="px-3 py-2 text-2xs text-ui-text-muted">Đang tìm ngày khác…</li>
       ) : null}
       {remoteLots.map((hit, i) => {
         const idx = suggestions.length + i;
@@ -196,7 +196,7 @@ function SuggestionList({
               }`}
             >
               <span
-                className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${WAREHOUSE_CHIP_CLASS[hit.warehouse]}`}
+                className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ring-1 ${WAREHOUSE_CHIP_CLASS[hit.warehouse]}`}
               >
                 {warehouseLabel[hit.warehouse]}
               </span>
@@ -205,11 +205,11 @@ function SuggestionList({
                   <span className="font-mono text-[12px] font-bold text-ui-text">
                     {hit.label}
                   </span>
-                  <span className="rounded bg-ui-surface-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase text-ui-text-muted">
+                  <span className="rounded bg-ui-surface-muted px-1.5 py-0.5 text-2xs font-semibold uppercase text-ui-text-muted">
                     {matchKindLabel(hit.kind)}
                   </span>
                 </span>
-                <span className="mt-0.5 block truncate text-[11px] text-ui-text-muted">
+                <span className="mt-0.5 block truncate text-2xs text-ui-text-muted">
                   {hit.sublabel || hit.sessionDate}
                 </span>
               </span>
@@ -438,14 +438,14 @@ export function SmartSearchBar({
   const filterSummary =
     hasFilterSummary && matchedRows.length >= 0 ? (
       <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <span className="text-[10px] font-semibold tabular-nums text-ui-text-muted">
+        <span className="text-2xs font-semibold tabular-nums text-ui-text-muted">
           {matchedRows.length} lô
         </span>
         {flightDateFilter ? (
           <button
             type="button"
             onClick={() => onFlightDateChange?.("")}
-            className="inline-flex items-center gap-0.5 rounded-md bg-ui-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-ui-primary"
+            className="inline-flex items-center gap-0.5 rounded-md bg-ui-primary/10 px-1.5 py-0.5 text-2xs font-bold text-ui-primary"
             title="Bỏ lọc ngày bay"
           >
             {flightDateFilter} ×
@@ -454,7 +454,7 @@ export function SmartSearchBar({
         {WAREHOUSE_ORDER.filter((wh) => warehouseCounts[wh] > 0).map((wh) => (
           <span
             key={wh}
-            className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ${WAREHOUSE_CHIP_CLASS[wh]}`}
+            className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-2xs font-semibold ring-1 ${WAREHOUSE_CHIP_CLASS[wh]}`}
           >
             {warehouseLabel[wh]} {warehouseCounts[wh]}
           </span>
@@ -524,7 +524,7 @@ export function SmartSearchBar({
 
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
               {!trimmed && flightFacets.length ? (
-                <p className="text-[11px] text-ui-text-muted">
+                <p className="text-2xs text-ui-text-muted">
                   Chọn ngày bay, hoặc gõ MAWB / số xe / tài xế / DEST.
                 </p>
               ) : null}
@@ -596,7 +596,7 @@ export function SmartSearchBar({
         </button>
       ) : (
         <kbd
-          className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-ui-border bg-ui-surface-muted px-1 py-px text-[9px] font-semibold leading-none text-ui-text-muted sm:inline-block"
+          className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-ui-border bg-ui-surface-muted px-1 py-px text-2xs font-semibold leading-none text-ui-text-muted sm:inline-block"
           title="Nhấn / hoặc F để tìm nhanh"
         >
           /

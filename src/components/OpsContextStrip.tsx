@@ -14,6 +14,7 @@ type Props = {
   selectedYmd: string;
   filteredViewRows: readonly Shipment[];
   viewRows: readonly Shipment[];
+  allRows?: readonly Shipment[];
   activeWarehouse: Warehouse;
   onWarehouseChange: (wh: Warehouse) => void;
   searchHighlightWarehouses?: readonly Warehouse[];
@@ -46,6 +47,7 @@ export function OpsContextStrip({
   selectedYmd,
   filteredViewRows,
   viewRows,
+  allRows,
   activeWarehouse,
   onWarehouseChange,
   searchHighlightWarehouses = [],
@@ -75,10 +77,15 @@ export function OpsContextStrip({
       embedded
       selectedYmd={selectedYmd}
       rows={filteredViewRows}
+      allRows={allRows}
       activeWarehouse={activeWarehouse}
       onSelectWarehouse={onWarehouseChange}
       highlightWarehouses={searchHighlightWarehouses}
       filtersActive={filtersActive}
+      attentionActive={statusFilter === "attention"}
+      onSelectAttention={() =>
+        onStatusFilterChange(statusFilter === "attention" ? "ALL" : "attention")
+      }
     />
   );
 
@@ -124,7 +131,7 @@ export function OpsContextStrip({
                   <button
                     type="button"
                     onClick={onExpandMobileStatus}
-                    className="inline-flex h-9 min-w-9 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-ui-border/80 bg-ui-surface text-[10px] font-bold text-ui-text-muted shadow-ui-sm"
+                    className="inline-flex h-9 min-w-9 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-ui-border/80 bg-ui-surface text-2xs font-bold text-ui-text-muted shadow-ui-sm"
                     aria-label="Lọc trạng thái"
                     title="Lọc trạng thái"
                   >
@@ -135,7 +142,7 @@ export function OpsContextStrip({
                       variant="ghost"
                       size="sm"
                       onClick={onClearFilters}
-                      className="h-9 shrink-0 px-2 text-[10px] font-bold text-ui-primary"
+                      className="h-9 shrink-0 px-2 text-2xs font-bold text-ui-primary"
                     >
                       Xóa
                     </Button>
@@ -144,7 +151,7 @@ export function OpsContextStrip({
               ) : null}
             </div>
           ) : (
-            <p className="px-2 py-1.5 text-[11px] font-medium text-ui-text-muted">
+            <p className="px-2 py-1.5 text-2xs font-medium text-ui-text-muted">
               Chưa có lô trong ngày · dùng Booking hoặc Sync
             </p>
           )}
@@ -210,7 +217,7 @@ export function OpsContextStrip({
                   <button
                     type="button"
                     onClick={onClearFilters}
-                    className="inline-flex h-8 shrink-0 items-center rounded-lg px-2 text-[10px] font-bold text-ui-primary hover:bg-ui-primary/10"
+                    className="inline-flex h-8 shrink-0 items-center rounded-lg px-2 text-2xs font-bold text-ui-primary hover:bg-ui-primary/10"
                     title="Xóa mọi bộ lọc"
                   >
                     Xóa lọc
@@ -218,7 +225,7 @@ export function OpsContextStrip({
                 ) : null}
               </>
             ) : (
-              <p className="shrink-0 text-[11px] font-medium text-ui-text-muted">
+              <p className="shrink-0 text-2xs font-medium text-ui-text-muted">
                 Chưa có lô trong ngày · dùng Booking hoặc Sync
               </p>
             )}

@@ -294,7 +294,7 @@ export function MobileShipmentEditSheet({
               <h2 className="text-[16px] font-bold text-ui-text">
                 {awb.trim() ? "Sửa lô" : "Booking mới"}
               </h2>
-              <p className="truncate font-shipment-data text-[11px] text-ui-text-muted">
+              <p className="truncate font-shipment-data text-2xs text-ui-text-muted">
                 {shipment.warehouse} · {sessionDateYmd}
               </p>
             </div>
@@ -394,7 +394,7 @@ export function MobileShipmentEditSheet({
                   />
                 </Field>
                 <div className={`space-y-2 rounded-2xl border p-3 ${OPS.panelSoft}`}>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-apple-secondary">
+                  <p className="text-2xs font-semibold uppercase tracking-wide text-apple-secondary">
                     Thông tin KH
                   </p>
                   <Field label="Shipper">
@@ -448,7 +448,7 @@ export function MobileShipmentEditSheet({
                       ))}
                     </select>
                   </Field>
-                  <p className="text-[11px] leading-relaxed text-apple-tertiary">
+                  <p className="text-2xs leading-relaxed text-apple-tertiary">
                     Chọn từ hồ sơ đã lưu trong Danh bạ khách.
                   </p>
                 </div>
@@ -485,7 +485,7 @@ export function MobileShipmentEditSheet({
             {tab === "notify" ? (
               <div className="space-y-4">
                 <div className={`rounded-2xl border p-4 ${OPS.panelSoft}`}>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-apple-secondary">
+                  <p className="text-2xs font-semibold uppercase tracking-wide text-apple-secondary">
                     Nội dung thông báo
                   </p>
                   {notifyPreview.trim() ? (
@@ -508,7 +508,7 @@ export function MobileShipmentEditSheet({
                     {copyOk ? "Đã sao chép" : "Sao chép thông báo"}
                   </button>
                 </div>
-                <p className="text-[11px] leading-relaxed text-apple-tertiary">
+                <p className="text-2xs leading-relaxed text-apple-tertiary">
                   Hồ sơ Shipper / CNEE / Tên hàng được quản lý trong Danh bạ.
                 </p>
               </div>
@@ -641,7 +641,7 @@ function Field({
     <div>
       <label className={MOBILE.fieldLabel}>{label}</label>
       {hint ? (
-        <p className="-mt-1 mb-1.5 text-[10px] text-ui-text-muted">{hint}</p>
+        <p className="-mt-1 mb-1.5 text-2xs text-ui-text-muted">{hint}</p>
       ) : null}
       {children}
     </div>

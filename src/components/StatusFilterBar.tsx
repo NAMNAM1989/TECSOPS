@@ -2,8 +2,9 @@ import { useMemo } from "react";
 import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { statusOrderForFilter } from "../utils/shipmentWorkflowStatus";
 import { statusIcon, statusLabel, statusLabelCompact } from "./statusStyles";
+import { countAttentionRows } from "../utils/opsAttention";
 
-export type StatusFilterValue = ShipmentStatus | "ALL";
+export type StatusFilterValue = ShipmentStatus | "ALL" | "attention";
 
 interface StatusFilterBarProps {
   /** Các lô trong ngày đang xem (chưa lọc) */
@@ -44,6 +45,11 @@ export function StatusFilterBar({
     return m;
   }, [dayRows, statusOrder]);
 
+  const attentionCount = useMemo(
+    () => countAttentionRows(dayRows as Shipment[], dayRows as Shipment[]),
+    [dayRows]
+  );
+
   if (dayRows.length === 0) return null;
 
   const segments = (
@@ -63,6 +69,7 @@ export function StatusFilterBar({
           onChange("ALL");
         }}
         label="Tất cả"
+        ariaLabel="Tất cả trạng thái"
         icon="☰"
         count={dayRows.length}
       />
@@ -85,6 +92,20 @@ export function StatusFilterBar({
           />
         );
       })}
+      {attentionCount > 0 || value === "attention" ? (
+        <FilterSegment
+          compact={compact}
+          dense={dense}
+          tight={tight}
+          active={value === "attention"}
+          onClick={() => onChange("attention")}
+          label="Cần xử lý"
+          icon="⚠"
+          count={attentionCount}
+          srOnlyText="cần chú ý"
+          tone={attentionCount > 0 ? "danger" : "default"}
+        />
+      ) : null}
     </div>
   );
 
@@ -104,7 +125,7 @@ export function StatusFilterBar({
           <button
             type="button"
             onClick={() => onChange("ALL")}
-            className="shrink-0 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
+            className="shrink-0 rounded-lg px-1.5 py-0.5 text-2xs font-semibold text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
             title="Xóa lọc trạng thái"
           >
             ×
@@ -124,7 +145,7 @@ export function StatusFilterBar({
           <button
             type="button"
             onClick={() => onChange("ALL")}
-            className="shrink-0 rounded-full border border-ui-border bg-ui-surface px-2.5 py-1 text-[10px] font-semibold text-ui-text hover:bg-ui-surface-muted"
+            className="shrink-0 rounded-full border border-ui-border bg-ui-surface px-2.5 py-1 text-2xs font-semibold text-ui-text hover:bg-ui-surface-muted"
           >
             Xóa lọc
           </button>
@@ -146,6 +167,9 @@ function FilterSegment({
   compact,
   dense,
   tight,
+  tone = "default",
+  ariaLabel,
+  srOnlyText,
 }: {
   active: boolean;
   onClick: () => void;
@@ -155,36 +179,50 @@ function FilterSegment({
   compact?: boolean;
   dense?: boolean;
   tight?: boolean;
+  tone?: "default" | "danger";
+  ariaLabel?: string;
+  srOnlyText?: string;
 }) {
   const isEmpty = count === 0;
+  const isDanger = tone === "danger";
 
   return (
     <button
       type="button"
       role="tab"
       aria-selected={active}
+      aria-label={ariaLabel}
       onClick={onClick}
       className={`btn-kinetic glide-pill relative shrink-0 select-none whitespace-nowrap rounded-full font-semibold leading-tight touch-manipulation ${
         tight
-          ? "inline-flex h-8 items-center px-2 text-[10px]"
+          ? "inline-flex h-8 items-center px-2 text-2xs"
           : dense
-            ? "inline-flex min-h-11 items-center px-2.5 py-1 text-[11px]"
+            ? "inline-flex min-h-11 items-center px-2.5 py-1 text-2xs"
             : compact
-              ? "px-2.5 py-1 text-[10px]"
-              : "px-3 py-1.5 text-[11px] sm:text-xs"
+              ? "px-2.5 py-1 text-2xs"
+              : "px-3 py-1.5 text-2xs sm:text-xs"
       } ${isEmpty && !active ? "opacity-40" : "opacity-100"} ${
         active
-          ? "bg-ui-primary text-white shadow-[0_2px_8px_rgba(13,148,136,0.35)] scale-[1.02]"
-          : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text hover:-translate-y-0.5"
+          ? isDanger
+            ? "bg-rose-600 text-white shadow-sm"
+            : "bg-ui-primary text-white shadow-sm"
+          : isDanger
+            ? "bg-rose-50/80 text-rose-800 border border-rose-200/90 hover:bg-rose-100 hover:text-rose-900"
+            : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
       }`}
     >
       <span className="mr-0.5 opacity-80" aria-hidden>
         {icon}
       </span>
       <span>{label}</span>
+      {srOnlyText ? <span className="sr-only"> {srOnlyText}</span> : null}
       <span
-        className={`ml-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold tabular-nums transition-colors duration-200 ${
-          active ? "bg-white/25 text-white" : "bg-black/5 text-ui-text-muted"
+        className={`ml-1 rounded-full px-1.5 py-0.5 text-2xs font-bold tabular-nums transition-colors duration-200 ${
+          active
+            ? "bg-white/25 text-white"
+            : isDanger
+              ? "bg-rose-200 text-rose-900 font-bold"
+              : "bg-black/5 text-ui-text-muted"
         }`}
       >
         {count}

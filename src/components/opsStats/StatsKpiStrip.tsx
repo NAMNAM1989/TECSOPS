@@ -22,7 +22,7 @@ export function StatsKpiStrip({ items }: { items: StatsKpiItem[] }) {
             title={item.hint}
             className="min-w-[7.5rem] shrink-0 px-3.5 py-3.5 sm:min-w-0 sm:px-4"
           >
-            <p className="m-0 text-[10px] font-bold uppercase tracking-[0.08em] text-ui-text-muted">
+            <p className="m-0 text-2xs font-bold uppercase tracking-[0.08em] text-ui-text-muted">
               {item.label}
             </p>
             <p
@@ -34,7 +34,7 @@ export function StatsKpiStrip({ items }: { items: StatsKpiItem[] }) {
             </p>
             {item.deltaLabel ? (
               <p
-                className={`m-0 mt-1 text-[10px] font-semibold tabular-nums ${
+                className={`m-0 mt-1 text-2xs font-semibold tabular-nums ${
                   item.deltaPositive
                     ? "text-emerald-700"
                     : item.deltaLabel.startsWith("-")

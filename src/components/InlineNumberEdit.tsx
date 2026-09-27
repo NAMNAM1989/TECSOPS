@@ -88,7 +88,7 @@ export function InlineNumberEdit({
     variant === "grid"
       ? "ops-inline-edit inline-flex min-w-[2rem] justify-end rounded px-0.5 py-0 text-right leading-none"
       : compact
-        ? "ops-inline-edit inline-flex min-w-[2rem] max-w-[4rem] justify-end rounded px-0.5 py-0 text-[11px] leading-none font-bold tabular-nums"
+        ? "ops-inline-edit inline-flex min-w-[2rem] max-w-[4rem] justify-end rounded px-0.5 py-0 text-2xs leading-none font-bold tabular-nums"
         : "ops-inline-edit w-full rounded px-1 py-0.5 text-right";
 
   const emptyLabel = placeholder || "\u00a0";
@@ -123,9 +123,9 @@ export function InlineNumberEdit({
 
   const inputCls =
     variant === "grid"
-      ? "w-full min-w-[2.5rem] rounded border border-black/[0.12] bg-white px-1 py-0 text-right text-[11px] font-bold tabular-nums focus:outline-none focus:ring-1 focus:ring-apple-blue/35"
+      ? "w-full min-w-[2.5rem] rounded border border-black/[0.12] bg-white px-1 py-0 text-right text-2xs font-bold tabular-nums focus:outline-none focus:ring-1 focus:ring-apple-blue/35"
       : compact
-        ? "inline-block w-14 rounded-lg border border-apple-blue bg-white px-1 py-0.5 text-right text-[11px] font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/25"
+        ? "inline-block w-14 rounded-lg border border-apple-blue bg-white px-1 py-0.5 text-right text-2xs font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/25"
         : "w-full rounded-xl border-2 border-apple-blue bg-white px-1.5 py-0.5 text-right text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20";
 
   return (
@@ -166,7 +166,7 @@ export function InlineNumberEdit({
         aria-invalid={Boolean(error)}
       />
       {error ? (
-        <span className="mt-0.5 text-[9px] font-semibold leading-tight text-rose-600">
+        <span className="mt-0.5 text-2xs font-semibold leading-tight text-rose-600">
           {error}
         </span>
       ) : null}

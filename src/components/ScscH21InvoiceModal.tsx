@@ -665,11 +665,11 @@ export function ScscH21InvoiceModal({
       {/* Shipper tờ khai */}
       <section className="shrink-0 border-b border-ui-border/80 bg-ui-surface px-4 py-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="text-xs font-extrabold uppercase tracking-wide text-ui-navy">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-ui-navy">
             Shipper tờ khai
           </h3>
           {!shipperId ? (
-            <span className="text-[10px] font-semibold text-amber-700">Bắt buộc chọn</span>
+            <span className="text-2xs font-semibold text-amber-700">Bắt buộc chọn</span>
           ) : null}
         </div>
         {activeStamps.length === 0 ? (
@@ -693,11 +693,11 @@ export function ScscH21InvoiceModal({
                 >
                   <div className="line-clamp-2 text-xs font-bold text-ui-navy">{s.shipperName}</div>
                   {s.shipperAddress ? (
-                    <div className="mt-0.5 line-clamp-2 text-[10px] text-ui-text-muted">
+                    <div className="mt-0.5 line-clamp-2 text-2xs text-ui-text-muted">
                       {s.shipperAddress}
                     </div>
                   ) : null}
-                  <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-ui-text-muted">
+                  <div className="mt-1 flex flex-wrap gap-2 text-2xs text-ui-text-muted">
                     {s.shipperPhone ? <span>{s.shipperPhone}</span> : null}
                     {s.stampId ? (
                       <span className="font-mono font-semibold text-indigo-700">{s.stampId}</span>
@@ -718,7 +718,7 @@ export function ScscH21InvoiceModal({
               <span className="shrink-0 font-bold text-ui-text-muted">INV NO:</span>
               <input
                 type="text"
-                className={`${OPS.input} h-7 min-w-[10rem] max-w-[18rem] flex-1 px-2 font-mono text-[11px] uppercase`}
+                className={`${OPS.input} h-7 min-w-[10rem] max-w-[18rem] flex-1 px-2 font-mono text-2xs uppercase`}
                 value={invoiceNoDraft}
                 placeholder={suggestedInvoiceNo || "Nhập số invoice…"}
                 title="Nhập tay INVOICE NO — lưu theo từng tờ khai"
@@ -732,7 +732,7 @@ export function ScscH21InvoiceModal({
             {suggestedInvoiceNo && invoiceNoDraft.trim() !== suggestedInvoiceNo ? (
               <button
                 type="button"
-                className="shrink-0 text-[10px] font-semibold text-indigo-700 underline"
+                className="shrink-0 text-2xs font-semibold text-indigo-700 underline"
                 title={`Điền gợi ý: ${suggestedInvoiceNo}`}
                 onClick={() => patchActiveSplit({ invoiceNoDraft: suggestedInvoiceNo })}
               >
@@ -831,7 +831,7 @@ export function ScscH21InvoiceModal({
       </div>
 
       {boundToCustomer && customerPresetPool.length > 0 ? (
-        <div className="shrink-0 border-b border-emerald-200/80 bg-emerald-50/70 px-4 py-1.5 text-[11px] text-emerald-950">
+        <div className="shrink-0 border-b border-emerald-200/80 bg-emerald-50/70 px-4 py-1.5 text-2xs text-emerald-950">
           Chỉ hiện data riêng · {customerEntry?.code ?? "—"} ·{" "}
           {customerPresetPool.length} SP đã up (không lẫn catalog chung)
           {customerUnresolvedCount > 0
@@ -839,24 +839,24 @@ export function ScscH21InvoiceModal({
             : ""}
         </div>
       ) : boundToCustomer && customerPresetPool.length === 0 ? (
-        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] text-amber-950">
+        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-2xs text-amber-950">
           KH {customerEntry?.code ?? "—"} đã có Data H21 nhưng không dùng được — up
           lại list trên Danh mục H21 · SCSC.
         </div>
       ) : customerEntry ? (
-        <div className="shrink-0 border-b border-ui-border/60 bg-ui-surface-muted/50 px-4 py-1.5 text-[11px] text-ui-text-muted">
+        <div className="shrink-0 border-b border-ui-border/60 bg-ui-surface-muted/50 px-4 py-1.5 text-2xs text-ui-text-muted">
           KH {customerEntry.code} chưa up data H21 tại SCSC — đang hiện catalog
           chung. Vào Danh mục H21 · SCSC → chọn KH → Thay list của KH.
         </div>
       ) : (
-        <div className="shrink-0 border-b border-ui-border/60 bg-ui-surface-muted/50 px-4 py-1.5 text-[11px] text-ui-text-muted">
+        <div className="shrink-0 border-b border-ui-border/60 bg-ui-surface-muted/50 px-4 py-1.5 text-2xs text-ui-text-muted">
           Lô chưa khớp khách trong danh bạ — H21 hiện catalog chung. Gắn đúng KH
           trên lô (vd. MINH KHANG).
         </div>
       )}
 
       {validationErrors.length > 0 ? (
-        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] text-amber-900">
+        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-2xs text-amber-900">
           {validationErrors.join(" · ")}
         </div>
       ) : null}
@@ -906,7 +906,7 @@ export function ScscH21InvoiceModal({
                     onClick={() => addFromCatalog(item)}
                   >
                     <div className="min-w-0 flex-1 text-left">
-                      <div className="text-[10px] font-bold text-indigo-700">{item.category}</div>
+                      <div className="text-2xs font-bold text-indigo-700">{item.category}</div>
                       <div className="line-clamp-2 text-xs font-medium">{item.description}</div>
                     </div>
                     <span className="shrink-0 text-lg font-bold text-apple-blue">+</span>
@@ -946,10 +946,10 @@ export function ScscH21InvoiceModal({
   const reviewPane = (
     <div className="flex min-h-0 flex-1 flex-col bg-neutral-100/80">
       <div className="shrink-0 border-b border-ui-border/60 bg-ui-surface px-4 py-2">
-        <h3 className="text-xs font-extrabold uppercase tracking-wide text-ui-navy">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-ui-navy">
           Xem trước invoice
         </h3>
-        <p className="text-[10px] text-ui-text-muted">
+        <p className="text-2xs text-ui-text-muted">
           Cập nhật realtime khi đổi shipper hoặc dòng hàng
         </p>
       </div>
@@ -1000,15 +1000,15 @@ export function ScscH21InvoiceModal({
         </div>
 
         <div className="min-w-0 flex-1 sm:px-2">
-          <h2 className="text-sm font-extrabold text-ui-navy sm:text-base">
+          <h2 className="text-sm font-bold text-ui-navy sm:text-base">
             Invoice H21 · Phi mậu dịch
             {isDirty ? (
-              <span className="ml-2 align-middle text-[10px] font-bold uppercase tracking-wide text-amber-700">
+              <span className="ml-2 align-middle text-2xs font-bold uppercase tracking-wide text-amber-700">
                 • chưa lưu
               </span>
             ) : null}
           </h2>
-          <p className="text-[11px] text-ui-text-muted">
+          <p className="text-2xs text-ui-text-muted">
             AWB {shipment.awb || "—"} · {shipment.flight || "—"}/{shipment.flightDate || "—"}
           </p>
         </div>

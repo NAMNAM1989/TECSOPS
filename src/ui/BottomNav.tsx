@@ -220,7 +220,7 @@ export function BottomNav({
         >
           {reportActions.length > 0 ? (
             <div data-testid="bottom-nav-cargo-copy" className="border-b border-ui-border/70">
-              <p className="px-3 pb-1 pt-2 text-[9px] font-extrabold uppercase tracking-wide text-ui-text-muted">
+              <p className="px-3 pb-1 pt-2 text-2xs font-bold uppercase tracking-wide text-ui-text-muted">
                 Copy ảnh
               </p>
               {reportActions.map((action) => (
@@ -245,7 +245,7 @@ export function BottomNav({
                   <IconImage className="h-4 w-4 shrink-0 text-ui-accent" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[13px] font-bold leading-tight">{action.label}</span>
-                    <span className="block truncate text-[10px] font-medium text-ui-text-muted">
+                    <span className="block truncate text-2xs font-medium text-ui-text-muted">
                       {action.description}
                     </span>
                   </span>
@@ -272,7 +272,7 @@ export function BottomNav({
                   <span className="block leading-tight">
                     {airlineSyncing ? "Đang đồng bộ hãng…" : "Đồng bộ hãng bay"}
                   </span>
-                  <span className="block truncate text-[10px] font-medium text-ui-text-muted">
+                  <span className="block truncate text-2xs font-medium text-ui-text-muted">
                     {syncedLabel}
                   </span>
                 </span>

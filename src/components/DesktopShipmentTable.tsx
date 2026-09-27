@@ -11,6 +11,7 @@ import {
   formatYmdToFlightDateDdMon,
   parseBookingDateLoose,
 } from "../utils/bookingDateParse";
+import { isCargoReportFlightDateUrgent } from "../utils/cargoDayReport";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { InlineAwbEdit } from "./InlineAwbEdit";
 import { LazyMobileDimKgModal } from "./LazyMobileDimKgModal";
@@ -132,9 +133,9 @@ export function DesktopShipmentTable({
           <div className="flex items-center justify-between gap-2 border-b border-ui-border/80 bg-ui-surface px-4 py-2.5">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <div className="min-w-0">
-                <h2 className="text-[12px] font-extrabold leading-tight tracking-tight text-ui-navy">
+                <h2 className="text-[12px] font-bold leading-tight tracking-tight text-ui-navy">
                   {warehouseLabel[activeWarehouse]}
-                  <span className="ml-1.5 text-[10px] font-semibold text-ui-text-muted">
+                  <span className="ml-1.5 text-2xs font-semibold text-ui-text-muted">
                     · {group.length} lô
                   </span>
                 </h2>
@@ -159,7 +160,7 @@ export function DesktopShipmentTable({
                     <th
                       key={c.key}
                       title={c.title}
-                      className={`box-border px-1 py-1.5 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted ${
+                      className={`box-border px-1 py-1.5 text-2xs font-bold uppercase tracking-wider text-ui-text-muted ${
                         c.key === "customerInfo" || c.key === "status"
                           ? "truncate"
                           : "whitespace-nowrap"
@@ -325,7 +326,7 @@ function ShipmentTableRowImpl({
       <td
         className={cell(
           "first",
-          "text-center font-shipment-data text-[11px] font-semibold tabular-nums text-ui-text-muted",
+          "text-center font-shipment-data text-2xs font-semibold tabular-nums text-ui-text-muted",
         )}
       >
         {row.stt}
@@ -344,7 +345,7 @@ function ShipmentTableRowImpl({
             value={row.hawb ?? ""}
             placeholder="HAWB"
             title={row.hawb?.trim() ? `HAWB: ${row.hawb}` : undefined}
-            className="font-shipment-data !py-0 text-[11px] font-semibold ops-grid-cell-muted"
+            className="font-shipment-data !py-0 text-2xs font-semibold ops-grid-cell-muted"
             maxLength={32}
             gridNav={{ rowId: row.id, field: "hawb" }}
             onCommit={(v) => onUpdate(row.id, { hawb: v.slice(0, 32) })}
@@ -367,24 +368,39 @@ function ShipmentTableRowImpl({
               focusShipmentGridCell(row.id, "flightDate")
             }
           />
-          <InlineTextEdit
-            value={row.flightDate}
-            placeholder="15APR"
-            title={row.flightDate?.trim() ? `Ngày: ${row.flightDate}` : undefined}
-            className="font-shipment-data !py-0 text-[11px] font-medium ops-grid-cell-muted"
-            uppercase
-            maxLength={16}
-            gridNav={{ rowId: row.id, field: "flightDate" }}
-            onCommit={onFlightDateCommit}
-            onEnterNavigateDown={onFlightDateEnterDown}
-          />
+          <div className="flex items-center gap-1">
+            <InlineTextEdit
+              value={row.flightDate}
+              placeholder="15APR"
+              title={row.flightDate?.trim() ? `Ngày: ${row.flightDate}` : undefined}
+              className={`font-shipment-data !py-0 text-2xs font-medium ops-grid-cell-muted ${
+                row.flightDate && viewSessionYmd && isCargoReportFlightDateUrgent(row.flightDate, viewSessionYmd)
+                  ? "font-bold text-red-700"
+                  : ""
+              }`}
+              uppercase
+              maxLength={16}
+              gridNav={{ rowId: row.id, field: "flightDate" }}
+              onCommit={onFlightDateCommit}
+              onEnterNavigateDown={onFlightDateEnterDown}
+            />
+          </div>
+          {row.cutoff ? (
+            <div
+              className="text-2xs text-ui-text-muted truncate"
+              title={row.cutoffNote ? `${row.cutoff} · ${row.cutoffNote}` : row.cutoff}
+            >
+              {row.cutoff}
+              {row.cutoffNote ? ` · ${row.cutoffNote}` : ""}
+            </div>
+          ) : null}
         </div>
       </td>
       <td className={cell("mid", "text-center")}>
         <InlineTextEdit
           value={row.dest}
           placeholder="DEST"
-          className="font-shipment-data !py-0 text-center text-[13px] font-extrabold text-ui-awb"
+          className="font-shipment-data !py-0 text-center text-[13px] font-bold text-ui-awb"
           uppercase
           maxLength={3}
           gridNav={{ rowId: row.id, field: "dest" }}
@@ -480,7 +496,7 @@ function ShipmentTableRowImpl({
               profileSelection={row}
               customerDirectory={customerDirectory}
               placeholder="Khách"
-              className="min-w-0 whitespace-normal break-words text-[12px] font-extrabold leading-tight text-ui-awb line-clamp-2"
+              className="min-w-0 whitespace-normal break-words text-[12px] font-bold leading-tight text-ui-awb line-clamp-2"
               maxLength={120}
               gridNav={{ rowId: row.id, field: "customer" }}
               onCommit={(patch) => onUpdate(row.id, patch)}

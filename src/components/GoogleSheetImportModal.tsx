@@ -496,10 +496,10 @@ export function GoogleSheetImportModal({
                 : "border-ui-border bg-ui-surface-muted/40"
             }`}
           >
-            <p className="text-[11px] font-semibold text-ui-text">
+            <p className="text-2xs font-semibold text-ui-text">
               Kéo thả file CSV/TSV hoặc link Google Sheet vào đây
             </p>
-            <p className="mt-0.5 text-[10px] text-ui-text-muted">
+            <p className="mt-0.5 text-2xs text-ui-text-muted">
               Hoặc chọn file · vẫn giữ URL Google Sheet bên dưới.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -514,7 +514,7 @@ export function GoogleSheetImportModal({
               </Button>
               <button
                 type="button"
-                className="text-[10px] font-semibold text-ui-text-muted underline hover:text-ui-text"
+                className="text-2xs font-semibold text-ui-text-muted underline hover:text-ui-text"
                 onClick={() => {
                   clearSheetColMapping();
                   setMappingWarn(null);
@@ -536,7 +536,7 @@ export function GoogleSheetImportModal({
             />
           </div>
           <label className="block">
-            <span className="mb-0.5 block text-[10px] font-semibold text-ui-text-muted">
+            <span className="mb-0.5 block text-2xs font-semibold text-ui-text-muted">
               URL Google Sheet
             </span>
             <input
@@ -547,7 +547,7 @@ export function GoogleSheetImportModal({
               disabled={loading || applying}
               className="w-full rounded-lg border border-ui-border bg-ui-surface px-2.5 py-2 text-xs outline-none focus:border-ui-primary/50 focus:ring-2 focus:ring-ui-focus disabled:opacity-50"
             />
-            <p className="mt-1 text-[10px] leading-snug text-ui-text-muted">
+            <p className="mt-1 text-2xs leading-snug text-ui-text-muted">
               Dán link tab đang mở trên Google (có gid) hoặc link file. Share «Anyone with the link
               can view». Bấm «Tải dòng» sau khi dán. Mapping cột lần trước được nhớ theo spreadsheet.
             </p>
@@ -596,7 +596,7 @@ export function GoogleSheetImportModal({
                   role="tab"
                   aria-selected={active}
                   onClick={() => applyWarehouseFilter(id)}
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${
+                  className={`rounded-full px-2.5 py-1 text-2xs font-semibold transition ${
                     active
                       ? "bg-dashboard-primary text-white"
                       : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
@@ -633,7 +633,7 @@ export function GoogleSheetImportModal({
             </span>
           )}
           {sync?.sheetTabMismatch ? (
-            <p className="w-full text-[10px] font-medium text-amber-800">
+            <p className="w-full text-2xs font-medium text-amber-800">
               Tab Sheet «{sync.sheetTab}» khác ngày phiên Ops
               {sync.expectedSheetTab ? ` (kỳ vọng «${sync.expectedSheetTab}»)` : ""}. Lô vẫn nhập vào
               phiên {sync.sessionDate}.
@@ -651,7 +651,7 @@ export function GoogleSheetImportModal({
                 applyErrors.length > 0 ? (
                   <button
                     type="button"
-                    className="text-[11px] font-semibold underline"
+                    className="text-2xs font-semibold underline"
                     onClick={() => setShowErrors((v) => !v)}
                   >
                     {showErrors ? "Ẩn lỗi" : "Xem lỗi"}
@@ -662,7 +662,7 @@ export function GoogleSheetImportModal({
               {error}
             </Banner>
             {showErrors && applyErrors.length > 0 ? (
-              <ul className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-ui-border bg-ui-surface px-2 py-1.5 text-[11px] text-ui-text">
+              <ul className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-ui-border bg-ui-surface px-2 py-1.5 text-2xs text-ui-text">
                 {applyErrors.map((e, i) => (
                   <li key={`${e.awb}-${i}`} className="py-0.5">
                     <span className="font-mono font-semibold">{e.awb}</span>
@@ -707,10 +707,10 @@ export function GoogleSheetImportModal({
           ) : null}
           {sync && visibleOrphans.length > 0 ? (
             <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-              <p className="text-[11px] font-semibold text-amber-950">
+              <p className="text-2xs font-semibold text-amber-950">
                 Lô trên web không còn trên Sheet · {visibleOrphans.length}
               </p>
-              <p className="mt-0.5 text-[10px] text-amber-800">
+              <p className="mt-0.5 text-2xs text-amber-800">
                 Thường gặp khi Sheet sửa số AWB — lô AWB cũ còn lại. Tick để xóa khi nhập.
               </p>
               <ul className="mt-2 space-y-1.5">
@@ -726,7 +726,7 @@ export function GoogleSheetImportModal({
             </div>
           ) : null}
           {sync && visibleRows.length > 0 && !isMobile ? (
-            <table className="w-full min-w-[640px] border-collapse text-left text-[11px]">
+            <table className="w-full min-w-[640px] border-collapse text-left text-2xs">
               <thead>
                 <tr className="border-b border-zinc-200 text-zinc-500">
                   <th className="w-8 p-2" />
@@ -756,7 +756,7 @@ export function GoogleSheetImportModal({
 
         <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {sync ? (
-            <span className="mr-auto text-[10px] text-zinc-500">
+            <span className="mr-auto text-2xs text-zinc-500">
               {selected.size > 0 ? `Chọn ${selected.size} lô` : "Đồng bộ STT theo Sheet"}
               {WAREHOUSE_ORDER.filter((wh) => selectedBreakdown[wh] > 0)
                 .map(
@@ -828,7 +828,7 @@ function OrphanRow({
           onChange={() => onToggle(orphan.id)}
           aria-label={`Xóa lô thừa ${orphan.awb}`}
         />
-        <span className="min-w-0 text-[11px] text-amber-950">
+        <span className="min-w-0 text-2xs text-amber-950">
           <span className="font-mono font-semibold">{orphan.awb}</span>
           {" · "}
           {orphan.flight}
@@ -838,7 +838,7 @@ function OrphanRow({
           {" · "}
           {warehouseLabel[wh] ?? orphan.warehouse}
           {orphan.customer ? ` · ${orphan.customer}` : ""}
-          <span className="block text-[10px] text-amber-800">{hint}</span>
+          <span className="block text-2xs text-amber-800">{hint}</span>
         </span>
       </label>
     </li>
@@ -918,12 +918,12 @@ function SheetRowCard({
                 {row.awb}
               </span>
               <span
-                className={`text-[10px] font-semibold uppercase ${status.cls}`}
+                className={`text-2xs font-semibold uppercase ${status.cls}`}
               >
                 {status.text}
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-zinc-600">
+            <p className="mt-1 text-2xs text-zinc-600">
               STT {row.sheetStt ?? "—"}
               {row.existingStt != null &&
               row.sheetStt != null &&
@@ -934,7 +934,7 @@ function SheetRowCard({
               {row.flightDate ? ` / ${row.flightDate}` : ""} · {row.dest} ·{" "}
               {whLabel}
             </p>
-            <p className="mt-0.5 truncate text-[11px] text-zinc-500">
+            <p className="mt-0.5 truncate text-2xs text-zinc-500">
               {row.pcs != null || row.kg != null
                 ? `${row.pcs ?? "—"} kiện / ${row.kg ?? "—"} kg`
                 : "— kiện/kg"}
@@ -948,12 +948,12 @@ function SheetRowCard({
             {row.needsUpdate &&
             row.existingWarehouse &&
             row.existingWarehouse !== row.warehouse ? (
-              <p className="mt-1 text-[10px] text-amber-700">
+              <p className="mt-1 text-2xs text-amber-700">
                 Web đang {row.existingWarehouse} → Sheet {whLabel}
               </p>
             ) : null}
             {blockHint ? (
-              <p className="mt-1 text-[10px] text-red-700">{blockHint}</p>
+              <p className="mt-1 text-2xs text-red-700">{blockHint}</p>
             ) : null}
           </div>
         </div>

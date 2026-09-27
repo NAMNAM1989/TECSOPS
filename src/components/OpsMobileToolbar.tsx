@@ -128,9 +128,7 @@ export function OpsMobileToolbar({
         label="Thêm thao tác"
         items={overflowItems}
         compact
-        triggerClassName={`inline-flex shrink-0 touch-manipulation items-center justify-center border border-ui-border/90 bg-ui-surface font-bold text-ui-text transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
-          embedded ? "min-h-9 min-w-9 rounded-lg px-2 text-[11px]" : "min-h-11 min-w-11 rounded-xl px-3 text-[13px] shadow-ui-sm"
-        }`}
+        triggerClassName={`inline-flex shrink-0 touch-manipulation items-center justify-center border border-ui-border/90 bg-ui-surface font-bold text-ui-text transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus min-h-11 min-w-11 rounded-lg px-2 text-2xs sm:text-xs shadow-ui-sm`}
       >
         Thêm ▾
       </OverflowMenu>

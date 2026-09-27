@@ -38,7 +38,7 @@ export function StatsKpiStrip({ items }: { items: StatsKpiItem[] }) {
                   item.deltaPositive
                     ? "text-emerald-700"
                     : item.deltaLabel.startsWith("-")
-                      ? "text-rose-700"
+                      ? "text-red-700"
                       : "text-ui-text-muted"
                 }`}
               >

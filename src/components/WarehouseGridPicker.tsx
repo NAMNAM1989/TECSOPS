@@ -162,7 +162,7 @@ export function WarehouseGridPicker({
                 title={`Thêm lô ${warehouseLabel[wh]}`}
                 aria-label={`Thêm lô ${warehouseLabel[wh]}`}
                 onClick={() => onAddRow(wh)}
-                className="absolute right-1 top-1 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full bg-ui-primary text-2xs font-bold leading-none text-white shadow-ui-sm transition hover:bg-ui-primary-hover active:scale-95"
+                className="absolute right-1 top-1 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full bg-ui-primary text-2xs font-bold leading-none text-white shadow-ui-sm transition hover:bg-ui-primary-hover active:opacity-90"
               >
                 +
               </button>
@@ -170,7 +170,7 @@ export function WarehouseGridPicker({
             <button
               type="button"
               onClick={() => onSelect(wh)}
-              className={`block w-full rounded-md text-left active:scale-[0.99] ${
+              className={`block w-full rounded-md text-left active:opacity-90 ${
                 compact ? "min-h-11" : ""
               }`}
             >

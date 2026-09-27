@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
+import { useUiV2 } from "../utils/featureFlags";
 
 export type AwbTextProps = {
   awb: string;
@@ -21,15 +22,20 @@ export function AwbText({
   "data-testid": testId,
 }: AwbTextProps) {
   const [copied, setCopied] = useState(false);
+  const isV2 = useUiV2();
 
   const digits = rawAwbDigits(awb);
   const formattedAwb = digits.length === 11 ? formatAwb(digits) : (awb || "—");
 
-  const sizeClasses = {
-    sm: "text-2xs",
-    md: "text-xs",
-    lg: "text-sm",
-  }[size];
+  const sizeClasses = isV2
+    ? "text-[15px] sm:text-[13px]"
+    : {
+        sm: "text-2xs",
+        md: "text-xs",
+        lg: "text-sm",
+      }[size];
+
+  const colorClass = isV2 ? "text-ui-navy" : "text-ui-text";
 
   const hasIncomplete = flags?.includes("incomplete");
   const hasDuplicate = flags?.includes("duplicate");
@@ -69,7 +75,7 @@ export function AwbText({
   const content = (
     <span
       data-testid={testId}
-      className={`inline-flex items-center gap-1 font-mono font-bold tracking-tight text-ui-text ${sizeClasses} ${className}`}
+      className={`inline-flex items-center gap-1 font-mono font-bold tracking-tight ${colorClass} ${sizeClasses} ${className}`}
     >
       {hasIncomplete ? (
         <span
@@ -85,13 +91,13 @@ export function AwbText({
         <span
           title="Trùng số AWB"
           aria-label="Cảnh báo: Trùng số AWB"
-          className="text-rose-600 dark:text-rose-400 select-none"
+          className="text-red-600 dark:text-red-400 select-none"
         >
           ⚑
         </span>
       ) : null}
 
-      <span className={hasDuplicate ? "text-rose-700 underline decoration-rose-500" : ""}>
+      <span className={hasDuplicate ? "text-red-700 dark:text-red-400 underline decoration-red-500" : ""}>
         {renderHighlightedText()}
       </span>
 

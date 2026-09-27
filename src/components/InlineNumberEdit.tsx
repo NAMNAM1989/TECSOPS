@@ -161,12 +161,12 @@ export function InlineNumberEdit({
           }
         }}
         onClick={(e) => e.stopPropagation()}
-        className={`${inputCls} ${error ? "border-rose-400 ring-1 ring-rose-300" : ""}`}
+        className={`${inputCls} ${error ? "border-red-400 ring-1 ring-red-300" : ""}`}
         step="any"
         aria-invalid={Boolean(error)}
       />
       {error ? (
-        <span className="mt-0.5 text-2xs font-semibold leading-tight text-rose-600">
+        <span className="mt-0.5 text-2xs font-semibold leading-tight text-red-600">
           {error}
         </span>
       ) : null}

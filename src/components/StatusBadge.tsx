@@ -1,5 +1,6 @@
 import type { ShipmentStatus, Warehouse } from "../types/shipment";
 import { selectableStatusesForShipment, statusOrderForWarehouse } from "../utils/shipmentWorkflowStatus";
+import { useUiV2 } from "../utils/featureFlags";
 import {
   statusBadgeClass,
   statusDotClass,
@@ -31,6 +32,7 @@ export function StatusBadge({
   onClick,
   "data-testid": testId,
 }: StatusBadgeProps) {
+  useUiV2();
   const label = variant === "compact" ? statusLabelCompact[status] : statusLabel[status];
   const step = warehouse && showStep ? statusStep(status, warehouse) : null;
   const stepText = step ? `${step.n}/${step.of}` : null;
@@ -99,6 +101,7 @@ export function StatusProgress({
   warehouse,
   className = "",
 }: StatusProgressProps) {
+  useUiV2();
   const step = statusStep(status, warehouse);
   if (!step) return null;
 
@@ -187,6 +190,7 @@ export function StatusSelect({
   className = "",
   "data-testid": testId,
 }: StatusSelectProps) {
+  useUiV2();
   const options = selectableStatusesForShipment(warehouse, value);
   const labels = compact || dense ? statusLabelCompact : statusLabel;
   const currentStep = statusStep(value, warehouse);

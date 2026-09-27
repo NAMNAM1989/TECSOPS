@@ -144,7 +144,7 @@ export function SyncStatusPill({
       className={`inline-flex items-center gap-1.5 rounded-full border font-semibold select-none ${
         isQueueWarning
           ? "border-amber-400 bg-amber-100 text-amber-950 font-bold shadow-ui-sm"
-          : "border-rose-200 bg-rose-50 text-rose-900 shadow-ui-sm"
+          : "border-red-200 bg-red-50 text-red-900 shadow-ui-sm"
       } ${compact ? "px-1.5 py-0.5 text-2xs" : "px-2.5 py-0.5 text-2xs"} ${className}`}
       title={titleText}
     >
@@ -156,7 +156,7 @@ export function SyncStatusPill({
       {pendingOfflineCount > 0 ? (
         <span
           className={`font-mono text-2xs tabular-nums ${
-            isQueueWarning ? "font-bold text-amber-900" : "text-rose-700"
+            isQueueWarning ? "font-bold text-amber-900" : "text-red-700"
           }`}
         >
           · {pendingOfflineCount}

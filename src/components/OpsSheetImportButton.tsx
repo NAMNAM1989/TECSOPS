@@ -13,7 +13,7 @@ export function OpsSheetImportButton({
 }: Props) {
   const icon = (
     <svg
-      className={`${compact ? "h-4 w-4" : "h-3.5 w-3.5"} text-emerald-600 transition-transform duration-200 ease-fluid group-hover:-translate-y-0.5 group-hover:scale-110`}
+      className={`${compact ? "h-4 w-4" : "h-3.5 w-3.5"} text-emerald-600 transition-transform duration-200 ease-fluid group-hover:scale-110`}
       fill="none"
       stroke="currentColor"
       strokeWidth={2}

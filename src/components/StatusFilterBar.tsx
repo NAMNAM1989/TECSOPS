@@ -3,6 +3,7 @@ import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
 import { statusOrderForFilter } from "../utils/shipmentWorkflowStatus";
 import { statusIcon, statusLabel, statusLabelCompact } from "./statusStyles";
 import { countAttentionRows } from "../utils/opsAttention";
+import { StatusLegendPopover } from "./StatusLegendPopover";
 
 export type StatusFilterValue = ShipmentStatus | "ALL" | "attention";
 
@@ -131,6 +132,7 @@ export function StatusFilterBar({
             ×
           </button>
         ) : null}
+        <StatusLegendPopover className="shrink-0" />
       </div>
     );
   }
@@ -138,9 +140,12 @@ export function StatusFilterBar({
   return (
     <div className="mb-6 min-w-0 rounded-xl border border-ui-border bg-ui-surface p-3 shadow-sm sm:p-4">
       <div className="mb-2.5 flex min-w-0 items-center justify-between gap-2">
-        <p className="min-w-0 text-xs font-bold uppercase tracking-wide text-ui-text-muted">
-          Lọc trạng thái
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className="min-w-0 text-xs font-bold uppercase tracking-wide text-ui-text-muted">
+            Lọc trạng thái
+          </p>
+          <StatusLegendPopover />
+        </div>
         {value !== "ALL" && (
           <button
             type="button"
@@ -204,10 +209,10 @@ function FilterSegment({
       } ${isEmpty && !active ? "opacity-40" : "opacity-100"} ${
         active
           ? isDanger
-            ? "bg-rose-600 text-white shadow-sm"
+            ? "bg-red-600 text-white shadow-sm"
             : "bg-ui-primary text-white shadow-sm"
           : isDanger
-            ? "bg-rose-50/80 text-rose-800 border border-rose-200/90 hover:bg-rose-100 hover:text-rose-900"
+            ? "bg-red-50/80 text-red-800 border border-red-200/90 hover:bg-red-100 hover:text-red-900"
             : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
       }`}
     >
@@ -221,7 +226,7 @@ function FilterSegment({
           active
             ? "bg-white/25 text-white"
             : isDanger
-              ? "bg-rose-200 text-rose-900 font-bold"
+              ? "bg-red-200 text-red-900 font-bold"
               : "bg-black/5 text-ui-text-muted"
         }`}
       >

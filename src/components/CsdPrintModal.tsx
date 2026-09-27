@@ -387,12 +387,12 @@ export function CsdPrintModal({
             </p>
           ) : null}
           {!preview.dest ? (
-            <p className="rounded-lg bg-rose-50 px-2.5 py-2 text-2xs font-medium text-rose-800">
+            <p className="rounded-lg bg-red-50 px-2.5 py-2 text-2xs font-medium text-red-800">
               Thiếu DEST trên lô — nhập mã sân bay đích trước khi in.
             </p>
           ) : null}
           {error ? (
-            <p className="rounded-lg bg-rose-50 px-2.5 py-2 text-2xs font-medium text-rose-800">
+            <p className="rounded-lg bg-red-50 px-2.5 py-2 text-2xs font-medium text-red-800">
               {error}
             </p>
           ) : null}

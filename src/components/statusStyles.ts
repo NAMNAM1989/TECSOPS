@@ -1,5 +1,6 @@
 import type { ShipmentStatus, Warehouse } from "../types/shipment";
 import { statusOrderForWarehouse } from "../utils/shipmentWorkflowStatus";
+import { isUiV2Enabled } from "../utils/featureFlags";
 
 export type StatusStage = "booking" | "warehouse" | "docs" | "done" | "legacy";
 
@@ -68,10 +69,10 @@ export const statusIcon: Record<ShipmentStatus, string> = {
   COMPLETED: "★",
 };
 
-/** Lớp CSS cho badge trạng thái theo thiết kế v2 (WCAG AA). */
-export const statusBadgeClass: Record<ShipmentStatus, string> = {
-  PENDING: "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800",
-  RECEIVED: "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
+/** Bộ màu trạng thái v1 (Mặc định khi cờ ui.v2 TẮT). PENDING xanh dương, RECEIVED vàng hổ phách. */
+export const statusBadgeClassV1: Record<ShipmentStatus, string> = {
+  PENDING: "bg-blue-50 text-blue-900 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
+  RECEIVED: "bg-amber-50 text-amber-950 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800",
   VOLUME_DONE: "bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800",
   OLA_PULL: "bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200 dark:bg-fuchsia-950 dark:text-fuchsia-300 dark:border-fuchsia-800",
   RECEPTION_COMPLETED: "bg-teal-50 text-teal-800 border-teal-200 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800",
@@ -81,8 +82,32 @@ export const statusBadgeClass: Record<ShipmentStatus, string> = {
   COMPLETED: "bg-slate-100 text-slate-700 border-slate-300 border-dashed dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
 };
 
-/** Màu chấm tròn (StatusProgress, indicator). */
-export const statusDotClass: Record<ShipmentStatus, string> = {
+/** Bộ màu trạng thái v2 (Khi cờ ui.v2 BẬT). Đảo PENDING hổ phách, RECEIVED xanh dương; WEIGH_SLIP tint dịu; lịch sử viền liền. */
+export const statusBadgeClassV2: Record<ShipmentStatus, string> = {
+  PENDING: "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800",
+  RECEIVED: "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
+  VOLUME_DONE: "bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800",
+  OLA_PULL: "bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200 dark:bg-fuchsia-950 dark:text-fuchsia-300 dark:border-fuchsia-800",
+  RECEPTION_COMPLETED: "bg-teal-50 text-teal-800 border-teal-200 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800",
+  WEIGH_SLIP: "bg-green-50 text-green-800 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800",
+  CUSTOMS: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+  SECURITY: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+  COMPLETED: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+};
+
+export const statusDotClassV1: Record<ShipmentStatus, string> = {
+  PENDING: "bg-blue-500",
+  RECEIVED: "bg-amber-500",
+  VOLUME_DONE: "bg-cyan-500",
+  OLA_PULL: "bg-fuchsia-500",
+  RECEPTION_COMPLETED: "bg-teal-600",
+  WEIGH_SLIP: "bg-green-600",
+  CUSTOMS: "bg-slate-400",
+  SECURITY: "bg-slate-400",
+  COMPLETED: "bg-slate-400",
+};
+
+export const statusDotClassV2: Record<ShipmentStatus, string> = {
   PENDING: "bg-amber-500",
   RECEIVED: "bg-blue-500",
   VOLUME_DONE: "bg-cyan-500",
@@ -94,8 +119,19 @@ export const statusDotClass: Record<ShipmentStatus, string> = {
   COMPLETED: "bg-slate-400",
 };
 
-/** Lớp CSS viền ring ngoài cho chấm hiện tại. */
-export const statusRingClass: Record<ShipmentStatus, string> = {
+export const statusRingClassV1: Record<ShipmentStatus, string> = {
+  PENDING: "ring-blue-500",
+  RECEIVED: "ring-amber-500",
+  VOLUME_DONE: "ring-cyan-500",
+  OLA_PULL: "ring-fuchsia-500",
+  RECEPTION_COMPLETED: "ring-teal-600",
+  WEIGH_SLIP: "ring-green-600",
+  CUSTOMS: "ring-slate-400",
+  SECURITY: "ring-slate-400",
+  COMPLETED: "ring-slate-400",
+};
+
+export const statusRingClassV2: Record<ShipmentStatus, string> = {
   PENDING: "ring-amber-500",
   RECEIVED: "ring-blue-500",
   VOLUME_DONE: "ring-cyan-500",
@@ -107,8 +143,19 @@ export const statusRingClass: Record<ShipmentStatus, string> = {
   COMPLETED: "ring-slate-400",
 };
 
-/** Lớp CSS vạch trước / vạch trái của trạng thái. */
-export const statusBarClass: Record<ShipmentStatus, string> = {
+export const statusBarClassV1: Record<ShipmentStatus, string> = {
+  PENDING: "before:bg-blue-500",
+  RECEIVED: "before:bg-amber-500",
+  VOLUME_DONE: "before:bg-cyan-500",
+  OLA_PULL: "before:bg-fuchsia-500",
+  RECEPTION_COMPLETED: "before:bg-teal-600",
+  WEIGH_SLIP: "before:bg-green-600",
+  CUSTOMS: "before:bg-slate-400",
+  SECURITY: "before:bg-slate-400",
+  COMPLETED: "before:bg-slate-400",
+};
+
+export const statusBarClassV2: Record<ShipmentStatus, string> = {
   PENDING: "before:bg-amber-500",
   RECEIVED: "before:bg-blue-500",
   VOLUME_DONE: "before:bg-cyan-500",
@@ -120,17 +167,19 @@ export const statusBarClass: Record<ShipmentStatus, string> = {
   COMPLETED: "before:bg-slate-400",
 };
 
-/** "3/6" theo workflow kho; null nếu mã lịch sử. */
-export function statusStep(status: ShipmentStatus, warehouse: Warehouse): { n: number; of: number } | null {
-  const order = statusOrderForWarehouse(warehouse);
-  const i = order.indexOf(status);
-  return i < 0 ? null : { n: i + 1, of: order.length };
-}
+export const statusRowAccentV1: Record<ShipmentStatus, string> = {
+  PENDING: "border-l-[3px] border-l-blue-500",
+  RECEIVED: "border-l-[3px] border-l-amber-500",
+  VOLUME_DONE: "border-l-[3px] border-l-cyan-500",
+  CUSTOMS: "border-l-[3px] border-l-slate-400",
+  SECURITY: "border-l-[3px] border-l-slate-400",
+  OLA_PULL: "border-l-[3px] border-l-fuchsia-500",
+  RECEPTION_COMPLETED: "border-l-[3px] border-l-teal-600",
+  WEIGH_SLIP: "border-l-[3px] border-l-green-600",
+  COMPLETED: "border-l-[3px] border-l-slate-400",
+};
 
-/** Card hàng — viền trái màu trạng thái + surface phẳng. */
-export const statusRowBg = "bg-ui-surface";
-
-export const statusRowAccent: Record<ShipmentStatus, string> = {
+export const statusRowAccentV2: Record<ShipmentStatus, string> = {
   PENDING: "border-l-[3px] border-l-amber-500",
   RECEIVED: "border-l-[3px] border-l-blue-500",
   VOLUME_DONE: "border-l-[3px] border-l-cyan-500",
@@ -141,6 +190,68 @@ export const statusRowAccent: Record<ShipmentStatus, string> = {
   WEIGH_SLIP: "border-l-[3px] border-l-green-600",
   COMPLETED: "border-l-[3px] border-l-slate-400",
 };
+
+function createDynamicMap(
+  v1Map: Record<ShipmentStatus, string>,
+  v2Map: Record<ShipmentStatus, string>
+): Record<ShipmentStatus, string> {
+  return new Proxy(v1Map, {
+    get(_target, prop: string | symbol) {
+      if (typeof prop !== "string") return Reflect.get(_target, prop);
+      const isV2 = isUiV2Enabled();
+      const map = isV2 ? v2Map : v1Map;
+      return map[prop as ShipmentStatus] ?? "";
+    },
+    ownKeys() {
+      const isV2 = isUiV2Enabled();
+      return Reflect.ownKeys(isV2 ? v2Map : v1Map);
+    },
+    getOwnPropertyDescriptor(_target, prop) {
+      const isV2 = isUiV2Enabled();
+      return Reflect.getOwnPropertyDescriptor(isV2 ? v2Map : v1Map, prop);
+    },
+  });
+}
+
+/** Lớp CSS cho badge trạng thái theo thiết kế (WCAG AA). Tự động theo cờ ui.v2. */
+export const statusBadgeClass: Record<ShipmentStatus, string> = createDynamicMap(
+  statusBadgeClassV1,
+  statusBadgeClassV2
+);
+
+/** Màu chấm tròn (StatusProgress, indicator). Tự động theo cờ ui.v2. */
+export const statusDotClass: Record<ShipmentStatus, string> = createDynamicMap(
+  statusDotClassV1,
+  statusDotClassV2
+);
+
+/** Lớp CSS viền ring ngoài cho chấm hiện tại. Tự động theo cờ ui.v2. */
+export const statusRingClass: Record<ShipmentStatus, string> = createDynamicMap(
+  statusRingClassV1,
+  statusRingClassV2
+);
+
+/** Lớp CSS vạch trước / vạch trái của trạng thái. Tự động theo cờ ui.v2. */
+export const statusBarClass: Record<ShipmentStatus, string> = createDynamicMap(
+  statusBarClassV1,
+  statusBarClassV2
+);
+
+/** Card hàng — viền trái màu trạng thái + surface phẳng. Tự động theo cờ ui.v2. */
+export const statusRowAccent: Record<ShipmentStatus, string> = createDynamicMap(
+  statusRowAccentV1,
+  statusRowAccentV2
+);
+
+/** "3/6" theo workflow kho; null nếu mã lịch sử. */
+export function statusStep(status: ShipmentStatus, warehouse: Warehouse): { n: number; of: number } | null {
+  const order = statusOrderForWarehouse(warehouse);
+  const i = order.indexOf(status);
+  return i < 0 ? null : { n: i + 1, of: order.length };
+}
+
+/** Card hàng — viền trái màu trạng thái + surface phẳng. */
+export const statusRowBg = "bg-ui-surface";
 
 /** Hàng được chọn — tint teal nhẹ Round 2. */
 export const statusRowSelected = "bg-teal-500/[0.08] ring-1 ring-teal-600/35";

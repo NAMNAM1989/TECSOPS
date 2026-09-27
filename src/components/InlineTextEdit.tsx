@@ -146,12 +146,12 @@ export function InlineTextEdit({
         }}
         onClick={(e) => e.stopPropagation()}
         className={`w-full rounded-xl border-2 bg-white px-1.5 py-0.5 text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-apple-blue/20 ${
-          error ? "border-rose-400" : "border-apple-blue"
+          error ? "border-red-400" : "border-apple-blue"
         } ${className}`}
         aria-invalid={Boolean(error)}
       />
       {error ? (
-        <span className="mt-0.5 text-2xs font-semibold text-rose-600">{error}</span>
+        <span className="mt-0.5 text-2xs font-semibold text-red-600">{error}</span>
       ) : null}
     </span>
   );

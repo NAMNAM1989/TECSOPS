@@ -87,7 +87,7 @@ function FlightDateChips({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onPick(active ? "" : f.date)}
-            className={`inline-flex shrink-0 items-center justify-center gap-0.5 ring-1 transition active:scale-[0.98] ${
+            className={`inline-flex shrink-0 items-center justify-center gap-0.5 ring-1 transition active:opacity-90 ${
               tight
                 ? "h-8 rounded-lg px-2 text-2xs font-bold tabular-nums"
                 : "min-h-11 min-w-11 rounded-md px-1.5 text-2xs font-bold tabular-nums"

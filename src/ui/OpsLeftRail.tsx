@@ -161,8 +161,8 @@ export function OpsLeftRail({
                     ? "bg-teal-500/18 text-teal-800 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.32)]"
                     : "bg-teal-500/12 text-ui-primary-hover shadow-sm"
                   : emphasize
-                    ? "text-teal-700 hover:bg-teal-500/10 hover:text-teal-800 hover:-translate-y-0.5"
-                    : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text hover:-translate-y-0.5"
+                    ? "text-teal-700 hover:bg-teal-500/10 hover:text-teal-800"
+                    : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
               }`}
             >
               {isActive ? (
@@ -181,7 +181,7 @@ export function OpsLeftRail({
                           ? "h-8 w-8 bg-teal-600 text-white shadow-sm shadow-teal-700/25"
                           : "h-8 w-8 bg-teal-500/15 text-teal-700 ring-1 ring-teal-500/35"
                       }`
-                    : "transition-transform duration-200 ease-fluid group-hover:scale-110 group-active:scale-95"
+                    : "transition-transform duration-200 ease-fluid group-hover:scale-110 group-active:opacity-90"
                 }
               >
                 <Icon className={emphasize ? "h-[1.35rem] w-[1.35rem] shrink-0" : "h-5 w-5 shrink-0"} />

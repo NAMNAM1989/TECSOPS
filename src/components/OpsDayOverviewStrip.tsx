@@ -45,12 +45,12 @@ function CompactKpi({
       } ${
         active
           ? isDanger
-            ? "border-rose-500 bg-rose-500/15 shadow-sm text-rose-800"
+            ? "border-red-500 bg-red-500/15 shadow-sm text-red-800"
             : isSuccess
               ? "border-emerald-500 bg-emerald-500/15 shadow-sm text-emerald-800"
               : "border-teal-500/45 bg-teal-500/10 shadow-sm"
           : isDanger
-            ? "border-rose-300 bg-rose-50/70 text-rose-800 hover:bg-rose-100 hover:border-rose-400"
+            ? "border-red-300 bg-red-50/70 text-red-800 hover:bg-red-100 hover:border-red-400"
             : isSuccess
               ? "border-emerald-200/80 bg-emerald-50/50 text-emerald-800 hover:bg-emerald-100/60"
               : "border-ui-border/80 bg-ui-surface hover:border-teal-500/30 hover:shadow-ui-sm"
@@ -59,14 +59,14 @@ function CompactKpi({
     >
       <span
         className={`text-2xs font-bold uppercase leading-none tracking-wide ${
-          isDanger ? "text-rose-700" : isSuccess ? "text-emerald-700" : "text-ui-text-muted"
+          isDanger ? "text-red-700" : isSuccess ? "text-emerald-700" : "text-ui-text-muted"
         }`}
       >
         {label}
       </span>
       <span
         className={`font-mono text-[13px] font-semibold tabular-nums leading-none ${
-          isDanger ? "text-rose-800 font-bold" : isSuccess ? "text-emerald-800" : "text-ui-navy"
+          isDanger ? "text-red-800 font-bold" : isSuccess ? "text-emerald-800" : "text-ui-navy"
         }`}
       >
         {value}
@@ -161,7 +161,7 @@ export function OpsDayOverviewStrip({
           {kgLabel}
           <span className="mx-0.5 text-ui-border">·</span>
           {attentionCount > 0 ? (
-            <span className="text-rose-700 font-bold">⚠ {attentionCount}</span>
+            <span className="text-red-700 font-bold">⚠ {attentionCount}</span>
           ) : (
             <span className="text-emerald-700 font-semibold">0 ✓</span>
           )}

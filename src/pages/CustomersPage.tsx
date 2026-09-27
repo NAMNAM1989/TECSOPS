@@ -1304,7 +1304,7 @@ export function CustomersPage({
                         </section>
 
                         <section
-                          className="rounded-xl border border-red-300/80 bg-gradient-to-br from-red-50 to-rose-50/80 p-3.5 shadow-ui-sm"
+                          className="rounded-xl border border-red-300/80 bg-gradient-to-br from-red-50 to-red-100/60 p-3.5 shadow-ui-sm"
                           data-testid="cust-danger-zone"
                         >
                           <p className="text-2xs font-bold uppercase tracking-wider text-red-900">

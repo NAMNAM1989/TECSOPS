@@ -14,7 +14,7 @@ export const MOBILE = {
   cardQty: "font-mono text-[12px] font-bold tabular-nums text-teal-800",
   cardMeta: "truncate font-shipment-data text-2xs font-medium leading-tight text-ui-text-muted",
   customerName:
-    "font-vi inline-flex max-w-full truncate rounded-md bg-rose-50 px-1.5 py-0.5 font-sans text-[13px] font-bold leading-snug tracking-normal text-ui-awb ring-1 ring-rose-100/90",
+    "font-vi inline-flex max-w-full truncate rounded-md bg-ui-surface-muted px-1.5 py-0.5 font-sans text-[13px] font-bold leading-snug tracking-normal text-ui-awb ring-1 ring-ui-border",
   awb: "font-shipment-data text-[15px] font-bold leading-none tracking-tight tabular-nums text-ui-navy whitespace-nowrap",
   awbEmpty: "text-[13px] font-semibold leading-tight text-ui-primary hover:text-ui-primary-hover",
   chip: "inline-flex items-center rounded-md bg-ui-surface-muted px-1.5 py-px text-2xs font-bold uppercase tracking-wide tabular-nums text-ui-text",

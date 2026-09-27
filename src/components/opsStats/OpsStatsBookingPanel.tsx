@@ -17,7 +17,7 @@ const SIGNAL_LABEL: Record<FlightDestSignal, string> = {
 
 const SIGNAL_CLASS: Record<FlightDestSignal, string> = {
   surge: "bg-amber-50 text-amber-950 ring-amber-200/80",
-  miss: "bg-rose-50 text-rose-950 ring-rose-200/80",
+  miss: "bg-red-50 text-red-950 ring-red-200/80",
   normal: "bg-slate-50 text-slate-700 ring-slate-200/80",
   new: "bg-sky-50 text-sky-950 ring-sky-200/80",
 };
@@ -111,19 +111,19 @@ export function OpsStatsBookingPanel({
       )}
 
       {missLanes.length > 0 ? (
-        <section className="overflow-hidden rounded-2xl border border-rose-300/80 bg-rose-50/30 shadow-ui-sm">
-          <header className="border-b border-rose-200/70 px-3.5 py-2.5 sm:px-4">
-            <h3 className="m-0 text-[13px] font-bold text-rose-950">
+        <section className="overflow-hidden rounded-2xl border border-red-300/80 bg-red-50/30 shadow-ui-sm">
+          <header className="border-b border-red-200/70 px-3.5 py-2.5 sm:px-4">
+            <h3 className="m-0 text-[13px] font-bold text-red-950">
               Chuyến thường chạy nhưng trống
             </h3>
-            <p className="m-0 mt-0.5 text-2xs text-rose-900/70">
+            <p className="m-0 mt-0.5 text-2xs text-red-900/70">
               Baseline ≥ 1 lô cùng DOW · click để lọc bảng lô
             </p>
           </header>
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse text-left text-[13px]">
               <thead>
-                <tr className="border-b border-rose-200/60 bg-rose-50/60 text-2xs uppercase tracking-wider text-rose-900/70">
+                <tr className="border-b border-red-200/60 bg-red-50/60 text-2xs uppercase tracking-wider text-red-900/70">
                   <th className="px-3.5 py-2.5 font-bold">Chuyến</th>
                   <th className="px-3.5 py-2.5 font-bold">Dest</th>
                   <th className="px-3.5 py-2.5 text-right font-bold">Lô</th>
@@ -135,10 +135,10 @@ export function OpsStatsBookingPanel({
                 {missLanes.map((r) => (
                   <tr
                     key={`miss|${r.flightKey}|${r.dest}`}
-                    className="cursor-pointer border-b border-rose-100/80 transition hover:bg-rose-100/40"
+                    className="cursor-pointer border-b border-red-100/80 transition hover:bg-red-100/40"
                     onClick={() => onSelectFlightDest?.(r.flightKey, r.dest)}
                   >
-                    <td className="px-3.5 py-2 font-mono text-[12px] font-bold text-rose-950">
+                    <td className="px-3.5 py-2 font-mono text-[12px] font-bold text-red-950">
                       {r.flightKey}
                     </td>
                     <td className="px-3.5 py-2 font-semibold">{r.dest}</td>

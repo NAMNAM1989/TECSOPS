@@ -105,8 +105,6 @@ export function WarehouseGridPicker({
               title={`${warehouseLabel[wh]} · Lô ${m.lots} · Kiện ${m.pcs} · Kg ${kg}`}
               active={isActive}
               as="button"
-              role="tab"
-              aria-selected={isActive}
               size={denseChips && !touchTargets ? "sm" : "md"}
               onClick={() => onSelect(wh)}
               className={`${

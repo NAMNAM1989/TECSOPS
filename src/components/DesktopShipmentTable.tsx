@@ -34,6 +34,7 @@ import {
 } from "../utils/inlineShipmentFieldValidation";
 import { useToast } from "../ui";
 import { NewBookingButton } from "./NewBookingButton";
+import { useUiV2 } from "../utils/featureFlags";
 
 interface Props {
   rows: Shipment[];
@@ -266,6 +267,7 @@ function ShipmentTableRowImpl({
   onInvoice?: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
 }) {
+  useUiV2();
   const toast = useToast();
   /** Mỗi lô một tint — 5 màu xoay, dễ tách khi nhiều hàng. */
   const lotSurface = `ops-lot-surface-${rowIdx % 5}`;

@@ -70,7 +70,7 @@ export function StatusLegendPopover({ className = "" }: { className?: string }) 
           role="dialog"
           aria-modal="false"
           aria-label="Bảng chú giải màu trạng thái"
-          className="absolute left-0 top-full z-50 mt-1.5 w-80 max-w-[calc(100vw-24px)] rounded-xl border border-ui-border bg-ui-surface p-3.5 shadow-ui-lg animate-in fade-in-50 zoom-in-95 sm:w-96"
+          className="absolute right-0 top-full z-50 mt-1.5 w-80 max-w-[calc(100vw-24px)] rounded-xl border border-ui-border bg-ui-surface p-3.5 shadow-ui-lg animate-in fade-in-50 zoom-in-95 sm:w-96"
         >
           <div className="flex items-center justify-between border-b border-ui-border pb-2.5">
             <h4 className="m-0 text-xs font-bold uppercase tracking-wide text-ui-navy">

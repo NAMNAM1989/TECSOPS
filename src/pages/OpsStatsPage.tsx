@@ -712,7 +712,7 @@ export function OpsStatsPage({
 
             <div className="overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm">
               <div
-                aria-label="Bộ lọc kỳ"
+                aria-label="Bộ lọc thống kê"
                 className="flex gap-0.5 overflow-x-auto border-b border-ui-border/70 bg-slate-50/70 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 role="tablist"
               >

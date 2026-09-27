@@ -17,7 +17,7 @@ server/data/*.tmp
 .env.*
 !.env.example
 
-# Backup state (cÛ th? ch?a d? li?u th?t ó khÙng commit nh?m)
+# Backup state (cù th? ch?a d? li?u th?t ù khùng commit nh?m)
 backups/
 tecsops-state-*.json
 **/tecsops-state-*.json
@@ -26,24 +26,25 @@ tecsops-postgres-state-*.json
 tecsops-prod-state-*.json
 **/tecsops-prod-state-*.json
 
-# Debug / scratch (khÙng commit)
+# Debug / scratch (khùng commit)
 tmp/
 .tmp-*
 outputs/
 output/
 .openclaw/
 
-# Leftover extension ZIPs ó khÙng ship (T?i Ext ?„ g?)
+# Leftover extension ZIPs ù khùng ship (T?i Ext ?ù g?)
 public/downloads/*.zip
 
 # Local scratch
 .trash/
 
-# Local TCS automation workspace (khÙng ship trong app Ops)
+# Local TCS automation workspace (khùng ship trong app Ops)
 tcs-awb-automation/
 
 # CSD debug/previews
 public/templates/csd/_*
+public/templates/csd/*-MOCKUP.pdf
 
 # Python bytecode
 scripts/__pycache__/
@@ -51,4 +52,16 @@ __pycache__/
 
 # Design briefs
 TECSOPS_REDESIGN_CURSOR.md
+CURSOR_FIX_P0_ROUND2.md
+TECSOPS-REDESIGN-V2-AUDIT.md
+TECSOPS_REDESIGN_V2.md
+docs/TECSOPS-REDESIGN-V2-AUDIT.md
+docs/TECSOPS_REDESIGN_V2.md
+
+# Temporary automation / audit scripts
+scripts/audit-ek-fill.ts
+scripts/capture-baseline-screenshots.mjs
+scripts/capture-v1-v2-screenshots.mjs
+scripts/e2e-minh-khang-h21.ts
+scripts/preview-with-prod-api.mjs
 

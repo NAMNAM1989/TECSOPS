@@ -192,7 +192,6 @@ export function StatusSelect({
 }: StatusSelectProps) {
   useUiV2();
   const options = selectableStatusesForShipment(warehouse, value);
-  const labels = compact || dense ? statusLabelCompact : statusLabel;
   const currentStep = statusStep(value, warehouse);
 
   const select = (
@@ -216,7 +215,7 @@ export function StatusSelect({
         const stepHint = step ? ` (${step.n}/${step.of})` : "";
         return (
           <option key={st} value={st}>
-            {statusIcon[st]} {labels[st]}
+            {statusIcon[st]} {statusLabel[st]}
             {stepHint}
           </option>
         );

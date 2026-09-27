@@ -129,6 +129,12 @@ export function AirCargoTracking({
   const toast = useToast();
   const [syncRefreshing, setSyncRefreshing] = useState(false);
 
+  const syncStatusMessage = useMemo(() => {
+    if (status === "live" && socketConnected) return "Đồng bộ trực tiếp";
+    if (status === "offline") return "Mất kết nối máy chủ, đang làm việc offline";
+    return "Đồng bộ hạn chế";
+  }, [status, socketConnected]);
+
   const initialUrlStateRef = useRef<Partial<OpsUrlState> | null>(null);
   if (initialUrlStateRef.current === null) {
     initialUrlStateRef.current =
@@ -854,12 +860,6 @@ export function AirCargoTracking({
       onClearFilters={clearViewFilters}
     />
   );
-
-  const syncStatusMessage = useMemo(() => {
-    if (status === "live" && socketConnected) return "Đồng bộ trực tiếp";
-    if (status === "offline") return "Mất kết nối máy chủ, đang làm việc offline";
-    return "Đồng bộ hạn chế";
-  }, [status, socketConnected]);
 
   return (
     <AppShell chrome={chrome} syncStatusMessage={syncStatusMessage}>

@@ -1,5 +1,5 @@
 import type { Warehouse } from "../types/shipment";
-import { opsTeamOf, warehouseFamily } from "../constants/warehouses";
+import { opsTeamOf, warehouseFamily, warehouseLabel } from "../constants/warehouses";
 
 export type WarehouseChipProps = {
   warehouse: Warehouse;
@@ -65,27 +65,32 @@ export function WarehouseChip({
     .filter(Boolean)
     .join(" ");
 
+  const fullLabel = warehouseLabel[warehouse];
+
   const chipContent = (
     <>
-      {isTecsHub ? (
-        <span className="flex items-center tracking-tight">
-          <span className="text-wh-tecs">TECS</span>
-          <span className="mx-0.5 text-slate-300 dark:text-slate-600">│</span>
-          <span className={familyTheme.text}>{family}</span>
-        </span>
-      ) : (
-        <span className={familyTheme.text}>{warehouse}</span>
-      )}
+      <span className="sr-only">{team} {fullLabel}</span>
+      <span aria-hidden="true" className="inline-flex items-center">
+        {isTecsHub ? (
+          <span className="flex items-center tracking-tight">
+            <span className="text-wh-tecs">TECS</span>
+            <span className="mx-0.5 text-slate-300 dark:text-slate-600">│</span>
+            <span className={familyTheme.text}>{family}</span>
+          </span>
+        ) : (
+          <span className={familyTheme.text}>{warehouse}</span>
+        )}
 
-      {typeof count === "number" ? (
-        <span
-          className={`ml-1 font-mono text-2xs tabular-nums ${
-            active ? "font-bold text-ui-text" : "font-semibold text-ui-text-muted"
-          }`}
-        >
-          {countPrefix ? `${countPrefix}${count}` : count}
-        </span>
-      ) : null}
+        {typeof count === "number" ? (
+          <span
+            className={`ml-1 font-mono text-2xs tabular-nums ${
+              active ? "font-bold text-ui-text" : "font-semibold text-ui-text-muted"
+            }`}
+          >
+            {countPrefix ? `${countPrefix}${count}` : count}
+          </span>
+        ) : null}
+      </span>
     </>
   );
 

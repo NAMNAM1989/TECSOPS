@@ -22,6 +22,7 @@ import {
 import { partitionShipmentsByWarehouse } from "../utils/partitionShipmentsByWarehouse";
 import { useWarehouseSectionCollapse } from "../hooks/useWarehouseSectionCollapse";
 import type { Warehouse } from "../types/shipment";
+import { useUiV2 } from "../utils/featureFlags";
 import {
   formatShipmentDimWeightDisplay,
   resolveShipmentDimWeightKg,
@@ -99,6 +100,7 @@ const MobileShipmentCard = memo(
     onPrint: (s: Shipment) => void;
     onInvoice?: (s: Shipment) => void;
   }) {
+    useUiV2();
     const rowAccent = statusRowAccent[row.status];
     const rowSurface = selected ? statusRowSelected : statusRowBg;
     const awbTrim = (row.awb ?? "").trim();

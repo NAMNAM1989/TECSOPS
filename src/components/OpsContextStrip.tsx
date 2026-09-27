@@ -174,7 +174,7 @@ export function OpsContextStrip({
       ) : (
         <div
           data-testid="ops-desktop-context-row"
-          className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain px-5 py-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+          className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain px-5 py-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden overflow-y-visible"
         >
           {overview}
           <StripDivider />

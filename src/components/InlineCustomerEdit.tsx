@@ -32,11 +32,13 @@ interface Props {
   onTabNavigateNext?: () => void;
 }
 
+const EMPTY_DIRECTORY: readonly CustomerDirectoryEntry[] = [];
+
 export function InlineCustomerEdit({
   value,
   customerId = "",
   profileSelection,
-  customerDirectory,
+  customerDirectory = EMPTY_DIRECTORY,
   placeholder = "Khách",
   onCommit,
   className = "",
@@ -109,7 +111,8 @@ export function InlineCustomerEdit({
     setEditing(false);
     setListOpen(false);
     const trimmed = normalizeCustomerNameInput(draft).slice(0, maxLength);
-    if (trimmed !== normalizeCustomerNameInput(value) || !customerId) {
+    const origTrimmed = normalizeCustomerNameInput(value).slice(0, maxLength);
+    if (trimmed !== origTrimmed) {
       onCommit(
         buildShipmentPatchForCustomerSelection(
           customerDirectory,
@@ -156,13 +159,22 @@ export function InlineCustomerEdit({
         {...gridProps}
         aria-label="Sửa khách"
         title={displayValue !== "" ? `${displayValue} — click để sửa` : "Click để chọn / sửa khách"}
-        onFocus={(e) => {
-          e.stopPropagation();
-          setEditing(true);
-        }}
         onClick={(e) => {
           e.stopPropagation();
           setEditing(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === "F2") {
+            e.preventDefault();
+            e.stopPropagation();
+            setEditing(true);
+          } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            setDraft(customerNameWhileTyping(e.key));
+            setEditing(true);
+            setListOpen(true);
+          }
         }}
         className={`${btnBase} focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
           displayValue === "" ? "ops-grid-placeholder" : ""

@@ -91,13 +91,21 @@ export function InlineAwbEdit({
             ? `AWB: ${value} — click để sửa`
             : "Click để nhập AWB"
         }
-        onFocus={(e) => {
-          e.stopPropagation();
-          setEditing(true);
-        }}
         onClick={(e) => {
           e.stopPropagation();
           setEditing(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === "F2") {
+            e.preventDefault();
+            e.stopPropagation();
+            setEditing(true);
+          } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && /[0-9]/.test(e.key)) {
+            e.preventDefault();
+            e.stopPropagation();
+            setDraftDigits(e.key);
+            setEditing(true);
+          }
         }}
         className={`${btnBase} focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
           !value || rawAwbDigits(value).length === 0

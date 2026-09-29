@@ -15,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import { formatKgTotal } from "../utils/formatKgTotal";
+import { warehouseSeriesFor } from "../styles/warehouseTokens";
 import type {
   OpsStatsDayRow,
   OpsStatsDestRow,
@@ -27,8 +28,7 @@ const COLORS = {
   chargeable: "#b45309",
   delta: "#d97706",
   lots: "#134e4a",
-  warehouse: ["#0f766e", "#0369a1", "#b45309", "#7c3aed"],
-  dest: ["#0d9488", "#0284c7", "#ca8a04", "#c026d3", "#ea580c", "#4f46e5", "#059669", "#e11d48"],
+  dest: ["#0d9488", "#0284c7", "#ca8a04", "#c026d3", "#ea580c", "#4f46e5", "#059669", "#57534E"],
 };
 
 function ChartCard({
@@ -231,7 +231,7 @@ export function OpsStatsWarehouseChart({
               style={{ cursor: onSelect ? "pointer" : undefined }}
             >
               {data.map((_, i) => (
-                <Cell key={data[i]!.warehouse} fill={COLORS.warehouse[i % COLORS.warehouse.length]} />
+                <Cell key={data[i]!.warehouse} fill={warehouseSeriesFor(data[i]!.warehouse)} />
               ))}
             </Pie>
             <Tooltip

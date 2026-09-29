@@ -361,7 +361,7 @@ function ShipmentTableRowImpl({
             value={row.flight}
             placeholder="Chuyến"
             title={row.flight?.trim() ? `Chuyến: ${row.flight}` : undefined}
-            className={`font-shipment-data !py-0 text-[13px] font-bold ${flightNumberAccent} ops-grid-cell`}
+            className={`font-shipment-data !py-0 text-[13px] ${flightNumberAccent} ops-grid-cell`}
             uppercase
             maxLength={12}
             gridNav={{ rowId: row.id, field: "flight" }}

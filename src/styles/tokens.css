@@ -8,10 +8,11 @@
   --surface-sunken: 226 232 240;    /* track progress, skeleton */
   /* Chữ */
   --foreground: 11 18 32;           /* #0B1220 navy — 18.7:1 trên trắng */
-  --muted-foreground: 91 107 124;   /* #5B6B7C — 5.47:1 trên trắng, 4.86:1 trên canvas */
+  --muted-foreground: 82 96 114;    /* #526072 — chữ phụ, ≥4.5 trên surface */
+  --subtle-foreground: 102 112 133; /* #667085 — placeholder, vẫn ≥4.5 */
   /* Viền */
   --border: 220 227 234;            /* #DCE3EA — chỉ trang trí */
-  --border-strong: 203 213 225;     /* slate-300 — divider hàng tổng */
+  --border-strong: 100 116 139;     /* #64748B — viền control, ≥3:1 */
   --input: 100 116 139;             /* slate-500 — viền control, 4.76:1 */
   /* Thương hiệu */
   --primary: 15 118 110;            /* teal-700 #0F766E — nền nút đặc, 5.47:1 với chữ trắng */
@@ -24,7 +25,7 @@
   /* Ngữ nghĩa */
   --success: 21 128 61;             /* green-700 */
   --success-soft: 240 253 244;       /* #f0fdf4 green-50 */
-  --warning: 194 65 12;             /* orange-700 — 5.18:1 */
+  --warning: 180 83 9;              /* #B45309 — 5.02:1 */
   --warning-soft: 254 252 232;       /* #fefce8 yellow-50 */
   --danger: 185 28 28;              /* red-700 — 6.47:1 */
   --danger-soft: 254 242 242;       /* red-50 */
@@ -36,12 +37,55 @@
   --stage-docs: 234 88 12;           /* #ea580c orange-600 */
   --stage-done: 21 128 61;           /* #15803d green-700 */
   --stage-history: 100 116 139;      /* #64748b slate-500 */
-  /* Kho (family) */
-  --wh-tcs: 3 105 161;              /* sky-700 chữ; vạch dùng sky-600 */
-  --wh-tcs-bar: 2 132 199;          /* sky-600 — 4.10:1 */
-  --wh-scsc: 109 40 217;            /* violet-700 */
-  --wh-scsc-bar: 124 58 237;        /* violet-600 — 5.70:1 */
-  --wh-tecs: 11 18 32;              /* navy cho segment "TECS" */
+  /* Kho (family — tương thích chip cũ) */
+  --wh-tcs: 12 74 110;              /* #0C4A6E chữ TCS */
+  --wh-tcs-bar: 3 105 161;          /* #0369A1 series TCS */
+  --wh-scsc: 76 29 149;             /* #4C1D95 chữ SCSC */
+  --wh-scsc-bar: 109 40 217;        /* #6D28D9 series SCSC */
+  --wh-tecs: 255 255 255;           /* chữ TECS trên hub đặc */
+  /* Kho v4 — gán theo mã kho, không theo thứ tự dữ liệu */
+  --whc-tecs-tcs-fg: 255 255 255;
+  --whc-tecs-tcs-bg: 12 74 110;     /* #0C4A6E */
+  --whc-tecs-tcs-border: 12 74 110;
+  --whc-tecs-tcs-series: 12 74 110;
+  --whc-tcs-fg: 12 74 110;
+  --whc-tcs-bg: 240 249 255;        /* #F0F9FF */
+  --whc-tcs-border: 3 105 161;      /* #0369A1 */
+  --whc-tcs-series: 3 105 161;
+  --whc-tecs-scsc-fg: 255 255 255;
+  --whc-tecs-scsc-bg: 76 29 149;    /* #4C1D95 */
+  --whc-tecs-scsc-border: 76 29 149;
+  --whc-tecs-scsc-series: 76 29 149;
+  --whc-scsc-fg: 76 29 149;
+  --whc-scsc-bg: 245 243 255;       /* #F5F3FF */
+  --whc-scsc-border: 109 40 217;    /* #6D28D9 */
+  --whc-scsc-series: 109 40 217;
+  /* Trạng thái lô v4 — không trùng họ màu kho, không rose */
+  --st-pending-fg: 51 65 85;        /* #334155 */
+  --st-pending-bg: 241 245 249;     /* #F1F5F9 */
+  --st-pending-bar: 100 116 139;    /* #64748B */
+  --st-received-fg: 255 255 255;
+  --st-received-bg: 161 98 7;       /* #A16207 */
+  --st-received-bar: 161 98 7;
+  --st-volume-fg: 22 78 99;         /* #164E63 */
+  --st-volume-bg: 236 254 255;      /* #ECFEFF */
+  --st-volume-bar: 8 145 178;       /* #0891B2 */
+  --st-ola-fg: 54 83 20;            /* #365314 */
+  --st-ola-bg: 247 254 231;         /* #F7FEE7 */
+  --st-ola-bar: 63 98 18;           /* #3F6212 */
+  --st-reception-fg: 11 18 32;      /* #0B1220 */
+  --st-reception-border: 15 23 42;  /* #0F172A */
+  --st-reception-bar: 15 23 42;
+  --st-weigh-fg: 255 255 255;
+  --st-weigh-bg: 4 120 87;          /* #047857 */
+  --st-weigh-bar: 5 150 105;        /* #059669 */
+  --st-legacy-fg: 68 64 60;         /* #44403C */
+  --st-legacy-border: 87 83 78;     /* #57534E */
+  --st-legacy-bar: 87 83 78;
+  /* Rose chỉ cho cảnh báo nghiệp vụ */
+  --alert-fg: 136 19 55;            /* #881337 */
+  --alert-bg: 255 241 242;          /* #FFF1F2 */
+  --alert-border: 225 29 72;        /* #E11D48 */
   /* Hình khối */
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -65,19 +109,20 @@
   --surface-muted: 30 41 59;        /* slate-800 */
   --surface-sunken: 51 65 85;
   --foreground: 241 245 249;        /* slate-100 */
-  --muted-foreground: 148 163 184;  /* slate-400 — 6.96:1 trên slate-900 */
+  --muted-foreground: 163 177 194;  /* #A3B1C2 */
+  --subtle-foreground: 148 163 184; /* #94A3B8 */
   --border: 30 41 59;
-  --border-strong: 51 65 85;
+  --border-strong: 100 116 139;     /* #64748B */
   --input: 100 116 139;             /* 3.75:1 trên slate-900 */
-  --primary: 45 212 191;            /* teal-400 */
+  --primary: 45 212 191;            /* #2DD4BF */
   --primary-hover: 94 234 212;
-  --primary-foreground: 15 23 42;   /* chữ tối trên teal-400 — 9.59:1 */
+  --primary-foreground: 4 47 46;    /* #042F2E */
   --primary-soft: 4 47 46;          /* teal-950 */
   --accent: 45 212 191;
-  --ring: 45 212 191;
+  --ring: 94 234 212;              /* #5EEAD4 focus */
   --success: 74 222 128;
   --success-soft: 5 46 22;
-  --warning: 251 146 60;            /* orange-400 */
+  --warning: 251 191 36;            /* #FBBF24 */
   --warning-soft: 66 32 6;
   --danger: 248 113 113;            /* red-400 */
   --danger-soft: 69 10 10;
@@ -88,11 +133,51 @@
   --stage-docs: 251 146 60;
   --stage-done: 74 222 128;
   --stage-history: 148 163 184;
-  --wh-tcs: 125 211 252;
-  --wh-tcs-bar: 56 189 248;
-  --wh-scsc: 196 181 253;
-  --wh-scsc-bar: 167 139 250;
-  --wh-tecs: 226 232 240;
+  --wh-tcs: 186 230 253;
+  --wh-tcs-bar: 14 165 233;
+  --wh-scsc: 221 214 254;
+  --wh-scsc-bar: 139 92 246;
+  --wh-tecs: 8 47 73;
+  --whc-tecs-tcs-fg: 8 47 73;       /* #082F49 */
+  --whc-tecs-tcs-bg: 186 230 253;   /* #BAE6FD */
+  --whc-tecs-tcs-border: 186 230 253;
+  --whc-tecs-tcs-series: 186 230 253;
+  --whc-tcs-fg: 186 230 253;
+  --whc-tcs-bg: 8 47 73;
+  --whc-tcs-border: 14 165 233;     /* #0EA5E9 */
+  --whc-tcs-series: 14 165 233;
+  --whc-tecs-scsc-fg: 46 16 101;    /* #2E1065 */
+  --whc-tecs-scsc-bg: 196 181 253;  /* #C4B5FD */
+  --whc-tecs-scsc-border: 196 181 253;
+  --whc-tecs-scsc-series: 196 181 253;
+  --whc-scsc-fg: 221 214 254;       /* #DDD6FE */
+  --whc-scsc-bg: 46 16 101;
+  --whc-scsc-border: 139 92 246;    /* #8B5CF6 */
+  --whc-scsc-series: 139 92 246;
+  --st-pending-fg: 241 245 249;
+  --st-pending-bg: 51 65 85;
+  --st-pending-bar: 100 116 139;
+  --st-received-fg: 66 32 6;        /* #422006 */
+  --st-received-bg: 234 179 8;      /* #EAB308 */
+  --st-received-bar: 234 179 8;
+  --st-volume-fg: 165 243 252;      /* #A5F3FC */
+  --st-volume-bg: 8 51 68;          /* #083344 */
+  --st-volume-bar: 8 145 178;
+  --st-ola-fg: 217 249 157;         /* #D9F99D */
+  --st-ola-bg: 26 46 5;             /* #1A2E05 */
+  --st-ola-bar: 190 242 100;        /* #BEF264 */
+  --st-reception-fg: 241 245 249;
+  --st-reception-border: 241 245 249;
+  --st-reception-bar: 241 245 249;
+  --st-weigh-fg: 255 255 255;
+  --st-weigh-bg: 4 120 87;
+  --st-weigh-bar: 16 185 129;       /* #10B981 */
+  --st-legacy-fg: 214 211 209;      /* #D6D3D1 */
+  --st-legacy-border: 168 162 158;  /* #A8A29E */
+  --st-legacy-bar: 168 162 158;
+  --alert-fg: 254 205 211;          /* #FECDD3 */
+  --alert-bg: 76 5 25;              /* #4C0519 */
+  --alert-border: 251 113 133;      /* #FB7185 */
   --shadow-sm: none;
   --shadow-md: none;
   --shadow-lg: 0 0 0 1px rgb(51 65 85);

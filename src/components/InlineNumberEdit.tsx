@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { formatGroupedNumber } from "../utils/formatNumber";
 import { runInlineAsyncCommit } from "../utils/inlineCommitAsync";
 
 interface Props {
@@ -86,7 +87,7 @@ export function InlineNumberEdit({
 
   const btnBase =
     variant === "grid"
-      ? "ops-inline-edit inline-flex min-w-[2rem] justify-end rounded px-0.5 py-0 text-right leading-none"
+      ? "ops-inline-edit inline-flex min-w-[2rem] justify-end rounded px-0.5 py-0 text-right leading-none tabular-nums"
       : compact
         ? "ops-inline-edit inline-flex min-w-[2rem] max-w-[4rem] justify-end rounded px-0.5 py-0 text-2xs leading-none font-bold tabular-nums"
         : "ops-inline-edit w-full rounded px-1 py-0.5 text-right";
@@ -124,7 +125,7 @@ export function InlineNumberEdit({
           value === null ? "ops-grid-placeholder" : ""
         } ${saving ? "opacity-60" : ""}`}
       >
-        {saving ? "…" : typeof value === "number" ? value.toLocaleString() : emptyLabel}
+        {saving ? "…" : typeof value === "number" ? formatGroupedNumber(value, { maxFractionDigits: 3 }) : emptyLabel}
       </button>
     );
   }

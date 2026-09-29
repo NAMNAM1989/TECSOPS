@@ -103,21 +103,9 @@ export function StatusLegendPopover({ className = "" }: { className?: string }) 
                 {isV2 ? "Tắt v2" : "Bật thử v2"}
               </button>
             </div>
-            {isV2 ? (
-              <p className="m-0 mt-1.5 text-ui-text-muted leading-relaxed">
-                <strong className="text-amber-800">Booking</strong>: Vàng hổ phách ·{" "}
-                <strong className="text-blue-800">Nhận hàng</strong>: Xanh dương ·{" "}
-                <strong className="text-green-800">Tờ cân</strong>: Xanh lá dạng tint ⚖ ·{" "}
-                <strong>Lịch sử</strong>: Xám viền liền.
-              </p>
-            ) : (
-              <p className="m-0 mt-1.5 text-ui-text-muted leading-relaxed">
-                <strong className="text-blue-900">Booking</strong>: Xanh dương ·{" "}
-                <strong className="text-amber-950">Nhận hàng</strong>: Vàng hổ phách ·{" "}
-                <strong className="text-green-900">Tờ cân</strong>: Xanh lá đậm ·{" "}
-                <strong>Lịch sử</strong>: Xám viền nét đứt.
-              </p>
-            )}
+            <p className="m-0 mt-1.5 text-ui-text-muted leading-relaxed">
+              Màu trạng thái dùng bảng token chung, không trùng màu kho. Công tắc chỉ đổi cỡ chữ AWB thử nghiệm.
+            </p>
           </div>
 
           {/* Danh sách trạng thái */}

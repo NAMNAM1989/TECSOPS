@@ -3,40 +3,11 @@ import {
   WAREHOUSE_ORDER,
   opsTeamOf,
   warehouseLabel,
-  type OpsTeam,
 } from "../constants/warehouses";
 import { formatKgTotal } from "../utils/formatKgTotal";
 import { computeWarehouseMetrics } from "../utils/warehouseMetrics";
 import { WarehouseChip } from "../ui/WarehouseChip";
-
-const CARD_RING: Record<Warehouse, string> = {
-  "TECS-TCS": "ring-sky-500/60",
-  "TECS-SCSC": "ring-violet-500/60",
-  TCS: "ring-cyan-500/60",
-  SCSC: "ring-fuchsia-500/60",
-};
-
-const CARD_ACCENT: Record<Warehouse, string> = {
-  "TECS-TCS": "border-l-sky-500",
-  "TECS-SCSC": "border-l-violet-500",
-  TCS: "border-l-cyan-500",
-  SCSC: "border-l-fuchsia-500",
-};
-
-const TEAM_CHIP: Record<OpsTeam, { label: string; className: string }> = {
-  TECS: {
-    label: "TECS",
-    className: "bg-teal-50 text-teal-800 ring-teal-200/90",
-  },
-  TCS: {
-    label: "TCS",
-    className: "bg-sky-50 text-sky-800 ring-sky-200/90",
-  },
-  SCSC: {
-    label: "SCSC",
-    className: "bg-violet-50 text-violet-800 ring-violet-200/90",
-  },
-};
+import { warehouseTone } from "../styles/warehouseTokens";
 
 interface Props {
   rows: readonly Shipment[];
@@ -138,7 +109,7 @@ export function WarehouseGridPicker({
         const isActive = active === wh;
         const hasSearchHit = highlightWarehouses.includes(wh);
         const team = opsTeamOf(wh);
-        const chip = TEAM_CHIP[team];
+        const tone = warehouseTone[wh];
         const kg = formatKgTotal(m.kg);
 
         return (
@@ -146,11 +117,11 @@ export function WarehouseGridPicker({
             key={wh}
             role="tab"
             aria-selected={isActive}
-            className={`group relative min-w-0 overflow-hidden rounded-xl border-l-[3px] text-left transition-all duration-150 ${CARD_ACCENT[wh]} ${
+            className={`group relative min-w-0 overflow-hidden rounded-xl border-l-[3px] text-left transition-all duration-150 ${tone.bar} ${
               compact ? "px-1.5 py-1" : "px-2 py-1"
             } ${
               isActive
-                ? `bg-ui-surface shadow-ui-md ring-2 ${CARD_RING[wh]}`
+                ? `bg-ui-surface shadow-ui-md ring-2 ${tone.ring}`
                 : "border border-ui-border/80 border-l-[3px] bg-ui-surface/90 hover:bg-ui-surface hover:shadow-ui-sm"
             } ${hasSearchHit && !isActive ? "ring-1 ring-ui-primary/40" : ""}`}
           >
@@ -174,9 +145,9 @@ export function WarehouseGridPicker({
             >
               <div className={`flex min-w-0 items-center gap-1 ${compact ? "pr-5" : "pr-5"}`}>
                 <span
-                  className={`inline-flex shrink-0 items-center rounded px-1 py-px text-2xs font-bold uppercase tracking-wide ring-1 ring-inset ${chip.className}`}
+                  className={`inline-flex shrink-0 items-center rounded px-1 py-px text-2xs font-semibold uppercase tracking-wide ring-1 ring-inset ${tone.chip}`}
                 >
-                  {chip.label}
+                  {team}
                 </span>
                 <p className="min-w-0 truncate text-2xs font-bold tracking-wide text-ui-navy">
                   {warehouseLabel[wh]}

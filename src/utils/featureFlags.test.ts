@@ -25,56 +25,19 @@ describe("ui.v2 feature flag & status styling", () => {
     expect(window.localStorage.getItem("tecsops.ui.v2")).toBeNull();
   });
 
-  it("uses legacy v1 colors when ui.v2 is disabled (default)", () => {
+  it("uses the shared v4 status tokens and does not swap them with the flag", () => {
     setUiV2Enabled(false);
-    // PENDING is blue, RECEIVED is amber
-    expect(statusBadgeClass.PENDING).toContain("bg-blue-50");
-    expect(statusBadgeClass.PENDING).toContain("text-blue-900");
-    expect(statusBadgeClass.RECEIVED).toContain("bg-amber-50");
-    expect(statusBadgeClass.RECEIVED).toContain("text-amber-950");
-
-    // WEIGH_SLIP is solid green
-    expect(statusBadgeClass.WEIGH_SLIP).toContain("bg-green-700");
-    expect(statusBadgeClass.WEIGH_SLIP).toContain("text-white");
-
-    // Legacy statuses have dashed borders
-    expect(statusBadgeClass.COMPLETED).toContain("border-dashed");
+    expect(statusBadgeClass.PENDING).toContain("bg-st-pending-bg");
+    expect(statusBadgeClass.RECEIVED).toContain("bg-st-received-bg");
+    expect(statusBadgeClass.WEIGH_SLIP).toContain("bg-st-weigh-bg");
+    expect(statusBadgeClass.RECEPTION_COMPLETED).toContain("bg-transparent");
     expect(statusBadgeClass.CUSTOMS).toContain("border-dashed");
-    expect(statusBadgeClass.SECURITY).toContain("border-dashed");
+    expect(statusDotClass.PENDING).toBe("bg-st-pending-bar");
+    expect(statusRowAccent.RECEIVED).toContain("border-l-st-received-bar");
 
-    // Indicator dots
-    expect(statusDotClass.PENDING).toBe("bg-blue-500");
-    expect(statusDotClass.RECEIVED).toBe("bg-amber-500");
-
-    // Card row accent border
-    expect(statusRowAccent.PENDING).toContain("border-l-blue-500");
-    expect(statusRowAccent.RECEIVED).toContain("border-l-amber-500");
-  });
-
-  it("swaps colors and styles when ui.v2 is enabled", () => {
+    const pending = statusBadgeClass.PENDING;
     setUiV2Enabled(true);
-
-    // PENDING is amber, RECEIVED is blue
-    expect(statusBadgeClass.PENDING).toContain("bg-amber-50");
-    expect(statusBadgeClass.PENDING).toContain("text-amber-800");
-    expect(statusBadgeClass.RECEIVED).toContain("bg-blue-50");
-    expect(statusBadgeClass.RECEIVED).toContain("text-blue-800");
-
-    // WEIGH_SLIP is tint green
-    expect(statusBadgeClass.WEIGH_SLIP).toContain("bg-green-50");
-    expect(statusBadgeClass.WEIGH_SLIP).toContain("text-green-800");
-
-    // Legacy statuses have solid borders (no border-dashed)
-    expect(statusBadgeClass.COMPLETED).not.toContain("border-dashed");
-    expect(statusBadgeClass.CUSTOMS).not.toContain("border-dashed");
-    expect(statusBadgeClass.SECURITY).not.toContain("border-dashed");
-
-    // Indicator dots
-    expect(statusDotClass.PENDING).toBe("bg-amber-500");
-    expect(statusDotClass.RECEIVED).toBe("bg-blue-500");
-
-    // Card row accent border
-    expect(statusRowAccent.PENDING).toContain("border-l-amber-500");
-    expect(statusRowAccent.RECEIVED).toContain("border-l-blue-500");
+    expect(statusBadgeClass.PENDING).toBe(pending);
+    expect(statusBadgeClass.RECEIVED).toContain("bg-st-received-bg");
   });
 });

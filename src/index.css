@@ -54,7 +54,7 @@
       "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
       Consolas, monospace;
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.015em;
+    letter-spacing: 0;
   }
 
   .tabular-nums-data {
@@ -89,7 +89,7 @@
 
   /** AWB mono — contrast cao Round 2. */
   .ops-awb {
-    @apply font-shipment-data font-bold tracking-tight tabular-nums text-ui-awb;
+    @apply font-shipment-data font-semibold tracking-tight tabular-nums text-ui-awb;
   }
 
   /** Zebra hàng bảng Ops — xen kẽ nhẹ (mobile / legacy). */

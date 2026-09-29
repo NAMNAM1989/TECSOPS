@@ -7,7 +7,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import type { Shipment, Warehouse } from "../types/shipment";
+import type { Shipment } from "../types/shipment";
 import { warehouseLabel, WAREHOUSE_ORDER } from "../constants/warehouses";
 import {
   buildShipmentSearchMatches,
@@ -25,12 +25,7 @@ import {
   type GlobalSearchLotHit,
 } from "../utils/globalSearchApi";
 
-const WAREHOUSE_CHIP_CLASS: Record<Warehouse, string> = {
-  "TECS-TCS": "bg-sky-100 text-sky-900 ring-sky-200/80",
-  "TECS-SCSC": "bg-violet-100 text-violet-900 ring-violet-200/80",
-  TCS: "bg-cyan-100 text-cyan-900 ring-cyan-200/80",
-  SCSC: "bg-fuchsia-100 text-fuchsia-900 ring-fuchsia-200/80",
-};
+import { warehouseTone } from "../styles/warehouseTokens";
 
 interface SmartSearchBarProps {
   value: string;
@@ -153,7 +148,7 @@ function SuggestionList({
             }`}
           >
             <span
-              className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ring-1 ${WAREHOUSE_CHIP_CLASS[match.shipment.warehouse]}`}
+              className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ring-1 ${warehouseTone[match.shipment.warehouse].chip}`}
             >
               {warehouseLabel[match.shipment.warehouse]}
             </span>
@@ -196,7 +191,7 @@ function SuggestionList({
               }`}
             >
               <span
-                className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ring-1 ${WAREHOUSE_CHIP_CLASS[hit.warehouse]}`}
+                className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ring-1 ${warehouseTone[hit.warehouse].chip}`}
               >
                 {warehouseLabel[hit.warehouse]}
               </span>
@@ -454,7 +449,7 @@ export function SmartSearchBar({
         {WAREHOUSE_ORDER.filter((wh) => warehouseCounts[wh] > 0).map((wh) => (
           <span
             key={wh}
-            className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-2xs font-semibold ring-1 ${WAREHOUSE_CHIP_CLASS[wh]}`}
+            className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-2xs font-semibold ring-1 ${warehouseTone[wh].chip}`}
           >
             {warehouseLabel[wh]} {warehouseCounts[wh]}
           </span>

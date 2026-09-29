@@ -7,6 +7,14 @@ export default {
   darkMode: "class",
   theme: {
     extend: {
+      fontWeight: {
+        normal: "400",
+        medium: "600",
+        semibold: "600",
+        bold: "700",
+        extrabold: "700",
+        black: "700",
+      },
       fontFamily: {
         sans: [
           '"Plus Jakarta Sans"',
@@ -38,6 +46,7 @@ export default {
           "surface-sunken": v("surface-sunken"),
           text: v("foreground"),
           "text-muted": v("muted-foreground"),
+          "text-subtle": v("subtle-foreground"),
           border: v("border"),
           "border-strong": v("border-strong"),
           input: v("input"),
@@ -70,6 +79,52 @@ export default {
             history: v("stage-history"),
           },
           awb: v("foreground"),
+          alert: {
+            fg: v("alert-fg"),
+            bg: v("alert-bg"),
+            border: v("alert-border"),
+          },
+        },
+        st: {
+          "pending-fg": v("st-pending-fg"),
+          "pending-bg": v("st-pending-bg"),
+          "pending-bar": v("st-pending-bar"),
+          "received-fg": v("st-received-fg"),
+          "received-bg": v("st-received-bg"),
+          "received-bar": v("st-received-bar"),
+          "volume-fg": v("st-volume-fg"),
+          "volume-bg": v("st-volume-bg"),
+          "volume-bar": v("st-volume-bar"),
+          "ola-fg": v("st-ola-fg"),
+          "ola-bg": v("st-ola-bg"),
+          "ola-bar": v("st-ola-bar"),
+          "reception-fg": v("st-reception-fg"),
+          "reception-border": v("st-reception-border"),
+          "reception-bar": v("st-reception-bar"),
+          "weigh-fg": v("st-weigh-fg"),
+          "weigh-bg": v("st-weigh-bg"),
+          "weigh-bar": v("st-weigh-bar"),
+          "legacy-fg": v("st-legacy-fg"),
+          "legacy-border": v("st-legacy-border"),
+          "legacy-bar": v("st-legacy-bar"),
+        },
+        whc: {
+          "tecs-tcs-fg": v("whc-tecs-tcs-fg"),
+          "tecs-tcs-bg": v("whc-tecs-tcs-bg"),
+          "tecs-tcs-border": v("whc-tecs-tcs-border"),
+          "tecs-tcs-series": v("whc-tecs-tcs-series"),
+          "tcs-fg": v("whc-tcs-fg"),
+          "tcs-bg": v("whc-tcs-bg"),
+          "tcs-border": v("whc-tcs-border"),
+          "tcs-series": v("whc-tcs-series"),
+          "tecs-scsc-fg": v("whc-tecs-scsc-fg"),
+          "tecs-scsc-bg": v("whc-tecs-scsc-bg"),
+          "tecs-scsc-border": v("whc-tecs-scsc-border"),
+          "tecs-scsc-series": v("whc-tecs-scsc-series"),
+          "scsc-fg": v("whc-scsc-fg"),
+          "scsc-bg": v("whc-scsc-bg"),
+          "scsc-border": v("whc-scsc-border"),
+          "scsc-series": v("whc-scsc-series"),
         },
         wh: {
           tcs: v("wh-tcs"),
@@ -133,7 +188,8 @@ export default {
         "ui-inset": "inset 0 1px 0 rgba(255,255,255,0.65)",
       },
       fontSize: {
-        "2xs": ["12px", { lineHeight: "16px" }], // nhỏ nhất cho phép
+        label: ["11px", { lineHeight: "16px" }],
+        "2xs": ["12px", { lineHeight: "16px" }], // sàn dữ liệu
         xs: ["12px", { lineHeight: "16px" }],
         sm13: ["13px", { lineHeight: "18px" }], // body bảng
         sm: ["14px", { lineHeight: "20px" }],

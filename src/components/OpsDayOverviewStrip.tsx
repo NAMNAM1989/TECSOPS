@@ -2,21 +2,16 @@ import { useMemo } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import { formatKgTotal } from "../utils/formatKgTotal";
 import { computeOpsDayOverview } from "../utils/opsDayOverview";
-import { countAttentionRows } from "../utils/opsAttention";
 import { WarehouseGridPicker } from "./WarehouseGridPicker";
 
 type Props = {
-  selectedYmd: string;
   rows: readonly Shipment[];
-  allRows?: readonly Shipment[];
   activeWarehouse: Warehouse;
   onSelectWarehouse: (wh: Warehouse) => void;
   highlightWarehouses?: readonly Warehouse[];
   filtersActive?: boolean;
   variant: "desktop" | "mobile";
   embedded?: boolean;
-  attentionActive?: boolean;
-  onSelectAttention?: () => void;
 };
 
 function CompactKpi({
@@ -75,25 +70,17 @@ function CompactKpi({
   );
 }
 
-/** KPI ngày + chip kho — desktop: 3 KPI cards + chips + Cần xử lý nếu có. */
+/** KPI ngày + chip kho. */
 export function OpsDayOverviewStrip({
-  selectedYmd,
   rows,
-  allRows,
   activeWarehouse,
   onSelectWarehouse,
   highlightWarehouses = [],
   filtersActive = false,
   variant,
   embedded = false,
-  attentionActive = false,
-  onSelectAttention,
 }: Props) {
   const { totals } = useMemo(() => computeOpsDayOverview(rows), [rows]);
-  const attentionCount = useMemo(
-    () => countAttentionRows(rows as Shipment[], (allRows ?? rows) as Shipment[], selectedYmd),
-    [rows, allRows, selectedYmd]
-  );
   const isMobile = variant === "mobile";
   const kgLabel = formatKgTotal(totals.kg);
   const filterHint = filtersActive ? "*" : "";
@@ -107,13 +94,6 @@ export function OpsDayOverviewStrip({
         <CompactKpi label={`Lô${filterHint}`} value={totals.lots} active={filtersActive} />
         <CompactKpi label="PCS" value={totals.pcs} />
         <CompactKpi label="KG" value={kgLabel} />
-        <CompactKpi
-          label="Cần xử lý"
-          value={attentionCount > 0 ? `⚠ ${attentionCount}` : "0 ✓"}
-          tone={attentionCount > 0 ? "danger" : "success"}
-          active={attentionActive}
-          onClick={onSelectAttention}
-        />
         <span className="mx-0.5 h-5 w-px shrink-0 bg-ui-border/70" aria-hidden />
         <WarehouseGridPicker
           rows={rows}
@@ -159,12 +139,6 @@ export function OpsDayOverviewStrip({
           {totals.pcs}
           <span className="mx-0.5 text-ui-border">·</span>
           {kgLabel}
-          <span className="mx-0.5 text-ui-border">·</span>
-          {attentionCount > 0 ? (
-            <span className="text-red-700 font-bold">⚠ {attentionCount}</span>
-          ) : (
-            <span className="text-emerald-700 font-semibold">0 ✓</span>
-          )}
         </span>
       </div>
 

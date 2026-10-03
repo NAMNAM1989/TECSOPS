@@ -17,7 +17,6 @@ import {
   filterShipmentsBySessionYmd,
   filterShipmentsBySessionYmdRange,
 } from "../utils/filterShipmentsBySessionYmd";
-import { computeAllShipmentsAttention } from "../utils/opsAttention";
 import {
   parseOpsUrlState,
   serializeOpsUrlState,
@@ -160,9 +159,7 @@ export function AirCargoTracking({
   const [mobileEditShipment, setMobileEditShipment] = useState<Shipment | null>(null);
   const [mobileEditInitialTab, setMobileEditInitialTab] = useState<"lot" | "notify" | "dim">("lot");
   const [mobileEditFocus, setMobileEditFocus] = useState<MobileEditFocus>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(
-    initUrl.st === "attention" ? "attention" : "ALL",
-  );
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
   const [activeWarehouse, setActiveWarehouse] = useState<Warehouse>(initUrl.wh ?? "TECS-TCS");
   const [searchQuery, setSearchQuery] = useState(initUrl.q ?? "");
   /** Ngày bay (DDMMM) — tách khỏi ô gõ, kết hợp AND với searchQuery. */
@@ -255,9 +252,8 @@ export function AirCargoTracking({
       if (parsed.wh && parsed.wh !== activeWarehouse) {
         setActiveWarehouse(parsed.wh);
       }
-      const nextStatus = parsed.st === "attention" ? "attention" : "ALL";
-      if (nextStatus !== statusFilter) {
-        setStatusFilter(nextStatus);
+      if (statusFilter !== "ALL") {
+        setStatusFilter("ALL");
       }
       if (parsed.q !== undefined && parsed.q !== searchQuery) {
         setSearchQuery(parsed.q);
@@ -298,14 +294,7 @@ export function AirCargoTracking({
     [state?.customers]
   );
 
-  const attentionMap = useMemo(() => {
-    return computeAllShipmentsAttention(viewRows, allRows, selectedYmd);
-  }, [viewRows, allRows, selectedYmd]);
-
-  const statusFilteredRows = useMemo(() => {
-    if (statusFilter !== "attention") return viewRows;
-    return viewRows.filter((r) => attentionMap.get(r.id)?.needsAttention ?? false);
-  }, [viewRows, statusFilter, attentionMap]);
+  const statusFilteredRows = viewRows;
 
   const searchActive =
     searchQuery.trim().length > 0 || Boolean(flightDateFilter);

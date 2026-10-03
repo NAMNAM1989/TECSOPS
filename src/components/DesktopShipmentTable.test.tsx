@@ -70,6 +70,11 @@ describe("DesktopShipmentTable density", () => {
     expect(html).not.toContain("STATUS");
     expect(html).toContain("THAO TÁC");
     expect(html).toContain("176");
+    expect(html).toContain('data-testid="ops-warehouse-totals"');
+    expect(html).toContain("Kiện");
+    expect(html).toContain("12.5");
+    expect(html).toContain('data-testid="ops-urgent-marquee"');
+    expect(html).toContain("Chưa có ghi chú gấp");
   });
 
   it("nhiều lô xoay tint bề mặt khác nhau", () => {

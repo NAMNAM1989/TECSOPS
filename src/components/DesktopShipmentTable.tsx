@@ -29,6 +29,10 @@ import {
 } from "../utils/inlineShipmentFieldValidation";
 import { useToast } from "../ui";
 import { NewBookingButton } from "./NewBookingButton";
+import { formatKgTotal } from "../utils/formatKgTotal";
+import { summarizeWarehouseHeader } from "../utils/warehouseHeaderTotals";
+import { OPS_URGENT_NOTICES } from "../content/opsUrgentNotices";
+import { OpsUrgentNoticeMarquee } from "./OpsUrgentNoticeMarquee";
 
 interface Props {
   rows: Shipment[];
@@ -108,6 +112,7 @@ export function DesktopShipmentTable({
     [rows, activeWarehouse],
   );
   const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);
+  const headerTotals = useMemo(() => summarizeWarehouseHeader(group), [group]);
 
   return (
     <>
@@ -119,9 +124,9 @@ export function DesktopShipmentTable({
           id={`warehouse-section-${activeWarehouse}`}
           className="mx-0 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md md:mx-5 md:mt-4"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-ui-border/80 bg-ui-surface px-4 py-2.5">
+          <div className="flex items-center gap-2 border-b border-ui-border/80 bg-ui-surface px-4 py-2">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
-              <div className="min-w-0">
+              <div className="min-w-0 shrink-0">
                 <h2 className="text-[12px] font-bold leading-tight tracking-tight text-ui-navy">
                   {warehouseLabel[activeWarehouse]}
                   <span className="ml-1.5 text-2xs font-semibold text-ui-text-muted">
@@ -135,6 +140,16 @@ export function DesktopShipmentTable({
                   onAdd={onAddBlankRow}
                 />
               ) : null}
+              <dl
+                className="flex shrink-0 items-center gap-1"
+                data-testid="ops-warehouse-totals"
+              >
+                <WarehouseTotalChip label="Kiện" value={String(headerTotals.pcs)} />
+                <WarehouseTotalChip label="Kg" value={formatKgTotal(headerTotals.actualKg)} />
+                <WarehouseTotalChip label="DIM" value={formatKgTotal(headerTotals.dimKg)} />
+                <WarehouseTotalChip label="CW" value={formatKgTotal(headerTotals.chargeableKg)} />
+              </dl>
+              <OpsUrgentNoticeMarquee notices={OPS_URGENT_NOTICES} />
             </div>
           </div>
           <div
@@ -215,6 +230,15 @@ export function DesktopShipmentTable({
         />
       ) : null}
     </>
+  );
+}
+
+function WarehouseTotalChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="inline-flex items-baseline gap-1 rounded-md bg-ui-background px-2 py-1" title={`${label}: ${value}`}>
+      <dt className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">{label}</dt>
+      <dd className="m-0 font-mono text-[13px] font-semibold tabular-nums text-ui-navy">{value}</dd>
+    </div>
   );
 }
 

@@ -163,3 +163,31 @@
 .animate-cnee-slide-up {
   animation: cnee-slide-up-in 0.28s cubic-bezier(0.32, 0.94, 0.6, 1) forwards;
 }
+
+@keyframes ops-urgent-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ops-urgent-marquee {
+  animation-name: ops-urgent-marquee;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.ops-urgent-marquee:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ops-urgent-marquee {
+    animation: none !important;
+    width: auto;
+    flex-wrap: wrap;
+    transform: none !important;
+  }
+}

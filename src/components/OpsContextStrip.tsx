@@ -43,7 +43,6 @@ export function OpsContextStrip({
   selectedYmd,
   filteredViewRows,
   viewRows,
-  allRows,
   activeWarehouse,
   onWarehouseChange,
   searchHighlightWarehouses = [],
@@ -57,8 +56,6 @@ export function OpsContextStrip({
   searchInputRef,
   onSelectSearchMatch,
   onSelectGlobalLot,
-  statusFilter,
-  onStatusFilterChange,
   onClearFilters,
 }: Props) {
   const isMobile = variant === "mobile";
@@ -68,17 +65,11 @@ export function OpsContextStrip({
     <OpsDayOverviewStrip
       variant={variant}
       embedded
-      selectedYmd={selectedYmd}
       rows={filteredViewRows}
-      allRows={allRows}
       activeWarehouse={activeWarehouse}
       onSelectWarehouse={onWarehouseChange}
       highlightWarehouses={searchHighlightWarehouses}
       filtersActive={filtersActive}
-      attentionActive={statusFilter === "attention"}
-      onSelectAttention={() =>
-        onStatusFilterChange(statusFilter === "attention" ? "ALL" : "attention")
-      }
     />
   );
 

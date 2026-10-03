@@ -30,7 +30,6 @@ function renderStrip(variant: "desktop" | "mobile", filtered = rows) {
   return renderToStaticMarkup(
     <OpsDayOverviewStrip
       variant={variant}
-      selectedYmd="2026-08-21"
       rows={filtered}
       activeWarehouse="TCS"
       onSelectWarehouse={() => undefined}
@@ -45,7 +44,6 @@ describe("OpsDayOverviewStrip", () => {
       <OpsDayOverviewStrip
         variant="desktop"
         embedded
-        selectedYmd="2026-08-21"
         rows={rows}
         activeWarehouse="TCS"
         onSelectWarehouse={() => undefined}
@@ -56,6 +54,7 @@ describe("OpsDayOverviewStrip", () => {
     expect(html).toContain("warehouse-chips");
     expect(html).toContain("flex-col");
     expect(html).toContain("min-h-9");
+    expect(html).not.toContain("Cần xử lý");
     expect(html).not.toContain("ops-day-pulse");
     expect(html).not.toContain("min-w-[5.5rem]");
   });

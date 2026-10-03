@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import type { SyncStatus } from "../hooks/useShipmentSync";
-import type { Shipment, ShipmentStatus } from "../types/shipment";
+import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { WarehouseLayoutFilter } from "../constants/warehouses";
 import { normalizeWarehouse, warehouseLabel, WAREHOUSE_ORDER } from "../constants/warehouses";
@@ -21,9 +21,7 @@ import {
   Wordmark,
   useToast,
 } from "../ui";
-import { statusLabel } from "../components/statusStyles";
 import { formatKgTotal } from "../utils/formatKgTotal";
-import { statusOrderForFilter } from "../utils/shipmentWorkflowStatus";
 import {
   computeOpsStats,
   listDestOptionsInRange,
@@ -138,8 +136,6 @@ const DETAIL_TABS: { id: DetailTab; label: string }[] = [
 const FIELD =
   "min-h-9 rounded-lg border border-ui-border/80 bg-ui-surface px-2.5 py-1.5 text-sm text-ui-text outline-none transition focus:border-ui-primary/45 focus:ring-2 focus:ring-ui-focus/80";
 
-const STATUS_FILTER_OPTIONS = statusOrderForFilter("ALL");
-
 function warehouseFilterLabel(w: WarehouseLayoutFilter): string {
   return w === "ALL" ? "Tất cả kho" : warehouseLabel[w];
 }
@@ -244,9 +240,6 @@ export function OpsStatsPage({
   const [flightKey, setFlightKey] = useState<string | "ALL">(
     () => url0.flightKey ?? "ALL"
   );
-  const [statuses, setStatuses] = useState<ShipmentStatus[] | "ALL">(
-    () => url0.statuses ?? "ALL"
-  );
   const [exporting, setExporting] = useState(false);
   const [intelTab, setIntelTab] = useState<IntelTab>(() => url0.intelTab ?? "ops");
   const [detailTab, setDetailTab] = useState<DetailTab>(
@@ -303,7 +296,6 @@ export function OpsStatsPage({
         dest,
         customerKey,
         flightKey,
-        statuses,
         intelTab,
         detailTab,
         focusYmd: focusYmdOverride ?? "",
@@ -323,7 +315,6 @@ export function OpsStatsPage({
     dest,
     customerKey,
     flightKey,
-    statuses,
     intelTab,
     detailTab,
     focusYmdOverride,
@@ -380,9 +371,8 @@ export function OpsStatsPage({
     return filterShipmentsForStatsIntel(base, {
       customerKey,
       flightKey,
-      statuses,
     });
-  }, [inRangeWh, dest, customerKey, flightKey, statuses]);
+  }, [inRangeWh, dest, customerKey, flightKey]);
 
   const stats = useMemo(
     () =>
@@ -415,9 +405,8 @@ export function OpsStatsPage({
     return filterShipmentsForStatsIntel(base, {
       customerKey,
       flightKey,
-      statuses,
     });
-  }, [rows, prevRange.fromYmd, prevRange.toYmd, warehouse, dest, customerKey, flightKey, statuses]);
+  }, [rows, prevRange.fromYmd, prevRange.toYmd, warehouse, dest, customerKey, flightKey]);
 
   const prevStats = useMemo(
     () =>
@@ -441,9 +430,8 @@ export function OpsStatsPage({
     return filterShipmentsForStatsIntel(base, {
       customerKey,
       flightKey,
-      statuses,
     });
-  }, [rows, warehouse, dest, customerKey, flightKey, statuses]);
+  }, [rows, warehouse, dest, customerKey, flightKey]);
 
   const intel = useMemo(
     () => computeOpsStatsIntelligence(stats.filtered, historyRows, focusYmd, 8),
@@ -537,13 +525,6 @@ export function OpsStatsPage({
         onClear: () => setFlightKey("ALL"),
       });
     }
-    if (statuses !== "ALL") {
-      chips.push({
-        id: "st",
-        label: statuses.map((s) => statusLabel[s] ?? s).join(", "),
-        onClear: () => setStatuses("ALL"),
-      });
-    }
     if (mode === "day") {
       chips.push({
         id: "day",
@@ -559,7 +540,6 @@ export function OpsStatsPage({
     dest,
     customerKey,
     flightKey,
-    statuses,
     mode,
     dayYmd,
     customerOptions,
@@ -570,7 +550,6 @@ export function OpsStatsPage({
     setDest("ALL");
     setCustomerKey("ALL");
     setFlightKey("ALL");
-    setStatuses("ALL");
     if (mode === "day") setMode("today");
   }, [mode]);
 
@@ -597,10 +576,6 @@ export function OpsStatsPage({
         filterMeta: {
           Khách: customerKey === "ALL" ? "Tất cả" : customerKey,
           Chuyến: flightKey === "ALL" ? "Tất cả" : flightKey,
-          "Trạng thái":
-            statuses === "ALL"
-              ? "Tất cả"
-              : statuses.map((s) => statusLabel[s] ?? s).join(", "),
         },
       });
       toast.success("Đã xuất Excel thống kê");
@@ -609,18 +584,7 @@ export function OpsStatsPage({
     } finally {
       setExporting(false);
     }
-  }, [customerKey, dest, flightKey, intel, mode, range, stats, statuses, toast, warehouse]);
-
-  const toggleStatus = useCallback((s: ShipmentStatus) => {
-    setStatuses((prev) => {
-      if (prev === "ALL") return [s];
-      if (prev.includes(s)) {
-        const next = prev.filter((x) => x !== s);
-        return next.length === 0 ? "ALL" : next;
-      }
-      return [...prev, s];
-    });
-  }, []);
+  }, [customerKey, dest, flightKey, intel, mode, range, stats, toast, warehouse]);
 
   const t = stats.totals;
   const pt = prevStats.totals;
@@ -629,10 +593,6 @@ export function OpsStatsPage({
   const actualDelta = kpiDelta(t.actualKg, pt.actualKg);
   const cwDelta = kpiDelta(t.chargeableKg, pt.chargeableKg);
   const deltaPositive = t.deltaKg > 0;
-  const statusMixHint = intel.statusMix
-    .slice(0, 3)
-    .map((m) => `${statusLabel[m.status] ?? m.status} ${m.pct}%`)
-    .join(" · ");
 
   const openLotFromAlert = useCallback(
     (sessionYmd: string, awb: string, shipmentId?: string) => {
@@ -927,46 +887,6 @@ export function OpsStatsPage({
                   </select>
                 </FilterField>
 
-                <div className="flex min-w-0 flex-col gap-1">
-                  <span className="text-2xs font-bold uppercase tracking-wider text-ui-text-muted">
-                    Trạng thái
-                  </span>
-                  <div
-                    aria-label="Lọc trạng thái"
-                    className="flex max-w-full flex-wrap gap-1"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setStatuses("ALL")}
-                      className={`min-h-8 rounded-lg px-2 text-2xs font-bold transition ${
-                        statuses === "ALL"
-                          ? "bg-ui-navy text-white shadow-ui-sm"
-                          : "border border-ui-border/80 bg-ui-surface text-ui-text-muted hover:text-ui-text"
-                      }`}
-                    >
-                      Tất cả
-                    </button>
-                    {STATUS_FILTER_OPTIONS.map((s) => {
-                      const active =
-                        statuses !== "ALL" && statuses.includes(s);
-                      return (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => toggleStatus(s)}
-                          className={`min-h-8 rounded-lg px-2 text-2xs font-bold transition ${
-                            active
-                              ? "bg-teal-700 text-white shadow-ui-sm"
-                              : "border border-ui-border/80 bg-ui-surface text-ui-text-muted hover:text-ui-text"
-                          }`}
-                        >
-                          {statusLabel[s]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 <p className="ml-auto pb-1.5 text-[12px] text-ui-text-muted">
                   Kỳ{" "}
                   <span className="font-bold tabular-nums text-ui-navy">{periodLabel}</span>
@@ -1020,7 +940,7 @@ export function OpsStatsPage({
                 {
                   label: "% Volume",
                   value: formatStatsPct(intel.volumeDonePct),
-                  hint: statusMixHint || "VOLUME_DONE trở đi / tổng lô kỳ",
+                  hint: "Tỷ lệ lô đã có DIM",
                 },
               ]}
             />
@@ -1035,14 +955,6 @@ export function OpsStatsPage({
                   Đủ DIM
                 </span>
               )}
-              {intel.statusMix.slice(0, 4).map((m) => (
-                <span
-                  key={m.status}
-                  className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-2xs font-semibold text-slate-800 ring-1 ring-slate-200/80"
-                >
-                  {statusLabel[m.status] ?? m.status} {m.pct}%
-                </span>
-              ))}
               <span className="text-2xs text-ui-text-muted">
                 Chargeable = max(Kg, DIM). Chưa DIM → CW = Kg, Δ = 0.
               </span>

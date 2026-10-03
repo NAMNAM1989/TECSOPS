@@ -13,17 +13,6 @@ export const MISSING_FLIGHT_KEY = "(chưa có)";
 /** Nhãn lô thiếu AWB — khớp alert + ô tìm bảng lô. */
 export const MISSING_AWB_LABEL = "(không AWB)";
 
-/** Trạng thái đã qua / đang ở bước đo volume trở đi. */
-const VOLUME_DONE_OR_LATER = new Set<ShipmentStatus>([
-  "VOLUME_DONE",
-  "CUSTOMS",
-  "SECURITY",
-  "OLA_PULL",
-  "RECEPTION_COMPLETED",
-  "WEIGH_SLIP",
-  "COMPLETED",
-]);
-
 const DOW_VI = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"] as const;
 
 /**
@@ -96,12 +85,12 @@ export function computeStatusMix(rows: readonly Shipment[]): StatusMixRow[] {
     .sort((a, b) => b.lots - a.lots);
 }
 
-/** % lô đã đo volume (VOLUME_DONE trở đi). */
+/** % lô đã có DIM. Không dùng trạng thái quy trình. */
 export function computeVolumeDonePct(rows: readonly Shipment[]): number {
   if (rows.length === 0) return 0;
   let n = 0;
   for (const s of rows) {
-    if (VOLUME_DONE_OR_LATER.has(s.status)) n += 1;
+    if (computeShipmentWeightMetrics(s).hasDim) n += 1;
   }
   return Math.round((n / rows.length) * 1000) / 10;
 }
@@ -110,7 +99,6 @@ export type OpsStatsAlertKind =
   | "missing_pcs"
   | "missing_kg"
   | "missing_flight"
-  | "pending"
   | "cutoff_per"
   | "flight_date_skew";
 
@@ -163,15 +151,6 @@ export function collectOpsStatsAlerts(rows: readonly Shipment[]): OpsStatsAlert[
         message: `${awb}: thiếu mã chuyến`,
       });
     }
-    if (s.status === "PENDING") {
-      out.push({
-        ...base,
-        id: `${s.id}:pending`,
-        kind: "pending",
-        severity: "info",
-        message: `${awb}: còn Booking (PENDING)`,
-      });
-    }
     if (isCutoffPer(s.cutoffNote || "")) {
       out.push({
         ...base,
@@ -198,7 +177,6 @@ export function collectOpsStatsAlerts(rows: readonly Shipment[]): OpsStatsAlert[
     missing_flight: 2,
     cutoff_per: 3,
     flight_date_skew: 4,
-    pending: 5,
   };
   out.sort((a, b) => order[a.kind] - order[b.kind] || a.awb.localeCompare(b.awb));
   return out;
@@ -696,18 +674,16 @@ export function shipmentMatchesStatsLotSearch(
   return shipmentMatchesSearchQuery(shipment, q, ctx);
 }
 
-/** Filter phụ trợ cho page (customer / flight / status). */
+/** Filter phụ trợ cho page (customer / flight). Không lọc theo trạng thái. */
 export function filterShipmentsForStatsIntel(
   rows: readonly Shipment[],
   opts: {
     customerKey?: string | "ALL";
     flightKey?: string | "ALL";
-    statuses?: readonly ShipmentStatus[] | "ALL";
   }
 ): Shipment[] {
   const cust = opts.customerKey ?? "ALL";
   const flight = opts.flightKey ?? "ALL";
-  const statuses = opts.statuses ?? "ALL";
   return rows.filter((s) => {
     if (cust !== "ALL") {
       const { key } = normalizeCustomerKey(s.customerCode, s.customer);
@@ -720,9 +696,6 @@ export function filterShipmentsForStatsIntel(
       } else if (fk !== flight) {
         return false;
       }
-    }
-    if (statuses !== "ALL" && statuses.length > 0) {
-      if (!statuses.includes(s.status)) return false;
     }
     return true;
   });

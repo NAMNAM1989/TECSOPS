@@ -44,7 +44,6 @@ function renderHeader(opts: { empty?: boolean; expandTools?: boolean } = {}) {
         searchContext={emptySearch}
         onSelectSearchMatch={() => undefined}
         statusFilter="ALL"
-        onStatusFilterChange={() => undefined}
         onClearFilters={() => undefined}
       />
     </ToastProvider>,
@@ -75,7 +74,7 @@ describe("OpsMobileStickyHeader chrome", () => {
     expect(html).toContain("ops-mobile-search-expand");
     expect(html).toContain("ops-mobile-toolbar");
     expect(html).toContain('data-embedded="true"');
-    expect(html).toContain("Lọc trạng thái");
+    expect(html).not.toContain("Lọc trạng thái");
     expect(html).toContain("Thêm ▾");
     expect(html).toContain("Xóa bộ lọc");
   });

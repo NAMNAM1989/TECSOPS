@@ -48,7 +48,6 @@ interface Props {
   onSelectSearchMatch: (match: ShipmentSearchMatch) => void;
   onSelectGlobalLot?: (hit: GlobalSearchLotHit) => void;
   statusFilter: StatusFilterValue;
-  onStatusFilterChange: (v: StatusFilterValue) => void;
   onClearFilters: () => void;
 }
 
@@ -105,7 +104,6 @@ export function OpsMobileStickyHeader({
   onSelectSearchMatch,
   onSelectGlobalLot,
   statusFilter,
-  onStatusFilterChange,
   onClearFilters,
 }: Props) {
   const [toolsExpanded, setToolsExpanded] = useState(
@@ -258,10 +256,7 @@ export function OpsMobileStickyHeader({
             />
             <OpsMobileToolbar
               embedded
-              activeWarehouse={activeWarehouse}
               viewRows={viewRows}
-              statusFilter={statusFilter}
-              onStatusFilterChange={onStatusFilterChange}
               onOpenSheetImport={onOpenSheetImport}
               onPrefetchSheetImport={onPrefetchSheetImport}
               onDownloadDayExcel={onDownloadDayExcel}

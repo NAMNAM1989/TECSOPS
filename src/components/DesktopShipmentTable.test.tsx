@@ -67,7 +67,7 @@ describe("DesktopShipmentTable density", () => {
     expect(html).toContain("AWB / HAWB");
     expect(html).toContain("CHUYẾN");
     expect(html).toContain("INFO KH");
-    expect(html).toContain("STATUS");
+    expect(html).not.toContain("STATUS");
     expect(html).toContain("THAO TÁC");
     expect(html).toContain("176");
   });
@@ -90,10 +90,10 @@ describe("DesktopShipmentTable density", () => {
     expect(html).toContain('data-lot-tone="1"');
   });
 
-  it("status desktop dense h-7, không min-h-11; overflow-visible menu", () => {
+  it("bảng desktop không còn cột STATUS; menu thao tác vẫn overflow-visible", () => {
     const html = renderTable();
-    expect(html).toContain("h-7 w-full min-w-0 truncate px-1.5 text-2xs");
-    expect(html).not.toContain("h-11 w-full min-h-11");
+    expect(html).not.toContain("Trạng thái lô");
+    expect(html).not.toContain("h-7 w-full min-w-0 truncate px-1.5 text-2xs");
     expect(html).toContain("overflow-visible py-0.5");
     expect(html).toContain("row-actions-menu-s1");
   });

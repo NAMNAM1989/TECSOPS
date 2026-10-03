@@ -1,6 +1,4 @@
 import type { WarehouseLayoutFilter } from "../constants/warehouses";
-import type { ShipmentStatus } from "../types/shipment";
-import { SHIPMENT_STATUS_ORDER } from "./shipmentWorkflowStatus";
 import { normalizeStatsDest } from "./opsStatsMetrics";
 import type { StatsPeriodMode } from "./opsStatsPeriod";
 
@@ -19,8 +17,6 @@ export type OpsStatsUrlState = {
   dest: string | "ALL";
   customerKey: string | "ALL";
   flightKey: string | "ALL";
-  /** ALL hoặc danh sách status */
-  statuses: ShipmentStatus[] | "ALL";
   intelTab: OpsStatsIntelTab;
   detailTab: OpsStatsDetailTab;
   focusYmd: string;
@@ -89,15 +85,6 @@ export function parseOpsStatsUrlState(hash: string): Partial<OpsStatsUrlState> {
   const flight = sp.get("flight");
   if (flight) out.flightKey = flight === "ALL" ? "ALL" : flight;
 
-  const st = sp.get("st");
-  if (st === "ALL") {
-    out.statuses = "ALL";
-  } else if (st) {
-    const allowed = new Set<string>(SHIPMENT_STATUS_ORDER);
-    const next = st.split(",").filter((s): s is ShipmentStatus => allowed.has(s));
-    if (next.length > 0) out.statuses = next;
-  }
-
   const tab = sp.get("tab");
   if (tab && INTEL.has(tab as OpsStatsIntelTab)) out.intelTab = tab as OpsStatsIntelTab;
   const detail = sp.get("detail");
@@ -127,9 +114,6 @@ export function serializeOpsStatsUrlState(state: OpsStatsUrlState): string {
   if (state.dest !== "ALL") sp.set("dest", state.dest);
   if (state.customerKey !== "ALL") sp.set("cust", state.customerKey);
   if (state.flightKey !== "ALL") sp.set("flight", state.flightKey);
-  if (state.statuses !== "ALL" && state.statuses.length > 0) {
-    sp.set("st", state.statuses.join(","));
-  }
   if (state.intelTab !== "ops") sp.set("tab", state.intelTab);
   if (state.detailTab !== "lots") sp.set("detail", state.detailTab);
   if (state.focusYmd) sp.set("focus", state.focusYmd);

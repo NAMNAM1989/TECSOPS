@@ -1,5 +1,4 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { statusLabel } from "../statusStyles";
 import { formatKgTotal } from "../../utils/formatKgTotal";
 import { warehouseLabel } from "../../constants/warehouses";
 import type {
@@ -195,9 +194,6 @@ function LotRow({
           <span className="text-2xs text-slate-500">chưa DIM</span>
         )}
       </td>
-      <td className="px-3.5 py-2 text-2xs text-ui-text-muted">
-        {statusLabel[s.status] ?? s.status}
-      </td>
       {onOpenLot ? (
         <td className="px-3.5 py-2">
           <button
@@ -226,7 +222,7 @@ export function LotsDetailTable({
 }) {
   const sorted = useMemo(() => sortOpsStatsLots(lots, sort), [lots, sort]);
   const [scrollTop, setScrollTop] = useState(0);
-  const colSpan = onOpenLot ? 13 : 12;
+  const colSpan = onOpenLot ? 12 : 11;
   const virtualize = sorted.length >= LOT_VIRTUALIZE_AT;
 
   const { startIdx, endIdx, padTop, padBottom } = useMemo(() => {
@@ -320,7 +316,6 @@ export function LotsDetailTable({
               onSortChange={onSortChange}
               align="right"
             />
-            <th className="px-3.5 py-2.5 font-bold">TT</th>
             {onOpenLot ? <th className="px-3.5 py-2.5 font-bold"> </th> : null}
           </tr>
         </thead>

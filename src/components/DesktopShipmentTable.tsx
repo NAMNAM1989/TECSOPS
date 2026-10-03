@@ -1,8 +1,7 @@
 import { memo, useCallback, useMemo, useRef, useState } from "react";
-import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
+import type { Shipment, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { findAwbDigitsConflict } from "../utils/awbUnique";
-import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { InlineTextEdit } from "./InlineTextEdit";
 import { InlineCustomerEdit } from "./InlineCustomerEdit";
@@ -15,11 +14,7 @@ import { isCargoReportFlightDateUrgent } from "../utils/cargoDayReport";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { InlineAwbEdit } from "./InlineAwbEdit";
 import { LazyMobileDimKgModal } from "./LazyMobileDimKgModal";
-import {
-  statusRowAccent,
-  statusRowSelected,
-  flightNumberAccent,
-} from "./statusStyles";
+import { statusRowSelected, flightNumberAccent } from "./statusStyles";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 import { normalizeWarehouse, warehouseLabel } from "../constants/warehouses";
 import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
@@ -34,7 +29,6 @@ import {
 } from "../utils/inlineShipmentFieldValidation";
 import { useToast } from "../ui";
 import { NewBookingButton } from "./NewBookingButton";
-import { useUiV2 } from "../utils/featureFlags";
 
 interface Props {
   rows: Shipment[];
@@ -58,7 +52,7 @@ interface Props {
 
 type ColHeader = { key: string; label: string; w: string; title?: string };
 
-/** ~200px — đủ đọc tên Shipper/CNEE, vẫn gọn cạnh STATUS. */
+/** ~200px — đủ đọc tên Shipper/CNEE. */
 const INFO_KH_W = "w-[12.5rem] max-w-[12.5rem]";
 /** Vừa đủ nội dung thật — không truncate AWB/chuyến; KHÁCH tối đa 2 dòng. */
 const AWB_W = "w-[9rem] max-w-[9rem]";
@@ -79,12 +73,6 @@ const COL_HEADERS: ColHeader[] = [
     label: "INFO KH",
     w: INFO_KH_W,
     title: "Shipper · CNEE · Tên hàng · CNEE in ấn",
-  },
-  {
-    key: "status",
-    label: "STATUS",
-    w: "min-w-[6.5rem] max-w-[7.5rem]",
-    title: "Trạng thái lô",
   },
   { key: "actions", label: "THAO TÁC", w: "min-w-[7.25rem]", title: "Ghi chú, in & menu" },
 ];
@@ -162,9 +150,7 @@ export function DesktopShipmentTable({
                       key={c.key}
                       title={c.title}
                       className={`box-border px-1 py-1.5 text-2xs font-bold uppercase tracking-wider text-ui-text-muted ${
-                        c.key === "customerInfo" || c.key === "status"
-                          ? "truncate"
-                          : "whitespace-nowrap"
+                        c.key === "customerInfo" ? "truncate" : "whitespace-nowrap"
                       } ${c.w} ${c.key === "awb" ? "ops-table-head" : ""}`}
                     >
                       {c.label}
@@ -267,16 +253,13 @@ function ShipmentTableRowImpl({
   onInvoice?: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
 }) {
-  useUiV2();
   const toast = useToast();
   /** Mỗi lô một tint — 5 màu xoay, dễ tách khi nhiều hàng. */
   const lotSurface = `ops-lot-surface-${rowIdx % 5}`;
   const bg = selected ? statusRowSelected : lotSurface;
-  const accent = statusRowAccent[row.status];
   const cell = (part: "first" | "mid" | "last" | "awb", extra = "") => {
     const round =
       part === "first" ? "rounded-l-xl" : part === "last" ? "rounded-r-xl" : "";
-    const accentCls = part === "first" ? accent : "";
     const hl = highlighted ? "ring-2 ring-inset ring-ui-primary/45" : "";
     const surface = selected ? statusRowSelected : bg;
     const stickyAwb =
@@ -285,7 +268,7 @@ function ShipmentTableRowImpl({
         : "";
     const cardEdge =
       "border-y border-ui-border/70 shadow-[0_1px_0_rgba(15,23,42,0.04)]";
-    return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} ${cardEdge} transition-colors duration-150 ease-fluid group-hover/row:shadow-[inset_0_0_0_9999px_rgba(13,148,136,0.06)] ${
+    return `${surface} ${round} ${hl} ${stickyAwb} ${cardEdge} transition-colors duration-150 ease-fluid group-hover/row:shadow-[inset_0_0_0_9999px_rgba(13,148,136,0.06)] ${
       part === "first" ? "border-l border-ui-border/80" : ""
     } ${part === "last" ? "border-r border-ui-border/80" : ""} px-1 py-1 ${extra}`.trim();
   };
@@ -538,14 +521,6 @@ function ShipmentTableRowImpl({
           />
         </div>
       </td>
-      <td className={cell("mid", "align-middle")}>
-        <StatusSelect
-          value={row.status}
-          warehouse={row.warehouse}
-          dense
-          onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
-        />
-      </td>
       <td className={cell("last", "overflow-visible py-0.5 align-middle")}>
         <div className="flex items-center justify-end gap-0.5">
           <OpsRowNoteControl
@@ -576,7 +551,6 @@ function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
     a.pcs === b.pcs &&
     a.kg === b.kg &&
     a.dimWeightKg === b.dimWeightKg &&
-    a.status === b.status &&
     a.note === b.note &&
     a.stt === b.stt &&
     (a.invoiceItems?.length ?? 0) === (b.invoiceItems?.length ?? 0) &&

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Shipment, ShipmentStatus } from "../types/shipment";
+import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { DESTINATIONS } from "../data/customers";
 import { findCustomerEntry } from "../utils/customerBookingResolve";
@@ -22,7 +22,6 @@ import {
   parseBookingDateLoose,
   formatYmdToFlightDateDdMon,
 } from "../utils/bookingDateParse";
-import { StatusSelect } from "./StatusBadge";
 import {
   LazyMobileDimKgModal,
   type MobileDimSavePayload,
@@ -114,7 +113,6 @@ export function MobileShipmentEditSheet({
   const [customerGoodsId, setCustomerGoodsId] = useState("");
   const [pcs, setPcs] = useState<number | null>(null);
   const [kg, setKg] = useState<number | null>(null);
-  const [status, setStatus] = useState<ShipmentStatus>("PENDING");
   const [dimWeightKg, setDimWeightKg] = useState<number | null>(null);
   const [dimLines, setDimLines] = useState<Shipment["dimLines"]>(null);
 
@@ -167,7 +165,6 @@ export function MobileShipmentEditSheet({
     setCustomerGoodsId((shipment.customerGoodsId ?? "").trim());
     setPcs(shipment.pcs);
     setKg(shipment.kg);
-    setStatus(shipment.status);
     setDimWeightKg(shipment.dimWeightKg);
     setDimLines(shipment.dimLines);
   }, [open, shipment, initialTab]);
@@ -256,7 +253,6 @@ export function MobileShipmentEditSheet({
         : {}),
       pcs,
       kg,
-      status,
       dimWeightKg,
       dimLines,
     };
@@ -516,13 +512,6 @@ export function MobileShipmentEditSheet({
 
             {tab === "dim" ? (
               <div className="space-y-4">
-                <Field label="Trạng thái">
-                  <StatusSelect
-                    value={status}
-                    warehouse={shipment.warehouse}
-                    onChange={setStatus}
-                  />
-                </Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Kiện">
                     <input

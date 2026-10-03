@@ -7,7 +7,7 @@ type Props = {
 };
 
 /**
- * Ghi chú gọn trên hàng Ops — icon + chỉnh 1 dòng (không chiếm cột STATUS).
+ * Ghi chú gọn trên hàng Ops — icon + chỉnh 1 dòng, nằm trong cột thao tác.
  */
 export function OpsRowNoteControl({ rowId, value, onCommit }: Props) {
   const [open, setOpen] = useState(false);

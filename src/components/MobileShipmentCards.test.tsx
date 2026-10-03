@@ -40,7 +40,6 @@ describe("MobileShipmentCards", () => {
         rows={[row]}
         selectedId={null}
         onSelect={() => undefined}
-        onUpdate={() => undefined}
         onDelete={() => undefined}
         onPrint={() => undefined}
         activeWarehouse="TCS"
@@ -67,7 +66,6 @@ describe("MobileShipmentCards", () => {
         rows={[row]}
         selectedId={null}
         onSelect={() => undefined}
-        onUpdate={() => undefined}
         onDelete={() => undefined}
         onPrint={() => undefined}
         activeWarehouse="TCS"
@@ -79,7 +77,7 @@ describe("MobileShipmentCards", () => {
     expect(html).toContain("rounded-xl");
     expect(html).toContain("text-ui-awb");
     expect(html).toContain("text-[15px]");
-    expect(html).toContain("h-7 w-full");
+    expect(html).not.toContain('aria-label="Trạng thái');
     expect(html).toContain("h-8 w-8");
     expect(html).not.toContain("h-11 w-full min-h-11");
     expect(html).toContain("pb-[calc(5rem+env(safe-area-inset-bottom))]");

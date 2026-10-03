@@ -70,7 +70,6 @@ describe("opsStatsUrlState", () => {
       dest: "SIN",
       customerKey: "code:LNE",
       flightKey: "SQ185",
-      statuses: ["PENDING", "RECEIVED"],
       intelTab: "booking",
       detailTab: "lots",
       focusYmd: "2026-09-18",
@@ -83,15 +82,15 @@ describe("opsStatsUrlState", () => {
     expect(parsed.dest).toBe("SIN");
     expect(parsed.flightKey).toBe("SQ185");
     expect(parsed.intelTab).toBe("booking");
-    expect(parsed.statuses).toEqual(["PENDING", "RECEIVED"]);
+    expect(new URLSearchParams(hash.split("?")[1] ?? "").has("st")).toBe(false);
     expect(parsed.focusYmd).toBe("2026-09-18");
   });
 
-  it("chuẩn hóa dest + bỏ status lạ", () => {
+  it("chuẩn hóa dest và bỏ query trạng thái cũ", () => {
     const parsed = parseOpsStatsUrlState("#/stats?dest=sin&st=PENDING,NOT_A_STATUS,RECEIVED");
     expect(parsed.dest).toBe("SIN");
-    expect(parsed.statuses).toEqual(["PENDING", "RECEIVED"]);
-    expect(parseOpsStatsUrlState("#/stats?st=BOGUS").statuses).toBeUndefined();
+    expect(parsed).not.toHaveProperty("statuses");
+    expect(parseOpsStatsUrlState("#/stats?st=BOGUS")).not.toHaveProperty("statuses");
     expect(parseOpsStatsUrlState("#/stats?year=0999").year).toBeUndefined();
   });
 });

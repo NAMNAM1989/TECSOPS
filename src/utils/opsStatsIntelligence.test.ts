@@ -74,12 +74,12 @@ describe("surgeIndex / HHI", () => {
 });
 
 describe("status mix / volume pct", () => {
-  it("mix + volume done %", () => {
+  it("% volume theo DIM đã đo, không theo status", () => {
     const rows = [
-      sample({ sessionDate: "2026-09-18", status: "PENDING", id: "a" }),
-      sample({ sessionDate: "2026-09-18", status: "VOLUME_DONE", id: "b" }),
-      sample({ sessionDate: "2026-09-18", status: "WEIGH_SLIP", id: "c" }),
-      sample({ sessionDate: "2026-09-18", status: "RECEIVED", id: "d" }),
+      sample({ sessionDate: "2026-09-18", status: "VOLUME_DONE", dimWeightKg: null, id: "a" }),
+      sample({ sessionDate: "2026-09-18", status: "RECEIVED", dimWeightKg: 10, id: "b" }),
+      sample({ sessionDate: "2026-09-18", status: "PENDING", dimWeightKg: null, id: "c" }),
+      sample({ sessionDate: "2026-09-18", status: "WEIGH_SLIP", dimWeightKg: 5, id: "d" }),
     ];
     const mix = computeStatusMix(rows);
     expect(mix).toHaveLength(4);
@@ -88,7 +88,7 @@ describe("status mix / volume pct", () => {
 });
 
 describe("collectOpsStatsAlerts", () => {
-  it("bắt thiếu pcs/kg, PENDING, PER, lệch flightDate", () => {
+  it("bắt thiếu pcs/kg, PER, lệch flightDate — không đếm PENDING", () => {
     const rows = [
       sample({
         id: "1",
@@ -106,7 +106,7 @@ describe("collectOpsStatsAlerts", () => {
     expect(kinds.has("missing_pcs")).toBe(true);
     expect(kinds.has("missing_kg")).toBe(true);
     expect(kinds.has("missing_flight")).toBe(true);
-    expect(kinds.has("pending")).toBe(true);
+    expect(collectOpsStatsAlerts(rows).some((a) => /PENDING|Booking/i.test(a.message))).toBe(false);
     expect(kinds.has("cutoff_per")).toBe(true);
     expect(kinds.has("flight_date_skew")).toBe(true);
   });
@@ -121,6 +121,11 @@ describe("filter missing flight / AWB search", () => {
     expect(listFlightOptionsInRows(rows)[0]).toBe(MISSING_FLIGHT_KEY);
     const missing = filterShipmentsForStatsIntel(rows, { flightKey: MISSING_FLIGHT_KEY });
     expect(missing.map((r) => r.id)).toEqual(["2"]);
+    const mixed = [
+      sample({ id: "p", sessionDate: "2026-09-18", status: "PENDING" }),
+      sample({ id: "v", sessionDate: "2026-09-18", status: "VOLUME_DONE" }),
+    ];
+    expect(filterShipmentsForStatsIntel(mixed, {}).map((r) => r.id)).toEqual(["p", "v"]);
   });
 
   it("ô tìm (không AWB) khớp lô trống AWB", () => {

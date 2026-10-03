@@ -167,7 +167,6 @@ function computeShipmentSearchHaystack(shipment: Shipment, ctx: ShipmentSearchCo
     shipment.dest,
     shipment.note,
     shipment.cutoffNote,
-    shipment.status,
     shipment.warehouse,
     shipment.cutoff,
     shipment.pcs != null ? String(shipment.pcs) : "",

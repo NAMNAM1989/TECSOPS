@@ -1,11 +1,11 @@
-import type { ReactNode, RefObject } from "react";
+import type { RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
 import type { GlobalSearchLotHit } from "../utils/globalSearchApi";
 import { Button } from "../ui";
 import { OpsDayOverviewStrip } from "./OpsDayOverviewStrip";
 import { SmartSearchBar } from "./SmartSearchBar";
-import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
+import type { StatusFilterValue } from "./StatusFilterBar";
 
 type Variant = "desktop" | "mobile";
 
@@ -31,10 +31,6 @@ type Props = {
   statusFilter: StatusFilterValue;
   onStatusFilterChange: (v: StatusFilterValue) => void;
   onClearFilters: () => void;
-  /** Mobile: ẩn status bar, chỉ nút ST */
-  showMobileStatusBar?: boolean;
-  onExpandMobileStatus?: () => void;
-  mobileStatusTrailing?: ReactNode;
 };
 
 function StripDivider() {
@@ -64,9 +60,6 @@ export function OpsContextStrip({
   statusFilter,
   onStatusFilterChange,
   onClearFilters,
-  showMobileStatusBar = true,
-  onExpandMobileStatus,
-  mobileStatusTrailing,
 }: Props) {
   const isMobile = variant === "mobile";
   const hasRows = viewRows.length > 0;
@@ -122,32 +115,19 @@ export function OpsContextStrip({
                   onSelectMatch={onSelectSearchMatch}
                   sessionDate={selectedYmd}
                   onSelectGlobalLot={onSelectGlobalLot}
-                  inlineFacets={false}
-                  debounceMs={200}
-                />
+                inlineFacets={false}
+                debounceMs={200}
+              />
               </div>
-              {!showMobileStatusBar && onExpandMobileStatus ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={onExpandMobileStatus}
-                    className="inline-flex h-9 min-w-9 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-ui-border/80 bg-ui-surface text-2xs font-bold text-ui-text-muted shadow-ui-sm"
-                    aria-label="Lọc trạng thái"
-                    title="Lọc trạng thái"
-                  >
-                    ST
-                  </button>
-                  {filtersActive ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={onClearFilters}
-                      className="h-9 shrink-0 px-2 text-2xs font-bold text-ui-primary"
-                    >
-                      Xóa
-                    </Button>
-                  ) : null}
-                </>
+              {filtersActive ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onClearFilters}
+                  className="h-9 shrink-0 px-2 text-2xs font-bold text-ui-primary"
+                >
+                  Xóa
+                </Button>
               ) : null}
             </div>
           ) : (
@@ -155,21 +135,6 @@ export function OpsContextStrip({
               Chưa có lô trong ngày · dùng Booking hoặc Sync
             </p>
           )}
-          {hasRows && showMobileStatusBar ? (
-            <div className="flex min-w-0 items-center gap-1 border-t border-ui-border/35 px-1 py-0.5">
-              <StatusFilterBar
-                compact
-                dense
-                tight
-                hideEmpty
-                warehouse={activeWarehouse}
-                dayRows={viewRows}
-                value={statusFilter}
-                onChange={onStatusFilterChange}
-              />
-              {mobileStatusTrailing}
-            </div>
-          ) : null}
         </>
       ) : (
         <div
@@ -200,31 +165,17 @@ export function OpsContextStrip({
                 debounceMs={200}
               />
             </div>
-            {hasRows ? (
-              <>
-                <StripDivider />
-                <StatusFilterBar
-                  compact
-                  dense
-                  tight
-                  hideEmpty
-                  warehouse={activeWarehouse}
-                  dayRows={viewRows}
-                  value={statusFilter}
-                  onChange={onStatusFilterChange}
-                />
-                {filtersActive ? (
-                  <button
-                    type="button"
-                    onClick={onClearFilters}
-                    className="inline-flex h-8 shrink-0 items-center rounded-lg px-2 text-2xs font-bold text-ui-primary hover:bg-ui-primary/10"
-                    title="Xóa mọi bộ lọc"
-                  >
-                    Xóa lọc
-                  </button>
-                ) : null}
-              </>
-            ) : (
+            {filtersActive ? (
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="inline-flex h-8 shrink-0 items-center rounded-lg px-2 text-2xs font-bold text-ui-primary hover:bg-ui-primary/10"
+                title="Xóa mọi bộ lọc"
+              >
+                Xóa lọc
+              </button>
+            ) : null}
+            {hasRows ? null : (
               <p className="shrink-0 text-2xs font-medium text-ui-text-muted">
                 Chưa có lô trong ngày · dùng Booking hoặc Sync
               </p>

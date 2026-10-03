@@ -83,28 +83,6 @@ async function main() {
       record(`D-WH-${warehouse}`, (await locator.count()) > 0, `có tab ${warehouse}`);
     }
 
-    async function statusOptionsFor(warehouse) {
-      const button = warehouseButtons[warehouse];
-      if ((await button.count()) === 0) return [];
-      await button.first().click();
-      const select = page.locator('select[aria-label*="Trạng thái"]').first();
-      if ((await select.count()) === 0) return [];
-      return select.locator("option").allTextContents();
-    }
-
-    const tcsOptions = await statusOptionsFor("TECS-TCS");
-    const scscOptions = await statusOptionsFor("SCSC");
-    record(
-      "C-TCS-RECEPTION",
-      tcsOptions.some((value) => /Hoàn thành tiếp nhận/i.test(value)),
-      "TCS có RECEPTION_COMPLETED",
-    );
-    record(
-      "C-SCSC-NO-RECEPTION",
-      scscOptions.length > 0 && !scscOptions.some((value) => /Hoàn thành tiếp nhận/i.test(value)),
-      "SCSC không có RECEPTION_COMPLETED",
-    );
-
     const scscMenus = page.getByRole("button", { name: /Menu thao tác lô hàng/i });
     if ((await scscMenus.count()) > 0) {
       await scscMenus.first().click();

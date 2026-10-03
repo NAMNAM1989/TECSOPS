@@ -96,16 +96,8 @@ async function main() {
       if (await clear.count()) await clear.click();
     } else fail("SEARCH-01", "Không thấy ô tìm kiếm");
 
-    // Lọc trạng thái
-    const reception = page.getByRole("tab", { name: /HOÀN THÀNH TIẾP NHẬN/i });
-    if (await reception.count()) {
-      await reception.click();
-      await page.waitForTimeout(200);
-      ok("FILTER-01", "Lọc HOÀN THÀNH TIẾP NHẬN");
-      const all = page.getByRole("tab", { name: /^Tất cả/i });
-      if (await all.count()) await all.click();
-    } else if (ALLOW_MUTATION) ok("FILTER-01", "DB test rỗng — status filter chưa dựng");
-    else fail("FILTER-01", "Không thấy tab trạng thái");
+    // Thanh lọc trạng thái đã gỡ khỏi Ops.
+    ok("FILTER-01", "Ops không còn tab lọc trạng thái");
 
     // Booking mutation chỉ chạy khi opt-in; luôn marker + cleanup đúng ID.
     const addBtn = page.getByRole("button", { name: /^\+ Booking/ }).first();

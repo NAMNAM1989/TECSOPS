@@ -4,7 +4,6 @@ const KIND_LABEL: Record<OpsStatsAlert["kind"], string> = {
   missing_pcs: "Thiếu kiện",
   missing_kg: "Thiếu kg",
   missing_flight: "Thiếu chuyến",
-  pending: "Booking",
   cutoff_per: "Cutoff PER",
   flight_date_skew: "Lệch ngày bay",
 };
@@ -21,7 +20,7 @@ export function OpsStatsAlertList({ alerts, onSelectAwb, onOpenOps }: Props) {
       <section className="rounded-2xl border border-ui-border/80 bg-ui-surface px-4 py-10 text-center shadow-ui-sm">
         <p className="m-0 text-sm font-semibold text-emerald-800">Không có cảnh báo trong kỳ</p>
         <p className="m-0 mt-1 text-[12px] text-ui-text-muted">
-          Không phát hiện thiếu pcs/kg/chuyến, PER, PENDING hay lệch flightDate.
+          Không phát hiện thiếu pcs/kg/chuyến, PER hay lệch ngày bay.
         </p>
       </section>
     );

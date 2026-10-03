@@ -160,7 +160,9 @@ export function AirCargoTracking({
   const [mobileEditShipment, setMobileEditShipment] = useState<Shipment | null>(null);
   const [mobileEditInitialTab, setMobileEditInitialTab] = useState<"lot" | "notify" | "dim">("lot");
   const [mobileEditFocus, setMobileEditFocus] = useState<MobileEditFocus>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(initUrl.st ?? "ALL");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(
+    initUrl.st === "attention" ? "attention" : "ALL",
+  );
   const [activeWarehouse, setActiveWarehouse] = useState<Warehouse>(initUrl.wh ?? "TECS-TCS");
   const [searchQuery, setSearchQuery] = useState(initUrl.q ?? "");
   /** Ngày bay (DDMMM) — tách khỏi ô gõ, kết hợp AND với searchQuery. */
@@ -253,8 +255,9 @@ export function AirCargoTracking({
       if (parsed.wh && parsed.wh !== activeWarehouse) {
         setActiveWarehouse(parsed.wh);
       }
-      if (parsed.st && parsed.st !== statusFilter) {
-        setStatusFilter(parsed.st);
+      const nextStatus = parsed.st === "attention" ? "attention" : "ALL";
+      if (nextStatus !== statusFilter) {
+        setStatusFilter(nextStatus);
       }
       if (parsed.q !== undefined && parsed.q !== searchQuery) {
         setSearchQuery(parsed.q);
@@ -300,13 +303,8 @@ export function AirCargoTracking({
   }, [viewRows, allRows, selectedYmd]);
 
   const statusFilteredRows = useMemo(() => {
-    return viewRows.filter((r) => {
-      if (statusFilter === "ALL") return true;
-      if (statusFilter === "attention") {
-        return attentionMap.get(r.id)?.needsAttention ?? false;
-      }
-      return r.status === (statusFilter as ShipmentStatus);
-    });
+    if (statusFilter !== "attention") return viewRows;
+    return viewRows.filter((r) => attentionMap.get(r.id)?.needsAttention ?? false);
   }, [viewRows, statusFilter, attentionMap]);
 
   const searchActive =
@@ -804,7 +802,6 @@ export function AirCargoTracking({
       onSelectSearchMatch={scrollToShipmentMatch}
       onSelectGlobalLot={jumpToGlobalLot}
       statusFilter={statusFilter}
-      onStatusFilterChange={setStatusFilter}
       onClearFilters={clearViewFilters}
     />
   ) : (
@@ -938,7 +935,6 @@ export function AirCargoTracking({
             rows={filteredViewRows}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            onUpdate={onUpdate}
             onDelete={onDelete}
             onPrint={requestPrintLabel}
             onInvoice={openInvoiceH21}

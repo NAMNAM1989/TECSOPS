@@ -42,22 +42,17 @@ describe("OpsContextStrip", () => {
     expect(html).toContain("ops-day-overview");
     expect(html).toContain("ops-desktop-context-row");
     expect(html).toContain("ops-desktop-filter-row");
-    expect(html).toContain("Lọc trạng thái");
+    expect(html).not.toContain("Lọc trạng thái");
     expect(html).toContain("MAWB · shipper · hàng · xe");
   });
 
-  it("mobile: filter row + nút ST khi status thu gọn", () => {
+  it("mobile: hàng tìm kiếm, không còn nút lọc trạng thái", () => {
     const html = renderToStaticMarkup(
-      <OpsContextStrip
-        variant="mobile"
-        {...baseProps}
-        showMobileStatusBar={false}
-        onExpandMobileStatus={() => undefined}
-      />,
+      <OpsContextStrip variant="mobile" {...baseProps} />,
     );
     expect(html).toContain('data-variant="mobile"');
     expect(html).toContain("ops-mobile-filter-row");
-    expect(html).toContain('aria-label="Lọc trạng thái"');
-    expect(html).toContain("ST");
+    expect(html).not.toContain('aria-label="Lọc trạng thái"');
+    expect(html).not.toContain(">ST<");
   });
 });

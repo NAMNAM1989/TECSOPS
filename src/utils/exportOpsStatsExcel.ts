@@ -10,7 +10,6 @@ import type { OpsStatsIntelligence } from "./opsStatsIntelligence";
 import { downloadXlsxBuffer } from "./downloadXlsx";
 import { formatStatsPeriodLabel, type StatsPeriodMode } from "./opsStatsPeriod";
 import { warehouseLabel } from "../constants/warehouses";
-import { statusLabel } from "../components/statusStyles";
 
 const HEADER_FILL: Fill = {
   type: "pattern",
@@ -63,7 +62,6 @@ const LOT_HEADERS = [
   "DIM",
   "Chargeable",
   "Δ",
-  "Trạng thái",
   "Ghi chú",
 ] as const;
 
@@ -185,7 +183,6 @@ function addLotsSheet(wb: Workbook, lots: readonly OpsStatsLotRow[]): void {
       lot.dimKg,
       lot.chargeableKg,
       lot.deltaKg,
-      statusLabel[s.status] ?? s.status,
       s.note,
     ]);
     row.eachCell((cell, col) => {
@@ -212,7 +209,6 @@ function addLotsSheet(wb: Workbook, lots: readonly OpsStatsLotRow[]): void {
     { width: 10 },
     { width: 12 },
     { width: 10 },
-    { width: 16 },
     { width: 24 },
   ];
 }
@@ -254,7 +250,7 @@ export async function buildOpsStatsWorkbook(opts: {
   meta.addRow(["Δ (CW−Kg)", opts.totals.deltaKg]);
   meta.addRow(["Lô chưa đo DIM", opts.totals.missingDimLots]);
   if (opts.intelligence) {
-    meta.addRow(["% Volume done", opts.intelligence.volumeDonePct]);
+    meta.addRow(["% Volume (đã đo DIM)", opts.intelligence.volumeDonePct]);
     meta.addRow(["Focus ngày", opts.intelligence.focusYmd]);
     meta.addRow(["HHI khách (kg)", opts.intelligence.customerShare.hhiKg]);
     meta.addRow(["HHI dest (kg)", opts.intelligence.destShare.hhiKg]);

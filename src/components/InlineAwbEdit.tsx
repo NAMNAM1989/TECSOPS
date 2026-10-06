@@ -3,6 +3,7 @@ import type { Shipment } from "../types/shipment";
 import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
 import { awbConflictMessage, findAwbDigitsConflict } from "../utils/awbUnique";
 import { useToast } from "../ui";
+import { CellStatusDot, type CellStatus } from "./CellStatusDot";
 
 interface Props {
   rowId: string;
@@ -14,6 +15,7 @@ interface Props {
   onCommit: (awbDisplay: string) => void;
   className?: string;
   onEnterNavigateDown?: () => void;
+  cellStatus?: CellStatus;
 }
 
 export function InlineAwbEdit({
@@ -24,6 +26,7 @@ export function InlineAwbEdit({
   onCommit,
   className = "",
   onEnterNavigateDown,
+  cellStatus,
 }: Props) {
   const toast = useToast();
   const [editing, setEditing] = useState(false);
@@ -76,7 +79,7 @@ export function InlineAwbEdit({
   };
 
   const btnBase =
-    "ops-inline-edit w-full rounded px-1 py-0.5 text-left font-mono text-sm font-semibold tracking-tight";
+    "ops-inline-edit relative w-full rounded px-1 py-0.5 text-left font-mono text-sm font-semibold tracking-tight";
 
   if (!editing) {
     const shown =
@@ -113,46 +116,50 @@ export function InlineAwbEdit({
             : "text-ui-awb"
         }`}
       >
-        {shown}
+        <span>{shown}</span>
+        <CellStatusDot status={cellStatus} />
       </button>
     );
   }
 
   /** Chỉ 0–11 chữ số khi đang gõ — không format gạch/khoảng trong input (tránh con trỏ nhảy / nhập lệch). */
   return (
-    <input
-      ref={ref}
-      type="text"
-      inputMode="numeric"
-      pattern="[0-9]*"
-      autoComplete="off"
-      spellCheck={false}
-      {...gridProps}
-      value={draftDigits}
-      maxLength={11}
-      onChange={(e) => {
-        const raw = rawAwbDigits(e.target.value);
-        if (raw.length > 11) {
-          toast.info("AWB chỉ được 11 chữ số — chỉ giữ 11 số đầu.", "AWB");
-        }
-        setDraftDigits(raw.slice(0, 11));
-      }}
-      onBlur={() => {
-        void tryCommit();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
-          e.preventDefault();
-          if (tryCommit()) queueMicrotask(() => onEnterNavigateDown?.());
-          return;
-        }
-        if (e.key === "Escape") {
-          setDraftDigits(rawAwbDigits(value));
-          setEditing(false);
-        }
-      }}
-      onClick={(e) => e.stopPropagation()}
-      className={`w-full rounded-xl border-2 border-ui-primary bg-ui-surface px-1.5 py-0.5 font-shipment-data text-sm font-semibold tabular-nums tracking-tight text-ui-danger antialiased focus:outline-none focus:ring-2 focus:ring-ui-focus ${className}`}
-    />
+    <span className="relative inline-flex w-full flex-col">
+      <input
+        ref={ref}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        autoComplete="off"
+        spellCheck={false}
+        {...gridProps}
+        value={draftDigits}
+        maxLength={11}
+        onChange={(e) => {
+          const raw = rawAwbDigits(e.target.value);
+          if (raw.length > 11) {
+            toast.info("AWB chỉ được 11 chữ số — chỉ giữ 11 số đầu.", "AWB");
+          }
+          setDraftDigits(raw.slice(0, 11));
+        }}
+        onBlur={() => {
+          void tryCommit();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
+            e.preventDefault();
+            if (tryCommit()) queueMicrotask(() => onEnterNavigateDown?.());
+            return;
+          }
+          if (e.key === "Escape") {
+            setDraftDigits(rawAwbDigits(value));
+            setEditing(false);
+          }
+        }}
+        onClick={(e) => e.stopPropagation()}
+        className={`w-full rounded-xl border-2 border-ui-primary bg-ui-surface px-1.5 py-0.5 font-shipment-data text-sm font-semibold tabular-nums tracking-tight text-ui-danger antialiased focus:outline-none focus:ring-2 focus:ring-ui-focus ${className}`}
+      />
+      <CellStatusDot status={cellStatus} />
+    </span>
   );
 }

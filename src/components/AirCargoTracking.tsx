@@ -124,6 +124,7 @@ export function AirCargoTracking({
     pendingOfflineCount,
     refreshState,
     applyRemoteState,
+    cellStatuses,
   } = sync;
   const toast = useToast();
   const [syncRefreshing, setSyncRefreshing] = useState(false);
@@ -946,6 +947,7 @@ export function AirCargoTracking({
             activeWarehouse={activeWarehouse}
             highlightedShipmentId={highlightedShipmentId}
             selectedRowId={selectedId}
+            cellStatuses={cellStatuses}
             onSelectRow={setSelectedId}
             onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
             onUpdate={onUpdate}

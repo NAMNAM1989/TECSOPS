@@ -8,6 +8,10 @@ export type NotifyInput = {
   message: string;
   title?: string;
   tone?: NotifyTone;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 };
 
 export type NotifySink = (input: NotifyInput) => void;

@@ -33,6 +33,8 @@ import { formatKgTotal } from "../utils/formatKgTotal";
 import { summarizeWarehouseHeader } from "../utils/warehouseHeaderTotals";
 import { OPS_URGENT_NOTICES } from "../content/opsUrgentNotices";
 import { OpsUrgentNoticeMarquee } from "./OpsUrgentNoticeMarquee";
+import type { CellStatus } from "./CellStatusDot";
+import { TABLE_COLUMN_ORDER } from "../config/tableUx";
 
 interface Props {
   rows: Shipment[];
@@ -52,6 +54,7 @@ interface Props {
   onUpdateCustomers?: (
     customers: CustomerDirectoryEntry[]
   ) => Promise<boolean | void>;
+  cellStatuses?: Record<string, CellStatus>;
 }
 
 type ColHeader = { key: string; label: string; w: string; title?: string };
@@ -96,6 +99,7 @@ export function DesktopShipmentTable({
   onInvoice,
   viewSessionYmd,
   onUpdateCustomers,
+  cellStatuses,
 }: Props) {
   const isMobile = useIsMobile();
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
@@ -122,6 +126,23 @@ export function DesktopShipmentTable({
     return target ? target.id : null;
   }, []);
   const headerTotals = useMemo(() => summarizeWarehouseHeader(group), [group]);
+
+  const getRowCellStatuses = useCallback(
+    (rowId: string): Record<string, CellStatus> | undefined => {
+      if (!cellStatuses) return undefined;
+      let hasAny = false;
+      const res: Record<string, CellStatus> = {};
+      for (const field of TABLE_COLUMN_ORDER) {
+        const s = cellStatuses[`${rowId}:${field}`];
+        if (s && s !== "idle") {
+          res[field] = s;
+          hasAny = true;
+        }
+      }
+      return hasAny ? res : undefined;
+    },
+    [cellStatuses]
+  );
 
   return (
     <>
@@ -204,6 +225,7 @@ export function DesktopShipmentTable({
                       key={row.id}
                       row={row}
                       rowIdx={rowIdx}
+                      rowCellStatuses={getRowCellStatuses(row.id)}
                       getNeighborRowId={getNeighborRowId}
                       viewSessionYmd={viewSessionYmd}
                       highlighted={highlightedShipmentId === row.id}
@@ -254,6 +276,7 @@ function WarehouseTotalChip({ label, value }: { label: string; value: string }) 
 function ShipmentTableRowImpl({
   row,
   rowIdx,
+  rowCellStatuses,
   getNeighborRowId,
   viewSessionYmd,
   highlighted = false,
@@ -270,6 +293,7 @@ function ShipmentTableRowImpl({
 }: {
   row: Shipment;
   rowIdx: number;
+  rowCellStatuses?: Record<string, CellStatus>;
   getNeighborRowId: (id: string, dir: "prev" | "next" | -1 | 1) => string | null;
   viewSessionYmd: string;
   highlighted?: boolean;
@@ -356,6 +380,7 @@ function ShipmentTableRowImpl({
             rowId={row.id}
             value={row.awb}
             findAwbConflict={findAwbConflict}
+            cellStatus={rowCellStatuses?.awb}
             className="ops-awb !py-0 text-[14px] leading-tight"
             onCommit={(awb) => onUpdate(row.id, { awb })}
             onEnterNavigateDown={() => focusShipmentGridCell(row.id, "hawb")}
@@ -367,6 +392,7 @@ function ShipmentTableRowImpl({
             className="font-shipment-data !py-0 text-2xs font-semibold ops-grid-cell-muted"
             maxLength={32}
             gridNav={{ rowId: row.id, field: "hawb" }}
+            cellStatus={rowCellStatuses?.hawb}
             onCommit={(v) => onUpdate(row.id, { hawb: v.slice(0, 32) })}
             onEnterNavigateDown={() => focusShipmentGridCell(row.id, "flight")}
           />
@@ -382,6 +408,7 @@ function ShipmentTableRowImpl({
             uppercase
             maxLength={12}
             gridNav={{ rowId: row.id, field: "flight" }}
+            cellStatus={rowCellStatuses?.flight}
             onCommit={(v) => onUpdate(row.id, { flight: v })}
             onEnterNavigateDown={() =>
               focusShipmentGridCell(row.id, "flightDate")
@@ -400,6 +427,7 @@ function ShipmentTableRowImpl({
               uppercase
               maxLength={16}
               gridNav={{ rowId: row.id, field: "flightDate" }}
+              cellStatus={rowCellStatuses?.flightDate}
               onCommit={onFlightDateCommit}
               onEnterNavigateDown={onFlightDateEnterDown}
             />
@@ -423,6 +451,7 @@ function ShipmentTableRowImpl({
           uppercase
           maxLength={3}
           gridNav={{ rowId: row.id, field: "dest" }}
+          cellStatus={rowCellStatuses?.dest}
           onCommit={(v) => onUpdate(row.id, { dest: v.slice(0, 3) })}
           onEnterNavigateDown={navDownSameField("dest")}
         />
@@ -434,6 +463,7 @@ function ShipmentTableRowImpl({
           title="Click để sửa số kiện"
           className="font-shipment-data !py-0 text-right text-[13px] font-bold tabular-nums text-ui-text"
           gridNav={{ rowId: row.id, field: "pcs" }}
+          cellStatus={rowCellStatuses?.pcs}
           validate={validateInlinePcs}
           onCommit={(v) => onUpdate(row.id, { pcs: v })}
           onEnterNavigateDown={navDownSameField("pcs")}
@@ -446,6 +476,7 @@ function ShipmentTableRowImpl({
           title="Click để sửa kg"
           className="font-shipment-data !py-0 text-right text-[13px] font-bold tabular-nums text-ui-text"
           gridNav={{ rowId: row.id, field: "kg" }}
+          cellStatus={rowCellStatuses?.kg}
           validate={validateInlineKg}
           onCommit={(v) => onUpdate(row.id, { kg: v })}
           onEnterNavigateDown={navDownSameField("kg")}
@@ -464,6 +495,7 @@ function ShipmentTableRowImpl({
               title="Click để sửa DIM kg"
               className="font-shipment-data text-right text-[12px] font-semibold tabular-nums text-ui-text"
               gridNav={{ rowId: row.id, field: "dimKg" }}
+              cellStatus={rowCellStatuses?.dimKg}
               validate={validateInlineDimWeightKg}
               onCommit={(v) =>
                 onUpdate(row.id, {
@@ -514,6 +546,7 @@ function ShipmentTableRowImpl({
               className="min-w-0 whitespace-normal break-words text-[12px] font-bold leading-tight text-ui-awb line-clamp-2"
               maxLength={120}
               gridNav={{ rowId: row.id, field: "customer" }}
+              cellStatus={rowCellStatuses?.customer}
               onCommit={(patch) => onUpdate(row.id, patch)}
               onEnterNavigateDown={navDownSameField("customer")}
               onTabNavigateNext={() => focusShipmentGridCell(row.id, "note")}
@@ -598,9 +631,26 @@ export function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
   );
 }
 
+function rowCellStatusesEqual(
+  a?: Record<string, CellStatus>,
+  b?: Record<string, CellStatus>
+): boolean {
+  if (a === b) return true;
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
 export const ShipmentTableRow = memo(ShipmentTableRowImpl, (prev, next) => {
   return (
     (prev.row === next.row || shipmentRowRenderEqual(prev.row, next.row)) &&
+    rowCellStatusesEqual(prev.rowCellStatuses, next.rowCellStatuses) &&
     prev.rowIdx === next.rowIdx &&
     prev.highlighted === next.highlighted &&
     prev.selected === next.selected &&

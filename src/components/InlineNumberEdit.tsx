@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { formatGroupedNumber } from "../utils/formatNumber";
 import { runInlineAsyncCommit } from "../utils/inlineCommitAsync";
+import { CellStatusDot, type CellStatus } from "./CellStatusDot";
 
 interface Props {
   value: number | null;
@@ -18,6 +19,7 @@ interface Props {
   /** Validation — trả message lỗi để giữ chế độ edit. */
   validate?: (v: number | null) => string | null;
   title?: string;
+  cellStatus?: CellStatus;
 }
 
 export function InlineNumberEdit({
@@ -31,11 +33,11 @@ export function InlineNumberEdit({
   onEnterNavigateDown,
   validate,
   title,
+  cellStatus,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value !== null ? String(value) : "");
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -52,7 +54,6 @@ export function InlineNumberEdit({
   }, [editing]);
 
   const commit = () => {
-    if (saving) return;
     const trimmed = draft.trim();
     const next: number | null =
       trimmed === "" ? null : Number(trimmed.replace(",", "."));
@@ -73,7 +74,6 @@ export function InlineNumberEdit({
     const result = onCommit(next);
     runInlineAsyncCommit(result, {
       setEditing,
-      setSaving,
       onReject: () => {
         setDraft(value !== null ? String(value) : "");
         setError("Không lưu được — thử lại.");
@@ -87,10 +87,10 @@ export function InlineNumberEdit({
 
   const btnBase =
     variant === "grid"
-      ? "ops-inline-edit inline-flex min-w-[2rem] justify-end rounded px-0.5 py-0 text-right leading-none tabular-nums"
+      ? "ops-inline-edit relative inline-flex min-w-[2rem] justify-end rounded px-0.5 py-0 text-right leading-none tabular-nums"
       : compact
-        ? "ops-inline-edit inline-flex min-w-[2rem] max-w-[4rem] justify-end rounded px-0.5 py-0 text-2xs leading-none font-bold tabular-nums"
-        : "ops-inline-edit w-full rounded px-1 py-0.5 text-right";
+        ? "ops-inline-edit relative inline-flex min-w-[2rem] max-w-[4rem] justify-end rounded px-0.5 py-0 text-2xs leading-none font-bold tabular-nums"
+        : "ops-inline-edit relative w-full rounded px-1 py-0.5 text-right";
 
   const emptyLabel = placeholder || "\u00a0";
 
@@ -123,9 +123,10 @@ export function InlineNumberEdit({
         }}
         className={`${btnBase} focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
           value === null ? "ops-grid-placeholder" : ""
-        } ${saving ? "opacity-60" : ""}`}
+        }`}
       >
-        {saving ? "…" : typeof value === "number" ? formatGroupedNumber(value, { maxFractionDigits: 3 }) : emptyLabel}
+        <span>{typeof value === "number" ? formatGroupedNumber(value, { maxFractionDigits: 3 }) : emptyLabel}</span>
+        <CellStatusDot status={cellStatus} />
       </button>
     );
   }
@@ -145,7 +146,6 @@ export function InlineNumberEdit({
         inputMode="numeric"
         {...gridProps}
         value={draft}
-        disabled={saving}
         onChange={(e) => {
           setDraft(e.target.value);
           setError(null);
@@ -174,6 +174,7 @@ export function InlineNumberEdit({
         step="any"
         aria-invalid={Boolean(error)}
       />
+      <CellStatusDot status={cellStatus} />
       {error ? (
         <span className="mt-0.5 text-2xs font-semibold leading-tight text-red-600">
           {error}

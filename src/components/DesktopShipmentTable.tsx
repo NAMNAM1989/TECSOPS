@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { findAwbDigitsConflict } from "../utils/awbUnique";
@@ -39,7 +39,13 @@ import { summarizeWarehouseHeader } from "../utils/warehouseHeaderTotals";
 import { OPS_URGENT_NOTICES } from "../content/opsUrgentNotices";
 import { OpsUrgentNoticeMarquee } from "./OpsUrgentNoticeMarquee";
 import type { CellStatus } from "./CellStatusDot";
-import { TABLE_COLUMN_ORDER } from "../config/tableUx";
+import { TABLE_COLUMN_ORDER, ENABLE_SPACE_PAGE_FLIP, type ScrollMode } from "../config/tableUx";
+import {
+  calculatePageFlipTarget,
+  getStoredScrollMode,
+  setStoredScrollMode,
+  smoothScrollTop,
+} from "../utils/pageFlipAnimation";
 
 interface Props {
   rows: Shipment[];
@@ -157,6 +163,47 @@ export function DesktopShipmentTable({
     [cellStatuses]
   );
 
+  const [scrollMode, setScrollMode] = useState<ScrollMode>(getStoredScrollMode);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollMode !== "page-flip") return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      const container = tableContainerRef.current;
+      if (!container) return;
+
+      if (e.key === "PageDown") {
+        e.preventDefault();
+        const targetScrollTop = calculatePageFlipTarget(container, "down");
+        void smoothScrollTop(container, targetScrollTop);
+      } else if (e.key === "PageUp") {
+        e.preventDefault();
+        const targetScrollTop = calculatePageFlipTarget(container, "up");
+        void smoothScrollTop(container, targetScrollTop);
+      } else if (ENABLE_SPACE_PAGE_FLIP && e.key === " ") {
+        e.preventDefault();
+        const dir = e.shiftKey ? "up" : "down";
+        const targetScrollTop = calculatePageFlipTarget(container, dir);
+        void smoothScrollTop(container, targetScrollTop);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [scrollMode]);
+
   return (
     <>
       <div
@@ -194,8 +241,33 @@ export function DesktopShipmentTable({
               </dl>
               <OpsUrgentNoticeMarquee notices={OPS_URGENT_NOTICES} />
             </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                aria-label="Đổi chế độ cuộn"
+                title={
+                  scrollMode === "page-flip"
+                    ? "Đang bật Lật trang (PageDown/PageUp) — bấm để chuyển Cuộn thường"
+                    : "Đang bật Cuộn thường — bấm để chuyển Lật trang"
+                }
+                onClick={() => {
+                  const next: ScrollMode =
+                    scrollMode === "page-flip" ? "normal" : "page-flip";
+                  setScrollMode(next);
+                  setStoredScrollMode(next);
+                }}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-2xs transition ${
+                  scrollMode === "page-flip"
+                    ? "border-ui-primary/60 bg-ui-primary/10 text-ui-primary font-bold shadow-sm"
+                    : "border-ui-border/80 bg-ui-surface text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text font-semibold"
+                }`}
+              >
+                <span>{scrollMode === "page-flip" ? "📖 Lật trang" : "📜 Cuộn thường"}</span>
+              </button>
+            </div>
           </div>
           <div
+            ref={tableContainerRef}
             className={`overflow-auto px-1 py-0.5 ${
               group.length > 4 ? "max-h-[min(86vh,860px)]" : ""
             }`}

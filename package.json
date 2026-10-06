@@ -11,6 +11,7 @@
     "dev:db": "docker compose up -d",
     "qa:smoke": "node scripts/qa-smoke-e2e.mjs",
     "test:e2e": "node tests/e2e/read-only.mjs",
+    "test:e2e:smooth": "node tests/e2e/smooth-table.mjs",
     "test:e2e:a11y": "node tests/e2e/accessibility.mjs",
     "test:e2e:mutation": "node tests/e2e/mutation.mjs",
     "e2e:cleanup": "node scripts/cleanup-e2e-records.mjs",

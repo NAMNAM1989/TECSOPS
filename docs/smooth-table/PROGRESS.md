@@ -58,5 +58,13 @@
   - Tích hợp `onBeforeFocus` vào `useGridNavigation`: tự động gọi `scrollToIndex` trước khi focus vào ô nằm ngoài viewport ảo.
   - Viết unit test: `useVirtualScroll.test.ts` (3 test pass), `DesktopShipmentTable.virtual.test.tsx` (1 test pass: 2.000 dòng render DOM < 80 thẻ `<tr>`).
   - Typecheck, lint, vitest pass.
-- [ ] Giai đoạn 8: E2E Playwright
+- [x] Giai đoạn 8: E2E Playwright
+  - Xây dựng suite E2E thực chiến `tests/e2e/smooth-table.mjs` bao quát 5 kịch bản:
+    1. ST-01: Điều hướng bàn phím hoàn toàn không dùng chuột (ArrowRight, Tab, Enter).
+    2. ST-02A: Optimistic UI khi mạng chậm (ô đóng ngay lập tức, không loading spinner).
+    3. ST-03: Rollback khi server trả 500 (hiện toast lỗi kèm nút "Thử lại", khôi phục giá trị cũ).
+    4. ST-04A: Chế độ Lật trang (nút chuyển đổi và cuộn mượt).
+    5. ST-05: Mobile view snap scroll proximity và touch targets >= 44px.
+  - Thêm script `npm run test:e2e:smooth`.
+  - Kết quả: PASS toàn bộ 5/5 kịch bản.
 - [ ] Kết thúc: Lint, typecheck, test, REPORT.md

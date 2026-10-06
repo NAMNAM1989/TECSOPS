@@ -11,6 +11,11 @@ import {
   parseBookingDateLoose,
 } from "../utils/bookingDateParse";
 import { isCargoReportFlightDateUrgent } from "../utils/cargoDayReport";
+import {
+  useGridNavigation,
+  type GridNavDirection,
+  type TableGridField,
+} from "../hooks/useGridNavigation";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { InlineAwbEdit } from "./InlineAwbEdit";
 import { LazyMobileDimKgModal } from "./LazyMobileDimKgModal";
@@ -125,6 +130,14 @@ export function DesktopShipmentTable({
     const target = list[idx + offset];
     return target ? target.id : null;
   }, []);
+  const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);
+  const { onNavigate: onGridNavigate } = useGridNavigation({ rowIds: groupRowIds });
+  const handleRowNavigate = useCallback(
+    (rowId: string, field: TableGridField, dir: GridNavDirection) => {
+      onGridNavigate(rowId, field, dir);
+    },
+    [onGridNavigate]
+  );
   const headerTotals = useMemo(() => summarizeWarehouseHeader(group), [group]);
 
   const getRowCellStatuses = useCallback(
@@ -233,6 +246,7 @@ export function DesktopShipmentTable({
                       onSelectRow={onSelectRow}
                       findAwbConflict={findAwbConflict}
                       customerDirectory={customerDirectory}
+                      onRowNavigate={handleRowNavigate}
                       onUpdate={onUpdate}
                       onUpdateCustomers={onUpdateCustomers}
                       onDelete={onDelete}
@@ -284,6 +298,7 @@ function ShipmentTableRowImpl({
   onSelectRow,
   findAwbConflict,
   customerDirectory,
+  onRowNavigate,
   onUpdate,
   onUpdateCustomers,
   onDelete,
@@ -301,6 +316,7 @@ function ShipmentTableRowImpl({
   onSelectRow?: (id: string | null) => void;
   findAwbConflict: (digits: string, exceptId: string) => Shipment | null;
   customerDirectory: readonly CustomerDirectoryEntry[];
+  onRowNavigate?: (rowId: string, field: TableGridField, dir: GridNavDirection) => void;
   onUpdate: (id: string, patch: Partial<Shipment>) => void | Promise<boolean | void>;
   onUpdateCustomers?: (
     customers: CustomerDirectoryEntry[]
@@ -383,7 +399,8 @@ function ShipmentTableRowImpl({
             cellStatus={rowCellStatuses?.awb}
             className="ops-awb !py-0 text-[14px] leading-tight"
             onCommit={(awb) => onUpdate(row.id, { awb })}
-            onEnterNavigateDown={() => focusShipmentGridCell(row.id, "hawb")}
+            onNavigate={(dir) => onRowNavigate?.(row.id, "awb", dir)}
+            onEnterNavigateDown={() => onRowNavigate ? onRowNavigate(row.id, "awb", "down") : focusShipmentGridCell(row.id, "hawb")}
           />
           <InlineTextEdit
             value={row.hawb ?? ""}
@@ -394,7 +411,8 @@ function ShipmentTableRowImpl({
             gridNav={{ rowId: row.id, field: "hawb" }}
             cellStatus={rowCellStatuses?.hawb}
             onCommit={(v) => onUpdate(row.id, { hawb: v.slice(0, 32) })}
-            onEnterNavigateDown={() => focusShipmentGridCell(row.id, "flight")}
+            onNavigate={(dir) => onRowNavigate?.(row.id, "hawb", dir)}
+            onEnterNavigateDown={() => onRowNavigate ? onRowNavigate(row.id, "hawb", "down") : focusShipmentGridCell(row.id, "flight")}
           />
         </div>
       </td>
@@ -410,8 +428,9 @@ function ShipmentTableRowImpl({
             gridNav={{ rowId: row.id, field: "flight" }}
             cellStatus={rowCellStatuses?.flight}
             onCommit={(v) => onUpdate(row.id, { flight: v })}
+            onNavigate={(dir) => onRowNavigate?.(row.id, "flight", dir)}
             onEnterNavigateDown={() =>
-              focusShipmentGridCell(row.id, "flightDate")
+              onRowNavigate ? onRowNavigate(row.id, "flight", "down") : focusShipmentGridCell(row.id, "flightDate")
             }
           />
           <div className="flex items-center gap-1">
@@ -429,7 +448,8 @@ function ShipmentTableRowImpl({
               gridNav={{ rowId: row.id, field: "flightDate" }}
               cellStatus={rowCellStatuses?.flightDate}
               onCommit={onFlightDateCommit}
-              onEnterNavigateDown={onFlightDateEnterDown}
+              onNavigate={(dir) => onRowNavigate?.(row.id, "flightDate", dir)}
+              onEnterNavigateDown={() => onRowNavigate ? onRowNavigate(row.id, "flightDate", "down") : onFlightDateEnterDown()}
             />
           </div>
           {row.cutoff ? (
@@ -453,6 +473,7 @@ function ShipmentTableRowImpl({
           gridNav={{ rowId: row.id, field: "dest" }}
           cellStatus={rowCellStatuses?.dest}
           onCommit={(v) => onUpdate(row.id, { dest: v.slice(0, 3) })}
+          onNavigate={(dir) => onRowNavigate?.(row.id, "dest", dir)}
           onEnterNavigateDown={navDownSameField("dest")}
         />
       </td>
@@ -466,6 +487,7 @@ function ShipmentTableRowImpl({
           cellStatus={rowCellStatuses?.pcs}
           validate={validateInlinePcs}
           onCommit={(v) => onUpdate(row.id, { pcs: v })}
+          onNavigate={(dir) => onRowNavigate?.(row.id, "pcs", dir)}
           onEnterNavigateDown={navDownSameField("pcs")}
         />
       </td>
@@ -479,6 +501,7 @@ function ShipmentTableRowImpl({
           cellStatus={rowCellStatuses?.kg}
           validate={validateInlineKg}
           onCommit={(v) => onUpdate(row.id, { kg: v })}
+          onNavigate={(dir) => onRowNavigate?.(row.id, "kg", dir)}
           onEnterNavigateDown={navDownSameField("kg")}
         />
       </td>
@@ -504,6 +527,7 @@ function ShipmentTableRowImpl({
                   dimDivisor: null,
                 })
               }
+              onNavigate={(dir) => onRowNavigate?.(row.id, "dimKg", dir)}
               onEnterNavigateDown={navDownSameField("dimKg")}
             />
           )}
@@ -548,8 +572,9 @@ function ShipmentTableRowImpl({
               gridNav={{ rowId: row.id, field: "customer" }}
               cellStatus={rowCellStatuses?.customer}
               onCommit={(patch) => onUpdate(row.id, patch)}
+              onNavigate={(dir) => onRowNavigate?.(row.id, "customer", dir)}
               onEnterNavigateDown={navDownSameField("customer")}
-              onTabNavigateNext={() => focusShipmentGridCell(row.id, "note")}
+              onTabNavigateNext={() => onRowNavigate ? onRowNavigate(row.id, "customer", "next") : focusShipmentGridCell(row.id, "note")}
             />
           </div>
           {onUpdateCustomers ? (
@@ -588,6 +613,7 @@ function ShipmentTableRowImpl({
             rowId={row.id}
             value={row.note ?? ""}
             onCommit={(v) => onUpdate(row.id, { note: v })}
+            onNavigate={(dir) => onRowNavigate?.(row.id, "note", dir)}
           />
           <ShipmentRowActionsMenu
             row={row}
@@ -658,6 +684,7 @@ export const ShipmentTableRow = memo(ShipmentTableRowImpl, (prev, next) => {
     prev.customerDirectory === next.customerDirectory &&
     prev.findAwbConflict === next.findAwbConflict &&
     prev.getNeighborRowId === next.getNeighborRowId &&
+    prev.onRowNavigate === next.onRowNavigate &&
     prev.onInvoice === next.onInvoice &&
     prev.onUpdate === next.onUpdate &&
     prev.onUpdateCustomers === next.onUpdateCustomers &&

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { runInlineAsyncCommit } from "../utils/inlineCommitAsync";
 import { CellStatusDot, type CellStatus } from "./CellStatusDot";
+import type { GridNavDirection } from "../hooks/useGridNavigation";
 
 interface Props {
   value: string;
@@ -16,6 +17,7 @@ interface Props {
   gridNav?: { rowId: string; field: string };
   /** Sau Enter (đã commit), ví dụ focus ô cùng cột hàng dưới */
   onEnterNavigateDown?: () => void;
+  onNavigate?: (dir: GridNavDirection) => void;
   validate?: (v: string) => string | null;
   title?: string;
   cellStatus?: CellStatus;
@@ -31,6 +33,7 @@ export function InlineTextEdit({
   maxLength,
   gridNav,
   onEnterNavigateDown,
+  onNavigate,
   validate,
   title,
   cellStatus,
@@ -105,7 +108,25 @@ export function InlineTextEdit({
             e.preventDefault();
             e.stopPropagation();
             setEditing(true);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            onNavigate?.("up");
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            onNavigate?.("down");
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            onNavigate?.("left");
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            onNavigate?.("right");
+          } else if (e.key === "Tab") {
+            e.preventDefault();
+            onNavigate?.(e.shiftKey ? "prev" : "next");
           } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            if (e.key === "n" || e.key === "N" || e.key === "/") {
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
             setDraft(uppercase ? e.key.toUpperCase() : e.key);
@@ -143,13 +164,27 @@ export function InlineTextEdit({
             e.preventDefault();
             commit();
             queueMicrotask(() => {
-              if (!error) onEnterNavigateDown?.();
+              if (!error) {
+                if (onNavigate) onNavigate("down");
+                else onEnterNavigateDown?.();
+              }
             });
+            return;
+          }
+          if (e.key === "Tab") {
+            e.preventDefault();
+            commit();
+            queueMicrotask(() => {
+              if (!error) onNavigate?.(e.shiftKey ? "prev" : "next");
+            });
+            return;
           }
           if (e.key === "Escape") {
+            e.preventDefault();
             setDraft(value);
             setError(null);
             setEditing(false);
+            return;
           }
         }}
         onClick={(e) => e.stopPropagation()}

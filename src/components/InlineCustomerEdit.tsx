@@ -14,6 +14,7 @@ import {
   useCustomerSuggestKeyboard,
 } from "./CustomerSuggestDropdown";
 import { CellStatusDot, type CellStatus } from "./CellStatusDot";
+import type { GridNavDirection } from "../hooks/useGridNavigation";
 
 interface Props {
   value: string;
@@ -31,6 +32,7 @@ interface Props {
   onEnterNavigateDown?: () => void;
   /** Sau Tab chọn gợi ý — thường focus ô kế (NOTE). */
   onTabNavigateNext?: () => void;
+  onNavigate?: (dir: GridNavDirection) => void;
   cellStatus?: CellStatus;
 }
 
@@ -48,6 +50,7 @@ export function InlineCustomerEdit({
   gridNav,
   onEnterNavigateDown,
   onTabNavigateNext,
+  onNavigate,
   cellStatus,
 }: Props) {
   const [editing, setEditing] = useState(false);
@@ -171,7 +174,25 @@ export function InlineCustomerEdit({
             e.preventDefault();
             e.stopPropagation();
             setEditing(true);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            onNavigate?.("up");
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            onNavigate?.("down");
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            onNavigate?.("left");
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            onNavigate?.("right");
+          } else if (e.key === "Tab") {
+            e.preventDefault();
+            onNavigate?.(e.shiftKey ? "prev" : "next");
           } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            if (e.key === "n" || e.key === "N" || e.key === "/") {
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
             setDraft(customerNameWhileTyping(e.key));
@@ -216,12 +237,26 @@ export function InlineCustomerEdit({
             !(e.nativeEvent as KeyboardEvent).isComposing
           ) {
             e.preventDefault();
-            commitDraft(onEnterNavigateDown);
+            commitDraft(() => {
+              if (onNavigate) onNavigate("down");
+              else onEnterNavigateDown?.();
+            });
+            return;
+          }
+          if (e.key === "Tab") {
+            e.preventDefault();
+            commitDraft(() => {
+              if (onNavigate) onNavigate(e.shiftKey ? "prev" : "next");
+              else onTabNavigateNext?.();
+            });
+            return;
           }
           if (e.key === "Escape") {
+            e.preventDefault();
             setDraft(value);
             setEditing(false);
             setListOpen(false);
+            return;
           }
         }}
         onClick={(e) => e.stopPropagation()}

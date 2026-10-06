@@ -4,6 +4,7 @@ import { formatAwb, rawAwbDigits } from "../utils/awbFormat";
 import { awbConflictMessage, findAwbDigitsConflict } from "../utils/awbUnique";
 import { useToast } from "../ui";
 import { CellStatusDot, type CellStatus } from "./CellStatusDot";
+import type { GridNavDirection } from "../hooks/useGridNavigation";
 
 interface Props {
   rowId: string;
@@ -15,6 +16,7 @@ interface Props {
   onCommit: (awbDisplay: string) => void;
   className?: string;
   onEnterNavigateDown?: () => void;
+  onNavigate?: (dir: GridNavDirection) => void;
   cellStatus?: CellStatus;
 }
 
@@ -26,6 +28,7 @@ export function InlineAwbEdit({
   onCommit,
   className = "",
   onEnterNavigateDown,
+  onNavigate,
   cellStatus,
 }: Props) {
   const toast = useToast();
@@ -103,6 +106,21 @@ export function InlineAwbEdit({
             e.preventDefault();
             e.stopPropagation();
             setEditing(true);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            onNavigate?.("up");
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            onNavigate?.("down");
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            onNavigate?.("left");
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            onNavigate?.("right");
+          } else if (e.key === "Tab") {
+            e.preventDefault();
+            onNavigate?.(e.shiftKey ? "prev" : "next");
           } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && /[0-9]/.test(e.key)) {
             e.preventDefault();
             e.stopPropagation();
@@ -148,12 +166,28 @@ export function InlineAwbEdit({
         onKeyDown={(e) => {
           if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
             e.preventDefault();
-            if (tryCommit()) queueMicrotask(() => onEnterNavigateDown?.());
+            if (tryCommit()) {
+              queueMicrotask(() => {
+                if (onNavigate) onNavigate("down");
+                else onEnterNavigateDown?.();
+              });
+            }
+            return;
+          }
+          if (e.key === "Tab") {
+            e.preventDefault();
+            if (tryCommit()) {
+              queueMicrotask(() => {
+                onNavigate?.(e.shiftKey ? "prev" : "next");
+              });
+            }
             return;
           }
           if (e.key === "Escape") {
+            e.preventDefault();
             setDraftDigits(rawAwbDigits(value));
             setEditing(false);
+            return;
           }
         }}
         onClick={(e) => e.stopPropagation()}

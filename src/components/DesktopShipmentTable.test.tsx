@@ -103,6 +103,22 @@ describe("DesktopShipmentTable density", () => {
     expect(html).toContain("row-actions-menu-s1");
   });
 
+  it("INFO KH giữ 3 dòng một hàng; địa chỉ chỉ nằm trong tooltip", () => {
+    const rich = {
+      ...row,
+      consigneeNamePrint: "Australasian Mail Services",
+      consigneeAddressPrint: "75 Harrick Road\nKeilor Park VIC 3043",
+      consigneePhonePrint: "+61 3 9338 6622",
+    } as Shipment;
+    const html = renderTable([rich]);
+    expect(html).toContain("max-w-[12.5rem]");
+    expect(html).toContain("h-3.5 w-full truncate");
+    expect(html).toContain("Australasian Mail Services");
+    expect(html).toContain("75 Harrick Road");
+    expect(html).not.toContain("line-clamp-4");
+    expect(html).not.toContain("w-[22rem]");
+  });
+
   it("empty state vẫn + Booking primary ≥44px", () => {
     const html = renderTable([]);
     expect(html).toContain("+ Booking");

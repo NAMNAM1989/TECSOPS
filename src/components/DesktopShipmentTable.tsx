@@ -56,7 +56,7 @@ interface Props {
 
 type ColHeader = { key: string; label: string; w: string; title?: string };
 
-/** ~200px — đủ đọc tên Shipper/CNEE. */
+/** Giữ một dòng mỗi mục — không kéo cao hàng. */
 const INFO_KH_W = "w-[12.5rem] max-w-[12.5rem]";
 /** Vừa đủ nội dung thật — không truncate AWB/chuyến; KHÁCH tối đa 2 dòng. */
 const AWB_W = "w-[9rem] max-w-[9rem]";
@@ -572,6 +572,17 @@ function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
     a.flightDate === b.flightDate &&
     a.dest === b.dest &&
     a.customer === b.customer &&
+    a.customerShipperId === b.customerShipperId &&
+    a.customerConsigneeId === b.customerConsigneeId &&
+    a.customerGoodsId === b.customerGoodsId &&
+    a.shipperNamePrint === b.shipperNamePrint &&
+    a.shipperAddressPrint === b.shipperAddressPrint &&
+    a.shipperPhonePrint === b.shipperPhonePrint &&
+    a.consigneeNamePrint === b.consigneeNamePrint &&
+    a.consigneeAddressPrint === b.consigneeAddressPrint &&
+    a.consigneePhonePrint === b.consigneePhonePrint &&
+    a.consigneeEmailPrint === b.consigneeEmailPrint &&
+    a.goodsDescriptionPrint === b.goodsDescriptionPrint &&
     a.pcs === b.pcs &&
     a.kg === b.kg &&
     a.dimWeightKg === b.dimWeightKg &&

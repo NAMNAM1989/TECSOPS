@@ -50,6 +50,7 @@ import { parseTsv } from "../utils/tsvParser";
 import { buildPastePlan, type PastePlan } from "../utils/tablePasteMapper";
 import { globalTableUndoManager } from "../utils/tableUndoManager";
 import { PastePreviewModal } from "./PastePreviewModal";
+import { useVirtualScroll } from "../hooks/useVirtualScroll";
 
 interface Props {
   rows: Shipment[];
@@ -143,8 +144,31 @@ export function DesktopShipmentTable({
   const toast = useToast();
   const [pendingPastePlan, setPendingPastePlan] = useState<PastePlan | null>(null);
   const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const getScrollElement = useCallback(() => tableContainerRef.current, []);
+  const scrollStorageKey = `tecsops.scrollPos.${viewSessionYmd || "today"}.${activeWarehouse}`;
+
+  const virtualScroll = useVirtualScroll({
+    count: group.length,
+    estimateSize: 56,
+    overscan: 8,
+    getScrollElement,
+    storageKey: scrollStorageKey,
+  });
+
+  const onBeforeGridFocus = useCallback(
+    (rowId: string) => {
+      const idx = groupRef.current.findIndex((r) => r.id === rowId);
+      if (idx !== -1 && virtualScroll.isVirtualized) {
+        virtualScroll.scrollToIndex(idx, { align: "auto" });
+      }
+    },
+    [virtualScroll]
+  );
+
   const { onNavigate: onGridNavigate, activeCell, setActiveCell } = useGridNavigation({
     rowIds: groupRowIds,
+    onBeforeFocus: onBeforeGridFocus,
   });
   const handleRowNavigate = useCallback(
     (rowId: string, field: TableGridField, dir: GridNavDirection) => {
@@ -295,7 +319,6 @@ export function DesktopShipmentTable({
   );
 
   const [scrollMode, setScrollMode] = useState<ScrollMode>(getStoredScrollMode);
-  const tableContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (scrollMode !== "page-flip") return;
@@ -443,6 +466,61 @@ export function DesktopShipmentTable({
                       </button>
                     </td>
                   </tr>
+                ) : virtualScroll.isVirtualized ? (
+                  <>
+                    {virtualScroll.paddingTop > 0 && (
+                      <tr aria-hidden="true" style={{ height: virtualScroll.paddingTop }}>
+                        <td
+                          colSpan={COL_HEADERS.length}
+                          style={{
+                            height: virtualScroll.paddingTop,
+                            padding: 0,
+                            border: "none",
+                            background: "transparent",
+                          }}
+                        />
+                      </tr>
+                    )}
+                    {virtualScroll.virtualItems.map((item) => {
+                      const row = group[item.index];
+                      if (!row) return null;
+                      return (
+                        <ShipmentTableRow
+                          key={row.id}
+                          row={row}
+                          rowIdx={item.index}
+                          rowCellStatuses={getRowCellStatuses(row.id)}
+                          getNeighborRowId={getNeighborRowId}
+                          viewSessionYmd={viewSessionYmd}
+                          highlighted={highlightedShipmentId === row.id}
+                          selected={selectedRowId === row.id}
+                          onSelectRow={onSelectRow}
+                          findAwbConflict={findAwbConflict}
+                          customerDirectory={customerDirectory}
+                          onRowNavigate={handleRowNavigate}
+                          onUpdate={onUpdate}
+                          onUpdateCustomers={onUpdateCustomers}
+                          onDelete={onDelete}
+                          onPrint={onPrint}
+                          onInvoice={onInvoice}
+                          onOpenDimModal={setDimModalRow}
+                        />
+                      );
+                    })}
+                    {virtualScroll.paddingBottom > 0 && (
+                      <tr aria-hidden="true" style={{ height: virtualScroll.paddingBottom }}>
+                        <td
+                          colSpan={COL_HEADERS.length}
+                          style={{
+                            height: virtualScroll.paddingBottom,
+                            padding: 0,
+                            border: "none",
+                            background: "transparent",
+                          }}
+                        />
+                      </tr>
+                    )}
+                  </>
                 ) : (
                   group.map((row, rowIdx) => (
                     <ShipmentTableRow

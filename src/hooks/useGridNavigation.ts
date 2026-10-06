@@ -13,6 +13,7 @@ export interface UseGridNavigationOptions {
   rowIds: readonly string[];
   fields?: readonly TableGridField[];
   onActiveCellChange?: (cell: ActiveGridCell | null) => void;
+  onBeforeFocus?: (rowId: string) => void;
 }
 
 /**
@@ -92,12 +93,15 @@ export function useGridNavigation({
   rowIds,
   fields = TABLE_COLUMN_ORDER,
   onActiveCellChange,
+  onBeforeFocus,
 }: UseGridNavigationOptions) {
   const [activeCell, setActiveCellState] = useState<ActiveGridCell | null>(null);
   const rowIdsRef = useRef(rowIds);
   rowIdsRef.current = rowIds;
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
+  const onBeforeFocusRef = useRef(onBeforeFocus);
+  onBeforeFocusRef.current = onBeforeFocus;
 
   const setActiveCell = useCallback(
     (cell: ActiveGridCell | null) => {
@@ -109,6 +113,7 @@ export function useGridNavigation({
 
   const focusCell = useCallback(
     (rowId: string, field: TableGridField) => {
+      onBeforeFocusRef.current?.(rowId);
       setActiveCell({ rowId, field });
       focusShipmentGridCell(rowId, field);
     },
@@ -119,6 +124,7 @@ export function useGridNavigation({
     (from: ActiveGridCell, dir: GridNavDirection): ActiveGridCell | null => {
       const target = getNextGridCell(from, dir, rowIdsRef.current, fieldsRef.current);
       if (target) {
+        onBeforeFocusRef.current?.(target.rowId);
         setActiveCell(target);
         focusShipmentGridCell(target.rowId, target.field);
       }

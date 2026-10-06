@@ -50,6 +50,13 @@
   - Tích hợp phím tắt Ctrl+C, Ctrl+V, Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z trong `DesktopShipmentTable.tsx`.
   - Viết unit test: `tsvParser.test.ts` (5 test pass), `tablePasteMapper.test.ts` (3 test pass), `tableUndoManager.test.ts` (3 test pass).
   - Typecheck, lint, vitest pass.
-- [ ] Giai đoạn 7: Virtual scroll (P1)
+- [x] Giai đoạn 7: Virtual scroll (P1)
+  - Xây dựng hook `useVirtualScroll.ts` ảo hoá danh sách tối ưu riêng cho table DOM (`src/hooks/useVirtualScroll.ts`).
+  - Tự động kích hoạt khi số dòng > `VIRTUALIZE_THRESHOLD` (100 dòng); dưới ngưỡng này render thông thường overhead = 0.
+  - Chiều cao dòng ~56px, `overscan: 8`, giữ nguyên `thead` sticky top-0 và cột AWB sticky left-0 bằng kỹ thuật spacer tr chuẩn HTML table.
+  - Lưu và khôi phục vị trí cuộn qua `sessionStorage` (`tecsops.scrollPos.<sessionDate>.<warehouse>`).
+  - Tích hợp `onBeforeFocus` vào `useGridNavigation`: tự động gọi `scrollToIndex` trước khi focus vào ô nằm ngoài viewport ảo.
+  - Viết unit test: `useVirtualScroll.test.ts` (3 test pass), `DesktopShipmentTable.virtual.test.tsx` (1 test pass: 2.000 dòng render DOM < 80 thẻ `<tr>`).
+  - Typecheck, lint, vitest pass.
 - [ ] Giai đoạn 8: E2E Playwright
 - [ ] Kết thúc: Lint, typecheck, test, REPORT.md

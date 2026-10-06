@@ -46,6 +46,10 @@ import {
   setStoredScrollMode,
   smoothScrollTop,
 } from "../utils/pageFlipAnimation";
+import { parseTsv } from "../utils/tsvParser";
+import { buildPastePlan, type PastePlan } from "../utils/tablePasteMapper";
+import { globalTableUndoManager } from "../utils/tableUndoManager";
+import { PastePreviewModal } from "./PastePreviewModal";
 
 interface Props {
   rows: Shipment[];
@@ -136,8 +140,12 @@ export function DesktopShipmentTable({
     const target = list[idx + offset];
     return target ? target.id : null;
   }, []);
+  const toast = useToast();
+  const [pendingPastePlan, setPendingPastePlan] = useState<PastePlan | null>(null);
   const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);
-  const { onNavigate: onGridNavigate } = useGridNavigation({ rowIds: groupRowIds });
+  const { onNavigate: onGridNavigate, activeCell, setActiveCell } = useGridNavigation({
+    rowIds: groupRowIds,
+  });
   const handleRowNavigate = useCallback(
     (rowId: string, field: TableGridField, dir: GridNavDirection) => {
       onGridNavigate(rowId, field, dir);
@@ -145,6 +153,129 @@ export function DesktopShipmentTable({
     [onGridNavigate]
   );
   const headerTotals = useMemo(() => summarizeWarehouseHeader(group), [group]);
+
+  const confirmPendingPaste = useCallback(() => {
+    if (!pendingPastePlan) return;
+    const plan = pendingPastePlan;
+    setPendingPastePlan(null);
+
+    globalTableUndoManager.push({
+      description: `Dán vùng ${plan.affectedRowsCount} lô`,
+      forwardMutations: plan.forwardMutations,
+      reverseMutations: plan.reverseMutations,
+    });
+
+    for (const mut of plan.forwardMutations) {
+      if (mut.action === "UPDATE") {
+        void onUpdate(mut.id, mut.patch);
+      }
+    }
+    toast.success(`Đã dán vào ${plan.affectedRowsCount} lô`);
+  }, [pendingPastePlan, onUpdate, toast]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isInput =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target?.isContentEditable;
+
+      if (isInput) return;
+
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+      // Undo: Ctrl+Z
+      if (isCtrlOrCmd && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        const entry = globalTableUndoManager.undo();
+        if (entry) {
+          for (const mut of entry.reverseMutations) {
+            if (mut.action === "UPDATE") {
+              void onUpdate(mut.id, mut.patch);
+            }
+          }
+          toast.info(`Đã hoàn tác: ${entry.description}`);
+        }
+        return;
+      }
+
+      // Redo: Ctrl+Y hoặc Ctrl+Shift+Z
+      if (
+        (isCtrlOrCmd && (e.key === "y" || e.key === "Y")) ||
+        (isCtrlOrCmd && e.shiftKey && (e.key === "z" || e.key === "Z"))
+      ) {
+        e.preventDefault();
+        const entry = globalTableUndoManager.redo();
+        if (entry) {
+          for (const mut of entry.forwardMutations) {
+            if (mut.action === "UPDATE") {
+              void onUpdate(mut.id, mut.patch);
+            }
+          }
+          toast.info(`Đã làm lại: ${entry.description}`);
+        }
+        return;
+      }
+
+      // Copy: Ctrl+C
+      if (isCtrlOrCmd && (e.key === "c" || e.key === "C")) {
+        if (!activeCell) return;
+        const row = group.find((r) => r.id === activeCell.rowId);
+        if (!row) return;
+        const val = String((row as unknown as Record<string, unknown>)[activeCell.field] ?? "");
+        e.preventDefault();
+        void navigator.clipboard
+          .writeText(val)
+          .then(() => {
+            toast.info(`Đã sao chép: ${val || "ô trống"}`);
+          })
+          .catch(() => {});
+        return;
+      }
+
+      // Paste: Ctrl+V
+      if (isCtrlOrCmd && (e.key === "v" || e.key === "V")) {
+        if (!activeCell) return;
+        e.preventDefault();
+        void navigator.clipboard
+          .readText()
+          .then((text) => {
+            if (!text) return;
+            const grid = parseTsv(text);
+            if (grid.length === 0) return;
+            const plan = buildPastePlan(grid, activeCell, group);
+            if (plan.forwardMutations.length === 0) {
+              toast.warning("Không có dữ liệu thay đổi hợp lệ.");
+              return;
+            }
+
+            if (grid.length > 1) {
+              setPendingPastePlan(plan);
+            } else {
+              globalTableUndoManager.push({
+                description: `Dán ô ${activeCell.field}`,
+                forwardMutations: plan.forwardMutations,
+                reverseMutations: plan.reverseMutations,
+              });
+              for (const mut of plan.forwardMutations) {
+                if (mut.action === "UPDATE") {
+                  void onUpdate(mut.id, mut.patch);
+                }
+              }
+              toast.success("Đã dán dữ liệu vào ô");
+            }
+          })
+          .catch(() => {});
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeCell, group, onUpdate, toast]);
 
   const getRowCellStatuses = useCallback(
     (rowId: string): Record<string, CellStatus> | undefined => {
@@ -271,6 +402,14 @@ export function DesktopShipmentTable({
             className={`overflow-auto px-1 py-0.5 ${
               group.length > 4 ? "max-h-[min(86vh,860px)]" : ""
             }`}
+            onFocusCapture={(e) => {
+              const el = e.target as HTMLElement;
+              const rowId = el.getAttribute("data-grid-row");
+              const field = el.getAttribute("data-grid-field") as TableGridField | null;
+              if (rowId && field) {
+                setActiveCell({ rowId, field });
+              }
+            }}
           >
             <table className="w-full border-separate border-spacing-x-0 border-spacing-y-1.5 text-left text-[13px] leading-tight">
               <thead className="sticky top-0 z-20">
@@ -344,6 +483,13 @@ export function DesktopShipmentTable({
             onUpdate(dimModalRow.id, payload);
             setDimModalRow(null);
           }}
+        />
+      ) : null}
+      {pendingPastePlan ? (
+        <PastePreviewModal
+          plan={pendingPastePlan}
+          onConfirm={confirmPendingPaste}
+          onCancel={() => setPendingPastePlan(null)}
         />
       ) : null}
     </>

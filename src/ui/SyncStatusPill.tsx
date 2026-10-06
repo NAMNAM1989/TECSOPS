@@ -83,7 +83,11 @@ export function SyncStatusPill({
           aria-hidden="true"
         />
         <span>Live</span>
-        {!compact && syncTimeStr ? (
+        {pendingOfflineCount > 0 ? (
+          <span className="font-mono text-2xs font-bold text-amber-800">
+            · {pendingOfflineCount} chờ gửi
+          </span>
+        ) : !compact && syncTimeStr ? (
           <span className="font-mono text-2xs font-normal text-ui-text-muted">
             · {syncTimeStr}
           </span>

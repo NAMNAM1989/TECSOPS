@@ -35,6 +35,12 @@ import {
   OUTBOX_DEBOUNCE_MS,
   OUTBOX_FLUSH_SIZE,
 } from "../utils/shipmentOutbox";
+import {
+  loadPersistentQueue,
+  savePersistentQueue,
+  clearPersistentQueue,
+  type PersistentMutationItem,
+} from "../utils/persistentOutbox";
 import { notify } from "../ui/notify";
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
@@ -287,6 +293,40 @@ export function useShipmentSync(
     setPendingOfflineCount(offlineQueueRef.current.length);
   }, []);
 
+  const persistOfflineQueue = useCallback(() => {
+    const items: PersistentMutationItem[] = offlineQueueRef.current.map((q, idx) => ({
+      id: (q.mutation as { id?: string }).id || `persisted_${Date.now()}_${idx}`,
+      mutation: q.mutation,
+      localId: q.localId,
+      enqueuedAt: Date.now(),
+    }));
+    if (items.length === 0) {
+      void clearPersistentQueue();
+    } else {
+      void savePersistentQueue(items);
+    }
+  }, []);
+
+  // Nạp mutation đã lưu bền vững từ phiên trước (IndexedDB / localStorage)
+  useEffect(() => {
+    void loadPersistentQueue().then((persisted) => {
+      if (cancelledRef.current || persisted.length === 0) return;
+      const existingIds = new Set(
+        offlineQueueRef.current.map((q) => (q.mutation as { id?: string }).id)
+      );
+      for (const item of persisted) {
+        const id = (item.mutation as { id?: string }).id;
+        if (!id || !existingIds.has(id)) {
+          offlineQueueRef.current.push({
+            mutation: item.mutation,
+            localId: item.localId,
+          });
+        }
+      }
+      syncPendingCount();
+    });
+  }, [syncPendingCount]);
+
   const updateCellStatus = useCallback((updates: Record<string, CellStatus>) => {
     setCellStatuses((prev) => {
       let changed = false;
@@ -400,6 +440,7 @@ export function useShipmentSync(
         );
         if (cancelledRef.current) return;
         offlineQueueRef.current = pending;
+        persistOfflineQueue();
         live = replayed;
       }
 
@@ -603,6 +644,7 @@ export function useShipmentSync(
             localId: mutation.action === "ADD" ? (addedRowId(base, next) ?? undefined) : undefined,
           };
           offlineQueueRef.current.push(queued);
+          persistOfflineQueue();
           syncPendingCount();
           scheduleSaveRows(next.rows);
           if (mutation.action === "SET_CUSTOMERS") {

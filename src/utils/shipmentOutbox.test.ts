@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { AppState, Shipment, WarehouseCode } from "../types";
+import type { AppState } from "./shipmentMutations";
+import type { Shipment, WarehouseCode } from "../types/shipment";
 import {
   applyPendingPatchesOverServerState,
   consolidateOutboxMutations,

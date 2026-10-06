@@ -111,7 +111,16 @@ export function DesktopShipmentTable({
         .sort((a, b) => (a.stt ?? 0) - (b.stt ?? 0) || a.id.localeCompare(b.id)),
     [rows, activeWarehouse],
   );
-  const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);
+  const groupRef = useRef(group);
+  groupRef.current = group;
+  const getNeighborRowId = useCallback((id: string, dir: "prev" | "next" | -1 | 1): string | null => {
+    const list = groupRef.current;
+    const idx = list.findIndex((r) => r.id === id);
+    if (idx === -1) return null;
+    const offset = dir === "next" || dir === 1 ? 1 : -1;
+    const target = list[idx + offset];
+    return target ? target.id : null;
+  }, []);
   const headerTotals = useMemo(() => summarizeWarehouseHeader(group), [group]);
 
   return (
@@ -195,7 +204,7 @@ export function DesktopShipmentTable({
                       key={row.id}
                       row={row}
                       rowIdx={rowIdx}
-                      groupRowIds={groupRowIds}
+                      getNeighborRowId={getNeighborRowId}
                       viewSessionYmd={viewSessionYmd}
                       highlighted={highlightedShipmentId === row.id}
                       selected={selectedRowId === row.id}
@@ -245,7 +254,7 @@ function WarehouseTotalChip({ label, value }: { label: string; value: string }) 
 function ShipmentTableRowImpl({
   row,
   rowIdx,
-  groupRowIds,
+  getNeighborRowId,
   viewSessionYmd,
   highlighted = false,
   selected = false,
@@ -261,7 +270,7 @@ function ShipmentTableRowImpl({
 }: {
   row: Shipment;
   rowIdx: number;
-  groupRowIds: string[];
+  getNeighborRowId: (id: string, dir: "prev" | "next" | -1 | 1) => string | null;
   viewSessionYmd: string;
   highlighted?: boolean;
   selected?: boolean;
@@ -297,14 +306,14 @@ function ShipmentTableRowImpl({
     } ${part === "last" ? "border-r border-ui-border/80" : ""} px-1 py-1 ${extra}`.trim();
   };
 
-  const hasNextRow = rowIdx < groupRowIds.length - 1;
   const sessionYear =
     parseInt((viewSessionYmd || row.sessionDate || "").slice(0, 4), 10) ||
     new Date().getFullYear();
 
   const navDownSameField = (field: string) => () => {
-    if (!hasNextRow) return;
-    focusShipmentGridCell(groupRowIds[rowIdx + 1], field);
+    const nextId = getNeighborRowId(row.id, "next");
+    if (!nextId) return;
+    focusShipmentGridCell(nextId, field);
   };
 
   const onFlightDateCommit = (t: string) => {
@@ -320,7 +329,8 @@ function ShipmentTableRowImpl({
   };
 
   const onFlightDateEnterDown = () => {
-    if (hasNextRow) focusShipmentGridCell(groupRowIds[rowIdx + 1], "flight");
+    const nextId = getNeighborRowId(row.id, "next");
+    if (nextId) focusShipmentGridCell(nextId, "flight");
     else focusShipmentGridCell(row.id, "dest");
   };
 
@@ -414,9 +424,7 @@ function ShipmentTableRowImpl({
           maxLength={3}
           gridNav={{ rowId: row.id, field: "dest" }}
           onCommit={(v) => onUpdate(row.id, { dest: v.slice(0, 3) })}
-          onEnterNavigateDown={
-            hasNextRow ? navDownSameField("dest") : undefined
-          }
+          onEnterNavigateDown={navDownSameField("dest")}
         />
       </td>
       <td className={cell("mid", "text-right")}>
@@ -428,7 +436,7 @@ function ShipmentTableRowImpl({
           gridNav={{ rowId: row.id, field: "pcs" }}
           validate={validateInlinePcs}
           onCommit={(v) => onUpdate(row.id, { pcs: v })}
-          onEnterNavigateDown={hasNextRow ? navDownSameField("pcs") : undefined}
+          onEnterNavigateDown={navDownSameField("pcs")}
         />
       </td>
       <td className={cell("mid", "text-right")}>
@@ -440,7 +448,7 @@ function ShipmentTableRowImpl({
           gridNav={{ rowId: row.id, field: "kg" }}
           validate={validateInlineKg}
           onCommit={(v) => onUpdate(row.id, { kg: v })}
-          onEnterNavigateDown={hasNextRow ? navDownSameField("kg") : undefined}
+          onEnterNavigateDown={navDownSameField("kg")}
         />
       </td>
       <td className={cell("mid", "text-right align-top")}>
@@ -464,9 +472,7 @@ function ShipmentTableRowImpl({
                   dimDivisor: null,
                 })
               }
-              onEnterNavigateDown={
-                hasNextRow ? navDownSameField("dimKg") : undefined
-              }
+              onEnterNavigateDown={navDownSameField("dimKg")}
             />
           )}
           <button
@@ -509,9 +515,7 @@ function ShipmentTableRowImpl({
               maxLength={120}
               gridNav={{ rowId: row.id, field: "customer" }}
               onCommit={(patch) => onUpdate(row.id, patch)}
-              onEnterNavigateDown={
-                hasNextRow ? navDownSameField("customer") : undefined
-              }
+              onEnterNavigateDown={navDownSameField("customer")}
               onTabNavigateNext={() => focusShipmentGridCell(row.id, "note")}
             />
           </div>
@@ -565,7 +569,7 @@ function ShipmentTableRowImpl({
   );
 }
 
-function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
+export function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
   return (
     a.awb === b.awb &&
     a.flight === b.flight &&
@@ -594,7 +598,7 @@ function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
   );
 }
 
-const ShipmentTableRow = memo(ShipmentTableRowImpl, (prev, next) => {
+export const ShipmentTableRow = memo(ShipmentTableRowImpl, (prev, next) => {
   return (
     (prev.row === next.row || shipmentRowRenderEqual(prev.row, next.row)) &&
     prev.rowIdx === next.rowIdx &&
@@ -603,7 +607,13 @@ const ShipmentTableRow = memo(ShipmentTableRowImpl, (prev, next) => {
     prev.viewSessionYmd === next.viewSessionYmd &&
     prev.customerDirectory === next.customerDirectory &&
     prev.findAwbConflict === next.findAwbConflict &&
-    prev.groupRowIds === next.groupRowIds &&
-    prev.onInvoice === next.onInvoice
+    prev.getNeighborRowId === next.getNeighborRowId &&
+    prev.onInvoice === next.onInvoice &&
+    prev.onUpdate === next.onUpdate &&
+    prev.onUpdateCustomers === next.onUpdateCustomers &&
+    prev.onDelete === next.onDelete &&
+    prev.onPrint === next.onPrint &&
+    prev.onOpenDimModal === next.onOpenDimModal &&
+    prev.onSelectRow === next.onSelectRow
   );
 });

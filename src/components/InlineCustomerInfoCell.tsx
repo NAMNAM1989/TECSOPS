@@ -9,6 +9,10 @@ import type {
 import type { Shipment } from "../types/shipment";
 import { findCustomerEntry } from "../utils/customerBookingResolve";
 import {
+  buildShipmentCustomerDetailSections,
+  type CustomerDetailPartyBlock,
+} from "../utils/shipmentCneeCopyBlock";
+import {
   buildShipmentPatchForSavedConsignee,
   formatSavedConsigneeDetailTitle,
   formatSavedConsigneeShortLabel,
@@ -42,9 +46,6 @@ const stopRowClick = {
 
 const selectCls =
   "box-border h-7 min-w-0 w-full max-w-full cursor-pointer truncate rounded-lg border border-ui-border bg-ui-surface px-2 py-0 text-2xs font-semibold leading-none text-ui-text focus:outline-none focus:ring-1 focus:ring-ui-focus disabled:cursor-default disabled:opacity-45";
-
-const LINE =
-  "block h-3.5 w-full truncate text-left text-2xs font-semibold leading-[0.875rem] text-ui-text";
 
 const FIELD_LABEL =
   "w-[3.25rem] shrink-0 pt-1.5 text-2xs font-semibold leading-none text-ui-text-muted";
@@ -118,21 +119,25 @@ function FieldRow({
   );
 }
 
+const LINE =
+  "block h-3.5 w-full truncate text-left text-2xs font-semibold leading-[0.875rem] text-ui-text";
+
+function partyTitle(party: CustomerDetailPartyBlock): string {
+  return [party.name, ...party.addressLines, ...party.contactLines].filter(Boolean).join("\n");
+}
+
 function SummaryLine({
   label,
   value,
-  empty,
+  title,
 }: {
   label: string;
   value: string;
-  empty?: boolean;
+  title?: string;
 }) {
   const shown = value || "—";
   return (
-    <span
-      className={`${LINE} ${empty ? "ops-grid-placeholder" : ""}`}
-      title={value ? `${label}: ${value}` : undefined}
-    >
+    <span className={`${LINE} ${value ? "" : "ops-grid-placeholder"}`} title={title || undefined}>
       <span className="mr-1 font-bold text-ui-text-muted">{label}</span>
       {shown}
     </span>
@@ -166,15 +171,8 @@ export function InlineCustomerInfoCell({
   const selectedConsignee = consignees.find((x) => x.id === consigneeId);
   const selectedGoods = goods.find((x) => x.id === goodsId);
 
-  const shipperText = selectedShipper
-    ? shortShipperLabel(selectedShipper)
-    : "";
-  const cneeText = selectedConsignee
-    ? formatSavedConsigneeShortLabel(selectedConsignee).trim()
-    : (shipment.consigneeNamePrint ?? "").trim();
-  const goodsText = selectedGoods
-    ? formatSavedGoodsShortLabel(selectedGoods).trim()
-    : "";
+  const detail = buildShipmentCustomerDetailSections(shipment, customerDirectory);
+  const goodsText = detail.goodsEmpty ? "" : detail.goodsLines.join("\n");
 
   const cneePrint = (shipment.consigneeNamePrint ?? "").trim();
   const cneeProfileName = selectedConsignee
@@ -359,9 +357,17 @@ export function InlineCustomerInfoCell({
           open ? "bg-ui-primary/10 ring-1 ring-ui-primary/30" : ""
         }`}
       >
-        <SummaryLine label="Ship" value={shipperText} empty={!shipperText} />
-        <SummaryLine label="CNEE" value={cneeText} empty={!cneeText} />
-        <SummaryLine label="Hàng" value={goodsText} empty={!goodsText} />
+        <SummaryLine
+          label="Ship"
+          value={detail.shipper.name}
+          title={detail.shipper.empty ? undefined : partyTitle(detail.shipper)}
+        />
+        <SummaryLine
+          label="CNEE"
+          value={detail.cnee.name}
+          title={detail.cnee.empty ? undefined : partyTitle(detail.cnee)}
+        />
+        <SummaryLine label="Hàng" value={goodsText} title={goodsText || undefined} />
       </button>
 
       {open && typeof document !== "undefined"

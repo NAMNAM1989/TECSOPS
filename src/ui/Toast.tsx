@@ -26,6 +26,10 @@ export type ToastInput = {
   tone?: ToastTone;
   /** ms — mặc định theo TOAST_DURATION_MS[tone]; 0 = không tự đóng */
   durationMs?: number;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 };
 
 type ToastItem = ToastInput & { id: string; tone: ToastTone };
@@ -103,6 +107,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         message: input.message,
         title: input.title,
         tone: input.tone ?? "info",
+        action: input.action,
       });
     });
     return () => registerNotifySink(null);
@@ -129,6 +134,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 {t.message}
               </p>
             </div>
+            {t.action ? (
+              <button
+                type="button"
+                onClick={() => {
+                  t.action?.onClick();
+                  dismiss(t.id);
+                }}
+                className="shrink-0 rounded-lg border border-red-300 bg-red-50 px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
+              >
+                {t.action.label}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => dismiss(t.id)}

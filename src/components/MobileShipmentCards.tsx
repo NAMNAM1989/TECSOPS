@@ -129,7 +129,7 @@ const MobileShipmentCard = memo(
           contentVisibility: "auto",
           containIntrinsicSize: "0 58px",
         }}
-        className={`${MOBILE.card} scroll-mt-2 scroll-mb-[calc(5rem+env(safe-area-inset-bottom))] ${rowSurface} ${
+        className={`${MOBILE.card} snap-start scroll-mt-2 scroll-mb-[calc(5rem+env(safe-area-inset-bottom))] ${rowSurface} ${
           selected ? "ring-2 ring-ui-primary/40" : ""
         } ${highlighted ? "ring-2 ring-amber-400/70" : ""} ${
           flightMeta.flightDateUrgent ? "ring-1 ring-red-300/80" : ""
@@ -290,7 +290,7 @@ export function MobileShipmentCards({
 
   return (
     <div
-      className={`space-y-1.5 px-0.5 pb-[calc(5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
+      className={`space-y-1.5 px-0.5 pb-[calc(5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(5rem+env(safe-area-inset-bottom))] snap-y snap-proximity overscroll-contain ${mobileOnlyVisibility(isMobile)}`}
       data-testid="mobile-shipment-list"
     >
       {searchActive

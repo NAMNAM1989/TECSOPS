@@ -13,6 +13,8 @@ import {
   useCustomerSuggestAnchor,
   useCustomerSuggestKeyboard,
 } from "./CustomerSuggestDropdown";
+import { CellStatusDot, type CellStatus } from "./CellStatusDot";
+import type { GridNavDirection } from "../hooks/useGridNavigation";
 
 interface Props {
   value: string;
@@ -30,6 +32,8 @@ interface Props {
   onEnterNavigateDown?: () => void;
   /** Sau Tab chọn gợi ý — thường focus ô kế (NOTE). */
   onTabNavigateNext?: () => void;
+  onNavigate?: (dir: GridNavDirection) => void;
+  cellStatus?: CellStatus;
 }
 
 const EMPTY_DIRECTORY: readonly CustomerDirectoryEntry[] = [];
@@ -46,6 +50,8 @@ export function InlineCustomerEdit({
   gridNav,
   onEnterNavigateDown,
   onTabNavigateNext,
+  onNavigate,
+  cellStatus,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -148,7 +154,7 @@ export function InlineCustomerEdit({
     ? { "data-grid-row": gridNav.rowId, "data-grid-field": gridNav.field }
     : {};
 
-  const btnBase = "ops-inline-edit w-full rounded px-1 py-0.5 text-left";
+  const btnBase = "ops-inline-edit relative w-full rounded px-1 py-0.5 text-left";
 
   const displayValue = value !== "" ? normalizeCustomerNameInput(value) : "";
 
@@ -168,7 +174,25 @@ export function InlineCustomerEdit({
             e.preventDefault();
             e.stopPropagation();
             setEditing(true);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            onNavigate?.("up");
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            onNavigate?.("down");
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            onNavigate?.("left");
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            onNavigate?.("right");
+          } else if (e.key === "Tab") {
+            e.preventDefault();
+            onNavigate?.(e.shiftKey ? "prev" : "next");
           } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            if (e.key === "n" || e.key === "N" || e.key === "/") {
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
             setDraft(customerNameWhileTyping(e.key));
@@ -180,13 +204,14 @@ export function InlineCustomerEdit({
           displayValue === "" ? "ops-grid-placeholder" : ""
         }`}
       >
-        {displayValue !== "" ? displayValue : placeholder}
+        <span>{displayValue !== "" ? displayValue : placeholder}</span>
+        <CellStatusDot status={cellStatus} />
       </button>
     );
   }
 
   return (
-    <>
+    <span className="relative inline-flex w-full flex-col">
       <input
         ref={inputRef}
         type="text"
@@ -212,12 +237,26 @@ export function InlineCustomerEdit({
             !(e.nativeEvent as KeyboardEvent).isComposing
           ) {
             e.preventDefault();
-            commitDraft(onEnterNavigateDown);
+            commitDraft(() => {
+              if (onNavigate) onNavigate("down");
+              else onEnterNavigateDown?.();
+            });
+            return;
+          }
+          if (e.key === "Tab") {
+            e.preventDefault();
+            commitDraft(() => {
+              if (onNavigate) onNavigate(e.shiftKey ? "prev" : "next");
+              else onTabNavigateNext?.();
+            });
+            return;
           }
           if (e.key === "Escape") {
+            e.preventDefault();
             setDraft(value);
             setEditing(false);
             setListOpen(false);
+            return;
           }
         }}
         onClick={(e) => e.stopPropagation()}
@@ -226,6 +265,7 @@ export function InlineCustomerEdit({
         aria-autocomplete="list"
         aria-expanded={showList}
       />
+      <CellStatusDot status={cellStatus} />
       <CustomerSuggestDropdown
         open={listOpen}
         anchor={anchor}
@@ -237,6 +277,6 @@ export function InlineCustomerEdit({
         onActiveIdxChange={setActiveIdx}
         listRef={listRef}
       />
-    </>
+    </span>
   );
 }

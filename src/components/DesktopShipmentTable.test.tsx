@@ -1,6 +1,12 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { DesktopShipmentTable } from "./DesktopShipmentTable";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  DesktopShipmentTable,
+  ShipmentTableRow,
+  shipmentRowRenderEqual,
+} from "./DesktopShipmentTable";
 import { ToastProvider } from "../ui";
 import type { Shipment } from "../types/shipment";
 import { blankShipmentDraft } from "../utils/blankShipment";
@@ -103,6 +109,22 @@ describe("DesktopShipmentTable density", () => {
     expect(html).toContain("row-actions-menu-s1");
   });
 
+  it("INFO KH giữ 3 dòng một hàng; địa chỉ chỉ nằm trong tooltip", () => {
+    const rich = {
+      ...row,
+      consigneeNamePrint: "Australasian Mail Services",
+      consigneeAddressPrint: "75 Harrick Road\nKeilor Park VIC 3043",
+      consigneePhonePrint: "+61 3 9338 6622",
+    } as Shipment;
+    const html = renderTable([rich]);
+    expect(html).toContain("max-w-[12.5rem]");
+    expect(html).toContain("h-3.5 w-full truncate");
+    expect(html).toContain("Australasian Mail Services");
+    expect(html).toContain("75 Harrick Road");
+    expect(html).not.toContain("line-clamp-4");
+    expect(html).not.toContain("w-[22rem]");
+  });
+
   it("empty state vẫn + Booking primary ≥44px", () => {
     const html = renderTable([]);
     expect(html).toContain("+ Booking");
@@ -137,5 +159,102 @@ describe("DesktopShipmentTable density", () => {
     expect(scscHtml).not.toContain("warehouse-dim-scsc");
     expect(scscHtml).not.toContain("DIM SCSC");
     expect(scscHtml).toContain('aria-label="+ Booking SCSC"');
+  });
+
+  it("comparator của ShipmentTableRow bỏ qua re-render khi row không đổi dữ liệu kể cả khi tạo object mới", () => {
+    const rowA = { ...row, id: "s1", kg: 10 };
+    const rowB = { ...row, id: "s1", kg: 10 }; // same data, new ref
+    const rowC = { ...row, id: "s1", kg: 12 }; // changed data
+
+    expect(shipmentRowRenderEqual(rowA, rowB)).toBe(true);
+    expect(shipmentRowRenderEqual(rowA, rowC)).toBe(false);
+
+    const getNeighborRowId = () => null;
+    const baseProps = {
+      row: rowA,
+      rowIdx: 0,
+      getNeighborRowId,
+      viewSessionYmd: "2026-08-23",
+      highlighted: false,
+      selected: false,
+      customerDirectory: [],
+      findAwbConflict: () => null,
+      onUpdate: () => undefined,
+      onDelete: () => undefined,
+      onPrint: () => undefined,
+      onOpenDimModal: () => undefined,
+    };
+
+    const comparator = (ShipmentTableRow as unknown as { compare: (p: typeof baseProps, n: typeof baseProps) => boolean }).compare;
+    expect(comparator).toBeDefined();
+
+    // Khi sync về tạo new object cùng data: compare trả về true => React memo skip re-render
+    expect(comparator(baseProps, { ...baseProps, row: rowB })).toBe(true);
+
+    // Khi sync đổi kg: compare trả về false => re-render
+    expect(comparator(baseProps, { ...baseProps, row: rowC })).toBe(false);
+  });
+
+  it("đổi 1 lô qua sync: chỉ row bị đổi re-render", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const row1: Shipment = { ...row, id: "s1", stt: 1, awb: "17611111111", kg: 10 };
+    const row2: Shipment = { ...row, id: "s2", stt: 2, awb: "17622222222", kg: 20 };
+
+    await act(async () => {
+      root.render(
+        <ToastProvider>
+          <DesktopShipmentTable
+            rows={[row1, row2]}
+            allRows={[row1, row2]}
+            activeWarehouse="TCS"
+            onUpdate={() => undefined}
+            onDelete={() => undefined}
+            onPrint={() => undefined}
+            onAddBlankRow={() => undefined}
+            viewSessionYmd="2026-08-23"
+          />
+        </ToastProvider>,
+      );
+    });
+
+    const row1ElBefore = container.querySelector("#shipment-row-s1");
+    const row2ElBefore = container.querySelector("#shipment-row-s2");
+    expect(row1ElBefore).not.toBeNull();
+    expect(row2ElBefore).not.toBeNull();
+
+    // Sync arrives: row1 data updated, row2 same data (new reference to simulate state sync)
+    const row1Updated: Shipment = { ...row1, kg: 15 };
+    const row2Clone: Shipment = { ...row2 };
+
+    await act(async () => {
+      root.render(
+        <ToastProvider>
+          <DesktopShipmentTable
+            rows={[row1Updated, row2Clone]}
+            allRows={[row1Updated, row2Clone]}
+            activeWarehouse="TCS"
+            onUpdate={() => undefined}
+            onDelete={() => undefined}
+            onPrint={() => undefined}
+            onAddBlankRow={() => undefined}
+            viewSessionYmd="2026-08-23"
+          />
+        </ToastProvider>,
+      );
+    });
+
+    const row1ElAfter = container.querySelector("#shipment-row-s1");
+    const row2ElAfter = container.querySelector("#shipment-row-s2");
+    expect(row1ElAfter).not.toBeNull();
+    expect(row2ElAfter).not.toBeNull();
+
+    // DOM node of row2 is preserved because memo skipped re-rendering it
+    expect(row2ElAfter).toBe(row2ElBefore);
+
+    root.unmount();
+    container.remove();
   });
 });

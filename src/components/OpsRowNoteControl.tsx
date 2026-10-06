@@ -1,15 +1,17 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import type { GridNavDirection } from "../hooks/useGridNavigation";
 
 type Props = {
   rowId: string;
   value: string;
   onCommit: (v: string) => void;
+  onNavigate?: (dir: GridNavDirection) => void;
 };
 
 /**
  * Ghi chú gọn trên hàng Ops — icon + chỉnh 1 dòng, nằm trong cột thao tác.
  */
-export function OpsRowNoteControl({ rowId, value, onCommit }: Props) {
+export function OpsRowNoteControl({ rowId, value, onCommit, onNavigate }: Props) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -42,6 +44,27 @@ export function OpsRowNoteControl({ rowId, value, onCommit }: Props) {
         aria-label={hasNote ? `Ghi chú: ${value}` : "Thêm ghi chú"}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === "F2") {
+            e.preventDefault();
+            setOpen(true);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            onNavigate?.("up");
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            onNavigate?.("down");
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            onNavigate?.("left");
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            onNavigate?.("right");
+          } else if (e.key === "Tab") {
+            e.preventDefault();
+            onNavigate?.(e.shiftKey ? "prev" : "next");
+          }
+        }}
         className={`inline-flex h-7 w-7 items-center justify-center rounded-lg border text-[12px] font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
           hasNote
             ? "border-red-300/80 bg-red-50 text-red-800 hover:bg-red-100"
@@ -80,10 +103,20 @@ export function OpsRowNoteControl({ rowId, value, onCommit }: Props) {
               if (e.key === "Enter" && !(e.nativeEvent as KeyboardEvent).isComposing) {
                 e.preventDefault();
                 commit();
+                queueMicrotask(() => onNavigate?.("down"));
+                return;
+              }
+              if (e.key === "Tab") {
+                e.preventDefault();
+                commit();
+                queueMicrotask(() => onNavigate?.(e.shiftKey ? "prev" : "next"));
+                return;
               }
               if (e.key === "Escape") {
+                e.preventDefault();
                 setDraft(value);
                 setOpen(false);
+                return;
               }
             }}
             className="w-full rounded-lg border border-ui-border bg-white px-2 py-1.5 text-2xs font-semibold text-ui-text outline-none focus:ring-2 focus:ring-ui-focus"

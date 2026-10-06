@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { runInlineAsyncCommit } from "../utils/inlineCommitAsync";
+import { CellStatusDot, type CellStatus } from "./CellStatusDot";
+import type { GridNavDirection } from "../hooks/useGridNavigation";
 
 interface Props {
   value: string;
@@ -15,8 +17,10 @@ interface Props {
   gridNav?: { rowId: string; field: string };
   /** Sau Enter (đã commit), ví dụ focus ô cùng cột hàng dưới */
   onEnterNavigateDown?: () => void;
+  onNavigate?: (dir: GridNavDirection) => void;
   validate?: (v: string) => string | null;
   title?: string;
+  cellStatus?: CellStatus;
 }
 
 export function InlineTextEdit({
@@ -29,13 +33,14 @@ export function InlineTextEdit({
   maxLength,
   gridNav,
   onEnterNavigateDown,
+  onNavigate,
   validate,
   title,
+  cellStatus,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -51,7 +56,6 @@ export function InlineTextEdit({
   }, [editing]);
 
   const commit = () => {
-    if (saving) return;
     let t = draft.trim();
     if (uppercase) t = t.toUpperCase();
     if (maxLength != null) t = t.slice(0, maxLength);
@@ -68,7 +72,6 @@ export function InlineTextEdit({
     const result = onCommit(t);
     runInlineAsyncCommit(result, {
       setEditing,
-      setSaving,
       onReject: () => {
         setDraft(value);
         setError("Không lưu được — thử lại.");
@@ -81,7 +84,7 @@ export function InlineTextEdit({
     : {};
 
   const btnBase =
-    "ops-inline-edit block w-full max-w-full truncate whitespace-nowrap rounded px-1 py-0.5 text-left";
+    "ops-inline-edit relative block w-full max-w-full truncate whitespace-nowrap rounded px-1 py-0.5 text-left";
   const shown = (displayValue ?? value).trim();
   const editLabel = title || (placeholder && placeholder !== "—" ? `Sửa ${placeholder}` : "Sửa");
 
@@ -105,7 +108,25 @@ export function InlineTextEdit({
             e.preventDefault();
             e.stopPropagation();
             setEditing(true);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            onNavigate?.("up");
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            onNavigate?.("down");
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            onNavigate?.("left");
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            onNavigate?.("right");
+          } else if (e.key === "Tab") {
+            e.preventDefault();
+            onNavigate?.(e.shiftKey ? "prev" : "next");
           } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            if (e.key === "n" || e.key === "N" || e.key === "/") {
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
             setDraft(uppercase ? e.key.toUpperCase() : e.key);
@@ -114,9 +135,10 @@ export function InlineTextEdit({
         }}
         className={`${btnBase} focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
           value === "" ? "ops-grid-placeholder" : ""
-        } ${saving ? "opacity-60" : ""}`}
+        }`}
       >
-        {saving ? "…" : shown !== "" ? shown : placeholder}
+        <span className="truncate">{shown !== "" ? shown : placeholder}</span>
+        <CellStatusDot status={cellStatus} />
       </button>
     );
   }
@@ -129,7 +151,6 @@ export function InlineTextEdit({
         {...gridProps}
         value={draft}
         maxLength={maxLength}
-        disabled={saving}
         onChange={(e) => {
           setDraft(uppercase ? e.target.value.toUpperCase() : e.target.value);
           setError(null);
@@ -143,13 +164,27 @@ export function InlineTextEdit({
             e.preventDefault();
             commit();
             queueMicrotask(() => {
-              if (!error) onEnterNavigateDown?.();
+              if (!error) {
+                if (onNavigate) onNavigate("down");
+                else onEnterNavigateDown?.();
+              }
             });
+            return;
+          }
+          if (e.key === "Tab") {
+            e.preventDefault();
+            commit();
+            queueMicrotask(() => {
+              if (!error) onNavigate?.(e.shiftKey ? "prev" : "next");
+            });
+            return;
           }
           if (e.key === "Escape") {
+            e.preventDefault();
             setDraft(value);
             setError(null);
             setEditing(false);
+            return;
           }
         }}
         onClick={(e) => e.stopPropagation()}
@@ -158,6 +193,7 @@ export function InlineTextEdit({
         } ${className}`}
         aria-invalid={Boolean(error)}
       />
+      <CellStatusDot status={cellStatus} />
       {error ? (
         <span className="mt-0.5 text-2xs font-semibold text-red-600">{error}</span>
       ) : null}

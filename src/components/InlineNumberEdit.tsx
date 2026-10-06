@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { formatGroupedNumber } from "../utils/formatNumber";
 import { runInlineAsyncCommit } from "../utils/inlineCommitAsync";
+import { CellStatusDot, type CellStatus } from "./CellStatusDot";
+import type { GridNavDirection } from "../hooks/useGridNavigation";
 
 interface Props {
   value: number | null;
@@ -15,9 +17,11 @@ interface Props {
   gridNav?: { rowId: string; field: string };
   /** Enter sau khi commit: ví dụ nhảy xuống ô cùng cột hàng dưới */
   onEnterNavigateDown?: () => void;
+  onNavigate?: (dir: GridNavDirection) => void;
   /** Validation — trả message lỗi để giữ chế độ edit. */
   validate?: (v: number | null) => string | null;
   title?: string;
+  cellStatus?: CellStatus;
 }
 
 export function InlineNumberEdit({
@@ -29,13 +33,14 @@ export function InlineNumberEdit({
   variant = "default",
   gridNav,
   onEnterNavigateDown,
+  onNavigate,
   validate,
   title,
+  cellStatus,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value !== null ? String(value) : "");
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -52,7 +57,6 @@ export function InlineNumberEdit({
   }, [editing]);
 
   const commit = () => {
-    if (saving) return;
     const trimmed = draft.trim();
     const next: number | null =
       trimmed === "" ? null : Number(trimmed.replace(",", "."));
@@ -73,7 +77,6 @@ export function InlineNumberEdit({
     const result = onCommit(next);
     runInlineAsyncCommit(result, {
       setEditing,
-      setSaving,
       onReject: () => {
         setDraft(value !== null ? String(value) : "");
         setError("Không lưu được — thử lại.");
@@ -87,10 +90,10 @@ export function InlineNumberEdit({
 
   const btnBase =
     variant === "grid"
-      ? "ops-inline-edit inline-flex min-w-[2rem] justify-end rounded px-0.5 py-0 text-right leading-none tabular-nums"
+      ? "ops-inline-edit relative inline-flex min-w-[2rem] justify-end rounded px-0.5 py-0 text-right leading-none tabular-nums"
       : compact
-        ? "ops-inline-edit inline-flex min-w-[2rem] max-w-[4rem] justify-end rounded px-0.5 py-0 text-2xs leading-none font-bold tabular-nums"
-        : "ops-inline-edit w-full rounded px-1 py-0.5 text-right";
+        ? "ops-inline-edit relative inline-flex min-w-[2rem] max-w-[4rem] justify-end rounded px-0.5 py-0 text-2xs leading-none font-bold tabular-nums"
+        : "ops-inline-edit relative w-full rounded px-1 py-0.5 text-right";
 
   const emptyLabel = placeholder || "\u00a0";
 
@@ -114,6 +117,21 @@ export function InlineNumberEdit({
             e.preventDefault();
             e.stopPropagation();
             setEditing(true);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            onNavigate?.("up");
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            onNavigate?.("down");
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            onNavigate?.("left");
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            onNavigate?.("right");
+          } else if (e.key === "Tab") {
+            e.preventDefault();
+            onNavigate?.(e.shiftKey ? "prev" : "next");
           } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && /[0-9.,]/.test(e.key)) {
             e.preventDefault();
             e.stopPropagation();
@@ -123,9 +141,10 @@ export function InlineNumberEdit({
         }}
         className={`${btnBase} focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${className} ${
           value === null ? "ops-grid-placeholder" : ""
-        } ${saving ? "opacity-60" : ""}`}
+        }`}
       >
-        {saving ? "…" : typeof value === "number" ? formatGroupedNumber(value, { maxFractionDigits: 3 }) : emptyLabel}
+        <span>{typeof value === "number" ? formatGroupedNumber(value, { maxFractionDigits: 3 }) : emptyLabel}</span>
+        <CellStatusDot status={cellStatus} />
       </button>
     );
   }
@@ -145,7 +164,6 @@ export function InlineNumberEdit({
         inputMode="numeric"
         {...gridProps}
         value={draft}
-        disabled={saving}
         onChange={(e) => {
           setDraft(e.target.value);
           setError(null);
@@ -159,14 +177,27 @@ export function InlineNumberEdit({
             e.preventDefault();
             commit();
             queueMicrotask(() => {
-              if (!error) onEnterNavigateDown?.();
+              if (!error) {
+                if (onNavigate) onNavigate("down");
+                else onEnterNavigateDown?.();
+              }
+            });
+            return;
+          }
+          if (e.key === "Tab") {
+            e.preventDefault();
+            commit();
+            queueMicrotask(() => {
+              if (!error) onNavigate?.(e.shiftKey ? "prev" : "next");
             });
             return;
           }
           if (e.key === "Escape") {
+            e.preventDefault();
             setDraft(value !== null ? String(value) : "");
             setError(null);
             setEditing(false);
+            return;
           }
         }}
         onClick={(e) => e.stopPropagation()}
@@ -174,6 +205,7 @@ export function InlineNumberEdit({
         step="any"
         aria-invalid={Boolean(error)}
       />
+      <CellStatusDot status={cellStatus} />
       {error ? (
         <span className="mt-0.5 text-2xs font-semibold leading-tight text-red-600">
           {error}

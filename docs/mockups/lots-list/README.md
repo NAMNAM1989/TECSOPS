@@ -6,7 +6,9 @@
 
 **Hồ sơ khách:** gộp cột KHÁCH + INFO KH. Hàng danh sách chỉ quét **mã KH → CNEE → hàng**. Shipper, địa chỉ, tên in nằm panel/sheet (desktop phải, mobile bottom sheet `?sheet=1`). Chip `Tên in ≠` khi tên in khác hồ sơ CNEE.
 
-**Thao tác nhanh:** panel/sheet là bàn lệnh — `In tem` + `Đo DIM` nổi, rồi `Copy AWB` / `Copy hồ sơ` / `Ghi chú` / `H21`. Cảnh báo tên in có nút `In tem với tên này`. Hàng đang chọn trên bảng/card cũng có `In tem` + `DIM` để khỏi mở panel khi đã xem đủ.
+**Mật độ hàng:** mỗi lô đúng **3 dòng** (KH → CNEE → hàng). AWB / chuyến / cut-off nằm 1 dòng. Nút thao tác **không** nhét vào hàng — để trên panel/sheet, khỏi đội chiều cao.
+
+**Thao tác nhanh:** panel/sheet là bàn lệnh — `In tem` + `Đo DIM` nổi, rồi `Copy AWB` / `Copy hồ sơ` / `Ghi chú` / `H21`. Cảnh báo tên in có nút `In tem với tên này`.
 
 | File | Vai trò |
 | --- | --- |

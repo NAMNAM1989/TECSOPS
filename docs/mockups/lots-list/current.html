@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TECSOPS — Màn hình hiện tại (tái tạo tĩnh)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ui: {
+                background: "#EEF2F6",
+                surface: "#FFFFFF",
+                "surface-muted": "#F6F8FA",
+                text: "#0B1220",
+                navy: "#0B1220",
+                awb: "#0B1220",
+                "text-muted": "#526072",
+                "text-subtle": "#667085",
+                border: "#DCE3EA",
+                primary: "#0F766E",
+                "primary-hover": "#115E59",
+                "primary-soft": "#F0FDFA",
+                accent: "#0D9488",
+                warning: "#B45309",
+              },
+            },
+            fontFamily: {
+              sans: ['"Plus Jakarta Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
+              mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
+            },
+            boxShadow: {
+              "ui-sm": "0 1px 2px rgb(11 18 32 / 0.05)",
+              "ui-md": "0 4px 12px rgb(11 18 32 / 0.08)",
+            },
+            fontSize: { "2xs": ["12px", "16px"] },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.012em;
+        background: #eef2f6;
+        color: #0b1220;
+      }
+      .ops-awb {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+        font-variant-numeric: tabular-nums;
+        color: #0b1220;
+      }
+      .ops-table-head {
+        background: linear-gradient(180deg, #f1f5f9 0%, #e8eef5 100%);
+        box-shadow: 0 1px 0 rgba(15, 23, 42, 0.08);
+      }
+      .ops-lot-surface-0 { background-color: #ffffff; }
+      .ops-lot-surface-1 { background-color: #eef6ff; }
+      .ops-lot-surface-2 { background-color: #f3f0ff; }
+      .ops-lot-surface-3 { background-color: #ecfdf5; }
+      .ops-lot-surface-4 { background-color: #fff7ed; }
+      .cell-card {
+        border-top: 1px solid rgb(220 227 234 / 0.7);
+        border-bottom: 1px solid rgb(220 227 234 / 0.7);
+        box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+        padding: 4px;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-[#EEF2F6] text-[#0B1220]">
+    <div
+      class="sticky top-0 z-50 border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-center text-[12px] font-semibold text-amber-950"
+    >
+      TÁI TẠO TĨNH màn hình hiện tại · dữ liệu giả · không phải app chạy
+    </div>
+
+    <div class="flex min-h-[calc(100vh-36px)]">
+      <!-- Left rail -->
+      <aside
+        class="hidden w-[72px] shrink-0 flex-col items-center gap-2 border-r border-[#DCE3EA] bg-white px-2 py-4 shadow-[1px_0_0_rgba(15,23,42,0.04)] md:flex"
+        aria-label="Điều hướng chính"
+      >
+        <div
+          class="grid h-12 w-12 place-items-center rounded-xl bg-[#0B1220] text-center text-[12px] font-bold leading-tight tracking-wide text-white shadow-[inset_0_-2px_0_#0D9488]"
+        >
+          AC<br />OPS
+        </div>
+        <nav class="mt-3 flex w-full flex-col gap-1">
+          <button
+            type="button"
+            class="relative flex min-h-11 w-full flex-col items-center justify-center gap-1 rounded-xl bg-teal-500/12 px-1 py-2 text-[12px] font-semibold text-[#115E59]"
+            aria-current="page"
+          >
+            <span class="absolute left-0 top-1/2 h-7 w-[3.5px] -translate-y-1/2 rounded-r-full bg-[#0D9488]"></span>
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden>
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            Ops
+          </button>
+          <button type="button" class="flex min-h-11 w-full flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[12px] font-semibold text-[#526072]">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden>
+              <circle cx="9" cy="8" r="3" />
+              <circle cx="17" cy="10" r="2.5" />
+              <path d="M3 20c0-3 2.5-5 6-5s6 2 6 5M14 20c0-2 1.5-3.5 4-3.5" />
+            </svg>
+            Khách
+          </button>
+          <button type="button" class="flex min-h-11 w-full flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[12px] font-semibold text-teal-700">
+            <span class="grid h-8 w-8 place-items-center rounded-xl bg-teal-500/15 text-teal-700 ring-1 ring-teal-500/35">
+              <svg class="h-[1.35rem] w-[1.35rem]" viewBox="0 0 24 24" aria-hidden>
+                <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="currentColor" opacity="0.16" />
+                <path d="M8 4.75h8a1.75 1.75 0 0 1 1.75 1.75v12.2l-2.35-1.15L12 18.95l-3.4-1.4L6.25 18.7V6.5A1.75 1.75 0 0 1 8 4.75Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                <text x="12" y="13.2" text-anchor="middle" fill="currentColor" font-size="7.2" font-weight="800" font-family="ui-sans-serif, system-ui, sans-serif">H21</text>
+              </svg>
+            </span>
+            H21 SCSC
+          </button>
+          <button type="button" class="flex min-h-11 w-full flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[12px] font-semibold text-teal-700">
+            <span class="grid h-8 w-8 place-items-center rounded-xl bg-teal-500/15 text-teal-700 ring-1 ring-teal-500/35">
+              <svg class="h-[1.35rem] w-[1.35rem]" viewBox="0 0 24 24" aria-hidden>
+                <rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="currentColor" opacity="0.16" />
+                <path d="M8 4.75h8a1.75 1.75 0 0 1 1.75 1.75v12.2l-2.35-1.15L12 18.95l-3.4-1.4L6.25 18.7V6.5A1.75 1.75 0 0 1 8 4.75Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                <text x="12" y="13.2" text-anchor="middle" fill="currentColor" font-size="7.2" font-weight="800" font-family="ui-sans-serif, system-ui, sans-serif">H21</text>
+              </svg>
+            </span>
+            H21 TCS
+          </button>
+          <button type="button" class="flex min-h-11 w-full flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[12px] font-semibold text-[#526072]">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden>
+              <path d="M4 19V5M4 19h16M8 15v-4M12 15V9M16 15v-2" />
+            </svg>
+            Thống kê
+          </button>
+        </nav>
+      </aside>
+
+      <main class="min-w-0 flex-1">
+        <header class="overflow-hidden border-b border-[#DCE3EA] bg-white">
+          <div class="flex min-w-0 items-center gap-2 px-5 py-3.5">
+            <div class="flex shrink-0 items-center gap-2">
+              <div class="inline-flex items-center rounded-xl border border-[#DCE3EA] bg-white p-0.5 shadow-[0_1px_2px_rgb(11_18_32/0.05)]">
+                <span class="inline-flex h-8 w-8 items-center justify-center text-[14px] font-semibold text-[#0F766E]">‹</span>
+                <span class="block w-[7.75rem] truncate text-center font-mono text-[12px] font-semibold tabular-nums">12-OCT-2026</span>
+                <span class="inline-flex h-8 w-8 items-center justify-center text-[14px] font-semibold text-[#0F766E]">›</span>
+              </div>
+              <span class="h-7 w-px shrink-0 bg-[#DCE3EA]/70"></span>
+              <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#DCE3EA]/90 bg-white px-2.5 text-[12px] font-semibold">
+                <svg class="h-3.5 w-3.5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 7.5h9M12 3v9" /></svg>
+                Sheet
+              </button>
+              <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#DCE3EA]/90 bg-white px-2.5 text-[12px] font-semibold">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M7 4h7l3 3v13a1 1 0 01-1 1H7a1 1 0 01-1-1V5a1 1 0 011-1z" /></svg>
+                Excel
+              </button>
+            </div>
+            <div class="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
+              <h1 class="m-0 leading-none">
+                <span class="inline-flex text-[13px] font-bold tracking-tight">AirCargo<span class="text-[#0F766E]">_OPS</span></span>
+              </h1>
+              <span class="rounded-full bg-[#0B1220] px-2 py-px text-[12px] font-bold uppercase tracking-wide text-white">OPS</span>
+              <span class="inline-flex items-center gap-1 rounded-full border border-emerald-200/90 bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-900">
+                <span class="h-1.5 w-1.5 rounded-full bg-green-600"></span>
+                Trực tiếp
+              </span>
+              <span class="hidden text-[12px] text-[#526072] xl:inline">8/1d</span>
+            </div>
+          </div>
+
+          <div class="flex min-w-0 items-center gap-2 border-t border-[#DCE3EA]/80 bg-[#EEF2F6] px-5 py-2">
+            <span class="inline-flex min-h-9 flex-col items-center justify-center rounded-lg border border-[#DCE3EA]/80 bg-white px-2.5 py-1">
+              <span class="text-[12px] font-bold uppercase tracking-wide text-[#526072]">Lô</span>
+              <span class="font-mono text-[13px] font-semibold tabular-nums">8</span>
+            </span>
+            <span class="inline-flex min-h-9 flex-col items-center justify-center rounded-lg border border-[#DCE3EA]/80 bg-white px-2.5 py-1">
+              <span class="text-[12px] font-bold uppercase tracking-wide text-[#526072]">PCS</span>
+              <span class="font-mono text-[13px] font-semibold tabular-nums">77</span>
+            </span>
+            <span class="inline-flex min-h-9 flex-col items-center justify-center rounded-lg border border-[#DCE3EA]/80 bg-white px-2.5 py-1">
+              <span class="text-[12px] font-bold uppercase tracking-wide text-[#526072]">KG</span>
+              <span class="font-mono text-[13px] font-semibold tabular-nums">1.057</span>
+            </span>
+            <span class="mx-0.5 h-5 w-px bg-[#DCE3EA]/70"></span>
+            <span class="inline-flex h-[22px] items-center rounded border border-[#0C4A6E] border-l-[3px] bg-[#0C4A6E] px-1.5 text-[12px] font-semibold text-white ring-2 ring-[#0F766E] ring-offset-1">TECS-TCS <span class="ml-1 font-mono">Lô 8</span></span>
+            <span class="inline-flex h-[22px] items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-1.5 text-[12px] font-semibold text-[#4C1D95]">TECS-SCSC <span class="ml-1 font-mono">Lô 0</span></span>
+            <span class="inline-flex h-[22px] items-center rounded border border-[#0369A1] border-l-[3px] bg-[#F0F9FF] px-1.5 text-[12px] font-semibold text-[#0C4A6E]">TCS <span class="ml-1 font-mono">Lô 0</span></span>
+            <span class="inline-flex h-[22px] items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-1.5 text-[12px] font-semibold text-[#4C1D95]">SCSC <span class="ml-1 font-mono">Lô 0</span></span>
+            <span class="mx-0.5 h-6 w-px bg-[#DCE3EA]/70"></span>
+            <div class="relative min-w-[12rem] max-w-lg flex-1">
+              <svg class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#526072]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+              <input
+                class="h-9 w-full rounded-xl border border-[#DCE3EA]/90 bg-white pl-8 pr-3 text-[14px] placeholder:text-[#526072]/70"
+                placeholder="MAWB · shipper · hàng · xe… (/)"
+                value=""
+                readonly
+              />
+            </div>
+          </div>
+        </header>
+
+        <section class="mx-0 overflow-hidden rounded-2xl border border-[#DCE3EA]/90 bg-white shadow-[0_4px_12px_rgb(11_18_32/0.08)] md:mx-5 md:mt-4">
+          <div class="flex items-center gap-2 border-b border-[#DCE3EA]/80 bg-white px-4 py-2">
+            <h2 class="text-[12px] font-bold tracking-tight">
+              TECS-TCS
+              <span class="ml-1.5 text-[12px] font-semibold text-[#526072]">· 8 lô</span>
+            </h2>
+            <button type="button" class="inline-flex h-8 items-center gap-1 rounded-xl bg-[#0F766E] px-2.5 text-[12px] font-semibold text-white">
+              <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+              Booking
+            </button>
+            <dl class="flex items-center gap-1">
+              <span class="rounded-md bg-[#F6F8FA] px-1.5 py-0.5 text-[11px] font-semibold text-[#526072]">Kiện <b class="font-mono text-[#0B1220]">77</b></span>
+              <span class="rounded-md bg-[#F6F8FA] px-1.5 py-0.5 text-[11px] font-semibold text-[#526072]">Kg <b class="font-mono text-[#0B1220]">1.057</b></span>
+              <span class="rounded-md bg-[#F6F8FA] px-1.5 py-0.5 text-[11px] font-semibold text-[#526072]">DIM <b class="font-mono text-[#0B1220]">980</b></span>
+              <span class="rounded-md bg-[#F6F8FA] px-1.5 py-0.5 text-[11px] font-semibold text-[#526072]">CW <b class="font-mono text-[#0B1220]">1.057</b></span>
+            </dl>
+            <span class="truncate rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-800">Gấp · CX 766 cut-off 13:15</span>
+            <button type="button" class="ml-auto inline-flex items-center gap-1 rounded-lg border border-[#0F766E]/60 bg-[#0F766E]/10 px-2 py-1 text-[12px] font-bold text-[#0F766E]">📖 Lật trang</button>
+          </div>
+
+          <div class="overflow-auto px-1 py-0.5">
+            <table class="w-full border-separate border-spacing-x-0 border-spacing-y-1.5 text-left text-[13px] leading-tight">
+              <thead class="sticky top-0 z-20">
+                <tr class="ops-table-head">
+                  <th class="w-9 px-1 py-1.5 text-[12px] font-bold uppercase tracking-wider text-[#526072]">#</th>
+                  <th class="w-36 px-1 py-1.5 text-[12px] font-bold uppercase tracking-wider text-[#526072]">AWB / HAWB</th>
+                  <th class="w-28 px-1 py-1.5 text-[12px] font-bold uppercase tracking-wider text-[#526072]">CHUYẾN</th>
+                  <th class="w-14 px-1 py-1.5 text-center text-[12px] font-bold uppercase tracking-wider text-[#526072]">DST</th>
+                  <th class="w-14 px-1 py-1.5 text-right text-[12px] font-bold uppercase tracking-wider text-[#526072]">KIỆN</th>
+                  <th class="w-14 px-1 py-1.5 text-right text-[12px] font-bold uppercase tracking-wider text-[#526072]">KG</th>
+                  <th class="w-16 px-1 py-1.5 text-right text-[12px] font-bold uppercase tracking-wider text-[#526072]">DIM</th>
+                  <th class="w-32 px-1 py-1.5 text-[12px] font-bold uppercase tracking-wider text-[#526072]">KHÁCH</th>
+                  <th class="w-40 px-1 py-1.5 text-[12px] font-bold uppercase tracking-wider text-[#526072]">INFO KH</th>
+                  <th class="min-w-[7.25rem] px-1 py-1.5 text-[12px] font-bold uppercase tracking-wider text-[#526072]">THAO TÁC</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Row 1 -->
+                <tr>
+                  <td class="cell-card ops-lot-surface-0 rounded-l-xl border-l border-[#DCE3EA]/80 text-center font-mono text-[12px] font-semibold text-[#526072]">1</td>
+                  <td class="cell-card ops-lot-surface-0">
+                    <div class="ops-awb text-[14px]">618-1234 5675</div>
+                    <div class="font-mono text-[12px] font-semibold text-[#667085]">H-SIN-0412</div>
+                  </td>
+                  <td class="cell-card ops-lot-surface-0">
+                    <div class="font-mono text-[13px] font-semibold">SQ183</div>
+                    <div class="font-mono text-[12px] text-[#667085]">12OCT</div>
+                    <div class="truncate text-[12px] text-[#526072]">14:30</div>
+                  </td>
+                  <td class="cell-card ops-lot-surface-0 text-center font-mono text-[13px] font-bold">SIN</td>
+                  <td class="cell-card ops-lot-surface-0 text-right font-mono text-[13px] font-bold">12</td>
+                  <td class="cell-card ops-lot-surface-0 text-right font-mono text-[13px] font-bold">186.4</td>
+                  <td class="cell-card ops-lot-surface-0 text-right align-top">
+                    <div class="font-mono text-[12px] font-semibold">172.0</div>
+                    <button type="button" class="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#0F766E]/35 bg-[#0F766E]/10 text-[#0F766E]" aria-label="Sửa DIM">
+                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                    </button>
+                  </td>
+                  <td class="cell-card ops-lot-surface-0 text-[12px] font-bold leading-tight">NAMNAM LOGISTICS</td>
+                  <td class="cell-card ops-lot-surface-0 overflow-hidden text-[11px] leading-tight text-[#526072]">NAMNAM · SIN AGENT · GOH · CNEE ABC</td>
+                  <td class="cell-card ops-lot-surface-0 rounded-r-xl border-r border-[#DCE3EA]/80">
+                    <div class="flex items-center gap-1 text-[#526072]">
+                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 3.5a2.121 2.121 0 013 3L12 16l-4 1 1-4 9.5-9.5z" /></svg>
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9V4h12v5M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" /></svg>
+                      <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg>
+                    </div>
+                  </td>
+                </tr>
+                <!-- Row 2 -->
+                <tr>
+                  <td class="cell-card ops-lot-surface-1 rounded-l-xl border-l border-[#DCE3EA]/80 text-center font-mono text-[12px] font-semibold text-[#526072]">2</td>
+                  <td class="cell-card ops-lot-surface-1"><div class="ops-awb text-[14px]">160-9876 5432</div><div class="font-mono text-[12px] font-semibold text-[#667085]">HAWB</div></td>
+                  <td class="cell-card ops-lot-surface-1">
+                    <div class="font-mono text-[13px] font-semibold">CX766</div>
+                    <div class="font-mono text-[12px] font-bold text-red-700">12OCT</div>
+                    <div class="truncate text-[12px] text-[#526072]">13:15 · Gấp</div>
+                  </td>
+                  <td class="cell-card ops-lot-surface-1 text-center font-mono text-[13px] font-bold">HKG</td>
+                  <td class="cell-card ops-lot-surface-1 text-right font-mono text-[13px] font-bold">8</td>
+                  <td class="cell-card ops-lot-surface-1 text-right font-mono text-[13px] font-bold">92.0</td>
+                  <td class="cell-card ops-lot-surface-1 text-right align-top"><div class="font-mono text-[12px] font-semibold">88.5</div><button type="button" class="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#0F766E]/35 bg-[#0F766E]/10 text-[#0F766E]"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg></button></td>
+                  <td class="cell-card ops-lot-surface-1 text-[12px] font-bold">ASIA FREIGHT</td>
+                  <td class="cell-card ops-lot-surface-1 text-[11px] text-[#526072]">ASIA · HKG AGENT · CONSOL</td>
+                  <td class="cell-card ops-lot-surface-1 rounded-r-xl border-r border-[#DCE3EA]/80"><div class="flex gap-1 text-[#526072]"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 3.5a2.121 2.121 0 013 3L12 16l-4 1 1-4 9.5-9.5z" /></svg><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></div></td>
+                </tr>
+                <!-- Row 3 -->
+                <tr>
+                  <td class="cell-card ops-lot-surface-2 rounded-l-xl border-l border-[#DCE3EA]/80 text-center font-mono text-[12px] font-semibold text-[#526072]">3</td>
+                  <td class="cell-card ops-lot-surface-2"><div class="ops-awb text-[14px]">738-1122 3344</div><div class="font-mono text-[12px] font-semibold text-[#667085]">HAWB</div></td>
+                  <td class="cell-card ops-lot-surface-2"><div class="font-mono text-[13px] font-semibold">VN301</div><div class="font-mono text-[12px] text-[#667085]">12OCT</div><div class="text-[12px] text-[#526072]">18:00</div></td>
+                  <td class="cell-card ops-lot-surface-2 text-center font-mono text-[13px] font-bold">SGN</td>
+                  <td class="cell-card ops-lot-surface-2 text-right font-mono text-[13px] font-bold">4</td>
+                  <td class="cell-card ops-lot-surface-2 text-right font-mono text-[13px] font-bold">45.5</td>
+                  <td class="cell-card ops-lot-surface-2 text-right align-top"><div class="font-mono text-[12px] font-semibold text-[#667085]">—</div><button type="button" class="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#0F766E]/35 bg-[#0F766E]/10 text-[#0F766E]"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg></button></td>
+                  <td class="cell-card ops-lot-surface-2 text-[12px] font-bold">SAIGON AIR CARGO</td>
+                  <td class="cell-card ops-lot-surface-2 text-[11px] text-[#526072]">SGN · CNEE XYZ · Textile</td>
+                  <td class="cell-card ops-lot-surface-2 rounded-r-xl border-r border-[#DCE3EA]/80"><div class="flex gap-1 text-[#526072]"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></div></td>
+                </tr>
+                <!-- Row 4 -->
+                <tr>
+                  <td class="cell-card ops-lot-surface-3 rounded-l-xl border-l border-[#DCE3EA]/80 text-center font-mono text-[12px] font-semibold text-[#526072]">4</td>
+                  <td class="cell-card ops-lot-surface-3"><div class="ops-awb text-[14px]">176-5566 7788</div><div class="font-mono text-[12px] font-semibold text-[#667085]">H-HAN-0091</div></td>
+                  <td class="cell-card ops-lot-surface-3"><div class="font-mono text-[13px] font-semibold">VN305</div><div class="font-mono text-[12px] text-[#667085]">12OCT</div><div class="text-[12px] text-[#526072]">16:40</div></td>
+                  <td class="cell-card ops-lot-surface-3 text-center font-mono text-[13px] font-bold">HAN</td>
+                  <td class="cell-card ops-lot-surface-3 text-right font-mono text-[13px] font-bold">20</td>
+                  <td class="cell-card ops-lot-surface-3 text-right font-mono text-[13px] font-bold">310.2</td>
+                  <td class="cell-card ops-lot-surface-3 text-right align-top"><div class="font-mono text-[12px] font-semibold">298.0</div><button type="button" class="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#0F766E]/35 bg-[#0F766E]/10 text-[#0F766E]"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg></button></td>
+                  <td class="cell-card ops-lot-surface-3 text-[12px] font-bold">HANOI EXPRESS</td>
+                  <td class="cell-card ops-lot-surface-3 text-[11px] text-[#526072]">HAN · Spare parts · Truck 51C</td>
+                  <td class="cell-card ops-lot-surface-3 rounded-r-xl border-r border-[#DCE3EA]/80"><div class="flex gap-1 text-[#526072]"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></div></td>
+                </tr>
+                <!-- Row 5 -->
+                <tr>
+                  <td class="cell-card ops-lot-surface-4 rounded-l-xl border-l border-[#DCE3EA]/80 text-center font-mono text-[12px] font-semibold text-[#526072]">5</td>
+                  <td class="cell-card ops-lot-surface-4"><div class="ops-awb text-[14px]">232-4433 2211</div><div class="font-mono text-[12px] font-semibold text-[#667085]">HAWB</div></td>
+                  <td class="cell-card ops-lot-surface-4"><div class="font-mono text-[13px] font-semibold">SQ178</div><div class="font-mono text-[12px] text-[#667085]">12OCT</div><div class="text-[12px] text-[#526072]">12:00 · Đóng</div></td>
+                  <td class="cell-card ops-lot-surface-4 text-center font-mono text-[13px] font-bold">SIN</td>
+                  <td class="cell-card ops-lot-surface-4 text-right font-mono text-[13px] font-bold">6</td>
+                  <td class="cell-card ops-lot-surface-4 text-right font-mono text-[13px] font-bold">71.8</td>
+                  <td class="cell-card ops-lot-surface-4 text-right align-top"><div class="font-mono text-[12px] font-semibold">70.0</div><button type="button" class="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#0F766E]/35 bg-[#0F766E]/10 text-[#0F766E]"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg></button></td>
+                  <td class="cell-card ops-lot-surface-4 text-[12px] font-bold">LION STAR</td>
+                  <td class="cell-card ops-lot-surface-4 text-[11px] text-[#526072]">LION · PER · Docs done</td>
+                  <td class="cell-card ops-lot-surface-4 rounded-r-xl border-r border-[#DCE3EA]/80"><div class="flex gap-1 text-[#526072]"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></div></td>
+                </tr>
+                <!-- Row 6 -->
+                <tr>
+                  <td class="cell-card ops-lot-surface-0 rounded-l-xl border-l border-[#DCE3EA]/80 text-center font-mono text-[12px] font-semibold text-[#526072]">6</td>
+                  <td class="cell-card ops-lot-surface-0"><div class="ops-awb text-[14px]">618-9988 7766</div><div class="font-mono text-[12px] font-semibold text-[#667085]">H-HKG-2201</div></td>
+                  <td class="cell-card ops-lot-surface-0"><div class="font-mono text-[13px] font-semibold">CX799</div><div class="font-mono text-[12px] text-[#667085]">12OCT</div><div class="text-[12px] text-[#526072]">17:20</div></td>
+                  <td class="cell-card ops-lot-surface-0 text-center font-mono text-[13px] font-bold">HKG</td>
+                  <td class="cell-card ops-lot-surface-0 text-right font-mono text-[13px] font-bold">15</td>
+                  <td class="cell-card ops-lot-surface-0 text-right font-mono text-[13px] font-bold">204.0</td>
+                  <td class="cell-card ops-lot-surface-0 text-right align-top"><div class="font-mono text-[12px] font-semibold">190.4</div><button type="button" class="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#0F766E]/35 bg-[#0F766E]/10 text-[#0F766E]"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg></button></td>
+                  <td class="cell-card ops-lot-surface-0 text-[12px] font-bold">PACIFIC GATE</td>
+                  <td class="cell-card ops-lot-surface-0 text-[11px] text-[#526072]">PACIFIC · Electronics</td>
+                  <td class="cell-card ops-lot-surface-0 rounded-r-xl border-r border-[#DCE3EA]/80"><div class="flex gap-1 text-[#526072]"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></div></td>
+                </tr>
+                <!-- Row 7 -->
+                <tr>
+                  <td class="cell-card ops-lot-surface-1 rounded-l-xl border-l border-[#DCE3EA]/80 text-center font-mono text-[12px] font-semibold text-[#526072]">7</td>
+                  <td class="cell-card ops-lot-surface-1"><div class="ops-awb text-[14px]">607-3344 5566</div><div class="font-mono text-[12px] font-semibold text-[#667085]">HAWB</div></td>
+                  <td class="cell-card ops-lot-surface-1"><div class="font-mono text-[13px] font-semibold">VN309</div><div class="font-mono text-[12px] font-bold text-red-700">13OCT</div><div class="text-[12px] text-[#526072]">20:10</div></td>
+                  <td class="cell-card ops-lot-surface-1 text-center font-mono text-[13px] font-bold">DAD</td>
+                  <td class="cell-card ops-lot-surface-1 text-right font-mono text-[13px] font-bold">3</td>
+                  <td class="cell-card ops-lot-surface-1 text-right font-mono text-[13px] font-bold">28.6</td>
+                  <td class="cell-card ops-lot-surface-1 text-right align-top"><div class="font-mono text-[12px] font-semibold text-[#667085]">—</div><button type="button" class="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#0F766E]/35 bg-[#0F766E]/10 text-[#0F766E]"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg></button></td>
+                  <td class="cell-card ops-lot-surface-1 text-[12px] font-bold">DANANG HUB</td>
+                  <td class="cell-card ops-lot-surface-1 text-[11px] text-[#526072]">DAD · Fresh · Booking</td>
+                  <td class="cell-card ops-lot-surface-1 rounded-r-xl border-r border-[#DCE3EA]/80"><div class="flex gap-1 text-[#526072]"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></div></td>
+                </tr>
+                <!-- Row 8 -->
+                <tr>
+                  <td class="cell-card ops-lot-surface-2 rounded-l-xl border-l border-[#DCE3EA]/80 text-center font-mono text-[12px] font-semibold text-[#526072]">8</td>
+                  <td class="cell-card ops-lot-surface-2"><div class="ops-awb text-[14px]">180-2211 3344</div><div class="font-mono text-[12px] font-semibold text-[#667085]">HAWB</div></td>
+                  <td class="cell-card ops-lot-surface-2"><div class="font-mono text-[13px] font-semibold">SQ184</div><div class="font-mono text-[12px] text-[#667085]">12OCT</div><div class="text-[12px] text-[#526072]">15:00</div></td>
+                  <td class="cell-card ops-lot-surface-2 text-center font-mono text-[13px] font-bold">SIN</td>
+                  <td class="cell-card ops-lot-surface-2 text-right font-mono text-[13px] font-bold">9</td>
+                  <td class="cell-card ops-lot-surface-2 text-right font-mono text-[13px] font-bold">118.5</td>
+                  <td class="cell-card ops-lot-surface-2 text-right align-top"><div class="font-mono text-[12px] font-semibold">112.0</div><button type="button" class="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#0F766E]/35 bg-[#0F766E]/10 text-[#0F766E]"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg></button></td>
+                  <td class="cell-card ops-lot-surface-2 text-[12px] font-bold">MEKONG AIR</td>
+                  <td class="cell-card ops-lot-surface-2 text-[11px] text-[#526072]">MEKONG · GOH · CNEE DEF</td>
+                  <td class="cell-card ops-lot-surface-2 rounded-r-xl border-r border-[#DCE3EA]/80"><div class="flex gap-1 text-[#526072]"><svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

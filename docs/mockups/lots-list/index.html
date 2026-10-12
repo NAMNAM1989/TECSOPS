@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TECSOPS — Đề xuất danh sách lô hàng</title>
+    <title>TECSOPS — Phương án 1 · danh sách lô hàng</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -31,10 +31,8 @@
                 "primary-hover": "#115E59",
                 "primary-soft": "#F0FDFA",
                 accent: "#0D9488",
-                success: "#15803D",
                 warning: "#B45309",
                 danger: "#B91C1C",
-                info: "#0369A1",
               },
             },
             fontFamily: {
@@ -46,29 +44,11 @@
               "ui-md": "0 4px 12px rgb(11 18 32 / 0.08)",
               "ui-lg": "0 12px 32px rgb(11 18 32 / 0.12)",
             },
-            fontSize: { "2xs": ["12px", "16px"] },
           },
         },
       };
     </script>
     <style>
-      :root {
-        --st-pending-fg: #334155;
-        --st-pending-bg: #f1f5f9;
-        --st-pending-bar: #64748b;
-        --st-received-fg: #ffffff;
-        --st-received-bg: #a16207;
-        --st-volume-fg: #164e63;
-        --st-volume-bg: #ecfeff;
-        --st-volume-bar: #0891b2;
-        --st-ola-fg: #365314;
-        --st-ola-bg: #f7fee7;
-        --st-ola-bar: #3f6212;
-        --st-reception-fg: #0b1220;
-        --st-reception-border: #0f172a;
-        --st-weigh-fg: #ffffff;
-        --st-weigh-bg: #047857;
-      }
       body {
         font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
         letter-spacing: 0.012em;
@@ -86,37 +66,11 @@
         background: linear-gradient(180deg, #f1f5f9 0%, #e8eef5 100%);
         box-shadow: 0 1px 0 rgba(15, 23, 42, 0.08);
       }
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        height: 22px;
-        padding: 0 8px;
-        border-radius: 9999px;
-        border: 1px solid transparent;
-        font-size: 12px;
-        line-height: 1;
-        font-weight: 700;
-        white-space: nowrap;
-        box-shadow: 0 1px 2px rgb(11 18 32 / 0.05);
-      }
-      .badge-pending { background: var(--st-pending-bg); color: var(--st-pending-fg); border-color: rgb(100 116 139 / 0.4); }
-      .badge-received { background: var(--st-received-bg); color: var(--st-received-fg); }
-      .badge-volume { background: var(--st-volume-bg); color: var(--st-volume-fg); border-color: rgb(8 145 178 / 0.35); }
-      .badge-ola { background: var(--st-ola-bg); color: var(--st-ola-fg); border-color: rgb(63 98 18 / 0.35); }
-      .badge-reception { background: transparent; color: var(--st-reception-fg); border: 1.5px solid var(--st-reception-border); }
-      .badge-weigh { background: var(--st-weigh-bg); color: var(--st-weigh-fg); }
-      .row-pending { border-left: 3px solid var(--st-pending-bar); }
-      .row-received { border-left: 3px solid var(--st-received-bg); }
-      .row-volume { border-left: 3px solid var(--st-volume-bar); }
-      .row-ola { border-left: 3px solid var(--st-ola-bar); }
-      .row-reception { border-left: 3px solid var(--st-reception-border); }
-      .row-weigh { border-left: 3px solid var(--st-weigh-bg); }
     </style>
   </head>
   <body class="min-h-screen bg-ui-background text-ui-text">
-    <div class="sticky top-0 z-50 border-b border-teal-700/20 bg-ui-primary px-3 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-white md:text-[12px]">
-      Mockup đề xuất · dữ liệu giả · chưa nối app
+    <div class="sticky top-0 z-50 border-b border-teal-800/20 bg-ui-primary px-3 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-white md:text-[12px]">
+      Phương án 1 · mockup · không trạng thái lô · dữ liệu giả
     </div>
 
     <!-- ================= DESKTOP ================= -->
@@ -167,6 +121,10 @@
             </button>
             <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-xl border border-ui-border/90 bg-ui-surface px-2.5 text-[12px] font-semibold">Sheet</button>
             <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-xl border border-ui-border/90 bg-ui-surface px-2.5 text-[12px] font-semibold">Excel</button>
+            <div class="relative ml-2 min-w-[18rem] max-w-lg flex-1">
+              <svg class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-text-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+              <input class="h-9 w-full rounded-xl border border-ui-border/90 bg-ui-surface pl-8 pr-3 text-[14px] placeholder:text-ui-text-muted/70" placeholder="Tìm AWB · chuyến · khách · điểm đến…" readonly />
+            </div>
             <div class="ml-auto flex items-center gap-1.5">
               <span class="text-[13px] font-bold tracking-tight">AirCargo<span class="text-ui-primary">_OPS</span></span>
               <span class="rounded-full bg-ui-navy px-2 py-px text-[12px] font-bold uppercase tracking-wide text-white">OPS</span>
@@ -190,52 +148,36 @@
               <span class="font-mono text-[13px] font-semibold tabular-nums">1.057</span>
             </span>
             <span class="mx-0.5 h-5 w-px bg-ui-border/70"></span>
-            <span class="inline-flex h-[22px] items-center rounded border border-[#0C4A6E] border-l-[3px] bg-[#0C4A6E] px-1.5 text-[12px] font-semibold text-white ring-2 ring-ui-primary ring-offset-1">TECS-TCS <span class="ml-1 font-mono">8</span></span>
-            <span class="inline-flex h-[22px] items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-1.5 text-[12px] font-semibold text-[#4C1D95]">TECS-SCSC <span class="ml-1 font-mono">0</span></span>
-            <span class="inline-flex h-[22px] items-center rounded border border-[#0369A1] border-l-[3px] bg-[#F0F9FF] px-1.5 text-[12px] font-semibold text-[#0C4A6E]">TCS <span class="ml-1 font-mono">0</span></span>
-            <span class="inline-flex h-[22px] items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-1.5 text-[12px] font-semibold text-[#4C1D95]">SCSC <span class="ml-1 font-mono">0</span></span>
-            <div class="relative ml-2 min-w-[16rem] max-w-md flex-1">
-              <svg class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-text-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-              <input class="h-9 w-full rounded-xl border border-ui-border/90 bg-ui-surface pl-8 pr-3 text-[14px] placeholder:text-ui-text-muted/70" placeholder="Tìm AWB · chuyến · khách · điểm đến…" readonly value="" />
-            </div>
-          </div>
-
-          <div class="flex items-center gap-1.5 border-t border-ui-border/60 bg-ui-surface px-5 py-2" aria-label="Lọc trạng thái">
-            <span class="mr-1 text-[11px] font-bold uppercase tracking-wide text-ui-text-muted">Trạng thái</span>
-            <button type="button" class="inline-flex h-7 items-center rounded-full bg-ui-navy px-2.5 text-[12px] font-bold text-white">Tất cả · 8</button>
-            <button type="button" class="badge badge-pending">○ Booking · 2</button>
-            <button type="button" class="badge badge-received">↓ Nhận hàng · 2</button>
-            <button type="button" class="badge badge-volume">▣ Volume · 1</button>
-            <button type="button" class="badge badge-ola">↗ Kéo OLA · 1</button>
-            <button type="button" class="badge badge-reception">✓ HT · 1</button>
-            <button type="button" class="badge badge-weigh">⚖ Tờ cân · 1</button>
+            <span class="inline-flex h-7 items-center rounded border border-[#0C4A6E] border-l-[3px] bg-[#0C4A6E] px-2 text-[12px] font-semibold text-white ring-2 ring-ui-primary ring-offset-1">TECS-TCS <span class="ml-1 font-mono">8</span></span>
+            <span class="inline-flex h-7 items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-2 text-[12px] font-semibold text-[#4C1D95]">TECS-SCSC <span class="ml-1 font-mono">0</span></span>
+            <span class="inline-flex h-7 items-center rounded border border-[#0369A1] border-l-[3px] bg-[#F0F9FF] px-2 text-[12px] font-semibold text-[#0C4A6E]">TCS <span class="ml-1 font-mono">0</span></span>
+            <span class="inline-flex h-7 items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-2 text-[12px] font-semibold text-[#4C1D95]">SCSC <span class="ml-1 font-mono">0</span></span>
+            <span class="ml-auto inline-flex items-center gap-1 rounded-full bg-[#FFF1F2] px-2 py-0.5 text-[11px] font-bold text-[#881337] ring-1 ring-[#E11D48]/30">2 cut-off gấp</span>
           </div>
         </header>
 
         <section class="mx-5 my-4 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md">
           <div class="flex items-center gap-3 border-b border-ui-border/80 px-4 py-2.5">
             <h2 class="text-[13px] font-bold tracking-tight">TECS-TCS <span class="ml-1 text-[12px] font-semibold text-ui-text-muted">· 8 lô hôm nay</span></h2>
-            <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-[#881337] ring-1 ring-[#E11D48]/30">2 cut-off gấp</span>
-            <span class="ml-auto text-[12px] font-semibold text-ui-text-muted">Cột chính: AWB · chuyến · DST · kiện/kg · trạng thái · cut-off</span>
+            <span class="ml-auto text-[12px] font-semibold text-ui-text-muted">Quét: AWB · chuyến · DST · kiện/kg · cut-off</span>
           </div>
 
           <table class="w-full text-left text-[13px]">
             <thead>
               <tr class="ops-table-head text-[11px] font-bold uppercase tracking-wider text-ui-text-muted">
                 <th class="w-10 px-3 py-2.5">#</th>
-                <th class="w-40 px-2 py-2.5">AWB</th>
+                <th class="w-44 px-2 py-2.5">AWB</th>
                 <th class="w-36 px-2 py-2.5">Chuyến</th>
                 <th class="w-16 px-2 py-2.5 text-center">DST</th>
                 <th class="w-16 px-2 py-2.5 text-right">Kiện</th>
-                <th class="w-20 px-2 py-2.5 text-right">Kg</th>
-                <th class="w-44 px-2 py-2.5">Trạng thái</th>
-                <th class="w-28 px-2 py-2.5">Cut-off</th>
+                <th class="w-24 px-2 py-2.5 text-right">Kg</th>
+                <th class="w-32 px-2 py-2.5">Cut-off</th>
                 <th class="px-2 py-2.5">Khách</th>
-                <th class="w-16 px-2 py-2.5 text-right"></th>
+                <th class="w-14 px-2 py-2.5"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-ui-border/70">
-              <tr class="row-received bg-ui-surface transition-colors hover:bg-ui-primary-soft">
+              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
                 <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">1</td>
                 <td class="px-2 py-2.5">
                   <div class="ops-awb text-[15px]">618-1234 5675</div>
@@ -247,15 +189,15 @@
                 </td>
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SIN</span></td>
                 <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">12</td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">186.4</td>
-                <td class="px-2 py-2.5"><span class="badge badge-received">↓ Nhận hàng</span></td>
+                <td class="px-2 py-2.5 text-right">
+                  <div class="font-mono text-[13px] font-bold tabular-nums">186.4</div>
+                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 172.0</div>
+                </td>
                 <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums">14:30</span></td>
                 <td class="px-2 py-2.5 text-[12px] font-bold">NAMNAM LOGISTICS</td>
-                <td class="px-2 py-2.5 text-right text-ui-text-muted">
-                  <svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg>
-                </td>
+                <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
               </tr>
-              <tr class="row-volume bg-ui-surface hover:bg-ui-primary-soft">
+              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
                 <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">2</td>
                 <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">160-9876 5432</div></td>
                 <td class="px-2 py-2.5">
@@ -264,27 +206,28 @@
                 </td>
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">HKG</span></td>
                 <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">8</td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">92.0</td>
-                <td class="px-2 py-2.5"><span class="badge badge-volume">▣ Đã đo Volume</span></td>
+                <td class="px-2 py-2.5 text-right">
+                  <div class="font-mono text-[13px] font-bold tabular-nums">92.0</div>
+                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 88.5</div>
+                </td>
                 <td class="px-2 py-2.5">
-                  <span class="inline-flex items-center gap-1 rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">13:15 GẤP</span>
+                  <span class="inline-flex items-center rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">13:15 GẤP</span>
                 </td>
                 <td class="px-2 py-2.5 text-[12px] font-bold">ASIA FREIGHT</td>
                 <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
               </tr>
-              <tr class="row-pending bg-ui-surface hover:bg-ui-primary-soft">
+              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
                 <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">3</td>
                 <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">738-1122 3344</div></td>
                 <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">VN 301</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SGN</span></td>
                 <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">4</td>
                 <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">45.5</td>
-                <td class="px-2 py-2.5"><span class="badge badge-pending">○ Booking</span></td>
                 <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums">18:00</span></td>
                 <td class="px-2 py-2.5 text-[12px] font-bold">SAIGON AIR CARGO</td>
                 <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
               </tr>
-              <tr class="row-ola bg-ui-surface hover:bg-ui-primary-soft">
+              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
                 <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">4</td>
                 <td class="px-2 py-2.5">
                   <div class="ops-awb text-[15px]">176-5566 7788</div>
@@ -293,25 +236,29 @@
                 <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">VN 305</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">HAN</span></td>
                 <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">20</td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">310.2</td>
-                <td class="px-2 py-2.5"><span class="badge badge-ola">↗ Kéo OLA</span></td>
+                <td class="px-2 py-2.5 text-right">
+                  <div class="font-mono text-[13px] font-bold tabular-nums">310.2</div>
+                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 298.0</div>
+                </td>
                 <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums">16:40</span></td>
                 <td class="px-2 py-2.5 text-[12px] font-bold">HANOI EXPRESS</td>
                 <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
               </tr>
-              <tr class="row-weigh bg-teal-500/[0.08] ring-1 ring-inset ring-teal-600/25">
+              <tr class="bg-teal-500/[0.08] ring-1 ring-inset ring-teal-600/25">
                 <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">5</td>
                 <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">232-4433 2211</div></td>
                 <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">SQ 178</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SIN</span></td>
                 <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">6</td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">71.8</td>
-                <td class="px-2 py-2.5"><span class="badge badge-weigh">⚖ Nộp tờ cân</span></td>
+                <td class="px-2 py-2.5 text-right">
+                  <div class="font-mono text-[13px] font-bold tabular-nums">71.8</div>
+                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 70.0</div>
+                </td>
                 <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums text-ui-text-muted line-through">12:00</span> <span class="text-[11px] font-bold text-ui-text-subtle">đã qua</span></td>
                 <td class="px-2 py-2.5 text-[12px] font-bold">LION STAR</td>
                 <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
               </tr>
-              <tr class="row-reception bg-ui-surface hover:bg-ui-primary-soft">
+              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
                 <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">6</td>
                 <td class="px-2 py-2.5">
                   <div class="ops-awb text-[15px]">618-9988 7766</div>
@@ -320,34 +267,37 @@
                 <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">CX 799</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">HKG</span></td>
                 <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">15</td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">204.0</td>
-                <td class="px-2 py-2.5"><span class="badge badge-reception">✓ Hoàn thành tiếp nhận</span></td>
+                <td class="px-2 py-2.5 text-right">
+                  <div class="font-mono text-[13px] font-bold tabular-nums">204.0</div>
+                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 190.4</div>
+                </td>
                 <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums">17:20</span></td>
                 <td class="px-2 py-2.5 text-[12px] font-bold">PACIFIC GATE</td>
                 <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
               </tr>
-              <tr class="row-pending bg-ui-surface hover:bg-ui-primary-soft">
+              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
                 <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">7</td>
                 <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">607-3344 5566</div></td>
                 <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">VN 309</div><div class="font-mono text-[11px] font-bold text-red-700">13OCT</div></td>
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">DAD</span></td>
                 <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">3</td>
                 <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">28.6</td>
-                <td class="px-2 py-2.5"><span class="badge badge-pending">○ Booking</span></td>
                 <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums">20:10</span></td>
                 <td class="px-2 py-2.5 text-[12px] font-bold">DANANG HUB</td>
                 <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
               </tr>
-              <tr class="row-received bg-ui-surface hover:bg-ui-primary-soft">
+              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
                 <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">8</td>
                 <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">180-2211 3344</div></td>
                 <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">SQ 184</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
                 <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SIN</span></td>
                 <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">9</td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">118.5</td>
-                <td class="px-2 py-2.5"><span class="badge badge-received">↓ Nhận hàng</span></td>
+                <td class="px-2 py-2.5 text-right">
+                  <div class="font-mono text-[13px] font-bold tabular-nums">118.5</div>
+                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 112.0</div>
+                </td>
                 <td class="px-2 py-2.5">
-                  <span class="inline-flex items-center gap-1 rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">15:00 GẤP</span>
+                  <span class="inline-flex items-center rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">15:00 GẤP</span>
                 </td>
                 <td class="px-2 py-2.5 text-[12px] font-bold">MEKONG AIR</td>
                 <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
@@ -389,19 +339,12 @@
           <span class="inline-flex h-7 shrink-0 items-center rounded border border-[#0369A1] border-l-[3px] bg-[#F0F9FF] px-2 text-[12px] font-semibold text-[#0C4A6E]">TCS 0</span>
           <span class="inline-flex h-7 shrink-0 items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-2 text-[12px] font-semibold text-[#4C1D95]">SCSC 0</span>
         </div>
-        <div class="flex gap-1.5 overflow-x-auto px-2 pb-2 [scrollbar-width:none]" aria-label="Lọc trạng thái">
-          <button type="button" class="inline-flex h-7 shrink-0 items-center rounded-full bg-ui-navy px-2.5 text-[12px] font-bold text-white">Tất cả</button>
-          <button type="button" class="badge badge-pending shrink-0">○ Booking</button>
-          <button type="button" class="badge badge-received shrink-0">↓ Nhận</button>
-          <button type="button" class="badge badge-volume shrink-0">▣ Volume</button>
-          <button type="button" class="badge badge-ola shrink-0">↗ OLA</button>
-        </div>
       </header>
 
       <div class="space-y-1.5 px-2 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-2">
         <p class="px-1 text-[12px] font-bold uppercase tracking-wide text-ui-text-muted">TECS-TCS · 8 lô</p>
 
-        <article class="row-received overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div class="px-2.5 py-2">
             <div class="flex items-center gap-1.5">
               <span class="ops-awb min-w-0 truncate text-[15px]">618-1234 5675</span>
@@ -413,14 +356,11 @@
               <span class="min-w-0 flex-1 truncate text-[12px] font-bold">NAMNAM LOGISTICS</span>
               <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">12K / 186.4kg</span>
             </div>
-            <div class="mt-1.5 flex items-center justify-between gap-2">
-              <span class="badge badge-received">↓ Nhận hàng</span>
-              <span class="font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 14:30</span>
-            </div>
+            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 14:30</div>
           </div>
         </article>
 
-        <article class="row-volume overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-red-300/80">
+        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-red-300/80">
           <div class="px-2.5 py-2">
             <div class="flex items-center gap-1.5">
               <span class="ops-awb min-w-0 truncate text-[15px]">160-9876 5432</span>
@@ -431,14 +371,13 @@
               <span class="min-w-0 flex-1 truncate text-[12px] font-bold">ASIA FREIGHT</span>
               <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">8K / 92.0kg</span>
             </div>
-            <div class="mt-1.5 flex items-center justify-between gap-2">
-              <span class="badge badge-volume">▣ Volume</span>
-              <span class="inline-flex items-center rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">13:15 GẤP</span>
+            <div class="mt-1.5">
+              <span class="inline-flex items-center rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">Cut-off 13:15 GẤP</span>
             </div>
           </div>
         </article>
 
-        <article class="row-pending overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div class="px-2.5 py-2">
             <div class="flex items-center gap-1.5">
               <span class="ops-awb min-w-0 truncate text-[15px]">738-1122 3344</span>
@@ -449,14 +388,11 @@
               <span class="min-w-0 flex-1 truncate text-[12px] font-bold">SAIGON AIR CARGO</span>
               <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">4K / 45.5kg</span>
             </div>
-            <div class="mt-1.5 flex items-center justify-between gap-2">
-              <span class="badge badge-pending">○ Booking</span>
-              <span class="font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 18:00</span>
-            </div>
+            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 18:00</div>
           </div>
         </article>
 
-        <article class="row-ola overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div class="px-2.5 py-2">
             <div class="flex items-center gap-1.5">
               <span class="ops-awb min-w-0 truncate text-[15px]">176-5566 7788</span>
@@ -467,14 +403,11 @@
               <span class="min-w-0 flex-1 truncate text-[12px] font-bold">HANOI EXPRESS</span>
               <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">20K / 310.2kg</span>
             </div>
-            <div class="mt-1.5 flex items-center justify-between gap-2">
-              <span class="badge badge-ola">↗ OLA</span>
-              <span class="font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 16:40</span>
-            </div>
+            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 16:40</div>
           </div>
         </article>
 
-        <article class="row-weigh overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-2 ring-ui-primary/40">
+        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-2 ring-ui-primary/40">
           <div class="px-2.5 py-2">
             <div class="flex items-center gap-1.5">
               <span class="ops-awb min-w-0 truncate text-[15px]">232-4433 2211</span>
@@ -485,14 +418,11 @@
               <span class="min-w-0 flex-1 truncate text-[12px] font-bold">LION STAR</span>
               <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">6K / 71.8kg</span>
             </div>
-            <div class="mt-1.5 flex items-center justify-between gap-2">
-              <span class="badge badge-weigh">⚖ Tờ cân</span>
-              <span class="font-mono text-[12px] font-semibold tabular-nums text-ui-text-subtle line-through">12:00 đã qua</span>
-            </div>
+            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-subtle line-through">Cut-off 12:00 đã qua</div>
           </div>
         </article>
 
-        <article class="row-reception overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div class="px-2.5 py-2">
             <div class="flex items-center gap-1.5">
               <span class="ops-awb min-w-0 truncate text-[15px]">618-9988 7766</span>
@@ -503,14 +433,11 @@
               <span class="min-w-0 flex-1 truncate text-[12px] font-bold">PACIFIC GATE</span>
               <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">15K / 204.0kg</span>
             </div>
-            <div class="mt-1.5 flex items-center justify-between gap-2">
-              <span class="badge badge-reception">✓ HT</span>
-              <span class="font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 17:20</span>
-            </div>
+            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 17:20</div>
           </div>
         </article>
 
-        <article class="row-pending overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div class="px-2.5 py-2">
             <div class="flex items-center gap-1.5">
               <span class="ops-awb min-w-0 truncate text-[15px]">607-3344 5566</span>
@@ -521,14 +448,11 @@
               <span class="min-w-0 flex-1 truncate text-[12px] font-bold">DANANG HUB</span>
               <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">3K / 28.6kg</span>
             </div>
-            <div class="mt-1.5 flex items-center justify-between gap-2">
-              <span class="badge badge-pending">○ Booking</span>
-              <span class="font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 20:10</span>
-            </div>
+            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 20:10</div>
           </div>
         </article>
 
-        <article class="row-received overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div class="px-2.5 py-2">
             <div class="flex items-center gap-1.5">
               <span class="ops-awb min-w-0 truncate text-[15px]">180-2211 3344</span>
@@ -539,9 +463,8 @@
               <span class="min-w-0 flex-1 truncate text-[12px] font-bold">MEKONG AIR</span>
               <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">9K / 118.5kg</span>
             </div>
-            <div class="mt-1.5 flex items-center justify-between gap-2">
-              <span class="badge badge-received">↓ Nhận</span>
-              <span class="inline-flex items-center rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">15:00 GẤP</span>
+            <div class="mt-1.5">
+              <span class="inline-flex items-center rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">Cut-off 15:00 GẤP</span>
             </div>
           </div>
         </article>

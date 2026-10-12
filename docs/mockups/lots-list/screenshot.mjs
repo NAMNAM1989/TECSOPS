@@ -17,7 +17,8 @@ const browser = await chromium.launch();
 
 async function shot(file, viewport, dest) {
   const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
-  await page.goto(`file://${file}`, { waitUntil: "networkidle" });
+  const href = file.startsWith("file:") ? file : `file://${file}`;
+  await page.goto(href, { waitUntil: "networkidle" });
   await page.evaluate(async () => {
     if (document.fonts?.ready) await document.fonts.ready;
   });

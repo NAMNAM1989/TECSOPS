@@ -71,7 +71,7 @@
   </head>
   <body class="min-h-screen bg-ui-background text-ui-text">
     <div class="sticky top-0 z-50 border-b border-teal-800/20 bg-ui-primary px-3 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-white md:text-[12px]">
-      Phương án 1 · gộp Khách + INFO KH · không trạng thái lô · dữ liệu giả
+      Phương án 1 · hồ sơ lô + thao tác nhanh · không trạng thái lô · dữ liệu giả
     </div>
 
     <!-- ================= DESKTOP ================= -->
@@ -183,6 +183,10 @@
                     </div>
                     <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">CNEE</span> HKG CONSOL</div>
                     <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">Hàng</span> Electronics</div>
+                    <div class="mt-1.5 flex gap-1">
+                      <button type="button" class="inline-flex h-7 items-center rounded-md bg-ui-primary px-2 text-[11px] font-bold text-white">In tem</button>
+                      <button type="button" class="inline-flex h-7 items-center rounded-md border border-ui-primary/40 px-2 text-[11px] font-bold text-ui-primary">DIM</button>
+                    </div>
                   </td>
                 </tr>
                 <tr class="bg-ui-surface hover:bg-ui-primary-soft">
@@ -273,14 +277,34 @@
             </table>
           </section>
 
-          <aside class="my-4 mr-5 hidden w-[360px] shrink-0 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md lg:flex lg:flex-col" aria-label="Hồ sơ lô đang chọn">
-            <div class="flex items-center justify-between border-b border-ui-border/80 px-4 py-2.5">
-              <div>
-                <p class="text-[11px] font-bold uppercase tracking-wide text-ui-text-muted">Hồ sơ lô</p>
-                <p class="ops-awb text-[14px]">160-9876 5432</p>
+          <aside class="my-4 mr-5 hidden w-[380px] shrink-0 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md lg:flex lg:flex-col" aria-label="Hồ sơ lô đang chọn">
+            <div class="border-b border-ui-border/80 px-4 py-2.5">
+              <p class="text-[11px] font-bold uppercase tracking-wide text-ui-text-muted">Hồ sơ lô</p>
+              <div class="mt-0.5 flex items-center gap-2">
+                <p class="ops-awb text-[15px]">160-9876 5432</p>
+                <button type="button" class="inline-flex h-7 items-center rounded-lg border border-ui-border bg-ui-surface px-2 font-mono text-[11px] font-bold" title="Sao chép AWB">Copy AWB</button>
               </div>
-              <button type="button" class="inline-flex h-8 items-center rounded-lg border border-ui-border px-2 text-[12px] font-semibold">Sao chép</button>
+              <p class="text-[12px] font-semibold text-ui-text-muted">CX 766 · 12OCT · HKG · 8K / 92.0kg</p>
             </div>
+
+            <div class="border-b border-ui-border/80 bg-ui-primary-soft/70 px-3 py-2.5">
+              <div class="grid grid-cols-2 gap-2">
+                <button type="button" class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-ui-primary text-[13px] font-bold text-white shadow-ui-sm">
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9V4h12v5M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" /></svg>
+                  In tem
+                </button>
+                <button type="button" class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-ui-primary/40 bg-white text-[13px] font-bold text-ui-primary">
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                  Đo DIM
+                </button>
+              </div>
+              <div class="mt-2 grid grid-cols-3 gap-1.5">
+                <button type="button" class="inline-flex h-8 items-center justify-center rounded-lg border border-ui-border bg-white text-[11px] font-bold">Copy hồ sơ</button>
+                <button type="button" class="inline-flex h-8 items-center justify-center rounded-lg border border-ui-border bg-white text-[11px] font-bold">Ghi chú</button>
+                <button type="button" class="inline-flex h-8 items-center justify-center rounded-lg border border-ui-border bg-white text-[11px] font-bold">H21</button>
+              </div>
+            </div>
+
             <div class="flex-1 space-y-3 overflow-auto px-4 py-3">
               <section>
                 <label class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-ui-text-muted">Khách (danh bạ)</label>
@@ -303,6 +327,7 @@
                   <p class="text-[11px] font-bold uppercase text-amber-800">Tên in (khác hồ sơ)</p>
                   <p class="text-[13px] font-semibold">Australasian Mail Services</p>
                   <p class="text-[12px] text-ui-text-muted">75 Harrick Road, Keilor Park VIC 3043</p>
+                  <button type="button" class="mt-2 inline-flex h-9 w-full items-center justify-center rounded-xl bg-ui-primary text-[12px] font-bold text-white">In tem với tên này</button>
                 </div>
               </section>
               <section>
@@ -311,7 +336,11 @@
                   <option>Electronics / CONSOL</option>
                 </select>
               </section>
-              <p class="text-[11px] leading-relaxed text-ui-text-subtle">Shipper / CNEE / Hàng lấy từ danh bạ. Tên in chỉ hiện khi khác hồ sơ — sửa tại đây trước khi in tem / phiếu cân.</p>
+            </div>
+
+            <div class="flex items-center justify-between border-t border-ui-border/80 px-3 py-2">
+              <button type="button" class="text-[12px] font-semibold text-ui-text-muted">Excel DIM</button>
+              <button type="button" class="text-[12px] font-bold text-red-700">Xóa lô</button>
             </div>
           </aside>
         </div>
@@ -369,7 +398,11 @@
             <span class="font-mono text-[12px] font-bold text-teal-800">8K / 92.0kg</span>
           </div>
           <div class="mt-1 truncate text-[11px] text-ui-text-muted"><span class="font-bold">CNEE</span> HKG CONSOL · <span class="font-bold">Hàng</span> Electronics</div>
-          <div class="mt-1"><span class="inline-flex rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">Cut-off 13:15 GẤP</span></div>
+          <div class="mt-1.5 flex items-center gap-1.5">
+            <span class="inline-flex rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">13:15 GẤP</span>
+            <button type="button" class="ml-auto inline-flex h-8 items-center rounded-lg bg-ui-primary px-2.5 text-[12px] font-bold text-white">In tem</button>
+            <button type="button" class="inline-flex h-8 items-center rounded-lg border border-ui-primary/40 px-2 text-[12px] font-bold text-ui-primary">DIM</button>
+          </div>
         </article>
 
         <article class="rounded-xl border border-ui-border/70 bg-ui-surface px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
@@ -423,30 +456,44 @@
       </div>
 
       <div class="mobile-sheet fixed inset-0 z-[600] hidden bg-black/30">
-        <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-auto rounded-t-[28px] border border-ui-border bg-ui-surface px-4 pb-8 pt-3 shadow-ui-lg">
-          <div class="mx-auto mb-3 h-1 w-10 rounded-full bg-ui-sunken"></div>
-          <div class="mb-3 flex items-start justify-between">
-            <div>
-              <p class="text-[11px] font-bold uppercase text-ui-text-muted">Hồ sơ lô</p>
+        <div class="absolute inset-x-0 bottom-0 flex max-h-[92vh] flex-col rounded-t-[28px] border border-ui-border bg-ui-surface shadow-ui-lg">
+          <div class="mx-auto mt-2 h-1 w-10 rounded-full bg-ui-sunken"></div>
+          <div class="px-4 pb-2 pt-2">
+            <p class="text-[11px] font-bold uppercase text-ui-text-muted">Hồ sơ lô</p>
+            <div class="flex items-center gap-2">
               <p class="ops-awb text-[16px]">160-9876 5432</p>
-              <p class="text-[12px] font-semibold text-ui-text-muted">CX 766 · HKG · 8K / 92.0kg</p>
+              <button type="button" class="inline-flex h-8 items-center rounded-lg border border-ui-border px-2 font-mono text-[11px] font-bold">Copy AWB</button>
             </div>
-            <button type="button" class="h-8 rounded-lg border border-ui-border px-2 text-[12px] font-semibold">Sao chép</button>
+            <p class="text-[12px] font-semibold text-ui-text-muted">CX 766 · HKG · 8K / 92.0kg</p>
           </div>
-          <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">Khách</label>
-          <div class="mb-3 h-11 rounded-xl border border-ui-border bg-ui-surface-muted/50 px-3 py-2 text-[14px] font-bold">ASIA FREIGHT</div>
-          <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">Shipper</label>
-          <div class="mb-3 h-11 rounded-xl border border-ui-border px-3 py-2 text-[14px] font-semibold">ASIA FREIGHT CO., LTD</div>
-          <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">CNEE</label>
-          <div class="mb-2 h-11 rounded-xl border border-ui-border px-3 py-2 text-[14px] font-semibold">HONG KONG CONSOL LTD</div>
-          <div class="mb-3 rounded-xl border border-dashed border-amber-400/70 bg-amber-50/70 px-3 py-2">
-            <p class="text-[11px] font-bold uppercase text-amber-800">Tên in ≠ hồ sơ</p>
-            <p class="text-[14px] font-semibold">Australasian Mail Services</p>
-            <p class="text-[12px] text-ui-text-muted">75 Harrick Road, Keilor Park VIC 3043</p>
+          <div class="border-y border-ui-border/80 bg-ui-primary-soft/80 px-3 py-2">
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" class="inline-flex h-11 items-center justify-center rounded-xl bg-ui-primary text-[14px] font-bold text-white">In tem</button>
+              <button type="button" class="inline-flex h-11 items-center justify-center rounded-xl border border-ui-primary/40 bg-white text-[14px] font-bold text-ui-primary">Đo DIM</button>
+            </div>
+            <div class="mt-2 grid grid-cols-3 gap-1.5">
+              <button type="button" class="inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-white text-[12px] font-bold">Copy hồ sơ</button>
+              <button type="button" class="inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-white text-[12px] font-bold">Ghi chú</button>
+              <button type="button" class="inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-white text-[12px] font-bold">H21</button>
+            </div>
           </div>
-          <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">Hàng</label>
-          <div class="mb-4 h-11 rounded-xl border border-ui-border px-3 py-2 text-[14px] font-semibold">Electronics / CONSOL</div>
-          <button type="button" class="inline-flex h-11 w-full items-center justify-center rounded-xl bg-ui-primary text-[14px] font-bold text-white">Lưu hồ sơ lô</button>
+          <div class="flex-1 overflow-auto px-4 py-3">
+            <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">Khách</label>
+            <div class="mb-3 h-11 rounded-xl border border-ui-border bg-ui-surface-muted/50 px-3 py-2 text-[14px] font-bold">ASIA FREIGHT</div>
+            <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">Shipper</label>
+            <div class="mb-3 h-11 rounded-xl border border-ui-border px-3 py-2 text-[14px] font-semibold">ASIA FREIGHT CO., LTD</div>
+            <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">CNEE</label>
+            <div class="mb-2 h-11 rounded-xl border border-ui-border px-3 py-2 text-[14px] font-semibold">HONG KONG CONSOL LTD</div>
+            <div class="mb-3 rounded-xl border border-dashed border-amber-400/70 bg-amber-50/70 px-3 py-2">
+              <p class="text-[11px] font-bold uppercase text-amber-800">Tên in ≠ hồ sơ</p>
+              <p class="text-[14px] font-semibold">Australasian Mail Services</p>
+              <p class="text-[12px] text-ui-text-muted">75 Harrick Road, Keilor Park VIC 3043</p>
+              <button type="button" class="mt-2 inline-flex h-11 w-full items-center justify-center rounded-xl bg-ui-primary text-[14px] font-bold text-white">In tem với tên này</button>
+            </div>
+            <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">Hàng</label>
+            <div class="mb-3 h-11 rounded-xl border border-ui-border px-3 py-2 text-[14px] font-semibold">Electronics / CONSOL</div>
+            <button type="button" class="text-[13px] font-bold text-red-700">Xóa lô</button>
+          </div>
         </div>
       </div>
     </div>

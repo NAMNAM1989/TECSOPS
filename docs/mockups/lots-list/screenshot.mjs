@@ -29,7 +29,7 @@ async function shot(file, viewport, dest) {
 }
 
 await shot(current, { width: 1440, height: 900 }, path.join(outDir, "current-desktop.png"));
-await shot(improved, { width: 1440, height: 900 }, path.join(outDir, "mockup-desktop.png"));
-await shot(improved, { width: 390, height: 844 }, path.join(outDir, "mockup-mobile.png"));
+await shot(improved, { width: 1440, height: 900 }, path.join(outDir, "mockup-desktop-v2.png"));
+await shot(improved, { width: 390, height: 844 }, path.join(outDir, "mockup-mobile-v2.png"));
 
 await browser.close();

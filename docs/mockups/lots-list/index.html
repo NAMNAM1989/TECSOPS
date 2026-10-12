@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TECSOPS — Phương án 1 · danh sách lô hàng</title>
+    <title>TECSOPS — Phương án 1 · hồ sơ khách trên danh sách lô</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -66,11 +66,12 @@
         background: linear-gradient(180deg, #f1f5f9 0%, #e8eef5 100%);
         box-shadow: 0 1px 0 rgba(15, 23, 42, 0.08);
       }
+      body.show-sheet .mobile-sheet { display: block; }
     </style>
   </head>
   <body class="min-h-screen bg-ui-background text-ui-text">
     <div class="sticky top-0 z-50 border-b border-teal-800/20 bg-ui-primary px-3 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-white md:text-[12px]">
-      Phương án 1 · mockup · không trạng thái lô · dữ liệu giả
+      Phương án 1 · gộp Khách + INFO KH · không trạng thái lô · dữ liệu giả
     </div>
 
     <!-- ================= DESKTOP ================= -->
@@ -93,12 +94,6 @@
             </span>
             H21 SCSC
           </button>
-          <button type="button" class="flex min-h-11 w-full flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[12px] font-semibold text-teal-700">
-            <span class="grid h-8 w-8 place-items-center rounded-xl bg-teal-500/15 text-teal-700 ring-1 ring-teal-500/35">
-              <svg class="h-[1.35rem] w-[1.35rem]" viewBox="0 0 24 24" aria-hidden><rect x="2.5" y="2.5" width="19" height="19" rx="5" fill="currentColor" opacity="0.16" /><path d="M8 4.75h8a1.75 1.75 0 0 1 1.75 1.75v12.2l-2.35-1.15L12 18.95l-3.4-1.4L6.25 18.7V6.5A1.75 1.75 0 0 1 8 4.75Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" /><text x="12" y="13.2" text-anchor="middle" fill="currentColor" font-size="7.2" font-weight="800">H21</text></svg>
-            </span>
-            H21 TCS
-          </button>
           <button type="button" class="flex min-h-11 w-full flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[12px] font-semibold text-ui-text-muted">
             <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden><path d="M4 19V5M4 19h16M8 15v-4M12 15V9M16 15v-2" /></svg>
             Thống kê
@@ -110,201 +105,216 @@
         <header class="sticky top-8 z-30 border-b border-ui-border bg-ui-surface">
           <div class="flex items-center gap-2 px-5 py-3">
             <div class="inline-flex items-center rounded-xl border border-ui-border bg-ui-surface p-0.5 shadow-ui-sm">
-              <span class="inline-flex h-8 w-8 items-center justify-center text-[14px] font-semibold text-ui-primary" aria-hidden>‹</span>
-              <span class="block w-[7.75rem] truncate text-center font-mono text-[12px] font-semibold tabular-nums text-ui-navy">12-OCT-2026</span>
-              <span class="inline-flex h-8 w-8 items-center justify-center text-[14px] font-semibold text-ui-primary" aria-hidden>›</span>
+              <span class="inline-flex h-8 w-8 items-center justify-center text-[14px] font-semibold text-ui-primary">‹</span>
+              <span class="block w-[7.75rem] truncate text-center font-mono text-[12px] font-semibold tabular-nums">12-OCT-2026</span>
+              <span class="inline-flex h-8 w-8 items-center justify-center text-[14px] font-semibold text-ui-primary">›</span>
             </div>
             <span class="h-7 w-px bg-ui-border/70"></span>
-            <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-xl bg-ui-primary px-3 text-[12px] font-semibold text-white shadow-ui-sm">
-              <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-              Booking
-            </button>
-            <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-xl border border-ui-border/90 bg-ui-surface px-2.5 text-[12px] font-semibold">Sheet</button>
-            <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-xl border border-ui-border/90 bg-ui-surface px-2.5 text-[12px] font-semibold">Excel</button>
-            <div class="relative ml-2 min-w-[18rem] max-w-lg flex-1">
+            <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-xl bg-ui-primary px-3 text-[12px] font-semibold text-white shadow-ui-sm">+ Booking</button>
+            <button type="button" class="inline-flex h-9 items-center rounded-xl border border-ui-border/90 bg-ui-surface px-2.5 text-[12px] font-semibold">Sheet</button>
+            <div class="relative ml-2 min-w-[16rem] max-w-md flex-1">
               <svg class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ui-text-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-              <input class="h-9 w-full rounded-xl border border-ui-border/90 bg-ui-surface pl-8 pr-3 text-[14px] placeholder:text-ui-text-muted/70" placeholder="Tìm AWB · chuyến · khách · điểm đến…" readonly />
+              <input class="h-9 w-full rounded-xl border border-ui-border/90 bg-ui-surface pl-8 pr-3 text-[14px] placeholder:text-ui-text-muted/70" placeholder="Tìm AWB · khách · CNEE · hàng…" readonly />
             </div>
             <div class="ml-auto flex items-center gap-1.5">
               <span class="text-[13px] font-bold tracking-tight">AirCargo<span class="text-ui-primary">_OPS</span></span>
               <span class="rounded-full bg-ui-navy px-2 py-px text-[12px] font-bold uppercase tracking-wide text-white">OPS</span>
-              <span class="inline-flex items-center gap-1 rounded-full border border-emerald-200/90 bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-900">
-                <span class="h-1.5 w-1.5 rounded-full bg-green-600"></span> Trực tiếp
-              </span>
+              <span class="inline-flex items-center gap-1 rounded-full border border-emerald-200/90 bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-900"><span class="h-1.5 w-1.5 rounded-full bg-green-600"></span> Trực tiếp</span>
             </div>
           </div>
-
           <div class="flex items-center gap-2 border-t border-ui-border/80 bg-ui-background px-5 py-2">
-            <span class="inline-flex min-h-9 flex-col items-center justify-center rounded-lg border border-ui-border/80 bg-ui-surface px-2.5 py-1">
-              <span class="text-[12px] font-bold uppercase tracking-wide text-ui-text-muted">Lô</span>
-              <span class="font-mono text-[13px] font-semibold tabular-nums">8</span>
-            </span>
-            <span class="inline-flex min-h-9 flex-col items-center justify-center rounded-lg border border-ui-border/80 bg-ui-surface px-2.5 py-1">
-              <span class="text-[12px] font-bold uppercase tracking-wide text-ui-text-muted">PCS</span>
-              <span class="font-mono text-[13px] font-semibold tabular-nums">77</span>
-            </span>
-            <span class="inline-flex min-h-9 flex-col items-center justify-center rounded-lg border border-ui-border/80 bg-ui-surface px-2.5 py-1">
-              <span class="text-[12px] font-bold uppercase tracking-wide text-ui-text-muted">KG</span>
-              <span class="font-mono text-[13px] font-semibold tabular-nums">1.057</span>
-            </span>
+            <span class="inline-flex min-h-9 flex-col items-center justify-center rounded-lg border border-ui-border/80 bg-ui-surface px-2.5 py-1"><span class="text-[12px] font-bold uppercase text-ui-text-muted">Lô</span><span class="font-mono text-[13px] font-semibold">8</span></span>
+            <span class="inline-flex min-h-9 flex-col items-center justify-center rounded-lg border border-ui-border/80 bg-ui-surface px-2.5 py-1"><span class="text-[12px] font-bold uppercase text-ui-text-muted">PCS</span><span class="font-mono text-[13px] font-semibold">77</span></span>
+            <span class="inline-flex min-h-9 flex-col items-center justify-center rounded-lg border border-ui-border/80 bg-ui-surface px-2.5 py-1"><span class="text-[12px] font-bold uppercase text-ui-text-muted">KG</span><span class="font-mono text-[13px] font-semibold">1.057</span></span>
             <span class="mx-0.5 h-5 w-px bg-ui-border/70"></span>
             <span class="inline-flex h-7 items-center rounded border border-[#0C4A6E] border-l-[3px] bg-[#0C4A6E] px-2 text-[12px] font-semibold text-white ring-2 ring-ui-primary ring-offset-1">TECS-TCS <span class="ml-1 font-mono">8</span></span>
-            <span class="inline-flex h-7 items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-2 text-[12px] font-semibold text-[#4C1D95]">TECS-SCSC <span class="ml-1 font-mono">0</span></span>
-            <span class="inline-flex h-7 items-center rounded border border-[#0369A1] border-l-[3px] bg-[#F0F9FF] px-2 text-[12px] font-semibold text-[#0C4A6E]">TCS <span class="ml-1 font-mono">0</span></span>
-            <span class="inline-flex h-7 items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-2 text-[12px] font-semibold text-[#4C1D95]">SCSC <span class="ml-1 font-mono">0</span></span>
+            <span class="inline-flex h-7 items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-2 text-[12px] font-semibold text-[#4C1D95]">TECS-SCSC 0</span>
+            <span class="inline-flex h-7 items-center rounded border border-[#0369A1] border-l-[3px] bg-[#F0F9FF] px-2 text-[12px] font-semibold text-[#0C4A6E]">TCS 0</span>
             <span class="ml-auto inline-flex items-center gap-1 rounded-full bg-[#FFF1F2] px-2 py-0.5 text-[11px] font-bold text-[#881337] ring-1 ring-[#E11D48]/30">2 cut-off gấp</span>
           </div>
         </header>
 
-        <section class="mx-5 my-4 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md">
-          <div class="flex items-center gap-3 border-b border-ui-border/80 px-4 py-2.5">
-            <h2 class="text-[13px] font-bold tracking-tight">TECS-TCS <span class="ml-1 text-[12px] font-semibold text-ui-text-muted">· 8 lô hôm nay</span></h2>
-            <span class="ml-auto text-[12px] font-semibold text-ui-text-muted">Quét: AWB · chuyến · DST · kiện/kg · cut-off</span>
-          </div>
+        <div class="flex min-h-0 flex-1">
+          <section class="mx-5 my-4 min-w-0 flex-1 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md">
+            <div class="flex items-center gap-3 border-b border-ui-border/80 px-4 py-2.5">
+              <h2 class="text-[13px] font-bold">TECS-TCS <span class="ml-1 text-[12px] font-semibold text-ui-text-muted">· 8 lô hôm nay</span></h2>
+              <span class="ml-auto text-[12px] font-semibold text-ui-text-muted">Khách = mã KH + CNEE + hàng · click mở hồ sơ</span>
+            </div>
+            <table class="w-full text-left text-[13px]">
+              <thead>
+                <tr class="ops-table-head text-[11px] font-bold uppercase tracking-wider text-ui-text-muted">
+                  <th class="w-10 px-3 py-2.5">#</th>
+                  <th class="w-40 px-2 py-2.5">AWB</th>
+                  <th class="w-28 px-2 py-2.5">Chuyến</th>
+                  <th class="w-14 px-2 py-2.5 text-center">DST</th>
+                  <th class="w-14 px-2 py-2.5 text-right">Kiện</th>
+                  <th class="w-20 px-2 py-2.5 text-right">Kg</th>
+                  <th class="w-28 px-2 py-2.5">Cut-off</th>
+                  <th class="px-2 py-2.5">Khách / hồ sơ</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-ui-border/70">
+                <tr class="bg-ui-surface hover:bg-ui-primary-soft">
+                  <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">1</td>
+                  <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">618-1234 5675</div><div class="font-mono text-[11px] text-ui-text-subtle">HAWB H-SIN-0412</div></td>
+                  <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">SQ 183</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
+                  <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold ring-1 ring-slate-200/80">SIN</span></td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">12</td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">186.4</td>
+                  <td class="px-2 py-2.5 font-mono text-[13px] font-semibold">14:30</td>
+                  <td class="px-2 py-2.5">
+                    <div class="text-[12px] font-bold">NAMNAM LOGISTICS</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">CNEE</span> SIN AGENT</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">Hàng</span> GOH</div>
+                  </td>
+                </tr>
+                <tr class="bg-teal-500/[0.08] ring-1 ring-inset ring-teal-600/25">
+                  <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">2</td>
+                  <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">160-9876 5432</div></td>
+                  <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">CX 766</div><div class="font-mono text-[11px] font-bold text-red-700">12OCT</div></td>
+                  <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold ring-1 ring-slate-200/80">HKG</span></td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">8</td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">92.0</td>
+                  <td class="px-2 py-2.5"><span class="inline-flex rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">13:15 GẤP</span></td>
+                  <td class="px-2 py-2.5">
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[12px] font-bold">ASIA FREIGHT</span>
+                      <span class="rounded bg-amber-50 px-1 py-px text-[10px] font-bold uppercase text-amber-800 ring-1 ring-amber-300/70">Tên in ≠</span>
+                    </div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">CNEE</span> HKG CONSOL</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">Hàng</span> Electronics</div>
+                  </td>
+                </tr>
+                <tr class="bg-ui-surface hover:bg-ui-primary-soft">
+                  <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">3</td>
+                  <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">738-1122 3344</div></td>
+                  <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">VN 301</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
+                  <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold ring-1 ring-slate-200/80">SGN</span></td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">4</td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">45.5</td>
+                  <td class="px-2 py-2.5 font-mono text-[13px] font-semibold">18:00</td>
+                  <td class="px-2 py-2.5">
+                    <div class="text-[12px] font-bold">SAIGON AIR CARGO</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">CNEE</span> XYZ TRADING</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">Hàng</span> Textile</div>
+                  </td>
+                </tr>
+                <tr class="bg-ui-surface hover:bg-ui-primary-soft">
+                  <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">4</td>
+                  <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">176-5566 7788</div></td>
+                  <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">VN 305</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
+                  <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold ring-1 ring-slate-200/80">HAN</span></td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">20</td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">310.2</td>
+                  <td class="px-2 py-2.5 font-mono text-[13px] font-semibold">16:40</td>
+                  <td class="px-2 py-2.5">
+                    <div class="text-[12px] font-bold">HANOI EXPRESS</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">CNEE</span> HAN SPARES</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">Hàng</span> Spare parts</div>
+                  </td>
+                </tr>
+                <tr class="bg-ui-surface hover:bg-ui-primary-soft">
+                  <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">5</td>
+                  <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">232-4433 2211</div></td>
+                  <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">SQ 178</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
+                  <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold ring-1 ring-slate-200/80">SIN</span></td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">6</td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">71.8</td>
+                  <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold text-ui-text-muted line-through">12:00</span> <span class="text-[11px] text-ui-text-subtle">đã qua</span></td>
+                  <td class="px-2 py-2.5">
+                    <div class="text-[12px] font-bold">LION STAR</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">CNEE</span> PER DOCS</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">Hàng</span> PER</div>
+                  </td>
+                </tr>
+                <tr class="bg-ui-surface hover:bg-ui-primary-soft">
+                  <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">6</td>
+                  <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">618-9988 7766</div></td>
+                  <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">CX 799</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
+                  <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold ring-1 ring-slate-200/80">HKG</span></td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">15</td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">204.0</td>
+                  <td class="px-2 py-2.5 font-mono text-[13px] font-semibold">17:20</td>
+                  <td class="px-2 py-2.5">
+                    <div class="text-[12px] font-bold">PACIFIC GATE</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">CNEE</span> HKG AGENT</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">Hàng</span> Electronics</div>
+                  </td>
+                </tr>
+                <tr class="bg-ui-surface hover:bg-ui-primary-soft">
+                  <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">7</td>
+                  <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">607-3344 5566</div></td>
+                  <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">VN 309</div><div class="font-mono text-[11px] font-bold text-red-700">13OCT</div></td>
+                  <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold ring-1 ring-slate-200/80">DAD</span></td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">3</td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">28.6</td>
+                  <td class="px-2 py-2.5 font-mono text-[13px] font-semibold">20:10</td>
+                  <td class="px-2 py-2.5">
+                    <div class="text-[12px] font-bold">DANANG HUB</div>
+                    <div class="truncate text-[11px] font-semibold text-amber-800"><span class="font-bold">CNEE</span> Chưa chọn</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">Hàng</span> Fresh</div>
+                  </td>
+                </tr>
+                <tr class="bg-ui-surface hover:bg-ui-primary-soft">
+                  <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">8</td>
+                  <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">180-2211 3344</div></td>
+                  <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">SQ 184</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
+                  <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold ring-1 ring-slate-200/80">SIN</span></td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">9</td>
+                  <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold">118.5</td>
+                  <td class="px-2 py-2.5"><span class="inline-flex rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">15:00 GẤP</span></td>
+                  <td class="px-2 py-2.5">
+                    <div class="text-[12px] font-bold">MEKONG AIR</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">CNEE</span> DEF TRADING</div>
+                    <div class="truncate text-[11px] text-ui-text-muted"><span class="font-bold text-ui-text-subtle">Hàng</span> GOH</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
 
-          <table class="w-full text-left text-[13px]">
-            <thead>
-              <tr class="ops-table-head text-[11px] font-bold uppercase tracking-wider text-ui-text-muted">
-                <th class="w-10 px-3 py-2.5">#</th>
-                <th class="w-44 px-2 py-2.5">AWB</th>
-                <th class="w-36 px-2 py-2.5">Chuyến</th>
-                <th class="w-16 px-2 py-2.5 text-center">DST</th>
-                <th class="w-16 px-2 py-2.5 text-right">Kiện</th>
-                <th class="w-24 px-2 py-2.5 text-right">Kg</th>
-                <th class="w-32 px-2 py-2.5">Cut-off</th>
-                <th class="px-2 py-2.5">Khách</th>
-                <th class="w-14 px-2 py-2.5"></th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-ui-border/70">
-              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
-                <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">1</td>
-                <td class="px-2 py-2.5">
-                  <div class="ops-awb text-[15px]">618-1234 5675</div>
-                  <div class="font-mono text-[11px] font-semibold text-ui-text-subtle">HAWB H-SIN-0412</div>
-                </td>
-                <td class="px-2 py-2.5">
-                  <div class="font-mono text-[13px] font-semibold">SQ 183</div>
-                  <div class="font-mono text-[11px] text-ui-text-muted">12OCT</div>
-                </td>
-                <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SIN</span></td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">12</td>
-                <td class="px-2 py-2.5 text-right">
-                  <div class="font-mono text-[13px] font-bold tabular-nums">186.4</div>
-                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 172.0</div>
-                </td>
-                <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums">14:30</span></td>
-                <td class="px-2 py-2.5 text-[12px] font-bold">NAMNAM LOGISTICS</td>
-                <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
-              </tr>
-              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
-                <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">2</td>
-                <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">160-9876 5432</div></td>
-                <td class="px-2 py-2.5">
-                  <div class="font-mono text-[13px] font-semibold">CX 766</div>
-                  <div class="font-mono text-[11px] font-bold text-red-700">12OCT</div>
-                </td>
-                <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">HKG</span></td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">8</td>
-                <td class="px-2 py-2.5 text-right">
-                  <div class="font-mono text-[13px] font-bold tabular-nums">92.0</div>
-                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 88.5</div>
-                </td>
-                <td class="px-2 py-2.5">
-                  <span class="inline-flex items-center rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">13:15 GẤP</span>
-                </td>
-                <td class="px-2 py-2.5 text-[12px] font-bold">ASIA FREIGHT</td>
-                <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
-              </tr>
-              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
-                <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">3</td>
-                <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">738-1122 3344</div></td>
-                <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">VN 301</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
-                <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SGN</span></td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">4</td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">45.5</td>
-                <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums">18:00</span></td>
-                <td class="px-2 py-2.5 text-[12px] font-bold">SAIGON AIR CARGO</td>
-                <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
-              </tr>
-              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
-                <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">4</td>
-                <td class="px-2 py-2.5">
-                  <div class="ops-awb text-[15px]">176-5566 7788</div>
-                  <div class="font-mono text-[11px] font-semibold text-ui-text-subtle">HAWB H-HAN-0091</div>
-                </td>
-                <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">VN 305</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
-                <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">HAN</span></td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">20</td>
-                <td class="px-2 py-2.5 text-right">
-                  <div class="font-mono text-[13px] font-bold tabular-nums">310.2</div>
-                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 298.0</div>
-                </td>
-                <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums">16:40</span></td>
-                <td class="px-2 py-2.5 text-[12px] font-bold">HANOI EXPRESS</td>
-                <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
-              </tr>
-              <tr class="bg-teal-500/[0.08] ring-1 ring-inset ring-teal-600/25">
-                <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">5</td>
-                <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">232-4433 2211</div></td>
-                <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">SQ 178</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
-                <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SIN</span></td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">6</td>
-                <td class="px-2 py-2.5 text-right">
-                  <div class="font-mono text-[13px] font-bold tabular-nums">71.8</div>
-                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 70.0</div>
-                </td>
-                <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums text-ui-text-muted line-through">12:00</span> <span class="text-[11px] font-bold text-ui-text-subtle">đã qua</span></td>
-                <td class="px-2 py-2.5 text-[12px] font-bold">LION STAR</td>
-                <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
-              </tr>
-              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
-                <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">6</td>
-                <td class="px-2 py-2.5">
-                  <div class="ops-awb text-[15px]">618-9988 7766</div>
-                  <div class="font-mono text-[11px] font-semibold text-ui-text-subtle">HAWB H-HKG-2201</div>
-                </td>
-                <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">CX 799</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
-                <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">HKG</span></td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">15</td>
-                <td class="px-2 py-2.5 text-right">
-                  <div class="font-mono text-[13px] font-bold tabular-nums">204.0</div>
-                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 190.4</div>
-                </td>
-                <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums">17:20</span></td>
-                <td class="px-2 py-2.5 text-[12px] font-bold">PACIFIC GATE</td>
-                <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
-              </tr>
-              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
-                <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">7</td>
-                <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">607-3344 5566</div></td>
-                <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">VN 309</div><div class="font-mono text-[11px] font-bold text-red-700">13OCT</div></td>
-                <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">DAD</span></td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">3</td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">28.6</td>
-                <td class="px-2 py-2.5"><span class="font-mono text-[13px] font-semibold tabular-nums">20:10</span></td>
-                <td class="px-2 py-2.5 text-[12px] font-bold">DANANG HUB</td>
-                <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
-              </tr>
-              <tr class="bg-ui-surface hover:bg-ui-primary-soft">
-                <td class="px-3 py-2.5 font-mono text-[12px] font-semibold text-ui-text-muted">8</td>
-                <td class="px-2 py-2.5"><div class="ops-awb text-[15px]">180-2211 3344</div></td>
-                <td class="px-2 py-2.5"><div class="font-mono text-[13px] font-semibold">SQ 184</div><div class="font-mono text-[11px] text-ui-text-muted">12OCT</div></td>
-                <td class="px-2 py-2.5 text-center"><span class="inline-flex rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SIN</span></td>
-                <td class="px-2 py-2.5 text-right font-mono text-[13px] font-bold tabular-nums">9</td>
-                <td class="px-2 py-2.5 text-right">
-                  <div class="font-mono text-[13px] font-bold tabular-nums">118.5</div>
-                  <div class="font-mono text-[11px] text-ui-text-subtle">DIM 112.0</div>
-                </td>
-                <td class="px-2 py-2.5">
-                  <span class="inline-flex items-center rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">15:00 GẤP</span>
-                </td>
-                <td class="px-2 py-2.5 text-[12px] font-bold">MEKONG AIR</td>
-                <td class="px-2 py-2.5 text-right text-ui-text-muted"><svg class="ml-auto h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg></td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
+          <aside class="my-4 mr-5 hidden w-[360px] shrink-0 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md lg:flex lg:flex-col" aria-label="Hồ sơ lô đang chọn">
+            <div class="flex items-center justify-between border-b border-ui-border/80 px-4 py-2.5">
+              <div>
+                <p class="text-[11px] font-bold uppercase tracking-wide text-ui-text-muted">Hồ sơ lô</p>
+                <p class="ops-awb text-[14px]">160-9876 5432</p>
+              </div>
+              <button type="button" class="inline-flex h-8 items-center rounded-lg border border-ui-border px-2 text-[12px] font-semibold">Sao chép</button>
+            </div>
+            <div class="flex-1 space-y-3 overflow-auto px-4 py-3">
+              <section>
+                <label class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-ui-text-muted">Khách (danh bạ)</label>
+                <div class="rounded-xl border border-ui-border bg-ui-surface-muted/50 px-3 py-2 text-[13px] font-bold">ASIA FREIGHT <span class="ml-1 font-mono text-[11px] font-semibold text-ui-text-muted">AFR</span></div>
+              </section>
+              <section>
+                <label class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-ui-text-muted">Shipper</label>
+                <select class="h-9 w-full rounded-xl border border-ui-border bg-white px-2 text-[13px] font-semibold" disabled>
+                  <option>ASIA FREIGHT CO., LTD</option>
+                </select>
+                <p class="mt-1.5 text-[12px] leading-relaxed text-ui-text-muted">12F Warehouse Rd, Kwai Chung, HKG</p>
+              </section>
+              <section>
+                <label class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-ui-text-muted">CNEE</label>
+                <select class="h-9 w-full rounded-xl border border-ui-border bg-white px-2 text-[13px] font-semibold" disabled>
+                  <option>HONG KONG CONSOL LTD</option>
+                </select>
+                <p class="mt-1.5 text-[12px] leading-relaxed text-ui-text">Unit 8, Kwai Chung Terminal<br />+852 2345 6789</p>
+                <div class="mt-2 rounded-xl border border-dashed border-amber-400/70 bg-amber-50/70 px-3 py-2">
+                  <p class="text-[11px] font-bold uppercase text-amber-800">Tên in (khác hồ sơ)</p>
+                  <p class="text-[13px] font-semibold">Australasian Mail Services</p>
+                  <p class="text-[12px] text-ui-text-muted">75 Harrick Road, Keilor Park VIC 3043</p>
+                </div>
+              </section>
+              <section>
+                <label class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-ui-text-muted">Hàng</label>
+                <select class="h-9 w-full rounded-xl border border-ui-border bg-white px-2 text-[13px] font-semibold" disabled>
+                  <option>Electronics / CONSOL</option>
+                </select>
+              </section>
+              <p class="text-[11px] leading-relaxed text-ui-text-subtle">Shipper / CNEE / Hàng lấy từ danh bạ. Tên in chỉ hiện khi khác hồ sơ — sửa tại đây trước khi in tem / phiếu cân.</p>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
 
@@ -312,176 +322,138 @@
     <div class="md:hidden">
       <header class="sticky top-8 z-30 border-b border-ui-border bg-ui-surface">
         <div class="flex h-9 items-center gap-1.5 px-2">
-          <div class="inline-flex items-center rounded-lg border border-ui-border bg-ui-surface">
-            <span class="inline-flex h-8 w-7 items-center justify-center text-[13px] font-semibold text-ui-primary">‹</span>
-            <span class="w-[6.75rem] text-center font-mono text-[12px] font-semibold tabular-nums">12-OCT-2026</span>
-            <span class="inline-flex h-8 w-7 items-center justify-center text-[13px] font-semibold text-ui-primary">›</span>
+          <div class="inline-flex items-center rounded-lg border border-ui-border">
+            <span class="inline-flex h-8 w-7 items-center justify-center text-ui-primary">‹</span>
+            <span class="w-[6.75rem] text-center font-mono text-[12px] font-semibold">12-OCT-2026</span>
+            <span class="inline-flex h-8 w-7 items-center justify-center text-ui-primary">›</span>
           </div>
-          <span class="inline-flex items-center gap-1.5 rounded-lg bg-teal-500/10 px-2 py-1 text-[12px] font-bold text-ui-navy ring-1 ring-ui-accent/20">
-            8 Lô · 1.057 Kg
-          </span>
-          <span class="ml-auto inline-flex h-4 w-4 items-center justify-center">
-            <span class="h-2 w-2 rounded-full bg-green-600"></span>
-          </span>
-          <button type="button" class="grid h-8 w-8 place-items-center rounded-lg bg-ui-primary-soft text-ui-primary" aria-label="Tìm kiếm">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3-3" /></svg>
-          </button>
+          <span class="rounded-lg bg-teal-500/10 px-2 py-1 text-[12px] font-bold ring-1 ring-ui-accent/20">8 Lô · 1.057 Kg</span>
+          <span class="ml-auto h-2 w-2 rounded-full bg-green-600"></span>
         </div>
-        <div class="px-2 pb-1.5">
-          <div class="relative">
-            <svg class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ui-text-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-            <input class="h-11 w-full rounded-xl border border-ui-border/90 bg-ui-surface pl-8 pr-3 text-base placeholder:text-ui-text-muted/70" placeholder="MAWB / hàng / xe…" readonly />
-          </div>
+        <div class="px-2 pb-2">
+          <input class="h-11 w-full rounded-xl border border-ui-border/90 bg-ui-surface px-3 text-base placeholder:text-ui-text-muted/70" placeholder="MAWB / khách / CNEE…" readonly />
         </div>
-        <div class="flex gap-1 overflow-x-auto px-2 pb-2 [scrollbar-width:none]" aria-label="Chọn kho">
+        <div class="flex gap-1 overflow-x-auto px-2 pb-2">
           <span class="inline-flex h-7 shrink-0 items-center rounded border border-[#0C4A6E] border-l-[3px] bg-[#0C4A6E] px-2 text-[12px] font-semibold text-white">TECS-TCS 8</span>
           <span class="inline-flex h-7 shrink-0 items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-2 text-[12px] font-semibold text-[#4C1D95]">TECS-SCSC 0</span>
           <span class="inline-flex h-7 shrink-0 items-center rounded border border-[#0369A1] border-l-[3px] bg-[#F0F9FF] px-2 text-[12px] font-semibold text-[#0C4A6E]">TCS 0</span>
-          <span class="inline-flex h-7 shrink-0 items-center rounded border border-[#6D28D9] border-l-[3px] bg-[#F5F3FF] px-2 text-[12px] font-semibold text-[#4C1D95]">SCSC 0</span>
         </div>
       </header>
 
       <div class="space-y-1.5 px-2 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-2">
-        <p class="px-1 text-[12px] font-bold uppercase tracking-wide text-ui-text-muted">TECS-TCS · 8 lô</p>
+        <p class="px-1 text-[12px] font-bold uppercase text-ui-text-muted">TECS-TCS · 8 lô</p>
 
-        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div class="px-2.5 py-2">
-            <div class="flex items-center gap-1.5">
-              <span class="ops-awb min-w-0 truncate text-[15px]">618-1234 5675</span>
-              <span class="inline-flex shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SIN</span>
-              <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-ui-text-muted">SQ 183 / 12OCT</span>
-              <svg class="h-4 w-4 shrink-0 text-ui-text-muted" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18.5" r="1.5" /></svg>
-            </div>
-            <div class="mt-1.5 flex items-center gap-2">
-              <span class="min-w-0 flex-1 truncate text-[12px] font-bold">NAMNAM LOGISTICS</span>
-              <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">12K / 186.4kg</span>
-            </div>
-            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 14:30</div>
+        <article class="rounded-xl border border-ui-border/70 bg-ui-surface px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div class="flex items-center gap-1.5">
+            <span class="ops-awb truncate text-[15px]">618-1234 5675</span>
+            <span class="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold">SIN</span>
+            <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-ui-text-muted">SQ 183 / 12OCT</span>
           </div>
+          <div class="mt-1.5 flex items-center gap-2">
+            <span class="min-w-0 flex-1 truncate text-[12px] font-bold">NAMNAM LOGISTICS</span>
+            <span class="font-mono text-[12px] font-bold text-teal-800">12K / 186.4kg</span>
+          </div>
+          <div class="mt-1 truncate text-[11px] text-ui-text-muted"><span class="font-bold">CNEE</span> SIN AGENT · <span class="font-bold">Hàng</span> GOH</div>
+          <div class="mt-1 font-mono text-[12px] font-semibold text-ui-text-muted">Cut-off 14:30</div>
         </article>
 
-        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-red-300/80">
-          <div class="px-2.5 py-2">
-            <div class="flex items-center gap-1.5">
-              <span class="ops-awb min-w-0 truncate text-[15px]">160-9876 5432</span>
-              <span class="inline-flex shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">HKG</span>
-              <span class="min-w-0 flex-1 truncate font-mono text-[12px] font-bold text-red-600">CX 766 / 12OCT</span>
-            </div>
-            <div class="mt-1.5 flex items-center gap-2">
-              <span class="min-w-0 flex-1 truncate text-[12px] font-bold">ASIA FREIGHT</span>
-              <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">8K / 92.0kg</span>
-            </div>
-            <div class="mt-1.5">
-              <span class="inline-flex items-center rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">Cut-off 13:15 GẤP</span>
-            </div>
+        <article class="rounded-xl border border-ui-border/70 bg-ui-surface px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-red-300/80">
+          <div class="flex items-center gap-1.5">
+            <span class="ops-awb truncate text-[15px]">160-9876 5432</span>
+            <span class="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold">HKG</span>
+            <span class="min-w-0 flex-1 truncate font-mono text-[12px] font-bold text-red-600">CX 766 / 12OCT</span>
           </div>
+          <div class="mt-1.5 flex items-center gap-2">
+            <span class="min-w-0 flex-1 truncate text-[12px] font-bold">ASIA FREIGHT</span>
+            <span class="rounded bg-amber-50 px-1 text-[10px] font-bold text-amber-800 ring-1 ring-amber-300/70">Tên in ≠</span>
+            <span class="font-mono text-[12px] font-bold text-teal-800">8K / 92.0kg</span>
+          </div>
+          <div class="mt-1 truncate text-[11px] text-ui-text-muted"><span class="font-bold">CNEE</span> HKG CONSOL · <span class="font-bold">Hàng</span> Electronics</div>
+          <div class="mt-1"><span class="inline-flex rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">Cut-off 13:15 GẤP</span></div>
         </article>
 
-        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div class="px-2.5 py-2">
-            <div class="flex items-center gap-1.5">
-              <span class="ops-awb min-w-0 truncate text-[15px]">738-1122 3344</span>
-              <span class="inline-flex shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SGN</span>
-              <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-ui-text-muted">VN 301 / 12OCT</span>
-            </div>
-            <div class="mt-1.5 flex items-center gap-2">
-              <span class="min-w-0 flex-1 truncate text-[12px] font-bold">SAIGON AIR CARGO</span>
-              <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">4K / 45.5kg</span>
-            </div>
-            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 18:00</div>
+        <article class="rounded-xl border border-ui-border/70 bg-ui-surface px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div class="flex items-center gap-1.5">
+            <span class="ops-awb truncate text-[15px]">738-1122 3344</span>
+            <span class="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold">SGN</span>
+            <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-ui-text-muted">VN 301 / 12OCT</span>
           </div>
+          <div class="mt-1.5 flex items-center gap-2">
+            <span class="min-w-0 flex-1 truncate text-[12px] font-bold">SAIGON AIR CARGO</span>
+            <span class="font-mono text-[12px] font-bold text-teal-800">4K / 45.5kg</span>
+          </div>
+          <div class="mt-1 truncate text-[11px] text-ui-text-muted"><span class="font-bold">CNEE</span> XYZ TRADING · <span class="font-bold">Hàng</span> Textile</div>
+          <div class="mt-1 font-mono text-[12px] font-semibold text-ui-text-muted">Cut-off 18:00</div>
         </article>
 
-        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div class="px-2.5 py-2">
-            <div class="flex items-center gap-1.5">
-              <span class="ops-awb min-w-0 truncate text-[15px]">176-5566 7788</span>
-              <span class="inline-flex shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">HAN</span>
-              <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-ui-text-muted">VN 305 / 12OCT</span>
-            </div>
-            <div class="mt-1.5 flex items-center gap-2">
-              <span class="min-w-0 flex-1 truncate text-[12px] font-bold">HANOI EXPRESS</span>
-              <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">20K / 310.2kg</span>
-            </div>
-            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 16:40</div>
+        <article class="rounded-xl border border-ui-border/70 bg-ui-surface px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div class="flex items-center gap-1.5">
+            <span class="ops-awb truncate text-[15px]">176-5566 7788</span>
+            <span class="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold">HAN</span>
+            <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-ui-text-muted">VN 305 / 12OCT</span>
           </div>
+          <div class="mt-1.5 flex items-center gap-2">
+            <span class="min-w-0 flex-1 truncate text-[12px] font-bold">HANOI EXPRESS</span>
+            <span class="font-mono text-[12px] font-bold text-teal-800">20K / 310.2kg</span>
+          </div>
+          <div class="mt-1 truncate text-[11px] text-ui-text-muted"><span class="font-bold">CNEE</span> HAN SPARES · <span class="font-bold">Hàng</span> Spare parts</div>
+          <div class="mt-1 font-mono text-[12px] font-semibold text-ui-text-muted">Cut-off 16:40</div>
         </article>
 
-        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-2 ring-ui-primary/40">
-          <div class="px-2.5 py-2">
-            <div class="flex items-center gap-1.5">
-              <span class="ops-awb min-w-0 truncate text-[15px]">232-4433 2211</span>
-              <span class="inline-flex shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SIN</span>
-              <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-ui-text-muted">SQ 178 / 12OCT</span>
-            </div>
-            <div class="mt-1.5 flex items-center gap-2">
-              <span class="min-w-0 flex-1 truncate text-[12px] font-bold">LION STAR</span>
-              <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">6K / 71.8kg</span>
-            </div>
-            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-subtle line-through">Cut-off 12:00 đã qua</div>
+        <article class="rounded-xl border border-ui-border/70 bg-ui-surface px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div class="flex items-center gap-1.5">
+            <span class="ops-awb truncate text-[15px]">607-3344 5566</span>
+            <span class="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold">DAD</span>
+            <span class="min-w-0 flex-1 truncate font-mono text-[12px] font-bold text-red-600">VN 309 / 13OCT</span>
           </div>
-        </article>
-
-        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div class="px-2.5 py-2">
-            <div class="flex items-center gap-1.5">
-              <span class="ops-awb min-w-0 truncate text-[15px]">618-9988 7766</span>
-              <span class="inline-flex shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">HKG</span>
-              <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-ui-text-muted">CX 799 / 12OCT</span>
-            </div>
-            <div class="mt-1.5 flex items-center gap-2">
-              <span class="min-w-0 flex-1 truncate text-[12px] font-bold">PACIFIC GATE</span>
-              <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">15K / 204.0kg</span>
-            </div>
-            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 17:20</div>
+          <div class="mt-1.5 flex items-center gap-2">
+            <span class="min-w-0 flex-1 truncate text-[12px] font-bold">DANANG HUB</span>
+            <span class="font-mono text-[12px] font-bold text-teal-800">3K / 28.6kg</span>
           </div>
-        </article>
-
-        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div class="px-2.5 py-2">
-            <div class="flex items-center gap-1.5">
-              <span class="ops-awb min-w-0 truncate text-[15px]">607-3344 5566</span>
-              <span class="inline-flex shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">DAD</span>
-              <span class="min-w-0 flex-1 truncate font-mono text-[12px] font-bold text-red-600">VN 309 / 13OCT</span>
-            </div>
-            <div class="mt-1.5 flex items-center gap-2">
-              <span class="min-w-0 flex-1 truncate text-[12px] font-bold">DANANG HUB</span>
-              <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">3K / 28.6kg</span>
-            </div>
-            <div class="mt-1.5 font-mono text-[12px] font-semibold tabular-nums text-ui-text-muted">Cut-off 20:10</div>
-          </div>
-        </article>
-
-        <article class="overflow-hidden rounded-xl border border-ui-border/70 bg-ui-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-          <div class="px-2.5 py-2">
-            <div class="flex items-center gap-1.5">
-              <span class="ops-awb min-w-0 truncate text-[15px]">180-2211 3344</span>
-              <span class="inline-flex shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-bold uppercase ring-1 ring-slate-200/80">SIN</span>
-              <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-ui-text-muted">SQ 184 / 12OCT</span>
-            </div>
-            <div class="mt-1.5 flex items-center gap-2">
-              <span class="min-w-0 flex-1 truncate text-[12px] font-bold">MEKONG AIR</span>
-              <span class="shrink-0 font-mono text-[12px] font-bold tabular-nums text-teal-800">9K / 118.5kg</span>
-            </div>
-            <div class="mt-1.5">
-              <span class="inline-flex items-center rounded-md bg-[#FFF1F2] px-1.5 py-0.5 font-mono text-[12px] font-bold text-[#881337] ring-1 ring-[#E11D48]/35">Cut-off 15:00 GẤP</span>
-            </div>
-          </div>
+          <div class="mt-1 truncate text-[11px] font-semibold text-amber-800"><span class="font-bold">CNEE</span> Chưa chọn · <span class="font-bold">Hàng</span> Fresh</div>
+          <div class="mt-1 font-mono text-[12px] font-semibold text-ui-text-muted">Cut-off 20:10</div>
         </article>
       </div>
 
-      <button
-        type="button"
-        class="fixed bottom-[max(5.5rem,calc(4.5rem+env(safe-area-inset-bottom)))] right-3 z-[400] inline-flex h-12 min-w-12 items-center justify-center rounded-full bg-ui-primary px-4 text-[13px] font-bold text-white shadow-ui-md"
-        aria-label="Thêm booking TECS-TCS"
-      >
-        + Booking
-      </button>
+      <button type="button" class="fixed bottom-[max(5.5rem,calc(4.5rem+env(safe-area-inset-bottom)))] right-3 z-[400] inline-flex h-12 items-center rounded-full bg-ui-primary px-4 text-[13px] font-bold text-white shadow-ui-md">+ Booking</button>
       <div class="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-3 z-[500]">
-        <button type="button" class="inline-flex h-14 w-14 items-center justify-center rounded-full border border-ui-border/80 bg-ui-surface text-ui-navy shadow-ui-md" aria-label="Mở menu">
+        <button type="button" class="inline-flex h-14 w-14 items-center justify-center rounded-full border border-ui-border/80 bg-ui-surface shadow-ui-md" aria-label="Mở menu">
           <svg class="h-6 w-6 text-ui-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
         </button>
       </div>
+
+      <div class="mobile-sheet fixed inset-0 z-[600] hidden bg-black/30">
+        <div class="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-auto rounded-t-[28px] border border-ui-border bg-ui-surface px-4 pb-8 pt-3 shadow-ui-lg">
+          <div class="mx-auto mb-3 h-1 w-10 rounded-full bg-ui-sunken"></div>
+          <div class="mb-3 flex items-start justify-between">
+            <div>
+              <p class="text-[11px] font-bold uppercase text-ui-text-muted">Hồ sơ lô</p>
+              <p class="ops-awb text-[16px]">160-9876 5432</p>
+              <p class="text-[12px] font-semibold text-ui-text-muted">CX 766 · HKG · 8K / 92.0kg</p>
+            </div>
+            <button type="button" class="h-8 rounded-lg border border-ui-border px-2 text-[12px] font-semibold">Sao chép</button>
+          </div>
+          <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">Khách</label>
+          <div class="mb-3 h-11 rounded-xl border border-ui-border bg-ui-surface-muted/50 px-3 py-2 text-[14px] font-bold">ASIA FREIGHT</div>
+          <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">Shipper</label>
+          <div class="mb-3 h-11 rounded-xl border border-ui-border px-3 py-2 text-[14px] font-semibold">ASIA FREIGHT CO., LTD</div>
+          <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">CNEE</label>
+          <div class="mb-2 h-11 rounded-xl border border-ui-border px-3 py-2 text-[14px] font-semibold">HONG KONG CONSOL LTD</div>
+          <div class="mb-3 rounded-xl border border-dashed border-amber-400/70 bg-amber-50/70 px-3 py-2">
+            <p class="text-[11px] font-bold uppercase text-amber-800">Tên in ≠ hồ sơ</p>
+            <p class="text-[14px] font-semibold">Australasian Mail Services</p>
+            <p class="text-[12px] text-ui-text-muted">75 Harrick Road, Keilor Park VIC 3043</p>
+          </div>
+          <label class="mb-1 block text-[11px] font-bold uppercase text-ui-text-muted">Hàng</label>
+          <div class="mb-4 h-11 rounded-xl border border-ui-border px-3 py-2 text-[14px] font-semibold">Electronics / CONSOL</div>
+          <button type="button" class="inline-flex h-11 w-full items-center justify-center rounded-xl bg-ui-primary text-[14px] font-bold text-white">Lưu hồ sơ lô</button>
+        </div>
+      </div>
     </div>
+    <script>
+      if (new URLSearchParams(location.search).get("sheet") === "1") {
+        document.body.classList.add("show-sheet");
+      }
+    </script>
   </body>
 </html>

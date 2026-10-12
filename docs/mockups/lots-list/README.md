@@ -2,7 +2,9 @@
 
 **Không** nối vào app, không sửa `src/`, server, hay CI.
 
-**Phương án 1 (đang chọn):** bảng desktop quét nhanh + card mobile. **Không** hiện trạng thái lô (đã gỡ khỏi Ops).
+**Phương án 1 (đang chọn):** bảng desktop quét nhanh + card mobile. **Không** hiện trạng thái lô.
+
+**Hồ sơ khách:** gộp cột KHÁCH + INFO KH. Hàng danh sách chỉ quét **mã KH → CNEE → hàng**. Shipper, địa chỉ, tên in nằm panel/sheet (desktop phải, mobile bottom sheet `?sheet=1`). Chip `Tên in ≠` khi tên in khác hồ sơ CNEE.
 
 | File | Vai trò |
 | --- | --- |

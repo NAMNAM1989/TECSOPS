@@ -988,6 +988,9 @@ export function AirCargoTracking({
               if (mobileEditShipment) onUpdate(mobileEditShipment.id, patch);
               setMobileEditShipment(null);
             }}
+            onPrint={requestPrintLabel}
+            onInvoice={openInvoiceH21}
+            onDelete={onDelete}
           />
         </Suspense>
       ) : null}

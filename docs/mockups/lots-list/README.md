@@ -1,6 +1,6 @@
 # Mockup — Bảng danh sách lô hàng (chỉ đề xuất giao diện)
 
-**Không** nối vào app, không sửa `src/`, server, hay CI.
+Đã nối phương án 1 vào app thật (`DesktopShipmentTable` + `LotProfilePanel` + card/sheet mobile). File tĩnh dưới đây vẫn dùng để so sánh.
 
 **Phương án 1 (đang chọn):** bảng desktop quét nhanh + card mobile. **Không** hiện trạng thái lô.
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Shipment, ShipmentStatus } from "../types/shipment";
+import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { DESTINATIONS } from "../data/customers";
 import { findCustomerEntry } from "../utils/customerBookingResolve";
@@ -22,7 +22,6 @@ import {
   parseBookingDateLoose,
   formatYmdToFlightDateDdMon,
 } from "../utils/bookingDateParse";
-import { StatusSelect } from "./StatusBadge";
 import {
   LazyMobileDimKgModal,
   type MobileDimSavePayload,
@@ -114,7 +113,6 @@ export function MobileShipmentEditSheet({
   const [customerGoodsId, setCustomerGoodsId] = useState("");
   const [pcs, setPcs] = useState<number | null>(null);
   const [kg, setKg] = useState<number | null>(null);
-  const [status, setStatus] = useState<ShipmentStatus>("PENDING");
   const [dimWeightKg, setDimWeightKg] = useState<number | null>(null);
   const [dimLines, setDimLines] = useState<Shipment["dimLines"]>(null);
 
@@ -167,7 +165,6 @@ export function MobileShipmentEditSheet({
     setCustomerGoodsId((shipment.customerGoodsId ?? "").trim());
     setPcs(shipment.pcs);
     setKg(shipment.kg);
-    setStatus(shipment.status);
     setDimWeightKg(shipment.dimWeightKg);
     setDimLines(shipment.dimLines);
   }, [open, shipment, initialTab]);
@@ -256,7 +253,6 @@ export function MobileShipmentEditSheet({
         : {}),
       pcs,
       kg,
-      status,
       dimWeightKg,
       dimLines,
     };
@@ -294,7 +290,7 @@ export function MobileShipmentEditSheet({
               <h2 className="text-[16px] font-bold text-ui-text">
                 {awb.trim() ? "Sửa lô" : "Booking mới"}
               </h2>
-              <p className="truncate font-shipment-data text-[11px] text-ui-text-muted">
+              <p className="truncate font-shipment-data text-2xs text-ui-text-muted">
                 {shipment.warehouse} · {sessionDateYmd}
               </p>
             </div>
@@ -394,7 +390,7 @@ export function MobileShipmentEditSheet({
                   />
                 </Field>
                 <div className={`space-y-2 rounded-2xl border p-3 ${OPS.panelSoft}`}>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-apple-secondary">
+                  <p className="text-2xs font-semibold uppercase tracking-wide text-apple-secondary">
                     Thông tin KH
                   </p>
                   <Field label="Shipper">
@@ -448,7 +444,7 @@ export function MobileShipmentEditSheet({
                       ))}
                     </select>
                   </Field>
-                  <p className="text-[11px] leading-relaxed text-apple-tertiary">
+                  <p className="text-2xs leading-relaxed text-apple-tertiary">
                     Chọn từ hồ sơ đã lưu trong Danh bạ khách.
                   </p>
                 </div>
@@ -485,7 +481,7 @@ export function MobileShipmentEditSheet({
             {tab === "notify" ? (
               <div className="space-y-4">
                 <div className={`rounded-2xl border p-4 ${OPS.panelSoft}`}>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-apple-secondary">
+                  <p className="text-2xs font-semibold uppercase tracking-wide text-apple-secondary">
                     Nội dung thông báo
                   </p>
                   {notifyPreview.trim() ? (
@@ -508,7 +504,7 @@ export function MobileShipmentEditSheet({
                     {copyOk ? "Đã sao chép" : "Sao chép thông báo"}
                   </button>
                 </div>
-                <p className="text-[11px] leading-relaxed text-apple-tertiary">
+                <p className="text-2xs leading-relaxed text-apple-tertiary">
                   Hồ sơ Shipper / CNEE / Tên hàng được quản lý trong Danh bạ.
                 </p>
               </div>
@@ -516,13 +512,6 @@ export function MobileShipmentEditSheet({
 
             {tab === "dim" ? (
               <div className="space-y-4">
-                <Field label="Trạng thái">
-                  <StatusSelect
-                    value={status}
-                    warehouse={shipment.warehouse}
-                    onChange={setStatus}
-                  />
-                </Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Kiện">
                     <input
@@ -641,7 +630,7 @@ function Field({
     <div>
       <label className={MOBILE.fieldLabel}>{label}</label>
       {hint ? (
-        <p className="-mt-1 mb-1.5 text-[10px] text-ui-text-muted">{hint}</p>
+        <p className="-mt-1 mb-1.5 text-2xs text-ui-text-muted">{hint}</p>
       ) : null}
       {children}
     </div>

@@ -251,6 +251,7 @@ export function parseCustomerDirectoryLoose(raw: unknown): CustomerDirectoryEntr
         consigneeEmail: trimStr(o.consigneeEmail),
         notifyName: trimStr(o.notifyName),
         otherRequirementsPrint: trimStr(o.otherRequirementsPrint),
+        h21InvoicePresets: o.h21InvoicePresets,
         ...(syncedAt ? { syncedAt } : {}),
       } as CustomerDirectoryEntry & {
         consigneeName?: string;

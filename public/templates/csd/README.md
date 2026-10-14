@@ -5,6 +5,7 @@
 | `CSD-FD.pdf` | Thai AirAsia | mã **FD**… | `CSD_CARRIER_PROFILES.FD` |
 | `CSD-TG.pdf` | Thai Airways | mã **TG**… | `CSD_CARRIER_PROFILES.TG` |
 | `CSD-MH.pdf` | Malaysia Airlines (maskargo) | mã **MH**… | `CSD_CARRIER_PROFILES.MH` |
+| `CSD-MH.pdf` | MJets Air | mã **WW**… | `CSD_CARRIER_PROFILES.WW` (cùng mẫu MH) |
 | `CSD-QR.pdf` | Qatar Airways | mã **QR**… | `CSD_CARRIER_PROFILES.QR` |
 | `CSD-AK.pdf` | AirAsia | mã **AK**… | `CSD_CARRIER_PROFILES.AK` |
 | `CSD-VU.pdf` | Vietravel Airlines | mã **VU**… | `CSD_CARRIER_PROFILES.VU` |
@@ -14,6 +15,8 @@
 | `CSD-PR.pdf` | Philippine Airlines | mã **PR**… | `CSD_CARRIER_PROFILES.PR` |
 | `CSD-T5.pdf` | Turkmenistan Airlines | mã **T5**… | `CSD_CARRIER_PROFILES.T5` |
 | `CSD-AI.pdf` | Air India | mã **AI**… | `CSD_CARRIER_PROFILES.AI` |
+| `CSD-MF.pdf` | Xiamen Airlines | mã **MF**… | `CSD_CARRIER_PROFILES.MF` |
+| `CSD-TH.pdf` | Raya Airways | mã **TH**… | `CSD_CARRIER_PROFILES.TH` |
 
 Logic điền + tải PDF: `src/utils/csdForms.ts`  
 Popup nhập Origin / Transfer (hoặc Issued by cho EK): `src/components/CsdPrintModal.tsx`
@@ -32,11 +35,17 @@ Ví dụ: `scsc_vj_97812345675_tín phát.pdf`
 - §1 `RA {mã}` · §2 AWB · §3 Contents (2 dòng)
 - §4 Origin (mặc định SGN) · §5 DEST · §6 Transfer
 - §14 `RA {mã}` (footer)
+- Tick cố định: **PAX aircraft (SPX)**, **RA**, **XRY/X-ray Machine**
 
 ### MH (A4 — maskargo)
 - Mẫu đã in sẵn ACV + Origin SGN + ACC3 footer
 - Ghi mã RA theo kho (`VN/RA3-xxxxx-xx`) — dưới nhãn §1
 - Unique Consignment Identifier = AWB · Contents · DEST · Transfer
+- Tick cố định: **Loose**, **SPX**, **RA/RA3 Regulated Agent**, **XRY/X-ray Machine**
+
+### WW (A4 — cùng mẫu maskargo với MH)
+- File: `CSD-MH.pdf` · chuyến mã **WW**… (MJets Air)
+- Điền và tick giống MH. Hub Transfer gợi ý: **KUL**
 - URL mẫu có `?v=` để tránh cache PDF cũ
 
 ### QR (A4 — QTR-CGO-CSM-001-CSD)
@@ -90,9 +99,21 @@ Ví dụ: `scsc_vj_97812345675_tín phát.pdf`
 - Điền: `RA {mã}` (§1 + footer), AWB, Contents, DEST, Transfer (gợi ý **DEL**), Date/Time Issued on
 - Issued by để trống (ký tay)
 
+### MF (A4 ngắn — Xiamen Airlines / IATA CSD)
+- File: `CSD-MF.pdf` — URL `?v=20260914`
+- Giữ Origin **SGN** + **SPX** + **XRY** + Received from **N/A** + Consolidation
+- Điền: `RA {mã}` (§1 + footer), AWB, Contents, DEST, Transfer (gợi ý **XMN**), Issued on Date
+- Issued by để trống (ký tay)
+
+### TH (A4 — Raya Airways / SCSC CSD)
+- File: `CSD-TH.pdf` — URL `?v=20260920`
+- Giữ logo SCSC + Origin **SGN**; blank đã wipe RA mẫu
+- Điền: `RA {mã}` (§1 + footer), AWB, Contents, DEST, Transfer (gợi ý **KUL**), tick **SPX** + **XRY**, Received from **RA**, Date/Time Issued on
+- Issued by để trống (ký tay)
+
 ## Mã RA theo kho (overlay §1 / §14)
 
-| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG/QR/AK/VU/VJ/SQ/TR/BI/EK/PR/T5/AI) | Mã RA trên mẫu MH |
+| Kho hoạt động | Mã lô Ops | Mã RA (FD/TG/QR/AK/VU/VJ/SQ/TR/BI/EK/PR/T5/AI/MF/TH) | Mã RA trên mẫu MH |
 |---------------|-----------|--------------------------------------|-------------------|
 | TECS | `TECS-TCS`, `TECS-SCSC` | `VN/RA3/00013-01` | `VN/RA3-00013-01` |
 | SCSC | `SCSC` | `VN/RA3/00009-01` | `VN/RA3-00009-01` |

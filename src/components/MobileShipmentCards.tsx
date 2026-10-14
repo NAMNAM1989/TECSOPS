@@ -1,14 +1,9 @@
 import { memo, useCallback, useMemo } from "react";
 import type { Shipment } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
-import { StatusSelect } from "./StatusBadge";
 import { Button } from "../ui";
 import { formatKgTotal } from "../utils/formatKgTotal";
-import {
-  statusRowAccent,
-  statusRowBg,
-  statusRowSelected,
-} from "./statusStyles";
+import { statusRowBg, statusRowSelected } from "./statusStyles";
 import {
   emptyWarehouseRecord,
   warehouseLabel,
@@ -83,7 +78,6 @@ const MobileShipmentCard = memo(
     customerDirectory,
     sessionYmd,
     onOpenEdit,
-    onUpdate,
     onDelete,
     onPrint,
     onInvoice,
@@ -94,12 +88,10 @@ const MobileShipmentCard = memo(
     customerDirectory: readonly CustomerDirectoryEntry[];
     sessionYmd: string;
     onOpenEdit: (row: Shipment) => void;
-    onUpdate: (id: string, patch: Partial<Shipment>) => void;
     onDelete: (id: string) => void;
     onPrint: (s: Shipment) => void;
     onInvoice?: (s: Shipment) => void;
   }) {
-    const rowAccent = statusRowAccent[row.status];
     const rowSurface = selected ? statusRowSelected : statusRowBg;
     const awbTrim = (row.awb ?? "").trim();
     const hawbTrim = (row.hawb ?? "").trim();
@@ -137,14 +129,14 @@ const MobileShipmentCard = memo(
           contentVisibility: "auto",
           containIntrinsicSize: "0 58px",
         }}
-        className={`${MOBILE.card} scroll-mt-2 scroll-mb-[calc(5rem+env(safe-area-inset-bottom))] ${rowAccent} ${rowSurface} ${
+        className={`${MOBILE.card} snap-start scroll-mt-2 scroll-mb-[calc(5rem+env(safe-area-inset-bottom))] ${rowSurface} ${
           selected ? "ring-2 ring-ui-primary/40" : ""
         } ${highlighted ? "ring-2 ring-amber-400/70" : ""} ${
           flightMeta.flightDateUrgent ? "ring-1 ring-red-300/80" : ""
         }`}
       >
         <div className={MOBILE.cardInner}>
-          {/* Dòng 1: AWB · DST · chuyến | status · menu */}
+          {/* Dòng 1: AWB · DST · chuyến | menu */}
           <div className="flex min-w-0 items-center gap-1.5">
             <button
               type="button"
@@ -172,7 +164,7 @@ const MobileShipmentCard = memo(
               {flightLine ? (
                 <span
                   className={`min-w-0 flex-1 truncate ${MOBILE.cardFlight} ${
-                    flightMeta.flightDateUrgent ? "!font-extrabold !text-red-600" : ""
+                    flightMeta.flightDateUrgent ? "!font-bold !text-red-600" : ""
                   }`}
                 >
                   {flightLine}
@@ -183,12 +175,6 @@ const MobileShipmentCard = memo(
               className="flex shrink-0 items-center gap-1"
               onClick={(e) => e.stopPropagation()}
             >
-              <StatusSelect
-                dense
-                warehouse={row.warehouse}
-                value={row.status}
-                onChange={(s) => onUpdate(row.id, { status: s })}
-              />
               <ShipmentRowActionsMenu
                 compact
                 dense
@@ -231,7 +217,6 @@ interface MobileShipmentCardsProps {
   rows: Shipment[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  onUpdate: (id: string, patch: Partial<Shipment>) => void;
   onDelete: (id: string) => void;
   onPrint: (s: Shipment) => void;
   onInvoice?: (s: Shipment) => void;
@@ -249,7 +234,6 @@ export function MobileShipmentCards({
   rows,
   selectedId,
   onSelect,
-  onUpdate,
   onDelete,
   onPrint,
   onInvoice,
@@ -298,7 +282,6 @@ export function MobileShipmentCards({
       customerDirectory={customerDirectory}
       sessionYmd={viewSessionYmd}
       onOpenEdit={handleOpenEdit}
-      onUpdate={onUpdate}
       onDelete={onDelete}
       onPrint={onPrint}
       onInvoice={onInvoice}
@@ -307,7 +290,7 @@ export function MobileShipmentCards({
 
   return (
     <div
-      className={`space-y-1.5 px-0.5 pb-[calc(5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(5rem+env(safe-area-inset-bottom))] ${mobileOnlyVisibility(isMobile)}`}
+      className={`space-y-1.5 px-0.5 pb-[calc(5rem+env(safe-area-inset-bottom))] scroll-pb-[calc(5rem+env(safe-area-inset-bottom))] snap-y snap-proximity overscroll-contain ${mobileOnlyVisibility(isMobile)}`}
       data-testid="mobile-shipment-list"
     >
       {searchActive
@@ -328,10 +311,10 @@ export function MobileShipmentCards({
                     className="flex min-h-11 min-w-0 flex-1 touch-manipulation items-center gap-1.5 px-0.5 py-0.5 text-left"
                   >
                     <Chevron collapsed={collapsed} />
-                    <span className="text-[11px] font-bold text-dashboard-primary">
+                    <span className="text-2xs font-bold text-dashboard-primary">
                       {warehouseLabel[wh]}
                     </span>
-                    <span className="text-[10px] text-dashboard-muted">
+                    <span className="text-2xs text-dashboard-muted">
                       {group.length}
                     </span>
                   </button>

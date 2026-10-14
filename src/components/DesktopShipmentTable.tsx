@@ -1,8 +1,7 @@
-import { memo, useCallback, useMemo, useRef, useState } from "react";
-import type { Shipment, ShipmentStatus, Warehouse } from "../types/shipment";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Shipment, Warehouse } from "../types/shipment";
 import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import { findAwbDigitsConflict } from "../utils/awbUnique";
-import { StatusSelect } from "./StatusBadge";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { InlineTextEdit } from "./InlineTextEdit";
 import { InlineCustomerEdit } from "./InlineCustomerEdit";
@@ -11,14 +10,16 @@ import {
   formatYmdToFlightDateDdMon,
   parseBookingDateLoose,
 } from "../utils/bookingDateParse";
+import { isCargoReportFlightDateUrgent } from "../utils/cargoDayReport";
+import {
+  useGridNavigation,
+  type GridNavDirection,
+  type TableGridField,
+} from "../hooks/useGridNavigation";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { InlineAwbEdit } from "./InlineAwbEdit";
 import { LazyMobileDimKgModal } from "./LazyMobileDimKgModal";
-import {
-  statusRowAccent,
-  statusRowSelected,
-  flightNumberAccent,
-} from "./statusStyles";
+import { statusRowSelected, flightNumberAccent } from "./statusStyles";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 import { normalizeWarehouse, warehouseLabel } from "../constants/warehouses";
 import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
@@ -33,6 +34,23 @@ import {
 } from "../utils/inlineShipmentFieldValidation";
 import { useToast } from "../ui";
 import { NewBookingButton } from "./NewBookingButton";
+import { formatKgTotal } from "../utils/formatKgTotal";
+import { summarizeWarehouseHeader } from "../utils/warehouseHeaderTotals";
+import { OPS_URGENT_NOTICES } from "../content/opsUrgentNotices";
+import { OpsUrgentNoticeMarquee } from "./OpsUrgentNoticeMarquee";
+import type { CellStatus } from "./CellStatusDot";
+import { TABLE_COLUMN_ORDER, ENABLE_SPACE_PAGE_FLIP, type ScrollMode } from "../config/tableUx";
+import {
+  calculatePageFlipTarget,
+  getStoredScrollMode,
+  setStoredScrollMode,
+  smoothScrollTop,
+} from "../utils/pageFlipAnimation";
+import { parseTsv } from "../utils/tsvParser";
+import { buildPastePlan, type PastePlan } from "../utils/tablePasteMapper";
+import { globalTableUndoManager } from "../utils/tableUndoManager";
+import { PastePreviewModal } from "./PastePreviewModal";
+import { useVirtualScroll } from "../hooks/useVirtualScroll";
 
 interface Props {
   rows: Shipment[];
@@ -52,11 +70,12 @@ interface Props {
   onUpdateCustomers?: (
     customers: CustomerDirectoryEntry[]
   ) => Promise<boolean | void>;
+  cellStatuses?: Record<string, CellStatus>;
 }
 
 type ColHeader = { key: string; label: string; w: string; title?: string };
 
-/** ~200px — đủ đọc tên Shipper/CNEE, vẫn gọn cạnh STATUS. */
+/** Giữ một dòng mỗi mục — không kéo cao hàng. */
 const INFO_KH_W = "w-[12.5rem] max-w-[12.5rem]";
 /** Vừa đủ nội dung thật — không truncate AWB/chuyến; KHÁCH tối đa 2 dòng. */
 const AWB_W = "w-[9rem] max-w-[9rem]";
@@ -78,12 +97,6 @@ const COL_HEADERS: ColHeader[] = [
     w: INFO_KH_W,
     title: "Shipper · CNEE · Tên hàng · CNEE in ấn",
   },
-  {
-    key: "status",
-    label: "STATUS",
-    w: "min-w-[6.5rem] max-w-[7.5rem]",
-    title: "Trạng thái lô",
-  },
   { key: "actions", label: "THAO TÁC", w: "min-w-[7.25rem]", title: "Ghi chú, in & menu" },
 ];
 
@@ -102,6 +115,7 @@ export function DesktopShipmentTable({
   onInvoice,
   viewSessionYmd,
   onUpdateCustomers,
+  cellStatuses,
 }: Props) {
   const isMobile = useIsMobile();
   const [dimModalRow, setDimModalRow] = useState<Shipment | null>(null);
@@ -117,7 +131,232 @@ export function DesktopShipmentTable({
         .sort((a, b) => (a.stt ?? 0) - (b.stt ?? 0) || a.id.localeCompare(b.id)),
     [rows, activeWarehouse],
   );
+  const groupRef = useRef(group);
+  groupRef.current = group;
+  const getNeighborRowId = useCallback((id: string, dir: "prev" | "next" | -1 | 1): string | null => {
+    const list = groupRef.current;
+    const idx = list.findIndex((r) => r.id === id);
+    if (idx === -1) return null;
+    const offset = dir === "next" || dir === 1 ? 1 : -1;
+    const target = list[idx + offset];
+    return target ? target.id : null;
+  }, []);
+  const toast = useToast();
+  const [pendingPastePlan, setPendingPastePlan] = useState<PastePlan | null>(null);
   const groupRowIds = useMemo(() => group.map((r) => r.id), [group]);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const getScrollElement = useCallback(() => tableContainerRef.current, []);
+  const scrollStorageKey = `tecsops.scrollPos.${viewSessionYmd || "today"}.${activeWarehouse}`;
+
+  const virtualScroll = useVirtualScroll({
+    count: group.length,
+    estimateSize: 56,
+    overscan: 8,
+    getScrollElement,
+    storageKey: scrollStorageKey,
+  });
+
+  const onBeforeGridFocus = useCallback(
+    (rowId: string) => {
+      const idx = groupRef.current.findIndex((r) => r.id === rowId);
+      if (idx !== -1 && virtualScroll.isVirtualized) {
+        virtualScroll.scrollToIndex(idx, { align: "auto" });
+      }
+    },
+    [virtualScroll]
+  );
+
+  const { onNavigate: onGridNavigate, activeCell, setActiveCell } = useGridNavigation({
+    rowIds: groupRowIds,
+    onBeforeFocus: onBeforeGridFocus,
+  });
+  const handleRowNavigate = useCallback(
+    (rowId: string, field: TableGridField, dir: GridNavDirection) => {
+      onGridNavigate(rowId, field, dir);
+    },
+    [onGridNavigate]
+  );
+  const headerTotals = useMemo(() => summarizeWarehouseHeader(group), [group]);
+
+  const confirmPendingPaste = useCallback(() => {
+    if (!pendingPastePlan) return;
+    const plan = pendingPastePlan;
+    setPendingPastePlan(null);
+
+    globalTableUndoManager.push({
+      description: `Dán vùng ${plan.affectedRowsCount} lô`,
+      forwardMutations: plan.forwardMutations,
+      reverseMutations: plan.reverseMutations,
+    });
+
+    for (const mut of plan.forwardMutations) {
+      if (mut.action === "UPDATE") {
+        void onUpdate(mut.id, mut.patch);
+      }
+    }
+    toast.success(`Đã dán vào ${plan.affectedRowsCount} lô`);
+  }, [pendingPastePlan, onUpdate, toast]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isInput =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target?.isContentEditable;
+
+      if (isInput) return;
+
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+      // Undo: Ctrl+Z
+      if (isCtrlOrCmd && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        const entry = globalTableUndoManager.undo();
+        if (entry) {
+          for (const mut of entry.reverseMutations) {
+            if (mut.action === "UPDATE") {
+              void onUpdate(mut.id, mut.patch);
+            }
+          }
+          toast.info(`Đã hoàn tác: ${entry.description}`);
+        }
+        return;
+      }
+
+      // Redo: Ctrl+Y hoặc Ctrl+Shift+Z
+      if (
+        (isCtrlOrCmd && (e.key === "y" || e.key === "Y")) ||
+        (isCtrlOrCmd && e.shiftKey && (e.key === "z" || e.key === "Z"))
+      ) {
+        e.preventDefault();
+        const entry = globalTableUndoManager.redo();
+        if (entry) {
+          for (const mut of entry.forwardMutations) {
+            if (mut.action === "UPDATE") {
+              void onUpdate(mut.id, mut.patch);
+            }
+          }
+          toast.info(`Đã làm lại: ${entry.description}`);
+        }
+        return;
+      }
+
+      // Copy: Ctrl+C
+      if (isCtrlOrCmd && (e.key === "c" || e.key === "C")) {
+        if (!activeCell) return;
+        const row = group.find((r) => r.id === activeCell.rowId);
+        if (!row) return;
+        const val = String((row as unknown as Record<string, unknown>)[activeCell.field] ?? "");
+        e.preventDefault();
+        void navigator.clipboard
+          .writeText(val)
+          .then(() => {
+            toast.info(`Đã sao chép: ${val || "ô trống"}`);
+          })
+          .catch(() => {});
+        return;
+      }
+
+      // Paste: Ctrl+V
+      if (isCtrlOrCmd && (e.key === "v" || e.key === "V")) {
+        if (!activeCell) return;
+        e.preventDefault();
+        void navigator.clipboard
+          .readText()
+          .then((text) => {
+            if (!text) return;
+            const grid = parseTsv(text);
+            if (grid.length === 0) return;
+            const plan = buildPastePlan(grid, activeCell, group);
+            if (plan.forwardMutations.length === 0) {
+              toast.warning("Không có dữ liệu thay đổi hợp lệ.");
+              return;
+            }
+
+            if (grid.length > 1) {
+              setPendingPastePlan(plan);
+            } else {
+              globalTableUndoManager.push({
+                description: `Dán ô ${activeCell.field}`,
+                forwardMutations: plan.forwardMutations,
+                reverseMutations: plan.reverseMutations,
+              });
+              for (const mut of plan.forwardMutations) {
+                if (mut.action === "UPDATE") {
+                  void onUpdate(mut.id, mut.patch);
+                }
+              }
+              toast.success("Đã dán dữ liệu vào ô");
+            }
+          })
+          .catch(() => {});
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeCell, group, onUpdate, toast]);
+
+  const getRowCellStatuses = useCallback(
+    (rowId: string): Record<string, CellStatus> | undefined => {
+      if (!cellStatuses) return undefined;
+      let hasAny = false;
+      const res: Record<string, CellStatus> = {};
+      for (const field of TABLE_COLUMN_ORDER) {
+        const s = cellStatuses[`${rowId}:${field}`];
+        if (s && s !== "idle") {
+          res[field] = s;
+          hasAny = true;
+        }
+      }
+      return hasAny ? res : undefined;
+    },
+    [cellStatuses]
+  );
+
+  const [scrollMode, setScrollMode] = useState<ScrollMode>(getStoredScrollMode);
+
+  useEffect(() => {
+    if (scrollMode !== "page-flip") return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      const container = tableContainerRef.current;
+      if (!container) return;
+
+      if (e.key === "PageDown") {
+        e.preventDefault();
+        const targetScrollTop = calculatePageFlipTarget(container, "down");
+        void smoothScrollTop(container, targetScrollTop);
+      } else if (e.key === "PageUp") {
+        e.preventDefault();
+        const targetScrollTop = calculatePageFlipTarget(container, "up");
+        void smoothScrollTop(container, targetScrollTop);
+      } else if (ENABLE_SPACE_PAGE_FLIP && e.key === " ") {
+        e.preventDefault();
+        const dir = e.shiftKey ? "up" : "down";
+        const targetScrollTop = calculatePageFlipTarget(container, dir);
+        void smoothScrollTop(container, targetScrollTop);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [scrollMode]);
 
   return (
     <>
@@ -129,12 +368,12 @@ export function DesktopShipmentTable({
           id={`warehouse-section-${activeWarehouse}`}
           className="mx-0 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md md:mx-5 md:mt-4"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-ui-border/80 bg-ui-surface px-4 py-2.5">
+          <div className="flex items-center gap-2 border-b border-ui-border/80 bg-ui-surface px-4 py-2">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
-              <div className="min-w-0">
-                <h2 className="text-[12px] font-extrabold leading-tight tracking-tight text-ui-navy">
+              <div className="min-w-0 shrink-0">
+                <h2 className="text-[12px] font-bold leading-tight tracking-tight text-ui-navy">
                   {warehouseLabel[activeWarehouse]}
-                  <span className="ml-1.5 text-[10px] font-semibold text-ui-text-muted">
+                  <span className="ml-1.5 text-2xs font-semibold text-ui-text-muted">
                     · {group.length} lô
                   </span>
                 </h2>
@@ -145,12 +384,55 @@ export function DesktopShipmentTable({
                   onAdd={onAddBlankRow}
                 />
               ) : null}
+              <dl
+                className="flex shrink-0 items-center gap-1"
+                data-testid="ops-warehouse-totals"
+              >
+                <WarehouseTotalChip label="Kiện" value={String(headerTotals.pcs)} />
+                <WarehouseTotalChip label="Kg" value={formatKgTotal(headerTotals.actualKg)} />
+                <WarehouseTotalChip label="DIM" value={formatKgTotal(headerTotals.dimKg)} />
+                <WarehouseTotalChip label="CW" value={formatKgTotal(headerTotals.chargeableKg)} />
+              </dl>
+              <OpsUrgentNoticeMarquee notices={OPS_URGENT_NOTICES} />
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                aria-label="Đổi chế độ cuộn"
+                title={
+                  scrollMode === "page-flip"
+                    ? "Đang bật Lật trang (PageDown/PageUp) — bấm để chuyển Cuộn thường"
+                    : "Đang bật Cuộn thường — bấm để chuyển Lật trang"
+                }
+                onClick={() => {
+                  const next: ScrollMode =
+                    scrollMode === "page-flip" ? "normal" : "page-flip";
+                  setScrollMode(next);
+                  setStoredScrollMode(next);
+                }}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-2xs transition ${
+                  scrollMode === "page-flip"
+                    ? "border-ui-primary/60 bg-ui-primary/10 text-ui-primary font-bold shadow-sm"
+                    : "border-ui-border/80 bg-ui-surface text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text font-semibold"
+                }`}
+              >
+                <span>{scrollMode === "page-flip" ? "📖 Lật trang" : "📜 Cuộn thường"}</span>
+              </button>
             </div>
           </div>
           <div
+            ref={tableContainerRef}
             className={`overflow-auto px-1 py-0.5 ${
               group.length > 4 ? "max-h-[min(86vh,860px)]" : ""
             }`}
+            onFocusCapture={(e) => {
+              const el = e.target as HTMLElement;
+              const rowId = el.getAttribute("data-grid-row");
+              const field = el.getAttribute("data-grid-field") as TableGridField | null;
+              if (rowId && field) {
+                setActiveCell({ rowId, field });
+              }
+            }}
           >
             <table className="w-full border-separate border-spacing-x-0 border-spacing-y-1.5 text-left text-[13px] leading-tight">
               <thead className="sticky top-0 z-20">
@@ -159,10 +441,8 @@ export function DesktopShipmentTable({
                     <th
                       key={c.key}
                       title={c.title}
-                      className={`box-border px-1 py-1.5 text-[10px] font-bold uppercase tracking-wider text-ui-text-muted ${
-                        c.key === "customerInfo" || c.key === "status"
-                          ? "truncate"
-                          : "whitespace-nowrap"
+                      className={`box-border px-1 py-1.5 text-2xs font-bold uppercase tracking-wider text-ui-text-muted ${
+                        c.key === "customerInfo" ? "truncate" : "whitespace-nowrap"
                       } ${c.w} ${c.key === "awb" ? "ops-table-head" : ""}`}
                     >
                       {c.label}
@@ -186,19 +466,76 @@ export function DesktopShipmentTable({
                       </button>
                     </td>
                   </tr>
+                ) : virtualScroll.isVirtualized ? (
+                  <>
+                    {virtualScroll.paddingTop > 0 && (
+                      <tr aria-hidden="true" style={{ height: virtualScroll.paddingTop }}>
+                        <td
+                          colSpan={COL_HEADERS.length}
+                          style={{
+                            height: virtualScroll.paddingTop,
+                            padding: 0,
+                            border: "none",
+                            background: "transparent",
+                          }}
+                        />
+                      </tr>
+                    )}
+                    {virtualScroll.virtualItems.map((item) => {
+                      const row = group[item.index];
+                      if (!row) return null;
+                      return (
+                        <ShipmentTableRow
+                          key={row.id}
+                          row={row}
+                          rowIdx={item.index}
+                          rowCellStatuses={getRowCellStatuses(row.id)}
+                          getNeighborRowId={getNeighborRowId}
+                          viewSessionYmd={viewSessionYmd}
+                          highlighted={highlightedShipmentId === row.id}
+                          selected={selectedRowId === row.id}
+                          onSelectRow={onSelectRow}
+                          findAwbConflict={findAwbConflict}
+                          customerDirectory={customerDirectory}
+                          onRowNavigate={handleRowNavigate}
+                          onUpdate={onUpdate}
+                          onUpdateCustomers={onUpdateCustomers}
+                          onDelete={onDelete}
+                          onPrint={onPrint}
+                          onInvoice={onInvoice}
+                          onOpenDimModal={setDimModalRow}
+                        />
+                      );
+                    })}
+                    {virtualScroll.paddingBottom > 0 && (
+                      <tr aria-hidden="true" style={{ height: virtualScroll.paddingBottom }}>
+                        <td
+                          colSpan={COL_HEADERS.length}
+                          style={{
+                            height: virtualScroll.paddingBottom,
+                            padding: 0,
+                            border: "none",
+                            background: "transparent",
+                          }}
+                        />
+                      </tr>
+                    )}
+                  </>
                 ) : (
                   group.map((row, rowIdx) => (
                     <ShipmentTableRow
                       key={row.id}
                       row={row}
                       rowIdx={rowIdx}
-                      groupRowIds={groupRowIds}
+                      rowCellStatuses={getRowCellStatuses(row.id)}
+                      getNeighborRowId={getNeighborRowId}
                       viewSessionYmd={viewSessionYmd}
                       highlighted={highlightedShipmentId === row.id}
                       selected={selectedRowId === row.id}
                       onSelectRow={onSelectRow}
                       findAwbConflict={findAwbConflict}
                       customerDirectory={customerDirectory}
+                      onRowNavigate={handleRowNavigate}
                       onUpdate={onUpdate}
                       onUpdateCustomers={onUpdateCustomers}
                       onDelete={onDelete}
@@ -226,20 +563,38 @@ export function DesktopShipmentTable({
           }}
         />
       ) : null}
+      {pendingPastePlan ? (
+        <PastePreviewModal
+          plan={pendingPastePlan}
+          onConfirm={confirmPendingPaste}
+          onCancel={() => setPendingPastePlan(null)}
+        />
+      ) : null}
     </>
+  );
+}
+
+function WarehouseTotalChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="inline-flex items-baseline gap-1 rounded-md bg-ui-background px-2 py-1" title={`${label}: ${value}`}>
+      <dt className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">{label}</dt>
+      <dd className="m-0 font-mono text-[13px] font-semibold tabular-nums text-ui-navy">{value}</dd>
+    </div>
   );
 }
 
 function ShipmentTableRowImpl({
   row,
   rowIdx,
-  groupRowIds,
+  rowCellStatuses,
+  getNeighborRowId,
   viewSessionYmd,
   highlighted = false,
   selected = false,
   onSelectRow,
   findAwbConflict,
   customerDirectory,
+  onRowNavigate,
   onUpdate,
   onUpdateCustomers,
   onDelete,
@@ -249,13 +604,15 @@ function ShipmentTableRowImpl({
 }: {
   row: Shipment;
   rowIdx: number;
-  groupRowIds: string[];
+  rowCellStatuses?: Record<string, CellStatus>;
+  getNeighborRowId: (id: string, dir: "prev" | "next" | -1 | 1) => string | null;
   viewSessionYmd: string;
   highlighted?: boolean;
   selected?: boolean;
   onSelectRow?: (id: string | null) => void;
   findAwbConflict: (digits: string, exceptId: string) => Shipment | null;
   customerDirectory: readonly CustomerDirectoryEntry[];
+  onRowNavigate?: (rowId: string, field: TableGridField, dir: GridNavDirection) => void;
   onUpdate: (id: string, patch: Partial<Shipment>) => void | Promise<boolean | void>;
   onUpdateCustomers?: (
     customers: CustomerDirectoryEntry[]
@@ -269,11 +626,9 @@ function ShipmentTableRowImpl({
   /** Mỗi lô một tint — 5 màu xoay, dễ tách khi nhiều hàng. */
   const lotSurface = `ops-lot-surface-${rowIdx % 5}`;
   const bg = selected ? statusRowSelected : lotSurface;
-  const accent = statusRowAccent[row.status];
   const cell = (part: "first" | "mid" | "last" | "awb", extra = "") => {
     const round =
       part === "first" ? "rounded-l-xl" : part === "last" ? "rounded-r-xl" : "";
-    const accentCls = part === "first" ? accent : "";
     const hl = highlighted ? "ring-2 ring-inset ring-ui-primary/45" : "";
     const surface = selected ? statusRowSelected : bg;
     const stickyAwb =
@@ -282,19 +637,19 @@ function ShipmentTableRowImpl({
         : "";
     const cardEdge =
       "border-y border-ui-border/70 shadow-[0_1px_0_rgba(15,23,42,0.04)]";
-    return `${surface} ${accentCls} ${round} ${hl} ${stickyAwb} ${cardEdge} transition-colors duration-150 ease-fluid group-hover/row:shadow-[inset_0_0_0_9999px_rgba(13,148,136,0.06)] ${
+    return `${surface} ${round} ${hl} ${stickyAwb} ${cardEdge} transition-colors duration-150 ease-fluid group-hover/row:shadow-[inset_0_0_0_9999px_rgba(13,148,136,0.06)] ${
       part === "first" ? "border-l border-ui-border/80" : ""
     } ${part === "last" ? "border-r border-ui-border/80" : ""} px-1 py-1 ${extra}`.trim();
   };
 
-  const hasNextRow = rowIdx < groupRowIds.length - 1;
   const sessionYear =
     parseInt((viewSessionYmd || row.sessionDate || "").slice(0, 4), 10) ||
     new Date().getFullYear();
 
   const navDownSameField = (field: string) => () => {
-    if (!hasNextRow) return;
-    focusShipmentGridCell(groupRowIds[rowIdx + 1], field);
+    const nextId = getNeighborRowId(row.id, "next");
+    if (!nextId) return;
+    focusShipmentGridCell(nextId, field);
   };
 
   const onFlightDateCommit = (t: string) => {
@@ -310,7 +665,8 @@ function ShipmentTableRowImpl({
   };
 
   const onFlightDateEnterDown = () => {
-    if (hasNextRow) focusShipmentGridCell(groupRowIds[rowIdx + 1], "flight");
+    const nextId = getNeighborRowId(row.id, "next");
+    if (nextId) focusShipmentGridCell(nextId, "flight");
     else focusShipmentGridCell(row.id, "dest");
   };
 
@@ -325,7 +681,7 @@ function ShipmentTableRowImpl({
       <td
         className={cell(
           "first",
-          "text-center font-shipment-data text-[11px] font-semibold tabular-nums text-ui-text-muted",
+          "text-center font-shipment-data text-2xs font-semibold tabular-nums text-ui-text-muted",
         )}
       >
         {row.stt}
@@ -336,19 +692,23 @@ function ShipmentTableRowImpl({
             rowId={row.id}
             value={row.awb}
             findAwbConflict={findAwbConflict}
+            cellStatus={rowCellStatuses?.awb}
             className="ops-awb !py-0 text-[14px] leading-tight"
             onCommit={(awb) => onUpdate(row.id, { awb })}
-            onEnterNavigateDown={() => focusShipmentGridCell(row.id, "hawb")}
+            onNavigate={(dir) => onRowNavigate?.(row.id, "awb", dir)}
+            onEnterNavigateDown={() => onRowNavigate ? onRowNavigate(row.id, "awb", "down") : focusShipmentGridCell(row.id, "hawb")}
           />
           <InlineTextEdit
             value={row.hawb ?? ""}
             placeholder="HAWB"
             title={row.hawb?.trim() ? `HAWB: ${row.hawb}` : undefined}
-            className="font-shipment-data !py-0 text-[11px] font-semibold ops-grid-cell-muted"
+            className="font-shipment-data !py-0 text-2xs font-semibold ops-grid-cell-muted"
             maxLength={32}
             gridNav={{ rowId: row.id, field: "hawb" }}
+            cellStatus={rowCellStatuses?.hawb}
             onCommit={(v) => onUpdate(row.id, { hawb: v.slice(0, 32) })}
-            onEnterNavigateDown={() => focusShipmentGridCell(row.id, "flight")}
+            onNavigate={(dir) => onRowNavigate?.(row.id, "hawb", dir)}
+            onEnterNavigateDown={() => onRowNavigate ? onRowNavigate(row.id, "hawb", "down") : focusShipmentGridCell(row.id, "flight")}
           />
         </div>
       </td>
@@ -358,40 +718,59 @@ function ShipmentTableRowImpl({
             value={row.flight}
             placeholder="Chuyến"
             title={row.flight?.trim() ? `Chuyến: ${row.flight}` : undefined}
-            className={`font-shipment-data !py-0 text-[13px] font-bold ${flightNumberAccent} ops-grid-cell`}
+            className={`font-shipment-data !py-0 text-[13px] ${flightNumberAccent} ops-grid-cell`}
             uppercase
             maxLength={12}
             gridNav={{ rowId: row.id, field: "flight" }}
+            cellStatus={rowCellStatuses?.flight}
             onCommit={(v) => onUpdate(row.id, { flight: v })}
+            onNavigate={(dir) => onRowNavigate?.(row.id, "flight", dir)}
             onEnterNavigateDown={() =>
-              focusShipmentGridCell(row.id, "flightDate")
+              onRowNavigate ? onRowNavigate(row.id, "flight", "down") : focusShipmentGridCell(row.id, "flightDate")
             }
           />
-          <InlineTextEdit
-            value={row.flightDate}
-            placeholder="15APR"
-            title={row.flightDate?.trim() ? `Ngày: ${row.flightDate}` : undefined}
-            className="font-shipment-data !py-0 text-[11px] font-medium ops-grid-cell-muted"
-            uppercase
-            maxLength={16}
-            gridNav={{ rowId: row.id, field: "flightDate" }}
-            onCommit={onFlightDateCommit}
-            onEnterNavigateDown={onFlightDateEnterDown}
-          />
+          <div className="flex items-center gap-1">
+            <InlineTextEdit
+              value={row.flightDate}
+              placeholder="15APR"
+              title={row.flightDate?.trim() ? `Ngày: ${row.flightDate}` : undefined}
+              className={`font-shipment-data !py-0 text-2xs font-medium ops-grid-cell-muted ${
+                row.flightDate && viewSessionYmd && isCargoReportFlightDateUrgent(row.flightDate, viewSessionYmd)
+                  ? "font-bold text-red-700"
+                  : ""
+              }`}
+              uppercase
+              maxLength={16}
+              gridNav={{ rowId: row.id, field: "flightDate" }}
+              cellStatus={rowCellStatuses?.flightDate}
+              onCommit={onFlightDateCommit}
+              onNavigate={(dir) => onRowNavigate?.(row.id, "flightDate", dir)}
+              onEnterNavigateDown={() => onRowNavigate ? onRowNavigate(row.id, "flightDate", "down") : onFlightDateEnterDown()}
+            />
+          </div>
+          {row.cutoff ? (
+            <div
+              className="text-2xs text-ui-text-muted truncate"
+              title={row.cutoffNote ? `${row.cutoff} · ${row.cutoffNote}` : row.cutoff}
+            >
+              {row.cutoff}
+              {row.cutoffNote ? ` · ${row.cutoffNote}` : ""}
+            </div>
+          ) : null}
         </div>
       </td>
       <td className={cell("mid", "text-center")}>
         <InlineTextEdit
           value={row.dest}
           placeholder="DEST"
-          className="font-shipment-data !py-0 text-center text-[13px] font-extrabold text-ui-awb"
+          className="font-shipment-data !py-0 text-center text-[13px] font-bold text-ui-awb"
           uppercase
           maxLength={3}
           gridNav={{ rowId: row.id, field: "dest" }}
+          cellStatus={rowCellStatuses?.dest}
           onCommit={(v) => onUpdate(row.id, { dest: v.slice(0, 3) })}
-          onEnterNavigateDown={
-            hasNextRow ? navDownSameField("dest") : undefined
-          }
+          onNavigate={(dir) => onRowNavigate?.(row.id, "dest", dir)}
+          onEnterNavigateDown={navDownSameField("dest")}
         />
       </td>
       <td className={cell("mid", "text-right")}>
@@ -401,9 +780,11 @@ function ShipmentTableRowImpl({
           title="Click để sửa số kiện"
           className="font-shipment-data !py-0 text-right text-[13px] font-bold tabular-nums text-ui-text"
           gridNav={{ rowId: row.id, field: "pcs" }}
+          cellStatus={rowCellStatuses?.pcs}
           validate={validateInlinePcs}
           onCommit={(v) => onUpdate(row.id, { pcs: v })}
-          onEnterNavigateDown={hasNextRow ? navDownSameField("pcs") : undefined}
+          onNavigate={(dir) => onRowNavigate?.(row.id, "pcs", dir)}
+          onEnterNavigateDown={navDownSameField("pcs")}
         />
       </td>
       <td className={cell("mid", "text-right")}>
@@ -413,9 +794,11 @@ function ShipmentTableRowImpl({
           title="Click để sửa kg"
           className="font-shipment-data !py-0 text-right text-[13px] font-bold tabular-nums text-ui-text"
           gridNav={{ rowId: row.id, field: "kg" }}
+          cellStatus={rowCellStatuses?.kg}
           validate={validateInlineKg}
           onCommit={(v) => onUpdate(row.id, { kg: v })}
-          onEnterNavigateDown={hasNextRow ? navDownSameField("kg") : undefined}
+          onNavigate={(dir) => onRowNavigate?.(row.id, "kg", dir)}
+          onEnterNavigateDown={navDownSameField("kg")}
         />
       </td>
       <td className={cell("mid", "text-right align-top")}>
@@ -431,6 +814,7 @@ function ShipmentTableRowImpl({
               title="Click để sửa DIM kg"
               className="font-shipment-data text-right text-[12px] font-semibold tabular-nums text-ui-text"
               gridNav={{ rowId: row.id, field: "dimKg" }}
+              cellStatus={rowCellStatuses?.dimKg}
               validate={validateInlineDimWeightKg}
               onCommit={(v) =>
                 onUpdate(row.id, {
@@ -439,9 +823,8 @@ function ShipmentTableRowImpl({
                   dimDivisor: null,
                 })
               }
-              onEnterNavigateDown={
-                hasNextRow ? navDownSameField("dimKg") : undefined
-              }
+              onNavigate={(dir) => onRowNavigate?.(row.id, "dimKg", dir)}
+              onEnterNavigateDown={navDownSameField("dimKg")}
             />
           )}
           <button
@@ -480,14 +863,14 @@ function ShipmentTableRowImpl({
               profileSelection={row}
               customerDirectory={customerDirectory}
               placeholder="Khách"
-              className="min-w-0 whitespace-normal break-words text-[12px] font-extrabold leading-tight text-ui-awb line-clamp-2"
+              className="min-w-0 whitespace-normal break-words text-[12px] font-bold leading-tight text-ui-awb line-clamp-2"
               maxLength={120}
               gridNav={{ rowId: row.id, field: "customer" }}
+              cellStatus={rowCellStatuses?.customer}
               onCommit={(patch) => onUpdate(row.id, patch)}
-              onEnterNavigateDown={
-                hasNextRow ? navDownSameField("customer") : undefined
-              }
-              onTabNavigateNext={() => focusShipmentGridCell(row.id, "note")}
+              onNavigate={(dir) => onRowNavigate?.(row.id, "customer", dir)}
+              onEnterNavigateDown={navDownSameField("customer")}
+              onTabNavigateNext={() => onRowNavigate ? onRowNavigate(row.id, "customer", "next") : focusShipmentGridCell(row.id, "note")}
             />
           </div>
           {onUpdateCustomers ? (
@@ -520,20 +903,13 @@ function ShipmentTableRowImpl({
           />
         </div>
       </td>
-      <td className={cell("mid", "align-middle")}>
-        <StatusSelect
-          value={row.status}
-          warehouse={row.warehouse}
-          dense
-          onChange={(s: ShipmentStatus) => onUpdate(row.id, { status: s })}
-        />
-      </td>
       <td className={cell("last", "overflow-visible py-0.5 align-middle")}>
         <div className="flex items-center justify-end gap-0.5">
           <OpsRowNoteControl
             rowId={row.id}
             value={row.note ?? ""}
             onCommit={(v) => onUpdate(row.id, { note: v })}
+            onNavigate={(dir) => onRowNavigate?.(row.id, "note", dir)}
           />
           <ShipmentRowActionsMenu
             row={row}
@@ -548,17 +924,27 @@ function ShipmentTableRowImpl({
   );
 }
 
-function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
+export function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
   return (
     a.awb === b.awb &&
     a.flight === b.flight &&
     a.flightDate === b.flightDate &&
     a.dest === b.dest &&
     a.customer === b.customer &&
+    a.customerShipperId === b.customerShipperId &&
+    a.customerConsigneeId === b.customerConsigneeId &&
+    a.customerGoodsId === b.customerGoodsId &&
+    a.shipperNamePrint === b.shipperNamePrint &&
+    a.shipperAddressPrint === b.shipperAddressPrint &&
+    a.shipperPhonePrint === b.shipperPhonePrint &&
+    a.consigneeNamePrint === b.consigneeNamePrint &&
+    a.consigneeAddressPrint === b.consigneeAddressPrint &&
+    a.consigneePhonePrint === b.consigneePhonePrint &&
+    a.consigneeEmailPrint === b.consigneeEmailPrint &&
+    a.goodsDescriptionPrint === b.goodsDescriptionPrint &&
     a.pcs === b.pcs &&
     a.kg === b.kg &&
     a.dimWeightKg === b.dimWeightKg &&
-    a.status === b.status &&
     a.note === b.note &&
     a.stt === b.stt &&
     (a.invoiceItems?.length ?? 0) === (b.invoiceItems?.length ?? 0) &&
@@ -567,16 +953,40 @@ function shipmentRowRenderEqual(a: Shipment, b: Shipment): boolean {
   );
 }
 
-const ShipmentTableRow = memo(ShipmentTableRowImpl, (prev, next) => {
+function rowCellStatusesEqual(
+  a?: Record<string, CellStatus>,
+  b?: Record<string, CellStatus>
+): boolean {
+  if (a === b) return true;
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
+export const ShipmentTableRow = memo(ShipmentTableRowImpl, (prev, next) => {
   return (
     (prev.row === next.row || shipmentRowRenderEqual(prev.row, next.row)) &&
+    rowCellStatusesEqual(prev.rowCellStatuses, next.rowCellStatuses) &&
     prev.rowIdx === next.rowIdx &&
     prev.highlighted === next.highlighted &&
     prev.selected === next.selected &&
     prev.viewSessionYmd === next.viewSessionYmd &&
     prev.customerDirectory === next.customerDirectory &&
     prev.findAwbConflict === next.findAwbConflict &&
-    prev.groupRowIds === next.groupRowIds &&
-    prev.onInvoice === next.onInvoice
+    prev.getNeighborRowId === next.getNeighborRowId &&
+    prev.onRowNavigate === next.onRowNavigate &&
+    prev.onInvoice === next.onInvoice &&
+    prev.onUpdate === next.onUpdate &&
+    prev.onUpdateCustomers === next.onUpdateCustomers &&
+    prev.onDelete === next.onDelete &&
+    prev.onPrint === next.onPrint &&
+    prev.onOpenDimModal === next.onOpenDimModal &&
+    prev.onSelectRow === next.onSelectRow
   );
 });

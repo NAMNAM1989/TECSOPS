@@ -120,7 +120,7 @@ export function OverflowMenu({
             >
               <span className="text-[13px] font-semibold text-ui-text">{item.label}</span>
               {item.description ? (
-                <span className="text-[11px] text-ui-text-muted">{item.description}</span>
+                <span className="text-2xs text-ui-text-muted">{item.description}</span>
               ) : null}
             </button>
           ))}

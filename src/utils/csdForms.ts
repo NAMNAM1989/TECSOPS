@@ -26,6 +26,7 @@ export type CsdCarrier =
   | "FD"
   | "TG"
   | "MH"
+  | "WW"
   | "QR"
   | "AK"
   | "VU"
@@ -36,7 +37,9 @@ export type CsdCarrier =
   | "EK"
   | "PR"
   | "T5"
-  | "AI";
+  | "AI"
+  | "MF"
+  | "TH";
 
 export type CsdCarrierProfile = {
   id: CsdCarrier;
@@ -105,6 +108,17 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     templateUrl: "/templates/csd/CSD-MH.pdf?v=20260905",
     flightPrefixes: ["MH"],
     /** Origin SGN đã in sẵn trên mẫu maskargo. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["KUL", "PEN", "BKI", "KCH"],
+  },
+  WW: {
+    id: "WW",
+    label: "WW",
+    airlineName: "MJets Air",
+    /** Cùng mẫu maskargo với MH. */
+    templateUrl: "/templates/csd/CSD-MH.pdf?v=20260924",
+    flightPrefixes: ["WW"],
     showOrigin: false,
     showTransfer: true,
     transferPresets: ["KUL", "PEN", "BKI", "KCH"],
@@ -228,12 +242,35 @@ export const CSD_CARRIER_PROFILES: Record<CsdCarrier, CsdCarrierProfile> = {
     showTransfer: true,
     transferPresets: ["DEL", "BOM", "MAA", "HYD"],
   },
+  MF: {
+    id: "MF",
+    label: "MF",
+    airlineName: "Xiamen Airlines",
+    templateUrl: "/templates/csd/CSD-MF.pdf?v=20260914",
+    flightPrefixes: ["MF"],
+    /** Origin SGN + SPX + XRY + Received from N/A + Consolidation đã in sẵn. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["XMN", "FOC", "HGH", "PKX"],
+  },
+  TH: {
+    id: "TH",
+    label: "TH",
+    airlineName: "Raya Airways",
+    templateUrl: "/templates/csd/CSD-TH.pdf?v=20260920",
+    flightPrefixes: ["TH"],
+    /** Origin SGN đã in sẵn; điền RA/AWB/Contents/DEST/Transfer + tick SPX/XRY + Received from RA + Date/Time. */
+    showOrigin: false,
+    showTransfer: true,
+    transferPresets: ["KUL", "SZB", "PEN", "BKI"],
+  },
 };
 
 export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   FD: CSD_CARRIER_PROFILES.FD.templateUrl,
   TG: CSD_CARRIER_PROFILES.TG.templateUrl,
   MH: CSD_CARRIER_PROFILES.MH.templateUrl,
+  WW: CSD_CARRIER_PROFILES.WW.templateUrl,
   QR: CSD_CARRIER_PROFILES.QR.templateUrl,
   AK: CSD_CARRIER_PROFILES.AK.templateUrl,
   VU: CSD_CARRIER_PROFILES.VU.templateUrl,
@@ -245,6 +282,8 @@ export const CSD_TEMPLATE_URL: Record<CsdCarrier, string> = {
   PR: CSD_CARRIER_PROFILES.PR.templateUrl,
   T5: CSD_CARRIER_PROFILES.T5.templateUrl,
   AI: CSD_CARRIER_PROFILES.AI.templateUrl,
+  MF: CSD_CARRIER_PROFILES.MF.templateUrl,
+  TH: CSD_CARRIER_PROFILES.TH.templateUrl,
 };
 
 export type CsdFillFields = {
@@ -284,7 +323,7 @@ export type CsdFillFields = {
   flightDest?: string;
   formDate?: string;
   verifiedBy?: string;
-  /** T5 / AI: Date + Time trên ô Issued on. */
+  /** T5 / AI / MF / TH: Date (+ Time) trên ô Issued on. */
   issuedOn?: string;
 };
 
@@ -346,6 +385,11 @@ export function isCsdMhFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "MH";
 }
 
+/** Chuyến WW… → MJets Air, cùng mẫu CSD maskargo với MH. */
+export function isCsdWwFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "WW";
+}
+
 /** Chuyến QR… → Qatar Airways CSD. */
 export function isCsdQrFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "QR";
@@ -399,6 +443,16 @@ export function isCsdT5Flight(flight: string | undefined | null): boolean {
 /** Chuyến AI… → Air India CSD. */
 export function isCsdAiFlight(flight: string | undefined | null): boolean {
   return flightCarrierPrefix(flight) === "AI";
+}
+
+/** Chuyến MF… → Xiamen Airlines CSD. */
+export function isCsdMfFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "MF";
+}
+
+/** Chuyến TH… → Raya Airways CSD. */
+export function isCsdThFlight(flight: string | undefined | null): boolean {
+  return flightCarrierPrefix(flight) === "TH";
 }
 
 /** Ba hãng dùng chung mẫu CSD-IATA.pdf. */
@@ -531,11 +585,6 @@ export function formatCsdEkKg(kg: number | string | null | undefined): string {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
-/** @deprecated dùng isCsdTgFlight */
-export function isCsdThFlight(flight: string | undefined | null): boolean {
-  return isCsdTgFlight(flight);
-}
-
 /** Mẫu MH in sẵn dạng VN/RA3-00010-01 (gạch ngang sau RA3). */
 export function formatCsdMhRaCode(raCode: string): string {
   return String(raCode || "")
@@ -593,7 +642,7 @@ export function normalizeCsdTransfer(raw: string | undefined | null): string {
 
 /**
  * Gợi ý Transit: nhớ lần trước theo hãng;
- * MH/AK → KUL; QR → DOH; SQ/TR → SIN; BI → BWN; EK → DXB; PR → MNL;
+ * MH/WW/AK → KUL; QR → DOH; SQ/TR → SIN; BI → BWN; EK → DXB; PR → MNL;
  * T5 → ASB; AI → DEL; VU/VJ → không gợi ý hub mặc định; FD/TG → BKK.
  */
 export function suggestCsdTransfer(
@@ -606,7 +655,7 @@ export function suggestCsdTransfer(
     .trim()
     .toUpperCase()
     .slice(0, 3);
-  if (carrier === "MH" || carrier === "AK") {
+  if (carrier === "MH" || carrier === "WW" || carrier === "AK") {
     if (d && d !== "KUL") return "KUL";
     return "";
   }
@@ -636,6 +685,14 @@ export function suggestCsdTransfer(
   }
   if (carrier === "AI") {
     if (d && d !== "DEL" && d !== "BOM") return "DEL";
+    return "";
+  }
+  if (carrier === "MF") {
+    if (d && d !== "XMN") return "XMN";
+    return "";
+  }
+  if (carrier === "TH") {
+    if (d && d !== "KUL" && d !== "SZB") return "KUL";
     return "";
   }
   if (carrier === "VU" || carrier === "VJ") {
@@ -758,6 +815,12 @@ export function buildCsdFields(
     base.issuedOn = formatCsdT5IssuedOn();
   }
   if (carrier === "AI") {
+    base.issuedOn = formatCsdAiIssuedOn();
+  }
+  if (carrier === "MF") {
+    base.issuedOn = formatCsdAiIssuedOn();
+  }
+  if (carrier === "TH") {
     base.issuedOn = formatCsdAiIssuedOn();
   }
   return base;
@@ -971,6 +1034,12 @@ const LAYOUT_TG = {
   transfer: { x: 410, yTop: 278, size: 13 },
   /** §14 Regulated Entity (footer). */
   footerRa: { x: 35, yTop: 678, size: 10 },
+  /** Ô PAX aircraft (SPX) ~28.6–37.3 × 343.8–352.4. */
+  paxSpxTick: { x: 30.3, yTop: 351.2, size: 8 },
+  /** Ô RA (Received from) ~129.3–137.9 × 391.6–400.3. */
+  receivedRaTick: { x: 131.0, yTop: 399.1, size: 8 },
+  /** Ô XRY/X-ray Machine ~281.0–289.5 × 356.3–364.9. */
+  xryTick: { x: 282.6, yTop: 363.7, size: 8 },
 } as const;
 
 /**
@@ -986,6 +1055,14 @@ const LAYOUT_MH = {
   /** Cùng hàng với Origin SGN (glyph top ≈313). */
   dest: { x: 270, yTop: 326, size: 14 },
   transfer: { x: 430, yTop: 326, size: 13 },
+  /** Ô Loose ~50.6–57.4 × 274.8–283.4 (cạnh Consolidation). */
+  looseTick: { x: 51.4, yTop: 282.2, size: 8 },
+  /** SPX box ~48.6–58.4 × 395–407. */
+  spxTick: { x: 50.0, yTop: 405.6, size: 10 },
+  /** RA/RA3 box ~120.6–128.6 × 403.6–413.5. */
+  raAgentTick: { x: 121.5, yTop: 412.4, size: 8 },
+  /** XRY box ~269.2–277.2 × 403.6–413.5. */
+  xryTick: { x: 270.1, yTop: 412.4, size: 8 },
 } as const;
 
 /**
@@ -1197,6 +1274,62 @@ const LAYOUT_AI = {
   issuedDate: { x: 318, yTop: 595, size: 10 },
   issuedTime: { x: 442, yTop: 595, size: 10 },
   footerRa: { x: 65, yTop: 645, size: 11 },
+} as const;
+
+/**
+ * Layout MF — ~A4 ngắn (Xiamen Airlines IATA CSD).
+ * Giữ Origin SGN + SPX + XRY + Received from N/A + Consolidation.
+ * Điền: RA, AWB, Contents, DEST, Transfer, Issued Date, footer RA.
+ */
+const LAYOUT_MF = {
+  ra: { x: 55, yTop: 158, size: 11, maxWidth: 220, minSize: 8 },
+  awb: { x: 310, yTop: 152, size: 13, maxWidth: 230, minSize: 10 },
+  /** Dưới dòng Contents/Consolidation (~182), trên Origin (~221). */
+  goods: {
+    x: 55,
+    yTop: 205,
+    size: 12,
+    maxWidth: 480,
+    minSize: 10,
+    maxLines: 2,
+    leading: 13,
+  },
+  /** Cùng hàng Origin SGN (~221–238); lệch phải tránh đè nhãn Destination. */
+  dest: { x: 215, yTop: 245, size: 14 },
+  transfer: { x: 340, yTop: 245, size: 13 },
+  issuedDate: { x: 478, yTop: 465, size: 10, maxWidth: 70, minSize: 8 },
+  footerRa: { x: 55, yTop: 560, size: 11, maxWidth: 480, minSize: 8 },
+} as const;
+
+/**
+ * Layout TH — A4 (Raya Airways / SCSC CSD).
+ * Giữ Origin SGN; wipe RA mẫu trên blank.
+ * Điền: RA, AWB, Contents, DEST, Transfer, tick SPX + XRY, Received from RA,
+ * Issued Date/Time, footer RA.
+ */
+const LAYOUT_TH = {
+  ra: { x: 60, yTop: 190, size: 11, maxWidth: 220, minSize: 8 },
+  awb: { x: 310, yTop: 170, size: 13, maxWidth: 230, minSize: 10 },
+  /** Trên checkbox Consolidation (~269). */
+  goods: {
+    x: 60,
+    yTop: 245,
+    size: 12,
+    maxWidth: 460,
+    minSize: 10,
+    maxLines: 2,
+    leading: 14,
+  },
+  /** Cùng hàng Origin SGN (~295–320). */
+  dest: { x: 200, yTop: 330, size: 14 },
+  transfer: { x: 330, yTop: 330, size: 13 },
+  /** Tick ô checkbox SPX / XRY. */
+  spxTick: { x: 76, yTop: 395, size: 11 },
+  xryTick: { x: 316, yTop: 395, size: 11 },
+  receivedFrom: { x: 200, yTop: 400, size: 12, maxWidth: 90, minSize: 9 },
+  issuedDate: { x: 330, yTop: 590, size: 10, maxWidth: 80, minSize: 8 },
+  issuedTime: { x: 455, yTop: 590, size: 10, maxWidth: 55, minSize: 8 },
+  footerRa: { x: 60, yTop: 630, size: 11, maxWidth: 480, minSize: 8 },
 } as const;
 
 /**
@@ -1626,8 +1759,17 @@ export async function fillCsdPdfBytes(
         LAYOUT_FD.transfer.size
       );
     }
-  } else if (carrier === "MH") {
-    /* maskargo A4 — ô trống: ghi RA + AWB + Contents + DEST + Transfer */
+  } else if (carrier === "MH" || carrier === "WW") {
+    /* maskargo A4 — MH và WW dùng chung mẫu. Tick cố định Loose / SPX / RA/RA3 / XRY. */
+    const tick = (
+      slot: { x: number; yTop: number; size: number }
+    ) => {
+      draw("X", slot.x, topYToPdfLibBaseline(pageH, slot.yTop), slot.size);
+    };
+    tick(LAYOUT_MH.looseTick);
+    tick(LAYOUT_MH.spxTick);
+    tick(LAYOUT_MH.raAgentTick);
+    tick(LAYOUT_MH.xryTick);
     const mhRa = formatCsdMhRaCode(raCode);
     if (mhRa) {
       draw(
@@ -2047,8 +2189,127 @@ export async function fillCsdPdfBytes(
         A.issuedTime.size
       );
     }
+  } else if (carrier === "MF") {
+    /* Xiamen Airlines — giữ SGN/SPX/XRY/N/A; điền RA + AWB + Contents + DEST + Transfer + Date + footer RA */
+    const fit = (
+      text: string,
+      slot: {
+        x: number;
+        yTop: number;
+        size: number;
+        maxWidth?: number;
+        minSize?: number;
+      }
+    ) => {
+      const t = text.trim();
+      if (!t) return;
+      const maxW = slot.maxWidth ?? 9999;
+      const minS = slot.minSize ?? 8;
+      let size = slot.size;
+      while (size > minS && fontBold.widthOfTextAtSize(t, size) > maxW) {
+        size -= 0.5;
+      }
+      draw(t, slot.x, topYToPdfLibBaseline(pageH, slot.yTop), size);
+    };
+    const M = LAYOUT_MF;
+    if (raLabel) {
+      fit(raLabel, M.ra);
+      fit(raLabel, M.footerRa);
+    }
+    fit(fields.awb, M.awb);
+    drawGoods(M.goods);
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        M.dest.x,
+        topYToPdfLibBaseline(pageH, M.dest.yTop),
+        M.dest.size
+      );
+    }
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        M.transfer.x,
+        topYToPdfLibBaseline(pageH, M.transfer.yTop),
+        M.transfer.size
+      );
+    }
+    const issued = String(fields.issuedOn || "").trim();
+    const issuedDate = issued.split(/\s+/)[0] || "";
+    if (issuedDate) fit(issuedDate, M.issuedDate);
+  } else if (carrier === "TH") {
+    /* Raya Airways — giữ SGN; điền RA + AWB + Contents + DEST/Transfer + SPX/XRY + Received from RA + Date/Time */
+    const fit = (
+      text: string,
+      slot: {
+        x: number;
+        yTop: number;
+        size: number;
+        maxWidth?: number;
+        minSize?: number;
+      }
+    ) => {
+      const t = text.trim();
+      if (!t) return;
+      const maxW = slot.maxWidth ?? 9999;
+      const minS = slot.minSize ?? 8;
+      let size = slot.size;
+      while (size > minS && fontBold.widthOfTextAtSize(t, size) > maxW) {
+        size -= 0.5;
+      }
+      draw(t, slot.x, topYToPdfLibBaseline(pageH, slot.yTop), size);
+    };
+    const T = LAYOUT_TH;
+    if (raLabel) {
+      fit(raLabel, T.ra);
+      fit(raLabel, T.footerRa);
+    }
+    fit(fields.awb, T.awb);
+    drawGoods(T.goods);
+    if (fields.dest) {
+      draw(
+        fields.dest,
+        T.dest.x,
+        topYToPdfLibBaseline(pageH, T.dest.yTop),
+        T.dest.size
+      );
+    }
+    if (fields.transfer) {
+      draw(
+        fields.transfer,
+        T.transfer.x,
+        topYToPdfLibBaseline(pageH, T.transfer.yTop),
+        T.transfer.size
+      );
+    }
+    draw("X", T.spxTick.x, topYToPdfLibBaseline(pageH, T.spxTick.yTop), T.spxTick.size);
+    draw("X", T.xryTick.x, topYToPdfLibBaseline(pageH, T.xryTick.yTop), T.xryTick.size);
+    fit("RA", T.receivedFrom);
+    const issued = String(fields.issuedOn || "").trim();
+    const [issuedDate = "", issuedTime = ""] = issued.split(/\s+/);
+    if (issuedDate) fit(issuedDate, T.issuedDate);
+    if (issuedTime) fit(issuedTime, T.issuedTime);
   } else {
-    /* TG — mẫu A4 trống: ghi §1 RA, §2 AWB, §3 Contents, §4–6, §14 RA */
+    /* TG — mẫu A4 trống: ghi §1 RA, §2 AWB, §3 Contents, §4–6, §14 RA.
+       Tick cố định: PAX aircraft (SPX), RA, XRY/X-ray Machine. */
+    draw(
+      "X",
+      LAYOUT_TG.paxSpxTick.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_TG.paxSpxTick.yTop),
+      LAYOUT_TG.paxSpxTick.size
+    );
+    draw(
+      "X",
+      LAYOUT_TG.receivedRaTick.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_TG.receivedRaTick.yTop),
+      LAYOUT_TG.receivedRaTick.size
+    );
+    draw(
+      "X",
+      LAYOUT_TG.xryTick.x,
+      topYToPdfLibBaseline(pageH, LAYOUT_TG.xryTick.yTop),
+      LAYOUT_TG.xryTick.size
+    );
     if (raLabel) {
       draw(
         raLabel,

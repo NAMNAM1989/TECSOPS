@@ -323,9 +323,9 @@ function DimPastePreviewTable({
   const pcs = lines.reduce((s, l) => s + l.pcs, 0);
   return (
     <div className="overflow-x-auto border-t border-ui-border">
-      <table className="w-full min-w-[22rem] border-collapse text-[11px]">
+      <table className="w-full min-w-[22rem] border-collapse text-2xs">
         <thead>
-          <tr className="bg-ui-surface-muted text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
+          <tr className="bg-ui-surface-muted text-2xs font-bold uppercase tracking-wide text-ui-text-muted">
             <th className="px-2 py-1 text-left font-bold">D</th>
             <th className="px-2 py-1 text-left font-bold">R</th>
             <th className="px-2 py-1 text-left font-bold">C</th>
@@ -415,7 +415,7 @@ function DimLinesTable({
     >
       <table className="w-full min-w-[40rem] border-collapse text-[13px]">
         <thead className="sticky top-0 z-10 bg-ui-surface-muted shadow-sm">
-          <tr className="border-b border-ui-border text-[11px] font-bold uppercase tracking-wide text-ui-text-muted">
+          <tr className="border-b border-ui-border text-2xs font-bold uppercase tracking-wide text-ui-text-muted">
             <th className="w-10 px-2.5 py-2 text-left">#</th>
             <th className="w-[5.25rem] px-1.5 py-2 text-center">D</th>
             <th className="w-[5.25rem] px-1.5 py-2 text-center">R</th>
@@ -489,7 +489,7 @@ function DimLinesTable({
                   </td>
                   <td className="px-2.5 py-1">
                     <span
-                      className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${
+                      className={`rounded px-1.5 py-0.5 text-2xs font-bold ${
                         tone === "measured"
                           ? "bg-ui-success/15 text-ui-success"
                           : "bg-ui-surface-muted text-ui-text-muted"
@@ -504,7 +504,7 @@ function DimLinesTable({
                         <button
                           type="button"
                           onClick={() => onToggleLock(idx)}
-                          className="h-9 rounded-md px-2 text-[11px] font-bold text-ui-text-muted hover:bg-ui-surface-muted"
+                          className="h-9 rounded-md px-2 text-2xs font-bold text-ui-text-muted hover:bg-ui-surface-muted"
                           title={line.locked ? "Mở khóa" : "Khóa dòng"}
                         >
                           {line.locked ? "Khóa" : "Ghim"}
@@ -513,7 +513,7 @@ function DimLinesTable({
                       <button
                         type="button"
                         onClick={() => onRemove(idx)}
-                        className="h-9 rounded-md px-2 text-[11px] font-bold text-ui-danger hover:bg-ui-danger/10"
+                        className="h-9 rounded-md px-2 text-2xs font-bold text-ui-danger hover:bg-ui-danger/10"
                       >
                         Xóa
                       </button>
@@ -527,7 +527,7 @@ function DimLinesTable({
         {rows.length > 0 ? (
           <tfoot>
             <tr className="sticky bottom-0 border-t border-ui-border bg-ui-surface-muted font-bold">
-              <td className="px-2.5 py-2 text-[11px] uppercase text-ui-text-muted" colSpan={4}>
+              <td className="px-2.5 py-2 text-2xs uppercase text-ui-text-muted" colSpan={4}>
                 Tổng
               </td>
               <td className="px-2.5 py-2 text-center font-mono text-[13px] tabular-nums">{sumPcs}</td>
@@ -590,8 +590,8 @@ function EstimationConfigPanel({
     <div className="space-y-2.5 text-xs" data-testid="dim-estimate-panel">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <span className="text-[11px] font-bold text-ui-navy">Bù kiện ước tính</span>
-          <p className="text-[10px] text-ui-text-muted">
+          <span className="text-2xs font-bold text-ui-navy">Bù kiện ước tính</span>
+          <p className="text-2xs text-ui-text-muted">
             {canGenerate
               ? `Còn thiếu ${snap.remainingPcs} kiện · mục tiêu dưới kg lô`
               : "Đã đủ kiện — xóa ước tính chưa khóa nếu muốn sinh lại"}
@@ -618,7 +618,7 @@ function EstimationConfigPanel({
 
       {lot.declaredKg != null && lot.declaredKg > 0 ? (
         <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold text-ui-text-muted">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-2xs font-bold text-ui-text-muted">
             <span>Tỉ lệ DIM / Gross</span>
             <span className="tabular-nums text-ui-navy">
               {targetRatioPercent.toFixed(1)}%
@@ -635,7 +635,7 @@ function EstimationConfigPanel({
                   setTargetRatioPercent(p);
                   setRandomTargetKgInput("");
                 }}
-                className={`min-h-9 rounded-lg px-2.5 text-[11px] font-bold tabular-nums transition ${
+                className={`min-h-9 rounded-lg px-2.5 text-2xs font-bold tabular-nums transition ${
                   !lockFixedKg && Math.abs(targetRatioPercent - p) < 0.26
                     ? "bg-ui-primary text-white"
                     : "border border-ui-border bg-ui-surface-muted text-ui-text hover:bg-ui-surface disabled:opacity-40"
@@ -661,7 +661,7 @@ function EstimationConfigPanel({
         </div>
       ) : null}
 
-      <label className="flex cursor-pointer items-center gap-1.5 text-[10px] font-semibold text-ui-text">
+      <label className="flex cursor-pointer items-center gap-1.5 text-2xs font-semibold text-ui-text">
         <input
           type="checkbox"
           checked={lockFixedKg}
@@ -681,7 +681,7 @@ function EstimationConfigPanel({
       <div className={`grid gap-1.5 ${lockFixedKg ? "grid-cols-2" : "grid-cols-1"}`}>
         {lockFixedKg ? (
           <label>
-            <span className="mb-0.5 block text-[9px] font-bold uppercase text-ui-text-muted">
+            <span className="mb-0.5 block text-2xs font-bold uppercase text-ui-text-muted">
               Kg DIM cố định
             </span>
             <Input
@@ -697,7 +697,7 @@ function EstimationConfigPanel({
           </label>
         ) : null}
         <label>
-          <span className="mb-0.5 block text-[9px] font-bold uppercase text-ui-text-muted">
+          <span className="mb-0.5 block text-2xs font-bold uppercase text-ui-text-muted">
             Số dòng ước tính
           </span>
           <Input
@@ -715,14 +715,14 @@ function EstimationConfigPanel({
             className="text-center text-sm font-semibold tabular-nums"
           />
           {snap.targetLineCount ? (
-            <span className="mt-0.5 block text-[9px] text-ui-text-muted">
+            <span className="mt-0.5 block text-2xs text-ui-text-muted">
               Lô lớn: gợi ý {snap.targetLineCount.min}–{snap.targetLineCount.max} dòng
             </span>
           ) : null}
         </label>
       </div>
 
-      <div className="flex items-center justify-between border-t border-ui-border pt-1.5 text-[10px]">
+      <div className="flex items-center justify-between border-t border-ui-border pt-1.5 text-2xs">
         <label className="flex cursor-pointer items-center gap-1.5 font-semibold text-ui-text">
           <input
             type="checkbox"
@@ -1603,18 +1603,18 @@ export function MobileDimKgModal({
                 <span className="font-mono text-[12px] font-bold text-ui-awb">
                   {row.awb || "—"}
                 </span>
-                <span className="text-[11px] font-semibold text-ui-text-muted">
+                <span className="text-2xs font-semibold text-ui-text-muted">
                   · {row.flight || "—"}
                 </span>
-                <span className="rounded-full border border-ui-border bg-ui-surface-muted px-2 py-0.5 text-[10px] font-bold text-ui-text">
+                <span className="rounded-full border border-ui-border bg-ui-surface-muted px-2 py-0.5 text-2xs font-bold text-ui-text">
                   {dimRuleBadgeText(airlineRule, divisor)}
                 </span>
                 {isVolumetric ? (
-                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-extrabold text-amber-800">
+                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-2xs font-bold text-amber-800">
                     ⚡ Hàng thể tích (+{formatKgTotal(deltaKg)} kg)
                   </span>
                 ) : lot.declaredKg != null && snap.totalDim != null ? (
-                  <span className="rounded-full bg-ui-success/15 px-2 py-0.5 text-[10px] font-extrabold text-ui-success">
+                  <span className="rounded-full bg-ui-success/15 px-2 py-0.5 text-2xs font-bold text-ui-success">
                     ✓ Hàng nặng (Tính theo Gross)
                   </span>
                 ) : null}
@@ -1623,39 +1623,39 @@ export function MobileDimKgModal({
               {/* KPI STRIP */}
               <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4" data-testid="dim-totals">
                 <div className="rounded-xl border border-ui-border/80 bg-ui-surface-muted/60 px-2.5 py-1.5">
-                  <p className="text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">Kiện</p>
-                  <p className="font-mono text-[14px] font-extrabold tabular-nums text-ui-navy">
+                  <p className="text-2xs font-bold uppercase tracking-wide text-ui-text-muted">Kiện</p>
+                  <p className="font-mono text-[14px] font-bold tabular-nums text-ui-navy">
                     {snap.sumDimPcs}
-                    <span className="text-[11px] font-semibold text-ui-text-muted">
+                    <span className="text-2xs font-semibold text-ui-text-muted">
                       /{lot.declaredPcs ?? "—"}
                     </span>
                     {snap.pcsMatch ? (
-                      <span className="ml-1 text-[11px] font-bold text-ui-success">✓</span>
+                      <span className="ml-1 text-2xs font-bold text-ui-success">✓</span>
                     ) : null}
                   </p>
                 </div>
                 <div className="rounded-xl border border-ui-border/80 bg-ui-surface-muted/60 px-2.5 py-1.5">
-                  <p className="text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">Kg lô (Gross)</p>
-                  <p className="font-mono text-[14px] font-extrabold tabular-nums text-ui-navy">
+                  <p className="text-2xs font-bold uppercase tracking-wide text-ui-text-muted">Kg lô (Gross)</p>
+                  <p className="font-mono text-[14px] font-bold tabular-nums text-ui-navy">
                     {lot.declaredKg != null ? `${formatKgTotal(lot.declaredKg)}` : "—"}
                   </p>
                 </div>
                 <div className="rounded-xl border border-ui-border/80 bg-ui-surface-muted/60 px-2.5 py-1.5">
-                  <p className="text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">DIM (Thể tích)</p>
-                  <p className={`font-mono text-[14px] font-extrabold tabular-nums ${isVolumetric ? "text-amber-800" : "text-ui-navy"}`}>
+                  <p className="text-2xs font-bold uppercase tracking-wide text-ui-text-muted">DIM (Thể tích)</p>
+                  <p className={`font-mono text-[14px] font-bold tabular-nums ${isVolumetric ? "text-amber-800" : "text-ui-navy"}`}>
                     {totalDimLabel}
                   </p>
                 </div>
                 <div className="rounded-xl border border-ui-border/80 bg-ui-surface-muted/60 px-2.5 py-1.5" data-testid="dim-chargeable">
-                  <p className="text-[9px] font-bold uppercase tracking-wide text-ui-text-muted">
+                  <p className="text-2xs font-bold uppercase tracking-wide text-ui-text-muted">
                     Chargeable (CW)
                   </p>
-                  <p className="font-mono text-[14px] font-extrabold tabular-nums text-ui-navy">
+                  <p className="font-mono text-[14px] font-bold tabular-nums text-ui-navy">
                     {chargeable.kg != null
                       ? `${formatKgTotal(chargeable.kg)} kg`
                       : "—"}
                     {chargeable.source ? (
-                      <span className="ml-1 text-[10px] font-semibold text-ui-text-muted">
+                      <span className="ml-1 text-2xs font-semibold text-ui-text-muted">
                         · {chargeable.source === "gross" ? "cân thực" : "DIM"}
                       </span>
                     ) : null}
@@ -1722,8 +1722,8 @@ export function MobileDimKgModal({
               className="space-y-3 rounded-2xl border border-ui-border bg-ui-surface p-3.5 shadow-ui-sm"
             >
               <div className="flex items-baseline justify-between gap-2">
-                <h3 className="text-[13px] font-extrabold text-ui-navy">Đo nhanh</h3>
-                <p className="text-[10px] font-medium text-ui-text-muted">
+                <h3 className="text-[13px] font-bold text-ui-navy">Đo nhanh</h3>
+                <p className="text-2xs font-medium text-ui-text-muted">
                   D × R × C × kiện (vd: 40×50×30×10)
                 </p>
               </div>
@@ -1731,10 +1731,10 @@ export function MobileDimKgModal({
               {/* CUSTOMER & COMMON AIR CARGO PRESETS */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-1">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+                  <p className="text-2xs font-bold uppercase tracking-wider text-ui-text-muted">
                     {customerKey ? (
                       <span>
-                        Quy cách khách <span className="font-extrabold text-ui-navy">[{customerKey.toUpperCase()}]</span>
+                        Quy cách khách <span className="font-bold text-ui-navy">[{customerKey.toUpperCase()}]</span>
                       </span>
                     ) : (
                       "Quy cách phổ biến (1-Click)"
@@ -1744,7 +1744,7 @@ export function MobileDimKgModal({
                     <button
                       type="button"
                       onClick={handleQuickBookmarkForCustomer}
-                      className="text-[10px] font-bold text-ui-primary hover:underline"
+                      className="text-2xs font-bold text-ui-primary hover:underline"
                       title="Ghim kích thước đang nhập vào danh sách gần đây của khách (trên máy này)"
                     >
                       + Ghim gần đây
@@ -1755,7 +1755,7 @@ export function MobileDimKgModal({
                   {dynamicPresets.map((p) => (
                     <span
                       key={p.id}
-                      className={`group inline-flex items-center rounded-lg border text-[11px] font-semibold transition ${
+                      className={`group inline-flex items-center rounded-lg border text-2xs font-semibold transition ${
                         p.type === "profile"
                           ? "border-amber-300/90 bg-amber-50/80 text-amber-950 hover:bg-amber-100"
                           : p.type === "recent" || p.type === "custom"
@@ -1777,7 +1777,7 @@ export function MobileDimKgModal({
                           type="button"
                           onClick={(e) => handleDeleteRecentPreset(e, p)}
                           aria-label={`Xóa kích thước ${p.d}x${p.r}x${p.c}`}
-                          className="mr-1 rounded px-1 text-[10px] text-ui-text-muted opacity-60 hover:bg-red-100 hover:text-ui-danger group-hover:opacity-100"
+                          className="mr-1 rounded px-1 text-2xs text-ui-text-muted opacity-60 hover:bg-red-100 hover:text-ui-danger group-hover:opacity-100"
                           title="Xóa khỏi danh sách gần đây"
                         >
                           ×
@@ -1791,13 +1791,13 @@ export function MobileDimKgModal({
               {/* COMBO PASTE / TEXT AREA */}
               <div className="space-y-1.5 border-t border-ui-border/70 pt-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-bold text-ui-text">Nhập hoặc dán kích thước</p>
+                  <p className="text-2xs font-bold text-ui-text">Nhập hoặc dán kích thước</p>
                   <Button
                     type="button"
                     size="sm"
                     variant="ghost"
                     onClick={() => void handlePasteClipboard()}
-                    className="min-h-9 px-2 text-[11px]"
+                    className="min-h-9 px-2 text-2xs"
                   >
                     📋 Clipboard
                   </Button>
@@ -1865,7 +1865,7 @@ export function MobileDimKgModal({
                 className="flex min-h-11 w-full touch-manipulation items-center justify-between px-3 text-[12px] font-bold text-ui-navy"
               >
                 <span>Nâng cao</span>
-                <span className="text-[10px] font-semibold text-ui-text-muted">
+                <span className="text-2xs font-semibold text-ui-text-muted">
                   {showAdvanced ? "Thu" : "Mẫu · sinh ảo · gộp dòng"}
                 </span>
               </button>
@@ -1873,7 +1873,7 @@ export function MobileDimKgModal({
                 <div className="space-y-3 border-t border-ui-border px-3 pb-3 pt-2.5">
                   <div className="space-y-1.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-ui-text-muted">
+                      <p className="text-2xs font-bold uppercase tracking-wide text-ui-text-muted">
                         Mẫu DIM
                       </p>
                       <div
@@ -1892,7 +1892,7 @@ export function MobileDimKgModal({
                             key={mode}
                             type="button"
                             onClick={() => setTemplateApplyMode(mode)}
-                            className={`min-h-8 rounded-md px-2 text-[10px] font-bold ${
+                            className={`min-h-8 rounded-md px-2 text-2xs font-bold ${
                               templateApplyMode === mode
                                 ? "bg-ui-primary text-white"
                                 : "text-ui-text-muted hover:text-ui-text"
@@ -1912,7 +1912,7 @@ export function MobileDimKgModal({
                     </div>
                     {matchedCustomer?.savedDimTemplates?.length ? (
                       <div className="space-y-1" data-testid="dim-customer-server-templates">
-                        <p className="text-[10px] font-semibold text-ui-text-muted">
+                        <p className="text-2xs font-semibold text-ui-text-muted">
                           Mẫu khách (server)
                         </p>
                         <div className="flex flex-wrap gap-1.5">
@@ -1926,7 +1926,7 @@ export function MobileDimKgModal({
                                 key={tmpl.id}
                                 type="button"
                                 onClick={() => handleApplyCustomerServerTemplate(tmpl.id)}
-                                className="min-h-11 rounded-lg border border-teal-300/80 bg-teal-50/70 px-2.5 text-[11px] font-semibold text-teal-950 hover:bg-teal-100"
+                                className="min-h-11 rounded-lg border border-teal-300/80 bg-teal-50/70 px-2.5 text-2xs font-semibold text-teal-950 hover:bg-teal-100"
                                 title={
                                   multi
                                     ? `${tmpl.label} · ${tmpl.lines!.length} dòng`
@@ -1938,7 +1938,7 @@ export function MobileDimKgModal({
                                   <span className="ml-1 tabular-nums text-teal-700/80">{pcs}</span>
                                 ) : null}
                                 {multi ? (
-                                  <span className="ml-1 text-[9px] font-bold text-teal-700">
+                                  <span className="ml-1 text-2xs font-bold text-teal-700">
                                     ×{tmpl.lines!.length}
                                   </span>
                                 ) : null}
@@ -1953,7 +1953,7 @@ export function MobileDimKgModal({
                         {dimTemplates.map((tmpl) => (
                           <span
                             key={tmpl.id}
-                            className="inline-flex items-center gap-0.5 rounded-lg border border-ui-border bg-ui-surface-muted pl-2 text-[11px] font-semibold text-ui-text"
+                            className="inline-flex items-center gap-0.5 rounded-lg border border-ui-border bg-ui-surface-muted pl-2 text-2xs font-semibold text-ui-text"
                           >
                             <button
                               type="button"
@@ -1975,7 +1975,7 @@ export function MobileDimKgModal({
                         ))}
                       </div>
                     ) : (
-                      <p className="text-[11px] text-ui-text-muted">Chưa có mẫu đã lưu.</p>
+                      <p className="text-2xs text-ui-text-muted">Chưa có mẫu đã lưu.</p>
                     )}
                     {lines.length > 0 ? (
                       <Button
@@ -2060,8 +2060,8 @@ export function MobileDimKgModal({
             {/* Table Header & Controls */}
             <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[13px] font-extrabold text-ui-navy">Bảng DIM</span>
-                <span className="rounded-full bg-ui-surface-muted px-2.5 py-1 text-[11px] font-bold tabular-nums text-ui-text-muted">
+                <span className="text-[13px] font-bold text-ui-navy">Bảng DIM</span>
+                <span className="rounded-full bg-ui-surface-muted px-2.5 py-1 text-2xs font-bold tabular-nums text-ui-text-muted">
                   {snap.lineCount} dòng · {snap.sumDimPcs}
                   {lot.declaredPcs != null ? `/${lot.declaredPcs}` : ""} kiện
                   {snap.estimatedLineCount > 0
@@ -2073,7 +2073,7 @@ export function MobileDimKgModal({
                 <button
                   type="button"
                   onClick={handleMergeLines}
-                  className="text-[11px] font-bold text-ui-primary hover:underline"
+                  className="text-2xs font-bold text-ui-primary hover:underline"
                 >
                   Gộp dòng trùng
                 </button>
@@ -2098,11 +2098,11 @@ export function MobileDimKgModal({
             {lines.length > 0 ? (
               <div className="shrink-0 rounded-xl border border-ui-border/70 bg-ui-surface p-2.5">
                 <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+                  <span className="text-2xs font-bold uppercase tracking-wider text-ui-text-muted">
                     Sao chép chuỗi gửi hệ thống (eSID / SCSC / TCS)
                   </span>
                   {copyFeedback ? (
-                    <span className="text-[10px] font-bold text-ui-success">
+                    <span className="text-2xs font-bold text-ui-success">
                       ✓ Đã copy {copyFeedback.toUpperCase()}
                     </span>
                   ) : null}
@@ -2111,7 +2111,7 @@ export function MobileDimKgModal({
                   <button
                     type="button"
                     onClick={() => void handleCopyFormatString("scsc")}
-                    className="inline-flex items-center gap-1 rounded-lg border border-ui-border bg-ui-surface-muted px-2 py-1 font-mono text-[11px] font-semibold text-ui-text transition hover:bg-ui-surface"
+                    className="inline-flex items-center gap-1 rounded-lg border border-ui-border bg-ui-surface-muted px-2 py-1 font-mono text-2xs font-semibold text-ui-text transition hover:bg-ui-surface"
                     title="Định dạng SCSC / eSID: 40-50-30/10 60-40-40/40"
                   >
                     <span>SCSC (D-R-C/K)</span>
@@ -2119,7 +2119,7 @@ export function MobileDimKgModal({
                   <button
                     type="button"
                     onClick={() => void handleCopyFormatString("tcs")}
-                    className="inline-flex items-center gap-1 rounded-lg border border-ui-border bg-ui-surface-muted px-2 py-1 font-mono text-[11px] font-semibold text-ui-text transition hover:bg-ui-surface"
+                    className="inline-flex items-center gap-1 rounded-lg border border-ui-border bg-ui-surface-muted px-2 py-1 font-mono text-2xs font-semibold text-ui-text transition hover:bg-ui-surface"
                     title="Định dạng TCS: 40*50*30/10+60*40*40/40"
                   >
                     <span>TCS (D*R*C/K)</span>
@@ -2127,7 +2127,7 @@ export function MobileDimKgModal({
                   <button
                     type="button"
                     onClick={() => void handleCopyFormatString("cargospot")}
-                    className="inline-flex items-center gap-1 rounded-lg border border-ui-border bg-ui-surface-muted px-2 py-1 font-mono text-[11px] font-semibold text-ui-text transition hover:bg-ui-surface"
+                    className="inline-flex items-center gap-1 rounded-lg border border-ui-border bg-ui-surface-muted px-2 py-1 font-mono text-2xs font-semibold text-ui-text transition hover:bg-ui-surface"
                     title="Định dạng IATA/Champ: 10/40/50/30 40/60/40/40"
                   >
                     <span>IATA (K/D/R/C)</span>

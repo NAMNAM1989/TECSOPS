@@ -112,7 +112,6 @@ export function useAirlineCatalog(): AirlineCatalogState {
       await runFetch(true, { silent: true });
     })();
     // Bootstrap một lần khi mount (cố ý bỏ deps).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return {

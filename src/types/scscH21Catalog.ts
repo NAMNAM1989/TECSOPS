@@ -72,7 +72,7 @@ export type ScscH21InvoiceDeclaration = {
   declarationPcs: number;
   /** INV NO nhập tay (ưu tiên hơn công thức tự động). */
   invoiceNo: string;
-  cargoFamilyMode: "auto" | "frozen" | "fruit" | "food" | "garment" | "general";
+  cargoFamilyMode: "auto" | "frozen" | "fruit" | "food" | "garment" | "general" | "customer";
   lines: ScscH21InvoiceLine[];
 };
 

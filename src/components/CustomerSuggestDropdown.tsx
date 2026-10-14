@@ -73,7 +73,7 @@ export function CustomerSuggestDropdown({
       }}
       className="max-h-56 overflow-auto rounded-xl border border-black/[0.08] bg-white py-1 shadow-apple-md"
     >
-      <p className="border-b border-black/[0.06] px-3 py-1 text-[9px] font-semibold uppercase tracking-wide text-apple-tertiary">
+      <p className="border-b border-black/[0.06] px-3 py-1 text-2xs font-semibold uppercase tracking-wide text-apple-tertiary">
         Tab chọn · ↑↓ lọc
       </p>
       {suggestions.map((entry, idx) => (
@@ -91,7 +91,7 @@ export function CustomerSuggestDropdown({
               : "hover:bg-black/[0.03]"
           } ${selectedId === entry.id ? "font-bold" : ""}`}
         >
-          <span className="font-mono text-[10px] font-semibold text-apple-secondary">
+          <span className="font-mono text-2xs font-semibold text-apple-secondary">
             {entry.code}
           </span>
           <span className="mx-1.5 text-apple-tertiary">·</span>

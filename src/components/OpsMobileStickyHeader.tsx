@@ -2,6 +2,7 @@ import { useMemo, useState, type RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
+import type { GlobalSearchLotHit } from "../utils/globalSearchApi";
 import { formatSyncedPhrase } from "../utils/dbSyncedAt";
 import { formatKgTotal } from "../utils/formatKgTotal";
 import { computeDayPulseTotals } from "../utils/opsDayOverview";
@@ -45,8 +46,8 @@ interface Props {
   searchContext: ShipmentSearchContext;
   searchInputRef?: RefObject<HTMLInputElement>;
   onSelectSearchMatch: (match: ShipmentSearchMatch) => void;
+  onSelectGlobalLot?: (hit: GlobalSearchLotHit) => void;
   statusFilter: StatusFilterValue;
-  onStatusFilterChange: (v: StatusFilterValue) => void;
   onClearFilters: () => void;
 }
 
@@ -101,8 +102,8 @@ export function OpsMobileStickyHeader({
   searchContext,
   searchInputRef,
   onSelectSearchMatch,
+  onSelectGlobalLot,
   statusFilter,
-  onStatusFilterChange,
   onClearFilters,
 }: Props) {
   const [toolsExpanded, setToolsExpanded] = useState(
@@ -159,19 +160,19 @@ export function OpsMobileStickyHeader({
           >
             <div className="inline-flex max-w-full items-stretch overflow-hidden rounded-xl bg-teal-500/[0.08] shadow-ui-sm ring-1 ring-teal-600/20">
               <div className="flex min-w-0 flex-col items-center justify-center gap-0.5 px-2.5 py-1">
-                <span className="text-[8px] font-bold uppercase leading-none tracking-wide text-teal-800/65">
+                <span className="text-2xs font-bold uppercase leading-none tracking-wide text-ui-text-muted">
                   Lô
                 </span>
-                <span className="font-mono text-[13px] font-extrabold tabular-nums leading-none text-ui-navy">
+                <span className="font-mono text-[13px] font-bold tabular-nums leading-none text-ui-navy">
                   {lotsLabel}
                 </span>
               </div>
               <span className="my-1.5 w-px shrink-0 bg-teal-700/15" aria-hidden />
               <div className="flex min-w-0 flex-col items-center justify-center gap-0.5 px-2.5 py-1">
-                <span className="text-[8px] font-bold uppercase leading-none tracking-wide text-teal-800/65">
+                <span className="text-2xs font-bold uppercase leading-none tracking-wide text-ui-text-muted">
                   Kg
                 </span>
-                <span className="max-w-[5.5rem] truncate font-mono text-[13px] font-extrabold tabular-nums leading-none text-teal-900">
+                <span className="max-w-[5.5rem] truncate font-mono text-[13px] font-bold tabular-nums leading-none text-teal-900">
                   {kgLabel}
                 </span>
               </div>
@@ -185,12 +186,27 @@ export function OpsMobileStickyHeader({
               title={syncTitle || syncCta}
               aria-label={syncCta}
             >
-              <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
-              <span className="text-[9px] font-bold text-ui-navy">{syncCta}</span>
+              <SyncStatusPill
+                status={syncStatus}
+                socketConnected={socketConnected}
+                pendingOfflineCount={pendingOfflineCount}
+                lastSyncedAt={lotSyncedAt}
+                onRefresh={onSyncRefresh}
+                compact
+                interactive={false}
+              />
+              <span className="text-2xs font-bold text-ui-navy">{syncCta}</span>
             </button>
           ) : (
-            <span title={syncTitle || "Live sync"} className="inline-flex shrink-0 scale-90 origin-right">
-              <SyncStatusPill status={syncStatus} socketConnected={socketConnected} compact />
+            <span title={syncTitle || "Live sync"} className="inline-flex shrink-0 origin-right">
+              <SyncStatusPill
+                status={syncStatus}
+                socketConnected={socketConnected}
+                pendingOfflineCount={pendingOfflineCount}
+                lastSyncedAt={lotSyncedAt}
+                onRefresh={onSyncRefresh}
+                compact
+              />
             </span>
           )}
           <button
@@ -233,15 +249,14 @@ export function OpsMobileStickyHeader({
               searchContext={searchContext}
               inputRef={searchInputRef}
               onSelectMatch={onSelectSearchMatch}
+              sessionDate={selectedYmd}
+              onSelectGlobalLot={onSelectGlobalLot}
               inlineFacets={false}
               debounceMs={200}
             />
             <OpsMobileToolbar
               embedded
-              activeWarehouse={activeWarehouse}
               viewRows={viewRows}
-              statusFilter={statusFilter}
-              onStatusFilterChange={onStatusFilterChange}
               onOpenSheetImport={onOpenSheetImport}
               onPrefetchSheetImport={onPrefetchSheetImport}
               onDownloadDayExcel={onDownloadDayExcel}
@@ -253,7 +268,7 @@ export function OpsMobileStickyHeader({
               <button
                 type="button"
                 onClick={onClearFilters}
-                className="mt-1.5 text-[11px] font-semibold text-ui-primary"
+                className="mt-1.5 inline-flex items-center min-h-11 px-3 touch-manipulation rounded-lg text-2xs font-semibold text-ui-primary hover:bg-ui-surface-muted"
               >
                 Xóa bộ lọc
               </button>

@@ -51,6 +51,11 @@ function AuthenticatedApp() {
   const isMobile = useIsMobile();
   const [printJob, setPrintJob] = useState<PrintJob | null>(null);
   const [opsSessionYmd, setOpsSessionYmd] = useState(todayYmd);
+  const [opsDeepLink, setOpsDeepLink] = useState<{
+    sessionYmd: string;
+    query: string;
+    shipmentId?: string;
+  } | null>(null);
   const [cargoCopyApi, setCargoCopyApi] = useState<MobileCargoCopyApi | null>(null);
   const [airlineSyncing, setAirlineSyncing] = useState(false);
 
@@ -153,6 +158,8 @@ function AuthenticatedApp() {
               ready={sync.state != null && sync.status !== "loading"}
               syncStatus={sync.status}
               socketConnected={sync.socketConnected}
+              pendingOfflineCount={sync.pendingOfflineCount}
+              onRefresh={sync.refreshState}
               customersMaxSyncedAt={sync.state?.syncMeta?.customersMaxSyncedAt ?? null}
               onSave={async (customers) => {
                 await sync.mutate({ action: "SET_CUSTOMERS", customers });
@@ -162,11 +169,19 @@ function AuthenticatedApp() {
           ) : route === "stats" ? (
             <OpsStatsPage
               rows={sync.state?.rows ?? fallback.rows}
+              customers={sync.state?.customers ?? EMPTY_CUSTOMERS}
               ready={sync.state != null && sync.status !== "loading"}
               syncStatus={sync.status}
               socketConnected={sync.socketConnected}
+              pendingOfflineCount={sync.pendingOfflineCount}
+              onRefresh={sync.refreshState}
               onNavigateOps={() => navigate("ops")}
               onNavigateCustomers={() => navigate("customers")}
+              onOpenLot={(opts) => {
+                setOpsDeepLink(opts);
+                setOpsSessionYmd(opts.sessionYmd);
+                navigate("ops");
+              }}
             />
           ) : route === "scsc-h21" ? (
             <ScscH21CatalogPage onBack={() => navigate("ops")} />
@@ -178,6 +193,8 @@ function AuthenticatedApp() {
               onSessionDateChange={setOpsSessionYmd}
               onRequestPrint={onRequestPrint}
               onCargoCopyApiChange={setCargoCopyApi}
+              deepLink={opsDeepLink}
+              onDeepLinkConsumed={() => setOpsDeepLink(null)}
             />
           )}
         </Suspense>

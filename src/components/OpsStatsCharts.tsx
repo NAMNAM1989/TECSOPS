@@ -15,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import { formatKgTotal } from "../utils/formatKgTotal";
+import { warehouseSeriesFor } from "../styles/warehouseTokens";
 import type {
   OpsStatsDayRow,
   OpsStatsDestRow,
@@ -27,8 +28,7 @@ const COLORS = {
   chargeable: "#b45309",
   delta: "#d97706",
   lots: "#134e4a",
-  warehouse: ["#0f766e", "#0369a1", "#b45309", "#7c3aed"],
-  dest: ["#0d9488", "#0284c7", "#ca8a04", "#c026d3", "#ea580c", "#4f46e5", "#059669", "#e11d48"],
+  dest: ["#0d9488", "#0284c7", "#ca8a04", "#c026d3", "#ea580c", "#4f46e5", "#059669", "#57534E"],
 };
 
 function ChartCard({
@@ -47,11 +47,11 @@ function ChartCard({
       className={`flex min-h-[260px] flex-col overflow-hidden rounded-2xl border border-ui-border/80 bg-ui-surface shadow-ui-sm ${className}`}
     >
       <header className="shrink-0 border-b border-ui-border/60 bg-gradient-to-b from-slate-50/80 to-transparent px-3.5 py-2.5 sm:px-4">
-        <h3 className="m-0 text-[13px] font-extrabold tracking-tight text-ui-navy">
+        <h3 className="m-0 text-[13px] font-bold tracking-tight text-ui-navy">
           {title}
         </h3>
         {subtitle ? (
-          <p className="m-0 mt-0.5 text-[11px] text-ui-text-muted">{subtitle}</p>
+          <p className="m-0 mt-0.5 text-2xs text-ui-text-muted">{subtitle}</p>
         ) : null}
       </header>
       <div className="min-h-0 flex-1 p-2.5 sm:p-3">{children}</div>
@@ -65,7 +65,13 @@ function kgTip(value: unknown): string {
 }
 
 /** Xu hướng kg theo ngày phiên. */
-export function OpsStatsDayTrendChart({ rows }: { rows: readonly OpsStatsDayRow[] }) {
+export function OpsStatsDayTrendChart({
+  rows,
+  onSelectDay,
+}: {
+  rows: readonly OpsStatsDayRow[];
+  onSelectDay?: (ymd: string) => void;
+}) {
   const data = useMemo(
     () =>
       rows.map((r) => ({
@@ -96,11 +102,24 @@ export function OpsStatsDayTrendChart({ rows }: { rows: readonly OpsStatsDayRow[
   return (
     <ChartCard
       title="Xu hướng theo ngày"
-      subtitle="Kg thực · DIM · Chargeable"
+      subtitle={
+        onSelectDay
+          ? "Kg thực · DIM · Chargeable · click ngày để lọc"
+          : "Kg thực · DIM · Chargeable"
+      }
       className="lg:col-span-2"
     >
       <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+        <LineChart
+          data={data}
+          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+          style={{ cursor: onSelectDay ? "pointer" : undefined }}
+          onClick={(state) => {
+            const full = (state as { activePayload?: { payload?: { full?: string } }[] })
+              ?.activePayload?.[0]?.payload?.full;
+            if (full && onSelectDay) onSelectDay(full);
+          }}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
           <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fontSize: 11, fill: "#64748b" }} width={44} axisLine={false} tickLine={false} />
@@ -140,7 +159,7 @@ export function OpsStatsDayTrendChart({ rows }: { rows: readonly OpsStatsDayRow[
             stroke={COLORS.actual}
             strokeWidth={2.25}
             dot={false}
-            activeDot={{ r: 4 }}
+            activeDot={{ r: 5 }}
           />
           <Line
             type="monotone"
@@ -212,7 +231,7 @@ export function OpsStatsWarehouseChart({
               style={{ cursor: onSelect ? "pointer" : undefined }}
             >
               {data.map((_, i) => (
-                <Cell key={data[i]!.warehouse} fill={COLORS.warehouse[i % COLORS.warehouse.length]} />
+                <Cell key={data[i]!.warehouse} fill={warehouseSeriesFor(data[i]!.warehouse)} />
               ))}
             </Pie>
             <Tooltip
@@ -330,7 +349,7 @@ export function OpsStatsWarehouseKgChart({ rows }: { rows: readonly OpsStatsWare
   const data = useMemo(
     () =>
       rows.map((r) => ({
-        name: r.label.replace("TECS-", ""),
+        name: r.label,
         actualKg: Math.round(r.actualKg * 1000) / 1000,
         chargeableKg: Math.round(r.chargeableKg * 1000) / 1000,
         deltaKg: Math.round(r.deltaKg * 1000) / 1000,

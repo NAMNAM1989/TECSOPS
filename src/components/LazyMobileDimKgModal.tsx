@@ -30,7 +30,7 @@ function DimModalSuspenseFallback({ onClose }: { onClose: () => void }) {
     >
       <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-ui-border bg-ui-surface shadow-ui-lg">
         <div className="flex items-center justify-between border-b border-ui-border px-4 py-3">
-          <div className="h-4 w-40 animate-pulse rounded bg-ui-surface-muted" />
+          <div className="h-4 w-40 animate-pulse motion-reduce:animate-none rounded bg-ui-surface-muted" />
           <button
             type="button"
             onClick={onClose}
@@ -41,15 +41,15 @@ function DimModalSuspenseFallback({ onClose }: { onClose: () => void }) {
         </div>
         <div className="grid gap-3 p-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <div className="h-24 animate-pulse rounded-xl bg-ui-surface-muted" />
-            <div className="h-10 animate-pulse rounded-xl bg-ui-surface-muted" />
-            <div className="h-32 animate-pulse rounded-xl bg-ui-surface-muted" />
+            <div className="h-24 animate-pulse motion-reduce:animate-none rounded-xl bg-ui-surface-muted" />
+            <div className="h-10 animate-pulse motion-reduce:animate-none rounded-xl bg-ui-surface-muted" />
+            <div className="h-32 animate-pulse motion-reduce:animate-none rounded-xl bg-ui-surface-muted" />
           </div>
-          <div className="h-64 animate-pulse rounded-xl bg-ui-surface-muted" />
+          <div className="h-64 animate-pulse motion-reduce:animate-none rounded-xl bg-ui-surface-muted" />
         </div>
         <div className="flex justify-end gap-2 border-t border-ui-border px-4 py-3">
-          <div className="h-11 w-24 animate-pulse rounded-xl bg-ui-surface-muted" />
-          <div className="h-11 w-40 animate-pulse rounded-xl bg-ui-surface-muted" />
+          <div className="h-11 w-24 animate-pulse motion-reduce:animate-none rounded-xl bg-ui-surface-muted" />
+          <div className="h-11 w-40 animate-pulse motion-reduce:animate-none rounded-xl bg-ui-surface-muted" />
         </div>
       </div>
     </div>

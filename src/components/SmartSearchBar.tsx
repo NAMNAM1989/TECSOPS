@@ -7,7 +7,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import type { Shipment, Warehouse } from "../types/shipment";
+import type { Shipment } from "../types/shipment";
 import { warehouseLabel, WAREHOUSE_ORDER } from "../constants/warehouses";
 import {
   buildShipmentSearchMatches,
@@ -18,13 +18,14 @@ import {
   type ShipmentSearchContext,
   type ShipmentSearchMatch,
 } from "../utils/shipmentSearch";
+import {
+  fetchGlobalSearch,
+  lotHitsFromGlobalSearch,
+  shouldFetchGlobalSearch,
+  type GlobalSearchLotHit,
+} from "../utils/globalSearchApi";
 
-const WAREHOUSE_CHIP_CLASS: Record<Warehouse, string> = {
-  "TECS-TCS": "bg-sky-100 text-sky-900 ring-sky-200/80",
-  "TECS-SCSC": "bg-violet-100 text-violet-900 ring-violet-200/80",
-  TCS: "bg-cyan-100 text-cyan-900 ring-cyan-200/80",
-  SCSC: "bg-fuchsia-100 text-fuchsia-900 ring-fuchsia-200/80",
-};
+import { warehouseTone } from "../styles/warehouseTokens";
 
 interface SmartSearchBarProps {
   value: string;
@@ -39,6 +40,9 @@ interface SmartSearchBarProps {
   searchContext: ShipmentSearchContext;
   inputRef?: RefObject<HTMLInputElement>;
   onSelectMatch?: (match: ShipmentSearchMatch) => void;
+  /** Ngày phiên đang xem — API bỏ lô ngày này (đã có local). */
+  sessionDate?: string;
+  onSelectGlobalLot?: (hit: GlobalSearchLotHit) => void;
   /** Gọn — mobile header */
   compact?: boolean;
   /**
@@ -78,10 +82,10 @@ function FlightDateChips({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onPick(active ? "" : f.date)}
-            className={`inline-flex shrink-0 items-center justify-center gap-0.5 ring-1 transition active:scale-[0.98] ${
+            className={`inline-flex shrink-0 items-center justify-center gap-0.5 ring-1 transition active:opacity-90 ${
               tight
-                ? "h-8 rounded-lg px-2 text-[10px] font-bold tabular-nums"
-                : "min-h-11 min-w-11 rounded-md px-1.5 text-[10px] font-bold tabular-nums"
+                ? "h-8 rounded-lg px-2 text-2xs font-bold tabular-nums"
+                : "min-h-11 min-w-11 rounded-md px-1.5 text-2xs font-bold tabular-nums"
             } ${
               active
                 ? "bg-ui-primary text-white ring-ui-primary"
@@ -96,7 +100,7 @@ function FlightDateChips({
           >
             <span>{f.date}</span>
             <span
-              className={`rounded px-1 py-px text-[9px] font-semibold ${
+              className={`rounded px-1 py-px text-2xs font-semibold ${
                 active ? "bg-white/20 text-white" : "bg-ui-surface-muted text-ui-text-muted"
               }`}
             >
@@ -111,16 +115,22 @@ function FlightDateChips({
 
 function SuggestionList({
   suggestions,
+  remoteLots,
+  remoteLoading = false,
   activeIdx,
   onPick,
+  onPickRemote,
   id,
 }: {
   suggestions: ShipmentSearchMatch[];
+  remoteLots: GlobalSearchLotHit[];
+  remoteLoading?: boolean;
   activeIdx: number;
   onPick: (match: ShipmentSearchMatch) => void;
+  onPickRemote: (hit: GlobalSearchLotHit) => void;
   id: string;
 }) {
-  if (!suggestions.length) return null;
+  if (!suggestions.length && !remoteLots.length && !remoteLoading) return null;
   return (
     <ul
       id={id}
@@ -138,7 +148,7 @@ function SuggestionList({
             }`}
           >
             <span
-              className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${WAREHOUSE_CHIP_CLASS[match.shipment.warehouse]}`}
+              className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ring-1 ${warehouseTone[match.shipment.warehouse].chip}`}
             >
               {warehouseLabel[match.shipment.warehouse]}
             </span>
@@ -147,12 +157,12 @@ function SuggestionList({
                 <span className="font-mono text-[12px] font-bold text-ui-text">
                   {match.label}
                 </span>
-                <span className="rounded bg-ui-surface-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase text-ui-text-muted">
+                <span className="rounded bg-ui-surface-muted px-1.5 py-0.5 text-2xs font-semibold uppercase text-ui-text-muted">
                   {matchKindLabel(match.kind)}
                 </span>
               </span>
               {match.sublabel ? (
-                <span className="mt-0.5 block truncate text-[11px] text-ui-text-muted">
+                <span className="mt-0.5 block truncate text-2xs text-ui-text-muted">
                   {match.sublabel}
                 </span>
               ) : null}
@@ -160,6 +170,48 @@ function SuggestionList({
           </button>
         </li>
       ))}
+      {remoteLots.length || remoteLoading ? (
+        <li className="px-3 pb-1 pt-2 text-2xs font-bold uppercase tracking-wide text-ui-text-muted">
+          Ngày khác
+        </li>
+      ) : null}
+      {remoteLoading && !remoteLots.length ? (
+        <li className="px-3 py-2 text-2xs text-ui-text-muted">Đang tìm ngày khác…</li>
+      ) : null}
+      {remoteLots.map((hit, i) => {
+        const idx = suggestions.length + i;
+        return (
+          <li key={`remote-${hit.id}`} role="option" aria-selected={idx === activeIdx}>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onPickRemote(hit)}
+              className={`flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${
+                idx === activeIdx ? "bg-ui-primary/10" : "hover:bg-ui-surface-muted"
+              }`}
+            >
+              <span
+                className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide ring-1 ${warehouseTone[hit.warehouse].chip}`}
+              >
+                {warehouseLabel[hit.warehouse]}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="font-mono text-[12px] font-bold text-ui-text">
+                    {hit.label}
+                  </span>
+                  <span className="rounded bg-ui-surface-muted px-1.5 py-0.5 text-2xs font-semibold uppercase text-ui-text-muted">
+                    {matchKindLabel(hit.kind)}
+                  </span>
+                </span>
+                <span className="mt-0.5 block truncate text-2xs text-ui-text-muted">
+                  {hit.sublabel || hit.sessionDate}
+                </span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -174,6 +226,8 @@ export function SmartSearchBar({
   searchContext,
   inputRef,
   onSelectMatch,
+  sessionDate,
+  onSelectGlobalLot,
   compact = false,
   inlineFacets = false,
   tightFacets = false,
@@ -188,6 +242,8 @@ export function SmartSearchBar({
   const [activeIdx, setActiveIdx] = useState(0);
   const [draftValue, setDraftValue] = useState(value);
   const [matchQuery, setMatchQuery] = useState(value.trim());
+  const [remoteLots, setRemoteLots] = useState<GlobalSearchLotHit[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -237,12 +293,41 @@ export function SmartSearchBar({
     [matchedRows],
   );
 
+  useEffect(() => {
+    if (!shouldFetchGlobalSearch(matchQuery)) {
+      setRemoteLots([]);
+      setRemoteLoading(false);
+      return;
+    }
+    const ac = new AbortController();
+    let cancelled = false;
+    setRemoteLoading(true);
+    const t = window.setTimeout(() => {
+      void fetchGlobalSearch({
+        q: matchQuery,
+        excludeSession: sessionDate,
+        signal: ac.signal,
+      }).then((body) => {
+        if (cancelled || ac.signal.aborted) return;
+        setRemoteLots(lotHitsFromGlobalSearch(body));
+        setRemoteLoading(false);
+      });
+    }, 200);
+    return () => {
+      cancelled = true;
+      ac.abort();
+      window.clearTimeout(t);
+    };
+  }, [matchQuery, sessionDate]);
+
+  const optionCount = suggestions.length + remoteLots.length;
+  const hasMenu = optionCount > 0 || remoteLoading;
   const mobileOverlay = compact && open;
   const hasFilterSummary = Boolean(trimmed || flightDateFilter);
 
   useEffect(() => {
     setActiveIdx(0);
-  }, [trimmed, suggestions.length]);
+  }, [trimmed, suggestions.length, remoteLots.length]);
 
   useEffect(() => {
     if (mobileOverlay) return;
@@ -276,6 +361,12 @@ export function SmartSearchBar({
     onSelectMatch?.(match);
   };
 
+  const pickRemote = (hit: GlobalSearchLotHit) => {
+    onChange("");
+    setOpen(false);
+    onSelectGlobalLot?.(hit);
+  };
+
   const pickFlightDate = (date: string) => {
     onFlightDateChange?.(date);
     // Nếu ô đang chỉ chứa token ngày bay cũ — xóa để tránh lọc kép.
@@ -295,17 +386,22 @@ export function SmartSearchBar({
       setOpen(false);
       return;
     }
-    if (!suggestions.length) return;
+    if (!optionCount) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIdx((i) => (i + 1) % suggestions.length);
+      setActiveIdx((i) => (i + 1) % optionCount);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIdx((i) => (i - 1 + suggestions.length) % suggestions.length);
+      setActiveIdx((i) => (i - 1 + optionCount) % optionCount);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const hit = suggestions[activeIdx];
-      if (hit) pickMatch(hit);
+      if (activeIdx < suggestions.length) {
+        const hit = suggestions[activeIdx];
+        if (hit) pickMatch(hit);
+        return;
+      }
+      const remote = remoteLots[activeIdx - suggestions.length];
+      if (remote) pickRemote(remote);
     }
   };
 
@@ -337,14 +433,14 @@ export function SmartSearchBar({
   const filterSummary =
     hasFilterSummary && matchedRows.length >= 0 ? (
       <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <span className="text-[10px] font-semibold tabular-nums text-ui-text-muted">
+        <span className="text-2xs font-semibold tabular-nums text-ui-text-muted">
           {matchedRows.length} lô
         </span>
         {flightDateFilter ? (
           <button
             type="button"
             onClick={() => onFlightDateChange?.("")}
-            className="inline-flex items-center gap-0.5 rounded-md bg-ui-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-ui-primary"
+            className="inline-flex items-center gap-0.5 rounded-md bg-ui-primary/10 px-1.5 py-0.5 text-2xs font-bold text-ui-primary"
             title="Bỏ lọc ngày bay"
           >
             {flightDateFilter} ×
@@ -353,7 +449,7 @@ export function SmartSearchBar({
         {WAREHOUSE_ORDER.filter((wh) => warehouseCounts[wh] > 0).map((wh) => (
           <span
             key={wh}
-            className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ${WAREHOUSE_CHIP_CLASS[wh]}`}
+            className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-2xs font-semibold ring-1 ${warehouseTone[wh].chip}`}
           >
             {warehouseLabel[wh]} {warehouseCounts[wh]}
           </span>
@@ -389,13 +485,13 @@ export function SmartSearchBar({
                   value={value}
                   onChange={(e) => onChange(e.target.value)}
                   onKeyDown={onKeyDown}
-                  placeholder="MAWB · xe · tài xế · DEST…"
+                  placeholder="MAWB · shipper · hàng · xe · DEST…"
                   autoComplete="off"
                   spellCheck={false}
                   enterKeyHint="search"
                   className={inputClass}
                   aria-label="Tìm kiếm thông minh"
-                  aria-expanded={suggestions.length > 0}
+                  aria-expanded={hasMenu}
                   aria-controls={listboxId}
                   role="combobox"
                 />
@@ -423,19 +519,22 @@ export function SmartSearchBar({
 
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
               {!trimmed && flightFacets.length ? (
-                <p className="text-[11px] text-ui-text-muted">
+                <p className="text-2xs text-ui-text-muted">
                   Chọn ngày bay, hoặc gõ MAWB / số xe / tài xế / DEST.
                 </p>
               ) : null}
-              {trimmed && suggestions.length > 0 ? (
+              {trimmed && hasMenu ? (
                 <SuggestionList
                   id={listboxId}
                   suggestions={suggestions}
+                  remoteLots={remoteLots}
+                  remoteLoading={remoteLoading}
                   activeIdx={activeIdx}
                   onPick={pickMatch}
+                  onPickRemote={pickRemote}
                 />
               ) : null}
-              {trimmed && suggestions.length === 0 ? (
+              {trimmed && !hasMenu ? (
                 <p className="rounded-xl border border-dashed border-ui-border bg-ui-surface px-3 py-6 text-center text-[12px] text-ui-text-muted">
                   Không có lô khớp. Thử MAWB, số xe, tài xế hoặc DEST.
                 </p>
@@ -466,13 +565,13 @@ export function SmartSearchBar({
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
-        placeholder={compact ? "MAWB / xe / DEST…" : "MAWB · xe · DEST… (/)"}
+        placeholder={compact ? "MAWB / hàng / xe…" : "MAWB · shipper · hàng · xe… (/)"}
         autoComplete="off"
         spellCheck={false}
         readOnly={compact && open}
         className={inputClass}
-        aria-label="Tìm kiếm thông minh MAWB, số xe, tài xế, DEST"
-        aria-expanded={open && suggestions.length > 0}
+        aria-label="Tìm kiếm thông minh MAWB, shipper, tên hàng, số xe, tài xế, DEST"
+        aria-expanded={open && hasMenu}
         aria-controls={listboxId}
         role="combobox"
       />
@@ -492,7 +591,7 @@ export function SmartSearchBar({
         </button>
       ) : (
         <kbd
-          className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-ui-border bg-ui-surface-muted px-1 py-px text-[9px] font-semibold leading-none text-ui-text-muted sm:inline-block"
+          className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border border-ui-border bg-ui-surface-muted px-1 py-px text-2xs font-semibold leading-none text-ui-text-muted sm:inline-block"
           title="Nhấn / hoặc F để tìm nhanh"
         >
           /
@@ -535,13 +634,16 @@ export function SmartSearchBar({
         </>
       )}
 
-      {!compact && open && trimmed && suggestions.length > 0 ? (
+      {!compact && open && trimmed && hasMenu ? (
         <div className={`absolute z-50 mt-1 ${useInline ? "left-0 w-[min(100%,22rem)]" : "left-0 right-0"}`}>
           <SuggestionList
             id={listboxId}
             suggestions={suggestions}
+            remoteLots={remoteLots}
+            remoteLoading={remoteLoading}
             activeIdx={activeIdx}
             onPick={pickMatch}
+            onPickRemote={pickRemote}
           />
         </div>
       ) : null}

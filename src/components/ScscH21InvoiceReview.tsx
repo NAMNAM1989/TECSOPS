@@ -11,7 +11,7 @@ export function ScscH21InvoiceReview({ doc }: Props) {
 
   return (
     <article
-      className="mx-auto max-w-[820px] rounded-lg border border-neutral-300 bg-white p-6 text-[11px] leading-snug text-neutral-900 shadow-md print:shadow-none"
+      className="mx-auto max-w-[820px] rounded-lg border border-neutral-300 bg-white p-6 text-2xs leading-snug text-neutral-900 shadow-md print:shadow-none"
       data-testid="scsc-h21-invoice-review"
     >
       <h1 className="mb-4 text-center text-sm font-bold tracking-wide">{doc.title}</h1>
@@ -59,7 +59,7 @@ export function ScscH21InvoiceReview({ doc }: Props) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-[10px]">
+        <table className="w-full min-w-[640px] border-collapse text-2xs">
           <thead>
             <tr className="border border-neutral-400 bg-neutral-100">
               <th className="border border-neutral-400 px-1 py-1">No</th>

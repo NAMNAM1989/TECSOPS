@@ -74,9 +74,9 @@ export function OpsDatePicker({
           <span
             className={`pointer-events-none block truncate text-center font-mono font-semibold tabular-nums text-ui-navy ${
               dense
-                ? "py-1 text-[11px] leading-none"
+                ? "py-1 text-2xs leading-none"
                 : compact
-                  ? "py-1 text-[11px]"
+                  ? "py-1 text-2xs"
                   : "py-0.5 text-[12px]"
             }`}
             aria-hidden
@@ -123,15 +123,15 @@ export function OpsDatePicker({
             onClick={onToday}
             className={`inline-flex shrink-0 touch-manipulation items-center rounded-full bg-ui-primary font-semibold text-white hover:bg-ui-primary-hover ${
               dense
-                ? "h-8 px-2 text-[10px]"
-                : "min-h-11 px-2.5 text-[11px] shadow-ui-sm"
+                ? "h-8 px-2 text-2xs"
+                : "min-h-11 px-2.5 text-2xs shadow-ui-sm"
             }`}
           >
             Nay
           </button>
         ) : null
       ) : !isViewingToday ? (
-        <Button variant="secondary" size="sm" onClick={onToday} className="px-2 text-[11px]">
+        <Button variant="secondary" size="sm" onClick={onToday} className="px-2 text-2xs">
           Hôm nay
         </Button>
       ) : null}

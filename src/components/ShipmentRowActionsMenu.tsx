@@ -28,12 +28,13 @@ const CsdPrintModal = lazy(() =>
 );
 
 const CSD_AIRLINE: Record<
-  "FD" | "TG" | "MH" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5" | "AI",
+  "FD" | "TG" | "MH" | "WW" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5" | "AI" | "MF" | "TH",
   string
 > = {
   FD: "Thai AirAsia",
   TG: "Thai Airways",
   MH: "Malaysia Airlines",
+  WW: "MJets Air",
   QR: "Qatar Airways",
   AK: "AirAsia",
   VU: "Vietravel Airlines",
@@ -45,6 +46,8 @@ const CSD_AIRLINE: Record<
   PR: "Philippine Airlines",
   T5: "Turkmenistan Airlines",
   AI: "Air India",
+  MF: "Xiamen Airlines",
+  TH: "Raya Airways",
 };
 
 type Props = {
@@ -63,12 +66,13 @@ const iconCls = "h-3.5 w-3.5";
 
 function lightweightCsdCarrier(
   row: Pick<Shipment, "flight" | "awb">
-): "FD" | "TG" | "MH" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5" | "AI" | null {
+): "FD" | "TG" | "MH" | "WW" | "QR" | "AK" | "VU" | "VJ" | "SQ" | "TR" | "BI" | "EK" | "PR" | "T5" | "AI" | "MF" | "TH" | null {
   if (awbDigitsKey(row.awb).length !== 11) return null;
   const flight = String(row.flight || "").trim().toUpperCase().replace(/\s+/g, "");
   if (flight.startsWith("FD")) return "FD";
   if (flight.startsWith("TG")) return "TG";
   if (flight.startsWith("MH")) return "MH";
+  if (flight.startsWith("WW")) return "WW";
   if (flight.startsWith("QR")) return "QR";
   if (flight.startsWith("AK")) return "AK";
   if (flight.startsWith("VU")) return "VU";
@@ -80,6 +84,8 @@ function lightweightCsdCarrier(
   if (flight.startsWith("PR")) return "PR";
   if (flight.startsWith("T5")) return "T5";
   if (flight.startsWith("AI")) return "AI";
+  if (flight.startsWith("MF")) return "MF";
+  if (flight.startsWith("TH")) return "TH";
   return null;
 }
 
@@ -111,7 +117,7 @@ function ActionIconBtn({
     >
       {children}
       {shortLabel ? (
-        <span className="text-[10px] font-semibold leading-none">{shortLabel}</span>
+        <span className="text-2xs font-semibold leading-none">{shortLabel}</span>
       ) : null}
     </button>
   );
@@ -426,7 +432,7 @@ export function ShipmentRowActionsMenu({
             e.stopPropagation();
             setCsdOpen(true);
           }}
-          className="inline-flex h-7 items-center rounded-md border border-rose-500/35 bg-rose-50 px-1.5 text-[10px] font-bold text-rose-900 hover:bg-rose-100"
+          className="inline-flex h-7 items-center rounded-md border border-red-500/35 bg-red-50 px-1.5 text-2xs font-bold text-red-900 hover:bg-red-100"
         >
           <IconCsd />
           <span className="ml-0.5">CSD {csdCarrier}</span>

@@ -79,13 +79,13 @@ export function VehicleTypeMissingBadge({
       </button>
       {open ? (
         <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-xl border border-amber-200 bg-white p-2 shadow-lg">
-          <p className="mb-1.5 text-[10px] font-semibold text-amber-900">
+          <p className="mb-1.5 text-2xs font-semibold text-amber-900">
             Chọn loại xe nhanh ({missing.length})
           </p>
           <ul className="space-y-1.5">
             {missing.map((v) => (
               <li key={v.id} className="rounded-lg bg-amber-50/80 px-1.5 py-1">
-                <p className="truncate font-mono text-[10px] font-bold text-slate-800">
+                <p className="truncate font-mono text-2xs font-bold text-slate-800">
                   {v.licensePlate || "(không biển)"}
                 </p>
                 <div className="mt-1 flex flex-wrap gap-1">
@@ -95,7 +95,7 @@ export function VehicleTypeMissingBadge({
                       type="button"
                       disabled={busyId === v.id}
                       onClick={() => void applyType(v, t.value)}
-                      className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-emerald-50 hover:text-emerald-800 disabled:opacity-50"
+                      className="rounded-full bg-white px-2 py-0.5 text-2xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-emerald-50 hover:text-emerald-800 disabled:opacity-50"
                     >
                       {t.label}
                     </button>

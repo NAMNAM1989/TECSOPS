@@ -302,6 +302,7 @@ const CARGO_FAMILY_MODES = new Set([
   "food",
   "garment",
   "general",
+  "customer",
 ]);
 
 /**

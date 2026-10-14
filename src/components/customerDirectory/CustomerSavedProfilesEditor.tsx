@@ -103,7 +103,7 @@ function ItemCard({
       <div className="mb-1.5 flex items-center gap-1.5">
         {defaultStar}
         <span
-          className={`min-w-0 flex-1 truncate text-[11px] font-semibold ${OPS.secondary}`}
+          className={`min-w-0 flex-1 truncate text-2xs font-semibold ${OPS.secondary}`}
         >
           {title}
         </span>
@@ -111,7 +111,7 @@ function ItemCard({
           <button
             type="button"
             onClick={onRemove}
-            className="text-[10px] font-semibold text-red-600 hover:underline"
+            className="text-2xs font-semibold text-red-600 hover:underline"
           >
             Xóa
           </button>
@@ -124,7 +124,7 @@ function ItemCard({
 
 function FieldLabel({ children }: { children: ReactNode }) {
   return (
-    <span className={`mb-0.5 block text-[10px] font-medium ${OPS.muted}`}>
+    <span className={`mb-0.5 block text-2xs font-medium ${OPS.muted}`}>
       {children}
     </span>
   );
@@ -175,12 +175,12 @@ function AccordionSection({
           className="flex min-h-10 min-w-0 flex-1 touch-manipulation items-center gap-2 rounded-lg px-2 text-left transition hover:bg-ui-surface sm:min-h-9"
         >
           <span
-            className={`text-[11px] font-bold text-ui-text-muted transition ${open ? "rotate-90" : ""}`}
+            className={`text-2xs font-bold text-ui-text-muted transition ${open ? "rotate-90" : ""}`}
             aria-hidden
           >
             ›
           </span>
-          <span className="truncate text-[12px] font-bold text-ui-navy sm:text-[11px]">
+          <span className="truncate text-[12px] font-bold text-ui-navy sm:text-2xs">
             {label}
             {count > 0 ? (
               <span className="ml-1 font-semibold text-ui-text-muted">
@@ -193,7 +193,7 @@ function AccordionSection({
         <button
           type="button"
           onClick={onAdd}
-          className="shrink-0 touch-manipulation rounded-full border border-ui-border px-2.5 py-1.5 text-[11px] font-semibold text-ui-primary hover:bg-ui-primary/10 sm:py-1 sm:text-[10px]"
+          className="shrink-0 touch-manipulation rounded-full border border-ui-border px-2.5 py-1.5 text-2xs font-semibold text-ui-primary hover:bg-ui-primary/10 sm:py-1 sm:text-2xs"
         >
           + Thêm
         </button>
@@ -342,7 +342,7 @@ export function CustomerDefaultDataEditor({
   return (
     <section className="space-y-2.5" data-testid="cust-defaults-editor">
       <div className="rounded-xl border border-ui-border/90 bg-ui-surface p-2.5 shadow-ui-sm sm:p-3">
-        <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-ui-text-muted">
+        <span className="mb-1.5 block text-2xs font-bold uppercase tracking-wider text-ui-text-muted">
           Notify (mặc định)
         </span>
         <textarea
@@ -352,7 +352,7 @@ export function CustomerDefaultDataEditor({
           className={`${inputCls} min-h-14 resize-y sm:min-h-[2.5rem]`}
           placeholder="VD: NOTIFY GLOBAL LOGISTICS…"
         />
-        <p className={`mt-1 text-[10px] leading-snug ${OPS.muted}`}>
+        <p className={`mt-1 text-2xs leading-snug ${OPS.muted}`}>
           Gắn CNEE mặc định · điền OPS / eSID
         </p>
       </div>
@@ -370,7 +370,7 @@ export function CustomerDefaultDataEditor({
         >
           {id === "shipper" ? (
             shippers.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
+              <p className={`py-3 text-center text-2xs ${OPS.muted}`}>
                 Chưa có người gửi.
               </p>
             ) : (
@@ -499,7 +499,7 @@ export function CustomerDefaultDataEditor({
                         Dán OCR
                       </button>
                       {ocrHint ? (
-                        <span className={`text-[10px] ${OPS.secondary}`}>
+                        <span className={`text-2xs ${OPS.secondary}`}>
                           {ocrHint}
                         </span>
                       ) : null}
@@ -512,7 +512,7 @@ export function CustomerDefaultDataEditor({
 
           {id === "consignee" ? (
             consignees.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
+              <p className={`py-3 text-center text-2xs ${OPS.muted}`}>
                 Chưa có CNEE — có thể bỏ qua hoặc nhập Notify phía trên.
               </p>
             ) : (
@@ -643,7 +643,7 @@ export function CustomerDefaultDataEditor({
 
           {id === "goods" ? (
             goods.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
+              <p className={`py-3 text-center text-2xs ${OPS.muted}`}>
                 Chưa có loại hàng (Nature of Goods).
               </p>
             ) : (
@@ -694,7 +694,7 @@ export function CustomerDefaultDataEditor({
 
           {id === "vehicle" ? (
             vehicles.length === 0 ? (
-              <p className={`py-3 text-center text-[11px] ${OPS.muted}`}>
+              <p className={`py-3 text-center text-2xs ${OPS.muted}`}>
                 Chưa có xe — thêm biển số / tài xế nếu cần.
               </p>
             ) : (

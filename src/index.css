@@ -1,3 +1,4 @@
+@import "./styles/tokens.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,13 +9,8 @@
     color-scheme: light;
   }
   body {
-    /* Operational Signal R2 — canvas lạnh + chiều sâu nhẹ, không flat đơn sắc. */
-    @apply min-h-screen text-ui-text antialiased font-sans;
-    background-color: #e8eef4;
-    background-image:
-      radial-gradient(ellipse 80% 60% at 10% 0%, rgba(148, 163, 184, 0.22), transparent 55%),
-      radial-gradient(ellipse 70% 50% at 95% 100%, rgba(13, 148, 136, 0.12), transparent 50%);
-    background-attachment: fixed;
+    /* Operational Signal — canvas chuẩn hóa theo design token bg-ui-background. */
+    @apply min-h-screen text-ui-text antialiased font-sans bg-ui-background;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: 0.012em;
@@ -27,7 +23,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid rgba(15, 118, 110, 0.45);
+    outline: 2px solid rgb(var(--ring));
     outline-offset: 2px;
   }
 
@@ -58,7 +54,7 @@
       "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
       Consolas, monospace;
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.015em;
+    letter-spacing: 0;
   }
 
   .tabular-nums-data {
@@ -77,9 +73,18 @@
     @apply italic text-apple-tertiary;
   }
 
-  /** Desktop inline edit — hover cho thấy ô có thể sửa. */
+  /** Desktop inline edit — hover cho thấy ô có thể sửa; focus viền 2px kiểu Excel. */
   .ops-inline-edit {
     @apply rounded-md transition hover:bg-ui-primary/10 hover:ring-1 hover:ring-inset hover:ring-ui-primary/30;
+  }
+
+  .ops-inline-edit:focus,
+  .ops-inline-edit:focus-visible,
+  [data-grid-row]:focus,
+  [data-grid-row]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-ui-focus, #2563eb);
+    z-index: 10;
   }
 
   /** Ghi chú lô — đỏ đậm để ops nhận nhanh trên lưới. */
@@ -93,7 +98,7 @@
 
   /** AWB mono — contrast cao Round 2. */
   .ops-awb {
-    @apply font-shipment-data font-extrabold tracking-tight tabular-nums text-ui-awb;
+    @apply font-shipment-data font-semibold tracking-tight tabular-nums text-ui-awb;
   }
 
   /** Zebra hàng bảng Ops — xen kẽ nhẹ (mobile / legacy). */
@@ -166,4 +171,32 @@
 
 .animate-cnee-slide-up {
   animation: cnee-slide-up-in 0.28s cubic-bezier(0.32, 0.94, 0.6, 1) forwards;
+}
+
+@keyframes ops-urgent-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ops-urgent-marquee {
+  animation-name: ops-urgent-marquee;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.ops-urgent-marquee:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ops-urgent-marquee {
+    animation: none !important;
+    width: auto;
+    flex-wrap: wrap;
+    transform: none !important;
+  }
 }

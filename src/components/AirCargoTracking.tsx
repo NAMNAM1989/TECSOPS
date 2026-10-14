@@ -17,6 +17,12 @@ import {
   filterShipmentsBySessionYmd,
   filterShipmentsBySessionYmdRange,
 } from "../utils/filterShipmentsBySessionYmd";
+import {
+  parseOpsUrlState,
+  serializeOpsUrlState,
+  isOpsHash,
+  type OpsUrlState,
+} from "../utils/opsUrlState";
 import { type StatusFilterValue } from "./StatusFilterBar";
 import {
   WAREHOUSE_ORDER,
@@ -45,6 +51,7 @@ import {
   type ShipmentSearchContext,
   type ShipmentSearchMatch,
 } from "../utils/shipmentSearch";
+import type { GlobalSearchLotHit } from "../utils/globalSearchApi";
 import { DayExcelExportDialog } from "./DayExcelExportDialog";
 import type { ScscH21StampId } from "../types/scscH21Catalog";
 import { isScscH21Warehouse } from "../types/scscH21Catalog";
@@ -92,6 +99,13 @@ interface AirCargoTrackingProps {
       onCopy: (kind: CargoDayReportCopyKind) => void;
     } | null,
   ) => void;
+  /** Deep-link từ Stats → Ops (ngày phiên + tìm AWB / highlight lô). */
+  deepLink?: {
+    sessionYmd: string;
+    query: string;
+    shipmentId?: string;
+  } | null;
+  onDeepLinkConsumed?: () => void;
 }
 
 export function AirCargoTracking({
@@ -99,6 +113,8 @@ export function AirCargoTracking({
   onSessionDateChange,
   onRequestPrint,
   onCargoCopyApiChange,
+  deepLink = null,
+  onDeepLinkConsumed,
 }: AirCargoTrackingProps) {
   const {
     status,
@@ -108,26 +124,49 @@ export function AirCargoTracking({
     pendingOfflineCount,
     refreshState,
     applyRemoteState,
+    cellStatuses,
   } = sync;
   const toast = useToast();
   const [syncRefreshing, setSyncRefreshing] = useState(false);
 
-  const [selectedViewDate, setSelectedViewDate] = useState(() => startOfLocalDay(new Date()));
+  const syncStatusMessage = useMemo(() => {
+    if (status === "live" && socketConnected) return "Đồng bộ trực tiếp";
+    if (status === "offline") return "Mất kết nối máy chủ, đang làm việc offline";
+    return "Đồng bộ hạn chế";
+  }, [status, socketConnected]);
+
+  const initialUrlStateRef = useRef<Partial<OpsUrlState> | null>(null);
+  if (initialUrlStateRef.current === null) {
+    initialUrlStateRef.current =
+      typeof window !== "undefined" && isOpsHash(window.location.hash)
+        ? parseOpsUrlState(window.location.hash)
+        : {};
+  }
+  const initUrl = initialUrlStateRef.current;
+
+  const [selectedViewDate, setSelectedViewDate] = useState(() => {
+    if (initUrl.d) {
+      const parsed = parseSessionDateYmd(initUrl.d);
+      if (parsed) return parsed;
+    }
+    return startOfLocalDay(new Date());
+  });
   const selectedYmd = formatLocalSessionDate(selectedViewDate);
 
   useEffect(() => {
     onSessionDateChange?.(selectedYmd);
   }, [selectedYmd, onSessionDateChange]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initUrl.lot ?? null);
   const [mobileEditShipment, setMobileEditShipment] = useState<Shipment | null>(null);
   const [mobileEditInitialTab, setMobileEditInitialTab] = useState<"lot" | "notify" | "dim">("lot");
   const [mobileEditFocus, setMobileEditFocus] = useState<MobileEditFocus>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("ALL");
-  const [activeWarehouse, setActiveWarehouse] = useState<Warehouse>("TECS-TCS");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [activeWarehouse, setActiveWarehouse] = useState<Warehouse>(initUrl.wh ?? "TECS-TCS");
+  const [searchQuery, setSearchQuery] = useState(initUrl.q ?? "");
   /** Ngày bay (DDMMM) — tách khỏi ô gõ, kết hợp AND với searchQuery. */
-  const [flightDateFilter, setFlightDateFilter] = useState("");
+  const [flightDateFilter, setFlightDateFilter] = useState(initUrl.fd ?? "");
   const [highlightedShipmentId, setHighlightedShipmentId] = useState<string | null>(null);
+
   const [excelExporting, setExcelExporting] = useState(false);
   const [cargoReportCopying, setCargoReportCopying] = useState(false);
   const [sheetImportOpen, setSheetImportOpen] = useState(false);
@@ -135,9 +174,102 @@ export function AirCargoTracking({
   const [invoiceShipment, setInvoiceShipment] = useState<Shipment | null>(null);
   const [h21Stamps, setH21Stamps] = useState<readonly (ScscH21StampId | TcsH21StampId)[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const pendingJumpRef = useRef<{
+    id: string;
+    warehouse: Warehouse;
+    sessionDate: string;
+    query?: string;
+  } | null>(null);
   const isMobile = useIsMobile();
   const todayYmd = formatLocalSessionDate(startOfLocalDay(new Date()));
   const isViewingToday = selectedYmd === todayYmd;
+
+  const prevNavRef = useRef({
+    d: selectedYmd,
+    wh: activeWarehouse,
+    lot: selectedId,
+  });
+
+  // Đồng bộ state ra URL hash (debounce 250ms)
+  useEffect(() => {
+    if (typeof window === "undefined" || !isOpsHash(window.location.hash)) return;
+
+    const timer = setTimeout(() => {
+      const targetHash = serializeOpsUrlState(
+        {
+          d: selectedYmd,
+          wh: activeWarehouse,
+          st: statusFilter,
+          q: searchQuery,
+          fd: flightDateFilter,
+          lot: selectedId ?? undefined,
+        },
+        {
+          defaultYmd: todayYmd,
+        }
+      );
+
+      if (window.location.hash !== targetHash) {
+        const isMajorNav =
+          prevNavRef.current.d !== selectedYmd ||
+          prevNavRef.current.wh !== activeWarehouse ||
+          (!prevNavRef.current.lot && Boolean(selectedId));
+
+        if (isMajorNav) {
+          window.history.pushState(null, "", targetHash);
+        } else {
+          window.history.replaceState(null, "", targetHash);
+        }
+      }
+      prevNavRef.current = {
+        d: selectedYmd,
+        wh: activeWarehouse,
+        lot: selectedId,
+      };
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [
+    selectedYmd,
+    activeWarehouse,
+    statusFilter,
+    searchQuery,
+    flightDateFilter,
+    selectedId,
+    todayYmd,
+  ]);
+
+  // Lắng nghe popstate / back / forward từ trình duyệt
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handlePopState = () => {
+      if (!isOpsHash(window.location.hash)) return;
+      const parsed = parseOpsUrlState(window.location.hash);
+      if (parsed.d && parsed.d !== selectedYmd) {
+        const nextDate = parseSessionDateYmd(parsed.d);
+        if (nextDate) setSelectedViewDate(nextDate);
+      }
+      if (parsed.wh && parsed.wh !== activeWarehouse) {
+        setActiveWarehouse(parsed.wh);
+      }
+      if (statusFilter !== "ALL") {
+        setStatusFilter("ALL");
+      }
+      if (parsed.q !== undefined && parsed.q !== searchQuery) {
+        setSearchQuery(parsed.q);
+      }
+      if (parsed.fd !== undefined && parsed.fd !== flightDateFilter) {
+        setFlightDateFilter(parsed.fd);
+      }
+      if (parsed.lot !== undefined && parsed.lot !== selectedId) {
+        setSelectedId(parsed.lot || null);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [selectedYmd, activeWarehouse, statusFilter, searchQuery, flightDateFilter, selectedId]);
 
   const allRows = state?.rows ?? EMPTY_SHIPMENT_ROWS;
   const viewRows = useMemo(
@@ -163,12 +295,7 @@ export function AirCargoTracking({
     [state?.customers]
   );
 
-  const statusFilteredRows = useMemo(() => {
-    return viewRows.filter((r) => {
-      if (statusFilter !== "ALL" && r.status !== (statusFilter as ShipmentStatus)) return false;
-      return true;
-    });
-  }, [viewRows, statusFilter]);
+  const statusFilteredRows = viewRows;
 
   const searchActive =
     searchQuery.trim().length > 0 || Boolean(flightDateFilter);
@@ -190,14 +317,26 @@ export function AirCargoTracking({
   }, [searchActive, filteredViewRows]);
 
   useEffect(() => {
+    const jump = pendingJumpRef.current;
+    const keepJump = Boolean(jump && jump.sessionDate === selectedYmd);
     setStatusFilter("ALL");
-    setSearchQuery("");
     setFlightDateFilter("");
+    if (keepJump && jump) {
+      setSearchQuery(jump.query ?? "");
+      setActiveWarehouse(jump.warehouse);
+      if (jump.id) {
+        setHighlightedShipmentId(jump.id);
+        setSelectedId(jump.id);
+      }
+      return;
+    }
+    setSearchQuery("");
     setHighlightedShipmentId(null);
     setActiveWarehouse("TECS-TCS");
   }, [selectedYmd]);
 
   useEffect(() => {
+    if (pendingJumpRef.current) return;
     setActiveWarehouse((prev) => {
       const hasInActive = filteredViewRows.some((r) => r.warehouse === prev);
       if (hasInActive) return prev;
@@ -229,23 +368,107 @@ export function AirCargoTracking({
     setHighlightedShipmentId(null);
   }, []);
 
-  const scrollToShipmentMatch = useCallback((match: ShipmentSearchMatch) => {
-    const { shipment } = match;
-    setActiveWarehouse(shipment.warehouse);
-    setHighlightedShipmentId(shipment.id);
-    setSelectedId(shipment.id);
+  const applyShipmentJump = useCallback((id: string, warehouse: Warehouse) => {
+    setActiveWarehouse(warehouse);
+    setHighlightedShipmentId(id);
+    setSelectedId(id);
     window.setTimeout(() => {
-      document.getElementById(`warehouse-section-${shipment.warehouse}`)?.scrollIntoView({
+      document.getElementById(`warehouse-section-${warehouse}`)?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
       const rowEl =
-        document.getElementById(`shipment-row-${shipment.id}`) ??
-        document.getElementById(`mobile-shipment-${shipment.id}`);
+        document.getElementById(`shipment-row-${id}`) ??
+        document.getElementById(`mobile-shipment-${id}`);
       rowEl?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 60);
-    window.setTimeout(() => setHighlightedShipmentId(null), 2400);
+    window.setTimeout(() => {
+      setHighlightedShipmentId((cur) => (cur === id ? null : cur));
+    }, 2400);
   }, []);
+
+  useEffect(() => {
+    if (!deepLink) return;
+    const ymd = (deepLink.sessionYmd || "").trim();
+    const query = (deepLink.query ?? "").trim();
+    const shipmentId = (deepLink.shipmentId || "").trim();
+    const found = shipmentId ? allRows.find((r) => r.id === shipmentId) : undefined;
+    const warehouse = found?.warehouse ?? activeWarehouse;
+    const sessionDate = ymd || selectedYmd;
+
+    pendingJumpRef.current = {
+      id: shipmentId,
+      warehouse,
+      sessionDate,
+      query,
+    };
+
+    if (ymd && ymd !== selectedYmd) {
+      try {
+        setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(ymd)));
+      } catch {
+        setSearchQuery(query);
+        if (shipmentId) applyShipmentJump(shipmentId, warehouse);
+        else setActiveWarehouse(warehouse);
+        pendingJumpRef.current = null;
+      }
+    } else {
+      setSearchQuery(query);
+      if (shipmentId) applyShipmentJump(shipmentId, warehouse);
+      else setActiveWarehouse(warehouse);
+      if (!shipmentId) pendingJumpRef.current = null;
+    }
+    onDeepLinkConsumed?.();
+  }, [deepLink, onDeepLinkConsumed, allRows, selectedYmd, activeWarehouse, applyShipmentJump]);
+
+  const scrollToShipmentMatch = useCallback(
+    (match: ShipmentSearchMatch) => {
+      applyShipmentJump(match.shipment.id, match.shipment.warehouse);
+    },
+    [applyShipmentJump],
+  );
+
+  const jumpToGlobalLot = useCallback(
+    (hit: GlobalSearchLotHit) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(hit.sessionDate)) return;
+      if (hit.sessionDate === selectedYmd) {
+        applyShipmentJump(hit.id, hit.warehouse);
+        return;
+      }
+      pendingJumpRef.current = {
+        id: hit.id,
+        warehouse: hit.warehouse,
+        sessionDate: hit.sessionDate,
+      };
+      setSelectedViewDate(startOfLocalDay(parseSessionDateYmd(hit.sessionDate)));
+    },
+    [selectedYmd, applyShipmentJump],
+  );
+
+  useEffect(() => {
+    const jump = pendingJumpRef.current;
+    if (!jump || jump.sessionDate !== selectedYmd) return;
+    if (!jump.id) {
+      setSearchQuery(jump.query ?? "");
+      setActiveWarehouse(jump.warehouse);
+      pendingJumpRef.current = null;
+      return;
+    }
+    const found = viewRows.find((r) => r.id === jump.id);
+    if (found) {
+      pendingJumpRef.current = null;
+      if (jump.query) setSearchQuery(jump.query);
+      applyShipmentJump(found.id, found.warehouse);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      if (pendingJumpRef.current === jump) {
+        pendingJumpRef.current = null;
+        setHighlightedShipmentId((cur) => (cur === jump.id ? null : cur));
+      }
+    }, 8000);
+    return () => window.clearTimeout(t);
+  }, [viewRows, selectedYmd, applyShipmentJump]);
 
   const daysWithData = useMemo(() => {
     const s = new Set<string>();
@@ -254,6 +477,7 @@ export function AirCargoTracking({
   }, [allRows]);
 
   useEffect(() => {
+    if (pendingJumpRef.current) return;
     setSelectedId((s) => (s && filteredViewRows.some((r) => r.id === s) ? s : null));
   }, [filteredViewRows]);
 
@@ -566,8 +790,8 @@ export function AirCargoTracking({
       searchContext={searchContext}
       searchInputRef={searchInputRef}
       onSelectSearchMatch={scrollToShipmentMatch}
+      onSelectGlobalLot={jumpToGlobalLot}
       statusFilter={statusFilter}
-      onStatusFilterChange={setStatusFilter}
       onClearFilters={clearViewFilters}
     />
   ) : (
@@ -580,6 +804,22 @@ export function AirCargoTracking({
       isViewingToday={isViewingToday}
       syncStatus={status}
       socketConnected={socketConnected}
+      pendingOfflineCount={pendingOfflineCount ?? 0}
+      lastSyncedAt={lotSyncedAt}
+      onRefresh={async () => {
+        setSyncRefreshing(true);
+        try {
+          await refreshState();
+          toast.success("Đã làm mới dữ liệu", "Đồng bộ");
+        } catch (e) {
+          toast.error(
+            e instanceof Error ? e.message : "Không làm mới được.",
+            "Đồng bộ thất bại"
+          );
+        } finally {
+          setSyncRefreshing(false);
+        }
+      }}
       daysWithData={daysWithData}
       totalLots={allRows.length}
       activeWarehouse={activeWarehouse}
@@ -590,6 +830,7 @@ export function AirCargoTracking({
       onCopyCargoDayReport={(kind) => void onCopyCargoDayReport(kind)}
       toolsProps={toolsProps}
       filteredViewRows={filteredViewRows}
+      allRows={allRows}
       onWarehouseChange={handleActiveWarehouseChange}
       searchHighlightWarehouses={searchHighlightWarehouses}
       searchQuery={searchQuery}
@@ -600,6 +841,7 @@ export function AirCargoTracking({
       searchContext={searchContext}
       searchInputRef={searchInputRef}
       onSelectSearchMatch={scrollToShipmentMatch}
+      onSelectGlobalLot={jumpToGlobalLot}
       statusFilter={statusFilter}
       onStatusFilterChange={setStatusFilter}
       onClearFilters={clearViewFilters}
@@ -607,12 +849,41 @@ export function AirCargoTracking({
   );
 
   return (
-    <AppShell chrome={chrome}>
+    <AppShell chrome={chrome} syncStatusMessage={syncStatusMessage}>
       {status === "offline" ? (
-        <div className="mb-2 md:block hidden">
-          <Banner tone="warning" title="Chỉ máy này">
-            Không kết nối máy chủ. Thay đổi vẫn lưu trên trình duyệt; sẽ đồng bộ khi có mạng lại.
+        <div className="mb-2">
+          <Banner
+            tone={pendingOfflineCount >= 400 ? "danger" : "warning"}
+            title={pendingOfflineCount >= 400 ? "Cảnh báo: Sắp đầy hàng đợi offline" : "Chỉ máy này (Offline)"}
+          >
+            {pendingOfflineCount >= 400
+              ? `Hàng đợi offline đã đạt ${pendingOfflineCount}/500 thay đổi. Hãy kết nối mạng ngay để tránh mất dữ liệu!`
+              : "Không kết nối máy chủ. Thay đổi vẫn lưu trên trình duyệt; sẽ đồng bộ khi có mạng lại."}
           </Banner>
+        </div>
+      ) : pendingOfflineCount >= 400 ? (
+        <div className="mb-2">
+          <Banner tone="danger" title="Cảnh báo: Sắp đầy hàng đợi offline">
+            Hàng đợi offline đã đạt {pendingOfflineCount}/500 thay đổi. Hãy kết nối mạng ngay để tránh mất dữ liệu!
+          </Banner>
+        </div>
+      ) : null}
+
+      {!isViewingToday ? (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-1.5 text-2xs text-amber-900 shadow-ui-sm">
+          <span className="flex items-center gap-1.5 font-medium">
+            <span aria-hidden>📅</span>
+            <span>
+              Đang xem ngày <strong>{selectedYmd.split("-").slice(1).reverse().join("/")}</strong>
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={goToday}
+            className="btn-kinetic inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-2xs font-bold text-amber-900 shadow-ui-sm hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus touch-manipulation"
+          >
+            Về Hôm nay
+          </button>
         </div>
       ) : null}
 
@@ -654,7 +925,6 @@ export function AirCargoTracking({
             rows={filteredViewRows}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            onUpdate={onUpdate}
             onDelete={onDelete}
             onPrint={requestPrintLabel}
             onInvoice={openInvoiceH21}
@@ -677,6 +947,7 @@ export function AirCargoTracking({
             activeWarehouse={activeWarehouse}
             highlightedShipmentId={highlightedShipmentId}
             selectedRowId={selectedId}
+            cellStatuses={cellStatuses}
             onSelectRow={setSelectedId}
             onAddBlankRow={(wh) => void addBlankRowForWarehouse(wh)}
             onUpdate={onUpdate}

@@ -2,6 +2,7 @@ import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { Shipment } from "../types/shipment";
 import { lookupCustomerCodeByName, lookupCustomerEntryByName } from "./customerDirectoryCore";
 import { buildShipmentPrintProfilePatch } from "./customerPrintProfileLink";
+import { foldSearchText } from "./searchNormalize";
 
 function norm(s: string): string {
   return s.trim().toLowerCase();
@@ -24,7 +25,7 @@ export function filterCustomerDirectoryEntries(
   limit = 12,
   preferredId?: string
 ): CustomerDirectoryEntry[] {
-  const q = query.trim().toLowerCase();
+  const q = foldSearchText(query);
   if (!q) {
     const list = [...directory];
     const pref = preferredId?.trim();
@@ -40,9 +41,9 @@ export function filterCustomerDirectoryEntries(
 
   const hits: CustomerDirectoryEntry[] = [];
   for (const entry of directory) {
-    const code = entry.code.trim().toLowerCase();
-    const name = entry.name.trim().toLowerCase();
-    const shortCode = (entry.shortCode ?? "").trim().toLowerCase();
+    const code = foldSearchText(entry.code);
+    const name = foldSearchText(entry.name);
+    const shortCode = foldSearchText(entry.shortCode ?? "");
     if (code.includes(q) || name.includes(q) || shortCode.includes(q)) {
       hits.push(entry);
       if (hits.length >= limit) break;

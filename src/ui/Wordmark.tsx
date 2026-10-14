@@ -14,7 +14,7 @@ export function Wordmark({
         : "text-xl tracking-tight sm:text-2xl";
   return (
     <span
-      className={`inline-flex font-extrabold text-ui-navy ${cls} ${className}`}
+      className={`inline-flex font-bold text-ui-navy ${cls} ${className}`}
       aria-label="AirCargo_OPS"
     >
       AirCargo<span className="text-ui-primary">_OPS</span>

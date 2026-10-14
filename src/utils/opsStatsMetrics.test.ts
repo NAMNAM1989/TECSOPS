@@ -143,6 +143,26 @@ describe("computeOpsStats", () => {
     expect(r.byWarehouse.find((w) => w.warehouse === "TECS-SCSC")?.lots).toBe(1);
   });
 
+  it("gom kho legacy KHO-TCS vào TECS-TCS", () => {
+    const legacy = [
+      sample({
+        id: "legacy",
+        sessionDate: "2026-07-27",
+        warehouse: "KHO-TCS" as Shipment["warehouse"],
+        pcs: 1,
+        kg: 10,
+        dimWeightKg: 10,
+      }),
+    ];
+    const r = computeOpsStats(legacy, {
+      fromYmd: "2026-07-27",
+      toYmd: "2026-07-27",
+      warehouse: "TECS-TCS",
+    });
+    expect(r.totals.lots).toBe(1);
+    expect(r.byWarehouse.find((w) => w.warehouse === "TECS-TCS")?.lots).toBe(1);
+  });
+
   it("lọc theo kho", () => {
     const r = computeOpsStats(rows, {
       fromYmd: "2026-07-01",

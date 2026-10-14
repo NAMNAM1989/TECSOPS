@@ -42,4 +42,7 @@ export const CUSTOMER_PROFILE_LIMITS = {
   phone: 40,
   savedDimTemplateLabel: 80,
   savedDimTemplateCount: 20,
+  /** SKU H21 gắn theo khách / kho (preset invoice) — đủ cho list Excel kiểu Minh Khang (~70+). */
+  h21PresetCatalogIds: 120,
+  h21PresetCount: 4,
 };

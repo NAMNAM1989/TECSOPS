@@ -54,12 +54,12 @@ function DetailSection({
 }) {
   return (
     <section className="border-t border-slate-100 pt-2 first:border-t-0 first:pt-0">
-      <h4 className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+      <h4 className="mb-1.5 text-2xs font-bold uppercase tracking-wide text-slate-500">
         {label}
       </h4>
       <div
         className={`whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed ${
-          empty ? "italic text-slate-400" : "text-slate-800"
+          empty ? "italic text-slate-500" : "text-slate-800"
         }`}
       >
         {lines.join("\n")}
@@ -83,13 +83,13 @@ function PartyDetailSection({
   }
   return (
     <section className="border-t border-slate-100 pt-3 first:border-t-0 first:pt-0">
-      <h4 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+      <h4 className="mb-2 text-2xs font-bold uppercase tracking-wide text-slate-500">
         {label}
       </h4>
       <div className="space-y-2.5">
         {party.name ? (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <p className="text-2xs font-semibold uppercase tracking-wide text-slate-500">
               Tên
             </p>
             <p className="break-words font-sans text-[14px] font-semibold leading-snug text-slate-900">
@@ -99,7 +99,7 @@ function PartyDetailSection({
         ) : null}
         {party.addressLines.length ? (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <p className="text-2xs font-semibold uppercase tracking-wide text-slate-500">
               Địa chỉ
             </p>
             <p className="whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-slate-700">
@@ -109,7 +109,7 @@ function PartyDetailSection({
         ) : null}
         {party.contactLines.length ? (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <p className="text-2xs font-semibold uppercase tracking-wide text-slate-500">
               Liên hệ
             </p>
             <p className="whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-slate-700">
@@ -265,7 +265,7 @@ export function CneeDetailPopover({
                   </div>
                   <button
                     type="button"
-                    className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-sky-700 hover:bg-sky-50"
+                    className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-2xs font-bold text-sky-700 hover:bg-sky-50"
                     onClick={(e) => {
                       e.stopPropagation();
                       onCopyAll();

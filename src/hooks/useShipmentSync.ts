@@ -23,6 +23,25 @@ import {
   loadAirlineLabelOverridesFromStorage,
   saveAirlineLabelOverridesToStorage,
 } from "../utils/airlineLabelOverridesStorage";
+import {
+  consolidateOutboxMutations,
+  remapOutboxItemIds,
+  applyPendingPatchesOverServerState,
+  rollbackSingleField,
+  measureApplyLocal,
+  getFieldDisplayName,
+  type OutboxItem,
+  type CellStatus,
+  OUTBOX_DEBOUNCE_MS,
+  OUTBOX_FLUSH_SIZE,
+} from "../utils/shipmentOutbox";
+import {
+  loadPersistentQueue,
+  savePersistentQueue,
+  clearPersistentQueue,
+  type PersistentMutationItem,
+} from "../utils/persistentOutbox";
+import { notify } from "../ui/notify";
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
 export type StateSyncScope = {
@@ -168,6 +187,31 @@ async function postMutation(
   return next;
 }
 
+async function postBatchMutations(
+  mutations: ShipmentMutation[],
+  scope: StateSyncScope = {}
+): Promise<AppState> {
+  const res = await fetch("/api/mutations", {
+    ...credFetch,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...scopeHeaders(scope),
+    },
+    body: JSON.stringify(mutations),
+  });
+  const body: unknown = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const o = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const msg = typeof o.error === "string" ? o.error : res.statusText;
+    debugWarn("sync:batch-mutations", res.status, msg);
+    throw new Error(msg);
+  }
+  const next = parseAppState(body);
+  if (!next) throw new Error("Phản hồi máy chủ không hợp lệ sau khi lưu hàng loạt.");
+  return next;
+}
+
 /** ID lô mới xuất hiện sau khi ADD — dùng map ID cục bộ sang ID server. */
 function addedRowId(before: AppState, after: AppState): string | null {
   const known = new Set(before.rows.map((r) => r.id));
@@ -230,7 +274,10 @@ export function useShipmentSync(
   syncScopeRef.current = syncScope;
   const stateRef = useRef<AppState | null>(state);
   stateRef.current = state;
-  const mutateChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const [cellStatuses, setCellStatuses] = useState<Record<string, CellStatus>>({});
+  const outboxQueueRef = useRef<OutboxItem[]>([]);
+  const outboxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const outboxInFlightRef = useRef(false);
   const apiOkRef = useRef(false);
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const cancelledRef = useRef(false);
@@ -244,6 +291,59 @@ export function useShipmentSync(
 
   const syncPendingCount = useCallback(() => {
     setPendingOfflineCount(offlineQueueRef.current.length);
+  }, []);
+
+  const persistOfflineQueue = useCallback(() => {
+    const items: PersistentMutationItem[] = offlineQueueRef.current.map((q, idx) => ({
+      id: (q.mutation as { id?: string }).id || `persisted_${Date.now()}_${idx}`,
+      mutation: q.mutation,
+      localId: q.localId,
+      enqueuedAt: Date.now(),
+    }));
+    if (items.length === 0) {
+      void clearPersistentQueue();
+    } else {
+      void savePersistentQueue(items);
+    }
+  }, []);
+
+  // Nạp mutation đã lưu bền vững từ phiên trước (IndexedDB / localStorage)
+  useEffect(() => {
+    void loadPersistentQueue().then((persisted) => {
+      if (cancelledRef.current || persisted.length === 0) return;
+      const existingIds = new Set(
+        offlineQueueRef.current.map((q) => (q.mutation as { id?: string }).id)
+      );
+      for (const item of persisted) {
+        const id = (item.mutation as { id?: string }).id;
+        if (!id || !existingIds.has(id)) {
+          offlineQueueRef.current.push({
+            mutation: item.mutation,
+            localId: item.localId,
+          });
+        }
+      }
+      syncPendingCount();
+    });
+  }, [syncPendingCount]);
+
+  const updateCellStatus = useCallback((updates: Record<string, CellStatus>) => {
+    setCellStatuses((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [k, v] of Object.entries(updates)) {
+        if (v === "idle") {
+          if (k in next) {
+            delete next[k];
+            changed = true;
+          }
+        } else if (next[k] !== v) {
+          next[k] = v;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
   }, []);
 
   const persistIfApplied = useCallback(
@@ -290,7 +390,9 @@ export function useShipmentSync(
       setState((prev) => {
         const next = mergeAppStateFromWire(prev, payload);
         if (!next) return prev;
-        return persistIfApplied(prev, next, false, { skipCustomerPersist });
+        // Server thắng, TRỪ các ô đang pending trong outbox
+        const mergedWithPending = applyPendingPatchesOverServerState(next, outboxQueueRef.current);
+        return persistIfApplied(prev, mergedWithPending, false, { skipCustomerPersist });
       });
       markSynced();
     };
@@ -338,6 +440,7 @@ export function useShipmentSync(
         );
         if (cancelledRef.current) return;
         offlineQueueRef.current = pending;
+        persistOfflineQueue();
         live = replayed;
       }
 
@@ -426,20 +529,138 @@ export function useShipmentSync(
     [connectSocket, persistIfApplied]
   );
 
-  const mutate = useCallback(async (mutation: ShipmentMutation): Promise<AppState | null> => {
-    const run = async (): Promise<AppState | null> => {
-      const base = stateRef.current;
-      if (!apiOkRef.current) {
-        assertOfflineQueueCapacity(offlineQueueRef.current.length);
+  const flushOutbox = useCallback(async () => {
+    if (outboxInFlightRef.current || outboxQueueRef.current.length === 0) return;
+    if (!apiOkRef.current) return;
+
+    if (outboxTimerRef.current) {
+      clearTimeout(outboxTimerRef.current);
+      outboxTimerRef.current = null;
+    }
+
+    outboxInFlightRef.current = true;
+    const { toSend, itemsInBatch, isAddBatch } = consolidateOutboxMutations(outboxQueueRef.current);
+    if (toSend.length === 0) {
+      outboxInFlightRef.current = false;
+      return;
+    }
+
+    try {
+      const beforeState = stateRef.current;
+      let nextState: AppState;
+
+      if (isAddBatch) {
+        nextState = await postMutation(toSend[0], syncScopeRef.current);
+        if (beforeState && itemsInBatch[0].localId) {
+          const serverId = addedRowId(beforeState, nextState);
+          if (serverId) {
+            const idMap = new Map<string, string>([[itemsInBatch[0].localId, serverId]]);
+            outboxQueueRef.current = remapOutboxItemIds(outboxQueueRef.current, idMap);
+          }
+        }
+      } else {
+        nextState = await postBatchMutations(toSend, syncScopeRef.current);
+      }
+
+      let applied: AppState = nextState;
+      setState((prev) => {
+        applied = pickNewerState(prev, nextState);
+        if (applied === nextState) {
+          scheduleSaveRows(nextState.rows);
+          if (toSend.some((m) => m.action === "SET_CUSTOMERS")) {
+            saveCustomerDirectoryToStorage(nextState.customers);
+          }
+          if (toSend.some((m) => m.action === "SET_AIRLINE_LABEL_OVERRIDES") && nextState.airlineLabelOverrides) {
+            saveAirlineLabelOverridesToStorage(nextState.airlineLabelOverrides);
+          }
+        }
+        stateRef.current = applied;
+        return applied;
+      });
+
+      const processedIds = new Set(itemsInBatch.map((it) => it.id));
+      outboxQueueRef.current = outboxQueueRef.current.filter((it) => !processedIds.has(it.id));
+
+      const statusClear: Record<string, CellStatus> = {};
+      for (const item of itemsInBatch) {
+        for (const field of item.touchedFields) {
+          statusClear[`${item.rowId}:${field}`] = "idle";
+        }
+      }
+      updateCellStatus(statusClear);
+      markSynced();
+    } catch (err) {
+      debugWarn("sync:outbox-error", err);
+      const statusErrors: Record<string, CellStatus> = {};
+      for (const item of itemsInBatch) {
+        if (item.mutation.action === "UPDATE") {
+          for (const field of item.touchedFields) {
+            statusErrors[`${item.rowId}:${field}`] = "error";
+            const prevVal = item.previousValues[field];
+            if (stateRef.current) {
+              const rolledBack = rollbackSingleField(stateRef.current, item.rowId, field, prevVal);
+              stateRef.current = rolledBack;
+              setState(rolledBack);
+              scheduleSaveRows(rolledBack.rows);
+            }
+            const fieldLabel = getFieldDisplayName(field);
+            const lotLabel = item.stt ? `lô #${item.stt}` : "lô";
+            notify({
+              title: "Lỗi lưu dữ liệu",
+              message: `Không lưu được ${fieldLabel} ${lotLabel}`,
+              tone: "danger",
+              action: {
+                label: "Thử lại",
+                onClick: () => {
+                  void mutate(item.mutation);
+                },
+              },
+            });
+          }
+        }
+      }
+      updateCellStatus(statusErrors);
+      const processedIds = new Set(itemsInBatch.map((it) => it.id));
+      outboxQueueRef.current = outboxQueueRef.current.filter((it) => !processedIds.has(it.id));
+    } finally {
+      outboxInFlightRef.current = false;
+      if (outboxQueueRef.current.length > 0) {
+        void flushOutbox();
+      }
+    }
+  }, [markSynced, syncPendingCount, updateCellStatus]);
+
+  const mutate = useCallback(
+    async (mutation: ShipmentMutation): Promise<AppState | null> => {
+      return measureApplyLocal(mutation.action, () => {
+        const base = stateRef.current;
         if (!base) return null;
+
+        if (!apiOkRef.current) {
+          assertOfflineQueueCapacity(offlineQueueRef.current.length);
+          const next = applyShipmentMutation(base, mutation);
+          const queued: QueuedMutation = {
+            mutation,
+            localId: mutation.action === "ADD" ? (addedRowId(base, next) ?? undefined) : undefined,
+          };
+          offlineQueueRef.current.push(queued);
+          persistOfflineQueue();
+          syncPendingCount();
+          scheduleSaveRows(next.rows);
+          if (mutation.action === "SET_CUSTOMERS") {
+            saveCustomerDirectoryToStorage(next.customers);
+          }
+          if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
+            saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
+          }
+          stateRef.current = next;
+          setState(next);
+          return next;
+        }
+
         const next = applyShipmentMutation(base, mutation);
-        const queued: QueuedMutation = {
-          mutation,
-          localId: mutation.action === "ADD" ? (addedRowId(base, next) ?? undefined) : undefined,
-        };
-        // Enqueue trước khi hiển thị/persist local: không bao giờ apply-without-enqueue.
-        offlineQueueRef.current.push(queued);
-        syncPendingCount();
+        stateRef.current = next;
+        setState(next);
         scheduleSaveRows(next.rows);
         if (mutation.action === "SET_CUSTOMERS") {
           saveCustomerDirectoryToStorage(next.customers);
@@ -447,64 +668,79 @@ export function useShipmentSync(
         if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
           saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
         }
-        stateRef.current = next;
-        setState(next);
-        return next;
-      }
 
-      const rollbackRef: { current: AppState | null } = { current: null };
-      const optimisticActions = new Set<ShipmentMutation["action"]>(["UPDATE", "DELETE", "ADD"]);
+        let rowId = "";
+        let touchedFields: string[] = [];
+        const previousValues: Record<string, unknown> = {};
+        let stt: number | undefined;
 
-      if (optimisticActions.has(mutation.action)) {
-        if (!base) return null;
-        rollbackRef.current = base;
-        try {
-          const optimistic = applyShipmentMutation(base, mutation);
-          stateRef.current = optimistic;
-          setState(optimistic);
-          scheduleSaveRows(optimistic.rows);
-        } catch (e) {
-          rollbackRef.current = null;
-          throw e;
-        }
-      }
-
-      try {
-        const next = await postMutation(mutation, syncScopeRef.current);
-        let applied: AppState = next;
-        setState((prev) => {
-          applied = pickNewerState(prev, next);
-          if (applied === next) {
-            scheduleSaveRows(next.rows);
-            if (mutation.action === "SET_CUSTOMERS") {
-              saveCustomerDirectoryToStorage(next.customers);
-            }
-            if (mutation.action === "SET_AIRLINE_LABEL_OVERRIDES" && next.airlineLabelOverrides) {
-              saveAirlineLabelOverridesToStorage(next.airlineLabelOverrides);
+        if (mutation.action === "UPDATE") {
+          rowId = mutation.id;
+          touchedFields = Object.keys(mutation.patch);
+          const existingRow = base.rows.find((r) => r.id === mutation.id);
+          if (existingRow) {
+            stt = existingRow.stt;
+            for (const f of touchedFields) {
+              previousValues[f] = (existingRow as unknown as Record<string, unknown>)[f];
             }
           }
-          stateRef.current = applied;
-          return applied;
-        });
-        markSynced();
-        return applied;
-      } catch (e) {
-        if (rollbackRef.current) {
-          stateRef.current = rollbackRef.current;
-          setState(rollbackRef.current);
-          scheduleSaveRows(rollbackRef.current.rows);
+        } else if (mutation.action === "DELETE") {
+          rowId = mutation.id;
+        } else if (mutation.action === "ADD") {
+          const addedId = addedRowId(base, next);
+          rowId = addedId ?? "";
         }
-        throw e;
+
+        const outboxItem: OutboxItem = {
+          id: `ob_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          mutation,
+          localId: mutation.action === "ADD" ? rowId : undefined,
+          rowId,
+          stt,
+          touchedFields,
+          previousValues,
+          createdAt: Date.now(),
+        };
+
+        outboxQueueRef.current.push(outboxItem);
+
+        if (touchedFields.length > 0 && rowId) {
+          const statusPending: Record<string, CellStatus> = {};
+          for (const f of touchedFields) {
+            statusPending[`${rowId}:${f}`] = "pending";
+          }
+          updateCellStatus(statusPending);
+        }
+
+        if (outboxQueueRef.current.length >= OUTBOX_FLUSH_SIZE) {
+          if (outboxTimerRef.current) {
+            clearTimeout(outboxTimerRef.current);
+            outboxTimerRef.current = null;
+          }
+          void flushOutbox();
+        } else {
+          if (!outboxTimerRef.current) {
+            outboxTimerRef.current = setTimeout(() => {
+              outboxTimerRef.current = null;
+              void flushOutbox();
+            }, OUTBOX_DEBOUNCE_MS);
+          }
+        }
+
+        return next;
+      });
+    },
+    [flushOutbox, syncPendingCount, updateCellStatus]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (outboxTimerRef.current) {
+        clearTimeout(outboxTimerRef.current);
+        outboxTimerRef.current = null;
       }
     };
-
-    const queued = mutateChainRef.current.then(run, run);
-    mutateChainRef.current = queued.then(
-      () => undefined,
-      () => undefined
-    );
-    return queued;
-  }, [markSynced, syncPendingCount]);
+  }, []);
 
   const refreshState = useCallback(async (): Promise<void> => {
     try {
@@ -545,6 +781,13 @@ export function useShipmentSync(
     [markSynced, persistIfApplied]
   );
 
+  const getCellStatus = useCallback(
+    (rowId: string, field: string): CellStatus => {
+      return cellStatuses[`${rowId}:${field}`] || "idle";
+    },
+    [cellStatuses]
+  );
+
   return {
     status,
     state,
@@ -557,5 +800,7 @@ export function useShipmentSync(
     applyRemoteState,
     setSyncScope,
     syncScope,
+    cellStatuses,
+    getCellStatus,
   };
 }

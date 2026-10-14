@@ -1,10 +1,11 @@
-import type { ReactNode, RefObject } from "react";
+import type { RefObject } from "react";
 import type { Shipment, Warehouse } from "../types/shipment";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
+import type { GlobalSearchLotHit } from "../utils/globalSearchApi";
 import { Button } from "../ui";
 import { OpsDayOverviewStrip } from "./OpsDayOverviewStrip";
 import { SmartSearchBar } from "./SmartSearchBar";
-import { StatusFilterBar, type StatusFilterValue } from "./StatusFilterBar";
+import type { StatusFilterValue } from "./StatusFilterBar";
 
 type Variant = "desktop" | "mobile";
 
@@ -13,6 +14,7 @@ type Props = {
   selectedYmd: string;
   filteredViewRows: readonly Shipment[];
   viewRows: readonly Shipment[];
+  allRows?: readonly Shipment[];
   activeWarehouse: Warehouse;
   onWarehouseChange: (wh: Warehouse) => void;
   searchHighlightWarehouses?: readonly Warehouse[];
@@ -25,13 +27,10 @@ type Props = {
   searchContext: ShipmentSearchContext;
   searchInputRef?: RefObject<HTMLInputElement>;
   onSelectSearchMatch: (match: ShipmentSearchMatch) => void;
+  onSelectGlobalLot?: (hit: GlobalSearchLotHit) => void;
   statusFilter: StatusFilterValue;
   onStatusFilterChange: (v: StatusFilterValue) => void;
   onClearFilters: () => void;
-  /** Mobile: ẩn status bar, chỉ nút ST */
-  showMobileStatusBar?: boolean;
-  onExpandMobileStatus?: () => void;
-  mobileStatusTrailing?: ReactNode;
 };
 
 function StripDivider() {
@@ -56,12 +55,8 @@ export function OpsContextStrip({
   searchContext,
   searchInputRef,
   onSelectSearchMatch,
-  statusFilter,
-  onStatusFilterChange,
+  onSelectGlobalLot,
   onClearFilters,
-  showMobileStatusBar = true,
-  onExpandMobileStatus,
-  mobileStatusTrailing,
 }: Props) {
   const isMobile = variant === "mobile";
   const hasRows = viewRows.length > 0;
@@ -70,7 +65,6 @@ export function OpsContextStrip({
     <OpsDayOverviewStrip
       variant={variant}
       embedded
-      selectedYmd={selectedYmd}
       rows={filteredViewRows}
       activeWarehouse={activeWarehouse}
       onSelectWarehouse={onWarehouseChange}
@@ -110,112 +104,74 @@ export function OpsContextStrip({
                   searchContext={searchContext}
                   inputRef={searchInputRef}
                   onSelectMatch={onSelectSearchMatch}
-                  inlineFacets={false}
-                  debounceMs={200}
-                />
+                  sessionDate={selectedYmd}
+                  onSelectGlobalLot={onSelectGlobalLot}
+                inlineFacets={false}
+                debounceMs={200}
+              />
               </div>
-              {!showMobileStatusBar && onExpandMobileStatus ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={onExpandMobileStatus}
-                    className="inline-flex h-9 min-w-9 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-ui-border/80 bg-ui-surface text-[10px] font-bold text-ui-text-muted shadow-ui-sm"
-                    aria-label="Lọc trạng thái"
-                    title="Lọc trạng thái"
-                  >
-                    ST
-                  </button>
-                  {filtersActive ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={onClearFilters}
-                      className="h-9 shrink-0 px-2 text-[10px] font-bold text-ui-primary"
-                    >
-                      Xóa
-                    </Button>
-                  ) : null}
-                </>
+              {filtersActive ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onClearFilters}
+                  className="h-9 shrink-0 px-2 text-2xs font-bold text-ui-primary"
+                >
+                  Xóa
+                </Button>
               ) : null}
             </div>
           ) : (
-            <p className="px-2 py-1.5 text-[11px] font-medium text-ui-text-muted">
+            <p className="px-2 py-1.5 text-2xs font-medium text-ui-text-muted">
               Chưa có lô trong ngày · dùng Booking hoặc Sync
             </p>
           )}
-          {hasRows && showMobileStatusBar ? (
-            <div className="flex min-w-0 items-center gap-1 border-t border-ui-border/35 px-1 py-0.5">
-              <StatusFilterBar
-                compact
-                dense
-                tight
-                hideEmpty
-                warehouse={activeWarehouse}
-                dayRows={viewRows}
-                value={statusFilter}
-                onChange={onStatusFilterChange}
-              />
-              {mobileStatusTrailing}
-            </div>
-          ) : null}
         </>
       ) : (
         <div
           data-testid="ops-desktop-context-row"
-          className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain px-5 py-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+          className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain px-5 py-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden overflow-y-visible"
         >
           {overview}
-          {hasRows ? (
-            <>
-              <StripDivider />
-              <div
-                data-testid="ops-desktop-filter-row"
-                className="flex min-w-0 flex-1 items-center gap-2"
+          <StripDivider />
+          <div
+            data-testid="ops-desktop-filter-row"
+            className="flex min-w-0 flex-1 items-center gap-2"
+          >
+            <div className="min-w-[12rem] max-w-lg flex-1">
+              <SmartSearchBar
+                tightFacets
+                value={searchQuery}
+                onChange={onSearchChange}
+                flightDateFilter={flightDateFilter}
+                onFlightDateChange={onFlightDateChange}
+                searchableRows={statusFilteredRows}
+                matchedRows={filteredViewRows}
+                searchContext={searchContext}
+                inputRef={searchInputRef}
+                onSelectMatch={onSelectSearchMatch}
+                sessionDate={selectedYmd}
+                onSelectGlobalLot={onSelectGlobalLot}
+                inlineFacets
+                debounceMs={200}
+              />
+            </div>
+            {filtersActive ? (
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="inline-flex h-8 shrink-0 items-center rounded-lg px-2 text-2xs font-bold text-ui-primary hover:bg-ui-primary/10"
+                title="Xóa mọi bộ lọc"
               >
-                <div className="min-w-[12rem] max-w-lg flex-1">
-                  <SmartSearchBar
-                    tightFacets
-                    value={searchQuery}
-                    onChange={onSearchChange}
-                    flightDateFilter={flightDateFilter}
-                    onFlightDateChange={onFlightDateChange}
-                    searchableRows={statusFilteredRows}
-                    matchedRows={filteredViewRows}
-                    searchContext={searchContext}
-                    inputRef={searchInputRef}
-                    onSelectMatch={onSelectSearchMatch}
-                    inlineFacets
-                    debounceMs={200}
-                  />
-                </div>
-                <StripDivider />
-                <StatusFilterBar
-                  compact
-                  dense
-                  tight
-                  hideEmpty
-                  warehouse={activeWarehouse}
-                  dayRows={viewRows}
-                  value={statusFilter}
-                  onChange={onStatusFilterChange}
-                />
-                {filtersActive ? (
-                  <button
-                    type="button"
-                    onClick={onClearFilters}
-                    className="inline-flex h-8 shrink-0 items-center rounded-lg px-2 text-[10px] font-bold text-ui-primary hover:bg-ui-primary/10"
-                    title="Xóa mọi bộ lọc"
-                  >
-                    Xóa lọc
-                  </button>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <p className="shrink-0 text-[11px] font-medium text-ui-text-muted">
-              Chưa có lô trong ngày · dùng Booking hoặc Sync
-            </p>
-          )}
+                Xóa lọc
+              </button>
+            ) : null}
+            {hasRows ? null : (
+              <p className="shrink-0 text-2xs font-medium text-ui-text-muted">
+                Chưa có lô trong ngày · dùng Booking hoặc Sync
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

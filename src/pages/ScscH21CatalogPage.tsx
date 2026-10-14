@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CustomerDirectoryEntry } from "../types/customerDirectory";
 import type { ScscH21CatalogItem } from "../types/scscH21Catalog";
 import {
   createScscH21Goods,
@@ -15,7 +16,9 @@ import {
 } from "../../shared/scscH21CatalogNormalize.mjs";
 import { OPS } from "../styles/opsModalStyles";
 import { Button, ConfirmDialog, IconButton, Input, TextArea, Wordmark, useToast } from "../ui";
+import { H21CustomerCatalogPresetSection } from "../components/H21CustomerCatalogPresetSection";
 import { ScscH21ShipperSection } from "../components/ScscH21ShipperSection";
+import { foldSearchText } from "../utils/searchNormalize";
 
 type Draft = ScscH21CatalogItem & { _isNew?: boolean };
 
@@ -100,10 +103,18 @@ function IconRefresh({ className }: { className?: string }) {
 
 type Props = {
   onBack: () => void;
+  customerDirectory?: readonly CustomerDirectoryEntry[];
+  onSaveCustomers?: (
+    customers: CustomerDirectoryEntry[]
+  ) => Promise<boolean | void>;
 };
 
 /** Quản lý danh mục H21 — chỉ kho SCSC (CRUD như database). */
-export function ScscH21CatalogPage({ onBack }: Props) {
+export function ScscH21CatalogPage({
+  onBack,
+  customerDirectory = [],
+  onSaveCustomers,
+}: Props) {
   const toast = useToast();
   const [items, setItems] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,15 +147,15 @@ export function ScscH21CatalogPage({ onBack }: Props) {
   }, [reload]);
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = foldSearchText(query);
     return items.filter((it) => {
       if (!showInactive && !it.active) return false;
       if (categoryFilter && it.category !== categoryFilter) return false;
       if (!needle) return true;
       return (
-        it.description.toLowerCase().includes(needle) ||
-        it.category.toLowerCase().includes(needle) ||
-        it.hsCode.includes(needle)
+        foldSearchText(it.description).includes(needle) ||
+        foldSearchText(it.category).includes(needle) ||
+        foldSearchText(it.hsCode).includes(needle)
       );
     });
   }, [items, query, showInactive, categoryFilter]);
@@ -297,19 +308,19 @@ export function ScscH21CatalogPage({ onBack }: Props) {
           </Button>
           <Wordmark />
           <div className="min-w-0 flex-1">
-            <h1 className="text-base font-extrabold tracking-tight text-ui-navy sm:text-lg">
+            <h1 className="text-base font-bold tracking-tight text-ui-navy sm:text-lg">
               Danh mục H21 · SCSC
             </h1>
-            <p className="text-[11px] text-ui-text-muted">
-              Chỉ kho SCSC — nhập / sửa / xóa mặt hàng dùng lập invoice phi mậu dịch
+            <p className="text-2xs text-ui-text-muted">
+              Catalog SCSC · gán Data KH tại đây · khai H21 lấy đúng pool kho này
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 ring-1 ring-emerald-200/80">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-2xs font-bold text-emerald-800 ring-1 ring-emerald-200/80">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
               {activeCount} active
             </span>
-            <span className="rounded-full bg-ui-surface-muted px-2.5 py-1 text-[11px] font-semibold text-ui-text-muted ring-1 ring-ui-border/70">
+            <span className="rounded-full bg-ui-surface-muted px-2.5 py-1 text-2xs font-semibold text-ui-text-muted ring-1 ring-ui-border/70">
               {items.length} tổng
             </span>
           </div>
@@ -318,6 +329,14 @@ export function ScscH21CatalogPage({ onBack }: Props) {
 
       <main className="mx-auto max-w-7xl space-y-3 px-4 py-4">
         <ScscH21ShipperSection />
+        {onSaveCustomers ? (
+          <H21CustomerCatalogPresetSection
+            warehouseScope="SCSC"
+            customerDirectory={customerDirectory}
+            catalog={items}
+            onSaveCustomers={onSaveCustomers}
+          />
+        ) : null}
         {/* Toolbar */}
         <section className="rounded-2xl border border-ui-border/80 bg-ui-surface p-3 shadow-ui-sm sm:p-3.5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -368,7 +387,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
                 disabled={loading}
                 className="gap-1.5"
               >
-                <IconRefresh className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                <IconRefresh className={`h-3.5 w-3.5 ${loading ? "animate-spin motion-reduce:animate-none" : ""}`} />
                 Tải lại
               </Button>
               <Button type="button" size="sm" onClick={addRow}>
@@ -396,7 +415,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
           {categories.length > 0 ? (
             <div className="mt-3 border-t border-ui-border/60 pt-3">
               <div className="mb-1.5 flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold text-ui-text-muted">
+                <p className="text-2xs font-semibold text-ui-text-muted">
                   {categories.length} loại hàng
                   {categoryFilter ? (
                     <span className="ml-1.5 text-ui-primary">· đang lọc «{categoryFilter}»</span>
@@ -405,7 +424,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
                 {categoryFilter || query ? (
                   <button
                     type="button"
-                    className="text-[11px] font-semibold text-ui-primary hover:underline"
+                    className="text-2xs font-semibold text-ui-primary hover:underline"
                     onClick={() => {
                       setCategoryFilter(null);
                       setQuery("");
@@ -419,7 +438,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
                 <button
                   type="button"
                   onClick={() => setCategoryFilter(null)}
-                  className={`inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-[11px] font-bold transition ${
+                  className={`inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-2xs font-bold transition ${
                     !categoryFilter
                       ? "bg-ui-navy text-white shadow-ui-sm"
                       : "bg-ui-surface-muted text-ui-text-muted ring-1 ring-ui-border/70 hover:bg-ui-surface"
@@ -432,7 +451,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
                     key={cat}
                     type="button"
                     onClick={() => setCategoryFilter((prev) => (prev === cat ? null : cat))}
-                    className={`inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-[11px] font-bold transition ${
+                    className={`inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-2xs font-bold transition ${
                       categoryFilter === cat
                         ? "bg-ui-primary text-white shadow-ui-sm"
                         : "bg-ui-surface-muted text-ui-text ring-1 ring-ui-border/70 hover:bg-sky-50 hover:text-sky-900"
@@ -448,7 +467,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
 
         {/* Meta strip */}
         {!loading && filtered.length > 0 ? (
-          <p className="px-0.5 text-[11px] text-ui-text-muted">
+          <p className="px-0.5 text-2xs text-ui-text-muted">
             Hiển thị <span className="font-semibold text-ui-text">{filtered.length}</span>
             {filtered.length !== items.length ? (
               <>
@@ -465,7 +484,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
             {[0, 1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="h-10 animate-pulse rounded-xl bg-ui-surface-muted"
+                className="h-10 animate-pulse motion-reduce:animate-none rounded-xl bg-ui-surface-muted"
                 style={{ opacity: 1 - i * 0.12 }}
               />
             ))}
@@ -481,7 +500,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
             <div className="overflow-x-auto">
               <table className="min-w-[960px] w-full border-collapse text-left text-sm">
                 <thead className="sticky top-0 z-10">
-                  <tr className="border-b border-ui-border/80 bg-slate-50/95 text-[10px] font-bold uppercase tracking-wide text-ui-text-muted backdrop-blur">
+                  <tr className="border-b border-ui-border/80 bg-slate-50/95 text-2xs font-bold uppercase tracking-wide text-ui-text-muted backdrop-blur">
                     <th className="whitespace-nowrap px-3 py-2.5">Loại</th>
                     <th className="min-w-[240px] px-3 py-2.5">Mô tả</th>
                     <th className="whitespace-nowrap px-3 py-2.5">HS</th>
@@ -525,7 +544,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
                               placeholder="Loại"
                             />
                           ) : (
-                            <span className="inline-flex max-w-[9rem] truncate rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-extrabold tracking-wide text-slate-800 ring-1 ring-slate-200/80">
+                            <span className="inline-flex max-w-[9rem] truncate rounded-lg bg-slate-100 px-2 py-0.5 text-2xs font-bold tracking-wide text-slate-800 ring-1 ring-slate-200/80">
                               {row.category || "—"}
                             </span>
                           )}
@@ -545,7 +564,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
                                 aria-invalid={Boolean(descConflict)}
                               />
                               {descConflict ? (
-                                <p className="text-[11px] font-semibold text-red-700">
+                                <p className="text-2xs font-semibold text-red-700">
                                   Mô tả trùng với bản ghi khác — không cho lưu.
                                 </p>
                               ) : null}
@@ -663,7 +682,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
                               aria-checked={row.active}
                               aria-label={row.active ? "Đang bật" : "Đang tắt"}
                               onClick={() => patchLocal(row.id, { active: !row.active })}
-                              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold transition ${
+                              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-2xs font-bold transition ${
                                 row.active
                                   ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200"
                                   : "bg-slate-100 text-slate-500 ring-1 ring-slate-200"
@@ -678,7 +697,7 @@ export function ScscH21CatalogPage({ onBack }: Props) {
                             </button>
                           ) : (
                             <span
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-bold ${
                                 row.active
                                   ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200/80"
                                   : "bg-slate-100 text-slate-500 ring-1 ring-slate-200"

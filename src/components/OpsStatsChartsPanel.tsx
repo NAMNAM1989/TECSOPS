@@ -17,6 +17,7 @@ type Props = {
   byDest: readonly OpsStatsDestRow[];
   onSelectWarehouse: (wh: WarehouseLayoutFilter) => void;
   onSelectDest: (dest: string) => void;
+  onSelectDay?: (ymd: string) => void;
 };
 
 /** Panel chart tách chunk — Recharts chỉ load khi Stats có dữ liệu. */
@@ -26,10 +27,11 @@ export function OpsStatsChartsPanel({
   byDest,
   onSelectWarehouse,
   onSelectDest,
+  onSelectDay,
 }: Props) {
   return (
     <div className="grid gap-3 lg:grid-cols-3">
-      <OpsStatsDayTrendChart rows={byDay} />
+      <OpsStatsDayTrendChart rows={byDay} onSelectDay={onSelectDay} />
       <OpsStatsWarehouseChart
         rows={byWarehouse}
         onSelect={(wh) => onSelectWarehouse(wh as WarehouseLayoutFilter)}

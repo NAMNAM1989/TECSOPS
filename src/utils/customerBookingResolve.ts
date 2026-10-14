@@ -53,6 +53,21 @@ export function findCustomerEntry(
     if (nameAsShort) return nameAsShort;
     const byCompactName = findByCompactKey(directory, nameRaw);
     if (byCompactName) return byCompactName;
+    // VD: lô «MINH KHANG» ↔ danh bạ «CÔNG TY TNHH MINH KHANG FASHION»
+    const compactName = compactCustomerMatchKey(nameRaw);
+    if (compactName.length >= 6) {
+      const byContains = directory.find((e) => {
+        const en = compactCustomerMatchKey(e.name);
+        const ec = compactCustomerMatchKey(e.code);
+        const es = compactCustomerMatchKey(e.shortCode ?? "");
+        return (
+          (en.length >= 6 && (en.includes(compactName) || compactName.includes(en))) ||
+          (ec.length >= 6 && (ec.includes(compactName) || compactName.includes(ec))) ||
+          (es.length >= 6 && (es.includes(compactName) || compactName.includes(es)))
+        );
+      });
+      if (byContains) return byContains;
+    }
   }
   return undefined;
 }

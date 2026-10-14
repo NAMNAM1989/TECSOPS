@@ -316,7 +316,7 @@ export function PrintShippingLabel({
             ) : null}
 
             {printMsg ? (
-              <p className="text-center text-[11px] font-medium text-amber-800">{printMsg}</p>
+              <p className="text-center text-2xs font-medium text-amber-800">{printMsg}</p>
             ) : null}
           </div>
 

@@ -21,7 +21,7 @@ import {
   queryExportShipments,
 } from "./exportStore.mjs";
 
-function applyExportCors(req, res) {
+export function applyExportCors(req, res) {
   const raw = process.env.CORS_ORIGINS?.trim() || process.env.EXPORT_CORS_ORIGINS?.trim();
   if (!raw) return;
   const origins = raw.split(",").map((s) => s.trim()).filter(Boolean);
@@ -31,7 +31,7 @@ function applyExportCors(req, res) {
     res.setHeader("Vary", "Origin");
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Authorization, Content-Type, If-None-Match, X-TECSOPS-Token",
+      "Authorization, Content-Type, If-None-Match, Last-Event-ID, X-TECSOPS-Token",
     );
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.setHeader("Access-Control-Max-Age", "86400");
@@ -92,6 +92,12 @@ export function registerExportRoutes(app, deps = {}) {
           shipments: "/api/v1/export/shipments",
           shipmentById: "/api/v1/export/shipments/:id",
           customers: "/api/v1/export/customers",
+          streamShipments: "/api/v1/stream/shipments",
+        },
+        push: {
+          sse: "/api/v1/stream/shipments",
+          webhook: "TECSOPS_WEBHOOK_URLS",
+          events: ["ready", "shipments.changed", "resync"],
         },
         filters: {
           shipments: ["sessionDate", "warehouse", "status", "awb", "id", "view", "limit", "cursor"],

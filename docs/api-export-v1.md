@@ -88,3 +88,8 @@ const { shipments, stateVersion, nextCursor } = await res.json();
 
 - Ghi / sửa dữ liệu (dùng `/api/mutation` nếu thật sự cần — không khuyến nghị cho app ngoài).
 - Thay `/api/state` cho UI TECSOPS (UI vẫn dùng state + socket).
+
+## Nhận thay đổi realtime
+
+Không cần poll: xem [Push API v1](./api-push-v1.md) (SSE + webhook).
+

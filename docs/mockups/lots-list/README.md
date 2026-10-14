@@ -12,6 +12,7 @@
 
 | File | Vai trò |
 | --- | --- |
+| [new-i.html](./new-i.html) | **I** — lưới Excel + hồ sơ lô (`?focus=1` / `?sheet=1`) |
 | [new-f.html](./new-f.html) | **F** — ULD / build-up (Cargospot + iCargo CTO) |
 | [new-g.html](./new-g.html) | **G** — cửa dock / VCT (SCSC lounge + Manhattan yard) |
 | [new-h.html](./new-h.html) | **H** — quét trước / hàng tem (Zebra + dán talon TCS) |
@@ -57,7 +58,17 @@ npx playwright install chromium
 ARTIFACT_DIR=/opt/cursor/artifacts node docs/mockups/lots-list/screenshot.mjs
 ```
 
-Ra thêm `pro-A/B-*.png`, `new-C/D/E-*.png` và `new-F-desktop.png`, `new-F-mobile.png`, `new-G-desktop.png`, `new-G-mobile.png`, `new-H-desktop.png`, `new-H-mobile.png`.
+Ra thêm các PNG C–H và `new-I-grid.png`, `new-I-detail.png`, `new-I-mobile.png`, `new-I-mobile-detail.png`.
+
+## I — lưới Excel + hồ sơ lô (quyết định owner)
+
+List **phải** là bảng ô (cột, sticky header, AWB đóng băng, sort/filter, F2/Enter, copy/paste). Chi tiết lô mới là chỗ làm việc.
+
+**Pattern chọn: inspector phải** mặc định (Airtable sidesheet / Google Sheets sidebar / `LotProfilePanel`). Không expandable row — DIM + H21 + lịch in không vừa một hàng ([UX Patterns](https://uxpatternsguide.com/compare/expandable-row-vs-table-vs-details-panel-vs-accordion/)). Không full object page làm màn chính — owner vừa khóa spreadsheet. `?focus=1` = lưới AWB hẹp + facet kiểu Fiori Object Page khi đào sâu. Mobile: lưới 5 cột + bottom sheet.
+
+Nguồn lưới: [AG Grid clipboard / pin / keyboard](https://www.ag-grid.com/javascript-data-grid/clipboard/), [Glide Data Grid freeze + paste](https://docs.grid.glideapps.com/extended-quickstart-guide/copy-and-paste-support), [Airtable record detail](https://support.airtable.com/docs/airtable-interface-layout-record-detail), [Notion database page peek](https://www.notion.com/help/guides/using-peek-view-for-database-pages), [Google Sheets side panel](https://support.google.com/docs/answer/1047393), [Retool table expandable rows](https://docs.retool.com/apps/guides/data/tables), [Fiori List Report + Object Page](https://help.sap.com/docs/abap-cloud/abap-rap/creating-list-report-and-object-page).
+
+Trường **đã có** trên `Shipment` / DB: AWB, HAWB, chuyến, `cutoff`, dest, `warehouse`, pcs/kg, `dimLines`/`dimWeightKg`/`dimDivisor`, CW = `max(kg,DIM)` (`computeShipmentWeightMetrics`), khách/shipper/CNEE + `*Print` (kể cả `consigneeNamePrint`), `note`, H21 `invoiceDeclarations`, `label_print_jobs`, `syncedAt`. Status enum tồn tại nhưng **không** hiện badge trên list. **Đề xuất mới:** AWB tách check-digit (IATA Res 600a, app đang `formatAwb` 3-8), countdown cut-off, entity tờ cân (chỉ có status `WEIGH_SLIP`, chưa có bảng), activity timeline đầy đủ (chưa có audit log).
 
 ## F / G / H (logistics — không generic SaaS)
 

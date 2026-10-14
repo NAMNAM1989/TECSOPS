@@ -19,6 +19,7 @@ const newE = path.join(root, "new-e.html");
 const newF = path.join(root, "new-f.html");
 const newG = path.join(root, "new-g.html");
 const newH = path.join(root, "new-h.html");
+const newI = path.join(root, "new-i.html");
 
 const browser = await chromium.launch();
 
@@ -56,5 +57,9 @@ await shot(newG, { width: 1440, height: 900 }, path.join(outDir, "new-G-desktop.
 await shot(newG, { width: 390, height: 844 }, path.join(outDir, "new-G-mobile.png"));
 await shot(newH, { width: 1440, height: 900 }, path.join(outDir, "new-H-desktop.png"));
 await shot(newH, { width: 390, height: 844 }, path.join(outDir, "new-H-mobile.png"));
+await shot(newI, { width: 1440, height: 900 }, path.join(outDir, "new-I-grid.png"));
+await shot(`${newI}?focus=1`, { width: 1440, height: 900 }, path.join(outDir, "new-I-detail.png"));
+await shot(newI, { width: 390, height: 844 }, path.join(outDir, "new-I-mobile.png"));
+await shot(`${newI}?sheet=1`, { width: 390, height: 844 }, path.join(outDir, "new-I-mobile-detail.png"));
 
 await browser.close();

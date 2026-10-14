@@ -12,6 +12,9 @@
 
 | File | Vai trò |
 | --- | --- |
+| [new-f.html](./new-f.html) | **F** — ULD / build-up (Cargospot + iCargo CTO) |
+| [new-g.html](./new-g.html) | **G** — cửa dock / VCT (SCSC lounge + Manhattan yard) |
+| [new-h.html](./new-h.html) | **H** — quét trước / hàng tem (Zebra + dán talon TCS) |
 | [new-c.html](./new-c.html) | **C** — bảng chuyến / cut-off (Morgen timeline) |
 | [new-d.html](./new-d.html) | **D** — inbox split (Superhuman / hộp thư) |
 | [new-e.html](./new-e.html) | **E** — brand ticket (Pitch + Ujjo) |
@@ -54,4 +57,14 @@ npx playwright install chromium
 ARTIFACT_DIR=/opt/cursor/artifacts node docs/mockups/lots-list/screenshot.mjs
 ```
 
-Ra thêm `pro-A/B-*.png` và `new-C-desktop.png`, `new-C-mobile.png`, `new-D-desktop.png`, `new-D-mobile.png`, `new-E-desktop.png`, `new-E-mobile.png`.
+Ra thêm `pro-A/B-*.png`, `new-C/D/E-*.png` và `new-F-desktop.png`, `new-F-mobile.png`, `new-G-desktop.png`, `new-G-mobile.png`, `new-H-desktop.png`, `new-H-mobile.png`.
+
+## F / G / H (logistics — không generic SaaS)
+
+Nghiên cứu SGN + phần mềm cargo/WMS/scanner (nguồn ghi trên PR #80). Cùng IA đã chốt; **không** badge trạng thái lô trên list.
+
+- **F ULD build-up:** chuyến = pallet/AKE/BULK, thanh chỗ kg/pcs, AWB tách check-digit, lệch cân Δ. Khác C (C = đồng hồ cut-off; F = chỗ trên ULD).
+- **G cửa dock / VCT:** lưới cửa D01–D08 + VCT như màn lounge SCSC / Manhattan dock door. Lệch tờ cân trên cửa đang gọi.
+- **H scan-first + hàng tem:** giếng quét DataWedge, AWB 3-7-CD, hàng in Zebra, mốc lô chỉ ở panel.
+
+**Khuyến nghị A–H:** **G** nếu ca nhận xe/cửa; **F** nếu ca build-up chuyến; **C** nếu chỉ cần cut-off. H cho máy cầm tay. A ổn nếu giữ bảng. B/D/E không phải nhịp kho SGN.

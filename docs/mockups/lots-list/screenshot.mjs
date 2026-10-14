@@ -16,6 +16,9 @@ const pro = path.join(root, "pro.html");
 const newC = path.join(root, "new-c.html");
 const newD = path.join(root, "new-d.html");
 const newE = path.join(root, "new-e.html");
+const newF = path.join(root, "new-f.html");
+const newG = path.join(root, "new-g.html");
+const newH = path.join(root, "new-h.html");
 
 const browser = await chromium.launch();
 
@@ -47,5 +50,11 @@ await shot(newD, { width: 1440, height: 900 }, path.join(outDir, "new-D-desktop.
 await shot(newD, { width: 390, height: 844 }, path.join(outDir, "new-D-mobile.png"));
 await shot(newE, { width: 1440, height: 900 }, path.join(outDir, "new-E-desktop.png"));
 await shot(newE, { width: 390, height: 844 }, path.join(outDir, "new-E-mobile.png"));
+await shot(newF, { width: 1440, height: 900 }, path.join(outDir, "new-F-desktop.png"));
+await shot(newF, { width: 390, height: 844 }, path.join(outDir, "new-F-mobile.png"));
+await shot(newG, { width: 1440, height: 900 }, path.join(outDir, "new-G-desktop.png"));
+await shot(newG, { width: 390, height: 844 }, path.join(outDir, "new-G-mobile.png"));
+await shot(newH, { width: 1440, height: 900 }, path.join(outDir, "new-H-desktop.png"));
+await shot(newH, { width: 390, height: 844 }, path.join(outDir, "new-H-mobile.png"));
 
 await browser.close();

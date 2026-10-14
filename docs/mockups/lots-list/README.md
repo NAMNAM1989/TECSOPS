@@ -12,8 +12,21 @@
 
 | File | Vai trò |
 | --- | --- |
-| [index.html](./index.html) | Phương án 1 — đề xuất (desktop bảng + mobile card) |
+| [pro.html](./pro.html) | **Pro A/B** — polish: `?dir=a` calm light, `?dir=b` high-contrast dark |
+| [index.html](./index.html) | Phương án 1 — đề xuất trước (desktop bảng + mobile card) |
 | [current.html](./current.html) | Tái tạo tĩnh màn hình Ops hiện tại để so sánh |
+
+## Pro A / B (nghiên cứu)
+
+Cùng IA đã chốt (hàng 3 dòng, AWB+chuyến+cut-off 1 dòng, không status, thao tác panel). Token vẫn `ui.*`.
+
+Tham chiếu thật (OpenDesign computed styles): **Vercel** (hairline, 4px grid, radius 6–8), **Linear** (dense dark, contrast, mono ID), **Mercury** (caption 11–12, restraint). Không có Flexport/airline catalog — không bịa token.
+
+- **A calm light:** canvas `#EEF2F6`, rail 56px, command bar 1 hàng (⌘K), bảng flush không card-per-row, selected = teal rail 2px, skeleton “đang kéo Sheet”, kho 0 = chip nét đứt.
+- **B ops dark:** token `.dark` official (`#020617` / `#2DD4BF`), hairline `white/8`, không đổ bóng.
+- **Motion (ghi chú triển khai):** hover 150ms color-only; selected fade 900ms; skeleton 1.2s pulse; không bounce.
+
+**Khuyến nghị: A** cho ca ngày kho (in tem/giấy, light-first hiện tại). B giữ làm ca đêm / `class="dark"`.
 
 Dữ liệu trên cả hai file là **mẫu giả** (AWB `618-12345675`, chuyến `SQ 183` / `CX 766` / `VN 30x`). App thật cần Postgres + auth nên screenshot “hiện tại” được render từ `current.html`, bám layout `DesktopShipmentTable` / `OpsDesktopCommandBar`.
 
@@ -26,4 +39,4 @@ npx playwright install chromium
 ARTIFACT_DIR=/opt/cursor/artifacts node docs/mockups/lots-list/screenshot.mjs
 ```
 
-Ra `current-desktop.png` (1440×900), `mockup-desktop.png` (1440×900), `mockup-mobile.png` (390×844).
+Ra thêm `pro-A-desktop.png`, `pro-A-mobile.png`, `pro-B-desktop.png`, `pro-B-mobile.png`.

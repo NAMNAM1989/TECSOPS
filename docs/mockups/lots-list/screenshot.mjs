@@ -12,6 +12,7 @@ fs.mkdirSync(outDir, { recursive: true });
 
 const current = path.join(root, "current.html");
 const improved = path.join(root, "index.html");
+const pro = path.join(root, "pro.html");
 
 const browser = await chromium.launch();
 
@@ -33,5 +34,9 @@ await shot(current, { width: 1440, height: 900 }, path.join(outDir, "current-des
 await shot(improved, { width: 1440, height: 900 }, path.join(outDir, "mockup-desktop-actions.png"));
 await shot(improved, { width: 390, height: 844 }, path.join(outDir, "mockup-mobile-actions.png"));
 await shot(`${improved}?sheet=1`, { width: 390, height: 844 }, path.join(outDir, "mockup-mobile-actions-sheet.png"));
+await shot(`${pro}?dir=a`, { width: 1440, height: 900 }, path.join(outDir, "pro-A-desktop.png"));
+await shot(`${pro}?dir=a`, { width: 390, height: 844 }, path.join(outDir, "pro-A-mobile.png"));
+await shot(`${pro}?dir=b`, { width: 1440, height: 900 }, path.join(outDir, "pro-B-desktop.png"));
+await shot(`${pro}?dir=b`, { width: 390, height: 844 }, path.join(outDir, "pro-B-mobile.png"));
 
 await browser.close();

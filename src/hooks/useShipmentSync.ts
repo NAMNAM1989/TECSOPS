@@ -42,6 +42,7 @@ import {
   type PersistentMutationItem,
 } from "../utils/persistentOutbox";
 import { notify } from "../ui/notify";
+import { SHEET_SYNC_SOCKET_EVENT, SHEET_SYNC_WINDOW_EVENT } from "../utils/sheetRealtime";
 export type SyncStatus = "loading" | "live" | "degraded" | "offline";
 
 export type StateSyncScope = {
@@ -422,6 +423,10 @@ export function useShipmentSync(
       if (apiOkRef.current) setStatus("degraded");
     });
     socket.on("sync", onSync);
+    socket.on(SHEET_SYNC_SOCKET_EVENT, (payload: unknown) => {
+      if (cancelledRef.current) return;
+      window.dispatchEvent(new CustomEvent(SHEET_SYNC_WINDOW_EVENT, { detail: payload }));
+    });
   }, [markSynced, persistIfApplied]);
 
   const goLiveFromParsed = useCallback(

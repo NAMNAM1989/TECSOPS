@@ -4,6 +4,7 @@ import type { CargoDayReportCopyKind } from "../utils/cargoDayReportImage";
 import type { ShipmentSearchContext, ShipmentSearchMatch } from "../utils/shipmentSearch";
 import type { GlobalSearchLotHit } from "../utils/globalSearchApi";
 import { formatSyncedPhrase } from "../utils/dbSyncedAt";
+import { formatSheetSyncTime } from "../utils/sheetRealtime";
 import { formatKgTotal } from "../utils/formatKgTotal";
 import { computeDayPulseTotals } from "../utils/opsDayOverview";
 import { SyncStatusPill } from "../ui";
@@ -24,6 +25,8 @@ interface Props {
   syncStatus: SyncStatus;
   socketConnected: boolean;
   lotSyncedAt?: number | null;
+  /** ISO — lần Sheet đẩy dữ liệu lên gần nhất. */
+  sheetSyncedAt?: string | null;
   pendingOfflineCount?: number;
   onSyncRefresh?: () => void | Promise<void>;
   syncRefreshing?: boolean;
@@ -80,6 +83,7 @@ export function OpsMobileStickyHeader({
   syncStatus,
   socketConnected,
   lotSyncedAt = null,
+  sheetSyncedAt = null,
   pendingOfflineCount = 0,
   onSyncRefresh,
   syncRefreshing = false,
@@ -123,8 +127,10 @@ export function OpsMobileStickyHeader({
   const syncTitle = useMemo(() => {
     const phrase = formatSyncedPhrase(lotSyncedAt);
     const pending = pendingOfflineCount > 0 ? `${pendingOfflineCount} chờ gửi` : "";
-    return [phrase, pending].filter(Boolean).join(" · ");
-  }, [lotSyncedAt, pendingOfflineCount]);
+    const sheetTime = formatSheetSyncTime(sheetSyncedAt);
+    const sheet = sheetTime ? `Sheet: cập nhật lúc ${sheetTime}` : "";
+    return [phrase, pending, sheet].filter(Boolean).join(" · ");
+  }, [lotSyncedAt, pendingOfflineCount, sheetSyncedAt]);
 
   const syncCta =
     !live && !syncRefreshing && onSyncRefresh

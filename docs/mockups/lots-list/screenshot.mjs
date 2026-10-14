@@ -13,6 +13,9 @@ fs.mkdirSync(outDir, { recursive: true });
 const current = path.join(root, "current.html");
 const improved = path.join(root, "index.html");
 const pro = path.join(root, "pro.html");
+const newC = path.join(root, "new-c.html");
+const newD = path.join(root, "new-d.html");
+const newE = path.join(root, "new-e.html");
 
 const browser = await chromium.launch();
 
@@ -38,5 +41,11 @@ await shot(`${pro}?dir=a`, { width: 1440, height: 900 }, path.join(outDir, "pro-
 await shot(`${pro}?dir=a`, { width: 390, height: 844 }, path.join(outDir, "pro-A-mobile.png"));
 await shot(`${pro}?dir=b`, { width: 1440, height: 900 }, path.join(outDir, "pro-B-desktop.png"));
 await shot(`${pro}?dir=b`, { width: 390, height: 844 }, path.join(outDir, "pro-B-mobile.png"));
+await shot(newC, { width: 1440, height: 900 }, path.join(outDir, "new-C-desktop.png"));
+await shot(newC, { width: 390, height: 844 }, path.join(outDir, "new-C-mobile.png"));
+await shot(newD, { width: 1440, height: 900 }, path.join(outDir, "new-D-desktop.png"));
+await shot(newD, { width: 390, height: 844 }, path.join(outDir, "new-D-mobile.png"));
+await shot(newE, { width: 1440, height: 900 }, path.join(outDir, "new-E-desktop.png"));
+await shot(newE, { width: 390, height: 844 }, path.join(outDir, "new-E-mobile.png"));
 
 await browser.close();

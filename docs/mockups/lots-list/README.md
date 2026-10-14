@@ -12,7 +12,10 @@
 
 | File | Vai trò |
 | --- | --- |
-| [pro.html](./pro.html) | **Pro A/B** — polish: `?dir=a` calm light, `?dir=b` high-contrast dark |
+| [new-c.html](./new-c.html) | **C** — bảng chuyến / cut-off (Morgen timeline) |
+| [new-d.html](./new-d.html) | **D** — inbox split (Superhuman / hộp thư) |
+| [new-e.html](./new-e.html) | **E** — brand ticket (Pitch + Ujjo) |
+| [pro.html](./pro.html) | Pro A/B — polish cùng layout bảng+panel: `?dir=a` light, `?dir=b` dark |
 | [index.html](./index.html) | Phương án 1 — đề xuất trước (desktop bảng + mobile card) |
 | [current.html](./current.html) | Tái tạo tĩnh màn hình Ops hiện tại để so sánh |
 
@@ -26,9 +29,21 @@ Tham chiếu thật (OpenDesign computed styles): **Vercel** (hairline, 4px grid
 - **B ops dark:** token `.dark` official (`#020617` / `#2DD4BF`), hairline `white/8`, không đổ bóng.
 - **Motion (ghi chú triển khai):** hover 150ms color-only; selected fade 900ms; skeleton 1.2s pulse; không bounce.
 
-**Khuyến nghị: A** cho ca ngày kho (in tem/giấy, light-first hiện tại). B giữ làm ca đêm / `class="dark"`.
+**Khuyến nghị A/B:** A cho ca ngày kho (in tem/giấy, light-first hiện tại). B giữ làm ca đêm / `class="dark"`. Owner đã xem A/B — không refine thêm cùng layout.
 
-Dữ liệu trên cả hai file là **mẫu giả** (AWB `618-12345675`, chuyến `SQ 183` / `CX 766` / `VN 30x`). App thật cần Postgres + auth nên screenshot “hiện tại” được render từ `current.html`, bám layout `DesktopShipmentTable` / `OpsDesktopCommandBar`.
+## C / D / E (hướng mới — không phải A/B)
+
+Cùng IA đã chốt. Khác **cấu trúc**, không chỉ theme.
+
+Tham chiếu OpenDesign (token thật): **Morgen** `#191A23` / `#F3C26A` (planner/timeline), **Superhuman** `#f2f0eb` / `#734cb6` (inbox premium), **Pitch** `#0c021c` / `#d4fb6b` / `#c6a5ff` + **Ujjo** cạnh sắc / neon. Mobbin không auth được trong session này. Skill GitHub: `nextlevelbuilder/ui-ux-pro-max` (nhóm + progressive disclosure), `kcd-dev/google-stitch-hallmark-ui-design-skill` (personality, không generic SaaS). Catalog OpenDesign không có Flexport/airline — không bịa token cargo.
+
+- **C flight board:** lô nhóm theo chuyến, sắp cut-off, countdown `00:47` trên CX 766. Không còn hàng bảng. Ca kho thấy “chuyến nào sắp đóng”.
+- **D inbox split:** list trái ~420px (KH = sender, AWB = subject, CNEE/hàng = preview, cut-off = time). Phải là **workspace đầy** — không còn panel 340px.
+- **E brand ticket:** Syne + lime/tím, DST khổ lớn, AWB lime, vé máy bay. Vẫn 3 dòng KH/CNEE/hàng, thao tác panel.
+
+**Khuyến nghị C/D/E: C** cho ca kho — cut-off là nhịp thật của xe/chuyến. D nếu owner muốn hồ sơ là màn chính (ít lô, nhiều sửa). E nếu cần nhận diện mạnh; kém “ops” hơn C.
+
+Dữ liệu trên mọi file là **mẫu giả** (AWB `618-1234 5675` / `160-9876 5432`, chuyến `SQ 183` / `CX 766` / `VN 30x`). App thật cần Postgres + auth nên screenshot “hiện tại” được render từ `current.html`, bám layout `DesktopShipmentTable` / `OpsDesktopCommandBar`.
 
 Mở file bằng trình duyệt, hoặc `npx serve docs/mockups/lots-list`.
 
@@ -39,4 +54,4 @@ npx playwright install chromium
 ARTIFACT_DIR=/opt/cursor/artifacts node docs/mockups/lots-list/screenshot.mjs
 ```
 
-Ra thêm `pro-A-desktop.png`, `pro-A-mobile.png`, `pro-B-desktop.png`, `pro-B-mobile.png`.
+Ra thêm `pro-A/B-*.png` và `new-C-desktop.png`, `new-C-mobile.png`, `new-D-desktop.png`, `new-D-mobile.png`, `new-E-desktop.png`, `new-E-mobile.png`.

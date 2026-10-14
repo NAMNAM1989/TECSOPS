@@ -215,6 +215,15 @@ The goal: Be helpful without being annoying. Check in a few times a day, do usef
 
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.
 
+## Cursor Cloud specific instructions
+
+TECSOPS is a Vite + React client plus an Express API (`npm run dev` → API on port 3001, UI on port 5173). Postgres is required. Cloud Agent VMs do not include Docker, so use the Ubuntu `postgresql` package (cluster `16/main`, port **5432**). `docker compose` in this repo maps host port **5434** and is for machines that run Docker.
+
+- Environment `start` brings up Postgres, creates role/database `tecsops` if missing, writes `.env.local` with `DATABASE_URL=postgresql://tecsops:tecsops@127.0.0.1:5432/tecsops` only when that file is absent, then runs `npm run dev`.
+- Health: `http://127.0.0.1:3001/api/health` should return `storage.postgres: true`. UI: `http://127.0.0.1:5173/`.
+- Dev mode has no `TECSOPS_APP_TOKEN`, so the login gate stays off. An empty database bootstraps to no shipments.
+- Canonical check (same as CI): `npm run ci` — lint, server lint, production build, vitest, deploy check. CI uses Node 22.
+
 ## Related
 
 - [Default AGENTS.md](/reference/AGENTS.default)

@@ -298,18 +298,45 @@ export function applyMutation(state, mutation) {
 
 let tail = Promise.resolve();
 
+/** @type {Set<(change: { prev: any, next: any }) => void>} */
+const commitListeners = new Set();
+
+/**
+ * Gọi sau mỗi mutation đã COMMIT vào Postgres (theo đúng thứ tự commit).
+ * Listener phải nhanh và không ném lỗi chặn luồng; lỗi bị nuốt + log.
+ * @returns {() => void} hủy đăng ký
+ */
+export function onStateCommitted(listener) {
+  commitListeners.add(listener);
+  return () => commitListeners.delete(listener);
+}
+
+function notifyCommitted(prev, next) {
+  for (const listener of commitListeners) {
+    try {
+      listener({ prev, next });
+    } catch (err) {
+      console.error("[state:commit-listener]", err);
+    }
+  }
+}
+
 export function runMutation(mutation) {
   const result = tail.then(async () => {
     if (!postgresStateStore) {
       throw new Error("[state] Postgres chưa cấu hình (DATABASE_URL).");
     }
-    return postgresStateStore.runLocked(async (currentRaw) => {
+    let prev = null;
+    const next = await postgresStateStore.runLocked(async (currentRaw) => {
       const current = currentRaw
         ? normalizeOrThrow(currentRaw, `Postgres (${postgresStateStore.key})`)
         : emptyInitialState();
-      const next = applyMutation(current, mutation);
-      return { __tecsopsPersistDiff: true, prev: current, next };
+      prev = current;
+      const nextState = applyMutation(current, mutation);
+      return { __tecsopsPersistDiff: true, prev: current, next: nextState };
     });
+    notifyCommitted(prev, next);
+    return next;
   });
   tail = result.catch(async (err) => {
     console.error("[mutation]", err);
@@ -328,16 +355,20 @@ export function runBatchMutations(mutations) {
     if (!postgresStateStore) {
       throw new Error("[state] Postgres chưa cấu hình (DATABASE_URL).");
     }
-    return postgresStateStore.runLocked(async (currentRaw) => {
+    let prev = null;
+    const next = await postgresStateStore.runLocked(async (currentRaw) => {
       const current = currentRaw
         ? normalizeOrThrow(currentRaw, `Postgres (${postgresStateStore.key})`)
         : emptyInitialState();
+      prev = current;
       let state = current;
       for (const mutation of list) {
         state = applyMutation(state, mutation);
       }
       return { __tecsopsPersistDiff: true, prev: current, next: state };
     });
+    notifyCommitted(prev, next);
+    return next;
   });
   tail = result.catch(async (err) => {
     console.error("[mutation:batch]", err);

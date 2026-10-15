@@ -12,7 +12,10 @@
 
 | File | Vai trò |
 | --- | --- |
-| [new-i.html](./new-i.html) | **I** — lưới Excel + hồ sơ lô (`?focus=1` / `?sheet=1`) |
+| [new-j.html](./new-j.html) | **J** — master-detail / Excel outline trong lưới |
+| [new-k.html](./new-k.html) | **K** — reading pane dưới + tab ngang |
+| [new-l.html](./new-l.html) | **L** — phiếu lô giấy (AWB / SLI / QF/ED/49) |
+| [new-i.html](./new-i.html) | **I** — lưới Excel + inspector phải (owner đã loại) |
 | [new-f.html](./new-f.html) | **F** — ULD / build-up (Cargospot + iCargo CTO) |
 | [new-g.html](./new-g.html) | **G** — cửa dock / VCT (SCSC lounge + Manhattan yard) |
 | [new-h.html](./new-h.html) | **H** — quét trước / hàng tem (Zebra + dán talon TCS) |
@@ -58,9 +61,19 @@ npx playwright install chromium
 ARTIFACT_DIR=/opt/cursor/artifacts node docs/mockups/lots-list/screenshot.mjs
 ```
 
-Ra thêm các PNG C–H và `new-I-grid.png`, `new-I-detail.png`, `new-I-mobile.png`, `new-I-mobile-detail.png`.
+Ra thêm các PNG C–I và `new-J-desktop.png`, `new-J-mobile.png`, `new-K-desktop.png`, `new-K-mobile.png`, `new-L-desktop.png`, `new-L-mobile.png`.
 
-## I — lưới Excel + hồ sơ lô (quyết định owner)
+## J / K / L — chi tiết lô, không inspector phải
+
+Owner loại I (panel phải). List vẫn bảng Excel. Ba pattern khác nhau:
+
+- **J master-detail:** gutter outline 1–2–3, `+`/`−` như [Excel Group](https://support.microsoft.com/en-us/excel/outline-group-data-in-a-worksheet) / [AG Grid Master Detail](https://www.ag-grid.com/javascript-data-grid/master-detail/). Con = `dimLines`, `invoiceDeclarations`, `label_print_jobs` — vẫn là hàng ô, không card.
+- **K pane dưới:** lưới trên, splitter, reading pane đáy như [Outlook Reading Pane Bottom](https://support.microsoft.com/en-us/outlook/use-and-configure-the-reading-pane-to-preview-messages-in-outlook). Tab ngang: Hàng & DIM | Shipper/CNEE | Chứng từ & In | Ghi chú & Lịch sử. Smartsheet details panel là bên phải — không dùng.
+- **L phiếu lô:** modal/tab form giấy — mặt AWB IATA (shipper/CNEE/pcs/gross/CW), SLI VNA, form DIM TCS `QF/ED/49` (`src/utils/tcsDimRecordForm.ts`). Ô vàng = sửa tại chỗ.
+
+**Khuyến nghị:** **K** cho ca kho (lưới không bị đẩy, DIM rộng ngang). **J** nếu NV sống trong ô và hay đối chiếu nhiều dòng DIM. **L** khi in/ký tờ cân là việc chính.
+
+## I — lưới Excel + hồ sơ lô (owner đã loại inspector phải)
 
 List **phải** là bảng ô (cột, sticky header, AWB đóng băng, sort/filter, F2/Enter, copy/paste). Chi tiết lô mới là chỗ làm việc.
 

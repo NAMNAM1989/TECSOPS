@@ -12,6 +12,8 @@
 
 | File | Vai trò |
 | --- | --- |
+| [new-m.html](./new-m.html) | **M** — bảng vận hành + drawer (`?detail=1`) |
+| [new-n.html](./new-n.html) | **N** — nhóm theo chuyến + trang hồ sơ (`?page=1`) |
 | [new-j.html](./new-j.html) | **J** — master-detail / Excel outline trong lưới |
 | [new-k.html](./new-k.html) | **K** — reading pane dưới + tab ngang |
 | [new-l.html](./new-l.html) | **L** — phiếu lô giấy (AWB / SLI / QF/ED/49) |
@@ -61,7 +63,16 @@ npx playwright install chromium
 ARTIFACT_DIR=/opt/cursor/artifacts node docs/mockups/lots-list/screenshot.mjs
 ```
 
-Ra thêm các PNG C–I và `new-J-desktop.png`, `new-J-mobile.png`, `new-K-desktop.png`, `new-K-mobile.png`, `new-L-desktop.png`, `new-L-mobile.png`.
+Ra thêm các PNG C–L và `new-M-desktop.png`, `new-M-mobile.png`, `new-M-detail.png`, `new-N-desktop.png`, `new-N-mobile.png`.
+
+## M / N — bảng vận hành (không giả Excel)
+
+Owner: cần **bảng quản lý**, không UI bắt chước Excel (không kẻ ô, không A/B/C, không thanh fx, không gutter). Token `ui.*` + Plus Jakarta / IBM Plex Mono.
+
+- **M:** bảng sạch (Linear / Stripe / Shopify orders) + view lưu + search + bulk In tem/Xuất + drawer hồ sơ. Highlight **cut-off** và chip *Chưa đo* / *Tên in ≠* — không badge workflow PENDING.
+- **N:** cùng bảng nhưng **nhóm theo chuyến**, hàng tổng (pcs/kg/số lô/cut-off). Click mở **trang hồ sơ** (`?page=1`), không drawer.
+
+**Khuyến nghị:** **M** nếu NV nhảy lô liên tục trên một ngày. **N** nếu ca bám cut-off/chuyến (xe đóng CX 766).
 
 ## J / K / L — chi tiết lô, không inspector phải
 

@@ -12,6 +12,7 @@
 
 | File | Vai trò |
 | --- | --- |
+| [new-o.html](./new-o.html) | **O** — tra cứu AWB + bảng kết quả + hồ sơ full-width |
 | [new-m.html](./new-m.html) | **M** — bảng vận hành + drawer (`?detail=1`) |
 | [new-n.html](./new-n.html) | **N** — nhóm theo chuyến + trang hồ sơ (`?page=1`) |
 | [new-j.html](./new-j.html) | **J** — master-detail / Excel outline trong lưới |
@@ -63,7 +64,23 @@ npx playwright install chromium
 ARTIFACT_DIR=/opt/cursor/artifacts node docs/mockups/lots-list/screenshot.mjs
 ```
 
-Ra thêm các PNG C–L và `new-M-desktop.png`, `new-M-mobile.png`, `new-M-detail.png`, `new-N-desktop.png`, `new-N-mobile.png`.
+Ra thêm các PNG C–L, `new-M-desktop.png`, `new-M-mobile.png`, `new-M-detail.png`, `new-N-desktop.png`, `new-N-mobile.png`, `new-O-desktop.png`, `new-O-mobile.png`.
+
+## O — tra cứu trước, bảng quản lý, hồ sơ dưới (không clone TCS)
+
+Owner xem [tcs.com.vn](https://www.tcs.com.vn) và bảo “copy”. **Không** sao chép logo, tên thương hiệu, chữ, ảnh, icon hay code của trang đó. Chỉ lấy pattern bố cục chung, rồi vẽ lại bằng token/font TECSOPS (`#EEF2F6`, teal `#0F766E`, Plus Jakarta + IBM Plex Mono), field `Shipment` thật, copy tiếng Việt.
+
+**Ý tưởng chuyển được (không phải brand):**
+
+1. **Tra cứu AWB là việc đầu trang** — ô prefix 3 số + seri 8+CD, nút Tra cứu lớn.
+2. **Ô chế độ việc** ngang hàng phía trên form (Tra AWB / Sắp cut-off / Chưa cân-đo / Tiếp nhận ngày), không pill SaaS.
+3. **Thẻ form trắng trên canvas xám** + header thể chế (nav chữ, không rail icon).
+4. **Radio kho** cạnh nút tra (Tất cả / TECS-TCS / TECS-SCSC) — cùng chỗ người chọn phạm vi trước khi xem bảng.
+5. **Kết quả + hồ sơ nằm dưới**, mật độ cao, bảng quản lý sạch — không kẻ Excel, không A/B/C, không thanh fx.
+
+Màu vàng/navy/ảnh hero của trang tham chiếu **không** đưa vào; mood chỉ dịch sang teal/navy TECSOPS.
+
+**O khác M:** M là bảng Linear/Stripe + pill filter + search + drawer phải. O là màn tra cứu (card hero) → bảng kết quả → hồ sơ full-width dưới bảng (Hàng&DIM / Shipper-CNEE / Chứng từ). Cùng field: AWB/HAWB, chuyến, cut-off, dest, warehouse, pcs/kg, `dimLines`/`dimWeightKg`/`dimDivisor`, CW, customer/shipper/CNEE + `consigneeNamePrint`, note, H21, `label_print_jobs`, `syncedAt`. Không badge workflow PENDING.
 
 ## M / N — bảng vận hành (không giả Excel)
 

@@ -6,6 +6,7 @@ Dự án **không dùng Prisma / Sequelize**. Nguồn sự thật là Railway Po
 - `app_state` giữ snapshot JSON tương thích và các phần catalog chưa tách bảng; `state_meta` giữ version.
 - Biến **`DATABASE_URL`** là bắt buộc; key snapshot mặc định là `tecsops:state`.
 - **Không** dùng Redis, file container, hay demo seed làm nguồn sự thật.
+- Nếu dashboard còn service Redis cũ: gỡ biến `REDIS_*` trên app rồi xóa service Redis (giữ Postgres). Chi tiết: `TOOLS.md`.
 
 Vì vậy:
 
@@ -52,7 +53,7 @@ Chạy `build` + `test` + `deploy:check`, rồi `git push`. Railway deploy từ 
 | `start` / `start:railway` | Chạy server |
 | `deploy:check` / `deploy:ship` | An toàn + ship |
 | `backup:postgres-state` / `restore:postgres-state` | Backup / khôi phục state chuẩn hóa qua cả bảng quan hệ và snapshot |
-| `migrate:postgres-state` | One-shot migrate từ nguồn cũ (Redis/file) nếu còn |
+| `migrate:postgres-state` | One-shot migrate state từ file backup hoặc API vào Postgres |
 
 ---
 

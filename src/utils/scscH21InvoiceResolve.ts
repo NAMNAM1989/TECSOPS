@@ -97,6 +97,7 @@ export function validateH21InvoiceForShipment(opts: {
   invoiceNo?: string | null;
   invoiceSeq?: number;
   invoiceSeqTotal?: number;
+  declarationKg?: number | null;
 }): string[] {
   const customerEntry = findCustomerEntry(opts.shipment, opts.directory);
   const sid = opts.shipperId ?? opts.shipment.h21DeclarationShipperId;
@@ -112,5 +113,6 @@ export function validateH21InvoiceForShipment(opts: {
     invoiceNo: opts.invoiceNo,
     invoiceSeq: opts.invoiceSeq,
     invoiceSeqTotal: opts.invoiceSeqTotal,
+    declarationKg: opts.declarationKg,
   });
 }

@@ -568,16 +568,24 @@ export async function replaceAllTcsH21Goods(client, rawList) {
       fileDups.map((d) => `«${d.description}» (×${d.ids.length})`)
     );
   }
-  await client.query(`DELETE FROM ${TCS_H21_GOODS_TABLE} WHERE warehouse_scope = 'TCS'`);
-  let i = 0;
-  for (const item of items) {
-    item.sortOrder = i++;
-    try {
-      await insertGoods(client, item);
-    } catch (e) {
-      if (e?.code === "23505") throw duplicateError(item.description);
-      throw e;
+  await client.query("BEGIN");
+  try {
+    await client.query(`DELETE FROM ${TCS_H21_GOODS_TABLE} WHERE warehouse_scope = 'TCS'`);
+    let i = 0;
+    for (const item of items) {
+      item.sortOrder = i++;
+      try {
+        await insertGoods(client, item);
+      } catch (e) {
+        if (e?.code === "23505") throw duplicateError(item.description);
+        throw e;
+      }
     }
+    const listed = await listTcsH21Goods(client, { activeOnly: false, limit: 2000 });
+    await client.query("COMMIT");
+    return listed;
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
   }
-  return listTcsH21Goods(client, { activeOnly: false, limit: 2000 });
 }

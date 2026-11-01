@@ -1,12 +1,15 @@
 import type { Shipment } from "../types/shipment";
-import { formatAwbLabel, rawAwbDigits } from "./awbFormat";
+import { formatAwb, rawAwbDigits } from "./awbFormat";
+import { awbCheckDigitError } from "./awbCheckDigit";
 import type { AirlineLabelOverrides } from "./airlineLabelOverridesCore";
-import { mergeAirlineLookupMaps, syntheticAirlineLabelName } from "./airlineLabelOverridesCore";
+import { mergeAirlineLookupMaps } from "./airlineLabelOverridesCore";
 
 export type AirCargoLabelSpecial = "" | "cold" | "danger";
 
 export type AirCargoLabelData = {
   airline: string;
+  /** false: không có trong danh mục, `airline` là mã hãng / đầu số AWB. */
+  airlineKnown: boolean;
   mawb: string;
   mawbDigits: string;
   origin: string;
@@ -53,18 +56,22 @@ export function extractFlightAirlinePrefix(
   return two;
 }
 
-function airlineNameFromShipment(s: Shipment, maps: ReturnType<typeof mergeAirlineLookupMaps>): string {
+function airlineNameFromShipment(
+  s: Shipment,
+  maps: ReturnType<typeof mergeAirlineLookupMaps>
+): { text: string; known: boolean } {
   const { byAwb, byFlight } = maps;
 
   // Tem nhãn: ưu tiên prefix cột chuyến bay
   const flightPrefix = extractFlightAirlinePrefix(s.flight, byFlight);
-  if (flightPrefix && byFlight[flightPrefix]) return byFlight[flightPrefix];
+  if (flightPrefix && byFlight[flightPrefix]) return { text: byFlight[flightPrefix], known: true };
 
   // Fallback: 3 số đầu AWB nếu không suy được từ chuyến
   const awbPrefix = rawAwbDigits(s.awb).slice(0, 3);
-  if (awbPrefix.length === 3 && byAwb[awbPrefix]) return byAwb[awbPrefix];
+  if (awbPrefix.length === 3 && byAwb[awbPrefix]) return { text: byAwb[awbPrefix], known: true };
 
-  return flightPrefix ? syntheticAirlineLabelName(flightPrefix) : "";
+  // Như talon esid-desktop: không có trong danh mục → in mã hãng, hoặc đầu số AWB
+  return { text: flightPrefix || (awbPrefix.length === 3 ? awbPrefix : ""), known: false };
 }
 
 function specialFromShipment(s: Shipment): AirCargoLabelSpecial {
@@ -80,12 +87,15 @@ export function mapShipmentToAirCargoLabelData(
   opts?: { replaceDefaults?: boolean }
 ): AirCargoLabelData {
   const maps = mergeAirlineLookupMaps(airlineLabelOverrides ?? undefined, opts);
-  const pieces = s.pcs != null && s.pcs > 0 ? String(s.pcs) : "";
-  const hawbNo = compact(s.hawb ?? "");
+  const pieces = Number.isInteger(s.pcs) && (s.pcs as number) > 0 ? String(s.pcs) : "";
+  const hawbNo = compact(s.hawb ?? "").toUpperCase();
   const hasHawb = hawbNo.length > 0;
+  const carrier = airlineNameFromShipment(s, maps);
+  const digits = rawAwbDigits(s.awb);
   return {
-    airline: airlineNameFromShipment(s, maps),
-    mawb: formatAwbLabel(s.awb),
+    airline: carrier.text,
+    airlineKnown: carrier.known,
+    mawb: digits.length === 11 ? formatAwb(digits) : "",
     mawbDigits: rawAwbDigits(s.awb),
     origin: "SGN",
     dest: compact(s.dest).toUpperCase(),
@@ -95,4 +105,29 @@ export function mapShipmentToAirCargoLabelData(
     hawbPieces: hasHawb ? pieces : "",
     special: specialFromShipment(s),
   };
+}
+
+/**
+ * Quy tắc talon esid-desktop: `errors` chặn in, `warnings` chỉ nhắc.
+ * @param format khổ cuộn đang chọn
+ */
+export function labelPrintIssues(
+  d: AirCargoLabelData,
+  format: "100x80" | "100x50"
+): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const awbError = awbCheckDigitError(d.mawbDigits);
+  if (awbError) errors.push(`${awbError}.`);
+  if (!/^[A-Z]{3}$/.test(d.dest)) errors.push("Chưa có DEST (mã sân bay 3 chữ).");
+  if (d.hasHawb && format !== "100x80") errors.push("Lô có HAWB phải in khổ 100×80.");
+  if (!d.airlineKnown) {
+    warnings.push(
+      d.airline
+        ? `Không có hãng "${d.airline}" trong danh mục, tem in mã hãng.`
+        : "Chưa nhận diện được hãng."
+    );
+  }
+  if (!d.pieces) warnings.push("Chưa có số kiện, ô số kiện để trống để viết tay.");
+  return { errors, warnings };
 }

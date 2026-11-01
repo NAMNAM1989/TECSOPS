@@ -106,4 +106,5 @@ export function validateH21InvoiceExport(opts: {
   invoiceNo?: string | null;
   invoiceSeq?: number;
   invoiceSeqTotal?: number;
+  declarationKg?: number | null;
 }): string[];

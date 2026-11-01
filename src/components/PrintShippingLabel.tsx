@@ -5,8 +5,10 @@ import {
   saveLabelSheetFormat,
   type LabelSheetFormat,
 } from "../utils/labelSheetFormat";
-import { mapShipmentToAirCargoLabelData } from "../utils/mapShipmentToAirCargoLabelData";
-import { fitAwbFontMm, fitRouteCodeFontMm } from "../utils/fitAwbFontMm";
+import {
+  labelPrintIssues,
+  mapShipmentToAirCargoLabelData,
+} from "../utils/mapShipmentToAirCargoLabelData";
 import type { AirlineLabelOverrides } from "../utils/airlineLabelOverridesCore";
 import { OPS } from "../styles/opsModalStyles";
 import {
@@ -28,10 +30,57 @@ type LabelContentProps = {
   sheetVariant?: LabelSheetVariant;
 };
 
+/** Cỡ chữ (pt) cho chữ đậm Arial in hoa vừa `widthMm` — ước theo số ký tự, không đo DOM. */
+function fitLabelPt(text: string, maxPt: number, widthMm = 95): number {
+  const perCharMm = 0.7 * 0.3528; // ~0.7em mỗi ký tự, 1pt = 0.3528mm
+  const fitted = widthMm / (Math.max(text.length, 1) * perCharMm);
+  return Math.round(Math.min(maxPt, fitted) * 10) / 10;
+}
+
+type LabelRow = { id: "car" | "awb" | "hawb" | "od" | "pcs"; hMm: number; pt: number };
+
+/** Theo talon esid-desktop (src/print/talon.mjs, 31/10/2026): chiều cao hàng mm + cỡ chữ pt. */
+const LABEL_ROWS: Record<"50" | "80" | "80h", LabelRow[]> = {
+  "50": [
+    { id: "car", hMm: 7, pt: 14 },
+    { id: "awb", hMm: 13.3, pt: 36 },
+    { id: "od", hMm: 10.1, pt: 24 },
+    { id: "pcs", hMm: 18.6, pt: 36 },
+  ],
+  "80": [
+    { id: "car", hMm: 12, pt: 18 },
+    { id: "awb", hMm: 19.5, pt: 36 },
+    { id: "od", hMm: 17.5, pt: 30 },
+    { id: "pcs", hMm: 29, pt: 48 },
+  ],
+  "80h": [
+    { id: "car", hMm: 10, pt: 18 },
+    { id: "awb", hMm: 15.5, pt: 36 },
+    { id: "hawb", hMm: 10.5, pt: 24 },
+    { id: "od", hMm: 13.5, pt: 30 },
+    { id: "pcs", hMm: 28.5, pt: 48 },
+  ],
+};
+
+const ROW_CAPTION = { car: "CARRIER", awb: "AWB", hawb: "HAWB", pcs: "TOTAL NO. OF PIECES" } as const;
+
+function LabelCell({ cap, value, pt }: { cap: string; value: string; pt: number }) {
+  return (
+    <div className="lbl-cell">
+      <span className="lbl-cap">{cap}</span>
+      {value ? (
+        <span className="lbl-v" style={{ fontSize: `${pt}pt` }}>
+          {value}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 /**
- * Mẫu tem 4 hàng (khớp docs/air-cargo-label-100x80-100x50.html):
- * Airline · AIR WAYBILL NO. · Origin/Dest · TOTAL PIECES
- * Không barcode, không banner xử lý, không HAWB trên tem.
+ * Tem talon (khớp esid-desktop docs/talon-mockup.html):
+ * CARRIER · AWB · (HAWB, chỉ khổ 100×80) · ORIGIN | DEST · TOTAL NO. OF PIECES.
+ * Ô trống để trống (không chữ gợi ý). Không barcode, không banner xử lý.
  */
 export function LabelContent({
   s,
@@ -43,74 +92,29 @@ export function LabelContent({
     replaceDefaults: airlineReplaceDefaults,
   });
   const compact = sheetVariant === "compact";
-  const hasAirline = Boolean(d.airline);
-
-  /* Nhỏ hơn một chút để letter-spacing rộng vẫn không tràn tên dài */
-  const airlineMm = compact ? 3.3 : 4.2;
-  const mawbMm = fitAwbFontMm(d.mawb, { compact });
-  const routeLabMm = compact ? 1.9 : 2.3;
-  /* DEST ưu tiên to hơn ORIGIN một chút; cả hai vẫn fit nửa ô */
-  const originMm = fitRouteCodeFontMm(d.origin, { compact, relScale: 0.92 });
-  const destMm = fitRouteCodeFontMm(d.dest, { compact });
-  const piecesLabMm = compact ? 1.9 : 2.3;
-  /* Số kiện nổi hơn — caption sát mép trên ô pieces */
-  const piecesValMm = compact ? 12 : 20;
-
-  const sheetClass = [
-    "label",
-    "print-label-sheet",
-    "lbl-sheet",
-    compact ? "lbl-sheet--compact" : "",
-    hasAirline ? "" : "lbl-sheet--no-airline",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const showHawb = d.hasHawb && !compact;
+  const rows = LABEL_ROWS[compact ? "50" : showHawb ? "80h" : "80"];
+  const text = { car: d.airline, awb: d.mawb, hawb: d.hawbNo, pcs: d.pieces };
 
   return (
-    <div className={sheetClass}>
-      <div className="lbl-sheet-inner">
-        {hasAirline ? (
-          <div className="lbl-airline" style={{ fontSize: `${airlineMm}mm` }}>
-            {d.airline}
-          </div>
-        ) : null}
-
-        <div className="lbl-mawb">
-          <div className="lbl-mawb-caption">AIR WAYBILL NO.</div>
-          <div className="lbl-mawb-val" style={{ fontSize: `${mawbMm}mm` }}>
-            {d.mawb || <span className="lbl-placeholder">Nhập MAWB...</span>}
-          </div>
-        </div>
-
-        <div className="lbl-route">
-          <div className="lbl-route-cell">
-            <div className="route-label" style={{ fontSize: `${routeLabMm}mm` }}>
-              ORIGIN:
+    <div className={`label print-label-sheet lbl-sheet ${compact ? "lbl-sheet--compact" : ""}`.trim()}>
+      <div className="lbl-grid" style={{ gridTemplateRows: rows.map((r) => `${r.hMm}mm`).join(" ") }}>
+        {rows.map((r) =>
+          r.id === "od" ? (
+            <div key={r.id} className="lbl-row lbl-row--od">
+              <LabelCell cap="ORIGIN" value={d.origin} pt={r.pt} />
+              <LabelCell cap="DEST" value={d.dest} pt={r.pt} />
             </div>
-            <div className="route-val" style={{ fontSize: `${originMm}mm` }}>
-              {d.origin}
+          ) : (
+            <div key={r.id} className={`lbl-row lbl-row--${r.id}`}>
+              <LabelCell
+                cap={ROW_CAPTION[r.id]}
+                value={text[r.id]}
+                pt={r.id === "car" || r.id === "hawb" ? fitLabelPt(text[r.id], r.pt) : r.pt}
+              />
             </div>
-          </div>
-          <div className="lbl-route-cell">
-            <div className="route-label" style={{ fontSize: `${routeLabMm}mm` }}>
-              DESTINATION:
-            </div>
-            <div className="route-val route-val--dest" style={{ fontSize: `${destMm}mm` }}>
-              {d.dest || <span className="lbl-placeholder">-</span>}
-            </div>
-          </div>
-        </div>
-
-        <div className="lbl-bottom">
-          <div className="lbl-pieces-cell">
-            <div className="pieces-label" style={{ fontSize: `${piecesLabMm}mm` }}>
-              TOTAL PIECES
-            </div>
-            <div className="pieces-val" style={{ fontSize: `${piecesValMm}mm` }}>
-              {d.pieces || null}
-            </div>
-          </div>
-        </div>
+          )
+        )}
       </div>
     </div>
   );
@@ -191,17 +195,14 @@ export function PrintShippingLabel({
       }),
     [shipment, airlineLabelOverrides, airlineReplaceDefaults]
   );
-  const warnings = useMemo(() => {
-    const next: string[] = [];
-    if (labelData.mawbDigits.length !== 11) next.push("MAWB chưa đủ 11 số");
-    if (!labelData.dest) next.push("chưa có Destination");
-    if (!shipment.pcs || shipment.pcs < 1) next.push("chưa có số kiện");
-    if (!labelData.airline) next.push("chưa nhận diện được hãng");
-    return next;
-  }, [labelData, shipment.pcs]);
+  const { errors, warnings } = useMemo(
+    () => labelPrintIssues(labelData, format),
+    [labelData, format]
+  );
+  const blocked = errors.length > 0;
 
   const handlePrint = async () => {
-    if (printing) return;
+    if (printing || blocked) return;
     setPrintMsg(null);
     setPrinting(true);
     const { wMm, hMm } = pageMm;
@@ -309,9 +310,18 @@ export function PrintShippingLabel({
               </div>
             </div>
 
+            {errors.length ? (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-300/70 bg-red-50 px-3 py-2 text-xs text-red-900"
+              >
+                <strong>Không in được:</strong> {errors.join(" ")}
+              </div>
+            ) : null}
+
             {warnings.length ? (
               <div className="rounded-xl border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                <strong>Kiểm tra:</strong> {warnings.join(" · ")}.
+                <strong>Kiểm tra:</strong> {warnings.join(" ")}
               </div>
             ) : null}
 
@@ -334,7 +344,7 @@ export function PrintShippingLabel({
               <button
                 type="button"
                 onClick={() => void handlePrint()}
-                disabled={printing}
+                disabled={printing || blocked}
                 className="rounded-full bg-apple-blue px-5 py-2.5 text-sm font-semibold text-white hover:bg-apple-blue-hover disabled:opacity-60"
               >
                 {printing ? "Đang chuẩn bị…" : "PRINT"}

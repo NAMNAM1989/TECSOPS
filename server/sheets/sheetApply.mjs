@@ -161,6 +161,15 @@ export function sheetSkipCode(code) {
   return code === "batch_duplicate" ? "sheet_duplicate" : code;
 }
 
+/** AWB → lúc webhook ghi gần nhất (ms). Auto-sync đọc gviz có thể trễ vài phút so với webhook. */
+const webhookAppliedAt = new Map();
+const WEBHOOK_MEMORY_MS = 30 * 60 * 1000;
+
+/** Test: xoá dấu webhook giữa các ca. */
+export function resetWebhookApplyMemory() {
+  webhookAppliedAt.clear();
+}
+
 /**
  * Khớp các dòng `parsed[indices]` với state rồi ghi một batch + broadcast một lần.
  * @param {{
@@ -170,7 +179,11 @@ export function sheetSkipCode(code) {
  *   removeIds?: string[],
  *   wantReorder?: boolean,
  *   io?: import('socket.io').Server,
+ *   webhookAt?: number,
+ *   skipWebhookSince?: number,
  * }} input
+ *   `webhookAt`: lần áp này là webhook — ghi nhớ thời điểm cho các AWB của nó.
+ *   `skipWebhookSince`: (auto-sync) bỏ qua AWB webhook đã ghi từ mốc này trở đi.
  */
 export function applyParsedSheetRows(input) {
   return withSheetApplyLock(() => applyParsedSheetRowsUnlocked(input));
@@ -183,9 +196,20 @@ async function applyParsedSheetRowsUnlocked({
   removeIds = [],
   wantReorder = true,
   io,
+  webhookAt,
+  skipWebhookSince,
 }) {
   const pickSet = new Set(indices.filter((n) => Number.isInteger(n) && n >= 0));
   const selected = parsed.filter((_, i) => pickSet.has(i));
+  if (webhookAt != null) {
+    for (const [key, at] of webhookAppliedAt) {
+      if (webhookAt - at > WEBHOOK_MEMORY_MS) webhookAppliedAt.delete(key);
+    }
+    for (const row of selected) {
+      const key = awbKeyForMatch(row.awb);
+      if (key) webhookAppliedAt.set(key, webhookAt);
+    }
+  }
 
   let state = await loadState();
   const customerLookups = buildCustomerLookups(state.customers ?? []);
@@ -214,6 +238,10 @@ async function applyParsedSheetRowsUnlocked({
     const awbKey = awbKeyForMatch(row.awb);
     if (awbKey && batchAwbKeys.has(awbKey)) {
       skip(row, "batch_duplicate", "Trùng AWB trong lần chọn — chỉ nhập dòng đầu");
+      continue;
+    }
+    if (skipWebhookSince != null && awbKey && (webhookAppliedAt.get(awbKey) ?? -Infinity) >= skipWebhookSince) {
+      skip(row, "webhook_newer", "Webhook vừa cập nhật lô này — bỏ qua bản Sheet có thể cũ");
       continue;
     }
 

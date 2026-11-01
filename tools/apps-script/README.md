@@ -30,7 +30,7 @@ Web TECSOPS cập nhật sau khoảng 1–3 giây, không cần bấm nút **Đ�
 
 | Sự kiện | Hành vi |
 |---|---|
-| Sửa ô / dán đè nhiều dòng | Gom các dòng bị sửa, đợi ~2 giây (gõ nhanh chỉ gửi 1 lần), đọc A:L rồi gửi `mode: "rows"`. Bỏ dòng trống, dòng tiêu đề khối, header. |
+| Sửa ô / dán đè nhiều dòng | Gom các dòng bị sửa, đợi ~2 giây (gõ nhanh chỉ gửi 1 lần), đọc A:L rồi gửi `mode: "rows"`. Gửi cả dòng vừa xoá trắng để server bỏ AWB cũ khỏi bản chụp tab. |
 | Chèn / xoá dòng, sắp xếp, dán cấu trúc | Gửi lại **cả tab** (`mode: "full"`) theo lô ≤ 200 dòng. |
 | Server vừa khởi động lại (chưa có bản chụp tab) | Server trả `needFullTab: true`, script tự gửi cả tab. |
 | Lỗi mạng / 5xx | Thử lại 3 lần (1 s, 2 s, 4 s). Vẫn lỗi thì ghi vào sheet ẩn `_sync_log`. |

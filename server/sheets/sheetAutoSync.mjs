@@ -12,6 +12,8 @@ import { recordSheetSync } from "./sheetRealtimeStatus.mjs";
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_MINUTES = 3;
+/** gviz có thể trễ vài phút so với Sheet — không ghi đè AWB webhook đã cập nhật trong khoảng này. */
+const WEBHOOK_QUIET_MS = 10 * 60 * 1000;
 
 export function autoSyncConfigFromEnv(env = process.env) {
   const enabled = String(env.SHEET_AUTO_SYNC ?? "").trim() === "1";
@@ -54,6 +56,8 @@ export async function runSheetAutoSyncOnce(deps = {}) {
   const sessions = [];
   try {
     for (const sessionDate of vnTodayAndTomorrow(now())) {
+      // Mốc lấy TRƯỚC khi tải lưới: webhook ghi trong lúc tải vẫn được giữ.
+      const skipWebhookSince = now() - WEBHOOK_QUIET_MS;
       let loaded;
       try {
         loaded = await loadGrid(sessionDate);
@@ -77,6 +81,7 @@ export async function runSheetAutoSyncOnce(deps = {}) {
         removeIds: [],
         wantReorder: false,
         io: deps.io,
+        skipWebhookSince,
       });
       const skipped = result.skipped.map((s) => ({
         awb: s.awb,

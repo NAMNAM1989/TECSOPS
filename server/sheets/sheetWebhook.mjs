@@ -173,7 +173,7 @@ export function createSheetWebhookHandler(deps = {}) {
   const getSpreadsheetId = deps.getSpreadsheetId ?? getBookSpreadsheetId;
   const now = deps.now ?? Date.now;
 
-  /** @type {Map<string, { rows: Map<number, string[]>, batchId: string, updatedAt: number }>} */
+  /** @type {Map<string, { rows: Map<number, string[]>, batchId: string, batchCount: number, received: Set<number>, updatedAt: number }>} */
   const snapshots = new Map();
   /** @type {Map<string, number>} khoá dòng+hash → thời điểm đã xử lý */
   const recentRows = new Map();
@@ -200,17 +200,25 @@ export function createSheetWebhookHandler(deps = {}) {
     if (payload.mode === "full") {
       let snap = snapshots.get(key);
       if (payload.batchIndex === 0) {
-        snap = { rows: new Map(), batchId: payload.batchId, updatedAt: nowMs };
+        snap = {
+          rows: new Map(),
+          batchId: payload.batchId,
+          batchCount: payload.batchCount,
+          received: new Set(),
+          updatedAt: nowMs,
+        };
         snapshots.set(key, snap);
       } else if (!snap || snap.batchId !== payload.batchId) {
         return false;
       }
       for (const r of payload.rows) snap.rows.set(r.rowNumber, r.values);
+      snap.received.add(payload.batchIndex);
       snap.updatedAt = nowMs;
       return true;
     }
     const snap = snapshots.get(key);
-    if (!snap) return false;
+    // Lần gửi cả tab bị đứt giữa chừng (Apps Script dừng khi một lô lỗi) → bản chụp thiếu, xin lại cả tab.
+    if (!snap || snap.received.size < snap.batchCount) return false;
     for (const r of payload.rows) snap.rows.set(r.rowNumber, r.values);
     snap.updatedAt = nowMs;
     return true;
@@ -299,6 +307,7 @@ export function createSheetWebhookHandler(deps = {}) {
             removeIds: [],
             wantReorder: false,
             io: deps.io,
+            webhookAt: nowMs,
           })
         : null;
     } catch (e) {

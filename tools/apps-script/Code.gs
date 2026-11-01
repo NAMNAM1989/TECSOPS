@@ -123,7 +123,7 @@ function flushPending_() {
   }
 }
 
-/** Gửi các dòng đã sửa (bỏ dòng trống / tiêu đề / header). */
+/** Gửi các dòng đã sửa — kể cả dòng vừa xoá trắng, để server bỏ AWB cũ khỏi bản chụp tab. */
 function pushRows_(sheet, rowNumbers) {
   var sorted = rowNumbers
     .filter(function (n) { return n >= 1 && n <= sheet.getMaxRows(); })
@@ -135,7 +135,7 @@ function pushRows_(sheet, rowNumbers) {
   var rows = [];
   sorted.forEach(function (n) {
     var values = block[n - first];
-    if (!values || isTitleOrHeader_(values)) return;
+    if (!values) return;
     rows.push({ rowNumber: n, values: values });
   });
   if (!rows.length) return null;
@@ -283,22 +283,6 @@ function readBlock_(sheet, startRow, numRows) {
     out.push(row);
   }
   return out;
-}
-
-function normText_(s) {
-  var t = String(s || "");
-  if (t.normalize) t = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  return t.toLowerCase();
-}
-
-/** Dòng tiêu đề khối («VLC-TECS», «CẬP NHẬT DANH SÁCH…») hoặc header «AWB/BOOKING». */
-function isTitleOrHeader_(values) {
-  var joined = normText_(values.join(" "));
-  if (!joined.trim()) return true;
-  if (joined.indexOf("cap nhat danh sach hang len san bay") >= 0) return true;
-  if (joined.indexOf("vlc-tecs") >= 0) return true;
-  var b = normText_(values[1]);
-  return b.indexOf("awb") >= 0 && b.indexOf("booking") >= 0;
 }
 
 /** Chia lô theo số dòng và kích thước JSON. */

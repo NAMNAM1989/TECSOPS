@@ -5,7 +5,7 @@ import { findAwbDigitsConflict } from "../utils/awbUnique";
 import { InlineNumberEdit } from "./InlineNumberEdit";
 import { InlineTextEdit } from "./InlineTextEdit";
 import { InlineCustomerEdit } from "./InlineCustomerEdit";
-import { OpsRowNoteControl } from "./OpsRowNoteControl";
+import { LotProfilePanel } from "./LotProfilePanel";
 import {
   formatYmdToFlightDateDdMon,
   parseBookingDateLoose,
@@ -20,15 +20,14 @@ import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { InlineAwbEdit } from "./InlineAwbEdit";
 import { LazyMobileDimKgModal } from "./LazyMobileDimKgModal";
 import { statusRowSelected, flightNumberAccent } from "./statusStyles";
-import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 import { normalizeWarehouse, warehouseLabel } from "../constants/warehouses";
 import { formatShipmentDimWeightDisplay } from "../utils/volumetricDim";
-import { InlineCustomerInfoCell } from "./InlineCustomerInfoCell";
-import { CneeDetailPopover } from "./CneeDetailPopover";
+import { buildShipmentCustomerDetailSections } from "../utils/shipmentCneeCopyBlock";
+import { findCustomerEntry } from "../utils/customerBookingResolve";
+import { formatSavedConsigneeShortLabel } from "../utils/customerConsigneeShipmentPatch";
 import { VehicleTypeMissingBadge } from "./VehicleTypeMissingBadge";
 import { useIsMobile } from "../hooks/useIsMobile";
 import {
-  validateInlineDimWeightKg,
   validateInlineKg,
   validateInlinePcs,
 } from "../utils/inlineShipmentFieldValidation";
@@ -75,12 +74,10 @@ interface Props {
 
 type ColHeader = { key: string; label: string; w: string; title?: string };
 
-/** Giữ một dòng mỗi mục — không kéo cao hàng. */
-const INFO_KH_W = "w-[12.5rem] max-w-[12.5rem]";
-/** Vừa đủ nội dung thật — không truncate AWB/chuyến; KHÁCH tối đa 2 dòng. */
+/** Vừa đủ nội dung thật — không truncate AWB/chuyến; Khách đúng 3 dòng. */
 const AWB_W = "w-[9rem] max-w-[9rem]";
 const FLIGHT_W = "w-[5rem] max-w-[5rem]";
-const CUSTOMER_W = "w-[8.75rem] max-w-[8.75rem]";
+const CUSTOMER_W = "w-[16rem] max-w-[16rem]";
 
 const COL_HEADERS: ColHeader[] = [
   { key: "stt", label: "#", w: "w-9" },
@@ -90,14 +87,12 @@ const COL_HEADERS: ColHeader[] = [
   { key: "pcs", label: "KIỆN", w: "w-14 text-right" },
   { key: "kg", label: "KG", w: "w-14 text-right" },
   { key: "dim", label: "DIM", w: "w-16 text-right" },
-  { key: "customer", label: "KHÁCH", w: CUSTOMER_W },
   {
-    key: "customerInfo",
-    label: "INFO KH",
-    w: INFO_KH_W,
-    title: "Shipper · CNEE · Tên hàng · CNEE in ấn",
+    key: "customer",
+    label: "Khách / hồ sơ",
+    w: CUSTOMER_W,
+    title: "Mã KH · CNEE · hàng — click hàng để mở hồ sơ",
   },
-  { key: "actions", label: "THAO TÁC", w: "min-w-[7.25rem]", title: "Ghi chú, in & menu" },
 ];
 
 export function DesktopShipmentTable({
@@ -358,15 +353,20 @@ export function DesktopShipmentTable({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [scrollMode]);
 
+  const selectedShipment = useMemo(
+    () => (selectedRowId ? group.find((r) => r.id === selectedRowId) ?? null : null),
+    [group, selectedRowId],
+  );
+
   return (
     <>
       <div
-        className={isMobile ? "hidden" : "hidden md:block space-y-1"}
+        className={isMobile ? "hidden" : "hidden md:flex md:items-stretch space-y-1"}
         data-testid="ops-desktop-shipment-table"
       >
         <section
           id={`warehouse-section-${activeWarehouse}`}
-          className="mx-0 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md md:mx-5 md:mt-4"
+          className="mx-0 min-w-0 flex-1 overflow-hidden rounded-2xl border border-ui-border/90 bg-ui-surface shadow-ui-md md:ml-5 md:mt-4"
         >
           <div className="flex items-center gap-2 border-b border-ui-border/80 bg-ui-surface px-4 py-2">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -442,7 +442,7 @@ export function DesktopShipmentTable({
                       key={c.key}
                       title={c.title}
                       className={`box-border px-1 py-1.5 text-2xs font-bold uppercase tracking-wider text-ui-text-muted ${
-                        c.key === "customerInfo" ? "truncate" : "whitespace-nowrap"
+                        c.key === "customer" ? "truncate" : "whitespace-nowrap"
                       } ${c.w} ${c.key === "awb" ? "ops-table-head" : ""}`}
                     >
                       {c.label}
@@ -500,9 +500,6 @@ export function DesktopShipmentTable({
                           onRowNavigate={handleRowNavigate}
                           onUpdate={onUpdate}
                           onUpdateCustomers={onUpdateCustomers}
-                          onDelete={onDelete}
-                          onPrint={onPrint}
-                          onInvoice={onInvoice}
                           onOpenDimModal={setDimModalRow}
                         />
                       );
@@ -538,9 +535,6 @@ export function DesktopShipmentTable({
                       onRowNavigate={handleRowNavigate}
                       onUpdate={onUpdate}
                       onUpdateCustomers={onUpdateCustomers}
-                      onDelete={onDelete}
-                      onPrint={onPrint}
-                      onInvoice={onInvoice}
                       onOpenDimModal={setDimModalRow}
                     />
                   ))
@@ -549,6 +543,15 @@ export function DesktopShipmentTable({
             </table>
           </div>
         </section>
+        <LotProfilePanel
+          shipment={selectedShipment}
+          customerDirectory={customerDirectory}
+          onUpdate={onUpdate}
+          onPrint={onPrint}
+          onDelete={onDelete}
+          onInvoice={onInvoice}
+          onOpenDim={setDimModalRow}
+        />
       </div>
       {dimModalRow ? (
         <LazyMobileDimKgModal
@@ -583,6 +586,93 @@ function WarehouseTotalChip({ label, value }: { label: string; value: string }) 
   );
 }
 
+function lotPrintNameDiffers(
+  row: Shipment,
+  directory: readonly CustomerDirectoryEntry[],
+): boolean {
+  const print = (row.consigneeNamePrint ?? "").trim();
+  if (!print) return false;
+  const entry = findCustomerEntry(row, directory);
+  const saved = entry?.savedConsignees?.find((x) => x.id === row.customerConsigneeId?.trim());
+  const profile = saved ? formatSavedConsigneeShortLabel(saved).trim() : "";
+  return Boolean(profile) && print.toUpperCase() !== profile.toUpperCase();
+}
+
+function LotCustomerScanCell({
+  row,
+  customerDirectory,
+  rowCellStatuses,
+  onUpdate,
+  onUpdateCustomers,
+  onRowNavigate,
+  navDownSameField,
+}: {
+  row: Shipment;
+  customerDirectory: readonly CustomerDirectoryEntry[];
+  rowCellStatuses?: Record<string, CellStatus>;
+  onUpdate: (id: string, patch: Partial<Shipment>) => void | Promise<boolean | void>;
+  onUpdateCustomers?: (
+    customers: CustomerDirectoryEntry[]
+  ) => Promise<boolean | void>;
+  onRowNavigate?: (rowId: string, field: TableGridField, dir: GridNavDirection) => void;
+  navDownSameField: (field: string) => () => void;
+}) {
+  const detail = buildShipmentCustomerDetailSections(row, customerDirectory);
+  const cneeText = detail.cneeEmpty ? "Chưa chọn" : detail.cnee.name;
+  const goodsText = detail.goodsEmpty ? "—" : detail.goodsLines[0] || "—";
+  const differs = lotPrintNameDiffers(row, customerDirectory);
+
+  return (
+    <div className="min-w-0">
+      <div className="flex min-w-0 items-center gap-1">
+        <div className="min-w-0 flex-1">
+          <InlineCustomerEdit
+            value={row.customer}
+            customerId={row.customerId}
+            profileSelection={row}
+            customerDirectory={customerDirectory}
+            placeholder="Khách"
+            className="min-w-0 truncate text-[12px] font-bold leading-tight text-ui-awb"
+            maxLength={120}
+            gridNav={{ rowId: row.id, field: "customer" }}
+            cellStatus={rowCellStatuses?.customer}
+            onCommit={(patch) => onUpdate(row.id, patch)}
+            onNavigate={(dir) => onRowNavigate?.(row.id, "customer", dir)}
+            onEnterNavigateDown={navDownSameField("customer")}
+            onTabNavigateNext={() =>
+              onRowNavigate
+                ? onRowNavigate(row.id, "customer", "next")
+                : focusShipmentGridCell(row.id, "note")
+            }
+          />
+        </div>
+        {differs ? (
+          <span className="shrink-0 rounded bg-amber-50 px-1 py-px text-[10px] font-bold uppercase text-amber-800 ring-1 ring-amber-300/70">
+            Tên in ≠
+          </span>
+        ) : null}
+        {onUpdateCustomers ? (
+          <VehicleTypeMissingBadge
+            shipment={row}
+            customerDirectory={customerDirectory}
+            onUpdateCustomers={onUpdateCustomers}
+          />
+        ) : null}
+      </div>
+      <div
+        className={`truncate text-[11px] leading-4 ${
+          detail.cneeEmpty ? "font-semibold text-amber-800" : "text-ui-text-muted"
+        }`}
+      >
+        <span className="font-bold text-ui-text-subtle">CNEE</span> {cneeText}
+      </div>
+      <div className="truncate text-[11px] leading-4 text-ui-text-muted">
+        <span className="font-bold text-ui-text-subtle">Hàng</span> {goodsText}
+      </div>
+    </div>
+  );
+}
+
 function ShipmentTableRowImpl({
   row,
   rowIdx,
@@ -597,9 +687,6 @@ function ShipmentTableRowImpl({
   onRowNavigate,
   onUpdate,
   onUpdateCustomers,
-  onDelete,
-  onPrint,
-  onInvoice,
   onOpenDimModal,
 }: {
   row: Shipment;
@@ -617,9 +704,6 @@ function ShipmentTableRowImpl({
   onUpdateCustomers?: (
     customers: CustomerDirectoryEntry[]
   ) => Promise<boolean | void>;
-  onDelete: (id: string) => void;
-  onPrint: (s: Shipment) => void;
-  onInvoice?: (s: Shipment) => void;
   onOpenDimModal: (s: Shipment) => void;
 }) {
   const toast = useToast();
@@ -802,123 +886,29 @@ function ShipmentTableRowImpl({
         />
       </td>
       <td className={cell("mid", "text-right align-top")}>
-        <div className="flex flex-col items-end gap-0.5">
-          {(row.dimLines?.length ?? 0) > 0 ? (
-            <span className="font-shipment-data text-[12px] font-semibold tabular-nums ops-grid-cell">
-              {formatShipmentDimWeightDisplay(row)}
-            </span>
-          ) : (
-            <InlineNumberEdit
-              value={row.dimWeightKg}
-              placeholder="—"
-              title="Click để sửa DIM kg"
-              className="font-shipment-data text-right text-[12px] font-semibold tabular-nums text-ui-text"
-              gridNav={{ rowId: row.id, field: "dimKg" }}
-              cellStatus={rowCellStatuses?.dimKg}
-              validate={validateInlineDimWeightKg}
-              onCommit={(v) =>
-                onUpdate(row.id, {
-                  dimWeightKg: v,
-                  dimLines: null,
-                  dimDivisor: null,
-                })
-              }
-              onNavigate={(dir) => onRowNavigate?.(row.id, "dimKg", dir)}
-              onEnterNavigateDown={navDownSameField("dimKg")}
-            />
-          )}
-          <button
-            type="button"
-            aria-label="Sửa DIM"
-            title="Sửa DIM (D×R×C)"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenDimModal(row);
-            }}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-ui-primary/35 bg-ui-primary/10 text-ui-primary hover:bg-ui-primary/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus"
-          >
-            <svg
-              className="h-3.5 w-3.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
-              aria-hidden
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-              />
-            </svg>
-          </button>
-        </div>
+        <button
+          type="button"
+          aria-label="Sửa DIM"
+          title="Sửa DIM (D×R×C)"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenDimModal(row);
+          }}
+          className="w-full text-right font-shipment-data text-[12px] font-semibold tabular-nums ops-grid-cell hover:text-ui-primary"
+        >
+          {(row.dimLines?.length ?? 0) > 0 ? formatShipmentDimWeightDisplay(row) : "—"}
+        </button>
       </td>
-      <td className={cell("mid", `box-border ${CUSTOMER_W} align-top`)}>
-        <div className="flex w-full items-start gap-0.5">
-          <div className="min-w-0 flex-1">
-            <InlineCustomerEdit
-              value={row.customer}
-              customerId={row.customerId}
-              profileSelection={row}
-              customerDirectory={customerDirectory}
-              placeholder="Khách"
-              className="min-w-0 whitespace-normal break-words text-[12px] font-bold leading-tight text-ui-awb line-clamp-2"
-              maxLength={120}
-              gridNav={{ rowId: row.id, field: "customer" }}
-              cellStatus={rowCellStatuses?.customer}
-              onCommit={(patch) => onUpdate(row.id, patch)}
-              onNavigate={(dir) => onRowNavigate?.(row.id, "customer", dir)}
-              onEnterNavigateDown={navDownSameField("customer")}
-              onTabNavigateNext={() => onRowNavigate ? onRowNavigate(row.id, "customer", "next") : focusShipmentGridCell(row.id, "note")}
-            />
-          </div>
-          {onUpdateCustomers ? (
-            <VehicleTypeMissingBadge
-              shipment={row}
-              customerDirectory={customerDirectory}
-              onUpdateCustomers={onUpdateCustomers}
-            />
-          ) : null}
-          <CneeDetailPopover
-            shipment={row}
-            customerDirectory={customerDirectory}
-            sessionYmdFallback={viewSessionYmd}
-            className="mt-0.5 shrink-0"
-          />
-        </div>
-      </td>
-      <td
-        className={cell(
-          "mid",
-          `box-border ${INFO_KH_W} align-middle overflow-hidden`,
-        )}
-      >
-        <div className="min-w-0 w-full max-w-[12.5rem] overflow-hidden">
-          <InlineCustomerInfoCell
-            shipment={row}
-            customerDirectory={customerDirectory}
-            sessionYmdFallback={viewSessionYmd}
-            onUpdate={(patch) => onUpdate(row.id, patch)}
-          />
-        </div>
-      </td>
-      <td className={cell("last", "overflow-visible py-0.5 align-middle")}>
-        <div className="flex items-center justify-end gap-0.5">
-          <OpsRowNoteControl
-            rowId={row.id}
-            value={row.note ?? ""}
-            onCommit={(v) => onUpdate(row.id, { note: v })}
-            onNavigate={(dir) => onRowNavigate?.(row.id, "note", dir)}
-          />
-          <ShipmentRowActionsMenu
-            row={row}
-            customerDirectory={customerDirectory}
-            onPrint={onPrint}
-            onDelete={onDelete}
-            onInvoice={onInvoice}
-          />
-        </div>
+      <td className={cell("last", `box-border ${CUSTOMER_W} align-top`)}>
+        <LotCustomerScanCell
+          row={row}
+          customerDirectory={customerDirectory}
+          rowCellStatuses={rowCellStatuses}
+          onUpdate={onUpdate}
+          onUpdateCustomers={onUpdateCustomers}
+          onRowNavigate={onRowNavigate}
+          navDownSameField={navDownSameField}
+        />
       </td>
     </tr>
   );
@@ -981,11 +971,8 @@ export const ShipmentTableRow = memo(ShipmentTableRowImpl, (prev, next) => {
     prev.findAwbConflict === next.findAwbConflict &&
     prev.getNeighborRowId === next.getNeighborRowId &&
     prev.onRowNavigate === next.onRowNavigate &&
-    prev.onInvoice === next.onInvoice &&
     prev.onUpdate === next.onUpdate &&
     prev.onUpdateCustomers === next.onUpdateCustomers &&
-    prev.onDelete === next.onDelete &&
-    prev.onPrint === next.onPrint &&
     prev.onOpenDimModal === next.onOpenDimModal &&
     prev.onSelectRow === next.onSelectRow
   );

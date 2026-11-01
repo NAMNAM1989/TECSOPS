@@ -34,7 +34,7 @@ const row = {
 } as Shipment;
 
 describe("MobileShipmentCards", () => {
-  it("card 2 dòng denser: AWB+DST+chuyến · khách+kg; không editor K/Kg", () => {
+  it("card 3 dòng: AWB+DST+chuyến · khách+kg · CNEE/Hàng; không editor K/Kg", () => {
     const html = renderToStaticMarkup(
       <MobileShipmentCards
         rows={[row]}
@@ -56,7 +56,8 @@ describe("MobileShipmentCards", () => {
     expect(html).toContain("font-bold");
     expect(html).toContain("text-ui-navy");
     expect(html).not.toContain(">K<");
-    expect(html).not.toContain("CNEE");
+    expect(html).toContain("CNEE");
+    expect(html).toContain("Hàng");
     expect(html).toContain("row-actions-menu-s1");
   });
 

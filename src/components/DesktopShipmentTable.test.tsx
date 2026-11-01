@@ -72,9 +72,10 @@ describe("DesktopShipmentTable density", () => {
     expect(html).toContain("sticky left-0");
     expect(html).toContain("AWB / HAWB");
     expect(html).toContain("CHUYẾN");
-    expect(html).toContain("INFO KH");
+    expect(html).toContain("Khách / hồ sơ");
+    expect(html).not.toContain("INFO KH");
     expect(html).not.toContain("STATUS");
-    expect(html).toContain("THAO TÁC");
+    expect(html).not.toContain("THAO TÁC");
     expect(html).toContain("176");
     expect(html).toContain('data-testid="ops-warehouse-totals"');
     expect(html).toContain("Kiện");
@@ -101,15 +102,15 @@ describe("DesktopShipmentTable density", () => {
     expect(html).toContain('data-lot-tone="1"');
   });
 
-  it("bảng desktop không còn cột STATUS; menu thao tác vẫn overflow-visible", () => {
+  it("bảng desktop không còn cột STATUS; thao tác chuyển sang panel hồ sơ", () => {
     const html = renderTable();
     expect(html).not.toContain("Trạng thái lô");
     expect(html).not.toContain("h-7 w-full min-w-0 truncate px-1.5 text-2xs");
-    expect(html).toContain("overflow-visible py-0.5");
-    expect(html).toContain("row-actions-menu-s1");
+    expect(html).not.toContain("row-actions-menu-s1");
+    expect(html).toContain("lot-profile-panel");
   });
 
-  it("INFO KH giữ 3 dòng một hàng; địa chỉ chỉ nằm trong tooltip", () => {
+  it("cột Khách / hồ sơ đúng 3 dòng; địa chỉ không nằm trên hàng", () => {
     const rich = {
       ...row,
       consigneeNamePrint: "Australasian Mail Services",
@@ -117,12 +118,35 @@ describe("DesktopShipmentTable density", () => {
       consigneePhonePrint: "+61 3 9338 6622",
     } as Shipment;
     const html = renderTable([rich]);
-    expect(html).toContain("max-w-[12.5rem]");
-    expect(html).toContain("h-3.5 w-full truncate");
-    expect(html).toContain("Australasian Mail Services");
-    expect(html).toContain("75 Harrick Road");
+    expect(html).toContain("Khách / hồ sơ");
+    expect(html).toContain("CNEE");
+    expect(html).toContain("Hàng");
+    expect(html).not.toContain("75 Harrick Road");
     expect(html).not.toContain("line-clamp-4");
-    expect(html).not.toContain("w-[22rem]");
+    expect(html).not.toContain("INFO KH");
+  });
+
+  it("chọn lô thì panel có In tem, Đo DIM và hồ sơ khách", () => {
+    const html = renderToStaticMarkup(
+      <ToastProvider>
+        <DesktopShipmentTable
+          rows={[row]}
+          allRows={[row]}
+          activeWarehouse="TCS"
+          selectedRowId={row.id}
+          onSelectRow={() => undefined}
+          onUpdate={() => undefined}
+          onDelete={() => undefined}
+          onPrint={() => undefined}
+          onAddBlankRow={() => undefined}
+          viewSessionYmd="2026-08-23"
+        />
+      </ToastProvider>,
+    );
+    expect(html).toContain("lot-profile-panel");
+    expect(html).toContain("In tem");
+    expect(html).toContain("Đo DIM");
+    expect(html).toContain("Copy AWB");
   });
 
   it("empty state vẫn + Booking primary ≥44px", () => {
@@ -180,8 +204,6 @@ describe("DesktopShipmentTable density", () => {
       customerDirectory: [],
       findAwbConflict: () => null,
       onUpdate: () => undefined,
-      onDelete: () => undefined,
-      onPrint: () => undefined,
       onOpenDimModal: () => undefined,
     };
 

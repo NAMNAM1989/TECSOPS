@@ -59,6 +59,9 @@ type Props = {
   focusField?: MobileEditFocus;
   onClose: () => void;
   onSave: (patch: Partial<Shipment>) => void;
+  onPrint?: (s: Shipment) => void;
+  onInvoice?: (s: Shipment) => void;
+  onDelete?: (id: string) => void;
   onUpdateCustomers?: (
     customers: CustomerDirectoryEntry[],
   ) => Promise<boolean | void> | boolean | void;
@@ -79,6 +82,9 @@ export function MobileShipmentEditSheet({
   focusField = null,
   onClose,
   onSave,
+  onPrint,
+  onInvoice,
+  onDelete,
   onUpdateCustomers,
 }: Props) {
   const isMobile = useIsMobile();
@@ -303,6 +309,61 @@ export function MobileShipmentEditSheet({
               ✕
             </button>
           </div>
+
+          {onPrint || onInvoice ? (
+            <div className="mx-3 mt-2 rounded-xl border border-ui-border/80 bg-ui-primary-soft/80 px-3 py-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-ui-primary text-[14px] font-bold text-white"
+                  onClick={() => shipment && onPrint?.(shipment)}
+                >
+                  In tem
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-ui-primary/40 bg-white text-[14px] font-bold text-ui-primary"
+                  onClick={() => setDimOpen(true)}
+                >
+                  Đo DIM
+                </button>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-white text-[12px] font-bold"
+                  onClick={() => {
+                    if (!shipment?.awb?.trim()) return;
+                    void copyTextToClipboard(shipment.awb.trim());
+                  }}
+                >
+                  Copy AWB
+                </button>
+                {onInvoice ? (
+                  <button
+                    type="button"
+                    className="inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-white text-[12px] font-bold"
+                    onClick={() => shipment && onInvoice(shipment)}
+                  >
+                    H21
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="inline-flex h-9 items-center justify-center rounded-lg border border-ui-border bg-white text-[12px] font-bold"
+                    onClick={() => {
+                      if (onDelete && shipment && confirm(`Xóa lô AWB ${shipment.awb || "(chưa có AWB)"}?`)) {
+                        onDelete(shipment.id);
+                        onClose();
+                      }
+                    }}
+                  >
+                    Xóa lô
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : null}
 
           <div className="mx-3 my-2 flex gap-1 rounded-xl bg-ui-surface-muted p-1">
             {TABS.map((t) => (

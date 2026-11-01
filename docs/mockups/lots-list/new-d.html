@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TECSOPS — D · inbox split</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #f2f0eb;
+        --paper: #ffffff;
+        --quiet: #ebe9e2;
+        --ink: #292827;
+        --muted: #6b6860;
+        --purple: #734cb6;
+        --purple-soft: #f3eefb;
+        --line: #e4e0d6;
+        --warn: #9A6700;
+        --warn-bg: #FFF6D6;
+        --danger: #B42318;
+        --live: #099250;
+        --ease: cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+      .label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+      button { font-family: inherit; cursor: default; }
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line);
+        background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 600;
+      }
+      .btn-p { background: var(--purple); color: #fff; border-color: transparent; }
+      .thread { padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--paper); }
+      .thread.sel { background: var(--purple-soft); box-shadow: inset 3px 0 0 var(--purple); }
+      .print { font-size: 9px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--warn); background: var(--warn-bg); border-radius: 3px; padding: 1px 5px; }
+      .dot { width: 7px; height: 7px; border-radius: 99px; background: var(--purple); flex-shrink: 0; }
+      .kbd { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; color: var(--muted); background: var(--quiet); }
+      html.show-sheet .mobile-sheet { display: flex !important; }
+      @media (min-width: 768px) { .mobile-only { display: none !important; } }
+      @media (max-width: 767px) { .desktop-only { display: none !important; } }
+    </style>
+  </head>
+  <body>
+    <div class="desktop-only" style="height:100vh;overflow:hidden;display:flex">
+      <aside style="width:52px;flex-shrink:0;background:var(--ink);color:#fff;display:flex;flex-direction:column;align-items:center;padding:12px 0 16px;gap:6px">
+        <div class="mono" style="width:34px;height:34px;border-radius:8px;background:var(--purple);display:grid;place-items:center;font-size:8px;font-weight:800;line-height:1.05;text-align:center">AC<br>OPS</div>
+        <span style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.1);display:grid;place-items:center">
+          <svg width="16" height="16" fill="none" stroke="#fff" stroke-width="1.7"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 5.5 8 9l6-3.5"/></svg>
+        </span>
+        <span style="width:36px;height:36px;border-radius:8px;color:rgba(255,255,255,.45);display:grid;place-items:center">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="8" cy="6" r="2.2"/><path d="M3.5 13c0-2 2-3.2 4.5-3.2S12.5 11 12.5 13"/></svg>
+        </span>
+        <span style="width:36px;height:36px;border-radius:8px;color:rgba(255,255,255,.45);display:grid;place-items:center;font-size:9px;font-weight:800">H21</span>
+        <div style="margin-top:auto;width:7px;height:7px;border-radius:99px;background:var(--live)"></div>
+      </aside>
+
+      <section style="width:420px;flex-shrink:0;background:var(--paper);border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0">
+        <div style="height:52px;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--line)">
+          <div class="mono" style="display:flex;align-items:center;height:30px;border:1px solid var(--line);border-radius:8px;font-size:11px;font-weight:600">
+            <span style="width:22px;text-align:center;color:var(--muted)">‹</span>
+            <span style="width:92px;text-align:center">12-OCT-2026</span>
+            <span style="width:22px;text-align:center;color:var(--muted)">›</span>
+          </div>
+          <span class="mono" style="font-size:11px;font-weight:600;color:var(--muted)">8 · 1.057kg</span>
+          <span style="margin-left:auto;height:22px;padding:0 7px;border-radius:99px;background:var(--ink);color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center">TCS 8</span>
+        </div>
+        <div style="padding:8px 12px;border-bottom:1px solid var(--line);background:var(--bg)">
+          <div style="height:34px;border:1px solid var(--line);border-radius:8px;background:var(--paper);display:flex;align-items:center;padding:0 10px;font-size:13px;color:var(--muted)">AWB · khách · CNEE · hàng <span class="kbd" style="margin-left:auto">⌘K</span></div>
+        </div>
+        <div style="flex:1;overflow:hidden">
+          <article class="thread">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dot" style="visibility:hidden"></span>
+              <span style="font-size:13px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">NAMNAM LOGISTICS</span>
+              <span class="mono" style="font-size:11px;color:var(--muted)">14:30</span>
+            </div>
+            <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">618-1234 5675 · SQ 183 · SIN</div>
+            <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> SIN AGENT · <b>Hàng</b> GOH · 12K / 186.4</div>
+          </article>
+          <article class="thread sel">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dot"></span>
+              <span style="font-size:13px;font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ASIA FREIGHT <span class="print">Tên in ≠</span></span>
+              <span class="mono" style="font-size:11px;font-weight:700;color:var(--danger)">13:15</span>
+            </div>
+            <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:700">160-9876 5432 · CX 766 · HKG</div>
+            <div style="margin:2px 0 0 15px;font-size:11px;color:#53486a"><b>CNEE</b> HKG CONSOL · <b>Hàng</b> Electronics · 8K / 92.0</div>
+          </article>
+          <article class="thread">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dot" style="visibility:hidden"></span>
+              <span style="font-size:13px;font-weight:600;flex:1">SAIGON AIR CARGO</span>
+              <span class="mono" style="font-size:11px;color:var(--muted)">18:00</span>
+            </div>
+            <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">738-1122 3344 · VN 301 · SGN</div>
+            <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> XYZ TRADING · <b>Hàng</b> Textile · 4K / 45.5</div>
+          </article>
+          <article class="thread">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dot" style="visibility:hidden"></span>
+              <span style="font-size:13px;font-weight:600;flex:1">HANOI EXPRESS</span>
+              <span class="mono" style="font-size:11px;color:var(--muted)">16:40</span>
+            </div>
+            <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">176-5566 7788 · VN 305 · HAN</div>
+            <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> HAN SPARES · <b>Hàng</b> Spare parts · 20K / 310.2</div>
+          </article>
+          <article class="thread">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dot" style="visibility:hidden"></span>
+              <span style="font-size:13px;font-weight:600;flex:1">LION STAR</span>
+              <span class="mono" style="font-size:11px;color:var(--muted);text-decoration:line-through">12:00</span>
+            </div>
+            <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">232-4433 2211 · SQ 178 · SIN</div>
+            <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> PER DOCS · <b>Hàng</b> PER · 6K / 71.8</div>
+          </article>
+          <article class="thread">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dot" style="visibility:hidden"></span>
+              <span style="font-size:13px;font-weight:600;flex:1">PACIFIC GATE</span>
+              <span class="mono" style="font-size:11px;color:var(--muted)">17:20</span>
+            </div>
+            <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">618-9988 7766 · CX 799 · HKG</div>
+            <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> HKG AGENT · <b>Hàng</b> Electronics · 15K / 204.0</div>
+          </article>
+          <article class="thread">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dot"></span>
+              <span style="font-size:13px;font-weight:600;flex:1">DANANG HUB</span>
+              <span class="mono" style="font-size:11px;color:var(--warn)">+1d 20:10</span>
+            </div>
+            <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">607-3344 5566 · VN 309 · DAD</div>
+            <div style="margin:2px 0 0 15px;font-size:11px;color:var(--warn)"><b>CNEE</b> Chưa chọn · <b>Hàng</b> Fresh · 3K / 28.6</div>
+          </article>
+          <article class="thread">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dot"></span>
+              <span style="font-size:13px;font-weight:600;flex:1">MEKONG AIR</span>
+              <span class="mono" style="font-size:11px;font-weight:700;color:var(--danger)">15:00</span>
+            </div>
+            <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">180-2211 3344 · SQ 184 · SIN</div>
+            <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> DEF TRADING · <b>Hàng</b> GOH · 9K / 118.5</div>
+          </article>
+        </div>
+      </section>
+
+      <main style="flex:1;min-width:0;background:var(--bg);display:flex;flex-direction:column">
+        <header style="background:var(--paper);border-bottom:1px solid var(--line);padding:16px 28px 14px">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+            <div>
+              <p class="label" style="margin:0 0 4px">Hồ sơ lô</p>
+              <h1 class="mono" style="margin:0;font-size:28px;font-weight:700;letter-spacing:-0.04em">160-9876 5432</h1>
+              <p class="mono" style="margin:6px 0 0;font-size:13px;color:var(--muted)">CX 766 · 12OCT · 13:15 GẤP · HKG · 8K / 92.0kg</p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn" type="button">Copy AWB <span class="kbd" style="margin-left:6px">⌘C</span></button>
+              <button class="btn" type="button">+ Booking</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn btn-p" type="button" style="height:40px;padding:0 18px">In tem <span class="kbd" style="margin-left:8px;border-color:rgba(255,255,255,.25);background:transparent;color:#fff">⌘P</span></button>
+            <button class="btn" type="button" style="height:40px;padding:0 18px;border-color:var(--purple);color:var(--purple)">Đo DIM</button>
+            <button class="btn" type="button" style="height:40px">Copy hồ sơ</button>
+            <button class="btn" type="button" style="height:40px">Ghi chú</button>
+            <button class="btn" type="button" style="height:40px">H21</button>
+          </div>
+        </header>
+        <div style="flex:1;overflow:hidden;padding:20px 28px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <section style="background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:16px 18px">
+            <p class="label" style="margin:0 0 10px">Khách / shipper</p>
+            <p style="margin:0;font-size:18px;font-weight:700;letter-spacing:-0.02em">ASIA FREIGHT <span class="mono" style="font-size:12px;color:var(--purple);font-weight:600">AFR</span></p>
+            <p style="margin:8px 0 0;font-size:13px;font-weight:600">ASIA FREIGHT CO., LTD</p>
+            <p style="margin:4px 0 0;font-size:13px;line-height:18px;color:var(--muted)">12F Warehouse Rd, Kwai Chung, HKG</p>
+            <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+              <p class="label" style="margin:0 0 8px">Hàng</p>
+              <p style="margin:0;font-size:15px;font-weight:600">Electronics / CONSOL</p>
+              <p class="mono" style="margin:6px 0 0;font-size:12px;color:var(--muted)">8 kiện · 92.0 kg</p>
+            </div>
+          </section>
+          <section style="background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:16px 18px">
+            <p class="label" style="margin:0 0 10px">CNEE</p>
+            <p style="margin:0;font-size:16px;font-weight:700">HONG KONG CONSOL LTD</p>
+            <div style="margin-top:12px;border:1px dashed #E9B200;background:var(--warn-bg);border-radius:10px;padding:12px 14px">
+              <p class="label" style="margin:0 0 6px;color:var(--warn)">Tên in ≠ hồ sơ</p>
+              <p style="margin:0;font-size:15px;font-weight:700">Australasian Mail Services</p>
+              <p style="margin:4px 0 12px;font-size:12px;color:var(--muted)">75 Harrick Road, Keilor Park VIC 3043</p>
+              <button class="btn btn-p" type="button" style="width:100%;height:36px">In tem với tên này</button>
+            </div>
+          </section>
+          <section style="grid-column:1 / -1;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:16px 18px">
+            <p class="label" style="margin:0 0 10px">Ghi chú ca · không hiện trên hàng list</p>
+            <p style="margin:0;font-size:13px;line-height:20px;color:var(--ink)">CNEE yêu cầu in <b>Australasian Mail Services</b> — khác hồ sơ HKG CONSOL. Đo DIM trước 13:00 nếu còn pallet.</p>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+              <p style="margin:0;font-size:12px;color:var(--muted)">Thao tác phụ</p>
+              <div style="display:flex;gap:8px">
+                <button class="btn" type="button" style="border:0;background:transparent;color:var(--muted)">Excel DIM</button>
+                <button class="btn" type="button" style="border:0;background:transparent;color:var(--danger)">Xóa lô</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div class="mobile-only" style="min-height:100vh;background:var(--bg)">
+      <header style="position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1px solid var(--line);padding:8px 12px 10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:16px;font-weight:700;letter-spacing:-0.03em">Hộp thư lô</span>
+          <span class="mono" style="margin-left:auto;font-size:11px;font-weight:600;color:var(--muted)">12-OCT · 8</span>
+        </div>
+        <div style="margin-top:8px;height:38px;border:1px solid var(--line);border-radius:10px;background:var(--quiet);display:flex;align-items:center;padding:0 12px;font-size:14px;color:var(--muted)">Tìm AWB / khách / CNEE</div>
+      </header>
+      <article class="thread">
+        <div style="display:flex;align-items:center;gap:8px"><span class="dot" style="visibility:hidden"></span><b style="font-size:13px">NAMNAM LOGISTICS</b><span class="mono" style="margin-left:auto;font-size:11px;color:var(--muted)">14:30</span></div>
+        <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">618-1234 5675 · SQ 183</div>
+        <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> SIN AGENT · <b>Hàng</b> GOH</div>
+      </article>
+      <article class="thread sel">
+        <div style="display:flex;align-items:center;gap:8px"><span class="dot"></span><b style="font-size:13px">ASIA FREIGHT</b><span class="print">Tên in ≠</span><span class="mono" style="margin-left:auto;font-size:11px;font-weight:700;color:var(--danger)">13:15</span></div>
+        <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:700">160-9876 5432 · CX 766 · HKG</div>
+        <div style="margin:2px 0 0 15px;font-size:11px;color:#53486a"><b>CNEE</b> HKG CONSOL · <b>Hàng</b> Electronics</div>
+      </article>
+      <article class="thread">
+        <div style="display:flex;align-items:center;gap:8px"><span class="dot" style="visibility:hidden"></span><b style="font-size:13px">SAIGON AIR CARGO</b><span class="mono" style="margin-left:auto;font-size:11px;color:var(--muted)">18:00</span></div>
+        <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">738-1122 3344 · VN 301</div>
+        <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> XYZ TRADING · <b>Hàng</b> Textile</div>
+      </article>
+      <article class="thread">
+        <div style="display:flex;align-items:center;gap:8px"><span class="dot" style="visibility:hidden"></span><b style="font-size:13px">HANOI EXPRESS</b><span class="mono" style="margin-left:auto;font-size:11px;color:var(--muted)">16:40</span></div>
+        <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">176-5566 7788 · VN 305</div>
+        <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> HAN SPARES · <b>Hàng</b> Spare parts</div>
+      </article>
+      <article class="thread">
+        <div style="display:flex;align-items:center;gap:8px"><span class="dot" style="visibility:hidden"></span><b style="font-size:13px">LION STAR</b><span class="mono" style="margin-left:auto;font-size:11px;color:var(--muted);text-decoration:line-through">12:00</span></div>
+        <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">232-4433 2211 · SQ 178</div>
+        <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> PER DOCS · <b>Hàng</b> PER</div>
+      </article>
+      <article class="thread">
+        <div style="display:flex;align-items:center;gap:8px"><span class="dot" style="visibility:hidden"></span><b style="font-size:13px">PACIFIC GATE</b><span class="mono" style="margin-left:auto;font-size:11px;color:var(--muted)">17:20</span></div>
+        <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">618-9988 7766 · CX 799</div>
+        <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> HKG AGENT · <b>Hàng</b> Electronics</div>
+      </article>
+      <article class="thread">
+        <div style="display:flex;align-items:center;gap:8px"><span class="dot"></span><b style="font-size:13px">DANANG HUB</b><span class="mono" style="margin-left:auto;font-size:11px;color:var(--warn)">+1d</span></div>
+        <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">607-3344 5566 · VN 309</div>
+        <div style="margin:2px 0 0 15px;font-size:11px;color:var(--warn)"><b>CNEE</b> Chưa chọn · <b>Hàng</b> Fresh</div>
+      </article>
+      <article class="thread">
+        <div style="display:flex;align-items:center;gap:8px"><span class="dot"></span><b style="font-size:13px">MEKONG AIR</b><span class="mono" style="margin-left:auto;font-size:11px;font-weight:700;color:var(--danger)">15:00</span></div>
+        <div class="mono" style="margin:3px 0 0 15px;font-size:12px;font-weight:600">180-2211 3344 · SQ 184</div>
+        <div style="margin:2px 0 0 15px;font-size:11px;color:var(--muted)"><b>CNEE</b> DEF TRADING · <b>Hàng</b> GOH</div>
+      </article>
+      <div class="mobile-sheet" style="display:none;position:fixed;inset:0;z-index:40;background:var(--bg);flex-direction:column">
+        <div style="background:var(--paper);padding:12px 16px 16px;border-bottom:1px solid var(--line)">
+          <p class="label" style="margin:0">Hồ sơ lô</p>
+          <p class="mono" style="margin:6px 0 0;font-size:22px;font-weight:700">160-9876 5432</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+            <button class="btn btn-p" type="button" style="height:44px">In tem</button>
+            <button class="btn" type="button" style="height:44px;color:var(--purple);border-color:var(--purple)">Đo DIM</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

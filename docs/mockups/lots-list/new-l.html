@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TECSOPS — L · phiếu lô giấy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #5C5C5C;
+        --paper: #FFFDF7;
+        --rule: #1A1A1A;
+        --ink: #111111;
+        --muted: #5A5348;
+        --excel: #217346;
+        --line: #C7C7C7;
+        --sel: #C6EFCE;
+        --warn: #B45309;
+        --danger: #B91C1C;
+        --teal: #0F766E;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body { margin: 0; font-family: Inter, ui-sans-serif, sans-serif; background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+      .serif { font-family: "Libre Baskerville", Georgia, serif; }
+      .label { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+      .cd { color: var(--excel); font-weight: 700; }
+      button { font-family: inherit; cursor: default; }
+      .btn { display: inline-flex; align-items: center; justify-content: center; height: 30px; padding: 0 10px; border-radius: 4px; border: 1px solid #C4BBA8; background: #fff; font-size: 12px; font-weight: 600; }
+      .btn-t { background: var(--teal); color: #fff; border-color: transparent; }
+      .box { border: 1px solid var(--rule); }
+      .edit { background: #FFFBEA; outline: 1px dashed #C4A35A; }
+      table.grid { border-collapse: collapse; font-size: 11px; width: 100%; }
+      table.grid th, table.grid td { border: 1px solid #B0B0B0; padding: 0 5px; height: 22px; white-space: nowrap; }
+      table.grid thead th { background: #EEE; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #555; }
+      .pin { position: sticky; left: 0; background: #fff; }
+      tr.sel td, tr.sel .pin { background: var(--sel); }
+      @media (min-width: 768px) { .mobile-only { display: none !important; } }
+      @media (max-width: 767px) { .desktop-only { display: none !important; } }
+    </style>
+  </head>
+  <body>
+    <div class="desktop-only" style="height:100vh;overflow:hidden;display:flex;flex-direction:column">
+      <div style="height:36px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--excel);color:#fff">
+        <span class="mono" style="font-size:12px;font-weight:700">TECSOPS · lưới 12-OCT · 8 lô</span>
+        <span style="margin-left:auto;font-size:11px;opacity:.9">L · phiếu lô · AWB / SLI / QF/ED/49 · modal trên lưới</span>
+      </div>
+      <div style="flex:1;min-height:0;position:relative;background:#D8D8D8">
+        <div style="position:absolute;inset:0;opacity:.28;overflow:hidden;pointer-events:none">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th class="pin">AWB</th><th>Chuyến</th><th>Cut-off</th><th>Kg</th><th>KH</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="pin mono">618-12345675</td><td>SQ 183</td><td>14:30</td><td>186.4</td><td>NAMNAM</td></tr>
+              <tr class="sel"><td class="pin mono">160-98765432</td><td>CX 766</td><td>13:15</td><td>92.0</td><td>ASIA FREIGHT</td></tr>
+              <tr><td class="pin mono">738-11223344</td><td>VN 301</td><td>18:00</td><td>45.5</td><td>SAIGON</td></tr>
+              <tr><td class="pin mono">176-55667788</td><td>VN 305</td><td>16:40</td><td>310.2</td><td>HANOI</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="position:absolute;inset:0;background:rgba(40,36,28,.45)"></div>
+
+        <article style="position:absolute;left:50%;top:10px;transform:translateX(-50%);width:980px;height:840px;background:var(--paper);box-shadow:0 18px 50px rgba(0,0,0,.35);border:1px solid #C9C1B0;display:flex;flex-direction:column;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#F3EFE4;border-bottom:1px solid #D7CFBE">
+            <span class="label">Phiếu lô · tab mới / modal</span>
+            <span class="mono" style="font-size:11px;color:var(--muted)">sửa tại chỗ · in A4</span>
+            <span style="margin-left:auto;display:flex;gap:6px">
+              <button class="btn btn-t" type="button">In phiếu</button>
+              <button class="btn" type="button">In tem</button>
+              <button class="btn" type="button">Đóng</button>
+            </span>
+          </div>
+
+          <div style="flex:1;padding:12px 16px 14px;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--rule);padding-bottom:8px">
+              <div>
+                <p class="serif" style="margin:0;font-size:11px;letter-spacing:0.14em">TAN SON NHAT CARGO SERVICES</p>
+                <p class="serif" style="margin:4px 0 0;font-size:18px;font-weight:700">PHIẾU LÔ / LOT SLIP</p>
+                <p class="label" style="margin:4px 0 0">Kết QF/ED/49 · SLI VNA · IATA AWB face</p>
+              </div>
+              <div style="text-align:right">
+                <p class="label" style="margin:0">Air Waybill No.</p>
+                <p class="mono" style="margin:2px 0 0;font-size:22px;font-weight:700;letter-spacing:-0.03em">160-9876543<span class="cd">2</span></p>
+                <p class="mono" style="margin:2px 0 0;font-size:11px">HAWB HKG-4411 · CD IATA 600a</p>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-top:8px">
+              <div class="box" style="padding:7px 8px;border-right:0">
+                <p class="label" style="margin:0 0 3px">2. Shipper’s Name and Address</p>
+                <p class="edit" style="margin:0;font-size:12px;font-weight:700;padding:2px 4px">ASIA FREIGHT CO., LTD</p>
+                <p style="margin:3px 0 0;font-size:11px;color:var(--muted)">12F Warehouse Rd, Kwai Chung, HKG</p>
+              </div>
+              <div class="box" style="padding:7px 8px;border-right:0">
+                <p class="label" style="margin:0 0 3px">4. Consignee’s Name and Address</p>
+                <p style="margin:0;font-size:12px;font-weight:700">HONG KONG CONSOL LTD</p>
+                <p style="margin:3px 0 0;font-size:11px;color:var(--muted)">savedConsignees · AFR Electronics</p>
+              </div>
+              <div class="box" style="padding:7px 8px">
+                <p class="label" style="margin:0 0 3px">Airport of Departure / Dest / Flight</p>
+                <p class="mono" style="margin:0;font-size:13px;font-weight:700">SGN → HKG · CX 766</p>
+                <p class="mono" style="margin:3px 0 0;font-size:12px;color:var(--danger);font-weight:700">Cut-off 13:15 · còn 00:47 · TECS-TCS 02B1A03</p>
+              </div>
+            </div>
+
+            <div class="box" style="margin-top:0;border-top:0;padding:7px 8px;background:#FFF6E5">
+              <p class="label" style="margin:0 0 3px;color:var(--warn)">Tên in trên tem / phiếu ≠ hồ sơ · consigneeNamePrint</p>
+              <p class="edit" style="margin:0;font-size:13px;font-weight:700;display:inline-block;padding:2px 6px">Australasian Mail Services</p>
+              <span style="font-size:11px;color:var(--muted);margin-left:8px">75 Harrick Road, Keilor Park VIC 3043</span>
+              <button class="btn btn-t" type="button" style="height:24px;margin-left:10px;font-size:11px">In tem với tên này</button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:72px 90px 90px 90px 1fr;margin-top:8px">
+              <div class="box" style="padding:6px;border-right:0">
+                <p class="label" style="margin:0">No. of Pcs</p>
+                <p class="mono edit" style="margin:4px 0 0;font-size:16px;font-weight:700;padding:2px">8</p>
+              </div>
+              <div class="box" style="padding:6px;border-right:0">
+                <p class="label" style="margin:0">Gross Weight</p>
+                <p class="mono" style="margin:4px 0 0;font-size:16px;font-weight:700">92.0</p>
+              </div>
+              <div class="box" style="padding:6px;border-right:0">
+                <p class="label" style="margin:0">Volume / DIM</p>
+                <p class="mono" style="margin:4px 0 0;font-size:16px;font-weight:700">89.3</p>
+              </div>
+              <div class="box" style="padding:6px;border-right:0">
+                <p class="label" style="margin:0">Chargeable</p>
+                <p class="mono" style="margin:4px 0 0;font-size:16px;font-weight:700">92.0</p>
+              </div>
+              <div class="box" style="padding:6px">
+                <p class="label" style="margin:0">Nature and Quantity of Goods (incl. Dimensions)</p>
+                <p class="edit" style="margin:4px 0 0;font-size:12px;font-weight:600;padding:2px 4px">Electronics / CONSOL · 40×40×40×4 + 50×40×35×4</p>
+              </div>
+            </div>
+
+            <p class="serif" style="margin:10px 0 4px;font-size:12px;font-weight:700">BẢNG GHI NHẬN KÍCH THƯỚC — QF/ED/49 · DIMENSION RECORD</p>
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead>
+                <tr>
+                  <th class="box" style="width:36px;padding:4px">STT</th>
+                  <th class="box" style="padding:4px">Dài (cm) Length</th>
+                  <th class="box" style="padding:4px">Rộng Width</th>
+                  <th class="box" style="padding:4px">Cao Height</th>
+                  <th class="box" style="padding:4px">Số kiện Pieces</th>
+                  <th class="box" style="padding:4px">Kết quả (kg) Result</th>
+                </tr>
+              </thead>
+              <tbody class="mono" style="text-align:center">
+                <tr>
+                  <td class="box" style="padding:4px">1</td>
+                  <td class="box edit" style="padding:4px">40</td>
+                  <td class="box edit" style="padding:4px">40</td>
+                  <td class="box edit" style="padding:4px">40</td>
+                  <td class="box edit" style="padding:4px">4</td>
+                  <td class="box" style="padding:4px">42.67</td>
+                </tr>
+                <tr>
+                  <td class="box" style="padding:4px">2</td>
+                  <td class="box" style="padding:4px">50</td>
+                  <td class="box" style="padding:4px">40</td>
+                  <td class="box" style="padding:4px">35</td>
+                  <td class="box" style="padding:4px">4</td>
+                  <td class="box" style="padding:4px">46.67</td>
+                </tr>
+                <tr>
+                  <td class="box" style="padding:3px;color:#AAA">3</td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                </tr>
+                <tr>
+                  <td class="box" style="padding:3px;color:#AAA">4</td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                </tr>
+                <tr>
+                  <td class="box" style="padding:3px;color:#AAA">5</td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                </tr>
+                <tr>
+                  <td class="box" style="padding:3px;color:#AAA">6</td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                  <td class="box" style="padding:3px"></td>
+                </tr>
+                <tr style="font-weight:700">
+                  <td class="box" colspan="4" style="padding:4px;text-align:left">Total ÷6000 · CW 92.0 · tờ cân 88.0</td>
+                  <td class="box" style="padding:4px">8</td>
+                  <td class="box" style="padding:4px;color:var(--danger)">89.3 · Δ +4.0</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;margin-top:8px">
+              <div class="box" style="padding:7px 8px;border-right:0">
+                <p class="label" style="margin:0 0 3px">Tem / talon · label_print_jobs</p>
+                <p class="mono" style="margin:0;font-size:12px">12:10 · 8 bản · In lại</p>
+              </div>
+              <div class="box" style="padding:7px 8px;border-right:0;background:#FFF6E5">
+                <p class="label" style="margin:0 0 3px;color:var(--warn)">Tờ cân 3 liên TCS</p>
+                <p style="margin:0;font-size:12px">Chưa có bảng DB · đề xuất</p>
+              </div>
+              <div class="box" style="padding:7px 8px">
+                <p class="label" style="margin:0 0 3px">H21 · invoiceDeclarations</p>
+                <p class="mono" style="margin:0;font-size:12px">INV-1 · 2 dòng · Mở H21</p>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px;margin-top:8px">
+              <div>
+                <p class="label" style="margin:0 0 3px">Handling / ghi chú · note</p>
+                <p class="edit" style="margin:0;font-size:12px;padding:4px 6px;min-height:36px">CNEE yêu cầu in Australasian Mail Services. Đo DIM trước 13:00 nếu còn pallet.</p>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div>
+                  <p class="label" style="margin:0 0 16px">Ký tổ kho / Checker</p>
+                  <div style="border-bottom:1px solid var(--rule)"></div>
+                </div>
+                <div>
+                  <p class="label" style="margin:0 0 16px">Thương vụ / Agent</p>
+                  <div style="border-bottom:1px solid var(--rule)"></div>
+                </div>
+              </div>
+            </div>
+            <p class="mono" style="margin:8px 0 0;font-size:10px;color:var(--muted)">09:10 Booking · 11:40 Nhận TECS-TCS · 11:52 DIM · 12:10 Tem · 12:28 syncedAt · không badge trạng thái trên lưới</p>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div class="mobile-only" style="min-height:100vh;background:#E8E2D4">
+      <header style="position:sticky;top:0;z-index:10;background:#F3EFE4;border-bottom:1px solid #D7CFBE;padding:8px 10px;display:flex;align-items:center;gap:6px">
+        <span class="serif" style="font-size:13px;font-weight:700">Phiếu lô</span>
+        <span class="mono" style="margin-left:auto;font-size:11px">160-98765432</span>
+      </header>
+      <div style="padding:10px 12px 24px">
+        <p class="label" style="margin:0">Air Waybill No.</p>
+        <p class="mono" style="margin:2px 0 0;font-size:22px;font-weight:700">160-9876543<span class="cd">2</span></p>
+        <p class="mono" style="margin:4px 0 0;font-size:12px;color:var(--danger);font-weight:700">SGN → HKG · CX 766 · 13:15 · 00:47</p>
+        <p class="label" style="margin:12px 0 3px">Shipper</p>
+        <p class="edit" style="margin:0;font-size:13px;font-weight:700;padding:4px">ASIA FREIGHT CO., LTD</p>
+        <p class="label" style="margin:10px 0 3px">Consignee / tên in</p>
+        <p style="margin:0;font-size:13px;font-weight:700">HONG KONG CONSOL LTD</p>
+        <p class="edit" style="margin:6px 0 0;font-size:12px;font-weight:700;padding:4px;color:var(--warn)">Australasian Mail Services</p>
+        <p class="serif" style="margin:14px 0 6px;font-size:12px;font-weight:700">QF/ED/49 · Dimension</p>
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead>
+            <tr>
+              <th class="box" style="padding:4px">D×R×C</th>
+              <th class="box" style="padding:4px">Pcs</th>
+              <th class="box" style="padding:4px">kg</th>
+            </tr>
+          </thead>
+          <tbody class="mono" style="text-align:center">
+            <tr>
+              <td class="box edit" style="padding:5px">40×40×40</td>
+              <td class="box" style="padding:5px">4</td>
+              <td class="box" style="padding:5px">42.67</td>
+            </tr>
+            <tr>
+              <td class="box" style="padding:5px">50×40×35</td>
+              <td class="box" style="padding:5px">4</td>
+              <td class="box" style="padding:5px">46.67</td>
+            </tr>
+            <tr style="font-weight:700">
+              <td class="box" style="padding:5px">CW / tờ cân</td>
+              <td class="box" style="padding:5px">8</td>
+              <td class="box" style="padding:5px;color:var(--danger)">92.0 · Δ+4</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="label" style="margin:12px 0 4px">Chứng từ</p>
+        <p style="margin:0;font-size:12px">Tem 12:10 ×8 · H21 INV-1 · Tờ cân chưa bảng</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
+          <button class="btn btn-t" type="button" style="height:42px">In phiếu</button>
+          <button class="btn" type="button" style="height:42px">In tem</button>
+        </div>
+        <p class="mono" style="margin:12px 0 0;font-size:10px;color:var(--muted)">Ký tổ kho ________ · Thương vụ ________</p>
+      </div>
+    </div>
+  </body>
+</html>

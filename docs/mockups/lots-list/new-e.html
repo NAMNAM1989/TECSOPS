@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TECSOPS — E · brand board</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #0c021c;
+        --soft: #1a0d33;
+        --quiet: #2a1848;
+        --ink: #ffffff;
+        --lav: #c6a5ff;
+        --lime: #d4fb6b;
+        --lime-ink: #0c021c;
+        --line: rgba(198, 165, 255, 0.22);
+        --danger: #ff7a9a;
+        --ease: cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      .display { font-family: Syne, Outfit, sans-serif; font-weight: 800; letter-spacing: -0.05em; }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+      .label { font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--lav); }
+      button { font-family: inherit; cursor: default; }
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        height: 34px; padding: 0 12px; border-radius: 4px; border: 1px solid var(--line);
+        background: transparent; color: var(--ink); font-size: 12px; font-weight: 700;
+      }
+      .btn-lime { background: var(--lime); color: var(--lime-ink); border-color: transparent; }
+      .ticket {
+        display: grid; grid-template-columns: 92px 1fr auto; gap: 0;
+        background: var(--soft); border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+      }
+      .ticket.sel { background: #24124a; box-shadow: inset 0 0 0 1px var(--lime); }
+      .dst {
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        background: #140628; border-right: 1px dashed var(--line);
+      }
+      .print { font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lime-ink); background: var(--lime); border-radius: 2px; padding: 1px 5px; }
+      html.show-sheet .mobile-sheet { display: flex !important; }
+      @media (min-width: 768px) { .mobile-only { display: none !important; } }
+      @media (max-width: 767px) { .desktop-only { display: none !important; } }
+    </style>
+  </head>
+  <body>
+    <div class="desktop-only" style="height:100vh;overflow:hidden;display:flex;flex-direction:column">
+      <header style="height:72px;flex-shrink:0;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--line);gap:16px">
+        <div class="display" style="font-size:28px;line-height:1">TECS<span style="color:var(--lime)">OPS</span></div>
+        <div>
+          <div class="label">Bảng lô · ca ngày</div>
+          <div class="mono" style="font-size:12px;color:var(--lav)">12-OCT-2026 · 8 lô · 77 pcs · 1.057 kg</div>
+        </div>
+        <span style="height:26px;padding:0 10px;border-radius:2px;background:var(--lime);color:var(--lime-ink);font-size:11px;font-weight:800;display:inline-flex;align-items:center">TECS-TCS 8</span>
+        <span style="height:26px;padding:0 10px;border-radius:2px;border:1px dashed var(--line);color:var(--lav);font-size:11px;font-weight:700;display:inline-flex;align-items:center">SCSC 0</span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+          <div style="width:240px;height:34px;border:1px solid var(--line);border-radius:4px;background:var(--soft);display:flex;align-items:center;padding:0 10px;font-size:12px;color:var(--lav)">AWB · khách · CNEE</div>
+          <button class="btn btn-lime" type="button">+ Booking</button>
+        </div>
+      </header>
+
+      <div style="flex:1;min-height:0;display:flex">
+        <section style="flex:1;min-width:0;padding:12px 14px;display:flex;flex-direction:column;gap:8px;overflow:hidden">
+          <article class="ticket">
+            <div class="dst"><span class="display" style="font-size:28px;line-height:1">SIN</span><span class="mono" style="font-size:10px;color:var(--lav);margin-top:2px">SQ 183</span></div>
+            <div style="padding:8px 12px">
+              <div style="font-size:13px;font-weight:700">NAMNAM LOGISTICS</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">CNEE</b> SIN AGENT</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">Hàng</b> GOH</div>
+            </div>
+            <div class="mono" style="padding:8px 12px;text-align:right">
+              <div style="font-size:13px;font-weight:700;color:var(--lime)">618-1234 5675</div>
+              <div style="font-size:11px;color:var(--lav);margin-top:6px">14:30 · 12K / 186.4</div>
+            </div>
+          </article>
+          <article class="ticket sel">
+            <div class="dst" style="background:#1d3a08"><span class="display" style="font-size:28px;line-height:1;color:var(--lime)">HKG</span><span class="mono" style="font-size:10px;color:var(--lime);margin-top:2px">CX 766</span></div>
+            <div style="padding:8px 12px">
+              <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700">ASIA FREIGHT <span class="print">Tên in ≠</span></div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">CNEE</b> HKG CONSOL</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">Hàng</b> Electronics</div>
+            </div>
+            <div class="mono" style="padding:8px 12px;text-align:right">
+              <div style="font-size:13px;font-weight:700;color:var(--lime)">160-9876 5432</div>
+              <div style="font-size:11px;color:var(--danger);margin-top:6px;font-weight:700">13:15 GẤP · 8K / 92.0</div>
+            </div>
+          </article>
+          <article class="ticket">
+            <div class="dst"><span class="display" style="font-size:28px;line-height:1">SGN</span><span class="mono" style="font-size:10px;color:var(--lav);margin-top:2px">VN 301</span></div>
+            <div style="padding:8px 12px">
+              <div style="font-size:13px;font-weight:700">SAIGON AIR CARGO</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">CNEE</b> XYZ TRADING</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">Hàng</b> Textile</div>
+            </div>
+            <div class="mono" style="padding:8px 12px;text-align:right">
+              <div style="font-size:13px;font-weight:700;color:var(--lime)">738-1122 3344</div>
+              <div style="font-size:11px;color:var(--lav);margin-top:6px">18:00 · 4K / 45.5</div>
+            </div>
+          </article>
+          <article class="ticket">
+            <div class="dst"><span class="display" style="font-size:28px;line-height:1">HAN</span><span class="mono" style="font-size:10px;color:var(--lav);margin-top:2px">VN 305</span></div>
+            <div style="padding:8px 12px">
+              <div style="font-size:13px;font-weight:700">HANOI EXPRESS</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">CNEE</b> HAN SPARES</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">Hàng</b> Spare parts</div>
+            </div>
+            <div class="mono" style="padding:8px 12px;text-align:right">
+              <div style="font-size:13px;font-weight:700;color:var(--lime)">176-5566 7788</div>
+              <div style="font-size:11px;color:var(--lav);margin-top:6px">16:40 · 20K / 310.2</div>
+            </div>
+          </article>
+          <article class="ticket" style="opacity:.55">
+            <div class="dst"><span class="display" style="font-size:28px;line-height:1;text-decoration:line-through">SIN</span><span class="mono" style="font-size:10px;color:var(--lav);margin-top:2px;text-decoration:line-through">SQ 178</span></div>
+            <div style="padding:8px 12px">
+              <div style="font-size:13px;font-weight:700">LION STAR</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">CNEE</b> PER DOCS</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">Hàng</b> PER</div>
+            </div>
+            <div class="mono" style="padding:8px 12px;text-align:right">
+              <div style="font-size:13px;font-weight:700">232-4433 2211</div>
+              <div style="font-size:11px;color:var(--lav);margin-top:6px;text-decoration:line-through">12:00 · 6K / 71.8</div>
+            </div>
+          </article>
+          <article class="ticket">
+            <div class="dst"><span class="display" style="font-size:28px;line-height:1">HKG</span><span class="mono" style="font-size:10px;color:var(--lav);margin-top:2px">CX 799</span></div>
+            <div style="padding:8px 12px">
+              <div style="font-size:13px;font-weight:700">PACIFIC GATE</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">CNEE</b> HKG AGENT</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">Hàng</b> Electronics</div>
+            </div>
+            <div class="mono" style="padding:8px 12px;text-align:right">
+              <div style="font-size:13px;font-weight:700;color:var(--lime)">618-9988 7766</div>
+              <div style="font-size:11px;color:var(--lav);margin-top:6px">17:20 · 15K / 204.0</div>
+            </div>
+          </article>
+          <article class="ticket">
+            <div class="dst"><span class="display" style="font-size:28px;line-height:1">DAD</span><span class="mono" style="font-size:10px;color:var(--lav);margin-top:2px">VN 309</span></div>
+            <div style="padding:8px 12px">
+              <div style="font-size:13px;font-weight:700">DANANG HUB</div>
+              <div style="font-size:11px;color:var(--lime);line-height:16px"><b>CNEE</b> Chưa chọn</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">Hàng</b> Fresh</div>
+            </div>
+            <div class="mono" style="padding:8px 12px;text-align:right">
+              <div style="font-size:13px;font-weight:700;color:var(--lime)">607-3344 5566</div>
+              <div style="font-size:11px;color:var(--lav);margin-top:6px">13OCT 20:10 · 3K / 28.6</div>
+            </div>
+          </article>
+          <article class="ticket">
+            <div class="dst"><span class="display" style="font-size:28px;line-height:1">SIN</span><span class="mono" style="font-size:10px;color:var(--lav);margin-top:2px">SQ 184</span></div>
+            <div style="padding:8px 12px">
+              <div style="font-size:13px;font-weight:700">MEKONG AIR</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">CNEE</b> DEF TRADING</div>
+              <div style="font-size:11px;color:var(--lav);line-height:16px"><b style="color:#fff">Hàng</b> GOH</div>
+            </div>
+            <div class="mono" style="padding:8px 12px;text-align:right">
+              <div style="font-size:13px;font-weight:700;color:var(--lime)">180-2211 3344</div>
+              <div style="font-size:11px;color:var(--danger);margin-top:6px;font-weight:700">15:00 GẤP · 9K / 118.5</div>
+            </div>
+          </article>
+        </section>
+
+        <aside style="width:340px;flex-shrink:0;background:var(--soft);border-left:1px solid var(--line);display:flex;flex-direction:column">
+          <div style="padding:16px 16px 12px;background:var(--lime);color:var(--lime-ink)">
+            <p class="label" style="margin:0 0 4px;color:#3a4a12">Hồ sơ lô</p>
+            <p class="mono display" style="margin:0;font-size:20px;letter-spacing:-0.04em">160-9876 5432</p>
+            <p class="mono" style="margin:6px 0 0;font-size:11px">CX 766 · HKG · 13:15 GẤP · 8K / 92.0</p>
+          </div>
+          <div style="padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;border-bottom:1px solid var(--line)">
+            <button class="btn btn-lime" type="button" style="height:40px">In tem</button>
+            <button class="btn" type="button" style="height:40px;border-color:var(--lime);color:var(--lime)">Đo DIM</button>
+            <button class="btn" type="button" style="height:30px;font-size:11px">Copy hồ sơ</button>
+            <button class="btn" type="button" style="height:30px;font-size:11px">Ghi chú</button>
+            <button class="btn" type="button" style="height:30px;font-size:11px;grid-column:1 / -1">H21</button>
+          </div>
+          <div style="flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+            <div>
+              <p class="label" style="margin:0 0 6px">Khách</p>
+              <div style="font-size:16px;font-weight:700">ASIA FREIGHT <span class="mono" style="color:var(--lime);font-size:12px">AFR</span></div>
+            </div>
+            <div>
+              <p class="label" style="margin:0 0 6px">Shipper</p>
+              <div style="font-size:13px;font-weight:600">ASIA FREIGHT CO., LTD</div>
+              <p style="margin:4px 0 0;font-size:12px;color:var(--lav)">12F Warehouse Rd, Kwai Chung, HKG</p>
+            </div>
+            <div>
+              <p class="label" style="margin:0 0 6px">CNEE</p>
+              <div style="font-size:13px;font-weight:600">HONG KONG CONSOL LTD</div>
+              <div style="margin-top:8px;border:1px dashed var(--lime);border-radius:4px;padding:10px">
+                <p class="label" style="margin:0 0 4px;color:var(--lime)">Tên in ≠ hồ sơ</p>
+                <p style="margin:0;font-size:14px;font-weight:700">Australasian Mail Services</p>
+                <p style="margin:4px 0 10px;font-size:11px;color:var(--lav)">75 Harrick Road, Keilor Park VIC 3043</p>
+                <button class="btn btn-lime" type="button" style="width:100%;height:34px">In tem với tên này</button>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 14px;border-top:1px solid var(--line)">
+            <button class="btn" type="button" style="border:0;color:var(--lav);height:28px">Excel DIM</button>
+            <button class="btn" type="button" style="border:0;color:var(--danger);height:28px">Xóa lô</button>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="mobile-only" style="min-height:100vh;background:var(--bg)">
+      <header style="position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 12px 12px">
+        <div class="display" style="font-size:22px;line-height:1">TECS<span style="color:var(--lime)">OPS</span></div>
+        <div class="mono" style="margin-top:4px;font-size:11px;color:var(--lav)">12-OCT · 8 lô · 1.057kg</div>
+      </header>
+      <div style="padding:8px 8px 88px;display:flex;flex-direction:column;gap:8px">
+        <article class="ticket">
+          <div class="dst"><span class="display" style="font-size:22px">SIN</span></div>
+          <div style="padding:8px 10px">
+            <div style="font-size:12px;font-weight:700">NAMNAM LOGISTICS</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">CNEE</b> SIN AGENT</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">Hàng</b> GOH</div>
+          </div>
+          <div class="mono" style="padding:8px 8px 8px 0;text-align:right;font-size:10px;color:var(--lime)">SQ 183<br>14:30</div>
+        </article>
+        <article class="ticket sel">
+          <div class="dst" style="background:#1d3a08"><span class="display" style="font-size:22px;color:var(--lime)">HKG</span></div>
+          <div style="padding:8px 10px">
+            <div style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700">ASIA FREIGHT <span class="print">Tên in ≠</span></div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">CNEE</b> HKG CONSOL</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">Hàng</b> Electronics</div>
+          </div>
+          <div class="mono" style="padding:8px 8px 8px 0;text-align:right;font-size:10px;color:var(--danger);font-weight:700">CX 766<br>13:15</div>
+        </article>
+        <article class="ticket">
+          <div class="dst"><span class="display" style="font-size:22px">SGN</span></div>
+          <div style="padding:8px 10px">
+            <div style="font-size:12px;font-weight:700">SAIGON AIR CARGO</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">CNEE</b> XYZ TRADING</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">Hàng</b> Textile</div>
+          </div>
+          <div class="mono" style="padding:8px 8px 8px 0;text-align:right;font-size:10px;color:var(--lime)">VN 301<br>18:00</div>
+        </article>
+        <article class="ticket">
+          <div class="dst"><span class="display" style="font-size:22px">HAN</span></div>
+          <div style="padding:8px 10px">
+            <div style="font-size:12px;font-weight:700">HANOI EXPRESS</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">CNEE</b> HAN SPARES</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">Hàng</b> Spare parts</div>
+          </div>
+          <div class="mono" style="padding:8px 8px 8px 0;text-align:right;font-size:10px;color:var(--lime)">VN 305<br>16:40</div>
+        </article>
+        <article class="ticket" style="opacity:.55">
+          <div class="dst"><span class="display" style="font-size:22px;text-decoration:line-through">SIN</span></div>
+          <div style="padding:8px 10px">
+            <div style="font-size:12px;font-weight:700">LION STAR</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">CNEE</b> PER DOCS</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">Hàng</b> PER</div>
+          </div>
+          <div class="mono" style="padding:8px 8px 8px 0;text-align:right;font-size:10px;color:var(--lav);text-decoration:line-through">SQ 178<br>12:00</div>
+        </article>
+        <article class="ticket">
+          <div class="dst"><span class="display" style="font-size:22px">HKG</span></div>
+          <div style="padding:8px 10px">
+            <div style="font-size:12px;font-weight:700">PACIFIC GATE</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">CNEE</b> HKG AGENT</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">Hàng</b> Electronics</div>
+          </div>
+          <div class="mono" style="padding:8px 8px 8px 0;text-align:right;font-size:10px;color:var(--lime)">CX 799<br>17:20</div>
+        </article>
+        <article class="ticket">
+          <div class="dst"><span class="display" style="font-size:22px">DAD</span></div>
+          <div style="padding:8px 10px">
+            <div style="font-size:12px;font-weight:700">DANANG HUB</div>
+            <div style="font-size:11px;color:var(--lime)"><b>CNEE</b> Chưa chọn</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">Hàng</b> Fresh</div>
+          </div>
+          <div class="mono" style="padding:8px 8px 8px 0;text-align:right;font-size:10px;color:var(--lime)">VN 309<br>+1d</div>
+        </article>
+        <article class="ticket">
+          <div class="dst"><span class="display" style="font-size:22px">SIN</span></div>
+          <div style="padding:8px 10px">
+            <div style="font-size:12px;font-weight:700">MEKONG AIR</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">CNEE</b> DEF TRADING</div>
+            <div style="font-size:11px;color:var(--lav)"><b style="color:#fff">Hàng</b> GOH</div>
+          </div>
+          <div class="mono" style="padding:8px 8px 8px 0;text-align:right;font-size:10px;color:var(--danger);font-weight:700">SQ 184<br>15:00</div>
+        </article>
+      </div>
+      <button type="button" style="position:fixed;right:12px;bottom:18px;height:48px;padding:0 16px;border:0;border-radius:4px;background:var(--lime);color:var(--lime-ink);font-size:13px;font-weight:800">+ Booking</button>
+      <div class="mobile-sheet" style="display:none;position:fixed;inset:0;z-index:40;background:rgba(12,2,28,.55);flex-direction:column;justify-content:flex-end">
+        <div style="background:var(--soft);border-radius:16px 16px 0 0;padding:12px 16px 24px">
+          <div style="width:36px;height:4px;border-radius:99px;background:var(--quiet);margin:0 auto 10px"></div>
+          <p class="label" style="margin:0">Hồ sơ lô</p>
+          <p class="mono display" style="margin:6px 0;font-size:18px">160-9876 5432</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+            <button class="btn btn-lime" type="button" style="height:44px">In tem</button>
+            <button class="btn" type="button" style="height:44px;color:var(--lime);border-color:var(--lime)">Đo DIM</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

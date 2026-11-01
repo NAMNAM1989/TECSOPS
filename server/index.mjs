@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
 import {
   loadState,
+  onStateCommitted,
   peekStateVersion,
   runBatchMutations,
   runMutation,
@@ -17,6 +18,10 @@ import { registerLookupRoutes } from "./lookupRoutes.mjs";
 import { registerGlobalSearchRoutes } from "./globalSearchRoutes.mjs";
 import { registerScscH21Routes } from "./scscH21Routes.mjs";
 import { registerTcsH21Routes } from "./tcsH21Routes.mjs";
+import { applyExportCors, registerExportRoutes } from "./exportRoutes.mjs";
+import { buildShipmentsChangedEvent, createPushEventBus } from "./pushEvents.mjs";
+import { registerPushRoutes } from "./pushRoutes.mjs";
+import { createWebhookDispatcher, parseWebhookConfig } from "./webhookDispatcher.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
 import {
@@ -255,6 +260,33 @@ if (isDatabaseConfigured()) {
   console.info("[api] lookup (Postgres)");
 }
 
+registerExportRoutes(app, { requireAuth: appAuth.requireAuth });
+console.info("[api] v1 export (shipments/customers)");
+
+const pushBus = createPushEventBus();
+onStateCommitted(({ prev, next }) => {
+  pushBus.publish(buildShipmentsChangedEvent(prev, next));
+});
+registerPushRoutes(app, {
+  requireAuth: appAuth.requireAuth,
+  bus: pushBus,
+  peekStateVersion,
+  applyCors: applyExportCors,
+});
+const webhookConfig = parseWebhookConfig();
+if (webhookConfig.urls.length && webhookConfig.secret) {
+  const webhooks = createWebhookDispatcher(webhookConfig);
+  pushBus.subscribe((event) => {
+    void webhooks.dispatch(event);
+  });
+  console.info(`[api] v1 push: SSE + webhook (${webhookConfig.urls.length} URL)`);
+} else {
+  if (webhookConfig.urls.length) {
+    console.warn("[api] v1 push: bỏ qua webhook vì thiếu TECSOPS_WEBHOOK_SECRET");
+  }
+  console.info("[api] v1 push: SSE /api/v1/stream/shipments");
+}
+
 const distDir = path.join(__dirname, "..", "dist");
 app.use(
   express.static(distDir, {
@@ -314,6 +346,12 @@ async function start() {
   } catch (e) {
     console.error("[state] bootstrap state failed:", e?.message ?? e);
     process.exit(1);
+  }
+
+  try {
+    pushBus.setBaseline(await peekStateVersion());
+  } catch (e) {
+    console.warn("[push] không đọc được stateVersion baseline:", e?.message ?? e);
   }
 
   console.info("[socket] Socket.IO in-memory (Postgres state; single app replica)");

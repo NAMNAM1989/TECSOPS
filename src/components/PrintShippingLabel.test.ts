@@ -3,6 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Shipment } from "../types/shipment";
 import { LabelContent, PrintShippingLabel } from "./PrintShippingLabel";
+import {
+  labelPrintIssues,
+  mapShipmentToAirCargoLabelData,
+} from "../utils/mapShipmentToAirCargoLabelData";
 
 function shipment(patch: Partial<Shipment> = {}): Shipment {
   return {
@@ -30,58 +34,95 @@ function shipment(patch: Partial<Shipment> = {}): Shipment {
   };
 }
 
-describe("LabelContent — mẫu 4 hàng", () => {
-  it("in Airline · AWB · Origin/Dest · TOTAL PIECES; origin luôn SGN", () => {
-    const html = renderToStaticMarkup(
-      createElement(LabelContent, {
-        s: shipment(),
-      })
-    );
+const caps = (html: string) => [...html.matchAll(/lbl-cap">([^<]+)</g)].map((m) => m[1]);
 
-    expect(html).toContain("lbl-sheet-inner");
-    expect(html).toContain("AIR WAYBILL NO.");
-    expect(html).toContain("ORIGIN:");
-    expect(html).toContain("DESTINATION:");
-    expect(html).toContain("TOTAL PIECES");
-    expect(html).toContain("SGN");
-    expect(html).toContain("NRT");
+describe("LabelContent — talon esid-desktop", () => {
+  it("100×50: CARRIER · AWB · ORIGIN | DEST · TOTAL NO. OF PIECES, không HAWB", () => {
+    const html = renderToStaticMarkup(
+      createElement(LabelContent, { s: shipment({ hawb: "" }), sheetVariant: "compact" })
+    );
+    expect(html).toContain("lbl-sheet--compact");
+    expect(caps(html)).toEqual(["CARRIER", "AWB", "ORIGIN", "DEST", "TOTAL NO. OF PIECES"]);
+    expect(html).toContain("grid-template-rows:7mm 13.3mm 10.1mm 18.6mm");
+    expect(html).toMatch(/font-size:36pt">738-1234 5675</);
+    expect(html).toMatch(/font-size:24pt">NRT</);
     expect(html).toContain("VIETNAM AIRLINES");
-    expect(html).not.toContain("HAWB");
-    expect(html).not.toContain("lbl-special");
-    expect(html).not.toContain("lbl-frame");
+    expect(html).toContain(">SGN<");
   });
 
-  it("maps shipment.pcs to TOTAL PIECES", () => {
+  it("100×80 không HAWB: 4 hàng, DEST 30pt, số kiện 48pt", () => {
+    const html = renderToStaticMarkup(createElement(LabelContent, { s: shipment({ hawb: "" }) }));
+    expect(caps(html)).toEqual(["CARRIER", "AWB", "ORIGIN", "DEST", "TOTAL NO. OF PIECES"]);
+    expect(html).toContain("grid-template-rows:12mm 19.5mm 17.5mm 29mm");
+    expect(html).toMatch(/font-size:30pt">NRT</);
+    expect(html).toMatch(/font-size:48pt">3</);
+  });
+
+  it("100×80 có HAWB: thêm hàng HAWB in hoa sau AWB", () => {
     const html = renderToStaticMarkup(
-      createElement(LabelContent, {
-        s: shipment({ pcs: 15 }),
-      })
+      createElement(LabelContent, { s: shipment({ hawb: "nnl26103012" }) })
     );
-
-    expect(html).toContain("TOTAL PIECES");
-    expect(html).toMatch(/pieces-val[^>]*>15</);
+    expect(caps(html)).toEqual(["CARRIER", "AWB", "HAWB", "ORIGIN", "DEST", "TOTAL NO. OF PIECES"]);
+    expect(html).toContain("grid-template-rows:10mm 15.5mm 10.5mm 13.5mm 28.5mm");
+    expect(html).toContain(">NNL26103012<");
   });
 
-  it("chưa có số kiện → TOTAL PIECES để trống, không hiện dấu -", () => {
+  it("ô trống để trống, không chữ gợi ý", () => {
     const html = renderToStaticMarkup(
-      createElement(LabelContent, {
-        s: shipment({ pcs: 0 }),
-      })
+      createElement(LabelContent, { s: shipment({ awb: "", dest: "", pcs: 0, hawb: "", flight: "" }) })
     );
-
-    expect(html).toContain("TOTAL PIECES");
-    expect(html).toMatch(/pieces-val[^>]*><\/div>/);
-    expect(html).not.toMatch(/pieces-val[^>]*>[\s\u2014\-—]+</);
+    expect(caps(html)).toEqual(["CARRIER", "AWB", "ORIGIN", "DEST", "TOTAL NO. OF PIECES"]);
+    expect(html).not.toContain("Nhập MAWB");
+    expect(html).not.toContain("lbl-placeholder");
+    expect(html.match(/lbl-v"/g)).toHaveLength(1); // chỉ còn ORIGIN SGN
   });
 
-  it("compact 100×50 dùng class lbl-sheet--compact", () => {
+  it("tên hãng dài tự thu nhỏ dưới 14pt", () => {
     const html = renderToStaticMarkup(
       createElement(LabelContent, {
-        s: shipment(),
+        s: shipment({ flight: "CO123", hawb: "" }),
+        airlineLabelOverrides: {
+          byAwbPrefix: {},
+          byFlightPrefix: { CO: "NORTH-WESTERN CARGO INTERNATIONAL AIRLINES" },
+        },
+        airlineReplaceDefaults: true,
         sheetVariant: "compact",
       })
     );
-    expect(html).toContain("lbl-sheet--compact");
+    const pt = Number(/font-size:([\d.]+)pt">NORTH-WESTERN/.exec(html)?.[1]);
+    expect(pt).toBeGreaterThan(5);
+    expect(pt).toBeLessThan(14);
+  });
+});
+
+describe("labelPrintIssues — chặn in như talon", () => {
+  const issues = (patch: Partial<Shipment>, format: "100x80" | "100x50" = "100x80") =>
+    labelPrintIssues(mapShipmentToAirCargoLabelData(shipment(patch)), format);
+
+  it("lô đủ dữ liệu: không lỗi, không cảnh báo", () => {
+    expect(issues({})).toEqual({ errors: [], warnings: [] });
+  });
+
+  it("AWB thiếu số hoặc sai số kiểm tra → chặn", () => {
+    expect(issues({ awb: "738-1234" }).errors.join()).toMatch(/11 số/);
+    expect(issues({ awb: "738-1234 5678" }).errors.join()).toMatch(/số kiểm tra.*5/);
+  });
+
+  it("DEST không phải 3 chữ cái → chặn", () => {
+    expect(issues({ dest: "" }).errors.join()).toMatch(/DEST/);
+    expect(issues({ dest: "NR1" }).errors.join()).toMatch(/DEST/);
+  });
+
+  it("có HAWB mà chọn 100×50 → chặn; 100×80 thì được", () => {
+    expect(issues({ hawb: "H1" }, "100x50").errors.join()).toMatch(/100×80/);
+    expect(issues({ hawb: "H1" }, "100x80").errors).toEqual([]);
+  });
+
+  it("hãng lạ và chưa có số kiện chỉ cảnh báo", () => {
+    const r = issues({ flight: "Q9123", awb: "868-7654 3213", pcs: null });
+    expect(r.errors).toEqual([]);
+    expect(r.warnings.join()).toMatch(/"Q9"/);
+    expect(r.warnings.join()).toMatch(/số kiện/);
   });
 });
 

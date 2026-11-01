@@ -11,6 +11,7 @@ import type { SyncStatus } from "../hooks/useShipmentSync";
 import { OpsActionToolbar } from "./OpsActionToolbar";
 import { OpsDatePicker } from "./OpsDatePicker";
 import { OpsContextStrip } from "./OpsContextStrip";
+import { SheetSyncedBadge } from "./SheetSyncedBadge";
 import type { StatusFilterValue } from "./StatusFilterBar";
 
 type ToolsProps = {
@@ -29,6 +30,8 @@ type Props = {
   socketConnected: boolean;
   pendingOfflineCount?: number;
   lastSyncedAt?: number | null;
+  /** ISO — lần Sheet đẩy dữ liệu lên gần nhất. */
+  sheetSyncedAt?: string | null;
   onRefresh?: () => void;
   daysWithData: number;
   totalLots: number;
@@ -70,6 +73,7 @@ export function OpsDesktopCommandBar({
   socketConnected,
   pendingOfflineCount,
   lastSyncedAt,
+  sheetSyncedAt = null,
   onRefresh,
   daysWithData,
   totalLots,
@@ -165,6 +169,7 @@ export function OpsDesktopCommandBar({
               onRefresh={onRefresh}
               compact
             />
+            <SheetSyncedBadge at={sheetSyncedAt} />
             {daysWithData > 0 ? (
               <span className="hidden shrink-0 text-2xs text-ui-text-muted xl:inline">
                 {totalLots}/{daysWithData}d

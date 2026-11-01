@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  allocateH21InvoiceLinesFromItems,
   buildH21InvoiceNo,
   computeH21InvoiceFooter,
   createSeededRng,
   generateRandomH21InvoiceLines,
   resolveH21InvoiceNo,
+  validateH21InvoiceExport,
 } from "../../shared/scscH21InvoiceCore.mjs";
 
 describe("scscH21InvoiceCore", () => {
@@ -139,8 +141,90 @@ describe("scscH21InvoiceCore", () => {
     });
     expect(lines).toHaveLength(2);
     const sum = lines.reduce((a, l) => a + (l.weightKg || 0), 0);
-    expect(sum).toBeLessThan(1000);
+    expect(sum).toBeLessThanOrEqual(1000);
     expect(sum).toBeGreaterThan(0);
+  });
+
+  it("allocate 15 dòng unitFactor=1 trên lô 5 kg không vượt 5 kg", () => {
+    const items = Array.from({ length: 15 }, (_, i) => ({
+      id: `i${i}`,
+      description: `Item ${i}`,
+      category: "X",
+      hsCode: "1",
+      origin: "VIETNAM",
+      qty1: 1,
+      uom1: "PCE",
+      qty2: 0,
+      uom2: "KGM",
+      unitPrice: 1,
+      amount: 1,
+      unitFactor: 1,
+      sortOrder: i,
+      warehouseScope: "SCSC",
+      active: true,
+    }));
+    const lines = allocateH21InvoiceLinesFromItems({
+      items,
+      grossKg: 5,
+      rng: () => 0.5,
+    });
+    const sum = lines.reduce((a, l) => a + (l.weightKg || 0), 0);
+    expect(sum).toBeLessThanOrEqual(5);
+    expect(lines.every((l) => (l.quantity || 0) >= 1)).toBe(true);
+  });
+
+  it("generateRandom 15 dòng unitFactor=1 trên lô 5 kg không vượt 5 kg", () => {
+    const catalog = Array.from({ length: 15 }, (_, i) => ({
+      id: `g${i}`,
+      description: `Goods ${i}`,
+      category: "X",
+      hsCode: "1",
+      origin: "VIETNAM",
+      qty1: 1,
+      uom1: "PCE",
+      qty2: 0,
+      uom2: "KGM",
+      unitPrice: 1,
+      amount: 1,
+      unitFactor: 1,
+      sortOrder: i,
+      warehouseScope: "SCSC",
+      active: true,
+    }));
+    const lines = generateRandomH21InvoiceLines({
+      catalog,
+      lineCount: 15,
+      grossKg: 5,
+      rng: createSeededRng(1),
+    });
+    const sum = lines.reduce((a, l) => a + (l.weightKg || 0), 0);
+    expect(sum).toBeLessThanOrEqual(5);
+  });
+
+  it("validate chặn xuất khi Σ kg dòng > KG tờ khai", () => {
+    const base = {
+      shipment: { customerCode: "CC", flight: "SQ185", flightDate: "03SEP", kg: 5 },
+      customerEntry: { code: "CC" },
+      shipper: { shipperName: "Ship Co" },
+      cnee: { name: "Cnee Co" },
+    };
+    const over = Array.from({ length: 15 }, () => ({ weightKg: 1, quantity: 1, amount: 1 }));
+    const blocked = validateH21InvoiceExport({ ...base, lines: over });
+    expect(blocked.some((e) => /vượt KG tờ khai/i.test(e))).toBe(true);
+
+    const ok = validateH21InvoiceExport({
+      ...base,
+      lines: [{ weightKg: 4, quantity: 4, amount: 4 }],
+    });
+    expect(ok.filter((e) => /vượt KG tờ khai/i.test(e))).toEqual([]);
+
+    const splitOver = validateH21InvoiceExport({
+      ...base,
+      shipment: { ...base.shipment, kg: 100 },
+      declarationKg: 5,
+      lines: [{ weightKg: 6, quantity: 6, amount: 6 }],
+    });
+    expect(splitOver.some((e) => /vượt KG tờ khai/i.test(e))).toBe(true);
   });
 
   it("random An An (250g/bag): weight = quantity × 0.25, không dùng qty2 lệch", () => {

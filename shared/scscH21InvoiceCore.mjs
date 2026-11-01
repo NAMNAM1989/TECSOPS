@@ -29,6 +29,51 @@ function num(v) {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+function roundKg3(n) {
+  return Math.round(n * 1000) / 1000;
+}
+
+function sumLineKg(lines) {
+  let kg = 0;
+  for (const l of lines) kg += num(l.weightKg) ?? 0;
+  return roundKg3(kg);
+}
+
+function applyAllocatedQty(line, quantity, factor) {
+  const qty = Math.max(0, Math.floor(quantity));
+  return {
+    ...line,
+    quantity: qty,
+    weightKg: roundKg3(qty * factor),
+    amount: Math.round(qty * (num(line.unitPrice) ?? 0) * 10000) / 10000,
+  };
+}
+
+/**
+ * Hạ quantity / bỏ dòng từ cuối cho đến khi Σ kg ≤ cap (KG lô / tờ khai).
+ * @param {{ line: object, factor: number }[]} allocated
+ * @param {number} capKg
+ */
+function clampAllocatedLinesToCap(allocated, capKg) {
+  const cap = roundKg3(capKg);
+  const out = allocated.map((x) => ({ line: x.line, factor: x.factor }));
+  while (out.length) {
+    if (sumLineKg(out.map((x) => x.line)) <= cap) break;
+    const last = out[out.length - 1];
+    const othersKg = sumLineKg(out.slice(0, -1).map((x) => x.line));
+    const room = cap - othersKg;
+    const maxQty = Math.floor((room + 1e-9) / last.factor);
+    if (maxQty >= 1) {
+      last.line = applyAllocatedQty(last.line, maxQty, last.factor);
+      if (sumLineKg(out.map((x) => x.line)) <= cap) break;
+      out.pop();
+      continue;
+    }
+    out.pop();
+  }
+  return out.map((x) => x.line);
+}
+
 /**
  * INV NO: mã KH + chuyến + ngày bay. Tách nhiều tờ khai → suffix -1, -2.
  * Chỉ là **gợi ý** — ưu tiên số nhập tay (`invoiceNo` trên tờ khai).
@@ -133,27 +178,28 @@ export function allocateH21InvoiceLinesFromItems(opts) {
   const weights = selected.map(() => rng() + 0.01);
   const sumW = weights.reduce((a, b) => a + b, 0);
 
-  /** @type {ReturnType<typeof invoiceLineFromCatalogItem>[]} */
-  const lines = [];
+  /** @type {{ line: NonNullable<ReturnType<typeof invoiceLineFromCatalogItem>>, factor: number }[]} */
+  const allocated = [];
   for (let i = 0; i < selected.length; i++) {
     const item = selected[i];
     const factor = resolveH21UnitFactorKg(item);
     const share = budget * (weights[i] / sumW);
     const quantity = Math.max(1, Math.round(share / factor));
-    const weightKg = Math.round(quantity * factor * 1000) / 1000;
-    const unitPrice = item.unitPrice;
-    const amount = Math.round(quantity * unitPrice * 10000) / 10000;
     const base = invoiceLineFromCatalogItem(item);
     if (!base) continue;
-    lines.push({
-      ...base,
-      quantity,
-      weightKg,
-      unitPrice,
-      amount,
+    allocated.push({
+      factor,
+      line: applyAllocatedQty(
+        {
+          ...base,
+          unitPrice: item.unitPrice,
+        },
+        quantity,
+        factor
+      ),
     });
   }
-  return lines;
+  return clampAllocatedLinesToCap(allocated, grossKg);
 }
 
 /**
@@ -321,7 +367,13 @@ export function validateH21InvoiceExport(opts) {
   if (!shipper?.shipperName?.trim()) errors.push("Chưa chọn Shipper tờ khai.");
   if (!cnee?.name?.trim()) errors.push("Chưa chọn CNEE trong INFO KH.");
   if (!Array.isArray(lines) || lines.length === 0) errors.push("Chưa có dòng hàng invoice.");
-  const kg = num(shipment?.kg);
-  if (kg == null || kg <= 0) errors.push("Lô chưa có KG thực.");
+  const lotKg = num(shipment?.kg);
+  const declRaw = num(opts.declarationKg);
+  const capKg =
+    declRaw != null && declRaw > 0 ? Math.min(declRaw, lotKg || declRaw) : lotKg;
+  if (capKg == null || capKg <= 0) errors.push("Lô chưa có KG thực.");
+  else if (Array.isArray(lines) && lines.length > 0 && sumLineKg(lines) > capKg) {
+    errors.push("Tổng KG dòng invoice vượt KG tờ khai.");
+  }
   return errors;
 }

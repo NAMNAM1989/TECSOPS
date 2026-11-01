@@ -3,7 +3,6 @@
  */
 export {
   formatAwb,
-  formatAwbLabel,
   awbDigitsKey,
   rawAwbDigits,
 } from "../../shared/awbFormat.mjs";

@@ -1,147 +1,34 @@
 import {
-  fetchBookHangNgayGridForSession,
   getBookSpreadsheetId,
   getBookSpreadsheetShareUrl,
   sessionYmdToBookSheetTab,
   tabTitleMatchesSession,
 } from "./googleSheetFetch.mjs";
 import { parseSpreadsheetIdFromInput, parseSheetGidFromInput } from "./spreadsheetIdParse.mjs";
-import { getCachedGrid, getCachedGridForSession, getCachedSyncResult, setCachedGrid, setCachedSyncResult, syncResultCacheKey } from "./sheetFetchCache.mjs";
+import { getCachedSyncResult, setCachedGrid, setCachedSyncResult, syncResultCacheKey } from "./sheetFetchCache.mjs";
 import { parseBookHangNgayGrid } from "./bookHangNgayParser.mjs";
 import { sessionYmdToFlightDateToken } from "./bookDateMatch.mjs";
-import {
-  buildCustomerLookups,
-  lookupCustomerCode,
-  lookupCustomerId,
-} from "./customerSheetLookup.mjs";
+import { buildCustomerLookups } from "./customerSheetLookup.mjs";
 import {
   awbKeyForMatch,
   assignSheetSttByWarehouse,
   classifySheetOrphan,
   findOrphanSessionLots,
-  reorderSessionRowsBySheet,
   resolveExistingForSheetRow,
   resolveSheetRowSyncStatus,
   sheetAwbFirstIndexByKey,
   sheetAwbKeySet,
   sheetRowIsBlocked,
-  sheetRowToPatch,
-  sheetRowToUpdatePatch,
 } from "./sheetRowReconcile.mjs";
-import { loadState, peekStateVersion, runBatchMutations } from "../stateStore.mjs";
-import { attachDbSyncedAt } from "../namnamlogisticsSyncedAt.mjs";
-import { emitScopedSync, projectAppState } from "../stateScope.mjs";
-
-function buildAwbIndexes(rows, sessionDate) {
-  /** @type {Map<string, object>} */
-  const inSession = new Map();
-  /** @type {Map<string, object>} */
-  const otherSession = new Map();
-  for (const r of rows) {
-    const key = awbKeyForMatch(r.awb);
-    if (!key || key.length < 11) continue;
-    if (r.sessionDate === sessionDate) {
-      if (!inSession.has(key)) inSession.set(key, r);
-    } else if (!otherSession.has(key)) {
-      otherSession.set(key, r);
-    }
-  }
-  return { inSession, otherSession };
-}
-
-function findExistingOtherSessionIndexed(indexes, awb) {
-  const key = awbKeyForMatch(awb);
-  if (key.length < 11) return null;
-  return indexes.otherSession.get(key) ?? null;
-}
-
-async function loadBookGridForSession(
-  spreadsheetId,
-  sessionDate,
-  preferredTab,
-  forceRefresh = false,
-  preferredGid = ""
-) {
-  const preferred = String(preferredTab ?? "").trim();
-  const gid = String(preferredGid ?? "").trim();
-  if (String(spreadsheetId || "").startsWith("local:")) {
-    const cachedSession = getCachedGridForSession(spreadsheetId, sessionDate);
-    if (cachedSession?.grid?.length) {
-      return {
-        grid: cachedSession.grid,
-        sheetTab: cachedSession.sheetTab || preferred || "local",
-        gid: "",
-      };
-    }
-    if (preferred) {
-      const cached = getCachedGrid(spreadsheetId, sessionDate, preferred);
-      if (cached?.grid?.length) {
-        return { grid: cached.grid, sheetTab: cached.sheetTab, gid: "" };
-      }
-    }
-    throw new Error("Chưa có dữ liệu file local — hãy kéo thả / tải file lại trước khi nhập.");
-  }
-  if (!forceRefresh && !gid) {
-    const cachedSession = getCachedGridForSession(spreadsheetId, sessionDate);
-    if (
-      cachedSession?.grid?.length &&
-      tabTitleMatchesSession(cachedSession.sheetTab, sessionDate)
-    ) {
-      return { grid: cachedSession.grid, sheetTab: cachedSession.sheetTab, gid: "" };
-    }
-    if (preferred) {
-      const cached = getCachedGrid(spreadsheetId, sessionDate, preferred);
-      if (cached?.grid?.length) {
-        return { grid: cached.grid, sheetTab: cached.sheetTab, gid: "" };
-      }
-    }
-  }
-
-  const { grid, sheetTab, gid: resolvedGid } = await fetchBookHangNgayGridForSession(
-    spreadsheetId,
-    sessionDate,
-    preferredTab,
-    { preferredGid: gid }
-  );
-  setCachedGrid(spreadsheetId, sessionDate, sheetTab, grid, {
-    bindSession: tabTitleMatchesSession(sheetTab, sessionDate),
-  });
-  return { grid, sheetTab, gid: resolvedGid };
-}
-
-function parsedRowToShipment(row, sessionDate, customers) {
-  const patch = sheetRowToPatch(row, sessionDate, customers, lookupCustomerCode, lookupCustomerId);
-  return {
-    sessionDate,
-    ...patch,
-    hawb: "",
-    dimWeightKg: row.dimWeightKg ?? null,
-    dimLines: null,
-    dimDivisor: null,
-    globalAgentId: "",
-    customerShipperId: "",
-    customerConsigneeId: "",
-    customerGoodsId: "",
-    goodsDescriptionPrint: "",
-    otherRequirementsPrint: "",
-    shipperNamePrint: row.shipperNamePrint || "",
-    shipperAddressPrint: "",
-    shipperPhonePrint: "",
-    shipperEmailPrint: "",
-    taxCodePrint: "",
-    agentNamePrint: "",
-    agentAddressPrint: "",
-    agentPhonePrint: "",
-    agentEmailPrint: "",
-    agentTaxCodePrint: "",
-    consigneeNamePrint: row.consigneeNamePrint || "",
-    consigneeAddressPrint: "",
-    consigneePhonePrint: "",
-    consigneeEmailPrint: "",
-    notifyNamePrint: "",
-    status: "PENDING",
-  };
-}
+import {
+  applyParsedSheetRows,
+  buildAwbIndexes,
+  findExistingOtherSessionIndexed,
+  loadBookGridForSession,
+} from "./sheetApply.mjs";
+import { registerSheetWebhookRoutes } from "./sheetWebhook.mjs";
+import { loadState, peekStateVersion } from "../stateStore.mjs";
+import { projectAppState } from "../stateScope.mjs";
 
 function mapOrphanRow(orphan, sheetRows, sessionDate) {
   const classified = classifySheetOrphan(orphan, sheetRows, sessionDate);
@@ -295,6 +182,7 @@ function csvTextToGrid(text) {
 
 export function registerSheetsRoutes(app, deps) {
   const requireAuth = deps.requireAuth || ((_req, _res, next) => next());
+  registerSheetWebhookRoutes(app, { io: deps.io, requireAuth });
 
   app.get("/api/sheets/book/config", requireAuth, (_req, res) => {
     const spreadsheetId = getBookSpreadsheetId();
@@ -546,157 +434,23 @@ export function registerSheetsRoutes(app, deps) {
         sheetGid
       );
       const parsed = assignSheetSttByWarehouse(parseBookHangNgayGrid(grid, sessionDate));
-      const pickSet = new Set(indices.filter((n) => Number.isInteger(n) && n >= 0));
-      const selected = parsed.filter((_, i) => pickSet.has(i));
+      const validIndices = indices.filter((n) => Number.isInteger(n) && n >= 0 && n < parsed.length);
 
-      if (!selected.length && !removeIds.length && !wantReorder) {
+      if (!validIndices.length && !removeIds.length && !wantReorder) {
         res.status(400).json({ error: "Không có dòng hợp lệ để nhập." });
         return;
       }
 
-      let state = await loadState();
-      const customerLookups = buildCustomerLookups(state.customers ?? []);
-      const awbIndexes = buildAwbIndexes(state.rows, sessionDate);
-      const applied = [];
-      const updated = [];
-      const removed = [];
-      const skipped = [];
-      const errors = [];
-      /** @type {Set<string>} */
-      const batchAwbKeys = new Set();
-      /** @type {Set<string>} */
-      const claimedBlankBookingIds = new Set();
-      const awbFirstIndex = sheetAwbFirstIndexByKey(parsed);
-      const sheetAwbKeys = sheetAwbKeySet(parsed);
-      /** @type {object[]} */
-      const pendingMutations = [];
-
-      for (const row of selected) {
-        const parsedIndex = parsed.indexOf(row);
-        const awbKey = awbKeyForMatch(row.awb);
-        if (awbKey && batchAwbKeys.has(awbKey)) {
-          skipped.push({ awb: row.awb, reason: "Trùng AWB trong lần chọn — chỉ nhập dòng đầu" });
-          continue;
-        }
-
-        const existing = resolveExistingForSheetRow(
-          state.rows,
-          awbIndexes,
-          sessionDate,
-          row,
-          claimedBlankBookingIds,
-          sheetAwbKeys
-        );
-        const otherSession = findExistingOtherSessionIndexed(awbIndexes, row.awb);
-        const sheetFirstIndex = awbFirstIndex.get(awbKey) ?? parsedIndex;
-        const resolved = resolveSheetRowSyncStatus(
-          { existing, otherSession, sheetFirstIndex, rowIndex: parsedIndex },
-          row,
-          sessionDate,
-          [],
-          customerLookups.code,
-          customerLookups.id
-        );
-        const syncStatus = resolved.syncStatus;
-
-        if (sheetRowIsBlocked(syncStatus)) {
-          if (syncStatus === "duplicate") {
-            skipped.push({ awb: row.awb, reason: "Đã khớp Sheet — không đổi" });
-          } else if (syncStatus === "sheet_duplicate") {
-            skipped.push({ awb: row.awb, reason: "Trùng AWB trong Sheet — bỏ dòng sau" });
-          } else if (syncStatus === "awb_taken") {
-            skipped.push({
-              awb: row.awb,
-              reason: `AWB đã có phiên ${resolved.takenSessionDate ?? "khác"}`,
-            });
-          }
-          continue;
-        }
-
-        try {
-          if (syncStatus === "update" && existing) {
-            const patch = sheetRowToUpdatePatch(
-              row,
-              sessionDate,
-              [],
-              customerLookups.code,
-              customerLookups.id
-            );
-            if (!Object.keys(patch).length) {
-              skipped.push({ awb: row.awb, reason: "Sheet không có field mới để cập nhật" });
-              continue;
-            }
-            pendingMutations.push({ action: "UPDATE", id: existing.id, patch });
-            updated.push({
-              awb: row.awb,
-              warehouse: row.warehouse,
-              fromWarehouse: existing.warehouse,
-            });
-            if (awbKey) batchAwbKeys.add(awbKey);
-            claimedBlankBookingIds.add(existing.id);
-            continue;
-          }
-
-          const shipment = parsedRowToShipment(row, sessionDate, state.customers ?? []);
-          pendingMutations.push({ action: "ADD", shipment });
-          applied.push({ awb: row.awb, warehouse: row.warehouse });
-          if (awbKey) batchAwbKeys.add(awbKey);
-        } catch (e) {
-          errors.push({ awb: row.awb, error: String(e?.message ?? e) });
-        }
-      }
-
-      const orphans = findOrphanSessionLots(
-        state.rows,
-        sessionDate,
+      const result = await applyParsedSheetRows({
         parsed,
-        claimedBlankBookingIds
-      );
-      const orphanById = new Map(orphans.map((o) => [o.id, o]));
-      for (const id of removeIds) {
-        const orphan = orphanById.get(id);
-        if (!orphan) {
-          skipped.push({ awb: id, reason: "Không phải lô thừa của tab Sheet này" });
-          continue;
-        }
-        pendingMutations.push({ action: "DELETE", id: orphan.id });
-        removed.push({
-          awb: orphan.awb,
-          warehouse: orphan.warehouse,
-          replacedByAwb: classifySheetOrphan(orphan, parsed, sessionDate).replacedByAwb,
-        });
-      }
-
-      if (pendingMutations.length) {
-        try {
-          state = await runBatchMutations(pendingMutations);
-        } catch (e) {
-          res.status(500).json({ error: String(e?.message ?? e) });
-          return;
-        }
-      }
-
-      let reorderedCount = 0;
-      if (wantReorder) {
-        const plan = reorderSessionRowsBySheet(state.rows, sessionDate, parsed);
-        if (plan.changed && plan.orderedIds.length) {
-          try {
-            state = await runBatchMutations([
-              { action: "REORDER_SESSION", sessionDate, orderedIds: plan.orderedIds },
-            ]);
-            reorderedCount = plan.sttShiftCount;
-          } catch (e) {
-            res.status(500).json({ error: String(e?.message ?? e) });
-            return;
-          }
-        }
-      }
-
-      if (pendingMutations.length || reorderedCount > 0) {
-        const forClient = await attachDbSyncedAt(state);
-        await emitScopedSync(deps.io, forClient, { omitCustomers: true });
-        state = forClient;
-      }
+        indices: validIndices,
+        sessionDate,
+        removeIds,
+        wantReorder,
+        io: deps.io,
+      });
+      const { state, applied, updated, removed, errors, reorderedCount } = result;
+      const skipped = result.skipped.map(({ awb, reason }) => ({ awb, reason }));
 
       res.json({
         sessionDate,

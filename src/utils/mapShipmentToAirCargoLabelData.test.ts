@@ -110,12 +110,13 @@ describe("mapShipmentToAirCargoLabelData airline", () => {
     expect(byAwb.airline).toBe("TURKMENISTAN AIRLINES");
   });
 
-  it("thiếu T5 trong catalog (cache cũ) → synthetic T5 AIRLINES", () => {
+  it("thiếu T5 trong catalog (cache cũ) → in mã hãng T5, đánh dấu chưa biết", () => {
     const d = mapShipmentToAirCargoLabelData(
       baseShipment({ flight: "T5123", awb: "542-1234 5678" }),
       { byAwbPrefix: {}, byFlightPrefix: {} },
       { replaceDefaults: true }
     );
-    expect(d.airline).toBe("T5 AIRLINES");
+    expect(d.airline).toBe("T5");
+    expect(d.airlineKnown).toBe(false);
   });
 });

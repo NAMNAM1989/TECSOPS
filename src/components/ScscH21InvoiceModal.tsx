@@ -405,6 +405,7 @@ export function ScscH21InvoiceModal({
         invoiceNo: invoiceNoDraft.trim() || null,
         invoiceSeq,
         invoiceSeqTotal,
+        declarationKg: allocateKg,
       }),
     [
       shipment,
@@ -415,6 +416,7 @@ export function ScscH21InvoiceModal({
       invoiceNoDraft,
       invoiceSeq,
       invoiceSeqTotal,
+      allocateKg,
     ]
   );
 

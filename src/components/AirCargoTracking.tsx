@@ -37,6 +37,8 @@ import { blankShipmentDraft } from "../utils/blankShipment";
 import { focusShipmentGridCell } from "../utils/focusShipmentGrid";
 import { debugError } from "../utils/debugLog";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useSheetRealtimeStatus } from "../hooks/useSheetRealtimeStatus";
+import { describeSheetConflicts } from "../utils/sheetRealtime";
 import {
   AppShell,
   Banner,
@@ -128,6 +130,13 @@ export function AirCargoTracking({
   } = sync;
   const toast = useToast();
   const [syncRefreshing, setSyncRefreshing] = useState(false);
+  const sheetSyncedAt = useSheetRealtimeStatus((conflicts, event) => {
+    toast.push({
+      tone: "warning",
+      title: `Sheet «${event.tabName}»: ${conflicts.length} dòng bị bỏ qua`,
+      message: describeSheetConflicts(conflicts),
+    });
+  });
 
   const syncStatusMessage = useMemo(() => {
     if (status === "live" && socketConnected) return "Đồng bộ trực tiếp";
@@ -757,6 +766,7 @@ export function AirCargoTracking({
       syncStatus={status}
       socketConnected={socketConnected}
       lotSyncedAt={lotSyncedAt}
+      sheetSyncedAt={sheetSyncedAt}
       pendingOfflineCount={pendingOfflineCount ?? 0}
       syncRefreshing={syncRefreshing}
       onSyncRefresh={async () => {
@@ -806,6 +816,7 @@ export function AirCargoTracking({
       socketConnected={socketConnected}
       pendingOfflineCount={pendingOfflineCount ?? 0}
       lastSyncedAt={lotSyncedAt}
+      sheetSyncedAt={sheetSyncedAt}
       onRefresh={async () => {
         setSyncRefreshing(true);
         try {

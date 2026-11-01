@@ -19,6 +19,7 @@ import { registerScscH21Routes } from "./scscH21Routes.mjs";
 import { registerTcsH21Routes } from "./tcsH21Routes.mjs";
 import { getDbPool, isDatabaseConfigured } from "./dbPool.mjs";
 import { registerSheetsRoutes } from "./sheets/sheetsRoutes.mjs";
+import { startSheetAutoSync } from "./sheets/sheetAutoSync.mjs";
 import {
   applySecurityHeaders,
   createMutationRateLimit,
@@ -321,6 +322,7 @@ async function start() {
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.info(`[server] http://0.0.0.0:${PORT} (static + /api + socket.io)`);
   });
+  startSheetAutoSync({ io });
 }
 
 io.on("connection", async (socket) => {

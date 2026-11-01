@@ -239,12 +239,10 @@ export type PrintThermalLabelsOptions = {
 };
 
 export type ThermalLabelPrintResult =
-  | { ok: true; printerCopiesHint?: number }
+  | { ok: true }
   | { ok: false; error: string };
 
 const MAX_PRINT_COPIES = 500;
-/** Chrome dễ treo khi preview quá nhiều trang @page nhỏ — trên ngưỡng này chỉ in 1 trang + nhắc đặt Copies. */
-const BROWSER_SAFE_PAGE_COPIES = 30;
 
 /** Lấy 1 trang tem từ host rồi nhân bản `copies` lần (HTML thuần, không React). */
 export function buildRepeatedLabelPagesHtml(host: HTMLElement, copies: number): string {
@@ -340,17 +338,13 @@ export async function printThermalLabelsFromIframe(
   }
 
   const pageCount = host.querySelectorAll(".print-label-page").length;
-  const copiesWanted =
+  const copies =
     copiesRaw != null
       ? Math.max(1, Math.min(MAX_PRINT_COPIES, Math.floor(copiesRaw) || 1))
       : Math.max(1, pageCount || 1);
 
-  /** Tránh treo: lô lớn → 1 trang + Copies trên hộp thoại in. */
-  const usePrinterCopies = copiesWanted > BROWSER_SAFE_PAGE_COPIES;
-  const copies = usePrinterCopies ? 1 : copiesWanted;
-
   const inner =
-    pageCount > 1 && copiesRaw == null && !usePrinterCopies
+    pageCount > 1 && copiesRaw == null
       ? host.innerHTML
       : buildRepeatedLabelPagesHtml(host, copies);
 
@@ -481,9 +475,7 @@ export async function printThermalLabelsFromIframe(
     win.focus();
     win.print();
     setTimeout(cleanup, 120_000);
-    return usePrinterCopies
-      ? { ok: true, printerCopiesHint: copiesWanted }
-      : { ok: true };
+    return { ok: true };
   } catch {
     cleanup();
     return { ok: false, error: "Trình duyệt chặn hộp thoại in." };

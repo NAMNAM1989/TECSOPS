@@ -20,3 +20,7 @@ export function saveLabelSheetFormat(f: LabelSheetFormat): void {
     /* ignore */
   }
 }
+
+export function labelSheetFormatLabel(f: LabelSheetFormat): string {
+  return f === "100x50" ? "100×50 mm" : "100×80 mm";
+}

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { Shipment } from "../types/shipment";
 import {
+  labelSheetFormatLabel,
   loadLabelSheetFormat,
   saveLabelSheetFormat,
   type LabelSheetFormat,
@@ -15,7 +16,6 @@ import {
   printThermalLabelsFromIframe,
   thermalPageMm,
 } from "../utils/printThermalLabelIframe";
-import { labelSheetFormatLabel } from "../printing/thermalLabelFormat";
 import { useModalFocusTrap } from "../hooks/useModalFocusTrap";
 /** Chỉ load khi mở modal in — không nhồi vào first paint. */
 import "../styles/print-label.css";
@@ -227,13 +227,7 @@ export function PrintShippingLabel({
         copies: 1,
         printWindow,
       });
-      if (!res.ok) {
-        setPrintMsg(res.error);
-      } else if (res.printerCopiesHint) {
-        setPrintMsg(
-          `Lô ${res.printerCopiesHint} tem: trong hộp thoại in hãy đặt Số bản = ${res.printerCopiesHint}.`
-        );
-      }
+      if (!res.ok) setPrintMsg(res.error);
     } finally {
       setPrinting(false);
     }

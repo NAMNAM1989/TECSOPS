@@ -4,8 +4,6 @@ import { awbCheckDigitError } from "./awbCheckDigit";
 import type { AirlineLabelOverrides } from "./airlineLabelOverridesCore";
 import { mergeAirlineLookupMaps } from "./airlineLabelOverridesCore";
 
-export type AirCargoLabelSpecial = "" | "cold" | "danger";
-
 export type AirCargoLabelData = {
   airline: string;
   /** false: không có trong danh mục, `airline` là mã hãng / đầu số AWB. */
@@ -17,8 +15,6 @@ export type AirCargoLabelData = {
   pieces: string;
   hasHawb: boolean;
   hawbNo: string;
-  hawbPieces: string;
-  special: AirCargoLabelSpecial;
 };
 
 function compact(s: string): string {
@@ -74,13 +70,6 @@ function airlineNameFromShipment(
   return { text: flightPrefix || (awbPrefix.length === 3 ? awbPrefix : ""), known: false };
 }
 
-function specialFromShipment(s: Shipment): AirCargoLabelSpecial {
-  const text = `${s.note ?? ""} ${s.cutoffNote ?? ""}`.toUpperCase();
-  if (/(DG|DANGEROUS|BATTERY|LITHIUM|CHEMICAL)/.test(text)) return "danger";
-  if (/(PER|PERISHABLE|COLD|COOL|2-8|2–8|FRESH|KEEP)/.test(text)) return "cold";
-  return "";
-}
-
 export function mapShipmentToAirCargoLabelData(
   s: Shipment,
   airlineLabelOverrides?: AirlineLabelOverrides | null,
@@ -102,8 +91,6 @@ export function mapShipmentToAirCargoLabelData(
     pieces,
     hasHawb,
     hawbNo,
-    hawbPieces: hasHawb ? pieces : "",
-    special: specialFromShipment(s),
   };
 }
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { migrateShipmentStatus, workflowStatusPatchFromDataEdit } from "./shipmentWorkflowStatus.mjs";
 import {
   parseCustomersLoose,
@@ -134,14 +135,6 @@ function assertAwbUnique(rows, awbString, exceptId) {
   }
 }
 
-function nextNewId(rows) {
-  let maxNew = 0;
-  for (const r of rows) {
-    const m = /^new-(\d+)$/.exec(r.id);
-    if (m) maxNew = Math.max(maxNew, parseInt(m[1], 10));
-  }
-  return `new-${Math.max(100, maxNew) + 1}`;
-}
 
 function finishState(state, rows, extras = {}) {
   return {
@@ -269,7 +262,8 @@ export function applyMutation(state, mutation) {
         throw new Error("ADD requires shipment.sessionDate (YYYY-MM-DD)");
       }
       assertAwbUnique(rows, s.awb, null);
-      const id = nextNewId(rows);
+      // Random, never reused: a stale UPDATE for a deleted lot must not hit a new one.
+      const id = `s-${randomUUID()}`;
       const withId = { ...s, awb: formatAwb(s.awb), id };
       rows.push({ ...withId, status: migrateShipmentStatus(withId) });
       break;
@@ -311,9 +305,9 @@ export function runMutation(mutation) {
       return { __tecsopsPersistDiff: true, prev: current, next };
     });
   });
-  tail = result.catch(async (err) => {
+  // Never leave tail rejected: the next mutation must still run.
+  tail = result.catch((err) => {
     console.error("[mutation]", err);
-    return loadState();
   });
   return result;
 }
@@ -339,9 +333,8 @@ export function runBatchMutations(mutations) {
       return { __tecsopsPersistDiff: true, prev: current, next: state };
     });
   });
-  tail = result.catch(async (err) => {
+  tail = result.catch((err) => {
     console.error("[mutation:batch]", err);
-    return loadState();
   });
   return result;
 }

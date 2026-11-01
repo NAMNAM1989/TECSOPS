@@ -118,11 +118,8 @@ async function main() {
       const mutationResponse = await mutationResponsePromise;
       const mutationState = await mutationResponse.json();
       const addedRows = (mutationState.rows || []).filter((row) => !previousIds.has(row.id));
-      const added = addedRows.sort((a, b) => {
-        const an = Number(String(a.id).replace(/^new-/, ""));
-        const bn = Number(String(b.id).replace(/^new-/, ""));
-        return bn - an;
-      })[0];
+      // IDs are random now — cannot pick "the newest" by number.
+      const added = addedRows.length === 1 ? addedRows[0] : null;
       if (!added?.id) throw new Error("Không xác định được ID booking smoke vừa tạo");
       createdShipmentIds.push(added.id);
       const markResponse = await page.request.post(new URL("/api/mutation", BASE).toString(), {

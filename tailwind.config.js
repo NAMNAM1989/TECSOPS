@@ -79,6 +79,9 @@ export default {
             history: v("stage-history"),
           },
           awb: v("foreground"),
+          marker: v("marker"),
+          "marker-soft": v("marker-soft"),
+          "marker-ink": v("marker-ink"),
           alert: {
             fg: v("alert-fg"),
             bg: v("alert-bg"),

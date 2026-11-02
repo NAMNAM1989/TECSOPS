@@ -158,16 +158,16 @@ export function OpsLeftRail({
               className={`group btn-kinetic relative flex min-h-11 w-full select-none touch-manipulation flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-2xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus ${
                 isActive
                   ? emphasize
-                    ? "bg-teal-500/18 text-teal-800 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.32)]"
-                    : "bg-teal-500/12 text-ui-primary-hover shadow-sm"
+                    ? "bg-ui-marker text-ui-text"
+                    : "bg-ui-marker text-ui-text"
                   : emphasize
-                    ? "text-teal-700 hover:bg-teal-500/10 hover:text-teal-800"
+                    ? "text-ui-text hover:bg-ui-surface-muted"
                     : "text-ui-text-muted hover:bg-ui-surface-muted hover:text-ui-text"
               }`}
             >
               {isActive ? (
                 <span
-                  className={`absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full bg-ui-accent shadow-[0_0_8px_rgba(13,148,136,0.6)] transition-all duration-200 ease-fluid ${
+                  className={`absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full bg-ui-text transition-all duration-200 ease-fluid ${
                     emphasize ? "h-8 w-[4px]" : "h-7 w-[3.5px]"
                   }`}
                   aria-hidden
@@ -178,8 +178,8 @@ export function OpsLeftRail({
                   emphasize
                     ? `grid place-items-center rounded-xl transition-all duration-200 ease-fluid group-hover:scale-110 ${
                         isActive
-                          ? "h-8 w-8 bg-teal-600 text-white shadow-sm shadow-teal-700/25"
-                          : "h-8 w-8 bg-teal-500/15 text-teal-700 ring-1 ring-teal-500/35"
+                          ? "h-8 w-8 bg-ui-text text-white"
+                          : "h-8 w-8 bg-ui-surface-muted text-ui-text ring-1 ring-ui-border"
                       }`
                     : "transition-transform duration-200 ease-fluid group-hover:scale-110 group-active:opacity-90"
                 }

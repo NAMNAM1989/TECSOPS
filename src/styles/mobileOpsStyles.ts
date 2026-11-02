@@ -25,9 +25,9 @@ export const MOBILE = {
   secondaryBtn:
     "inline-flex min-h-11 items-center justify-center rounded-xl border border-ui-border bg-ui-surface px-4 text-[13px] font-semibold text-ui-text transition hover:bg-ui-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ui-focus active:scale-[0.98]",
   inputHero:
-    "box-border w-full min-h-12 min-w-0 rounded-xl border border-ui-border bg-ui-surface px-3 py-3 font-shipment-data text-[15px] font-bold tracking-tight text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-focus sm:px-4 sm:text-base",
+    "box-border w-full min-h-12 min-w-0 rounded-xl border border-ui-border bg-ui-surface px-3 py-3 font-shipment-data text-base font-bold tracking-tight text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-focus sm:px-4",
   input:
-    "box-border w-full min-h-11 min-w-0 rounded-xl border border-ui-border bg-ui-surface px-3.5 py-2.5 font-semibold text-[13px] text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-focus",
+    "box-border w-full min-h-11 min-w-0 rounded-xl border border-ui-border bg-ui-surface px-3.5 py-2.5 font-semibold text-base text-ui-text outline-none focus:border-ui-primary focus:ring-2 focus:ring-ui-focus",
   fieldLabel: "mb-1 block text-2xs font-bold uppercase tracking-wider text-ui-text-muted",
   tabActive:
     "flex-1 rounded-xl bg-ui-navy py-2.5 text-center text-[12px] font-semibold text-white transition",

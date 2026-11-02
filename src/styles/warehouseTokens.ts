@@ -2,10 +2,10 @@ import type { Warehouse } from "../types/shipment";
 
 /** Series biểu đồ — light v4, gán theo mã kho. */
 export const warehouseSeriesHex: Record<Warehouse, string> = {
-  "TECS-TCS": "#0C4A6E",
-  TCS: "#0369A1",
-  "TECS-SCSC": "#4C1D95",
-  SCSC: "#6D28D9",
+  "TECS-TCS": "#17457E",
+  TCS: "#2F6FC0",
+  "TECS-SCSC": "#4A2384",
+  SCSC: "#7A4CC4",
 };
 
 export type WarehouseTone = {

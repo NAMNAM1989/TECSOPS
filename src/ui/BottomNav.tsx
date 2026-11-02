@@ -151,6 +151,12 @@ export function BottomNav({
   defaultOpen = false,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen);
+  // Đổi route (kể cả Back) → đóng menu; set trong render để không đè defaultOpen lúc mount.
+  const [prevActive, setPrevActive] = useState(active);
+  if (active !== prevActive) {
+    setPrevActive(active);
+    setOpen(false);
+  }
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const ActiveIcon = ITEMS.find((i) => i.id === active)?.Icon ?? IconMenu;
@@ -239,7 +245,7 @@ export function BottomNav({
                   className={`flex w-full touch-manipulation items-center gap-2.5 px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ui-focus disabled:cursor-not-allowed disabled:opacity-40 ${
                     action.disabled
                       ? "text-ui-text-muted"
-                      : "text-ui-text hover:bg-teal-500/10"
+                      : "text-ui-text hover:bg-ui-surface-muted"
                   }`}
                 >
                   <IconImage className="h-4 w-4 shrink-0 text-ui-accent" />
@@ -299,10 +305,10 @@ export function BottomNav({
                 className={`flex w-full touch-manipulation items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ui-focus ${
                   isActive
                     ? item.id === "scsc-h21" || item.id === "tcs-h21"
-                      ? "bg-teal-500/18 text-teal-800"
-                      : "bg-teal-500/12 text-ui-primary-hover"
+                      ? "bg-ui-marker text-ui-text"
+                      : "bg-ui-marker text-ui-text"
                     : item.id === "scsc-h21" || item.id === "tcs-h21"
-                      ? "text-teal-800 hover:bg-teal-500/10"
+                      ? "text-ui-text hover:bg-ui-surface-muted"
                       : "text-ui-text hover:bg-ui-surface-muted"
                 }`}
               >
@@ -311,8 +317,8 @@ export function BottomNav({
                     item.id === "scsc-h21" || item.id === "tcs-h21"
                       ? `grid h-8 w-8 shrink-0 place-items-center rounded-xl ${
                           isActive
-                            ? "bg-teal-600 text-white shadow-sm"
-                            : "bg-teal-500/15 text-teal-700 ring-1 ring-teal-500/35"
+                            ? "bg-ui-text text-white"
+                            : "bg-ui-surface-muted text-ui-text ring-1 ring-ui-border"
                         }`
                       : undefined
                   }

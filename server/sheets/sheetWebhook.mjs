@@ -200,6 +200,13 @@ export function createSheetWebhookHandler(deps = {}) {
     if (payload.mode === "full") {
       let snap = snapshots.get(key);
       if (payload.batchIndex === 0) {
+        // Gửi lại đúng lô 0 (cùng batchId, thường do timeout) không được xoá
+        // các lô sau đã nằm trong bản chụp — nếu không, sửa dòng lẻ sẽ thấy tab cụt.
+        if (snap && snap.batchId === payload.batchId && snap.received.has(0)) {
+          for (const r of payload.rows) snap.rows.set(r.rowNumber, r.values);
+          snap.updatedAt = nowMs;
+          return true;
+        }
         snap = {
           rows: new Map(),
           batchId: payload.batchId,

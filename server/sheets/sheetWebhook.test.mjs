@@ -536,6 +536,85 @@ describe("sheet realtime — lỗi Bugbot PR #82", () => {
   });
 
   // Hợp đồng cho tools/apps-script/Code.gs: dòng xoá trắng PHẢI được gửi lên thì AWB cũ mới rời bản chụp.
+  it("ghi state thất bại ⇒ chưa đánh dấu webhook, auto-sync vẫn cập nhật được lô", async () => {
+    const store = createFakeStore([lot("l-1", AWB_A, SESSION)]);
+    const originalRunLocked = store.runLocked.bind(store);
+    let failed = false;
+    store.runLocked = async (fn) => {
+      if (!failed) {
+        failed = true;
+        throw new Error("db down");
+      }
+      return originalRunLocked(fn);
+    };
+    const { http, post } = await startWebhook();
+    try {
+      const res = await post(fullTab([{ rowNumber: 5, values: sheetValues(AWB_A, { pcsKg: "9/90" }) }]));
+      expect(res.status).toBe(500);
+      expect(store.rows[0]).toMatchObject({ pcs: 20, kg: 100 });
+      const auto = await runSheetAutoSyncOnce({
+        now: () => START + 60_000,
+        loadGrid: async (sessionDate) => {
+          if (sessionDate !== SESSION) throw new Error("Không có tab Sheet cho ngày");
+          return {
+            sheetTab: TAB,
+            grid: [{ rowIndex: 0, cells: sheetValues(AWB_A, { pcsKg: "9/90" }) }],
+          };
+        },
+      });
+      expect(auto.sessions[0]).toMatchObject({ updated: 1, mutated: true });
+      expect(store.rows[0]).toMatchObject({ pcs: 9, kg: 90 });
+    } finally {
+      await http.close();
+    }
+  });
+
+  it("gửi lại lô 0 trong 5s không cắt mất dòng của lô sau", async () => {
+    const store = createFakeStore();
+    const { clock, http, post } = await startWebhook();
+    try {
+      await post(
+        fullTab([{ rowNumber: 5, values: sheetValues(AWB_A) }], {
+          batchCount: 2,
+          batchId: "b9",
+          batchIndex: 0,
+        })
+      );
+      clock.t += 1000;
+      await post(
+        fullTab([{ rowNumber: 205, values: sheetValues(AWB_B) }], {
+          batchCount: 2,
+          batchId: "b9",
+          batchIndex: 1,
+        })
+      );
+      expect(store.rows).toHaveLength(2);
+      clock.t += 1000;
+      const retry = await (
+        await post(
+          fullTab([{ rowNumber: 5, values: sheetValues(AWB_A) }], {
+            batchCount: 2,
+            batchId: "b9",
+            batchIndex: 0,
+          })
+        )
+      ).json();
+      expect(retry.deduped).toBe(1);
+      clock.t += 10_000;
+      // Dòng sau lô 1: nếu bản chụp còn dòng 205 thì AWB_B là trùng Sheet, không ghi đè lô.
+      const body = await (
+        await post(editRows([{ rowNumber: 400, values: sheetValues(AWB_B, { pcsKg: "9/90" }) }]))
+      ).json();
+      expect(body.needFullTab).not.toBe(true);
+      expect(body.skipped.map((s) => s.code)).toContain("sheet_duplicate");
+      expect(store.rows).toHaveLength(2);
+      const b = store.rows.find((r) => r.awb.replace(/\D/g, "") === AWB_B.replace(/\D/g, ""));
+      expect(b).toMatchObject({ pcs: 20, kg: 100 });
+    } finally {
+      await http.close();
+    }
+  });
+
   it("nhận dòng xoá trắng ⇒ dùng lại AWB ở dòng khác không bị coi là trùng", async () => {
     const store = createFakeStore();
     const { clock, http, post } = await startWebhook();

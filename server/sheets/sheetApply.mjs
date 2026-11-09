@@ -171,6 +171,23 @@ export function resetWebhookApplyMemory() {
 }
 
 /**
+ * Chỉ ghi nhớ AWB sau khi Postgres đã nhận batch. Ghi trước đó khiến auto-sync
+ * bỏ qua lô trong 10 phút dù lần webhook vừa lỗi.
+ * @param {number | undefined} webhookAt
+ * @param {{ awb?: string }[]} rows
+ */
+function rememberWebhookApplies(webhookAt, rows) {
+  if (webhookAt == null || !rows.length) return;
+  for (const [key, at] of webhookAppliedAt) {
+    if (webhookAt - at > WEBHOOK_MEMORY_MS) webhookAppliedAt.delete(key);
+  }
+  for (const row of rows) {
+    const key = awbKeyForMatch(row.awb);
+    if (key) webhookAppliedAt.set(key, webhookAt);
+  }
+}
+
+/**
  * Khớp các dòng `parsed[indices]` với state rồi ghi một batch + broadcast một lần.
  * @param {{
  *   parsed: object[],
@@ -201,15 +218,6 @@ async function applyParsedSheetRowsUnlocked({
 }) {
   const pickSet = new Set(indices.filter((n) => Number.isInteger(n) && n >= 0));
   const selected = parsed.filter((_, i) => pickSet.has(i));
-  if (webhookAt != null) {
-    for (const [key, at] of webhookAppliedAt) {
-      if (webhookAt - at > WEBHOOK_MEMORY_MS) webhookAppliedAt.delete(key);
-    }
-    for (const row of selected) {
-      const key = awbKeyForMatch(row.awb);
-      if (key) webhookAppliedAt.set(key, webhookAt);
-    }
-  }
 
   let state = await loadState();
   const customerLookups = buildCustomerLookups(state.customers ?? []);
@@ -334,6 +342,7 @@ async function applyParsedSheetRowsUnlocked({
 
   if (pendingMutations.length) {
     state = await runBatchMutations(pendingMutations);
+    rememberWebhookApplies(webhookAt, [...applied, ...updated]);
   }
 
   let reorderedCount = 0;

@@ -96,6 +96,7 @@ describe("mapShipmentToAirCargoLabelData airline", () => {
       "3U3904": "SICHUAN AIRLINES",
       "5X067": "UPS AIRLINES",
       "9G400": "SUN PHUQUOC AIRWAYS",
+      A9123: "SIN KUNG AIRWAYS",
       BI382: "ROYAL BRUNEI AIRLINES",
       CO9632: "NORTH-WESTERN CARGO",
       CV7856: "CARGOLUX",
@@ -118,6 +119,12 @@ describe("mapShipmentToAirCargoLabelData airline", () => {
     expect(
       mapShipmentToAirCargoLabelData(baseShipment({ flight: "", awb: "618-1234 5675" })).airline
     ).toBe("SINGAPORE AIRLINES");
+    expect(
+      mapShipmentToAirCargoLabelData(baseShipment({ flight: "", awb: "809-1234 5675" })).airline
+    ).toBe("SUN PHUQUOC AIRWAYS");
+    expect(
+      mapShipmentToAirCargoLabelData(baseShipment({ flight: "", awb: "962-1234 5675" })).airline
+    ).toBe("SIN KUNG AIRWAYS");
   });
 
   it("fallback AWB khi không có chuyến", () => {

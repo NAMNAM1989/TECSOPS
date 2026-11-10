@@ -31,12 +31,15 @@ import {
 } from "../utils/inlineShipmentFieldValidation";
 import { InlineTextEdit } from "./InlineTextEdit";
 
-type Props = {
+type ProfileEditorProps = {
   shipment: Shipment;
   customerDirectory: readonly CustomerDirectoryEntry[];
+  onUpdate: (patch: Partial<Shipment>) => void | Promise<boolean | void>;
+};
+
+type Props = ProfileEditorProps & {
   /** Giữ prop để caller cũ không vỡ — chi tiết CNEE đã chuyển sang cột KHÁCH. */
   sessionYmdFallback?: string;
-  onUpdate: (patch: Partial<Shipment>) => void | Promise<boolean | void>;
 };
 
 const stopRowClick = {
@@ -144,20 +147,12 @@ function SummaryLine({
   );
 }
 
-/**
- * Ô INFO KH: mặc định 3 dòng tóm tắt; click → panel chỉnh Shipper / CNEE (+ tên in) / Hàng.
- */
-export function InlineCustomerInfoCell({
+/** Shipper / CNEE / tên in / hàng — dùng trong popover cũ và panel hồ sơ lô. */
+export function CustomerProfileEditors({
   shipment,
   customerDirectory,
   onUpdate,
-}: Props) {
-  const panelId = useId();
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-
+}: ProfileEditorProps) {
   const entry = findCustomerEntry(shipment, customerDirectory);
   const shippers = entry?.savedShippers ?? [];
   const consignees = entry?.savedConsignees ?? [];
@@ -171,9 +166,6 @@ export function InlineCustomerInfoCell({
   const selectedConsignee = consignees.find((x) => x.id === consigneeId);
   const selectedGoods = goods.find((x) => x.id === goodsId);
 
-  const detail = buildShipmentCustomerDetailSections(shipment, customerDirectory);
-  const goodsText = detail.goodsEmpty ? "" : detail.goodsLines.join("\n");
-
   const cneePrint = (shipment.consigneeNamePrint ?? "").trim();
   const cneeProfileName = selectedConsignee
     ? formatSavedConsigneeShortLabel(selectedConsignee).trim()
@@ -183,49 +175,7 @@ export function InlineCustomerInfoCell({
     Boolean(cneeProfileName) &&
     cneePrint.toUpperCase() !== cneeProfileName.toUpperCase();
 
-  const place = useCallback(() => {
-    const el = btnRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const width = 272;
-    const estH = 220;
-    let left = r.left;
-    if (left + width > window.innerWidth - 12) {
-      left = window.innerWidth - width - 12;
-    }
-    if (left < 12) left = 12;
-    let top = r.bottom + 6;
-    if (top + estH > window.innerHeight - 12) {
-      top = Math.max(12, r.top - estH - 6);
-    }
-    setPos({ top, left });
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    place();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    const onScroll = () => setOpen(false);
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("mousedown", onDown);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
-    };
-  }, [open, place]);
-
-  const editors = (
+  return (
     <div className="flex min-w-0 flex-col gap-2">
       <FieldRow label="Shipper">
         <MiniSelect
@@ -343,6 +293,66 @@ export function InlineCustomerInfoCell({
       </FieldRow>
     </div>
   );
+}
+
+/**
+ * Ô INFO KH: mặc định 3 dòng tóm tắt; click → panel chỉnh Shipper / CNEE (+ tên in) / Hàng.
+ */
+export function InlineCustomerInfoCell({
+  shipment,
+  customerDirectory,
+  onUpdate,
+}: Props) {
+  const panelId = useId();
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const detail = buildShipmentCustomerDetailSections(shipment, customerDirectory);
+  const goodsText = detail.goodsEmpty ? "" : detail.goodsLines.join("\n");
+
+  const place = useCallback(() => {
+    const el = btnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const width = 272;
+    const estH = 220;
+    let left = r.left;
+    if (left + width > window.innerWidth - 12) {
+      left = window.innerWidth - width - 12;
+    }
+    if (left < 12) left = 12;
+    let top = r.bottom + 6;
+    if (top + estH > window.innerHeight - 12) {
+      top = Math.max(12, r.top - estH - 6);
+    }
+    setPos({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open, place]);
 
   return (
     <div className="relative min-w-0 w-full max-w-full" {...stopRowClick}>
@@ -392,7 +402,11 @@ export function InlineCustomerInfoCell({
                   ✕
                 </button>
               </div>
-              {editors}
+              <CustomerProfileEditors
+                shipment={shipment}
+                customerDirectory={customerDirectory}
+                onUpdate={onUpdate}
+              />
             </div>,
             document.body
           )

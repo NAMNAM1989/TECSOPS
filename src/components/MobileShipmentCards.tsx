@@ -26,6 +26,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { ShipmentRowActionsMenu } from "./ShipmentRowActionsMenu";
 import { formatAwb } from "../utils/awbFormat";
 import {
+  buildShipmentCustomerDetailSections,
   formatShipmentCneeReadonlySummary,
 } from "../utils/shipmentCneeCopyBlock";
 
@@ -109,6 +110,9 @@ const MobileShipmentCard = memo(
       .filter(Boolean)
       .join(" · ");
     const cneeSummary = formatShipmentCneeReadonlySummary(row, customerDirectory);
+    const profile = buildShipmentCustomerDetailSections(row, customerDirectory);
+    const cneeLine = profile.cneeEmpty ? "Chưa chọn" : profile.cnee.name;
+    const goodsLine = profile.goodsEmpty ? "—" : profile.goodsLines[0] || "—";
 
     const flightLine = [
       flightMeta.flight && flightMeta.flightDate
@@ -200,6 +204,15 @@ const MobileShipmentCard = memo(
             {qtyLine ? (
               <span className={`shrink-0 ${MOBILE.cardQty}`}>{qtyLine}</span>
             ) : null}
+          </button>
+          <button
+            type="button"
+            className="mt-0.5 w-full truncate py-0 text-left text-[11px] leading-4 text-ui-text-muted active:opacity-90"
+            onClick={() => onOpenEdit(row)}
+          >
+            <span className="font-bold">CNEE</span> {cneeLine}
+            {" · "}
+            <span className="font-bold">Hàng</span> {goodsLine}
           </button>
         </div>
       </Box>

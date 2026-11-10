@@ -85,6 +85,41 @@ describe("mapShipmentToAirCargoLabelData airline", () => {
     expect(d.airline).toBe("VIETNAM AIRLINES");
   });
 
+  it("lịch SCSC mùa đông: TR in cùng tên với SQ, và nhận các mã chuyến mới", () => {
+    expect(mapShipmentToAirCargoLabelData(baseShipment({ flight: "SQ185" })).airline).toBe(
+      "SINGAPORE AIRLINES"
+    );
+    expect(mapShipmentToAirCargoLabelData(baseShipment({ flight: "TR503" })).airline).toBe(
+      "SINGAPORE AIRLINES"
+    );
+    const byFlight: Record<string, string> = {
+      "3U3904": "SICHUAN AIRLINES",
+      "5X067": "UPS AIRLINES",
+      "9G400": "SUN PHUQUOC AIRWAYS",
+      BI382: "ROYAL BRUNEI AIRLINES",
+      CO9632: "NORTH-WESTERN CARGO",
+      CV7856: "CARGOLUX",
+      LD562: "AIR HONG KONG",
+      MF842: "XIAMEN AIRLINES",
+      O3318: "SF AIRLINES",
+      TH237: "RAYA AIRWAYS",
+      VU311: "VIETRAVEL AIRLINES",
+    };
+    for (const [flight, airline] of Object.entries(byFlight)) {
+      const d = mapShipmentToAirCargoLabelData(baseShipment({ flight }));
+      expect(`${flight} ${d.airline} known=${d.airlineKnown}`).toBe(`${flight} ${airline} known=true`);
+    }
+  });
+
+  it("đầu AWB của hãng mới trên lịch SCSC", () => {
+    expect(
+      mapShipmentToAirCargoLabelData(baseShipment({ flight: "", awb: "921-1234 5675" })).airline
+    ).toBe("SF AIRLINES");
+    expect(
+      mapShipmentToAirCargoLabelData(baseShipment({ flight: "", awb: "618-1234 5675" })).airline
+    ).toBe("SINGAPORE AIRLINES");
+  });
+
   it("fallback AWB khi không có chuyến", () => {
     const d = mapShipmentToAirCargoLabelData(baseShipment({ flight: "", awb: "695-5630 0484" }));
     expect(d.airline).toBe("EVA AIR");

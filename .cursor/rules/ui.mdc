@@ -1,0 +1,48 @@
+---
+description: Quy tắc UI TECSOPS — component nội bộ, token ui.*, mobile-first, a11y, không Ext/eCargo
+globs:
+  - src/**/*.tsx
+  - src/**/*.css
+  - src/styles/**/*.{ts,css}
+  - tailwind.config.js
+alwaysApply: false
+---
+
+# UI TECSOPS — Operational Signal
+
+Rule này áp dụng khi sửa giao diện hoặc thêm feature trên web Ops. Phạm vi nghiệp vụ: **hàng không (air cargo) thôi** — bốn kho `TECS-TCS`, `TECS-SCSC`, `TCS`, `SCSC`. Không thêm luồng đường bộ / đường biển.
+
+## Component và token — dùng cái có sẵn
+
+- Tái sử dụng kit nội bộ ở `src/ui` (export qua `src/ui/index.ts`: `Button`, `IconButton`, `Input`/`TextArea`/`Select`, `Card`, `Badge`, `Banner`, `Toast`/`useToast`/`notify`, `ConfirmDialog`, `EmptyState`/`ErrorState`, `AppShell`, `BottomNav`, `OpsLeftRail`, `Wordmark`, `Skeleton`, …) và feature UI ở `src/components` (`AirCargoTracking`, `MobileDimKgModal`, `MobileShipmentCards`, `PrintShippingLabel`, `customerDirectory/`, …).
+- Import kit: `from "../ui"` hoặc `from "./ui"` — không copy markup nút/input mới khi đã có primitive.
+- Màu / bóng / radius: token **`ui.*`** trong `tailwind.config.js` (Tailwind **3.4**, map CSS var ở `src/styles/tokens.css`). Class thực tế: `bg-ui-background`, `bg-ui-surface`, `text-ui-text`, `text-ui-navy`, `border-ui-border`, `bg-ui-primary`, `shadow-ui-sm`, `ring-ui-focus`. Token kho/trạng thái: `whc.*`, `st.*`. Helper mobile: `src/styles/mobileOpsStyles.ts` (`MOBILE.*`).
+- Không style ad-hoc (`#0F766E`, `bg-white`/`text-slate-*` tùy tiện, inline style) khi đã có token `ui.*`. Light mode là mặc định (`darkMode: "class"` — không gắn `.dark` trừ khi có quyết định riêng).
+- **Không** thêm shadcn, Radix, MUI, Chakra, hoặc thư viện UI mới. Hỏi trước nếu thấy thiếu primitive. Repo hiện không dùng shadcn.
+
+## Mobile-first + a11y
+
+Nhân viên kho dùng điện thoại. `BottomNav`, sheet/card (`MobileShipmentCards`, `MobileShipmentEditSheet`), sticky header, vùng chạm `min-h-11` (≥44px) là chuẩn — không thiết kế desktop-only rồi mới co.
+
+Trước khi mở PR đụng UI:
+
+1. `npm run test:e2e:a11y` — axe-core (`tests/e2e/accessibility.mjs`); không tăng critical.
+2. `npm run ci` — `lint` + `lint:server` + `build` + `test` + `deploy:check`.
+
+Giữ `focus-visible`, `aria-label` tiếng Việt hiện có, `role="alert"` cho lỗi. Không bỏ caption/label để “gọn”.
+
+## Copy tiếng Việt — viết đủ, đúng chữ
+
+Giữ nguyên chuỗi UI đang có (`Truy cập hệ thống Ops`, `Vào TECSOPS`, `Khách`, `H21 SCSC`, `H21 TCS`, `Ảnh báo cáo lô hàng`, `Đồng bộ trực tiếp` / `Đồng bộ hạn chế`, …). Không viết tắt tùy tiện (vd. không «ĐN» thay cho **Đăng Nhập TCS**). Khi cần nhắc đúng cụm đã gỡ hoặc assert “không còn”, viết **đủ** `Đăng Nhập TCS` / `Tải Ext` / `eCargo`.
+
+## Đã gỡ ở PR #74 — không đưa lại
+
+[PR #74](https://github.com/NAMNAM1989/TECSOPS/pull/74) đã gỡ Chrome Ext TCS/SCSC, menu **Tải Ext**, thanh/CTA **Đăng Nhập TCS**, eCargo UI/API (`/api/ecargo*`, `SET_ECARGO_*`), OCR/IMAP captcha. Không thêm lại `chrome-extension*`, `/api/chrome-extensions`, `/api/tcs-extension*`, portal TCS tự động, VCT/OTP. ESID còn là **local** (`EsidSettingsMenu` trên thanh Ops), không bridge trình duyệt.
+
+## Bảng nguồn Supabase — chỉ SELECT
+
+`lots`, `airlines`, `ops_customers` trên namnamlogistics / Supabase là SoT **đọc**. App chỉ `SELECT` / REST `GET` (vd. `server/namnamlogisticsSyncedAt.mjs`, `src/utils/airlineCatalogFromSupabase.ts`). **Cấm** INSERT / UPDATE / DELETE / TRUNCATE / baseline / reset / migrate ghi đè các bảng này. Đừng nhầm với state Railway (`app_state`, `shipments`, `customers`, …) — đó là persistence app, không phải catalog nguồn.
+
+## Git / PR
+
+Không `git push --force`, không `git reset --hard` trên `main`. Chỉ mở PR. Không merge main trừ khi user yêu cầu rõ (xem `.cursor/rules/integration-manager.mdc`).

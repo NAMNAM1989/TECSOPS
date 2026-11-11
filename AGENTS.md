@@ -124,6 +124,8 @@ Reactions are lightweight social signals. Humans use them constantly — they sa
 
 Skills provide your tools. When you need one, check its `SKILL.md`. Keep local notes (camera names, SSH details, voice preferences) in `TOOLS.md`.
 
+**TECSOPS / Cursor (repo này):** rule UI `.cursor/rules/ui.mdc`; MCP trình duyệt `.cursor/mcp.json`; Bugbot `.cursor/BUGBOT.md`; merge an toàn `.cursor/rules/integration-manager.mdc`. Skills nghiệp vụ nằm trong `.cursor/skills/`.
+
 **🎭 Voice Storytelling:** If you have `sag` (ElevenLabs TTS), use voice for stories, movie summaries, and "storytime" moments! Way more engaging than walls of text. Surprise people with funny voices.
 
 **📝 Platform Formatting:**
